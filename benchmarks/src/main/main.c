@@ -58,7 +58,7 @@ static struct option long_options[] = {
 	{"durableDelete",        no_argument,       0, 'D'},
 	{"async",                no_argument,       0, 'a'},
 	{"asyncMaxCommands",     required_argument, 0, 'c'},
-	{"asyncSelectorThreads", required_argument, 0, 'W'},
+	{"eventLoops",           required_argument, 0, 'W'},
 	{"tlsEnable",            no_argument,       0, 'A'},
 	{"tlsEncryptOnly",       no_argument,       0, 'B'},
 	{"tlsCaFile",            required_argument, 0, 'E'},
@@ -248,7 +248,7 @@ print_usage(const char* program)
 	blog_line("   in time.");
 	blog_line("");
 
-	blog_line("-W --asyncSelectorThreads <thread count> # Default: 1");
+	blog_line("-W --eventLoops <thread count> # Default: 1");
 	blog_line("   Number of event loops (or selector threads) when running in asynchronous mode.");
 	blog_line("");
 
@@ -520,7 +520,7 @@ validate_args(arguments* args)
 		}
 		
 		if (args->event_loop_capacity <= 0 || args->event_loop_capacity > 1000) {
-			blog_line("Invalid asyncSelectorThreads: %d  Valid values: [1-1000]", args->event_loop_capacity);
+			blog_line("Invalid eventLoops: %d  Valid values: [1-1000]", args->event_loop_capacity);
 			return 1;
 		}
 	}

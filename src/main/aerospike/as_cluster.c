@@ -503,7 +503,9 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 			else {
 				// Use info level so aql doesn't see message by default.
 				as_log_info("Node %s refresh failed: %s %s", node->name, as_error_string(status), error_local.message);
-				peers.gen_changed = true;
+				if (peers.use_peers) {
+					peers.gen_changed = true;
+				}
 				node->failures++;
 			}
 		}

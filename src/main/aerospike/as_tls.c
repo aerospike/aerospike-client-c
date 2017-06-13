@@ -363,8 +363,9 @@ as_tls_thread_cleanup()
 	if (! s_tls_inited) {
 		return;
 	}
-
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	ERR_remove_state(0);
+#endif
 }
 
 static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
@@ -412,7 +413,13 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 	}
 
 	// If this is the peer cert, check the name
-	if (current_cert == ctx->cert) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+	X509* cert = X509_STORE_CTX_get0_cert(ctx);
+#else
+	X509* cert = ctx->cert;
+#endif
+
+	if (current_cert == cert) {
 		char * hostname = SSL_get_ex_data(ssl, s_ex_name_index);
 
 		if (! hostname) {
@@ -421,7 +428,7 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 		}
 
 		bool allow_wildcard = true;
-		bool matched = as_tls_match_name(ctx->cert, hostname, allow_wildcard);
+		bool matched = as_tls_match_name(cert, hostname, allow_wildcard);
 
 		if (matched) {
 			as_log_debug("TLS name '%s' matches", hostname);
@@ -492,17 +499,33 @@ as_tls_context_setup(as_config_tls* tlscfg,
 #endif
 	}
 	else if (protocols == AS_TLS_PROTOCOL_TLSV1) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		method = TLS_client_method();
+#else
 		method = TLSv1_client_method();
+#endif
 	}
 	else if (protocols == AS_TLS_PROTOCOL_TLSV1_1) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		method = TLS_client_method();
+#else
 		method = TLSv1_1_client_method();
+#endif
 	}
 	else if (protocols == AS_TLS_PROTOCOL_TLSV1_2) {
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		method = TLS_client_method();
+#else
 		method = TLSv1_2_client_method();
+#endif
 	}
 	else {
 		// Multiple protocols are enabled, use a flexible method.
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+		method = TLS_client_method();
+#else
 		method = SSLv23_client_method();
+#endif
 	}
 
 	SSL_CTX* ctx = SSL_CTX_new(method);

@@ -182,7 +182,7 @@ atf_suite_result * atf_suite_run(atf_suite * suite) {
 
     for ( int i = 0; i < suite->size; i++ ) {
         atf_test * test = suite->tests[i];
-        printf("    [+] %s[%d] :: %s\n", suite->name, i+1, test->desc);
+        printf("    [+] %s[%s] :: %s\n", suite->name, test->name, test->desc);
         atf_test_result * test_result = atf_test_run(test);
         atf_suite_result_add(suite_result, test_result);
         if ( ! test_result->success ) {

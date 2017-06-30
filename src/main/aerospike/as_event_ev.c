@@ -258,13 +258,21 @@ as_ev_write(as_event_command* cmd)
 			}
 		} while (cmd->pos < cmd->len);
 	}
-	
+
+	// Socket timeout applies only to read events.
+	// Reset event received because we are switching from a write to a read state.
+	// This handles case where write succeeds and read event does not occur.  If we didn't reset,
+	// the socket timeout would go through two iterations (double the timeout) because a write
+	// event occurred in the first timeout period.
+	cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
 	return AS_EVENT_WRITE_COMPLETE;
 }
 
 static int
 as_ev_read(as_event_command* cmd)
 {
+	cmd->flags |= AS_ASYNC_FLAGS_EVENT_RECEIVED;
+
 	if (cmd->conn->socket.ctx) {
 		do {
 			int rv = as_tls_read_once(&cmd->conn->socket, cmd->buf + cmd->pos, cmd->len - cmd->pos);
@@ -402,12 +410,12 @@ as_ev_command_peek_block(as_event_command* cmd)
 		// Received normal data block.  Stop reading for fairness reasons and wait
 		// till next iteration.
 		if (cmd->len > cmd->capacity) {
-			if (cmd->free_buf) {
+			if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
 				cf_free(cmd->buf);
 			}
 			cmd->buf = cf_malloc(size);
 			cmd->capacity = cmd->len;
-			cmd->free_buf = true;
+			cmd->flags |= AS_ASYNC_FLAGS_FREE_BUF;
 		}
 	}
 
@@ -482,12 +490,12 @@ as_ev_command_read(as_event_command* cmd)
 		cmd->state = AS_ASYNC_STATE_READ_BODY;
 		
 		if (cmd->len > cmd->capacity) {
-			if (cmd->free_buf) {
+			if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
 				cf_free(cmd->buf);
 			}
 			cmd->buf = cf_malloc(size);
 			cmd->capacity = cmd->len;
-			cmd->free_buf = true;
+			cmd->flags |= AS_ASYNC_FLAGS_FREE_BUF;
 		}
 	}
 	
@@ -825,22 +833,88 @@ as_ev_connect(as_event_command* cmd)
 }
 
 static void
-as_ev_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
+as_ev_total_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
 {
 	// One-off timers are automatically stopped by libev.
 	as_event_timeout(timer->data);
 }
 
+static inline void
+as_ev_init_total_timeout(as_event_command* cmd, double timeout)
+{
+	ev_timer_init(&cmd->timer, as_ev_total_timeout, timeout / 1000.0, 0.0);
+	cmd->timer.data = cmd;
+	ev_timer_start(cmd->event_loop->loop, &cmd->timer);
+}
+
+static void
+as_ev_socket_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
+{
+	as_event_command* cmd = timer->data;
+
+	// Check for socket timeout.
+	if (! (cmd->flags & AS_ASYNC_FLAGS_EVENT_RECEIVED)) {
+		ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
+		as_event_timeout(cmd);
+		return;
+	}
+
+	// Socket has been used since timer was started.
+	if (cmd->total_deadline) {
+		// Check for total timeout.
+		uint64_t now = cf_getms();
+
+		if (now >= cmd->total_deadline) {
+			ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
+			as_event_timeout(cmd);
+			return;
+		}
+
+		if (now + cmd->socket_timeout >= cmd->total_deadline) {
+			// Transition to total timer.
+			ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
+			as_ev_init_total_timeout(cmd, (double)(cmd->total_deadline - now));
+			return;
+		}
+	}
+
+	// Repeat socket timer.
+	cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
+	cmd->timer.repeat = (double)cmd->socket_timeout/ 1000.0;
+	ev_timer_again(cmd->event_loop->loop, &cmd->timer);
+}
+
+static inline void
+as_ev_init_socket_timeout(as_event_command* cmd)
+{
+	ev_init(&cmd->timer, as_ev_socket_timeout);
+	cmd->timer.repeat = ((double)cmd->socket_timeout) / 1000.0;
+	cmd->timer.data = cmd;
+	ev_timer_again(cmd->event_loop->loop, &cmd->timer);
+}
+
 bool
 as_event_command_begin(as_event_command* cmd)
 {
-	// Always initialize timer first when timeouts are specified.
-	if (cmd->timeout_ms) {
-		ev_timer_init(&cmd->timer, as_ev_timeout, (double)cmd->timeout_ms / 1000.0, 0.0);
-		cmd->timer.data = cmd;
-		ev_timer_start(cmd->event_loop->loop, &cmd->timer);
+	// Timeout is minimum of socket timeout and total timeout.
+	if (cmd->total_deadline) {
+		// total_deadline is really a timeout at this point.
+		if (cmd->socket_timeout && cmd->socket_timeout < cmd->total_deadline) {
+			// Use socket timeout.
+			uint64_t now = cf_getms();
+			cmd->total_deadline += now;  // Convert total timeout to deadline.
+			as_ev_init_socket_timeout(cmd);
+		}
+		else {
+			// Use total timeout.
+			as_ev_init_total_timeout(cmd, (double)cmd->total_deadline);
+		}
 	}
-	
+	else if (cmd->socket_timeout) {
+		// Use socket timeout.
+		as_ev_init_socket_timeout(cmd);
+	}
+
 	as_connection_status status = cmd->pipe_listener != NULL ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
 	
 	if (status == AS_CONNECTION_FROM_POOL) {

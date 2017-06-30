@@ -53,7 +53,10 @@ extern "C" {
 #define AS_ASYNC_STATE_WRITE 16
 #define AS_ASYNC_STATE_READ_HEADER 32
 #define AS_ASYNC_STATE_READ_BODY 64
-	
+
+#define AS_ASYNC_FLAGS_FREE_BUF 1
+#define AS_ASYNC_FLAGS_EVENT_RECEIVED 2
+
 #define AS_ASYNC_AUTH_RETURN_CODE 1
 
 #define AS_EVENT_CONNECTION_COMPLETE 0
@@ -120,16 +123,17 @@ typedef struct as_event_command {
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
+	uint64_t total_deadline;
+	uint32_t socket_timeout;
 	uint32_t capacity;
 	uint32_t len;
 	uint32_t pos;
 	uint32_t auth_len;
-	uint32_t timeout_ms;
-	
+
 	uint8_t type;
 	uint8_t state;
+	uint8_t flags;
 	bool deserialize;
-	bool free_buf;
 } as_event_command;
 
 typedef struct {
@@ -253,7 +257,7 @@ as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
 static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
-	if (cmd->timeout_ms) {
+	if (cmd->total_deadline || cmd->socket_timeout) {
 		ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
 	}
 }
@@ -311,7 +315,7 @@ as_uv_timer_closed(uv_handle_t* handle);
 static inline void
 as_event_command_release(as_event_command* cmd)
 {
-	if (cmd->timeout_ms) {
+	if (cmd->total_deadline || cmd->socket_timeout) {
 		// libuv requires that cmd can't be freed until timer is closed.
 		uv_close((uv_handle_t*)&cmd->timer, as_uv_timer_closed);
 	}
@@ -352,7 +356,7 @@ as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
 static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
-	if (cmd->timeout_ms) {
+	if (cmd->total_deadline || cmd->socket_timeout) {
 		evtimer_del(&cmd->timer);
 	}
 }

@@ -217,11 +217,13 @@ static void
 as_event_command_execute_in_loop(as_event_command* cmd)
 {
 	// Check if command timed out after coming off queue.
-	if (cmd->timeout_ms && (cf_getms() - *(uint64_t*)cmd) > cmd->timeout_ms) {
+	// total_deadline is really a timeout at this point.
+	if (cmd->total_deadline && (cf_getms() - *(uint64_t*)cmd) > cmd->total_deadline) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
 		// Tell the libuv version of as_event_command_release() to not try to close the uv_timer_t.
-		cmd->timeout_ms = 0;
+		cmd->total_deadline = 0;
+		cmd->socket_timeout = 0;
 		as_event_error_callback(cmd, &err);
 		return;
 	}
@@ -258,7 +260,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 	else {
 		cmd->type |= AS_ASYNC_TYPE_REGISTERED;
 
-		if (cmd->timeout_ms) {
+		if (cmd->total_deadline) {
 			// Store current time in first 8 bytes which is not used yet.
 			*(uint64_t*)cmd = cf_getms();
 		}
@@ -680,7 +682,7 @@ as_event_command_free(as_event_command* cmd)
 		as_cluster_destroy(cluster);
 	}
 	
-	if (cmd->free_buf) {
+	if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
 		cf_free(cmd->buf);
 	}
 	cf_free(cmd);

@@ -53,6 +53,7 @@ typedef struct as_query_task_s {
 	as_node* node;
 	
 	as_cluster* cluster;
+	const as_policy_query* query_policy;
 	const as_policy_write* write_policy;
 	const as_query* query;
 	aerospike_query_foreach_callback callback;
@@ -65,9 +66,6 @@ typedef struct as_query_task_s {
 	
 	uint8_t* cmd;
 	size_t cmd_size;
-	
-	uint32_t timeout;
-	bool deserialize;
 } as_query_task;
 
 typedef struct as_query_task_aggr_s {
@@ -302,7 +300,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 
 		AEROSPIKE_QUERY_RECPARSE_BINS(task->task_id, task->node->name);
 
-		as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->deserialize);
+		as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->query_policy->deserialize);
 
 		AEROSPIKE_QUERY_RECPARSE_FINISHED(task->task_id, task->node->name);
 
@@ -373,7 +371,7 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 }
 
 static as_status
-as_query_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* udata)
+as_query_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* udata)
 {
 	as_query_task* task = udata;
 	as_status status = AEROSPIKE_OK;
@@ -383,7 +381,7 @@ as_query_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), max_idle, deadline_ms);
 		
 		if (status) {
 			break;
@@ -400,7 +398,7 @@ as_query_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, deadline_ms);
+			status = as_socket_read_deadline(err, sock, node, buf, size, max_idle, deadline_ms);
 			
 			if (status) {
 				break;
@@ -430,9 +428,19 @@ as_query_command_execute(as_query_task* task)
 
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, task->cmd, task->cmd_size,
-										  task->timeout, false, 0, 0, as_query_parse, task);
-		
+
+	as_command_policy policy;
+
+	if (task->query_policy) {
+		as_command_policy_query(&policy, task->query_policy);
+	}
+	else {
+		as_command_policy_query_background(&policy, task->write_policy->timeout);
+	}
+
+	as_status status = as_command_execute(task->cluster, &err, &policy, &cn, task->cmd, task->cmd_size,
+										  as_query_parse, task);
+
 	if (status) {
 		// Set main error only once.
 		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
@@ -818,11 +826,12 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
+	uint32_t timeout = (task->query_policy)? task->query_policy->timeout : task->write_policy->timeout;
 	
 	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &predexp_size, &bin_name_size);
 	uint8_t* cmd = as_command_init(size);
 	size = as_query_command_init(cmd, query, query_type, task->write_policy, task->task_id,
-								 task->timeout, n_fields, filter_size, predexp_size, bin_name_size, &argbuffer);
+								 timeout, n_fields, filter_size, predexp_size, bin_name_size, &argbuffer);
 	
 	task->cmd = cmd;
 	task->cmd_size = size;
@@ -988,6 +997,7 @@ aerospike_query_foreach(
 	as_query_task task = {
 		.node = 0,
 		.cluster = cluster,
+		.query_policy = policy,
 		.write_policy = 0,
 		.query = query,
 		.callback = 0,
@@ -998,9 +1008,7 @@ aerospike_query_foreach(
 		.complete_q = 0,
 		.task_id = as_random_get_uint64(),
 		.cmd = 0,
-		.cmd_size = 0,
-		.timeout = policy->timeout,
-		.deserialize = policy->deserialize
+		.cmd_size = 0
 	};
 	
 	AEROSPIKE_QUERY_FOREACH_STARTING(task.task_id);
@@ -1147,17 +1155,18 @@ aerospike_query_async(
 		cmd->node = nodes->array[i];
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_query_parse_records_async;
+		cmd->pipe_listener = NULL;
 		cmd->buf = ((as_async_query_command*)cmd)->space;
+		cmd->total_deadline = policy->timeout;
+		cmd->socket_timeout = policy->socket_timeout;
 		cmd->capacity = (uint32_t)(s - sizeof(as_async_query_command));
 		cmd->len = (uint32_t)size;
 		cmd->pos = 0;
 		cmd->auth_len = 0;
-		cmd->timeout_ms = policy->timeout;
 		cmd->type = AS_ASYNC_TYPE_QUERY;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->pipe_listener = NULL;
+		cmd->flags = 0;
 		cmd->deserialize = policy->deserialize;
-		cmd->free_buf = false;
 		memcpy(cmd->buf, cmd_buf, size);
 		
 		status = as_event_command_execute(cmd, err);
@@ -1222,6 +1231,7 @@ aerospike_query_background(
 	as_query_task task = {
 		.node = 0,
 		.cluster = cluster,
+		.query_policy = NULL,
 		.write_policy = policy,
 		.query = query,
 		.callback = 0,
@@ -1232,9 +1242,7 @@ aerospike_query_background(
 		.complete_q = 0,
 		.task_id = task_id,
 		.cmd = 0,
-		.cmd_size = 0,
-		.timeout = policy->timeout,
-		.deserialize = false
+		.cmd_size = 0
 	};
 	
 	as_status status = as_query_execute(&task, query, nodes, n_nodes, QUERY_BACKGROUND);

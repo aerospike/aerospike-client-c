@@ -323,7 +323,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 }
 
 static as_status
-as_batch_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* udata)
+as_batch_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* udata)
 {
 	as_batch_task* task = udata;
 	as_status status = AEROSPIKE_OK;
@@ -333,7 +333,7 @@ as_batch_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), max_idle, deadline_ms);
 		
 		if (status) {
 			break;
@@ -350,7 +350,7 @@ as_batch_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, deadline_ms);
+			status = as_socket_read_deadline(err, sock, node, buf, size, max_idle, deadline_ms);
 			
 			if (status) {
 				break;
@@ -511,9 +511,11 @@ as_batch_index_records_execute(as_batch_task* task)
 
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size,
-				policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
-				as_batch_parse, task);
+
+	as_command_policy pol;
+	as_command_policy_batch(&pol, policy);
+
+	as_status status = as_command_execute(task->cluster, &err, &pol, &cn, cmd, size, as_batch_parse, task);
 	
 	as_command_free(cmd, size);
 	
@@ -631,9 +633,11 @@ as_batch_index_execute(as_batch_task* task)
 	
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size,
-				policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
-				as_batch_parse, task);
+
+	as_command_policy pol;
+	as_command_policy_batch(&pol, policy);
+
+	as_status status = as_command_execute(task->cluster, &err, &pol, &cn, cmd, size, as_batch_parse, task);
 	
 	as_command_free(cmd, size);
 	
@@ -689,9 +693,11 @@ as_batch_direct_execute(as_batch_task* task)
 	
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, cmd, size,
-				policy->timeout, policy->retry_on_timeout, policy->retry, policy->sleep_between_retries,
-				as_batch_parse, task);
+
+	as_command_policy pol;
+	as_command_policy_batch(&pol, policy);
+
+	as_status status = as_command_execute(task->cluster, &err, &pol, &cn, cmd, size, as_batch_parse, task);
 	
 	as_command_free(cmd, size);
 	
@@ -1069,16 +1075,17 @@ as_batch_read_execute_async(
 		cmd->node = batch_node->node;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_batch_async_parse_records;
+		cmd->pipe_listener = NULL;
 		cmd->buf = ((as_async_batch_command*)cmd)->space;
+		cmd->total_deadline = policy->timeout;
+		cmd->socket_timeout = 0;
 		cmd->capacity = (uint32_t)(s - sizeof(as_async_batch_command));
 		cmd->pos = 0;
 		cmd->auth_len = 0;
-		cmd->timeout_ms = policy->timeout;
 		cmd->type = AS_ASYNC_TYPE_BATCH;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->pipe_listener = NULL;
+		cmd->flags = 0;
 		cmd->deserialize = policy->deserialize;
-		cmd->free_buf = false;
 		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy, cmd->buf);
 		
 		status = as_event_command_execute(cmd, err);

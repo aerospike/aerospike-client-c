@@ -217,7 +217,7 @@ as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task, as_error* e
 }
 
 static as_status
-as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, void* udata)
+as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* udata)
 {
 	as_scan_task* task = udata;
 	as_status status = AEROSPIKE_OK;
@@ -227,7 +227,7 @@ as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_m
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), max_idle, deadline_ms);
 		
 		if (status) {
 			break;
@@ -244,7 +244,7 @@ as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint64_t deadline_m
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, deadline_ms);
+			status = as_socket_read_deadline(err, sock, node, buf, size, max_idle, deadline_ms);
 			
 			if (status) {
 				break;
@@ -272,8 +272,12 @@ as_scan_command_execute(as_scan_task* task)
 	
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_command_execute(task->cluster, &err, &cn, task->cmd, task->cmd_size,
-										  task->policy->timeout, false, 0, 0, as_scan_parse, task);
+
+	as_command_policy policy;
+	as_command_policy_scan(&policy, task->policy);
+
+	as_status status = as_command_execute(task->cluster, &err, &policy, &cn, task->cmd, task->cmd_size,
+										  as_scan_parse, task);
 	
 	if (status) {
 		// Set main error only once.
@@ -650,17 +654,18 @@ as_scan_async(
 		cmd->node = nodes[i];
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_scan_parse_records_async;
+		cmd->pipe_listener = NULL;
 		cmd->buf = ((as_async_scan_command*)cmd)->space;
+		cmd->total_deadline = policy->timeout;
+		cmd->socket_timeout = policy->socket_timeout;
 		cmd->capacity = (uint32_t)(s - sizeof(as_async_scan_command));
 		cmd->len = (uint32_t)size;
 		cmd->pos = 0;
 		cmd->auth_len = 0;
-		cmd->timeout_ms = policy->timeout;
 		cmd->type = AS_ASYNC_TYPE_SCAN;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->pipe_listener = NULL;
+		cmd->flags = 0;
 		cmd->deserialize = scan->deserialize_list_map;
-		cmd->free_buf = false;
 		memcpy(cmd->buf, cmd_buf, size);
 		
 		if (daisy_chain) {

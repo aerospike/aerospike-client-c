@@ -25,36 +25,19 @@
 
 #include <aerospike/as_config.h>
 
-#if defined(__linux__) || defined(__APPLE__)
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-// Windows send() and recv() parameter types are different.
 #define as_socket_data_t void
 #define as_socket_size_t size_t
 #define as_close(fd) (close(fd))
-#endif
 
 #if defined(__APPLE__)
 #define SOL_TCP IPPROTO_TCP
 #define MSG_NOSIGNAL 0
 #endif
-
-#if defined(CF_WINDOWS)
-#include <WinSock2.h>
-#include <Ws2tcpip.h>
-
-#define as_socket_data_t char
-#define as_socket_size_t int
-#define as_close(fd) (closesocket(fd))
-
-#define MSG_DONTWAIT	0
-#define MSG_NOSIGNAL	0
-
-#define SHUT_RDWR		SD_BOTH
-#endif // CF_WINDOWS
 
 #define AS_IP_ADDRESS_SIZE 64
 
@@ -196,97 +179,25 @@ as_socket_deadline(uint32_t timeout_ms)
 
 /**
  *	@private
- *	Write socket data without timeouts.
- */
-as_status
-as_socket_write_forever(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len);
-
-/**
- *	@private
- *	Write socket data with future deadline in milliseconds.
- *	Do not adjust for zero deadline.
- */
-as_status
-as_socket_write_limit(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint64_t deadline);
-
-/**
- *	@private
  *	Write socket data with future deadline in milliseconds.
  *	If deadline is zero, do not set deadline.
  */
-static inline as_status
-as_socket_write_deadline(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint64_t deadline)
-{
-	if (deadline) {
-		return as_socket_write_limit(err, sock, node, buf, buf_len, deadline);
-	}
-	else {
-		return as_socket_write_forever(err, sock, node, buf, buf_len);
-	}
-}
-
-/**
- *	@private
- *	Write socket data with timeout in milliseconds.
- *	If timeout is zero or > MAXINT, do not set timeout.
- */
-static inline as_status
-as_socket_write_timeout(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
-{
-	if (timeout_ms && timeout_ms <= INT32_MAX) {
-		return as_socket_write_limit(err, sock, node, buf, buf_len, cf_getms() + timeout_ms);
-	}
-	else {
-		return as_socket_write_forever(err, sock, node, buf, buf_len);
-	}
-}
-
-/**
- *	@private
- *	Read socket data without timeouts.
- */
 as_status
-as_socket_read_forever(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len);
-
-/**
- *	@private
- *	Read socket data with future deadline in milliseconds.
- *	Do not adjust for zero deadline.
- */
-as_status
-as_socket_read_limit(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint64_t deadline);
+as_socket_write_deadline(
+	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len,
+	uint32_t max_idle, uint64_t deadline
+	);
 
 /**
  *	@private
  *	Read socket data with future deadline in milliseconds.
  *	If deadline is zero, do not set deadline.
  */
-static inline as_status
-as_socket_read_deadline(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint64_t deadline)
-{
-	if (deadline) {
-		return as_socket_read_limit(err, sock, node, buf, buf_len, deadline);
-	}
-	else {
-		return as_socket_read_forever(err, sock, node, buf, buf_len);
-	}
-}
-
-/**
- *	@private
- *	Read socket data with timeout in milliseconds.
- *	If timeout is zero or > MAXINT, do not set timeout.
- */
-static inline as_status
-as_socket_read_timeout(as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len, uint32_t timeout_ms)
-{
-	if (timeout_ms && timeout_ms <= INT32_MAX) {
-		return as_socket_read_limit(err, sock, node, buf, buf_len, cf_getms() + timeout_ms);
-	}
-	else {
-		return as_socket_read_forever(err, sock, node, buf, buf_len);
-	}
-}
+as_status
+as_socket_read_deadline(
+	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len,
+	uint32_t max_idle, uint64_t deadline
+	);
 
 #endif
 

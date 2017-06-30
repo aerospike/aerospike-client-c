@@ -69,8 +69,8 @@ typedef struct as_async_value_command {
 
 static inline as_event_command*
 as_async_write_command_create(
-	as_cluster* cluster, as_node* node, uint32_t timeout_ms, bool deserialize,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_cluster* cluster, as_node* node, uint32_t socket_timeout, uint32_t total_timeout,
+	bool deserialize, as_async_write_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
@@ -85,25 +85,26 @@ as_async_write_command_create(
 	cmd->node = node;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
+	cmd->pipe_listener = pipe_listener;
 	cmd->buf = wcmd->space;
+	cmd->total_deadline = total_timeout;
+	cmd->socket_timeout = socket_timeout;
 	cmd->capacity = (uint32_t)(s - sizeof(as_async_write_command));
 	cmd->len = 0;
 	cmd->pos = 0;
 	cmd->auth_len = 0;
-	cmd->timeout_ms = timeout_ms;
 	cmd->type = AS_ASYNC_TYPE_WRITE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->pipe_listener = pipe_listener;
+	cmd->flags = 0;
 	cmd->deserialize = deserialize;
-	cmd->free_buf = false;
 	wcmd->listener = listener;
 	return cmd;
 }
 	
 static inline as_event_command*
 as_async_record_command_create(
-	as_cluster* cluster, as_node* node, uint32_t timeout_ms, bool deserialize,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_cluster* cluster, as_node* node, uint32_t socket_timeout, uint32_t total_timeout,
+	bool deserialize, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
@@ -119,27 +120,28 @@ as_async_record_command_create(
 	cmd->node = node;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
+	cmd->pipe_listener = pipe_listener;
 	cmd->buf = rcmd->space;
+	cmd->total_deadline = total_timeout;
+	cmd->socket_timeout = socket_timeout;
 	cmd->capacity = (uint32_t)(s - sizeof(as_async_record_command));
 	cmd->len = 0;
 	cmd->pos = 0;
 	cmd->auth_len = 0;
-	cmd->timeout_ms = timeout_ms;
 	cmd->type = AS_ASYNC_TYPE_RECORD;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->pipe_listener = pipe_listener;
+	cmd->flags = 0;
 	cmd->deserialize = deserialize;
-	cmd->free_buf = false;
 	rcmd->listener = listener;
 	return cmd;
 }
 
 static inline as_event_command*
 as_async_value_command_create(
-   as_cluster* cluster, as_node* node, uint32_t timeout_ms, bool deserialize,
-   as_async_value_listener listener, void* udata, as_event_loop* event_loop,
-   as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
-   )
+	as_cluster* cluster, as_node* node, uint32_t socket_timeout, uint32_t total_timeout,
+	bool deserialize, as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
+	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
 	// Then, round up memory size in 1KB increments to reduce fragmentation and to allow socket
@@ -153,17 +155,18 @@ as_async_value_command_create(
 	cmd->node = node;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
+	cmd->pipe_listener = pipe_listener;
 	cmd->buf = vcmd->space;
+	cmd->total_deadline = total_timeout;
+	cmd->socket_timeout = socket_timeout;
 	cmd->capacity = (uint32_t)(s - sizeof(as_async_value_command));
 	cmd->len = 0;
 	cmd->pos = 0;
 	cmd->auth_len = 0;
-	cmd->timeout_ms = timeout_ms;
 	cmd->type = AS_ASYNC_TYPE_VALUE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->pipe_listener = pipe_listener;
+	cmd->flags = 0;
 	cmd->deserialize = deserialize;
-	cmd->free_buf = false;
 	vcmd->listener = listener;
 	return cmd;
 }

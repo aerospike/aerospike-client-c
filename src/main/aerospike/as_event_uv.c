@@ -275,6 +275,7 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		return;
 	}
 
+	cmd->flags |= AS_ASYNC_FLAGS_EVENT_RECEIVED;
 	cmd->pos += nread;
 	
 	if (cmd->pos < cmd->len) {
@@ -300,12 +301,12 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		}
 		
 		if (cmd->len > cmd->capacity) {
-			if (cmd->free_buf) {
+			if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
 				cf_free(cmd->buf);
 			}
 			cmd->buf = cf_malloc(size);
 			cmd->capacity = cmd->len;
-			cmd->free_buf = true;
+			cmd->flags |= AS_ASYNC_FLAGS_FREE_BUF;
 		}
 		return;
 	}
@@ -387,7 +388,8 @@ static inline bool
 as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 {
 	cmd->state = AS_ASYNC_STATE_WRITE;
-	
+	cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
+
 	uv_write_t* write_req = &cmd->conn->req.write;
 	write_req->data = cmd;
 	uv_buf_t buf = uv_buf_init((char*)cmd->buf, cmd->len);
@@ -503,7 +505,7 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 {
 	as_event_set_auth_write(cmd);
 	cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
-	
+
 	uv_write_t* write_req = &cmd->conn->req.write;
 	write_req->data = cmd;
 	uv_buf_t buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->auth_len);
@@ -633,22 +635,86 @@ as_uv_connect(as_event_command* cmd)
 }
 
 static void
-as_uv_timeout(uv_timer_t* timer)
+as_uv_total_timeout(uv_timer_t* timer)
 {
 	// One-off timers are automatically stopped by libuv.
 	as_event_timeout(timer->data);
 }
 
+static inline void
+as_uv_init_total_timeout(as_event_command* cmd, uint64_t timeout)
+{
+	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
+	cmd->timer.data = cmd;
+	uv_timer_start(&cmd->timer, as_uv_total_timeout, timeout, 0);
+}
+
+static void
+as_uv_socket_timeout(uv_timer_t* timer)
+{
+	as_event_command* cmd = timer->data;
+
+	// Check for socket timeout.
+	if (! (cmd->flags & AS_ASYNC_FLAGS_EVENT_RECEIVED)) {
+		uv_timer_stop(&cmd->timer);
+		as_event_timeout(cmd);
+		return;
+	}
+
+	// Socket has been used since timer was started.
+	if (cmd->total_deadline) {
+		// Check for total timeout.
+		uint64_t now = cf_getms();
+
+		if (now >= cmd->total_deadline) {
+			uv_timer_stop(&cmd->timer);
+			as_event_timeout(cmd);
+			return;
+		}
+
+		if (now + cmd->socket_timeout >= cmd->total_deadline) {
+			// Transition to total timer.
+			uv_timer_stop(&cmd->timer);
+			as_uv_init_total_timeout(cmd, cmd->total_deadline - now);
+			return;
+		}
+	}
+
+	// Repeat socket timer.
+	cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
+	uv_timer_again(&cmd->timer);
+}
+
+static inline void
+as_uv_init_socket_timeout(as_event_command* cmd)
+{
+	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
+	cmd->timer.data = cmd;
+	uv_timer_start(&cmd->timer, as_uv_socket_timeout, cmd->socket_timeout, cmd->socket_timeout);
+}
+
 bool
 as_event_command_begin(as_event_command* cmd)
 {
-	// Always initialize timer first when timeouts are specified.
-	if (cmd->timeout_ms) {
-		uv_timer_init(cmd->event_loop->loop, &cmd->timer);
-		cmd->timer.data = cmd;
-		uv_timer_start(&cmd->timer, as_uv_timeout, cmd->timeout_ms, 0);
+	// Timeout is minimum of socket timeout and total timeout.
+	if (cmd->total_deadline) {
+		// total_deadline is really a timeout at this point.
+		if (cmd->socket_timeout && cmd->socket_timeout < cmd->total_deadline) {
+			// Use socket timeout.
+			uint64_t now = cf_getms();
+			cmd->total_deadline += now;  // Convert total timeout to deadline.
+			as_uv_init_socket_timeout(cmd);
+		}
+		else {
+			// Use total timeout.
+			as_uv_init_total_timeout(cmd, cmd->total_deadline);
+		}
 	}
-	
+	else if (cmd->socket_timeout) {
+		// Use socket timeout.
+		as_uv_init_socket_timeout(cmd);
+	}
+
 	as_connection_status status = cmd->pipe_listener != NULL ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
 	
 	if (status == AS_CONNECTION_FROM_POOL) {

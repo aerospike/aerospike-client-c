@@ -26,7 +26,7 @@
 #include <string.h>
 #include <getopt.h>
 
-static const char* short_options = "h:p:U:P::n:s:K:k:b:o:Rt:w:z:g:T:dL:SC:N:M:Dac:W:u";
+static const char* short_options = "h:p:U:P::n:s:K:k:b:o:Rt:w:z:g:T:dL:SC:N:M:Y:Dac:W:u";
 
 static struct option long_options[] = {
 	{"hosts",                required_argument, 0, 'h'},

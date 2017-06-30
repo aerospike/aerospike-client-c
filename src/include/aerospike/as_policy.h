@@ -753,12 +753,18 @@ typedef struct as_policy_remove_s {
 typedef struct as_policy_query_s {
 
 	/**
-	 *	Maximum time in milliseconds to wait for 
-	 *	the operation to complete.
-	 *
-	 *	The default (0) means do not timeout.
+	 *	Maximum time in milliseconds to wait for the operation to complete.
+	 *	The default (0) means do not apply a total timeout.
 	 */
 	uint32_t timeout;
+
+	/**
+	 *	Maximum socket idle time in milliseconds when processing a database command.
+	 *	Zero means do not apply a socket idle timeout.
+	 *
+	 *	Default: 10000 ms
+	 */
+	uint32_t socket_timeout;
 
 	/**
 	 *	Should raw bytes representing a list or map be deserialized to as_list or as_map.
@@ -778,23 +784,22 @@ typedef struct as_policy_scan_s {
 
 	/**
 	 *	Maximum time in milliseconds to wait for the operation to complete.
-	 *
-	 *	The default (0) means do not timeout.
+	 *	The default (0) means do not apply a total timeout.
 	 */
 	uint32_t timeout;
 
 	/**
-	 *	Maximum time in milliseconds to wait when polling socket for availability prior to
-	 *	performing an operation on the socket on the server side.  Zero means there is no
-	 *	socket timeout.
+	 *	Maximum socket idle time in milliseconds when processing a database command.
+	 *	Zero means do not apply a socket idle timeout.
+	 *
+	 *	This scan socket timeout is also applied on server side as well.
 	 *
 	 *	Default: 10000 ms
 	 */
 	uint32_t socket_timeout;
 
 	/**
-	 *	Abort the scan if the cluster is not in a 
-	 *	stable state.
+	 *	Abort the scan if the cluster is not in a stable state.
 	 */
 	bool fail_on_cluster_change;
 
@@ -1434,6 +1439,7 @@ static inline as_policy_query*
 as_policy_query_init(as_policy_query* p)
 {
 	p->timeout = 0;
+	p->socket_timeout = 10000;
 	p->deserialize = true;
 	return p;
 }

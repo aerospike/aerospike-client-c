@@ -320,7 +320,7 @@ typedef struct as_config_tls_s {
  *
  *	## User-Defined Function Settings
  *	
- *	If you are using using user-defined functions (UDF) for processing query 
+ *	If you are using user-defined functions (UDF) for processing query 
  *	results (i.e aggregations), then you will find it useful to set the 
  *	`mod_lua` settings. Of particular importance is the `mod_lua.user_path`, 
  *	which allows you to define a path to where the client library will look for

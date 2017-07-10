@@ -614,7 +614,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/opt/openssl/lib,
-					"/Users/bnichols/aerospike-client-c/modules/lua/src",
+					"../modules/lua/src",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
@@ -642,7 +642,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/opt/openssl/lib,
-					"/Users/bnichols/aerospike-client-c/modules/lua/src",
+					"../modules/lua/src",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";

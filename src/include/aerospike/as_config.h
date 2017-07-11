@@ -88,6 +88,64 @@ typedef struct as_addr_map_s {
 } as_addr_map;
 
 /**
+ *	Cluster event notification type.
+ *
+ *	@ingroup as_config_object
+ */
+typedef enum as_cluster_event_type_e {
+	/**
+	 *	Node was added to cluster.
+	 */
+	AS_CLUSTER_ADD_NODE = 0,
+
+	/**
+	 *	Node was removed fron cluster.
+	 */
+	AS_CLUSTER_REMOVE_NODE = 1,
+
+	/**
+	 *	There are no active nodes in the cluster.
+	 */
+	AS_CLUSTER_DISCONNECTED = 2
+} as_cluster_event_type;
+
+/**
+ *	Cluster event notification data.
+ *
+ *	@ingroup as_config_object
+ */
+typedef struct as_cluster_event_s {
+	/**
+	 *	Node name.
+	 */
+	const char* node_name;
+
+	/**
+	 *	Node IP address in string format.
+	 */
+	const char* node_address;
+
+	/**
+	 *	User defined data.
+	 */
+	void* udata;
+
+	/**
+	 *	Cluster event notification type.
+	 */
+	as_cluster_event_type type;
+} as_cluster_event;
+
+/**
+ *	Cluster event notification callback function.
+ *	as_cluster_event is placed on the stack before calling.
+ *	Do not free node_name or node_address.
+ *
+ *	@ingroup as_config_object
+ */
+typedef void (*as_cluster_event_callback) (as_cluster_event* event);
+
+/**
  *	lua module config
  *
  *	@ingroup as_config_object
@@ -362,6 +420,20 @@ typedef struct as_config_s {
 	char* cluster_name;
 	
 	/**
+	 *	Cluster event function that will be called when nodes are added/removed from the cluster.
+	 *
+	 *	Default: NULL (no callback will be made)
+	 */
+	as_cluster_event_callback event_callback;
+
+	/**
+	 *	Cluster event user data that will be passed back to event_callback.
+	 *
+	 *	Default: NULL
+	 */
+	void* event_callback_udata;
+
+	/**
 	 *	A IP translation table is used in cases where different clients use different server
 	 *	IP addresses.  This may be necessary when using clients from both inside and outside
 	 *	a local area network.  Default is no translation.
@@ -370,7 +442,7 @@ typedef struct as_config_s {
 	 *	value is the real IP address used to connect to the server.
 	 *
 	 *	A deep copy of ip_map is performed in aerospike_connect().  The caller is
-	 *  responsible for memory deallocation of the original data structure.
+	 *	responsible for memory deallocation of the original data structure.
 	 */
 	as_addr_map* ip_map;
 	
@@ -655,6 +727,18 @@ static inline void
 as_config_set_cluster_name(as_config* config, const char* cluster_name)
 {
 	as_config_set_string(&config->cluster_name, cluster_name);
+}
+
+/**
+ *	Set cluster event callback and user data.
+ *
+ *	@relates as_config
+ */
+static inline void
+as_config_set_cluster_event_callback(as_config* config, as_cluster_event_callback callback, void* udata)
+{
+	config->event_callback = callback;
+	config->event_callback_udata = udata;
 }
 
 /**

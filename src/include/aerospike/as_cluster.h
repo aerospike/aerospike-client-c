@@ -128,6 +128,16 @@ typedef struct as_cluster_s {
 	char* cluster_name;
 	
 	/**
+	 *	Cluster event function that will be called when nodes are added/removed from the cluster.
+	 */
+	as_cluster_event_callback event_callback;
+
+	/**
+	 *	Cluster event user data that will be passed back to event_callback.
+	 */
+	void* event_callback_udata;
+
+	/**
 	 *	@private
 	 *	Initial seed hosts specified by user.
 	 */
@@ -252,7 +262,7 @@ typedef struct as_cluster_s {
 	 *	Random node index.
 	 */
 	uint32_t node_index;
-	
+
 	/**
 	 *	@private
 	 *	Total number of data partitions used by cluster.

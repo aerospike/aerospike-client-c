@@ -83,6 +83,33 @@ release_nodes(as_nodes* nodes)
 	as_nodes_release(nodes);
 }
 
+static void
+as_cluster_event_notify(as_cluster* cluster, as_node* node, as_cluster_event_type type)
+{
+	if (! cluster->event_callback) {
+		return;
+	}
+
+	if (node != NULL) {
+		as_cluster_event event = {
+			.node_name = node->name,
+			.node_address = as_node_get_address_string(node),
+			.udata = cluster->event_callback_udata,
+			.type = type
+		};
+		cluster->event_callback(&event);
+	}
+	else {
+		as_cluster_event event = {
+			.node_name = "",
+			.node_address = "",
+			.udata = cluster->event_callback_udata,
+			.type = type
+		};
+		cluster->event_callback(&event);
+	}
+}
+
 /**
  *	Add nodes using copy on write semantics.
  */
@@ -94,6 +121,7 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 	for (uint32_t i = 0; i < nodes_to_add->size; i++) {
 		node = as_vector_get_ptr(nodes_to_add, i);
 		as_log_info("Add node %s %s", node->name, as_node_get_address_string(node));
+		as_cluster_event_notify(cluster, node, AS_CLUSTER_ADD_NODE);
 	}
 	
 	// Create temporary nodes array.
@@ -326,6 +354,7 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 		
 		if (as_cluster_find_node_by_reference(nodes_to_remove, node)) {
 			as_log_info("Remove node %s %s", node->name, as_node_get_address_string(node));
+			as_cluster_event_notify(cluster, node, AS_CLUSTER_REMOVE_NODE);
 			as_gc_item item;
 			item.data = node;
 			item.release_fn = (as_release_fn)release_node;
@@ -345,9 +374,13 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	if (count < nodes_new->size) {
 		as_log_warn("Node remove mismatch. Expected %d Received %d", nodes_new->size, count);
 	}
-	
+
 	// Replace nodes with copy.
 	set_nodes(cluster, nodes_new);
+
+	if (nodes_new->size == 0) {
+		as_cluster_event_notify(cluster, NULL, AS_CLUSTER_DISCONNECTED);
+	}
 
 	// Put old nodes on garbage collector stack.
 	as_gc_item item;
@@ -886,6 +919,8 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	// Heap allocated cluster_name continues to be owned by as->config.
 	// Make a reference copy here.
 	cluster->cluster_name = config->cluster_name;
+	cluster->event_callback = config->event_callback;
+	cluster->event_callback_udata = config->event_callback_udata;
 
 	// Initialize cluster tend and node parameters
 	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;

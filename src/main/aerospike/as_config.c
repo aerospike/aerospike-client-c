@@ -35,6 +35,8 @@ as_config_init(as_config* c)
 	memset(c->user, 0, sizeof(c->user));
 	memset(c->password, 0, sizeof(c->password));
 	c->cluster_name = NULL;
+	c->event_callback = NULL;
+	c->event_callback_udata = NULL;
 	c->ip_map = NULL;
 	c->ip_map_size = 0;
 	c->max_conns_per_node = 300;

@@ -67,14 +67,14 @@ as_async_update_max_conns(as_cluster* cluster, bool pipe, uint32_t max_conns)
 	for (uint32_t i = 0; i < size; i++) {
 		as_node* node = nodes->array[i];
 
-		for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
-			uint32_t limit = i < rem ? max + 1 : max;
+		for (uint32_t j = 0; j < as_event_loop_capacity; j++) {
+			uint32_t limit = j < rem ? max + 1 : max;
 
 			if (pipe) {
-				node->pipe_conn_pools[i].limit = limit;
+				node->pipe_conn_pools[j].limit = limit;
 			}
 			else {
-				node->async_conn_pools[i].limit = limit;
+				node->async_conn_pools[j].limit = limit;
 			}
 		}
 	}

@@ -690,7 +690,8 @@ as_query_command_init(
 									wp->durable_delete);
 	}
 	else {
-		p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ, AS_POLICY_CONSISTENCY_LEVEL_ONE,
+		uint8_t read_attr = (query->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
+		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE,
 										 timeout, n_fields, n_ops);
 	}
 	

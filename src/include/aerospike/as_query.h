@@ -568,6 +568,13 @@ typedef struct as_query_s {
 	 */
 	as_udf_call apply;
 
+	/**
+	 *	Set to true if query should only return keys and no bin data.
+	 *
+	 *	Default value is false.
+	 */
+	bool no_bins;
+
 } as_query;
 
 /******************************************************************************

@@ -598,8 +598,10 @@ typedef struct as_config_s {
 	bool use_shm;
 
 	/**
-	 *	Shared memory identifier.  This identifier should be the same for all applications
-	 *	that use the Aerospike C client. 
+	 *	Identifier for the shared memory segment associated with the target Aerospike cluster.
+	 *	Each shared memory segment contains state for one Aerospike cluster.  If there are
+	 *	multiple Aerospike clusters, a different shm_key must be defined for each cluster.
+	 *	
 	 *	Default: 0xA6000000
 	 */
 	int shm_key;

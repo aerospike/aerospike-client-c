@@ -53,6 +53,8 @@ static as_query * as_query_defaults(as_query * query, bool free, const as_namesp
 	query->predexp.size = 0;
 	query->predexp.entries = NULL;
 
+	query->no_bins = false;
+
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
 
 	return query;

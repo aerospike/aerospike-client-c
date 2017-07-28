@@ -23,7 +23,7 @@
 #include <unistd.h>
 
 /**
- *	@defgroup async_events Asynchronous Event Abstraction
+ *	@defgroup async_events Event Framework Abstraction
  *
  *  Generic asynchronous events abstraction.  Designed to support multiple event libraries.
  *	Only one library is supported per build.

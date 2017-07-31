@@ -383,9 +383,6 @@ PLAN(aerospike_test) {
 	// aerospike_scan module
 	plan_add(batch_get);
 
-	// as_ldt module
-	plan_add(ldt_lmap);
-
 #if AS_EVENT_LIB_DEFINED
 	plan_add(key_basics_async);
 	plan_add(list_basics_async);

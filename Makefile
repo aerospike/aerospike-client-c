@@ -137,15 +137,10 @@ endif
 
 AEROSPIKE = 
 AEROSPIKE += _bin.o
-AEROSPIKE += _ldt.o
 AEROSPIKE += aerospike.o
 AEROSPIKE += aerospike_batch.o
 AEROSPIKE += aerospike_index.o
 AEROSPIKE += aerospike_info.o
-AEROSPIKE += aerospike_llist.o
-AEROSPIKE += aerospike_lmap.o
-AEROSPIKE += aerospike_lset.o
-AEROSPIKE += aerospike_lstack.o
 AEROSPIKE += aerospike_key.o
 AEROSPIKE += aerospike_query.o
 AEROSPIKE += aerospike_scan.o
@@ -166,7 +161,6 @@ AEROSPIKE += as_event_none.o
 AEROSPIKE += as_info.o
 AEROSPIKE += as_job.o
 AEROSPIKE += as_key.o
-AEROSPIKE += as_ldt.o
 AEROSPIKE += as_lookup.o
 AEROSPIKE += as_node.o
 AEROSPIKE += as_operations.o

@@ -19,8 +19,10 @@
 #include <aerospike/as_admin.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_monitor.h>
 #include <aerospike/as_pipe.h>
 #include <aerospike/as_proto.h>
+#include <aerospike/as_shm_cluster.h>
 #include <citrusleaf/alloc.h>
 #include <errno.h>
 #include <pthread.h>
@@ -213,38 +215,17 @@ as_event_destroy_loops()
  * PRIVATE FUNCTIONS
  *****************************************************************************/
 
-static void
-as_event_command_execute_in_loop(as_event_command* cmd)
-{
-	// Check if command timed out after coming off queue.
-	// total_deadline is really a timeout at this point.
-	if (cmd->total_deadline && (cf_getms() - *(uint64_t*)cmd) > cmd->total_deadline) {
-		as_error err;
-		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
-		// Tell the libuv version of as_event_command_release() to not try to close the uv_timer_t.
-		cmd->total_deadline = 0;
-		cmd->socket_timeout = 0;
-		as_event_error_callback(cmd, &err);
-		return;
-	}
-
-	// Start processing.
-	as_event_command_begin(cmd);
-}
+static void as_event_command_execute_in_loop(as_event_command* cmd);
+static void as_event_command_begin(as_event_command* cmd);
 
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
 {
-	ck_pr_inc_32(&cmd->cluster->async_pending);
-	
-	as_event_loop* event_loop = cmd->event_loop;
+	// Initialize read buffer (buf) to be located after write buffer.
+	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
+	cmd->buf += cmd->write_len;
 
-	// Only do this after the above increment to avoid a race with as_cluster_destroy().
-	if (!cmd->cluster->valid) {
-		event_loop->errors++;  // May not be in event loop thread, so not exactly accurate.
-		as_event_command_free(cmd);
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Client shutting down");
-	}
+	as_event_loop* event_loop = cmd->event_loop;
 
 	// Use pointer comparison for performance.  If portability becomes an issue, use
 	// "pthread_equal(event_loop->thread, pthread_self())" instead.
@@ -252,47 +233,294 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 	// event loop when consecutive recursive errors reaches an approximate limit.
 	if (event_loop->thread == pthread_self() && event_loop->errors < 5) {
 		// We are already in event loop thread, so start processing.
-		if (as_event_command_begin(cmd)) {
-			cmd->type |= AS_ASYNC_TYPE_REGISTERED;
-			event_loop->errors = 0;
-		}
+		as_event_command_execute_in_loop(cmd);
 	}
 	else {
-		cmd->type |= AS_ASYNC_TYPE_REGISTERED;
-
-		if (cmd->total_deadline) {
-			// Store current time in first 8 bytes which is not used yet.
-			*(uint64_t*)cmd = cf_getms();
-		}
-
 		// Send command through queue so it can be executed in event loop thread.
+		if (cmd->total_deadline > 0) {
+			// Convert total timeout to deadline.
+			cmd->total_deadline += cf_getms();
+		}
+		cmd->state = AS_ASYNC_STATE_REGISTERED;
+
 		if (! as_event_execute(cmd->event_loop, (as_event_executable)as_event_command_execute_in_loop, cmd)) {
 			event_loop->errors++;  // Not in event loop thread, so not exactly accurate.
-			as_event_command_free(cmd);
+			if (cmd->node) {
+				as_node_release(cmd->node);
+			}
+			cf_free(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
 		}
-		event_loop->errors = 0;
 	}
 	return AEROSPIKE_OK;
 }
 
-static inline void
-as_event_release_async_connection(as_event_command* cmd)
+static void
+as_event_command_execute_in_loop(as_event_command* cmd)
 {
+	as_event_loop* event_loop = cmd->event_loop;
+
+	if (cmd->cluster->pending[event_loop->index]++ == -1) {
+		event_loop->errors++;
+		cmd->state = AS_ASYNC_STATE_COMPLETE;
+
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster has been closed");
+		as_event_error_callback(cmd, &err);
+		return;
+	}
+
+	if (cmd->total_deadline > 0) {
+		uint64_t now = cf_getms();
+		uint64_t total_timeout;
+
+		if (cmd->state == AS_ASYNC_STATE_REGISTERED) {
+			// Command was queued to event loop thread.
+			if (now >= cmd->total_deadline) {
+				// Command already timed out.
+				event_loop->errors++;
+				cmd->state = AS_ASYNC_STATE_COMPLETE;
+
+				as_error err;
+				as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Register timeout");
+				as_event_error_callback(cmd, &err);
+				return;
+			}
+			total_timeout = cmd->total_deadline - now;
+		}
+		else {
+			// Convert total timeout to deadline.
+			total_timeout = cmd->total_deadline;
+			cmd->total_deadline += now;
+		}
+
+		if (cmd->socket_timeout > 0 && cmd->socket_timeout < total_timeout) {
+			// Use socket timer.
+			as_event_init_socket_timer(cmd);
+			cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+		}
+		else {
+			// Use total timer.
+			as_event_init_total_timer(cmd, total_timeout);
+			cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER;
+		}
+	}
+	else if (cmd->socket_timeout > 0) {
+		// Use socket timer.
+		as_event_init_socket_timer(cmd);
+		cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+	}
+
+	// Start processing.
+	as_event_command_begin(cmd);
+}
+
+static void
+as_event_command_begin(as_event_command* cmd)
+{
+	if (cmd->partition) {
+		// If in retry, need to release node from prior attempt.
+		if (cmd->node) {
+			as_node_release(cmd->node);
+		}
+
+		if (cmd->cluster->shm_info) {
+			cmd->node = as_partition_shm_get_node(cmd->cluster, cmd->partition, cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER);
+		}
+		else {
+			cmd->node = as_partition_get_node(cmd->cluster, cmd->partition, cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER);
+		}
+
+		if (! cmd->node) {
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+
+			if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+				as_event_stop_timer(cmd);
+			}
+			as_event_error_callback(cmd, &err);
+			return;
+		}
+	}
+
+	if (cmd->pipe_listener) {
+		as_pipe_get_connection(cmd);
+		return;
+	}
+
 	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
-	as_event_release_connection(cmd->cluster, cmd->conn, pool);
+	as_async_connection* conn;
+
+	// Find connection.
+	while (as_conn_pool_get(pool, &conn)) {
+		// Verify that socket is active and receive buffer is empty.
+		int len = as_event_validate_connection(&conn->base);
+
+		if (len == 0) {
+			conn->cmd = cmd;
+			cmd->conn = (as_event_connection*)conn;
+			cmd->event_loop->errors = 0;  // Reset errors on valid connection.
+			as_event_command_write_start(cmd);
+			return;
+		}
+
+		as_log_debug("Invalid async socket from pool: %d", len);
+		as_event_release_connection(&conn->base, pool);
+	}
+
+	// Create connection structure only when node connection count within queue limit.
+	if (as_conn_pool_inc(pool)) {
+		conn = cf_malloc(sizeof(as_async_connection));
+		conn->base.pipeline = false;
+		conn->base.watching = 0;
+		conn->cmd = cmd;
+		cmd->conn = &conn->base;
+		as_event_connect(cmd);
+		return;
+	}
+
+	cmd->event_loop->errors++;
+
+	if (! as_event_command_retry(cmd, true)) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
+						"Max node/event loop %s async connections would be exceeded: %u",
+						cmd->node->name, pool->limit);
+
+		if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+			as_event_stop_timer(cmd);
+		}
+		as_event_error_callback(cmd, &err);
+	}
+}
+
+void
+as_event_socket_timeout(as_event_command* cmd)
+{
+	if (cmd->flags & AS_ASYNC_FLAGS_EVENT_RECEIVED) {
+		// Event(s) received within socket timeout period.
+		cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
+
+		if (cmd->total_deadline > 0) {
+			// Check total timeout.
+			uint64_t now = cf_getms();
+
+			if (now >= cmd->total_deadline) {
+				cmd->iteration++;
+				as_event_stop_timer(cmd);
+				as_event_total_timeout(cmd);
+				return;
+			}
+
+			uint64_t remaining = cmd->total_deadline - now;
+
+			if (remaining <= cmd->socket_timeout) {
+				// Transition to total timer.
+				cmd->flags &= ~AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+				as_event_stop_timer(cmd);
+				as_event_set_total_timer(cmd, remaining);
+			}
+			else {
+				as_event_repeat_socket_timer(cmd);
+			}
+		}
+		else {
+			as_event_repeat_socket_timer(cmd);
+		}
+		return;
+	}
+
+	if (cmd->pipe_listener) {
+		as_pipe_timeout(cmd, true);
+		return;
+	}
+
+	// Close connection.
+	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_event_connection_timeout(cmd, pool);
+
+	// Attempt retry.
+	// Read commands shift to prole node on timeout.
+	if (! as_event_command_retry(cmd, cmd->flags & AS_ASYNC_FLAGS_READ)) {
+		as_event_stop_timer(cmd);
+
+		as_error err;
+		const char* node_string = cmd->node ? as_node_get_address_string(cmd->node) : "null";
+		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Timeout: iterations=%u lastNode=%s",
+						cmd->iteration, node_string);
+
+		as_event_error_callback(cmd, &err);
+	}
+}
+
+void
+as_event_total_timeout(as_event_command* cmd)
+{
+	if (cmd->pipe_listener) {
+		as_pipe_timeout(cmd, false);
+		return;
+	}
+
+	as_error err;
+	const char* node_string = cmd->node ? as_node_get_address_string(cmd->node) : "null";
+	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Timeout: iterations=%u lastNode=%s",
+					cmd->iteration, node_string);
+
+	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_event_connection_timeout(cmd, pool);
+
+	as_event_error_callback(cmd, &err);
+}
+
+bool
+as_event_command_retry(as_event_command* cmd, bool alternate)
+{
+	// Check max retries.
+	if (++(cmd->iteration) > cmd->max_retries) {
+		return false;
+	}
+
+	if (cmd->total_deadline > 0) {
+		// Check total timeout.
+		uint64_t now = cf_getms();
+
+		if (now >= cmd->total_deadline) {
+			return false;
+		}
+
+		if (cmd->flags & AS_ASYNC_FLAGS_USING_SOCKET_TIMER) {
+			uint64_t remaining = cmd->total_deadline - now;
+
+			if (remaining <= cmd->socket_timeout) {
+				// Transition to total timer.
+				cmd->flags &= ~AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+				as_event_stop_timer(cmd);
+				as_event_set_total_timer(cmd, remaining);
+			}
+			else {
+				as_event_repeat_socket_timer(cmd);
+			}
+		}
+	}
+	else if (cmd->flags & AS_ASYNC_FLAGS_USING_SOCKET_TIMER) {
+		as_event_repeat_socket_timer(cmd);
+	}
+
+	if (alternate) {
+		cmd->flags ^= AS_ASYNC_FLAGS_MASTER;  // Alternate between master and prole.
+	}
+
+	// Retry command at the end of the queue so other commands have a chance to run first.
+	return as_event_execute(cmd->event_loop, (as_event_executable)as_event_command_begin, cmd);
 }
 
 static inline void
-as_event_put_connection(as_event_command* cmd)
+as_event_put_connection(as_event_command* cmd, as_conn_pool* pool)
 {
 	as_event_set_conn_last_used(cmd->conn, cmd->cluster->max_socket_idle);
-	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 
-	if (as_conn_pool_put(pool, &cmd->conn)) {
-		ck_pr_inc_32(&cmd->cluster->async_conn_pool);
-	} else {
-		as_event_release_connection(cmd->cluster, cmd->conn, pool);
+	if (! as_conn_pool_put(pool, &cmd->conn)) {
+		as_event_release_connection(cmd->conn, pool);
 	}
 }
 
@@ -304,9 +532,13 @@ as_event_response_complete(as_event_command* cmd)
 		return;
 	}
 	
-	as_event_stop_timer(cmd);
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(cmd);
+	}
 	as_event_stop_watcher(cmd, cmd->conn);
-	as_event_put_connection(cmd);
+
+	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_event_put_connection(cmd, pool);
 }
 
 static inline void
@@ -405,61 +637,10 @@ as_event_executor_complete(as_event_command* cmd)
 	as_event_command_release(cmd);
 }
 
-as_connection_status
-as_event_get_connection(as_event_command* cmd)
-{
-	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
-	as_async_connection* conn;
-
-	// Find connection.
-	while (as_conn_pool_get(pool, &conn)) {
-		ck_pr_dec_32(&cmd->cluster->async_conn_pool);
-		
-		// Verify that socket is active and receive buffer is empty.
-		int len = as_event_validate_connection(&conn->base);
-		
-		if (len == 0) {
-			conn->cmd = cmd;
-			cmd->conn = (as_event_connection*)conn;
-			return AS_CONNECTION_FROM_POOL;
-		}
-		
-		as_log_debug("Invalid async socket from pool: %d", len);
-		as_event_release_connection(cmd->cluster, &conn->base, pool);
-	}
-	
-	// Create connection structure only when node connection count within queue limit.
-	if (as_conn_pool_inc(pool)) {
-		ck_pr_inc_32(&cmd->cluster->async_conn_count);
-		conn = cf_malloc(sizeof(as_async_connection));
-		conn->base.pipeline = false;
-#if defined(AS_USE_LIBEV) || defined(AS_USE_LIBEVENT)
-		conn->base.watching = 0;
-#endif
-		conn->cmd = cmd;
-		cmd->conn = &conn->base;
-		return AS_CONNECTION_NEW;
-	}
-	else {
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
-						"Max node/event loop %s async connections would be exceeded: %u",
-						cmd->node->name, pool->limit);
-		as_event_stop_timer(cmd);
-		as_event_error_callback(cmd, &err);
-		return AS_CONNECTION_TOO_MANY;
-	}
-}
-
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
-	if (! (cmd->type & AS_ASYNC_TYPE_REGISTERED)) {
-		// Must increment recursive error count before callback is made.
-		cmd->event_loop->errors++;
-	}
-
-	switch (cmd->type & AS_ASYNC_TYPE_MASK) {
+	switch (cmd->type) {
 		case AS_ASYNC_TYPE_WRITE:
 			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);
 			break;
@@ -480,21 +661,40 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 }
 
 void
-as_event_socket_error(as_event_command* cmd, as_error* err)
+as_event_parse_error(as_event_command* cmd, as_error* err)
 {
-	if (cmd->pipe_listener != NULL) {
-		as_pipe_socket_error(cmd, err);
+	if (cmd->pipe_listener) {
+		as_pipe_socket_error(cmd, err, false);
 		return;
 	}
-	
-	// Socket read/write failure.
+
+	// Close connection.
 	as_event_stop_watcher(cmd, cmd->conn);
-	
-	// Stop timer.
-	as_event_stop_timer(cmd);
-	
-	// Do not put connection back in pool.
 	as_event_release_async_connection(cmd);
+
+	// Stop timer.
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(cmd);
+	}
+
+	as_event_error_callback(cmd, err);
+}
+
+void
+as_event_socket_error(as_event_command* cmd, as_error* err)
+{
+	if (cmd->pipe_listener) {
+		// Retry pipeline commands.
+		as_pipe_socket_error(cmd, err, true);
+		return;
+	}
+
+	// Connection should already have been closed before calling this function.
+	// Stop timer.
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(cmd);
+	}
+
 	as_event_error_callback(cmd, err);
 }
 
@@ -508,9 +708,13 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	
 	// Server sent back error.
 	// Release resources, make callback and free command.
-	as_event_stop_timer(cmd);
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(cmd);
+	}
 	as_event_stop_watcher(cmd, cmd->conn);
 	
+	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+
 	// Close socket on errors that can leave unread data in socket.
 	switch (err->code) {
 		case AEROSPIKE_ERR_QUERY_ABORTED:
@@ -519,38 +723,16 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_TLS_ERROR:
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
-		case AEROSPIKE_NOT_AUTHENTICATED:
-			as_event_release_async_connection(cmd);
+		case AEROSPIKE_NOT_AUTHENTICATED: {
+			as_event_release_connection(cmd->conn, pool);
 			break;
+		}
 			
 		default:
-			as_event_put_connection(cmd);
+			as_event_put_connection(cmd, pool);
 			break;
 	}
 	as_event_error_callback(cmd, err);
-}
-
-void
-as_event_timeout(as_event_command* cmd)
-{
-	if (cmd->pipe_listener != NULL) {
-		as_pipe_timeout(cmd);
-		return;
-	}
-	
-	as_error err;
-	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
-	
-	// Command has timed out.
-	// Stop watcher if it has been initialized.
-	if (cmd->state > AS_ASYNC_STATE_UNREGISTERED) {
-		as_event_stop_watcher(cmd, cmd->conn);
-	}
-	
-	// Assume timer has already been stopped.
-	// Do not put connection back in pool.
-	as_event_release_async_connection(cmd);
-	as_event_error_callback(cmd, &err);
 }
 
 bool
@@ -670,20 +852,116 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 void
 as_event_command_free(as_event_command* cmd)
 {
-	as_node_release(cmd->node);
-	
-	as_cluster* cluster = cmd->cluster;
-	bool destroy;
-	
-	ck_pr_dec_32_zero(&cluster->async_pending, &destroy);
-	
-	// Only destroy cluster if cluster was closed and there are no pending async commands.
-	if (destroy) {
-		as_cluster_destroy(cluster);
+	cmd->cluster->pending[cmd->event_loop->index]--;
+
+	if (cmd->node) {
+		as_node_release(cmd->node);
 	}
-	
+
 	if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
 		cf_free(cmd->buf);
 	}
 	cf_free(cmd);
+}
+
+/******************************************************************************
+ * CLUSTER CLOSE FUNCTIONS
+ *****************************************************************************/
+
+typedef struct {
+	as_monitor* monitor;
+	as_cluster* cluster;
+	as_event_loop* event_loop;
+	uint32_t* event_loop_count;
+} as_event_close_state;
+
+static void
+as_event_close_cluster_event_loop(as_event_close_state* state)
+{
+	state->cluster->pending[state->event_loop->index] = -1;
+
+	bool destroy;
+	ck_pr_dec_32_zero(state->event_loop_count, &destroy);
+
+	if (destroy) {
+		as_cluster_destroy(state->cluster);
+		cf_free(state->event_loop_count);
+
+		if (state->monitor) {
+			as_monitor_notify(state->monitor);
+		}
+	}
+	cf_free(state);
+}
+
+static void
+as_event_close_cluster_cb(as_event_close_state* state)
+{
+	int pending = state->cluster->pending[state->event_loop->index];
+
+	if (pending < 0) {
+		// Cluster's event loop connections are already closed.
+		return;
+	}
+
+	if (pending > 0) {
+		// Cluster has pending commands.
+		// Check again after all other commands run.
+		if (as_event_execute(state->event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
+			return;
+		}
+		as_log_error("Failed to queue cluster close command");
+	}
+
+	as_event_close_cluster_event_loop(state);
+}
+
+void
+as_event_close_cluster(as_cluster* cluster)
+{
+	// Determine if current thread is an event loop thread.
+	bool in_event_loop = false;
+
+	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+		as_event_loop* event_loop = &as_event_loops[i];
+
+		if (event_loop->thread == pthread_self()) {
+			in_event_loop = true;
+			break;
+		}
+	}
+
+	as_monitor* monitor = NULL;
+
+	if (! in_event_loop) {
+		monitor = cf_malloc(sizeof(as_monitor));
+		as_monitor_init(monitor);
+	}
+
+	uint32_t* event_loop_count = cf_malloc(sizeof(uint32_t));
+	*event_loop_count = as_event_loop_size;
+
+	// Send cluster close notification to async event loops.
+	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+		as_event_loop* event_loop = &as_event_loops[i];
+
+		as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
+		state->monitor = monitor;
+		state->cluster = cluster;
+		state->event_loop = event_loop;
+		state->event_loop_count = event_loop_count;
+
+		if (! as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
+			as_log_error("Failed to queue cluster close command");
+			as_event_close_cluster_event_loop(state);
+		}
+	}
+
+	// Deadlock would occur if we wait from an event loop thread.
+	// Only wait when not in event loop thread.
+	if (monitor) {
+		as_monitor_wait(monitor);
+		as_monitor_destroy(monitor);
+		cf_free(monitor);
+	}
 }

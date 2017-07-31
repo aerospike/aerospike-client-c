@@ -264,7 +264,7 @@ as_roles_destroy(as_role** roles, int roles_size);
  *  Do not use this method directly.
  */
 as_status
-as_authenticate(as_error* err, as_socket* sock, struct as_node_s* node, const char* user, const char* credential, uint64_t deadline_ms);
+as_authenticate(as_error* err, as_socket* sock, struct as_node_s* node, const char* user, const char* credential, uint32_t socket_timeout, uint64_t deadline_ms);
 	
 /**
  *	@private

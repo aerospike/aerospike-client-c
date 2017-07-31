@@ -486,7 +486,7 @@ as_node_authenticate_connection(struct as_cluster_s* cluster, const char* user, 
  *	Get a connection to the given node from pool and validate.  Return 0 on success.
  */
 as_status
-as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_socket* sock);
+as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_socket* sock);
 
 /**
  *	@private

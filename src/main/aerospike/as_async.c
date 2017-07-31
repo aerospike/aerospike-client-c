@@ -22,6 +22,7 @@
 
 extern uint32_t as_cluster_count;
 extern uint32_t as_event_loop_capacity;
+extern uint32_t as_event_loop_size;
 
 /******************************************************************************
  * FUNCTIONS
@@ -36,17 +37,41 @@ as_async_get_cluster_count()
 uint32_t
 as_async_get_pending(as_cluster* cluster)
 {
-	// Subtract one to account for extra as_cluster_create() pending reference count.
-	// Maxint could be returned if pending is really zero, but that can only occur after
-	// as_cluster_destroy() was called, so the result is garbage anyway.
-	return ck_pr_load_32(&cluster->async_pending) - 1;
+	// Return approximate number of pending commands for given cluster.
+	// Results may not be exactly accurate because we accessing pending counts
+	// in a non-atomic way.
+	int sum = 0;
+
+	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+		int pending = cluster->pending[i];
+
+		if (pending > 0) {
+			sum += pending;
+		}
+	}
+	return sum;
 }
 
-void
-as_async_get_connections(as_cluster* cluster, uint32_t* async_conn, uint32_t* async_conn_pool)
+uint32_t
+as_async_get_connections(as_cluster* cluster)
 {
-	*async_conn = ck_pr_load_32(&cluster->async_conn_count);
-	*async_conn_pool = ck_pr_load_32(&cluster->async_conn_pool);
+	// Return approximate number of open connections for given cluster.
+	// Results may not be exactly accurate because we accessing connection counts
+	// in a non-atomic way.
+	uint32_t sum = 0;
+
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	uint32_t size = nodes->size;
+
+	for (uint32_t i = 0; i < size; i++) {
+		as_node* node = nodes->array[i];
+
+		for (uint32_t j = 0; j < as_event_loop_size; j++) {
+			sum += node->async_conn_pools[j].total + node->pipe_conn_pools[j].total;
+		}
+	}
+	as_nodes_release(nodes);
+	return sum;
 }
 
 void

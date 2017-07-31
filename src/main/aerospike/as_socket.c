@@ -320,12 +320,12 @@ as_socket_validate(as_socket* sock)
 as_status
 as_socket_write_deadline(
 	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len,
-	uint32_t max_idle, uint64_t deadline
+	uint32_t socket_timeout, uint64_t deadline
 	)
 {
 	if (sock->ctx) {
 		as_status status = AEROSPIKE_OK;
-		int rv = as_tls_write(sock, buf, buf_len, max_idle, deadline);
+		int rv = as_tls_write(sock, buf, buf_len, socket_timeout, deadline);
 
 		if (rv < 0) {
 			status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "TLS write error", rv);
@@ -370,17 +370,17 @@ as_socket_write_deadline(
 
 			uint64_t ms_left = deadline - now;
 
-			if (max_idle > 0 && max_idle < ms_left) {
-				ms_left = max_idle;
+			if (socket_timeout > 0 && socket_timeout < ms_left) {
+				ms_left = socket_timeout;
 			}
 			tv.tv_sec = ms_left / 1000;
 			tv.tv_usec = (ms_left % 1000) * 1000;
 			tvp = &tv;
 		}
 		else {
-			if (max_idle > 0) {
-				tv.tv_sec = max_idle / 1000;
-				tv.tv_usec = (max_idle % 1000) * 1000;
+			if (socket_timeout > 0) {
+				tv.tv_sec = socket_timeout / 1000;
+				tv.tv_usec = (socket_timeout % 1000) * 1000;
 				tvp = &tv;
 			}
 		}
@@ -440,12 +440,12 @@ as_socket_write_deadline(
 as_status
 as_socket_read_deadline(
 	as_error* err, as_socket* sock, as_node* node, uint8_t *buf, size_t buf_len,
-	uint32_t max_idle, uint64_t deadline
+	uint32_t socket_timeout, uint64_t deadline
 	)
 {
 	if (sock->ctx) {
 		as_status status = AEROSPIKE_OK;
-		int rv = as_tls_read(sock, buf, buf_len, max_idle, deadline);
+		int rv = as_tls_read(sock, buf, buf_len, socket_timeout, deadline);
 
 		if (rv < 0) {
 			status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "TLS read error", rv);
@@ -490,17 +490,17 @@ as_socket_read_deadline(
 
 			uint64_t ms_left = deadline - now;
 
-			if (max_idle > 0 && max_idle < ms_left) {
-				ms_left = max_idle;
+			if (socket_timeout > 0 && socket_timeout < ms_left) {
+				ms_left = socket_timeout;
 			}
 			tv.tv_sec = ms_left / 1000;
 			tv.tv_usec = (ms_left % 1000) * 1000;
 			tvp = &tv;
 		}
 		else {
-			if (max_idle > 0) {
-				tv.tv_sec = max_idle / 1000;
-				tv.tv_usec = (max_idle % 1000) * 1000;
+			if (socket_timeout > 0) {
+				tv.tv_sec = socket_timeout / 1000;
+				tv.tv_usec = (socket_timeout % 1000) * 1000;
 				tvp = &tv;
 			}
 		}

@@ -383,10 +383,6 @@ PLAN(aerospike_test) {
 	// aerospike_scan module
 	plan_add(batch_get);
 
-	// as_policy module
-	plan_add(policy_read);
-	plan_add(policy_scan);
-
 	// as_ldt module
 	plan_add(ldt_lmap);
 

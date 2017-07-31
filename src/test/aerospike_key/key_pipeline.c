@@ -42,6 +42,7 @@
 
 extern aerospike* as;
 static as_monitor monitor;
+static int responses[10];
 
 /******************************************************************************
  * MACROS
@@ -50,15 +51,23 @@ static as_monitor monitor;
 #define NAMESPACE "test"
 #define SET "pipe"
 
+#define set_error_message(result, fmt, args ... ) \
+	if (! result->message[0]) {\
+		atf_assert_log(result, "", __FILE__, __LINE__, fmt, ##args);\
+	}
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
 
 typedef struct {
-	atf_test_result* __result__;
-	uint32_t pipeline_count;
-	uint32_t complete_count;
-} counter_data;
+	atf_test_result* result;
+	uint32_t queue_size;  // Maximum records allowed inflight (in async queue).
+	uint32_t max;
+	uint32_t started;     // Key of next record to write.
+	uint32_t completed;
+	uint32_t pipe_count;
+} counter;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -82,7 +91,26 @@ after(atf_suite* suite)
  * TEST CASES
  *****************************************************************************/
 
-static int responses[10];
+static void
+stop_pipeline(counter* ctr)
+{
+	free(ctr);
+	as_monitor_notify(&monitor);
+}
+
+static bool
+has_error(atf_test_result* result)
+{
+	return result->message[0];
+}
+
+static void
+set_error(as_error* err, atf_test_result* result)
+{
+	if (! has_error(result)) {
+		atf_assert_log(result, "", __FILE__, __LINE__, "Error %d: %s", err->code, err->message);
+	}
+}
 
 static void
 pipeline_noop(void* udata, as_event_loop* event_loop)
@@ -90,125 +118,163 @@ pipeline_noop(void* udata, as_event_loop* event_loop)
 }
 
 static void
-as_get_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+get_listener(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
-	assert_success_async(&monitor, err, udata);
-	assert_int_eq_async(&monitor, as_record_numbins(rec), 1);
+	counter* ctr = udata;
+	ctr->completed++;
 
-	int64_t v = as_record_get_int64(rec, "a", -1);
-	counter_data* cdata = udata;
-	cdata->complete_count++;
-	
-	as_log_trace("Read Response %p %u %" PRIi64, cdata, cdata->complete_count, v);
-	
-	if (v < 1 || v > 10) {
-		fail_async(&monitor, "Response value invalid %" PRIi64, v);
+	if (err) {
+		set_error(err, ctr->result);
 	}
-	
-	responses[v-1] = 1;
-	
-	if (cdata->complete_count == 10) {
+	else {
+		if (as_record_numbins(rec) == 1) {
+			int64_t v = as_record_get_int64(rec, "a", -1);
+
+			if (v < 0 || v >= 10) {
+				set_error_message(ctr->result, "Response value invalid %" PRIi64, v);
+			}
+			else {
+				responses[v] = 1;
+			}
+		}
+		else {
+			set_error(err, ctr->result);
+		}
+	}
+
+	if (ctr->completed != ctr->max) {
+		return;
+	}
+
+	if (! has_error(ctr->result)) {
 		as_log_info("Pipeline reads complete. Validating.");
 		for (int i = 0; i < 10; i++) {
 			if (! responses[i]) {
-				fail_async(&monitor, "Response value invalid %d", i);
+				set_error_message(ctr->result, "Response value invalid %d", i);
 			}
 		}
-		free(cdata);
-		as_monitor_notify(&monitor);
 	}
+
+	stop_pipeline(ctr);
 }
 
 static void
-put_callback1(as_error* err, void* udata, as_event_loop* event_loop)
+read_all(as_event_loop* event_loop, counter* ctr)
 {
-	assert_success_async(&monitor, err, udata);
-	
-	counter_data* cdata = udata;
-	cdata->complete_count++;
-	
-	if (cdata->complete_count == 10) {
-		// All writes complete, now read and verify all records with pipeline.
-		cdata->pipeline_count = 0;
-		cdata->complete_count = 0;
-				
-		as_key key;
-		char key_buf[64];
-
-		as_error e;
-		as_status status;
-
-		for (int i = 1; i <= 10; i++) {
-			as_log_trace("Read rec %d", i);
-			sprintf(key_buf, "pipe%d", i);
-			as_key_init(&key, NAMESPACE, SET, key_buf);
-			
-			status = aerospike_key_get_async(as, &e, NULL, &key, as_get_callback, cdata, event_loop, pipeline_noop);
-			assert_status_async(&monitor, status, &e);
-		}
-	}
-}
-
-static void
-pipeline_callback1(void* udata, as_event_loop* event_loop)
-{
-	// Issue an extra put for each put callback, thus doubling puts.
-	atf_test_result* __result__ = udata;
-	counter_data* cdata = udata;
-	cdata->pipeline_count++;
-	
-	uint32_t index = cdata->pipeline_count + 5;
+	// Read and verify all records with pipeline.
+	ctr->started = 0;
+	ctr->completed = 0;
 
 	as_key key;
 	char key_buf[64];
-	
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.total_timeout = 1000;
+	p.base.socket_timeout = 200;
+
+	as_error e;
+
+	for (int i = 0; i < ctr->max; i++) {
+		as_log_trace("Read rec %d", i);
+		sprintf(key_buf, "pipe%d", i);
+		as_key_init(&key, NAMESPACE, SET, key_buf);
+
+		if (aerospike_key_get_async(as, &e, &p, &key, get_listener, ctr, event_loop, pipeline_noop) != AEROSPIKE_OK) {
+			get_listener(&e, NULL, ctr, event_loop);
+		}
+	}
+}
+
+static bool
+write_record(as_event_loop* event_loop, counter* ctr);
+
+static void
+write_listener(as_error* err, void* udata, as_event_loop* event_loop)
+{
+	counter* ctr = udata;
+	ctr->completed++;
+
+	if (err) {
+		set_error(err, ctr->result);
+	}
+
+	// Stop early if error and no more commands in pipeline.
+	if (has_error(ctr->result) && ctr->completed == ctr->started) {
+		stop_pipeline(ctr);
+		return;
+	}
+
+	// Check if written all records.
+	if (ctr->completed == ctr->max) {
+		// We have written all records.
+		// Read those records back.
+		read_all(event_loop, ctr);
+		return;
+	}
+
+	// Check if need to write another record.
+	if (ctr->started < ctr->max) {
+		write_record(event_loop, ctr);
+	}
+	else {
+		// There's one fewer command in the pipeline.
+		ctr->pipe_count--;
+	}
+}
+
+static void
+pipeline_listener(void* udata, as_event_loop* event_loop)
+{
+	counter* ctr = udata;
+
+	// Check if pipeline has space.
+	if (ctr->pipe_count < ctr->queue_size && ctr->started < ctr->max) {
+		// Issue another write.
+		ctr->pipe_count++;
+		write_record(event_loop, ctr);
+	}
+}
+
+static bool
+write_record(as_event_loop* event_loop, counter* ctr)
+{
+	uint32_t id = ctr->started++;
+	char key_buf[64];
+	sprintf(key_buf, "pipe%u", id);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, key_buf);
+
 	as_record rec;
 	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, "a", index);
-	
+	as_record_set_int64(&rec, "a", id);
+
 	as_error err;
-	as_status status;
-	
-	sprintf(key_buf, "pipe%d", index);
-	as_key_init(&key, NAMESPACE, SET, key_buf);
-	
-	as_log_trace("Write rec %d", index);
-	status = aerospike_key_put_async(as, &err, NULL, &key, &rec, put_callback1, cdata, event_loop, pipeline_noop);
-	assert_status_async(&monitor, status, &err);
+
+	if (aerospike_key_put_async(as, &err, NULL, &key, &rec, write_listener, ctr, event_loop, pipeline_listener) != AEROSPIKE_OK) {
+		write_listener(&err, ctr, event_loop);
+		return false;
+	}
+	return true;
 }
 
 TEST(key_pipeline_put, "pipeline puts")
 {
 	as_monitor_begin(&monitor);
 	
-	counter_data* cdata = malloc(sizeof(counter_data));
-	cdata->__result__ = __result__;
-	cdata->pipeline_count = 0;
-	cdata->complete_count = 0;
+	counter* ctr = malloc(sizeof(counter));
+	memset(ctr, 0, sizeof(counter));
+	ctr->result = __result__;
+	ctr->queue_size = 100;
+	ctr->max = 10;
 
-	as_key key;
-	char key_buf[64];
+	// Write a single record to start pipeline.
+	// More records will be written in pipeline_listener to fill pipeline queue.
+	// A NULL event_loop indicates that an event loop will be chosen round-robin.
+	ctr->pipe_count++;
+	write_record(NULL, ctr);
 
-	as_record rec;
-	as_record_inita(&rec, 1);
-	
-	as_error err;
-	as_status status;
-
-	// Retrieve a random event loop.
-	as_event_loop* event_loop = as_event_loop_get();
-	
-	// Issue 5 puts with pipeline set on same event loop.
-	for (int i = 1; i <= 5; i++) {
-		as_log_trace("Write rec %d", i);
-		sprintf(key_buf, "pipe%d", i);
-		as_key_init(&key, NAMESPACE, SET, key_buf);
-		as_record_set_int64(&rec, "a", i);
-		
-		status = aerospike_key_put_async(as, &err, NULL, &key, &rec, put_callback1, cdata, event_loop, pipeline_callback1);
-		assert_int_eq(status, AEROSPIKE_OK);
-	}
-	
 	// Wait for tasks to finish.
 	as_monitor_wait(&monitor);
 }

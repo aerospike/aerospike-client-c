@@ -528,6 +528,7 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	
 	if (! as_config_add_hosts(&config, g_host, g_port)) {
 		printf("Invalid host(s) %s\n", g_host);
+		as_event_close_loops();
 		exit(-1);
 	}
 	
@@ -544,6 +545,7 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	// done after calling example_get_opts(), so it's ok to exit on failure.
 	if (aerospike_connect(p_as, &err) != AEROSPIKE_OK) {
 		LOG("aerospike_connect() returned %d - %s", err.code, err.message);
+		as_event_close_loops();
 		aerospike_destroy(p_as);
 		exit(-1);
 	}

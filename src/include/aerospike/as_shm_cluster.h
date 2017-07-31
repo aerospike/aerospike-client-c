@@ -290,6 +290,13 @@ as_shm_remove_nodes(struct as_cluster_s* cluster, as_vector* /* <as_node*> */ no
 
 /**
  *	@private
+ *	Find partition table for namespace in shared memory.
+ */
+as_partition_table_shm*
+as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns);
+
+/**
+ *	@private
  *	Update shared memory partition tables for given namespace.
  */
 void
@@ -302,6 +309,14 @@ as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64
  */
 as_node*
 as_shm_node_get(struct as_cluster_s* cluster, const char* ns, const uint8_t* digest, as_policy_replica replica, bool master);
+
+/**
+ *	@private
+ *	Get shared memory mapped node given partition.
+ *	as_nodes_release() must be called when done with node.
+ */
+as_node*
+as_partition_shm_get_node(struct as_cluster_s* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master);
 
 /**
  *	@private

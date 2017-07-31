@@ -40,10 +40,14 @@ as_event_execute(as_event_loop* event_loop, as_event_executable executable, void
 	return false;
 }
 
-bool
-as_event_command_begin(as_event_command* cmd)
+void
+as_event_command_write_start(as_event_command* cmd)
 {
-	return false;
+}
+
+void
+as_event_connect(as_event_command* cmd)
+{
 }
 
 void

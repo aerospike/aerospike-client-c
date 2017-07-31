@@ -134,49 +134,54 @@ reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 	return reserve_node(cluster, alternate);
 }
 
-static uint32_t g_randomizer = 0;
-
 as_node*
 as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const uint8_t* digest, as_policy_replica replica, bool use_master)
 {
 	if (table) {
 		uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);
 		as_partition* p = &table->partitions[partition_id];
-
-		// Make volatile reference so changes to tend thread will be reflected in this thread.
-		as_node* master = ck_pr_load_ptr(&p->master);
-
-		if (replica == AS_POLICY_REPLICA_MASTER) {
-			return reserve_node(cluster, master);
-		}
-		
-		as_node* prole = ck_pr_load_ptr(&p->prole);
-		
-		if (! prole) {
-			return reserve_node(cluster, master);
-		}
-		
-		if (! master) {
-			return reserve_node(cluster, prole);
-		}
-		
-		if (replica == AS_POLICY_REPLICA_ANY) {
-			// Alternate between master and prole for reads with global iterator.
-			uint32_t r = ck_pr_faa_32(&g_randomizer, 1);
-			use_master = (r & 1);
-		}
-
-		// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
-		if (use_master) {
-			return reserve_node_alternate(cluster, master, prole);
-		}
-		return reserve_node_alternate(cluster, prole, master);
+		return as_partition_get_node(cluster, p, replica, use_master);
 	}
-	
+
 #ifdef DEBUG_VERBOSE
 	as_log_debug("Choose random node for null partition table");
 #endif
 	return as_node_get_random(cluster);
+}
+
+static uint32_t g_randomizer = 0;
+
+as_node*
+as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master)
+{
+	// Make volatile reference so changes to tend thread will be reflected in this thread.
+	as_node* master = ck_pr_load_ptr(&p->master);
+
+	if (replica == AS_POLICY_REPLICA_MASTER) {
+		return reserve_node(cluster, master);
+	}
+
+	as_node* prole = ck_pr_load_ptr(&p->prole);
+
+	if (! prole) {
+		return reserve_node(cluster, master);
+	}
+
+	if (! master) {
+		return reserve_node(cluster, prole);
+	}
+
+	if (replica == AS_POLICY_REPLICA_ANY) {
+		// Alternate between master and prole for reads with global iterator.
+		uint32_t r = ck_pr_faa_32(&g_randomizer, 1);
+		use_master = (r & 1);
+	}
+
+	// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
+	if (use_master) {
+		return reserve_node_alternate(cluster, master, prole);
+	}
+	return reserve_node_alternate(cluster, prole, master);
 }
 
 as_partition_table*

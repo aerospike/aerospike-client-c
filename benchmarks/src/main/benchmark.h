@@ -63,7 +63,7 @@ typedef struct arguments_t {
 	int latency_columns;
 	int latency_shift;
 	bool use_shm;
-	as_policy_replica read_replica;
+	as_policy_replica replica;
 	as_policy_consistency_level read_consistency_level;
 	as_policy_commit_level write_commit_level;
 	int conn_pools_per_node;

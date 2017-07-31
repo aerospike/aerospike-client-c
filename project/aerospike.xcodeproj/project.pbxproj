@@ -48,7 +48,6 @@
 		BF2AA7F218BEBFA500E54AF3 /* as_record.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7CC18BEBFA500E54AF3 /* as_record.c */; };
 		BF2AA7F318BEBFA500E54AF3 /* as_scan.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */; };
 		BF2AA7F418BEBFA500E54AF3 /* as_udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7CE18BEBFA500E54AF3 /* as_udf.c */; };
-		BF3CA8E21EFDF320004B2211 /* as_command_policy.h in Headers */ = {isa = PBXBuildFile; fileRef = BF3CA8E11EFDF320004B2211 /* as_command_policy.h */; };
 		BF467C6C1E42AD1500D8EEDB /* as_predexp.c in Sources */ = {isa = PBXBuildFile; fileRef = BF467C6B1E42AD1500D8EEDB /* as_predexp.c */; };
 		BF4E4E2A1D48213700BEEF94 /* as_host.h in Headers */ = {isa = PBXBuildFile; fileRef = BF4E4E291D48213700BEEF94 /* as_host.h */; };
 		BF4E4E451D50150700BEEF94 /* as_peers.c in Sources */ = {isa = PBXBuildFile; fileRef = BF4E4E441D50150700BEEF94 /* as_peers.c */; };
@@ -220,7 +219,6 @@
 		BF2AA7CC18BEBFA500E54AF3 /* as_record.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_record.c; path = ../src/main/aerospike/as_record.c; sourceTree = "<group>"; };
 		BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_scan.c; path = ../src/main/aerospike/as_scan.c; sourceTree = "<group>"; };
 		BF2AA7CE18BEBFA500E54AF3 /* as_udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_udf.c; path = ../src/main/aerospike/as_udf.c; sourceTree = "<group>"; };
-		BF3CA8E11EFDF320004B2211 /* as_command_policy.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_command_policy.h; path = ../src/include/aerospike/as_command_policy.h; sourceTree = "<group>"; };
 		BF467C6B1E42AD1500D8EEDB /* as_predexp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_predexp.c; path = ../src/main/aerospike/as_predexp.c; sourceTree = "<group>"; };
 		BF4E4E291D48213700BEEF94 /* as_host.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_host.h; path = ../src/include/aerospike/as_host.h; sourceTree = "<group>"; };
 		BF4E4E441D50150700BEEF94 /* as_peers.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_peers.c; path = ../src/main/aerospike/as_peers.c; sourceTree = "<group>"; };
@@ -608,7 +606,6 @@
 				BFC65B461C921E9E0079DF5A /* as_bin.h */,
 				BFC65B471C921E9E0079DF5A /* as_cluster.h */,
 				BFC65B481C921E9E0079DF5A /* as_command.h */,
-				BF3CA8E11EFDF320004B2211 /* as_command_policy.h */,
 				BFC65B491C921E9E0079DF5A /* as_config.h */,
 				BFC65B4A1C921E9E0079DF5A /* as_error.h */,
 				BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */,
@@ -656,7 +653,6 @@
 				BFC65B811C921E9E0079DF5A /* as_pipe.h in Headers */,
 				BFC65B761C921E9E0079DF5A /* as_event_internal.h in Headers */,
 				BFC65B741C921E9E0079DF5A /* as_config.h in Headers */,
-				BF3CA8E21EFDF320004B2211 /* as_command_policy.h in Headers */,
 				BFC65B791C921E9E0079DF5A /* as_job.h in Headers */,
 				BFC65B651C921E9E0079DF5A /* aerospike_llist.h in Headers */,
 				BFC65B731C921E9E0079DF5A /* as_command.h in Headers */,

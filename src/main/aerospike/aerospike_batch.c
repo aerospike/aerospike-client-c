@@ -323,7 +323,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 }
 
 static as_status
-as_batch_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* udata)
+as_batch_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* udata)
 {
 	as_batch_task* task = udata;
 	as_status status = AEROSPIKE_OK;
@@ -333,7 +333,7 @@ as_batch_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle,
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), max_idle, deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), socket_timeout, deadline_ms);
 		
 		if (status) {
 			break;
@@ -350,7 +350,7 @@ as_batch_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle,
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, max_idle, deadline_ms);
+			status = as_socket_read_deadline(err, sock, node, buf, size, socket_timeout, deadline_ms);
 			
 			if (status) {
 				break;
@@ -423,7 +423,7 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, const as_po
 	}
 
 	uint32_t n_offsets = offsets->size;
-	uint8_t* p = as_command_write_header_read(cmd, read_attr | AS_MSG_INFO1_BATCH_INDEX, policy->consistency_level, policy->timeout, 1, 0);
+	uint8_t* p = as_command_write_header_read(cmd, read_attr | AS_MSG_INFO1_BATCH_INDEX, policy->consistency_level, policy->base.total_timeout, 1, 0);
 	uint8_t* field_size_ptr = p;
 	p = as_command_write_field_header(p, policy->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
@@ -512,10 +512,7 @@ as_batch_index_records_execute(as_batch_task* task)
 	as_error err;
 	as_error_init(&err);
 
-	as_command_policy pol;
-	as_command_policy_batch(&pol, policy);
-
-	as_status status = as_command_execute(task->cluster, &err, &pol, &cn, cmd, size, as_batch_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &policy->base, &cn, cmd, size, as_batch_parse, task, true);
 	
 	as_command_free(cmd, size);
 	
@@ -577,7 +574,7 @@ as_batch_index_execute(as_batch_task* task)
 
 	// Write command
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, task->read_attr | AS_MSG_INFO1_BATCH_INDEX, policy->consistency_level, policy->timeout, 1, 0);
+	uint8_t* p = as_command_write_header_read(cmd, task->read_attr | AS_MSG_INFO1_BATCH_INDEX, policy->consistency_level, policy->base.total_timeout, 1, 0);
 	uint8_t* field_size_ptr = p;
 	p = as_command_write_field_header(p, policy->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
@@ -634,10 +631,7 @@ as_batch_index_execute(as_batch_task* task)
 	as_error err;
 	as_error_init(&err);
 
-	as_command_policy pol;
-	as_command_policy_batch(&pol, policy);
-
-	as_status status = as_command_execute(task->cluster, &err, &pol, &cn, cmd, size, as_batch_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &policy->base, &cn, cmd, size, as_batch_parse, task, true);
 	
 	as_command_free(cmd, size);
 	
@@ -669,7 +663,7 @@ as_batch_direct_execute(as_batch_task* task)
 	}
 	
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, task->read_attr, policy->consistency_level, policy->timeout, 2, task->n_bins);
+	uint8_t* p = as_command_write_header_read(cmd, task->read_attr, policy->consistency_level, policy->base.total_timeout, 2, task->n_bins);
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, task->ns);
 	p = as_command_write_field_header(p, AS_FIELD_DIGEST_ARRAY, byte_size);
 	
@@ -694,10 +688,7 @@ as_batch_direct_execute(as_batch_task* task)
 	as_error err;
 	as_error_init(&err);
 
-	as_command_policy pol;
-	as_command_policy_batch(&pol, policy);
-
-	as_status status = as_command_execute(task->cluster, &err, &pol, &cn, cmd, size, as_batch_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &policy->base, &cn, cmd, size, as_batch_parse, task, true);
 	
 	as_command_free(cmd, size);
 	
@@ -1069,22 +1060,24 @@ as_batch_read_execute_async(
 		// fragmentation and to allow socket read to reuse buffer.
 		size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 		as_event_command* cmd = cf_malloc(s);
+		cmd->total_deadline = policy->base.total_timeout;
+		cmd->socket_timeout = policy->base.socket_timeout;
+		cmd->max_retries = policy->base.max_retries;
+		cmd->iteration = 0;
+		cmd->replica = AS_POLICY_REPLICA_MASTER;
 		cmd->event_loop = exec->event_loop;
-		cmd->conn = 0;
 		cmd->cluster = cluster;
 		cmd->node = batch_node->node;
+		cmd->partition = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_batch_async_parse_records;
 		cmd->pipe_listener = NULL;
 		cmd->buf = ((as_async_batch_command*)cmd)->space;
-		cmd->total_deadline = policy->timeout;
-		cmd->socket_timeout = 0;
-		cmd->capacity = (uint32_t)(s - sizeof(as_async_batch_command));
-		cmd->pos = 0;
-		cmd->auth_len = 0;
+		cmd->write_len = (uint32_t)size;
+		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_batch_command));
 		cmd->type = AS_ASYNC_TYPE_BATCH;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->flags = 0;
+		cmd->flags = AS_ASYNC_FLAGS_MASTER;
 		cmd->deserialize = policy->deserialize;
 		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy, cmd->buf);
 		

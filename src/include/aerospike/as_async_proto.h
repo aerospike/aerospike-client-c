@@ -35,8 +35,8 @@ as_async_get_cluster_count();
 uint32_t
 as_async_get_pending(struct as_cluster_s* cluster);
 
-void
-as_async_get_connections(struct as_cluster_s* cluster, uint32_t* async_conn, uint32_t* async_conn_pool);
+uint32_t
+as_async_get_connections(struct as_cluster_s* cluster);
 
 void
 as_async_update_max_idle(struct as_cluster_s* cluster, uint32_t max_idle);

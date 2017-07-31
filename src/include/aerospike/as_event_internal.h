@@ -46,16 +46,22 @@ extern "C" {
  *****************************************************************************/
 	
 #define AS_ASYNC_STATE_UNREGISTERED 0
-#define AS_ASYNC_STATE_TLS_CONNECT 1
-#define AS_ASYNC_STATE_AUTH_WRITE 2
+#define AS_ASYNC_STATE_REGISTERED 1
+#define AS_ASYNC_STATE_TLS_CONNECT 2
+#define AS_ASYNC_STATE_AUTH_WRITE 3
 #define AS_ASYNC_STATE_AUTH_READ_HEADER 4
-#define AS_ASYNC_STATE_AUTH_READ_BODY 8
-#define AS_ASYNC_STATE_WRITE 16
-#define AS_ASYNC_STATE_READ_HEADER 32
-#define AS_ASYNC_STATE_READ_BODY 64
+#define AS_ASYNC_STATE_AUTH_READ_BODY 5
+#define AS_ASYNC_STATE_COMMAND_WRITE 6
+#define AS_ASYNC_STATE_COMMAND_READ_HEADER 7
+#define AS_ASYNC_STATE_COMMAND_READ_BODY 8
+#define AS_ASYNC_STATE_COMPLETE 9
 
-#define AS_ASYNC_FLAGS_FREE_BUF 1
-#define AS_ASYNC_FLAGS_EVENT_RECEIVED 2
+#define AS_ASYNC_FLAGS_MASTER 1
+#define AS_ASYNC_FLAGS_READ 2
+#define AS_ASYNC_FLAGS_HAS_TIMER 4
+#define AS_ASYNC_FLAGS_USING_SOCKET_TIMER 8
+#define AS_ASYNC_FLAGS_EVENT_RECEIVED 16
+#define AS_ASYNC_FLAGS_FREE_BUF 32
 
 #define AS_ASYNC_AUTH_RETURN_CODE 1
 
@@ -72,7 +78,6 @@ typedef struct {
 #if defined(AS_USE_LIBEV)
 	struct ev_io watcher;
 	as_socket socket;
-	int watching;
 #elif defined(AS_USE_LIBUV)
 	uv_tcp_t socket;
 	// Reuse memory for requests, because only one request is active at a time.
@@ -83,9 +88,9 @@ typedef struct {
 #elif defined(AS_USE_LIBEVENT)
 	struct event watcher;
 	as_socket socket;
-	int watching;
 #else
 #endif
+	int watching;
 	bool pipeline;
 } as_event_connection;
 
@@ -113,22 +118,27 @@ typedef struct as_event_command {
 	struct event timer;
 #else
 #endif
+	uint64_t total_deadline;
+	uint32_t socket_timeout;
+	uint32_t max_retries;
+	uint32_t iteration;
+	as_policy_replica replica;
 	as_event_loop* event_loop;
 	as_event_connection* conn;
 	as_cluster* cluster;
 	as_node* node;
+	void* partition;  // as_partition* or as_partition_shm*
 	void* udata;
 	as_event_parse_results_fn parse_results;
 	as_pipe_listener pipe_listener;
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
-	uint64_t total_deadline;
-	uint32_t socket_timeout;
-	uint32_t capacity;
+	uint32_t write_offset;
+	uint32_t write_len;
+	uint32_t read_capacity;
 	uint32_t len;
 	uint32_t pos;
-	uint32_t auth_len;
 
 	uint8_t type;
 	uint8_t state;
@@ -152,12 +162,6 @@ typedef struct as_event_executor {
 	uint32_t count;
 	bool valid;
 } as_event_executor;
-	
-typedef enum as_connection_status_e {
-	AS_CONNECTION_FROM_POOL = 0,
-	AS_CONNECTION_NEW = 1,
-	AS_CONNECTION_TOO_MANY = 2
-} as_connection_status;
 
 /******************************************************************************
  * COMMON FUNCTIONS
@@ -167,25 +171,31 @@ as_status
 as_event_command_execute(as_event_command* cmd, as_error* err);
 
 void
+as_event_socket_timeout(as_event_command* cmd);
+
+void
+as_event_total_timeout(as_event_command* cmd);
+
+bool
+as_event_command_retry(as_event_command* cmd, bool alternate);
+	
+void
 as_event_executor_complete(as_event_command* cmd);
 
 void
 as_event_executor_cancel(as_event_executor* executor, int queued_count);
 
-as_connection_status
-as_event_get_connection(as_event_command* cmd);
-
 void
 as_event_error_callback(as_event_command* cmd, as_error* err);
-	
+
+void
+as_event_parse_error(as_event_command* cmd, as_error* err);
+
 void
 as_event_socket_error(as_event_command* cmd, as_error* err);
 
 void
 as_event_response_error(as_event_command* cmd, as_error* err);
-
-void
-as_event_timeout(as_event_command* cmd);
 
 bool
 as_event_command_parse_result(as_event_command* cmd);
@@ -198,6 +208,9 @@ as_event_command_parse_success_failure(as_event_command* cmd);
 
 void
 as_event_command_free(as_event_command* cmd);
+
+void
+as_event_close_cluster(as_cluster* cluster);
 
 /******************************************************************************
  * IMPLEMENTATION SPECIFIC FUNCTIONS
@@ -216,8 +229,11 @@ as_event_register_external_loop(as_event_loop* event_loop);
 bool
 as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata);
 
-bool
-as_event_command_begin(as_event_command* cmd);
+void
+as_event_command_write_start(as_event_command* cmd);
+
+void
+as_event_connect(as_event_command* cmd);
 
 void
 as_event_close_connection(as_event_connection* conn);
@@ -230,6 +246,9 @@ as_event_node_destroy(as_node* node);
  *****************************************************************************/
 
 #if defined(AS_USE_LIBEV)
+
+void as_ev_socket_timeout(struct ev_loop* loop, ev_timer* timer, int revents);
+void as_ev_total_timeout(struct ev_loop* loop, ev_timer* timer, int revents);
 
 static inline int
 as_event_validate_connection(as_event_connection* conn)
@@ -255,11 +274,39 @@ as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
 }
 
 static inline void
+as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
+{
+	ev_timer_init(&cmd->timer, as_ev_total_timeout, (double)timeout / 1000.0, 0.0);
+	cmd->timer.data = cmd;
+	ev_timer_start(cmd->event_loop->loop, &cmd->timer);
+}
+	
+static inline void
+as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
+{
+	ev_timer_start(cmd->event_loop->loop, &cmd->timer);
+}
+
+static inline void
+as_event_init_socket_timer(as_event_command* cmd)
+{
+	ev_init(&cmd->timer, as_ev_socket_timeout);
+	cmd->timer.repeat = ((double)cmd->socket_timeout) / 1000.0;
+	cmd->timer.data = cmd;
+	ev_timer_again(cmd->event_loop->loop, &cmd->timer);
+}
+
+static inline void
+as_event_repeat_socket_timer(as_event_command* cmd)
+{
+	cmd->timer.repeat = (double)cmd->socket_timeout/ 1000.0;
+	ev_timer_again(cmd->event_loop->loop, &cmd->timer);
+}
+
+static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
-	if (cmd->total_deadline || cmd->socket_timeout) {
-		ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
-	}
+	ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
 }
 
 static inline void
@@ -280,6 +327,9 @@ as_event_command_release(as_event_command* cmd)
 
 #elif defined(AS_USE_LIBUV)
 
+void as_uv_total_timeout(uv_timer_t* timer);
+void as_uv_socket_timeout(uv_timer_t* timer);
+
 static inline int
 as_event_validate_connection(as_event_connection* conn)
 {
@@ -298,9 +348,37 @@ as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
 }
 
 static inline void
+as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
+{
+	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
+	cmd->timer.data = cmd;
+	uv_timer_start(&cmd->timer, as_uv_total_timeout, timeout, 0);
+}
+
+static inline void
+as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
+{
+	uv_timer_start(&cmd->timer, as_uv_total_timeout, timeout, 0);
+}
+
+static inline void
+as_event_init_socket_timer(as_event_command* cmd)
+{
+	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
+	cmd->timer.data = cmd;
+	uv_timer_start(&cmd->timer, as_uv_socket_timeout, cmd->socket_timeout, cmd->socket_timeout);
+}
+
+static inline void
+as_event_repeat_socket_timer(as_event_command* cmd)
+{
+	uv_timer_again(&cmd->timer);
+}
+
+static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
-	// Timer is stopped in libuv by uv_close which occurs later in as_event_command_release().
+	uv_timer_stop(&cmd->timer);
 }
 
 static inline void
@@ -315,7 +393,7 @@ as_uv_timer_closed(uv_handle_t* handle);
 static inline void
 as_event_command_release(as_event_command* cmd)
 {
-	if (cmd->total_deadline || cmd->socket_timeout) {
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
 		// libuv requires that cmd can't be freed until timer is closed.
 		uv_close((uv_handle_t*)&cmd->timer, as_uv_timer_closed);
 	}
@@ -329,6 +407,9 @@ as_event_command_release(as_event_command* cmd)
  *****************************************************************************/
 
 #elif defined(AS_USE_LIBEVENT)
+
+void as_libevent_socket_timeout(evutil_socket_t sock, short events, void* udata);
+void as_libevent_total_timeout(evutil_socket_t sock, short events, void* udata);
 
 static inline int
 as_event_validate_connection(as_event_connection* conn)
@@ -354,11 +435,49 @@ as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
 }
 
 static inline void
+as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
+{
+	evtimer_assign(&cmd->timer, cmd->event_loop->loop, as_libevent_total_timeout, cmd);
+
+	struct timeval tv;
+	tv.tv_sec = timeout / 1000;
+	tv.tv_usec = (timeout % 1000) * 1000;
+
+	evtimer_add(&cmd->timer, &tv);
+}
+
+static inline void
+as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
+{
+	struct timeval tv;
+	tv.tv_sec = timeout / 1000;
+	tv.tv_usec = (timeout % 1000) * 1000;
+
+	evtimer_add(&cmd->timer, &tv);
+}
+
+static inline void
+as_event_init_socket_timer(as_event_command* cmd)
+{
+	event_assign(&cmd->timer, cmd->event_loop->loop, -1, EV_PERSIST, as_libevent_socket_timeout, cmd);
+
+	struct timeval tv;
+	tv.tv_sec = cmd->socket_timeout / 1000;
+	tv.tv_usec = (cmd->socket_timeout % 1000) * 1000;
+
+	evtimer_add(&cmd->timer, &tv);
+}
+
+static inline void
+as_event_repeat_socket_timer(as_event_command* cmd)
+{
+	// libevent socket timers automatically repeat.
+}
+
+static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
-	if (cmd->total_deadline || cmd->socket_timeout) {
-		evtimer_del(&cmd->timer);
-	}
+	evtimer_del(&cmd->timer);
 }
 
 static inline void
@@ -387,6 +506,26 @@ as_event_validate_connection(as_event_connection* conn)
 
 static inline void
 as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
+{
+}
+
+static inline void
+as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
+{
+}
+
+static inline void
+as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
+{
+}
+
+static inline void
+as_event_init_socket_timer(as_event_command* cmd)
+{
+}
+
+static inline void
+as_event_repeat_socket_timer(as_event_command* cmd)
 {
 }
 
@@ -421,48 +560,52 @@ as_event_assign(as_event_loop* event_loop)
 static inline void
 as_event_set_auth_write(as_event_command* cmd)
 {
-	// The command buffer was already allocated with enough space for max authentication size,
-	// so just use the end of the write buffer for authentication bytes.
-	cmd->pos = cmd->len;
-	cmd->auth_len = as_authenticate_set(cmd->cluster->user, cmd->cluster->password, &cmd->buf[cmd->pos]);
-	cmd->len = cmd->pos + cmd->auth_len;
+	// Authentication write buffer is always located after command write buffer.
+	uint8_t* buf = (uint8_t*)cmd + cmd->write_offset + cmd->write_len;
+	uint32_t len = as_authenticate_set(cmd->cluster->user, cmd->cluster->password, buf);
+	cmd->len = cmd->write_len + len;
+	cmd->pos = cmd->write_len;
 }
 
 static inline void
 as_event_set_auth_read_header(as_event_command* cmd)
 {
-	// Authenticate response buffer is at end of write buffer.
-	cmd->pos = cmd->len - cmd->auth_len;
-	cmd->auth_len = sizeof(as_proto);
-	cmd->len = cmd->pos + cmd->auth_len;
+	// Authenticate read buffer uses the standard read buffer (buf).
+	cmd->len = sizeof(as_proto);
+	cmd->pos = 0;
 	cmd->state = AS_ASYNC_STATE_AUTH_READ_HEADER;
 }
 	
 static inline void
 as_event_set_auth_parse_header(as_event_command* cmd)
 {
-	// Authenticate response buffer is at end of write buffer.
-	cmd->pos = cmd->len - cmd->auth_len;
-	as_proto* proto = (as_proto*)&cmd->buf[cmd->pos];
+	// Authenticate read buffer uses the standard read buffer (buf).
+	as_proto* proto = (as_proto*)cmd->buf;
 	as_proto_swap_from_be(proto);
-	cmd->auth_len = (uint32_t)proto->sz;
-	cmd->len = cmd->pos + cmd->auth_len;
+	cmd->len = (uint32_t)proto->sz;
+	cmd->pos = 0;
 	cmd->state = AS_ASYNC_STATE_AUTH_READ_BODY;
 }
 
 static inline void
-as_event_release_connection(as_cluster* cluster, as_event_connection* conn, as_conn_pool* pool)
+as_event_set_write(as_event_command* cmd)
+{
+	cmd->len = cmd->write_len;
+	cmd->pos = 0;
+}
+
+static inline void
+as_event_release_connection(as_event_connection* conn, as_conn_pool* pool)
 {
 	as_event_close_connection(conn);
-	ck_pr_dec_32(&cluster->async_conn_count);
 	as_conn_pool_dec(pool);
 }
 
 static inline void
-as_event_decr_connection(as_cluster* cluster, as_conn_pool* pool)
+as_event_release_async_connection(as_event_command* cmd)
 {
-	ck_pr_dec_32(&cluster->async_conn_count);
-	as_conn_pool_dec(pool);
+	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_event_release_connection(cmd->conn, pool);
 }
 
 static inline void
@@ -472,7 +615,34 @@ as_event_decr_conn(as_event_command* cmd)
 		&cmd->node->pipe_conn_pools[cmd->event_loop->index] :
 		&cmd->node->async_conn_pools[cmd->event_loop->index];
 	
-	as_event_decr_connection(cmd->cluster, pool);
+	as_conn_pool_dec(pool);
+}
+
+static inline void
+as_event_connection_timeout(as_event_command* cmd, as_conn_pool* pool)
+{
+	as_event_connection* conn = cmd->conn;
+
+	if (conn->watching > 0) {
+		as_event_stop_watcher(cmd, conn);
+		as_event_release_connection(conn, pool);
+	}
+	else {
+		cf_free(conn);
+		as_conn_pool_dec(pool);
+	}
+}
+
+static inline bool
+as_event_socket_retry(as_event_command* cmd)
+{
+	if (cmd->pipe_listener) {
+		return false;
+	}
+
+	as_event_stop_watcher(cmd, cmd->conn);
+	as_event_release_async_connection(cmd);
+	return as_event_command_retry(cmd, true);
 }
 
 #ifdef __cplusplus

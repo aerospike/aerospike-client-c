@@ -160,7 +160,7 @@ as_fd_isset(int fd, fd_set *fdset)
 }
 
 static int
-wait_readable(int fd, uint32_t max_idle, uint64_t deadline)
+wait_readable(int fd, uint32_t socket_timeout, uint64_t deadline)
 {
 	size_t rset_size = as_fdset_size(fd);
 	fd_set* rset = (fd_set*)(rset_size > STACK_LIMIT ? cf_malloc(rset_size) : alloca(rset_size));
@@ -179,17 +179,17 @@ wait_readable(int fd, uint32_t max_idle, uint64_t deadline)
 
 			uint64_t ms_left = deadline - now;
 
-			if (max_idle > 0 && max_idle < ms_left) {
-				ms_left = max_idle;
+			if (socket_timeout > 0 && socket_timeout < ms_left) {
+				ms_left = socket_timeout;
 			}
 			tv.tv_sec = ms_left / 1000;
 			tv.tv_usec = (ms_left % 1000) * 1000;
 			tvp = &tv;
 		}
 		else {
-			if (max_idle > 0) {
-				tv.tv_sec = max_idle / 1000;
-				tv.tv_usec = (max_idle % 1000) * 1000;
+			if (socket_timeout > 0) {
+				tv.tv_sec = socket_timeout / 1000;
+				tv.tv_usec = (socket_timeout % 1000) * 1000;
 				tvp = &tv;
 			}
 		}
@@ -221,7 +221,7 @@ wait_readable(int fd, uint32_t max_idle, uint64_t deadline)
 }
 
 static int
-wait_writable(int fd, uint32_t max_idle, uint64_t deadline)
+wait_writable(int fd, uint32_t socket_timeout, uint64_t deadline)
 {
 	size_t wset_size = as_fdset_size(fd);
 	fd_set* wset = (fd_set*)(wset_size > STACK_LIMIT ? cf_malloc(wset_size) : alloca(wset_size));
@@ -240,17 +240,17 @@ wait_writable(int fd, uint32_t max_idle, uint64_t deadline)
 
 			uint64_t ms_left = deadline - now;
 
-			if (max_idle > 0 && max_idle < ms_left) {
-				ms_left = max_idle;
+			if (socket_timeout > 0 && socket_timeout < ms_left) {
+				ms_left = socket_timeout;
 			}
 			tv.tv_sec = ms_left / 1000;
 			tv.tv_usec = (ms_left % 1000) * 1000;
 			tvp = &tv;
 		}
 		else {
-			if (max_idle > 0) {
-				tv.tv_sec = max_idle / 1000;
-				tv.tv_usec = (max_idle % 1000) * 1000;
+			if (socket_timeout > 0) {
+				tv.tv_sec = socket_timeout / 1000;
+				tv.tv_usec = (socket_timeout % 1000) * 1000;
 				tvp = &tv;
 			}
 		}
@@ -987,7 +987,7 @@ as_tls_read_once(as_socket* sock, void* buf, size_t len)
 }
 
 int
-as_tls_read(as_socket* sock, void* bufp, size_t len, uint32_t max_idle, uint64_t deadline)
+as_tls_read(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, uint64_t deadline)
 {
 	uint8_t* buf = (uint8_t *) bufp;
 	size_t pos = 0;
@@ -1014,14 +1014,14 @@ as_tls_read(as_socket* sock, void* bufp, size_t len, uint32_t max_idle, uint64_t
 			char errbuf[1024];
 			switch (sslerr) {
 			case SSL_ERROR_WANT_READ:
-				rv = wait_readable(sock->fd, max_idle, deadline);
+				rv = wait_readable(sock->fd, socket_timeout, deadline);
 				if (rv != 0) {
 					return rv;
 				}
 				// loop back around and retry
 				break;
 			case SSL_ERROR_WANT_WRITE:
-				rv = wait_writable(sock->fd, max_idle, deadline);
+				rv = wait_writable(sock->fd, socket_timeout, deadline);
 				if (rv != 0) {
 					return rv;
 				}
@@ -1102,7 +1102,7 @@ as_tls_write_once(as_socket* sock, void* buf, size_t len)
 }
 
 int
-as_tls_write(as_socket* sock, void* bufp, size_t len, uint32_t max_idle, uint64_t deadline)
+as_tls_write(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, uint64_t deadline)
 {
 	uint8_t* buf = (uint8_t *) bufp;
 	size_t pos = 0;
@@ -1121,14 +1121,14 @@ as_tls_write(as_socket* sock, void* bufp, size_t len, uint32_t max_idle, uint64_
 			char errbuf[1024];
 			switch (sslerr) {
 			case SSL_ERROR_WANT_READ:
-				rv = wait_readable(sock->fd, max_idle, deadline);
+				rv = wait_readable(sock->fd, socket_timeout, deadline);
 				if (rv != 0) {
 					return rv;
 				}
 				// loop back around and retry
 				break;
 			case SSL_ERROR_WANT_WRITE:
-				rv = wait_writable(sock->fd, max_idle, deadline);
+				rv = wait_writable(sock->fd, socket_timeout, deadline);
 				if (rv != 0) {
 					return rv;
 				}

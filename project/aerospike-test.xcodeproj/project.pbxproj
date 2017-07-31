@@ -25,8 +25,6 @@
 		BFC65C1B1C9225AB0079DF5A /* producer_stream.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C121C9225AB0079DF5A /* producer_stream.c */; };
 		BFC65C1C1C9225AB0079DF5A /* test_aerospike.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C141C9225AB0079DF5A /* test_aerospike.c */; };
 		BFC65C1D1C9225AB0079DF5A /* udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C161C9225AB0079DF5A /* udf.c */; };
-		BFC65C211C9225EA0079DF5A /* read.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C1F1C9225EA0079DF5A /* read.c */; };
-		BFC65C221C9225EA0079DF5A /* scan.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C201C9225EA0079DF5A /* scan.c */; };
 		BFC65C321C92264E0079DF5A /* udf_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C2F1C92264E0079DF5A /* udf_basics.c */; };
 		BFC65C331C92264E0079DF5A /* udf_record.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C301C92264E0079DF5A /* udf_record.c */; };
 		BFC65C341C92264E0079DF5A /* udf_types.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C311C92264E0079DF5A /* udf_types.c */; };
@@ -113,8 +111,6 @@
 		BFC65C151C9225AB0079DF5A /* test_aerospike.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = test_aerospike.h; path = ../src/test/util/test_aerospike.h; sourceTree = "<group>"; };
 		BFC65C161C9225AB0079DF5A /* udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = udf.c; path = ../src/test/util/udf.c; sourceTree = "<group>"; };
 		BFC65C171C9225AB0079DF5A /* udf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = udf.h; path = ../src/test/util/udf.h; sourceTree = "<group>"; };
-		BFC65C1F1C9225EA0079DF5A /* read.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = read.c; path = ../src/test/policy/read.c; sourceTree = "<group>"; };
-		BFC65C201C9225EA0079DF5A /* scan.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = scan.c; path = ../src/test/policy/scan.c; sourceTree = "<group>"; };
 		BFC65C241C92261F0079DF5A /* client_record_basics.lua */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = client_record_basics.lua; path = ../src/test/lua/client_record_basics.lua; sourceTree = "<group>"; };
 		BFC65C251C92261F0079DF5A /* client_record_lists.lua */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = client_record_lists.lua; path = ../src/test/lua/client_record_lists.lua; sourceTree = "<group>"; };
 		BFC65C261C92261F0079DF5A /* client_stream_ads.lua */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = client_stream_ads.lua; path = ../src/test/lua/client_stream_ads.lua; sourceTree = "<group>"; };
@@ -224,7 +220,6 @@
 				BFC65C351C92265E0079DF5A /* aerospike_scan */,
 				BFC65C2E1C9226340079DF5A /* aerospike_udf */,
 				BFC65C231C92260A0079DF5A /* lua */,
-				BFC65C1E1C9225D30079DF5A /* policy */,
 				BFC65C0B1C9225850079DF5A /* util */,
 				BFC65BFC1C92250B0079DF5A /* aerospike_test.c */,
 				BFC65BFD1C92250B0079DF5A /* aerospike_test.h */,
@@ -262,15 +257,6 @@
 				BFC65C171C9225AB0079DF5A /* udf.h */,
 			);
 			name = util;
-			sourceTree = "<group>";
-		};
-		BFC65C1E1C9225D30079DF5A /* policy */ = {
-			isa = PBXGroup;
-			children = (
-				BFC65C1F1C9225EA0079DF5A /* read.c */,
-				BFC65C201C9225EA0079DF5A /* scan.c */,
-			);
-			name = policy;
 			sourceTree = "<group>";
 		};
 		BFC65C231C92260A0079DF5A /* lua */ = {
@@ -468,7 +454,6 @@
 				BFC65C331C92264E0079DF5A /* udf_record.c in Sources */,
 				BFC65C041C92250B0079DF5A /* aerospike_test.c in Sources */,
 				BFC65C3F1C9226C90079DF5A /* query_async.c in Sources */,
-				BFC65C211C9225EA0079DF5A /* read.c in Sources */,
 				BFC65C401C9226C90079DF5A /* query_background.c in Sources */,
 				BFC65C341C92264E0079DF5A /* udf_types.c in Sources */,
 				BF5D22741E69096800724AE3 /* info_helper.c in Sources */,
@@ -477,7 +462,6 @@
 				BFC65C5E1C9227640079DF5A /* index_basics.c in Sources */,
 				BFB8A5E21D0F4DB4007B4E22 /* map_index.c in Sources */,
 				BFC65C411C9226C90079DF5A /* query_foreach.c in Sources */,
-				BFC65C221C9225EA0079DF5A /* scan.c in Sources */,
 				BFC65C1D1C9225AB0079DF5A /* udf.c in Sources */,
 				BFF344C81CEA8FD200FD1976 /* map_basics.c in Sources */,
 				BFC65C0A1C92256A0079DF5A /* batch_get.c in Sources */,
@@ -614,7 +598,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/opt/openssl/lib,
-					"../modules/lua/src",
+					../modules/lua/src,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
@@ -642,7 +626,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/opt/openssl/lib,
-					"../modules/lua/src",
+					../modules/lua/src,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";

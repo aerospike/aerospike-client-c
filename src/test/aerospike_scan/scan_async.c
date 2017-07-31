@@ -92,7 +92,7 @@ insert_data(uint32_t numrecs, const char *setname)
 	
 	as_policy_write policy;
 	as_policy_write_init(&policy);
-	policy.timeout = 10000;
+	policy.base.total_timeout = 10000;
 		
 	as_monitor_begin(&monitor);
 	

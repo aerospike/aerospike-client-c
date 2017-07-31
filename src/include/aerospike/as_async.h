@@ -36,8 +36,6 @@ extern "C" {
 #define AS_ASYNC_TYPE_BATCH 3
 #define AS_ASYNC_TYPE_SCAN 4
 #define AS_ASYNC_TYPE_QUERY 5
-#define AS_ASYNC_TYPE_MASK 7
-#define AS_ASYNC_TYPE_REGISTERED 128
 	
 #define AS_AUTHENTICATION_MAX_SIZE 158
 
@@ -69,8 +67,8 @@ typedef struct as_async_value_command {
 
 static inline as_event_command*
 as_async_write_command_create(
-	as_cluster* cluster, as_node* node, uint32_t socket_timeout, uint32_t total_timeout,
-	bool deserialize, as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, void* partition,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
@@ -79,58 +77,59 @@ as_async_write_command_create(
 	size_t s = (sizeof(as_async_write_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_write_command* wcmd = (as_async_write_command*)cmd;
+	cmd->total_deadline = policy->total_timeout;
+	cmd->socket_timeout = policy->socket_timeout;
+	cmd->max_retries = policy->max_retries;
+	cmd->iteration = 0;
+	cmd->replica = replica;
 	cmd->event_loop = as_event_assign(event_loop);
-	cmd->conn = 0;
 	cmd->cluster = cluster;
-	cmd->node = node;
+	cmd->node = NULL;
+	cmd->partition = partition;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
 	cmd->pipe_listener = pipe_listener;
 	cmd->buf = wcmd->space;
-	cmd->total_deadline = total_timeout;
-	cmd->socket_timeout = socket_timeout;
-	cmd->capacity = (uint32_t)(s - sizeof(as_async_write_command));
-	cmd->len = 0;
-	cmd->pos = 0;
-	cmd->auth_len = 0;
+	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_write_command));
 	cmd->type = AS_ASYNC_TYPE_WRITE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = 0;
-	cmd->deserialize = deserialize;
+	cmd->flags = AS_ASYNC_FLAGS_MASTER;
+	cmd->deserialize = false;
 	wcmd->listener = listener;
 	return cmd;
 }
 	
 static inline as_event_command*
 as_async_record_command_create(
-	as_cluster* cluster, as_node* node, uint32_t socket_timeout, uint32_t total_timeout,
-	bool deserialize, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
+	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, void* partition,
+	bool deserialize, uint8_t flags, as_async_record_listener listener, void* udata,
+	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
+	as_event_parse_results_fn parse_results
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
-	// Then, round up memory size in 1KB increments to reduce fragmentation and to allow socket
+	// Then, round up memory size in 4KB increments to reduce fragmentation and to allow socket
 	// read to reuse buffer for small socket write sizes.
-	size_t s = (sizeof(as_async_record_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
+	size_t s = (sizeof(as_async_record_command) + size + AS_AUTHENTICATION_MAX_SIZE + 4095) & ~4095;
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_record_command* rcmd = (as_async_record_command*)cmd;
+	cmd->total_deadline = policy->total_timeout;
+	cmd->socket_timeout = policy->socket_timeout;
+	cmd->max_retries = policy->max_retries;
+	cmd->iteration = 0;
+	cmd->replica = replica;
 	cmd->event_loop = as_event_assign(event_loop);
-	cmd->conn = 0;
 	cmd->cluster = cluster;
-	cmd->node = node;
+	cmd->node = NULL;
+	cmd->partition = partition;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
 	cmd->pipe_listener = pipe_listener;
 	cmd->buf = rcmd->space;
-	cmd->total_deadline = total_timeout;
-	cmd->socket_timeout = socket_timeout;
-	cmd->capacity = (uint32_t)(s - sizeof(as_async_record_command));
-	cmd->len = 0;
-	cmd->pos = 0;
-	cmd->auth_len = 0;
+	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_record_command));
 	cmd->type = AS_ASYNC_TYPE_RECORD;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = 0;
+	cmd->flags = flags;
 	cmd->deserialize = deserialize;
 	rcmd->listener = listener;
 	return cmd;
@@ -138,35 +137,35 @@ as_async_record_command_create(
 
 static inline as_event_command*
 as_async_value_command_create(
-	as_cluster* cluster, as_node* node, uint32_t socket_timeout, uint32_t total_timeout,
-	bool deserialize, as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, void* partition,
+	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
-	// Then, round up memory size in 1KB increments to reduce fragmentation and to allow socket
+	// Then, round up memory size in 4KB increments to reduce fragmentation and to allow socket
 	// read to reuse buffer for small socket write sizes.
-	size_t s = (sizeof(as_async_value_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
+	size_t s = (sizeof(as_async_value_command) + size + AS_AUTHENTICATION_MAX_SIZE + 4095) & ~4095;
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_value_command* vcmd = (as_async_value_command*)cmd;
+	cmd->total_deadline = policy->total_timeout;
+	cmd->socket_timeout = policy->socket_timeout;
+	cmd->max_retries = policy->max_retries;
+	cmd->iteration = 0;
+	cmd->replica = replica;
 	cmd->event_loop = as_event_assign(event_loop);
-	cmd->conn = 0;
 	cmd->cluster = cluster;
-	cmd->node = node;
+	cmd->node = NULL;
+	cmd->partition = partition;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
 	cmd->pipe_listener = pipe_listener;
 	cmd->buf = vcmd->space;
-	cmd->total_deadline = total_timeout;
-	cmd->socket_timeout = socket_timeout;
-	cmd->capacity = (uint32_t)(s - sizeof(as_async_value_command));
-	cmd->len = 0;
-	cmd->pos = 0;
-	cmd->auth_len = 0;
+	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_value_command));
 	cmd->type = AS_ASYNC_TYPE_VALUE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = 0;
-	cmd->deserialize = deserialize;
+	cmd->flags = AS_ASYNC_FLAGS_MASTER;
+	cmd->deserialize = false;
 	vcmd->listener = listener;
 	return cmd;
 }

@@ -171,8 +171,8 @@ int Ad_Udf::init(void)
 
 	as_config_init(&config);
 	as_config_add_host(&config, host, port);
-	config.policies.read.timeout = timeout_ms;
-	config.policies.apply.timeout = timeout_ms;
+	config.policies.read.base.total_timeout = timeout_ms;
+	config.policies.apply.base.total_timeout = timeout_ms;
 
 	aerospike_init(&as, &config);
 

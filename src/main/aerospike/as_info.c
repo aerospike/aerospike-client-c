@@ -131,7 +131,7 @@ as_info_command_node(
 	)
 {
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, deadline_ms, &socket);
+	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &socket);
 	
 	if (status) {
 		return status;
@@ -326,7 +326,7 @@ as_info_create_socket(
 	}
 	
 	if (cluster->user) {
-		status = as_authenticate(err, sock, NULL, cluster->user, cluster->password, deadline_ms);
+		status = as_authenticate(err, sock, NULL, cluster->user, cluster->password, 0, deadline_ms);
 		
 		if (status) {
 			as_socket_error_append(err, addr);

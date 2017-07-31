@@ -217,7 +217,7 @@ as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task, as_error* e
 }
 
 static as_status
-as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* udata)
+as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* udata)
 {
 	as_scan_task* task = udata;
 	as_status status = AEROSPIKE_OK;
@@ -227,7 +227,7 @@ as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, 
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), max_idle, deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), socket_timeout, deadline_ms);
 		
 		if (status) {
 			break;
@@ -244,7 +244,7 @@ as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, 
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, max_idle, deadline_ms);
+			status = as_socket_read_deadline(err, sock, node, buf, size, socket_timeout, deadline_ms);
 			
 			if (status) {
 				break;
@@ -273,11 +273,8 @@ as_scan_command_execute(as_scan_task* task)
 	as_error err;
 	as_error_init(&err);
 
-	as_command_policy policy;
-	as_command_policy_scan(&policy, task->policy);
-
-	as_status status = as_command_execute(task->cluster, &err, &policy, &cn, task->cmd, task->cmd_size,
-										  as_scan_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, &task->policy->base, &cn, task->cmd, task->cmd_size,
+										  as_scan_parse, task, true);
 	
 	if (status) {
 		// Set main error only once.
@@ -386,11 +383,11 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 	if (scan->apply_each.function[0]) {
 		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE,
 			AS_POLICY_COMMIT_LEVEL_ALL, AS_POLICY_CONSISTENCY_LEVEL_ONE, AS_POLICY_EXISTS_IGNORE,
-			AS_POLICY_GEN_IGNORE, 0, 0, policy->timeout, n_fields, 0, policy->durable_delete);
+			AS_POLICY_GEN_IGNORE, 0, 0, policy->base.total_timeout, n_fields, 0, policy->durable_delete);
 	}
 	else {
 		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
-		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, policy->timeout, n_fields, scan->select.size);
+		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, policy->base.total_timeout, n_fields, scan->select.size);
 	}
 	
 	if (scan->ns) {
@@ -418,7 +415,7 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 
 	// Write socket timeout.
 	p = as_command_write_field_header(p, AS_FIELD_SCAN_TIMEOUT, sizeof(uint32_t));
-	*(uint32_t*)p = cf_swap_to_be32(policy->socket_timeout);
+	*(uint32_t*)p = cf_swap_to_be32(policy->base.socket_timeout);
 	p += sizeof(uint32_t);
 
 	// Write taskId field
@@ -648,23 +645,24 @@ as_scan_async(
 	// Create all scan commands.
 	for (uint32_t i = 0; i < n_nodes; i++) {
 		as_event_command* cmd = cf_malloc(s);
+		cmd->total_deadline = policy->base.total_timeout;
+		cmd->socket_timeout = policy->base.socket_timeout;
+		cmd->max_retries = policy->base.max_retries;
+		cmd->iteration = 0;
+		cmd->replica = AS_POLICY_REPLICA_MASTER;
 		cmd->event_loop = exec->event_loop;
-		cmd->conn = 0;
 		cmd->cluster = as->cluster;
 		cmd->node = nodes[i];
+		cmd->partition = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_scan_parse_records_async;
 		cmd->pipe_listener = NULL;
 		cmd->buf = ((as_async_scan_command*)cmd)->space;
-		cmd->total_deadline = policy->timeout;
-		cmd->socket_timeout = policy->socket_timeout;
-		cmd->capacity = (uint32_t)(s - sizeof(as_async_scan_command));
-		cmd->len = (uint32_t)size;
-		cmd->pos = 0;
-		cmd->auth_len = 0;
+		cmd->write_len = (uint32_t)size;
+		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_scan_command));
 		cmd->type = AS_ASYNC_TYPE_SCAN;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->flags = 0;
+		cmd->flags = AS_ASYNC_FLAGS_MASTER;
 		cmd->deserialize = scan->deserialize_list_map;
 		memcpy(cmd->buf, cmd_buf, size);
 		

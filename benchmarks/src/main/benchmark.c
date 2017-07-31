@@ -119,24 +119,30 @@ connect_to_server(arguments* args, aerospike* client)
 	}
 
 	as_policies* p = &cfg.policies;
-	p->timeout = args->read_timeout;
-	p->retry = args->max_retries;
-	p->key = AS_POLICY_KEY_DIGEST;
-	p->gen = AS_POLICY_GEN_IGNORE;
-	p->exists = AS_POLICY_EXISTS_IGNORE;
 
-	if (args->read_replica == AS_POLICY_REPLICA_SEQUENCE) {
-		p->read.retry_on_timeout = true;
-	}
-	p->read.replica = args->read_replica;
+	p->read.base.total_timeout = args->read_timeout;
+	p->read.base.max_retries = args->max_retries;
+	p->read.replica = args->replica;
 	p->read.consistency_level = args->read_consistency_level;
 
-	p->write.timeout = args->write_timeout;
+	p->write.base.total_timeout = args->write_timeout;
+	p->write.base.max_retries = args->max_retries;
+	p->write.replica = args->replica;
 	p->write.commit_level = args->write_commit_level;
 	p->write.durable_delete = args->durable_deletes;
 
-	p->operate.timeout = args->write_timeout;
-	p->remove.timeout = args->write_timeout;
+	p->operate.base.total_timeout = args->write_timeout;
+	p->operate.base.max_retries = args->max_retries;
+	p->operate.replica = args->replica;
+	p->operate.commit_level = args->write_commit_level;
+	p->operate.durable_delete = args->durable_deletes;
+
+	p->remove.base.total_timeout = args->write_timeout;
+	p->remove.base.max_retries = args->max_retries;
+	p->remove.replica = args->replica;
+	p->remove.commit_level = args->write_commit_level;
+	p->remove.durable_delete = args->durable_deletes;
+
 	p->info.timeout = 10000;
 
 	// Transfer ownership of all heap allocated TLS fields via shallow copy.

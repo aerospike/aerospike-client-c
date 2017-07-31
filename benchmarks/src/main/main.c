@@ -393,7 +393,7 @@ print_args(arguments* args)
 	blog_line("shared memory:  %s", boolstring(args->use_shm));
 
 	const char* rep;
-	switch (args->read_replica) {
+	switch (args->replica) {
 		case AS_POLICY_REPLICA_MASTER:
 			rep = "master";
 			break;
@@ -696,13 +696,13 @@ set_args(int argc, char * const * argv, arguments* args)
 
 			case 'C':
 				if (strcmp(optarg, "master") == 0) {
-					args->read_replica = AS_POLICY_REPLICA_MASTER;
+					args->replica = AS_POLICY_REPLICA_MASTER;
 				}
 				else if (strcmp(optarg, "any") == 0) {
-					args->read_replica = AS_POLICY_REPLICA_ANY;
+					args->replica = AS_POLICY_REPLICA_ANY;
 				}
 				else if (strcmp(optarg, "sequence") == 0) {
-					args->read_replica = AS_POLICY_REPLICA_SEQUENCE;
+					args->replica = AS_POLICY_REPLICA_SEQUENCE;
 				}
 				else {
 					blog_line("replica must be master | any | sequence");
@@ -844,7 +844,7 @@ main(int argc, char * const * argv)
 	args.latency_columns = 4;
 	args.latency_shift = 3;
 	args.use_shm = false;
-	args.read_replica = AS_POLICY_REPLICA_MASTER;
+	args.replica = AS_POLICY_REPLICA_SEQUENCE;
 	args.read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	args.write_commit_level = AS_POLICY_COMMIT_LEVEL_ALL;
 	args.durable_deletes = false;

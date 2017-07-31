@@ -158,13 +158,13 @@ as_admin_write_privileges(uint8_t** p, as_error* err, as_privilege** privileges,
 }
 
 static as_status
-as_admin_send(as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint8_t* end, uint32_t max_idle, uint64_t deadline_ms)
+as_admin_send(as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint8_t* end, uint32_t socket_timeout, uint64_t deadline_ms)
 {
 	uint64_t len = end - buffer;
 	uint64_t proto = (len - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
 	*(uint64_t*)buffer = cf_swap_to_be64(proto);
 	
-	return as_socket_write_deadline(err, sock, node, buffer, len, max_idle, deadline_ms);
+	return as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
 }
 
 static as_status
@@ -183,7 +183,7 @@ as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, ui
 	}
 	
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, deadline_ms, &socket);
+	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &socket);
 	
 	if (status) {
 		as_node_release(node);
@@ -283,7 +283,7 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 	}
 
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, deadline_ms, &socket);
+	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &socket);
 	
 	if (status) {
 		as_node_release(node);
@@ -331,7 +331,7 @@ as_authenticate_set(const char* user, const char* credential, uint8_t* buffer)
 }
 
 as_status
-as_authenticate(as_error* err, as_socket* sock, as_node* node, const char* user, const char* credential, uint64_t deadline_ms)
+as_authenticate(as_error* err, as_socket* sock, as_node* node, const char* user, const char* credential, uint32_t socket_timeout, uint64_t deadline_ms)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
@@ -340,13 +340,13 @@ as_authenticate(as_error* err, as_socket* sock, as_node* node, const char* user,
 	p = as_admin_write_field_string(p, USER, user);
 	p = as_admin_write_field_string(p, CREDENTIAL, credential);
 	
-	as_status status = as_admin_send(err, sock, node, buffer, p, 0, deadline_ms);
+	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms);
 	
 	if (status) {
 		return status;
 	}
 
-	status = as_socket_read_deadline(err, sock, node, buffer, HEADER_SIZE, 0, deadline_ms);
+	status = as_socket_read_deadline(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms);
 	
 	if (status) {
 		return status;

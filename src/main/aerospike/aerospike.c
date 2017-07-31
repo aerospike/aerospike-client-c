@@ -26,6 +26,7 @@
 
 #include <citrusleaf/alloc.h>
 
+extern uint32_t as_event_loop_capacity;
 static bool lua_initialized = false;
 
 void
@@ -47,7 +48,6 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 	else {
 		as_config_init(&as->config);
 	}
-	as_policies_resolve(&as->config.policies);
 	return as;
 }
 
@@ -165,6 +165,8 @@ aerospike_connect(aerospike* as, as_error* err)
 	return as_cluster_create(&as->config, err, &as->cluster);
 }
 
+void as_event_close_cluster(as_cluster* cluster);
+
 /**
  * Close connections to the cluster
  */
@@ -177,18 +179,14 @@ aerospike_close(aerospike* as, as_error* err)
 	as_cluster* cluster = as->cluster;
 	
 	if (cluster) {
-		// Decrement extra pending reference count that was set in as_cluster_create().
-		bool destroy;
-		ck_pr_dec_32_zero(&cluster->async_pending, &destroy);
-		
-		// Only destroy cluster if there are no pending async commands.
-		if (destroy) {
+		if (as_event_loop_capacity > 0) {
+			// Async configurations will attempt to wait till pending async commands have completed.
+			as_event_close_cluster(cluster);
+		}
+		else {
+			// Close sync only configurations immediately.
 			as_cluster_destroy(cluster);
 		}
-		
-		// If there were pending commands, return control to user to allow pending commands
-		// to complete.  When the last command completes, async_pending will become zero and
-		// the cluster will be destroyed in as_event_command_free().
 		as->cluster = NULL;
 	}
 	return err->code;

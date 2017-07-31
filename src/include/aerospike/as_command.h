@@ -18,7 +18,6 @@
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_buffer.h>
-#include <aerospike/as_command_policy.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_operations.h>
@@ -162,7 +161,7 @@ typedef struct as_command_parse_result_data_s {
  *	@private
  *	Parse results callback used in as_command_execute().
  */
-typedef as_status (*as_parse_results_fn) (as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* user_data);
+typedef as_status (*as_parse_results_fn) (as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
 
 /******************************************************************************
  * FUNCTIONS
@@ -423,8 +422,9 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
  */
 as_status
 as_command_execute(
-	as_cluster* cluster, as_error* err, as_command_policy* policy, as_command_node* cn,
-	uint8_t* command, size_t command_len, as_parse_results_fn parse_results_fn, void* parse_results_data
+	as_cluster* cluster, as_error* err, const as_policy_base* policy, as_command_node* cn,
+	uint8_t* command, size_t command_len, as_parse_results_fn parse_results_fn, void* parse_results_data,
+	bool is_read
 );
 
 /**
@@ -432,21 +432,21 @@ as_command_execute(
  *	Parse header of server response.
  */
 as_status
-as_command_parse_header(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* user_data);
+as_command_parse_header(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
 
 /**
  *	@private
  *	Parse server record.  Used for reads.
  */
 as_status
-as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* user_data);
+as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
 
 /**
  *	@private
  *	Parse server success or failure result.
  */
 as_status
-as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* user_data);
+as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
 
 /**
  *	@private

@@ -371,7 +371,7 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 }
 
 static as_status
-as_query_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle, uint64_t deadline_ms, void* udata)
+as_query_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* udata)
 {
 	as_query_task* task = udata;
 	as_status status = AEROSPIKE_OK;
@@ -381,7 +381,7 @@ as_query_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle,
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), max_idle, deadline_ms);
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), socket_timeout, deadline_ms);
 		
 		if (status) {
 			break;
@@ -398,7 +398,7 @@ as_query_parse(as_error* err, as_socket* sock, as_node* node, uint32_t max_idle,
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, max_idle, deadline_ms);
+			status = as_socket_read_deadline(err, sock, node, buf, size, socket_timeout, deadline_ms);
 			
 			if (status) {
 				break;
@@ -429,17 +429,20 @@ as_query_command_execute(as_query_task* task)
 	as_error err;
 	as_error_init(&err);
 
-	as_command_policy policy;
+	const as_policy_base* policy;
+	bool is_read;
 
 	if (task->query_policy) {
-		as_command_policy_query(&policy, task->query_policy);
+		policy = &task->query_policy->base;
+		is_read = true;
 	}
 	else {
-		as_command_policy_query_background(&policy, task->write_policy->timeout);
+		policy = &task->write_policy->base;
+		is_read = false;
 	}
 
-	as_status status = as_command_execute(task->cluster, &err, &policy, &cn, task->cmd, task->cmd_size,
-										  as_query_parse, task);
+	as_status status = as_command_execute(task->cluster, &err, policy, &cn, task->cmd, task->cmd_size,
+										  as_query_parse, task, is_read);
 
 	if (status) {
 		// Set main error only once.
@@ -827,7 +830,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
-	uint32_t timeout = (task->query_policy)? task->query_policy->timeout : task->write_policy->timeout;
+	uint32_t timeout = (task->query_policy)? task->query_policy->base.total_timeout : task->write_policy->base.total_timeout;
 	
 	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &predexp_size, &bin_name_size);
 	uint8_t* cmd = as_command_init(size);
@@ -1138,7 +1141,7 @@ aerospike_query_async(
 	
 	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &predexp_size, &bin_name_size);
 	uint8_t* cmd_buf = as_command_init(size);
-	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, NULL, task_id, policy->timeout,
+	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, NULL, task_id, policy->base.total_timeout,
 								 n_fields, filter_size, predexp_size, bin_name_size, &argbuffer);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
@@ -1150,23 +1153,24 @@ aerospike_query_async(
 	// Create all query commands.
 	for (uint32_t i = 0; i < n_nodes; i++) {
 		as_event_command* cmd = cf_malloc(s);
+		cmd->total_deadline = policy->base.total_timeout;
+		cmd->socket_timeout = policy->base.socket_timeout;
+		cmd->max_retries = policy->base.max_retries;
+		cmd->iteration = 0;
+		cmd->replica = AS_POLICY_REPLICA_MASTER;
 		cmd->event_loop = exec->event_loop;
-		cmd->conn = 0;
 		cmd->cluster = as->cluster;
 		cmd->node = nodes->array[i];
+		cmd->partition = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_query_parse_records_async;
 		cmd->pipe_listener = NULL;
 		cmd->buf = ((as_async_query_command*)cmd)->space;
-		cmd->total_deadline = policy->timeout;
-		cmd->socket_timeout = policy->socket_timeout;
-		cmd->capacity = (uint32_t)(s - sizeof(as_async_query_command));
-		cmd->len = (uint32_t)size;
-		cmd->pos = 0;
-		cmd->auth_len = 0;
+		cmd->write_len = (uint32_t)size;
+		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_query_command));
 		cmd->type = AS_ASYNC_TYPE_QUERY;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->flags = 0;
+		cmd->flags = AS_ASYNC_FLAGS_MASTER;
 		cmd->deserialize = policy->deserialize;
 		memcpy(cmd->buf, cmd_buf, size);
 		

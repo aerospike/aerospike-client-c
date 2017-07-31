@@ -269,9 +269,12 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 			
 	if (nread < 0) {
 		uv_read_stop(stream);
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket read failed: %zd", nread);
-		as_event_socket_error(cmd, &err);
+
+		if (! as_event_socket_retry(cmd)) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket read failed: %zd", nread);
+			as_event_socket_error(cmd, &err);
+		}
 		return;
 	}
 
@@ -283,29 +286,29 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		return;
 	}
 
-	if (cmd->state == AS_ASYNC_STATE_READ_HEADER) {
+	if (cmd->state == AS_ASYNC_STATE_COMMAND_READ_HEADER) {
 		as_proto* proto = (as_proto*)cmd->buf;
 		as_proto_swap_from_be(proto);
 		size_t size = proto->sz;
 		
 		cmd->len = (uint32_t)size;
 		cmd->pos = 0;
-		cmd->state = AS_ASYNC_STATE_READ_BODY;
+		cmd->state = AS_ASYNC_STATE_COMMAND_READ_BODY;
 		
 		if (cmd->len < sizeof(as_msg)) {
 			uv_read_stop(stream);
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Invalid record header size: %u", cmd->len);
-			as_event_socket_error(cmd, &err);
+			as_event_parse_error(cmd, &err);
 			return;
 		}
 		
-		if (cmd->len > cmd->capacity) {
+		if (cmd->len > cmd->read_capacity) {
 			if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
 				cf_free(cmd->buf);
 			}
 			cmd->buf = cf_malloc(size);
-			cmd->capacity = cmd->len;
+			cmd->read_capacity = cmd->len;
 			cmd->flags |= AS_ASYNC_FLAGS_FREE_BUF;
 		}
 		return;
@@ -331,9 +334,11 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 			int status = uv_read_start(stream, as_uv_command_buffer, as_uv_command_read);
 
 			if (status) {
-				as_error err;
-				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_read_start failed: %s", uv_strerror(status));
-				as_event_socket_error(cmd, &err);
+				if (! as_event_socket_retry(cmd)) {
+					as_error err;
+					as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_read_start failed: %s", uv_strerror(status));
+					as_event_socket_error(cmd, &err);
+				}
 			}
 		}
 	}
@@ -341,7 +346,7 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		// Batch, scan, query is not finished.
 		cmd->len = sizeof(as_proto);
 		cmd->pos = 0;
-		cmd->state = AS_ASYNC_STATE_READ_HEADER;
+		cmd->state = AS_ASYNC_STATE_COMMAND_READ_HEADER;
 	}
 }
 
@@ -357,7 +362,7 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 	if (status == 0) {
 		cmd->len = sizeof(as_proto);
 		cmd->pos = 0;
-		cmd->state = AS_ASYNC_STATE_READ_HEADER;
+		cmd->state = AS_ASYNC_STATE_COMMAND_READ_HEADER;
 
 		if (cmd->pipe_listener != NULL) {
 			as_pipe_read_start(cmd);
@@ -372,37 +377,48 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 		status = uv_read_start(req->handle, as_uv_command_buffer, as_uv_command_read);
 		
 		if (status) {
-			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_read_start failed: %s", uv_strerror(status));
-			as_event_socket_error(cmd, &err);
+			if (! as_event_socket_retry(cmd)) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_read_start failed: %s", uv_strerror(status));
+				as_event_socket_error(cmd, &err);
+			}
 		}
 	}
 	else if (status != UV_ECANCELED) {
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket write failed: %s", uv_strerror(status));
-		as_event_socket_error(cmd, &err);
+		if (! as_event_socket_retry(cmd)) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket write failed: %s", uv_strerror(status));
+			as_event_socket_error(cmd, &err);
+		}
 	}
 }
 
-static inline bool
+static inline void
 as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 {
-	cmd->state = AS_ASYNC_STATE_WRITE;
+	as_event_set_write(cmd);
+	cmd->state = AS_ASYNC_STATE_COMMAND_WRITE;
 	cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
 
 	uv_write_t* write_req = &cmd->conn->req.write;
 	write_req->data = cmd;
-	uv_buf_t buf = uv_buf_init((char*)cmd->buf, cmd->len);
+	uv_buf_t buf = uv_buf_init((char*)cmd + cmd->write_offset, cmd->len);
 
 	int status = uv_write(write_req, stream, &buf, 1, as_uv_command_write_complete);
 
 	if (status) {
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_write failed: %s", uv_strerror(status));
-		as_event_socket_error(cmd, &err);
-		return false;
+		if (! as_event_socket_retry(cmd)) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_write failed: %s", uv_strerror(status));
+			as_event_socket_error(cmd, &err);
+		}
 	}
-	return true;
+}
+
+void
+as_event_command_write_start(as_event_command* cmd)
+{
+	as_uv_command_write_start(cmd, (uv_stream_t*)&cmd->conn->socket);
 }
 
 static inline as_event_command*
@@ -422,9 +438,12 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		
 	if (nread < 0) {
 		uv_read_stop(stream);
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate socket read failed: %zd", nread);
-		as_event_socket_error(cmd, &err);
+
+		if (! as_event_socket_retry(cmd)) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate socket read failed: %zd", nread);
+			as_event_socket_error(cmd, &err);
+		}
 		return;
 	}
 	
@@ -438,11 +457,11 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	if (cmd->state == AS_ASYNC_STATE_AUTH_READ_HEADER) {
 		as_event_set_auth_parse_header(cmd);
 		
-		if (cmd->len > cmd->capacity) {
+		if (cmd->len > cmd->read_capacity) {
 			uv_read_stop(stream);
 			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Authenticate response size is corrupt: %u", cmd->auth_len);
-			as_event_socket_error(cmd, &err);
+			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Authenticate response size is corrupt: %u", cmd->len);
+			as_event_parse_error(cmd, &err);
 			return;
 		}
 		return;
@@ -452,18 +471,15 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	uv_read_stop(stream);
 	
 	// Parse authentication response.
-	cmd->len -= cmd->auth_len;
-	uint8_t code = cmd->buf[cmd->len + AS_ASYNC_AUTH_RETURN_CODE];
+	uint8_t code = cmd->buf[AS_ASYNC_AUTH_RETURN_CODE];
 	
 	if (code) {
 		// Can't authenticate socket, so must close it.
 		as_error err;
 		as_error_update(&err, code, "Authentication failed: %s", as_error_string(code));
-		as_event_socket_error(cmd, &err);
+		as_event_parse_error(cmd, &err);
 		return;
 	}
-	
-	cmd->pos = 0;
 	as_uv_command_write_start(cmd, stream);
 }
 
@@ -488,15 +504,19 @@ as_uv_auth_write_complete(uv_write_t* req, int status)
 		status = uv_read_start(req->handle, as_uv_auth_command_buffer, as_uv_auth_read);
 		
 		if (status) {
-			as_error err;
-			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate uv_read_start failed: %s", uv_strerror(status));
-			as_event_socket_error(cmd, &err);
+			if (! as_event_socket_retry(cmd)) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate uv_read_start failed: %s", uv_strerror(status));
+				as_event_socket_error(cmd, &err);
+			}
 		}
 	}
 	else if (status != UV_ECANCELED) {
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate socket write failed: %s", uv_strerror(status));
-		as_event_socket_error(cmd, &err);
+		if (! as_event_socket_retry(cmd)) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate socket write failed: %s", uv_strerror(status));
+			as_event_socket_error(cmd, &err);
+		}
 	}
 }
 
@@ -508,14 +528,17 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 
 	uv_write_t* write_req = &cmd->conn->req.write;
 	write_req->data = cmd;
-	uv_buf_t buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->auth_len);
+	// Authentication buffer is located after the write buffer.
+	uv_buf_t buf = uv_buf_init((char*)cmd + cmd->write_offset + cmd->write_len, cmd->len - cmd->pos);
 	
 	int status = uv_write(write_req, stream, &buf, 1, as_uv_auth_write_complete);
 	
 	if (status) {
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate uv_write failed: %s", uv_strerror(status));
-		as_event_socket_error(cmd, &err);
+		if (! as_event_socket_retry(cmd)) {
+			as_error err;
+			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate uv_write failed: %s", uv_strerror(status));
+			as_event_socket_error(cmd, &err);
+		}
 	}
 }
 
@@ -524,7 +547,9 @@ as_uv_fd_error(as_event_command* cmd, as_error* err)
 {
 	// Only timer needs to be released on socket connection failure.
 	// Watcher has not been registered yet.
-	as_event_stop_timer(cmd);
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(cmd);
+	}
 
 	// Socket has already been closed.
 	cf_free(cmd->conn);
@@ -543,7 +568,14 @@ as_uv_connect_error(as_event_command* cmd, as_error* err)
 	// The close callback will also free as_event_connection memory.
 	uv_close((uv_handle_t*)cmd->conn, as_uv_connection_closed);
 	as_event_decr_conn(cmd);
-	as_event_error_callback(cmd, err);
+	cmd->event_loop->errors++;
+
+	if (! as_event_command_retry(cmd, true)) {
+		if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+			as_event_stop_timer(cmd);
+		}
+		as_event_error_callback(cmd, err);
+	}
 }
 
 static void
@@ -572,8 +604,8 @@ as_uv_connected(uv_connect_t* req, int status)
 	}
 }
 
-static bool
-as_uv_connect(as_event_command* cmd)
+void
+as_event_connect(as_event_command* cmd)
 {
 	// Create a non-blocking socket.
 	as_address* address = as_node_get_address(cmd->node);
@@ -585,7 +617,7 @@ as_uv_connect(as_event_command* cmd)
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "%s: %s %s", msg, cmd->node->name, address->name);
 		as_uv_fd_error(cmd, &err);
-		return false;
+		return;
 	}
 
 	if (cmd->pipe_listener && ! as_pipe_modify_fd(fd)) {
@@ -593,7 +625,7 @@ as_uv_connect(as_event_command* cmd)
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Failed to modify fd for pipeline");
 		as_uv_fd_error(cmd, &err);
-		return false;
+		return;
 	}
 
 	as_event_connection* conn = cmd->conn;
@@ -605,8 +637,11 @@ as_uv_connect(as_event_command* cmd)
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_init failed: %s", uv_strerror(status));
 		close(fd);
 		as_uv_fd_error(cmd, &err);
-		return false;
+		return;
 	}
+
+	// Indicate that watcher has been initialized.
+	conn->watching = 1;
 	
 	// Define externally created fd to uv_tcp_t.
 	status = uv_tcp_open(socket, fd);
@@ -617,7 +652,7 @@ as_uv_connect(as_event_command* cmd)
 		// Close fd directly because we created it outside of libuv and uv_tcp_t does not know about it here.
 		close(fd);
 		as_uv_connect_error(cmd, &err);
-		return false;
+		return;
 	}
 	
 	socket->data = conn;
@@ -629,102 +664,22 @@ as_uv_connect(as_event_command* cmd)
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_connect failed: %s", uv_strerror(status));
 		as_uv_connect_error(cmd, &err);
-		return false;
+		return;
 	}
-	return true;
+	cmd->event_loop->errors = 0; // Reset errors on valid connection.
 }
 
-static void
+void
 as_uv_total_timeout(uv_timer_t* timer)
 {
 	// One-off timers are automatically stopped by libuv.
-	as_event_timeout(timer->data);
+	as_event_total_timeout(timer->data);
 }
 
-static inline void
-as_uv_init_total_timeout(as_event_command* cmd, uint64_t timeout)
-{
-	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
-	cmd->timer.data = cmd;
-	uv_timer_start(&cmd->timer, as_uv_total_timeout, timeout, 0);
-}
-
-static void
+void
 as_uv_socket_timeout(uv_timer_t* timer)
 {
-	as_event_command* cmd = timer->data;
-
-	// Check for socket timeout.
-	if (! (cmd->flags & AS_ASYNC_FLAGS_EVENT_RECEIVED)) {
-		uv_timer_stop(&cmd->timer);
-		as_event_timeout(cmd);
-		return;
-	}
-
-	// Socket has been used since timer was started.
-	if (cmd->total_deadline) {
-		// Check for total timeout.
-		uint64_t now = cf_getms();
-
-		if (now >= cmd->total_deadline) {
-			uv_timer_stop(&cmd->timer);
-			as_event_timeout(cmd);
-			return;
-		}
-
-		if (now + cmd->socket_timeout >= cmd->total_deadline) {
-			// Transition to total timer.
-			uv_timer_stop(&cmd->timer);
-			as_uv_init_total_timeout(cmd, cmd->total_deadline - now);
-			return;
-		}
-	}
-
-	// Repeat socket timer.
-	cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
-	uv_timer_again(&cmd->timer);
-}
-
-static inline void
-as_uv_init_socket_timeout(as_event_command* cmd)
-{
-	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
-	cmd->timer.data = cmd;
-	uv_timer_start(&cmd->timer, as_uv_socket_timeout, cmd->socket_timeout, cmd->socket_timeout);
-}
-
-bool
-as_event_command_begin(as_event_command* cmd)
-{
-	// Timeout is minimum of socket timeout and total timeout.
-	if (cmd->total_deadline) {
-		// total_deadline is really a timeout at this point.
-		if (cmd->socket_timeout && cmd->socket_timeout < cmd->total_deadline) {
-			// Use socket timeout.
-			uint64_t now = cf_getms();
-			cmd->total_deadline += now;  // Convert total timeout to deadline.
-			as_uv_init_socket_timeout(cmd);
-		}
-		else {
-			// Use total timeout.
-			as_uv_init_total_timeout(cmd, cmd->total_deadline);
-		}
-	}
-	else if (cmd->socket_timeout) {
-		// Use socket timeout.
-		as_uv_init_socket_timeout(cmd);
-	}
-
-	as_connection_status status = cmd->pipe_listener != NULL ? as_pipe_get_connection(cmd) : as_event_get_connection(cmd);
-	
-	if (status == AS_CONNECTION_FROM_POOL) {
-		return as_uv_command_write_start(cmd, (uv_stream_t*)&cmd->conn->socket);
-	}
-
-	if (status == AS_CONNECTION_NEW) {
-		return as_uv_connect(cmd);
-	}
-	return false;
+	as_event_socket_timeout(timer->data);
 }
 
 void
@@ -754,8 +709,7 @@ as_uv_queue_close_connections(as_node* node, as_conn_pool* pool, as_queue* cmd_q
 		// This is done because the node will be invalid when the deferred connection close occurs.
 		// Since node destroy always waits till there are no node references, all transactions that
 		// referenced this node should be completed by the time this code is executed.
-		as_event_decr_connection(node->cluster, pool);
-		ck_pr_dec_32(&node->cluster->async_conn_pool);
+		as_conn_pool_dec(pool);
 	}
 	return true;
 }

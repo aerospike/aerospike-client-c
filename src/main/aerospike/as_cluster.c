@@ -36,6 +36,7 @@
  *	Globals
  *****************************************************************************/
 
+extern uint32_t as_event_loop_capacity;
 uint32_t as_cluster_count = 0;
 
 /******************************************************************************
@@ -442,7 +443,7 @@ as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 	
 	if (cluster->n_partitions > 0) {
 		// Must reset error if previous nodes had failed.
-		if (err->code != AEROSPIKE_OK) {
+		if (status != AEROSPIKE_OK) {
 			as_error_reset(err);
 		}
 		return AEROSPIKE_OK;
@@ -956,10 +957,10 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		}
 	}
 
-	// Increment pending reference count to keep cluster alive until it's explicitly closed.
-	cluster->async_pending = 1;
-	cluster->async_conn_count = 0;
-	cluster->async_conn_pool = 0;
+	if (as_event_loop_capacity > 0) {
+		// Create one pending integer for each event loop.
+		cluster->pending = cf_calloc(as_event_loop_capacity, sizeof(int));
+	}
 
 	// Initialize empty nodes.
 	cluster->nodes = as_nodes_create(0);
@@ -1092,7 +1093,8 @@ as_cluster_destroy(as_cluster* cluster)
 	// Destroy tend lock and condition.
 	pthread_mutex_destroy(&cluster->tend_lock);
 	pthread_cond_destroy(&cluster->tend_cond);
-	
+
+	cf_free(cluster->pending);
 	cf_free(cluster->user);
 	cf_free(cluster->password);
 

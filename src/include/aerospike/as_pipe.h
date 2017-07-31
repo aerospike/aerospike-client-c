@@ -57,17 +57,17 @@ as_pipe_get_send_buffer_size();
 extern int
 as_pipe_get_recv_buffer_size();
 
-extern as_connection_status
+extern void
 as_pipe_get_connection(as_event_command* cmd);
 
 extern bool
 as_pipe_modify_fd(int fd);
 
 extern void
-as_pipe_socket_error(as_event_command* cmd, as_error* err);
+as_pipe_socket_error(as_event_command* cmd, as_error* err, bool retry);
 
 extern void
-as_pipe_timeout(as_event_command* cmd);
+as_pipe_timeout(as_event_command* cmd, bool retry);
 
 extern void
 as_pipe_response_error(as_event_command* cmd, as_error* err);

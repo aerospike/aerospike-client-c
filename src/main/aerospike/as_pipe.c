@@ -48,7 +48,9 @@ next_reader(as_event_command* reader)
 	assert(cf_ll_get_head(&conn->readers) == &reader->pipe_link);
 
 	cf_ll_delete(&conn->readers, &reader->pipe_link);
-	as_event_stop_timer(reader);
+	if (reader->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(reader);
+	}
 
 	if (conn->writer == NULL && cf_ll_size(&conn->readers) == 0) {
 		as_log_trace("No writer and no reader left");
@@ -61,7 +63,7 @@ next_reader(as_event_command* reader)
 
 		as_log_trace("Closing non-pooled pipeline connection %p", conn);
 		as_conn_pool* pool = &reader->node->pipe_conn_pools[reader->event_loop->index];
-		as_event_release_connection(reader->cluster, reader->conn, pool);
+		as_event_release_connection(reader->conn, pool);
 		return;
 	}
 
@@ -69,12 +71,16 @@ next_reader(as_event_command* reader)
 }
 
 static void
-cancel_command(as_event_command* cmd, as_error* err)
+cancel_command(as_event_command* cmd, as_error* err, bool retry, bool alternate)
 {
-	as_log_trace("Canceling command %p, error code %d", cmd, err->code);
-	as_event_stop_timer(cmd);
+	if (retry && as_event_command_retry(cmd, alternate)) {
+		return;
+	}
 
-	as_log_trace("Invoking callback function for command %p", cmd);
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(cmd);
+	}
+
 	as_event_error_callback(cmd, err);
 }
 
@@ -83,7 +89,7 @@ cancel_command(as_event_command* cmd, as_error* err)
 #define CANCEL_CONNECTION_TIMEOUT 3
 
 static void
-cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
+cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool retry, bool alternate_on_write)
 {
 	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
 	as_node* node = cmd->node;
@@ -103,7 +109,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 
 	if (conn->writer != NULL) {
 		as_log_trace("Canceling writer %p on %p", conn->writer, conn);
-		cancel_command(conn->writer, err);
+		cancel_command(conn->writer, err, retry, alternate_on_write);
 	}
 
 	bool is_reader = false;
@@ -118,7 +124,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 
 		as_log_trace("Canceling reader %p on %p", walker, conn);
 		cf_ll_delete(&conn->readers, link);
-		cancel_command(walker, err);
+		cancel_command(walker, err, retry, true);
 	}
 
 	if (source == CANCEL_CONNECTION_TIMEOUT) {
@@ -130,7 +136,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source)
 		// For as_uv_connection_alive().
 		conn->canceled = true;
 		as_conn_pool* pool = &node->pipe_conn_pools[loop->index];
-		as_event_release_connection(node->cluster, (as_event_connection*)conn, pool);
+		as_event_release_connection((as_event_connection*)conn, pool);
 		as_node_release(node);
 		return;
 	}
@@ -155,7 +161,7 @@ release_connection(as_event_command* cmd, as_pipe_connection* conn, as_conn_pool
 
 	as_log_trace("Closing pipeline connection %p", conn);
 	as_event_stop_watcher(cmd, &conn->base);
-	as_event_release_connection(cmd->cluster, &conn->base, pool);
+	as_event_release_connection(&conn->base, pool);
 }
 
 static void
@@ -167,7 +173,6 @@ put_connection(as_event_command* cmd)
 	as_conn_pool* pool = &cmd->node->pipe_conn_pools[cmd->event_loop->index];
 
 	if (as_conn_pool_put(pool, &conn)) {
-		ck_pr_inc_32(&cmd->cluster->async_conn_pool);
 		conn->in_pool = true;
 		return;
 	}
@@ -282,7 +287,7 @@ as_pipe_get_recv_buffer_size()
 #endif
 }
 
-as_connection_status
+void
 as_pipe_get_connection(as_event_command* cmd)
 {
 	as_log_trace("Getting pipeline connection for command %p", cmd);
@@ -297,7 +302,6 @@ as_pipe_get_connection(as_event_command* cmd)
 	if (pool->total >= pool->limit) {
 		while (as_conn_pool_get(pool, &conn)) {
 			as_log_trace("Checking pipeline connection %p", conn);
-			ck_pr_dec_32(&cmd->cluster->async_conn_pool);
 
 			if (conn->canceling) {
 				as_log_trace("Pipeline connection %p is being canceled", conn);
@@ -308,7 +312,7 @@ as_pipe_get_connection(as_event_command* cmd)
 			if (conn->canceled) {
 				as_log_trace("Pipeline connection %p was canceled earlier", conn);
 				// Do not need to stop watcher because it was stopped in cancel_connection().
-				as_event_release_connection(cmd->cluster, (as_event_connection*)conn, pool);
+				as_event_release_connection((as_event_connection*)conn, pool);
 				continue;
 			}
 
@@ -321,7 +325,8 @@ as_pipe_get_connection(as_event_command* cmd)
 				as_log_trace("Validation OK");
 				cmd->conn = (as_event_connection*)conn;
 				write_start(cmd);
-				return AS_CONNECTION_FROM_POOL;
+				as_event_command_write_start(cmd);
+				return;
 			}
 
 			as_log_debug("Invalid pipeline socket from pool: %d", len);
@@ -333,14 +338,13 @@ as_pipe_get_connection(as_event_command* cmd)
 	as_log_trace("Creating new pipeline connection");
 
 	if (as_conn_pool_inc(pool)) {
-		ck_pr_inc_32(&cmd->cluster->async_conn_count);
 		conn = cf_malloc(sizeof(as_pipe_connection));
 		assert(conn != NULL);
 
 #if defined(AS_USE_LIBEV) || defined(AS_USE_LIBEVENT)
 		as_socket_init(&conn->base.socket);
-		conn->base.watching = 0;
 #endif
+		conn->base.watching = 0;
 		conn->base.pipeline = true;
 		conn->writer = NULL;
 		cf_ll_init(&conn->readers, NULL, false);
@@ -350,16 +354,22 @@ as_pipe_get_connection(as_event_command* cmd)
 		
 		cmd->conn = (as_event_connection*)conn;
 		write_start(cmd);
-		return AS_CONNECTION_NEW;
+		as_event_connect(cmd);
+		return;
 	}
-	else {
+
+	cmd->event_loop->errors++;
+
+	if (! as_event_command_retry(cmd, true)) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
 						"Max node/event loop %s pipeline connections would be exceeded: %u",
 						cmd->node->name, pool->limit);
-		as_event_stop_timer(cmd);
+
+		if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+			as_event_stop_timer(cmd);
+		}
 		as_event_error_callback(cmd, &err);
-		return AS_CONNECTION_TOO_MANY;
 	}
 }
 
@@ -405,19 +415,19 @@ as_pipe_modify_fd(int fd)
 }
 
 void
-as_pipe_socket_error(as_event_command* cmd, as_error* err)
+as_pipe_socket_error(as_event_command* cmd, as_error* err, bool retry)
 {
 	as_log_trace("Socket error for command %p", cmd);
-	cancel_connection(cmd, err, CANCEL_CONNECTION_SOCKET);
+	cancel_connection(cmd, err, CANCEL_CONNECTION_SOCKET, retry, true);
 }
 
 void
-as_pipe_timeout(as_event_command* cmd)
+as_pipe_timeout(as_event_command* cmd, bool retry)
 {
 	as_log_trace("Timeout for command %p", cmd);
 	as_error err;
 	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
-	cancel_connection(cmd, &err, CANCEL_CONNECTION_TIMEOUT);
+	cancel_connection(cmd, &err, CANCEL_CONNECTION_TIMEOUT, retry, false);
 }
 
 void
@@ -434,7 +444,7 @@ as_pipe_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
 			as_log_trace("Error is fatal");
-			cancel_connection(cmd, err, CANCEL_CONNECTION_RESPONSE);
+			cancel_connection(cmd, err, CANCEL_CONNECTION_RESPONSE, false, false);
 			break;
 
 		default:

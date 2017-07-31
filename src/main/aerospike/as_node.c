@@ -344,7 +344,7 @@ as_node_create_socket(as_error* err, as_node* node, as_conn_pool_lock* pool_lock
 }
 
 static as_status
-as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_conn_pool_lock* pool_lock, as_socket* sock)
+as_node_create_connection(as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_conn_pool_lock* pool_lock, as_socket* sock)
 {
 	as_status status = as_node_create_socket(err, node, pool_lock, sock);
 
@@ -356,7 +356,7 @@ as_node_create_connection(as_error* err, as_node* node, uint64_t deadline_ms, as
 	as_cluster* cluster = node->cluster;
 
 	if (cluster->user) {
-		as_status status = as_authenticate(err, sock, node, cluster->user, cluster->password, deadline_ms);
+		as_status status = as_authenticate(err, sock, node, cluster->user, cluster->password, socket_timeout, deadline_ms);
 
 		if (status) {
 			as_socket_close(sock);
@@ -398,14 +398,14 @@ as_node_authenticate_connection(as_cluster* cluster, const char* user, const cha
 	}
 
 	uint64_t deadline_ms = as_socket_deadline(2000);
-	status = as_authenticate(&err, &sock, node, user, hash, deadline_ms);
+	status = as_authenticate(&err, &sock, node, user, hash, 0, deadline_ms);
 	as_socket_close(&sock);
 	as_node_release(node);
 	return status;
 }
 
 as_status
-as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_socket* sock)
+as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_socket* sock)
 {
 	as_conn_pool_lock* pool_locks = node->conn_pool_locks;
 	uint32_t max = node->cluster->conn_pools_per_node;
@@ -457,7 +457,7 @@ as_node_get_connection(as_error* err, as_node* node, uint64_t deadline_ms, as_so
 		else if (ret == 1) {
 			// Socket not found and queue has available slot.
 			// Create new connection.
-			return as_node_create_connection(err, node, deadline_ms, pool_lock, sock);
+			return as_node_create_connection(err, node, socket_timeout, deadline_ms, pool_lock, sock);
 		}
 		else {
 			// Socket not found and queue is full.  Try another queue.
@@ -492,7 +492,7 @@ as_node_get_info_connection(as_error* err, as_node* node, uint64_t deadline_ms)
 	if (node->info_socket.fd < 0) {
 		// Try to open a new socket.
 		as_socket info_socket;
-		as_status status = as_node_create_connection(err, node, deadline_ms, NULL, &info_socket);
+		as_status status = as_node_create_connection(err, node, 0, deadline_ms, NULL, &info_socket);
 
 		if (status == AEROSPIKE_OK) {
 			node->info_socket = info_socket;

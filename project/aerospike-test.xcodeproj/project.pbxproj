@@ -35,7 +35,6 @@
 		BFC65C411C9226C90079DF5A /* query_foreach.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C3E1C9226C90079DF5A /* query_foreach.c */; };
 		BFC65C451C9226E50079DF5A /* list_basics_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C431C9226E50079DF5A /* list_basics_async.c */; };
 		BFC65C461C9226E50079DF5A /* list_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C441C9226E50079DF5A /* list_basics.c */; };
-		BFC65C491C9227070079DF5A /* test_lmap.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C481C9227070079DF5A /* test_lmap.c */; };
 		BFC65C521C9227260079DF5A /* key_apply_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C4B1C9227260079DF5A /* key_apply_async.c */; };
 		BFC65C531C9227260079DF5A /* key_apply.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C4C1C9227260079DF5A /* key_apply.c */; };
 		BFC65C541C9227260079DF5A /* key_apply2.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C4D1C9227260079DF5A /* key_apply2.c */; };
@@ -132,7 +131,6 @@
 		BFC65C3E1C9226C90079DF5A /* query_foreach.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = query_foreach.c; path = ../src/test/aerospike_query/query_foreach.c; sourceTree = "<group>"; };
 		BFC65C431C9226E50079DF5A /* list_basics_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = list_basics_async.c; path = ../src/test/aerospike_list/list_basics_async.c; sourceTree = "<group>"; };
 		BFC65C441C9226E50079DF5A /* list_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = list_basics.c; path = ../src/test/aerospike_list/list_basics.c; sourceTree = "<group>"; };
-		BFC65C481C9227070079DF5A /* test_lmap.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = test_lmap.c; path = ../src/test/aerospike_ldt/test_lmap.c; sourceTree = "<group>"; };
 		BFC65C4B1C9227260079DF5A /* key_apply_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = key_apply_async.c; path = ../src/test/aerospike_key/key_apply_async.c; sourceTree = "<group>"; };
 		BFC65C4C1C9227260079DF5A /* key_apply.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = key_apply.c; path = ../src/test/aerospike_key/key_apply.c; sourceTree = "<group>"; };
 		BFC65C4D1C9227260079DF5A /* key_apply2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = key_apply2.c; path = ../src/test/aerospike_key/key_apply2.c; sourceTree = "<group>"; };
@@ -213,7 +211,6 @@
 				BFC65C5C1C9227560079DF5A /* aerospike_index */,
 				BFC65C591C9227380079DF5A /* aerospike_info */,
 				BFC65C4A1C9227170079DF5A /* aerospike_key */,
-				BFC65C471C9226F80079DF5A /* aerospike_ldt */,
 				BFC65C421C9226DA0079DF5A /* aerospike_list */,
 				BFF344C41CEA8F3300FD1976 /* aerospike_map */,
 				BFC65C3B1C9226B80079DF5A /* aerospike_query */,
@@ -313,14 +310,6 @@
 				BFC65C441C9226E50079DF5A /* list_basics.c */,
 			);
 			name = aerospike_list;
-			sourceTree = "<group>";
-		};
-		BFC65C471C9226F80079DF5A /* aerospike_ldt */ = {
-			isa = PBXGroup;
-			children = (
-				BFC65C481C9227070079DF5A /* test_lmap.c */,
-			);
-			name = aerospike_ldt;
 			sourceTree = "<group>";
 		};
 		BFC65C4A1C9227170079DF5A /* aerospike_key */ = {
@@ -465,7 +454,6 @@
 				BFC65C1D1C9225AB0079DF5A /* udf.c in Sources */,
 				BFF344C81CEA8FD200FD1976 /* map_basics.c in Sources */,
 				BFC65C0A1C92256A0079DF5A /* batch_get.c in Sources */,
-				BFC65C491C9227070079DF5A /* test_lmap.c in Sources */,
 				BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */,
 				BFC65C611C9227860079DF5A /* query_geospatial.c in Sources */,
 				BFC65C1C1C9225AB0079DF5A /* test_aerospike.c in Sources */,
@@ -598,14 +586,11 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/opt/openssl/lib,
-					../modules/lua/src,
+					"../modules/lua/src"
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = (
-					"-L/usr/local/lib",
-					"-L../modules/lua/src",
-				);
+				OTHER_LDFLAGS = "-L/usr/local/lib";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 			};
@@ -626,14 +611,11 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/opt/openssl/lib,
-					../modules/lua/src,
+					"../modules/lua/src"
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = (
-					"-L/usr/local/lib",
-					"-L../modules/lua/src",
-				);
+				OTHER_LDFLAGS = "-L/usr/local/lib";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 			};

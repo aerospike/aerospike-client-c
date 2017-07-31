@@ -51,11 +51,6 @@ extern "C" {
 #define AS_SCAN_CONCURRENT_DEFAULT false
 
 /**
- *	Default value for as_scan.include_ldt
- */
-#define AS_SCAN_INCLUDE_LDT_DEFAULT false
-
-/**
  *	Default value for as_scan.deserialize_list_map
  */
 #define AS_SCAN_DESERIALIZE_DEFAULT true
@@ -364,15 +359,6 @@ typedef struct as_scan_s {
 	 *	Default value is AS_SCAN_CONCURRENT_DEFAULT.
 	 */
 	bool concurrent;
-
-	/**
-	 *	Include large data type bin values in addition to large data type bin names.
-	 *	If false, LDT bin names will be returned, but LDT bin values will be empty.
-	 *	If true,  LDT bin names and the entire LDT bin values will be returned.
-	 *	This is useful for backups.
-	 *	Default: false
-	 */
-	bool include_ldt;
 
 	/**
 	 *	Set to true if the scan should deserialize list and map raw bytes.

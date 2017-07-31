@@ -117,43 +117,6 @@ error code AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE. Finally it demonstrates the
 combination of arithmetic and read operations in the same transaction, in order
 to perform an atomic arithmetic operation.
 
-
-### lset (3.0 feature)
-
-	aerospike_lset_add()
-	aerospike_lset_addall()
-	aerospike_lset_size()
-	aerospike_lset_filter()
-	aerospike_lset_exists()
-	aerospike_lset_destroy()
-
-This example demonstrates manipulation of a "large set" record bin. It shows how
-to add values using aerospike_lset_add() and aerospike_lset_addall(), how to get
-the number of elements (size) using aerospike_lset_size(), and how to check the
-existence of a particular value using aerospike_lset_exists(). It also shows how
-to return all the values using aerospike_lset_filter(), and how to remove an
-entire lset using aerospike_lset_destroy().
-
-
-### lstack (3.0 feature)
-
-	aerospike_lstack_push()
-	aerospike_lstack_pushall()
-	aerospike_lstack_size()
-	aerospike_lstack_peek()
-	aerospike_lstack_set_capacity()
-	aerospike_lstack_get_capacity()
-	aerospike_lstack_destroy()
-
-This example demonstrates manipulation of a "large stack" record bin. It shows
-how to push values using aerospike_lstack_push() and aerospike_lstack_pushall(),
-how to get the number of elements (size) using aerospike_lstack_size(), and how
-to peek to a specified depth using aerospike_lstack_peek(). It also shows how to
-set and query capacity using aerospike_lstack_set_capacity() and
-aerospike_lstack_get_capacity(), and how to remove an entire lstack using
-aerospike_lstack_destroy().
-
-
 ### put
 
 	aerospike_key_put()

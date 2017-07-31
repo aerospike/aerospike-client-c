@@ -405,11 +405,7 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 	if (policy->fail_on_cluster_change) {
 		priority |= 0x08;
 	}
-	
-	if (scan->include_ldt) {
-		priority |= 0x02;
-	}
-	
+
 	*p++ = priority;
 	*p++ = scan->percent;
 

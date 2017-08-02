@@ -375,7 +375,7 @@ typedef struct as_policy_base_s {
 	 * completes, the transaction will return error AEROSPIKE_ERR_TIMEOUT.
 	 * If totalTimeout is zero, there will be no total time limit.
 	 *
-	 * Default: 0 (no time limit).
+	 * Default: 1000
 	 */
 	uint32_t total_timeout;
 

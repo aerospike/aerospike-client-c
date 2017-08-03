@@ -384,12 +384,8 @@ as_batch_index_records_size(as_vector* records, as_vector* offsets, bool send_se
 		
 		size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
 		
-		// Avoid relatively expensive full equality checks for performance reasons.
-		// Use reference equality only in hope that common namespaces/bin names are set from
-		// fixed variables.  It's fine if equality not determined correctly because it just
-		// results in more space used. The batch will still be correct.
-		if (prev && prev->key.ns == record->key.ns &&
-			(! send_set_name || prev->key.set == record->key.set) &&
+		if (prev && strcmp(prev->key.ns, record->key.ns) == 0 &&
+			(! send_set_name || strcmp(prev->key.set, record->key.set) == 0) &&
 			prev->bin_names == record->bin_names && prev->read_all_bins == record->read_all_bins) {
 			// Can set repeat previous namespace/bin names to save space.
 			size++;
@@ -442,12 +438,8 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, const as_po
 		memcpy(p, record->key.digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 		
-		// Avoid relatively expensive full equality checks for performance reasons.
-		// Use reference equality only in hope that common namespaces/bin names are set from
-		// fixed variables.  It's fine if equality not determined correctly because it just
-		// results in more space used. The batch will still be correct.
-		if (prev && prev->key.ns == record->key.ns &&
-			(! policy->send_set_name || prev->key.set == record->key.set) &&
+		if (prev && strcmp(prev->key.ns, record->key.ns) == 0 &&
+			(! policy->send_set_name || strcmp(prev->key.set, record->key.set) == 0) &&
 			prev->bin_names == record->bin_names && prev->read_all_bins == record->read_all_bins) {
 			// Can set repeat previous namespace/bin names to save space.
 			*p++ = 1;  // repeat
@@ -551,8 +543,7 @@ as_batch_index_execute(as_batch_task* task)
 		
 		size += 24;  // digest + int count.
 
-		// Try reference equality in hope that namespace for all keys is set from a fixed variable.
-		if (prev && prev->ns == key->ns && (! policy->send_set_name || prev->set == key->set)) {
+		if (prev && strcmp(prev->ns, key->ns) == 0 && (! policy->send_set_name || strcmp(prev->set, key->set) == 0)) {
 			// Can set repeat previous namespace/bin names to save space.
 			size++;
 		}
@@ -592,8 +583,7 @@ as_batch_index_execute(as_batch_task* task)
 		memcpy(p, key->digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 		
-		// Try reference equality in hope that namespace for all keys is set from a fixed variable.
-		if (prev && prev->ns == key->ns && (! policy->send_set_name || prev->set == key->set)) {
+		if (prev && strcmp(prev->ns, key->ns) == 0 && (! policy->send_set_name || strcmp(prev->set, key->set) == 0)) {
 			// Can set repeat previous namespace/bin names to save space.
 			*p++ = 1;  // repeat
 		}

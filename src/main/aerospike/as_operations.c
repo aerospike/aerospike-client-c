@@ -41,36 +41,36 @@ typedef enum as_cdt_paramtype_e {
 } as_cdt_paramtype;
 
 typedef enum as_cdt_optype_e {
-	
+
 	// ------------------------------------------------------------------------
 	// List Operation
-	
+
 	// Add to list
 	AS_CDT_OP_LIST_APPEND        = 1,
 	AS_CDT_OP_LIST_APPEND_ITEMS  = 2,
 	AS_CDT_OP_LIST_INSERT        = 3,
 	AS_CDT_OP_LIST_INSERT_ITEMS  = 4,
-	
+
 	// Remove from list
 	AS_CDT_OP_LIST_POP           = 5,
 	AS_CDT_OP_LIST_POP_RANGE     = 6,
 	AS_CDT_OP_LIST_REMOVE        = 7,
 	AS_CDT_OP_LIST_REMOVE_RANGE  = 8,
-	
+
 	// Other list modifies
 	AS_CDT_OP_LIST_SET           = 9,
 	AS_CDT_OP_LIST_TRIM          = 10,
 	AS_CDT_OP_LIST_CLEAR         = 11,
 	AS_CDT_OP_LIST_INCREMENT     = 12,
-	
+
 	// Read from list
 	AS_CDT_OP_LIST_SIZE          = 16,
 	AS_CDT_OP_LIST_GET           = 17,
 	AS_CDT_OP_LIST_GET_RANGE     = 18,
-	
+
 	// ------------------------------------------------------------------------
 	// Map Operation
-	
+
 	AS_CDT_OP_MAP_SET_TYPE							= 64,
 	AS_CDT_OP_MAP_ADD								= 65,
 	AS_CDT_OP_MAP_ADD_ITEMS							= 66,
@@ -78,12 +78,12 @@ typedef enum as_cdt_optype_e {
 	AS_CDT_OP_MAP_PUT_ITEMS							= 68,
 	AS_CDT_OP_MAP_REPLACE							= 69,
 	AS_CDT_OP_MAP_REPLACE_ITEMS						= 70,
-	
+
 	AS_CDT_OP_MAP_INCREMENT							= 73,
 	AS_CDT_OP_MAP_DECREMENT							= 74,
-	
+
 	AS_CDT_OP_MAP_CLEAR								= 75,
-	
+
 	AS_CDT_OP_MAP_REMOVE_BY_KEY						= 76,
 	AS_CDT_OP_MAP_REMOVE_BY_INDEX					= 77,
 	AS_CDT_OP_MAP_REMOVE_BY_RANK					= 79,
@@ -94,9 +94,9 @@ typedef enum as_cdt_optype_e {
 	AS_CDT_OP_MAP_REMOVE_BY_INDEX_RANGE				= 85,
 	AS_CDT_OP_MAP_REMOVE_BY_VALUE_INTERVAL			= 86,
 	AS_CDT_OP_MAP_REMOVE_BY_RANK_RANGE				= 87,
-	
+
 	AS_CDT_OP_MAP_SIZE								= 96,
-	
+
 	AS_CDT_OP_MAP_GET_BY_KEY						= 97,
 	AS_CDT_OP_MAP_GET_BY_INDEX						= 98,
 	AS_CDT_OP_MAP_GET_BY_RANK						= 100,
@@ -343,7 +343,7 @@ as_operations * as_operations_new(uint16_t nops)
 void as_operations_destroy(as_operations * ops)
 {
 	if ( !ops ) return;
-	
+
 	// destroy each bin in binops
 	for(int i = 0; i < ops->binops.size; i++) {
 		as_bin_destroy(&ops->binops.entries[i].bin);
@@ -858,7 +858,11 @@ bool as_operations_add_list_trim(as_operations* ops, const as_bin_name name, int
 
 bool as_operations_add_list_increment(as_operations *ops, const as_bin_name name, int64_t index, as_val *incr)
 {
-	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INCREMENT, index, incr);
+	if (incr) {
+		return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INCREMENT, index, incr);
+	}
+
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INCREMENT, index);
 }
 
 bool as_operations_add_list_get(as_operations* ops, const as_bin_name name, int64_t index)
@@ -897,19 +901,19 @@ void
 as_map_policy_set(as_map_policy* policy, as_map_order order, as_map_write_mode mode)
 {
 	policy->attributes = order;
-	
+
 	switch (mode) {
 		default:
 		case AS_MAP_UPDATE:
 			policy->item_command = AS_CDT_OP_MAP_PUT;
 			policy->items_command = AS_CDT_OP_MAP_PUT_ITEMS;
 			break;
-			
+
 		case AS_MAP_UPDATE_ONLY:
 			policy->item_command = AS_CDT_OP_MAP_REPLACE;
 			policy->items_command = AS_CDT_OP_MAP_REPLACE_ITEMS;
 			break;
-			
+
 		case AS_MAP_CREATE_ONLY:
 			policy->item_command = AS_CDT_OP_MAP_ADD;
 			policy->items_command = AS_CDT_OP_MAP_ADD_ITEMS;

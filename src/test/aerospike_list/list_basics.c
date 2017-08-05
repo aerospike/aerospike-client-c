@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Aerospike, Inc.
+ * Copyright 2017 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -437,6 +437,39 @@ as_testlist_set(as_testlist *tlist, int64_t index, as_val *val)
 }
 
 static bool
+as_testlist_incr(as_testlist *tlist, int64_t index, as_val *incr)
+{
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+
+	uint32_t uindex = index2uindex(tlist, index);
+	as_val *val = as_arraylist_get(&tlist->arraylist, uindex);
+	as_val_t val_type = as_val_type(val);
+	as_val_t incr_type = as_val_type(incr);
+
+	if (incr_type == AS_INTEGER || incr_type == AS_DOUBLE) {
+		if (val_type == AS_INTEGER) {
+			int64_t val_int = as_integer_get((as_integer *)val);
+			val_int += (incr_type == AS_INTEGER) ?
+					as_integer_get((as_integer *)incr) :
+					as_double_get((as_double *)incr);
+			as_arraylist_set_int64(&tlist->arraylist, uindex, val_int);
+		}
+		else if (val_type == AS_DOUBLE) {
+			double val_double = as_double_get((as_double *)val);
+			val_double += (incr_type == AS_INTEGER) ?
+					as_integer_get((as_integer *)incr) :
+					as_double_get((as_double *)incr);
+			as_arraylist_set_double(&tlist->arraylist, uindex, val_double);
+		}
+	}
+
+	as_operations_add_list_increment(&ops, BIN_NAME, index, incr);
+
+	return as_testlist_op(tlist, &ops);
+}
+
+static bool
 as_testlist_trim(as_testlist *tlist, int64_t index, uint32_t count)
 {
 	as_operations ops;
@@ -639,11 +672,39 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" )
 	as_testlist_destroy(&tlist);
 }
 
+TEST( cdt_incr , "CDT incr test on a single bin" )
+{
+	if (! has_cdt_list()) {
+		info("cdt-list not enabled. skipping test");
+		return;
+	}
+
+	as_testlist tlist;
+	assert_true( as_testlist_init(&tlist, as) );
+
+	as_testlist_append(&tlist, (as_val *)as_string_new("test", false));
+	as_testlist_append(&tlist, (as_val *)as_integer_new(1));
+	as_testlist_append(&tlist, (as_val *)as_integer_new(2));
+	as_testlist_append(&tlist, (as_val *)as_integer_new(30000));
+	as_testlist_append(&tlist, (as_val *)as_integer_new(4));
+	as_testlist_append(&tlist, (as_val *)as_integer_new(5));
+	as_testlist_append(&tlist, (as_val *)as_string_new("end", false));
+
+	for (int64_t i = 0; i < 7; i++) {
+		as_testlist_incr(&tlist, i, (as_val *)as_integer_new(1));
+	}
+
+	assert_true( as_testlist_compare(&tlist) );
+
+	as_testlist_destroy(&tlist);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
 SUITE(list_basics, "aerospike list basic tests")
 {
-    suite_add(cdt_basics_op);
+	suite_add(cdt_basics_op);
+	suite_add(cdt_incr);
 }

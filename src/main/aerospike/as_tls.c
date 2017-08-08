@@ -422,6 +422,8 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 		return 0;
 	}
 
+	pthread_mutex_lock(&asctxt->lock);
+
 	if (asctxt->cert_blacklist) {
 		// Is this cert blacklisted?
 		char name[256];
@@ -442,9 +444,12 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 
 		if (blacklisted) {
 			as_log_warn("CERT: BLACKLISTED");
+			pthread_mutex_unlock(&asctxt->lock);
 			return 0;
 		}
 	}
+
+	pthread_mutex_unlock(&asctxt->lock);
 
 	// If this is the peer cert, check the name
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
@@ -497,6 +502,8 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
 		"TLS not supported with libuv");
 #endif
+
+	pthread_mutex_init(&octx->lock, NULL);
 	
 	// Only initialize OpenSSL if we've enabled TLS.
 	as_tls_check_init();
@@ -705,6 +712,61 @@ as_tls_context_destroy(as_tls_context* ctx)
 	if (ctx->ssl_ctx) {
 		SSL_CTX_free(ctx->ssl_ctx);
 	}
+
+	pthread_mutex_destroy(&ctx->lock);
+}
+
+int
+as_tls_config_reload(as_config_tls* tlscfg, as_tls_context* ctx,
+		as_error *err)
+{
+	if (ctx->ssl_ctx == NULL) {
+		return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+				"TLS not enabled");
+	}
+
+	pthread_mutex_lock(&ctx->lock);
+
+	if (tlscfg->certfile &&
+			SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx,
+					tlscfg->certfile) != 1 &&
+			ERR_peek_error() != SSL_ERROR_NONE) {
+		pthread_mutex_unlock(&ctx->lock);
+
+		char buff[1000];
+		ERR_error_string_n(ERR_get_error(), buff, sizeof(buff));
+
+		return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+				"Failed to reload certificate file %s: %s",
+				tlscfg->certfile, buff);
+	}
+
+	if (tlscfg->keyfile &&
+			SSL_CTX_use_RSAPrivateKey_file(ctx->ssl_ctx, tlscfg->keyfile,
+					SSL_FILETYPE_PEM) != 1) {
+		pthread_mutex_unlock(&ctx->lock);
+
+		char buff[1000];
+		ERR_error_string_n(ERR_get_error(), buff, sizeof(buff));
+
+		return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+				"Failed to reload private key file %s: %s",
+				tlscfg->keyfile, buff);
+	}
+
+	if (tlscfg->cert_blacklist) {
+		void *new_cbl = cert_blacklist_read(tlscfg->cert_blacklist);
+
+		if (! new_cbl) {
+			pthread_mutex_unlock(&ctx->lock);
+			return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+					"Failed to reload certificate blacklist %s",
+					tlscfg->cert_blacklist);
+		}
+	}
+
+	pthread_mutex_unlock(&ctx->lock);
+	return AEROSPIKE_OK;
 }
 
 int
@@ -713,7 +775,10 @@ as_tls_wrap(as_tls_context* ctx, as_socket* sock, const char* tls_name)
 	sock->ctx = ctx;
 	sock->tls_name = tls_name;
 
+	pthread_mutex_lock(&ctx->lock);
 	sock->ssl = SSL_new(ctx->ssl_ctx);
+	pthread_mutex_unlock(&ctx->lock);
+
 	if (sock->ssl == NULL)
 		return -1;
 

@@ -35,6 +35,8 @@ as_status as_tls_context_setup(as_config_tls* tlscfg,
 
 void as_tls_context_destroy(as_tls_context* ctx);
 
+int as_tls_config_reload(as_config_tls* tlscfg, as_tls_context* ctx, as_error *err);
+
 int as_tls_wrap(as_tls_context* ctx, as_socket* sock, const char* tls_name);
 
 void as_tls_set_name(as_socket* sock, const char* tls_name);

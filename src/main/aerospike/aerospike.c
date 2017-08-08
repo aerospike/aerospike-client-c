@@ -246,3 +246,10 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
 	// Send truncate command to one node. That node will distribute the command to other nodes.
 	return as_info_command_random_node(as, err, policy, command);
 }
+
+int
+aerospike_reload_tls_config(aerospike* as, as_error* err)
+{
+	as_error_reset(err);
+	return as_tls_config_reload(&as->config.tls, &as->cluster->tls_ctx, err);
+}

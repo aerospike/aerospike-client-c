@@ -387,7 +387,7 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
  *
  * @relates aerospike
  */
-int
+as_status
 aerospike_reload_tls_config(aerospike* as, as_error* err);
 
 #ifdef __cplusplus

@@ -716,7 +716,7 @@ as_tls_context_destroy(as_tls_context* ctx)
 	pthread_mutex_destroy(&ctx->lock);
 }
 
-int
+as_status
 as_tls_config_reload(as_config_tls* tlscfg, as_tls_context* ctx,
 		as_error *err)
 {

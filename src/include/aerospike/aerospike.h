@@ -377,6 +377,19 @@ aerospike_stop_on_interrupt(bool stop);
 as_status
 aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const char* ns, const char* set, uint64_t before_nanos);
 
+/**
+ * Refresh the current TLS configuration by reloading its certificate, key, and blacklist files.
+ *
+ * @param as 		Aerospike instance whose TLS configuration to refresh.
+ * @param err		If an error occurs, this will be populated.
+ *
+ * @returns AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ * @relates aerospike
+ */
+int
+aerospike_reload_tls_config(aerospike* as, as_error* err);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

@@ -247,7 +247,7 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
 	return as_info_command_random_node(as, err, policy, command);
 }
 
-int
+as_status
 aerospike_reload_tls_config(aerospike* as, as_error* err)
 {
 	as_error_reset(err);

@@ -18,6 +18,7 @@
 
 #include <aerospike/as_error.h>
 #include <citrusleaf/cf_clock.h>
+#include <pthread.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -50,6 +51,7 @@ extern "C" {
  *	by all the connections to a specific cluster.
  */
 typedef struct as_tls_context_s {
+	pthread_mutex_t lock;
 	SSL_CTX* ssl_ctx;
 	void* cert_blacklist;
 	bool log_session_info;

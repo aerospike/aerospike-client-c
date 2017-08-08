@@ -763,6 +763,9 @@ as_tls_config_reload(as_config_tls* tlscfg, as_tls_context* ctx,
 					"Failed to reload certificate blacklist %s",
 					tlscfg->cert_blacklist);
 		}
+
+		cert_blacklist_destroy(ctx->cert_blacklist);
+		ctx->cert_blacklist = new_cbl;
 	}
 
 	pthread_mutex_unlock(&ctx->lock);

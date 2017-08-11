@@ -819,8 +819,9 @@ aerospike_key_apply(
 	n_fields += 3;
 
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, 0, 0,
-		0, policy->ttl, policy->base.total_timeout, n_fields, 0, policy->durable_delete);
+	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, 0,
+		policy->gen, policy->gen_value, policy->ttl, policy->base.total_timeout, n_fields, 0,
+		policy->durable_delete);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, module);
@@ -876,7 +877,8 @@ aerospike_key_apply_async(
 		event_loop, pipe_listener, size, as_event_command_parse_success_failure);
 
 	uint8_t* p = as_command_write_header(cmd->buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, 0,
-		0, 0, policy->ttl, policy->base.total_timeout, n_fields, 0, policy->durable_delete);
+		policy->gen, policy->gen_value, policy->ttl, policy->base.total_timeout, n_fields, 0,
+		policy->durable_delete);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, module);

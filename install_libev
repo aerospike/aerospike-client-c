@@ -1,5 +1,5 @@
 #!/bin/bash -e
-ver=4.22
+ver=4.24
 dir=libev-$ver
 fn=$dir.tar.gz
 url=http://dist.schmorp.de/libev/Attic/$fn

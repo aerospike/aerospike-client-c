@@ -53,8 +53,8 @@ An event library is required when C client asynchronous functionality is used.
 This event library must be installed independently of the C client.
 Install one of the supported event libraries:
 
-* [libev](http://dist.schmorp.de/libev) version 4.20 or greater.  libev is the preferred event library.  Use `install_libev` to install.
-* [libuv](http://docs.libuv.org) version 1.7.5 or greater.  Use `install_libuv` to install.
+* [libev](http://dist.schmorp.de/libev) version 4.24 or greater.  libev is the preferred event library.  Use `install_libev` to install.
+* [libuv](http://docs.libuv.org) version 1.8.0 or greater.  Use `install_libuv` to install.
 * [libevent](http://libevent.org) version 2.0.22 or greater.  Use `install_libevent` to install.
 
 Event libraries usually install into /usr/local/lib.  Most operating systems do not 

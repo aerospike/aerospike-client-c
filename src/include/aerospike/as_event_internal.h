@@ -106,7 +106,7 @@ typedef struct {
 
 typedef void (*as_event_executable) (void* udata);
 typedef bool (*as_event_parse_results_fn) (struct as_event_command* cmd);
-typedef void (*as_event_executor_complete_fn) (struct as_event_executor* executor, as_error* err);
+typedef void (*as_event_executor_complete_fn) (struct as_event_executor* executor);
 typedef void (*as_event_executor_destroy_fn) (struct as_event_executor* executor);
 
 typedef struct as_event_command {
@@ -157,9 +157,11 @@ typedef struct as_event_executor {
 	as_event_loop* event_loop;
 	as_event_executor_complete_fn complete_fn;
 	void* udata;
+	as_error* err;
 	uint32_t max_concurrent;
 	uint32_t max;
 	uint32_t count;
+	bool notify;
 	bool valid;
 } as_event_executor;
 

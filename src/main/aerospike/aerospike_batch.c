@@ -119,10 +119,10 @@ as_batch_parse_record(uint8_t** pp, as_error* err, as_msg* msg, as_record* rec, 
 }
 
 static void
-as_batch_complete_async(as_event_executor* executor, as_error* err)
+as_batch_complete_async(as_event_executor* executor)
 {
 	as_async_batch_executor* e = (as_async_batch_executor*)executor;
-	e->listener(err, e->records, executor->udata, executor->event_loop);
+	e->listener(executor->err, e->records, executor->udata, executor->event_loop);
 }
 
 static bool
@@ -1258,9 +1258,11 @@ aerospike_batch_read_async(
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_batch_complete_async;
 	exec->udata = udata;
+	exec->err = NULL;
 	exec->max_concurrent = 0;
 	exec->max = 0;
 	exec->count = 0;
+	exec->notify = true;
 	exec->valid = true;
 	executor->records = records;
 	executor->listener = listener;

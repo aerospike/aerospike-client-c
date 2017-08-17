@@ -549,6 +549,10 @@ as_event_executor_destroy(as_event_executor* executor)
 	if (executor->commands) {
 		cf_free(executor->commands);
 	}
+
+	if (executor->err) {
+		cf_free(executor->err);
+	}
 	
 	cf_free(executor);
 }
@@ -557,7 +561,7 @@ static void
 as_event_executor_error(as_event_executor* executor, as_error* err, int queued_count)
 {
 	pthread_mutex_lock(&executor->lock);
-	bool notify = executor->valid;
+	bool first_error = executor->valid;
 	executor->valid = false;
 
 	if (queued_count >= 0) {
@@ -571,14 +575,29 @@ as_event_executor_error(as_event_executor* executor, as_error* err, int queued_c
 	bool complete = executor->count == executor->max;
 	pthread_mutex_unlock(&executor->lock);
 
-	// Notify user only once on first error.
-	if (notify) {
-		executor->complete_fn(executor, err);
-	}
-
-	// If all commands complete, destroy executor.
 	if (complete) {
+		// All commands have completed.
+		// If scan or query user callback already returned false,
+		// do not re-notify user that an error occurred.
+		if (executor->notify) {
+			if (first_error) {
+				// Original error can be used directly.
+				executor->err = err;
+				executor->complete_fn(executor);
+				executor->err = NULL;
+			}
+			else {
+				// Use saved error.
+				executor->complete_fn(executor);
+			}
+		}
 		as_event_executor_destroy(executor);
+	}
+	else if (first_error)
+	{
+		// Save first error only.
+		executor->err = cf_malloc(sizeof(as_error));
+		as_error_copy(executor->err, err);
 	}
 }
 
@@ -598,6 +617,8 @@ as_event_executor_cancel(as_event_executor* executor, int queued_count)
 	pthread_mutex_unlock(&executor->lock);
 
 	if (complete) {
+		// Do not call user listener because an error will be returned
+		// on initial batch, scan or query call.
 		as_event_executor_destroy(executor);
 	}
 }
@@ -609,7 +630,6 @@ as_event_executor_complete(as_event_command* cmd)
 	
 	as_event_executor* executor = cmd->udata;
 	pthread_mutex_lock(&executor->lock);
-	bool notify = executor->valid;
 	executor->count++;
 	bool complete = executor->count == executor->max;
 	int next = executor->count + executor->max_concurrent - 1;
@@ -618,8 +638,10 @@ as_event_executor_complete(as_event_command* cmd)
 
 	if (complete) {
 		// All commands completed.
-		if (notify) {
-			executor->complete_fn(executor, 0);
+		// If scan or query user callback already returned false,
+		// do not re-notify user that an error occurred.
+		if (executor->notify) {
+			executor->complete_fn(executor);
 		}
 		as_event_executor_destroy(executor);
 	}

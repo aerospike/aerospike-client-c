@@ -17,6 +17,7 @@
 
 #include <ctype.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <signal.h>
 
 #include <openssl/conf.h>
@@ -281,6 +282,7 @@ wait_writable(int fd, uint32_t socket_timeout, uint64_t deadline)
 	return rv;
 }
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 static pthread_mutex_t *lock_cs;
 
 static void
@@ -324,6 +326,7 @@ threading_cleanup(void)
     }
     cf_free(lock_cs);
 }
+#endif
 
 void
 as_tls_check_init()
@@ -344,7 +347,9 @@ as_tls_check_init()
 		SSL_load_error_strings();
 		SSL_library_init();
 
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 		threading_setup();
+#endif
 
 		s_ex_name_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 		s_ex_ctxt_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
@@ -370,8 +375,10 @@ as_tls_cleanup()
 
 	// Cleanup global OpenSSL state, must be after all other OpenSSL
 	// API calls, of course ...
-	
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	threading_cleanup();
+#endif
 
 	// https://wiki.openssl.org/index.php/Library_Initialization#Cleanup
 	//

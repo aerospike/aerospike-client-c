@@ -262,7 +262,7 @@ clean: modules-clean docs-clean package-clean
 
 .PHONY: version
 version:
-	echo "char* aerospike_client_version = \"$(shell pkg/version)\";" > $(SOURCE_MAIN)/aerospike/version.c
+	pkg/set_version $(shell pkg/version)
 
 .PHONY: build
 build:  libaerospike

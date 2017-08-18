@@ -1,0 +1,25 @@
+#!/bin/bash
+# Set version in version.h and version.c.
+
+if [ $# -lt 1 ]
+then
+	echo "Usage: $0 <version>"
+	exit 1
+fi
+
+version=$1
+
+cd `dirname $0`
+
+echo $version | awk -F. '{
+	split($3,b,"-");
+	printf("// Version format: MNNNPPPBBB\n");
+	printf("// M: major\n");
+	printf("// N: minor\n");
+	printf("// P: patch\n");
+	printf("// B: build id\n");
+	printf("#define AEROSPIKE_CLIENT_VERSION %d%03d%03d%03dL\n", $1, $2, b[1], b[2]);
+	printf("\nextern char* aerospike_client_version;\n");
+}' > ../src/include/aerospike/version.h
+
+echo 'char* aerospike_client_version = "'$version'";' > ../src/main/aerospike/version.c

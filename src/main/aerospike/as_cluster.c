@@ -264,44 +264,30 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 			as_vector_append(nodes_to_remove, &node);
 			continue;
 		}
-		
-		switch (nodes->size) {
-			case 1:
-				// Single node clusters rely on whether it responded to info requests.
-				if (node->failures >= 5) {
-					// 5 consecutive info requests failed.
-					// Remove node.  Seeds will be tried in next cluster tend iteration.
+
+		if (refresh_count == 0 && node->failures >= 5) {
+			// All node info requests failed and this node had 5 consecutive failures.
+			// Remove node.  If no nodes are left, seeds will be tried in next cluster
+			// tend iteration.
+			as_vector_append(nodes_to_remove, &node);
+			continue;
+		}
+
+		if (refresh_count >= 1 && node->friends == 0) {
+			// Node is not referenced by other nodes.
+			// Check if node responded to info request.
+			if (node->failures == 0) {
+				// Node is alive, but not referenced by other nodes.  Check if mapped.
+				if (! as_partition_tables_find_node(cluster->partition_tables, node)) {
+					// Node doesn't have any partitions mapped to it.
+					// There is no point in keeping it in the cluster.
 					as_vector_append(nodes_to_remove, &node);
 				}
-				break;
-				
-			case 2:
-				// Two node clusters require at least one successful refresh before removing.
-				if (refresh_count == 1 && node->friends == 0 && node->failures > 0) {
-					// Node is not referenced nor did it respond.
-					as_vector_append(nodes_to_remove, &node);
-				}
-				break;
-				
-			default:
-				// Multi-node clusters require at least one successful refresh before removing.
-				if (refresh_count >= 1 && node->friends == 0) {
-					// Node is not referenced by other nodes.
-					// Check if node responded to info request.
-					if (node->failures == 0) {
-						// Node is alive, but not referenced by other nodes.  Check if mapped.
-						if (! as_partition_tables_find_node(cluster->partition_tables, node)) {
-							// Node doesn't have any partitions mapped to it.
-							// There is no point in keeping it in the cluster.
-							as_vector_append(nodes_to_remove, &node);
-						}
-					}
-					else {
-						// Node not responding. Remove it.
-						as_vector_append(nodes_to_remove, &node);
-					}
-				}
-				break;
+			}
+			else {
+				// Node not responding. Remove it.
+				as_vector_append(nodes_to_remove, &node);
+			}
 		}
 	}
 }

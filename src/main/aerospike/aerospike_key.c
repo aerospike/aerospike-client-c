@@ -61,6 +61,7 @@ as_event_command_init(as_cluster* cluster, as_error* err, const as_key* key, voi
 	as_status status = as_key_set_digest(err, (as_key*)key);
 
 	if (status != AEROSPIKE_OK) {
+		*partition = NULL;
 		return status;
 	}
 
@@ -69,6 +70,7 @@ as_event_command_init(as_cluster* cluster, as_error* err, const as_key* key, voi
 		as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, key->ns);
 
 		if (! table) {
+			*partition = NULL;
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
 		}
 
@@ -79,6 +81,7 @@ as_event_command_init(as_cluster* cluster, as_error* err, const as_key* key, voi
 		as_partition_table* table = as_cluster_get_partition_table(cluster, key->ns);
 
 		if (! table) {
+			*partition = NULL;
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
 		}
 

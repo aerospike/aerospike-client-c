@@ -584,15 +584,17 @@ as_shm_wait_till_ready(as_cluster* cluster, as_cluster_shm* cluster_shm)
 {
 	// Wait till cluster is initialized or connection timeout is reached.
 	uint32_t interval_micros = 200 * 1000;  // 200 milliseconds
-	uint64_t limit = cf_getms() + cluster->conn_timeout_ms;
+	uint64_t limit = cf_getms() + 10000;    // 10 second timeout.
 	
 	do {
 		usleep(interval_micros);
 		
 		if (ck_pr_load_8(&cluster_shm->ready)) {
+			as_log_info("Follow cluster finally initialized. Node count: %u", ck_pr_load_32(&cluster_shm->nodes_size));
 			break;
 		}
 	} while (cf_getms() < limit);
+	as_log_info("Follow cluster initialize timed out! Node count: %u", ck_pr_load_32(&cluster_shm->nodes_size));
 }
 
 static void
@@ -694,20 +696,24 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		ck_pr_store_32(&cluster_shm->owner_pid, pid);
 		
 		// Ensure shared memory cluster is fully initialized.
-		if (cluster_shm->ready) {
+		if (ck_pr_load_8(&cluster_shm->ready)) {
 			// Copy shared memory nodes to local nodes.
+			as_log_info("Cluster already initialized: %d. Node count=%u", pid, ck_pr_load_32(&cluster_shm->nodes_size));
 			as_shm_reset_nodes(cluster);
 			as_cluster_add_seeds(cluster);
 		}
 		else {
+			as_log_info("Initialize cluster: %d", pid);
 			as_status status = as_cluster_init(cluster, err, true);
 			
 			if (status != AEROSPIKE_OK) {
+				as_log_info("Initialize cluster FAILED: %d %d %s", pid, status, err->message);
 				ck_pr_store_8(&cluster_shm->lock, 0);
 				as_shm_destroy(cluster);
 				return status;
 			}
-			cluster_shm->ready = 1;
+			ck_pr_store_8(&cluster_shm->ready, 1);
+			as_log_info("Initialize cluster success: %d. Node count=%u", pid, ck_pr_load_32(&cluster_shm->nodes_size));
 		}
 	}
 	else {
@@ -715,6 +721,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		
 		// Prole should wait until master has fully initialized shared memory.
 		if (! ck_pr_load_8(&cluster_shm->ready)) {
+			as_log_info("Follow cluster not initialized yet. Wait: %d", pid);
 			as_shm_wait_till_ready(cluster, cluster_shm);
 		}
 		

@@ -602,6 +602,7 @@ as_event_tls_connect(as_event_command* cmd, as_event_connection* conn)
 			cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
 		}
 		else {
+			as_event_set_write(cmd);
 			cmd->state = AS_ASYNC_STATE_COMMAND_WRITE;
 		}
 		as_event_watch_write(cmd);

@@ -580,19 +580,21 @@ as_shm_tender(void* userdata)
 }
 
 static void
-as_shm_wait_till_ready(as_cluster* cluster, as_cluster_shm* cluster_shm)
+as_shm_wait_till_ready(as_cluster* cluster, as_cluster_shm* cluster_shm, uint32_t pid)
 {
 	// Wait till cluster is initialized or connection timeout is reached.
 	uint32_t interval_micros = 200 * 1000;  // 200 milliseconds
-	uint64_t limit = cf_getms() + cluster->conn_timeout_ms;
+	uint64_t limit = cf_getms() + 10000;    // 10 second timeout.
 	
 	do {
 		usleep(interval_micros);
 		
 		if (ck_pr_load_8(&cluster_shm->ready)) {
-			break;
+			as_log_info("Follow cluster initialized: %d", pid);
+			return;
 		}
 	} while (cf_getms() < limit);
+	as_log_warn("Follow cluster initialize timed out: %d", pid);
 }
 
 static void
@@ -624,28 +626,12 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	// Create shared memory segment.  Only one process will succeed.
 	int id = shmget(config->shm_key, size, IPC_CREAT | IPC_EXCL | 0666);
 	as_cluster_shm* cluster_shm = 0;
-	
+
 	if (id >= 0) {
 		// Exclusive shared memory lock succeeded.
+		// shmget docs say shared memory create initializes memory to zero, so memset is not necessary.
+		// memset(cluster_shm, 0, size);
 		as_log_info("Create shared memory cluster: %d", pid);
-		
-		// Attach to shared memory.
-		cluster_shm = shmat(id, NULL, 0);
-		
-		if (cluster_shm == (void*)-1) {
-			// Shared memory attach failed.
-			as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
-			as_shm_cleanup(id, 0);
-			return err->code;
-		}
-		
-		memset(cluster_shm, 0, size);
-		cluster_shm->n_partitions = n_partitions;
-		cluster_shm->nodes_capacity = config->shm_max_nodes;
-		cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
-		cluster_shm->partition_tables_offset = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes);
-		cluster_shm->partition_table_byte_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * n_partitions);
-		cluster_shm->timestamp = cf_getms();
 	}
 	else if (errno == EEXIST) {
 		// Some other process has created shared memory.  Use that shared memory.
@@ -653,14 +639,6 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		
 		if (id < 0) {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory get failed: %s pid: %d", strerror(errno), pid);
-		}
-		
-		cluster_shm = shmat(id, NULL, 0);
-
-		if (cluster_shm == (void*)-1) {
-			as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
-			as_shm_cleanup(id, 0);
-			return err->code;
 		}
 	}
 	else if (errno == ENOMEM) {
@@ -681,6 +659,16 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory get failed: %s pid: %d", strerror(errno), pid);
 	}
 
+	// Attach to shared memory.
+	cluster_shm = shmat(id, NULL, 0);
+
+	if (cluster_shm == (void*)-1) {
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
+		as_shm_cleanup(id, 0);
+		return err->code;
+	}
+
+	// Initialize local data.
 	as_shm_info* shm_info = cf_malloc(sizeof(as_shm_info));
 	shm_info->local_nodes = cf_calloc(config->shm_max_nodes, sizeof(as_node*));
 	shm_info->cluster_shm = cluster_shm;
@@ -688,18 +676,28 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	shm_info->takeover_threshold_ms = config->shm_takeover_threshold_sec * 1000;
 	shm_info->is_tend_master = ck_pr_cas_8(&cluster_shm->lock, 0, 1);
 	cluster->shm_info = shm_info;
-	
+
 	if (shm_info->is_tend_master) {
 		as_log_info("Take over shared memory cluster: %d", pid);
+		ck_pr_fence_lock();
+		cluster_shm->n_partitions = n_partitions;
+		cluster_shm->nodes_capacity = config->shm_max_nodes;
+		cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
+		cluster_shm->partition_tables_offset = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes);
+		cluster_shm->partition_table_byte_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * n_partitions);
+		cluster_shm->timestamp = cf_getms();
+
 		ck_pr_store_32(&cluster_shm->owner_pid, pid);
 		
 		// Ensure shared memory cluster is fully initialized.
-		if (cluster_shm->ready) {
+		if (ck_pr_load_8(&cluster_shm->ready)) {
 			// Copy shared memory nodes to local nodes.
+			as_log_info("Cluster already initialized: %d", pid);
 			as_shm_reset_nodes(cluster);
 			as_cluster_add_seeds(cluster);
 		}
 		else {
+			as_log_info("Initialize cluster: %d", pid);
 			as_status status = as_cluster_init(cluster, err, true);
 			
 			if (status != AEROSPIKE_OK) {
@@ -707,17 +705,20 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 				as_shm_destroy(cluster);
 				return status;
 			}
-			cluster_shm->ready = 1;
+			ck_pr_store_8(&cluster_shm->ready, 1);
 		}
+		ck_pr_fence_unlock();
 	}
 	else {
 		as_log_info("Follow shared memory cluster: %d", pid);
-		
+		ck_pr_fence_lock();
+
 		// Prole should wait until master has fully initialized shared memory.
 		if (! ck_pr_load_8(&cluster_shm->ready)) {
-			as_shm_wait_till_ready(cluster, cluster_shm);
+			as_shm_wait_till_ready(cluster, cluster_shm, pid);
 		}
-		
+		ck_pr_fence_unlock();
+
 		// Copy shared memory nodes to local nodes.
 		as_shm_reset_nodes(cluster);
 		as_cluster_add_seeds(cluster);

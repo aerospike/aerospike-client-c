@@ -778,13 +778,13 @@ as_node_get_random(as_cluster* cluster)
 {
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t size = nodes->size;
-	
+
 	for (uint32_t i = 0; i < size; i++) {
 		// Must handle concurrency with other threads.
 		uint32_t index = ck_pr_faa_32(&cluster->node_index, 1);
 		as_node* node = nodes->array[index % size];
 		uint8_t active = ck_pr_load_8(&node->active);
-		
+
 		if (active) {
 			as_node_reserve(node);
 			as_nodes_release(nodes);
@@ -792,7 +792,7 @@ as_node_get_random(as_cluster* cluster)
 		}
 	}
 	as_nodes_release(nodes);
-	return 0;
+	return NULL;
 }
 
 as_node*
@@ -839,6 +839,40 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names)
 		nptr += AS_NODE_NAME_SIZE;
 	}
 	as_nodes_release(nodes);
+}
+
+as_status
+as_cluster_get_node(
+	as_cluster* cluster, as_error* err, const char* ns, const uint8_t* digest,
+	as_policy_replica replica, bool master, as_node** node_pp
+	)
+{
+#ifdef AS_TEST_PROXY
+	as_node* node = as_node_get_random(cluster);
+#else
+	if (cluster->shm_info) {
+		return as_shm_cluster_get_node(cluster, err, ns, digest, replica, master, node_pp);
+	}
+
+	as_partition_table* table = as_cluster_get_partition_table(cluster, ns);
+
+	if (! table) {
+		*node_pp = NULL;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
+	}
+
+	uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);
+	as_partition* p = &table->partitions[partition_id];
+	as_node* node = as_partition_get_node(cluster, p, replica, master, table->cp_mode);
+#endif
+
+	if (! node) {
+		*node_pp = NULL;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid node for key.");
+	}
+
+	*node_pp = node;
+	return AEROSPIKE_OK;
 }
 
 bool

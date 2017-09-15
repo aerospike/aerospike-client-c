@@ -74,12 +74,12 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 	int args;
 	
 	if (cluster->cluster_name) {
-		command = "node\nfeatures\ncluster-name\n";
-		args = 3;
+		command = "node\npartition-generation\nfeatures\ncluster-name\n";
+		args = 4;
 	}
 	else {
-		command = "node\nfeatures\n";
-		args = 2;
+		command = "node\npartition-generation\nfeatures\n";
+		args = 3;
 	}
 	
 	char* response = 0;
@@ -101,7 +101,8 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 		as_vector_destroy(&values);
 		goto Error;
 	}
-	
+
+	// Process node name.
 	as_name_value* nv = as_vector_get(&values, 0);
 	char* node_name = nv->value;
 	
@@ -109,9 +110,24 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 		goto Error;
 	}
 	as_strncpy(node_info->name, node_name, AS_NODE_NAME_SIZE);
-	
+
+	// Process partition generation.
+	nv = as_vector_get(&values, 1);
+	uint32_t gen = strtoul(nv->value, NULL, 10);
+
+	if (gen == (uint32_t)-1) {
+		char addr_name[AS_IP_ADDRESS_SIZE];
+		as_address_name(addr, addr_name, sizeof(addr_name));
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s %s is not yet fully initialized",
+						node_info->name, addr_name);
+		cf_free(response);
+		as_socket_close(sock);
+		return AEROSPIKE_ERR_CLIENT;
+	}
+
+	// Process cluster name.
 	if (cluster->cluster_name) {
-		nv = as_vector_get(&values, 2);
+		nv = as_vector_get(&values, 3);
 		
 		if (strcmp(cluster->cluster_name, nv->value) != 0) {
 			char addr_name[AS_IP_ADDRESS_SIZE];
@@ -125,7 +141,8 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 		}
 	}
 	
-	nv = as_vector_get(&values, 1);
+	// Process features.
+	nv = as_vector_get(&values, 2);
 	char* begin = nv->value;
 	
 	if (begin == 0) {
@@ -161,6 +178,9 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 		}
 		else if (strcmp(begin, "peers") == 0) {
 			features |= AS_FEATURES_PEERS;
+		}
+		else if (strcmp(begin, "replicas") == 0) {
+			features |= AS_FEATURES_REPLICAS;
 		}
 		begin = end;
 	}

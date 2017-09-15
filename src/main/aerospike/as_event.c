@@ -325,10 +325,10 @@ as_event_command_begin(as_event_command* cmd)
 		}
 
 		if (cmd->cluster->shm_info) {
-			cmd->node = as_partition_shm_get_node(cmd->cluster, cmd->partition, cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER);
+			cmd->node = as_partition_shm_get_node(cmd->cluster, cmd->partition, cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER, cmd->flags & AS_ASYNC_FLAGS_CP_MODE);
 		}
 		else {
-			cmd->node = as_partition_get_node(cmd->cluster, cmd->partition, cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER);
+			cmd->node = as_partition_get_node(cmd->cluster, cmd->partition, cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER, cmd->flags & AS_ASYNC_FLAGS_CP_MODE);
 		}
 
 		if (! cmd->node) {

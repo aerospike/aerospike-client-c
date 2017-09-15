@@ -71,12 +71,13 @@ set_node(as_node** trg, as_node* src)
 }
 
 static as_partition_table*
-as_partition_table_create(const char* ns, uint32_t capacity)
+as_partition_table_create(const char* ns, uint32_t capacity, bool cp_mode)
 {
 	size_t len = sizeof(as_partition_table) + (sizeof(as_partition) * capacity);
 	as_partition_table* table = cf_malloc(len);
 	memset(table, 0, len);
 	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
+	table->cp_mode = cp_mode;
 	table->size = capacity;
 	return table;
 }
@@ -110,65 +111,59 @@ as_partition_tables_create(uint32_t capacity)
 }
 
 static inline as_node*
-reserve_node(as_cluster* cluster, as_node* node)
+reserve_master(as_cluster* cluster, as_node* node)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (node && ck_pr_load_8(&node->active)) {
 		as_node_reserve(node);
 		return node;
 	}
-#ifdef DEBUG_VERBOSE
-	as_log_debug("Choose random node for unmapped namespace/partition");
-#endif
-	return as_node_get_random(cluster);
+	// When master only specified, both AP and CP modes should never get random nodes.
+	return NULL;
+}
+
+static inline as_node*
+reserve_node(as_cluster* cluster, as_node* node, bool cp_mode)
+{
+	// Make volatile reference so changes to tend thread will be reflected in this thread.
+	if (node && ck_pr_load_8(&node->active)) {
+		as_node_reserve(node);
+		return node;
+	}
+	return cp_mode ? NULL : as_node_get_random(cluster);
 }
 
 static as_node*
-reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
+reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate, bool cp_mode)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (ck_pr_load_8(&chosen->active)) {
 		as_node_reserve(chosen);
 		return chosen;
 	}
-	return reserve_node(cluster, alternate);
-}
-
-as_node*
-as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const uint8_t* digest, as_policy_replica replica, bool use_master)
-{
-	if (table) {
-		uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);
-		as_partition* p = &table->partitions[partition_id];
-		return as_partition_get_node(cluster, p, replica, use_master);
-	}
-
-#ifdef DEBUG_VERBOSE
-	as_log_debug("Choose random node for null partition table");
-#endif
-	return as_node_get_random(cluster);
+	return reserve_node(cluster, alternate, cp_mode);
 }
 
 static uint32_t g_randomizer = 0;
 
 as_node*
-as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master)
+as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master, bool cp_mode)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	as_node* master = ck_pr_load_ptr(&p->master);
 
 	if (replica == AS_POLICY_REPLICA_MASTER) {
-		return reserve_node(cluster, master);
+		return reserve_master(cluster, master);
 	}
 
 	as_node* prole = ck_pr_load_ptr(&p->prole);
 
 	if (! prole) {
-		return reserve_node(cluster, master);
+		return reserve_node(cluster, master, cp_mode);
 	}
 
 	if (! master) {
-		return reserve_node(cluster, prole);
+		return reserve_node(cluster, prole, cp_mode);
 	}
 
 	if (replica == AS_POLICY_REPLICA_ANY) {
@@ -179,9 +174,9 @@ as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica re
 
 	// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
 	if (use_master) {
-		return reserve_node_alternate(cluster, master, prole);
+		return reserve_node_alternate(cluster, master, prole, cp_mode);
 	}
-	return reserve_node_alternate(cluster, prole, master);
+	return reserve_node_alternate(cluster, prole, master, cp_mode);
 }
 
 as_partition_table*
@@ -227,23 +222,27 @@ force_replicas_refresh(as_node* node)
 }
 
 static void
-as_partition_update(as_partition* p, as_node* node, bool master, bool owns)
+as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint32_t regime)
 {
 	// Volatile reads are not necessary because the tend thread exclusively modifies partition.
 	// Volatile writes are used so other threads can view change.
 	if (master) {
 		if (node == p->master) {
 			if (! owns) {
-				set_node(&p->master, 0);
+				set_node(&p->master, NULL);
 				as_node_release(node);
 			}
 		}
 		else {
-			if (owns) {
+			if (owns && (regime == 0 || regime >= p->regime)) {
 				as_node* tmp = p->master;
 				as_node_reserve(node);
 				set_node(&p->master, node);
-				
+
+				if (regime > p->regime) {
+					ck_pr_store_32(&p->regime, regime);
+				}
+
 				if (tmp) {
 					force_replicas_refresh(tmp);
 					as_node_release(tmp);
@@ -254,16 +253,20 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns)
 	else {
 		if (node == p->prole) {
 			if (! owns) {
-				set_node(&p->prole, 0);
+				set_node(&p->prole, NULL);
 				as_node_release(node);
 			}
 		}
 		else {
-			if (owns) {
+			if (owns && (regime == 0 || regime >= p->regime)) {
 				as_node* tmp = p->prole;
 				as_node_reserve(node);
 				set_node(&p->prole, node);
-				
+
+				if (regime > p->regime) {
+					ck_pr_store_32(&p->regime, regime);
+				}
+
 				if (tmp) {
 					force_replicas_refresh(tmp);
 					as_node_release(tmp);
@@ -289,7 +292,7 @@ as_partition_vector_get(as_vector* tables, const char* ns)
 }
 
 static void
-decode_and_update(char* bitmap_b64, long len, as_partition_table* table, as_node* node, bool master)
+decode_and_update(char* bitmap_b64, long len, as_partition_table* table, as_node* node, bool master, uint32_t regime)
 {
 	// Size allows for padding - is actual size rounded up to multiple of 3.
 	uint8_t* bitmap = (uint8_t*)alloca(cf_b64_decoded_buf_size((uint32_t)len));
@@ -305,7 +308,7 @@ decode_and_update(char* bitmap_b64, long len, as_partition_table* table, as_node
 			as_log_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i, node->name);
 		}
 		*/
-		as_partition_update(&table->partitions[i], node, master, owns);
+		as_partition_update(&table->partitions[i], node, master, owns, regime);
 	}
 }
 
@@ -386,7 +389,7 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 			}
 
 			if (cluster->shm_info) {
-				as_shm_update_partitions(cluster->shm_info, ns, bitmap_b64, len, node, master);
+				as_shm_update_partitions(cluster->shm_info, ns, bitmap_b64, len, node, master, 0);
 			}
 			else {
 				as_partition_table* table = as_partition_tables_get(tables, ns);
@@ -395,13 +398,13 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 					table = as_partition_vector_get(&tables_to_add, ns);
 					
 					if (! table) {
-						table = as_partition_table_create(ns, cluster->n_partitions);
+						table = as_partition_table_create(ns, cluster->n_partitions, false);
 						as_vector_append(&tables_to_add, &table);
 					}
 				}
 
 				// Decode partition bitmap and update client's view.
-				decode_and_update(bitmap_b64, len, table, node, master);
+				decode_and_update(bitmap_b64, len, table, node, master, 0);
 			}
 			ns = ++p;
 		}
@@ -419,9 +422,12 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 }
 
 bool
-as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf)
+as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bool has_regime)
 {
 	// Use destructive parsing (ie modifying input buffer with null termination) for performance.
+	// Receive format: replicas-all\t or replicas\t
+	//                 <ns1>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;
+	//                 <ns2>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;\n
 	as_partition_tables* tables = cluster->partition_tables;
 	uint32_t bitmap_size = (cluster->n_partitions + 7) / 8;
 	long expected_len = (long)cf_b64_encoded_len(bitmap_size);
@@ -430,11 +436,12 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf)
 	char* ns = p;
 	char* begin = 0;
 	int64_t len;
-	
+	uint32_t regime = 0;
+
 	// Add all tables at once to avoid copying entire array multiple times.
 	as_vector tables_to_add;
 	as_vector_inita(&tables_to_add, sizeof(as_partition_table*), 16);
-	
+
 	while (*p) {
 		if (*p == ':') {
 			// Parse namespace.
@@ -447,7 +454,20 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf)
 				return false;
 			}
 			begin = ++p;
-			
+
+			if (has_regime) {
+				// Parse regime.
+				while (*p) {
+					if (*p == ',') {
+						*p = 0;
+						break;
+					}
+					p++;
+				}
+				regime = strtoul(begin, NULL, 10);
+				begin = ++p;
+			}
+
 			// Parse replica count.
 			while (*p) {
 				if (*p == ',') {
@@ -485,7 +505,7 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf)
 					bool master = (i == 0);
 					
 					if (cluster->shm_info) {
-						as_shm_update_partitions(cluster->shm_info, ns, begin, len, node, master);
+						as_shm_update_partitions(cluster->shm_info, ns, begin, len, node, master, regime);
 					}
 					else {
 						as_partition_table* table = as_partition_tables_get(tables, ns);
@@ -494,13 +514,13 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf)
 							table = as_partition_vector_get(&tables_to_add, ns);
 							
 							if (! table) {
-								table = as_partition_table_create(ns, cluster->n_partitions);
+								table = as_partition_table_create(ns, cluster->n_partitions, regime != 0);
 								as_vector_append(&tables_to_add, &table);
 							}
 						}
 						
 						// Decode partition bitmap and update client's view.
-						decode_and_update(begin, len, table, node, master);
+						decode_and_update(begin, len, table, node, master, regime);
 					}
 				}
 			}

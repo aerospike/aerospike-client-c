@@ -68,7 +68,7 @@ typedef struct as_async_value_command {
 static inline as_event_command*
 as_async_write_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, void* partition,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	uint8_t flags, as_async_write_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
@@ -93,7 +93,7 @@ as_async_write_command_create(
 	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_write_command));
 	cmd->type = AS_ASYNC_TYPE_WRITE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = AS_ASYNC_FLAGS_MASTER;
+	cmd->flags = flags;
 	cmd->deserialize = false;
 	wcmd->listener = listener;
 	return cmd;
@@ -138,7 +138,7 @@ as_async_record_command_create(
 static inline as_event_command*
 as_async_value_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, void* partition,
-	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+	uint8_t flags, as_async_value_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
@@ -164,7 +164,7 @@ as_async_value_command_create(
 	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_value_command));
 	cmd->type = AS_ASYNC_TYPE_VALUE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = AS_ASYNC_FLAGS_MASTER;
+	cmd->flags = flags;
 	cmd->deserialize = false;
 	vcmd->listener = listener;
 	return cmd;

@@ -44,7 +44,7 @@ bool
 as_partition_tables_update(struct as_cluster_s* cluster, as_node* node, char* buf, bool master);
 
 bool
-as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf);
+as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bool has_regime);
 
 extern uint32_t as_event_loop_capacity;
 
@@ -603,14 +603,14 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 			}
 		}
 		else if (strcmp(nv->name, "peers-generation") == 0) {
-			uint32_t gen = (uint32_t)atoi(nv->value);
+			uint32_t gen = strtoul(nv->value, NULL, 10);
 			if (node->peers_generation != gen) {
 				as_log_debug("Node %s peers generation changed: %u", node->name, gen);
 				peers->gen_changed = true;
 			}
 		}
 		else if (strcmp(nv->name, "partition-generation") == 0) {
-			uint32_t gen = (uint32_t)atoi(nv->value);
+			uint32_t gen = strtoul(nv->value, NULL, 10);
 			if (node->partition_generation != gen) {
 				as_log_debug("Node %s partition generation changed: %u", node->name, gen);
 				node->partition_changed = true;
@@ -763,8 +763,9 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 	return status;
 }
 
-static const char INFO_STR_GET_REPLICAS[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
+static const char INFO_STR_GET_REPLICAS_OLD[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
 static const char INFO_STR_GET_REPLICAS_ALL[] = "partition-generation\nreplicas-all\n";
+static const char INFO_STR_GET_REPLICAS_REGIME[] = "partition-generation\nreplicas\n";
 
 static as_status
 as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as_vector* values)
@@ -773,10 +774,13 @@ as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 		as_name_value* nv = as_vector_get(values, i);
 		
 		if (strcmp(nv->name, "partition-generation") == 0) {
-			node->partition_generation = (uint32_t)atoi(nv->value);
+			node->partition_generation = strtoul(nv->value, NULL, 10);
+		}
+		else if (strcmp(nv->name, "replicas") == 0) {
+			as_partition_tables_update_all(cluster, node, nv->value, true);
 		}
 		else if (strcmp(nv->name, "replicas-all") == 0) {
-			as_partition_tables_update_all(cluster, node, nv->value);
+			as_partition_tables_update_all(cluster, node, nv->value, false);
 		}
 		else if (strcmp(nv->name, "replicas-master") == 0) {
 			as_partition_tables_update(cluster, node, nv->value, true);
@@ -798,13 +802,17 @@ as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 	const char* command;
 	size_t command_len;
 
-	if (node->features & AS_FEATURES_REPLICAS_ALL) {
+	if (node->features & AS_FEATURES_REPLICAS) {
+		command = INFO_STR_GET_REPLICAS_REGIME;
+		command_len = sizeof(INFO_STR_GET_REPLICAS_REGIME) - 1;
+	}
+	else if (node->features & AS_FEATURES_REPLICAS_ALL) {
 		command = INFO_STR_GET_REPLICAS_ALL;
 		command_len = sizeof(INFO_STR_GET_REPLICAS_ALL) - 1;
 	}
 	else {
-		command = INFO_STR_GET_REPLICAS;
-		command_len = sizeof(INFO_STR_GET_REPLICAS) - 1;
+		command = INFO_STR_GET_REPLICAS_OLD;
+		command_len = sizeof(INFO_STR_GET_REPLICAS_OLD) - 1;
 	}
 	
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];

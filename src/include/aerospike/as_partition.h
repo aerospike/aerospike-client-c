@@ -23,81 +23,94 @@ extern "C" {
 #endif
 
 /******************************************************************************
- *	MACROS
+ * MACROS
  *****************************************************************************/
 
 /**
- *	Maximum namespace size including null byte.  Effective maximum length is 31.
+ * Maximum namespace size including null byte.  Effective maximum length is 31.
  */
 #define AS_MAX_NAMESPACE_SIZE 32
 
 /******************************************************************************
- *	TYPES
+ * TYPES
  *****************************************************************************/
 
 /**
- *	@private
- *  Map of namespace data partitions to nodes.
+ * @private
+ * Map of namespace data partitions to nodes.
  */
 typedef struct as_partition_s {
 	/**
-	 *	@private
-	 *  Master node for this partition.
+	 * @private
+	 * Master node for this partition.
 	 */
 	as_node* master;
 	
 	/**
-	 *	@private
-	 *  Prole node for this partition.
-	 *  TODO - not ideal for replication factor > 2.
+	 * @private
+	 * Prole node for this partition.
+	 * TODO - not ideal for replication factor > 2.
 	 */
 	as_node* prole;
+
+	/**
+	 * @private
+	 * Currrent regime for CP mode.
+	 */
+	uint32_t regime;
 } as_partition;
 
 /**
- *	@private
- *  Map of namespace to data partitions.
+ * @private
+ * Map of namespace to data partitions.
  */
 typedef struct as_partition_table_s {
 	/**
-	 *	@private
-	 *	Namespace
+	 * @private
+	 * Namespace
 	 */
 	char ns[AS_MAX_NAMESPACE_SIZE];
-	
+
 	/**
-	 *	@private
-	 *  Fixed length of partition array.
+	 * @private
+	 * Is namespace running in CP mode.
+	 */
+	bool cp_mode;
+	char pad[3];
+
+	/**
+	 * @private
+	 * Fixed length of partition array.
 	 */
 	uint32_t size;
 
 	/**
-	 *	@private
-	 *	Array of partitions for a given namespace.
+	 * @private
+	 * Array of partitions for a given namespace.
 	 */
 	as_partition partitions[];
 } as_partition_table;
 
 /**
- *	@private
- *  Reference counted array of partition table pointers.
+ * @private
+ * Reference counted array of partition table pointers.
  */
 typedef struct as_partition_tables_s {
 	/**
-	 *	@private
-	 *  Reference count of partition table array.
+	 * @private
+	 * Reference count of partition table array.
 	 */
 	uint32_t ref_count;
 	
 	/**
-	 *	@private
-	 *  Length of partition table array.
+	 * @private
+	 * Length of partition table array.
 	 */
 	uint32_t size;
 
 	/**
-	 *	@private
-	 *  Partition table array.
+	 * @private
+	 * Partition table array.
 	 */
 	as_partition_table* array[];
 } as_partition_tables;
@@ -107,36 +120,36 @@ typedef struct as_partition_tables_s {
  ******************************************************************************/
 
 /**
- *	@private
- *	Create reference counted structure containing partition tables.
+ * @private
+ * Create reference counted structure containing partition tables.
  */
 as_partition_tables*
 as_partition_tables_create(uint32_t capacity);
 
 /**
- *	@private
- *	Destroy and release memory for partition table.
+ * @private
+ * Destroy and release memory for partition table.
  */
 void
 as_partition_table_destroy(as_partition_table* table);
 
 /**
- *	@private
- *	Get partition table given namespace.
+ * @private
+ * Get partition table given namespace.
  */
 as_partition_table*
 as_partition_tables_get(as_partition_tables* tables, const char* ns);
 
 /**
- *	@private
- *	Is node referenced in any partition table.
+ * @private
+ * Is node referenced in any partition table.
  */
 bool
 as_partition_tables_find_node(as_partition_tables* tables, as_node* node);
 	
 /**
- *	@private
- *	Return partition ID given digest.
+ * @private
+ * Return partition ID given digest.
  */
 static inline uint32_t
 as_partition_getid(const uint8_t* digest, uint32_t n_partitions)

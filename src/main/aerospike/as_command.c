@@ -426,6 +426,7 @@ as_command_execute(
 	uint32_t socket_timeout = policy->socket_timeout;
 	uint32_t total_timeout = policy->total_timeout;
 	uint32_t iteration = 0;
+	as_status status;
 	bool master = true;
 	bool release_node;
 
@@ -441,20 +442,25 @@ as_command_execute(
 	while (true) {
 		if (cn->node) {
 			node = cn->node;
+
+			if (! node) {
+				// There are no active nodes in the cluster.  It's not worth retrying.
+				return as_error_set_message(err, AEROSPIKE_ERR_INVALID_NODE, "Invalid namespace or node");
+			}
 			release_node = false;
 		}
 		else {
-			node = as_node_get(cluster, cn->ns, cn->digest, cn->replica, master);
+			status = as_cluster_get_node(cluster, err, cn->ns, cn->digest, cn->replica, master, &node);
+
+			if (status) {
+				// Invalid namespace or there are no active nodes. It's not worth retrying.
+				return status;
+			}
 			release_node = true;
-		}
-		
-		if (! node) {
-			// There are no active nodes in the cluster.  It's not worth retrying in this case.
-			return as_error_set_message(err, AEROSPIKE_ERR_INVALID_NODE, "Invalid node");
 		}
 
 		as_socket socket;
-		as_status status = as_node_get_connection(err, node, socket_timeout, deadline_ms, &socket);
+		status = as_node_get_connection(err, node, socket_timeout, deadline_ms, &socket);
 		
 		if (status) {
 			master = !master;  // Alternate between master and prole.

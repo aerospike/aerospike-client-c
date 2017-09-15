@@ -298,18 +298,19 @@ as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns)
 }
 
 static as_partition_table_shm*
-as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns)
+as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns, bool cp_mode)
 {
 	if (cluster_shm->partition_tables_size >= cluster_shm->partition_tables_capacity) {
 		// There are no more partition table slots available in shared memory.
 		as_log_error("Failed to add partition table namespace %s. Shared memory capacity exceeeded: %d",
 				 ns, cluster_shm->partition_tables_capacity);
-		return 0;
+		return NULL;
 	}
 	
 	as_partition_table_shm* tables = as_shm_get_partition_tables(cluster_shm);
 	as_partition_table_shm* table = as_shm_get_partition_table(cluster_shm, tables, cluster_shm->partition_tables_size);
 	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
+	table->cp_mode = cp_mode;
 	
 	// Increment partition tables array size.
 	ck_pr_inc_32(&cluster_shm->partition_tables_size);
@@ -328,7 +329,7 @@ as_shm_force_replicas_refresh(as_shm_info* shm_info, uint32_t node_index)
 }
 
 static void
-as_shm_partition_update(as_shm_info* shm_info, as_partition_shm* p, uint32_t node_index, bool master, bool owns)
+as_shm_partition_update(as_shm_info* shm_info, as_partition_shm* p, uint32_t node_index, bool master, bool owns, uint32_t regime)
 {
 	// node_index starts at one (zero indicates unset).
 	if (master) {
@@ -338,11 +339,15 @@ as_shm_partition_update(as_shm_info* shm_info, as_partition_shm* p, uint32_t nod
 			}
 		}
 		else {
-			if (owns) {
+			if (owns && (regime == 0 || regime >= p->regime)) {
 				if (p->master) {
 					as_shm_force_replicas_refresh(shm_info, p->master);
 				}
 				ck_pr_store_32(&p->master, node_index);
+
+				if (regime > p->regime) {
+					ck_pr_store_32(&p->regime, regime);
+				}
 			}
 		}
 	}
@@ -353,18 +358,22 @@ as_shm_partition_update(as_shm_info* shm_info, as_partition_shm* p, uint32_t nod
 			}
 		}
 		else {
-			if (owns) {
+			if (owns && (regime == 0 || regime >= p->regime)) {
 				if (p->prole) {
 					as_shm_force_replicas_refresh(shm_info, p->prole);
 				}
 				ck_pr_store_32(&p->prole, node_index);
+
+				if (regime > p->regime) {
+					ck_pr_store_32(&p->regime, regime);
+				}
 			}
 		}
 	}
 }
 
 static void
-as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, as_partition_table_shm* table, uint32_t node_index, bool master)
+as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, as_partition_table_shm* table, uint32_t node_index, bool master, uint32_t regime)
 {
 	// Size allows for padding - is actual size rounded up to multiple of 3.
 	uint8_t* bitmap = (uint8_t*)alloca(cf_b64_decoded_buf_size((uint32_t)len));
@@ -374,47 +383,61 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 	
 	// Expand the bitmap.
 	uint32_t max = shm_info->cluster_shm->n_partitions;
-	
+
 	for (uint32_t i = 0; i < max; i++) {
 		bool owns = ((bitmap[i >> 3] & (0x80 >> (i & 7))) != 0);
-		as_shm_partition_update(shm_info, &table->partitions[i], node_index, master, owns);
+		as_shm_partition_update(shm_info, &table->partitions[i], node_index, master, owns, regime);
 	}
 }
 
 void
-as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node, bool master)
+as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node, bool master, uint32_t regime)
 {
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
 	
 	if (! table) {
-		table = as_shm_add_partition_table(cluster_shm, ns);
+		table = as_shm_add_partition_table(cluster_shm, ns, regime != 0);
 	}
 	
 	if (table) {
-		as_shm_decode_and_update(shm_info, bitmap_b64, len, table, node->index + 1, master);
+		as_shm_decode_and_update(shm_info, bitmap_b64, len, table, node->index + 1, master, regime);
 	}
 }
 
 static inline as_node*
-as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
+as_shm_reserve_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
 		as_node* node = ck_pr_load_ptr(&local_nodes[node_index-1]);
-		
+
 		if (node && ck_pr_load_8(&node->active)) {
 			as_node_reserve(node);
 			return node;
 		}
 	}
-	
-	// as_log_debug("Choose random node for unmapped namespace/partition");
-	return as_node_get_random(cluster);
+	// When master only specified, both AP and CP modes should never get random nodes.
+	return NULL;
+}
+
+static inline as_node*
+as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index, bool cp_mode)
+{
+	// node_index starts at one (zero indicates unset).
+	if (node_index) {
+		as_node* node = ck_pr_load_ptr(&local_nodes[node_index-1]);
+
+		if (node && ck_pr_load_8(&node->active)) {
+			as_node_reserve(node);
+			return node;
+		}
+	}
+	return cp_mode ? NULL : as_node_get_random(cluster);
 }
 
 static as_node*
-as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index)
+as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index, bool cp_mode)
 {
 	// index values start at one (zero indicates unset).
 	as_node* chosen = ck_pr_load_ptr(&local_nodes[chosen_index-1]);
@@ -424,46 +447,54 @@ as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32
 		as_node_reserve(chosen);
 		return chosen;
 	}
-	return as_shm_reserve_node(cluster, local_nodes, alternate_index);
+	return as_shm_reserve_node(cluster, local_nodes, alternate_index, cp_mode);
+}
+
+as_status
+as_shm_cluster_get_node(as_cluster* cluster, as_error* err, const char* ns, const uint8_t* digest, as_policy_replica replica, bool use_master, as_node** node_pp)
+{
+	as_cluster_shm* cluster_shm = cluster->shm_info->cluster_shm;
+	as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
+
+	if (! table) {
+		*node_pp = NULL;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
+	}
+
+	uint32_t partition_id = as_partition_getid(digest, cluster_shm->n_partitions);
+	as_partition_shm* p = &table->partitions[partition_id];
+	as_node* node = as_partition_shm_get_node(cluster, p, replica, use_master, table->cp_mode);
+
+	if (! node) {
+		*node_pp = NULL;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid node for key.");
+	}
+
+	*node_pp = node;
+	return AEROSPIKE_OK;
 }
 
 static uint32_t g_shm_randomizer = 0;
 
 as_node*
-as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, as_policy_replica replica, bool use_master)
-{
-	as_cluster_shm* cluster_shm = cluster->shm_info->cluster_shm;
-	as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
-
-	if (table) {
-		uint32_t partition_id = as_partition_getid(digest, cluster_shm->n_partitions);
-		as_partition_shm* p = &table->partitions[partition_id];
-		return as_partition_shm_get_node(cluster, p, replica, use_master);
-	}
-
-	// as_log_debug("Choose random node for null partition table");
-	return as_node_get_random(cluster);
-}
-
-as_node*
-as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master)
+as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master, bool cp_mode)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	as_node** local_nodes = cluster->shm_info->local_nodes;
 	uint32_t master = ck_pr_load_32(&p->master);
 
 	if (replica == AS_POLICY_REPLICA_MASTER) {
-		return as_shm_reserve_node(cluster, local_nodes, master);
+		return as_shm_reserve_master(cluster, local_nodes, master);
 	}
 
 	uint32_t prole = ck_pr_load_32(&p->prole);
 
 	if (! prole) {
-		return as_shm_reserve_node(cluster, local_nodes, master);
+		return as_shm_reserve_node(cluster, local_nodes, master, cp_mode);
 	}
 
 	if (! master) {
-		return as_shm_reserve_node(cluster, local_nodes, prole);
+		return as_shm_reserve_node(cluster, local_nodes, prole, cp_mode);
 	}
 
 	if (replica == AS_POLICY_REPLICA_ANY) {
@@ -474,9 +505,9 @@ as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_re
 
 	// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
 	if (use_master) {
-		return as_shm_reserve_node_alternate(cluster, local_nodes, master, prole);
+		return as_shm_reserve_node_alternate(cluster, local_nodes, master, prole, cp_mode);
 	}
-	return as_shm_reserve_node_alternate(cluster, local_nodes, prole, master);
+	return as_shm_reserve_node_alternate(cluster, local_nodes, prole, master, cp_mode);
 }
 
 static void

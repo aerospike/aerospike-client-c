@@ -407,49 +407,22 @@ as_cluster_get_partition_table(as_cluster* cluster, const char* ns)
 
 /**
  * @private
- * Get mapped node given digest key and partition table.  If there is no mapped node, a random
- * node is used instead.
- * as_nodes_release() must be called when done with node.
- */
-as_node*
-as_partition_table_get_node(as_cluster* cluster, as_partition_table* table, const uint8_t* digest, as_policy_replica replica, bool master);
-
-/**
- * @private
  * Get mapped node given partition.  
  * as_nodes_release() must be called when done with node.
  */
 as_node*
-as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master);
+as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master, bool cp_mode);
 
 /**
  * @private
- * Get shared memory mapped node given digest key.  If there is no mapped node, a random node is used instead.
- * as_nodes_release() must be called when done with node.
+ * Get mapped node given digest key.  If there is no mapped node, another node is used based on replica.
+ * If successful, as_nodes_release() must be called when done with node.
  */
-as_node*
-as_shm_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, as_policy_replica replica, bool master);
-
-/**
- * @private
- * Get mapped node given digest key.  If there is no mapped node, a random node is used instead.
- * as_nodes_release() must be called when done with node.
- */
-static inline as_node*
-as_node_get(as_cluster* cluster, const char* ns, const uint8_t* digest, as_policy_replica replica, bool master)
-{
-#ifdef AS_TEST_PROXY
-	return as_node_get_random(cluster);
-#else
-	if (cluster->shm_info) {
-		return as_shm_node_get(cluster, ns, digest, replica, master);
-	}
-	else {
-		as_partition_table* table = as_cluster_get_partition_table(cluster, ns);
-		return as_partition_table_get_node(cluster, table, digest, replica, master);
-	}
-#endif
-}
+as_status
+as_cluster_get_node(
+	struct as_cluster_s* cluster, as_error* err, const char* ns, const uint8_t* digest,
+	as_policy_replica replica, bool master, as_node** node
+	);
 
 #ifdef __cplusplus
 } // end extern "C"

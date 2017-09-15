@@ -817,15 +817,16 @@ as_batch_execute(
 			as_nodes_release(nodes);
 			return status;
 		}
-		
-		as_node* node = as_node_get(cluster, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false);
-		
-		if (! node) {
+
+		as_node* node;
+		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false, &node);
+
+		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(batch_nodes, n_batch_nodes);
 			as_nodes_release(nodes);
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find batch node for key.");
+			return status;
 		}
-		
+
 		if (! as_batch_use_new(policy, node)) {
 			// Batch direct only supports batch commands with all keys in the same namespace.
 			if (strcmp(ns, key->ns)) {
@@ -1159,13 +1160,14 @@ as_batch_read_execute(
 			return status;
 		}
 		
-		as_node* node = as_node_get(cluster, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false);
-		
-		if (! node) {
+		as_node* node;
+		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false, &node);
+
+		if (status != AEROSPIKE_OK) {
 			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find batch node for key.");
+			return status;
 		}
-		
+
 		if (! as_batch_use_new(policy, node)) {
 			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);
 			return as_error_set_message(err, AEROSPIKE_ERR_UNSUPPORTED_FEATURE, "aerospike_batch_read() requires a server that supports new batch index protocol.");

@@ -54,6 +54,7 @@ extern "C" {
 #define AS_FEATURES_REPLICAS_ALL (1 << 3)
 #define AS_FEATURES_PIPELINING   (1 << 4)
 #define AS_FEATURES_PEERS        (1 << 5)
+#define AS_FEATURES_REPLICAS     (1 << 6)
 
 #define AS_ADDRESS4_MAX 4
 #define AS_ADDRESS6_MAX 8

@@ -96,6 +96,18 @@ typedef struct as_partition_shm_s {
 	 *	Prole node index offset.
 	 */
 	uint32_t prole;
+
+	/**
+	 *	@private
+	 *	Current regime for CP mode.
+	 */
+	uint32_t regime;
+
+	/**
+	 *	@private
+	 *	Pad to 8 byte boundary.
+	 */
+	uint32_t pad;
 } as_partition_shm;
 
 /**
@@ -109,6 +121,18 @@ typedef struct as_partition_table_shm_s {
 	 */
 	char ns[AS_MAX_NAMESPACE_SIZE];
 	
+	/**
+	 *	@private
+	 *	Is namespace running in CP mode.
+	 */
+	uint8_t cp_mode;
+
+	/**
+	 *	@private
+	 *	Pad to 8 byte boundary.
+	 */
+	char pad[7];
+
 	/**
 	 *	@private
 	 *	Array of partitions for a given namespace.
@@ -300,15 +324,15 @@ as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns);
  *	Update shared memory partition tables for given namespace.
  */
 void
-as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node, bool master);
+as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node, bool master, uint32_t regime);
 
 /**
  *	@private
- *	Get shared memory mapped node given digest key.  If there is no mapped node, a random node is 
- *	used instead.  as_nodes_release() must be called when done with node.
+ *	Get shared memory mapped node given digest key. If there is no mapped node, another node is used based on replica.
+ *	If successful, as_nodes_release() must be called when done with node.
  */
-as_node*
-as_shm_node_get(struct as_cluster_s* cluster, const char* ns, const uint8_t* digest, as_policy_replica replica, bool master);
+as_status
+as_shm_cluster_get_node(struct as_cluster_s* cluster, as_error* err, const char* ns, const uint8_t* digest, as_policy_replica replica, bool use_master, as_node** node_pp);
 
 /**
  *	@private
@@ -316,7 +340,7 @@ as_shm_node_get(struct as_cluster_s* cluster, const char* ns, const uint8_t* dig
  *	as_nodes_release() must be called when done with node.
  */
 as_node*
-as_partition_shm_get_node(struct as_cluster_s* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master);
+as_partition_shm_get_node(struct as_cluster_s* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master, bool cp_mode);
 
 /**
  *	@private

@@ -251,6 +251,15 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 	return status;
 }
 
+static bool
+as_cluster_find_node_in_map(as_cluster* cluster, as_node* node)
+{
+	if (cluster->shm_info) {
+		return as_shm_partition_tables_find_node(cluster->shm_info->cluster_shm, node);
+	}
+	return as_partition_tables_find_node(cluster->partition_tables, node);
+}
+
 static void
 as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_vector* /* <as_node*> */ nodes_to_remove)
 {
@@ -273,12 +282,12 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 			continue;
 		}
 
-		if (refresh_count >= 1 && node->friends == 0) {
+		if (nodes->size > 1 && refresh_count >= 1 && node->friends == 0) {
 			// Node is not referenced by other nodes.
 			// Check if node responded to info request.
 			if (node->failures == 0) {
 				// Node is alive, but not referenced by other nodes.  Check if mapped.
-				if (! as_partition_tables_find_node(cluster->partition_tables, node)) {
+				if (! as_cluster_find_node_in_map(cluster, node)) {
 					// Node doesn't have any partitions mapped to it.
 					// There is no point in keeping it in the cluster.
 					as_vector_append(nodes_to_remove, &node);

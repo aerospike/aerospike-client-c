@@ -282,6 +282,28 @@ as_shm_reset_nodes(as_cluster* cluster)
 	as_vector_destroy(&nodes_to_remove);
 }
 
+bool
+as_shm_partition_tables_find_node(as_cluster_shm* cluster_shm, as_node* node)
+{
+	as_partition_table_shm* table = as_shm_get_partition_tables(cluster_shm);
+	as_partition_shm* p;
+	uint32_t max_tables = cluster_shm->partition_tables_size;
+	uint32_t max_partitions = cluster_shm->n_partitions;
+	uint32_t node_index = node->index + 1;
+
+	for (uint32_t i = 0; i < max_tables; i++) {
+		for (uint32_t j = 0; j < max_partitions; j++) {
+			p = &table->partitions[j];
+
+			if (p->master == node_index || p->prole == node_index) {
+				return true;
+			}
+		}
+		table = as_shm_next_partition_table(cluster_shm, table);
+	}
+	return false;
+}
+
 as_partition_table_shm*
 as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns)
 {

@@ -314,6 +314,13 @@ as_shm_remove_nodes(struct as_cluster_s* cluster, as_vector* /* <as_node*> */ no
 
 /**
  *	@private
+ *	Determine if node exists in shared memory partition map.
+ */
+bool
+as_shm_partition_tables_find_node(as_cluster_shm* cluster_shm, as_node* node);
+
+/**
+ *	@private
  *	Find partition table for namespace in shared memory.
  */
 as_partition_table_shm*

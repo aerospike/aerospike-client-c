@@ -789,20 +789,26 @@ example_remove_udf(aerospike* p_as, const char* udf_file_path)
 // specified bin in the database.
 //
 bool
-example_create_integer_index(aerospike* p_as, const char* bin,
-		const char* index)
+example_create_integer_index(aerospike* p_as, const char* bin, const char* index)
 {
 	as_error err;
 	as_index_task task;
+	as_status status = aerospike_index_create(p_as, &err, &task, NULL, g_namespace, g_set, bin, index, AS_INDEX_NUMERIC);
 
-	if (aerospike_index_create(p_as, &err, &task, NULL, g_namespace, g_set, bin, index, AS_INDEX_NUMERIC) != AEROSPIKE_OK) {
-		LOG("aerospike_index_create() returned %d - %s", err.code, err.message);
-		return false;
+	switch (status) {
+		case AEROSPIKE_OK:
+			// Wait for the system metadata to spread to all nodes.
+			aerospike_index_create_wait(&err, &task, 0);
+			break;
+
+		case AEROSPIKE_ERR_INDEX_FOUND:
+			LOG("index already exists");
+			break;
+
+		default:
+			LOG("aerospike_index_create() returned %d - %s", err.code, err.message);
+			return false;
 	}
-
-	// Wait for the system metadata to spread to all nodes.
-	aerospike_index_create_wait(&err, &task, 0);
-
 	return true;
 }
 
@@ -811,20 +817,26 @@ example_create_integer_index(aerospike* p_as, const char* bin,
 // specified bin in the database.
 //
 bool
-example_create_2dsphere_index(aerospike* p_as, const char* bin,
-		const char* index)
+example_create_2dsphere_index(aerospike* p_as, const char* bin, const char* index)
 {
 	as_error err;
 	as_index_task task;
+	as_status status = aerospike_index_create(p_as, &err, &task, NULL, g_namespace, g_set, bin, index, AS_INDEX_GEO2DSPHERE);
 
-	if (aerospike_index_create(p_as, &err, &task, NULL, g_namespace, g_set, bin, index, AS_INDEX_GEO2DSPHERE) != AEROSPIKE_OK) {
-		LOG("aerospike_index_create() returned %d - %s", err.code, err.message);
-		return false;
+	switch (status) {
+		case AEROSPIKE_OK:
+			// Wait for the system metadata to spread to all nodes.
+			aerospike_index_create_wait(&err, &task, 0);
+			break;
+
+		case AEROSPIKE_ERR_INDEX_FOUND:
+			LOG("index already exists");
+			break;
+
+		default:
+			LOG("aerospike_index_create() returned %d - %s", err.code, err.message);
+			return false;
 	}
-
-	// Wait for the system metadata to spread to all nodes.
-	aerospike_index_create_wait(&err, &task, 0);
-
 	return true;
 }
 

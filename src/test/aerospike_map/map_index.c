@@ -26,6 +26,7 @@
 #include <aerospike/as_val.h>
 
 #include "../test.h"
+#include "../util/index_util.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -106,13 +107,9 @@ TEST( map_index_pre , "create indexes" )
 		as_error_reset(&err);
 		status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, index_table[i].bin_name, index_table[i].index_name, index_table[i].index_type, index_table[i].index_datatype);
 
-		if ( status == AEROSPIKE_OK ) {
-			aerospike_index_create_wait(&err, &task, 0);
+		if (! index_process_return_code(status, &err, &task)) {
+			assert_int_eq( status , AEROSPIKE_OK );
 		}
-		else {
-			info("error(%d): %s", err.code, err.message);
-		}
-		assert_int_eq( status , AEROSPIKE_OK );
 	}
 }
 

@@ -464,7 +464,7 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 					}
 					p++;
 				}
-				regime = strtoul(begin, NULL, 10);
+				regime = (uint32_t)strtoul(begin, NULL, 10);
 				begin = ++p;
 			}
 

@@ -38,6 +38,7 @@
 #include <aerospike/mod_lua.h>
 
 #include "../test.h"
+#include "../util/index_util.h"
 #include "../util/info_helper.h"
 #include "../util/udf.h"
 #include "../util/consumer_stream.h"
@@ -93,81 +94,41 @@ bool query_foreach_create()
 	// create index on "a"
 	
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "a", "idx_test_a", AS_INDEX_STRING);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-	
+	index_process_return_code(status, &err, &task);
+
 	// create index on "b"
 	
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "b", "idx_test_b", AS_INDEX_NUMERIC);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-	
+	index_process_return_code(status, &err, &task);
+
 	// create index on "c"
 	
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "c", "idx_test_c", AS_INDEX_NUMERIC);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-	
+	index_process_return_code(status, &err, &task);
+
 	// create index on "d"
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_NUMERIC);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-	
+	index_process_return_code(status, &err, &task);
+
 	// create complex index on "x"
 	 
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-	 
+	index_process_return_code(status, &err, &task);
+
 	// create complex index on "y"
 	 
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-	 
+	index_process_return_code(status, &err, &task);
+
 	// create complex index on "y"
 	 
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
+	index_process_return_code(status, &err, &task);
 
 	// create complex index on "z"
 	 
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_test_z", AS_INDEX_TYPE_LIST, AS_INDEX_NUMERIC);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
+	index_process_return_code(status, &err, &task);
 
 	uint32_t the_ttl = AS_RECORD_NO_EXPIRE_TTL;
 	
@@ -1391,11 +1352,7 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 	as_index_task task;
 
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, setname, "NUMERIC", "idx2", AS_INDEX_NUMERIC);
-	if ( status != AEROSPIKE_OK ) {
-		info("error(%d): %s", err.code, err.message);
-	} else {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
+	index_process_return_code(status, &err, &task);
 
 	as_record r;
 	as_record_init(&r, 2);
@@ -1466,12 +1423,7 @@ TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
 
 	//create index on "int_bin"
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, int_bin, "idx_test_int_bin", AS_INDEX_NUMERIC);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
+	index_process_return_code(status, &err, &task);
 
 	as_record r;
 	as_record_init(&r, 2);

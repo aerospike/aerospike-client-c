@@ -48,6 +48,7 @@
 		BFD74AE11CFE699800D79E15 /* map_basics_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD74AE01CFE699800D79E15 /* map_basics_async.c */; };
 		BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD74AE51CFE6E4B00D79E15 /* map_udf.c */; };
 		BFD8C86F18D7E3A300CB8B6D /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFD8C86C18D7E37800CB8B6D /* libaerospike.a */; };
+		BFED8ED21F704B0B000BCBBE /* index_util.c in Sources */ = {isa = PBXBuildFile; fileRef = BFED8ED11F704B0B000BCBBE /* index_util.c */; };
 		BFF344C81CEA8FD200FD1976 /* map_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFF344C61CEA8FD200FD1976 /* map_basics.c */; };
 /* End PBXBuildFile section */
 
@@ -143,6 +144,8 @@
 		BFC65C601C9227860079DF5A /* query_geospatial.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = query_geospatial.c; path = ../src/test/aerospike_geo/query_geospatial.c; sourceTree = "<group>"; };
 		BFD74AE01CFE699800D79E15 /* map_basics_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_basics_async.c; path = ../src/test/aerospike_map/map_basics_async.c; sourceTree = "<group>"; };
 		BFD74AE51CFE6E4B00D79E15 /* map_udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_udf.c; path = ../src/test/aerospike_map/map_udf.c; sourceTree = "<group>"; };
+		BFED8ED11F704B0B000BCBBE /* index_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = index_util.c; path = ../src/test/util/index_util.c; sourceTree = "<group>"; };
+		BFED8ED41F7058C0000BCBBE /* index_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = index_util.h; path = ../src/test/util/index_util.h; sourceTree = "<group>"; };
 		BFF344C61CEA8FD200FD1976 /* map_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_basics.c; path = ../src/test/aerospike_map/map_basics.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -240,6 +243,8 @@
 			children = (
 				BFC65C0C1C9225AB0079DF5A /* consumer_stream.c */,
 				BFC65C0D1C9225AB0079DF5A /* consumer_stream.h */,
+				BFED8ED11F704B0B000BCBBE /* index_util.c */,
+				BFED8ED41F7058C0000BCBBE /* index_util.h */,
 				BF5D22721E69096800724AE3 /* info_helper.c */,
 				BF5D22731E69096800724AE3 /* info_helper.h */,
 				BFC65C0E1C9225AB0079DF5A /* log_helper.c */,
@@ -463,6 +468,7 @@
 				BFC65C181C9225AB0079DF5A /* consumer_stream.c in Sources */,
 				BFC65C1A1C9225AB0079DF5A /* map_rec.c in Sources */,
 				BFC65C5B1C9227440079DF5A /* info_basics.c in Sources */,
+				BFED8ED21F704B0B000BCBBE /* index_util.c in Sources */,
 				BFC65C321C92264E0079DF5A /* udf_basics.c in Sources */,
 				BFC65C451C9226E50079DF5A /* list_basics_async.c in Sources */,
 				BFC65C541C9227260079DF5A /* key_apply2.c in Sources */,
@@ -586,7 +592,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/opt/openssl/lib,
-					"../modules/lua/src"
+					../modules/lua/src,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
@@ -611,7 +617,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					/usr/local/opt/openssl/lib,
-					"../modules/lua/src"
+					../modules/lua/src,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";

@@ -30,6 +30,7 @@
 #include <aerospike/as_val.h>
 
 #include "../test.h"
+#include "../util/index_util.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -67,24 +68,16 @@ TEST( index_basics_create , "Create index on bin" ) {
 	// DEFAULT type index
 	as_status status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "new_bin", "idx_test_new_bin", AS_INDEX_STRING);
 
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
+	if (! index_process_return_code(status, &err, &task)) {
+		assert_int_eq(status , AEROSPIKE_OK);
 	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-	assert_int_eq( status , AEROSPIKE_OK );
 
 	// LIST type index
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "new_bin[0]", "idx_test_listbin", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
 
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
+	if (! index_process_return_code(status, &err, &task)) {
+		assert_int_eq(status , AEROSPIKE_OK);
 	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-	assert_int_eq( status , AEROSPIKE_OK );
 }
 
 TEST( index_basics_drop , "Drop index" ) {

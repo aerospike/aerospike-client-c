@@ -113,7 +113,7 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 
 	// Process partition generation.
 	nv = as_vector_get(&values, 1);
-	uint32_t gen = strtoul(nv->value, NULL, 10);
+	uint32_t gen = (uint32_t)strtoul(nv->value, NULL, 10);
 
 	if (gen == (uint32_t)-1) {
 		char addr_name[AS_IP_ADDRESS_SIZE];

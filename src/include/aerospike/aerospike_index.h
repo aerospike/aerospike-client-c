@@ -138,7 +138,7 @@ typedef struct as_index_task_s {
  *	@param itype		The type of index, default or complex type.
  *	@param dtype		The data type of index, string or integer.
  *
- *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful. Return AEROSPIKE_ERR_INDEX_FOUND if index exists. Otherwise an error.
  *
  *	@ingroup index_operations
  */
@@ -171,7 +171,7 @@ as_status aerospike_index_create_complex(
  *	@param name			The name of the index.
  *	@param dtype		The data type of index, string or integer.
  *
- *	@return AEROSPIKE_OK if successful or index already exists. Otherwise an error.
+ *	@return AEROSPIKE_OK if successful. Return AEROSPIKE_ERR_INDEX_FOUND if index exists. Otherwise an error.
  *
  *	@ingroup index_operations
  */

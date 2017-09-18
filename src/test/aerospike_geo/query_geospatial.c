@@ -35,6 +35,7 @@
 
 #include "../test.h"
 #include "../util/consumer_stream.h"
+#include "../util/index_util.h"
 #include "../util/log_helper.h"
 #include "../util/udf.h"
 
@@ -65,18 +66,9 @@ static bool before(atf_suite * suite) {
 	as_error_reset(&err);
 
 	// create index on "a"
-	as_status status;
 	as_index_task task;
-
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "geobin", "idx_test_geo", AS_INDEX_GEO2DSPHERE);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
-
-	return true;
+	as_status status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "geobin", "idx_test_geo", AS_INDEX_GEO2DSPHERE);
+	return index_process_return_code(status, &err, &task);
 }
 
 static bool after(atf_suite * suite) {
@@ -853,12 +845,8 @@ TEST( query_geojson_in_list, "IN LIST count(*) where p in <rectangle>" ) {
 
 	as_status status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET,
 			indexed_bin_name, index_name, AS_INDEX_TYPE_LIST, AS_INDEX_GEO2DSPHERE);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
+
+	index_process_return_code(status, &err, &task);
 
 	// insert records
 	int n_recs = 1000;
@@ -997,12 +985,7 @@ TEST( query_geojson_in_mapvalue, "IN MAPVALUES count(*) where p in <rectangle>" 
 	as_index_task task;
 
 	as_status status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, indexed_bin_name, index_name, AS_INDEX_TYPE_MAPVALUES, AS_INDEX_GEO2DSPHERE);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
+	index_process_return_code(status, &err, &task);
 
 	// insert records
 	int n_recs = 1000;

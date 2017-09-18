@@ -95,31 +95,19 @@ aerospike_index_create_complex(
 	
 	char* response = NULL;
 	as_status status = aerospike_info_any(as, err, policy, command, &response);
-	
-	switch (status) {
-		case AEROSPIKE_OK:
-			// Return task that could optionally be polled for completion.
-			if (task) {
-				task->as = as;
-				as_strncpy(task->ns, ns, sizeof(task->ns));
-				as_strncpy(task->name, name, sizeof(task->name));
-				task->done = false;
-			}
-			cf_free(response);
-			break;
-			
-		case AEROSPIKE_ERR_INDEX_FOUND:
-			// Index has already been created.  Do not need to poll for completion.
-			if (task) {
-				task->done = true;
-			}
-			status = AEROSPIKE_OK;
-			as_error_reset(err);
-			break;
-			
-		default:
-			break;
+
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
+
+	// Return task that could optionally be polled for completion.
+	if (task) {
+		task->as = as;
+		as_strncpy(task->ns, ns, sizeof(task->ns));
+		as_strncpy(task->name, name, sizeof(task->name));
+		task->done = false;
+	}
+	cf_free(response);
 	return status;
 }
 

@@ -35,6 +35,7 @@
 #include <aerospike/mod_lua.h>
 
 #include "../test.h"
+#include "../util/index_util.h"
 #include "../util/udf.h"
 #include "../util/consumer_stream.h"
 
@@ -103,12 +104,7 @@ TEST(query_background_create, "create records and indices")
 
 	as_index_task task;
 	as_status status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "qebin1", "qeindex9", AS_INDEX_NUMERIC);
-
-	if (status != AEROSPIKE_OK) {
-		error("error(%d): %s", err.code, err.message);
-	}
-	
-	aerospike_index_create_wait(&err, &task, 0);
+	index_process_return_code(status, &err, &task);
 
 	as_key key;
 	char keystr[64];
@@ -267,12 +263,7 @@ TEST(query_aggregation_double, "query aggregation validate")
 
 	//create index on "a_int_bin"
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, int_bin, "idx_test_a_int_bin", AS_INDEX_NUMERIC);
-	if ( status == AEROSPIKE_OK ) {
-		aerospike_index_create_wait(&err, &task, 0);
-	}
-	else {
-		info("error(%d): %s", err.code, err.message);
-	}
+	index_process_return_code(status, &err, &task);
 
 	as_record r;
 	as_record_init(&r, 2);

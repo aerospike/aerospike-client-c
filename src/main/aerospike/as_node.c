@@ -603,14 +603,14 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 			}
 		}
 		else if (strcmp(nv->name, "peers-generation") == 0) {
-			uint32_t gen = strtoul(nv->value, NULL, 10);
+			uint32_t gen = (uint32_t)strtoul(nv->value, NULL, 10);
 			if (node->peers_generation != gen) {
 				as_log_debug("Node %s peers generation changed: %u", node->name, gen);
 				peers->gen_changed = true;
 			}
 		}
 		else if (strcmp(nv->name, "partition-generation") == 0) {
-			uint32_t gen = strtoul(nv->value, NULL, 10);
+			uint32_t gen = (uint32_t)strtoul(nv->value, NULL, 10);
 			if (node->partition_generation != gen) {
 				as_log_debug("Node %s partition generation changed: %u", node->name, gen);
 				node->partition_changed = true;
@@ -774,7 +774,7 @@ as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 		as_name_value* nv = as_vector_get(values, i);
 		
 		if (strcmp(nv->name, "partition-generation") == 0) {
-			node->partition_generation = strtoul(nv->value, NULL, 10);
+			node->partition_generation = (uint32_t)strtoul(nv->value, NULL, 10);
 		}
 		else if (strcmp(nv->name, "replicas") == 0) {
 			as_partition_tables_update_all(cluster, node, nv->value, true);

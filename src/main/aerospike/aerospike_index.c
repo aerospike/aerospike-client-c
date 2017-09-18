@@ -201,18 +201,10 @@ aerospike_index_remove(
 	char* response = NULL;
 	as_status status = aerospike_info_any(as, err, policy, command, &response);
 	
-	switch (status) {
-		case AEROSPIKE_OK:
-			cf_free(response);
-			break;
-			
-		case AEROSPIKE_ERR_INDEX_NOT_FOUND:
-			status = AEROSPIKE_OK;
-			as_error_reset(err);
-			break;
-			
-		default:
-			break;
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
+
+	cf_free(response);
 	return status;
 }

@@ -614,34 +614,38 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
  * This helps avoid initial database request timeout issues when
  * a large number of threads are initiated at client startup.
  *
- * If the cluster has not stabilized by the timeout, return
- * control as well.  Do not return an error since future
- * database requests may still succeed.
+ * At least two cluster tends are necessary. The first cluster
+ * tend finds a seed node and obtains the seed's partition maps 
+ * and peer nodes.  The second cluster tend requests partition 
+ * maps for the peer nodes.
+ *
+ * A third cluster tend is allowed if some peers nodes can't
+ * be contacted.  If peer nodes are still unreachable, an
+ * error is returned.
  */
 static as_status
 as_wait_till_stabilized(as_cluster* cluster, as_error* err)
 {
-	uint64_t limit = cf_getms() + cluster->conn_timeout_ms;
 	uint32_t count = -1;
-	
-	do {
+
+	for (int i = 0; i < 3; i++) {
 		as_status status = as_cluster_tend(cluster, err, true);
-		
+
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
-		
+
 		// Check to see if cluster has changed since the last tend.
 		// If not, assume cluster has stabilized and return.
 		as_nodes* nodes = cluster->nodes;
+
 		if (count == nodes->size) {
 			return AEROSPIKE_OK;
 		}
 		count = nodes->size;
 		usleep(1);  // Sleep 1 microsecond before next cluster tend.
-	} while (cf_getms() < limit);
-	
-	return AEROSPIKE_OK;
+	}
+	return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster not stabilized after multiple tend attempts");
 }
 
 static void*
@@ -773,7 +777,7 @@ as_cluster_init(as_cluster* cluster, as_error* err, bool fail_if_not_connected)
 			return status;
 		}
 		else {
-			as_log_warn("Cluster connection failed: %s %s", as_error_string(err->code), err->message);
+			as_log_warn(err->message);
 			as_error_reset(err);
 		}
 	}

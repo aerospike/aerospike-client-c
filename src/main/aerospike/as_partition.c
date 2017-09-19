@@ -240,7 +240,7 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint
 				set_node(&p->master, node);
 
 				if (regime > p->regime) {
-					ck_pr_store_32(&p->regime, regime);
+					p->regime = regime;
 				}
 
 				if (tmp) {
@@ -264,7 +264,7 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint
 				set_node(&p->prole, node);
 
 				if (regime > p->regime) {
-					ck_pr_store_32(&p->regime, regime);
+					p->regime = regime;
 				}
 
 				if (tmp) {

@@ -13,12 +13,12 @@ cd `dirname $0`
 
 echo $version | awk -F. '{
 	split($3,b,"-");
-	printf("// Version format: MNNNPPPBBB\n");
+	printf("// Version format: MNNPPBBBB\n");
 	printf("// M: major\n");
 	printf("// N: minor\n");
 	printf("// P: patch\n");
 	printf("// B: build id\n");
-	printf("#define AEROSPIKE_CLIENT_VERSION %d%03d%03d%03dL\n", $1, $2, b[1], b[2]);
+	printf("#define AEROSPIKE_CLIENT_VERSION %d%02d%02d%04dL\n", $1, $2, b[1], b[2]);
 	printf("\nextern char* aerospike_client_version;\n");
 }' > ../src/include/aerospike/version.h
 

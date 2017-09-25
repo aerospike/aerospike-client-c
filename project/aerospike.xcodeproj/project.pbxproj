@@ -99,7 +99,6 @@
 		BFBBBAEF18B6D9D0003FFD88 /* cf_digest.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE518B6D9D0003FFD88 /* cf_digest.c */; };
 		BFBBBAF118B6D9D0003FFD88 /* cf_ll.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE718B6D9D0003FFD88 /* cf_ll.c */; };
 		BFBBBAF218B6D9D0003FFD88 /* cf_rchash.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE818B6D9D0003FFD88 /* cf_rchash.c */; };
-		BFBBBAF318B6D9D0003FFD88 /* cf_shash.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE918B6D9D0003FFD88 /* cf_shash.c */; };
 		BFBBBAF418B6D9D0003FFD88 /* cf_vector.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAEA18B6D9D0003FFD88 /* cf_vector.c */; };
 		BFBD205018BC3436009ED931 /* internal.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBD204518BC3435009ED931 /* internal.c */; };
 		BFBD205118BC3436009ED931 /* mod_lua_aerospike.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBD204618BC3436009ED931 /* mod_lua_aerospike.c */; };
@@ -259,7 +258,6 @@
 		BFBBBAE518B6D9D0003FFD88 /* cf_digest.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_digest.c; path = ../modules/common/src/main/citrusleaf/cf_digest.c; sourceTree = "<group>"; };
 		BFBBBAE718B6D9D0003FFD88 /* cf_ll.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_ll.c; path = ../modules/common/src/main/citrusleaf/cf_ll.c; sourceTree = "<group>"; };
 		BFBBBAE818B6D9D0003FFD88 /* cf_rchash.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = cf_rchash.c; path = ../modules/common/src/main/citrusleaf/cf_rchash.c; sourceTree = "<group>"; };
-		BFBBBAE918B6D9D0003FFD88 /* cf_shash.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_shash.c; path = ../modules/common/src/main/citrusleaf/cf_shash.c; sourceTree = "<group>"; };
 		BFBBBAEA18B6D9D0003FFD88 /* cf_vector.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_vector.c; path = ../modules/common/src/main/citrusleaf/cf_vector.c; sourceTree = "<group>"; };
 		BFBD204518BC3435009ED931 /* internal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = internal.c; path = "../modules/mod-lua/src/main/internal.c"; sourceTree = "<group>"; };
 		BFBD204618BC3436009ED931 /* mod_lua_aerospike.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = mod_lua_aerospike.c; path = "../modules/mod-lua/src/main/mod_lua_aerospike.c"; sourceTree = "<group>"; };
@@ -548,7 +546,6 @@
 				BFBBBAE518B6D9D0003FFD88 /* cf_digest.c */,
 				BFBBBAE718B6D9D0003FFD88 /* cf_ll.c */,
 				BFBBBAE818B6D9D0003FFD88 /* cf_rchash.c */,
-				BFBBBAE918B6D9D0003FFD88 /* cf_shash.c */,
 				BFBBBAEA18B6D9D0003FFD88 /* cf_vector.c */,
 			);
 			name = citrusleaf;
@@ -823,7 +820,6 @@
 				BFBA105C18B7D8B300A64E68 /* as_map.c in Sources */,
 				BF2AA7E618BEBFA500E54AF3 /* as_batch.c in Sources */,
 				BFBA105418B7D8B300A64E68 /* as_hashmap_hooks.c in Sources */,
-				BFBBBAF318B6D9D0003FFD88 /* cf_shash.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

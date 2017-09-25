@@ -617,7 +617,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
  * At least two cluster tends are necessary. The first cluster
  * tend finds a seed node and obtains the seed's partition maps 
  * and peer nodes.  The second cluster tend requests partition 
- * maps for the peer nodes.
+ * maps from the peer nodes.
  *
  * A third cluster tend is allowed if some peers nodes can't
  * be contacted.  If peer nodes are still unreachable, an

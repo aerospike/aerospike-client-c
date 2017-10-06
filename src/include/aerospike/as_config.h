@@ -345,27 +345,6 @@ typedef struct as_config_tls_s {
  *	config.policies.write.key = AS_POLICY_KEY_SEND;
  *	~~~~~~~~~~
  *
- *	If you find that you want to use a policy value across all operations, then 
- *	you may find it beneficial to set the default policy value for that policy 
- *	value.
- *
- *	For example, if you keep setting the key policy value to 
- *	`AS_POLICY_KEY_SEND`, then you may want to just set `as_policies.key`. This
- *	will set the global default value for the policy value. So, if an global
- *  operation policy or a local operation policy does not define a value, then
- *	this value will be used.
- *
- *	~~~~~~~~~~{.c}
- *	config.policies.key = AS_POLICY_KEY_SEND;
- *	~~~~~~~~~~
- *
- *	Global default policy values:
- *	-	as_policies.timeout
- *	-	as_policies.retry
- *	-	as_policies.key
- *	-	as_policies.gen
- *	-	as_policies.exists
- *
  *	Global operation policies:
  *	-	as_policies.read
  *	-	as_policies.write

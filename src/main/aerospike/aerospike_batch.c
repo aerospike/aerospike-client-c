@@ -419,7 +419,8 @@ as_batch_index_records_write(as_vector* records, as_vector* offsets, const as_po
 	}
 
 	uint32_t n_offsets = offsets->size;
-	uint8_t* p = as_command_write_header_read(cmd, read_attr | AS_MSG_INFO1_BATCH_INDEX, policy->consistency_level, policy->base.total_timeout, 1, 0);
+	uint8_t* p = as_command_write_header_read(cmd, read_attr | AS_MSG_INFO1_BATCH_INDEX,
+					policy->consistency_level, policy->linearize_read, policy->base.total_timeout, 1, 0);
 	uint8_t* field_size_ptr = p;
 	p = as_command_write_field_header(p, policy->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
@@ -565,7 +566,8 @@ as_batch_index_execute(as_batch_task* task)
 
 	// Write command
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, task->read_attr | AS_MSG_INFO1_BATCH_INDEX, policy->consistency_level, policy->base.total_timeout, 1, 0);
+	uint8_t* p = as_command_write_header_read(cmd, task->read_attr | AS_MSG_INFO1_BATCH_INDEX,
+					policy->consistency_level, policy->linearize_read, policy->base.total_timeout, 1, 0);
 	uint8_t* field_size_ptr = p;
 	p = as_command_write_field_header(p, policy->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);  // Need to update size at end
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
@@ -653,7 +655,8 @@ as_batch_direct_execute(as_batch_task* task)
 	}
 	
 	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, task->read_attr, policy->consistency_level, policy->base.total_timeout, 2, task->n_bins);
+	uint8_t* p = as_command_write_header_read(cmd, task->read_attr, policy->consistency_level,
+					policy->linearize_read, policy->base.total_timeout, 2, task->n_bins);
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, task->ns);
 	p = as_command_write_field_header(p, AS_FIELD_DIGEST_ARRAY, byte_size);
 	

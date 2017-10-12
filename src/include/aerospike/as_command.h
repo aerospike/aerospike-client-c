@@ -84,7 +84,7 @@ extern "C" {
 #define AS_MSG_INFO3_UPDATE_ONLY		(1 << 3) // update existing record only, do not create new record
 #define AS_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4) // completely replace existing record, or create new record
 #define AS_MSG_INFO3_REPLACE_ONLY		(1 << 5) // completely replace existing record, do not create new record
-// (Note:  Bit 6 is unused.)
+#define AS_MSG_INFO3_LINEARIZE_READ		(1 << 6) // linearize read when in CP mode.
 // (Note:  Bit 7 is unused.)
 
 // Transaction message
@@ -244,8 +244,8 @@ as_command_string_operation_size(const char* value)
 uint8_t*
 as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 	as_policy_commit_level commit_level, as_policy_consistency_level consistency,
-	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
-	uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins, bool durable_delete);
+	bool linearize_read, as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen,
+	uint32_t ttl, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins, bool durable_delete);
 
 /**
  *	@private
@@ -253,15 +253,23 @@ as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
  */
 static inline uint8_t*
 as_command_write_header_read(uint8_t* cmd, uint8_t read_attr, as_policy_consistency_level consistency,
-	uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins)
+	bool linearize_read, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins)
 {
+	uint8_t info_attr = 0;
+
+	if (linearize_read) {
+		info_attr |= AS_MSG_INFO3_LINEARIZE_READ;
+	}
+
 	if (consistency == AS_POLICY_CONSISTENCY_LEVEL_ALL) {
 		read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
 	}
 	
 	cmd[8] = 22;
 	cmd[9] = read_attr;
-	memset(&cmd[10], 0, 12);
+	cmd[10] = 0;
+	cmd[11] = info_attr;
+	memset(&cmd[12], 0, 10);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout_ms);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
 	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);

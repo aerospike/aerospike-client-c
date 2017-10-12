@@ -132,8 +132,8 @@ as_command_value_size(as_val* val, as_buffer* buffer)
 uint8_t*
 as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 	as_policy_commit_level commit_level, as_policy_consistency_level consistency,
-	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
-	uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins, bool durable_delete)
+	bool linearize_read, as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen,
+	uint32_t ttl, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins, bool durable_delete)
 {
 	uint32_t generation = 0;
 	uint8_t info_attr = 0;
@@ -179,6 +179,10 @@ as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 
 	if (commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
 		info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
+	}
+
+	if (linearize_read) {
+		info_attr |= AS_MSG_INFO3_LINEARIZE_READ;
 	}
 
 	if (consistency == AS_POLICY_CONSISTENCY_LEVEL_ALL) {

@@ -444,7 +444,13 @@ typedef struct as_policy_read_s {
 	 * Default: true
 	 */
 	bool deserialize;
-	
+
+	/**
+	 * Force reads to be linearized for server namespaces that support CP mode.
+	 * Default: false
+	 */
+	bool linearize_read;
+
 } as_policy_read;
 	
 /**
@@ -564,6 +570,12 @@ typedef struct as_policy_apply_s {
 	 */
 	bool durable_delete;
 
+	/**
+	 * Force reads to be linearized for server namespaces that support CP mode.
+	 * Default: false
+	 */
+	bool linearize_read;
+
 } as_policy_apply;
 
 /**
@@ -619,6 +631,12 @@ typedef struct as_policy_operate_s {
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Force reads to be linearized for server namespaces that support CP mode.
+	 * Default: false
+	 */
+	bool linearize_read;
 
 } as_policy_operate;
 
@@ -753,6 +771,12 @@ typedef struct as_policy_batch_s {
 	 */
 	bool deserialize;
 	
+	/**
+	 * Force reads to be linearized for server namespaces that support CP mode.
+	 * Default: false
+	 */
+	bool linearize_read;
+
 } as_policy_batch;
 	
 /**
@@ -926,6 +950,7 @@ as_policy_read_init(as_policy_read* p)
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
 	p->deserialize = true;
+	p->linearize_read = false;
 	return p;
 }
 
@@ -1004,6 +1029,7 @@ as_policy_operate_init(as_policy_operate* p)
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->deserialize = true;
 	p->durable_delete = false;
+	p->linearize_read = false;
 	return p;
 }
 
@@ -1081,6 +1107,7 @@ as_policy_apply_init(as_policy_apply* p)
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->gen_value = 0;
 	p->durable_delete = false;
+	p->linearize_read = false;
 	return p;
 }
 
@@ -1119,6 +1146,7 @@ as_policy_batch_init(as_policy_batch* p)
 	p->allow_inline = true;
 	p->send_set_name = false;
 	p->deserialize = true;
+	p->linearize_read = false;
 	return p;
 }
 

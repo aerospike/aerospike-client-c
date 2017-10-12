@@ -382,12 +382,14 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 	
 	if (scan->apply_each.function[0]) {
 		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE,
-			AS_POLICY_COMMIT_LEVEL_ALL, AS_POLICY_CONSISTENCY_LEVEL_ONE, AS_POLICY_EXISTS_IGNORE,
-			AS_POLICY_GEN_IGNORE, 0, 0, policy->base.total_timeout, n_fields, 0, policy->durable_delete);
+			AS_POLICY_COMMIT_LEVEL_ALL, AS_POLICY_CONSISTENCY_LEVEL_ONE, false,
+			AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0, policy->base.total_timeout,
+			n_fields, 0, policy->durable_delete);
 	}
 	else {
 		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
-		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, policy->base.total_timeout, n_fields, scan->select.size);
+		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, false,
+			policy->base.total_timeout, n_fields, scan->select.size);
 	}
 	
 	if (scan->ns) {

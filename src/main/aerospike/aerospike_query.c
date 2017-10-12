@@ -689,13 +689,13 @@ as_query_command_init(
 	
 	if (wp) {
 		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE, wp->commit_level, 0,
-									wp->exists, AS_POLICY_GEN_IGNORE, 0, 0, timeout, n_fields, n_ops,
-									wp->durable_delete);
+			false, wp->exists, AS_POLICY_GEN_IGNORE, 0, 0, timeout, n_fields, n_ops,
+			wp->durable_delete);
 	}
 	else {
 		uint8_t read_attr = (query->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
-		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE,
-										 timeout, n_fields, n_ops);
+		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, false,
+			timeout, n_fields, n_ops);
 	}
 	
 	// Write namespace.

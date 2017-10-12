@@ -480,7 +480,7 @@ as_node_get_address_string(as_node* node)
  *	Attempt to authenticate given user and password.
  */
 as_status
-as_node_authenticate_connection(struct as_cluster_s* cluster, const char* user, const char* password);
+as_node_authenticate_connection(struct as_cluster_s* cluster, const char* user, const char* password, uint64_t deadline_ms);
 
 /**
  *	@private

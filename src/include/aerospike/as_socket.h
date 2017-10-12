@@ -114,14 +114,14 @@ as_socket_wrap(as_socket* sock, int family, int fd, as_tls_context* ctx, const c
  *	Connect to non-blocking socket.
  */
 bool
-as_socket_start_connect(as_socket* sock, struct sockaddr* addr);
+as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadline_ms);
 
 /**
  *	@private
  *	Create non-blocking socket and connect.
  */
 as_status
-as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name);
+as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name, uint64_t deadline_ms);
 
 /**
  * @private

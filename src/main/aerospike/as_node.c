@@ -247,10 +247,10 @@ as_node_add_alias(as_node* node, const char* hostname, in_port_t port)
 }
 
 static int
-as_node_try_connections(as_socket* sock, as_address* addresses, int i, int max)
+as_node_try_connections(as_socket* sock, as_address* addresses, int i, int max, uint64_t deadline_ms)
 {
 	while (i < max) {
-		if (as_socket_start_connect(sock, (struct sockaddr*)&addresses[i].addr)) {
+		if (as_socket_start_connect(sock, (struct sockaddr*)&addresses[i].addr, deadline_ms)) {
 			return i;
 		}
 		i++;
@@ -259,7 +259,7 @@ as_node_try_connections(as_socket* sock, as_address* addresses, int i, int max)
 }
 
 static int
-as_node_try_family_connections(as_node* node, int family, int begin, int end, int index, as_address* primary, as_socket* sock)
+as_node_try_family_connections(as_node* node, int family, int begin, int end, int index, as_address* primary, as_socket* sock, uint64_t deadline_ms)
 {
 	// Create a non-blocking socket.
 	int rv = as_socket_create(sock, family, &node->cluster->tls_ctx, node->tls_name);
@@ -273,20 +273,20 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 	
 	if (index >= 0) {
 		// Try primary address.
-		if (as_socket_start_connect(sock, (struct sockaddr*)&primary->addr)) {
+		if (as_socket_start_connect(sock, (struct sockaddr*)&primary->addr, deadline_ms)) {
 			return index;
 		}
 		
 		// Start from current index + 1 to end.
-		rv = as_node_try_connections(sock, addresses, index + 1, end);
+		rv = as_node_try_connections(sock, addresses, index + 1, end, deadline_ms);
 
 		if (rv < 0) {
 			// Start from begin to index.
-			rv = as_node_try_connections(sock, addresses, begin, index);
+			rv = as_node_try_connections(sock, addresses, begin, index, deadline_ms);
 		}
 	}
 	else {
-		rv = as_node_try_connections(sock, addresses, begin, end);
+		rv = as_node_try_connections(sock, addresses, begin, end, deadline_ms);
 	}
 	
 	if (rv < 0) {
@@ -298,7 +298,7 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 }
 
 static as_status
-as_node_create_socket(as_error* err, as_node* node, as_conn_pool_lock* pool_lock, as_socket* sock)
+as_node_create_socket(as_error* err, as_node* node, as_conn_pool_lock* pool_lock, as_socket* sock, uint64_t deadline_ms)
 {
 	// Try addresses.
 	uint32_t index = node->address_index;
@@ -307,20 +307,20 @@ as_node_create_socket(as_error* err, as_node* node, as_conn_pool_lock* pool_lock
 	
 	if (primary->addr.ss_family == AF_INET) {
 		// Try IPv4 addresses first.
-		rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, index, primary, sock);
+		rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, index, primary, sock, deadline_ms);
 		
 		if (rv < 0) {
 			// Try IPv6 addresses.
-			rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, -1, NULL, sock);
+			rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, -1, NULL, sock, deadline_ms);
 		}
 	}
 	else {
 		// Try IPv6 addresses first.
-		rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, index, primary, sock);
+		rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, index, primary, sock, deadline_ms);
 		
 		if (rv < 0) {
 			// Try IPv4 addresses.
-			rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, -1, NULL, sock);
+			rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, -1, NULL, sock, deadline_ms);
 		}
 	}
 	
@@ -346,7 +346,7 @@ as_node_create_socket(as_error* err, as_node* node, as_conn_pool_lock* pool_lock
 static as_status
 as_node_create_connection(as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_conn_pool_lock* pool_lock, as_socket* sock)
 {
-	as_status status = as_node_create_socket(err, node, pool_lock, sock);
+	as_status status = as_node_create_socket(err, node, pool_lock, sock, deadline_ms);
 
 	if (status) {
 		return status;
@@ -374,7 +374,7 @@ as_node_create_connection(as_error* err, as_node* node, uint32_t socket_timeout,
 }
 
 as_status
-as_node_authenticate_connection(as_cluster* cluster, const char* user, const char* password)
+as_node_authenticate_connection(as_cluster* cluster, const char* user, const char* password, uint64_t deadline_ms)
 {
 	char hash[AS_PASSWORD_HASH_SIZE];
 
@@ -390,14 +390,13 @@ as_node_authenticate_connection(as_cluster* cluster, const char* user, const cha
 
 	as_socket sock;
 	as_error err;
-	as_status status = as_node_create_socket(&err, node, NULL, &sock);
+	as_status status = as_node_create_socket(&err, node, NULL, &sock, deadline_ms);
 
 	if (status) {
 		as_node_release(node);
 		return status;
 	}
 
-	uint64_t deadline_ms = as_socket_deadline(2000);
 	status = as_authenticate(&err, &sock, node, user, hash, 0, deadline_ms);
 	as_socket_close(&sock);
 	as_node_release(node);

@@ -43,7 +43,7 @@ void as_tls_set_name(as_socket* sock, const char* tls_name);
 
 int as_tls_connect_once(as_socket* sock);
 
-int as_tls_connect(as_socket* sock);
+int as_tls_connect(as_socket* sock, uint64_t deadline);
 
 // int as_tls_peek(as_socket* sock, void* buf, int num);
 

@@ -193,7 +193,7 @@ as_socket_wrap(as_socket* sock, int family, int fd, as_tls_context* ctx, const c
 }
 
 bool
-as_socket_start_connect(as_socket* sock, struct sockaddr* addr)
+as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadline_ms)
 {
 	socklen_t size = as_address_size(addr);
 
@@ -204,7 +204,7 @@ as_socket_start_connect(as_socket* sock, struct sockaddr* addr)
 	}
 
 	if (sock->ctx) {
-		if (as_tls_connect(sock)) {
+		if (as_tls_connect(sock, deadline_ms)) {
 			return false;
 		}
 	}
@@ -212,7 +212,7 @@ as_socket_start_connect(as_socket* sock, struct sockaddr* addr)
 }
 
 as_status
-as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name)
+as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name, uint64_t deadline_ms)
 {
 	// Create the socket.
 	int rv = as_socket_create(sock, addr->sa_family, ctx, tls_name);
@@ -224,7 +224,7 @@ as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* ad
 	}
 	
 	// Initiate non-blocking connect.
-	if (! as_socket_start_connect(sock, addr)) {
+	if (! as_socket_start_connect(sock, addr, deadline_ms)) {
 		as_socket_close(sock);
 		char name[AS_IP_ADDRESS_SIZE];
 		as_address_name(addr, name, sizeof(name));

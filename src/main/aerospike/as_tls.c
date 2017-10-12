@@ -888,10 +888,8 @@ as_tls_connect_once(as_socket* sock)
 }
 
 int
-as_tls_connect(as_socket* sock)
+as_tls_connect(as_socket* sock, uint64_t deadline)
 {
-	uint64_t deadline = cf_getms() + 60000;
-
 	while (true) {
 		int rv = SSL_connect(sock->ssl);
 		if (rv == 1) {

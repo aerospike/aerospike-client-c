@@ -150,9 +150,9 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_TIMEOUT = 9,
 	
 	/**
-	 *	XDR is not available for the cluster.
+	 *	Operation not allowed in current configuration
 	 */
-	AEROSPIKE_ERR_NO_XDR = 10,
+	AEROSPIKE_ERR_ALWAYS_FORBIDDEN = 10,
 	
 	/**
 	 *	Generic cluster discovery & connection error.

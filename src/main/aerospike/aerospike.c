@@ -135,7 +135,7 @@ aerospike_connect(aerospike* as, as_error* err)
 	}
 	
 	// Set TLS names to default when enabled.
-	if (config->tls.enable && ! config->tls.encrypt_only) {
+	if (config->tls.enable) {
 		for (uint32_t i = 0; i < hosts->size; i++) {
 			as_host* host = as_vector_get(hosts, i);
 			

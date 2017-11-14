@@ -87,9 +87,6 @@ usage()
 	fprintf(stderr, "  --tlsEnable         # Default: TLS disabled\n");
 	fprintf(stderr, "  Enable TLS.\n\n");
 
-	fprintf(stderr, "  --tlsEncryptOnly\n");
-	fprintf(stderr, "  Disable TLS certificate verification.\n\n");
-
 	fprintf(stderr, "  --tlsCaFile <path>\n");
 	fprintf(stderr, "  Set the TLS certificate authority file.\n\n");
 
@@ -134,7 +131,6 @@ static struct option long_options[] = {
 	{"suite",                required_argument, 0, 'S'},
 	{"test",                 required_argument, 0, 'T'},
 	{"tlsEnable",            no_argument,       0, 'A'},
-	{"tlsEncryptOnly",       no_argument,       0, 'B'},
 	{"tlsCaFile",            required_argument, 0, 'E'},
 	{"tlsCaPath",            required_argument, 0, 'F'},
 	{"tlsProtocols",         required_argument, 0, 'G'},
@@ -196,10 +192,6 @@ static bool parse_opts(int argc, char* argv[])
 				
 		case 'A':
 			g_tls.enable = true;
-			break;
-
-		case 'B':
-			g_tls.encrypt_only = true;
 			break;
 
 		case 'E':

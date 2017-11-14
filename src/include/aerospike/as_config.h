@@ -187,12 +187,6 @@ typedef struct as_config_tls_s {
 	bool enable;
 
 	/**
-	 *	Only encrypt connections; do not verify certificates.
-     *  By default TLS will verify certificates.
-	 */
-	bool encrypt_only;
-	
-	/**
 	 *  Path to a trusted CA certificate file.
 	 *  By default TLS will use system standard trusted CA certificates.
 	 *	Use as_config_tls_set_cafile() to set this field.

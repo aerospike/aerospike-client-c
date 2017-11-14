@@ -695,11 +695,7 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		X509_VERIFY_PARAM_free(param);
 	}
 
-	if (tlscfg->encrypt_only) {
-		SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
-	} else {
-		SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
-	}
+	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
 
 	manage_sigpipe();
 

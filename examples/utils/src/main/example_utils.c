@@ -77,7 +77,6 @@ const struct option LONG_OPTS_BASIC[] = {
 	{"set",                  required_argument, 0, 's'},
 	{"key",                  required_argument, 0, 'k'},
 	{"tlsEnable",            no_argument,       0, 'A'},
-	{"tlsEncryptOnly",       no_argument,       0, 'B'},
 	{"tlsCaFile",            required_argument, 0, 'E'},
 	{"tlsCaPath",            required_argument, 0, 'F'},
 	{"tlsProtocols",         required_argument, 0, 'G'},
@@ -101,7 +100,6 @@ const struct option LONG_OPTS_MULTI_KEY[] = {
 	{"set",                  required_argument, 0, 's'},
 	{"multikey",             required_argument, 0, 'K'},
 	{"tlsEnable",            no_argument,       0, 'A'},
-	{"tlsEncryptOnly",       no_argument,       0, 'B'},
 	{"tlsCaFile",            required_argument, 0, 'E'},
 	{"tlsCaPath",            required_argument, 0, 'F'},
 	{"tlsProtocols",         required_argument, 0, 'G'},
@@ -272,10 +270,6 @@ example_get_opts(int argc, char* argv[], int which_opts)
 			g_tls.enable = true;
 			break;
 
-		case 'B':
-			g_tls.encrypt_only = true;
-			break;
-
 		case 'E':
 			g_tls.cafile = strdup(optarg);
 			break;
@@ -407,9 +401,6 @@ usage(const char* short_opts)
 
 	LOG("--tlsEnable  [default: TLS disabled]");
 	LOG("  Enable TLS.");
-
-	LOG("--tlsEncryptOnly");
-	LOG("  Disable TLS certificate verification.");
 
 	LOG("--tlsCaFile <path>");
 	LOG("  Set the TLS certificate authority file.");

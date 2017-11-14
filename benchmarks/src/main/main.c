@@ -60,7 +60,6 @@ static struct option long_options[] = {
 	{"asyncMaxCommands",     required_argument, 0, 'c'},
 	{"eventLoops",           required_argument, 0, 'W'},
 	{"tlsEnable",            no_argument,       0, 'A'},
-	{"tlsEncryptOnly",       no_argument,       0, 'B'},
 	{"tlsCaFile",            required_argument, 0, 'E'},
 	{"tlsCaPath",            required_argument, 0, 'F'},
 	{"tlsProtocols",         required_argument, 0, 'G'},
@@ -256,10 +255,6 @@ print_usage(const char* program)
 	blog_line("   Enable TLS.");
 	blog_line("");
 
-	blog_line("   --tlsEncryptOnly");
-	blog_line("   Disable TLS certificate verification.");
-	blog_line("");
-
 	blog_line("   --tlsCaFile <path>");
 	blog_line("   Set the TLS certificate authority file.");
 	blog_line("");
@@ -422,7 +417,6 @@ print_args(arguments* args)
 
 	if (args->tls.enable) {
 		blog_line("TLS:                    enabled");
-		blog_line("TLS encrypt only:       %s", boolstring(args->tls.encrypt_only));
 		blog_line("TLS cafile:             %s", args->tls.cafile);
 		blog_line("TLS capath:             %s", args->tls.capath);
 		blog_line("TLS protocols:          %s", args->tls.protocols);
@@ -758,10 +752,6 @@ set_args(int argc, char * const * argv, arguments* args)
 
 			case 'A':
 				args->tls.enable = true;
-				break;
-
-			case 'B':
-				args->tls.encrypt_only = true;
 				break;
 
 			case 'E':

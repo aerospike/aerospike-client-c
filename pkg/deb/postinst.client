@@ -14,6 +14,7 @@ case "$1" in
     useradd -r -d /opt/aerospike -g aerospike aerospike
   fi
 
+  mkdir -p /opt/aerospike
   chown -R aerospike:aerospike /opt/aerospike
 
   /sbin/ldconfig

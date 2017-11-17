@@ -15,16 +15,18 @@
  * the License.
  */
 #include <aerospike/as_partition.h>
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_node.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_string.h>
-#include <aerospike/ck/ck_pr.h>
 #include <citrusleaf/cf_b64.h>
+#include <stdlib.h>
 
 /******************************************************************************
- *	Functions
+ * Functions
  *****************************************************************************/
 
 /* Used for debugging only.
@@ -59,15 +61,15 @@ static inline void
 set_partition_tables(as_cluster* cluster, as_partition_tables* tables)
 {
 	// Volatile write used so other threads can see node changes.
-	ck_pr_fence_store();
-	ck_pr_store_ptr(&cluster->partition_tables, tables);
+	as_fence_store();
+	as_store_ptr(&cluster->partition_tables, tables);
 }
 
 static inline void
 set_node(as_node** trg, as_node* src)
 {
-	ck_pr_fence_store();
-	ck_pr_store_ptr(trg, src);
+	as_fence_store();
+	as_store_ptr(trg, src);
 }
 
 static as_partition_table*
@@ -114,7 +116,7 @@ static inline as_node*
 reserve_master(as_cluster* cluster, as_node* node)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (node && ck_pr_load_8(&node->active)) {
+	if (node && as_load_uint8(&node->active)) {
 		as_node_reserve(node);
 		return node;
 	}
@@ -126,7 +128,7 @@ static inline as_node*
 reserve_node(as_cluster* cluster, as_node* node, bool cp_mode)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (node && ck_pr_load_8(&node->active)) {
+	if (node && as_load_uint8(&node->active)) {
 		as_node_reserve(node);
 		return node;
 	}
@@ -137,7 +139,7 @@ static as_node*
 reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate, bool cp_mode)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (ck_pr_load_8(&chosen->active)) {
+	if (as_load_uint8(&chosen->active)) {
 		as_node_reserve(chosen);
 		return chosen;
 	}
@@ -150,13 +152,13 @@ as_node*
 as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master, bool cp_mode)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	as_node* master = ck_pr_load_ptr(&p->master);
+	as_node* master = (as_node*)as_load_ptr(&p->master);
 
 	if (replica == AS_POLICY_REPLICA_MASTER) {
 		return reserve_master(cluster, master);
 	}
 
-	as_node* prole = ck_pr_load_ptr(&p->prole);
+	as_node* prole = (as_node*)as_load_ptr(&p->prole);
 
 	if (! prole) {
 		return reserve_node(cluster, master, cp_mode);
@@ -168,7 +170,7 @@ as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica re
 
 	if (replica == AS_POLICY_REPLICA_ANY) {
 		// Alternate between master and prole for reads with global iterator.
-		uint32_t r = ck_pr_faa_32(&g_randomizer, 1);
+		uint32_t r = as_faa_uint32(&g_randomizer, 1);
 		use_master = (r & 1);
 	}
 
@@ -292,13 +294,13 @@ as_partition_vector_get(as_vector* tables, const char* ns)
 }
 
 static void
-decode_and_update(char* bitmap_b64, long len, as_partition_table* table, as_node* node, bool master, uint32_t regime)
+decode_and_update(char* bitmap_b64, uint32_t len, as_partition_table* table, as_node* node, bool master, uint32_t regime)
 {
 	// Size allows for padding - is actual size rounded up to multiple of 3.
-	uint8_t* bitmap = (uint8_t*)alloca(cf_b64_decoded_buf_size((uint32_t)len));
+	uint8_t* bitmap = (uint8_t*)alloca(cf_b64_decoded_buf_size(len));
 
 	// For now - for speed - trust validity of encoded characters.
-	cf_b64_decode(bitmap_b64, (uint32_t)len, bitmap, NULL);
+	cf_b64_decode(bitmap_b64, len, bitmap, NULL);
 
 	// Expand the bitmap.
 	for (uint32_t i = 0; i < table->size; i++) {
@@ -404,7 +406,7 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 				}
 
 				// Decode partition bitmap and update client's view.
-				decode_and_update(bitmap_b64, len, table, node, master, 0);
+				decode_and_update(bitmap_b64, (uint32_t)len, table, node, master, 0);
 			}
 			ns = ++p;
 		}
@@ -520,7 +522,7 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 						}
 						
 						// Decode partition bitmap and update client's view.
-						decode_and_update(begin, len, table, node, master, regime);
+						decode_and_update(begin, (uint32_t)len, table, node, master, regime);
 					}
 				}
 			}

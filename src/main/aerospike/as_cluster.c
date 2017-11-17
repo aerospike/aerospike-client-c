@@ -33,14 +33,14 @@
 #include <citrusleaf/cf_clock.h>
 
 /******************************************************************************
- *	Globals
+ * Globals
  *****************************************************************************/
 
 extern uint32_t as_event_loop_capacity;
 uint32_t as_cluster_count = 0;
 
 /******************************************************************************
- *	Function declarations
+ * Function declarations
  *****************************************************************************/
 
 as_status
@@ -53,14 +53,14 @@ as_status
 as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers);
 
 /******************************************************************************
- *	Functions
+ * Functions
  *****************************************************************************/
 
 static inline void
 set_nodes(as_cluster* cluster, as_nodes* nodes)
 {
-	ck_pr_fence_store();
-	ck_pr_store_ptr(&cluster->nodes, nodes);
+	as_fence_store();
+	as_store_ptr(&cluster->nodes, nodes);
 }
 
 static as_nodes*
@@ -75,8 +75,8 @@ as_nodes_create(uint32_t capacity)
 }
 
 /**
- *	Use non-inline function for garbarge collector function pointer reference.
- *	Forward to inlined release.
+ * Use non-inline function for garbarge collector function pointer reference.
+ * Forward to inlined release.
  */
 static void
 release_nodes(as_nodes* nodes)
@@ -112,7 +112,7 @@ as_cluster_event_notify(as_cluster* cluster, as_node* node, as_cluster_event_typ
 }
 
 /**
- *	Add nodes using copy on write semantics.
+ * Add nodes using copy on write semantics.
  */
 void
 as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
@@ -320,8 +320,8 @@ as_cluster_find_node_by_reference(as_vector* /* <as_node*> */ nodes_to_remove, a
 }
 
 /**
- *	Use non-inline function for garbarge collector function pointer reference.
- *	Forward to inlined release.
+ * Use non-inline function for garbarge collector function pointer reference.
+ * Forward to inlined release.
  */
 static void
 release_node(as_node* node)
@@ -342,7 +342,7 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	as_nodes* nodes_old = cluster->nodes;
 	as_nodes* nodes_new = as_nodes_create(nodes_old->size - nodes_to_remove->size);
 	as_node* node;
-	int count = 0;
+	uint32_t count = 0;
 		
 	// Add nodes that are not in remove list.
 	for (uint32_t i = 0; i < nodes_old->size; i++) {
@@ -361,14 +361,14 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 				nodes_new->array[count++] = node;
 			}
 			else {
-				as_log_error("Remove node error. Node count exceeded %d, %s %s", count, node->name, as_node_get_address_string(node));
+				as_log_error("Remove node error. Node count exceeded %u, %s %s", count, node->name, as_node_get_address_string(node));
 			}
 		}
 	}
 		
 	// Do sanity check to make sure assumptions are correct.
 	if (count < nodes_new->size) {
-		as_log_warn("Node remove mismatch. Expected %d Received %d", nodes_new->size, count);
+		as_log_warn("Node remove mismatch. Expected %u Received %u", nodes_new->size, count);
 	}
 
 	// Replace nodes with copy.
@@ -452,7 +452,7 @@ as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 }
 
 /**
- *	Release data structures schuleduled for removal in previous cluster tend.
+ * Release data structures schuleduled for removal in previous cluster tend.
  */
 static void
 as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
@@ -643,7 +643,6 @@ as_wait_till_stabilized(as_cluster* cluster, as_error* err)
 			return AEROSPIKE_OK;
 		}
 		count = nodes->size;
-		usleep(1);  // Sleep 1 microsecond before next cluster tend.
 	}
 	return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster not stabilized after multiple tend attempts");
 }
@@ -684,7 +683,7 @@ as_cluster_tender(void* data)
 }
 
 static int
-as_cluster_find_seed(as_vector* seeds, const char* hostname, in_port_t port) {
+as_cluster_find_seed(as_vector* seeds, const char* hostname, uint16_t port) {
 	for (uint32_t i = 0; i < seeds->size; i++) {
 		as_host* seed = as_vector_get(seeds, i);
 
@@ -739,7 +738,7 @@ as_cluster_add_seed_address(as_cluster* cluster, as_node* node, as_address* addr
 	char address_name[AS_IP_ADDRESS_SIZE];
 
 	as_address_short_name(addr, address_name, sizeof(address_name));
-	in_port_t port = as_address_port(addr);
+	uint16_t port = as_address_port(addr);
 
 	as_cluster_add_seed(cluster, address_name, node->tls_name, port);
 }
@@ -794,9 +793,9 @@ as_node_get_random(as_cluster* cluster)
 
 	for (uint32_t i = 0; i < size; i++) {
 		// Must handle concurrency with other threads.
-		uint32_t index = ck_pr_faa_32(&cluster->node_index, 1);
+		uint32_t index = as_faa_uint32(&cluster->node_index, 1);
 		as_node* node = nodes->array[index % size];
-		uint8_t active = ck_pr_load_8(&node->active);
+		uint8_t active = as_load_uint8(&node->active);
 
 		if (active) {
 			as_node_reserve(node);
@@ -936,7 +935,7 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
 as_status
 as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 {
-	ck_pr_inc_32(&as_cluster_count);
+	as_incr_uint32(&as_cluster_count);
 	
 	as_cluster* cluster = cf_malloc(sizeof(as_cluster));
 	memset(cluster, 0, sizeof(as_cluster));
@@ -995,6 +994,10 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		cluster->pending = cf_calloc(as_event_loop_capacity, sizeof(int));
 	}
 
+	// Initialize tend lock and condition.
+	pthread_mutex_init(&cluster->tend_lock, NULL);
+	pthread_cond_init(&cluster->tend_cond, NULL);
+
 	// Initialize empty nodes.
 	cluster->nodes = as_nodes_create(0);
 	
@@ -1026,10 +1029,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		return st;
 	}
 
-	// Initialize tend lock and condition.
-	pthread_mutex_init(&cluster->tend_lock, NULL);
-	pthread_cond_init(&cluster->tend_cond, NULL);
-	
 	if (config->use_shm) {
 		// Create shared memory cluster.
 		as_status status = as_shm_create(cluster, err, config);
@@ -1135,8 +1134,12 @@ as_cluster_destroy(as_cluster* cluster)
 	// cf_free(cluster->cluster_name);
 
 	as_tls_context_destroy(&cluster->tls_ctx);
-	
+
+#if defined(_MSC_VER)
+	WSACleanup();
+#endif
+
 	// Destroy cluster.
 	cf_free(cluster);
-	ck_pr_dec_32(&as_cluster_count);
+	as_decr_uint32(&as_cluster_count);
 }

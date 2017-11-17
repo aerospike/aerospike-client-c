@@ -1,14 +1,11 @@
 # Aerospike C Client
 
 The Aerospike C client provides a C interface for interacting with the 
-[Aerospike](http://aerospike.com) Database.  Examples and unit tests are
-also included.
+[Aerospike](http://aerospike.com) Database.  The client can be built on
+64-bit distributions of Linux, MacOS or Windows. Unit tests, examples
+and benchmarks are also included.
 
 ## Build Prerequisites
-
-The C client can be built on most recent 64-bit Linux distributions
-and Mac OS X 10.9 or greater.  The build requires gcc 4.1 or newer 
-for Linux and XCode clang for Mac OS X.
 
 ### Debian 7+ and Ubuntu 12+
 
@@ -36,30 +33,51 @@ for Linux and XCode clang for Mac OS X.
 	$ sudo yum install compat-lua-devel-5.1.5
 	$ sudo yum install gcc-c++ graphviz rpm-build 
 
-### Mac OS X
-
-Download and install:
+### MacOS 10.9+
 
 * [XCode](https://itunes.apple.com/us/app/xcode/id497799835)
 * [Brew Package Manager](http://brew.sh)
 
-Then, run the following:
+Run this script after installing XCode and Brew:
 
-	$ project/prepare_xcode
+	$ xcode/prepare_xcode
 
+### Windows 7+
+
+See [Windows Build](vs).
+	
 ### Event Library (Optional)
 
 An event library is required when C client asynchronous functionality is used.
-This event library must be installed independently of the C client.
+On Linux and MacOS, the event library must be installed independently of the C client.
 Install one of the supported event libraries:
 
-* [libev](http://dist.schmorp.de/libev) version 4.24 or greater.  libev is the preferred event library.  Use `install_libev` to install.
-* [libuv](http://docs.libuv.org) version 1.8.0 or greater.  Use `install_libuv` to install.
-* [libevent](http://libevent.org) version 2.0.22 or greater.  Use `install_libevent` to install.
+#### [libuv 1.8.0+](http://docs.libuv.org) 
 
-Event libraries usually install into /usr/local/lib.  Most operating systems do not 
-search /usr/local/lib by default.  Therefore, the following `LD_LIBRARY_PATH` setting may 
-be necessary.
+libuv has excellent performance and supports all platforms.  The client does not
+support async TLS (SSL) sockets when using libuv.  Use `install_libuv` to install
+on Linux/MacOS.  See [Windows Build](vs) for libuv configuration on 
+Windows.
+
+#### [libev 4.24+](http://dist.schmorp.de/libev)
+
+libev has excellent performance on Linux/MacOS, but its Windows implementation
+is suboptimal.  Therefore, the C client supports libev on Linux/MacOS only.
+The client does support async TLS (SSL) sockets when using libev.  Use
+`install_libev` to install.
+
+#### [libevent 2.0.22+](http://libevent.org)
+
+libevent is less performant than the other two options, but it does support all
+platforms.  The client also supports async TLS (SSL) sockets when using libevent.
+Use `install_libevent` to install on Linux/MacOS.  See [Windows Build](vs)
+for libevent configuration on Windows.
+
+#### Event Library Notes
+
+Event libraries usually install into /usr/local/lib on Linux/MacOS.  Most
+operating systems do not search /usr/local/lib by default.  Therefore, the
+following `LD_LIBRARY_PATH` setting may be necessary.
 
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
@@ -70,6 +88,9 @@ in an IDE.  Example:
 	$ gcc -DAS_USE_LIBEV -o myapp myapp.c -laerospike -lev -lssl -lcrypto -lpthread -lm -lz
 
 ## Build
+
+The remaining sections are applicable to Linux/MacOS platforms.
+See [Windows Build](vs) for Windows build instructions.
 
 Before building, please ensure you have the prerequisites installed.  This project uses 
 git submodules, so you will need to initialize and update submodules before building 

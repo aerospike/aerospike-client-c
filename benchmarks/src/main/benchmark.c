@@ -26,7 +26,7 @@
 #include "aerospike/as_log.h"
 #include "aerospike/as_monitor.h"
 #include "aerospike/as_random.h"
-#include <stdint.h>
+#include <stdlib.h>
 #include <time.h>
 
 as_monitor monitor;
@@ -35,7 +35,9 @@ void
 blog_line(const char* fmt, ...)
 {
 	char fmtbuf[1024];
-	char* p = stpcpy(fmtbuf, fmt);
+	size_t len = strlen(fmt);
+	memcpy(fmtbuf, fmt, len);
+	char* p = fmtbuf + len;
 	*p++ = '\n';
 	*p = 0;
 	
@@ -55,7 +57,10 @@ blog_detailv(as_log_level level, const char* fmt, va_list ap)
 	struct tm* t = localtime(&now);
 	int len = sprintf(fmtbuf, "%d-%02d-%02d %02d:%02d:%02d %s ",
 		t->tm_year+1900, t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec, as_log_level_tostring(level));
-	char* p = stpcpy(fmtbuf + len, fmt);
+	size_t len2 = strlen(fmt);
+	char* p = fmtbuf + len;
+	memcpy(p, fmt, len2);
+	p += len2;
 	*p++ = '\n';
 	*p = 0;
 	
@@ -114,7 +119,7 @@ connect_to_server(arguments* args, aerospike* client)
 	cfg.thread_pool_size = 0;
 	cfg.conn_pools_per_node = args->conn_pools_per_node;
 
-	if (cfg.async_max_conns_per_node < args->async_max_commands) {
+	if (cfg.async_max_conns_per_node < (uint32_t)args->async_max_commands) {
 		cfg.async_max_conns_per_node = args->async_max_commands;
 	}
 

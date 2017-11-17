@@ -17,56 +17,66 @@
 #pragma once
 
 #include <citrusleaf/cf_byte_order.h>
-#include <netinet/in.h>
 #include <string.h>
+
+#if !defined(_MSC_VER)
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
+#else
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#define in_addr_t ULONG
+#endif
+
+#define AS_IP_ADDRESS_SIZE 64
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- *	@private
- *	Convert socket address (including port) to a string.
+ * @private
+ * Convert socket address (including port) to a string.
  *
- *	Formats:
- *	~~~~~~~~~~{.c}
- *	IPv4: xxx.xxx.xxx.xxx:<port>
- *	IPv6: [xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx]:<port>
- *	~~~~~~~~~~
+ * Formats:
+ * ~~~~~~~~~~{.c}
+ * IPv4: xxx.xxx.xxx.xxx:<port>
+ * IPv6: [xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx]:<port>
+ * ~~~~~~~~~~
  */
 void
 as_address_name(struct sockaddr* addr, char* name, socklen_t size);
 
 /**
- *	@private
- *	Convert socket address to a string without brackets or a port.
+ * @private
+ * Convert socket address to a string without brackets or a port.
  *
- *	Formats:
- *	~~~~~~~~~~{.c}
- *	IPv4: xxx.xxx.xxx.xxx
- *	IPv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
- *	~~~~~~~~~~
+ * Formats:
+ * ~~~~~~~~~~{.c}
+ * IPv4: xxx.xxx.xxx.xxx
+ * IPv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
+ * ~~~~~~~~~~
  */
 void
 as_address_short_name(struct sockaddr* addr, char* name, socklen_t size);
 
 /**
- *	@private
- *	Return port of address.
+ * @private
+ * Return port of address.
  */
-static inline in_port_t
+static inline uint16_t
 as_address_port(struct sockaddr* addr)
 {
-	in_port_t port = (addr->sa_family == AF_INET)?
+	uint16_t port = (addr->sa_family == AF_INET)?
 		((struct sockaddr_in*)addr)->sin_port :
 		((struct sockaddr_in6*)addr)->sin6_port;
 	return cf_swap_from_be16(port);
 }
 
 /**
- *	@private
- *	Return size of socket address.
+ * @private
+ * Return size of socket address.
  */
 static inline socklen_t
 as_address_size(struct sockaddr* addr)
@@ -75,8 +85,8 @@ as_address_size(struct sockaddr* addr)
 }
 
 /**
- *	@private
- *	Copy socket address to storage.
+ * @private
+ * Copy socket address to storage.
  */
 static inline void
 as_address_copy_storage(struct sockaddr* src, struct sockaddr_storage* trg)

@@ -25,9 +25,7 @@
 // Includes
 //
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <inttypes.h>
 
@@ -48,8 +46,14 @@
 // Constants
 //
 
+#if !defined(_MSC_VER)
+#define UDF_USER_PATH "src/lua/"
+#else
+#define UDF_USER_PATH "../../../examples/basic_examples/udf/src/lua/"
+#endif
+
 #define UDF_MODULE "basic_udf"
-const char UDF_FILE_PATH[] = "src/lua/" UDF_MODULE ".lua";
+const char UDF_FILE_PATH[] = UDF_USER_PATH UDF_MODULE ".lua";
 
 
 //==========================================================

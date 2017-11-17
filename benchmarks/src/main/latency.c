@@ -20,7 +20,7 @@
  * IN THE SOFTWARE.
  ******************************************************************************/
 #include "latency.h"
-#include <aerospike/ck/ck_pr.h>
+#include <aerospike/as_atomic.h>
 #include <citrusleaf/alloc.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -60,7 +60,7 @@ void
 latency_add(latency* l, uint64_t elapsed_ms)
 {
 	int index = latency_getindex(l, elapsed_ms);
-	ck_pr_inc_32(&l->buckets[index]);
+	as_incr_uint32(&l->buckets[index]);
 }
 
 void
@@ -113,12 +113,12 @@ latency_print_results(latency* l, const char* prefix, char* out) {
 	int count;
 	
 	for (int i = max - 1; i >= 1 ; i--) {
-		count = ck_pr_fas_32(&buckets[i], 0);
+		count = as_fas_uint32(&buckets[i], 0);
 		array[i] = count + sum;
 		sum += count;
 	}
 	// The first bucket (<=1ms) does not need a cumulative adjustment.
-	count = ck_pr_fas_32(&buckets[0], 0);
+	count = as_fas_uint32(&buckets[0], 0);
 	array[0] = count;
 	sum += count;
 	

@@ -16,18 +16,17 @@
  */
 #pragma once
 
-#include <openssl/ssl.h>
-
+#include <aerospike/as_address.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_socket.h>
-
+#include <openssl/ssl.h>
 
 void as_tls_check_init();
 
-void as_tls_cleanup();
+void as_tls_cleanup(void);
 
-void as_tls_thread_cleanup();
+AS_EXTERN void as_tls_thread_cleanup();
 
 as_status as_tls_context_setup(as_config_tls* tlscfg,
 							   as_tls_context* octx,

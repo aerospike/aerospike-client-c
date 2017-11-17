@@ -206,9 +206,13 @@ endif
 COMMON-HEADERS :=
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arraylist.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arraylist_iterator.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_atomic.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_atomic_gcc.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_boolean.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_bytes.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_dir.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_double.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_geojson.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_hashmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_hashmap_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_integer.h
@@ -225,9 +229,10 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_password.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_queue.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_random.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_rec.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_sleep.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_std.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stream.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_geojson.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_thread_pool.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
@@ -240,7 +245,6 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_byte_order.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_ll.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_types.h
 COMMON-HEADERS += $(shell find $(COMMON)/$(SOURCE_INCL)/aerospike/ck -type f)
 
 EXCLUDE-HEADERS = 
@@ -304,7 +308,7 @@ package-clean:
 
 .PHONY: tags etags
 tags etags:
-	etags `find benchmarks demos examples modules src -name "*.[ch]" | egrep -v '(target/Linux|m4)'` `find /usr/include -name "*.h"`
+	etags `find benchmarks examples modules src -name "*.[ch]" | egrep -v '(target/Linux|m4)'` `find /usr/include -name "*.h"`
 
 ###############################################################################
 ##  BUILD TARGETS                                                            ##

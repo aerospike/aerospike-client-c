@@ -26,12 +26,9 @@
 //
 
 #include <errno.h>
-#include <getopt.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_index.h>
@@ -39,6 +36,7 @@
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_bytes.h>
+#include <aerospike/as_dir.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
@@ -46,12 +44,17 @@
 #include <aerospike/as_password.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_record_iterator.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_val.h>
 
 #include "example_utils.h"
 
+#if defined(_MSC_VER)
+#undef _UNICODE  // Use ASCII version on windows.
+#endif
+#include <getopt.h>
 
 //==========================================================
 // Constants
@@ -434,21 +437,6 @@ usage(const char* short_opts)
 }
 
 //==========================================================
-// Initialize asynchronous event loop
-//
-bool
-example_create_event_loop()
-{
-#if AS_EVENT_LIB_DEFINED
-	if (as_event_create_loops(1)) {
-		return true;
-	}
-#endif
-	LOG("Event library not defined. Skip async example.");
-	return false;
-}
-
-//==========================================================
 // Logging
 //
 static bool
@@ -460,6 +448,24 @@ example_log_callback(as_log_level level, const char * func, const char * file, u
 	printf("\n");
 	va_end(ap);
 	return true;
+}
+
+//==========================================================
+// Initialize asynchronous event loop
+//
+bool
+example_create_event_loop()
+{
+#if AS_EVENT_LIB_DEFINED
+	// Initialize logging.
+	as_log_set_callback(example_log_callback);
+
+	if (as_event_create_loops(1)) {
+		return true;
+	}
+#endif
+	LOG("Event library not defined. Skip async example.");
+	return false;
 }
 
 //==========================================================
@@ -492,16 +498,12 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 
 	// Examples can be run from client binary package-installed lua files or
 	// from git client source tree lua files. If client binary package is not
-	// installed, look for lua system files in client source tree.
-	int rc = access(lua.system_path, R_OK);
-	
-	if (rc != 0) {
+	// installed, look for lua system files in client source tree.	
+	if (! as_dir_exists(lua.system_path)) {
 		// Use lua files in source tree if they exist.
 		char* path = "../../../modules/lua-core/src";
 		
-		rc = access(path, R_OK);
-		
-		if (rc == 0) {
+		if (as_dir_exists(path)) {
 			strcpy(lua.system_path, path);
 		}
 	}
@@ -765,7 +767,7 @@ example_remove_udf(aerospike* p_as, const char* udf_file_path)
 	as_string_destroy(&base_string);
 
 	// Wait for the system metadata to spread to all nodes.
-	usleep(100 * 1000);
+	as_sleep(100);
 
 	return true;
 }
@@ -843,7 +845,7 @@ example_remove_index(aerospike* p_as, const char* index)
 	aerospike_index_remove(p_as, &err, NULL, g_namespace, index);
 
 	// Wait for the system metadata to spread to all nodes.
-	usleep(100 * 1000);
+	as_sleep(100);
 }
 
 

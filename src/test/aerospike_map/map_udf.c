@@ -25,12 +25,11 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_map_operations.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
-
-#include <time.h>
 
 #include "../test.h"
 #include "../util/udf.h"
@@ -48,10 +47,8 @@ extern aerospike *as;
 #define NAMESPACE "test"
 #define SET "map_udf"
 
-#define LUA_FILE "src/test/lua/udf_record.lua"
+#define LUA_FILE AS_START_DIR "src/test/lua/udf_record.lua"
 #define UDF_FILE "udf_record"
-
-#define WAIT_MS(__ms) nanosleep((struct timespec[]){{0, __ms##000000}}, NULL)
 
 /******************************************************************************
  * TEST CASES
@@ -88,7 +85,7 @@ TEST( map_udf_post , "remove udf_record.lua" )
 
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
-	WAIT_MS(100);
+	as_sleep(100);
 }
 
 TEST( map_udf_update_map, "udf_record.update_map()" )

@@ -27,7 +27,6 @@
 // Includes
 //
 
-#include <stdbool.h>
 #include <stdio.h>
 
 #include <aerospike/aerospike.h>
@@ -40,12 +39,12 @@
 // Example Logging Macros
 //
 
-#define LOG(_fmt, _args...) { printf(_fmt "\n", ## _args); fflush(stdout); }
+#define LOG(_fmt, ...) { printf(_fmt "\n", ##__VA_ARGS__); fflush(stdout); }
 
 #ifdef SHOW_DETAIL
-#define DETAIL(_fmt, _args...) { printf(_fmt "\n", ## _args); fflush(stdout); }
+#define DETAIL(_fmt, ...) { printf(_fmt "\n", ##__VA_ARGS__); fflush(stdout); }
 #else
-#define DETAIL(_fmt, _args...)
+#define DETAIL(_fmt, ...)
 #endif
 
 

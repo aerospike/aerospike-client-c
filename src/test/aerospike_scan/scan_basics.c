@@ -29,11 +29,11 @@
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
 #include <aerospike/as_cluster.h>
-#include <citrusleaf/cf_types.h>
 
 #include "../test.h"
 #include "../util/udf.h"
@@ -48,7 +48,7 @@ extern aerospike * as;
  * MACROS
  *****************************************************************************/
 
-#define LUA_FILE "src/test/aerospike_scan/aerospike_scan_test.lua"
+#define LUA_FILE AS_START_DIR "src/test/aerospike_scan/aerospike_scan_test.lua"
 
 #define NS "test"
 #define SET_STRSZ 20
@@ -254,7 +254,7 @@ static bool scan_check_callback(const as_val * val, void * udata)
 
 	const char * set = rec->key.set[0] == '\0' ? NULL : rec->key.set;
 
-	ck_pr_inc_32(&check->count);
+	as_incr_uint32(&check->count);
 
 	// Check if we are getting the results only from the set the scan is triggered for
 	// If scan is called with NULL set, all the recs will come. So, no checks in this case.
@@ -612,7 +612,7 @@ TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the bac
 		as_error_reset(&cb_err);
 		rc = aerospike_info_foreach(as, &cb_err, NULL, "jobs:module=scan", scan_udf_info_callback, NULL);
 		assert_int_eq( rc, AEROSPIKE_OK );
-		sleep(1);
+		as_sleep(1 * 1000);
 	}
 
 	as_scan_destroy(&scan);
@@ -925,7 +925,7 @@ static bool after(atf_suite * suite) {
 SUITE( scan_basics, "aerospike_scan basic tests" ) {
 
 	// For the cluster to settle as it is important for the per-node testcases
-	sleep(1);
+	as_sleep(1 * 1000);
     suite_before( before );
     suite_after( after );
 

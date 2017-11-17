@@ -25,9 +25,7 @@
 // Includes
 //
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -52,8 +50,14 @@
 // Constants
 //
 
-#define UDF_MODULE "query_udf"
+#if !defined(_MSC_VER)
 #define UDF_USER_PATH "src/lua/"
+#else
+#define UDF_USER_PATH "../../../examples/query_examples/aggregate/src/lua/"
+#endif
+
+#define UDF_MODULE "query_udf"
+
 const char UDF_FILE_PATH[] =  UDF_USER_PATH UDF_MODULE ".lua";
 
 const char TEST_INDEX_NAME[] = "test-bin-index";
@@ -71,7 +75,6 @@ bool query_cb_map(const as_val* p_val, void* udata);
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
 char* generate_numbers(char* numbers);
-
 
 //==========================================================
 // AGGREGATE QUERY Example
@@ -313,6 +316,8 @@ insert_records(aerospike* p_as)
 	as_record rec;
 	as_record_inita(&rec, 2);
 
+	char* numbers = alloca((TOKENS_PER_BIN * 3) + 1);
+
 	// Re-using rec, write records into the database such that each record's key
 	// and test-bin value is based on the loop index.
 	for (uint32_t i = 0; i < g_n_keys; i++) {
@@ -327,7 +332,6 @@ insert_records(aerospike* p_as)
 		// destroy any previous value.
 		as_record_set_int64(&rec, "test-bin", (int64_t)i);
 
-		char numbers[(TOKENS_PER_BIN * 3) + 1];
 		as_record_set_str(&rec, "numbers-bin", generate_numbers(numbers));
 
 		// Write a record to the database.

@@ -25,12 +25,8 @@
 // Includes
 //
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <inttypes.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -39,6 +35,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_scan.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 
 #include "example_utils.h"
@@ -48,8 +45,14 @@
 // Constants
 //
 
+#if !defined(_MSC_VER)
+#define UDF_USER_PATH "src/lua/"
+#else
+#define UDF_USER_PATH "../../../examples/scan_examples/background/src/lua/"
+#endif
+
 #define UDF_MODULE "bg_scan_udf"
-const char UDF_FILE_PATH[] = "src/lua/" UDF_MODULE ".lua";
+const char UDF_FILE_PATH[] = UDF_USER_PATH UDF_MODULE ".lua";
 
 
 //==========================================================
@@ -124,7 +127,7 @@ main(int argc, char* argv[])
 
 	// Poll to see when scan is done.
 	do {
-		usleep(1000 * 500);
+		as_sleep(500);
 
 		if (aerospike_scan_info(&as, &err, NULL, scan_id, &info) !=
 				AEROSPIKE_OK) {

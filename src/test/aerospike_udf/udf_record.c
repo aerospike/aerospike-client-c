@@ -17,23 +17,22 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/aerospike_key.h>
-
-#include <aerospike/as_error.h>
-#include <aerospike/as_status.h>
-
-#include <aerospike/as_record.h>
-#include <aerospike/as_integer.h>
-#include <aerospike/as_string.h>
-#include <aerospike/as_list.h>
 #include <aerospike/as_arraylist.h>
+#include <aerospike/as_double.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_hashmap.h>
+#include <aerospike/as_hashmap_iterator.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_list.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_nil.h>
-#include <aerospike/as_hashmap.h>
+#include <aerospike/as_record.h>
+#include <aerospike/as_sleep.h>
+#include <aerospike/as_status.h>
+#include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_udf.h>
-
-#include <time.h>
 
 #include "../test.h"
 #include "../util/udf.h"
@@ -51,10 +50,8 @@ extern aerospike * as;
 #define NAMESPACE "test"
 #define SET "query_bg"
 
-#define LUA_FILE "src/test/lua/udf_record.lua"
+#define LUA_FILE AS_START_DIR "src/test/lua/udf_record.lua"
 #define UDF_FILE "udf_record"
-
-#define WAIT_MS(__ms) nanosleep((struct timespec[]){{0, __ms##000000}}, NULL)
 
 /******************************************************************************
  * TEST CASES
@@ -91,8 +88,7 @@ TEST( udf_record_post , "remove udf_record.lua" ) {
 
   assert_int_eq( err.code, AEROSPIKE_OK );
 
-  WAIT_MS(100);
-
+  as_sleep(100);
 }
 
 bool udf_record_update_map_foreach(const as_val * key, const as_val * value, void * udata) {

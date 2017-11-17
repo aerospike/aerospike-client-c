@@ -24,6 +24,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if defined(_MSC_VER)
+#undef _UNICODE  // Use ASCII getopt version on windows.
+#endif
 #include <getopt.h>
 
 static const char* short_options = "h:p:U:P::n:s:K:k:b:o:Rt:w:z:g:T:dL:SC:N:M:Y:Dac:W:u";

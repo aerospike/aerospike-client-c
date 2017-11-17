@@ -24,12 +24,12 @@ extern "C" {
 #endif
 
 /******************************************************************************
- *	TYPES
+ * TYPES
  *****************************************************************************/
 
 /**
- *	@private
- *	Name value pair.
+ * @private
+ * Name value pair.
  */
 typedef struct as_name_value_s {
 	char* name;
@@ -41,46 +41,46 @@ typedef struct as_name_value_s {
  ******************************************************************************/
 
 /**
- *	@private
- *	Send info command to specific node. The values must be freed by the caller on success.
+ * @private
+ * Send info command to specific node. The values must be freed by the caller on success.
  */
-as_status
+AS_EXTERN as_status
 as_info_command_node(
 	as_error* err, as_node* node, char* command, bool send_asis, uint64_t deadline_ms,
 	char** response
 	);
 
 /**
- *	@private
- *	Send info command to random node. The values must be freed by the caller on success.
+ * @private
+ * Send info command to random node. The values must be freed by the caller on success.
  */
-as_status
+AS_EXTERN as_status
 as_info_command_random_node(aerospike* as, as_error* err, as_policy_info* policy, char* command);
 
 /**
- *	@private
- *	Send info command to specific host. The values must be freed by the caller on success.
+ * @private
+ * Send info command to specific host. The values must be freed by the caller on success.
  */
-as_status
+AS_EXTERN as_status
 as_info_command_host(
 	as_cluster* cluster, as_error* err, struct sockaddr* addr, char* command,
 	bool send_asis, uint64_t deadline_ms, char** response, const char* tls_name
 	);
 
 /**
- *	@private
- *	Send info command to specific socket. The values must be freed by the caller on success.
- *	Set max_response_length to zero if response size should not be bounded.
+ * @private
+ * Send info command to specific socket. The values must be freed by the caller on success.
+ * Set max_response_length to zero if response size should not be bounded.
  */
-as_status
+AS_EXTERN as_status
 as_info_command(
 	as_error* err, as_socket* sock, as_node* node, char* names, bool send_asis, uint64_t deadline_ms,
 	uint64_t max_response_length, char** values
 	);
 
 /**
- *	@private
- *	Create and authenticate socket for info requests.
+ * @private
+ * Create and authenticate socket for info requests.
  */
 as_status
 as_info_create_socket(
@@ -89,18 +89,18 @@ as_info_create_socket(
 	);
 
 /**
- *	@private
- *	Return the single command's info response buffer value.
- *	The original buffer will be modified with the null termination character.
+ * @private
+ * Return the single command's info response buffer value.
+ * The original buffer will be modified with the null termination character.
  */
 as_status
 as_info_parse_single_response(char *values, char **value);
 
 /**
- *	@private
- *	Parse info response buffer into name/value pairs, one for each command.
- *	The original buffer will be modified with null termination characters to
- *	delimit each command name and value referenced by the name/value pairs.
+ * @private
+ * Parse info response buffer into name/value pairs, one for each command.
+ * The original buffer will be modified with null termination characters to
+ * delimit each command name and value referenced by the name/value pairs.
  */
 void
 as_info_parse_multi_response(char* buf, as_vector* /* <as_name_value> */ values);

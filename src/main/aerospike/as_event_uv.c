@@ -279,7 +279,7 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	}
 
 	cmd->flags |= AS_ASYNC_FLAGS_EVENT_RECEIVED;
-	cmd->pos += nread;
+	cmd->pos += (uint32_t)nread;
 	
 	if (cmd->pos < cmd->len) {
 		// Read not finished.
@@ -447,7 +447,7 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		return;
 	}
 	
-	cmd->pos += nread;
+	cmd->pos += (uint32_t)nread;
 	
 	if (cmd->pos < cmd->len) {
 		// Read not finished.
@@ -609,13 +609,12 @@ as_event_connect(as_event_command* cmd)
 {
 	// Create a non-blocking socket.
 	as_address* address = as_node_get_address(cmd->node);
-	int fd = as_socket_create_fd(address->addr.ss_family);
+	as_socket_fd fd;
+	int rv = as_socket_create_fd(address->addr.ss_family, &fd);
 
-	if (fd < 0) {
-		// fd is really -errno on error.
-		char* msg = strerror(-fd);
+	if (rv) {
 		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "%s: %s %s", msg, cmd->node->name, address->name);
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket create failed: %d %s %s", rv, cmd->node->name, address->name);
 		as_uv_fd_error(cmd, &err);
 		return;
 	}
@@ -635,7 +634,7 @@ as_event_connect(as_event_command* cmd)
 	if (status) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_init failed: %s", uv_strerror(status));
-		close(fd);
+		as_close(fd);
 		as_uv_fd_error(cmd, &err);
 		return;
 	}
@@ -650,7 +649,7 @@ as_event_connect(as_event_command* cmd)
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_tcp_open failed: %s", uv_strerror(status));
 		// Close fd directly because we created it outside of libuv and uv_tcp_t does not know about it here.
-		close(fd);
+		as_close(fd);
 		as_uv_connect_error(cmd, &err);
 		return;
 	}

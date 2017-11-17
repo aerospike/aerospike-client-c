@@ -16,8 +16,7 @@
  */
 #pragma once
 
-#include <stdbool.h>
-#include <stdint.h>
+#include <aerospike/as_std.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -29,19 +28,19 @@ struct as_cluster_s;
  * FUNCTIONS
  *****************************************************************************/
 
-uint32_t
+AS_EXTERN uint32_t
 as_async_get_cluster_count();
 
-uint32_t
+AS_EXTERN uint32_t
 as_async_get_pending(struct as_cluster_s* cluster);
 
-uint32_t
+AS_EXTERN uint32_t
 as_async_get_connections(struct as_cluster_s* cluster);
 
-void
+AS_EXTERN void
 as_async_update_max_idle(struct as_cluster_s* cluster, uint32_t max_idle);
 
-void
+AS_EXTERN void
 as_async_update_max_conns(struct as_cluster_s* cluster, bool pipe, uint32_t max_conns);
 
 #ifdef __cplusplus

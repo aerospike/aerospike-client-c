@@ -21,7 +21,7 @@
  ******************************************************************************/
 #pragma once
 
-#include "aerospike/ck/ck_pr.h"
+#include <aerospike/as_atomic.h>
 
 typedef struct latency_t {
 	uint32_t* buckets;

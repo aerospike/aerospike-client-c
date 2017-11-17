@@ -20,12 +20,11 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
-
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_crypto.h>
-
 #include <stdio.h>
 #include <openssl/sha.h>
 
@@ -68,8 +67,8 @@ as_udf_parse_file(const char* token, char* p, as_udf_file_ptr* ptr)
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
 as_status aerospike_udf_list(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	as_udf_files * files)
+	aerospike* as, as_error* err, const as_policy_info* policy, 
+	as_udf_files* files)
 {
 	as_error_reset(err);
 	
@@ -170,8 +169,8 @@ as_status aerospike_udf_list(
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
 as_status aerospike_udf_get(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * filename, as_udf_type type, as_udf_file * file)
+	aerospike* as, as_error* err, const as_policy_info* policy, 
+	const char* filename, as_udf_type type, as_udf_file * file)
 {
 	as_error_reset(err);
 	
@@ -253,8 +252,8 @@ as_status aerospike_udf_get(
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
 as_status aerospike_udf_put(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * filename, as_udf_type type, as_bytes * content)
+	aerospike* as, as_error* err, const as_policy_info* policy, 
+	const char* filename, as_udf_type type, as_bytes* content)
 {
 	if (type != AS_UDF_TYPE_LUA) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid udf type: %d", type);
@@ -301,7 +300,7 @@ as_status aerospike_udf_put(
 }
 
 static bool
-aerospike_udf_put_is_done(aerospike* as, as_error * err, const as_policy_info* policy, char* filter)
+aerospike_udf_put_is_done(aerospike* as, as_error* err, const as_policy_info* policy, char* filter)
 {
 	// Query all nodes for task completion status.
 	bool done = true;
@@ -327,8 +326,8 @@ aerospike_udf_put_is_done(aerospike* as, as_error * err, const as_policy_info* p
 }
 
 as_status aerospike_udf_put_wait(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	const char * filename, uint32_t interval_ms)
+	aerospike* as, as_error* err, const as_policy_info* policy,
+	const char* filename, uint32_t interval_ms)
 {
 	if (! policy) {
 		policy = &as->config.policies.info;
@@ -337,12 +336,14 @@ as_status aerospike_udf_put_wait(
 	char filter[256];
 	snprintf(filter, sizeof(filter), "filename=%s", filename);
 	
-	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
+	if (!interval_ms) {
+		interval_ms = 1000;
+	}
 	
 	bool done;
 		
 	do {
-		usleep(interval_micros);
+		as_sleep(interval_ms);
 		done = aerospike_udf_put_is_done(as, err, policy, filter);
 	} while (! done);
 	
@@ -353,8 +354,8 @@ as_status aerospike_udf_put_wait(
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
 as_status aerospike_udf_remove(
-	aerospike * as, as_error * err, const as_policy_info * policy, 
-	const char * filename)
+	aerospike* as, as_error* err, const as_policy_info* policy, 
+	const char* filename)
 {
 	as_error_reset(err);
 	
@@ -403,8 +404,8 @@ aerospike_udf_remove_is_done(aerospike* as, as_error* err, const as_policy_info*
 }
 
 as_status aerospike_udf_remove_wait(
-	aerospike * as, as_error * err, const as_policy_info * policy,
-	const char * filename, uint32_t interval_ms)
+	aerospike* as, as_error* err, const as_policy_info* policy,
+	const char* filename, uint32_t interval_ms)
 {
 	if (! policy) {
 		policy = &as->config.policies.info;
@@ -413,12 +414,14 @@ as_status aerospike_udf_remove_wait(
 	char filter[256];
 	snprintf(filter, sizeof(filter), "filename=%s", filename);
 
-	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
+	if (!interval_ms) {
+		interval_ms = 1000;
+	}
 
 	bool done;
 
 	do {
-		usleep(interval_micros);
+		as_sleep(interval_ms);
 		done = aerospike_udf_remove_is_done(as, err, policy, filter);
 	} while (! done);
 

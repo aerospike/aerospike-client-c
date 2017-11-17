@@ -1,0 +1,44 @@
+{
+  "DVTSourceControlWorkspaceBlueprintPrimaryRemoteRepositoryKey" : "73C4DD2B266DB55C9C29C7792A303D4F59D8E4C5",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyRepositoryLocationsKey" : {
+
+  },
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyStatesKey" : {
+    "51F8DF67304F280D6DE1D6D5537A5AE5C0054730" : 9223372036854775807,
+    "73C4DD2B266DB55C9C29C7792A303D4F59D8E4C5" : 9223372036854775807,
+    "7CDD612D83226CD2A53C473AC2BFE3114D9AE12B" : 9223372036854775807,
+    "BC04B098A0B4BB104CCD404243D2264D4CA4079B" : 9223372036854775807
+  },
+  "DVTSourceControlWorkspaceBlueprintIdentifierKey" : "9260F800-765F-4803-A29B-123C8192515E",
+  "DVTSourceControlWorkspaceBlueprintWorkingCopyPathsKey" : {
+    "51F8DF67304F280D6DE1D6D5537A5AE5C0054730" : "client-c\/modules\/common\/",
+    "73C4DD2B266DB55C9C29C7792A303D4F59D8E4C5" : "client-c\/",
+    "7CDD612D83226CD2A53C473AC2BFE3114D9AE12B" : "client-c\/modules\/mod-lua\/",
+    "BC04B098A0B4BB104CCD404243D2264D4CA4079B" : "client-c\/modules\/lua\/"
+  },
+  "DVTSourceControlWorkspaceBlueprintNameKey" : "client",
+  "DVTSourceControlWorkspaceBlueprintVersion" : 204,
+  "DVTSourceControlWorkspaceBlueprintRelativePathToProjectKey" : "xcode\/client.xcworkspace",
+  "DVTSourceControlWorkspaceBlueprintRemoteRepositoriesKey" : [
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "github.com:citrusleaf\/aerospike-common",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "51F8DF67304F280D6DE1D6D5537A5AE5C0054730"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "https:\/\/github.com\/citrusleaf\/aerospike-client-c.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "73C4DD2B266DB55C9C29C7792A303D4F59D8E4C5"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "github.com:citrusleaf\/aerospike-mod-lua",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "7CDD612D83226CD2A53C473AC2BFE3114D9AE12B"
+    },
+    {
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryURLKey" : "github.com:citrusleaf\/lua.git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositorySystemKey" : "com.apple.dt.Xcode.sourcecontrol.Git",
+      "DVTSourceControlWorkspaceBlueprintRemoteRepositoryIdentifierKey" : "BC04B098A0B4BB104CCD404243D2264D4CA4079B"
+    }
+  ]
+}

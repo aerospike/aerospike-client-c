@@ -15,6 +15,10 @@
  * the License.
  */
 #include <errno.h>
+
+#if defined(_MSC_VER)
+#undef _UNICODE  // Use ASCII getopt version on windows.
+#endif
 #include <getopt.h>
 
 #include <aerospike/aerospike.h>
@@ -269,8 +273,8 @@ static bool before(atf_plan * plan) {
 	// Initialize global lua configuration.
 	as_config_lua lua;
 	as_config_lua_init(&lua);
-	strcpy(lua.system_path, "modules/lua-core/src");
-	strcpy(lua.user_path, "src/test/lua");
+	strcpy(lua.system_path, AS_START_DIR "modules/lua-core/src");
+	strcpy(lua.user_path, AS_START_DIR "src/test/lua");
 	aerospike_init_lua(&lua);
 
 	// Initialize cluster configuration.

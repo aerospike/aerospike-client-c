@@ -22,9 +22,9 @@
 #include "benchmark.h"
 #include <aerospike/as_monitor.h>
 #include <aerospike/as_random.h>
+#include <aerospike/as_sleep.h>
 #include <citrusleaf/cf_clock.h>
 #include <pthread.h>
-#include <unistd.h>
 
 extern as_monitor monitor;
 
@@ -44,20 +44,20 @@ ticker_worker(void* udata)
 	if (latency) {
 		latency_set_header(write_latency, latency_header);
 	}
-	sleep(1);
+	as_sleep(1000);
 	
 	while (data->valid) {
 		uint64_t time = cf_getms();
 		int64_t elapsed = time - prev_time;
 		prev_time = time;
 		
-		uint32_t write_current = ck_pr_fas_32(&data->write_count, 0);
-		uint32_t write_timeout_current = ck_pr_fas_32(&data->write_timeout_count, 0);
-		uint32_t write_error_current = ck_pr_fas_32(&data->write_error_count, 0);
-		uint32_t read_current = ck_pr_fas_32(&data->read_count, 0);
-		uint32_t read_timeout_current = ck_pr_fas_32(&data->read_timeout_count, 0);
-		uint32_t read_error_current = ck_pr_fas_32(&data->read_error_count, 0);
-		uint64_t transactions_current = ck_pr_load_64(&data->transactions_count);
+		uint32_t write_current = as_fas_uint32(&data->write_count, 0);
+		uint32_t write_timeout_current = as_fas_uint32(&data->write_timeout_count, 0);
+		uint32_t write_error_current = as_fas_uint32(&data->write_error_count, 0);
+		uint32_t read_current = as_fas_uint32(&data->read_count, 0);
+		uint32_t read_timeout_current = as_fas_uint32(&data->read_timeout_count, 0);
+		uint32_t read_error_current = as_fas_uint32(&data->read_error_count, 0);
+		uint64_t transactions_current = as_load_uint64(&data->transactions_count);
 
 		data->period_begin = time;
 	
@@ -83,7 +83,7 @@ ticker_worker(void* udata)
 			continue;
 		}
 
-		sleep(1);
+		as_sleep(1000);
 	}
 	return 0;
 }
@@ -112,7 +112,7 @@ random_worker(void* udata)
 		else {
 			write_record_sync(cdata, tdata, key);
 		}
-		ck_pr_inc_64(&cdata->transactions_count);
+		as_incr_uint64(&cdata->transactions_count);
 
 		throttle(cdata);
 	}
@@ -134,7 +134,7 @@ random_worker_async(clientdata* cdata)
 	for (int i = 0; i < max; i++) {
 		// Allocate separate buffers for each seed command and reuse them in callbacks.
 		threaddata* tdata = create_threaddata(cdata, cdata->key_start, cdata->n_keys);
-		ck_pr_inc_32(&cdata->tdata_count);
+		as_incr_uint32(&cdata->tdata_count);
 
 		// Start seed commands on random event loops.
 		random_read_write_async(cdata, tdata, 0);
@@ -162,7 +162,7 @@ random_read_write(clientdata* cdata)
 		// Synchronous mode.
 		int max = cdata->threads;
 		blog_info("Start %d generator threads", max);
-		pthread_t threads[max];
+		pthread_t* threads = alloca(sizeof(pthread_t) * max);
 		
 		for (int i = 0; i < max; i++) {
 			if (pthread_create(&threads[i], 0, random_worker, cdata) != 0) {

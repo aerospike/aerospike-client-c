@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
@@ -25,9 +26,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-	
-// Concurrency kit needs to be under extern "C" when compiling C++.
-#include <aerospike/ck/ck_pr.h>
 
 /******************************************************************************
  * TYPES
@@ -303,9 +301,9 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names);
 static inline as_nodes*
 as_nodes_reserve(as_cluster* cluster)
 {
-	as_nodes* nodes = (as_nodes *)ck_pr_load_ptr(&cluster->nodes);
-	//ck_pr_fence_acquire();
-	ck_pr_inc_32(&nodes->ref_count);
+	as_nodes* nodes = (as_nodes *)as_load_ptr(&cluster->nodes);
+	//as_fence_acquire();
+	as_incr_uint32(&nodes->ref_count);
 	return nodes;
 }
 
@@ -315,24 +313,20 @@ as_nodes_reserve(as_cluster* cluster)
 static inline void
 as_nodes_release(as_nodes* nodes)
 {
-	//ck_pr_fence_release();
-	
-	bool destroy;
-	ck_pr_dec_32_zero(&nodes->ref_count, &destroy);
-	
-	if (destroy) {
+	//as_fence_release();
+	if (as_aaf_uint32(&nodes->ref_count, -1) == 0) {
 		cf_free(nodes);
 	}
 }
 
 /**
- * 	Add seed to cluster.
+ * Add seed to cluster.
  */
 void
 as_cluster_add_seed(as_cluster* cluster, const char* hostname, const char* tls_name, uint16_t port);
 
 /**
- * 	Remove seed from cluster.
+ * Remove seed from cluster.
  */
 void
 as_cluster_remove_seed(as_cluster* cluster, const char* hostname, uint16_t port);
@@ -349,7 +343,7 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
  * Get random node in the cluster.
  * as_nodes_release() must be called when done with node.
  */
-as_node*
+AS_EXTERN as_node*
 as_node_get_random(as_cluster* cluster);
 
 /**
@@ -357,7 +351,7 @@ as_node_get_random(as_cluster* cluster);
  * Get node given node name.
  * as_nodes_release() must be called when done with node.
  */
-as_node*
+AS_EXTERN as_node*
 as_node_get_by_name(as_cluster* cluster, const char* name);
 
 /**
@@ -368,8 +362,8 @@ as_node_get_by_name(as_cluster* cluster, const char* name);
 static inline as_partition_tables*
 as_partition_tables_reserve(as_cluster* cluster)
 {
-	as_partition_tables* tables = (as_partition_tables *)ck_pr_load_ptr(&cluster->partition_tables);
-	ck_pr_inc_32(&tables->ref_count);
+	as_partition_tables* tables = (as_partition_tables *)as_load_ptr(&cluster->partition_tables);
+	as_incr_uint32(&tables->ref_count);
 	return tables;
 }
 
@@ -380,10 +374,7 @@ as_partition_tables_reserve(as_cluster* cluster)
 static inline void
 as_partition_tables_release(as_partition_tables* tables)
 {
-	bool destroy;
-	ck_pr_dec_32_zero(&tables->ref_count, &destroy);
-	
-	if (destroy) {
+	if (as_aaf_uint32(&tables->ref_count, -1) == 0) {
 		cf_free(tables);
 	}
 }

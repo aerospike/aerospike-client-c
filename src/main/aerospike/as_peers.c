@@ -19,6 +19,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
 #include <citrusleaf/cf_byte_order.h>
+#include <stdlib.h>
 
 const char*
 as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
@@ -190,10 +191,10 @@ as_peers_validate_node(as_peers* peers, as_cluster* cluster, as_host* host, cons
 }
 
 static as_node*
-as_peers_find_node_by_ipv4(as_cluster* cluster, in_addr_t addr, in_port_t port)
+as_peers_find_node_by_ipv4(as_cluster* cluster, in_addr_t addr, uint16_t port)
 {
 	as_nodes* nodes = (as_nodes*)cluster->nodes;
-	in_port_t port_be = cf_swap_to_be16(port);
+	uint16_t port_be = cf_swap_to_be16(port);
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
@@ -212,7 +213,7 @@ as_peers_find_node_by_ipv4(as_cluster* cluster, in_addr_t addr, in_port_t port)
 }
 
 static as_node*
-as_peers_find_node_by_host(as_cluster* cluster, const char* hostname, in_port_t port)
+as_peers_find_node_by_host(as_cluster* cluster, const char* hostname, uint16_t port)
 {
 	as_nodes* nodes = (as_nodes*)cluster->nodes;
 	as_node* node;
@@ -235,7 +236,7 @@ as_peers_find_node_by_host(as_cluster* cluster, const char* hostname, in_port_t 
 }
 
 static bool
-as_peers_find_host(as_vector* /* <as_host> */ hosts, const char* hostname, in_port_t port)
+as_peers_find_host(as_vector* /* <as_host> */ hosts, const char* hostname, uint16_t port)
 {
 	as_host* host;
 	
@@ -264,9 +265,9 @@ as_peers_parse_services(as_peers* peers, as_cluster* cluster, as_node* node, cha
 	char* p = buf;
 	char* addr_str = p;
 	char* port_str;
-	struct in_addr addr_tmp;
 	as_node* peer_node;
-	in_port_t port;
+	struct in_addr addr_tmp;
+	uint16_t port;
 	
 	while (*p) {
 		if (*p == ':') {
@@ -295,7 +296,7 @@ as_peers_parse_services(as_peers* peers, as_cluster* cluster, as_node* node, cha
 			
 			// Check if hostname is really an IP address.
 			// Old services protocol only supports IPv4 addresses.
-			if (inet_aton(hostname, &addr_tmp)) {
+			if (inet_pton(AF_INET, hostname, &addr_tmp) == 1) {
 				// Address is an IP Address.
 				peer_node = as_peers_find_node_by_ipv4(cluster, addr_tmp.s_addr, port);
 			}

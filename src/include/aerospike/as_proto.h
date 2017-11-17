@@ -16,18 +16,18 @@
  */
 #pragma once
 
+#include <aerospike/as_std.h>
 #include <stddef.h>
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /******************************************************************************
- *	TYPES
+ * TYPES
  *****************************************************************************/
 
-#if defined(__APPLE__) || defined(CF_WINDOWS)
+#if defined(__APPLE__) || defined(_MSC_VER)
 
 #pragma pack(push, 1) // packing is now 1
 typedef struct as_proto_s {

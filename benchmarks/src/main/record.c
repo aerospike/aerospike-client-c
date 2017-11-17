@@ -25,7 +25,9 @@
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_monitor.h>
 #include <aerospike/as_random.h>
+#include <aerospike/as_sleep.h>
 #include <citrusleaf/cf_clock.h>
+#include <stdlib.h>
 
 extern as_monitor monitor;
 
@@ -71,7 +73,7 @@ random_element_9b(as_random *ran)
 	// Len is 4 to 10, average 7 with 2 bytes of msgpack
 	// string header results in an expected value of 9 bytes.
 	int len = (int)(as_random_next_uint64(ran) % 6) + 4;
-	uint8_t buf[len + 1];
+	uint8_t* buf = alloca(len + 1);
 	as_random_next_bytes(ran, buf, len);
 
 	for (int i = 0; i < len; i++) {
@@ -332,7 +334,7 @@ write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key)
 		uint64_t end = cf_getms();
 		
 		if (status == AEROSPIKE_OK) {
-			ck_pr_inc_32(&cdata->write_count);
+			as_incr_uint32(&cdata->write_count);
 			latency_add(&cdata->write_latency, end - begin);
 			return true;
 		}
@@ -341,17 +343,17 @@ write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key)
 		status = aerospike_key_put(&cdata->client, &err, 0, &tdata->key, &tdata->rec);
 		
 		if (status == AEROSPIKE_OK) {
-			ck_pr_inc_32(&cdata->write_count);
+			as_incr_uint32(&cdata->write_count);
 			return true;
 		}
 	}
 	
 	// Handle error conditions.
 	if (status == AEROSPIKE_ERR_TIMEOUT) {
-		ck_pr_inc_32(&cdata->write_timeout_count);
+		as_incr_uint32(&cdata->write_timeout_count);
 	}
 	else {
-		ck_pr_inc_32(&cdata->write_error_count);
+		as_incr_uint32(&cdata->write_error_count);
 		
 		if (cdata->debug) {
 			blog_error("Write error: ns=%s set=%s key=%d bin=%s code=%d message=%s",
@@ -378,7 +380,7 @@ read_record_sync(uint64_t keyval, clientdata* data)
 		
 		// Record may not have been initialized, so not found is ok.
 		if (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			ck_pr_inc_32(&data->read_count);
+			as_incr_uint32(&data->read_count);
 			latency_add(&data->read_latency, end - begin);
 			as_record_destroy(rec);
 			return status;
@@ -389,7 +391,7 @@ read_record_sync(uint64_t keyval, clientdata* data)
 		
 		// Record may not have been initialized, so not found is ok.
 		if (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			ck_pr_inc_32(&data->read_count);
+			as_incr_uint32(&data->read_count);
 			as_record_destroy(rec);
 			return status;
 		}
@@ -397,10 +399,10 @@ read_record_sync(uint64_t keyval, clientdata* data)
 	
 	// Handle error conditions.
 	if (status == AEROSPIKE_ERR_TIMEOUT) {
-		ck_pr_inc_32(&data->read_timeout_count);
+		as_incr_uint32(&data->read_timeout_count);
 	}
 	else {
-		ck_pr_inc_32(&data->read_error_count);
+		as_incr_uint32(&data->read_error_count);
 		
 		if (data->debug) {
 			blog_error("Read error: ns=%s set=%s key=%d bin=%s code=%d message=%s",
@@ -422,7 +424,7 @@ throttle(clientdata* cdata) {
 					(int64_t)cf_getms();
 
 			if (millis > 0) {
-				usleep((uint32_t)millis * 1000);
+				as_sleep((uint32_t)millis);
 			}
 		}
 	}
@@ -457,15 +459,15 @@ linear_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 			uint64_t end = cf_getms();
 			latency_add(&cdata->write_latency, end - tdata->begin);
 		}
-		ck_pr_inc_32(&cdata->write_count);
+		as_incr_uint32(&cdata->write_count);
 		tdata->key_count++;
 	}
 	else {
 		if (err->code == AEROSPIKE_ERR_TIMEOUT) {
-			ck_pr_inc_32(&cdata->write_timeout_count);
+			as_incr_uint32(&cdata->write_timeout_count);
 		}
 		else {
-			ck_pr_inc_32(&cdata->write_error_count);
+			as_incr_uint32(&cdata->write_error_count);
 			
 			if (cdata->debug) {
 				blog_error("Write error: ns=%s set=%s key=%d bin=%s code=%d message=%s",
@@ -478,7 +480,7 @@ linear_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	// Reuse tdata structures.
 	if (tdata->key_count == tdata->n_keys) {
 		// We have reached max number of records for this command.
-		uint64_t total = ck_pr_faa_64(&cdata->key_count, tdata->n_keys) + tdata->n_keys;
+		uint64_t total = as_faa_uint64(&cdata->key_count, tdata->n_keys) + tdata->n_keys;
 		destroy_threaddata(tdata);
 
 		if (total >= cdata->n_keys) {
@@ -532,7 +534,7 @@ random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 static void
 random_read_write_next(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop)
 {
-	ck_pr_inc_64(&cdata->transactions_count);
+	as_incr_uint64(&cdata->transactions_count);
 
 	if (cdata->valid) {
 		// Start a new command on same event loop to keep the queue full.
@@ -541,10 +543,7 @@ random_read_write_next(clientdata* cdata, threaddata* tdata, as_event_loop* even
 	else {
 		destroy_threaddata(tdata);
 
-		bool complete;
-		ck_pr_dec_32_zero(&cdata->tdata_count, &complete);
-
-		if (complete) {
+		if (as_aaf_uint32(&cdata->tdata_count, -1) == 0) {
 			// All tdata instances are complete.
 			as_monitor_notify(&monitor);
 		}
@@ -562,14 +561,14 @@ random_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 			uint64_t end = cf_getms();
 			latency_add(&cdata->write_latency, end - tdata->begin);
 		}
-		ck_pr_inc_32(&cdata->write_count);
+		as_incr_uint32(&cdata->write_count);
 	}
 	else {
 		if (err->code == AEROSPIKE_ERR_TIMEOUT) {
-			ck_pr_inc_32(&cdata->write_timeout_count);
+			as_incr_uint32(&cdata->write_timeout_count);
 		}
 		else {
-			ck_pr_inc_32(&cdata->write_error_count);
+			as_incr_uint32(&cdata->write_error_count);
 			
 			if (cdata->debug) {
 				blog_error("Write error: ns=%s set=%s key=%d bin=%s code=%d message=%s",
@@ -592,14 +591,14 @@ random_read_listener(as_error* err, as_record* rec, void* udata, as_event_loop* 
 			uint64_t end = cf_getms();
 			latency_add(&cdata->read_latency, end - tdata->begin);
 		}
-		ck_pr_inc_32(&cdata->read_count);
+		as_incr_uint32(&cdata->read_count);
 	}
 	else {
 		if (err->code == AEROSPIKE_ERR_TIMEOUT) {
-			ck_pr_inc_32(&cdata->read_timeout_count);
+			as_incr_uint32(&cdata->read_timeout_count);
 		}
 		else {
-			ck_pr_inc_32(&cdata->read_error_count);
+			as_incr_uint32(&cdata->read_error_count);
 			
 			if (cdata->debug) {
 				blog_error("Read error: ns=%s set=%s key=%d bin=%s code=%d message=%s",

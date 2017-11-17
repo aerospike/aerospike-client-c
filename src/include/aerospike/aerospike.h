@@ -72,7 +72,6 @@
 #include <aerospike/as_config.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_status.h>
-#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -181,20 +180,20 @@ typedef struct aerospike_s {
 
 	/**
 	 * @private
-	 * If true, then aerospike_destroy() will free this instance.
-	 */
-	bool _free;
-
-	/**
-	 * @private
 	 * Cluster state.
 	 */
-	struct as_cluster_s * cluster;
+	struct as_cluster_s* cluster;
 
 	/**
 	 * Client configuration.
 	 */
 	as_config config;
+
+	/**
+	* @private
+	* If true, then aerospike_destroy() will free this instance.
+	*/
+	bool _free;
 
 } aerospike;
 
@@ -228,7 +227,7 @@ typedef struct aerospike_s {
  *
  * @relates aerospike
  */
-aerospike*
+AS_EXTERN aerospike*
 aerospike_init(aerospike* as, as_config* config);
 
 /**
@@ -252,7 +251,7 @@ aerospike_init(aerospike* as, as_config* config);
  *
  * @relates aerospike
  */
-aerospike*
+AS_EXTERN aerospike*
 aerospike_new(as_config* config);
 
 /**
@@ -260,7 +259,7 @@ aerospike_new(as_config* config);
  *
  * @param config 	The lua configuration to use for all cluster instances.
  */
-void
+AS_EXTERN void
 aerospike_init_lua(as_config_lua* config);	
 
 /**
@@ -274,7 +273,7 @@ aerospike_init_lua(as_config_lua* config);
  *
  * @relates aerospike
  */
-void
+AS_EXTERN void
 aerospike_destroy(aerospike* as);
 
 /**
@@ -296,7 +295,7 @@ aerospike_destroy(aerospike* as);
  *
  * @relates aerospike
  */
-as_status
+AS_EXTERN as_status
 aerospike_connect(aerospike* as, as_error* err);
 
 /**
@@ -313,7 +312,7 @@ aerospike_connect(aerospike* as, as_error* err);
  *
  * @relates aerospike
  */
-as_status
+AS_EXTERN as_status
 aerospike_close(aerospike* as, as_error* err);
 
 /**
@@ -329,7 +328,7 @@ aerospike_close(aerospike* as, as_error* err);
  *
  * @relates aerospike
  */
-bool
+AS_EXTERN bool
 aerospike_cluster_is_connected(aerospike* as);
 
 /**
@@ -341,7 +340,7 @@ aerospike_cluster_is_connected(aerospike* as);
  *
  * @relates aerospike
  */
-bool
+AS_EXTERN bool
 aerospike_has_pipelining(aerospike* as);
 
 /**
@@ -350,12 +349,13 @@ aerospike_has_pipelining(aerospike* as);
  *
  * @relates aerospike
  */
-void
+AS_EXTERN void
 aerospike_stop_on_interrupt(bool stop);
 
 /**
  * Remove records in specified namespace/set efficiently.  This method is many orders of magnitude
- * faster than deleting records one at a time.  Works with Aerospike Server versions >= 3.12.
+ * faster than deleting records one at a time.  Works with Aerospike Enterprise Server versions >= 3.12.
+ * See <a href="https://www.aerospike.com/docs/reference/info#truncate">https://www.aerospike.com/docs/reference/info#truncate</a>
  *
  * This asynchronous server call may return before the truncation is complete.  The user can still
  * write new records after the server returns because new records will have last update times
@@ -367,14 +367,14 @@ aerospike_stop_on_interrupt(bool stop);
  * @param ns			Required namespace.
  * @param set			Optional set name.  Pass in NULL to delete all sets in namespace.
  * @param before_nanos	Optionally delete records before record last update time.
- *						Units are in nanoseconds since unix epoch (1970-01-01).
- *						If specified, value must be before the current time.
- *						Pass in 0 to delete all records in namespace/set regardless of last update time.
+ * 					Units are in nanoseconds since unix epoch (1970-01-01).
+ * 					If specified, value must be before the current time.
+ * 					Pass in 0 to delete all records in namespace/set regardless of last update time.
  * @returns AEROSPIKE_OK on success. Otherwise an error occurred.
  *
  * @relates aerospike
  */
-as_status
+AS_EXTERN as_status
 aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const char* ns, const char* set, uint64_t before_nanos);
 
 /**
@@ -387,7 +387,7 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
  *
  * @relates aerospike
  */
-as_status
+AS_EXTERN as_status
 aerospike_reload_tls_config(aerospike* as, as_error* err);
 
 #ifdef __cplusplus

@@ -20,11 +20,21 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_module.h>
+#include <aerospike/as_string_builder.h>
 #include <aerospike/as_tls.h>
 #include <aerospike/mod_lua.h>
 #include <aerospike/mod_lua_config.h>
-
 #include <citrusleaf/alloc.h>
+#include <citrusleaf/cf_clock.h>
+#include <pthread.h>
+
+#if defined(_MSC_VER)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+static bool library_initialized = false;
+#endif
+
+pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
 
 extern uint32_t as_event_loop_capacity;
 static bool lua_initialized = false;
@@ -55,6 +65,40 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
  * FUNCTIONS
  *****************************************************************************/
 
+bool
+aerospike_library_init()
+{
+#if defined(_MSC_VER)
+	// Aerospike library initialization on windows.
+	pthread_mutex_lock(&init_lock);
+
+	if (!library_initialized) {
+		if (!cf_clock_init()) {
+			as_log_error("cf_clock_init() failed");
+			return false;
+		}
+
+		WORD version = MAKEWORD(2, 2);
+		WSADATA data;
+		if (WSAStartup(version, &data) != 0) {
+			as_log_error("WSAStartup() failed");
+			return false;
+		}
+
+#if defined(AS_USE_LIBEVENT)
+		int evthread_use_windows_threads();
+		if (evthread_use_windows_threads() == -1) {
+			as_log_error("evthread_use_windows_threads() failed");
+			return false;
+		}
+#endif
+		library_initialized = true;
+	}
+	pthread_mutex_unlock(&init_lock);
+#endif
+	return true;
+}
+
 /**
  * Initialize the aerospike object on the stack
  * @returns the initialized aerospike object
@@ -72,7 +116,7 @@ aerospike_init(aerospike* as, as_config* config)
 aerospike*
 aerospike_new(as_config* config)
 {
-	aerospike * as = cf_malloc(sizeof(aerospike));
+	aerospike* as = cf_malloc(sizeof(aerospike));
 
 	if (!as) {
 		as_config_destroy(config);
@@ -120,6 +164,10 @@ aerospike_connect(aerospike* as, as_error* err)
 {
 	as_error_reset(err);
 
+	if (!aerospike_library_init()) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "aerospike_library_init() failed");
+	}
+
 	// This is not 100% bulletproof against, say, simultaneously calling
 	// aerospike_connect() from two different threads with the same as object...
 	if (as->cluster) {
@@ -156,11 +204,11 @@ aerospike_connect(aerospike* as, as_error* err)
 	
 #if !defined USE_XDR
 	// Only change global lua configuration once.
-	if (! lua_initialized) {
+	if (!lua_initialized) {
 		aerospike_init_lua(&as->config.lua);
 	}
 #endif
-	
+
 	// Create the cluster object.
 	return as_cluster_create(&as->config, err, &as->cluster);
 }
@@ -229,22 +277,26 @@ aerospike_stop_on_interrupt(bool stop)
 as_status
 aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const char* ns, const char* set, uint64_t before_nanos)
 {
-	char command[500];
-	char* p = stpcpy(command, "truncate:namespace=");
-	p = stpncpy(p, ns, sizeof(command) - (p - command));
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 500, false);
+	as_string_builder_append(&sb, "truncate:namespace=");
+	as_string_builder_append(&sb, ns);
 
 	if (set) {
-		p = stpncpy(p, ";set=", sizeof(command) - (p - command));
-		p = stpncpy(p, set, sizeof(command) - (p - command));
+		as_string_builder_append(&sb, ";set=");
+		as_string_builder_append(&sb, set);
 	}
 
 	if (before_nanos) {
-		p = stpncpy(p, ";lut=", sizeof(command) - (p - command));
-		snprintf(p, sizeof(command) - (p - command), "%" PRIu64, before_nanos);
+		as_string_builder_append(&sb, ";lut=");
+
+		char buff[100];
+		snprintf(buff, sizeof(buff), "%" PRIu64, before_nanos);
+		as_string_builder_append(&sb, buff);
 	}
 
 	// Send truncate command to one node. That node will distribute the command to other nodes.
-	return as_info_command_random_node(as, err, policy, command);
+	return as_info_command_random_node(as, err, policy, sb.data);
 }
 
 as_status

@@ -15,12 +15,12 @@
  * the License.
  */
 #pragma once
-#include <stdlib.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdarg.h>
+
+#include <aerospike/as_std.h>
 #include <math.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 /******************************************************************************
  * MACROS
@@ -255,11 +255,11 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
     if ( strcmp(ACTUAL, EXPECTED) != 0 ) return atf_assert_string_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
 
 
-#define assert_log(EXP, fmt, args ... ) \
-    if ( (EXP) == true ) return atf_assert_log(__result__, #EXP, __FILE__, __LINE__, fmt, ##args );
+#define assert_log(EXP, fmt, ...) \
+    if ( (EXP) == true ) return atf_assert_log(__result__, #EXP, __FILE__, __LINE__, fmt, ##__VA_ARGS__);
 
-#define fail_async(_mon_, fmt, args ... ) \
-	atf_assert_log(__result__, "", __FILE__, __LINE__, fmt, ##args);\
+#define fail_async(_mon_, fmt, ...) \
+	atf_assert_log(__result__, "", __FILE__, __LINE__, fmt, ##__VA_ARGS__);\
 	as_monitor_notify(_mon_);
 
 #define assert_success_async(_mon_, _err_, _udata_) \
@@ -302,17 +302,17 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 
 #define ATF_LOG_PREFIX "        "
 
-#define debug(fmt, args...) \
-    atf_log_line(stderr, "DEBUG", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
+#define debug(fmt, ...) \
+    atf_log_line(stderr, "DEBUG", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ##__VA_ARGS__);
 
-#define info(fmt, args...) \
-    atf_log(stderr, "INFO", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
+#define info(fmt, ...) \
+    atf_log(stderr, "INFO", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ##__VA_ARGS__);
 
-#define warn(fmt, args...) \
-    atf_log(stderr, "WARN", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
+#define warn(fmt, ...) \
+    atf_log(stderr, "WARN", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ##__VA_ARGS__);
 
-#define error(fmt, args...) \
-    atf_log(stderr, "ERROR", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ## args);
+#define error(fmt, ...) \
+    atf_log(stderr, "ERROR", ATF_LOG_PREFIX, __FILE__, __LINE__, fmt, ##__VA_ARGS__);
 
 void atf_log(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);
 
@@ -321,3 +321,13 @@ void atf_logv(FILE * f, const char * level, const char * prefix, const char * fi
 void atf_log_line(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);
 
 void atf_log_line(FILE * f, const char * level, const char * prefix, const char * file, int line, const char * fmt, ...);
+
+/******************************************************************************
+ * Start Directory
+ *****************************************************************************/
+
+#if !defined(_MSC_VER)
+#define AS_START_DIR "./"
+#else
+#define AS_START_DIR "../../"
+#endif

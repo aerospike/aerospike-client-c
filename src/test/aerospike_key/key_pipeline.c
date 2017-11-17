@@ -51,9 +51,9 @@ static int responses[10];
 #define NAMESPACE "test"
 #define SET "pipe"
 
-#define set_error_message(result, fmt, args ... ) \
+#define set_error_message(result, fmt, ...) \
 	if (! result->message[0]) {\
-		atf_assert_log(result, "", __FILE__, __LINE__, fmt, ##args);\
+		atf_assert_log(result, "", __FILE__, __LINE__, fmt, ##__VA_ARGS__);\
 	}
 
 /******************************************************************************
@@ -175,7 +175,7 @@ read_all(as_event_loop* event_loop, counter* ctr)
 
 	as_error e;
 
-	for (int i = 0; i < ctr->max; i++) {
+	for (uint32_t i = 0; i < ctr->max; i++) {
 		as_log_trace("Read rec %d", i);
 		sprintf(key_buf, "pipe%d", i);
 		as_key_init(&key, NAMESPACE, SET, key_buf);

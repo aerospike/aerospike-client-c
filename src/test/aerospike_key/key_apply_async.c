@@ -49,7 +49,7 @@ static as_monitor monitor;
 
 #define NAMESPACE "test"
 #define SET "test_basics"
-#define LUA_FILE "src/test/lua/key_apply.lua"
+#define LUA_FILE AS_START_DIR "src/test/lua/key_apply.lua"
 #define UDF_FILE "key_apply"
 
 /******************************************************************************

@@ -650,7 +650,7 @@ as_operate_set_attr(const as_operations* ops, as_buffer* buffers, size_t size, u
 	uint8_t write_attr = 0;
 	bool respond_all_ops = false;
 	
-	for (int i = 0; i < n_operations; i++) {
+	for (uint32_t i = 0; i < n_operations; i++) {
 		as_binop* op = &ops->binops.entries[i];
 		
 		switch (op->op)	{

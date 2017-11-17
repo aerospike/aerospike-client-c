@@ -151,6 +151,6 @@ void blog_line(const char* fmt, ...);
 void blog_detail(as_log_level level, const char* fmt, ...);
 void blog_detailv(as_log_level level, const char* fmt, va_list ap);
 
-#define blog(_fmt, _args...) { printf(_fmt, ## _args); }
-#define blog_info(_fmt, _args...) { blog_detail(AS_LOG_LEVEL_INFO, _fmt, ## _args); }
-#define blog_error(_fmt, _args...) { blog_detail(AS_LOG_LEVEL_ERROR, _fmt, ## _args); }
+#define blog(_fmt, ...) { printf(_fmt, ##__VA_ARGS__); }
+#define blog_info(_fmt, ...) { blog_detail(AS_LOG_LEVEL_INFO, _fmt, ##__VA_ARGS__); }
+#define blog_error(_fmt, ...) { blog_detail(AS_LOG_LEVEL_ERROR, _fmt, ##__VA_ARGS__); }

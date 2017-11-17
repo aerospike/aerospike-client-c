@@ -21,6 +21,7 @@
  ******************************************************************************/
 #include "benchmark.h"
 #include <aerospike/as_monitor.h>
+#include <aerospike/as_sleep.h>
 #include <citrusleaf/cf_clock.h>
 #include <pthread.h>
 
@@ -41,7 +42,7 @@ ticker_worker(void* udata)
 	if (latency) {
 		latency_set_header(write_latency, latency_header);
 	}
-	sleep(1);
+	as_sleep(1000);
 
 	uint64_t total_count = 0;
 	bool complete = false;
@@ -51,9 +52,9 @@ ticker_worker(void* udata)
 		int64_t elapsed = time - prev_time;
 		prev_time = time;
 
-		uint32_t write_current = ck_pr_fas_32(&data->write_count, 0);
-		uint32_t write_timeout_current = ck_pr_fas_32(&data->write_timeout_count, 0);
-		uint32_t write_error_current = ck_pr_fas_32(&data->write_error_count, 0);
+		uint32_t write_current = as_fas_uint32(&data->write_count, 0);
+		uint32_t write_timeout_current = as_fas_uint32(&data->write_timeout_count, 0);
+		uint32_t write_error_current = as_fas_uint32(&data->write_error_count, 0);
 		uint32_t write_tps = (uint32_t)((double)write_current * 1000 / elapsed + 0.5);
 		total_count += write_current;
 
@@ -72,7 +73,7 @@ ticker_worker(void* udata)
 			break;
 		}
 		
-		sleep(1);
+		as_sleep(1000);
 
 		if (! data->valid) {
 			// Go through one more iteration to print last line.
@@ -153,7 +154,7 @@ linear_write(clientdata* cdata)
 		// Start threads with each thread performing writes in a loop.
 		int max = cdata->threads;
 		blog_info("Start %d generator threads", max);
-		pthread_t threads[max];
+		pthread_t* threads = alloca(sizeof(pthread_t) * max);
 		uint64_t keys_per_thread = cdata->n_keys / max;
 		uint64_t rem = cdata->n_keys - (keys_per_thread * max);
 		uint64_t start = cdata->key_start;

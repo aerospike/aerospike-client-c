@@ -16,8 +16,13 @@
  */
 #pragma once
 
-#include <aerospike/as_cluster.h>
+#include <aerospike/as_address.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_status.h>
+
+#if !defined(_MSC_VER)
 #include <netdb.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -28,30 +33,33 @@ extern "C" {
  ******************************************************************************/
 	
 /**
- *	@private
- *	Iterator for IP addresses.
+ * @private
+ * Iterator for IP addresses.
  */
 typedef struct as_sockaddr_iterator_s {
 	struct addrinfo* addresses;
 	struct addrinfo* current;
-	in_port_t port_be;
+	uint16_t port_be;
 	bool hostname_is_alias;
 } as_address_iterator;
+
+struct as_cluster_s;
+struct as_node_info_s;
 
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
 
 /**
- *	@private
- *	Lookup hostname and initialize address iterator.
+ * @private
+ * Lookup hostname and initialize address iterator.
  */
 as_status
-as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, in_port_t port);
+as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, uint16_t port);
 	
 /**
- *	@private
- *	Get next socket address with assigned port.  Return false when there are no more addresses.
+ * @private
+ * Get next socket address with assigned port.  Return false when there are no more addresses.
  */
 static inline bool
 as_lookup_next(as_address_iterator* iter, struct sockaddr** addr)
@@ -74,21 +82,21 @@ as_lookup_next(as_address_iterator* iter, struct sockaddr** addr)
 }
 
 /**
- *	@private
- *	Release memory associated with address iterator.
+ * @private
+ * Release memory associated with address iterator.
  */
 static inline void
 as_lookup_end(as_address_iterator* iter)
 {
 	freeaddrinfo(iter->addresses);
 }
-	
+
 /**
- *	@private
- *	Lookup and validate node.
+ * @private
+ * Lookup and validate node.
  */
 as_status
-as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct sockaddr* addr, as_node_info* node_info);
+as_lookup_node(struct as_cluster_s* cluster, as_error* err, const char* tls_name, struct sockaddr* addr, struct as_node_info_s* node_info);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<package>
+  <metadata>
+    <id>aerospike-client-c-libevent</id>
+    <version>4.2.0</version>
+    <title>Aerospike C Client with libevent</title>
+    <authors>Aerospike</authors>
+    <owners>Aerospike</owners>
+    <licenseUrl>https://github.com/aerospike/aerospike-client-c/blob/master/LICENSE.md</licenseUrl>
+    <projectUrl>https://www.aerospike.com/download/client/c</projectUrl>
+    <iconUrl>http://wordpress-www.s3-us-west-1.amazonaws.com/wp-content/uploads/2015/03/bryan-as.png</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Aerospike C client library for sync and async database commands using the libevent event framework.</description>
+    <copyright>Copyright 2008-2017 Aerospike, Inc.</copyright>
+    <tags>Aerospike database C client native libevent</tags>
+  </metadata>
+  <files>
+	<file src="aerospike-client-c-libevent.targets" target="build\native" />
+	<file src="..\modules\lua-core\src\*.lua" target="lua" />
+    <file src="..\modules\common\src\include\aerospike\*.h" exclude="**\ssl_util.h" target="build\native\include\aerospike" />
+    <file src="..\modules\common\src\include\citrusleaf\*.h" exclude="**\cf_crypto.h;**\cf_digest.h" target="build\native\include\citrusleaf" />
+    <file src="..\src\include\aerospike\*.h" exclude="**\as_tls.h" target="build\native\include\aerospike" />	
+
+	<file src="x64\Debug libevent\aerospike.lib" target="build\native\lib\x64\Debug" />
+    <file src="x64\Debug libevent\aerospike.dll" target="build\native\lib\x64\Debug" />
+    <file src="x64\Debug libevent\aerospike.pdb" target="build\native\lib\x64\Debug" />
+    <file src="x64\Release libevent\aerospike.lib" target="build\native\lib\x64\Release" />
+    <file src="x64\Release libevent\aerospike.dll" target="build\native\lib\x64\Release" />
+
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\pthread.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\sched.h" target="build\native\include" />
+	<file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.dll" target="build\native\lib\x64\Debug" />
+	<file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\lua51.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\lua51.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\pthreadVC2d.lib" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\pthreadVC2d.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\pthreadVC2d.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\ssleay32.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\ssleay32.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\zlibd.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\zlibd.pdb" target="build\native\lib\x64\Debug" />
+	<file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\libeay32.dll" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\lua51.dll" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\pthreadVC2.lib" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\pthreadVC2.dll" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\ssleay32.dll" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\zlib.dll" target="build\native\lib\x64\Release" />
+
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\evdns.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\event.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\evhttp.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\evrpc.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\evutil.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\event2\*.h" target="build\native\include\event2" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\event_core.lib" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\event_core.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\event_core.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\event_core.lib" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\event_core.dll" target="build\native\lib\x64\Release" />
+  </files>
+</package>

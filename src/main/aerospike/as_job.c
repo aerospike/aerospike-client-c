@@ -16,9 +16,10 @@
  */
 #include <aerospike/as_job.h>
 #include <aerospike/as_info.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
-
 #include <citrusleaf/alloc.h>
+#include <stdlib.h>
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -90,7 +91,7 @@ as_job_process(char* response, as_job_info* info)
 			begin = p;
 			p = as_mark_end(p);
 			
-			uint64_t count = atol(begin);
+			long count = atol(begin);
 			info->records_read += count;
 			found_recs_read = true;
 		}
@@ -109,13 +110,16 @@ aerospike_job_wait(
    aerospike* as, as_error* err, const as_policy_info* policy, const char* module, uint64_t job_id,
    uint32_t interval_ms)
 {
-	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
+	if (!interval_ms) {
+		interval_ms = 1000;
+	}
+
 	as_job_info info;
 	as_status status;
 	
 	// Poll to see when job is done.
 	do {
-		usleep(interval_micros);
+		as_sleep(interval_ms);
 		status = aerospike_job_info(as, err, policy, module, job_id, true, &info);
 	} while (status == AEROSPIKE_OK && info.status == AS_JOB_STATUS_INPROGRESS);
 	

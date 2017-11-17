@@ -17,6 +17,7 @@
 #include <aerospike/as_node.h>
 #include <aerospike/as_address.h>
 #include <aerospike/as_admin.h>
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_event_internal.h>
@@ -28,13 +29,12 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_tls.h>
 #include <citrusleaf/cf_byte_order.h>
-#include <errno.h> //errno
 
 // Replicas take ~2K per namespace, so this will cover most deployments:
 #define INFO_STACK_BUF_SIZE (16 * 1024)
 
 /******************************************************************************
- *	Function declarations.
+ * Function declarations.
  *****************************************************************************/
 
 const char*
@@ -49,7 +49,7 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 extern uint32_t as_event_loop_capacity;
 
 /******************************************************************************
- *	Functions.
+ * Functions.
  *****************************************************************************/
 
 static as_conn_pool*
@@ -73,7 +73,7 @@ as_node_create_async_pools(uint32_t max_conns_per_node)
 as_node*
 as_node_create(
 	as_cluster* cluster, const char* hostname, const char* tls_name,
-	in_port_t port, bool is_alias, struct sockaddr* addr, as_node_info* node_info
+	uint16_t port, bool is_alias, struct sockaddr* addr, as_node_info* node_info
 	)
 {
 	as_node* node = cf_malloc(sizeof(as_node));
@@ -215,7 +215,7 @@ as_node_add_address(as_node* node, struct sockaddr* addr)
 }
 
 void
-as_node_add_alias(as_node* node, const char* hostname, in_port_t port)
+as_node_add_alias(as_node* node, const char* hostname, uint16_t port)
 {
 	as_vector* aliases = &node->aliases;
 	as_alias* alias;
@@ -337,7 +337,7 @@ as_node_create_socket(as_error* err, as_node* node, as_conn_pool_lock* pool_lock
 		// Replace invalid primary address with valid alias.
 		// Other threads may not see this change immediately.
 		// It's just a hint, not a requirement to try this new address first.
-		ck_pr_store_32(&node->address_index, rv);
+		as_store_uint32(&node->address_index, rv);
 		as_log_debug("Change node address %s %s", node->name, as_node_get_address_string(node));
 	}
 	return AEROSPIKE_OK;
@@ -577,7 +577,7 @@ as_node_verify_name(as_error* err, as_node* node, const char* name)
 	if (strcmp(node->name, name) != 0) {
 		// Set node to inactive immediately.
 		// Make volatile write so changes are reflected in other threads.
-		ck_pr_store_8(&node->active, false);
+		as_store_uint8(&node->active, false);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node name has changed. Old=%s New=%s", node->name, name);
 	}
 	return AEROSPIKE_OK;
@@ -626,7 +626,7 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 }
 
 /**
- *	Request current status from server node.
+ * Request current status from server node.
  */
 as_status
 as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)

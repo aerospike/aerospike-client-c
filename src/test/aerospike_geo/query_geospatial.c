@@ -31,7 +31,6 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
-#include <aerospike/mod_lua.h>
 
 #include "../test.h"
 #include "../util/consumer_stream.h"
@@ -183,7 +182,7 @@ insert_points(char const * set)
 
 	// Re-using rec, write records into the database such that each record's key
 	// and (test-bin) value is based on the loop index.
-	for (uint32_t i = 0; i < g_n_keys; i++) {
+	for (int i = 0; i < g_n_keys; i++) {
 		as_error err;
 
 		// No need to destroy a stack as_key object, if we only use

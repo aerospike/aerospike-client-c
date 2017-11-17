@@ -14,13 +14,17 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
+#if !defined(_MSC_VER)
 #include <regex.h>
+#else
+#define REG_ICASE 2
+#endif
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_query.h>
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
@@ -30,12 +34,11 @@
 #include <aerospike/as_query.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
-#include <aerospike/ck/ck_pr.h>
-#include <aerospike/mod_lua.h>
 
 #include "../test.h"
 #include "../util/index_util.h"
@@ -55,7 +58,7 @@ static uint64_t g_epochns;
  * MACROS
  *****************************************************************************/
 
-#define LUA_FILE "src/test/lua/client_stream_simple.lua"
+#define LUA_FILE AS_START_DIR "src/test/lua/client_stream_simple.lua"
 #define UDF_FILE "client_stream_simple"
 
 #define NAMESPACE "test"
@@ -91,18 +94,15 @@ bool query_foreach_create()
 	as_status status;
 	as_index_task task;
 	
-	// create index on "a"
-	
+	// create index on "a"	
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "a", "idx_test_a", AS_INDEX_STRING);
 	index_process_return_code(status, &err, &task);
 
 	// create index on "b"
-	
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "b", "idx_test_b", AS_INDEX_NUMERIC);
 	index_process_return_code(status, &err, &task);
 
 	// create index on "c"
-	
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "c", "idx_test_c", AS_INDEX_NUMERIC);
 	index_process_return_code(status, &err, &task);
 
@@ -111,25 +111,22 @@ bool query_foreach_create()
 	index_process_return_code(status, &err, &task);
 
 	// create complex index on "x"
-	 
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
 	index_process_return_code(status, &err, &task);
 
 	// create complex index on "y"
-	 
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
 	index_process_return_code(status, &err, &task);
 
-	// create complex index on "y"
-	 
+	// create complex index on "y"	 
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
 	index_process_return_code(status, &err, &task);
 
-	// create complex index on "z"
-	 
+	// create complex index on "z"	 
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_test_z", AS_INDEX_TYPE_LIST, AS_INDEX_NUMERIC);
 	index_process_return_code(status, &err, &task);
 
+	char* buffer = alloca(n_recs * 1024 + 1);
 	uint32_t the_ttl = AS_RECORD_NO_EXPIRE_TTL;
 	
 	// insert records
@@ -145,15 +142,9 @@ bool query_foreach_create()
 			// as_predexp_rec_last_update_after predicate below to find
 			// the later records.
 
-			usleep(5 * 1000);
-
-			struct timeval tv;
-			gettimeofday(&tv, NULL);
-			g_epochns =
-				(tv.tv_sec * 1000L * 1000L * 1000L) +
-				(tv.tv_usec * 1000L);
-			
-			usleep(5 * 1000);
+			as_sleep(5);
+			g_epochns = cf_clock_getabsolute() * 1000 * 1000;
+			as_sleep(5);
 
 			// Also on the 42nd iteration we change the TTL to
 			// 10 days for the remaining records.
@@ -173,8 +164,7 @@ bool query_foreach_create()
 		char keystr[64] = { '\0' };
 		snprintf(keystr, 64, "%s-%d-%d-%d-%d", a, b, c, d, e);
 		
-		// Make list
-		
+		// Make list		
 		as_arraylist list;
 		as_arraylist_init(&list, 3, 0);
 		if ( (i%3) == 0) {
@@ -189,7 +179,6 @@ bool query_foreach_create()
 		}
 		
 		// Make map
-		
 		as_hashmap map;
 		as_hashmap_init(&map, 1);
 		if ( (i%7) == 0) {
@@ -197,11 +186,9 @@ bool query_foreach_create()
 		} else {
 			as_stringmap_set_str((as_map *) &map, "ykey_not", "yvalue_not");
 
-		}
+		}		
 		
-		
-		// Make list of integers
-		
+		// Make list of integers		
 		as_arraylist list2;
 		as_arraylist_init(&list2, 5, 0);
 		as_arraylist_append_int64(&list2, i);
@@ -211,8 +198,6 @@ bool query_foreach_create()
 		as_arraylist_append_int64(&list2, i+4);
 
 		// Make a string of variable size
-
-		char buffer[n_recs * 1024 + 1];
 		for (int jj = 0; jj < i * 1024; ++jj) {
 			buffer[jj] = 'X';
 		}
@@ -349,10 +334,10 @@ static bool after(atf_suite * suite) {
 static bool count_callback(const as_val * v, void * udata) {
 	uint32_t * count = (uint32_t *) udata;
 	if ( v == NULL ) {
-		info("count: %d", ck_pr_load_32(count));
+		info("count: %d", as_load_uint32(count));
 	}
 	else {
-		ck_pr_inc_32(count);
+		as_incr_uint32(count);
 	}
 	return true;
 }
@@ -369,10 +354,10 @@ static bool query_foreach_count_callback(const as_val * v, void * udata) {
 
 	uint32_t * count = (uint32_t *) udata;
 	if ( v == NULL ) {
-		info("count: %d", ck_pr_load_32(count));
+		info("count: %d", as_load_uint32(count));
 	}
 	else {
-		ck_pr_inc_32(count);
+		as_incr_uint32(count);
 	}
 	return true;
 }
@@ -886,9 +871,9 @@ TEST( scan_with_rec_void_time_predexp_2, "scan_with_rec_void_time_predexp_2" ) {
 	as_query_select(&q, "c");
 
 	int64_t tstamp_5_days =
-		((int64_t) time(NULL) + ((int64_t) 5 * 24 * 60 * 60)) * 1e9;
+		((int64_t) time(NULL) + ((int64_t) 5 * 24 * 60 * 60)) * (int64_t)1e9;
 	int64_t tstamp_15_days =
-		((int64_t) time(NULL) + ((int64_t) 15 * 24 * 60 * 60)) * 1e9;
+		((int64_t) time(NULL) + ((int64_t) 15 * 24 * 60 * 60)) * (int64_t)1e9;
 	
 	as_query_predexp_inita(&q, 7);
 	as_query_predexp_add(&q, as_predexp_rec_void_time());
@@ -924,7 +909,7 @@ TEST( scan_with_rec_void_time_predexp_3, "scan_with_rec_void_time_predexp_3" ) {
 	as_query_select(&q, "c");
 
 	int64_t tstamp_15_days =
-		((int64_t) time(NULL) + ((int64_t) 15 * 24 * 60 * 60)) * 1e9;
+		((int64_t) time(NULL) + ((int64_t) 15 * 24 * 60 * 60)) * (int64_t)1e9;
 	
 	as_query_predexp_inita(&q, 3);
 	as_query_predexp_add(&q, as_predexp_rec_void_time());
@@ -1237,7 +1222,7 @@ TEST( query_with_mapval_predexp, "query_with_mapval_predexp" ) {
 static bool query_quit_early_callback(const as_val * v, void * udata) {
 	if (v) {
 		uint32_t * count = (uint32_t *) udata;
-		ck_pr_inc_32(count);
+		as_incr_uint32(count);
 	}
 	return false;
 }
@@ -1308,7 +1293,7 @@ static bool query_quit_early_bytes_callback(const as_val * v, void * udata) {
 
 		if (bval) {
 			uint32_t* byte_count = (uint32_t*)udata;
-			ck_pr_add_32( byte_count, as_bytes_size(bval));
+			as_add_uint32( byte_count, as_bytes_size(bval));
 		}
 	}
 	return false;

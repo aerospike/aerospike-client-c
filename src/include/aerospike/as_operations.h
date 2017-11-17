@@ -408,7 +408,7 @@ as_operations_destroy(as_operations* ops);
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value * value);
+as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value* value);
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with an int64_t value.

@@ -91,7 +91,7 @@ extern "C" {
  * available, then NULL is returned.
  *
  * ~~~~~~~~~~{.c}
- * as_bin * bin = as_record_iterator_next(&it);
+ * as_bin* bin = as_record_iterator_next(&it);
  * ~~~~~~~~~~
  *
  * If  as_record_iterator_next() returns a bin, then you can use the following
@@ -106,9 +106,9 @@ extern "C" {
  *
  * ~~~~~~~~~~{.c}
  * while ( as_record_iterator_has_next(&it) ) {
- * 	   as_bin * bin = as_record_iterator_next(&it);
- * 	   char *   name = as_bin_get_name(bin);
- * 	   as_val * value = (as_val *) as_bin_get_value(bin);
+ * 	   as_bin* bin = as_record_iterator_next(&it);
+ * 	   char* name = as_bin_get_name(bin);
+ * 	   as_val* value = (as_val*) as_bin_get_value(bin);
  * }
  * ~~~~~~~~~~
  *
@@ -188,7 +188,7 @@ as_record_iterator_new(const as_record* record);
  * @ingroup as_record_object
  */
 AS_EXTERN as_record_iterator*
-as_record_iterator_init(as_record_iterator * iterator, const as_record* record);
+as_record_iterator_init(as_record_iterator* iterator, const as_record* record);
 
 /**
  * Destroy the as_record_iterator and associated resources.
@@ -199,7 +199,7 @@ as_record_iterator_init(as_record_iterator * iterator, const as_record* record);
  * @ingroup as_record_object
  */
 AS_EXTERN void
-as_record_iterator_destroy(as_record_iterator * iterator);
+as_record_iterator_destroy(as_record_iterator* iterator);
 
 /**
  * Test if there are more bins in the iterator.
@@ -212,7 +212,7 @@ as_record_iterator_destroy(as_record_iterator * iterator);
  * @ingroup as_record_object
  */
 AS_EXTERN bool
-as_record_iterator_has_next(const as_record_iterator * iterator);
+as_record_iterator_has_next(const as_record_iterator* iterator);
 
 /**
  * Read the next bin from the iterator. 
@@ -225,7 +225,7 @@ as_record_iterator_has_next(const as_record_iterator * iterator);
  * @ingroup as_record_object
  */
 AS_EXTERN as_bin*
-as_record_iterator_next(as_record_iterator * iterator);
+as_record_iterator_next(as_record_iterator* iterator);
 
 #ifdef __cplusplus
 } // end extern "C"

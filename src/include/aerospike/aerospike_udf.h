@@ -76,8 +76,7 @@ extern "C" {
  */
 AS_EXTERN as_status
 aerospike_udf_list(
-	aerospike* as, as_error* err, const as_policy_info* policy, 
-	as_udf_files* files
+	aerospike* as, as_error* err, const as_policy_info* policy, as_udf_files* files
 	);
 
 /**

@@ -63,12 +63,10 @@ as_udf_parse_file(const char* token, char* p, as_udf_file_ptr* ptr)
 	}
 }
 
-/**
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
- */
-as_status aerospike_udf_list(
-	aerospike* as, as_error* err, const as_policy_info* policy, 
-	as_udf_files* files)
+as_status
+aerospike_udf_list(
+	aerospike* as, as_error* err, const as_policy_info* policy, as_udf_files* files
+	)
 {
 	as_error_reset(err);
 	
@@ -165,12 +163,11 @@ as_status aerospike_udf_list(
 	return AEROSPIKE_OK;
 }
 
-/**
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
- */
-as_status aerospike_udf_get(
+as_status
+aerospike_udf_get(
 	aerospike* as, as_error* err, const as_policy_info* policy, 
-	const char* filename, as_udf_type type, as_udf_file * file)
+	const char* filename, as_udf_type type, as_udf_file * file
+	)
 {
 	as_error_reset(err);
 	
@@ -251,9 +248,11 @@ as_status aerospike_udf_get(
 /**
  * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
  */
-as_status aerospike_udf_put(
+as_status
+aerospike_udf_put(
 	aerospike* as, as_error* err, const as_policy_info* policy, 
-	const char* filename, as_udf_type type, as_bytes* content)
+	const char* filename, as_udf_type type, as_bytes* content
+	)
 {
 	if (type != AS_UDF_TYPE_LUA) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid udf type: %d", type);
@@ -325,9 +324,11 @@ aerospike_udf_put_is_done(aerospike* as, as_error* err, const as_policy_info* po
 	return done;
 }
 
-as_status aerospike_udf_put_wait(
+as_status
+aerospike_udf_put_wait(
 	aerospike* as, as_error* err, const as_policy_info* policy,
-	const char* filename, uint32_t interval_ms)
+	const char* filename, uint32_t interval_ms
+	)
 {
 	if (! policy) {
 		policy = &as->config.policies.info;
@@ -350,12 +351,10 @@ as_status aerospike_udf_put_wait(
 	return AEROSPIKE_OK;
 }
 
-/**
- * @return AEROSPIKE_OK if successful. Otherwise an error occurred.
- */
-as_status aerospike_udf_remove(
-	aerospike* as, as_error* err, const as_policy_info* policy, 
-	const char* filename)
+as_status
+aerospike_udf_remove(
+	aerospike* as, as_error* err, const as_policy_info* policy, const char* filename
+	)
 {
 	as_error_reset(err);
 	
@@ -403,9 +402,11 @@ aerospike_udf_remove_is_done(aerospike* as, as_error* err, const as_policy_info*
 	return done;
 }
 
-as_status aerospike_udf_remove_wait(
+as_status
+aerospike_udf_remove_wait(
 	aerospike* as, as_error* err, const as_policy_info* policy,
-	const char* filename, uint32_t interval_ms)
+	const char* filename, uint32_t interval_ms
+	)
 {
 	if (! policy) {
 		policy = &as->config.policies.info;

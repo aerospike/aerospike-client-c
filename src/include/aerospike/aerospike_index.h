@@ -59,9 +59,9 @@ extern "C" {
 typedef char as_index_position[AS_INDEX_POSITION_MAX_SZ];
 
 /**
- *  Index Type
+ * Index Type
  *
- *  @ingroup index_operations
+ * @ingroup index_operations
  */
 typedef enum as_index_type_s {
 	AS_INDEX_TYPE_DEFAULT,

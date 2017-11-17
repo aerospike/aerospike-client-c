@@ -25,10 +25,11 @@
  * UDF CALL FUNCTIONS
  *****************************************************************************/
 
-/**
- * Initialize default values for given as_udf_call.
- */
-static as_udf_call * as_udf_call_defaults(as_udf_call* call, bool free, const as_udf_module_name module, const as_udf_function_name function, as_list* arglist) 
+static as_udf_call*
+as_udf_call_defaults(
+	as_udf_call* call, bool free, const as_udf_module_name module,
+	const as_udf_function_name function, as_list* arglist
+	)
 {
 	if ( !call ) return call;
 
@@ -50,10 +51,11 @@ static as_udf_call * as_udf_call_defaults(as_udf_call* call, bool free, const as
 	return call;
 }
 
-/**
- * Initialize a stack allocated as_udf_call.
- */
-as_udf_call * as_udf_call_init(as_udf_call* call, const as_udf_module_name module, const as_udf_function_name function, as_list* arglist)
+as_udf_call*
+as_udf_call_init(
+	as_udf_call* call, const as_udf_module_name module, const as_udf_function_name function,
+	as_list* arglist
+	)
 {
 	if ( ( module && strlen(module) > AS_UDF_MODULE_MAX_LEN ) ||
 		 ( function && strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) ) {
@@ -62,10 +64,10 @@ as_udf_call * as_udf_call_init(as_udf_call* call, const as_udf_module_name modul
 	return as_udf_call_defaults(call, false, module, function, arglist);
 }
 
-/**
- * Creates a new heap allocated as_udf_call.
- */
-as_udf_call * as_udf_call_new(const as_udf_module_name module, const as_udf_function_name function, as_list* arglist)
+as_udf_call*
+as_udf_call_new(
+	const as_udf_module_name module, const as_udf_function_name function, as_list* arglist
+	)
 {
 	if ( ( module && strlen(module) > AS_UDF_MODULE_MAX_LEN ) ||
 		 ( function && strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) ) {
@@ -75,13 +77,10 @@ as_udf_call * as_udf_call_new(const as_udf_module_name module, const as_udf_func
 	return as_udf_call_defaults(call, true, module, function, arglist);
 }
 
-/**
- * Destroy an as_udf_call.
- */
-void as_udf_call_destroy(as_udf_call* call)
+void
+as_udf_call_destroy(as_udf_call* call)
 {
 	if ( call ) {
-
 		call->module[0] = '\0';
 		call->function[0] = '\0';
 
@@ -100,10 +99,9 @@ void as_udf_call_destroy(as_udf_call* call)
  * UDF FILE FUNCTIONS
  *****************************************************************************/
 
-/**
- * Initialize default values for given as_udf_call.
- */
-static as_udf_file * as_udf_file_defaults(as_udf_file * file, bool free) {
+static as_udf_file*
+as_udf_file_defaults(as_udf_file * file, bool free)
+{
 	file->_free = free;
 	file->name[0] = '\0';
 	memset(file->hash, 0, AS_UDF_FILE_HASH_SIZE);
@@ -113,29 +111,24 @@ static as_udf_file * as_udf_file_defaults(as_udf_file * file, bool free) {
 	file->content.bytes = 0;
 	return file;
 }
-/**
- * Initialize a stack allocated as_udf_file.
- */
-as_udf_file * as_udf_file_init(as_udf_file * file)
+
+as_udf_file*
+as_udf_file_init(as_udf_file * file)
 {
 	if ( !file ) return file;
 	return as_udf_file_defaults(file, false);
 }
 
-/**
- * Creates a new heap allocated as_udf_file.
- */
-as_udf_file * as_udf_file_new()
+as_udf_file*
+as_udf_file_new()
 {
 	as_udf_file * file = (as_udf_file *) cf_malloc(sizeof(as_udf_file));
 	if ( !file ) return file;
 	return as_udf_file_defaults(file, true);
 }
 
-/**
- * Destroy an as_udf_file.
- */
-void as_udf_file_destroy(as_udf_file * file)
+void
+as_udf_file_destroy(as_udf_file * file)
 {
 	if ( file ) {
 		if ( file->content.bytes && file->content._free ) {
@@ -156,7 +149,8 @@ void as_udf_file_destroy(as_udf_file * file)
  * UDF LIST FUNCTIONS
  *****************************************************************************/
 
-as_udf_files * as_udf_files_defaults(as_udf_files* files, bool free, uint32_t capacity)
+as_udf_files*
+as_udf_files_defaults(as_udf_files* files, bool free, uint32_t capacity)
 {
 	if ( !files ) return files;
 	
@@ -174,38 +168,23 @@ as_udf_files * as_udf_files_defaults(as_udf_files* files, bool free, uint32_t ca
 	return files;
 }
 
-/**
- * Initialize a stack allocated as_udf_files.
- *
- * @param files
- * @param capacity The number of entries to allocate.
- *
- * @returns The initialized udf list on success. Otherwise NULL.
- */
-as_udf_files * as_udf_files_init(as_udf_files* files, uint32_t capacity)
+as_udf_files*
+as_udf_files_init(as_udf_files* files, uint32_t capacity)
 {
 	if ( !files ) return files;
 	return as_udf_files_defaults(files, false, capacity);
 }
 
-/**
- * Create and initialize a new heap allocated `as_udf_files`.
- * 
- * @param capacity The number of entries to allocate.
- *
- * @returns The newly allocated udf list on success. Otherwise NULL.
- */
-as_udf_files * as_udf_files_new(uint32_t capacity)
+as_udf_files*
+as_udf_files_new(uint32_t capacity)
 {
 	as_udf_files* files = (as_udf_files *) cf_malloc(sizeof(as_udf_files));
 	if ( !files ) return files;
 	return as_udf_files_defaults(files, true, capacity);
 }
 
-/**
- * Destroy an as_udf_list.
- */
-void as_udf_files_destroy(as_udf_files* files)
+void
+as_udf_files_destroy(as_udf_files* files)
 {
 	if ( files ) {
 
@@ -226,6 +205,3 @@ void as_udf_files_destroy(as_udf_files* files)
 		files->entries = NULL;
 	}
 }
-
-
-

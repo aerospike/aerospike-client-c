@@ -17,38 +17,37 @@
 #pragma once
 
 #include <citrusleaf/alloc.h>
-#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /******************************************************************************
- *	TYPES
+ * TYPES
  *****************************************************************************/
 
 /**
- *	Host information.
+ * Host information.
  */
 typedef struct as_host_s {
 	/**
-	 *	Host name or IP address of database server.
+	 * Host name or IP address of database server.
 	 */
 	char* name;
 	
 	/**
-	 *	TLS certificate name for secure connections.
+	 * TLS certificate name for secure connections.
 	 */
 	char* tls_name;
 
 	/**
-	 *	Port of database server.
+	 * Port of database server.
 	 */
 	uint16_t port;
 } as_host;
 
 /******************************************************************************
- *	FUNCTIONS
+ * FUNCTIONS
  *****************************************************************************/
 
 /**

@@ -19,10 +19,9 @@
 #include <aerospike/as_command.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
-
 #include <citrusleaf/alloc.h>
-#include <citrusleaf/cf_types.h>
 #include <citrusleaf/cf_b64.h>
+#include <stdlib.h>
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -249,7 +248,7 @@ as_info_command(
 	
 	// Write header
 	size = p - cmd;
-	uint64_t proto = (size - 8) | (AS_INFO_MESSAGE_VERSION << 56) | (AS_INFO_MESSAGE_TYPE << 48);
+	uint64_t proto = (size - 8) | ((uint64_t)AS_INFO_MESSAGE_VERSION << 56) | ((uint64_t)AS_INFO_MESSAGE_TYPE << 48);
 	*(uint64_t*)cmd = cf_swap_to_be64(proto);
 	
 	// Write command

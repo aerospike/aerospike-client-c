@@ -109,6 +109,18 @@ as_val_is_equal(const as_val *v0, const as_val *v1)
 	return false;
 }
 
+static void
+make_string_list(as_arraylist *list, int len)
+{
+	char* str = alloca(len + 1);
+	for (int i = 0; i < len; i++) {
+		// Random chars from 32 (space) to 126 (~)
+		str[i] = (rand() % (126 - 32 + 1)) + 32;
+	}
+	str[len] = '\0';
+	as_arraylist_append(list, (as_val *)as_string_new_strdup(str));
+}
+
 void
 make_random_list(as_arraylist *list, uint32_t count)
 {
@@ -119,13 +131,7 @@ make_random_list(as_arraylist *list, uint32_t count)
 		}
 		else {
 			int len = rand() % 100;
-			char str[len + 1];
-			for (int i = 0; i < len; i++) {
-				// Random chars from 32 (space) to 126 (~)
-				str[i] = (rand() % (126 - 32 + 1)) + 32;
-			}
-			str[len] = '\0';
-			as_arraylist_append(list, (as_val *)as_string_new_strdup(str));
+			make_string_list(list, len);
 		}
 	}
 }
@@ -452,7 +458,7 @@ as_testlist_incr(as_testlist *tlist, int64_t index, as_val *incr)
 			int64_t val_int = as_integer_get((as_integer *)val);
 			val_int += (incr_type == AS_INTEGER) ?
 					as_integer_get((as_integer *)incr) :
-					as_double_get((as_double *)incr);
+					(int64_t)as_double_get((as_double *)incr);
 			as_arraylist_set_int64(&tlist->arraylist, uindex, val_int);
 		}
 		else if (val_type == AS_DOUBLE) {

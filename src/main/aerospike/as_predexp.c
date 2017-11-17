@@ -314,7 +314,7 @@ as_predexp_base * as_predexp_integer_value(int64_t value)
 
 typedef struct {
 	as_predexp_base		base;
-	char const *		value;
+	char const * 	value;
 } as_predexp_string_value_t;
 
 void as_predexp_string_value_dtor(as_predexp_base * bp)
@@ -368,7 +368,7 @@ as_predexp_base * as_predexp_string_value(char const * value)
 	dp->base.dtor_fn = as_predexp_string_value_dtor;
 	dp->base.size_fn = as_predexp_string_value_size;
 	dp->base.write_fn = as_predexp_string_value_write;
-	dp->value = strdup(value);
+	dp->value = cf_strdup(value);
 	return (as_predexp_base *) dp;
 }
 
@@ -378,7 +378,7 @@ as_predexp_base * as_predexp_string_value(char const * value)
 
 typedef struct {
 	as_predexp_base		base;
-	char const *		value;
+	char const * 	value;
 } as_predexp_geojson_value_t;
 
 void as_predexp_geojson_value_dtor(as_predexp_base * bp)
@@ -445,7 +445,7 @@ as_predexp_base * as_predexp_geojson_value(char const * value)
 	dp->base.dtor_fn = as_predexp_geojson_value_dtor;
 	dp->base.size_fn = as_predexp_geojson_value_size;
 	dp->base.write_fn = as_predexp_geojson_value_write;
-	dp->value = strdup(value);
+	dp->value = cf_strdup(value);
 	return (as_predexp_base *) dp;
 }
 
@@ -455,7 +455,7 @@ as_predexp_base * as_predexp_geojson_value(char const * value)
 
 typedef struct {
 	as_predexp_base		base;
-	char *				binname;
+	char * 			binname;
 	uint16_t			tag;		// Not written to wire
 } as_predexp_bin_t;
 
@@ -481,8 +481,7 @@ uint8_t * as_predexp_bin_write(as_predexp_base * bp, uint8_t * p)
 {
 	as_predexp_bin_t * dp = (as_predexp_bin_t *) bp;
 
-	size_t len = strlen(dp->binname);
-	uint8_t bnlen = len;
+	uint32_t len = (uint32_t)strlen(dp->binname);
 
 	// TAG
 	uint16_t * tag_ptr = (uint16_t *) p;
@@ -492,12 +491,12 @@ uint8_t * as_predexp_bin_write(as_predexp_base * bp, uint8_t * p)
 	// LEN
 	uint32_t * len_ptr = (uint32_t *) p;
 	p += sizeof(uint32_t);
-	*len_ptr = cf_swap_to_be32(bnlen);
+	*len_ptr = cf_swap_to_be32(len);
 
 	// binname value
 	char * bnptr = (char *) p;
-	p += bnlen;
-	memcpy(bnptr, dp->binname, bnlen);
+	p += len;
+	memcpy(bnptr, dp->binname, len);
 
 	return p;
 }
@@ -519,7 +518,7 @@ static as_predexp_base * as_predexp_bin(char const * binname, uint16_t tag)
 	dp->base.dtor_fn = as_predexp_bin_dtor;
 	dp->base.size_fn = as_predexp_bin_size;
 	dp->base.write_fn = as_predexp_bin_write;
-	dp->binname = strdup(binname);
+	dp->binname = cf_strdup(binname);
 	dp->tag = tag;
 	return (as_predexp_base *) dp;
 }
@@ -555,7 +554,7 @@ as_predexp_base * as_predexp_map_bin(char const * binname)
 
 typedef struct {
 	as_predexp_base		base;
-	char *				varname;
+	char * 			varname;
 	uint16_t			tag;		// Not written to wire
 } as_predexp_var_t;
 
@@ -581,8 +580,7 @@ uint8_t * as_predexp_var_write(as_predexp_base * bp, uint8_t * p)
 {
 	as_predexp_var_t * dp = (as_predexp_var_t *) bp;
 
-	size_t len = strlen(dp->varname);
-	uint8_t bnlen = len;
+	uint32_t len = (uint32_t)strlen(dp->varname);
 
 	// TAG
 	uint16_t * tag_ptr = (uint16_t *) p;
@@ -592,12 +590,12 @@ uint8_t * as_predexp_var_write(as_predexp_base * bp, uint8_t * p)
 	// LEN
 	uint32_t * len_ptr = (uint32_t *) p;
 	p += sizeof(uint32_t);
-	*len_ptr = cf_swap_to_be32(bnlen);
+	*len_ptr = cf_swap_to_be32(len);
 
 	// varname value
 	char * bnptr = (char *) p;
-	p += bnlen;
-	memcpy(bnptr, dp->varname, bnlen);
+	p += len;
+	memcpy(bnptr, dp->varname, len);
 
 	return p;
 }
@@ -619,7 +617,7 @@ static as_predexp_base * as_predexp_var(char const * varname, uint16_t tag)
 	dp->base.dtor_fn = as_predexp_var_dtor;
 	dp->base.size_fn = as_predexp_var_size;
 	dp->base.write_fn = as_predexp_var_write;
-	dp->varname = strdup(varname);
+	dp->varname = cf_strdup(varname);
 	dp->tag = tag;
 	return (as_predexp_base *) dp;
 }
@@ -1020,7 +1018,7 @@ as_predexp_base * as_predexp_string_regex(uint32_t cflags)
 
 typedef struct {
 	as_predexp_base		base;
-	char *				varname;
+	char * 			varname;
 	uint16_t			tag;		// Not written to wire
 } as_predexp_iter_t;
 
@@ -1046,8 +1044,7 @@ uint8_t * as_predexp_iter_write(as_predexp_base * bp, uint8_t * p)
 {
 	as_predexp_iter_t * dp = (as_predexp_iter_t *) bp;
 
-	size_t len = strlen(dp->varname);
-	uint8_t bnlen = len;
+	uint32_t len = (uint32_t)strlen(dp->varname);
 
 	// TAG
 	uint16_t * tag_ptr = (uint16_t *) p;
@@ -1057,12 +1054,12 @@ uint8_t * as_predexp_iter_write(as_predexp_base * bp, uint8_t * p)
 	// LEN
 	uint32_t * len_ptr = (uint32_t *) p;
 	p += sizeof(uint32_t);
-	*len_ptr = cf_swap_to_be32(bnlen);
+	*len_ptr = cf_swap_to_be32(len);
 
 	// varname value
 	char * bnptr = (char *) p;
-	p += bnlen;
-	memcpy(bnptr, dp->varname, bnlen);
+	p += len;
+	memcpy(bnptr, dp->varname, len);
 
 	return p;
 }
@@ -1084,7 +1081,7 @@ static as_predexp_base * as_predexp_iter(char const * varname, uint16_t tag)
 	dp->base.dtor_fn = as_predexp_iter_dtor;
 	dp->base.size_fn = as_predexp_iter_size;
 	dp->base.write_fn = as_predexp_iter_write;
-	dp->varname = strdup(varname);
+	dp->varname = cf_strdup(varname);
 	dp->tag = tag;
 	return (as_predexp_base *) dp;
 }

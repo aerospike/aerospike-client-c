@@ -24,9 +24,6 @@
 #include <aerospike/as_socket.h>
 #include <citrusleaf/cf_ll.h>
 #include <pthread.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <unistd.h>
 
 #if defined(AS_USE_LIBEV)
 #include <ev.h>
@@ -340,7 +337,7 @@ as_event_validate_connection(as_event_connection* conn)
 	uv_os_fd_t fd;
 	
 	if (uv_fileno((uv_handle_t*)&conn->socket, &fd) == 0) {
-		return as_socket_validate_fd(fd);
+		return as_socket_validate_fd((as_socket_fd)fd);
 	}
 	return false;
 }
@@ -443,8 +440,8 @@ as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
 	evtimer_assign(&cmd->timer, cmd->event_loop->loop, as_libevent_total_timeout, cmd);
 
 	struct timeval tv;
-	tv.tv_sec = timeout / 1000;
-	tv.tv_usec = (timeout % 1000) * 1000;
+	tv.tv_sec = (uint32_t)timeout / 1000;
+	tv.tv_usec = ((uint32_t)timeout % 1000) * 1000;
 
 	evtimer_add(&cmd->timer, &tv);
 }
@@ -453,8 +450,8 @@ static inline void
 as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
 {
 	struct timeval tv;
-	tv.tv_sec = timeout / 1000;
-	tv.tv_usec = (timeout % 1000) * 1000;
+	tv.tv_sec = (uint32_t)timeout / 1000;
+	tv.tv_usec = ((uint32_t)timeout % 1000) * 1000;
 
 	evtimer_add(&cmd->timer, &tv);
 }

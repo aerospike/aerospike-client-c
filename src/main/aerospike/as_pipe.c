@@ -374,22 +374,24 @@ as_pipe_get_connection(as_event_command* cmd)
 }
 
 bool
-as_pipe_modify_fd(int fd)
+as_pipe_modify_fd(as_socket_fd fd)
 {
 	if (as_event_send_buffer_size) {
-		if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &as_event_send_buffer_size, sizeof(as_event_send_buffer_size)) < 0) {
-			as_log_debug("Failed to configure pipeline send buffer. size %d error %d (%s)",
-						 as_event_send_buffer_size, errno, strerror(errno));
-			close(fd);
+		if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char*)&as_event_send_buffer_size, sizeof(as_event_send_buffer_size)) < 0) {
+			int e = as_last_error();
+			as_log_debug("Failed to configure pipeline send buffer. size %d error %d",
+						 as_event_send_buffer_size, e);
+			as_close(fd);
 			return false;
 		}
 	}
 	
 	if (as_event_recv_buffer_size) {
-		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
-			as_log_debug("Failed to configure pipeline receive buffer. size %d error %d (%s)",
-						 as_event_recv_buffer_size, errno, strerror(errno));
-			close(fd);
+		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*)&as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
+			int e = as_last_error();
+			as_log_debug("Failed to configure pipeline receive buffer. size %d error %d",
+						 as_event_recv_buffer_size, e);
+			as_close(fd);
 			return false;
 		}
 	}
@@ -398,17 +400,17 @@ as_pipe_modify_fd(int fd)
 	if (as_event_recv_buffer_size) {
 		if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
 			as_log_debug("Failed to configure pipeline TCP window.");
-			close(fd);
+			as_close(fd);
 			return false;
 		}
 	}
 #endif
 	
+	// Disable TCP no delay.
 	int arg = 0;
-	
-	if (setsockopt(fd, SOL_TCP, TCP_NODELAY, &arg, sizeof(arg)) < 0) {
+	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char*)&arg, sizeof(arg)) < 0) {
 		as_log_debug("Failed to configure pipeline Nagle algorithm.");
-		close(fd);
+		as_close(fd);
 		return false;
 	}
 	return true;

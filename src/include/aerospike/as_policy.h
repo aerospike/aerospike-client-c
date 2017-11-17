@@ -52,8 +52,7 @@
  * - as_policy_write
  */
 
-#include <stdbool.h>
-#include <stdint.h>
+#include <aerospike/as_std.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -557,7 +556,7 @@ typedef struct as_policy_apply_s {
 	as_policy_gen gen;
 
 	/**
-	 *	The expected generation of the record.
+	 * The expected generation of the record.
 	 */
 	uint16_t gen_value;
 

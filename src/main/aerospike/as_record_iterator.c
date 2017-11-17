@@ -26,18 +26,14 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_util.h>
 #include <aerospike/as_val.h>
-
 #include <citrusleaf/alloc.h>
-
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdlib.h>
 
 /******************************************************************************
- *	STATIC FUNCTIONS
+ * STATIC FUNCTIONS
  *****************************************************************************/
 
-static inline as_record_iterator * as_record_iterator_cons(as_record_iterator * iterator, const as_record * record, bool free)
+static inline as_record_iterator* as_record_iterator_cons(as_record_iterator * iterator, const as_record* record, bool free)
 {
 	if ( ! ( iterator && record ) ) return NULL;
 	iterator->_free = free;
@@ -47,70 +43,70 @@ static inline as_record_iterator * as_record_iterator_cons(as_record_iterator * 
 }
 
 /******************************************************************************
- *	FUNCTIONS
+ * FUNCTIONS
  *****************************************************************************/
 
 /**
- *	Create and initialize a heap allocated as_record_iterator for the 
- *	specified record.
+ * Create and initialize a heap allocated as_record_iterator for the 
+ * specified record.
  *
- *	~~~~~~~~~~{.c}
- *	as_record_iterator * it = as_record_iterator_new(rec);
+ * ~~~~~~~~~~{.c}
+ * as_record_iterator * it = as_record_iterator_new(rec);
  *
- *	while ( as_record_iterator_has_next(&it) ) {
- *		as_bin * bin = as_record_iterator_next(&it);
- *	}
+ * while ( as_record_iterator_has_next(&it) ) {
+ * 	as_bin * bin = as_record_iterator_next(&it);
+ * }
  *
- *	as_record_iterator_destroy(&it);
- *	~~~~~~~~~~
- *	
- *	@param record 	The record to iterate over.
+ * as_record_iterator_destroy(&it);
+ * ~~~~~~~~~~
+ * 
+ * @param record 	The record to iterate over.
  *
- *	@return On success, a new as_record_iterator. Otherwsie an error occurred.
+ * @return On success, a new as_record_iterator. Otherwsie an error occurred.
  *
- *	@relates as_record_iterator
+ * @relates as_record_iterator
  */
-as_record_iterator * as_record_iterator_new(const as_record * record)
+as_record_iterator* as_record_iterator_new(const as_record* record)
 {
 	as_record_iterator * iterator = (as_record_iterator *) cf_malloc(sizeof(as_record_iterator));
 	return as_record_iterator_cons(iterator, record, true);
 }
 
 /**
- *	Initializes a stack allocated as_record_iterator for the specified record.
+ * Initializes a stack allocated as_record_iterator for the specified record.
  *
- *	~~~~~~~~~~{.c}
- *	as_record_iterator it;
- *	as_record_iterator_init(&it, rec);
- *	
- *	while ( as_record_iterator_has_next(&it) ) {
- *		as_bin * bin = as_record_iterator_next(&it);
- *	}
+ * ~~~~~~~~~~{.c}
+ * as_record_iterator it;
+ * as_record_iterator_init(&it, rec);
+ * 
+ * while ( as_record_iterator_has_next(&it) ) {
+ * 	as_bin * bin = as_record_iterator_next(&it);
+ * }
  *
- *	as_record_iterator_destroy(&it);
- *	~~~~~~~~~~
+ * as_record_iterator_destroy(&it);
+ * ~~~~~~~~~~
  *
- *	When you are finished using the `as_record` instance, you should release the 
- *	resources allocated to it by calling `as_record_destroy()`.
+ * When you are finished using the `as_record` instance, you should release the 
+ * resources allocated to it by calling `as_record_destroy()`.
  *
- *	@param iterator		The iterator to initialize.
- *	@param record		The record to iterate over.
+ * @param iterator		The iterator to initialize.
+ * @param record		The record to iterate over.
  *
- *	@return On success, a new as_record_iterator. Otherwsie an error occurred.
+ * @return On success, a new as_record_iterator. Otherwsie an error occurred.
  *
- *	@relates as_record_iterator
+ * @relates as_record_iterator
  */
-as_record_iterator * as_record_iterator_init(as_record_iterator * iterator, const as_record * record)
+as_record_iterator* as_record_iterator_init(as_record_iterator * iterator, const as_record* record)
 {
 	return as_record_iterator_cons(iterator, record, false);
 }
 
 /**
- *	Destroy the as_record_iterator and associated resources.
+ * Destroy the as_record_iterator and associated resources.
  *
- *	@param iterator The iterator to destroy.
+ * @param iterator The iterator to destroy.
  *
- *	@relates as_record_iterator
+ * @relates as_record_iterator
  */
 void as_record_iterator_destroy(as_record_iterator * iterator)
 {
@@ -123,13 +119,13 @@ void as_record_iterator_destroy(as_record_iterator * iterator)
 }
 
 /**
- *	Test if there are more bins in the iterator.
+ * Test if there are more bins in the iterator.
  *
- *	@param iterator The iterator to test.
+ * @param iterator The iterator to test.
  *
- *	@return the number of bins in the record.
+ * @return the number of bins in the record.
  *
- *	@relates as_record_iterator
+ * @relates as_record_iterator
  */
 bool as_record_iterator_has_next(const as_record_iterator * iterator)
 {
@@ -137,13 +133,13 @@ bool as_record_iterator_has_next(const as_record_iterator * iterator)
 }
 
 /**
- *	Read the next bin from the iterator. 
+ * Read the next bin from the iterator. 
  *
- *	@param iterator		The iterator to read from.
+ * @param iterator		The iterator to read from.
  *
- *	@return On success, the next bin from the iterator. Otherwise, NULL if no more bins are available.
+ * @return On success, the next bin from the iterator. Otherwise, NULL if no more bins are available.
  *
- *	@relates as_record_iterator
+ * @relates as_record_iterator
  */
 as_bin * as_record_iterator_next(as_record_iterator * iterator)
 {

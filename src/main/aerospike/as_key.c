@@ -15,8 +15,7 @@
  * the License.
  */
 #include <aerospike/as_key.h>
-#include <aerospike/as_integer.h>
-#include <aerospike/as_command.h>
+#include <aerospike/as_double.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_bytes.h>
@@ -25,23 +24,20 @@
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_digest.h>
 
-#include <stdbool.h>
-#include <stdint.h>
-
 /******************************************************************************
- *	INLINE FUNCTIONS
+ * INLINE FUNCTIONS
  *****************************************************************************/
 
-extern inline as_key * as_key_init_str(as_key * key, const as_namespace ns, const as_set set, const char * value);
-extern inline as_key * as_key_init_raw(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
-extern inline as_key * as_key_new_str(const as_namespace ns, const as_set set, const char * value);
-extern inline as_key * as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size);
+extern inline as_key* as_key_init_str(as_key* key, const as_namespace ns, const as_set set, const char* value);
+extern inline as_key* as_key_init_raw(as_key* key, const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size);
+extern inline as_key* as_key_new_str(const as_namespace ns, const as_set set, const char* value);
+extern inline as_key* as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size);
 
 /******************************************************************************
- *	STATIC FUNCTIONS
+ * STATIC FUNCTIONS
  *****************************************************************************/
 
-static as_key * as_key_cons(as_key * key, bool free, const as_namespace ns, const char * set, const as_key_value * valuep, const as_digest_value digest)
+static as_key* as_key_cons(as_key* key, bool free, const as_namespace ns, const char * set, const as_key_value* valuep, const as_digest_value digest)
 {
 	if ( ! set ) {
 		set = "";
@@ -68,21 +64,21 @@ static as_key * as_key_cons(as_key * key, bool free, const as_namespace ns, cons
 }
 
 /******************************************************************************
- *	FUNCTIONS
+ * FUNCTIONS
  *****************************************************************************/
 
 /**
- *	Initialize a stack allocated `as_key` to a NULL-terminated string value.
+ * Initialize a stack allocated `as_key` to a NULL-terminated string value.
  */
-as_key * as_key_init(as_key * key, const as_namespace ns, const as_set set, const char * value)
+as_key* as_key_init(as_key* key, const as_namespace ns, const as_set set, const char* value)
 {
 	return as_key_init_str(key, ns, set, value);
 }
 
 /**
- *	Initialize a stack allocated `as_key` to a int64_t value.
+ * Initialize a stack allocated `as_key` to a int64_t value.
  */
-as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set, int64_t value)
+as_key* as_key_init_int64(as_key* key, const as_namespace ns, const as_set set, int64_t value)
 {
 	if ( !key ) return key;
 
@@ -91,9 +87,9 @@ as_key * as_key_init_int64(as_key * key, const as_namespace ns, const as_set set
 }
 
 /**
- *	Initialize a stack allocated `as_key` to a NULL-terminated string value.
+ * Initialize a stack allocated `as_key` to a NULL-terminated string value.
  */
-as_key * as_key_init_strp(as_key * key, const as_namespace ns, const as_set set, const char * value, bool free)
+as_key* as_key_init_strp(as_key* key, const as_namespace ns, const as_set set, const char* value, bool free)
 {
 	if ( !key ) return key;
 	
@@ -102,9 +98,9 @@ as_key * as_key_init_strp(as_key * key, const as_namespace ns, const as_set set,
 }
 
 /**
- *	Initialize a stack allocated `as_key` to a raw bytes value.
+ * Initialize a stack allocated `as_key` to a raw bytes value.
  */
-as_key * as_key_init_rawp(as_key * key, const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size, bool free)
+as_key* as_key_init_rawp(as_key* key, const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool free)
 {
 	if ( !key ) return key;
 	
@@ -113,9 +109,9 @@ as_key * as_key_init_rawp(as_key * key, const as_namespace ns, const as_set set,
 }
 
 /**
- *	Initialize a stack allocated as_key with a digest.
+ * Initialize a stack allocated as_key with a digest.
  */
-as_key * as_key_init_digest(as_key * key, const as_namespace ns, const as_set set, const as_digest_value digest)
+as_key* as_key_init_digest(as_key* key, const as_namespace ns, const as_set set, const as_digest_value digest)
 {
 	if ( !key ) return key;
 
@@ -123,9 +119,9 @@ as_key * as_key_init_digest(as_key * key, const as_namespace ns, const as_set se
 }
 
 /**
- *	Initialize a stack allocated `as_key` with a digest value.
+ * Initialize a stack allocated `as_key` with a digest value.
  */
-as_key * as_key_init_value(as_key * key, const as_namespace ns, const as_set set, const as_key_value * value)
+as_key* as_key_init_value(as_key* key, const as_namespace ns, const as_set set, const as_key_value* value)
 {
 	if ( !key ) return key;
 
@@ -133,19 +129,19 @@ as_key * as_key_init_value(as_key * key, const as_namespace ns, const as_set set
 }
 
 /**
- *	Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
+ * Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
  */
-as_key * as_key_new(const as_namespace ns, const as_set set, const char * value)
+as_key* as_key_new(const as_namespace ns, const as_set set, const char* value)
 {
 	return as_key_new_str(ns, set, value);
 }
 
 /**
- *	Initialize a stack allocated `as_key` to a int64_t value.
+ * Initialize a stack allocated `as_key` to a int64_t value.
  */
-as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value)
+as_key* as_key_new_int64(const as_namespace ns, const as_set set, int64_t value)
 {
-	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
+	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 
 	as_integer_init((as_integer *) &key->value, value);
@@ -154,11 +150,11 @@ as_key * as_key_new_int64(const as_namespace ns, const as_set set, int64_t value
 
 
 /**
- *	Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
+ * Creates and initializes a heap allocated `as_key` to a NULL-terminated string value.
  */
-as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * value, bool free)
+as_key* as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool free)
 {
-	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
+	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 	
 	as_string_init((as_string *) &key->value, (char *) value, free);
@@ -166,11 +162,11 @@ as_key * as_key_new_strp(const as_namespace ns, const as_set set, const char * v
 }
 
 /**
- *	Initialize a stack allocated `as_key` to a raw bytes value.
+ * Initialize a stack allocated `as_key` to a raw bytes value.
  */
-as_key * as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t * value, uint32_t size, bool free)
+as_key* as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool free)
 {
-	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
+	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 	
 	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, free);
@@ -178,31 +174,31 @@ as_key * as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t 
 }
 
 /**
- *	Initialize a stack allocated as_key with a digest value.
+ * Initialize a stack allocated as_key with a digest value.
  */
-as_key * as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest)
+as_key* as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest)
 {
-	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
+	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 
 	return as_key_cons(key, true, ns, set, NULL, digest);
 }
 
 /**
- *	Initialize a stack allocated `as_key` to a an `as_key_value`.
+ * Initialize a stack allocated `as_key` to a an `as_key_value`.
  */
-as_key * as_key_new_value(const as_namespace ns, const as_set set, const as_key_value * value)
+as_key* as_key_new_value(const as_namespace ns, const as_set set, const as_key_value* value)
 {
-	as_key * key = (as_key *) cf_malloc(sizeof(as_key));
+	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
 	if ( !key ) return key;
 
 	return as_key_cons(key, true, ns, set, value, NULL);
 }
 
 /**
- *	Destory the `as_key`, releasing resources.
+ * Destory the `as_key`, releasing resources.
  */
-void as_key_destroy(as_key * key)
+void as_key_destroy(as_key* key)
 {
 	if ( !key ) return;
 
@@ -214,9 +210,9 @@ void as_key_destroy(as_key * key)
 }
 
 /**
- *	Compute the digest value.
+ * Compute the digest value.
  */
-as_digest * as_key_digest(as_key * key)
+as_digest * as_key_digest(as_key* key)
 {
 	as_error err;
 	as_status status = as_key_set_digest(&err, key);

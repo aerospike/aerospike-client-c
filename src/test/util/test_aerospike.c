@@ -16,6 +16,7 @@
  */
 #include "../test.h"
 #include "test_aerospike.h"
+#include <string.h>
 
 /*****************************************************************************
  * STATIC FUNCTIONS

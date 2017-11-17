@@ -4,7 +4,7 @@
 set -e
 
 function PrintUsage {
-  echo "Usage: $0 [-sign] lib|devel sync|libev|libuv <client dir> <stage dir> <target dir>"
+  echo "Usage: $0 [-sign] lib|devel sync|libuv|libev|libevent <client dir> <stage dir> <target dir>"
   exit 1
 }
 

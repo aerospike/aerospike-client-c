@@ -29,30 +29,30 @@ extern "C" {
 #endif
 
 /******************************************************************************
- *	MACROS
+ * MACROS
  *****************************************************************************/
 
 /**
- *	Maximum bin name size
+ * Maximum bin name size
  */
 #define AS_BIN_NAME_MAX_SIZE 15
 
 /**
- *	Maximum bin name length
+ * Maximum bin name length
  */
 #define AS_BIN_NAME_MAX_LEN (AS_BIN_NAME_MAX_SIZE - 1)
 
 /******************************************************************************
- *	TYPES
+ * TYPES
  *****************************************************************************/
 
 /**
- *	Bin Name
+ * Bin Name
  */
 typedef char as_bin_name[AS_BIN_NAME_MAX_SIZE];
 
 /**
- *	Bin Value
+ * Bin Value
  */
 typedef union as_bin_value_s {
 	as_val nil;
@@ -65,33 +65,33 @@ typedef union as_bin_value_s {
 } as_bin_value;
 
 /**
- *	Represents a bin of a record. Each bin is a (name,value) pair. 
+ * Represents a bin of a record. Each bin is a (name,value) pair. 
  *
- *	Bins of a record should never be directly accessed. The bins should only
- *	be modified via as_record functions. The only time an as_bin is directly 
- *	accessible is during iteration via as_record_iterator, but the 
- *	as_bin functions should be used to read the values.
+ * Bins of a record should never be directly accessed. The bins should only
+ * be modified via as_record functions. The only time an as_bin is directly 
+ * accessible is during iteration via as_record_iterator, but the 
+ * as_bin functions should be used to read the values.
  *
- *	@ingroup client_objects
+ * @ingroup client_objects
  */
 typedef struct as_bin_s {
 
 	/**
-	 *	Bin name.
+	 * Bin name.
 	 */
 	as_bin_name name;
 
 	/**
-	 *	Bin value.
+	 * Bin value.
 	 */
 	as_bin_value value;
 
 	/**
-	 *	Bin value pointer.
-	 *	If NULL, then there is no value.
-	 *	It can point to as_bin.value or a different value.
+	 * Bin value pointer.
+	 * If NULL, then there is no value.
+	 * It can point to as_bin.value or a different value.
 	 */
-	as_bin_value * valuep;
+	as_bin_value* valuep;
 	
 } as_bin;
 
@@ -101,82 +101,86 @@ typedef struct as_bin_s {
 typedef struct as_bins_s {
 
 	/**
-	 *	@private
-	 *	If true, then as_record_destroy() will free data
+	 * Storage for bins
 	 */
-	bool _free;
+	as_bin* entries;
 
 	/**
-	 *	Number of entries allocated to data.
+	 * Number of entries allocated to data.
 	 */
 	uint16_t capacity;
 
 	/**
-	 *	Number of entries currently holding data.
+	 * Number of entries currently holding data.
 	 */
 	uint16_t size;
 
 	/**
-	 *	Storage for bins
+	 * @private
+	 * If true, then as_record_destroy() will free data
 	 */
-	as_bin * entries;
+	bool _free;
 
 } as_bins;
 
 /******************************************************************************
- *	INLINE FUNCTIONS
+ * INLINE FUNCTIONS
  *****************************************************************************/
 
 /**
- *	Get the name of the bin.
+ * Get the name of the bin.
  *
- *	~~~~~~~~~~{.c}
- *	char * name = as_bin_get_name(bin);
- *	~~~~~~~~~~
+ * ~~~~~~~~~~{.c}
+ * char * name = as_bin_get_name(bin);
+ * ~~~~~~~~~~
  *
- *	@param bin 	The bin to get the name of.
+ * @param bin 	The bin to get the name of.
  *
- *	@return The name of the bin.
+ * @return The name of the bin.
  *
- *	@relates as_bin
+ * @relates as_bin
  */
-static inline char * as_bin_get_name(const as_bin * bin) {
+static inline char*
+as_bin_get_name(const as_bin * bin)
+{
 	return (char *) bin->name;
 }
 
-
 /**
- *	Get the value of the bin.
+ * Get the value of the bin.
  *
- *	~~~~~~~~~~{.c}
- *	as_bin_value val = as_bin_get_value(bin);
- *	~~~~~~~~~~
+ * ~~~~~~~~~~{.c}
+ * as_bin_value val = as_bin_get_value(bin);
+ * ~~~~~~~~~~
  *
- *	@param bin 	The bin to get the value of.
+ * @param bin 	The bin to get the value of.
  *
- *	@return The value of the bin.
+ * @return The value of the bin.
  *
- *	@relates as_bin
+ * @relates as_bin
  */
-static inline as_bin_value * as_bin_get_value(const as_bin * bin) {
+static inline as_bin_value*
+as_bin_get_value(const as_bin * bin)
+{
 	return bin->valuep;
 }
 
-
 /**
- *	Get the type for the value of the bin.
+ * Get the type for the value of the bin.
  *
- *	~~~~~~~~~~{.c}
- *	as_val_t type = as_bin_get_type(bin);
- *	~~~~~~~~~~
+ * ~~~~~~~~~~{.c}
+ * as_val_t type = as_bin_get_type(bin);
+ * ~~~~~~~~~~
  *
- *	@param bin 	The bin to get value's type.
+ * @param bin 	The bin to get value's type.
  *
- *	@return The type of the bin's value
+ * @return The type of the bin's value
  *
- *	@relates as_bin
+ * @relates as_bin
  */
-static inline as_val_t as_bin_get_type(const as_bin * bin) {
+static inline as_val_t
+as_bin_get_type(const as_bin * bin)
+{
 	return as_val_type(bin->valuep);
 }
 

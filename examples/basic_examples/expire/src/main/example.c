@@ -25,16 +25,14 @@
 // Includes
 //
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 
 #include "example_utils.h"
@@ -106,7 +104,7 @@ main(int argc, char* argv[])
 
 	// Wait until past its specified expiration.
 	LOG("waiting %u seconds for record to expire ...", TEST_TTL + 1);
-	sleep(TEST_TTL + 1);
+	as_sleep((TEST_TTL + 1) * 1000);
 
 	// Check that it's no longer in the database.
 	if (aerospike_key_exists(&as, &err, NULL, &g_key, &p_rec) !=

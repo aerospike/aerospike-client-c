@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?> 
+<Project ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemDefinitionGroup>
+    <ClCompile>
+	  <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4996</DisableSpecificWarnings>
+      <PreprocessorDefinitions>AS_USE_LIBUV;USING_UV_SHARED;AS_SHARED_IMPORT;_CRT_SECURE_NO_DEPRECATE;_TIMESPEC_DEFINED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(UseDebugLibraries)' == 'true'">
+    <Link>
+      <AdditionalLibraryDirectories>$(MSBuildThisFileDirectory)lib\x64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+	  <AdditionalDependencies>aerospike.lib;libuv.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(UseDebugLibraries)' == 'false'">
+    <Link>
+      <AdditionalLibraryDirectories>$(MSBuildThisFileDirectory)lib\x64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+	  <AdditionalDependencies>aerospike.lib;libuv.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <Target Name="AfterBuild">
+    <ItemGroup Condition="'$(UseDebugLibraries)' == 'true'">
+      <AerospikePackageFiles Include="$(MSBuildThisFileDirectory)lib\x64\Debug\*.dll"/>
+      <AerospikePackageFiles Include="$(MSBuildThisFileDirectory)lib\x64\Debug\*.pdb"/>
+    </ItemGroup>
+    <ItemGroup Condition="'$(UseDebugLibraries)' == 'false'">
+      <AerospikePackageFiles Include="$(MSBuildThisFileDirectory)lib\x64\Release\*.dll"/>
+    </ItemGroup>
+    <Copy SourceFiles="@(AerospikePackageFiles)" DestinationFolder="$(OutputPath)"></Copy> 
+  </Target>
+</Project>

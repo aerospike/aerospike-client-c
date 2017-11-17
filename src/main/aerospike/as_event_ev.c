@@ -18,6 +18,7 @@
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_async.h>
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_pipe.h>
 #include <aerospike/as_proto.h>
@@ -26,7 +27,6 @@
 #include <aerospike/as_tls.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
-#include <errno.h>
 
 /******************************************************************************
  * GLOBALS
@@ -244,14 +244,16 @@ as_ev_write(as_event_command* cmd)
 			}
 		
 			if (bytes < 0) {
-				if (errno == EWOULDBLOCK) {
+				int e = as_last_error();
+
+				if (e == AS_WOULDBLOCK) {
 					as_ev_watch_write(cmd);
 					return AS_EVENT_WRITE_INCOMPLETE;
 				}
 
 				if (! as_event_socket_retry(cmd)) {
 					as_error err;
-					as_socket_error(fd, cmd->node, &err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket write failed", errno);
+					as_socket_error(fd, cmd->node, &err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket write failed", e);
 					as_event_socket_error(cmd, &err);
 				}
 				return AS_EVENT_WRITE_ERROR;
@@ -323,14 +325,16 @@ as_ev_read(as_event_command* cmd)
 			}
 		
 			if (bytes < 0) {
-				if (errno == EWOULDBLOCK) {
+				int e = as_last_error();
+
+				if (e == EWOULDBLOCK) {
 					as_ev_watch_read(cmd);
 					return AS_EVENT_READ_INCOMPLETE;
 				}
 
 				if (! as_event_socket_retry(cmd)) {
 					as_error err;
-					as_socket_error(fd, cmd->node, &err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket read failed", errno);
+					as_socket_error(fd, cmd->node, &err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket read failed", e);
 					as_event_socket_error(cmd, &err);
 				}
 				return AS_EVENT_READ_ERROR;
@@ -718,7 +722,7 @@ static int
 as_ev_try_connections(int fd, as_address* addresses, socklen_t size, int i, int max)
 {
 	while (i < max) {
-		if (connect(fd, (struct sockaddr*)&addresses[i].addr, size) == 0 || errno == EINPROGRESS) {
+		if (as_socket_connect_fd(fd, (struct sockaddr*)&addresses[i].addr, size)) {
 			return i;
 		}
 		i++;
@@ -730,10 +734,11 @@ static int
 as_ev_try_family_connections(as_event_command* cmd, int family, int begin, int end, int index, as_address* primary, as_socket* sock)
 {
 	// Create a non-blocking socket.
-	int fd = as_socket_create_fd(family);
+	as_socket_fd fd;
+	int rv = as_socket_create_fd(family, &fd);
 
-	if (fd < 0) {
-		return fd;
+	if (rv < 0) {
+		return rv;
 	}
 
 	if (cmd->pipe_listener && ! as_pipe_modify_fd(fd)) {
@@ -747,11 +752,10 @@ as_ev_try_family_connections(as_event_command* cmd, int family, int begin, int e
 	// Try addresses.
 	as_address* addresses = cmd->node->addresses;
 	socklen_t size = (family == AF_INET)? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-	int rv;
-	
+
 	if (index >= 0) {
 		// Try primary address.
-		if (connect(fd, (struct sockaddr*)&primary->addr, size) == 0 || errno == EINPROGRESS) {
+		if (as_socket_connect_fd(fd, (struct sockaddr*)&primary->addr, size)) {
 			return index;
 		}
 		
@@ -787,29 +791,8 @@ as_ev_connect_error(as_event_command* cmd, as_address* primary, int rv)
 		return;
 	}
 
-	const char* msg;
-	rv = -rv;
-
-	if (rv < 1000) {
-		// rv is errno.
-		msg = strerror(rv);
-	}
-	else {
-		switch (rv) {
-			case 1000:
-				msg = "Failed to modify fd for pipeline";
-				break;
-			case 1001:
-				msg = "Failed to wrap socket for TLS";
-				break;
-			default:
-				msg = "Failed to connect";
-				break;
-		}
-	}
-
 	as_error err;
-	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "%s: %s %s", msg, cmd->node->name, primary->name);
+	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Connect failed: %d %s %s", rv, cmd->node->name, primary->name);
 
 	// Only timer needs to be released on socket connection failure.
 	// Watcher has not been registered yet.
@@ -860,7 +843,7 @@ as_event_connect(as_event_command* cmd)
 		// Replace invalid primary address with valid alias.
 		// Other threads may not see this change immediately.
 		// It's just a hint, not a requirement to try this new address first.
-		ck_pr_store_32(&node->address_index, rv);
+		as_store_uint32(&node->address_index, rv);
 		as_log_debug("Change node address %s %s", node->name, as_node_get_address_string(node));
 	}
 

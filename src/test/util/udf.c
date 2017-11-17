@@ -18,30 +18,26 @@
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_udf.h>
-
-#include <stdlib.h>
-#include <stdbool.h>
 #include <errno.h>
+#include <stdlib.h>
 #include <time.h>
 
 #include "udf.h"
 #include "../test.h"
 
-
 #define SCRIPT_LEN_MAX 1048576
 
 extern aerospike * as;
 
-
-
-bool udf_readfile(const char * filename, as_bytes * content) {
-    
-    FILE * file = fopen(filename,"r"); 
+bool udf_readfile(const char * filename, as_bytes * content) {   
+	
+	FILE * file = fopen(filename,"r");
 
     if ( !file ) { 
-        error("cannot open script file %s : %s", filename, strerror(errno));  
+        error("cannot open script file %s : %s", filename, strerror(errno));
         return false;
     } 
 
@@ -70,11 +66,11 @@ bool udf_readfile(const char * filename, as_bytes * content) {
 
 
 bool udf_put(const char * filename) {
-    
-    FILE * file = fopen(filename,"r"); 
+
+    FILE * file = fopen(filename,"r");
 
     if ( !file ) { 
-        error("cannot open script file %s : %s", filename, strerror(errno));  
+        error("cannot open script file %s : %s", filename, strerror(errno));
         return -1; 
     } 
 
@@ -131,7 +127,7 @@ bool udf_remove(const char * filename) {
     }
 
 	as_string_destroy(&filename_string);
- 	WAIT_MS(100);
+	as_sleep(100);
 	
     return err.code == AEROSPIKE_OK;
 }

@@ -30,6 +30,7 @@
 #include <aerospike/as_thread_pool.h>
 #include <aerospike/as_val.h>
 #include <citrusleaf/cf_clock.h>
+#include <citrusleaf/cf_digest.h>
 
 /************************************************************************
  * 	TYPES
@@ -83,7 +84,7 @@ typedef struct as_async_batch_command {
 } as_async_batch_command;
 
 /******************************************************************************
- *	STATIC FUNCTIONS
+ * STATIC FUNCTIONS
  *****************************************************************************/
 
 static inline bool
@@ -511,7 +512,7 @@ as_batch_index_records_execute(as_batch_task* task)
 	
 	if (status) {
 		// Copy error to main error only once.
-		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
 			as_error_copy(task->err, &err);
 		}
 	}
@@ -629,7 +630,7 @@ as_batch_index_execute(as_batch_task* task)
 	
 	if (status) {
 		// Copy error to main error only once.
-		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
 			as_error_copy(task->err, &err);
 		}
 	}
@@ -687,7 +688,7 @@ as_batch_direct_execute(as_batch_task* task)
 	
 	if (status) {
 		// Copy error to main error only once.
-		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
 			as_error_copy(task->err, &err);
 		}
 	}
@@ -898,7 +899,7 @@ as_batch_execute(
 			
 			if (rc) {
 				// Thread could not be added. Abort entire batch.
-				if (ck_pr_fas_32(task.error_mutex, 1) == 0) {
+				if (as_fas_uint32(task.error_mutex, 1) == 0) {
 					status = as_error_update(task.err, AEROSPIKE_ERR_CLIENT, "Failed to add batch thread: %d", rc);
 				}
 				
@@ -993,7 +994,7 @@ as_batch_read_execute_sync(
 			
 			if (rc) {
 				// Thread could not be added. Abort entire batch.
-				if (ck_pr_fas_32(task.error_mutex, 1) == 0) {
+				if (as_fas_uint32(task.error_mutex, 1) == 0) {
 					status = as_error_update(task.err, AEROSPIKE_ERR_CLIENT, "Failed to add batch thread: %d", rc);
 				}
 				
@@ -1208,7 +1209,7 @@ as_batch_read_execute(
 }
 
 /******************************************************************************
- *	PUBLIC FUNCTIONS
+ * PUBLIC FUNCTIONS
  *****************************************************************************/
 
 bool
@@ -1276,8 +1277,8 @@ aerospike_batch_read_async(
 }
 
 /**
- *	Destroy keys and records in record list.  It's the responsility of the caller to
- *	free `as_batch_read_record.bin_names` when necessary.
+ * Destroy keys and records in record list.  It's the responsility of the caller to
+ * free `as_batch_read_record.bin_names` when necessary.
  */
 void
 as_batch_read_destroy(as_batch_read_records* records)
@@ -1299,7 +1300,7 @@ as_batch_read_destroy(as_batch_read_records* records)
 }
 
 /**
- *	Look up multiple records by key, then return all bins.
+ * Look up multiple records by key, then return all bins.
  */
 as_status
 aerospike_batch_get(
@@ -1311,9 +1312,9 @@ aerospike_batch_get(
 }
 
 /**
- *	@private
- *	Perform batch reads for XDR.  The callback will be called for each record as soon as it's
- *	received in no particular order.
+ * @private
+ * Perform batch reads for XDR.  The callback will be called for each record as soon as it's
+ * received in no particular order.
  */
 as_status
 aerospike_batch_get_xdr(
@@ -1325,7 +1326,7 @@ aerospike_batch_get_xdr(
 }
 
 /**
- *	Look up multiple records by key, then return specified bins.
+ * Look up multiple records by key, then return specified bins.
  */
 as_status
 aerospike_batch_get_bins(
@@ -1337,7 +1338,7 @@ aerospike_batch_get_bins(
 }
 
 /**
- *	Test whether multiple records exist in the cluster.
+ * Test whether multiple records exist in the cluster.
  */
 as_status
 aerospike_batch_exists(

@@ -24,14 +24,13 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_record.h>
 #include <citrusleaf/cf_byte_order.h>
-#include <citrusleaf/cf_digest.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /******************************************************************************
- *	MACROS
+ * MACROS
  *****************************************************************************/
 
 // Field IDs
@@ -88,13 +87,13 @@ extern "C" {
 // (Note:  Bit 7 is unused.)
 
 // Transaction message
-#define AS_MESSAGE_VERSION 2L
-#define AS_MESSAGE_TYPE 3L
-#define AS_COMPRESSED_MESSAGE_TYPE 4L
+#define AS_MESSAGE_VERSION 2
+#define AS_MESSAGE_TYPE 3
+#define AS_COMPRESSED_MESSAGE_TYPE 4
 
 // Info message
-#define AS_INFO_MESSAGE_VERSION 2L
-#define AS_INFO_MESSAGE_TYPE 1L
+#define AS_INFO_MESSAGE_VERSION 2
+#define AS_INFO_MESSAGE_TYPE 1
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -104,9 +103,9 @@ extern "C" {
 #define AS_STACK_BUF_SIZE (1024 * 16)
 
 /**
- *	@private
- *	Macros use these stand-ins for cf_malloc() / cf_free(), so that
- *	instrumentation properly substitutes them.
+ * @private
+ * Macros use these stand-ins for cf_malloc() / cf_free(), so that
+ * instrumentation properly substitutes them.
  */
 
 static inline void*
@@ -118,28 +117,28 @@ local_malloc(size_t size)
 static inline void
 local_free(void* memory)
 {
-	return cf_free(memory);
+	cf_free(memory);
 }
 
 /**
- *	@private
- *	Allocate command buffer on stack or heap depending on given size.
+ * @private
+ * Allocate command buffer on stack or heap depending on given size.
  */
 #define as_command_init(_sz) (_sz > AS_STACK_BUF_SIZE) ? (uint8_t*)local_malloc(_sz) : (uint8_t*)alloca(_sz)
 
 /**
- *	@private
- *	Free command buffer.
+ * @private
+ * Free command buffer.
  */
 #define as_command_free(_buf, _sz) if (_sz > AS_STACK_BUF_SIZE) {local_free(_buf);}
 
 /******************************************************************************
- *	TYPES
+ * TYPES
  *****************************************************************************/
 
 /**
- *	@private
- *	Node map data used in as_command_execute().
+ * @private
+ * Node map data used in as_command_execute().
  */
 typedef struct as_command_node_s {
 	as_node* node;
@@ -149,8 +148,8 @@ typedef struct as_command_node_s {
 } as_command_node;
 
 /**
- *	@private
- *	Data used in as_command_parse_result().
+ * @private
+ * Data used in as_command_parse_result().
  */
 typedef struct as_command_parse_result_data_s {
 	as_record** record;
@@ -158,8 +157,8 @@ typedef struct as_command_parse_result_data_s {
 } as_command_parse_result_data;
 
 /**
- *	@private
- *	Parse results callback used in as_command_execute().
+ * @private
+ * Parse results callback used in as_command_execute().
  */
 typedef as_status (*as_parse_results_fn) (as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
 
@@ -168,15 +167,15 @@ typedef as_status (*as_parse_results_fn) (as_error* err, as_socket* sock, as_nod
  ******************************************************************************/
 
 /**
- *	@private
- *	Calculate size of command header plus key fields.
+ * @private
+ * Calculate size of command header plus key fields.
  */
 size_t
 as_command_key_size(as_policy_key policy, const as_key* key, uint16_t* n_fields);
 
 /**
- *	@private
- *	Calculate size of string field.
+ * @private
+ * Calculate size of string field.
  */
 static inline size_t
 as_command_string_field_size(const char* value)
@@ -185,8 +184,8 @@ as_command_string_field_size(const char* value)
 }
 
 /**
- *	@private
- *	Calculate size of field structure given field value size.
+ * @private
+ * Calculate size of field structure given field value size.
  */
 static inline size_t
 as_command_field_size(size_t size)
@@ -195,15 +194,15 @@ as_command_field_size(size_t size)
 }
 
 /**
- *	@private
- *	Calculate size of as_val field.
+ * @private
+ * Calculate size of as_val field.
  */
 size_t
 as_command_value_size(as_val* val, as_buffer* buffer);
 
 /**
- *	@private
- *	Calculate size of bin name and value combined.
+ * @private
+ * Calculate size of bin name and value combined.
  */
 static inline size_t
 as_command_bin_size(const as_bin* bin, as_buffer* buffer)
@@ -212,8 +211,8 @@ as_command_bin_size(const as_bin* bin, as_buffer* buffer)
 }
 
 /**
- *	@private
- *	Calculate size of bin name.  Return error is bin name greater than 14 characters.
+ * @private
+ * Calculate size of bin name.  Return error is bin name greater than 14 characters.
  */
 static inline as_status
 as_command_bin_name_size(as_error* err, const char* name, size_t* size)
@@ -228,8 +227,8 @@ as_command_bin_name_size(as_error* err, const char* name, size_t* size)
 }
 
 /**
- *	@private
- *	Calculate size of string operation.
+ * @private
+ * Calculate size of string operation.
  */
 static inline size_t
 as_command_string_operation_size(const char* value)
@@ -238,8 +237,8 @@ as_command_string_operation_size(const char* value)
 }
 
 /**
- *	@private
- *	Write command header for all commands.
+ * @private
+ * Write command header for all commands.
  */
 uint8_t*
 as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
@@ -248,8 +247,8 @@ as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 	uint32_t ttl, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins, bool durable_delete);
 
 /**
- *	@private
- *	Write command header for read commands only.
+ * @private
+ * Write command header for read commands only.
  */
 static inline uint8_t*
 as_command_write_header_read(uint8_t* cmd, uint8_t read_attr, as_policy_consistency_level consistency,
@@ -277,8 +276,8 @@ as_command_write_header_read(uint8_t* cmd, uint8_t read_attr, as_policy_consiste
 }
 
 /**
- *	@private
- *	Write field header.
+ * @private
+ * Write field header.
  */
 static inline uint8_t*
 as_command_write_field_header(uint8_t* p, uint8_t id, uint32_t size)
@@ -290,8 +289,8 @@ as_command_write_field_header(uint8_t* p, uint8_t id, uint32_t size)
 }
 
 /**
- *	@private
- *	Write string field.
+ * @private
+ * Write string field.
  */
 static inline uint8_t*
 as_command_write_field_string(uint8_t* begin, uint8_t id, const char* val)
@@ -307,8 +306,8 @@ as_command_write_field_string(uint8_t* begin, uint8_t id, const char* val)
 }
 
 /**
- *	@private
- *	Write uint64_t field.
+ * @private
+ * Write uint64_t field.
  */
 static inline uint8_t*
 as_command_write_field_uint64(uint8_t* p, uint8_t id, uint64_t val)
@@ -319,8 +318,8 @@ as_command_write_field_uint64(uint8_t* p, uint8_t id, uint64_t val)
 }
 
 /**
- *	@private
- *	Write as_buffer field.
+ * @private
+ * Write as_buffer field.
  */
 static inline uint8_t*
 as_command_write_field_buffer(uint8_t* p, uint8_t id, as_buffer* buffer)
@@ -331,8 +330,8 @@ as_command_write_field_buffer(uint8_t* p, uint8_t id, as_buffer* buffer)
 }
 
 /**
- *	@private
- *	Write digest field.
+ * @private
+ * Write digest field.
  */
 static inline uint8_t*
 as_command_write_field_digest(uint8_t* p, const as_digest* val)
@@ -343,15 +342,15 @@ as_command_write_field_digest(uint8_t* p, const as_digest* val)
 }
 
 /**
- *	@private
- *	Write key structure.
+ * @private
+ * Write key structure.
  */
 uint8_t*
 as_command_write_key(uint8_t* p, as_policy_key policy, const as_key* key);
 
 /**
- *	@private
- *	Write bin header and bin name.
+ * @private
+ * Write bin header and bin name.
  */
 static inline uint8_t*
 as_command_write_bin_name(uint8_t* cmd, const char* name)
@@ -362,7 +361,7 @@ as_command_write_bin_name(uint8_t* cmd, const char* name)
 	while (*name) {
 		*p++ = *name++;
 	}
-	uint8_t name_len = p - cmd - AS_OPERATION_HEADER_SIZE;
+	uint8_t name_len = (uint8_t)(p - cmd - AS_OPERATION_HEADER_SIZE);
 	*(uint32_t*)cmd = cf_swap_to_be32((uint32_t)name_len + 4);
 	cmd += 4;
 	*cmd++ = AS_OPERATOR_READ;
@@ -373,34 +372,34 @@ as_command_write_bin_name(uint8_t* cmd, const char* name)
 }
 
 /**
- *	@private
- *	Write bin.
+ * @private
+ * Write bin.
  */
 uint8_t*
 as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, as_buffer* buffer);
 
 /**
- *	@private
- *	Finish writing command.
+ * @private
+ * Finish writing command.
  */
 static inline size_t
 as_command_write_end(uint8_t* begin, uint8_t* end)
 {
 	uint64_t len = end - begin;
-	uint64_t proto = (len - 8) | (AS_MESSAGE_VERSION << 56) | (AS_MESSAGE_TYPE << 48);
+	uint64_t proto = (len - 8) | ((uint64_t)AS_MESSAGE_VERSION << 56) | ((uint64_t)AS_MESSAGE_TYPE << 48);
 	*(uint64_t*)begin = cf_swap_to_be64(proto);
 	return len;
 }
 
 /**
- *	@private
- *	Finish writing compressed command.
+ * @private
+ * Finish writing compressed command.
  */
 static inline size_t
 as_command_compress_write_end(uint8_t* begin, uint8_t* end, uint64_t uncompressed_sz)
 {
 	uint64_t len = end - begin;
-	uint64_t proto = (len - 8) | (AS_MESSAGE_VERSION << 56) | (AS_COMPRESSED_MESSAGE_TYPE << 48);
+	uint64_t proto = (len - 8) | ((uint64_t)AS_MESSAGE_VERSION << 56) | ((uint64_t)AS_COMPRESSED_MESSAGE_TYPE << 48);
 	*(uint64_t*)begin = cf_swap_to_be64(proto);
 
 	// TODO: We are not passing this in network byte order because of a mistake
@@ -411,22 +410,22 @@ as_command_compress_write_end(uint8_t* begin, uint8_t* end, uint64_t uncompresse
 }
 
 /**
- *	@private
- *	Calculate max size the compressed command buffer.
+ * @private
+ * Calculate max size the compressed command buffer.
  */
 size_t
 as_command_compress_max_size(size_t cmd_sz);
 
 /**
- *	@private
- *	Compress command buffer.
+ * @private
+ * Compress command buffer.
  */
 as_status
 as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compressed_cmd, size_t* compressed_size);
 
 /**
- *	@private
- *	Send command to the server.
+ * @private
+ * Send command to the server.
  */
 as_status
 as_command_execute(
@@ -436,64 +435,64 @@ as_command_execute(
 );
 
 /**
- *	@private
- *	Parse header of server response.
+ * @private
+ * Parse header of server response.
  */
 as_status
 as_command_parse_header(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
 
 /**
- *	@private
- *	Parse server record.  Used for reads.
+ * @private
+ * Parse server record.  Used for reads.
  */
 as_status
 as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
 
 /**
- *	@private
- *	Parse server success or failure result.
+ * @private
+ * Parse server success or failure result.
  */
 as_status
 as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
 
 /**
- *	@private
- *	Parse server success or failure bins.
+ * @private
+ * Parse server success or failure bins.
  */
 as_status
 as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, as_val** value);
 
 /**
- *	@private
- *	Parse bins received from the server.
+ * @private
+ * Parse bins received from the server.
  */
 as_status
 as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bins, bool deserialize);
 
 /**
- *	@private
- *	Parse user defined function error.
+ * @private
+ * Parse user defined function error.
  */
 as_status
 as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status);
 
 /**
- *	@private
- *	Skip over fields section in returned data.
+ * @private
+ * Skip over fields section in returned data.
  */
 uint8_t*
 as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
 
 /**
- *	@private
- *	Skip over bins in returned data.
+ * @private
+ * Skip over bins in returned data.
  */
 uint8_t*
 as_command_ignore_bins(uint8_t* p, uint32_t n_bins);
 
 /**
- *	@private
- *	Parse key fields received from server.  Used for reads.
+ * @private
+ * Parse key fields received from server.  Used for reads.
  */
 uint8_t*
 as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key);

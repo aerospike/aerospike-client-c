@@ -15,14 +15,10 @@
  * the License.
  */
 #include "test.h"
-#include <sys/wait.h>
-#include <sys/time.h>
-#include <sys/resource.h>
+#include <aerospike/as_std.h>
 #include <sys/types.h>
-#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <citrusleaf/cf_types.h>
 
 /******************************************************************************
  * MACROS
@@ -31,96 +27,15 @@
 #define out stdout
 #define LOG_MESSAGE_MAX 1024
 
-
 /******************************************************************************
  * atf_test
  *****************************************************************************/
-
-atf_test_result * atf_test_run_isolated(atf_test * test) {
-
-    int outfd[2];
-    int infd[2];
-
-    int oldstdin, oldstdout;
-
-    int rc = pipe(outfd); // Where the parent is going to write to
-
-    if (!rc) {
-        fprintf(stderr, "pipe for outfd failed\n");
-	exit (-1);
-    }
-
-    rc = pipe(infd); // From where parent is going to read
-    if (!rc) {
-        fprintf(stderr, "pipe for infd failed\n");
-	exit (-1);
-    }
-
-    oldstdin = dup(0); // Save current stdin
-    oldstdout = dup(1); // Save stdout
-
-    close(0);
-    close(1);
-
-    dup2(outfd[0], 0); // Make the read end of outfd pipe as stdin
-    dup2(infd[1],1); // Make the write end of infd as stdout
-
-
-    atf_test_result * result = atf_test_result_new(test);
-
-    int pid = fork();
-
-    if ( pid == 0 ) {
-        // CHILD
-        close(outfd[0]); // Not required for the child
-        close(outfd[1]);
-        close(infd[0]);
-        close(infd[1]);
-
-        test->run(test, result);
-
-        exit(result->success ? 0 : 1);
-    }
-    else if ( pid == -1 ) {
-        fprintf(stderr, "failed to fork child for running test.\n");
-    }
-    else {
-        char input[100];
-        close(0); // Restore the original std fds of parent
-        close(1);
-        dup2(oldstdin, 0);
-        dup2(oldstdout, 1);
-
-        close(outfd[0]); // These are being used by the child
-        close(infd[1]);
-
-        ssize_t wrc = write(outfd[1],"2^32\n",5); // Write to child’s stdin
-        if (!wrc) {
-            fprintf(stderr, "write to outfd failed\n");
-			exit (-1);
-        }
-
-        input[read(infd[0],input,100)] = 0; // Read from child’s stdout
-
-        int status = 0;
-        int options = 0;
-        struct rusage usage;
-
-        wait4(pid, &status, options, &usage);
-
-        printf("%s",input);
-    }
-
-    return result;
-}
-
 
 atf_test_result * atf_test_run(atf_test * test) {
     atf_test_result * result = atf_test_result_new(test);
     test->run(test, result);
     return result;
 }
-
 
 atf_test_result * atf_test_result_new(atf_test * test) {
     atf_test_result * res = (atf_test_result *) malloc(sizeof(atf_test_result));
@@ -180,7 +95,7 @@ atf_suite_result * atf_suite_run(atf_suite * suite) {
         }
     }
 
-    for ( int i = 0; i < suite->size; i++ ) {
+    for (uint32_t i = 0; i < suite->size; i++) {
         atf_test * test = suite->tests[i];
         printf("    [+] %s[%s] :: %s\n", suite->name, test->name, test->desc);
         atf_test_result * test_result = atf_test_run(test);
@@ -203,7 +118,7 @@ atf_suite_result * atf_suite_run(atf_suite * suite) {
 void atf_suite_result_print(atf_suite_result * suite_result) {
     if ( suite_result->success < suite_result->size ) {
         printf("[✘] %s: %d/%d tests passed.\n", suite_result->suite->name, suite_result->success, suite_result->size);
-        for ( int i = 0; i < suite_result->size; i++ ) {
+        for (uint32_t i = 0; i < suite_result->size; i++) {
             atf_test_result * test_result = suite_result->tests[i];
             if ( ! test_result->success ) {
                 printf("    [✘] %s\n", test_result->test->desc);
@@ -231,7 +146,7 @@ void atf_suite_result_destroy(atf_suite_result * result) {
     if ( ! result ) return;
     result->suite = NULL;
 
-	for (int i = 0; i < result->size; i++) {
+	for (uint32_t i = 0; i < result->size; i++) {
 		atf_test_result_destroy(result->tests[i]);
 		result->tests[i] = NULL;
 	}
@@ -291,7 +206,7 @@ int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
         }
     }
 
-    for( int i = 0; i < plan->size; i++ ) {
+    for(uint32_t i = 0; i < plan->size; i++) {
         atf_plan_result_add( result, atf_suite_run(plan->suites[i]) );
     }
 
@@ -311,7 +226,7 @@ int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
     uint32_t total = 0;
     uint32_t passed = 0;
 
-    for( int i = 0; i < result->size; i++ ) {
+    for(uint32_t i = 0; i < result->size; i++) {
         atf_suite_result_print(result->suites[i]);
         total += result->suites[i]->size;
         passed += result->suites[i]->success;
@@ -339,7 +254,7 @@ void atf_plan_result_destroy(atf_plan_result * result) {
     if ( ! result ) return;
     result->plan = NULL;
 
-	for (int i = 0; i < result->size; i++) {
+	for (uint32_t i = 0; i < result->size; i++) {
 		atf_suite_result_destroy(result->suites[i]);
 		result->suites[i] = NULL;
 	}

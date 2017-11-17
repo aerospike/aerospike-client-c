@@ -16,32 +16,34 @@
  */
 #pragma once
 
+#include <aerospike/as_atomic.h>
+#include <aerospike/as_config.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_vector.h>
+
+#if !defined(_MSC_VER)
 #include <netinet/in.h>
 #include <sys/uio.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// Concurrency kit needs to be under extern "C" when compiling C++.
-#include <aerospike/ck/ck_pr.h>
 	
 /******************************************************************************
- *	MACROS
+ * MACROS
  *****************************************************************************/
 
 /**
- *	Maximum size (including NULL byte) of a hostname.
+ * Maximum size (including NULL byte) of a hostname.
  */
 #define AS_HOSTNAME_SIZE 256
 
 /**
- *	Maximum size of node name
+ * Maximum size of node name
  */
 #define AS_NODE_NAME_SIZE 20
 
@@ -60,84 +62,84 @@ extern "C" {
 #define AS_ADDRESS6_MAX 8
 
 /******************************************************************************
- *	TYPES
+ * TYPES
  *****************************************************************************/
 
 /**
- *	Socket address information.
+ * Socket address information.
  */
 typedef struct as_address_s {
 	/**
-	 *	Socket IP address.
+	 * Socket IP address.
 	 */
 	struct sockaddr_storage addr;
 	
 	/**
-	 *	Socket IP address string representation including port.
+	 * Socket IP address string representation including port.
 	 */
 	char name[AS_IP_ADDRESS_SIZE];
 	
 } as_address;
 	
 /**
- *	@private
- *	Host address alias information.
+ * @private
+ * Host address alias information.
  */
 typedef struct as_alias_s {
 	/**
-	 *	@private
-	 *	Hostname or IP address string representation.
+	 * @private
+	 * Hostname or IP address string representation.
 	 */
 	char name[AS_HOSTNAME_SIZE];
 	
 	/**
-	 *	@private
-	 *	Socket IP port.
+	 * @private
+	 * Socket IP port.
 	 */
-	in_port_t port;
+	uint16_t port;
 	
 } as_alias;
 
 /**
- *	@private
- *	Connection pool; not thread-safe.
+ * @private
+ * Connection pool; not thread-safe.
  */
 typedef struct as_conn_pool_s {
 	/**
-	 *	@private
-	 *	Queue.
+	 * @private
+	 * Queue.
 	 */
 	as_queue queue;
 	
 	/**
-	 *	@private
-	 *	Total number of connections associated with this pool, whether currently
-	 *	queued or not.
+	 * @private
+	 * Total number of connections associated with this pool, whether currently
+	 * queued or not.
 	 */
 	uint32_t total;
 
 	/**
-	 *	@private
-	 *	The limit on the above total number of connections.
+	 * @private
+	 * The limit on the above total number of connections.
 	 */
 	uint32_t limit;
 
 } as_conn_pool;
 
 /**
- *	@private
- *	Connection pool with lock.
+ * @private
+ * Connection pool with lock.
  */
 typedef struct as_conn_pool_lock_s {
 	/**
-	 *	@private
-	 *	Mutex lock.
+	 * @private
+	 * Mutex lock.
 	 */
 	pthread_mutex_t lock;
 
 	/**
-	 *	@private
-	 *	Actual pool.
+	 * @private
+	 * Actual pool.
 	 */
 	as_conn_pool pool;
 
@@ -146,74 +148,74 @@ typedef struct as_conn_pool_lock_s {
 struct as_cluster_s;
 
 /**
- *	Server node representation.
+ * Server node representation.
  */
 typedef struct as_node_s {
 	/**
-	 *	@private
+	 * @private
 	 *  Reference count of node.
 	 */
 	uint32_t ref_count;
 	
 	/**
-	 *	@private
-	 *	Server's generation count for partition management.
+	 * @private
+	 * Server's generation count for partition management.
 	 */
 	uint32_t partition_generation;
 	
 	/**
-	 *	@private
-	 *	TLS certificate name (needed for TLS only, NULL otherwise).
+	 * @private
+	 * TLS certificate name (needed for TLS only, NULL otherwise).
 	 */
 	char* tls_name;
 	
 	/**
-	 *	The name of the node.
+	 * The name of the node.
 	 */
 	char name[AS_NODE_NAME_SIZE];
 	
 	/**
-	 *	@private
-	 *	Primary address index into addresses array.
+	 * @private
+	 * Primary address index into addresses array.
 	 */
 	uint32_t address_index;
 		
 	/**
-	 *	@private
-	 *	Number of IPv4 addresses.
+	 * @private
+	 * Number of IPv4 addresses.
 	 */
 	uint32_t address4_size;
 
 	/**
-	 *	@private
-	 *	Number of IPv6 addresses.
+	 * @private
+	 * Number of IPv6 addresses.
 	 */
 	uint32_t address6_size;
 
 	/**
-	 *	@private
-	 *	Array of IP addresses. Not thread-safe.
+	 * @private
+	 * Array of IP addresses. Not thread-safe.
 	 */
 	as_address* addresses;
 	
 	/**
-	 *	@private
-	 *	Array of hostnames aliases. Not thread-safe.
+	 * @private
+	 * Array of hostnames aliases. Not thread-safe.
 	 */
 	as_vector /* <as_alias> */ aliases;
 
 	struct as_cluster_s* cluster;
 	
 	/**
-	 *	@private
-	 *	Pools of current, cached sockets.
+	 * @private
+	 * Pools of current, cached sockets.
 	 */
 	as_conn_pool_lock* conn_pool_locks;
 	
 	/**
-	 *	@private
-	 *	Array of connection pools used in async commands.  There is one pool per node/event loop.
-	 *	Only used by event loop threads. Not thread-safe.
+	 * @private
+	 * Array of connection pools used in async commands.  There is one pool per node/event loop.
+	 * Only used by event loop threads. Not thread-safe.
 	 */
 	as_conn_pool* async_conn_pools;
 	
@@ -224,87 +226,87 @@ typedef struct as_node_s {
 	as_conn_pool* pipe_conn_pools;
 
 	/**
-	 *	@private
-	 *	Socket used exclusively for cluster tend thread info requests.
+	 * @private
+	 * Socket used exclusively for cluster tend thread info requests.
 	 */
 	as_socket info_socket;
 		
 	/**
-	 *	@private
-	 *	Features supported by server.  Stored in bitmap.
+	 * @private
+	 * Features supported by server.  Stored in bitmap.
 	 */
 	uint32_t features;
 
 	/**
-	 *	@private
-	 *	Connection queue iterator.  Not atomic by design.
+	 * @private
+	 * Connection queue iterator.  Not atomic by design.
 	 */
 	uint32_t conn_iter;
 
 	/**
-	 *	@private
-	 *	Server's generation count for peers.
+	 * @private
+	 * Server's generation count for peers.
 	 */
 	uint32_t peers_generation;
 
 	/**
-	 *	@private
-	 *	Number of peers returned by server node.
+	 * @private
+	 * Number of peers returned by server node.
 	 */
 	uint32_t peers_count;
 
 	/**
-	 *	@private
-	 *	Number of other nodes that consider this node a member of the cluster.
+	 * @private
+	 * Number of other nodes that consider this node a member of the cluster.
 	 */
 	uint32_t friends;
 	
 	/**
-	 *	@private
-	 *	Number of consecutive info request failures.
+	 * @private
+	 * Number of consecutive info request failures.
 	 */
 	uint32_t failures;
 
 	/**
-	 *	@private
-	 *	Shared memory node array index.
+	 * @private
+	 * Shared memory node array index.
 	 */
 	uint32_t index;
 	
 	/**
-	 *	@private
-	 *	Is node currently active.
+	 * @private
+	 * Is node currently active.
 	 */
 	uint8_t active;
 	
 	/**
-	 *	@private
-	 *	Did partition change in current cluster tend.
+	 * @private
+	 * Did partition change in current cluster tend.
 	 */
 	bool partition_changed;
 	
 } as_node;
 
 /**
- *	@private
- *	Node discovery information.
+ * @private
+ * Node discovery information.
  */
 typedef struct as_node_info_s {
 	/**
-	 *	@private
-	 *	Node name.
+	 * @private
+	 * Node name.
 	 */
 	char name[AS_NODE_NAME_SIZE];
 
 	/**
-	 *	@private
-	 *	Features supported by server.  Stored in bitmap.
+	 * @private
+	 * Features supported by server.  Stored in bitmap.
 	 */
 	uint32_t features;
 
 	/**
-	 *	@private
-	 *	Validated socket.
+	 * @private
+	 * Validated socket.
 	 */
 	as_socket socket;
 
@@ -365,7 +367,7 @@ as_conn_pool_inc(as_conn_pool* pool)
 
 /**
  *  @private
- *  Get a connection from the pool.
+ * Get a connection from the pool.
  */
 static inline bool
 as_conn_pool_get(as_conn_pool* pool, void* conn)
@@ -388,77 +390,73 @@ as_conn_pool_put(as_conn_pool* pool, void* conn)
 }
 
 /**
- *	@private
- *	Create new cluster node.
+ * @private
+ * Create new cluster node.
  */
 as_node*
 as_node_create(
 	struct as_cluster_s* cluster, const char* hostname, const char* tls_name,
-	in_port_t port, bool is_alias, struct sockaddr* addr, as_node_info* node_info
+	uint16_t port, bool is_alias, struct sockaddr* addr, as_node_info* node_info
 	);
 
 /**
- *	@private
- *	Close all connections in pool and free resources.
+ * @private
+ * Close all connections in pool and free resources.
  */
-void
+AS_EXTERN void
 as_node_destroy(as_node* node);
 
 /**
- *	@private
- *	Set node to inactive.
+ * @private
+ * Set node to inactive.
  */
 static inline void
 as_node_deactivate(as_node* node)
 {
 	// Make volatile write so changes are reflected in other threads.
-	ck_pr_store_8(&node->active, false);
+	as_store_uint8(&node->active, false);
 }
 
 /**
- *	@private
- *	Reserve existing cluster node.
+ * @private
+ * Reserve existing cluster node.
  */
 static inline void
 as_node_reserve(as_node* node)
 {
-	//ck_pr_fence_acquire();
-	ck_pr_inc_32(&node->ref_count);
+	//as_fence_acquire();
+	as_incr_uint32(&node->ref_count);
 }
 
 /**
- *	@private
- *	Release existing cluster node.
+ * @private
+ * Release existing cluster node.
  */
 static inline void
 as_node_release(as_node* node)
 {
-	//ck_pr_fence_release();
-	
-	bool destroy;
-	ck_pr_dec_32_zero(&node->ref_count, &destroy);
-	
-	if (destroy) {
+	//as_fence_release();
+	if (as_aaf_uint32(&node->ref_count, -1) == 0) {
 		as_node_destroy(node);
 	}
 }
 
 /**
- *	@private
- *	Add socket address to node addresses.
+ * @private
+ * Add socket address to node addresses.
  */
 void
 as_node_add_address(as_node* node, struct sockaddr* addr);
 
 /**
- *	@private
- *	Add hostname to node aliases.
+ * @private
+ * Add hostname to node aliases.
  */
 void
-as_node_add_alias(as_node* node, const char* hostname, in_port_t port);
+as_node_add_alias(as_node* node, const char* hostname, uint16_t port);
 
 /**
- *	Get primary socket address.
+ * Get primary socket address.
  */
 static inline as_address*
 as_node_get_address(as_node* node)
@@ -467,7 +465,7 @@ as_node_get_address(as_node* node)
 }
 
 /**
- *	Get socket address as a string.
+ * Get socket address as a string.
  */
 static inline const char*
 as_node_get_address_string(as_node* node)
@@ -476,22 +474,22 @@ as_node_get_address_string(as_node* node)
 }
 
 /**
- *	@private
- *	Attempt to authenticate given user and password.
+ * @private
+ * Attempt to authenticate given user and password.
  */
 as_status
 as_node_authenticate_connection(struct as_cluster_s* cluster, const char* user, const char* password, uint64_t deadline_ms);
 
 /**
- *	@private
- *	Get a connection to the given node from pool and validate.  Return 0 on success.
+ * @private
+ * Get a connection to the given node from pool and validate.  Return 0 on success.
  */
 as_status
 as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_socket* sock);
 
 /**
- *	@private
- *	Close a node's connection and do not put back into pool.
+ * @private
+ * Close a node's connection and do not put back into pool.
  */
 static inline void
 as_node_close_connection(as_socket* sock) {
@@ -503,8 +501,8 @@ as_node_close_connection(as_socket* sock) {
 }
 
 /**
- *	@private
- *	Put connection back into pool.
+ * @private
+ * Put connection back into pool.
  */
 static inline void
 as_node_put_connection(as_socket* sock, uint32_t max_socket_idle)
@@ -539,8 +537,8 @@ as_node_put_connection(as_socket* sock, uint32_t max_socket_idle)
 }
 
 /**
- *	@private
- *	Are hosts equal.
+ * @private
+ * Are hosts equal.
  */
 static inline bool
 as_host_equals(as_host* h1, as_host* h2)

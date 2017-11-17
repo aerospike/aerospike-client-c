@@ -33,7 +33,6 @@
 #include <aerospike/as_thread_pool.h>
 #include <aerospike/as_udf_context.h>
 #include <aerospike/mod_lua.h>
-#include <stdint.h>
 
 #include "as_stap.h"
 
@@ -98,7 +97,7 @@ typedef struct as_async_query_command {
  *****************************************************************************/
 
 static int
-as_query_aerospike_log(const as_aerospike * as, const char * file, const int line, const int level, const char * msg)
+as_query_aerospike_log(const as_aerospike* as, const char * file, const int line, const int level, const char * msg)
 {
 	switch(level) {
 		case 1:
@@ -358,7 +357,7 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 #if defined(USE_SYSTEMTAP)
 		++nrecs;
 #endif
-		if (ck_pr_load_32(task->error_mutex)) {
+		if (as_load_uint32(task->error_mutex)) {
 			err->code = AEROSPIKE_ERR_QUERY_ABORTED;
 			AEROSPIKE_QUERY_PARSE_RECORDS_FINISHED(task->task_id, task->node->name, nrecs, err->code);
 			return err->code;
@@ -446,7 +445,7 @@ as_query_command_execute(as_query_task* task)
 
 	if (status) {
 		// Set main error only once.
-		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
 			// Don't set error when user aborts query,
 			if (status != AEROSPIKE_ERR_CLIENT_ABORT) {
 				as_error_copy(task->err, &err);
@@ -557,13 +556,13 @@ as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuf
 	uint16_t n_fields = 0;
 	
 	// Estimate namespace size.
-	if (query->ns) {
+	if (query->ns[0]) {
 		size += as_command_string_field_size(query->ns);
 		n_fields++;
 	}
 	
 	// Estimate set size.  Do not send empty sets.
-	if (query->set && *query->set) {
+	if (query->set[0]) {
 		size += as_command_string_field_size(query->set);
 		n_fields++;
 	}
@@ -588,12 +587,12 @@ as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuf
 			as_predicate* pred = &query->where.entries[i];
 			
 			// bin name size(1) + particle type size(1) + begin particle size(4) + end particle size(4) = 10
-			filter_size += strlen(pred->bin) + 10;
+			filter_size += (uint32_t)strlen(pred->bin) + 10;
 			
 			switch(pred->type) {
 				case AS_PREDICATE_EQUAL:
 					if (pred->dtype == AS_INDEX_STRING) {
-						filter_size += strlen(pred->value.string) * 2;
+						filter_size += (uint32_t)strlen(pred->value.string) * 2;
 					}
 					else if (pred->dtype == AS_INDEX_NUMERIC) {
 						filter_size += sizeof(int64_t) * 2;
@@ -604,7 +603,7 @@ as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuf
                         filter_size += sizeof(int64_t) * 2;
                     }
 					else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
-						filter_size += strlen(pred->value.string) * 2;
+						filter_size += (uint32_t)strlen(pred->value.string) * 2;
 					}
 					break;
 			}
@@ -619,7 +618,7 @@ as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuf
 			bin_name_size++;  // Add byte for num bin names.
 			
 			for (uint16_t i = 0; i < query->select.size; i++) {
-				bin_name_size += strlen(query->select.entries[i]) + 1;
+				bin_name_size += (uint32_t)strlen(query->select.entries[i]) + 1;
 			}
 			size += bin_name_size;
 			n_fields++;
@@ -636,7 +635,7 @@ as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuf
 		size += AS_FIELD_HEADER_SIZE;
 		for (uint16_t ii = 0; ii < query->predexp.size; ++ii) {
 			as_predexp_base * bp = query->predexp.entries[ii];
-			predexp_size += (*bp->size_fn)(bp);
+			predexp_size += (uint32_t)(*bp->size_fn)(bp);
 		}
 		size += predexp_size;
 		n_fields++;
@@ -699,12 +698,12 @@ as_query_command_init(
 	}
 	
 	// Write namespace.
-	if (query->ns) {
+	if (query->ns[0]) {
 		p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, query->ns);
 	}
 	
 	// Write set.
-	if (query->set && *query->set) {
+	if (query->set[0]) {
 		p = as_command_write_field_string(p, AS_FIELD_SETNAME, query->set);
 	}
 	
@@ -721,7 +720,7 @@ as_query_command_init(
 	// Write query filters.
 	if (query->where.size > 0) {
 		p = as_command_write_field_header(p, AS_FIELD_INDEX_RANGE, filter_size);
-		*p++ = query->where.size;
+		*p++ = (uint8_t)query->where.size;
 		
 		for (uint16_t i = 0; i < query->where.size; i++ ) {
 			as_predicate* pred = &query->where.entries[i];
@@ -759,7 +758,7 @@ as_query_command_init(
 		// Write selected bin names.
 		if (query->select.size > 0) {
 			p = as_command_write_field_header(p, AS_FIELD_QUERY_BINS, bin_name_size);
-			*p++ = query->select.size;
+			*p++ = (uint8_t)query->select.size;
 			
 			for (uint16_t i = 0; i < query->select.size; i++) {
 				// Write bin name, but do not transfer null byte.
@@ -859,7 +858,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 			
 			if (rc) {
 				// Thread could not be added. Abort entire query.
-				if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+				if (as_fas_uint32(task->error_mutex, 1) == 0) {
 					status = as_error_update(task->err, AEROSPIKE_ERR_CLIENT, "Failed to add query thread: %d", rc);
 	 			}
 				
@@ -938,7 +937,7 @@ as_query_aggregate(void* data)
 	
 	if (status) {
 		// Aggregation failed. Abort entire query.
-		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
 			char* rs = as_module_err_string(status);
 			
 			if (res.value) {

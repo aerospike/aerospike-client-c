@@ -15,7 +15,6 @@
  * the License.
  */
 #include <aerospike/as_address.h>
-#include <arpa/inet.h>
 #include <stdio.h>
 
 /******************************************************************************

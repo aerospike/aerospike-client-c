@@ -26,11 +26,7 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
-
 #include <citrusleaf/alloc.h>
-
-#include <netinet/in.h>
-#include <sys/socket.h>
 
 /******************************************************************************
  * FUNCTIONS

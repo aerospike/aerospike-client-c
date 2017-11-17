@@ -1,0 +1,438 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\fix8.dependencies.getopt.1.0.20151130.1\build\native\fix8.dependencies.getopt.props" Condition="Exists('..\packages\fix8.dependencies.getopt.1.0.20151130.1\build\native\fix8.dependencies.getopt.props')" />
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug libevent|x64">
+      <Configuration>Debug libevent</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug libuv|x64">
+      <Configuration>Debug libuv</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release libevent|x64">
+      <Configuration>Release libevent</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release libuv|x64">
+      <Configuration>Release libuv</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{FDF0C655-6233-4C54-AF71-8AB68C1D3888}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>aerospike</RootNamespace>
+    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libevent|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libuv|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libevent|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libuv|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v140</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="..\props\base.props" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug libevent|x64'" Label="PropertySheets">
+    <Import Project="..\props\base.props" />
+    <Import Project="..\props\libevent.props" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug libuv|x64'" Label="PropertySheets">
+    <Import Project="..\props\base.props" />
+    <Import Project="..\props\libuv.props" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="..\props\base.props" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release libevent|x64'" Label="PropertySheets">
+    <Import Project="..\props\base.props" />
+    <Import Project="..\props\libevent.props" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release libuv|x64'" Label="PropertySheets">
+    <Import Project="..\props\base.props" />
+    <Import Project="..\props\libuv.props" />
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libevent|x64'">
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libuv|x64'">
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libevent|x64'">
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libuv|x64'">
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>AS_SHARED_EXPORT;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeaderFile />
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug libevent|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>AS_SHARED_EXPORT;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug libuv|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>AS_SHARED_EXPORT;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>AS_SHARED_EXPORT;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeaderFile />
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release libevent|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>AS_SHARED_EXPORT;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release libuv|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>AS_SHARED_EXPORT;NDEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_aerospike.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_arraylist.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_arraylist_iterator.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_atomic.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_atomic_gcc.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_atomic_win.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_boolean.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_buffer.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_buffer_pool.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_bytes.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_double.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_geojson.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_hashmap.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_hashmap_iterator.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_integer.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_iterator.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_list.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_list_iterator.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_log.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_log_macros.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_map.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_map_iterator.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_memtracker.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_module.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_monitor.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_msgpack.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_msgpack_serializer.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_nil.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_pair.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_password.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_queue.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_random.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_rec.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_result.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_serializer.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_sleep.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_std.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_stream.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_string.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_stringmap.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_string_builder.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_thread_pool.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_timer.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_types.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_udf_context.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_util.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_val.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_vector.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\ssl_util.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\alloc.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_atomic.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_b64.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_byte_order.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_clock.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_crypto.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_digest.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_hash_math.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_ll.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_queue.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_queue_priority.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_random.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_rchash.h" />
+    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_vector.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike_batch.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike_index.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike_info.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike_key.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike_query.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike_scan.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike_udf.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_address.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_admin.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_async.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_async_proto.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_batch.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_bin.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_cluster.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_command.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_config.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_error.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_event.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_event_internal.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_host.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_info.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_job.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_key.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_listener.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_list_operations.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_lookup.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_map_operations.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_node.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_operations.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_partition.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_peers.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_pipe.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_policy.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_poll.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_predexp.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_proto.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_query.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_record.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_record_iterator.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_scan.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_shm_cluster.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_socket.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_status.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_tls.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_udf.h" />
+    <ClInclude Include="..\..\src\include\aerospike\version.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_aerospike.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_arraylist.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_arraylist_hooks.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_arraylist_iterator.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_arraylist_iterator_hooks.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_boolean.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_buffer.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_buffer_pool.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_bytes.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_double.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_geojson.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_hashmap.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_hashmap_hooks.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_hashmap_iterator.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_hashmap_iterator_hooks.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_integer.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_iterator.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_list.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_log.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_map.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_memtracker.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_module.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_msgpack.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_msgpack_serializer.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_nil.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_pair.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_password.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_queue.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_random.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_rec.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_result.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_serializer.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_stream.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_string.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_string_builder.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_thread_pool.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_timer.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_val.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_vector.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\crypt_blowfish.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\ssl_util.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_alloc.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_b64.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_clock.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_crypto.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_digest.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_ll.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_queue.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_queue_priority.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_random.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_rchash.c" />
+    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_vector.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\internal.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_aerospike.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_bytes.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_geojson.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_iterator.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_list.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_map.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_record.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_reg.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_stream.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_val.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike_batch.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike_index.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike_info.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike_key.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike_query.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike_scan.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike_udf.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_address.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_admin.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_async.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_batch.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_cluster.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_command.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_config.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_error.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_event.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_event_event.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_event_none.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_event_uv.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_info.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_job.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_key.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_lookup.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_node.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_operations.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_partition.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_peers.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_pipe.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_policy.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_predexp.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_proto.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_query.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_record.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_record_hooks.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_record_iterator.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_scan.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_shm_cluster.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_socket.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_tls.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_udf.c" />
+    <ClCompile Include="..\..\src\main\aerospike\version.c" />
+    <ClCompile Include="..\..\src\main\aerospike\_bin.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\aerospike-client-c-dependencies.1.0.0\build\native\aerospike-client-c-dependencies.targets" Condition="Exists('..\packages\aerospike-client-c-dependencies.1.0.0\build\native\aerospike-client-c-dependencies.targets')" />
+  </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\aerospike-client-c-dependencies.1.0.0\build\native\aerospike-client-c-dependencies.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\aerospike-client-c-dependencies.1.0.0\build\native\aerospike-client-c-dependencies.targets'))" />
+  </Target>
+</Project>

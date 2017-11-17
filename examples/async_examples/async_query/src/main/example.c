@@ -19,9 +19,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  * IN THE SOFTWARE.
  ******************************************************************************/
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
 
 #include <aerospike/aerospike.h>
@@ -50,7 +48,7 @@ const char TEST_INDEX_NAME[] = "test-bin-index";
 // Forward Declarations
 //
 
-void insert_records();
+void insert_records(uint32_t* counter);
 bool insert_record(as_event_loop* event_loop, void* udata, uint32_t index);
 void insert_listener(as_error* err, void* udata, as_event_loop* event_loop);
 void run_query(as_event_loop* event_loop);
@@ -114,7 +112,7 @@ insert_records(uint32_t* counter)
 	as_event_loop* event_loop = as_event_loop_get();	
 		
 	// Put up to max_commands on the async queue at a time.
-	int block_size = g_n_keys >= max_commands ? max_commands : g_n_keys;
+	uint32_t block_size = g_n_keys >= max_commands ? max_commands : g_n_keys;
 
 	for (uint32_t i = 0; i < block_size; i++) {
 		if (! insert_record(event_loop, counter, i)) {

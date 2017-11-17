@@ -25,16 +25,14 @@
 // Includes
 //
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 
 #include "example_utils.h"
@@ -139,7 +137,7 @@ main(int argc, char* argv[])
 
 	// Sleep 2 seconds, just to show the TTL decrease.
 	LOG("waiting 2 seconds ...");
-	sleep(2);
+	as_sleep(2000);
 
 	// Use aerospike_key_exists() to get only record metadata.
 	if (aerospike_key_exists(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {

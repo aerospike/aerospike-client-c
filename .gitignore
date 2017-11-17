@@ -17,7 +17,6 @@ client_test-valgrind
 ###################
 *.com
 *.class
-*.dll
 *.exe
 *.o
 *.so
@@ -64,3 +63,15 @@ xcuserdata
 # Security Credentials #
 ########################
 *.pem
+
+# Windows
+*.suo
+*.user
+*.nupkg
+*.VC.db
+*.VC.VC.opendb
+.vs
+x64
+ipch
+packages
+packages/repositories.config

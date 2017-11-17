@@ -16,21 +16,23 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_udf.h>
-
-#include <aerospike/as_error.h>
-#include <aerospike/as_status.h>
-
-#include <aerospike/as_record.h>
-#include <aerospike/as_integer.h>
-#include <aerospike/as_string.h>
-#include <aerospike/as_list.h>
+#include <aerospike/aerospike_key.h>
 #include <aerospike/as_arraylist.h>
-#include <aerospike/as_map.h>
+#include <aerospike/as_double.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_hashmap_iterator.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_list.h>
+#include <aerospike/as_map.h>
+#include <aerospike/as_nil.h>
+#include <aerospike/as_record.h>
+#include <aerospike/as_sleep.h>
+#include <aerospike/as_status.h>
+#include <aerospike/as_string.h>
+#include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_udf.h>
-
-#include <time.h>
 
 #include "../test.h"
 #include "../util/udf.h"
@@ -45,10 +47,8 @@ extern aerospike * as;
  * MACROS
  *****************************************************************************/
 
-#define LUA_FILE "src/test/lua/udf_basics.lua"
+#define LUA_FILE AS_START_DIR "src/test/lua/udf_basics.lua"
 #define UDF_FILE "udf_basics"
-
-#define WAIT_MS(__ms) nanosleep((struct timespec[]){{0, __ms##000000}}, NULL)
 
 /******************************************************************************
  * TEST CASES
@@ -69,7 +69,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 
 	assert_int_eq( err.code, AEROSPIKE_ERR_UDF );
 
-	WAIT_MS(100);
+	as_sleep(100);
 
 	// list the files on the server
 
@@ -80,7 +80,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	info("files: ")
-	for(int i=0; i<files.size; i++) {
+	for(uint32_t i=0; i<files.size; i++) {
 		as_udf_file * file = &files.entries[i];
 		info("- %s", file->name);
 		if ( strcmp(file->name, filename) == 0 ) {
@@ -116,7 +116,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	info("files: ")
-	for(int i=0; i<files.size; i++) {
+	for(uint32_t i=0; i<files.size; i++) {
 		as_udf_file * file = &files.entries[i];
 		info("- %s", file->name);
 		if ( strcmp(file->name, filename) == 0 ) {
@@ -150,7 +150,7 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
-	WAIT_MS(100);
+	as_sleep(100);
 
 	as_bytes_destroy(&content);
 }

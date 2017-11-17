@@ -24,13 +24,13 @@
 #include <string.h>
 
 /******************************************************************************
- *	TYPES
+ * TYPES
  *****************************************************************************/
 
 typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t size, as_vector* list);
 
 /******************************************************************************
- *	MACROS
+ * MACROS
  *****************************************************************************/
 
 // Commands
@@ -58,8 +58,8 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define PRIVILEGES 12
 
 // Misc
-#define MSG_VERSION 0L
-#define MSG_TYPE 2L
+#define MSG_VERSION 0ULL
+#define MSG_TYPE 2ULL
 #define FIELD_HEADER_SIZE 5
 #define HEADER_SIZE 24
 #define HEADER_REMAINING 16
@@ -67,7 +67,7 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define DEFAULT_TIMEOUT 60000  // one minute
 
 /******************************************************************************
- *	STATIC FUNCTIONS
+ * STATIC FUNCTIONS
  *****************************************************************************/
 
 static uint8_t*
@@ -312,7 +312,7 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 }
 
 /******************************************************************************
- *	FUNCTIONS
+ * FUNCTIONS
  *****************************************************************************/
 
 uint32_t
@@ -420,6 +420,10 @@ as_status
 aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user, const char* password)
 {
 	as_error_reset(err);
+
+	if (! as->cluster->password) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Current password is invalid");
+	}
 
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
@@ -534,7 +538,7 @@ aerospike_revoke_privileges(aerospike* as, as_error* err, const as_policy_admin*
 }
 
 /******************************************************************************
- *	QUERY USERS
+ * QUERY USERS
  *****************************************************************************/
 
 static uint8_t*
@@ -716,7 +720,7 @@ as_users_destroy(as_user** users, int users_size)
 }
 
 /******************************************************************************
- *	QUERY ROLES
+ * QUERY ROLES
  *****************************************************************************/
 
 static uint8_t*
@@ -895,7 +899,7 @@ aerospike_query_roles(aerospike* as, as_error* err, const as_policy_admin* polic
 void
 as_roles_destroy(as_role** roles, int roles_size)
 {
-	for (uint32_t i = 0; i < roles_size; i++) {
+	for (int i = 0; i < roles_size; i++) {
 		cf_free(roles[i]);
 	}
 	cf_free(roles);

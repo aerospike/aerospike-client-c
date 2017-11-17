@@ -16,7 +16,10 @@
  */
 #pragma once
 
-#include <aerospike/as_cluster.h>
+#include <aerospike/as_std.h>
+#include <aerospike/as_status.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_vector.h>
 
 /******************************************************************************
  * TYPES
@@ -29,15 +32,18 @@ typedef struct as_peers_s {
 	bool gen_changed;
 } as_peers;
 
+struct as_cluster_s;
+struct as_node_s;
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
-as_node*
+struct as_node_s*
 as_peers_find_local_node(as_vector* nodes, const char* name);
 
 void
-as_peers_parse_services(as_peers* peers, as_cluster* cluster, as_node* node, char* buf);
+as_peers_parse_services(as_peers* peers, struct as_cluster_s* cluster, struct as_node_s* node, char* buf);
 
 as_status
-as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_node* node, char* buf);
+as_peers_parse_peers(as_peers* peers, as_error* err, struct as_cluster_s* cluster, struct as_node_s* node, char* buf);

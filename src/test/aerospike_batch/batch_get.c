@@ -17,22 +17,21 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
-
+#include <aerospike/as_arraylist.h>
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_batch.h>
 #include <aerospike/as_error.h>
-#include <aerospike/as_status.h>
-#include <aerospike/as_tls.h>
-
-#include <aerospike/as_record.h>
-#include <aerospike/as_integer.h>
-#include <aerospike/as_string.h>
-#include <aerospike/as_list.h>
-#include <aerospike/as_arraylist.h>
-#include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_list.h>
+#include <aerospike/as_map.h>
+#include <aerospike/as_record.h>
+#include <aerospike/as_sleep.h>
+#include <aerospike/as_status.h>
+#include <aerospike/as_string.h>
+#include <aerospike/as_tls.h>
 #include <aerospike/as_val.h>
 #include <pthread.h>
-#include <unistd.h>
 
 #include "../test.h"
 
@@ -42,7 +41,7 @@
 
 extern aerospike * as;
 
-cf_atomic32 num_threads = 0;
+uint32_t num_threads = 0;
 pthread_rwlock_t rwlock;
 
 /******************************************************************************
@@ -216,13 +215,13 @@ void *batch_get_function(void  *thread_id)
     int start_index = thread_num * 20;
     int end_index = start_index + 20;
     int j = 0;
-    for (uint32_t i = start_index; i < end_index; i++) {
+    for (int i = start_index; i < end_index; i++) {
         as_key_init_int64(as_batch_keyat(&batch,j++), NAMESPACE, SET, i+1);
     }
 	
     batch_read_data data = {thread_num, 0, 0, 0, 0};
 	
-    cf_atomic32_incr(&num_threads);
+    as_incr_uint32(&num_threads);
     pthread_rwlock_rdlock(&rwlock);
 	
 	aerospike_batch_get(as, &err, NULL, &batch, batch_get_1_callback, &data);
@@ -240,10 +239,10 @@ void *batch_get_function(void  *thread_id)
 
 TEST( multithreaded_batch_get , "Batch Get - with multiple threads ")
 {
-    int threads = 10;
+    uint32_t threads = 10;
 	
-    pthread_t batch_thread[threads];
-	int ids[threads];
+    pthread_t* batch_thread = alloca(sizeof(pthread_t) * threads);
+	int* ids = alloca(sizeof(int) * threads);
     pthread_rwlock_init(&rwlock, NULL);
     pthread_rwlock_wrlock( &rwlock);
     for (uint32_t i = 0; i < threads; i++) {
@@ -251,12 +250,12 @@ TEST( multithreaded_batch_get , "Batch Get - with multiple threads ")
         pthread_create( &batch_thread[i], 0, batch_get_function, &ids[i]);
     }
 	
-    while ( cf_atomic32_get(num_threads) < threads ) {
-        sleep(1);
+    while (as_load_uint32(&num_threads) < threads) {
+        as_sleep(1 * 1000);
     }
     pthread_rwlock_unlock( &rwlock);
 	
-    for ( uint32_t i = 0; i < threads; i++) {
+    for (uint32_t i = 0; i < threads; i++) {
         pthread_join( batch_thread[i], NULL);
     }
     pthread_rwlock_destroy( &rwlock);

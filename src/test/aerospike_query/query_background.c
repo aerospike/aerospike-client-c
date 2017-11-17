@@ -32,7 +32,6 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
-#include <aerospike/mod_lua.h>
 
 #include "../test.h"
 #include "../util/index_util.h"
@@ -50,7 +49,7 @@ static bool server_has_double = false;
  * MACROS
  *****************************************************************************/
 
-#define LUA_FILE "src/test/lua/query_background.lua"
+#define LUA_FILE AS_START_DIR "src/test/lua/query_background.lua"
 #define UDF_FILE "query_background"
 
 #define NAMESPACE "test"
@@ -175,7 +174,7 @@ as_query_callback(const as_val* v, void* udata)
 		return true;
 	}
 	qdata* data = udata;
-	ck_pr_inc_int(&data->count);
+	as_incr_int32(&data->count);
 
 	as_record* rec = (as_record*)v;
 	int v1 = (int)as_record_get_int64(rec, "qebin1", 0);
@@ -240,7 +239,7 @@ as_query_aggr_cb(const as_val* p_val, void* udata)
 			*sum = res ? res->value : 0;
 		} else if (as_val_type(p_val) == AS_INTEGER) {
 			as_integer* res = as_integer_fromval(p_val);
-			*sum = res ? res->value : 0;
+			*sum = res ? (double)res->value : 0;
 		} else {
 			warn("unexpected return type %d",as_val_type(p_val));
 		}

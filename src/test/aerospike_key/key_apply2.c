@@ -26,6 +26,7 @@
 #include <aerospike/as_map.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
@@ -46,7 +47,7 @@ extern aerospike * as;
 #define NAMESPACE "test"
 #define SET "test_apply2"
 
-#define LUA_FILE "src/test/lua/key_apply2.lua"
+#define LUA_FILE AS_START_DIR "src/test/lua/key_apply2.lua"
 #define UDF_FILE "key_apply2"
 
 /******************************************************************************
@@ -60,7 +61,7 @@ static bool before(atf_suite * suite) {
 		return false;
 	}
 
-	WAIT_MS(100);
+	as_sleep(100);
 
 	if ( ! udf_exists(LUA_FILE) ) {
 		error("lua file does not exist: %s", LUA_FILE);
@@ -423,7 +424,7 @@ typedef struct {
 			error("(%d) %s [%s:%d]", err.code, err.message, err.file, err.line);\
 			assert(err.code != AEROSPIKE_OK);\
 		}\
-		for( int i = 0; i < kvp.vals_size && kvp.vals[i] != '\0'; i++ ) {\
+		for(uint32_t i = 0; i < kvp.vals_size && kvp.vals[i] != '\0'; i++) {\
 			char * __val = kvp.vals[i]; \
 			__block; \
 			__val = NULL; \

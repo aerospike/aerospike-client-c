@@ -18,7 +18,9 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log.h>
+#include <aerospike/as_sleep.h>
 #include <citrusleaf/alloc.h>
+#include <stdlib.h>
 
 /******************************************************************************
  * FUNCTIONS
@@ -176,10 +178,12 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 	char command[1024];
 	snprintf(command, sizeof(command), "sindex/%s/%s" , task->ns, task->name);
 	
-	uint32_t interval_micros = (interval_ms <= 0)? 1000 * 1000 : interval_ms * 1000;
+	if (! interval_ms) {
+		interval_ms = 1000;
+	}
 	
 	while (! task->done) {
-		usleep(interval_micros);
+		as_sleep(interval_ms);
 		task->done = aerospike_index_create_is_done(task->as, err, &policy, command);
 	}
 	return AEROSPIKE_OK;

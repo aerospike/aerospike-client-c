@@ -19,27 +19,27 @@
 #include <citrusleaf/alloc.h>
 
 /******************************************************************************
- *	INLINE FUNCTIONS
+ * INLINE FUNCTIONS
  *****************************************************************************/
 
 /**
- *	Get the key at given position of the batch. If the position is not
- *	within the allocated capacity for the batchm then NULL is returned.
+ * Get the key at given position of the batch. If the position is not
+ * within the allocated capacity for the batchm then NULL is returned.
  */
-extern inline as_key * as_batch_keyat(const as_batch * batch, uint32_t i);
+extern inline as_key * as_batch_keyat(const as_batch* batch, uint32_t i);
 
 
 /******************************************************************************
- *	FUNCTIONS
+ * FUNCTIONS
  *****************************************************************************/
 
 /**
- *	Create and initialize a heap allocated as_batch capable of storing
- *	`capacity` keys.
+ * Create and initialize a heap allocated as_batch capable of storing
+ * `capacity` keys.
  */
 as_batch * as_batch_new(uint32_t size)
 {
-	as_batch * batch = (as_batch *) cf_malloc(sizeof(as_batch) + sizeof(as_key) * size);
+	as_batch* batch = (as_batch *) cf_malloc(sizeof(as_batch) + sizeof(as_key) * size);
 	if ( !batch ) return NULL;
 
 	batch->_free = true;
@@ -50,9 +50,9 @@ as_batch * as_batch_new(uint32_t size)
 }
 
 /**
- *	Initialize a stack allocated as_batch capable of storing `capacity` keys.
+ * Initialize a stack allocated as_batch capable of storing `capacity` keys.
  */
-as_batch * as_batch_init(as_batch * batch, uint32_t size)
+as_batch * as_batch_init(as_batch* batch, uint32_t size)
 {
 	if ( !batch ) return batch;
 
@@ -70,15 +70,15 @@ as_batch * as_batch_init(as_batch * batch, uint32_t size)
 }
 
 /**
- *	Destroy the batch of keys.
+ * Destroy the batch of keys.
  */
-void as_batch_destroy(as_batch * batch)
+void as_batch_destroy(as_batch* batch)
 {
 	if ( !batch ) return;
 
 	if ( batch->keys.entries ) {
 
-		for (int i = 0; i < batch->keys.size; i++ ) {
+		for (uint32_t i = 0; i < batch->keys.size; i++ ) {
 			as_key_destroy(&batch->keys.entries[i]);
 		}
 

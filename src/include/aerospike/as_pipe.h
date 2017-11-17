@@ -27,20 +27,18 @@
 #include <citrusleaf/cf_ll.h>
 
 #include <assert.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
-#include <unistd.h>
-
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-
-#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+
+#if !defined(_MSC_VER)
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 
 typedef struct as_pipe_connection {
 	as_event_connection base;
@@ -61,7 +59,7 @@ extern void
 as_pipe_get_connection(as_event_command* cmd);
 
 extern bool
-as_pipe_modify_fd(int fd);
+as_pipe_modify_fd(as_socket_fd fd);
 
 extern void
 as_pipe_socket_error(as_event_command* cmd, as_error* err, bool retry);

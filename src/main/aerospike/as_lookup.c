@@ -15,11 +15,12 @@
  * the License.
  */
 #include <aerospike/as_lookup.h>
-#include <aerospike/as_address.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
+#include <stdlib.h>
 
 as_status
-as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, in_port_t port)
+as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, uint16_t port)
 {
 	iter->hostname_is_alias = true;
 

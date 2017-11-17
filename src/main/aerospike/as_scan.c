@@ -22,7 +22,7 @@
  * INSTANCE FUNCTIONS
  *****************************************************************************/
 
-static as_scan * as_scan_defaults(as_scan * scan, bool free, const as_namespace ns, const as_set set)
+static as_scan * as_scan_defaults(as_scan* scan, bool free, const as_namespace ns, const as_set set)
 {
 	if (scan == NULL) return scan;
 
@@ -69,7 +69,7 @@ static as_scan * as_scan_defaults(as_scan * scan, bool free, const as_namespace 
  */
 as_scan * as_scan_new(const as_namespace ns, const as_set set)
 {
-	as_scan * scan = (as_scan *) cf_malloc(sizeof(as_scan));
+	as_scan* scan = (as_scan *) cf_malloc(sizeof(as_scan));
 	if ( ! scan ) return NULL;
 	return as_scan_defaults(scan, true, ns, set);
 }
@@ -77,7 +77,7 @@ as_scan * as_scan_new(const as_namespace ns, const as_set set)
 /**
  * Initializes a scan.
  */
-as_scan * as_scan_init(as_scan * scan, const as_namespace ns, const as_set set)
+as_scan * as_scan_init(as_scan* scan, const as_namespace ns, const as_set set)
 {
 	if ( !scan ) return scan;
 	return as_scan_defaults(scan, false, ns, set);
@@ -86,7 +86,7 @@ as_scan * as_scan_init(as_scan * scan, const as_namespace ns, const as_set set)
 /**
  * Releases all resources allocated to the scan.
  */
-void as_scan_destroy(as_scan * scan)
+void as_scan_destroy(as_scan* scan)
 {
 	if ( !scan ) return;
 
@@ -126,29 +126,29 @@ void as_scan_destroy(as_scan * scan)
 }
 
 /******************************************************************************
- *	SELECT FUNCTIONS
+ * SELECT FUNCTIONS
  *****************************************************************************/
 
 /** 
- *	Initializes `as_scan.select` with a capacity of `n` using `malloc()`.
- *	
- *	For stack allocation, use `as_scan_select_inita()`.
+ * Initializes `as_scan.select` with a capacity of `n` using `malloc()`.
+ * 
+ * For stack allocation, use `as_scan_select_inita()`.
  *
- *	~~~~~~~~~~{.c}
- *	as_scan_select_init(&scan, 2);
- *	as_scan_select(&scan, "bin1");
- *	as_scan_select(&scan, "bin2");
- *	~~~~~~~~~~
+ * ~~~~~~~~~~{.c}
+ * as_scan_select_init(&scan, 2);
+ * as_scan_select(&scan, "bin1");
+ * as_scan_select(&scan, "bin2");
+ * ~~~~~~~~~~
  *
- *	@param scan		The scan to initialize.
- *	@param n		The number of bins to allocate.
+ * @param scan		The scan to initialize.
+ * @param n		The number of bins to allocate.
  *
- *	@return On success, the initialized. Otherwise an error occurred.
+ * @return On success, the initialized. Otherwise an error occurred.
  *
- *	@relates as_scan
- *	@ingroup as_scan_t
+ * @relates as_scan
+ * @ingroup as_scan_t
  */
-bool as_scan_select_init(as_scan * scan, uint16_t n) 
+bool as_scan_select_init(as_scan* scan, uint16_t n) 
 {
 	if ( !scan ) return false;
 	if ( scan->select.entries ) return false;
@@ -164,26 +164,26 @@ bool as_scan_select_init(as_scan * scan, uint16_t n)
 }
 
 /**
- *	Select bins to be projected from matching records.
+ * Select bins to be projected from matching records.
  *
- *	You have to ensure as_scan.select has sufficient capacity, prior to 
- *	adding a bin. If capacity is insufficient then false is returned.
+ * You have to ensure as_scan.select has sufficient capacity, prior to 
+ * adding a bin. If capacity is insufficient then false is returned.
  *
- *	~~~~~~~~~~{.c}
- *	as_scan_select_init(&scan, 2);
- *	as_scan_select(&scan, "bin1");
- *	as_scan_select(&scan, "bin2");
- *	~~~~~~~~~~
+ * ~~~~~~~~~~{.c}
+ * as_scan_select_init(&scan, 2);
+ * as_scan_select(&scan, "bin1");
+ * as_scan_select(&scan, "bin2");
+ * ~~~~~~~~~~
  *
- *	@param scan 		The scan to modify.
- *	@param bin 			The name of the bin to select.
+ * @param scan 		The scan to modify.
+ * @param bin 			The name of the bin to select.
  *
- *	@return On success, true. Otherwise an error occurred.
+ * @return On success, true. Otherwise an error occurred.
  *
- *	@relates as_scan
- *	@ingroup as_scany_t
+ * @relates as_scan
+ * @ingroup as_scany_t
  */
-bool as_scan_select(as_scan * scan, const char * bin)
+bool as_scan_select(as_scan* scan, const char * bin)
 {
 	// test preconditions
 	if ( !scan || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
@@ -200,10 +200,10 @@ bool as_scan_select(as_scan * scan, const char * bin)
 }
 
 /******************************************************************************
- *	PREDEXP FUNCTIONS
+ * PREDEXP FUNCTIONS
  *****************************************************************************/
 
-bool as_scan_predexp_init(as_scan * scan, uint16_t n)
+bool as_scan_predexp_init(as_scan* scan, uint16_t n)
 {
 	if ( !scan ) return false;
 	if ( scan->predexp.entries ) return false;
@@ -218,7 +218,7 @@ bool as_scan_predexp_init(as_scan * scan, uint16_t n)
 	return true;
 }
 
-bool as_scan_predexp_add(as_scan * scan, as_predexp_base * predexp)
+bool as_scan_predexp_add(as_scan* scan, as_predexp_base * predexp)
 {
 	// test preconditions
 	if ( !scan ) {
@@ -240,18 +240,18 @@ bool as_scan_predexp_add(as_scan * scan, as_predexp_base * predexp)
  *****************************************************************************/
 
 /**
- *	The percentage of data to scan.
- *	
- *	~~~~~~~~~~{.c}
- *	as_scan_set_percent(&q, 100);
- *	~~~~~~~~~~
+ * The percentage of data to scan.
+ * 
+ * ~~~~~~~~~~{.c}
+ * as_scan_set_percent(&q, 100);
+ * ~~~~~~~~~~
  *
- *	@param scan 		The scan to set the priority on.
- *	@param percent		The percent to scan.
+ * @param scan 		The scan to set the priority on.
+ * @param percent		The percent to scan.
  *
- *	@return On success, true. Otherwise an error occurred.
+ * @return On success, true. Otherwise an error occurred.
  */
-bool as_scan_set_percent(as_scan * scan, uint8_t percent)
+bool as_scan_set_percent(as_scan* scan, uint8_t percent)
 {
 	if ( !scan ) return false;
 	scan->percent = percent;
@@ -259,18 +259,18 @@ bool as_scan_set_percent(as_scan * scan, uint8_t percent)
 }
 
 /**
- *	Set the priority for the scan.
- *	
- *	~~~~~~~~~~{.c}
- *	as_scan_set_priority(&q, AS_SCAN_PRIORITY_LOW);
- *	~~~~~~~~~~
+ * Set the priority for the scan.
+ * 
+ * ~~~~~~~~~~{.c}
+ * as_scan_set_priority(&q, AS_SCAN_PRIORITY_LOW);
+ * ~~~~~~~~~~
  *
- *	@param scan 		The scan to set the priority on.
- *	@param priority		The priority for the scan.
+ * @param scan 		The scan to set the priority on.
+ * @param priority		The priority for the scan.
  *
- *	@return On success, true. Otherwise an error occurred.
+ * @return On success, true. Otherwise an error occurred.
  */
-bool as_scan_set_priority(as_scan * scan, as_scan_priority priority)
+bool as_scan_set_priority(as_scan* scan, as_scan_priority priority)
 {
 	if ( !scan ) return false;
 	scan->priority = priority;
@@ -278,18 +278,18 @@ bool as_scan_set_priority(as_scan * scan, as_scan_priority priority)
 }
 
 /**
- *	Do not return bins. This will only return the metadata for the records.
- *	
- *	~~~~~~~~~~{.c}
- *	as_scan_set_nobins(&q, true);
- *	~~~~~~~~~~
+ * Do not return bins. This will only return the metadata for the records.
+ * 
+ * ~~~~~~~~~~{.c}
+ * as_scan_set_nobins(&q, true);
+ * ~~~~~~~~~~
  *
- *	@param scan 		The scan to set the priority on.
- *	@param nobins		If true, then do not return bins.
+ * @param scan 		The scan to set the priority on.
+ * @param nobins		If true, then do not return bins.
  *
- *	@return On success, true. Otherwise an error occurred.
+ * @return On success, true. Otherwise an error occurred.
  */
-bool as_scan_set_nobins(as_scan * scan, bool nobins)
+bool as_scan_set_nobins(as_scan* scan, bool nobins)
 {
 	if ( !scan ) return false;
 	scan->no_bins = nobins;
@@ -297,18 +297,18 @@ bool as_scan_set_nobins(as_scan * scan, bool nobins)
 }
 
 /**
- *	Scan all the nodes in prallel
- *	
- *	~~~~~~~~~~{.c}
- *	as_scan_set_concurrent(&q, true);
- *	~~~~~~~~~~
+ * Scan all the nodes in prallel
+ * 
+ * ~~~~~~~~~~{.c}
+ * as_scan_set_concurrent(&q, true);
+ * ~~~~~~~~~~
  *
- *	@param scan 		The scan to set the concurrency on.
- *	@param concurrent	If true, scan all the nodes in parallel
+ * @param scan 		The scan to set the concurrency on.
+ * @param concurrent	If true, scan all the nodes in parallel
  *
- *	@return On success, true. Otherwise an error occurred.
+ * @return On success, true. Otherwise an error occurred.
  */
-bool as_scan_set_concurrent(as_scan * scan, bool concurrent)
+bool as_scan_set_concurrent(as_scan* scan, bool concurrent)
 {
 	if ( !scan ) return false;
 	scan->concurrent = concurrent;
@@ -316,27 +316,27 @@ bool as_scan_set_concurrent(as_scan * scan, bool concurrent)
 }
 
 /**
- *	Apply a UDF to each record scanned on the server.
- *	
- *	~~~~~~~~~~{.c}
- *	as_arraylist arglist;
- *	as_arraylist_init(&arglist, 2, 0);
- *	as_arraylist_append_int64(&arglist, 1);
- *	as_arraylist_append_int64(&arglist, 2);
- *	
- *	as_scan_apply_each(&q, "module", "func", (as_list *) &arglist);
+ * Apply a UDF to each record scanned on the server.
+ * 
+ * ~~~~~~~~~~{.c}
+ * as_arraylist arglist;
+ * as_arraylist_init(&arglist, 2, 0);
+ * as_arraylist_append_int64(&arglist, 1);
+ * as_arraylist_append_int64(&arglist, 2);
+ * 
+ * as_scan_apply_each(&q, "module", "func", (as_list *) &arglist);
  *
- *	as_arraylist_destroy(&arglist);
- *	~~~~~~~~~~
+ * as_arraylist_destroy(&arglist);
+ * ~~~~~~~~~~
  *
- *	@param scan 		The scan to apply the UDF to.
- *	@param module 		The module containing the function to execute.
- *	@param function 	The function to execute.
- *	@param arglist 		The arguments for the function.
+ * @param scan 		The scan to apply the UDF to.
+ * @param module 		The module containing the function to execute.
+ * @param function 	The function to execute.
+ * @param arglist 		The arguments for the function.
  *
- *	@return On success, true. Otherwise an error occurred.
+ * @return On success, true. Otherwise an error occurred.
  */
-bool as_scan_apply_each(as_scan * scan, const char * module, const char * function, as_list * arglist)
+bool as_scan_apply_each(as_scan* scan, const char* module, const char* function, as_list* arglist)
 {
 	if ( !module || !function ) return false;
 	as_udf_call_init(&scan->apply_each, module, function, arglist);

@@ -16,7 +16,7 @@
  */
 #pragma once
 
-#include <aerospike/as_node.h>
+#include <aerospike/as_std.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,6 +34,7 @@ extern "C" {
 /******************************************************************************
  * TYPES
  *****************************************************************************/
+struct as_node_s;
 
 /**
  * @private
@@ -44,14 +45,14 @@ typedef struct as_partition_s {
 	 * @private
 	 * Master node for this partition.
 	 */
-	as_node* master;
+	struct as_node_s* master;
 	
 	/**
 	 * @private
 	 * Prole node for this partition.
 	 * TODO - not ideal for replication factor > 2.
 	 */
-	as_node* prole;
+	struct as_node_s* prole;
 
 	/**
 	 * @private
@@ -145,7 +146,7 @@ as_partition_tables_get(as_partition_tables* tables, const char* ns);
  * Is node referenced in any partition table.
  */
 bool
-as_partition_tables_find_node(as_partition_tables* tables, as_node* node);
+as_partition_tables_find_node(as_partition_tables* tables, struct as_node_s* node);
 	
 /**
  * @private

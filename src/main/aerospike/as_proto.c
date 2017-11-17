@@ -16,15 +16,14 @@
  */
 #include <aerospike/as_proto.h>
 #include <citrusleaf/cf_byte_order.h>
-#include <stdint.h>
 #include <string.h>
 
 // Byte swap proto from current machine byte order to network byte order (big endian).
 void
 as_proto_swap_to_be(as_proto *p)
 {
-	uint8_t	 version = p->version;
-	uint8_t  type = p->type;
+	uint8_t	version = (uint8_t)p->version;
+	uint8_t type = (uint8_t)p->type;
 	p->version = p->type = 0;
 	p->sz = cf_swap_to_be64(*(uint64_t*)p);
 	p->version = version;
@@ -35,8 +34,8 @@ as_proto_swap_to_be(as_proto *p)
 void
 as_proto_swap_from_be(as_proto *p)
 {
-	uint8_t	 version = p->version;
-	uint8_t  type = p->type;
+	uint8_t	version = (uint8_t)p->version;
+	uint8_t type = (uint8_t)p->type;
 	p->version = p->type = 0;
 	p->sz = cf_swap_from_be64(*(uint64_t*)p);
 	p->version = version;

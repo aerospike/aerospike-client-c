@@ -208,7 +208,7 @@ as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task, as_error* e
 			return status;
 		}
 		
-		if (ck_pr_load_32(task->error_mutex)) {
+		if (as_load_uint32(task->error_mutex)) {
 			err->code = AEROSPIKE_ERR_SCAN_ABORTED;
 			return err->code;
 		}
@@ -278,7 +278,7 @@ as_scan_command_execute(as_scan_task* task)
 	
 	if (status) {
 		// Set main error only once.
-		if (ck_pr_fas_32(task->error_mutex, 1) == 0) {
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
 			// Don't set error when user aborts query,
 			if (status != AEROSPIKE_ERR_CLIENT_ABORT) {
 				as_error_copy(task->err, &err);
@@ -311,12 +311,12 @@ as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer
 	uint32_t predexp_size = 0;
 	uint16_t n_fields = 0;
 	
-	if (scan->ns) {
+	if (scan->ns[0]) {
 		size += as_command_string_field_size(scan->ns);
 		n_fields++;
 	}
 	
-	if (scan->set) {
+	if (scan->set[0]) {
 		size += as_command_string_field_size(scan->set);
 		n_fields++;
 	}
@@ -363,7 +363,7 @@ as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer
 		size += AS_FIELD_HEADER_SIZE;
 		for (uint16_t ii = 0; ii < scan->predexp.size; ++ii) {
 			as_predexp_base * bp = scan->predexp.entries[ii];
-			predexp_size += (*bp->size_fn)(bp);
+			predexp_size += (uint32_t)((*bp->size_fn)(bp));
 		}
 		size += predexp_size;
 		n_fields++;
@@ -392,11 +392,11 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 			policy->base.total_timeout, n_fields, scan->select.size);
 	}
 	
-	if (scan->ns) {
+	if (scan->ns[0]) {
 		p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, scan->ns);
 	}
 	
-	if (scan->set) {
+	if (scan->set[0]) {
 		p = as_command_write_field_string(p, AS_FIELD_SETNAME, scan->set);
 	}
 
@@ -523,7 +523,7 @@ as_scan_generic(
 			
 			if (rc) {
 				// Thread could not be added. Abort entire scan.
-				if (ck_pr_fas_32(task.error_mutex, 1) == 0) {
+				if (as_fas_uint32(task.error_mutex, 1) == 0) {
 					status = as_error_update(task.err, AEROSPIKE_ERR_CLIENT, "Failed to add scan thread: %d", rc);
 				}
 				
@@ -756,7 +756,7 @@ aerospike_scan_foreach(
 as_status
 aerospike_scan_node(
 	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
-	const char* node_name, aerospike_scan_foreach_callback callback, void * udata
+	const char* node_name, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
 	as_error_reset(err);

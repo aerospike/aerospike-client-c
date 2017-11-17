@@ -14,23 +14,20 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
-#include <ctype.h>
-#include <pthread.h>
-#include <stdbool.h>
-#include <signal.h>
-
+#include <aerospike/as_tls.h>
+#include <aerospike/as_atomic.h>
+#include <aerospike/as_log_macros.h>
+#include <aerospike/as_poll.h>
+#include <aerospike/ssl_util.h>
+#include <citrusleaf/cf_clock.h>
 #include <openssl/conf.h>
 #include <openssl/crypto.h>
 #include <openssl/engine.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-
-#include <aerospike/as_log_macros.h>
-#include <aerospike/as_socket.h>
-#include <aerospike/as_tls.h>
-#include <aerospike/ssl_util.h>
-#include <citrusleaf/cf_clock.h>
+#include <ctype.h>
+#include <pthread.h>
+#include <signal.h>
 
 static void* cert_blacklist_read(const char * path);
 static bool cert_blacklist_check(void* cert_blacklist,
@@ -139,34 +136,13 @@ protocols_parse(as_config_tls* tlscfg, uint16_t* oprotocols, as_error* errp)
 	return AEROSPIKE_OK;
 }
 
-#define STACK_LIMIT (16 * 1024)
-
-static inline size_t
-as_fdset_size(int fd)
-{
-	// Roundup fd in increments of FD_SETSIZE and convert to bytes.
-	return ((fd / FD_SETSIZE) + 1) * FD_SETSIZE / 8;
-}
-
-static inline void
-as_fd_set(int fd, fd_set *fdset)
-{
-	FD_SET(fd%FD_SETSIZE, &fdset[fd/FD_SETSIZE]);
-}
-
-static inline int
-as_fd_isset(int fd, fd_set *fdset)
-{
-	return FD_ISSET(fd%FD_SETSIZE, &fdset[fd/FD_SETSIZE]);
-}
-
 static int
-wait_readable(int fd, uint32_t socket_timeout, uint64_t deadline)
+wait_socket(as_socket_fd fd, uint32_t socket_timeout, uint64_t deadline, bool read)
 {
-	size_t rset_size = as_fdset_size(fd);
-	fd_set* rset = (fd_set*)(rset_size > STACK_LIMIT ? cf_malloc(rset_size) : alloca(rset_size));
-	struct timeval tv;
-	struct timeval* tvp = NULL;
+	as_poll poll;
+	as_poll_init(&poll, fd);
+
+	uint32_t timeout;
 	int rv;
 
 	while (true) {
@@ -178,107 +154,30 @@ wait_readable(int fd, uint32_t socket_timeout, uint64_t deadline)
 				break;
 			}
 
-			uint64_t ms_left = deadline - now;
+			timeout = (uint32_t)(deadline - now);
 
-			if (socket_timeout > 0 && socket_timeout < ms_left) {
-				ms_left = socket_timeout;
+			if (socket_timeout > 0 && socket_timeout < timeout) {
+				timeout = socket_timeout;
 			}
-			tv.tv_sec = ms_left / 1000;
-			tv.tv_usec = (ms_left % 1000) * 1000;
-			tvp = &tv;
 		}
 		else {
-			if (socket_timeout > 0) {
-				tv.tv_sec = socket_timeout / 1000;
-				tv.tv_usec = (socket_timeout % 1000) * 1000;
-				tvp = &tv;
-			}
+			timeout = socket_timeout;
 		}
 
-		memset((void*)rset, 0, rset_size);
-		as_fd_set(fd, rset);
-
-		rv = select(fd+1, rset /*readfd*/, 0 /*writefd*/, 0 /*oobfd*/, tvp);
+		rv = as_poll_socket(&poll, fd, timeout, read);
 
 		if (rv > 0) {
-			if (as_fd_isset(fd, rset)) {
-				rv = 0;
-				break;
-			}
-			continue;
-		}
-
-		if (rv == 0) {
-			rv = 1;  // timeout
+			rv = 0;  // success
 			break;
 		}
-		break;  // error
+
+		if (rv < 0) {
+			break;  // error
+		}
+		// rv == 0 timeout.  continue in case timed out before real timeout.
 	}
 
-	if (rset_size > STACK_LIMIT) {
-		cf_free(rset);
-	}
-	return rv;
-}
-
-static int
-wait_writable(int fd, uint32_t socket_timeout, uint64_t deadline)
-{
-	size_t wset_size = as_fdset_size(fd);
-	fd_set* wset = (fd_set*)(wset_size > STACK_LIMIT ? cf_malloc(wset_size) : alloca(wset_size));
-	struct timeval tv;
-	struct timeval* tvp = NULL;
-	int rv;
-
-	while (true) {
-		if (deadline > 0) {
-			uint64_t now = cf_getms();
-
-			if (now > deadline) {
-				rv = 1;  // timeout
-				break;
-			}
-
-			uint64_t ms_left = deadline - now;
-
-			if (socket_timeout > 0 && socket_timeout < ms_left) {
-				ms_left = socket_timeout;
-			}
-			tv.tv_sec = ms_left / 1000;
-			tv.tv_usec = (ms_left % 1000) * 1000;
-			tvp = &tv;
-		}
-		else {
-			if (socket_timeout > 0) {
-				tv.tv_sec = socket_timeout / 1000;
-				tv.tv_usec = (socket_timeout % 1000) * 1000;
-				tvp = &tv;
-			}
-		}
-
-		memset((void*)wset, 0, wset_size);
-		as_fd_set(fd, wset);
-
-		rv = select(fd+1, 0 /*readfd*/, wset /*writefd*/, 0 /*oobfd*/, tvp);
-
-		if (rv > 0) {
-			if (as_fd_isset(fd, wset)) {
-				rv = 0;
-				break;
-			}
-			continue;
-		}
-
-		if (rv == 0) {
-			rv = 1;  // timeout
-			break;
-		}
-		break;  // error
-	}
-
-	if (wset_size > STACK_LIMIT) {
-		cf_free(wset);
-	}
+	as_poll_destroy(&poll);
 	return rv;
 }
 
@@ -298,7 +197,11 @@ pthreads_locking_callback(int mode, int type, const char *file, int line)
 static void
 pthreads_thread_id(CRYPTO_THREADID *tid)
 {
-    CRYPTO_THREADID_set_numeric(tid, (unsigned long)pthread_self());
+#if !defined(_MSC_VER)
+	CRYPTO_THREADID_set_numeric(tid, (unsigned long)pthread_self());
+#else
+	CRYPTO_THREADID_set_pointer(tid, pthread_self().p);
+#endif
 }
 
 static void
@@ -354,7 +257,7 @@ as_tls_check_init()
 		s_ex_name_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 		s_ex_ctxt_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 		
-		__sync_synchronize();
+		as_fence_memory();
 		
 		s_tls_inited = true;
 
@@ -366,7 +269,7 @@ as_tls_check_init()
 }
 
 void
-as_tls_cleanup()
+as_tls_cleanup(void)
 {
 	// Skip if we were never initialized.
 	if (! s_tls_inited) {
@@ -519,6 +422,7 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	if (tlscfg->cert_blacklist) {
 		cert_blacklist = cert_blacklist_read(tlscfg->cert_blacklist);
 		if (! cert_blacklist) {
+			pthread_mutex_destroy(&octx->lock);
 			return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
 								   "Failed to read certificate blacklist: %s",
 								   tlscfg->cert_blacklist);
@@ -530,6 +434,7 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	as_status status = protocols_parse(tlscfg, &protocols, errp);
 	if (status != AEROSPIKE_OK) {
 		cert_blacklist_destroy(cert_blacklist);
+		pthread_mutex_destroy(&octx->lock);
 		return status;
 	}
 
@@ -543,6 +448,7 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		method = SSLv3_client_method();
 #else
 		cert_blacklist_destroy(cert_blacklist);
+		pthread_mutex_destroy(&octx->lock);
 		return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR, "SSLV3 protocol is not allowed");
 #endif
 	}
@@ -579,6 +485,8 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	SSL_CTX* ctx = SSL_CTX_new(method);
 	if (ctx == NULL) {
 		cert_blacklist_destroy(cert_blacklist);
+		pthread_mutex_destroy(&octx->lock);
+		
 		unsigned long errcode = ERR_get_error();
 		char errbuf[1024];
 		ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
@@ -609,6 +517,8 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		if (rv != 1) {
 			cert_blacklist_destroy(cert_blacklist);
 			SSL_CTX_free(ctx);
+			pthread_mutex_destroy(&octx->lock);
+
 			char errbuf[1024];
 			unsigned long errcode = ERR_get_error();
 			if (errcode != 0) {
@@ -635,7 +545,8 @@ as_tls_context_setup(as_config_tls* tlscfg,
 				// There *was* an error after all.
 				cert_blacklist_destroy(cert_blacklist);
 				SSL_CTX_free(ctx);
-				
+				pthread_mutex_destroy(&octx->lock);
+
 				unsigned long errcode = ERR_get_error();
 				char errbuf[1024];
 				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
@@ -652,7 +563,8 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		if (rv != 1) {
 				cert_blacklist_destroy(cert_blacklist);
 				SSL_CTX_free(ctx);
-				
+				pthread_mutex_destroy(&octx->lock);
+
 				unsigned long errcode = ERR_get_error();
 				char errbuf[1024];
 				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
@@ -667,6 +579,7 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		if (rv != 1) {
 			cert_blacklist_destroy(cert_blacklist);
 			SSL_CTX_free(ctx);
+			pthread_mutex_destroy(&octx->lock);
 			return as_error_set_message(errp, AEROSPIKE_ERR_TLS_ERROR,
 										"no compatible cipher found");
 		}
@@ -714,9 +627,8 @@ as_tls_context_destroy(as_tls_context* ctx)
 	
 	if (ctx->ssl_ctx) {
 		SSL_CTX_free(ctx->ssl_ctx);
+		pthread_mutex_destroy(&ctx->lock);
 	}
-
-	pthread_mutex_destroy(&ctx->lock);
 }
 
 as_status
@@ -788,7 +700,7 @@ as_tls_wrap(as_tls_context* ctx, as_socket* sock, const char* tls_name)
 	if (sock->ssl == NULL)
 		return -1;
 
-	SSL_set_fd(sock->ssl, sock->fd);
+	SSL_set_fd(sock->ssl, (int)sock->fd);
 
 	// Note - it's tempting to try and point at the as_socket with the
 	// SSL ex_data instead of pointing at it's fields.  It doesn't
@@ -872,7 +784,7 @@ as_tls_connect_once(as_socket* sock)
 				as_log_warn("SSL_connect_once I/O error: unexpected EOF");
 			}
 			else {
-				as_log_warn("SSL_connect_once I/O error: %s", strerror(errno));
+				as_log_warn("SSL_connect_once I/O error: %d", as_last_error());
 			}
 		}
 		return -4;
@@ -886,8 +798,21 @@ as_tls_connect_once(as_socket* sock)
 int
 as_tls_connect(as_socket* sock, uint64_t deadline)
 {
+	int rv;
+
+#if defined(_MSC_VER)
+	// Windows SSL_connect() will fail with SSL_ERROR_SYSCALL if non-blocking
+	// socket has not completed TCP connect.  Wait on socket before calling
+	// SSL_connect() when on Windows.
+	rv = wait_socket(sock->fd, 0, deadline, false);
+	if (rv != 0) {
+		as_log_warn("wait_writable failed: %d", rv);
+		return rv;
+	}
+#endif
+
 	while (true) {
-		int rv = SSL_connect(sock->ssl);
+		rv = SSL_connect(sock->ssl);
 		if (rv == 1) {
 			log_session_info(sock);
 			return 0;
@@ -898,17 +823,17 @@ as_tls_connect(as_socket* sock, uint64_t deadline)
 		char errbuf[1024];
 		switch (sslerr) {
 		case SSL_ERROR_WANT_READ:
-			rv = wait_readable(sock->fd, 0, deadline);
+			rv = wait_socket(sock->fd, 0, deadline, true);
 			if (rv != 0) {
-				as_log_warn("wait_readable failed: %d", errno);
+				as_log_warn("wait_readable failed: %d", rv);
 				return rv;
 			}
 			// loop back around and retry
 			break;
 		case SSL_ERROR_WANT_WRITE:
-			rv = wait_writable(sock->fd, 0, deadline);
+			rv = wait_socket(sock->fd, 0, deadline, false);
 			if (rv != 0) {
-				as_log_warn("wait_writables failed: %d", errno);
+				as_log_warn("wait_writable failed: %d", rv);
 				return rv;
 			}
 			// loop back around and retry
@@ -930,7 +855,7 @@ as_tls_connect(as_socket* sock, uint64_t deadline)
 					as_log_warn("SSL_connect I/O error: unexpected EOF");
 				}
 				else {
-					as_log_warn("SSL_connect I/O error: %s", strerror(errno));
+					as_log_warn("SSL_connect I/O error: %d", as_last_error());
 				}
 			}
 			return -2;
@@ -986,7 +911,7 @@ as_tls_peek(as_socket* sock, void* buf, int num)
 					as_log_warn("SSL_peek I/O error: unexpected EOF");
 				}
 				else {
-					as_log_warn("SSL_peek I/O error: %s", strerror(errno));
+					as_log_warn("SSL_peek I/O error: %d", as_last_error());
 				}
 			}
 			return -1;
@@ -1041,7 +966,7 @@ as_tls_read_once(as_socket* sock, void* buf, size_t len)
 					as_log_warn("SSL_read_once I/O error: unexpected EOF");
 				}
 				else {
-					as_log_warn("SSL_read_once I/O error: %s", strerror(errno));
+					as_log_warn("SSL_read_once I/O error: %d", as_last_error());
 				}
 			}
 			return -4;
@@ -1083,14 +1008,14 @@ as_tls_read(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, ui
 			char errbuf[1024];
 			switch (sslerr) {
 			case SSL_ERROR_WANT_READ:
-				rv = wait_readable(sock->fd, socket_timeout, deadline);
+				rv = wait_socket(sock->fd, socket_timeout, deadline, true);
 				if (rv != 0) {
 					return rv;
 				}
 				// loop back around and retry
 				break;
 			case SSL_ERROR_WANT_WRITE:
-				rv = wait_writable(sock->fd, socket_timeout, deadline);
+				rv = wait_socket(sock->fd, socket_timeout, deadline, false);
 				if (rv != 0) {
 					return rv;
 				}
@@ -1113,7 +1038,7 @@ as_tls_read(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, ui
 						as_log_warn("SSL_read I/O error: unexpected EOF");
 					}
 					else {
-						as_log_warn("SSL_read I/O error: %s", strerror(errno));
+						as_log_warn("SSL_read I/O error: %d", as_last_error());
 					}
 				}
 				return -1;
@@ -1159,7 +1084,7 @@ as_tls_write_once(as_socket* sock, void* buf, size_t len)
 					as_log_warn("SSL_write_once I/O error: unexpected EOF");
 				}
 				else {
-					as_log_warn("SSL_write_once I/O error: %s", strerror(errno));
+					as_log_warn("SSL_write_once I/O error: %d", as_last_error());
 				}
 			}
 			return -4;
@@ -1190,14 +1115,14 @@ as_tls_write(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, u
 			char errbuf[1024];
 			switch (sslerr) {
 			case SSL_ERROR_WANT_READ:
-				rv = wait_readable(sock->fd, socket_timeout, deadline);
+				rv = wait_socket(sock->fd, socket_timeout, deadline, true);
 				if (rv != 0) {
 					return rv;
 				}
 				// loop back around and retry
 				break;
 			case SSL_ERROR_WANT_WRITE:
-				rv = wait_writable(sock->fd, socket_timeout, deadline);
+				rv = wait_socket(sock->fd, socket_timeout, deadline, false);
 				if (rv != 0) {
 					return rv;
 				}
@@ -1220,7 +1145,7 @@ as_tls_write(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, u
 						as_log_warn("SSL_write I/O error: unexpected EOF");
 					}
 					else {
-						as_log_warn("SSL_write I/O error: %s", strerror(errno));
+						as_log_warn("SSL_write I/O error: %d", as_last_error());
 					}
 				}
 				return -1;
@@ -1378,6 +1303,7 @@ static void cert_blacklist_destroy(void* cbl)
 
 static void manage_sigpipe()
 {
+#if !defined(_MSC_VER)
 	// OpenSSL can encounter a SIGPIPE in the SSL_shutdown sequence.
 	// The default behavior is to terminate the program.
 	//
@@ -1417,4 +1343,5 @@ static void manage_sigpipe()
 					strerror(errno));
 		return;
 	}
+#endif
 }

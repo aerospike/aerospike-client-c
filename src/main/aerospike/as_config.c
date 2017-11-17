@@ -19,10 +19,8 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_string.h>
 #include <aerospike/mod_lua_config.h>
-
 #include <ctype.h>
-#include <stdbool.h>
-#include <stdint.h>
+#include <stdlib.h>
 
 /******************************************************************************
  * FUNCTIONS

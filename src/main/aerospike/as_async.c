@@ -31,7 +31,7 @@ extern uint32_t as_event_loop_size;
 uint32_t
 as_async_get_cluster_count()
 {
-	return ck_pr_load_32(&as_cluster_count);
+	return as_load_uint32(&as_cluster_count);
 }
 
 uint32_t

@@ -17,11 +17,7 @@
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_udf.h>
-
 #include <citrusleaf/alloc.h>
-
-#include <stdbool.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -32,7 +28,7 @@
 /**
  * Initialize default values for given as_udf_call.
  */
-static as_udf_call * as_udf_call_defaults(as_udf_call * call, bool free, const as_udf_module_name module, const as_udf_function_name function, as_list * arglist) 
+static as_udf_call * as_udf_call_defaults(as_udf_call* call, bool free, const as_udf_module_name module, const as_udf_function_name function, as_list* arglist) 
 {
 	if ( !call ) return call;
 
@@ -57,7 +53,7 @@ static as_udf_call * as_udf_call_defaults(as_udf_call * call, bool free, const a
 /**
  * Initialize a stack allocated as_udf_call.
  */
-as_udf_call * as_udf_call_init(as_udf_call * call, const as_udf_module_name module, const as_udf_function_name function, as_list * arglist)
+as_udf_call * as_udf_call_init(as_udf_call* call, const as_udf_module_name module, const as_udf_function_name function, as_list* arglist)
 {
 	if ( ( module && strlen(module) > AS_UDF_MODULE_MAX_LEN ) ||
 		 ( function && strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) ) {
@@ -69,20 +65,20 @@ as_udf_call * as_udf_call_init(as_udf_call * call, const as_udf_module_name modu
 /**
  * Creates a new heap allocated as_udf_call.
  */
-as_udf_call * as_udf_call_new(const as_udf_module_name module, const as_udf_function_name function, as_list * arglist)
+as_udf_call * as_udf_call_new(const as_udf_module_name module, const as_udf_function_name function, as_list* arglist)
 {
 	if ( ( module && strlen(module) > AS_UDF_MODULE_MAX_LEN ) ||
 		 ( function && strlen(function) > AS_UDF_FUNCTION_MAX_LEN ) ) {
 		return NULL;
 	}
-	as_udf_call * call = (as_udf_call *) cf_malloc(sizeof(as_udf_call));
+	as_udf_call* call = (as_udf_call *) cf_malloc(sizeof(as_udf_call));
 	return as_udf_call_defaults(call, true, module, function, arglist);
 }
 
 /**
  * Destroy an as_udf_call.
  */
-void as_udf_call_destroy(as_udf_call * call)
+void as_udf_call_destroy(as_udf_call* call)
 {
 	if ( call ) {
 
@@ -160,7 +156,7 @@ void as_udf_file_destroy(as_udf_file * file)
  * UDF LIST FUNCTIONS
  *****************************************************************************/
 
-as_udf_files * as_udf_files_defaults(as_udf_files * files, bool free, uint32_t capacity)
+as_udf_files * as_udf_files_defaults(as_udf_files* files, bool free, uint32_t capacity)
 {
 	if ( !files ) return files;
 	
@@ -179,29 +175,29 @@ as_udf_files * as_udf_files_defaults(as_udf_files * files, bool free, uint32_t c
 }
 
 /**
- *	Initialize a stack allocated as_udf_files.
+ * Initialize a stack allocated as_udf_files.
  *
- *	@param files
- *	@param capacity The number of entries to allocate.
+ * @param files
+ * @param capacity The number of entries to allocate.
  *
- *	@returns The initialized udf list on success. Otherwise NULL.
+ * @returns The initialized udf list on success. Otherwise NULL.
  */
-as_udf_files * as_udf_files_init(as_udf_files * files, uint32_t capacity)
+as_udf_files * as_udf_files_init(as_udf_files* files, uint32_t capacity)
 {
 	if ( !files ) return files;
 	return as_udf_files_defaults(files, false, capacity);
 }
 
 /**
- *	Create and initialize a new heap allocated `as_udf_files`.
- *	
- *	@param capacity The number of entries to allocate.
+ * Create and initialize a new heap allocated `as_udf_files`.
+ * 
+ * @param capacity The number of entries to allocate.
  *
- *	@returns The newly allocated udf list on success. Otherwise NULL.
+ * @returns The newly allocated udf list on success. Otherwise NULL.
  */
 as_udf_files * as_udf_files_new(uint32_t capacity)
 {
-	as_udf_files * files = (as_udf_files *) cf_malloc(sizeof(as_udf_files));
+	as_udf_files* files = (as_udf_files *) cf_malloc(sizeof(as_udf_files));
 	if ( !files ) return files;
 	return as_udf_files_defaults(files, true, capacity);
 }
@@ -209,7 +205,7 @@ as_udf_files * as_udf_files_new(uint32_t capacity)
 /**
  * Destroy an as_udf_list.
  */
-void as_udf_files_destroy(as_udf_files * files)
+void as_udf_files_destroy(as_udf_files* files)
 {
 	if ( files ) {
 

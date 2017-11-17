@@ -25,9 +25,7 @@
 // Includes
 //
 
-#include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 #include <stdlib.h>
 
 #include <aerospike/aerospike.h>
@@ -48,8 +46,13 @@
 // Constants
 //
 
-#define UDF_MODULE "geo_filter_amen"
+#if !defined(_MSC_VER)
 #define UDF_USER_PATH "src/lua/"
+#else
+#define UDF_USER_PATH "../../../examples/geospatial_examples/filter/src/lua/"
+#endif
+
+#define UDF_MODULE "geo_filter_amen"
 const char UDF_FILE_PATH[] =  UDF_USER_PATH UDF_MODULE ".lua";
 
 const char TEST_BIN_NAME1[] = "geofilterloc";

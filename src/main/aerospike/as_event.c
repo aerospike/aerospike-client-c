@@ -24,8 +24,15 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_shm_cluster.h>
 #include <citrusleaf/alloc.h>
-#include <errno.h>
 #include <pthread.h>
+
+// Use pointer comparison for performance.  If portability becomes an issue, use
+// "pthread_equal(event_loop->thread, pthread_self())" instead.
+#if !defined(_MSC_VER)
+#define as_in_event_loop(_t1) ((_t1) == pthread_self())
+#else
+#define as_in_event_loop(_t1) ((_t1).p == pthread_self().p)
+#endif
 
 /******************************************************************************
  * GLOBALS
@@ -39,6 +46,8 @@ int as_event_send_buffer_size = 0;
 int as_event_recv_buffer_size = 0;
 bool as_event_threads_created = false;
 
+bool aerospike_library_init();
+
 /******************************************************************************
  * PUBLIC FUNCTIONS
  *****************************************************************************/
@@ -49,6 +58,10 @@ bool as_event_threads_created = false;
 static bool
 as_event_initialize_loops(uint32_t capacity)
 {
+	if (!aerospike_library_init()) {
+		return false;
+	}
+
 	if (capacity == 0) {
 		return false;
 	}
@@ -85,7 +98,11 @@ as_event_create_loops(uint32_t capacity)
 
 		event_loop->loop = 0;
 		pthread_mutex_init(&event_loop->lock, 0);
+#if !defined(_MSC_VER)
 		event_loop->thread = 0;
+#else
+		memset(&event_loop->thread, 0, sizeof(pthread_t));
+#endif
 		event_loop->index = i;
 		event_loop->errors = 0;
 		as_queue_init(&event_loop->queue, sizeof(as_event_commander), AS_EVENT_QUEUE_INITIAL_CAPACITY);
@@ -125,7 +142,7 @@ as_event_set_external_loop_capacity(uint32_t capacity)
 as_event_loop*
 as_event_set_external_loop(void* loop)
 {
-	uint32_t current = ck_pr_faa_32(&as_event_loop_size, 1);
+	uint32_t current = as_faa_uint32(&as_event_loop_size, 1);
 	
 	if (current >= as_event_loop_capacity) {
 		as_log_error("Failed to add external loop. Capacity is %u", as_event_loop_capacity);
@@ -227,11 +244,9 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 
 	as_event_loop* event_loop = cmd->event_loop;
 
-	// Use pointer comparison for performance.  If portability becomes an issue, use
-	// "pthread_equal(event_loop->thread, pthread_self())" instead.
-	// Also, avoid recursive error death spiral by forcing command to be queued to
+	// Avoid recursive error death spiral by forcing command to be queued to
 	// event loop when consecutive recursive errors reaches an approximate limit.
-	if (event_loop->thread == pthread_self() && event_loop->errors < 5) {
+	if (as_in_event_loop(event_loop->thread) && event_loop->errors < 5) {
 		// We are already in event loop thread, so start processing.
 		as_event_command_execute_in_loop(cmd);
 	}
@@ -632,7 +647,7 @@ as_event_executor_complete(as_event_command* cmd)
 	pthread_mutex_lock(&executor->lock);
 	executor->count++;
 	bool complete = executor->count == executor->max;
-	int next = executor->count + executor->max_concurrent - 1;
+	uint32_t next = executor->count + executor->max_concurrent - 1;
 	bool start_new_command = next < executor->max && executor->valid;
 	pthread_mutex_unlock(&executor->lock);
 
@@ -902,10 +917,7 @@ as_event_close_cluster_event_loop(as_event_close_state* state)
 {
 	state->cluster->pending[state->event_loop->index] = -1;
 
-	bool destroy;
-	ck_pr_dec_32_zero(state->event_loop_count, &destroy);
-
-	if (destroy) {
+	if (as_aaf_uint32(state->event_loop_count, -1) == 0) {
 		as_cluster_destroy(state->cluster);
 		cf_free(state->event_loop_count);
 
@@ -947,7 +959,7 @@ as_event_close_cluster(as_cluster* cluster)
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
 
-		if (event_loop->thread == pthread_self()) {
+		if (as_in_event_loop(event_loop->thread)) {
 			in_event_loop = true;
 			break;
 		}

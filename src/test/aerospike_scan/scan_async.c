@@ -96,7 +96,7 @@ insert_data(uint32_t numrecs, const char *setname)
 		
 	as_monitor_begin(&monitor);
 	
-	for (int i = 0; i < numrecs; i++) {
+	for (uint32_t i = 0; i < numrecs; i++) {
 		sprintf(strval, "str-%s-%d", setname ? setname : "noset", i);
 		sprintf(strkey, "key-%s-%d", setname, i);
 		

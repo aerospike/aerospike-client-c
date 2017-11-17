@@ -14,12 +14,13 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+#include "map_rec.h"
 #include <aerospike/as_integer.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_rec.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
-#include "map_rec.h"
+#include <string.h>
 
 /*****************************************************************************
  * STATIC FUNCTIONS

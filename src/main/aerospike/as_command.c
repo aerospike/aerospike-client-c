@@ -22,14 +22,13 @@
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
-
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
-
-#include <errno.h>
+#include <citrusleaf/cf_digest.h>
+#include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <zlib.h>
 
 /******************************************************************************
@@ -289,7 +288,7 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 	while (*name) {
 		*p++ = *name++;
 	}
-	uint8_t name_len = p - begin - AS_OPERATION_HEADER_SIZE;
+	uint8_t name_len = (uint8_t)(p - begin - AS_OPERATION_HEADER_SIZE);
 	as_val* val = (as_val*)bin->valuep;
 	uint32_t val_len;
 	uint8_t val_type;
@@ -395,15 +394,15 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 size_t
 as_command_compress_max_size(size_t cmd_sz)
 {
-	return compressBound(cmd_sz) + sizeof(as_compressed_proto);
+	return compressBound((uLong)cmd_sz) + sizeof(as_compressed_proto);
 }
 
 as_status
 as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compressed_cmd, size_t* compressed_size)
 {
 	*compressed_size -= sizeof(as_compressed_proto);
-	int ret_val = compress2(compressed_cmd + sizeof(as_compressed_proto), compressed_size,
-							cmd, cmd_sz, Z_DEFAULT_COMPRESSION);
+	int ret_val = compress2(compressed_cmd + sizeof(as_compressed_proto), (uLongf*)compressed_size,
+							cmd, (uLong)cmd_sz, Z_DEFAULT_COMPRESSION);
 	
 	if (ret_val) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Compress failed: %d", ret_val);
@@ -574,7 +573,7 @@ Retry:
 
 		if (policy->sleep_between_retries > 0) {
 			// Sleep before trying again.
-			usleep(policy->sleep_between_retries * 1000);
+			as_sleep(policy->sleep_between_retries);
 		}
 	}
 	

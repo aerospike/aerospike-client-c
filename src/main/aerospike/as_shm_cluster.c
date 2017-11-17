@@ -19,15 +19,23 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_b64.h>
-#include <citrusleaf/cf_types.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 #include <errno.h>
 #include <string.h>
 #include <signal.h>
+
+#if !defined(_MSC_VER)
 #include <sys/shm.h>
+#else
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <process.h>
+#define getpid _getpid
+#endif
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -88,6 +96,7 @@ as_shm_dump_partition_tables(as_cluster_shm* cluster_shm)
 }
 */
 
+#if !defined(_MSC_VER)
 static size_t
 as_shm_get_max_size()
 {
@@ -115,6 +124,7 @@ as_shm_get_max_size()
 	return shm_max;
 #endif
 }
+#endif
 
 static int
 as_shm_find_node_index(as_cluster_shm* cluster_shm, const char* name)
@@ -147,7 +157,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 			as_node_shm* node_shm = &cluster_shm->nodes[node_index];
 			
 			// Update shared memory node in write lock.
-			ck_swlock_write_lock(&node_shm->lock);
+			as_swlock_write_lock(&node_shm->lock);
 			memcpy(&node_shm->addr, &address->addr, sizeof(struct sockaddr_storage));
 			if (node_to_add->tls_name) {
 				strcpy(node_shm->tls_name, node_to_add->tls_name);
@@ -157,7 +167,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 			}
 			node_shm->features = node_to_add->features;
 			node_shm->active = true;
-			ck_swlock_write_unlock(&node_shm->lock);
+			as_swlock_write_unlock(&node_shm->lock);
 			
 			// Set shared memory node array index.
 			// Only referenced by shared memory tending thread, so volatile write not necessary.
@@ -169,7 +179,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				as_node_shm* node_shm = &cluster_shm->nodes[cluster_shm->nodes_size];
 				
 				// Update shared memory node in write lock.
-				ck_swlock_write_lock(&node_shm->lock);
+				as_swlock_write_lock(&node_shm->lock);
 				memcpy(node_shm->name, node_to_add->name, AS_NODE_NAME_SIZE);
 				memcpy(&node_shm->addr, &address->addr, sizeof(struct sockaddr_storage));
 				if (node_to_add->tls_name) {
@@ -180,14 +190,14 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				}
 				node_shm->features = node_to_add->features;
 				node_shm->active = true;
-				ck_swlock_write_unlock(&node_shm->lock);
+				as_swlock_write_unlock(&node_shm->lock);
 				
 				// Set shared memory node array index.
 				// Only referenced by shared memory tending thread, so volatile write not necessary.
 				node_to_add->index = cluster_shm->nodes_size;
 
 				// Increment node array size.
-				ck_pr_inc_32(&cluster_shm->nodes_size);
+				as_incr_uint32(&cluster_shm->nodes_size);
 			}
 			else {
 				// There are no more node slots available in shared memory.
@@ -195,9 +205,9 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 					node_to_add->name, address->name, cluster_shm->nodes_capacity);
 			}
 		}
-		ck_pr_store_ptr(&shm_info->local_nodes[node_to_add->index], node_to_add);
+		as_store_ptr(&shm_info->local_nodes[node_to_add->index], node_to_add);
 	}
-	ck_pr_inc_32(&cluster_shm->nodes_gen);
+	as_incr_uint32(&cluster_shm->nodes_gen);
 }
 
 void
@@ -212,13 +222,13 @@ as_shm_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_re
 		as_node_shm* node_shm = &cluster_shm->nodes[node_to_remove->index];
 		
 		// Update shared memory node in write lock.
-		ck_swlock_write_lock(&node_shm->lock);
+		as_swlock_write_lock(&node_shm->lock);
 		node_shm->active = false;
-		ck_swlock_write_unlock(&node_shm->lock);
+		as_swlock_write_unlock(&node_shm->lock);
 
-		ck_pr_store_ptr(&shm_info->local_nodes[node_to_remove->index], 0);
+		as_store_ptr(&shm_info->local_nodes[node_to_remove->index], 0);
 	}
-	ck_pr_inc_32(&cluster_shm->nodes_gen);
+	as_incr_uint32(&cluster_shm->nodes_gen);
 }
 
 static void
@@ -230,7 +240,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 	
 	as_node_shm* nodes_shm = cluster_shm->nodes;
 	as_node_shm node_tmp;
-	uint32_t max = ck_pr_load_32(&cluster_shm->nodes_size);
+	uint32_t max = as_load_uint32(&cluster_shm->nodes_size);
 	
 	as_vector nodes_to_add;
 	as_vector_inita(&nodes_to_add, sizeof(as_node*), max);
@@ -243,9 +253,9 @@ as_shm_reset_nodes(as_cluster* cluster)
 		as_node* node = shm_info->local_nodes[i];
 
 		// Make copy of shared memory node under a read lock.
-		ck_swlock_read_lock(&node_shm->lock);
+		as_swlock_read_lock(&node_shm->lock);
 		memcpy(&node_tmp, node_shm, sizeof(as_node_shm));
-		ck_swlock_read_unlock(&node_shm->lock);
+		as_swlock_read_unlock(&node_shm->lock);
 		
 		if (node_tmp.active) {
 			if (! node) {
@@ -256,14 +266,14 @@ as_shm_reset_nodes(as_cluster* cluster)
 				node = as_node_create(cluster, NULL, node_tmp.tls_name, 0, false, (struct sockaddr*)&node_tmp.addr, &node_info);
 				node->index = i;
 				as_vector_append(&nodes_to_add, &node);
-				ck_pr_store_ptr(&shm_info->local_nodes[i], node);
+				as_store_ptr(&shm_info->local_nodes[i], node);
 			}
 		}
 		else {
 			if (node) {
 				as_node_deactivate(node);
 				as_vector_append(&nodes_to_remove, &node);
-				ck_pr_store_ptr(&shm_info->local_nodes[i], 0);
+				as_store_ptr(&shm_info->local_nodes[i], 0);
 			}
 		}
 	}
@@ -335,7 +345,7 @@ as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns, bool cp_
 	table->cp_mode = cp_mode;
 	
 	// Increment partition tables array size.
-	ck_pr_inc_32(&cluster_shm->partition_tables_size);
+	as_incr_uint32(&cluster_shm->partition_tables_size);
 	return table;
 }
 
@@ -357,18 +367,18 @@ as_shm_partition_update(as_shm_info* shm_info, as_partition_shm* p, uint32_t nod
 	if (master) {
 		if (node_index == p->master) {
 			if (! owns) {
-				ck_pr_store_32(&p->master, 0);
+				as_store_uint32(&p->master, 0);
 			}
 		}
 		else {
-			if (owns && (regime == 0 || regime >= ck_pr_load_32(&p->regime))) {
+			if (owns && (regime == 0 || regime >= as_load_uint32(&p->regime))) {
 				if (p->master) {
 					as_shm_force_replicas_refresh(shm_info, p->master);
 				}
-				ck_pr_store_32(&p->master, node_index);
+				as_store_uint32(&p->master, node_index);
 
 				if (regime > p->regime) {
-					ck_pr_store_32(&p->regime, regime);
+					as_store_uint32(&p->regime, regime);
 				}
 			}
 		}
@@ -376,18 +386,18 @@ as_shm_partition_update(as_shm_info* shm_info, as_partition_shm* p, uint32_t nod
 	else {
 		if (node_index == p->prole) {
 			if (! owns) {
-				ck_pr_store_32(&p->prole, 0);
+				as_store_uint32(&p->prole, 0);
 			}
 		}
 		else {
-			if (owns && (regime == 0 || regime >= ck_pr_load_32(&p->regime))) {
+			if (owns && (regime == 0 || regime >= as_load_uint32(&p->regime))) {
 				if (p->prole) {
 					as_shm_force_replicas_refresh(shm_info, p->prole);
 				}
-				ck_pr_store_32(&p->prole, node_index);
+				as_store_uint32(&p->prole, node_index);
 
 				if (regime > p->regime) {
-					ck_pr_store_32(&p->regime, regime);
+					as_store_uint32(&p->regime, regime);
 				}
 			}
 		}
@@ -432,9 +442,9 @@ as_shm_reserve_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
-		as_node* node = ck_pr_load_ptr(&local_nodes[node_index-1]);
+		as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index-1]);
 
-		if (node && ck_pr_load_8(&node->active)) {
+		if (node && as_load_uint8(&node->active)) {
 			as_node_reserve(node);
 			return node;
 		}
@@ -448,9 +458,9 @@ as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_in
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
-		as_node* node = ck_pr_load_ptr(&local_nodes[node_index-1]);
+		as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index-1]);
 
-		if (node && ck_pr_load_8(&node->active)) {
+		if (node && as_load_uint8(&node->active)) {
 			as_node_reserve(node);
 			return node;
 		}
@@ -462,10 +472,10 @@ static as_node*
 as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index, bool cp_mode)
 {
 	// index values start at one (zero indicates unset).
-	as_node* chosen = ck_pr_load_ptr(&local_nodes[chosen_index-1]);
+	as_node* chosen = (as_node*)as_load_ptr(&local_nodes[chosen_index-1]);
 	
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (chosen && ck_pr_load_8(&chosen->active)) {
+	if (chosen && as_load_uint8(&chosen->active)) {
 		as_node_reserve(chosen);
 		return chosen;
 	}
@@ -503,13 +513,13 @@ as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_re
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	as_node** local_nodes = cluster->shm_info->local_nodes;
-	uint32_t master = ck_pr_load_32(&p->master);
+	uint32_t master = as_load_uint32(&p->master);
 
 	if (replica == AS_POLICY_REPLICA_MASTER) {
 		return as_shm_reserve_master(cluster, local_nodes, master);
 	}
 
-	uint32_t prole = ck_pr_load_32(&p->prole);
+	uint32_t prole = as_load_uint32(&p->prole);
 
 	if (! prole) {
 		return as_shm_reserve_node(cluster, local_nodes, master, cp_mode);
@@ -521,7 +531,7 @@ as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_re
 
 	if (replica == AS_POLICY_REPLICA_ANY) {
 		// Alternate between master and prole for reads with global iterator.
-		uint32_t r = ck_pr_faa_32(&g_shm_randomizer, 1);
+		uint32_t r = as_faa_uint32(&g_shm_randomizer, 1);
 		use_master = (r & 1);
 	}
 
@@ -536,8 +546,24 @@ static void
 as_shm_takeover_cluster(as_shm_info* shm_info, as_cluster_shm* cluster_shm, uint32_t pid)
 {
 	as_log_info("Take over shared memory cluster: %d", pid);
-	ck_pr_store_32(&cluster_shm->owner_pid, pid);
+	as_store_uint32(&cluster_shm->owner_pid, pid);
 	shm_info->is_tend_master = true;
+}
+
+static bool
+as_process_exists(uint32_t pid)
+{
+#if !defined(_MSC_VER)
+	return kill(pid, 0) == 0;
+#else
+	HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, pid);
+
+	if (process == NULL) {
+		return false;
+	}
+	CloseHandle(process);
+	return true;
+#endif
 }
 
 static void*
@@ -566,7 +592,7 @@ as_shm_tender(void* userdata)
 		if (shm_info->is_tend_master) {
 			// Tend shared memory cluster.
 			status = as_cluster_tend(cluster, &err, false);
-			ck_pr_store_64(&cluster_shm->timestamp, cf_getms());
+			as_store_uint64(&cluster_shm->timestamp, cf_getms());
 			
 			if (status != AEROSPIKE_OK) {
 				as_log_warn("Tend error: %s %s", as_error_string(status), err.message);
@@ -575,7 +601,7 @@ as_shm_tender(void* userdata)
 		else {
 			// Follow shared memory cluster.
 			// Check if tend owner has released lock.
-			if (ck_pr_cas_8(&cluster_shm->lock, 0, 1)) {
+			if (as_cas_uint8(&cluster_shm->lock, 0, 1)) {
 				as_shm_takeover_cluster(shm_info, cluster_shm, pid);
 				continue;
 			}
@@ -583,38 +609,38 @@ as_shm_tender(void* userdata)
 			// Check if tend owner died without releasing lock.
 			uint64_t now = cf_getms();
 			if (now >= limit) {
-				uint64_t ts = ck_pr_load_64(&cluster_shm->timestamp);
+				uint64_t ts = as_load_uint64(&cluster_shm->timestamp);
 				
 				// Check if cluster hasn't been tended within threshold.
 				if (now - ts >= threshold) {
-					uint32_t owner_pid = ck_pr_load_32(&cluster_shm->owner_pid);
+					uint32_t owner_pid = as_load_uint32(&cluster_shm->owner_pid);
 					
 					// Check if owner process id is invalid or does not exist.
-					if (owner_pid == 0 || kill(owner_pid, 0) != 0) {
+					if (owner_pid == 0 || !as_process_exists(owner_pid)) {
 						// Cluster should be taken over, but this must be done under lock.
-						ck_spinlock_lock(&cluster_shm->take_over_lock);
+						as_spinlock_lock(&cluster_shm->take_over_lock);
 						
 						// Reload timestamp, just in case another process just modified it.
-						ts = ck_pr_load_64(&cluster_shm->timestamp);
+						ts = as_load_uint64(&cluster_shm->timestamp);
 						
 						// Check if cluster hasn't been tended within threshold.
 						if (now - ts >= threshold) {
 							// Take over cluster tending.
 							// Update timestamp, so other processes will not try to take over.
-							ck_pr_store_64(&cluster_shm->timestamp, now);
-							ck_pr_store_8(&cluster_shm->lock, 1);
-							ck_spinlock_unlock(&cluster_shm->take_over_lock);
+							as_store_uint64(&cluster_shm->timestamp, now);
+							as_store_uint8(&cluster_shm->lock, 1);
+							as_spinlock_unlock(&cluster_shm->take_over_lock);
 							as_shm_takeover_cluster(shm_info, cluster_shm, pid);
 							continue;
 						}
-						ck_spinlock_unlock(&cluster_shm->take_over_lock);
+						as_spinlock_unlock(&cluster_shm->take_over_lock);
 					}
 				}
 				limit = ts + threshold;
 			}
 			
 			// Synchronize local cluster with shared memory cluster.
-			uint32_t gen = ck_pr_load_32(&cluster_shm->nodes_gen);
+			uint32_t gen = as_load_uint32(&cluster_shm->nodes_gen);
 			
 			if (nodes_gen != gen) {
 				nodes_gen = gen;
@@ -632,7 +658,7 @@ as_shm_tender(void* userdata)
 	
 	if (shm_info->is_tend_master) {
 		shm_info->is_tend_master = false;
-		ck_pr_store_8(&cluster_shm->lock, 0);
+		as_store_uint8(&cluster_shm->lock, 0);
 	}
 	return 0;
 }
@@ -641,30 +667,18 @@ static void
 as_shm_wait_till_ready(as_cluster* cluster, as_cluster_shm* cluster_shm, uint32_t pid)
 {
 	// Wait till cluster is initialized or connection timeout is reached.
-	uint32_t interval_micros = 200 * 1000;  // 200 milliseconds
+	uint32_t interval_ms = 200;  // 200 milliseconds
 	uint64_t limit = cf_getms() + 10000;    // 10 second timeout.
 	
 	do {
-		usleep(interval_micros);
+		as_sleep(interval_ms);
 		
-		if (ck_pr_load_8(&cluster_shm->ready)) {
+		if (as_load_uint8(&cluster_shm->ready)) {
 			as_log_info("Follow cluster initialized: %d", pid);
 			return;
 		}
 	} while (cf_getms() < limit);
 	as_log_warn("Follow cluster initialize timed out: %d", pid);
-}
-
-static void
-as_shm_cleanup(int id, as_cluster_shm* cluster_shm)
-{
-	// Detach shared memory.
-	if (cluster_shm) {
-		shmdt(cluster_shm);
-	}
-	
-	// Try removing the shared memory - it will fail if any other process is still attached.
-	shmctl(id, IPC_RMID, 0);
 }
 
 as_status
@@ -681,9 +695,9 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	
 	uint32_t pid = getpid();
 
+#if !defined(_MSC_VER)
 	// Create shared memory segment.  Only one process will succeed.
 	int id = shmget(config->shm_key, size, IPC_CREAT | IPC_EXCL | 0666);
-	as_cluster_shm* cluster_shm = 0;
 
 	if (id >= 0) {
 		// Exclusive shared memory lock succeeded.
@@ -718,13 +732,56 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	}
 
 	// Attach to shared memory.
-	cluster_shm = shmat(id, NULL, 0);
+	as_cluster_shm* cluster_shm = shmat(id, NULL, 0);
 
 	if (cluster_shm == (void*)-1) {
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %s pid: %d", strerror(errno), pid);
-		as_shm_cleanup(id, 0);
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %s pid: %d", strerror(errno), pid);		
+		// Try removing the shared memory - it will fail if any other process is still attached.
+		shmctl(id, IPC_RMID, 0);
 		return err->code;
 	}
+#else // _MSC_VER
+	char name[256];
+	HANDLE id;
+	DWORD code;
+	int i;
+
+	for (i = 0; i < 2; i++) {
+		// Try global shared memory namespace first.  This will fail with 
+		// ERROR_ACCESS_DENIED if the process is not run with administrator
+		// privileges.  If fail, try local shared memory namespace instead.
+		const char* prefix = (i == 0) ? "Global" : "Local";
+		sprintf(name, "%s\\Aerospike%x", prefix, config->shm_key);
+		id = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, 0, size, name);
+		code = GetLastError();
+
+		if (id && id != INVALID_HANDLE_VALUE) {
+			if (code == 0) {
+				as_log_info("Create shared memory cluster: %s pid: %d", name, pid);
+				break;
+			}
+			else if (code == ERROR_ALREADY_EXISTS) {
+				as_log_info("Follow shared memory cluster: %s pid: %d", name, pid);
+				// Handle should be handle of file that was already created.
+				// There is no need to reopen.
+				// id = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, name);
+				break;
+			}
+		}
+	}
+
+	if (i >= 2) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory create/get failed: %s pid: %d code: %d", name, pid, code);
+	}
+
+	as_cluster_shm* cluster_shm = MapViewOfFile(id, FILE_MAP_ALL_ACCESS, 0, 0, size);
+
+	if (cluster_shm == NULL) {
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %d pid: %d", GetLastError(), pid);
+		CloseHandle(id);
+		return err->code;
+	}
+#endif
 
 	// Initialize local data.
 	as_shm_info* shm_info = cf_malloc(sizeof(as_shm_info));
@@ -732,12 +789,12 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	shm_info->cluster_shm = cluster_shm;
 	shm_info->shm_id = id;
 	shm_info->takeover_threshold_ms = config->shm_takeover_threshold_sec * 1000;
-	shm_info->is_tend_master = ck_pr_cas_8(&cluster_shm->lock, 0, 1);
+	shm_info->is_tend_master = as_cas_uint8(&cluster_shm->lock, 0, 1);
 	cluster->shm_info = shm_info;
 
 	if (shm_info->is_tend_master) {
 		as_log_info("Take over shared memory cluster: %d", pid);
-		ck_pr_fence_lock();
+		as_fence_lock();
 		cluster_shm->n_partitions = n_partitions;
 		cluster_shm->nodes_capacity = config->shm_max_nodes;
 		cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
@@ -745,10 +802,10 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		cluster_shm->partition_table_byte_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * n_partitions);
 		cluster_shm->timestamp = cf_getms();
 
-		ck_pr_store_32(&cluster_shm->owner_pid, pid);
+		as_store_uint32(&cluster_shm->owner_pid, pid);
 		
 		// Ensure shared memory cluster is fully initialized.
-		if (ck_pr_load_8(&cluster_shm->ready)) {
+		if (as_load_uint8(&cluster_shm->ready)) {
 			// Copy shared memory nodes to local nodes.
 			as_log_info("Cluster already initialized: %d", pid);
 			as_shm_reset_nodes(cluster);
@@ -759,23 +816,23 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 			as_status status = as_cluster_init(cluster, err, true);
 			
 			if (status != AEROSPIKE_OK) {
-				ck_pr_store_8(&cluster_shm->lock, 0);
+				as_store_uint8(&cluster_shm->lock, 0);
 				as_shm_destroy(cluster);
 				return status;
 			}
-			ck_pr_store_8(&cluster_shm->ready, 1);
+			as_store_uint8(&cluster_shm->ready, 1);
 		}
-		ck_pr_fence_unlock();
+		as_fence_unlock();
 	}
 	else {
 		as_log_info("Follow shared memory cluster: %d", pid);
-		ck_pr_fence_lock();
+		as_fence_lock();
 
 		// Prole should wait until master has fully initialized shared memory.
-		if (! ck_pr_load_8(&cluster_shm->ready)) {
+		if (! as_load_uint8(&cluster_shm->ready)) {
 			as_shm_wait_till_ready(cluster, cluster_shm, pid);
 		}
-		ck_pr_fence_unlock();
+		as_fence_unlock();
 
 		// Copy shared memory nodes to local nodes.
 		as_shm_reset_nodes(cluster);
@@ -796,13 +853,20 @@ as_shm_destroy(as_cluster* cluster)
 	if (!shm_info) {
 		return;
 	}
-	
+
+#if !defined(_MSC_VER)
 	// Detach shared memory.
 	shmdt(shm_info->cluster_shm);
 	
 	// Try removing the shared memory - it will fail if any other process is still attached.
 	// Failure is normal behavior, so don't check return code.
 	shmctl(shm_info->shm_id, IPC_RMID, 0);
+#else
+	if (!UnmapViewOfFile(shm_info->cluster_shm)) {
+		as_log_error("Failed to detach from shared memory");
+	}
+	CloseHandle(shm_info->shm_id);
+#endif
 
 	// Release memory.
 	cf_free(shm_info->local_nodes);

@@ -395,7 +395,7 @@ void as_operations_destroy(as_operations* ops)
  *
  * @return true on success. Otherwise an error occurred.
  */
-bool as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value * value)
+bool as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value* value)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;

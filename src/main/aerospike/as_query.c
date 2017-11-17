@@ -28,7 +28,8 @@
  * INSTANCE FUNCTIONS
  *****************************************************************************/
 
-static as_query * as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_set set) 
+static as_query*
+as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_set set)
 {
 	query->_free = free;
 
@@ -57,42 +58,23 @@ static as_query * as_query_defaults(as_query* query, bool free, const as_namespa
 	return query;
 }
 
-/**
- * Initialize a stack allocated as_query.
- *
- * @param query 	- the query to initialize
- * @param ns 		- the namespace to query
- * @param set 		- the set to query
- *
- * @return the initialized query on success. Otherwise NULL.
- */
-as_query * as_query_init(as_query* query, const as_namespace ns, const as_set set)
+as_query*
+as_query_init(as_query* query, const as_namespace ns, const as_set set)
 {
 	if ( !query ) return query;
 	return as_query_defaults(query, false, ns, set);
 }
 
-/**
- * Creates a new heap allocated as_query.
- *
- * @param ns 		- the namespace to query
- * @param set 		- the set to query
- *
- * @return the new query on success. Otherwise NULL.
- */
-as_query * as_query_new(const as_namespace ns, const as_set set)
+as_query*
+as_query_new(const as_namespace ns, const as_set set)
 {
 	as_query* query = (as_query *) cf_malloc(sizeof(as_query));
 	if ( !query ) return query;
 	return as_query_defaults(query, true, ns, set);
 }
 
-/**
- * Destroy the query and associated resources.
- *
- * @param query 	- the query to destroy
- */
-void as_query_destroy(as_query* query) 
+void
+as_query_destroy(as_query* query)
 {
 	if ( !query ) return;
 
@@ -148,24 +130,8 @@ void as_query_destroy(as_query* query)
  * SELECT FUNCTIONS
  *****************************************************************************/
 
-/** 
- * Initializes `as_query.select` with a capacity of `n` using `malloc()`.
- * 
- * For stack allocation, use `as_query_select_inita()`.
- *
- * ~~~~~~~~~~{.c}
- * as_query_select_init(&q, 2);
- * as_query_select(&q, "bin1");
- * as_query_select(&q, "bin2");
- * as_query_select(&q, "bin3");
- * ~~~~~~~~~~
- *
- * @param query	The query to initialize.
- * @param n		The number of bins to allocate.
- *
- * @return On success, the initialized. Otherwise an error occurred.
- */
-bool as_query_select_init(as_query* query, uint16_t n)
+bool
+as_query_select_init(as_query* query, uint16_t n)
 {
 	if ( !query ) return false;
 	if ( query->select.entries ) return false;
@@ -180,25 +146,8 @@ bool as_query_select_init(as_query* query, uint16_t n)
 	return true;
 }
 
-/**
- * Select bins to be projected from matching records.
- * 
- * You have to ensure as_query.select has sufficient capacity, prior to 
- * adding a bin. If capacity is sufficient then false is returned.
- *
- * ~~~~~~~~~~{.c}
- * as_query_select_init(&q, 3);
- * as_query_select(&q, "bin1");
- * as_query_select(&q, "bin2");
- * as_query_select(&q, "bin3");
- * ~~~~~~~~~~
- * 
- * @param query 		The query to modify.
- * @param bin 			The name of the bin to select.
- *
- * @return On success, true. Otherwise an error occurred.
- */
-bool as_query_select(as_query* query, const char * bin)
+bool
+as_query_select(as_query* query, const char * bin)
 {
 	// test preconditions
 	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
@@ -218,24 +167,8 @@ bool as_query_select(as_query* query, const char * bin)
  * WHERE FUNCTIONS
  *****************************************************************************/
 
-/** 
- * Initializes `as_query.where` with a capacity of `n` using `malloc()`.
- *
- * For stack allocation, use `as_query_where_inita()`.
- *
- * ~~~~~~~~~~{.c}
- * as_query_where_init(&q, 3);
- * as_query_where(&q, "bin1", as_string_equals("abc"));
- * as_query_where(&q, "bin1", as_integer_equals(123));
- * as_query_where(&q, "bin1", as_integer_range(0,123));
- * ~~~~~~~~~~
- *
- * @param query	The query to initialize.
- * @param n		The number of as_query_predicate to allocate.
- *
- * @return On success, true. Otherwise an error occurred.
- */
-bool as_query_where_init(as_query* query, uint16_t n)
+bool
+as_query_where_init(as_query* query, uint16_t n)
 {
 	if ( !query ) return false;
 	if ( query->where.entries ) return false;
@@ -250,35 +183,8 @@ bool as_query_where_init(as_query* query, uint16_t n)
 	return true;
 }
 
-/**
- * Add a predicate to the query.
- *
- * You have to ensure as_query.where has sufficient capacity, prior to
- * adding a predicate. If capacity is insufficient then false is returned.
- *
- * String predicates are not owned by as_query.  If the string is allocated 
- * on the heap, the caller is responsible for freeing the string after the query 
- * has been executed.  as_query_destroy() will not free this string predicate.
- *
- * ~~~~~~~~~~{.c}
- * as_query_where_init(&query, 3);
- * as_query_where(&query, "bin1", as_string_equals("abc"));
- * as_query_where(&query, "bin1", as_integer_equals(123));
- * as_query_where(&query, "bin1", as_integer_range(0,123));
- * ~~~~~~~~~~
- *
- * @param query		The query add the predicate to.
- * @param bin			The name of the bin the predicate will apply to.
- * @param type			The type of predicate.
- * @param itype		The type of index.
- * @param dtype		The underlying data type that the index is based on.
- * @param ... 			The values for the predicate.
- *
- * @return On success, true. Otherwise an error occurred.
- *
- * @relates as_query
- */
-bool as_query_where(as_query* query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ... )
+bool
+as_query_where(as_query* query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ... )
 {
 	// test preconditions
 	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
@@ -332,7 +238,8 @@ bool as_query_where(as_query* query, const char * bin, as_predicate_type type, a
  * PREDEXP FUNCTIONS
  *****************************************************************************/
 
-bool as_query_predexp_init(as_query* query, uint16_t n)
+bool
+as_query_predexp_init(as_query* query, uint16_t n)
 {
 	if ( !query ) return false;
 	if ( query->predexp.entries ) return false;
@@ -347,7 +254,8 @@ bool as_query_predexp_init(as_query* query, uint16_t n)
 	return true;
 }
 
-bool as_query_predexp_add(as_query* query, as_predexp_base * predexp)
+bool
+as_query_predexp_add(as_query* query, as_predexp_base * predexp)
 {
 	// test preconditions
 	if ( !query ) {
@@ -373,19 +281,8 @@ bool as_query_predexp_add(as_query* query, as_predexp_base * predexp)
  * QUERY MODIFIER FUNCTIONS
  *****************************************************************************/
 
-/**
- * Apply a function to the results of the query.
- *
- * 	as_query_apply(&q, "my_module", "my_function", NULL);
- *
- * @param query 	- the query to apply the function to
- * @param module 	- the module containing the function to invoke
- * @param function 	- the function in the module to invoke
- * @param arglist 	- the arguments to use when calling the function
- *
- * @param 0 on success. Otherwise an error occurred.
- */
-bool as_query_apply(as_query* query, const char* module, const char* function, const as_list* arglist)
+bool
+as_query_apply(as_query* query, const char* module, const char* function, const as_list* arglist)
 {
 	if ( !query ) return false;
 	as_udf_call_init(&query->apply, module, function, (as_list *) arglist);

@@ -138,7 +138,7 @@ extern "C" {
  * `as_val_type()`.
  *
  * ~~~~~~~~~~{.c}
- * as_bin_value * value = as_record_get(rec, "bin1");
+ * as_bin_value* value = as_record_get(rec, "bin1");
  * switch ( as_val_type(value) ) {
  * 	case AS_NIL: break;
  * 	case AS_INTEGER: break;
@@ -337,7 +337,7 @@ as_record_numbins(const as_record* rec);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set(as_record* rec, const as_bin_name name, as_bin_value * value);
+as_record_set(as_record* rec, const as_bin_name name, as_bin_value* value);
 
 /**
  * Set specified bin's value to an int64_t.

@@ -15,29 +15,14 @@
  * the License.
  */
 #include <aerospike/as_batch.h>
-
 #include <citrusleaf/alloc.h>
-
-/******************************************************************************
- * INLINE FUNCTIONS
- *****************************************************************************/
-
-/**
- * Get the key at given position of the batch. If the position is not
- * within the allocated capacity for the batchm then NULL is returned.
- */
-extern inline as_key * as_batch_keyat(const as_batch* batch, uint32_t i);
-
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
-/**
- * Create and initialize a heap allocated as_batch capable of storing
- * `capacity` keys.
- */
-as_batch * as_batch_new(uint32_t size)
+as_batch*
+as_batch_new(uint32_t size)
 {
 	as_batch* batch = (as_batch *) cf_malloc(sizeof(as_batch) + sizeof(as_key) * size);
 	if ( !batch ) return NULL;
@@ -49,10 +34,8 @@ as_batch * as_batch_new(uint32_t size)
 	return batch;
 }
 
-/**
- * Initialize a stack allocated as_batch capable of storing `capacity` keys.
- */
-as_batch * as_batch_init(as_batch* batch, uint32_t size)
+as_batch*
+as_batch_init(as_batch* batch, uint32_t size)
 {
 	if ( !batch ) return batch;
 
@@ -69,10 +52,8 @@ as_batch * as_batch_init(as_batch* batch, uint32_t size)
 	return batch;
 }
 
-/**
- * Destroy the batch of keys.
- */
-void as_batch_destroy(as_batch* batch)
+void
+as_batch_destroy(as_batch* batch)
 {
 	if ( !batch ) return;
 

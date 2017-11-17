@@ -35,7 +35,8 @@
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static as_bin * as_bin_defaults(as_bin * bin, const as_bin_name name, as_bin_value * valuep)
+static as_bin*
+as_bin_defaults(as_bin* bin, const as_bin_name name, as_bin_value* valuep)
 {
 	strcpy(bin->name, name);
 	bin->valuep = valuep;
@@ -43,148 +44,59 @@ static as_bin * as_bin_defaults(as_bin * bin, const as_bin_name name, as_bin_val
 }
 
 /******************************************************************************
- * as_bin FUNCTIONS
+ * FUNCTIONS
  *****************************************************************************/
 
-/**
- * Intializes an `as_bin` with the given name and value.
- *
- * ~~~~~~~~~~{.c}
- * 	as_bin bin;
- * 		as_bin_init(&bin, "bin1", as_integer_new(123));
- * ~~~~~~~~~~
- *
- * Use `as_bin_destroy()` to free the resources allocated by this function.
- *
- * @param bin 		The `as_bin` to initialize.
- * @param name		The name of the bin.
- * @param value	The value of the bin.
- *
- * @return The initialized `as_bin` on success. Otherwsie NULL.
- */
-as_bin * as_bin_init(as_bin * bin, const as_bin_name name, as_bin_value * value)
+as_bin*
+as_bin_init(as_bin* bin, const as_bin_name name, as_bin_value* value)
 {
 	if ( !bin ) return bin;
 	((as_val *) &bin->value)->type = AS_UNKNOWN;
 	return as_bin_defaults(bin, name, value);
 }
 
-/**
- * Initialize a stack allocated `as_bin` to a int64_t value.
- *
- * ~~~~~~~~~~{.c}
- * 	as_bin bin;
- *     as_bin_init_int64(&key, "abc", 123);
- * ~~~~~~~~~~
- *
- * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
- *
- * @param name 	The name of the bin.
- * @param value	The value of the value.
- *
- * @return The initialized `as_bin` on success. Otherwise NULL.
- */
-as_bin * as_bin_init_int64(as_bin * bin, const as_bin_name name, int64_t value)
+as_bin*
+as_bin_init_int64(as_bin* bin, const as_bin_name name, int64_t value)
 {
 	if ( !bin ) return bin;
 	as_integer_init((as_integer *) &bin->value, value);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
-as_bin * as_bin_init_double(as_bin * bin, const as_bin_name name, double value)
+as_bin*
+as_bin_init_double(as_bin* bin, const as_bin_name name, double value)
 {
 	if ( !bin ) return bin;
 	as_double_init((as_double *) &bin->value, value);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
-/**
- * Initialize a stack allocated `as_bin` to a NULL-terminated string value.
- *
- * ~~~~~~~~~~{.c}
- * 	as_bin bin;
- *     as_bin_init_str(&key, "abc", "def");
- * ~~~~~~~~~~
- *
- * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
- *
- * @param name 	The name of the bin.
- * @param value	The value of the value.
- *
- * @return The initialized `as_bin` on success. Otherwise NULL.
- */
-as_bin * as_bin_init_str(as_bin * bin, const as_bin_name name, const char* value, bool free)
+as_bin*
+as_bin_init_str(as_bin* bin, const as_bin_name name, const char* value, bool free)
 {
 	if ( !bin ) return bin;
 	as_string_init((as_string *) &bin->value, (char *) value, free);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
-/**
- * Initialize a stack allocated `as_bin` to a NULL-terminated GeoJSON string value.
- *
- * ~~~~~~~~~~{.c}
- * 	as_bin bin;
- * 	as_bin_init_geojson(&key, "abc", "def");
- * ~~~~~~~~~~
- *
- * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
- *
- * @param name		The name of the bin.
- * @param value	The value of the value.
- *
- * @return The initialized `as_bin` on success. Otherwise NULL.
- */
-as_bin * as_bin_init_geojson(as_bin * bin, const as_bin_name name, const char* value, bool free)
+as_bin*
+as_bin_init_geojson(as_bin* bin, const as_bin_name name, const char* value, bool free)
 {
 	if ( !bin ) return bin;
 	as_geojson_init((as_geojson *) &bin->value, (char *) value, free);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
-/**
- * Initialize a stack allocated `as_key` to a raw bytes value.
- *
- * ~~~~~~~~~~{.c}
- * 	uint8_t rgb[3] = {254,254,120};
- *
- * 	as_bin bin;
- *     as_bin_init_str(&key, "abc", rgb, 3);
- * ~~~~~~~~~~
- *
- * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
- *
- * @param name 	The name of the bin.
- * @param value	The value of the value.
- *
- * @return The initialized `as_bin` on success. Otherwise NULL.
- */
-as_bin * as_bin_init_raw(as_bin * bin, const as_bin_name name, const uint8_t* value, uint32_t size, bool free)
+as_bin*
+as_bin_init_raw(as_bin* bin, const as_bin_name name, const uint8_t* value, uint32_t size, bool free)
 {
 	if ( !bin ) return bin;
 	as_bytes_init_wrap((as_bytes *) &bin->value, (uint8_t *) value, size, free);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
-/**
- * Initialize a stack allocated `as_key` to a an `as_key_value`.
- *
- * ~~~~~~~~~~{.c}
- * 	as_string str;
- * 	as_string_init(&str, "abc", false);
- *
- * 	as_bin bin;
- *     as_bin_init_str(&key, "abc", (as_key_value *) str);
- * ~~~~~~~~~~
- *
- * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
- *
- * @param name 	The name of the bin.
- * @param value	The value of the value.
- *
- * @return The initialized `as_bin` on success. Otherwise NULL.
- */
-as_bin * as_bin_init_nil(as_bin * bin, const as_bin_name name)
+as_bin*
+as_bin_init_nil(as_bin* bin, const as_bin_name name)
 {
 	if ( !bin ) return bin;
 	as_val * nil = (as_val *) &bin->value;
@@ -194,16 +106,8 @@ as_bin * as_bin_init_nil(as_bin * bin, const as_bin_name name)
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
-/**
- * Destroy the given `as_bin` and associated resources.
- *
- * ~~~~~~~~~~{.c}
- * 		as_bin_destroy(bin);
- * ~~~~~~~~~~
- *
- * @param bin The `as_bin` to destroy.
- */
-void as_bin_destroy(as_bin * bin) 
+void
+as_bin_destroy(as_bin* bin)
 {
 	if ( !bin ) return;
 
@@ -219,25 +123,8 @@ void as_bin_destroy(as_bin * bin)
  * as_bins FUNCTIONS
  *****************************************************************************/
 
-/**
- * Intializes a stack allocated `as_bins`. The capacity specifies the number 
- * of `as_bins.entries` to allocate on the heap. 
- *
- * ~~~~~~~~~~{.c}
- * 	as_bins bins;
- * 		as_bins_init(&bins, 2);
- * 	as_bins_append(&bins, "bin1", as_integer_new(123));
- * 	as_bins_append(&bins, "bin2", as_integer_new(456));
- * ~~~~~~~~~~
- *
- * Use `as_bins_destroy()` to free the resources allocated by this function.
- *
- * @param bins 		The `as_bins` to initialize.
- * @param capacity		The number of `as_bins.entries` to allocate on the heap.
- *
- * @return The initialized `as_bins` on success. Otherwsie NULL.
- */
-as_bins * as_bins_init(as_bins * bins, uint16_t capacity)
+as_bins*
+as_bins_init(as_bins* bins, uint16_t capacity)
 {
 	if ( !bins ) return bins;
 
@@ -258,16 +145,8 @@ as_bins * as_bins_init(as_bins * bins, uint16_t capacity)
 	return bins;
 }
 
-/**
- * Destroy the `as_bins` and associated resources.
- *
- * ~~~~~~~~~~{.c}
- * 		as_bins_destroy(bins);
- * ~~~~~~~~~~
- *
- * @param bins 	The `as_bins` to destroy.
- */
-void as_bins_destroy(as_bins * bins)
+void
+as_bins_destroy(as_bins* bins)
 {
 	if ( !bins ) return;
 
@@ -280,16 +159,8 @@ void as_bins_destroy(as_bins * bins)
 	bins->entries = NULL;
 }
 
-/**
- * Append a bin to the sequence of bins.
- *
- * @param bins 		The `as_bins` to append the bin to.
- * @param name 		The name of the bin to append.
- * @param value 		The value of the bin to append.
- *
- * @return true on success. Otherswise an error occurred.
- */
-bool as_bins_append(as_bins * bins, as_bin_name name, as_bin_value * value)
+bool
+as_bins_append(as_bins* bins, as_bin_name name, as_bin_value* value)
 {
 	if ( !bins ) return false;
 	if ( bins->size >= bins->capacity ) return false;

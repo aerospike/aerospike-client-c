@@ -77,20 +77,6 @@ extern "C" {
 #define AS_POLICY_TOTAL_TIMEOUT_DEFAULT 1000
 
 /**
- * Default number of retries when a transaction fails due to a network error.
- *
- * @ingroup client_policies
- */
-#define AS_POLICY_MAX_RETRIES_DEFAULT 2
-
-/**
- * Default milliseconds to sleep before a command retry.
- *
- * @ingroup client_policies
- */
-#define AS_POLICY_SLEEP_BETWEEN_RETRIES_DEFAULT 0
-
-/**
  * Default value for compression threshold
  *
  * @ingroup client_policies
@@ -390,21 +376,28 @@ typedef struct as_policy_base_s {
 	 * It's important to use a distinct write policy for non-idempotent
 	 * writes which sets max_retries = 0;
 	 *
-	 * Default: 2 (initial attempt + 2 retries = 3 attempts)
+	 * Default for read: 2 (initial attempt + 2 retries = 3 attempts)
+	 * Default for write/query/scan: 0 (no retries)
 	 */
 	uint32_t max_retries;
 
 	/**
 	 * Milliseconds to sleep between retries.  Enter zero to skip sleep.
-	 * This field is ignored in async mode.
+	 * This field is ignored when max_retries is zero.  
+	 * This field is also ignored in async mode.
 	 *
 	 * Reads do not have to sleep when a node goes down because the cluster
 	 * does not shut out reads during cluster reformation.  The default for
 	 * reads is zero.
 	 *
+	 * The default for writes is also zero because writes are not retried by default.
 	 * Writes need to wait for the cluster to reform when a node goes down.
 	 * Immediate write retries on node failure have been shown to consistently
-	 * result in errors. The default for writes is 500ms.
+	 * result in errors.  If max_retries is greater than zero on a write, then
+	 * sleep_between_retries should be set high enough to allow the cluster to
+	 * reform (>= 500ms).
+	 *
+	 * Default: 0 (do not sleep between retries).
 	 */
 	uint32_t sleep_between_retries;
 
@@ -943,8 +936,8 @@ as_policy_read_init(as_policy_read* p)
 {
 	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = AS_POLICY_MAX_RETRIES_DEFAULT;
-	p->base.sleep_between_retries = AS_POLICY_SLEEP_BETWEEN_RETRIES_DEFAULT;
+	p->base.max_retries = 2;
+	p->base.sleep_between_retries = 0;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
@@ -980,8 +973,8 @@ as_policy_write_init(as_policy_write* p)
 {
 	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = AS_POLICY_MAX_RETRIES_DEFAULT;
-	p->base.sleep_between_retries = 500;
+	p->base.max_retries = 0;
+	p->base.sleep_between_retries = 0;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
@@ -1019,8 +1012,8 @@ as_policy_operate_init(as_policy_operate* p)
 {
 	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = AS_POLICY_MAX_RETRIES_DEFAULT;
-	p->base.sleep_between_retries = 500;
+	p->base.max_retries = 0;
+	p->base.sleep_between_retries = 0;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
@@ -1059,8 +1052,8 @@ as_policy_remove_init(as_policy_remove* p)
 {
 	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = AS_POLICY_MAX_RETRIES_DEFAULT;
-	p->base.sleep_between_retries = 500;
+	p->base.max_retries = 0;
+	p->base.sleep_between_retries = 0;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
@@ -1097,8 +1090,8 @@ as_policy_apply_init(as_policy_apply* p)
 {
 	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = AS_POLICY_MAX_RETRIES_DEFAULT;
-	p->base.sleep_between_retries = 500;
+	p->base.max_retries = 0;
+	p->base.sleep_between_retries = 0;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
@@ -1137,8 +1130,8 @@ as_policy_batch_init(as_policy_batch* p)
 {
 	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = AS_POLICY_MAX_RETRIES_DEFAULT;
-	p->base.sleep_between_retries = AS_POLICY_SLEEP_BETWEEN_RETRIES_DEFAULT;
+	p->base.max_retries = 2;
+	p->base.sleep_between_retries = 0;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	p->concurrent = false;
 	p->use_batch_direct = false;

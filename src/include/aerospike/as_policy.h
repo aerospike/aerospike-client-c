@@ -955,7 +955,7 @@ as_policy_read_init(as_policy_read* p)
  * @relates as_policy_read
  */
 static inline void
-as_policy_read_copy(as_policy_read* src, as_policy_read* trg)
+as_policy_read_copy(const as_policy_read* src, as_policy_read* trg)
 {
 	*trg = *src;
 }
@@ -994,7 +994,7 @@ as_policy_write_init(as_policy_write* p)
  * @relates as_policy_write
  */
 static inline void
-as_policy_write_copy(as_policy_write* src, as_policy_write* trg)
+as_policy_write_copy(const as_policy_write* src, as_policy_write* trg)
 {
 	*trg = *src;
 }
@@ -1034,7 +1034,7 @@ as_policy_operate_init(as_policy_operate* p)
  * @relates as_policy_operate
  */
 static inline void
-as_policy_operate_copy(as_policy_operate* src, as_policy_operate* trg)
+as_policy_operate_copy(const as_policy_operate* src, as_policy_operate* trg)
 {
 	*trg = *src;
 }
@@ -1072,7 +1072,7 @@ as_policy_remove_init(as_policy_remove* p)
  * @relates as_policy_remove
  */
 static inline void
-as_policy_remove_copy(as_policy_remove* src, as_policy_remove* trg)
+as_policy_remove_copy(const as_policy_remove* src, as_policy_remove* trg)
 {
 	*trg = *src;
 }
@@ -1112,7 +1112,7 @@ as_policy_apply_init(as_policy_apply* p)
  * @relates as_policy_apply
  */
 static inline void
-as_policy_apply_copy(as_policy_apply* src, as_policy_apply* trg)
+as_policy_apply_copy(const as_policy_apply* src, as_policy_apply* trg)
 {
 	*trg = *src;
 }
@@ -1151,7 +1151,7 @@ as_policy_batch_init(as_policy_batch* p)
  * @relates as_policy_batch
  */
 static inline void
-as_policy_batch_copy(as_policy_batch* src, as_policy_batch* trg)
+as_policy_batch_copy(const as_policy_batch* src, as_policy_batch* trg)
 {
 	*trg = *src;
 }
@@ -1185,7 +1185,7 @@ as_policy_scan_init(as_policy_scan* p)
  * @relates as_policy_scan
  */
 static inline void
-as_policy_scan_copy(as_policy_scan* src, as_policy_scan* trg)
+as_policy_scan_copy(const as_policy_scan* src, as_policy_scan* trg)
 {
 	*trg = *src;
 }
@@ -1218,7 +1218,7 @@ as_policy_query_init(as_policy_query* p)
  * @relates as_policy_query
  */
 static inline void
-as_policy_query_copy(as_policy_query* src, as_policy_query* trg)
+as_policy_query_copy(const as_policy_query* src, as_policy_query* trg)
 {
 	*trg = *src;
 }
@@ -1249,7 +1249,7 @@ as_policy_info_init(as_policy_info* p)
  * @relates as_policy_info
  */
 static inline void
-as_policy_info_copy(as_policy_info* src, as_policy_info* trg)
+as_policy_info_copy(const as_policy_info* src, as_policy_info* trg)
 {
 	*trg = *src;
 }
@@ -1278,7 +1278,7 @@ as_policy_admin_init(as_policy_admin* p)
  * @relates as_policy_admin
  */
 static inline void
-as_policy_admin_copy(as_policy_admin* src, as_policy_admin* trg)
+as_policy_admin_copy(const as_policy_admin* src, as_policy_admin* trg)
 {
 	*trg = *src;
 }

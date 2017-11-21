@@ -643,8 +643,9 @@ aerospike_key_remove_async(
 }
 
 static size_t
-as_operate_set_attr(const as_operations* ops, as_buffer* buffers, size_t size, uint8_t* rattr, uint8_t* wattr)
+as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr, uint8_t* wattr)
 {
+	size_t size = 0;
 	uint32_t n_operations = ops->binops.size;
 	uint8_t read_attr = 0;
 	uint8_t write_attr = 0;
@@ -691,10 +692,6 @@ aerospike_key_operate(
 	)
 {
 	as_error_reset(err);
-	
-	if (! policy) {
-		policy = &as->config.policies.operate;
-	}
 
 	int status = as_key_set_digest(err, (as_key*)key);
 	
@@ -710,13 +707,29 @@ aerospike_key_operate(
 	
 	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_operations);
 	memset(buffers, 0, sizeof(as_buffer) * n_operations);
-	
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
+
 	uint8_t read_attr;
 	uint8_t write_attr;
-	size = as_operate_set_attr(ops, buffers, size, &read_attr, &write_attr);
+	size_t size = as_operate_set_attr(ops, buffers, &read_attr, &write_attr);
 	
+	as_policy_operate policy_local;
+
+	if (! policy) {
+		if (write_attr & AS_MSG_INFO2_WRITE) {
+			// Write operations should not retry by default.
+			policy = &as->config.policies.operate;
+		}
+		else {
+			// Read operations should retry by default.
+			as_policy_operate_copy(&as->config.policies.operate, &policy_local);
+			policy_local.base.max_retries = 2;
+			policy = &policy_local;
+		}
+	}
+
+	uint16_t n_fields;
+	size += as_command_key_size(policy->key, key, &n_fields);
+
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, read_attr, write_attr, policy->commit_level,
 				policy->consistency_level, policy->linearize_read, AS_POLICY_EXISTS_IGNORE,
@@ -751,10 +764,6 @@ aerospike_key_operate_async(
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.operate;
-	}
-	
 	uint32_t n_operations = ops->binops.size;
 	
 	if (n_operations == 0) {
@@ -764,11 +773,27 @@ aerospike_key_operate_async(
 	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_operations);
 	memset(buffers, 0, sizeof(as_buffer) * n_operations);
 	
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	uint8_t read_attr;
 	uint8_t write_attr;
-	size = as_operate_set_attr(ops, buffers, size, &read_attr, &write_attr);
+	size_t size = as_operate_set_attr(ops, buffers, &read_attr, &write_attr);
+
+	as_policy_operate policy_local;
+
+	if (! policy) {
+		if (write_attr & AS_MSG_INFO2_WRITE) {
+			// Write operations should not retry by default.
+			policy = &as->config.policies.operate;
+		}
+		else {
+			// Read operations should retry by default.
+			as_policy_operate_copy(&as->config.policies.operate, &policy_local);
+			policy_local.base.max_retries = 2;
+			policy = &policy_local;
+		}
+	}
+
+	uint16_t n_fields;
+	size += as_command_key_size(policy->key, key, &n_fields);
 
 	void* partition;
 	uint8_t flags = AS_ASYNC_FLAGS_MASTER;

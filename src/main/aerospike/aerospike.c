@@ -78,13 +78,6 @@ aerospike_library_init()
 			return false;
 		}
 
-		WORD version = MAKEWORD(2, 2);
-		WSADATA data;
-		if (WSAStartup(version, &data) != 0) {
-			as_log_error("WSAStartup() failed");
-			return false;
-		}
-
 #if defined(AS_USE_LIBEVENT)
 		int evthread_use_windows_threads();
 		if (evthread_use_windows_threads() == -1) {

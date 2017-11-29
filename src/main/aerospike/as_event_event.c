@@ -142,6 +142,11 @@ as_event_worker(void* udata)
 	}
 	event_base_free(loop);
 	as_tls_thread_cleanup();
+
+#if defined(_MSC_VER)
+	// Call WSACleanup() when event loop thread ends.
+	WSACleanup();
+#endif
 	return NULL;
 }
 

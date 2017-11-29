@@ -935,6 +935,15 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
 as_status
 as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 {
+#if defined(_MSC_VER)
+	// Call WSAStartup() for every cluster instance on windows.
+	WORD version = MAKEWORD(2, 2);
+	WSADATA data;
+	if (WSAStartup(version, &data) != 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "WSAStartup failed")
+	}
+#endif
+
 	as_incr_uint32(&as_cluster_count);
 	
 	as_cluster* cluster = cf_malloc(sizeof(as_cluster));
@@ -1136,6 +1145,7 @@ as_cluster_destroy(as_cluster* cluster)
 	as_tls_context_destroy(&cluster->tls_ctx);
 
 #if defined(_MSC_VER)
+	// Call WSACleanup() for every cluster instance shutdown on windows.
 	WSACleanup();
 #endif
 

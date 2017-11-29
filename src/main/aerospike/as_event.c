@@ -62,6 +62,16 @@ as_event_initialize_loops(uint32_t capacity)
 		return false;
 	}
 
+#if defined(_MSC_VER)
+	// Call WSAStartup() on event loops initialization on windows.
+	WORD version = MAKEWORD(2, 2);
+	WSADATA data;
+	if (WSAStartup(version, &data) != 0) {
+		as_log_error("WSAStartup failed");
+		return false;
+	}
+#endif
+
 	if (capacity == 0) {
 		return false;
 	}
@@ -221,6 +231,11 @@ as_event_close_loops()
 void
 as_event_destroy_loops()
 {
+#if defined(_MSC_VER)
+	// Call WSACleanup() on event loops destroy on windows.
+	WSACleanup();
+#endif
+
 	if (as_event_loops) {
 		cf_free(as_event_loops);
 		as_event_loops = NULL;

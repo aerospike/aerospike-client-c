@@ -227,6 +227,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_nil.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_pair.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_password.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_queue.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_queue_mt.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_random.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_rec.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_sleep.h

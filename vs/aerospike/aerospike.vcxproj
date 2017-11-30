@@ -233,6 +233,7 @@
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_pair.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_password.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_queue.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_queue_mt.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_random.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_rec.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_result.h" />
@@ -342,6 +343,7 @@
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_pair.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_password.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_queue.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_queue_mt.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_random.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_rec.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_result.c" />

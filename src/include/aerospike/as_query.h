@@ -652,7 +652,7 @@ as_query_destroy(as_query* query);
  */
 #define as_query_select_inita(__query, __n) \
 	do { \
-		if ( (__query) != NULL && (__query)->select.entries == NULL ) {\
+		if ((__query)->select.entries == NULL) {\
 			(__query)->select.entries = (as_bin_name*) alloca(sizeof(as_bin_name) * (__n));\
 			if ( (__query)->select.entries ) { \
 				(__query)->select.capacity = (__n);\
@@ -732,7 +732,7 @@ as_query_select(as_query* query, const char * bin);
  */
 #define as_query_where_inita(__query, __n) \
 	do { \
-		if ((__query)  != NULL && (__query)->where.entries == NULL) {\
+		if ((__query)->where.entries == NULL) {\
 			(__query)->where.entries = (as_predicate*) alloca(sizeof(as_predicate) * (__n));\
 			if ( (__query)->where.entries ) {\
 				(__query)->where.capacity = (__n);\
@@ -818,7 +818,7 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
   * @ingroup query_object
   */
 #define as_query_predexp_inita(__query, __n) \
-	if ((__query) != NULL && (__query)->predexp.entries == NULL) {\
+	if ((__query)->predexp.entries == NULL) {\
 		(__query)->predexp.entries = (as_predexp_base**)alloca(__n * sizeof(as_predexp_base *));\
 		if ((__query)->predexp.entries) {\
 			(__query)->predexp.capacity = __n;\

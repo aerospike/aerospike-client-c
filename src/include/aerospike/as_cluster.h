@@ -322,13 +322,13 @@ as_nodes_release(as_nodes* nodes)
 /**
  * Add seed to cluster.
  */
-void
+AS_EXTERN void
 as_cluster_add_seed(as_cluster* cluster, const char* hostname, const char* tls_name, uint16_t port);
 
 /**
  * Remove seed from cluster.
  */
-void
+AS_EXTERN void
 as_cluster_remove_seed(as_cluster* cluster, const char* hostname, uint16_t port);
 
 /**

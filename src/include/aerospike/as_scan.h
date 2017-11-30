@@ -500,7 +500,7 @@ as_scan_destroy(as_scan* scan);
  */
 #define as_scan_select_inita(__scan, __n) \
 	do {\
-		if ((__scan) != NULL && (__scan)->select.entries == NULL) {\
+		if ((__scan)->select.entries == NULL) {\
 			(__scan)->select.entries = (as_bin_name*) alloca(sizeof(as_bin_name) * (__n));\
 			if ((__scan)->select.entries) {\
 				(__scan)->select.capacity = (__n);\
@@ -578,7 +578,7 @@ as_scan_select(as_scan* scan, const char * bin);
  * @ingroup as_scan_object
  */
 #define as_scan_predexp_inita(__scan, __n) \
-	if ((__scan) != NULL && (__scan)->predexp.entries == NULL) {\
+	if ((__scan)->predexp.entries == NULL) {\
 		(__scan)->predexp.entries =	(as_predexp_base**)alloca(__n * sizeof(as_predexp_base*));\
 		if ((__scan)->predexp.entries) {\
 			(__scan)->predexp.capacity = __n;\

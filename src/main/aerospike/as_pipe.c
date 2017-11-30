@@ -16,6 +16,7 @@
  */
 
 #include <aerospike/as_pipe.h>
+#include <stdlib.h>
 
 #if defined(__linux__)
 #define PIPE_WRITE_BUFFER_SIZE (5 * 1024 * 1024)

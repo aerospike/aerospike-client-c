@@ -6,9 +6,11 @@
 - Visual Studio 2015 or greater.
 
 The Aerospike C client library is dependent on several third party libraries.
-Since many of these libraries are difficult to build on Windows,
-pre-built third party libraries are provided in [Libraries](lib).
-Their corresponding include files are located in [Include](include).
+Since many of these libraries are difficult to build on Windows, pre-built 
+third party libraries and corresponding include files are provided in the nuget
+[aerospike-client-c-dependencies](https://www.nuget.org/packages/aerospike-client-c-dependencies)
+package.  This package dependency is defined in the aerospike solution and should
+automatically be downloaded on the first compile in Visual Studio.
 
 ### Git Submodules
 

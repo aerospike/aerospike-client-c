@@ -82,10 +82,10 @@ following `LD_LIBRARY_PATH` setting may be necessary.
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
 When compiling your async applications with aerospike header files, the event library
-must be defined (`-DAS_USE_LIBEV`, `-DAS_USE_LIBUV` or `-DAS_USE_LIBEVENT`) on the command line or
+must be defined (`-DAS_USE_LIBUV`, `-DAS_USE_LIBEV` or `-DAS_USE_LIBEVENT`) on the command line or
 in an IDE.  Example:
 
-	$ gcc -DAS_USE_LIBEV -o myapp myapp.c -laerospike -lev -lssl -lcrypto -lpthread -lm -lz
+	$ gcc -DAS_USE_LIBUV -o myapp myapp.c -laerospike -lev -lssl -lcrypto -lpthread -lm -lz
 
 ## Build
 
@@ -100,13 +100,13 @@ this project.
 
 Build default library:
 
-	$ make [EVENT_LIB=libev|libuv|libevent]
+	$ make [EVENT_LIB=libuv|libev|libevent]
 
 Build examples:
 
 	$ make
-	$ make EVENT_LIB=libev    # Support asynchronous functions with libev
 	$ make EVENT_LIB=libuv    # Support asynchronous functions with libuv
+	$ make EVENT_LIB=libev    # Support asynchronous functions with libev
 	$ make EVENT_LIB=libevent # Support asynchronous functions with libevent
 
 The build adheres to the _GNU_SOURCE API level. The build will generate the following files:
@@ -125,7 +125,7 @@ Build alias:
 
 If always building with the same asynchronous framework, creating an alias is recommended.
 
-	$ alias make="make EVENT_LIB=libev"
+	$ alias make="make EVENT_LIB=libuv"
 
 ## Clean
 
@@ -139,11 +139,11 @@ This will remove all files in the `target` directory.
 
 To run unit tests:
 
-	$ make [EVENT_LIB=libev|libuv|libevent] [AS_HOST=<hostname>] test
+	$ make [EVENT_LIB=libuv|libev|libevent] [AS_HOST=<hostname>] test
 
 or with valgrind:
 
-	$ make [EVENT_LIB=libev|libuv|libevent] [AS_HOST=<hostname>] test-valgrind
+	$ make [EVENT_LIB=libuv|libev|libevent] [AS_HOST=<hostname>] test-valgrind
 
 ## Lua
 

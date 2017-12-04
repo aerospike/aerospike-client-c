@@ -174,7 +174,7 @@ typedef struct as_record_s {
 
 	/**
 	 * The key of the record.
-	 * This is populated when a record is read from the database.
+	 * This is only populated on records returned from a scan or secondary index query.
 	 * This should not be set by the user.
 	 */
 	as_key key;

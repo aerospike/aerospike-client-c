@@ -8,6 +8,7 @@ set -e
 signPackage="$1"  # "-sign" or empty string.
 
 cd `dirname $0`
+origin=`pwd`
 
 platform=`./platform`
 
@@ -31,11 +32,23 @@ else
   installDir=/usr
 fi
 
-# Initialize stage dir
+# Initialize stage dir.
 stageDir=$baseDir/stage
 rm -rf $stageDir
 mkdir -p $stageDir
 mkdir -p $stageDir/packages
+
+# Remove target directories.
+echo Make clean
+make -C $baseDir clean
+
+# Create separate package of source code.
+echo Create source code zip package
+srcDir=aerospike-client-c-src-$version
+./package_src $baseDir $stageDir/SOURCE/$srcDir
+cd $stageDir/SOURCE
+zip -r $stageDir/packages/$srcDir.zip $srcDir
+cd $origin
 
 # Package each event library implmentation for current platform.
 for eventLib in sync libuv libev libevent
@@ -81,10 +94,6 @@ make -C $baseDir docs
 packageDir=$baseDir/target/packages
 rm -rf $packageDir
 mv $stageDir/packages $packageDir
-
-# Create separate package of source code.
-./package_src $baseDir $stageDir/SOURCE/aerospike-client-c
-tar cfj $packageDir/aerospike-client-c-$version.src.tar.bz2 -C $stageDir/SOURCE aerospike-client-c
 
 # Cleanup temporary distribution.
 rm -rf $stageDir

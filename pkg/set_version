@@ -11,6 +11,7 @@ version=$1
 
 cd `dirname $0`
 
+# Write version.h
 echo $version | awk -F. '{
 	split($3,b,"-");
 	printf("// Version format: MNNPPBBBB\n");
@@ -22,4 +23,25 @@ echo $version | awk -F. '{
 	printf("\nextern char* aerospike_client_version;\n");
 }' > ../src/include/aerospike/version.h
 
+# Write version.c
 echo 'char* aerospike_client_version = "'$version'";' > ../src/main/aerospike/version.c
+
+# Update windows nuspec version.
+for fn in ../vs/*.nuspec
+do
+  awk 'BEGIN{OFS=""}
+  {
+    idx = index($0,"<version>"); 
+    
+    if (idx > 0)
+    {
+      print substr($0, 0, idx+8),"'$version'</version>";
+    } 
+    else
+    {
+      print $0
+    }
+  }' $fn > $fn.tmp
+
+  mv $fn.tmp $fn
+done

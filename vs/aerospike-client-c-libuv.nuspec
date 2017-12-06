@@ -29,6 +29,7 @@
 	
     <file src="packages\aerospike-client-c-dependencies.*\build\native\include\pthread.h" target="build\native\include" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\include\sched.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\_ptw32.h" target="build\native\include" />
 	<file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.dll" target="build\native\lib\x64\Debug" />
 	<file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.pdb" target="build\native\lib\x64\Debug" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\lua51.dll" target="build\native\lib\x64\Debug" />

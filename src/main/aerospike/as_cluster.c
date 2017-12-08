@@ -190,6 +190,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 	as_error error_local;
 	as_error_init(&error_local); // AEROSPIKE_ERR_TIMEOUT doesn't come with a message; make sure it's initialized.
 	as_status status = AEROSPIKE_OK;
+	as_status conn_status = AEROSPIKE_ERR_CLIENT;
 	
 	pthread_mutex_lock(&cluster->seed_lock);
 	as_vector* seeds = cluster->seeds;
@@ -233,6 +234,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 				if (enable_warnings) {
 					as_log_warn("Failed to connect to seed %s %d. %s %s", hostname, seed->port, as_error_string(status), error_local.message);
 				}
+				conn_status = status;
 			}
 		}
 		as_lookup_end(&iter);
@@ -244,7 +246,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		status = AEROSPIKE_OK;
 	}
 	else {
-		status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to connect");
+		status = as_error_set_message(err, conn_status, "Failed to connect");
 	}
 	
 	as_vector_destroy(&nodes_to_add);

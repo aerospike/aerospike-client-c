@@ -732,7 +732,7 @@ aerospike_key_operate(
 
 	uint8_t* cmd = as_command_init(size);
 	uint8_t* p = as_command_write_header(cmd, read_attr, write_attr, policy->commit_level,
-				policy->consistency_level, policy->linearize_read, AS_POLICY_EXISTS_IGNORE,
+				policy->consistency_level, policy->linearize_read, policy->exists,
 				policy->gen, ops->gen, ops->ttl, policy->base.total_timeout, n_fields, n_operations,
 				policy->durable_delete);
 
@@ -815,7 +815,7 @@ aerospike_key_operate_async(
 		listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header(cmd->buf, read_attr, write_attr, policy->commit_level,
-		policy->consistency_level, policy->linearize_read, AS_POLICY_EXISTS_IGNORE, policy->gen,
+		policy->consistency_level, policy->linearize_read, policy->exists, policy->gen,
 		ops->gen, ops->ttl, policy->base.total_timeout, n_fields, n_operations,
 		policy->durable_delete);
 

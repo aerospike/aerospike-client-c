@@ -609,6 +609,11 @@ typedef struct as_policy_operate_s {
 	as_policy_gen gen;
 
 	/**
+	 * Specifies the behavior for the existence of the record.
+	 */
+	as_policy_exists exists;
+
+	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
 	 * Default: true
@@ -1019,6 +1024,7 @@ as_policy_operate_init(as_policy_operate* p)
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
+	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->deserialize = true;
 	p->durable_delete = false;
 	p->linearize_read = false;

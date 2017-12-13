@@ -429,7 +429,9 @@ as_pipe_timeout(as_event_command* cmd, bool retry)
 {
 	as_log_trace("Timeout for command %p", cmd);
 	as_error err;
-	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, as_error_string(AEROSPIKE_ERR_TIMEOUT));
+	const char* node_string = cmd->node ? as_node_get_address_string(cmd->node) : "null";
+	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Pipeline timeout: iterations=%u lastNode=%s",
+					cmd->iteration, node_string);
 	cancel_connection(cmd, &err, CANCEL_CONNECTION_TIMEOUT, retry, false);
 }
 

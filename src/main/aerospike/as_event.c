@@ -476,7 +476,7 @@ as_event_socket_timeout(as_event_command* cmd)
 
 		as_error err;
 		const char* node_string = cmd->node ? as_node_get_address_string(cmd->node) : "null";
-		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Timeout: iterations=%u lastNode=%s",
+		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
 						cmd->iteration, node_string);
 
 		as_event_error_callback(cmd, &err);
@@ -493,7 +493,7 @@ as_event_total_timeout(as_event_command* cmd)
 
 	as_error err;
 	const char* node_string = cmd->node ? as_node_get_address_string(cmd->node) : "null";
-	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Timeout: iterations=%u lastNode=%s",
+	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
 					cmd->iteration, node_string);
 
 	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
@@ -850,7 +850,7 @@ as_event_command_parse_result(as_event_command* cmd)
 		}
 			
 		default: {
-			as_error_set_message(&err, status, as_error_string(status));
+			as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
 			as_event_response_error(cmd, &err);
 			break;
 		}
@@ -893,7 +893,7 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 			
 		default: {
 			as_error err;
-			as_error_set_message(&err, status, as_error_string(status));
+			as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
 			as_event_response_error(cmd, &err);
 			break;
 		}

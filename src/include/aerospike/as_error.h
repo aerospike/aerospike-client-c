@@ -16,6 +16,7 @@
  */
 #pragma once 
 
+#include <aerospike/as_std.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
 

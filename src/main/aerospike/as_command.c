@@ -577,12 +577,14 @@ Retry:
 		}
 	}
 	
-	// Retries have been exhausted.  Return last error.
+	// Retries have been exhausted.
 	// Fill in timeout stats if timeout occurred.
 	if (err->code == AEROSPIKE_ERR_TIMEOUT) {
+		// Server timeouts have a message.  Client timeouts do not have a message.
+		const char* type = (err->message[0])? "Server" : "Client";
 		as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
-			"Timeout: socket=%u total=%u iterations=%u lastNode=%s",
-			policy->socket_timeout, policy->total_timeout, iteration, as_node_get_address_string(node));
+			"%s timeout: socket=%u total=%u iterations=%u lastNode=%s",
+			type, policy->socket_timeout, policy->total_timeout, iteration, as_node_get_address_string(node));
 	}
 
 	if (release_node) {
@@ -1172,7 +1174,7 @@ as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint32_t 
 		}
 			
 		default:
-			as_error_set_message(err, status, as_error_string(status));
+			as_error_update(err, status, "%s %s", as_node_get_address_string(node), as_error_string(status));
 			break;
 	}
 	as_command_free(buf, size);
@@ -1233,7 +1235,7 @@ as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, 
 		}
 
 		default:
-			as_error_set_message(err, status, as_error_string(status));
+			as_error_update(err, status, "%s %s", as_node_get_address_string(node), as_error_string(status));
 			if (val) {
 				*val = 0;
 			}

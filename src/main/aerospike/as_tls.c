@@ -149,7 +149,7 @@ wait_socket(as_socket_fd fd, uint32_t socket_timeout, uint64_t deadline, bool re
 		if (deadline > 0) {
 			uint64_t now = cf_getms();
 
-			if (now > deadline) {
+			if (now >= deadline) {
 				rv = 1;  // timeout
 				break;
 			}

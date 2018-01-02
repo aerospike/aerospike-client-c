@@ -342,7 +342,7 @@ as_socket_write_deadline(
 		if (deadline > 0) {
 			uint64_t now = cf_getms();
 
-			if (now > deadline) {
+			if (now >= deadline) {
 				// Timeout.  Do not set error string to avoid affecting performance.
 				// Calling functions usually retry, so the error string is not used anyway.
 				status = err->code = AEROSPIKE_ERR_TIMEOUT;
@@ -446,7 +446,7 @@ as_socket_read_deadline(
 		if (deadline > 0) {
 			uint64_t now = cf_getms();
 
-			if (now > deadline) {
+			if (now >= deadline) {
 				// Timeout.  Do not set error string to avoid affecting performance.
 				// Calling functions usually retry, so the error string is not used anyway.
 				status = err->code = AEROSPIKE_ERR_TIMEOUT;

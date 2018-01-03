@@ -256,6 +256,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 	// Initialize read buffer (buf) to be located after write buffer.
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
+	cmd->conn = NULL;
 
 	as_event_loop* event_loop = cmd->event_loop;
 
@@ -539,6 +540,10 @@ as_event_command_retry(as_event_command* cmd, bool alternate)
 	if (alternate) {
 		cmd->flags ^= AS_ASYNC_FLAGS_MASTER;  // Alternate between master and prole.
 	}
+
+	// Old connection should already be closed or is closing.
+	// Reset command connection so timeout watcher knows not to close connection twice.
+	cmd->conn = NULL;
 
 	// Retry command at the end of the queue so other commands have a chance to run first.
 	return as_event_execute(cmd->event_loop, (as_event_executable)as_event_command_begin, cmd);

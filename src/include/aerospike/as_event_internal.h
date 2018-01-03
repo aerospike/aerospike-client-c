@@ -623,13 +623,15 @@ as_event_connection_timeout(as_event_command* cmd, as_conn_pool* pool)
 {
 	as_event_connection* conn = cmd->conn;
 
-	if (conn->watching > 0) {
-		as_event_stop_watcher(cmd, conn);
-		as_event_release_connection(conn, pool);
-	}
-	else {
-		cf_free(conn);
-		as_conn_pool_dec(pool);
+	if (conn) {
+		if (conn->watching > 0) {
+			as_event_stop_watcher(cmd, conn);
+			as_event_release_connection(conn, pool);
+		}
+		else {
+			cf_free(conn);
+			as_conn_pool_dec(pool);
+		}
 	}
 }
 

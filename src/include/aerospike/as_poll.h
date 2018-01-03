@@ -87,10 +87,13 @@ as_poll_socket(as_poll* poll, as_socket_fd fd, uint32_t timeout, bool read)
 	}
 
 	if (rv <= 0) {
-		return rv;
+		return -1;
 	}
 
-	return FD_ISSET(fd % FD_SETSIZE, &poll->set[fd / FD_SETSIZE]);
+	if (! FD_ISSET(fd % FD_SETSIZE, &poll->set[fd / FD_SETSIZE])) {
+		return -2;
+	}
+	return rv;
 }
 
 static inline void
@@ -135,7 +138,10 @@ as_poll_socket(as_poll* poll, as_socket_fd fd, uint32_t timeout, bool read)
 		return -1;
 	}
 
-	return FD_ISSET(fd, &poll->set);
+	if (! FD_ISSET(fd, &poll->set)) {
+		return -2;
+	}
+	return rv;
 }
 
 #define as_poll_destroy(_poll)

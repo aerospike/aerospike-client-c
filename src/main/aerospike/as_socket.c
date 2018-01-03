@@ -395,9 +395,9 @@ as_socket_write_deadline(
 			err->message[0] = 0;
 			break;
 		}
-		else {
+		else if (rv == -1) {
 			int e = as_last_error();
-			if (rv == -1 && (e != AS_EINTR || as_socket_stop_on_interrupt)) {
+			if (e != AS_EINTR || as_socket_stop_on_interrupt) {
 				status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket write error", e);
 				break;
 			}
@@ -496,9 +496,9 @@ as_socket_read_deadline(
 			err->message[0] = 0;
 			break;
 		}
-		else {
+		else if (rv == -1) {
 			int e = as_last_error();
-			if (rv == -1 && (e != AS_EINTR || as_socket_stop_on_interrupt)) {
+			if (e != AS_EINTR || as_socket_stop_on_interrupt) {
 				status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket read error", e);
 				break;
 			}

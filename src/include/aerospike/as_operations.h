@@ -170,7 +170,7 @@ typedef struct as_binops_s {
  * as_operations* ops = as_operations_new(2);
  * ~~~~~~~~~~
  *
- * When you no longer needthe as_operations, you can release the resources 
+ * When you no longer need the as_operations, you can release the resources
  * allocated to it via as_operations_destroy().
  *
  * ## Destruction

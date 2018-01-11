@@ -256,6 +256,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 	// Initialize read buffer (buf) to be located after write buffer.
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
+	cmd->command_sent_counter = 0;
 	cmd->conn = NULL;
 
 	as_event_loop* event_loop = cmd->event_loop;
@@ -697,6 +698,8 @@ as_event_executor_complete(as_event_command* cmd)
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
+	as_error_set_in_doubt(err, cmd->flags & AS_ASYNC_FLAGS_READ, cmd->command_sent_counter);
+
 	switch (cmd->type) {
 		case AS_ASYNC_TYPE_WRITE:
 			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);

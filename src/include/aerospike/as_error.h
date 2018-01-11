@@ -121,6 +121,13 @@ typedef struct as_error_s {
 	 */
 	uint32_t line;
 
+	/**
+	 * Is it possible that the write transaction completed even though this error was generated.
+	 * This may be the case when a client error occurs (like timeout) after the command was sent
+	 * to the server.
+	 */
+	bool in_doubt;
+
 } as_error;
 
 /******************************************************************************
@@ -165,6 +172,7 @@ as_error_init(as_error* err)
 	err->func = NULL;
 	err->file = NULL;
 	err->line = 0;
+	err->in_doubt = false;
 	return err;
 }
 
@@ -186,6 +194,7 @@ as_error_reset(as_error* err)
 	err->func = NULL;
 	err->file = NULL;
 	err->line = 0;
+	err->in_doubt = false;
 	return err->code;
 }
 
@@ -251,6 +260,21 @@ as_error_set(as_error* err, as_status code, const char * fmt, ...)
 }
 
 /**
+ * Set whether it is possible that the write transaction may have completed
+ * even though this exception was generated.  This may be the case when a
+ * client error occurs (like timeout) after the command was sent to the server.
+ *
+ * @relates as_error
+ */
+static inline void
+as_error_set_in_doubt(as_error* err, bool is_read, uint32_t command_sent_counter)
+{
+	if (!is_read && (command_sent_counter > 1 || (command_sent_counter == 1 && (err->code == AEROSPIKE_ERR_TIMEOUT || err->code <= 0)))) {
+		err->in_doubt = true;
+	}
+}
+
+/**
  * Copy error from source to target.
  *
  * @relates as_error
@@ -263,6 +287,7 @@ as_error_copy(as_error * trg, const as_error * src)
 	trg->func = src->func;
 	trg->file = src->file;
 	trg->line = src->line;
+	trg->in_doubt = src->in_doubt;
 }
 
 /**

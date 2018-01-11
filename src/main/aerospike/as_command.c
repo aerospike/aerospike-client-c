@@ -429,6 +429,7 @@ as_command_execute(
 	uint32_t socket_timeout = policy->socket_timeout;
 	uint32_t total_timeout = policy->total_timeout;
 	uint32_t iteration = 0;
+	uint32_t command_sent_counter = 0;
 	as_status status;
 	bool master = true;
 	bool release_node;
@@ -485,7 +486,8 @@ as_command_execute(
 			}
 			goto Retry;
 		}
-		
+		command_sent_counter++;
+
 		// Parse results returned by server.
 		status = parse_results_fn(err, &socket, node, socket_timeout, deadline_ms, parse_results_data);
 		
@@ -525,9 +527,11 @@ as_command_execute(
 					if (release_node) {
 						as_node_release(node);
 					}
+					as_error_set_in_doubt(err, is_read, command_sent_counter);
 					return status;
 				
 				default:
+					as_error_set_in_doubt(err, is_read, command_sent_counter);
 					break;
 			}
 		}
@@ -590,6 +594,7 @@ Retry:
 	if (release_node) {
 		as_node_release(node);
 	}
+	as_error_set_in_doubt(err, is_read, command_sent_counter);
 	return err->code;
 }
 

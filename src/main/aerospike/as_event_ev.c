@@ -356,6 +356,7 @@ as_ev_read(as_event_command* cmd)
 static inline void
 as_ev_command_read_start(as_event_command* cmd)
 {
+	cmd->command_sent_counter++;
 	cmd->len = sizeof(as_proto);
 	cmd->pos = 0;
 	cmd->state = AS_ASYNC_STATE_COMMAND_READ_HEADER;

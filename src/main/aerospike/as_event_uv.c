@@ -360,6 +360,7 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 	as_event_command* cmd = req->data;
 	
 	if (status == 0) {
+		cmd->command_sent_counter++;
 		cmd->len = sizeof(as_proto);
 		cmd->pos = 0;
 		cmd->state = AS_ASYNC_STATE_COMMAND_READ_HEADER;

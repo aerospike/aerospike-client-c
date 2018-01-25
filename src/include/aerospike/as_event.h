@@ -69,7 +69,7 @@ typedef struct as_policy_event {
 	 *
 	 * Default: 0 (execute all async commands immediately)
 	 */
-	uint32_t max_commands_in_process;
+	int max_commands_in_process;
 
 	/**
 	 * Maximum number of async commands that can be stored in each event loop's delay queue for
@@ -125,7 +125,7 @@ typedef struct as_event_loop {
 	pthread_t thread;
 	uint32_t index;
 	uint32_t max_commands_in_queue;
-	uint32_t max_commands_in_process;
+	int max_commands_in_process;
 	int pending;
 	// Count of consecutive errors occurring before event loop registration.
 	// Used to prevent deep recursion.

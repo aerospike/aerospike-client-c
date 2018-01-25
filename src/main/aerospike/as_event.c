@@ -55,7 +55,7 @@ as_status aerospike_library_init(as_error* err);
 static as_status
 as_event_validate_policy(as_error* err, as_policy_event* policy)
 {
-	if (policy->max_commands_in_process > 0 && policy->max_commands_in_process < 5) {
+	if (policy->max_commands_in_process < 0 || (policy->max_commands_in_process > 0 && policy->max_commands_in_process < 5)) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "max_commands_in_process %u must be 0 or >= 5", policy->max_commands_in_process);
 	}
 	return AEROSPIKE_OK;

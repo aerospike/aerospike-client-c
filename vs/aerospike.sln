@@ -51,6 +51,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "aerospike-test", "aerospike
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "benchmarks", "benchmarks\benchmarks.vcxproj", "{D231D4C7-0017-4BE4-8838-2FBC158510C8}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "async-delay-queue", "examples\async-delay-queue\async-delay-queue.vcxproj", "{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug libevent|x64 = Debug libevent|x64
@@ -485,6 +487,24 @@ Global
 		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release|x64.ActiveCfg = Release|x64
 		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release|x64.Build.0 = Release|x64
 		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release|x86.ActiveCfg = Release|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug libevent|x64.ActiveCfg = Debug libevent|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug libevent|x64.Build.0 = Debug libevent|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug libevent|x86.ActiveCfg = Debug libevent|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug libuv|x64.ActiveCfg = Debug libuv|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug libuv|x64.Build.0 = Debug libuv|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug libuv|x86.ActiveCfg = Debug libuv|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug|x64.ActiveCfg = Debug|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug|x64.Build.0 = Debug|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug|x86.ActiveCfg = Debug|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Release libevent|x64.ActiveCfg = Release libevent|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Release libevent|x64.Build.0 = Release libevent|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Release libevent|x86.ActiveCfg = Release libevent|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Release libuv|x64.ActiveCfg = Release libuv|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Release libuv|x64.Build.0 = Release libuv|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Release libuv|x86.ActiveCfg = Release libuv|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Release|x64.ActiveCfg = Release|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Release|x64.Build.0 = Release|x64
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Release|x86.ActiveCfg = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -510,5 +530,6 @@ Global
 		{48242998-2002-4B4C-A610-296C2E94677B} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{05EA735B-3AE2-4BDC-B56D-A87D66FD4BB5} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{76680446-5B3C-4E58-BD4E-97C70DFD83D3} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
+		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 	EndGlobalSection
 EndGlobal

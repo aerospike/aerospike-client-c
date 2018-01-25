@@ -65,8 +65,8 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
  * FUNCTIONS
  *****************************************************************************/
 
-bool
-aerospike_library_init()
+as_status
+aerospike_library_init(as_error* err)
 {
 #if defined(_MSC_VER)
 	// Aerospike library initialization on windows.
@@ -74,22 +74,22 @@ aerospike_library_init()
 
 	if (!library_initialized) {
 		if (!cf_clock_init()) {
-			as_log_error("cf_clock_init() failed");
-			return false;
+			pthread_mutex_unlock(&init_lock);
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "cf_clock_init() failed");
 		}
 
 #if defined(AS_USE_LIBEVENT)
 		int evthread_use_windows_threads();
 		if (evthread_use_windows_threads() == -1) {
-			as_log_error("evthread_use_windows_threads() failed");
-			return false;
+			pthread_mutex_unlock(&init_lock);
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "evthread_use_windows_threads() failed");
 		}
 #endif
 		library_initialized = true;
 	}
 	pthread_mutex_unlock(&init_lock);
 #endif
-	return true;
+	return AEROSPIKE_OK;
 }
 
 /**
@@ -157,8 +157,10 @@ aerospike_connect(aerospike* as, as_error* err)
 {
 	as_error_reset(err);
 
-	if (!aerospike_library_init()) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "aerospike_library_init() failed");
+	as_status status = aerospike_library_init(err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
 	// This is not 100% bulletproof against, say, simultaneously calling

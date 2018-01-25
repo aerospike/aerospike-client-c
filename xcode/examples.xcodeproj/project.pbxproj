@@ -11,6 +11,8 @@
 		BE9280DC1E4BA677007F7DA7 /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280DB1E4BA677007F7DA7 /* libcrypto.dylib */; };
 		BE9280DE1E4BA67D007F7DA7 /* libz.1.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280DD1E4BA67D007F7DA7 /* libz.1.dylib */; };
 		BE9280EA1E4E649D007F7DA7 /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280D81E4BA65D007F7DA7 /* liblua.a */; };
+		BF19D6E220195AE4001A075D /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
+		BF2CE58F201976C2000CD2C8 /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD60E64201964E4004A6CE2 /* example.c */; };
 		BF9750191E4ECABA00B737CF /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750181E4ECABA00B737CF /* libev.a */; };
 		BF97501C1E4ECAC700B737CF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF97501B1E4ECAC700B737CF /* libuv.a */; };
 		BFC65C891C923CEB0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
@@ -67,6 +69,15 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		BF19D6EB20195AE4001A075D /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
 		BFC65C721C9237EE0079DF5A /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -254,6 +265,7 @@
 		BE9280D91E4BA672007F7DA7 /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = /usr/local/opt/openssl/lib/libssl.dylib; sourceTree = "<group>"; };
 		BE9280DB1E4BA677007F7DA7 /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = /usr/local/opt/openssl/lib/libcrypto.dylib; sourceTree = "<group>"; };
 		BE9280DD1E4BA67D007F7DA7 /* libz.1.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.1.dylib; path = ../../../../../usr/lib/libz.1.dylib; sourceTree = "<group>"; };
+		BF19D6EF20195AE4001A075D /* async_delay_queue */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = async_delay_queue; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF9750181E4ECABA00B737CF /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<group>"; };
 		BF97501B1E4ECAC700B737CF /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/lib/libuv.a; sourceTree = "<group>"; };
 		BFC65C741C9237EE0079DF5A /* put */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = put; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -297,6 +309,7 @@
 		BFC65E5E1C924FDB0079DF5A /* scan_background */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = scan_background; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65E701C92501C0079DF5A /* scan_standard */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = scan_standard; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65E841C92560A0079DF5A /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/put/src/main/example.c; sourceTree = "<group>"; };
+		BFD60E64201964E4004A6CE2 /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/async_examples/async_delay_queue/src/main/example.c; sourceTree = "<group>"; };
 		BFF344E91CEE41DB00FD1976 /* map */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = map; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFF344EA1CEE420100FD1976 /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/map/src/main/example.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -319,6 +332,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		BF19D6DC201959CA001A075D /* async_delay_queue */ = {
+			isa = PBXGroup;
+			children = (
+				BFD60E64201964E4004A6CE2 /* example.c */,
+			);
+			name = async_delay_queue;
+			sourceTree = "<group>";
+		};
 		BFC65C641C9234A90079DF5A = {
 			isa = PBXGroup;
 			children = (
@@ -368,6 +389,7 @@
 				BFC65DCE1C924E4F0079DF5A /* async_get */,
 				BFC65DE01C924E880079DF5A /* async_batch_get */,
 				BFC65DF21C924EC20079DF5A /* async_query */,
+				BF19D6EF20195AE4001A075D /* async_delay_queue */,
 				BFC65E041C924EF40079DF5A /* batch_get */,
 				BFC65E161C924F3B0079DF5A /* geo_filter */,
 				BFC65E281C924F640079DF5A /* geo_simple */,
@@ -495,6 +517,7 @@
 				BFC65DAA1C924C080079DF5A /* async_get */,
 				BFC65DA81C924BA50079DF5A /* async_batch_get */,
 				BFC65DAB1C924C180079DF5A /* async_query */,
+				BF19D6DC201959CA001A075D /* async_delay_queue */,
 			);
 			name = async_examples;
 			sourceTree = "<group>";
@@ -617,6 +640,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		BF19D6DF20195AE4001A075D /* async_delay_queue */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BF19D6EC20195AE4001A075D /* Build configuration list for PBXNativeTarget "async_delay_queue" */;
+			buildPhases = (
+				BF19D6E020195AE4001A075D /* Sources */,
+				BFC65CBB1C9241AA0079DF5A /* Frameworks */,
+				BF19D6EB20195AE4001A075D /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = async_delay_queue;
+			productName = put;
+			productReference = BF19D6EF20195AE4001A075D /* async_delay_queue */;
+			productType = "com.apple.product-type.tool";
+		};
 		BFC65C731C9237EE0079DF5A /* put */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = BFC65C7B1C9237EE0079DF5A /* Build configuration list for PBXNativeTarget "put" */;
@@ -997,6 +1037,7 @@
 				BFC65DBD1C924E4F0079DF5A /* async_get */,
 				BFC65DCF1C924E880079DF5A /* async_batch_get */,
 				BFC65DE11C924EC20079DF5A /* async_query */,
+				BF19D6DF20195AE4001A075D /* async_delay_queue */,
 				BFC65E051C924F3B0079DF5A /* geo_filter */,
 				BFC65E171C924F640079DF5A /* geo_simple */,
 				BFC65E291C924F930079DF5A /* query_aggregate */,
@@ -1018,6 +1059,15 @@
 /* End PBXReferenceProxy section */
 
 /* Begin PBXSourcesBuildPhase section */
+		BF19D6E020195AE4001A075D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BF2CE58F201976C2000CD2C8 /* example.c in Sources */,
+				BF19D6E220195AE4001A075D /* example_utils.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BFC65C701C9237EE0079DF5A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1201,6 +1251,82 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		BF19D6ED20195AE4001A075D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
+				New_Setting = "";
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		BF19D6EE20195AE4001A075D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				MACOSX_DEPLOYMENT_TARGET = "";
+				New_Setting = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
 		BFC65C691C9234A90079DF5A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -2806,6 +2932,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		BF19D6EC20195AE4001A075D /* Build configuration list for PBXNativeTarget "async_delay_queue" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BF19D6ED20195AE4001A075D /* Debug */,
+				BF19D6EE20195AE4001A075D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		BFC65C681C9234A90079DF5A /* Build configuration list for PBXProject "examples" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

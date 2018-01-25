@@ -33,6 +33,11 @@ typedef enum as_status_e {
 	 * Client Errors
 	 **************************************************************************/
 	/**
+	 * Async command delay queue is full.
+	 */
+	AEROSPIKE_ERR_ASYNC_QUEUE_FULL = -11,
+
+	/**
 	 * Synchronous connection error.
 	 */
 	AEROSPIKE_ERR_CONNECTION = -10,

@@ -53,9 +53,7 @@ as_ev_close_loop(as_event_loop* event_loop)
 	}
 	
 	// Cleanup event loop resources.
-	as_queue_destroy(&event_loop->queue);
-	as_queue_destroy(&event_loop->pipe_cb_queue);
-	pthread_mutex_destroy(&event_loop->lock);
+	as_event_loop_destroy(event_loop);
 }
 
 static void
@@ -117,7 +115,6 @@ as_event_create_loop(as_event_loop* event_loop)
 	event_loop->loop = ev_loop_new(EVFLAG_AUTO);
 	
 	if (! event_loop->loop) {
-		as_log_error("Failed to create event loop");
 		return false;
 	}
 	as_ev_init_loop(event_loop);

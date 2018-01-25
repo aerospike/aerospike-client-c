@@ -46,20 +46,53 @@ int as_event_send_buffer_size = 0;
 int as_event_recv_buffer_size = 0;
 bool as_event_threads_created = false;
 
-bool aerospike_library_init();
+as_status aerospike_library_init(as_error* err);
 
 /******************************************************************************
  * PUBLIC FUNCTIONS
  *****************************************************************************/
 
+static as_status
+as_event_validate_policy(as_error* err, as_policy_event* policy)
+{
+	if (policy->max_commands_in_process > 0 && policy->max_commands_in_process < 5) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "max_commands_in_process %u must be 0 or >= 5", policy->max_commands_in_process);
+	}
+	return AEROSPIKE_OK;
+}
+
+static void
+as_event_initialize_loop(as_policy_event* policy, as_event_loop* event_loop, uint32_t index)
+{
+	pthread_mutex_init(&event_loop->lock, 0);
+	as_queue_init(&event_loop->queue, sizeof(as_event_commander), AS_EVENT_QUEUE_INITIAL_CAPACITY);
+
+	if (policy->max_commands_in_process > 0) {
+		as_queue_init(&event_loop->delay_queue, sizeof(as_event_command*), policy->queue_initial_capacity);
+	}
+	else {
+		memset(&event_loop->delay_queue, 0, sizeof(as_queue));
+	}
+	as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
+	event_loop->index = index;
+	event_loop->max_commands_in_queue = policy->max_commands_in_queue;
+	event_loop->max_commands_in_process = policy->max_commands_in_process;
+	event_loop->pending = 0;
+	event_loop->errors = 0;
+	event_loop->using_delay_queue = false;
+	event_loop->pipe_cb_calling = false;
+}
+
 // Force link error on event initialization when event library not defined.
 #if AS_EVENT_LIB_DEFINED
 
-static bool
-as_event_initialize_loops(uint32_t capacity)
+static as_status
+as_event_initialize_loops(as_error* err, uint32_t capacity)
 {
-	if (!aerospike_library_init()) {
-		return false;
+	as_status status = aerospike_library_init(err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
 #if defined(_MSC_VER)
@@ -67,13 +100,12 @@ as_event_initialize_loops(uint32_t capacity)
 	WORD version = MAKEWORD(2, 2);
 	WSADATA data;
 	if (WSAStartup(version, &data) != 0) {
-		as_log_error("WSAStartup failed");
-		return false;
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "WSAStartup failed");
 	}
 #endif
 
 	if (capacity == 0) {
-		return false;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid capacity: %u", capacity);
 	}
 	
 	as_event_send_buffer_size = as_pipe_get_send_buffer_size();
@@ -82,7 +114,7 @@ as_event_initialize_loops(uint32_t capacity)
 	as_event_loops = cf_calloc(capacity, sizeof(as_event_loop));
 	
 	if (! as_event_loops) {
-		return false;
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "as_event_loops calloc() failed");
 	}
 
 	as_event_loop_capacity = capacity;
@@ -91,37 +123,64 @@ as_event_initialize_loops(uint32_t capacity)
 	// Initialize first loop to circular linked list for efficient round-robin
 	// event loop distribution.
 	as_event_loops->next = as_event_loops;
-	return true;
+	return AEROSPIKE_OK;
 }
 
 as_event_loop*
 as_event_create_loops(uint32_t capacity)
 {
-	if (! as_event_initialize_loops(capacity)) {
-		return 0;
+	as_error err;
+	as_event_loop* event_loops;
+
+	if (as_create_event_loops(&err, NULL, capacity, &event_loops) != AEROSPIKE_OK) {
+		as_log_error(err.message);
+		return NULL;
 	}
-	
+	return event_loops;
+}
+
+as_status
+as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity, as_event_loop** event_loops)
+{
+	as_error_reset(err);
+
+	as_status status;
+	as_policy_event pol_local;
+
+	if (policy) {
+		status = as_event_validate_policy(err, policy);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	else {
+		policy = &pol_local;
+		as_policy_event_init(policy);
+	}
+
+	status = as_event_initialize_loops(err, capacity);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
 	as_event_threads_created = true;
 	
 	for (uint32_t i = 0; i < capacity; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
+		as_event_initialize_loop(policy, event_loop, i);
+		event_loop->loop = NULL;
 
-		event_loop->loop = 0;
-		pthread_mutex_init(&event_loop->lock, 0);
 #if !defined(_MSC_VER)
 		event_loop->thread = 0;
 #else
 		memset(&event_loop->thread, 0, sizeof(pthread_t));
 #endif
-		event_loop->index = i;
-		event_loop->errors = 0;
-		as_queue_init(&event_loop->queue, sizeof(as_event_commander), AS_EVENT_QUEUE_INITIAL_CAPACITY);
-		as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
-		event_loop->pipe_cb_calling = false;
 
 		if (! as_event_create_loop(event_loop)) {
 			as_event_close_loops();
-			return 0;
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create event_loop: %u", i);
 		}
 		
 		if (i > 0) {
@@ -133,16 +192,24 @@ as_event_create_loops(uint32_t capacity)
 		}
 		as_event_loop_size++;
 	}
-	return as_event_loops;
+
+	if (event_loops) {
+		*event_loops = as_event_loops;
+	}
+	return AEROSPIKE_OK;
 }
 
 bool
 as_event_set_external_loop_capacity(uint32_t capacity)
 {
-	if (! as_event_initialize_loops(capacity)) {
-		return 0;
+	as_error err;
+	as_status status = as_event_initialize_loops(&err, capacity);
+
+	if (status != AEROSPIKE_OK) {
+		as_log_error(err.message);
+		return false;
 	}
-	
+
 	as_event_threads_created = false;
 	return true;
 }
@@ -152,22 +219,46 @@ as_event_set_external_loop_capacity(uint32_t capacity)
 as_event_loop*
 as_event_set_external_loop(void* loop)
 {
+	as_error err;
+	as_event_loop* event_loop;
+
+	if (as_set_external_event_loop(&err, NULL, loop, &event_loop) != AEROSPIKE_OK) {
+		as_log_error(err.message);
+		return NULL;
+	}
+	return event_loop;
+}
+
+as_status
+as_set_external_event_loop(as_error* err, as_policy_event* policy, void* loop, as_event_loop** event_loop_out)
+{
+	as_error_reset(err);
+
+	as_policy_event pol_local;
+
+	if (policy) {
+		as_status status = as_event_validate_policy(err, policy);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	else {
+		policy = &pol_local;
+		as_policy_event_init(policy);
+	}
+
 	uint32_t current = as_faa_uint32(&as_event_loop_size, 1);
 	
 	if (current >= as_event_loop_capacity) {
-		as_log_error("Failed to add external loop. Capacity is %u", as_event_loop_capacity);
-		return 0;
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to add external loop. Capacity is %u", as_event_loop_capacity);
 	}
 	
 	as_event_loop* event_loop = &as_event_loops[current];
+	as_event_initialize_loop(policy, event_loop, current);
 	event_loop->loop = loop;
-	pthread_mutex_init(&event_loop->lock, 0);
 	event_loop->thread = pthread_self();  // Current thread must be same as event loop thread!
-	event_loop->index = current;
-	event_loop->errors = 0;
-	as_queue_init(&event_loop->queue, sizeof(as_event_commander), AS_EVENT_QUEUE_INITIAL_CAPACITY);
-	as_queue_init(&event_loop->pipe_cb_queue, sizeof(as_queued_pipe_cb), AS_EVENT_QUEUE_INITIAL_CAPACITY);
-	event_loop->pipe_cb_calling = false;
+
 	as_event_register_external_loop(event_loop);
 
 	if (current > 0) {
@@ -178,7 +269,8 @@ as_event_set_external_loop(void* loop)
 		// Warning: not synchronized with as_event_loop_get()
 		as_event_loops[current - 1].next = event_loop;
 	}
-	return event_loop;
+	*event_loop_out = event_loop;
+	return AEROSPIKE_OK;
 }
 
 as_event_loop*
@@ -288,34 +380,76 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 }
 
 static void
+as_event_execute_from_delay_queue(as_event_loop* event_loop)
+{
+	event_loop->using_delay_queue = true;
+
+	as_event_command* cmd;
+
+	while (event_loop->pending < event_loop->max_commands_in_process &&
+		   as_queue_pop(&event_loop->delay_queue, &cmd)) {
+
+		if (cmd->state == AS_ASYNC_STATE_COMPLETE) {
+			// Command timed out and user has already been notified.
+			as_event_command_release(cmd);
+			continue;
+		}
+
+		if (cmd->socket_timeout > 0) {
+			if (cmd->total_deadline > 0) {
+				if (cmd->socket_timeout < cmd->total_deadline - cf_getms()) {
+					// Transition from total timer to socket timer.
+					as_event_stop_timer(cmd);
+					as_event_set_socket_timer(cmd);
+					cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+				}
+			}
+			else {
+				// Use socket timer.
+				as_event_init_socket_timer(cmd);
+				cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+			}
+		}
+
+		event_loop->pending++;
+		as_event_command_begin(cmd);
+	}
+	event_loop->using_delay_queue = false;
+}
+
+static inline void
+as_event_prequeue_error(as_event_loop* event_loop, as_event_command* cmd, as_error* err)
+{
+	event_loop->pending++;  // Will be decremented in as_event_error_callback().
+	event_loop->errors++;
+	cmd->state = AS_ASYNC_STATE_COMPLETE;
+	as_event_error_callback(cmd, err);
+}
+
+static void
 as_event_command_execute_in_loop(as_event_command* cmd)
 {
 	as_event_loop* event_loop = cmd->event_loop;
 
 	if (cmd->cluster->pending[event_loop->index]++ == -1) {
-		event_loop->errors++;
-		cmd->state = AS_ASYNC_STATE_COMPLETE;
-
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster has been closed");
-		as_event_error_callback(cmd, &err);
+		as_event_prequeue_error(event_loop, cmd, &err);
 		return;
 	}
 
+	uint64_t total_timeout;
+
 	if (cmd->total_deadline > 0) {
 		uint64_t now = cf_getms();
-		uint64_t total_timeout;
 
 		if (cmd->state == AS_ASYNC_STATE_REGISTERED) {
 			// Command was queued to event loop thread.
 			if (now >= cmd->total_deadline) {
 				// Command already timed out.
-				event_loop->errors++;
-				cmd->state = AS_ASYNC_STATE_COMPLETE;
-
 				as_error err;
 				as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Register timeout");
-				as_event_error_callback(cmd, &err);
+				as_event_prequeue_error(event_loop, cmd, &err);
 				return;
 			}
 			total_timeout = cmd->total_deadline - now;
@@ -325,7 +459,49 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 			total_timeout = cmd->total_deadline;
 			cmd->total_deadline += now;
 		}
+	}
 
+	if (event_loop->max_commands_in_process > 0) {
+		// Delay queue takes precendence over new commands.
+		as_event_execute_from_delay_queue(event_loop);
+
+		// Handle new command.
+		if (event_loop->pending >= event_loop->max_commands_in_process) {
+			// Pending queue full. Append new command to delay queue.
+			bool status;
+
+			if (event_loop->max_commands_in_queue > 0) {
+				uint32_t size = as_queue_size(&event_loop->delay_queue);
+
+				if (size < event_loop->max_commands_in_queue) {
+					status = as_queue_push(&event_loop->delay_queue, &cmd);
+				}
+				else {
+					status = false;
+				}
+			}
+			else {
+				status = as_queue_push(&event_loop->delay_queue, &cmd);
+			}
+
+			if (! status) {
+				as_error err;
+				as_error_update(&err, AEROSPIKE_ERR_ASYNC_QUEUE_FULL, "Async delay queue full: %u",
+								event_loop->max_commands_in_queue);
+				as_event_prequeue_error(event_loop, cmd, &err);
+			}
+
+			if (total_timeout > 0) {
+				as_event_init_total_timer(cmd, total_timeout);
+				cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER;
+			}
+
+			cmd->state = AS_ASYNC_STATE_DELAY_QUEUE;
+			return;
+		}
+	}
+
+	if (cmd->total_deadline > 0) {
 		if (cmd->socket_timeout > 0 && cmd->socket_timeout < total_timeout) {
 			// Use socket timer.
 			as_event_init_socket_timer(cmd);
@@ -342,14 +518,17 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 		as_event_init_socket_timer(cmd);
 		cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
 	}
-
+	
 	// Start processing.
+	event_loop->pending++;
 	as_event_command_begin(cmd);
 }
 
 static void
 as_event_command_begin(as_event_command* cmd)
 {
+	cmd->state = AS_ASYNC_STATE_CONNECT;
+
 	if (cmd->partition) {
 		// If in retry, need to release node from prior attempt.
 		if (cmd->node) {
@@ -438,7 +617,6 @@ as_event_socket_timeout(as_event_command* cmd)
 			uint64_t now = cf_getms();
 
 			if (now >= cmd->total_deadline) {
-				cmd->iteration++;
 				as_event_stop_timer(cmd);
 				as_event_total_timeout(cmd);
 				return;
@@ -467,9 +645,8 @@ as_event_socket_timeout(as_event_command* cmd)
 		return;
 	}
 
-	// Close connection.
-	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
-	as_event_connection_timeout(cmd, pool);
+	// Node should not be null at this point.
+	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
 
 	// Attempt retry.
 	// Read commands shift to prole node on timeout.
@@ -477,9 +654,8 @@ as_event_socket_timeout(as_event_command* cmd)
 		as_event_stop_timer(cmd);
 
 		as_error err;
-		const char* node_string = cmd->node ? as_node_get_address_string(cmd->node) : "null";
 		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
-						cmd->iteration, node_string);
+						cmd->iteration + 1, as_node_get_address_string(cmd->node));
 
 		as_event_error_callback(cmd, &err);
 	}
@@ -488,19 +664,28 @@ as_event_socket_timeout(as_event_command* cmd)
 void
 as_event_total_timeout(as_event_command* cmd)
 {
+	if (cmd->state == AS_ASYNC_STATE_DELAY_QUEUE) {
+		cmd->state = AS_ASYNC_STATE_COMPLETE;
+
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Delay queue timeout");
+
+		// Notify user, but do not destroy command.
+		as_event_notify_error(cmd, &err);
+		return;
+	}
+
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, false);
 		return;
 	}
 
+	// Node should not be null at this point.
+	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+
 	as_error err;
-	const char* node_string = cmd->node ? as_node_get_address_string(cmd->node) : "null";
 	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
-					cmd->iteration, node_string);
-
-	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
-	as_event_connection_timeout(cmd, pool);
-
+					cmd->iteration + 1, as_node_get_address_string(cmd->node));
 	as_event_error_callback(cmd, &err);
 }
 
@@ -696,7 +881,7 @@ as_event_executor_complete(as_event_command* cmd)
 }
 
 void
-as_event_error_callback(as_event_command* cmd, as_error* err)
+as_event_notify_error(as_event_command* cmd, as_error* err)
 {
 	as_error_set_in_doubt(err, cmd->flags & AS_ASYNC_FLAGS_READ, cmd->command_sent_counter);
 
@@ -710,14 +895,12 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 		case AS_ASYNC_TYPE_VALUE:
 			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
 			break;
-			
+
 		default:
 			// Handle command that is part of a group (batch, scan, query).
 			as_event_executor_error(cmd->udata, err, -1);
 			break;
 	}
-
-	as_event_command_release(cmd);
 }
 
 void
@@ -912,7 +1095,10 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 void
 as_event_command_free(as_event_command* cmd)
 {
-	cmd->cluster->pending[cmd->event_loop->index]--;
+	as_event_loop* event_loop = cmd->event_loop;
+
+	event_loop->pending--;
+	cmd->cluster->pending[event_loop->index]--;
 
 	if (cmd->node) {
 		as_node_release(cmd->node);
@@ -922,6 +1108,11 @@ as_event_command_free(as_event_command* cmd)
 		cf_free(cmd->buf);
 	}
 	cf_free(cmd);
+
+	if (event_loop->max_commands_in_process > 0 && ! event_loop->using_delay_queue) {
+		// Try executing commands from the delay queue.
+		as_event_execute_from_delay_queue(event_loop);
+	}
 }
 
 /******************************************************************************

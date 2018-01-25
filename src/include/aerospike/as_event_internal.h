@@ -44,14 +44,16 @@ extern "C" {
 	
 #define AS_ASYNC_STATE_UNREGISTERED 0
 #define AS_ASYNC_STATE_REGISTERED 1
-#define AS_ASYNC_STATE_TLS_CONNECT 2
-#define AS_ASYNC_STATE_AUTH_WRITE 3
-#define AS_ASYNC_STATE_AUTH_READ_HEADER 4
-#define AS_ASYNC_STATE_AUTH_READ_BODY 5
-#define AS_ASYNC_STATE_COMMAND_WRITE 6
-#define AS_ASYNC_STATE_COMMAND_READ_HEADER 7
-#define AS_ASYNC_STATE_COMMAND_READ_BODY 8
-#define AS_ASYNC_STATE_COMPLETE 9
+#define AS_ASYNC_STATE_DELAY_QUEUE 2
+#define AS_ASYNC_STATE_CONNECT 3
+#define AS_ASYNC_STATE_TLS_CONNECT 4
+#define AS_ASYNC_STATE_AUTH_WRITE 5
+#define AS_ASYNC_STATE_AUTH_READ_HEADER 6
+#define AS_ASYNC_STATE_AUTH_READ_BODY 7
+#define AS_ASYNC_STATE_COMMAND_WRITE 8
+#define AS_ASYNC_STATE_COMMAND_READ_HEADER 9
+#define AS_ASYNC_STATE_COMMAND_READ_BODY 10
+#define AS_ASYNC_STATE_COMPLETE 11
 
 #define AS_ASYNC_FLAGS_MASTER 1
 #define AS_ASYNC_FLAGS_READ 2
@@ -187,7 +189,7 @@ void
 as_event_executor_cancel(as_event_executor* executor, int queued_count);
 
 void
-as_event_error_callback(as_event_command* cmd, as_error* err);
+as_event_notify_error(as_event_command* cmd, as_error* err);
 
 void
 as_event_parse_error(as_event_command* cmd, as_error* err);
@@ -285,7 +287,7 @@ as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
 static inline void
 as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
 {
-	ev_timer_start(cmd->event_loop->loop, &cmd->timer);
+	as_event_init_total_timer(cmd, timeout);
 }
 
 static inline void
@@ -295,6 +297,12 @@ as_event_init_socket_timer(as_event_command* cmd)
 	cmd->timer.repeat = ((double)cmd->socket_timeout) / 1000.0;
 	cmd->timer.data = cmd;
 	ev_timer_again(cmd->event_loop->loop, &cmd->timer);
+}
+
+static inline void
+as_event_set_socket_timer(as_event_command* cmd)
+{
+	as_event_init_socket_timer(cmd);
 }
 
 static inline void
@@ -367,6 +375,12 @@ as_event_init_socket_timer(as_event_command* cmd)
 {
 	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
 	cmd->timer.data = cmd;
+	uv_timer_start(&cmd->timer, as_uv_socket_timeout, cmd->socket_timeout, cmd->socket_timeout);
+}
+
+static inline void
+as_event_set_socket_timer(as_event_command* cmd)
+{
 	uv_timer_start(&cmd->timer, as_uv_socket_timeout, cmd->socket_timeout, cmd->socket_timeout);
 }
 
@@ -450,11 +464,7 @@ as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
 static inline void
 as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
 {
-	struct timeval tv;
-	tv.tv_sec = (uint32_t)timeout / 1000;
-	tv.tv_usec = ((uint32_t)timeout % 1000) * 1000;
-
-	evtimer_add(&cmd->timer, &tv);
+	as_event_init_total_timer(cmd, timeout);
 }
 
 static inline void
@@ -467,6 +477,12 @@ as_event_init_socket_timer(as_event_command* cmd)
 	tv.tv_usec = (cmd->socket_timeout % 1000) * 1000;
 
 	evtimer_add(&cmd->timer, &tv);
+}
+
+static inline void
+as_event_set_socket_timer(as_event_command* cmd)
+{
+	as_event_init_socket_timer(cmd);
 }
 
 static inline void
@@ -522,6 +538,11 @@ as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
 
 static inline void
 as_event_init_socket_timer(as_event_command* cmd)
+{
+}
+
+static inline void
+as_event_set_socket_timer(as_event_command* cmd)
 {
 }
 
@@ -646,6 +667,22 @@ as_event_socket_retry(as_event_command* cmd)
 	as_event_stop_watcher(cmd, cmd->conn);
 	as_event_release_async_connection(cmd);
 	return as_event_command_retry(cmd, true);
+}
+
+static inline void
+as_event_error_callback(as_event_command* cmd, as_error* err)
+{
+	as_event_notify_error(cmd, err);
+	as_event_command_release(cmd);
+}
+
+static inline void
+as_event_loop_destroy(as_event_loop* event_loop)
+{
+	as_queue_destroy(&event_loop->queue);
+	as_queue_destroy(&event_loop->delay_queue);
+	as_queue_destroy(&event_loop->pipe_cb_queue);
+	pthread_mutex_destroy(&event_loop->lock);
 }
 
 #ifdef __cplusplus

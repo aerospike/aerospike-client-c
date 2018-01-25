@@ -76,9 +76,7 @@ as_uv_close_loop(as_event_loop* event_loop)
 	}
 	
 	// Cleanup event loop resources.
-	as_queue_destroy(&event_loop->queue);
-	as_queue_destroy(&event_loop->pipe_cb_queue);
-	pthread_mutex_destroy(&event_loop->lock);
+	as_event_loop_destroy(event_loop);
 }
 
 static void

@@ -354,7 +354,8 @@ aerospike_stop_on_interrupt(bool stop);
 
 /**
  * Remove records in specified namespace/set efficiently.  This method is many orders of magnitude
- * faster than deleting records one at a time.  Works with Aerospike Enterprise Server versions >= 3.12.
+ * faster than deleting records one at a time.
+ *
  * See <a href="https://www.aerospike.com/docs/reference/info#truncate">https://www.aerospike.com/docs/reference/info#truncate</a>
  *
  * This asynchronous server call may return before the truncation is complete.  The user can still

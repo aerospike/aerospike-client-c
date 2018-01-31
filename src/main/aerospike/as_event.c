@@ -389,7 +389,7 @@ as_event_execute_from_delay_queue(as_event_loop* event_loop)
 	while (event_loop->pending < event_loop->max_commands_in_process &&
 		   as_queue_pop(&event_loop->delay_queue, &cmd)) {
 
-		if (cmd->state == AS_ASYNC_STATE_COMPLETE) {
+		if (cmd->state == AS_ASYNC_STATE_QUEUE_ERROR) {
 			// Command timed out and user has already been notified.
 			as_event_command_release(cmd);
 			continue;
@@ -420,9 +420,8 @@ as_event_execute_from_delay_queue(as_event_loop* event_loop)
 static inline void
 as_event_prequeue_error(as_event_loop* event_loop, as_event_command* cmd, as_error* err)
 {
-	event_loop->pending++;  // Will be decremented in as_event_error_callback().
 	event_loop->errors++;
-	cmd->state = AS_ASYNC_STATE_COMPLETE;
+	cmd->state = AS_ASYNC_STATE_QUEUE_ERROR;
 	as_event_error_callback(cmd, err);
 }
 
@@ -665,7 +664,7 @@ void
 as_event_total_timeout(as_event_command* cmd)
 {
 	if (cmd->state == AS_ASYNC_STATE_DELAY_QUEUE) {
-		cmd->state = AS_ASYNC_STATE_COMPLETE;
+		cmd->state = AS_ASYNC_STATE_QUEUE_ERROR;
 
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Delay queue timeout");
@@ -1097,7 +1096,9 @@ as_event_command_free(as_event_command* cmd)
 {
 	as_event_loop* event_loop = cmd->event_loop;
 
-	event_loop->pending--;
+	if (cmd->state != AS_ASYNC_STATE_QUEUE_ERROR) {
+		event_loop->pending--;
+	}
 	cmd->cluster->pending[event_loop->index]--;
 
 	if (cmd->node) {

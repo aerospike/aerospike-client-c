@@ -269,9 +269,8 @@ as_error_set(as_error* err, as_status code, const char * fmt, ...)
 static inline void
 as_error_set_in_doubt(as_error* err, bool is_read, uint32_t command_sent_counter)
 {
-	if (!is_read && (command_sent_counter > 1 || (command_sent_counter == 1 && (err->code == AEROSPIKE_ERR_TIMEOUT || err->code <= 0)))) {
-		err->in_doubt = true;
-	}
+	err->in_doubt = (!is_read && (command_sent_counter > 1 || (command_sent_counter == 1 &&
+					(err->code == AEROSPIKE_ERR_TIMEOUT || err->code <= 0))));
 }
 
 /**

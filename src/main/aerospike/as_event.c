@@ -461,7 +461,7 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 	}
 
 	if (event_loop->max_commands_in_process > 0) {
-		// Delay queue takes precendence over new commands.
+		// Delay queue takes precedence over new commands.
 		as_event_execute_from_delay_queue(event_loop);
 
 		// Handle new command.

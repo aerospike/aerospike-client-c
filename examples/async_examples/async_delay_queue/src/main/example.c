@@ -23,9 +23,7 @@
 #include <stdlib.h>
 
 #include <aerospike/aerospike.h>
-#include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
-#include <aerospike/as_batch.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_integer.h>
@@ -78,10 +76,10 @@ main(int argc, char* argv[])
 	// Start clean.
 	example_remove_test_records(&as);
 
-	// Counter can be placed on stack because main() will not end until batch read is finished.
+	// Counter can be placed on stack because main() will not end until writes are finished.
 	uint32_t counter = 0;
 	
-	// Start inserting records.  Batch read will be made when insertions are complete.
+	// Start inserting records.
 	insert_records(&counter);
 
 	// Wait till commands have completed before shutting down.

@@ -437,7 +437,7 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 		return;
 	}
 
-	uint64_t total_timeout;
+	uint64_t total_timeout = 0;
 
 	if (cmd->total_deadline > 0) {
 		uint64_t now = cf_getms();

@@ -488,6 +488,7 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 				as_error_update(&err, AEROSPIKE_ERR_ASYNC_QUEUE_FULL, "Async delay queue full: %u",
 								event_loop->max_commands_in_queue);
 				as_event_prequeue_error(event_loop, cmd, &err);
+				return;
 			}
 
 			if (total_timeout > 0) {
@@ -500,7 +501,7 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 		}
 	}
 
-	if (cmd->total_deadline > 0) {
+	if (total_timeout > 0) {
 		if (cmd->socket_timeout > 0 && cmd->socket_timeout < total_timeout) {
 			// Use socket timer.
 			as_event_init_socket_timer(cmd);

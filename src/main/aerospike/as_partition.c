@@ -236,7 +236,7 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint
 			}
 		}
 		else {
-			if (owns && (regime == 0 || regime >= p->regime)) {
+			if (owns && regime >= p->regime) {
 				as_node* tmp = p->master;
 				as_node_reserve(node);
 				set_node(&p->master, node);
@@ -260,7 +260,7 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint
 			}
 		}
 		else {
-			if (owns && (regime == 0 || regime >= p->regime)) {
+			if (owns && regime >= p->regime) {
 				as_node* tmp = p->prole;
 				as_node_reserve(node);
 				set_node(&p->prole, node);

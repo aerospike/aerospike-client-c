@@ -145,6 +145,12 @@ or with valgrind:
 
 	$ make [EVENT_LIB=libuv|libev|libevent] [AS_HOST=<hostname>] test-valgrind
 
+## Install
+
+To install header files and library on the current machine:
+
+	$ sudo make install
+
 ## Lua
 
 The C client requires [Lua](http://www.lua.org) 5.1 support for the

@@ -244,14 +244,17 @@ as_tls_check_init()
 
 	// Check the flag again, in case we lost a race.
 	if (! s_tls_inited) {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 		OpenSSL_add_all_algorithms();
 		ERR_load_BIO_strings();
 		ERR_load_crypto_strings();
 		SSL_load_error_strings();
 		SSL_library_init();
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
 		threading_setup();
+
+		// Install an atexit handler to cleanup.
+		atexit(as_tls_cleanup);
 #endif
 
 		s_ex_name_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
@@ -260,9 +263,6 @@ as_tls_check_init()
 		as_fence_memory();
 		
 		s_tls_inited = true;
-
-		// Install an atexit handler to cleanup.
-		atexit(as_tls_cleanup);
 	}
 
 	pthread_mutex_unlock(&s_tls_init_mutex);

@@ -508,10 +508,6 @@ TEST(map_switch, "Switch from unordered map to a key ordered map." )
 
 	list = &results[i++].valuep->list;
 	assert_int_eq(as_list_size(list), 4 * 2);
-	v = as_list_get_int64(list, 2);
-	assert_int_eq(v, 2);
-	v = as_list_get_int64(list, 3);
-	assert_int_eq(v, 2);
 
 	as_record_destroy(rec);
 

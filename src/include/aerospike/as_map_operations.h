@@ -34,7 +34,7 @@ extern "C" {
  */
 typedef enum as_map_order_e {
 	/**
-	 *  Map is not ordered.  This is the default.
+	 * Map is not ordered.  This is the default.
 	 */
 	AS_MAP_UNORDERED = 0,
 	
@@ -137,7 +137,27 @@ typedef enum as_map_return_type_e {
 	/**
 	 * Return key/value items.
 	 */
-	AS_MAP_RETURN_KEY_VALUE	= 8
+	AS_MAP_RETURN_KEY_VALUE	= 8,
+
+	/**
+	 * Invert meaning of map command and return values.  For example:
+	 *
+	 * ~~~~~~~~~~{.c}
+	 * as_operations ops;
+	 * as_operations_inita(&ops, 1);
+	 *
+	 * as_operations_add_map_remove_by_key_range(&ops, BIN_NAME, (as_val*)&mkey1, (as_val*)&mkey2,
+	 *                                           AS_MAP_RETURN_KEY | AS_MAP_RETURN_INVERTED);
+	 *
+	 * as_record* rec = NULL;
+	 * as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	 * as_operations_destroy(&ops);
+	 * ~~~~~~~~~~
+	 *
+	 * With AS_MAP_RETURN_INVERTED enabled, the keys outside of the specified key range will be
+	 * removed and returned.
+	 */
+	AS_MAP_RETURN_INVERTED = 0x10000,
 } as_map_return_type;
 	
 /******************************************************************************
@@ -292,7 +312,7 @@ as_operations_add_map_remove_by_value(as_operations* ops, const as_bin_name name
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_map_remove_by_value_list(as_operations* ops, const as_bin_name name, as_list *items, as_map_return_type return_type);
+as_operations_add_map_remove_by_value_list(as_operations* ops, const as_bin_name name, as_list* values, as_map_return_type return_type);
 
 /**
  * Create map remove operation.
@@ -370,7 +390,6 @@ as_operations_add_map_remove_by_rank_range_to_end(as_operations* ops, const as_b
 AS_EXTERN bool
 as_operations_add_map_remove_by_rank_range(as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count, as_map_return_type return_type);
 
-
 /**
  * Create map size operation.
  * Server returns size of map.
@@ -406,6 +425,16 @@ AS_EXTERN bool
 as_operations_add_map_get_by_key_range(as_operations* ops, const as_bin_name name, as_val* begin, as_val* end, as_map_return_type return_type);
 
 /**
+ * Create map get by key list operation.
+ * Server selects map items identified by keys and returns selected data specified by return_type.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
+ */
+AS_EXTERN bool
+as_operations_add_map_get_by_key_list(as_operations* ops, const as_bin_name name, as_list* keys, as_map_return_type return_type);
+
+/**
  * Create map get by value operation.
  * Server selects map items identified by value and returns selected data specified by return_type.
  *
@@ -428,6 +457,16 @@ as_operations_add_map_get_by_value(as_operations* ops, const as_bin_name name, a
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_value_range(as_operations* ops, const as_bin_name name, as_val* begin, as_val* end, as_map_return_type return_type);
+
+/**
+ * Create map get by value list operation.
+ * Server selects map items identified by values and returns selected data specified by return_type.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
+ */
+AS_EXTERN bool
+as_operations_add_map_get_by_value_list(as_operations* ops, const as_bin_name name, as_list* values, as_map_return_type return_type);
 
 /**
  * Create map get by index operation.

@@ -832,6 +832,9 @@ TEST(list_sort, "List Sort")
 	as_operations ops;
 	as_operations_inita(&ops, 3);
 
+	as_list_policy lp;
+	as_list_policy_set(&lp, AS_LIST_ORDERED, AS_LIST_WRITE_DEFAULT);
+
 	as_arraylist item_list;
 	as_arraylist_init(&item_list, 5, 0);
 	as_arraylist_append_int64(&item_list, -44);
@@ -839,7 +842,7 @@ TEST(list_sort, "List Sort")
 	as_arraylist_append_int64(&item_list, -1);
 	as_arraylist_append_int64(&item_list, 33);
 	as_arraylist_append_int64(&item_list, -2);
-	as_operations_add_list_append_items(&ops, BIN_NAME, (as_list*)&item_list);
+	as_operations_add_list_append_items_with_policy(&ops, BIN_NAME, &lp, (as_list*)&item_list);
 	as_operations_add_list_sort(&ops, BIN_NAME, AS_LIST_SORT_DROP_DUPLICATES);
 	as_operations_add_list_size(&ops, BIN_NAME);
 
@@ -1039,6 +1042,66 @@ TEST(list_inverted, "List Inverted")
 	as_record_destroy(rec);
 }
 
+TEST(list_insert, "List Insert")
+{
+	if (! has_cdt_list()) {
+		info("cdt-list not enabled. skipping test");
+		return;
+	}
+
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 103);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_operations ops;
+	as_operations_inita(&ops, 3);
+
+	as_list_policy lp;
+	as_list_policy_set(&lp, AS_LIST_UNORDERED, AS_LIST_WRITE_ADD_UNIQUE);
+
+	as_arraylist item_list;
+	as_arraylist_init(&item_list, 5, 0);
+	as_arraylist_append_int64(&item_list, 5);
+	as_arraylist_append_int64(&item_list, 2);
+	as_arraylist_append_int64(&item_list, 9);
+	as_arraylist_append_int64(&item_list, 3);
+	as_arraylist_append_int64(&item_list, 0);
+	as_operations_add_list_insert_items_with_policy(&ops, BIN_NAME, &lp, 0, (as_list*)&item_list);
+
+	as_integer v1;
+	as_integer_init(&v1, 6);
+	as_operations_add_list_insert_with_policy(&ops, BIN_NAME, &lp, 1, (as_val*)&v1);
+
+	as_integer v2;
+	// Duplicate would cause failure.
+	//as_integer_init(&v2, 3);
+	as_integer_init(&v2, 1);
+	as_operations_add_list_insert_with_policy(&ops, BIN_NAME, &lp, 5, (as_val*)&v2);
+
+	as_record* rec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	//example_dump_record(rec);
+
+	as_bin* results = rec->bins.entries;
+	uint32_t i = 0;
+
+	int64_t val = results[i++].valuep->integer.value;
+	assert_int_eq(val, 5);
+
+	val = results[i++].valuep->integer.value;
+	assert_int_eq(val, 6);
+
+	val = results[i++].valuep->integer.value;
+	assert_int_eq(val, 7);
+
+	as_record_destroy(rec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1051,4 +1114,5 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_sort);
 	suite_add(list_remove);
 	suite_add(list_inverted);
+	suite_add(list_insert);
 }

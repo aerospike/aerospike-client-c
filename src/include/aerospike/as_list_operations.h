@@ -230,11 +230,10 @@ as_operations_add_list_append(as_operations* ops, const as_bin_name name, as_val
 
 /**
  * Add an as_val element to end of list with policy.
- * If the list does not exist, the list policy attributes will also be applied.
  *
  * @param ops		The `as_operations` to append the operation to.
  * @param name 		The name of the bin to perform the operation on.
- * @param policy 	The list attributes.
+ * @param policy 	The list write flags.
  * @param val		Value to append. Consumes a reference of this as_val.
  *
  * @return true on success. Otherwise an error occurred.
@@ -243,7 +242,7 @@ as_operations_add_list_append(as_operations* ops, const as_bin_name name, as_val
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_list_append_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, as_val *val);
+as_operations_add_list_append_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, as_val* val);
 
 /**
  * Add an integer to end of list. Convenience function of as_operations_add_list_append()
@@ -362,11 +361,10 @@ as_operations_add_list_append_items(as_operations* ops, const as_bin_name name, 
 
 /**
  * Add multiple values to end of list with policy.
- * If the list does not exist, the list policy attributes will also be applied.
  *
  * @param ops		The `as_operations` to append the operation to.
  * @param name 		The name of the bin to perform the operation on.
- * @param policy 	The list attributes.
+ * @param policy 	The list write flags.
  * @param list		List of values to append. Consumes a reference of this as_list.
  *
  * @return true on success. Otherwise an error occurred.
@@ -395,11 +393,10 @@ as_operations_add_list_insert(as_operations* ops, const as_bin_name name, int64_
 
 /**
  * Insert an as_val element to list at index position with policy.
- * If the list does not exist, the list policy attributes will also be applied.
  *
  * @param ops		The `as_operations` to append the operation to.
  * @param name 		The name of the bin to perform the operation on.
- * @param policy 	The list attributes.
+ * @param policy 	The list write flags.
  * @param index 	Index position which the as_val will be inserted at. Negative index counts from end of list.
  * @param val		Value to insert. Consumes a reference of this as_list.
  *
@@ -409,7 +406,7 @@ as_operations_add_list_insert(as_operations* ops, const as_bin_name name, int64_
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_list_insert_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val *val);
+as_operations_add_list_insert_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* val);
 
 /**
  * Insert integer to list at index position. Convenience function of as_operations_add_list_insert()
@@ -535,11 +532,10 @@ as_operations_add_list_insert_items(as_operations* ops, const as_bin_name name, 
 
 /**
  * Insert multiple values to list at index position.
- * If the list does not exist, the list policy attributes will also be applied.
  *
  * @param ops		The `as_operations` to append the operation to.
  * @param name 		The name of the bin to perform the operation on.
- * @param policy 	The list attributes.
+ * @param policy 	The list write flags.
  * @param index 	Index position which the blob will be inserted at. Negative index counts from end of list.
  * @param list 		List of values to insert. Consumes reference of list.
  *
@@ -566,7 +562,6 @@ as_operations_add_list_increment(as_operations* ops, const as_bin_name name, int
  * Create list increment operation with policy.
  * Server increments value at index by incr and returns final result.
  * Valid only for numbers.
- * If the list does not exist, the list policy attributes will also be applied.
  *
  * @relates as_operations
  * @ingroup as_operations_object
@@ -593,6 +588,23 @@ as_operations_add_list_increment_with_policy(as_operations* ops, const as_bin_na
 AS_EXTERN bool
 as_operations_add_list_set(as_operations* ops, const as_bin_name name, int64_t index, as_val* val);
 	
+/**
+ * Set an as_val element of the list at the index position with policy.
+ *
+ * @param ops		The `as_operations` to append the operation to.
+ * @param name 		The name of the bin to perform the operation on.
+ * @param policy 	The list write flags.
+ * @param index 	Index position to set. Negative index counts from end of list.
+ * @param val		Consumes a reference of this as_val.
+ *
+ * @return true on success. Otherwise an error occurred.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
+ */
+AS_EXTERN bool
+as_operations_add_list_set_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* val);
+
 /**
  * Set value at index as integer. Convenience function of as_operations_add_list_set()
  *

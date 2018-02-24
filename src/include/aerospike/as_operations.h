@@ -384,7 +384,7 @@ as_operations_new(uint16_t nops);
  * Destroy an `as_operations` and release associated resources.
  *
  * ~~~~~~~~~~{.c}
- * 	as_operations_destroy(binops);
+ * as_operations_destroy(binops);
  * ~~~~~~~~~~
  *
  * @param ops 	The `as_operations` to destroy.

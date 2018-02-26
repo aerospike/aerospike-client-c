@@ -65,7 +65,7 @@ test: $(TARGET_TEST)/aerospike_test
 
 .PHONY: test-valgrind
 test-valgrind: test-build
-	valgrind $(TEST_VALGRIND) $(TARGET_TEST)/aerospike_test 1>&2 2>client_test-valgrind
+	valgrind $(TEST_VALGRIND) $(TARGET_TEST)/aerospike_test $(AS_ARGS) 1>&2 2>client_test-valgrind
 
 .PHONY: test-build
 test-build: $(TARGET_TEST)/aerospike_test

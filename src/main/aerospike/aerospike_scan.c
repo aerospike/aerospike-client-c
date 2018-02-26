@@ -352,13 +352,6 @@ as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer
 		n_fields += 4;
 	}
 	
-	// Estimate size for selected bin names.
-	if (scan->select.size > 0) {
-		for (uint16_t i = 0; i < scan->select.size; i++) {
-			size += as_command_string_operation_size(scan->select.entries[i]);
-		}
-	}
-
 	if (scan->predexp.size > 0) {
 		size += AS_FIELD_HEADER_SIZE;
 		for (uint16_t ii = 0; ii < scan->predexp.size; ++ii) {
@@ -368,9 +361,16 @@ as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer
 		size += predexp_size;
 		n_fields++;
 	}
-
-	*fields = n_fields;
 	*predexp_sz = predexp_size;
+	*fields = n_fields;
+
+	// Estimate size for selected bin names.
+	if (scan->select.size > 0) {
+		for (uint16_t i = 0; i < scan->select.size; i++) {
+			size += as_command_string_operation_size(scan->select.entries[i]);
+		}
+	}
+
 	return size;
 }
 
@@ -429,12 +429,6 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 	}
     as_buffer_destroy(argbuffer);
 	
-	if (scan->select.size > 0) {
-		for (uint16_t i = 0; i < scan->select.size; i++) {
-			p = as_command_write_bin_name(p, scan->select.entries[i]);
-		}
-	}
-
 	// Write predicate expressions.
 	if (scan->predexp.size > 0) {
 		p = as_command_write_field_header(p, AS_FIELD_PREDEXP, predexp_size);
@@ -444,6 +438,12 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 		}
 	}
 	
+	if (scan->select.size > 0) {
+		for (uint16_t i = 0; i < scan->select.size; i++) {
+			p = as_command_write_bin_name(p, scan->select.entries[i]);
+		}
+	}
+
 	return as_command_write_end(cmd, p);
 }
 

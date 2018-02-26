@@ -115,10 +115,16 @@ typedef struct as_cluster_s {
 	
 	/**
 	 * @private
-	 * Password in hashed format in bytes.
+	 * Password in clear text.
 	 */
 	char* password;
-	
+
+	/**
+	 * @private
+	 * Password in hashed format.
+	 */
+	char* password_hash;
+
 	/**
 	 * @private
 	 * Expected cluster name for all nodes.  May be null.
@@ -336,7 +342,7 @@ as_cluster_remove_seed(as_cluster* cluster, const char* hostname, uint16_t port)
  * Change user and password that is used to authenticate with cluster servers.
  */
 void
-as_cluster_change_password(as_cluster* cluster, const char* user, const char* password);
+as_cluster_change_password(as_cluster* cluster, const char* user, const char* password, const char* password_hash);
 
 /**
  * @private

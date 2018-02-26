@@ -45,6 +45,7 @@ typedef struct as_sockaddr_iterator_s {
 
 struct as_cluster_s;
 struct as_node_info_s;
+struct as_host_s;
 
 /******************************************************************************
  * FUNCTIONS
@@ -96,7 +97,10 @@ as_lookup_end(as_address_iterator* iter)
  * Lookup and validate node.
  */
 as_status
-as_lookup_node(struct as_cluster_s* cluster, as_error* err, const char* tls_name, struct sockaddr* addr, struct as_node_info_s* node_info);
+as_lookup_node(
+	struct as_cluster_s* cluster, as_error* err, struct as_host_s* host, struct sockaddr* addr,
+	struct as_node_info_s* node_info
+	);
 
 #ifdef __cplusplus
 } // end extern "C"

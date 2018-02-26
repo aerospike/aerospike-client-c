@@ -153,7 +153,7 @@ struct as_cluster_s;
 typedef struct as_node_s {
 	/**
 	 * @private
-	 *  Reference count of node.
+	 * Reference count of node.
 	 */
 	uint32_t ref_count;
 	
@@ -220,10 +220,16 @@ typedef struct as_node_s {
 	as_conn_pool* async_conn_pools;
 	
 	/**
-	 * 	@private
-	 * 	Pool of connections used in pipelined async commands.  Also not thread-safe.
+	 * @private
+	 * Pool of connections used in pipelined async commands.  Also not thread-safe.
 	 */
 	as_conn_pool* pipe_conn_pools;
+
+	/**
+	 * @private
+	 * Session token for this node.
+	 */
+	char* session_token;
 
 	/**
 	 * @private
@@ -293,22 +299,24 @@ typedef struct as_node_s {
  */
 typedef struct as_node_info_s {
 	/**
-	 * @private
 	 * Node name.
 	 */
 	char name[AS_NODE_NAME_SIZE];
 
 	/**
-	 * @private
 	 * Features supported by server.  Stored in bitmap.
 	 */
 	uint32_t features;
 
 	/**
-	 * @private
 	 * Validated socket.
 	 */
 	as_socket socket;
+
+	/**
+	 * Session token.
+	 */
+	char* session_token;
 
 } as_node_info;
 
@@ -475,10 +483,10 @@ as_node_get_address_string(as_node* node)
 
 /**
  * @private
- * Attempt to authenticate given user and password.
+ * Attempt to authenticate given current cluster's user and password.
  */
 as_status
-as_node_authenticate_connection(struct as_cluster_s* cluster, const char* user, const char* password, uint64_t deadline_ms);
+as_node_authenticate_connection(struct as_cluster_s* cluster, uint64_t deadline_ms);
 
 /**
  * @private
@@ -544,6 +552,17 @@ static inline bool
 as_host_equals(as_host* h1, as_host* h2)
 {
 	return strcmp(h1->name, h2->name) == 0 && h1->port == h2->port;
+}
+
+/**
+ * @private
+ * Destroy node_info contents.
+ */
+static inline void
+as_node_info_destroy(as_node_info* node_info)
+{
+	as_socket_close(&node_info->socket);
+	cf_free(node_info->session_token);
 }
 
 #ifdef __cplusplus

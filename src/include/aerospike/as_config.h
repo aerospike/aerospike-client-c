@@ -69,6 +69,11 @@ extern "C" {
  */
 #define AS_CONFIG_PATH_MAX_LEN 	(AS_CONFIG_PATH_MAX_SIZE - 1)
 
+/**
+ * Max clear text password size.
+ */
+#define AS_PASSWORD_SIZE 64
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -383,10 +388,9 @@ typedef struct as_config_s {
 	char user[AS_USER_SIZE];
 	
 	/**
-	 * Password authentication to cluster.  The hashed value of password will be stored by the client 
-	 * and sent to server in same format.  Leave empty for clusters running without restricted access.
+	 * Password authentication to cluster.  Leave empty for clusters running without restricted access.
 	 */
-	char password[AS_PASSWORD_HASH_SIZE];
+	char password[AS_PASSWORD_SIZE];
 	
 	/**
 	 * Expected cluster name.  If not null, server nodes must return this cluster name in order to

@@ -85,8 +85,8 @@ as_peers_find_node(as_peers* peers, as_cluster* cluster, const char* name)
 static void
 as_peers_duplicate(as_host* host, bool is_alias, as_node* node, as_node_info* node_info, struct sockaddr* addr)
 {
-	as_socket_close(&node_info->socket);
-	
+	as_node_info_destroy(node_info);
+
 	as_log_info("Node %s %d already exists with nodeid %s and address %s",
 				host->name, host->port, node->name, as_node_get_address_string(node));
 	
@@ -163,7 +163,7 @@ as_peers_validate_node(as_peers* peers, as_cluster* cluster, as_host* host, cons
 	
 	while (as_lookup_next(&iter, &addr)) {
 		as_node_info node_info;
-		status = as_lookup_node(cluster, &err, host->tls_name, addr, &node_info);
+		status = as_lookup_node(cluster, &err, host, addr, &node_info);
 		
 		if (status == AEROSPIKE_OK) {
 			if (expected_name == NULL || strcmp(node_info.name, expected_name) == 0) {
@@ -177,6 +177,7 @@ as_peers_validate_node(as_peers* peers, as_cluster* cluster, as_host* host, cons
 				break;
 			}
 			else {
+				as_node_info_destroy(&node_info);
 				as_log_warn("Peer node %s is different than actual node %s for host %s %d",
 							expected_name, node_info.name, host->name, host->port);
 			}

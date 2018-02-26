@@ -296,8 +296,11 @@ as_config_set_user(as_config* config, const char* user, const char* password)
 		if (as_strncpy(config->user, user, sizeof(config->user))) {
 			return false;
 		}
-		
-		return as_password_get_constant_hash(password, config->password);
+
+		if (as_strncpy(config->password, password, sizeof(config->password))) {
+			return false;
+		}
+		return true;
 	}
 	else {
 		return false;

@@ -325,7 +325,7 @@ as_info_create_socket(
 	}
 	
 	if (cluster->user) {
-		status = as_authenticate(err, sock, NULL, cluster->user, cluster->password, 0, deadline_ms);
+		status = as_authenticate(cluster, err, sock, NULL, 0, deadline_ms);
 		
 		if (status) {
 			as_socket_error_append(err, addr);

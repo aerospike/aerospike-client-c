@@ -212,13 +212,13 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		struct sockaddr* addr;
 
 		while (as_lookup_next(&iter, &addr)) {
-			status = as_lookup_node(cluster, &error_local, seed->tls_name, addr, &node_info);
+			status = as_lookup_node(cluster, &error_local, seed, addr, &node_info);
 			
 			if (status == AEROSPIKE_OK) {
 				as_node* node = as_peers_find_local_node(&nodes_to_add, node_info.name);
 				
 				if (node) {
-					as_socket_close(&node_info.socket);
+					as_node_info_destroy(&node_info);
 					as_node_add_address(node, addr);
 					
 					if (iter.hostname_is_alias) {
@@ -917,19 +917,23 @@ as_cluster_is_connected(as_cluster* cluster)
 }
 
 void
-as_cluster_change_password(as_cluster* cluster, const char* user, const char* password)
+as_cluster_change_password(as_cluster* cluster, const char* user, const char* password, const char* password_hash)
 {
 	if (user && *user) {
 		if (cluster->user) {
 			if (strcmp(cluster->user, user) == 0) {
 				cf_free(cluster->password);
+				cf_free(cluster->password_hash);
 				cluster->password = cf_strdup(password);
+				cluster->password_hash = cf_strdup(password_hash);
 			}
 		}
 		else {
 			cluster->user = cf_strdup(user);
 			cf_free(cluster->password);
+			cf_free(cluster->password_hash);
 			cluster->password = cf_strdup(password);
+			cluster->password_hash = cf_strdup(password_hash);
 		}
 	}
 }
@@ -937,11 +941,23 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
 as_status
 as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 {
+	char* pass_hash = NULL;
+
+	if (*(config->password)) {
+		pass_hash = cf_malloc(AS_PASSWORD_HASH_SIZE);
+
+		if (! as_password_get_constant_hash(config->password, pass_hash)) {
+			*cluster_out = NULL;
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to hash password");
+		}
+	}
+
 #if defined(_MSC_VER)
 	// Call WSAStartup() for every cluster instance on windows.
 	WORD version = MAKEWORD(2, 2);
 	WSADATA data;
 	if (WSAStartup(version, &data) != 0) {
+		cf_free(pass_hash);
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "WSAStartup failed")
 	}
 #endif
@@ -956,8 +972,9 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		cluster->user = cf_strdup(config->user);
 	}
 	
-	if (*(config->password)) {
+	if (pass_hash) {
 		cluster->password = cf_strdup(config->password);
+		cluster->password_hash = pass_hash;
 	}
 	
 	// Heap allocated cluster_name continues to be owned by as->config.
@@ -1140,6 +1157,7 @@ as_cluster_destroy(as_cluster* cluster)
 	cf_free(cluster->pending);
 	cf_free(cluster->user);
 	cf_free(cluster->password);
+	cf_free(cluster->password_hash);
 
 	// Do not free cluster name because as->config owns it.
 	// cf_free(cluster->cluster_name);

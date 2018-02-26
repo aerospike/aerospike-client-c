@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_lookup.h>
+#include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
 #include <stdlib.h>
@@ -51,7 +52,8 @@ as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, u
 	int ret = getaddrinfo(hostname, NULL, &hints, &iter->addresses);
 	
 	if (ret) {
-		return as_error_update(err, AEROSPIKE_ERR_INVALID_HOST, "Invalid hostname %s: %s", hostname, gai_strerror(ret));
+		return as_error_update(err, AEROSPIKE_ERR_INVALID_HOST, "Invalid hostname %s: %s",
+							   hostname, gai_strerror(ret));
 	}
 	
 	iter->current = iter->addresses;
@@ -60,17 +62,32 @@ as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, u
 }
 
 as_status
-as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct sockaddr* addr, as_node_info* node_info)
+as_lookup_node(
+	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr,
+	as_node_info* node_info
+	)
 {
 	uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
 	
-	as_socket* sock = &node_info->socket;
-	as_status status = as_info_create_socket(cluster, err, addr, deadline, tls_name, sock);
-	
+	as_status status = as_socket_create_and_connect(&node_info->socket, err, addr, &cluster->tls_ctx,
+													host->tls_name, deadline);
+
 	if (status) {
 		return status;
 	}
-	
+
+	node_info->session_token = NULL;
+
+	if (cluster->user) {
+		status = as_cluster_login(cluster, err, host, &node_info->socket, deadline,
+								  &node_info->session_token);
+
+		if (status) {
+			as_socket_close(&node_info->socket);
+			return status;
+		}
+	}
+
 	char* command;
 	int args;
 	
@@ -84,11 +101,11 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 	}
 	
 	char* response = 0;
-	status = as_info_command(err, sock, NULL, command, true, deadline, 0, &response);
+	status = as_info_command(err, &node_info->socket, NULL, command, true, deadline, 0, &response);
 	
 	if (status) {
 		as_socket_error_append(err, addr);
-		as_socket_close(sock);
+		as_node_info_destroy(node_info);
 		return status;
 	}
 	
@@ -122,7 +139,7 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s %s is not yet fully initialized",
 						node_info->name, addr_name);
 		cf_free(response);
-		as_socket_close(sock);
+		as_node_info_destroy(node_info);
 		return AEROSPIKE_ERR_CLIENT;
 	}
 
@@ -137,7 +154,7 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 					"Invalid node %s %s Expected cluster name '%s' Received '%s'",
 					node_info->name, addr_name, cluster->cluster_name, nv->value);
 			cf_free(response);
-			as_socket_close(sock);
+			as_node_info_destroy(node_info);
 			return AEROSPIKE_ERR_CLIENT;
 		}
 	}
@@ -192,9 +209,10 @@ as_lookup_node(as_cluster* cluster, as_error* err, const char* tls_name, struct 
 Error: {
 	char addr_name[AS_IP_ADDRESS_SIZE];
 	as_address_name(addr, addr_name, sizeof(addr_name));
-	as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid node info response from %s: %s", addr_name, response);
+	as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid node info response from %s: %s",
+					addr_name, response);
 	cf_free(response);
-	as_socket_close(sock);
+	as_node_info_destroy(node_info);
 	return AEROSPIKE_ERR_CLIENT;
 	}
 }

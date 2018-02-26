@@ -258,20 +258,35 @@ aerospike_query_roles(aerospike* as, as_error* err, const as_policy_admin* polic
 AS_EXTERN void
 as_roles_destroy(as_role** roles, int roles_size);
 
+struct as_cluster_s;
+
+/**
+ * @private
+ * Login to node on node discovery.  Do not use this method directly.
+ */
+as_status
+as_cluster_login(
+	struct as_cluster_s* cluster, as_error* err, as_host* host, struct as_socket_s* sock,
+	uint64_t deadline_ms, char** session_token
+	);
+
 /**
  * @private
  * Authenticate user with a server node.  This is done automatically after socket open.
- *  Do not use this method directly.
+ * Do not use this method directly.
  */
 as_status
-as_authenticate(as_error* err, struct as_socket_s* sock, struct as_node_s* node, const char* user, const char* credential, uint32_t socket_timeout, uint64_t deadline_ms);
-	
+as_authenticate(
+	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, struct as_node_s* node,
+	uint32_t socket_timeout, uint64_t deadline_ms
+	);
+
 /**
  * @private
  * Write authentication command to buffer.  Return buffer length.
  */
 uint32_t
-as_authenticate_set(const char* user, const char* credential, uint8_t* buffer);
+as_authenticate_set(struct as_cluster_s* cluster, struct as_node_s* node, uint8_t* buffer);
 
 #ifdef __cplusplus
 } // end extern "C"

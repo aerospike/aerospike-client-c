@@ -88,6 +88,7 @@ as_node_create(
 	node->cluster = cluster;
 
 	strcpy(node->name, node_info->name);
+	node->session_token = node_info->session_token;
 	node->features = node_info->features;
 	node->address_index = (addr->sa_family == AF_INET) ? 0 : AS_ADDRESS4_MAX;
 	node->address4_size = 0;
@@ -178,6 +179,10 @@ as_node_destroy(as_node* node)
 
 	if (node->tls_name) {
 		cf_free(node->tls_name);
+	}
+
+	if (node->session_token) {
+		cf_free(node->session_token);
 	}
 	cf_free(node);
 }
@@ -356,7 +361,7 @@ as_node_create_connection(as_error* err, as_node* node, uint32_t socket_timeout,
 	as_cluster* cluster = node->cluster;
 
 	if (cluster->user) {
-		as_status status = as_authenticate(err, sock, node, cluster->user, cluster->password, socket_timeout, deadline_ms);
+		as_status status = as_authenticate(cluster, err, sock, node, socket_timeout, deadline_ms);
 
 		if (status) {
 			as_socket_close(sock);
@@ -374,14 +379,8 @@ as_node_create_connection(as_error* err, as_node* node, uint32_t socket_timeout,
 }
 
 as_status
-as_node_authenticate_connection(as_cluster* cluster, const char* user, const char* password, uint64_t deadline_ms)
+as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 {
-	char hash[AS_PASSWORD_HASH_SIZE];
-
-	if (! as_password_get_constant_hash(password, hash)) {
-		return AEROSPIKE_ERR_CLIENT;
-	}
-
 	as_node* node = as_node_get_random(cluster);
 
 	if (! node) {
@@ -397,7 +396,7 @@ as_node_authenticate_connection(as_cluster* cluster, const char* user, const cha
 		return status;
 	}
 
-	status = as_authenticate(&err, &sock, node, user, hash, 0, deadline_ms);
+	status = as_authenticate(cluster, &err, &sock, node, 0, deadline_ms);
 	as_socket_close(&sock);
 	as_node_release(node);
 	return status;

@@ -584,7 +584,7 @@ as_event_set_auth_write(as_event_command* cmd)
 {
 	// Authentication write buffer is always located after command write buffer.
 	uint8_t* buf = (uint8_t*)cmd + cmd->write_offset + cmd->write_len;
-	uint32_t len = as_authenticate_set(cmd->cluster->user, cmd->cluster->password, buf);
+	uint32_t len = as_authenticate_set(cmd->cluster, cmd->node, buf);
 	cmd->len = cmd->write_len + len;
 	cmd->pos = cmd->write_len;
 }

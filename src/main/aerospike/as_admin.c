@@ -47,12 +47,15 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define GRANT_PRIVILEGES 12
 #define REVOKE_PRIVILEGES 13
 #define QUERY_ROLES 16
+#define LOGIN 20
 
 // Field IDs
 #define USER 0
 #define PASSWORD 1
 #define OLD_PASSWORD 2
 #define CREDENTIAL 3
+#define CLEAR_PASSWORD 4
+#define SESSION_TOKEN 5
 #define ROLES 10
 #define ROLE 11
 #define PRIVILEGES 12
@@ -65,6 +68,9 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define HEADER_REMAINING 16
 #define RESULT_CODE 9
 #define DEFAULT_TIMEOUT 60000  // one minute
+
+// Result Codes
+#define INVALID_COMMAND 54
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -311,18 +317,135 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 	return status;
 }
 
+static as_status
+as_authenticate_old(as_error* err, as_socket* sock, const char* user, const char* credential, uint64_t deadline_ms)
+{
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+
+	p = as_admin_write_header(p, AUTHENTICATE, 2);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_field_string(p, CREDENTIAL, credential);
+
+	as_status status = as_admin_send(err, sock, NULL, buffer, p, 0, deadline_ms);
+
+	if (status) {
+		return status;
+	}
+
+	status = as_socket_read_deadline(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms);
+
+	if (status) {
+		return status;
+	}
+
+	status = buffer[RESULT_CODE];
+
+	if (status) {
+		as_error_set_message(err, status, as_error_string(status));
+	}
+	return status;
+}
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
+as_status
+as_cluster_login(
+	as_cluster* cluster, as_error* err, as_host* host, as_socket* sock, uint64_t deadline_ms,
+	char** session_token
+)
+{
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+
+	p = as_admin_write_header(p, LOGIN, 3);
+	p = as_admin_write_field_string(p, USER, cluster->user);
+	p = as_admin_write_field_string(p, CREDENTIAL, cluster->password_hash);
+	p = as_admin_write_field_string(p, CLEAR_PASSWORD, cluster->password);
+
+	as_status status = as_admin_send(err, sock, NULL, buffer, p, 0, deadline_ms);
+
+	if (status) {
+		return status;
+	}
+
+	status = as_socket_read_deadline(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms);
+
+	if (status) {
+		return status;
+	}
+
+	status = buffer[RESULT_CODE];
+
+	if (status) {
+		if (status == INVALID_COMMAND) {
+			// New login not supported.  Try old authentication.
+			*session_token = NULL;
+			return as_authenticate_old(err, sock, cluster->user, cluster->password_hash, deadline_ms);
+		}
+		return as_error_set_message(err, status, as_error_string(status));
+	}
+
+	// Read session token.
+	as_proto* proto = (as_proto*)buffer;
+	as_proto_swap_from_be(proto);
+	int64_t receive_size = proto->sz - HEADER_REMAINING;
+	int field_count = buffer[11];
+
+	if (receive_size <= 0 || receive_size > AS_STACK_BUF_SIZE || field_count <= 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve session token from %s:%u", host->name, host->port);
+	}
+
+	// Read remaining message bytes in group
+	status = as_socket_read_deadline(err, sock, NULL, buffer, receive_size, 0, deadline_ms);
+
+	if (status) {
+		return status;
+	}
+
+	int len;
+	uint8_t id;
+	p = buffer;
+
+	for (int i = 0; i < field_count; i++) {
+		len = cf_swap_from_be32(*(int*)p);
+		p += 4;
+		id = *p++;
+		len--;
+
+		if (id == SESSION_TOKEN) {
+			int sz = (len < AS_STACK_BUF_SIZE) ? len : AS_STACK_BUF_SIZE;
+			char* token = cf_malloc(sz + 1);
+			memcpy(token, p, sz);
+			token[sz] = 0;
+			*session_token = token;
+			return status;
+		}
+		else {
+			p += len;
+		}
+	}
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve session token from %s:%u", host->name, host->port);
+}
+
 uint32_t
-as_authenticate_set(const char* user, const char* credential, uint8_t* buffer)
+as_authenticate_set(as_cluster* cluster, as_node* node, uint8_t* buffer)
 {
 	uint8_t* p = buffer + 8;
 	
 	p = as_admin_write_header(p, AUTHENTICATE, 2);
-	p = as_admin_write_field_string(p, USER, user);
-	p = as_admin_write_field_string(p, CREDENTIAL, credential);
+	p = as_admin_write_field_string(p, USER, cluster->user);
+
+	if (node->session_token) {
+		// New authentication.
+		p = as_admin_write_field_string(p, SESSION_TOKEN, node->session_token);
+	}
+	else {
+		// Old authentication.
+		p = as_admin_write_field_string(p, CREDENTIAL, cluster->password_hash);
+	}
 
 	uint64_t len = p - buffer;
 	uint64_t proto = (len - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
@@ -331,14 +454,25 @@ as_authenticate_set(const char* user, const char* credential, uint8_t* buffer)
 }
 
 as_status
-as_authenticate(as_error* err, as_socket* sock, as_node* node, const char* user, const char* credential, uint32_t socket_timeout, uint64_t deadline_ms)
+as_authenticate(
+	as_cluster* cluster, as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout,
+	uint64_t deadline_ms
+	)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 
 	p = as_admin_write_header(p, AUTHENTICATE, 2);
-	p = as_admin_write_field_string(p, USER, user);
-	p = as_admin_write_field_string(p, CREDENTIAL, credential);
+	p = as_admin_write_field_string(p, USER, cluster->user);
+
+	if (node && node->session_token) {
+		// New authentication.
+		p = as_admin_write_field_string(p, SESSION_TOKEN, node->session_token);
+	}
+	else {
+		// Old authentication.
+		p = as_admin_write_field_string(p, CREDENTIAL, cluster->password_hash);
+	}
 	
 	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms);
 	
@@ -411,7 +545,7 @@ aerospike_set_password(aerospike* as, as_error* err, const as_policy_admin* poli
 	int status = as_admin_execute(as, err, policy, buffer, p);
 	
 	if (status == 0) {
-		as_cluster_change_password(as->cluster, user, hash);
+		as_cluster_change_password(as->cluster, user, password, hash);
 	}
 	return status;
 }
@@ -441,7 +575,7 @@ aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* p
 	int status = as_admin_execute(as, err, policy, buffer, p);
 	
 	if (status == 0) {
-		as_cluster_change_password(as->cluster, user, hash);
+		as_cluster_change_password(as->cluster, user, password, hash);
 	}
 	return status;
 }

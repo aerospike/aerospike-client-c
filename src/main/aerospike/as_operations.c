@@ -191,7 +191,7 @@ const cdt_op_table_entry cdt_op_table[] = {
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_SET,                      AS_OPERATOR_CDT_MODIFY, 1, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_TRIM,                     AS_OPERATOR_CDT_MODIFY, 0, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_CLEAR,                    AS_OPERATOR_CDT_MODIFY, 0),
-	CDT_OP_ENTRY(AS_CDT_OP_LIST_INCREMENT,                AS_OPERATOR_CDT_MODIFY, 2, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS),
+	CDT_OP_ENTRY(AS_CDT_OP_LIST_INCREMENT,                AS_OPERATOR_CDT_MODIFY, 3, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_FLAGS),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_SORT,                     AS_OPERATOR_CDT_MODIFY, 0, AS_CDT_PARAM_FLAGS),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_SIZE,                     AS_OPERATOR_CDT_READ, 0),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_GET,                      AS_OPERATOR_CDT_READ, 0, AS_CDT_PARAM_INDEX),
@@ -727,12 +727,13 @@ as_operations_add_list_increment(as_operations* ops, const as_bin_name name, int
 bool
 as_operations_add_list_increment_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* incr)
 {
-	// as_list_policy.order is not sent because inserts are not allowed on sorted lists.
 	if (incr) {
-		return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INCREMENT, index, incr, (uint64_t)policy->flags);
+		return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INCREMENT, index, incr, (uint64_t)policy->order, (uint64_t)policy->flags);
 	}
 
-	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INCREMENT, index, &as_nil, (uint64_t)policy->flags);
+	as_integer inc;
+	as_integer_init(&inc, 1);
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_INCREMENT, index, (as_val*)&inc, (uint64_t)policy->order, (uint64_t)policy->flags);
 }
 
 bool

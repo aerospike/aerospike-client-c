@@ -38,7 +38,7 @@ typedef struct arguments_t {
 	char* hosts;
 	int port;
 	const char* user;
-	char password[AS_PASSWORD_HASH_SIZE];
+	char password[AS_PASSWORD_SIZE];
 	const char* namespace;
 	const char* set;
 	uint64_t start_key;

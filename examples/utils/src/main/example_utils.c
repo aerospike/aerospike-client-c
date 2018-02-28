@@ -161,7 +161,7 @@ static int g_port;
 // -P [<password>]
 //
 static char g_user[AS_USER_SIZE];
-static char g_password[AS_PASSWORD_HASH_SIZE];
+static char g_password[AS_PASSWORD_SIZE];
 
 //------------------------------------------------
 // The (string) value of the test key used by all
@@ -238,7 +238,7 @@ example_get_opts(int argc, char* argv[], int which_opts)
 			break;
 
 		case 'P':
-			as_password_prompt_hash(optarg, g_password);
+			as_password_acquire(g_password, optarg, AS_PASSWORD_SIZE);
 			break;
 
 		case 'n':

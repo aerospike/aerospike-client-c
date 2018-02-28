@@ -44,7 +44,7 @@ char ** g_argv = NULL;
 char g_host[MAX_HOST_SIZE];
 int g_port = 3000;
 static char g_user[AS_USER_SIZE];
-static char g_password[AS_PASSWORD_HASH_SIZE];
+static char g_password[AS_PASSWORD_SIZE];
 as_config_tls g_tls = {0};
 
 /******************************************************************************
@@ -181,7 +181,7 @@ static bool parse_opts(int argc, char* argv[])
 			break;
 
 		case 'P':
-			as_password_prompt_hash(optarg, g_password);
+			as_password_acquire(g_password, optarg, AS_PASSWORD_SIZE);
 			break;
 				
 		case 'S':

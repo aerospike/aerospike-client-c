@@ -548,7 +548,7 @@ set_args(int argc, char * const * argv, arguments* args)
 				break;
 			
 			case 'P':
-				as_password_prompt_hash(optarg, args->password);
+				as_password_acquire(args->password, optarg, AS_PASSWORD_SIZE);
 				break;
 
 			case 'n':

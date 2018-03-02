@@ -16,6 +16,10 @@
  */
 #pragma once
 
+#if !defined(_MSC_VER)
+#include <sys/select.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

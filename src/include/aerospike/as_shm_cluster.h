@@ -97,7 +97,7 @@ typedef struct as_partition_shm_s {
 
 	/**
 	 * @private
-	 * Current regime for CP mode.
+	 * Current regime for strong consistency mode.
 	 */
 	uint32_t regime;
 
@@ -121,7 +121,7 @@ typedef struct as_partition_table_shm_s {
 	
 	/**
 	 * @private
-	 * Is namespace running in CP mode.
+	 * Is namespace running in strong consistency mode.
 	 */
 	uint8_t cp_mode;
 

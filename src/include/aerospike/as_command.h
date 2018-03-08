@@ -83,7 +83,7 @@ extern "C" {
 #define AS_MSG_INFO3_UPDATE_ONLY		(1 << 3) // update existing record only, do not create new record
 #define AS_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4) // completely replace existing record, or create new record
 #define AS_MSG_INFO3_REPLACE_ONLY		(1 << 5) // completely replace existing record, do not create new record
-#define AS_MSG_INFO3_LINEARIZE_READ		(1 << 6) // linearize read when in CP mode.
+#define AS_MSG_INFO3_LINEARIZE_READ		(1 << 6) // linearize read when in strong consistency mode.
 // (Note:  Bit 7 is unused.)
 
 // Transaction message

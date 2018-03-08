@@ -438,7 +438,7 @@ typedef struct as_policy_read_s {
 	bool deserialize;
 
 	/**
-	 * Force reads to be linearized for server namespaces that support CP mode.
+	 * Force reads to be linearized for server namespaces that support strong consistency mode.
 	 * Default: false
 	 */
 	bool linearize_read;
@@ -563,7 +563,7 @@ typedef struct as_policy_apply_s {
 	bool durable_delete;
 
 	/**
-	 * Force reads to be linearized for server namespaces that support CP mode.
+	 * Force reads to be linearized for server namespaces that support strong consistency mode.
 	 * Default: false
 	 */
 	bool linearize_read;
@@ -630,7 +630,7 @@ typedef struct as_policy_operate_s {
 	bool durable_delete;
 
 	/**
-	 * Force reads to be linearized for server namespaces that support CP mode.
+	 * Force reads to be linearized for server namespaces that support strong consistency mode.
 	 * Default: false
 	 */
 	bool linearize_read;
@@ -769,7 +769,7 @@ typedef struct as_policy_batch_s {
 	bool deserialize;
 	
 	/**
-	 * Force reads to be linearized for server namespaces that support CP mode.
+	 * Force reads to be linearized for server namespaces that support strong consistency mode.
 	 * Default: false
 	 */
 	bool linearize_read;

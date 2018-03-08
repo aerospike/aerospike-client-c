@@ -449,7 +449,7 @@ as_shm_reserve_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_
 			return node;
 		}
 	}
-	// When master only specified, both AP and CP modes should never get random nodes.
+	// When master only specified, should never get random nodes.
 	return NULL;
 }
 

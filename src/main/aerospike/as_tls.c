@@ -181,7 +181,7 @@ wait_socket(as_socket_fd fd, uint32_t socket_timeout, uint64_t deadline, bool re
 	return rv;
 }
 
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if OPENSSL_VERSION_NUMBER < 0x10100000L && !defined USE_XDR
 static pthread_mutex_t *lock_cs;
 
 static void
@@ -244,7 +244,7 @@ as_tls_check_init()
 
 	// Check the flag again, in case we lost a race.
 	if (! s_tls_inited) {
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
+#if OPENSSL_VERSION_NUMBER < 0x10100000L && !defined USE_XDR
 		OpenSSL_add_all_algorithms();
 		ERR_load_BIO_strings();
 		ERR_load_crypto_strings();
@@ -276,6 +276,7 @@ as_tls_cleanup(void)
 		return;
 	}
 
+#if !defined USE_XDR
 	// Cleanup global OpenSSL state, must be after all other OpenSSL
 	// API calls, of course ...
 
@@ -298,6 +299,7 @@ as_tls_cleanup(void)
 	if (ssl_comp_methods != NULL) {
         sk_SSL_COMP_free(ssl_comp_methods);
 	}
+#endif
 }
 
 void

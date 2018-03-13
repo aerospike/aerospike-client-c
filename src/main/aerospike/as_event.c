@@ -130,7 +130,7 @@ as_event_loop*
 as_event_create_loops(uint32_t capacity)
 {
 	as_error err;
-	as_event_loop* event_loops;
+	as_event_loop* event_loops = NULL;
 
 	if (as_create_event_loops(&err, NULL, capacity, &event_loops) != AEROSPIKE_OK) {
 		as_log_error(err.message);
@@ -220,7 +220,7 @@ as_event_loop*
 as_event_set_external_loop(void* loop)
 {
 	as_error err;
-	as_event_loop* event_loop;
+	as_event_loop* event_loop = NULL;
 
 	if (as_set_external_event_loop(&err, NULL, loop, &event_loop) != AEROSPIKE_OK) {
 		as_log_error(err.message);

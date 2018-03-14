@@ -943,7 +943,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 {
 	char* pass_hash = NULL;
 
-	if (*(config->password)) {
+	if (*(config->user)) {
 		pass_hash = cf_malloc(AS_PASSWORD_HASH_SIZE);
 
 		if (! as_password_get_constant_hash(config->password, pass_hash)) {
@@ -970,13 +970,10 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	// Initialize user/password.
 	if (*(config->user)) {
 		cluster->user = cf_strdup(config->user);
-	}
-	
-	if (pass_hash) {
 		cluster->password = cf_strdup(config->password);
 		cluster->password_hash = pass_hash;
 	}
-	
+
 	// Heap allocated cluster_name continues to be owned by as->config.
 	// Make a reference copy here.
 	cluster->cluster_name = config->cluster_name;

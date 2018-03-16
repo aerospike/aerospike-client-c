@@ -330,41 +330,6 @@ typedef struct as_query_predexp_s {
 
 } as_query_predexp;
 
-/**
- * Sequence of ordering to be applied to a query results.
- *
- * Entries can either be initialized on the stack or on the heap.
- * 
- * Initialization should be performed via a query object, using:
- * - as_query_orderby_init()
- * - as_query_orderby_inita()
- */
-typedef struct as_query_sort_s {
-
-	/**
-	 * @private
-	 * If true, then as_query_destroy() will free this instance.
-	 */
-	bool _free;
-
-	/**
-	 * Number of entries allocated
-	 */
-	uint16_t capacity;
-
-	/**
-	 * Number of entries used
-	 */
-	uint16_t size;
-
-	/**
-	 * Sequence of entries
-	 */
-	as_ordering * entries;
-
-} as_query_ordering;
-
-
 /** 
  * The as_query object is used define a query to be executed in the datasbase.
  *
@@ -458,33 +423,6 @@ typedef struct as_query_sort_s {
  * ~~~~~~~~~~{.c}
  * as_query_where_inita(query, 1);
  * as_query_where(query, "bin1", as_string_equals("abc"));
- * ~~~~~~~~~~
- *
- * ### Sorting Results
- *
- * as_query_orderby() is used to specify ordering of results of a query.
- * 
- * ~~~~~~~~~~{.c}
- * as_query_orderby(query, "bin1", AS_ORDER_ASCENDING);
- * ~~~~~~~~~~
- *
- * The sort order can be:
- * - `AS_ORDER_ASCENDING`
- * - `AS_ORDER_DESCENDING`
- *
- * Before adding ordering, the orderby structure must be initialized via 
- * either:
- * - as_query_orderby_inita() - Initializes the structure on the stack.
- * - as_query_orderby_init() - Initializes the structure on the heap.
- * 
- * Both functions are given the number of orderings to be added.
- *
- * A complete example using as_query_orderby_inita():
- * 
- * ~~~~~~~~~~{.c}
- * as_query_orderby_inita(query, 2);
- * as_query_orderby(query, "bin1", AS_ORDER_ASCENDING);
- * as_query_orderby(query, "bin2", AS_ORDER_ASCENDING);
  * ~~~~~~~~~~
  *
  * ### Applying a UDF to Query Results

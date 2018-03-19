@@ -555,8 +555,8 @@ aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* p
 {
 	as_error_reset(err);
 
-	if (! as->cluster->password) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Current password is invalid");
+	if (! as->cluster->password_hash) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Current hashed password is invalid");
 	}
 
 	char hash[AS_PASSWORD_HASH_SIZE];
@@ -570,7 +570,7 @@ aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* p
 	
 	p = as_admin_write_header(p, CHANGE_PASSWORD, 3);
 	p = as_admin_write_field_string(p, USER, user);
-	p = as_admin_write_field_string(p, OLD_PASSWORD, as->cluster->password);
+	p = as_admin_write_field_string(p, OLD_PASSWORD, as->cluster->password_hash);
 	p = as_admin_write_field_string(p, PASSWORD, hash);
 	int status = as_admin_execute(as, err, policy, buffer, p);
 	

@@ -498,7 +498,19 @@ as_status
 aerospike_create_user(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user, const char* password, const char** roles, int roles_size)
 {
 	as_error_reset(err);
-	
+
+	int len = (int)strlen(user);
+
+	if (len >= AS_USER_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Max user length %d exceeded: %d", AS_USER_SIZE - 1, len)
+	}
+
+	len = (int)strlen(password);
+
+	if (len >= AS_PASSWORD_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Max password length %d exceeded: %d", AS_PASSWORD_SIZE - 1, len)
+	}
+
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
 	
@@ -530,6 +542,18 @@ aerospike_set_password(aerospike* as, as_error* err, const as_policy_admin* poli
 {
 	as_error_reset(err);
 
+	int len = (int)strlen(user);
+
+	if (len >= AS_USER_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Max user length %d exceeded: %d", AS_USER_SIZE - 1, len)
+	}
+
+	len = (int)strlen(password);
+
+	if (len >= AS_PASSWORD_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Max password length %d exceeded: %d", AS_PASSWORD_SIZE - 1, len)
+	}
+
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
 	
@@ -554,6 +578,18 @@ as_status
 aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user, const char* password)
 {
 	as_error_reset(err);
+
+	int len = (int)strlen(user);
+
+	if (len >= AS_USER_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Max user length %d exceeded: %d", AS_USER_SIZE - 1, len)
+	}
+
+	len = (int)strlen(password);
+
+	if (len >= AS_PASSWORD_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Max password length %d exceeded: %d", AS_PASSWORD_SIZE - 1, len)
+	}
 
 	if (! as->cluster->password_hash) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Current hashed password is invalid");

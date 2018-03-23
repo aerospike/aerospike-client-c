@@ -91,7 +91,7 @@ as_poll_socket(as_poll* poll, as_socket_fd fd, uint32_t timeout, bool read)
 	}
 
 	if (rv <= 0) {
-		return -1;
+		return rv;
 	}
 
 	if (! FD_ISSET(fd % FD_SETSIZE, &poll->set[fd / FD_SETSIZE])) {
@@ -138,8 +138,8 @@ as_poll_socket(as_poll* poll, as_socket_fd fd, uint32_t timeout, bool read)
 		rv = select(0, 0 /*readfd*/, &poll->set /*writefd*/, 0/*oobfd*/, tvp);
 	}
 
-	if (rv == SOCKET_ERROR) {
-		return -1;
+	if (rv <= 0) {
+		return rv;
 	}
 
 	if (! FD_ISSET(fd, &poll->set)) {

@@ -362,8 +362,7 @@ as_socket_write_deadline(
 
 		int rv = as_poll_socket(&poll, sock->fd, timeout, false);
 
-		// we only have one fd, so we know it's ours, but select seems confused sometimes - do the safest thing
-		if (rv > 0) {		
+		if (rv > 0) {
 #if defined(__linux__) 
 			int w_bytes = (int)send(sock->fd, buf + pos, buf_len - pos, MSG_NOSIGNAL);
 #elif defined(_MSC_VER)

@@ -202,6 +202,7 @@ int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
 
     if ( plan->before ) {
         if ( plan->before(plan) == false ) {
+			atf_plan_result_destroy(result);
             return -1;
         }
     }
@@ -212,6 +213,7 @@ int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
 
     if ( plan->after ) {
         if ( plan->after(plan) == false ) {
+			atf_plan_result_destroy(result);
             return -2;
         }
     }
@@ -352,3 +354,4 @@ void atf_log_line(FILE * f, const char * level, const char * prefix, const char 
     va_end(ap);
     fprintf(f, "%s[%s:%d] %s - %s\n", prefix, file, line, level, msg);
 }
+

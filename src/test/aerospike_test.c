@@ -283,6 +283,7 @@ static bool before(atf_plan * plan) {
 
 	if (! as_config_add_hosts(&config, g_host, g_port)) {
 		error("Invalid host(s) %s", g_host);
+		as_event_close_loops();
 		return false;
 	}
 
@@ -301,6 +302,8 @@ static bool before(atf_plan * plan) {
 	}
 	else {
 		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
+		aerospike_destroy(as);
+		as_event_close_loops();
 		return false;
 	}
 }
@@ -390,3 +393,4 @@ PLAN(aerospike_test) {
 	plan_add(query_async);
 #endif
 }
+

@@ -234,6 +234,12 @@ as_query_parse_records_async(as_event_command* cmd)
 		as_msg_swap_header_from_be(msg);
 		
 		if (msg->result_code) {
+			// Special case - if we scan a set name that doesn't exist on a
+			// node, it will return "not found".
+			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+				as_event_executor_complete(cmd);
+				return true;
+			}
 			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
 			as_event_response_error(cmd, &err);
 			return true;

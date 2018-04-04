@@ -341,6 +341,15 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 		as_msg_swap_header_from_be(msg);
 		
 		if (msg->result_code) {
+			// Special case - if we query a set name that doesn't exist on a
+			// node, it will return "not found" - we unify this with the
+			// case where OK is returned and no callbacks were made.
+			// We are sending "no more records back" to the caller which will
+			// send OK to the main worker thread.
+			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+				AEROSPIKE_QUERY_PARSE_RECORDS_FINISHED(task->task_id, task->node->name, nrecs, AEROSPIKE_NO_MORE_RECORDS);
+				return AEROSPIKE_NO_MORE_RECORDS;
+			}
 			status = as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
 			AEROSPIKE_QUERY_PARSE_RECORDS_FINISHED(task->task_id, task->node->name, nrecs, status);
 			return status;

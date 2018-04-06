@@ -259,6 +259,7 @@ AS_EXTERN void
 as_roles_destroy(as_role** roles, int roles_size);
 
 struct as_cluster_s;
+struct as_node_info_s;
 
 /**
  * @private
@@ -267,7 +268,7 @@ struct as_cluster_s;
 as_status
 as_cluster_login(
 	struct as_cluster_s* cluster, as_error* err, as_host* host, struct as_socket_s* sock,
-	uint64_t deadline_ms, char** session_token
+	uint64_t deadline_ms, struct as_node_info_s* node_info
 	);
 
 /**

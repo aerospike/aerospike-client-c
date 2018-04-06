@@ -227,16 +227,22 @@ typedef struct as_node_s {
 
 	/**
 	 * @private
-	 * Session token for this node.
-	 */
-	char* session_token;
-
-	/**
-	 * @private
 	 * Socket used exclusively for cluster tend thread info requests.
 	 */
 	as_socket info_socket;
 		
+	/**
+	 * @private
+	 * Session token for this node.
+	 */
+	uint8_t* session_token;
+
+	/**
+	 * @private
+	 * Session token length.
+	 */
+	uint32_t session_token_length;
+
 	/**
 	 * @private
 	 * Features supported by server.  Stored in bitmap.
@@ -316,7 +322,12 @@ typedef struct as_node_info_s {
 	/**
 	 * Session token.
 	 */
-	char* session_token;
+	uint8_t* session_token;
+
+	/**
+	 * Session token length.
+	 */
+	uint32_t session_token_length;
 
 } as_node_info;
 

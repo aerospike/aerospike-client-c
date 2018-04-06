@@ -89,6 +89,7 @@ as_node_create(
 
 	strcpy(node->name, node_info->name);
 	node->session_token = node_info->session_token;
+	node->session_token_length = node_info->session_token_length;
 	node->features = node_info->features;
 	node->address_index = (addr->sa_family == AF_INET) ? 0 : AS_ADDRESS4_MAX;
 	node->address4_size = 0;

@@ -107,6 +107,14 @@ as_admin_write_field_string(uint8_t* p, uint8_t id, const char* val)
 }
 
 static uint8_t*
+as_admin_write_field_bytes(uint8_t* p, uint8_t id, const uint8_t* bytes, uint32_t len)
+{
+	p = as_admin_write_field_header(p, id, len);
+	memcpy(p, bytes, len);
+	return p + len;
+}
+
+static uint8_t*
 as_admin_write_roles(uint8_t* p, const char** roles, int length)
 {
 	uint8_t* q = p + FIELD_HEADER_SIZE;
@@ -354,7 +362,7 @@ as_authenticate_old(as_error* err, as_socket* sock, const char* user, const char
 as_status
 as_cluster_login(
 	as_cluster* cluster, as_error* err, as_host* host, as_socket* sock, uint64_t deadline_ms,
-	char** session_token
+	as_node_info* node_info
 )
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -382,7 +390,8 @@ as_cluster_login(
 	if (status) {
 		if (status == INVALID_COMMAND) {
 			// New login not supported.  Try old authentication.
-			*session_token = NULL;
+			node_info->session_token = NULL;
+			node_info->session_token_length = 0;
 			return as_authenticate_old(err, sock, cluster->user, cluster->password_hash, deadline_ms);
 		}
 		return as_error_set_message(err, status, as_error_string(status));
@@ -395,7 +404,9 @@ as_cluster_login(
 	int field_count = buffer[11];
 
 	if (receive_size <= 0 || receive_size > AS_STACK_BUF_SIZE || field_count <= 0) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve session token from %s:%u", host->name, host->port);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+							   "Failed to retrieve session token from %s:%u",
+							   host->name, host->port);
 	}
 
 	// Read remaining message bytes in group
@@ -416,18 +427,24 @@ as_cluster_login(
 		len--;
 
 		if (id == SESSION_TOKEN) {
-			int sz = (len < AS_STACK_BUF_SIZE) ? len : AS_STACK_BUF_SIZE;
-			char* token = cf_malloc(sz + 1);
-			memcpy(token, p, sz);
-			token[sz] = 0;
-			*session_token = token;
-			return status;
+			if (len > 0 && len < AS_STACK_BUF_SIZE) {
+				node_info->session_token = cf_malloc(len);
+				memcpy(node_info->session_token, p, len);
+				node_info->session_token_length = len;
+				return AEROSPIKE_OK;
+			}
+			else {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+									   "Invalid session token length %d from %s:%u",
+									   len, host->name, host->port);
+			}
 		}
 		else {
 			p += len;
 		}
 	}
-	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve session token from %s:%u", host->name, host->port);
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+						   "Failed to retrieve session token from %s:%u", host->name, host->port);
 }
 
 uint32_t
@@ -440,7 +457,7 @@ as_authenticate_set(as_cluster* cluster, as_node* node, uint8_t* buffer)
 
 	if (node->session_token) {
 		// New authentication.
-		p = as_admin_write_field_string(p, SESSION_TOKEN, node->session_token);
+		p = as_admin_write_field_bytes(p, SESSION_TOKEN, node->session_token, node->session_token_length);
 	}
 	else {
 		// Old authentication.
@@ -467,7 +484,7 @@ as_authenticate(
 
 	if (node && node->session_token) {
 		// New authentication.
-		p = as_admin_write_field_string(p, SESSION_TOKEN, node->session_token);
+		p = as_admin_write_field_bytes(p, SESSION_TOKEN, node->session_token, node->session_token_length);
 	}
 	else {
 		// Old authentication.

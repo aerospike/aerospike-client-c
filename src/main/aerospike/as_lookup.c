@@ -77,10 +77,10 @@ as_lookup_node(
 	}
 
 	node_info->session_token = NULL;
+	node_info->session_token_length = 0;
 
 	if (cluster->user) {
-		status = as_cluster_login(cluster, err, host, &node_info->socket, deadline,
-								  &node_info->session_token);
+		status = as_cluster_login(cluster, err, host, &node_info->socket, deadline, node_info);
 
 		if (status) {
 			as_socket_close(&node_info->socket);

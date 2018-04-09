@@ -288,7 +288,7 @@ static bool scan_check_callback(const as_val * val, void * udata)
 
 	// validate bins
 	int nbins = sizeof(check->bins) / sizeof(char *);
-	for( int i = 0; check->bins[i] && i < nbins; i++ ) {
+	for( int i = 0; i < nbins && check->bins[i]; i++ ) {
 		char * bin = check->bins[i];
 		if ( strcmp(bin, "bin1") == 0 ) {
 			if ( !check_bin1(rec, check) ) {

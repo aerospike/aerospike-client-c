@@ -276,7 +276,7 @@ aerospike_udf_put(
 	size_t size = encoded_len + 1024;
 	char* command = cf_malloc(size);
 	
-	if (snprintf(command, size, "udf-put:filename=%s;content=%s;content-len=%d;udf-type=%s;",
+	if (snprintf(command, size, "udf-put:filename=%s;content=%s;content-len=%u;udf-type=%s;",
 				   filebase, content_base64, encoded_len, as_udf_type_str[type]) >= size) {
 		as_string_destroy(&filename_string);
 		cf_free(content_base64);

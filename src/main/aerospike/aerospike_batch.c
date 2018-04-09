@@ -772,7 +772,7 @@ as_batch_execute(
 	
 	uint32_t n_keys = batch->keys.size;
 	
-	if (n_keys <= 0) {
+	if (n_keys == 0) {
 		callback(0, 0, udata);
 		return AEROSPIKE_OK;
 	}
@@ -1123,7 +1123,7 @@ as_batch_read_execute(
 	as_vector* list = &records->list;
 	uint32_t n_keys = records->list.size;
 	
-	if (n_keys <= 0) {
+	if (n_keys == 0) {
 		return AEROSPIKE_OK;
 	}
 	

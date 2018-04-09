@@ -97,8 +97,8 @@ insert_data(uint32_t numrecs, const char *setname)
 	as_monitor_begin(&monitor);
 	
 	for (uint32_t i = 0; i < numrecs; i++) {
-		sprintf(strval, "str-%s-%d", setname ? setname : "noset", i);
-		sprintf(strkey, "key-%s-%d", setname, i);
+		sprintf(strval, "str-%s-%u", setname ? setname : "noset", i);
+		sprintf(strkey, "key-%s-%u", setname, i);
 		
 		// Map bin
         as_hashmap m;
@@ -338,7 +338,7 @@ scan_listener(as_error* err, as_record* rec, void* udata, as_event_loop* event_l
 	
 	// validate bins
 	int nbins = sizeof(check->bins) / sizeof(char *);
-	for (int i = 0; check->bins[i] && i < nbins; i++) {
+	for (int i = 0; i < nbins && check->bins[i]; i++) {
 		char * bin = check->bins[i];
 		if ( strcmp(bin, "bin1") == 0 ) {
 			if ( !check_bin1(rec, check) ) {

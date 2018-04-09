@@ -211,30 +211,28 @@ as_info_command(
 	
 	// Deal with the incoming 'names' parameter
 	// Translate interior ';' in the passed-in names to \n
-	if (names) {
-		if (send_asis) {
-			slen = (uint32_t)strlen(names);
-		}
-		else {
-			char *p = names;
-			while (*p) {
-				slen++;
-				if ((*p == ';') || (*p == ':') || (*p == ',')) {
-					*p = '\n';
-				}
-				p++;
+	if (send_asis) {
+		slen = (uint32_t)strlen(names);
+	}
+	else {
+		char *p = names;
+		while (*p) {
+			slen++;
+			if ((*p == ';') || (*p == ':') || (*p == ',')) {
+				*p = '\n';
 			}
-		}
-		size += slen;
-		
-		// Sometimes people forget to/cannot add the trailing '\n'. Be nice and
-		// add it for them using a stack allocated variable so we don't have to clean up.
-		if (slen && names[slen-1] != '\n') {
-			add_newline = true;
-			size++;
+			p++;
 		}
 	}
+	size += slen;
 	
+	// Sometimes people forget to/cannot add the trailing '\n'. Be nice and
+	// add it for them using a stack allocated variable so we don't have to clean up.
+	if (slen && names[slen-1] != '\n') {
+		add_newline = true;
+		size++;
+	}
+
 	uint8_t* cmd = as_command_init(size);
 	
 	// Write request

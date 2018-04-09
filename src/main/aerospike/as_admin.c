@@ -185,7 +185,7 @@ static as_status
 as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end)
 {
 	uint32_t timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
-	if (timeout_ms <= 0) {
+	if (timeout_ms == 0) {
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);

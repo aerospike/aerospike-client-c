@@ -140,7 +140,6 @@ as_udf_file_destroy(as_udf_file * file)
 		file->content.bytes = NULL;
 		if ( file->_free ) {
 			cf_free(file);
-			file = NULL;
 		}
 	}
 }

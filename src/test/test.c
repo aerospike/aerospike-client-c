@@ -85,7 +85,7 @@ atf_suite_result * atf_suite_run(atf_suite * suite) {
 
     if ( suite->init ) suite->init(suite);
 
-    printf("[+] %s[%d] :: %s\n", suite->name, suite->size, suite->desc);
+    printf("[+] %s[%u] :: %s\n", suite->name, suite->size, suite->desc);
 
     atf_suite_result * suite_result = atf_suite_result_new(suite);
 
@@ -117,7 +117,7 @@ atf_suite_result * atf_suite_run(atf_suite * suite) {
 
 void atf_suite_result_print(atf_suite_result * suite_result) {
     if ( suite_result->success < suite_result->size ) {
-        printf("[✘] %s: %d/%d tests passed.\n", suite_result->suite->name, suite_result->success, suite_result->size);
+        printf("[✘] %s: %u/%u tests passed.\n", suite_result->suite->name, suite_result->success, suite_result->size);
         for (uint32_t i = 0; i < suite_result->size; i++) {
             atf_test_result * test_result = suite_result->tests[i];
             if ( ! test_result->success ) {
@@ -128,7 +128,7 @@ void atf_suite_result_print(atf_suite_result * suite_result) {
         }
     }
     else {
-        printf("[✔] %s: %d/%d tests passed.\n", suite_result->suite->name, suite_result->success, suite_result->size);
+        printf("[✔] %s: %u/%u tests passed.\n", suite_result->suite->name, suite_result->success, suite_result->size);
     }
 }
 
@@ -236,7 +236,7 @@ int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
 
     printf("\n");
 
-    printf("%d tests: %d passed, %d failed\n", total, passed, total-passed);
+    printf("%u tests: %u passed, %u failed\n", total, passed, total-passed);
 
     atf_plan_result_destroy(result);
 

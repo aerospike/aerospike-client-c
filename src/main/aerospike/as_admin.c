@@ -559,6 +559,10 @@ aerospike_set_password(aerospike* as, as_error* err, const as_policy_admin* poli
 {
 	as_error_reset(err);
 
+	if (! user) {
+		user = as->cluster->user;
+	}
+
 	int len = (int)strlen(user);
 
 	if (len >= AS_USER_SIZE) {
@@ -574,9 +578,6 @@ aerospike_set_password(aerospike* as, as_error* err, const as_policy_admin* poli
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
 	
-	if (! user) {
-		user = as->cluster->user;
-	}
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
@@ -595,6 +596,10 @@ as_status
 aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user, const char* password)
 {
 	as_error_reset(err);
+
+	if (! user) {
+		user = as->cluster->user;
+	}
 
 	int len = (int)strlen(user);
 
@@ -615,9 +620,6 @@ aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* p
 	char hash[AS_PASSWORD_HASH_SIZE];
 	as_password_get_constant_hash(password, hash);
 	
-	if (! user) {
-		user = as->cluster->user;
-	}
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	

@@ -479,8 +479,14 @@ as_query_worker(void* data)
 	as_query_complete_task complete_task;
 	complete_task.node = task->node;
 	complete_task.task_id = task->task_id;
-	complete_task.result = as_query_command_execute(task);
-		
+
+	if (as_load_uint32(task->error_mutex) == 0) {
+		complete_task.result = as_query_command_execute(task);
+	}
+	else {
+		complete_task.result = AEROSPIKE_ERR_QUERY_ABORTED;
+	}
+
 	cf_queue_push(task->complete_q, &complete_task);
 }
 

@@ -649,6 +649,10 @@ as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuf
 		// Estimate scan options size.
 		size += as_command_field_size(2);
 		n_fields++;
+
+		// Estimate scan timeout size.
+		size += as_command_field_size(sizeof(uint32_t));
+		n_fields++;
 	}
 
 	// Estimate predexp size.
@@ -698,24 +702,24 @@ as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuf
 
 static size_t
 as_query_command_init(
-	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_write* wp,
-	uint64_t task_id, uint32_t timeout, uint16_t n_fields, uint32_t filter_size,
-	uint32_t predexp_size, uint32_t bin_name_size, as_buffer* argbuffer
+	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_query* query_policy,
+	const as_policy_write* write_policy, uint64_t task_id, uint32_t timeout, uint16_t n_fields,
+	uint32_t filter_size, uint32_t predexp_size, uint32_t bin_name_size, as_buffer* argbuffer
 	)
 {
 	// Write command buffer.
 	uint16_t n_ops = (query->where.size == 0)? query->select.size : 0;
 	uint8_t* p;
 	
-	if (wp) {
-		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE, wp->commit_level, 0,
-			false, wp->exists, AS_POLICY_GEN_IGNORE, 0, 0, timeout, n_fields, n_ops,
-			wp->durable_delete);
-	}
-	else {
+	if (query_policy) {
 		uint8_t read_attr = (query->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
 		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, false,
-			timeout, n_fields, n_ops);
+				timeout, n_fields, n_ops);
+	}
+	else {
+		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE,
+				write_policy->commit_level, 0, false, write_policy->exists, AS_POLICY_GEN_IGNORE, 0,
+				0, timeout, n_fields, n_ops, write_policy->durable_delete);
 	}
 	
 	// Write namespace.
@@ -806,6 +810,12 @@ as_query_command_init(
 		//}
 		//*p++ = priority;
 		//*p++ = query->percent;
+
+		// Write socket timeout.
+		uint32_t timeout = (query_policy)? query_policy->base.socket_timeout : write_policy->base.socket_timeout;
+		p = as_command_write_field_header(p, AS_FIELD_SCAN_TIMEOUT, sizeof(uint32_t));
+		*(uint32_t*)p = cf_swap_to_be32(timeout);
+		p += sizeof(uint32_t);
 	}
 
 	// Write predicate expressions.
@@ -854,7 +864,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	
 	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &predexp_size, &bin_name_size);
 	uint8_t* cmd = as_command_init(size);
-	size = as_query_command_init(cmd, query, query_type, task->write_policy, task->task_id,
+	size = as_query_command_init(cmd, query, query_type, task->query_policy, task->write_policy, task->task_id,
 								 timeout, n_fields, filter_size, predexp_size, bin_name_size, &argbuffer);
 	
 	task->cmd = cmd;
@@ -1163,7 +1173,7 @@ aerospike_query_async(
 	
 	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &predexp_size, &bin_name_size);
 	uint8_t* cmd_buf = as_command_init(size);
-	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, NULL, task_id, policy->base.total_timeout,
+	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, policy, NULL, task_id, policy->base.total_timeout,
 								 n_fields, filter_size, predexp_size, bin_name_size, &argbuffer);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket

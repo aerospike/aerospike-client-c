@@ -279,7 +279,7 @@ as_cluster_login(
 as_status
 as_authenticate(
 	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, struct as_node_s* node,
-	uint32_t socket_timeout, uint64_t deadline_ms
+	uint8_t* session_token, uint32_t session_token_length, uint32_t socket_timeout, uint64_t deadline_ms
 	);
 
 /**

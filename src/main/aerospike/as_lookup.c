@@ -79,7 +79,8 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 			status = as_socket_create_and_connect(&node_info->socket, &error_local, addr, NULL, NULL, deadline);
 
 			if (status == AEROSPIKE_OK) {
-				status = as_authenticate(cluster, &error_local, &node_info->socket, NULL, 0, deadline);
+				status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
+							node_info->session_token, node_info->session_token_length, 0, deadline);
 
 				if (status == AEROSPIKE_OK) {
 					node_info->host.name = (char*)hostname;

@@ -491,8 +491,8 @@ as_authenticate_set(as_cluster* cluster, as_node* node, uint8_t* buffer)
 
 as_status
 as_authenticate(
-	as_cluster* cluster, as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout,
-	uint64_t deadline_ms
+	as_cluster* cluster, as_error* err, as_socket* sock, as_node* node, uint8_t* session_token,
+	uint32_t session_token_length, uint32_t socket_timeout, uint64_t deadline_ms
 	)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -501,9 +501,9 @@ as_authenticate(
 	p = as_admin_write_header(p, AUTHENTICATE, 2);
 	p = as_admin_write_field_string(p, USER, cluster->user);
 
-	if (node && node->session_token) {
+	if (session_token) {
 		// New authentication.
-		p = as_admin_write_field_bytes(p, SESSION_TOKEN, node->session_token, node->session_token_length);
+		p = as_admin_write_field_bytes(p, SESSION_TOKEN, session_token, session_token_length);
 	}
 	else {
 		// Old authentication.

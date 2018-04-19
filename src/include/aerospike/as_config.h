@@ -520,6 +520,12 @@ typedef struct as_config_s {
 	uint32_t conn_timeout_ms;
 
 	/**
+	 * Node login timeout in milliseconds.
+	 * Default: 5000
+	 */
+	uint32_t login_timeout_ms;
+
+	/**
 	 * Maximum socket idle time in seconds.  Connection pools will discard sockets that have
 	 * been idle longer than the maximum.  The value is limited to 24 hours (86400).
 	 *

@@ -174,6 +174,7 @@ as_lookup_node(
 	node_info->session_token_length = 0;
 
 	if (cluster->user) {
+		deadline = as_socket_deadline(cluster->login_timeout_ms);
 		status = as_cluster_login(cluster, err, &node_info->socket, deadline, node_info);
 
 		if (status) {

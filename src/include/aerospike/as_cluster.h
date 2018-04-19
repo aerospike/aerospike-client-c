@@ -241,7 +241,13 @@ typedef struct as_cluster_s {
 	 * Initial connection timeout in milliseconds.
 	 */
 	uint32_t conn_timeout_ms;
-	
+
+	/**
+	 * @private
+	 * Node login timeout in milliseconds.
+	 */
+	uint32_t login_timeout_ms;
+
 	/**
 	 * @private
 	 * Maximum socket idle in seconds.

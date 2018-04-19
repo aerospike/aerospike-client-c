@@ -498,10 +498,12 @@ as_node_signal_login(as_node* node)
 }
 
 static as_status
-as_node_login(as_error* err, as_node* node, as_socket* sock, uint64_t deadline_ms)
+as_node_login(as_error* err, as_node* node, as_socket* sock)
 {
 	as_node_info node_info;
-	as_status status = as_cluster_login(node->cluster, err, sock, deadline_ms, &node_info);
+	as_cluster* cluster = node->cluster;
+	uint64_t deadline_ms = as_socket_deadline(cluster->login_timeout_ms);
+	as_status status = as_cluster_login(cluster, err, sock, deadline_ms, &node_info);
 
 	if (status) {
 		as_error_append(err, as_node_get_address_string(node));
@@ -517,10 +519,10 @@ as_node_login(as_error* err, as_node* node, as_socket* sock, uint64_t deadline_m
 }
 
 static as_status
-as_node_ensure_login(as_error* err, as_node* node, as_socket* sock, uint64_t deadline_ms, bool* auth)
+as_node_ensure_login(as_error* err, as_node* node, as_socket* sock, bool* auth)
 {
 	if (as_load_uint8(&node->perform_login) || (node->session_expiration > 0 && cf_getns() >= node->session_expiration)) {
-		as_status status = as_node_login(err, node, sock, deadline_ms);
+		as_status status = as_node_login(err, node, sock);
 
 		if (status) {
 			return status;
@@ -534,35 +536,40 @@ as_node_ensure_login(as_error* err, as_node* node, as_socket* sock, uint64_t dea
 }
 
 static as_status
-as_node_get_tend_connection(as_error* err, as_node* node, uint64_t deadline_ms)
+as_node_get_tend_connection(as_error* err, as_node* node)
 {
+	as_cluster* cluster = node->cluster;
 	as_status status = AEROSPIKE_OK;
 
 	if (node->info_socket.fd < 0) {
 		// Try to open a new socket.
 		as_socket sock;
+		uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
 		status = as_node_create_socket(err, node, NULL, &sock, deadline_ms);
 
 		if (status) {
 			return status;
 		}
 
-		if (node->cluster->user) {
+		if (cluster->user) {
 			bool auth;
-			status = as_node_ensure_login(err, node, &sock, deadline_ms, &auth);
+			status = as_node_ensure_login(err, node, &sock, &auth);
 
 			if (status) {
 				as_socket_close(&sock);
 				return status;
 			}
 
+			// Reset deadline because previous login had a separate timeout and can take a long time.
+			deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
+
 			if (! auth) {
-				status = as_authenticate(node->cluster, err, &sock, node, 0, deadline_ms);
+				status = as_authenticate(cluster, err, &sock, node, 0, deadline_ms);
 
 				if (status) {
 					// Authentication failed.  Session token probably expired.
 					// Must login again to get new session token.
-					status = as_node_login(err, node, &sock, deadline_ms);
+					status = as_node_login(err, node, &sock);
 
 					if (status) {
 						as_socket_close(&sock);
@@ -574,9 +581,9 @@ as_node_get_tend_connection(as_error* err, as_node* node, uint64_t deadline_ms)
 		node->info_socket = sock;
 	}
 	else {
-		if (node->cluster->user) {
+		if (cluster->user) {
 			bool auth;
-			status = as_node_ensure_login(err, node, &node->info_socket, deadline_ms, &auth);
+			status = as_node_ensure_login(err, node, &node->info_socket, &auth);
 
 			if (status) {
 				as_socket_close(&node->info_socket);
@@ -710,13 +717,15 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 as_status
 as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
 {
-	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
-	as_status status = as_node_get_tend_connection(err, node, deadline_ms);
+	as_status status = as_node_get_tend_connection(err, node);
 	
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-	
+
+	// Set new deadline because login may have occurred which can take a long time.
+	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
+
 	const char* command;
 	size_t command_len;
 	

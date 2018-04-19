@@ -114,7 +114,8 @@ connect_to_server(arguments* args, aerospike* client)
 	as_config_set_user(&cfg, args->user, args->password);
 	cfg.use_shm = args->use_shm;
 	cfg.conn_timeout_ms = 10000;
-	
+	cfg.login_timeout_ms = 10000;
+
 	// Disable batch/scan/query thread pool because these commands are not used in benchmarks.
 	cfg.thread_pool_size = 0;
 	cfg.conn_pools_per_node = args->conn_pools_per_node;

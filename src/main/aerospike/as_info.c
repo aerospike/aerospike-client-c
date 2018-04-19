@@ -316,7 +316,8 @@ as_info_create_socket(
 	const char* tls_name, as_socket* sock
 	)
 {
-	as_status status = as_socket_create_and_connect(sock, err, addr, &cluster->tls_ctx, tls_name, deadline_ms);
+	as_tls_context* ctx = as_socket_get_tls_context(cluster->tls_ctx);
+	as_status status = as_socket_create_and_connect(sock, err, addr, ctx, tls_name, deadline_ms);
 	
 	if (status) {
 		return status;

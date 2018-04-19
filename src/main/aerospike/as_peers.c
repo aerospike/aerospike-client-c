@@ -83,35 +83,37 @@ as_peers_find_node(as_peers* peers, as_cluster* cluster, const char* name)
 }
 
 static void
-as_peers_duplicate(as_host* host, bool is_alias, as_node* node, as_node_info* node_info, struct sockaddr* addr)
+as_peers_duplicate(as_host* host, bool is_alias, as_node* node, as_node_info* node_info)
 {
-	as_node_info_destroy(node_info);
-
 	as_log_info("Node %s %d already exists with nodeid %s and address %s",
 				host->name, host->port, node->name, as_node_get_address_string(node));
-	
-	as_node_add_address(node, addr);
-	
+
+	as_node_add_address(node, (struct sockaddr*)&node_info->addr);
+
 	if (is_alias) {
 		as_node_add_alias(node, host->name, host->port);
 	}
+
+	as_node_info_destroy(node_info);
 }
 
 static inline void
 as_peers_create_node(
-	as_peers* peers, as_cluster* cluster, as_host* host, bool is_alias,
-	as_node_info* node_info, struct sockaddr* addr
+	as_peers* peers, as_cluster* cluster, as_host* host, bool is_alias, as_node_info* node_info
 	)
 {
 	// Create node.
-	as_node* node = as_node_create(cluster, host->name, host->tls_name, host->port, is_alias, addr, node_info);
+	as_node* node = as_node_create(cluster, node_info);
+
+	if (is_alias) {
+		as_node_add_alias(node, host->name, host->port);
+	}
 	as_vector_append(&peers->nodes, &node);
 }
 
 static bool
 as_peers_prepare_services_node(
-	as_peers* peers, as_cluster* cluster, as_host* host, bool is_alias,
-	as_node_info* node_info, struct sockaddr* addr
+	as_peers* peers, as_cluster* cluster, as_host* host, bool is_alias, as_node_info* node_info
 	)
 {
 	// Copy host to local hosts.
@@ -126,7 +128,7 @@ as_peers_prepare_services_node(
 		// Duplicate node name found.  This usually occurs when the server
 		// services list contains both internal and external IP addresses
 		// for the same node.
-		as_peers_duplicate(host, is_alias, node, node_info, addr);
+		as_peers_duplicate(host, is_alias, node, node_info);
 		return true;
 	}
 	
@@ -134,18 +136,20 @@ as_peers_prepare_services_node(
 	node = as_peers_find_cluster_node(cluster, node_info->name);
 	
 	if (node) {
-		as_peers_duplicate(host, is_alias, node, node_info, addr);
+		as_peers_duplicate(host, is_alias, node, node_info);
 		node->friends++;
 		return true;
 	}
 	
 	// Create node.
-	as_peers_create_node(peers, cluster, host, is_alias, node_info, addr);
+	as_peers_create_node(peers, cluster, host, is_alias, node_info);
 	return true;
 }
 
 static bool
-as_peers_validate_node(as_peers* peers, as_cluster* cluster, as_host* host, const char* expected_name, bool is_peers_protocol)
+as_peers_validate_node(
+	as_peers* peers, as_cluster* cluster, as_host* host, const char* expected_name, bool is_peers_protocol
+	)
 {
 	as_error err;
 	as_error_init(&err);
@@ -158,20 +162,20 @@ as_peers_validate_node(as_peers* peers, as_cluster* cluster, as_host* host, cons
 		return false;
 	}
 	
+	as_node_info node_info;
 	struct sockaddr* addr;
 	bool validated = false;
 	
 	while (as_lookup_next(&iter, &addr)) {
-		as_node_info node_info;
 		status = as_lookup_node(cluster, &err, host, addr, &node_info);
 		
 		if (status == AEROSPIKE_OK) {
 			if (expected_name == NULL || strcmp(node_info.name, expected_name) == 0) {
 				if (is_peers_protocol) {
-					as_peers_create_node(peers, cluster, host, iter.hostname_is_alias, &node_info, addr);
+					as_peers_create_node(peers, cluster, host, iter.hostname_is_alias, &node_info);
 				}
 				else {
-					as_peers_prepare_services_node(peers, cluster, host, iter.hostname_is_alias, &node_info, addr);
+					as_peers_prepare_services_node(peers, cluster, host, iter.hostname_is_alias, &node_info);
 				}
 				validated = true;
 				break;

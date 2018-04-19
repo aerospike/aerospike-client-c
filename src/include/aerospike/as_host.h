@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include <aerospike/as_vector.h>
 #include <citrusleaf/alloc.h>
 
 #ifdef __cplusplus
@@ -49,6 +50,14 @@ typedef struct as_host_s {
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
+/**
+ * Parse hosts from format: address1:port1,...
+ * Warning: Destructive parse. String is modified.
+ * Host name pointers are only in scope of string.
+ */
+bool
+as_host_parse_addresses(char* str, as_vector* hosts);
 
 /**
  * Deep copy host.

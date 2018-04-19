@@ -46,6 +46,7 @@ int g_port = 3000;
 static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_SIZE];
 as_config_tls g_tls = {0};
+as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -121,6 +122,12 @@ usage()
 	fprintf(stderr, "  --tlsCertFile <path>\n");
 	fprintf(stderr, "  Set the TLS client certificate chain file for mutual authentication.\n\n");
 
+	fprintf(stderr, "  --tlsLoginOnly\n");
+	fprintf(stderr, "  Use TLS sockets on node login only.\n\n");
+
+	fprintf(stderr, "  --auth {INTERNAL,EXTERNAL,EXTERNAL_SECURE} # Default: INTERNAL\n");
+	fprintf(stderr, "  Set authentication mode when user/password is defined.\n\n");
+
 	fprintf(stderr, "  -u --usage         # Default: usage not printed.\n");
 	fprintf(stderr, "  Display program usage.\n\n");
 }
@@ -145,7 +152,9 @@ static struct option long_options[] = {
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
 	{"tlsCertFile",          required_argument, 0, 'y'},
-	{"usage",     	         no_argument,       0, 'u'},
+	{"tlsLoginOnly",         no_argument,       0, 'Y'},
+	{"auth",                 required_argument, 0, 'e'},
+	{"usage",                no_argument,       0, 'u'},
 	{0, 0, 0, 0}
 };
 
@@ -238,6 +247,17 @@ static bool parse_opts(int argc, char* argv[])
 			g_tls.certfile = strdup(optarg);
 			break;
 
+		case 'Y':
+			g_tls.for_login_only = true;
+			break;
+
+		case 'e':
+			if (! as_auth_mode_from_string(&g_auth_mode, optarg)) {
+				error("ERROR: invalid authentication mode: %s", optarg);
+				return false;
+			}
+			break;
+
 		case 'u':
 			usage();
 			return false;
@@ -291,6 +311,7 @@ static bool before(atf_plan * plan) {
 
 	// Transfer ownership of all heap allocated TLS fields via shallow copy.
 	memcpy(&config.tls, &g_tls, sizeof(as_config_tls));
+	config.auth_mode = g_auth_mode;
 
 	as_error err;
 	as_error_reset(&err);

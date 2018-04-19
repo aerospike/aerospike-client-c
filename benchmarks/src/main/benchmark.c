@@ -152,6 +152,7 @@ connect_to_server(arguments* args, aerospike* client)
 
 	// Transfer ownership of all heap allocated TLS fields via shallow copy.
 	memcpy(&cfg.tls, &args->tls, sizeof(as_config_tls));
+	cfg.auth_mode = args->auth_mode;
 
 	aerospike_init(client, &cfg);
 	

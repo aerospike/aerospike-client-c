@@ -90,6 +90,8 @@ const struct option LONG_OPTS_BASIC[] = {
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
 	{"tlsCertFile",          required_argument, 0, 'y'},
+	{"tlsLoginOnly",         no_argument,       0, 'f'},
+	{"auth",                 required_argument, 0, 'e'},
 	{0, 0, 0, 0}
 };
 
@@ -113,6 +115,8 @@ const struct option LONG_OPTS_MULTI_KEY[] = {
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
 	{"tlsCertFile",          required_argument, 0, 'y'},
+	{"tlsLoginOnly",         no_argument,       0, 'f'},
+	{"auth",                 required_argument, 0, 'e'},
 	{0, 0, 0, 0}
 };
 
@@ -174,6 +178,7 @@ static char g_key_str[MAX_KEY_STR_SIZE];
 // TLS configuration variables.
 as_config_tls g_tls = {0};
 
+as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
 
 //==========================================================
 // Forward Declarations
@@ -313,6 +318,17 @@ example_get_opts(int argc, char* argv[], int which_opts)
 			g_tls.certfile = strdup(optarg);
 			break;
 
+		case 'f':
+			g_tls.for_login_only = true;
+			break;
+
+		case 'e':
+			if (! as_auth_mode_from_string(&g_auth_mode, optarg)) {
+				LOG("ERROR: invalid authentication mode: %s", optarg);
+				return false;
+			}
+			break;
+
 		default:
 			usage(short_opts);
 			return false;
@@ -434,6 +450,12 @@ usage(const char* short_opts)
 
 	LOG("--tlsCertFile <path>");
 	LOG("  Set the TLS client certificate chain file for mutual authentication.");
+
+	LOG("--tlsLoginOnly");
+	LOG("  Use TLS for node login only.");
+
+	LOG("--auth {INTERNAL,EXTERNAL,EXTERNAL_SECURE}");
+	LOG("  Set authentication mode when user/password is defined.");
 }
 
 //==========================================================
@@ -529,6 +551,7 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 
 	// Transfer ownership of all heap allocated TLS fields via shallow copy.
 	memcpy(&config.tls, &g_tls, sizeof(as_config_tls));
+	config.auth_mode = g_auth_mode;
 
 	aerospike_init(p_as, &config);
 

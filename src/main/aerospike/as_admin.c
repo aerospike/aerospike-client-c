@@ -17,6 +17,7 @@
 #include <aerospike/as_admin.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -56,6 +57,7 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define CREDENTIAL 3
 #define CLEAR_PASSWORD 4
 #define SESSION_TOKEN 5
+#define SESSION_TTL 6
 #define ROLES 10
 #define ROLE 11
 #define PRIVILEGES 12
@@ -361,17 +363,28 @@ as_authenticate_old(as_error* err, as_socket* sock, const char* user, const char
 
 as_status
 as_cluster_login(
-	as_cluster* cluster, as_error* err, as_host* host, as_socket* sock, uint64_t deadline_ms,
+	as_cluster* cluster, as_error* err, as_socket* sock, uint64_t deadline_ms,
 	as_node_info* node_info
 )
 {
+	node_info->session_expiration = 0;
+	node_info->session_token = NULL;
+	node_info->session_token_length = 0;
+
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 
-	p = as_admin_write_header(p, LOGIN, 3);
-	p = as_admin_write_field_string(p, USER, cluster->user);
-	p = as_admin_write_field_string(p, CREDENTIAL, cluster->password_hash);
-	p = as_admin_write_field_string(p, CLEAR_PASSWORD, cluster->password);
+	if (cluster->auth_mode == AS_AUTH_INTERNAL) {
+		p = as_admin_write_header(p, LOGIN, 2);
+		p = as_admin_write_field_string(p, USER, cluster->user);
+		p = as_admin_write_field_string(p, CREDENTIAL, cluster->password_hash);
+	}
+	else {
+		p = as_admin_write_header(p, LOGIN, 3);
+		p = as_admin_write_field_string(p, USER, cluster->user);
+		p = as_admin_write_field_string(p, CREDENTIAL, cluster->password_hash);
+		p = as_admin_write_field_string(p, CLEAR_PASSWORD, cluster->password);
+	}
 
 	as_status status = as_admin_send(err, sock, NULL, buffer, p, 0, deadline_ms);
 
@@ -390,8 +403,6 @@ as_cluster_login(
 	if (status) {
 		if (status == INVALID_COMMAND) {
 			// New login not supported.  Try old authentication.
-			node_info->session_token = NULL;
-			node_info->session_token_length = 0;
 			return as_authenticate_old(err, sock, cluster->user, cluster->password_hash, deadline_ms);
 		}
 		return as_error_set_message(err, status, as_error_string(status));
@@ -404,9 +415,7 @@ as_cluster_login(
 	int field_count = buffer[11];
 
 	if (receive_size <= 0 || receive_size > AS_STACK_BUF_SIZE || field_count <= 0) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-							   "Failed to retrieve session token from %s:%u",
-							   host->name, host->port);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve session token");
 	}
 
 	// Read remaining message bytes in group
@@ -431,20 +440,30 @@ as_cluster_login(
 				node_info->session_token = cf_malloc(len);
 				memcpy(node_info->session_token, p, len);
 				node_info->session_token_length = len;
-				return AEROSPIKE_OK;
 			}
 			else {
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-									   "Invalid session token length %d from %s:%u",
-									   len, host->name, host->port);
+									   "Invalid session token length %d", len);
 			}
 		}
-		else {
-			p += len;
+		else if (id == SESSION_TTL) {
+			// Subtract 60 seconds from ttl so client session expires before server session.
+			int64_t seconds = (int64_t)cf_swap_from_be32(*(uint32_t*)p) - 60;
+
+			if (seconds > 0) {
+				node_info->session_expiration = cf_getns() + (seconds * 1000 * 1000 * 1000);
+			}
+			else {
+				as_log_warn("Invalid session TTL: %" PRIi64, seconds);
+			}
 		}
+		p += len;
 	}
-	return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-						   "Failed to retrieve session token from %s:%u", host->name, host->port);
+
+	if (node_info->session_token == NULL) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve session token");
+	}
+	return AEROSPIKE_OK;
 }
 
 uint32_t

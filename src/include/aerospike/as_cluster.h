@@ -167,7 +167,7 @@ typedef struct as_cluster_s {
 	 * @private
 	 * TLS parameters
 	 */
-	as_tls_context tls_ctx;
+	as_tls_context* tls_ctx;
 	
 	/**
 	 * @private
@@ -253,6 +253,12 @@ typedef struct as_cluster_s {
 	 * Random node index.
 	 */
 	uint32_t node_index;
+
+	/**
+	 * @private
+	 * Authentication mode.
+	 */
+	as_auth_mode auth_mode;
 
 	/**
 	 * @private

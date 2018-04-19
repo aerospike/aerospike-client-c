@@ -98,6 +98,34 @@ typedef struct as_addr_map_s {
 } as_addr_map;
 
 /**
+ * Authentication mode when user/password is defined.
+ *
+ * @ingroup as_config_object
+ */
+typedef enum as_auth_mode_e {
+	/**
+	 * Use internal authentication only.  Hashed password is stored on the server.
+	 * Do not send clear password. This is the default.
+	 */
+	AS_AUTH_INTERNAL,
+
+	/**
+	 * Use external authentication (like LDAP).  Specific external authentication is
+	 * configured on server.  If TLS defined, send clear password on node login via TLS.
+	 * Throw exception if TLS is not defined.
+	 */
+	AS_AUTH_EXTERNAL,
+
+	/**
+	 * Use external authentication (like LDAP).  Specific external authentication is
+	 * configured on server.  Send clear password on node login whether or not TLS is defined.
+	 * This mode should only be used for testing purposes because it is not secure
+	 * authentication.
+	 */
+	AS_AUTH_EXTERNAL_INSECURE
+} as_auth_mode;
+
+/**
  * Cluster event notification type.
  *
  * @ingroup as_config_object
@@ -243,20 +271,6 @@ typedef struct as_config_tls_s {
 	char* cipher_suite;
 	
 	/**
-	 * Enable CRL checking for the certificate chain leaf certificate.
-	 * An error occurs if a suitable CRL cannot be found.
-     * By default CRL checking is disabled.
-	 */
-	bool crl_check;
-
-	/**
-	 * Enable CRL checking for the entire certificate chain.
-	 * An error occurs if a suitable CRL cannot be found.
-     * By default CRL checking is disabled.
-	 */
-	bool crl_check_all;
-
-	/**
 	 * Path to a certificate blacklist file.
 	 * The file should contain one line for each blacklisted certificate.
 	 * Each line starts with the certificate serial number expressed in hex.
@@ -270,11 +284,6 @@ typedef struct as_config_tls_s {
 	 */
 	char* cert_blacklist;
 
-	/**
-	 * Log session information for each connection.
-	 */
-	bool log_session_info;
-	
 	/**
 	 * Path to the client's key for mutual authentication.
 	 * By default mutual authentication is disabled.
@@ -290,6 +299,32 @@ typedef struct as_config_tls_s {
 	 * Use as_config_tls_set_certfile() to set this field.
 	 */
 	char* certfile;
+
+	/**
+	 * Enable CRL checking for the certificate chain leaf certificate.
+	 * An error occurs if a suitable CRL cannot be found.
+	 * By default CRL checking is disabled.
+	 */
+	bool crl_check;
+
+	/**
+	 * Enable CRL checking for the entire certificate chain.
+	 * An error occurs if a suitable CRL cannot be found.
+	 * By default CRL checking is disabled.
+	 */
+	bool crl_check_all;
+
+	/**
+	 * Log session information for each connection.
+	 */
+	bool log_session_info;
+
+	/**
+	 * Use TLS connections only for login authentication.
+	 * All other communication with the server will be done with non-TLS connections.
+	 * Default: false (Use TLS connections for all communication with server.)
+	 */
+	bool for_login_only;
 
 } as_config_tls;
 
@@ -544,11 +579,17 @@ typedef struct as_config_s {
 	 */
 	as_config_lua lua;
 
-	/*
+	/**
 	 * TLS configuration parameters.
 	 */
 	as_config_tls tls;
-	
+
+	/**
+	 * Authentication mode used when user/password is defined.
+	 * Default: AS_AUTH_INTERNAL
+	 */
+	as_auth_mode auth_mode;
+
 	/**
 	 * Action to perform if client fails to connect to seed hosts.
 	 *
@@ -562,7 +603,7 @@ typedef struct as_config_s {
 	
 	/**
 	 * Flag to signify if "services-alternate" should be used instead of "services"
-	 * Default : false
+	 * Default: false
 	 */
 	bool use_services_alternate;
 
@@ -829,6 +870,12 @@ as_config_tls_set_certfile(as_config* config, const char* certfile)
  */
 AS_EXTERN void
 as_config_tls_add_host(as_config* config, const char* address, const char* tls_name, uint16_t port);
+
+/**
+ * Convert string into as_auth_mode enum.
+ */
+AS_EXTERN bool
+as_auth_mode_from_string(as_auth_mode* auth, const char* str);
 
 #ifdef __cplusplus
 } // end extern "C"

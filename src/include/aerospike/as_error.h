@@ -290,6 +290,17 @@ as_error_copy(as_error * trg, const as_error * src)
 }
 
 /**
+ * Append string to error message.
+ *
+ * @relates as_error
+ */
+static inline void
+as_error_append(as_error* err, const char* str)
+{
+	strncat(err->message, str, sizeof(err->message) - strlen(err->message) - 1);
+}
+
+/**
  * Return string representation of error code.  Result should not be freed.
  *
  * @relates as_error

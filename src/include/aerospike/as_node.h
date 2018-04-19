@@ -233,6 +233,12 @@ typedef struct as_node_s {
 		
 	/**
 	 * @private
+	 * Session expiration for this node.
+	 */
+	uint64_t session_expiration;
+
+	/**
+	 * @private
 	 * Session token for this node.
 	 */
 	uint8_t* session_token;
@@ -287,6 +293,12 @@ typedef struct as_node_s {
 	
 	/**
 	 * @private
+	 * Should user login to avoid session expiration.
+	 */
+	uint8_t perform_login;
+
+	/**
+	 * @private
 	 * Is node currently active.
 	 */
 	uint8_t active;
@@ -315,9 +327,24 @@ typedef struct as_node_info_s {
 	uint32_t features;
 
 	/**
+	 * Host.
+	 */
+	as_host host;
+
+	/**
 	 * Validated socket.
 	 */
 	as_socket socket;
+
+	/**
+	 * Socket address.
+	 */
+	struct sockaddr_storage addr;
+
+	/**
+	 * Session expiration.
+	 */
+	uint64_t session_expiration;
 
 	/**
 	 * Session token.
@@ -339,7 +366,6 @@ typedef struct as_node_info_s {
  *  @private
  *  Initialize a connection pool.
  */
-
 static inline void
 as_conn_pool_init(as_conn_pool* pool, uint32_t size, uint32_t limit)
 {
@@ -413,10 +439,7 @@ as_conn_pool_put(as_conn_pool* pool, void* conn)
  * Create new cluster node.
  */
 as_node*
-as_node_create(
-	struct as_cluster_s* cluster, const char* hostname, const char* tls_name,
-	uint16_t port, bool is_alias, struct sockaddr* addr, as_node_info* node_info
-	);
+as_node_create(struct as_cluster_s* cluster, as_node_info* node_info);
 
 /**
  * @private
@@ -575,6 +598,13 @@ as_node_info_destroy(as_node_info* node_info)
 	as_socket_close(&node_info->socket);
 	cf_free(node_info->session_token);
 }
+
+/**
+ * @private
+ * Tell tend thread to perform another node login.
+ */
+void
+as_node_signal_login(as_node* node);
 
 #ifdef __cplusplus
 } // end extern "C"

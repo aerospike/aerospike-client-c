@@ -161,7 +161,7 @@ as_socket_wrap(as_socket* sock, int family, as_socket_fd fd, as_tls_context* ctx
 #endif
 	sock->idle_check.max_socket_idle = sock->idle_check.last_used = 0;
 
-	if (ctx->ssl_ctx) {
+	if (ctx) {
 		if (as_tls_wrap(ctx, sock, tls_name) < 0) {
 			as_close(sock->fd);
 			sock->fd = -1;

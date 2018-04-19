@@ -405,6 +405,7 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	octx->ssl_ctx = NULL;
 	octx->cert_blacklist = NULL;
 	octx->log_session_info = false;
+	octx->for_login_only = false;
 
 	if (! tlscfg->enable) {
 		return AEROSPIKE_OK;
@@ -615,8 +616,9 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	manage_sigpipe();
 
 	octx->ssl_ctx = ctx;
-	octx->log_session_info = tlscfg->log_session_info;
 	octx->cert_blacklist = cert_blacklist;
+	octx->log_session_info = tlscfg->log_session_info;
+	octx->for_login_only = tlscfg->for_login_only;
 	return AEROSPIKE_OK;
 }
 
@@ -637,7 +639,7 @@ as_status
 as_tls_config_reload(as_config_tls* tlscfg, as_tls_context* ctx,
 		as_error *err)
 {
-	if (ctx->ssl_ctx == NULL) {
+	if (ctx == NULL || ctx->ssl_ctx == NULL) {
 		return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
 				"TLS not enabled");
 	}

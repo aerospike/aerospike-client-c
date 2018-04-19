@@ -545,6 +545,7 @@ as_event_parse_authentication(as_event_command* cmd)
 	
 	if (code) {
 		// Can't authenticate socket, so must close it.
+		as_node_signal_login(cmd->node);
 		as_error err;
 		as_error_update(&err, code, "Authentication failed: %s", as_error_string(code));
 		as_event_parse_error(cmd, &err);
@@ -774,7 +775,7 @@ as_event_watcher_init(as_event_command* cmd, as_socket* sock)
 	as_event_connection* conn = cmd->conn;
 	memcpy(&conn->socket, sock, sizeof(as_socket));
 
-	if (cmd->cluster->tls_ctx.ssl_ctx) {
+	if (as_socket_use_tls(cmd->cluster->tls_ctx)) {
 		cmd->state = AS_ASYNC_STATE_TLS_CONNECT;
 	}
 	else if (cmd->cluster->user) {
@@ -823,7 +824,9 @@ as_event_try_family_connections(as_event_command* cmd, int family, int begin, in
 		return -1000;
 	}
 
-	if (! as_socket_wrap(sock, family, fd, &cmd->cluster->tls_ctx, cmd->node->tls_name)) {
+	as_tls_context* ctx = as_socket_get_tls_context(cmd->cluster->tls_ctx);
+
+	if (! as_socket_wrap(sock, family, fd, ctx, cmd->node->tls_name)) {
 		return -1001;
 	}
 

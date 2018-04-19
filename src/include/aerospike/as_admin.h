@@ -267,8 +267,8 @@ struct as_node_info_s;
  */
 as_status
 as_cluster_login(
-	struct as_cluster_s* cluster, as_error* err, as_host* host, struct as_socket_s* sock,
-	uint64_t deadline_ms, struct as_node_info_s* node_info
+	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, uint64_t deadline_ms,
+	struct as_node_info_s* node_info
 	);
 
 /**

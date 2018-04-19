@@ -474,6 +474,7 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	
 	if (code) {
 		// Can't authenticate socket, so must close it.
+		as_node_signal_login(cmd->node);
 		as_error err;
 		as_error_update(&err, code, "Authentication failed: %s", as_error_string(code));
 		as_event_parse_error(cmd, &err);

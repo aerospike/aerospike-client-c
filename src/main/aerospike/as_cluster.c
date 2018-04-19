@@ -197,42 +197,46 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 
 	for (uint32_t i = 0; i < seeds->size; i++) {
 		as_host* seed = as_vector_get(seeds, i);
-		
-		const char* hostname = as_cluster_get_alternate_host(cluster, seed->name);
+
+		as_host host;
+		host.name = (char*)as_cluster_get_alternate_host(cluster, seed->name);
+		host.tls_name = seed->tls_name;
+		host.port = seed->port;
+
 		as_address_iterator iter;
-		as_status status = as_lookup_host(&iter, &error_local, hostname, seed->port);
+		as_status status = as_lookup_host(&iter, &error_local, host.name, host.port);
 		
 		if (status != AEROSPIKE_OK) {
 			if (enable_warnings) {
-				as_log_warn("Failed to lookup %s %d. %s %s", hostname, seed->port, as_error_string(status), error_local.message);
+				as_log_warn("Failed to lookup %s %d. %s %s", host.name, host.port, as_error_string(status), error_local.message);
 			}
 			continue;
 		}
-		
+
 		struct sockaddr* addr;
 
 		while (as_lookup_next(&iter, &addr)) {
-			status = as_lookup_node(cluster, &error_local, seed, addr, &node_info);
+			status = as_lookup_node(cluster, &error_local, &host, addr, &node_info);
 			
 			if (status == AEROSPIKE_OK) {
 				as_node* node = as_peers_find_local_node(&nodes_to_add, node_info.name);
-				
+
 				if (node) {
+					as_node_add_address(node, (struct sockaddr*)&node_info.addr);
 					as_node_info_destroy(&node_info);
-					as_node_add_address(node, addr);
-					
-					if (iter.hostname_is_alias) {
-						as_node_add_alias(node, hostname, seed->port);
-					}
 				}
 				else {
-					node = as_node_create(cluster, hostname, seed->tls_name, seed->port, iter.hostname_is_alias, addr, &node_info);
+					node = as_node_create(cluster, &node_info);
 					as_vector_append(&nodes_to_add, &node);
+				}
+
+				if (iter.hostname_is_alias) {
+					as_node_add_alias(node, host.name, host.port);
 				}
 			}
 			else {
 				if (enable_warnings) {
-					as_log_warn("Failed to connect to seed %s %d. %s %s", hostname, seed->port, as_error_string(status), error_local.message);
+					as_log_warn("Failed to connect to seed %s %d. %s %s", host.name, host.port, as_error_string(status), error_local.message);
 				}
 				conn_status = status;
 			}
@@ -674,7 +678,7 @@ as_cluster_tender(void* data)
 		// Convert tend interval into absolute timeout.
 		cf_clock_current_add(&delta, &abstime);
 		
-		// Sleep for tend interval and exit early if cluster destroy is signaled.
+		// Sleep for tend interval and exit early if condition is signaled.
 		pthread_cond_timedwait(&cluster->tend_cond, &cluster->tend_lock, &abstime);
 	}
 	pthread_mutex_unlock(&cluster->tend_lock);
@@ -922,18 +926,27 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
 	if (user && *user) {
 		if (cluster->user) {
 			if (strcmp(cluster->user, user) == 0) {
-				cf_free(cluster->password);
 				cf_free(cluster->password_hash);
-				cluster->password = cf_strdup(password);
 				cluster->password_hash = cf_strdup(password_hash);
+
+				// Only store clear text password if external authentication is used.
+				if (cluster->auth_mode != AS_AUTH_INTERNAL) {
+					cf_free(cluster->password);
+					cluster->password = cf_strdup(password);
+				}
 			}
 		}
 		else {
 			cluster->user = cf_strdup(user);
-			cf_free(cluster->password);
+
 			cf_free(cluster->password_hash);
-			cluster->password = cf_strdup(password);
 			cluster->password_hash = cf_strdup(password_hash);
+
+			// Only store clear text password if external authentication is used.
+			if (cluster->auth_mode != AS_AUTH_INTERNAL) {
+				cf_free(cluster->password);
+				cluster->password = cf_strdup(password);
+			}
 		}
 	}
 }
@@ -966,12 +979,16 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	
 	as_cluster* cluster = cf_malloc(sizeof(as_cluster));
 	memset(cluster, 0, sizeof(as_cluster));
-	
+	cluster->auth_mode = config->auth_mode;
+
 	// Initialize user/password.
 	if (*(config->user)) {
 		cluster->user = cf_strdup(config->user);
-		cluster->password = cf_strdup(config->password);
 		cluster->password_hash = pass_hash;
+
+		if (config->auth_mode != AS_AUTH_INTERNAL) {
+			cluster->password = cf_strdup(config->password);
+		}
 	}
 
 	// Heap allocated cluster_name continues to be owned by as->config.
@@ -1046,12 +1063,25 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		return status;
 	}
 
-	// Initialize TLS parameters.
-	as_status st = as_tls_context_setup(&config->tls, &cluster->tls_ctx, err);
-	if (st != AEROSPIKE_OK) {
-		as_cluster_destroy(cluster);
-		*cluster_out = 0;
-		return st;
+	if (config->tls.enable) {
+		// Initialize TLS parameters.
+		cluster->tls_ctx = cf_malloc(sizeof(as_tls_context));
+
+		as_status status = as_tls_context_setup(&config->tls, cluster->tls_ctx, err);
+
+		if (status != AEROSPIKE_OK) {
+			as_cluster_destroy(cluster);
+			*cluster_out = 0;
+			return status;
+		}
+	}
+	else {
+		if (cluster->auth_mode == AS_AUTH_EXTERNAL) {
+			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "TLS is required for external authentication");
+			as_cluster_destroy(cluster);
+			*cluster_out = 0;
+			return status;
+		}
 	}
 
 	if (config->use_shm) {
@@ -1159,7 +1189,10 @@ as_cluster_destroy(as_cluster* cluster)
 	// Do not free cluster name because as->config owns it.
 	// cf_free(cluster->cluster_name);
 
-	as_tls_context_destroy(&cluster->tls_ctx);
+	if (cluster->tls_ctx) {
+		as_tls_context_destroy(cluster->tls_ctx);
+		cf_free(cluster->tls_ctx);
+	}
 
 #if defined(_MSC_VER)
 	// Call WSACleanup() for every cluster instance shutdown on windows.

@@ -695,6 +695,9 @@
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_queue_mt.c">
       <Filter>Source Files\common\aerospike</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_host.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

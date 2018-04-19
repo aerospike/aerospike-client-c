@@ -48,6 +48,7 @@ as_config_init(as_config* c)
 	as_policies_init(&c->policies);
 	as_config_lua_init(&c->lua);
 	memset(&c->tls, 0, sizeof(as_config_tls));
+	c->auth_mode = AS_AUTH_INTERNAL;
 	c->fail_if_not_connected = true;
 	c->use_services_alternate = false;
 	c->use_shm = false;
@@ -315,4 +316,24 @@ as_config_set_string(char** str, const char* value)
 	}
 
 	*str = value ? cf_strdup(value) : NULL;
+}
+
+bool
+as_auth_mode_from_string(as_auth_mode* auth, const char* str)
+{
+	if (strcasecmp(str, "INTERNAL") == 0) {
+		*auth = AS_AUTH_INTERNAL;
+		return true;
+	}
+
+	if (strcasecmp(str, "EXTERNAL") == 0) {
+		*auth = AS_AUTH_EXTERNAL;
+		return true;
+	}
+
+	if (strcasecmp(str, "EXTERNAL_INSECURE") == 0) {
+		*auth = AS_AUTH_EXTERNAL_INSECURE;
+		return true;
+	}
+	return false;
 }

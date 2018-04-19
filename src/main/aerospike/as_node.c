@@ -71,15 +71,12 @@ as_node_create_async_pools(uint32_t max_conns_per_node)
 }
 
 as_node*
-as_node_create(
-	as_cluster* cluster, const char* hostname, const char* tls_name,
-	uint16_t port, bool is_alias, struct sockaddr* addr, as_node_info* node_info
-	)
+as_node_create(as_cluster* cluster, as_node_info* node_info)
 {
 	as_node* node = cf_malloc(sizeof(as_node));
 
 	if (!node) {
-		return 0;
+		return NULL;
 	}
 	
 	node->ref_count = 1;
@@ -88,22 +85,20 @@ as_node_create(
 	node->cluster = cluster;
 
 	strcpy(node->name, node_info->name);
+	node->session_expiration = node_info->session_expiration;
 	node->session_token = node_info->session_token;
 	node->session_token_length = node_info->session_token_length;
 	node->features = node_info->features;
-	node->address_index = (addr->sa_family == AF_INET) ? 0 : AS_ADDRESS4_MAX;
+	node->address_index = (node_info->addr.ss_family == AF_INET) ? 0 : AS_ADDRESS4_MAX;
 	node->address4_size = 0;
 	node->address6_size = 0;
 	node->addresses = cf_malloc(sizeof(as_address) * (AS_ADDRESS6_MAX));
-	as_node_add_address(node, addr);
+	as_node_add_address(node, (struct sockaddr*)&node_info->addr);
 	
 	as_vector_init(&node->aliases, sizeof(as_alias), 2);
-	if (is_alias) {
-		as_node_add_alias(node, hostname, port);
-	}
-	
+
 	memcpy(&node->info_socket, &node_info->socket, sizeof(as_socket));
-	node->tls_name = tls_name ? cf_strdup(tls_name) : NULL;
+	node->tls_name = node_info->host.tls_name ? cf_strdup(node_info->host.tls_name) : NULL;
 
 	if (node->info_socket.ssl) {
 		// Required to keep as_socket tls_name in scope.
@@ -138,6 +133,7 @@ as_node_create(
 	node->friends = 0;
 	node->failures = 0;
 	node->index = 0;
+	node->perform_login = false;
 	node->active = true;
 	node->partition_changed = false;
 	return node;
@@ -268,7 +264,8 @@ static int
 as_node_try_family_connections(as_node* node, int family, int begin, int end, int index, as_address* primary, as_socket* sock, uint64_t deadline_ms)
 {
 	// Create a non-blocking socket.
-	int rv = as_socket_create(sock, family, &node->cluster->tls_ctx, node->tls_name);
+	as_tls_context* ctx = as_socket_get_tls_context(node->cluster->tls_ctx);
+	int rv = as_socket_create(sock, family, ctx, node->tls_name);
 	
 	if (rv < 0) {
 		return rv;
@@ -338,6 +335,7 @@ as_node_create_socket(as_error* err, as_node* node, as_conn_pool_lock* pool_lock
 		}
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s", node->name, primary->name);
 	}
+	sock->pool_lock = pool_lock;
 	
 	if (rv != index) {
 		// Replace invalid primary address with valid alias.
@@ -365,6 +363,7 @@ as_node_create_connection(as_error* err, as_node* node, uint32_t socket_timeout,
 		as_status status = as_authenticate(cluster, err, sock, node, socket_timeout, deadline_ms);
 
 		if (status) {
+			as_node_signal_login(node);
 			as_socket_close(sock);
 
 			if (pool_lock) {
@@ -375,7 +374,6 @@ as_node_create_connection(as_error* err, as_node* node, uint32_t socket_timeout,
 			return status;
 		}
 	}
-	sock->pool_lock = pool_lock;
 	return AEROSPIKE_OK;
 }
 
@@ -485,27 +483,108 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 						   node->name, node->cluster->max_conns_per_node);
 }
 
-static inline as_status
-as_node_get_info_connection(as_error* err, as_node* node, uint64_t deadline_ms)
+void
+as_node_signal_login(as_node* node)
 {
-	if (node->info_socket.fd < 0) {
-		// Try to open a new socket.
-		as_socket info_socket;
-		as_status status = as_node_create_connection(err, node, 0, deadline_ms, NULL, &info_socket);
+	// Only login when login not already been requested.
+	if (as_cas_uint8(&node->perform_login, 0, 1)) {
+		// Signal tend thread to wake up from sleep, so node tend will occur faster.
+		as_cluster* cluster = node->cluster;
 
-		if (status == AEROSPIKE_OK) {
-			node->info_socket = info_socket;
-		}
+		pthread_mutex_lock(&cluster->tend_lock);
+		pthread_cond_signal(&cluster->tend_cond);
+		pthread_mutex_unlock(&cluster->tend_lock);
+	}
+}
+
+static as_status
+as_node_login(as_error* err, as_node* node, as_socket* sock, uint64_t deadline_ms)
+{
+	as_node_info node_info;
+	as_status status = as_cluster_login(node->cluster, err, sock, deadline_ms, &node_info);
+
+	if (status) {
+		as_error_append(err, as_node_get_address_string(node));
 		return status;
+	}
+
+	cf_free(node->session_token);
+	node->session_expiration = node_info.session_expiration;
+	node->session_token = node_info.session_token;
+	node->session_token_length = node_info.session_token_length;
+	as_store_uint8(&node->perform_login, 0);
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_node_ensure_login(as_error* err, as_node* node, as_socket* sock, uint64_t deadline_ms, bool* auth)
+{
+	if (as_load_uint8(&node->perform_login) || (node->session_expiration > 0 && cf_getns() >= node->session_expiration)) {
+		as_status status = as_node_login(err, node, sock, deadline_ms);
+
+		if (status) {
+			return status;
+		}
+		*auth = true;
+	}
+	else {
+		*auth = false;
 	}
 	return AEROSPIKE_OK;
 }
 
-static void
-as_node_close_info_connection(as_node* node)
+static as_status
+as_node_get_tend_connection(as_error* err, as_node* node, uint64_t deadline_ms)
 {
-	as_socket_close(&node->info_socket);
-	node->info_socket.fd = -1;
+	as_status status = AEROSPIKE_OK;
+
+	if (node->info_socket.fd < 0) {
+		// Try to open a new socket.
+		as_socket sock;
+		status = as_node_create_socket(err, node, NULL, &sock, deadline_ms);
+
+		if (status) {
+			return status;
+		}
+
+		if (node->cluster->user) {
+			bool auth;
+			status = as_node_ensure_login(err, node, &sock, deadline_ms, &auth);
+
+			if (status) {
+				as_socket_close(&sock);
+				return status;
+			}
+
+			if (! auth) {
+				status = as_authenticate(node->cluster, err, &sock, node, 0, deadline_ms);
+
+				if (status) {
+					// Authentication failed.  Session token probably expired.
+					// Must login again to get new session token.
+					status = as_node_login(err, node, &sock, deadline_ms);
+
+					if (status) {
+						as_socket_close(&sock);
+						return status;
+					}
+				}
+			}
+		}
+		node->info_socket = sock;
+	}
+	else {
+		if (node->cluster->user) {
+			bool auth;
+			status = as_node_ensure_login(err, node, &node->info_socket, deadline_ms, &auth);
+
+			if (status) {
+				as_socket_close(&node->info_socket);
+				return status;
+			}
+		}
+	}
+	return status;
 }
 
 static uint8_t*
@@ -632,7 +711,7 @@ as_status
 as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
 {
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
-	as_status status = as_node_get_info_connection(err, node, deadline_ms);
+	as_status status = as_node_get_tend_connection(err, node, deadline_ms);
 	
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -660,7 +739,7 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
 	
 	if (! buf) {
-		as_node_close_info_connection(node);
+		as_socket_close(&node->info_socket);
 		return err->code;
 	}
 	
@@ -672,7 +751,7 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	status = as_node_process_response(cluster, err, node, &values, peers);
 
 	if (status == AEROSPIKE_ERR_CLIENT) {
-		as_node_close_info_connection(node);
+		as_socket_close(&node->info_socket);
 	}
 		
 	if (buf != stack_buf) {
@@ -719,7 +798,7 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 	const char* command;
 	size_t command_len;
 
-	if (cluster->tls_ctx.ssl_ctx) {
+	if (cluster->tls_ctx) {
 		if (cluster->use_services_alternate) {
 			command = INFO_STR_PEERS_TLS_ALT;
 			command_len = sizeof(INFO_STR_PEERS_TLS_ALT) - 1;
@@ -744,7 +823,7 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
 	
 	if (! buf) {
-		as_node_close_info_connection(node);
+		as_socket_close(&node->info_socket);
 		return err->code;
 	}
 	
@@ -818,7 +897,7 @@ as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
 	
 	if (! buf) {
-		as_node_close_info_connection(node);
+		as_socket_close(&node->info_socket);
 		return err->code;
 	}
 	

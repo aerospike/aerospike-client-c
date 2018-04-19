@@ -298,5 +298,5 @@ as_status
 aerospike_reload_tls_config(aerospike* as, as_error* err)
 {
 	as_error_reset(err);
-	return as_tls_config_reload(&as->config.tls, &as->cluster->tls_ctx, err);
+	return as_tls_config_reload(&as->config.tls, as->cluster->tls_ctx, err);
 }

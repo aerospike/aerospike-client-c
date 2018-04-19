@@ -466,6 +466,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_event_event.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event_none.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event_uv.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_host.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_info.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_job.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_key.c" />

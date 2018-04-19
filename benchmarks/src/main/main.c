@@ -74,6 +74,8 @@ static struct option long_options[] = {
 	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
 	{"tlsCertFile",          required_argument, 0, 'y'},
+	{"tlsLoginOnly",         no_argument,       0, 'f'},
+	{"auth",                 required_argument, 0, 'e'},
 	{"usage",                no_argument,       0, 'u'},
 	{0, 0, 0, 0}
 };
@@ -299,6 +301,14 @@ print_usage(const char* program)
 	blog_line("   Set the TLS client certificate chain file for mutual authentication.");
 	blog_line("");
 
+	blog_line("   --tlsLoginOnly");
+	blog_line("   Use TLS for node login only.");
+	blog_line("");
+
+	blog_line("   --auth {INTERNAL,EXTERNAL,EXTERNAL_SECURE} # Default: INTERNAL");
+	blog_line("   Set authentication mode when user/password is defined.");
+	blog_line("");
+
 	blog_line("-u --usage           # Default: usage not printed.");
 	blog_line("   Display program usage.");
 	blog_line("");
@@ -318,15 +328,15 @@ boolstring(bool val)
 static void
 print_args(arguments* args)
 {
-	blog_line("hosts:          %s", args->hosts);
-	blog_line("port:           %d", args->port);
-	blog_line("user:           %s", args->user);
-	blog_line("namespace:      %s", args->namespace);
-	blog_line("set:            %s", args->set);
-	blog_line("startKey:       %" PRIu64, args->start_key);
-	blog_line("keys/records:   %" PRIu64, args->keys);
-	blog_line("bins:           %d", args->numbins);
-	blog("object spec:    ");
+	blog_line("hosts:                  %s", args->hosts);
+	blog_line("port:                   %d", args->port);
+	blog_line("user:                   %s", args->user);
+	blog_line("namespace:              %s", args->namespace);
+	blog_line("set:                    %s", args->set);
+	blog_line("startKey:               %" PRIu64, args->start_key);
+	blog_line("keys/records:           %" PRIu64, args->keys);
+	blog_line("bins:                   %d", args->numbins);
+	blog("object spec:            ");
 	
 	static const char *units[3] = {"", "b", "k"};
 
@@ -356,9 +366,9 @@ print_args(arguments* args)
 			break;
 	}
 	
-	blog_line("random values:  %s", boolstring(args->random));
+	blog_line("random values:          %s", boolstring(args->random));
 
-	blog("workload:       ");
+	blog("workload:               ");
 
 	if (args->init) {
 		blog_line("initialize %d%% of records", args->init_pct);
@@ -366,30 +376,30 @@ print_args(arguments* args)
 		blog_line("delete %d bins in %d records", args->numbins, args->keys);
 	} else if (args->read_pct) {
 		blog_line("read %d%% write %d%%", args->read_pct, 100 - args->read_pct);
-		blog_line("stop after:     %" PRIu64 " transactions", args->transactions_limit);
+		blog_line("stop after:             %" PRIu64 " transactions", args->transactions_limit);
 	}
 	
-	blog_line("threads:        %d", args->threads);
+	blog_line("threads:                %d", args->threads);
 	
 	if (args->throughput > 0) {
-		blog_line("max throughput: %d tps", args->throughput);
+		blog_line("max throughput:         %d tps", args->throughput);
 	}
 	else {
-		blog_line("max throughput: unlimited", args->throughput);
+		blog_line("max throughput:         unlimited", args->throughput);
 	}
-	blog_line("read timeout:   %d ms", args->read_timeout);
-	blog_line("write timeout:  %d ms", args->write_timeout);
-	blog_line("max retries:    %d", args->max_retries);
-	blog_line("debug:          %s", boolstring(args->debug));
+	blog_line("read timeout:           %d ms", args->read_timeout);
+	blog_line("write timeout:          %d ms", args->write_timeout);
+	blog_line("max retries:            %d", args->max_retries);
+	blog_line("debug:                  %s", boolstring(args->debug));
 	
 	if (args->latency) {
-		blog_line("latency:        %d columns, shift exponent %d", args->latency_columns, args->latency_shift);
+		blog_line("latency:                %d columns, shift exponent %d", args->latency_columns, args->latency_shift);
 	}
 	else {
-		blog_line("latency:        false");
+		blog_line("latency:                false");
 	}
 	
-	blog_line("shared memory:  %s", boolstring(args->use_shm));
+	blog_line("shared memory:          %s", boolstring(args->use_shm));
 
 	const char* rep;
 	switch (args->replica) {
@@ -407,13 +417,12 @@ print_args(arguments* args)
 			break;
 	}
 
-	blog_line("read replica:   %s", rep);
+	blog_line("read replica:           %s", rep);
 	blog_line("read consistency level: %s", (AS_POLICY_CONSISTENCY_LEVEL_ONE == args->read_consistency_level ? "one" : "all"));
-	blog_line("write commit level: %s", (AS_POLICY_COMMIT_LEVEL_ALL == args->write_commit_level ? "all" : "master"));
-	blog_line("Conn pools per node: %d", args->conn_pools_per_node);
+	blog_line("write commit level:     %s", (AS_POLICY_COMMIT_LEVEL_ALL == args->write_commit_level ? "all" : "master"));
+	blog_line("conn pools per node:    %d", args->conn_pools_per_node);
+	blog_line("asynchronous mode:      %s", args->async ? "on" : "off");
 
-	blog_line("asynchronous mode:  %s", args->async ? "on" : "off");
-	
 	if (args->async) {
 		blog_line("async max commands:     %d", args->async_max_commands);
 		blog_line("async selector threads: %d", args->event_loop_capacity);
@@ -431,7 +440,25 @@ print_args(arguments* args)
 		blog_line("TLS log session info:   %s", boolstring(args->tls.log_session_info));
 		blog_line("TLS keyfile:            %s", args->tls.keyfile);
 		blog_line("TLS certfile:           %s", args->tls.certfile);
+		blog_line("TLS login only:         %s", boolstring(args->tls.for_login_only));
 	}
+
+	char* s;
+	switch (args->auth_mode) {
+		case AS_AUTH_INTERNAL:
+			s = "INTERNAL";
+			break;
+		case AS_AUTH_EXTERNAL:
+			s = "EXTERNAL";
+			break;
+		case AS_AUTH_EXTERNAL_INSECURE:
+			s = "EXTERNAL_INSECURE";
+			break;
+		default:
+			s = "unknown";
+			break;
+	}
+	blog_line("auth mode:              %s", s);
 }
 
 static int
@@ -798,6 +825,17 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->tls.certfile = strdup(optarg);
 				break;
 
+			case 'f':
+				args->tls.for_login_only = true;
+				break;
+
+			case 'e':
+				if (! as_auth_mode_from_string(&args->auth_mode, optarg)) {
+					blog_line("invalid authentication mode: %s", optarg);
+					return 1;
+				}
+				break;
+
 			case 'u':
 			default:
 				return 1;
@@ -847,6 +885,7 @@ main(int argc, char * const * argv)
 	args.async_max_commands = 200;
 	args.event_loop_capacity = 1;
 	memset(&args.tls, 0, sizeof(as_config_tls));
+	args.auth_mode = AS_AUTH_INTERNAL;
 
 	int ret = set_args(argc, argv, &args);
 	

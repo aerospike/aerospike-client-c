@@ -263,7 +263,11 @@ as_shm_reset_nodes(as_cluster* cluster)
 				strcpy(node_info.name, node_tmp.name);
 				as_socket_init(&node_info.socket);
 				node_info.features = node_tmp.features;
-				node = as_node_create(cluster, NULL, node_tmp.tls_name, 0, false, (struct sockaddr*)&node_tmp.addr, &node_info);
+				node_info.host.name = NULL;
+				node_info.host.tls_name = node_tmp.tls_name;
+				node_info.host.port = 0;
+				as_address_copy_storage((struct sockaddr*)&node_tmp.addr, &node_info.addr);
+				node = as_node_create(cluster, &node_info);
 				node->index = i;
 				as_vector_append(&nodes_to_add, &node);
 				as_store_ptr(&shm_info->local_nodes[i], node);

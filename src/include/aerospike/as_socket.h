@@ -66,6 +66,7 @@ typedef struct as_tls_context_s {
 	struct ssl_ctx_st* ssl_ctx;
 	void* cert_blacklist;
 	bool log_session_info;
+	bool for_login_only;
 } as_tls_context;
 
 struct as_conn_pool_lock_s;
@@ -93,6 +94,26 @@ typedef struct as_socket_s {
 	struct ssl_st* ssl;
 } as_socket;
 
+/**
+ * @private
+ * Return true if TLS context exists and not TLS login only.
+ */
+static inline bool
+as_socket_use_tls(as_tls_context* ctx)
+{
+	return (ctx && !ctx->for_login_only);
+}
+	
+/**
+ * @private
+ * Return TLS context only if exists and not for login only.
+ */
+static inline as_tls_context*
+as_socket_get_tls_context(as_tls_context* ctx)
+{
+	return (ctx && !ctx->for_login_only) ? ctx : NULL;
+}
+	
 /**
  * @private
  * Initialize an as_socket structure.

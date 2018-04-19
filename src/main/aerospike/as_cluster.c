@@ -1001,6 +1001,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
 	cluster->max_conns_per_node = config->max_conns_per_node;
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
+	cluster->login_timeout_ms = (config->login_timeout_ms == 0) ? 5000 : config->login_timeout_ms;
 	cluster->max_socket_idle = (config->max_socket_idle > 86400) ? 86400 : config->max_socket_idle;
 	cluster->async_max_conns_per_node = config->async_max_conns_per_node;
 	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;;

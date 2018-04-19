@@ -42,6 +42,7 @@ as_config_init(as_config* c)
 	c->pipe_max_conns_per_node = 64;
 	c->conn_pools_per_node = 1;
 	c->conn_timeout_ms = 1000;
+	c->login_timeout_ms = 5000;
 	c->max_socket_idle = 0;
 	c->tender_interval = 1000;
 	c->thread_pool_size = 16;

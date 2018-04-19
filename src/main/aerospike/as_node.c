@@ -360,7 +360,8 @@ as_node_create_connection(as_error* err, as_node* node, uint32_t socket_timeout,
 	as_cluster* cluster = node->cluster;
 
 	if (cluster->user) {
-		as_status status = as_authenticate(cluster, err, sock, node, socket_timeout, deadline_ms);
+		as_status status = as_authenticate(cluster, err, sock, node, node->session_token,
+										   node->session_token_length, socket_timeout, deadline_ms);
 
 		if (status) {
 			as_node_signal_login(node);
@@ -395,7 +396,8 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 		return status;
 	}
 
-	status = as_authenticate(cluster, &err, &sock, node, 0, deadline_ms);
+	status = as_authenticate(cluster, &err, &sock, node, node->session_token,
+							 node->session_token_length, 0, deadline_ms);
 	as_socket_close(&sock);
 	as_node_release(node);
 	return status;
@@ -564,7 +566,8 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 			deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
 
 			if (! auth) {
-				status = as_authenticate(cluster, err, &sock, node, 0, deadline_ms);
+				status = as_authenticate(cluster, err, &sock, node, node->session_token,
+										 node->session_token_length, 0, deadline_ms);
 
 				if (status) {
 					// Authentication failed.  Session token probably expired.

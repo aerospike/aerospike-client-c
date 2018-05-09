@@ -17,11 +17,11 @@ and runtime.
 
 The C client library requires other third-party libraries depending on your platform.
 
-### Debian 7+ and Ubuntu 12+
+### Debian 7+ and Ubuntu 14+
 
   $ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++
 
-  [Also do on Ubuntu 12+:]
+  [Also do on Ubuntu 14+:]
   $ sudo apt-get install ncurses-dev
 
   [Optional:]

@@ -345,7 +345,9 @@ typedef struct as_policy_base_s {
 	 * then socket_timeout will be set to total_timeout.  If socket_timeout is zero, there will be
 	 * no socket idle limit.
 	 *
-	 * Default: 0 (no socket idle time limit).
+	 * Default for everything but scan/query: 0 (no socket idle time limit).
+	 *
+	 * Default for scan/query: 30000ms
 	 */
 	uint32_t socket_timeout;
 
@@ -1173,7 +1175,7 @@ as_policy_batch_copy(const as_policy_batch* src, as_policy_batch* trg)
 static inline as_policy_scan*
 as_policy_scan_init(as_policy_scan* p)
 {
-	p->base.socket_timeout = 10000;
+	p->base.socket_timeout = 30000;
 	p->base.total_timeout = 0;
 	p->base.max_retries = 0;
 	p->base.sleep_between_retries = 0;
@@ -1207,7 +1209,7 @@ as_policy_scan_copy(const as_policy_scan* src, as_policy_scan* trg)
 static inline as_policy_query*
 as_policy_query_init(as_policy_query* p)
 {
-	p->base.socket_timeout = 10000;
+	p->base.socket_timeout = 30000;
 	p->base.total_timeout = 0;
 	p->base.max_retries = 0;
 	p->base.sleep_between_retries = 0;

@@ -284,21 +284,20 @@ typedef enum as_policy_replica_e {
 /**
  * Consistency Level
  *
- * Specifies the number of replicas to be consulted
- * in a read operation to provide the desired
- * consistency guarantee.
+ * How duplicates should be consulted in a read operation.
+ * Only makes a difference during migrations and only applicable in AP mode.
  *
  * @ingroup client_policies
  */
 typedef enum as_policy_consistency_level_e {
 
 	/**
-	 * Involve a single replica in the operation.
+	 * Involve master only in the read operation.
 	 */
 	AS_POLICY_CONSISTENCY_LEVEL_ONE,
 
 	/**
-	 * Involve all replicas in the operation.
+	 * Involve all duplicates in the read operation.
 	 */
 	AS_POLICY_CONSISTENCY_LEVEL_ALL,
 
@@ -428,7 +427,7 @@ typedef struct as_policy_read_s {
 	as_policy_replica replica;
 
 	/**
-	 * Specifies the number of replicas consulted when reading for the desired consistency guarantee.
+	 * How duplicates should be consulted in a read operation.
 	 */
 	as_policy_consistency_level consistency_level;
 
@@ -595,7 +594,7 @@ typedef struct as_policy_operate_s {
 	as_policy_replica replica;
 
 	/**
-	 * Specifies the number of replicas consulted when reading for the desired consistency guarantee.
+	 * How duplicates should be consulted in a read operation.
 	 */
 	as_policy_consistency_level consistency_level;
 
@@ -701,7 +700,7 @@ typedef struct as_policy_batch_s {
 	as_policy_base base;
 
 	/**
-	 * Specifies the number of replicas consulted when reading for the desired consistency guarantee.
+	 * How duplicates should be consulted in a read operation.
 	 */
 	as_policy_consistency_level consistency_level;
 

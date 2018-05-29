@@ -432,7 +432,6 @@
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_queue.c" />
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_queue_priority.c" />
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_random.c" />
-    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_rchash.c" />
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_vector.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\internal.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua.c" />

@@ -63,9 +63,17 @@ endif
 
 ifeq ($(OS),Darwin)
   CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT -I/usr/local/include
+
+  # homebrew openssl include path
   ifneq ($(wildcard /usr/local/opt/openssl/include),)
     CC_FLAGS += -I/usr/local/opt/openssl/include
   endif
+
+  # macports openssl include path
+  ifneq ($(wildcard /opt/local/include/openssl),)
+    CC_FLAGS += -I/opt/local/include
+  endif
+
   LUA_PLATFORM = macosx
 else
   CC_FLAGS += -finline-functions -rdynamic

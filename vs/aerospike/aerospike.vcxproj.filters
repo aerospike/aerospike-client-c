@@ -650,9 +650,6 @@
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_random.c">
       <Filter>Source Files\common\citrusleaf</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_rchash.c">
-      <Filter>Source Files\common\citrusleaf</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_vector.c">
       <Filter>Source Files\common\citrusleaf</Filter>
     </ClCompile>

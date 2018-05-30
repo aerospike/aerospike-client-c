@@ -339,6 +339,7 @@
     <ClInclude Include="..\..\src\include\aerospike\aerospike_key.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike_query.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike_scan.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike_stats.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike_udf.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_address.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_admin.h" />
@@ -452,6 +453,7 @@
     <ClCompile Include="..\..\src\main\aerospike\aerospike_key.c" />
     <ClCompile Include="..\..\src\main\aerospike\aerospike_query.c" />
     <ClCompile Include="..\..\src\main\aerospike\aerospike_scan.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike_stats.c" />
     <ClCompile Include="..\..\src\main\aerospike\aerospike_udf.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_address.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_admin.c" />

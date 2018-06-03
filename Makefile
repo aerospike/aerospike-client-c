@@ -67,9 +67,14 @@ ifeq ($(OS),Darwin)
     CC_FLAGS += -I/usr/local/opt/openssl/include
   endif
   LUA_PLATFORM = macosx
-else
+endif
+ifeq ($(OS),Linux)
   CC_FLAGS += -finline-functions -rdynamic
   LUA_PLATFORM = linux
+endif
+ifeq ($(OS),FreeBSD)
+  CC_FLAGS += -finline-functions
+  LUA_PLATFORM = freebsd
 endif
 
 ifeq ($(USE_SYSTEMTAP),1)

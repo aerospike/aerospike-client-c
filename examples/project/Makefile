@@ -20,7 +20,8 @@ endif
 
 ifeq ($(OS),Darwin)
   CFLAGS += -D_DARWIN_UNLIMITED_SELECT
-else
+endif
+ifeq ($(OS),Linux)
   CFLAGS += -rdynamic
 endif
 
@@ -116,6 +117,9 @@ endif
 LDFLAGS += -lm -lz
 
 ifeq ($(OS),Darwin)
+  CC = clang
+endif
+ifeq ($(OS),FreeBSD)
   CC = clang
 else
   CC = gcc

@@ -293,6 +293,14 @@ typedef struct as_config_tls_s {
 	char* keyfile;
 
 	/**
+	 * Decryption password for the client's key for mutual authentication.
+	 * By default the key is assumed not to be encrypted.
+	 *
+	 * Use as_config_tls_set_keyfile_pw() to set this field.
+	 */
+	char* keyfile_pw;
+
+	/**
 	 * Path to the client's certificate chain file for mutual authentication.
 	 * By default mutual authentication is disabled.
 	 *
@@ -848,6 +856,17 @@ static inline void
 as_config_tls_set_keyfile(as_config* config, const char* keyfile)
 {
 	as_config_set_string(&config->tls.keyfile, keyfile);
+}
+
+/**
+ * Set decryption password for the client's key.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_tls_set_keyfile_pw(as_config* config, const char* pw)
+{
+	as_config_set_string(&config->tls.keyfile_pw, pw);
 }
 
 /**

@@ -106,6 +106,10 @@ as_config_destroy(as_config* config) {
 		cf_free(tls->keyfile);
 	}
 
+	if (tls->keyfile_pw) {
+		cf_free(tls->keyfile_pw);
+	}
+
 	if (tls->certfile) {
 		cf_free(tls->certfile);
 	}

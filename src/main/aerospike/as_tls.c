@@ -396,6 +396,25 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 	return 1;
 }
 
+static int
+password_cb(char* buf, int size, int rwflag, void* udata)
+{
+	char* pw = udata;
+
+	if (pw == NULL) {
+		return 0;
+	}
+
+	int pw_len = strlen(pw);
+
+	if (pw_len > size) {
+		return 0;
+	}
+
+	memcpy(buf, pw, pw_len);
+	return pw_len;
+}
+
 as_status
 as_tls_context_setup(as_config_tls* tlscfg,
 					 as_tls_context* octx,
@@ -561,19 +580,58 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	}
 
 	if (tlscfg->keyfile) {
-		int rv = SSL_CTX_use_RSAPrivateKey_file(ctx, tlscfg->keyfile,
-											SSL_FILETYPE_PEM);
-		if (rv != 1) {
+		bool ok = false;
+		FILE *fh = fopen(tlscfg->keyfile, "r");
+
+		if (fh == NULL) {
+			as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
+					"failed to open key file %s: %s", tlscfg->keyfile,
+					strerror(errno));
+		}
+		else {
+			EVP_PKEY *pkey = PEM_read_PrivateKey(fh, NULL, password_cb,
+					tlscfg->keyfile_pw);
+
+			if (pkey == NULL) {
+				unsigned long errcode = ERR_get_error();
+
+				if (ERR_GET_REASON(errcode) == PEM_R_BAD_PASSWORD_READ) {
+					if (tlscfg->keyfile_pw == NULL) {
+						as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
+								"key file %s requires a password",
+								tlscfg->keyfile);
+					}
+					else {
+						as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
+								"password for key file %s too long",
+								tlscfg->keyfile);
+					}
+				}
+				else if (ERR_GET_REASON(errcode) == EVP_R_BAD_DECRYPT) {
+					as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
+							"invalid password for key file %s",
+							tlscfg->keyfile);
+				}
+				else {
+					char errbuf[1024];
+					ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
+					as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
+							"PEM_read_PrivateKey failed: %s", errbuf);
+				}
+			}
+			else {
+				SSL_CTX_use_PrivateKey(ctx, pkey);
+				ok = true;
+			}
+
+			fclose(fh);
+		}
+
+		if (!ok) {
 				cert_blacklist_destroy(cert_blacklist);
 				SSL_CTX_free(ctx);
 				pthread_mutex_destroy(&octx->lock);
-
-				unsigned long errcode = ERR_get_error();
-				char errbuf[1024];
-				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
-				return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
-							  "SSL_CTX_use_RSAPrivateKey_file failed: %s",
-									   errbuf);
+				return AEROSPIKE_ERR_TLS_ERROR;
 		}
 	}
 

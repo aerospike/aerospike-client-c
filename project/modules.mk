@@ -142,7 +142,11 @@ LUAMOD-build:	$(LUAMOD)/src/liblua.a
 
 $(LUAMOD)/src/liblua.a:	$(LUAMOD)/src/luaconf.h
 ifeq ($(USE_LUAMOD),1)
-	$(MAKE) -C $(LUAMOD) $(LUA_PLATFORM)
+  ifeq ($(OS),FreeBSD)
+	  $(MAKE) CC=$(CC) CFLAGS="-O2 -Wall -fPIC -DLUA_USE_LINUX" -C $(LUAMOD) $(LUA_PLATFORM)
+  else
+	  $(MAKE) -C $(LUAMOD) $(LUA_PLATFORM)
+  endif
 endif
 
 $(LUAMOD)/src/luaconf.h:	$(LUAMOD)/src/luaconf.h.orig

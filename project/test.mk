@@ -35,6 +35,8 @@ ifeq ($(OS),Darwin)
   ifeq ($(USE_LUAJIT),1)
     TEST_LDFLAGS += -pagezero_size 10000 -image_base 100000000
   endif
+else ifeq ($(OS),FreeBSD)
+  TEST_LDFLAGS += -lrt
 else
   TEST_LDFLAGS += -lrt -ldl
 endif

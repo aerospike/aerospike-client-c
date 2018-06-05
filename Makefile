@@ -75,6 +75,9 @@ ifeq ($(OS),Darwin)
   endif
 
   LUA_PLATFORM = macosx
+else ifeq ($(OS),FreeBSD)
+  CC_FLAGS += -finline-functions -I/usr/local/include
+  LUA_PLATFORM = freebsd
 else
   CC_FLAGS += -finline-functions -rdynamic
   LUA_PLATFORM = linux

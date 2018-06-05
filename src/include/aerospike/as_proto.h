@@ -73,14 +73,14 @@ typedef struct as_proto_msg_s {
 typedef struct as_proto_s {
 	uint8_t		version;
 	uint8_t		type;
-	uint64_t	sz:48;
-	uint8_t		data[];
+	uint64_t	sz :48;
+	uint8_t		data[0];
 } __attribute__ ((__packed__)) as_proto;
 
 typedef struct as_compressed_proto_s {
 	as_proto	proto;
 	uint64_t	uncompressed_sz;
-	uint8_t		data[];					// compressed bytes
+	uint8_t		data[0];				// compressed bytes
 } __attribute__((__packed__)) as_compressed_proto;
 
 typedef struct as_msg_s {
@@ -95,7 +95,7 @@ typedef struct as_msg_s {
 /*14*/	uint32_t	transaction_ttl;
 /*18*/	uint16_t	n_fields;			// size in uint8_ts
 /*20*/	uint16_t	n_ops;				// number of operations
-/*22*/	uint8_t		data[];				// data contains first the fields, then the ops
+/*22*/	uint8_t		data[0];			// data contains first the fields, then the ops
 } __attribute__((__packed__)) as_msg;
 
 typedef struct as_proto_msg_s {

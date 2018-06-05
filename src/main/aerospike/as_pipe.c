@@ -21,6 +21,9 @@
 #if defined(__linux__)
 #define PIPE_WRITE_BUFFER_SIZE (5 * 1024 * 1024)
 #define PIPE_READ_BUFFER_SIZE (15 * 1024 * 1024)
+#elif defined(__FreeBSD__)
+#define PIPE_WRITE_BUFFER_SIZE (1 * 1024 * 1024)
+#define PIPE_READ_BUFFER_SIZE  (1 * 1024 * 1024)
 #else
 #define PIPE_WRITE_BUFFER_SIZE (2 * 1024 * 1024)
 #define PIPE_READ_BUFFER_SIZE  (4 * 1024 * 1024)

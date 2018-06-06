@@ -19,8 +19,8 @@ ifneq ($(ARCH),$(filter $(ARCH),ppc64 ppc64le))
 endif
 
 ifeq ($(OS),Darwin)
-  CFLAGS += -D_DARWIN_UNLIMITED_SELECT 
-else
+  CFLAGS += -D_DARWIN_UNLIMITED_SELECT
+else ifeq ($(OS),Linux)
   CFLAGS += -rdynamic
 endif
 
@@ -58,8 +58,10 @@ endif
 
 LDFLAGS += -lssl -lcrypto -lpthread
 
-ifneq ($(OS),Darwin)
+ifeq ($(OS),Linux)
   LDFLAGS += -lrt -ldl
+else ifeq ($(OS),FreeBSD)
+  LDFLAGS += -lrt
 endif
 
 # Use the Lua submodule?  [By default, yes.]
@@ -113,12 +115,7 @@ else
 endif
 
 LDFLAGS += -lm -lz
-
-ifeq ($(OS),Darwin)
-  CC = cc
-else
-  CC = gcc
-endif
+CC = cc
 
 ###############################################################################
 ##  OBJECTS                                                                  ##

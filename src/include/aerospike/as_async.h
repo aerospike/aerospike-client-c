@@ -36,7 +36,8 @@ extern "C" {
 #define AS_ASYNC_TYPE_BATCH 3
 #define AS_ASYNC_TYPE_SCAN 4
 #define AS_ASYNC_TYPE_QUERY 5
-	
+#define AS_ASYNC_TYPE_INFO 6
+
 #define AS_AUTHENTICATION_MAX_SIZE 158
 
 #define AS_ASYNC_CONNECTION_COMPLETE 0
@@ -60,6 +61,12 @@ typedef struct as_async_value_command {
 	as_async_value_listener listener;
 	uint8_t space[];
 } as_async_value_command;
+
+typedef struct as_async_info_command {
+	as_event_command command;
+	as_async_info_listener listener;
+	uint8_t space[];
+} as_async_info_command;
 
 /******************************************************************************
  * FUNCTIONS
@@ -169,7 +176,40 @@ as_async_value_command_create(
 	vcmd->listener = listener;
 	return cmd;
 }
-	
+
+static inline as_event_command*
+as_async_info_command_create(
+	as_node* node, const as_policy_info* policy, as_async_info_listener listener, void* udata,
+	as_event_loop* event_loop, size_t size
+	)
+{
+	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
+	// Then, round up memory size in 1KB increments.
+	size_t s = (sizeof(as_async_info_command) + size + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
+	as_event_command* cmd = (as_event_command*)cf_malloc(s);
+	as_async_info_command* icmd = (as_async_info_command*)cmd;
+	cmd->total_deadline = policy->timeout;
+	cmd->socket_timeout = policy->timeout;
+	cmd->max_retries = 1;
+	cmd->iteration = 0;
+	cmd->replica = AS_POLICY_REPLICA_MASTER;
+	cmd->event_loop = as_event_assign(event_loop);
+	cmd->cluster = node->cluster;
+	cmd->node = node;
+	cmd->partition = NULL;
+	cmd->udata = udata;
+	cmd->parse_results = as_event_command_parse_info;
+	cmd->pipe_listener = NULL;
+	cmd->buf = icmd->space;
+	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_info_command));
+	cmd->type = AS_ASYNC_TYPE_INFO;
+	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
+	cmd->flags = AS_ASYNC_FLAGS_MASTER;
+	cmd->deserialize = false;
+	icmd->listener = listener;
+	return cmd;
+}
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

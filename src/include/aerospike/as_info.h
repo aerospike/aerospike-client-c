@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_listener.h>
 #include <aerospike/as_cluster.h>
 
 #ifdef __cplusplus
@@ -48,6 +49,17 @@ AS_EXTERN as_status
 as_info_command_node(
 	as_error* err, as_node* node, char* command, bool send_asis, uint64_t deadline_ms,
 	char** response
+	);
+
+/**
+ * @private
+ * Asynchronously send info command to specific node.
+ * The values must be freed by the caller on success.
+ */
+AS_EXTERN as_status
+as_info_command_node_async(
+	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, char* command,
+	as_async_info_listener listener, void* udata, as_event_loop* event_loop
 	);
 
 /**
@@ -87,6 +99,13 @@ as_info_create_socket(
 	as_cluster* cluster, as_error* err, struct sockaddr* addr, uint64_t deadline_ms,
 	const char* tls_name, as_socket* sock
 	);
+
+/**
+ * @private
+ * Check for errors in info response.
+ */
+as_status
+as_info_validate(char* response, char** message);
 
 /**
  * @private

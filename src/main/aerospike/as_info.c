@@ -16,7 +16,9 @@
  */
 #include <aerospike/as_info.h>
 #include <aerospike/as_admin.h>
+#include <aerospike/as_async.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_event_internal.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
 #include <citrusleaf/alloc.h>
@@ -85,40 +87,6 @@ as_info_decode_error(char* begin)
 	}
 }
 
-static as_status
-as_info_validate(char* response, char** message)
-{
-	char* p = response;
-	
-	if (p) {
-		// Check for errors embedded in the response.
-		// ERROR: may appear at beginning of string.
-		if (strncmp(p, "ERROR:", 6) == 0) {
-			return as_info_parse_error(p + 6, message);
-		}
-		
-		// ERROR: or FAIL: may appear after a tab.
-		while ((p = strchr(p, '\t'))) {
-			p++;
-			
-			if (strncmp(p, "ERROR:", 6) == 0) {
-				return as_info_parse_error(p + 6, message);
-			}
-			
-			if (strncmp(p, "FAIL:", 5) == 0) {
-				return as_info_parse_error(p + 5, message);
-			}
-			
-			if (strncmp(p, "error=", 6) == 0) {
-				*message = p;
-				as_info_decode_error(p + 6);
-				return AEROSPIKE_ERR_UDF;
-			}
-		}
-	}
-	return AEROSPIKE_OK;
-}
-
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -145,6 +113,32 @@ as_info_command_node(
 		as_node_put_connection(&socket, node->cluster->max_socket_idle);
 	}
 	return status;
+}
+
+as_status
+as_info_command_node_async(
+	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, char* command,
+	as_async_info_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_error_reset(err);
+
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
+
+	size_t size = strlen(command);
+	as_event_command* cmd = as_async_info_command_create(node, policy, listener, udata, event_loop, size);
+	uint8_t* p = cmd->buf + sizeof(uint64_t);
+
+	memcpy(p, command, size);
+	p += size;
+	size = p - cmd->buf;
+	uint64_t proto = (size - 8) | ((uint64_t)AS_INFO_MESSAGE_VERSION << 56) | ((uint64_t)AS_INFO_MESSAGE_TYPE << 48);
+	*(uint64_t*)cmd->buf = cf_swap_to_be64(proto);
+	cmd->write_len = (uint32_t)size;
+
+	return as_event_command_execute(cmd, err);
 }
 
 as_status
@@ -335,6 +329,40 @@ as_info_create_socket(
 			as_socket_error_append(err, addr);
 			as_socket_close(sock);
 			return status;
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_info_validate(char* response, char** message)
+{
+	char* p = response;
+
+	if (p) {
+		// Check for errors embedded in the response.
+		// ERROR: may appear at beginning of string.
+		if (strncmp(p, "ERROR:", 6) == 0) {
+			return as_info_parse_error(p + 6, message);
+		}
+
+		// ERROR: or FAIL: may appear after a tab.
+		while ((p = strchr(p, '\t'))) {
+			p++;
+
+			if (strncmp(p, "ERROR:", 6) == 0) {
+				return as_info_parse_error(p + 6, message);
+			}
+
+			if (strncmp(p, "FAIL:", 5) == 0) {
+				return as_info_parse_error(p + 5, message);
+			}
+
+			if (strncmp(p, "error=", 6) == 0) {
+				*message = p;
+				as_info_decode_error(p + 6);
+				return AEROSPIKE_ERR_UDF;
+			}
 		}
 	}
 	return AEROSPIKE_OK;

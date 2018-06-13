@@ -405,7 +405,7 @@ password_cb(char* buf, int size, int rwflag, void* udata)
 		return 0;
 	}
 
-	int pw_len = strlen(pw);
+	int pw_len = (int)strlen(pw);
 
 	if (pw_len > size) {
 		return 0;

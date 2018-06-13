@@ -39,8 +39,7 @@ typedef void (*as_async_write_listener) (as_error* err, void* udata, as_event_lo
  * User callback when an asynchronous read completes with a record result.
  *
  * @param err			This error structure is only populated when the command fails. Null on success.
- * @param record 		The return value from the asynchronous command. This value will need to be cast
- * 						to the structure that corresponds to the asynchronous command.  Null on error.
+ * @param record 		The return value from the asynchronous command.  Null on error.
  * @param udata 		User data that is forwarded from asynchronous command function.
  * @param event_loop 	Event loop that this command was executed on.  Use this event loop when running
  * 						nested asynchronous commands when single threaded behavior is desired for the
@@ -71,6 +70,19 @@ typedef void (*as_async_value_listener) (as_error* err, as_val* val, void* udata
  * 						group of commands.
  */
 typedef void (*as_pipe_listener) (void* udata, as_event_loop* event_loop);
+
+/**
+ * User callback when asynchronous info command completes with a string result.
+ *
+ * @param err			This error structure is only populated when the command fails. Null on success.
+ * @param response		The return string from the asynchronous info command. Null on error. 
+ *						Do not free when finished.  This will be done automatically.
+ * @param udata			User data that is forwarded from asynchronous command function.
+ * @param event_loop 	Event loop that this command was executed on.  Use this event loop when running
+ * 						nested asynchronous commands when single threaded behavior is desired for the
+ * 						group of commands.
+ */
+typedef void (*as_async_info_listener) (as_error* err, char* response, void* udata, as_event_loop* event_loop);
 
 #ifdef __cplusplus
 } // end extern "C"

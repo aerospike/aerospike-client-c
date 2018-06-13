@@ -18,10 +18,12 @@
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_monitor.h>
 #include <aerospike/as_pipe.h>
 #include <aerospike/as_proto.h>
+#include <aerospike/as_query_validate.h>
 #include <aerospike/as_shm_cluster.h>
 #include <citrusleaf/alloc.h>
 #include <pthread.h>
@@ -762,37 +764,39 @@ as_event_response_complete(as_event_command* cmd)
 	as_event_put_connection(cmd, pool);
 }
 
-static inline void
+static void
 as_event_executor_destroy(as_event_executor* executor)
 {
 	pthread_mutex_destroy(&executor->lock);
 	
 	if (executor->commands) {
+		// Free commands not started yet.
+		for (uint32_t i = executor->queued; i < executor->max; i++) {
+			// Destroy command before it was started.
+			as_event_command* cmd = executor->commands[i];
+			as_event_command_destroy(cmd);
+		}
 		cf_free(executor->commands);
 	}
 
 	if (executor->err) {
 		cf_free(executor->err);
 	}
+
+	if (executor->ns) {
+		cf_free(executor->ns);
+	}
 	
 	cf_free(executor);
 }
 
-static void
-as_event_executor_error(as_event_executor* executor, as_error* err, int queued_count)
+void
+as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t command_count)
 {
 	pthread_mutex_lock(&executor->lock);
 	bool first_error = executor->valid;
 	executor->valid = false;
-
-	if (queued_count >= 0) {
-		// Add tasks that were never queued.
-		executor->count += (executor->max - queued_count);
-	}
-	else {
-		executor->count++;
-	}
-
+	executor->count += command_count;
 	bool complete = executor->count == executor->max;
 	pthread_mutex_unlock(&executor->lock);
 
@@ -823,7 +827,7 @@ as_event_executor_error(as_event_executor* executor, as_error* err, int queued_c
 }
 
 void
-as_event_executor_cancel(as_event_executor* executor, int queued_count)
+as_event_executor_cancel(as_event_executor* executor, uint32_t queued_count)
 {
 	// Cancel group of commands that already have been queued.
 	// We are cancelling commands running in the event loop thread when this method
@@ -847,13 +851,11 @@ as_event_executor_cancel(as_event_executor* executor, int queued_count)
 void
 as_event_executor_complete(as_event_command* cmd)
 {
-	as_event_response_complete(cmd);
-	
 	as_event_executor* executor = cmd->udata;
 	pthread_mutex_lock(&executor->lock);
 	executor->count++;
-	bool complete = executor->count == executor->max;
 	uint32_t next = executor->count + executor->max_concurrent - 1;
+	bool complete = executor->count == executor->max;
 	bool start_new_command = next < executor->max && executor->valid;
 	pthread_mutex_unlock(&executor->lock);
 
@@ -869,15 +871,42 @@ as_event_executor_complete(as_event_command* cmd)
 	else {
 		// Determine if a new command needs to be started.
 		if (start_new_command) {
-			as_error err;
-			as_status status = as_event_command_execute(executor->commands[next], &err);
-			
-			if (status != AEROSPIKE_OK) {
-				as_event_executor_error(executor, &err, next);
+			if (executor->cluster_key) {
+				as_query_validate_next_async(executor, next);
+			}
+			else {
+				as_error err;
+				executor->queued++;
+
+				if (as_event_command_execute(executor->commands[next], &err) != AEROSPIKE_OK) {
+					as_event_executor_error(executor, &err, executor->max - next);
+				}
 			}
 		}
 	}
 	as_event_command_release(cmd);
+}
+
+void
+as_event_query_complete(as_event_command* cmd)
+{
+	as_event_response_complete(cmd);
+
+	as_event_executor* executor = cmd->udata;
+
+	if (executor->cluster_key) {
+		// Verify migrations did not occur during scan/query.
+		as_query_validate_end_async(cmd);
+		return;
+	}
+	as_event_executor_complete(cmd);
+}
+
+void
+as_event_batch_complete(as_event_command* cmd)
+{
+	as_event_response_complete(cmd);
+	as_event_executor_complete(cmd);
 }
 
 void
@@ -895,10 +924,13 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 		case AS_ASYNC_TYPE_VALUE:
 			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
 			break;
+		case AS_ASYNC_TYPE_INFO:
+			((as_async_info_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			break;
 
 		default:
 			// Handle command that is part of a group (batch, scan, query).
-			as_event_executor_error(cmd->udata, err, -1);
+			as_event_executor_error(cmd->udata, err, 1);
 			break;
 	}
 }
@@ -1088,6 +1120,28 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 			as_event_response_error(cmd, &err);
 			break;
 		}
+	}
+	return true;
+}
+
+bool
+as_event_command_parse_info(as_event_command* cmd)
+{
+	char* response = (char*)cmd->buf;
+	response[cmd->len] = 0;
+
+	char* error = 0;
+	as_status status = as_info_validate(response, &error);
+
+	if (status == AEROSPIKE_OK) {
+		as_event_response_complete(cmd);
+		((as_async_info_command*)cmd)->listener(NULL, response, cmd->udata, cmd->event_loop);
+		as_event_command_release(cmd);
+	}
+	else {
+		as_error err;
+		as_error_set_message(&err, status, as_error_string(status));
+		as_event_response_error(cmd, &err);
 	}
 	return true;
 }

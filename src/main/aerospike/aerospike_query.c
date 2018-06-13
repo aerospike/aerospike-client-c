@@ -25,6 +25,7 @@
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
+#include <aerospike/as_query_validate.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_socket.h>
@@ -62,9 +63,11 @@ typedef struct as_query_task_s {
 	cf_queue* input_queue;
 	cf_queue* complete_q;
 	uint64_t task_id;
-	
+	uint64_t cluster_key;
+
 	uint8_t* cmd;
 	size_t cmd_size;
+	bool first;
 } as_query_task;
 
 typedef struct as_query_task_aggr_s {
@@ -237,7 +240,7 @@ as_query_parse_records_async(as_event_command* cmd)
 			// Special case - if we scan a set name that doesn't exist on a
 			// node, it will return "not found".
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-				as_event_executor_complete(cmd);
+				as_event_query_complete(cmd);
 				return true;
 			}
 			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
@@ -247,7 +250,7 @@ as_query_parse_records_async(as_event_command* cmd)
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			as_event_executor_complete(cmd);
+			as_event_query_complete(cmd);
 			return true;
 		}
 		
@@ -443,6 +446,20 @@ as_query_command_execute(as_query_task* task)
 	as_error err;
 	as_error_init(&err);
 
+	as_status status;
+
+	if (task->cluster_key && ! task->first) {
+		status = as_query_validate(&err, task->node, task->query->ns, task->cluster_key);
+
+		if (status) {
+			// Set main error only once.
+			if (as_fas_uint32(task->error_mutex, 1) == 0) {
+				as_error_copy(task->err, &err);
+			}
+			return status;
+		}
+	}
+
 	const as_policy_base* policy;
 	bool is_read;
 
@@ -455,7 +472,7 @@ as_query_command_execute(as_query_task* task)
 		is_read = false;
 	}
 
-	as_status status = as_command_execute(task->cluster, &err, policy, &cn, task->cmd, task->cmd_size,
+	status = as_command_execute(task->cluster, &err, policy, &cn, task->cmd, task->cmd_size,
 										  as_query_parse, task, is_read);
 
 	if (status) {
@@ -466,8 +483,20 @@ as_query_command_execute(as_query_task* task)
 				as_error_copy(task->err, &err);
 			}
 		}
+		return status;
 	}
 
+	if (task->cluster_key) {
+		status = as_query_validate(&err, task->node, task->query->ns, task->cluster_key);
+
+		if (status) {
+			// Set main error only once.
+			if (as_fas_uint32(task->error_mutex, 1) == 0) {
+				as_error_copy(task->err, &err);
+			}
+			return status;
+		}
+	}
 	return status;
 }
 
@@ -852,6 +881,16 @@ as_query_command_init(
 static as_status
 as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, uint32_t n_nodes, uint8_t query_type)
 {
+	as_status status = AEROSPIKE_OK;
+
+	if (task->query_policy && task->query_policy->fail_on_cluster_change) {
+		status = as_query_validate_begin(task->err, nodes->array[0], query->ns, &task->cluster_key);
+
+		if (status) {
+			return status;
+		}
+	}
+
 	// Build Command.  It's okay to share command across threads because query does not have retries.
 	// If retries were allowed, the timeout field in the command would change on retry which
 	// would conflict with other threads.
@@ -871,7 +910,6 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	task->cmd_size = size;
 	task->complete_q = cf_queue_create(sizeof(as_query_complete_task), true);
 
-	as_status status = AEROSPIKE_OK;
 	uint32_t n_wait_nodes = n_nodes;
 	uint32_t thread_pool_size = task->cluster->thread_pool.thread_size;
 
@@ -904,6 +942,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 				break;
 			}
 		}
+		task->first = false;
 	}
 
 	// Wait for tasks to complete.
@@ -1041,8 +1080,10 @@ aerospike_query_foreach(
 		.input_queue = 0,
 		.complete_q = 0,
 		.task_id = as_random_get_uint64(),
+		.cluster_key = 0,
 		.cmd = 0,
-		.cmd_size = 0
+		.cmd_size = 0,
+		.first = true
 	};
 	
 	AEROSPIKE_QUERY_FOREACH_STARTING(task.task_id);
@@ -1153,14 +1194,17 @@ aerospike_query_async(
 	as_async_query_executor* executor = cf_malloc(sizeof(as_async_query_executor));
 	as_event_executor* exec = &executor->executor;
 	pthread_mutex_init(&exec->lock, NULL);
+	exec->commands = cf_malloc(sizeof(as_event_command*) * n_nodes);
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_query_complete_async;
 	exec->udata = udata;
 	exec->err = NULL;
-	exec->max = n_nodes;
+	exec->ns = NULL;
+	exec->cluster_key = 0;
 	exec->max_concurrent = n_nodes;
+	exec->max = n_nodes;
 	exec->count = 0;
-	exec->commands = 0;
+	exec->queued = 0;
 	exec->notify = true;
 	exec->valid = true;
 	executor->listener = listener;
@@ -1180,8 +1224,6 @@ aerospike_query_async(
 	// read to reuse buffer.
 	size_t s = (sizeof(as_async_query_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 	
-	as_status status = AEROSPIKE_OK;
-
 	// Create all query commands.
 	for (uint32_t i = 0; i < n_nodes; i++) {
 		as_event_command* cmd = cf_malloc(s);
@@ -1205,18 +1247,32 @@ aerospike_query_async(
 		cmd->flags = AS_ASYNC_FLAGS_MASTER;
 		cmd->deserialize = policy->deserialize;
 		memcpy(cmd->buf, cmd_buf, size);
-		
-		status = as_event_command_execute(cmd, err);
-		
-		if (status != AEROSPIKE_OK) {
-			as_event_executor_cancel(exec, i);
-			break;
-		}
+		exec->commands[i] = cmd;
 	}
 	
 	// Free command buffer.
 	as_command_free(cmd_buf, size);
 	
+	as_status status = AEROSPIKE_OK;
+
+	if (policy->fail_on_cluster_change && (nodes->array[0]->features & AS_FEATURES_CLUSTER_STABLE)) {
+		// Verify migrations are not in progress.
+		status = as_query_validate_begin_async(exec, query->ns, err);
+	}
+	else {
+		// Run query commands.
+		for (uint32_t i = 0; i < exec->max_concurrent; i++) {
+			exec->queued++;
+			as_event_command* cmd = exec->commands[i];
+			as_status status = as_event_command_execute(cmd, err);
+
+			if (status != AEROSPIKE_OK) {
+				as_event_executor_cancel(exec, i);
+				break;
+			}
+		}
+	}
+
 	as_nodes_release(nodes);
 	return status;
 }
@@ -1278,8 +1334,10 @@ aerospike_query_background(
 		.input_queue = 0,
 		.complete_q = 0,
 		.task_id = task_id,
+		.cluster_key = 0,
 		.cmd = 0,
-		.cmd_size = 0
+		.cmd_size = 0,
+		.first = false
 	};
 	
 	as_status status = as_query_execute(&task, query, nodes, n_nodes, QUERY_BACKGROUND);

@@ -145,7 +145,7 @@ as_batch_async_skip_records(as_event_command* cmd)
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			as_event_executor_complete(cmd);
+			as_event_batch_complete(cmd);
 			return true;
 		}
 		
@@ -183,7 +183,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			as_event_executor_complete(cmd);
+			as_event_batch_complete(cmd);
 			return true;
 		}
 		
@@ -1041,7 +1041,7 @@ as_batch_read_execute_async(
 	)
 {
 	as_event_executor* exec = &executor->executor;
-	exec->max_concurrent = exec->max = n_batch_nodes;
+	exec->max_concurrent = exec->max = exec->queued = n_batch_nodes;
 	
 	as_status status = AEROSPIKE_OK;
 	
@@ -1265,9 +1265,12 @@ aerospike_batch_read_async(
 	exec->complete_fn = as_batch_complete_async;
 	exec->udata = udata;
 	exec->err = NULL;
+	exec->ns = NULL;
+	exec->cluster_key = 0;
 	exec->max_concurrent = 0;
 	exec->max = 0;
 	exec->count = 0;
+	exec->queued = 0;
 	exec->notify = true;
 	exec->valid = true;
 	executor->records = records;

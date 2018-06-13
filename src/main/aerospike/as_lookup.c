@@ -309,6 +309,9 @@ as_lookup_node(
 		else if (strcmp(begin, "replicas") == 0) {
 			features |= AS_FEATURES_REPLICAS;
 		}
+		else if (strcmp(begin, "cluster-stable") == 0) {
+			features |= AS_FEATURES_CLUSTER_STABLE;
+		}
 		begin = end;
 	}
 	node_info->features = features;

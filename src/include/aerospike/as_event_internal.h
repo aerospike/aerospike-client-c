@@ -159,9 +159,12 @@ typedef struct as_event_executor {
 	as_event_executor_complete_fn complete_fn;
 	void* udata;
 	as_error* err;
+	char* ns;
+	uint64_t cluster_key;
 	uint32_t max_concurrent;
 	uint32_t max;
 	uint32_t count;
+	uint32_t queued;
 	bool notify;
 	bool valid;
 } as_event_executor;
@@ -183,10 +186,19 @@ bool
 as_event_command_retry(as_event_command* cmd, bool alternate);
 	
 void
-as_event_executor_complete(as_event_command* cmd);
+as_event_query_complete(as_event_command* cmd);
 
 void
-as_event_executor_cancel(as_event_executor* executor, int queued_count);
+as_event_batch_complete(as_event_command* cmd);
+
+void
+as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t command_count);
+
+void
+as_event_executor_cancel(as_event_executor* executor, uint32_t queued_count);
+
+void
+as_event_executor_complete(as_event_command* cmd);
 
 void
 as_event_notify_error(as_event_command* cmd, as_error* err);
@@ -208,6 +220,9 @@ as_event_command_parse_header(as_event_command* cmd);
 
 bool
 as_event_command_parse_success_failure(as_event_command* cmd);
+
+bool
+as_event_command_parse_info(as_event_command* cmd);
 
 void
 as_event_command_free(as_event_command* cmd);
@@ -674,6 +689,14 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 {
 	as_event_notify_error(cmd, err);
 	as_event_command_release(cmd);
+}
+
+static inline void
+as_event_command_destroy(as_event_command* cmd)
+{
+	// Use this function to free commands that were never started.
+	as_node_release(cmd->node);
+	cf_free(cmd);
 }
 
 static inline void

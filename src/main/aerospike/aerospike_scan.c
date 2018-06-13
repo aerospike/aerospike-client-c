@@ -22,6 +22,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_msgpack.h>
+#include <aerospike/as_query_validate.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_socket.h>
@@ -45,9 +46,11 @@ typedef struct as_scan_task_s {
 	cf_queue* complete_q;
 	uint32_t* error_mutex;
 	uint64_t task_id;
-	
+	uint64_t cluster_key;
+
 	uint8_t* cmd;
 	size_t cmd_size;
+	bool first;
 } as_scan_task;
 
 typedef struct as_scan_complete_task_s {
@@ -120,7 +123,7 @@ as_scan_parse_records_async(as_event_command* cmd)
 			// Special case - if we scan a set name that doesn't exist on a
 			// node, it will return "not found".
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-				as_event_executor_complete(cmd);
+				as_event_query_complete(cmd);
 				return true;
 			}
 			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
@@ -130,7 +133,7 @@ as_scan_parse_records_async(as_event_command* cmd)
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			as_event_executor_complete(cmd);
+			as_event_query_complete(cmd);
 			return true;
 		}
 		
@@ -273,7 +276,21 @@ as_scan_command_execute(as_scan_task* task)
 	as_error err;
 	as_error_init(&err);
 
-	as_status status = as_command_execute(task->cluster, &err, &task->policy->base, &cn, task->cmd, task->cmd_size,
+	as_status status;
+
+	if (task->cluster_key && ! task->first) {
+		status = as_query_validate(&err, task->node, task->scan->ns, task->cluster_key);
+
+		if (status) {
+			// Set main error only once.
+			if (as_fas_uint32(task->error_mutex, 1) == 0) {
+				as_error_copy(task->err, &err);
+			}
+			return status;
+		}
+	}
+
+	status = as_command_execute(task->cluster, &err, &task->policy->base, &cn, task->cmd, task->cmd_size,
 										  as_scan_parse, task, true);
 	
 	if (status) {
@@ -283,6 +300,19 @@ as_scan_command_execute(as_scan_task* task)
 			if (status != AEROSPIKE_ERR_CLIENT_ABORT) {
 				as_error_copy(task->err, &err);
 			}
+		}
+		return status;
+	}
+
+	if (task->cluster_key) {
+		status = as_query_validate(&err, task->node, task->scan->ns, task->cluster_key);
+
+		if (status) {
+			// Set main error only once.
+			if (as_fas_uint32(task->error_mutex, 1) == 0) {
+				as_error_copy(task->err, &err);
+			}
+			return status;
 		}
 	}
 	return status;
@@ -477,7 +507,24 @@ as_scan_generic(
 	for (uint32_t i = 0; i < n_nodes; i++) {
 		as_node_reserve(nodes->array[i]);
 	}
-	
+
+	uint64_t cluster_key = 0;
+
+	if (policy->fail_on_cluster_change && callback) {
+		as_status status = as_query_validate_begin(err, nodes->array[0], scan->ns, &cluster_key);
+
+		if (status) {
+			// Release each node in cluster.
+			for (uint32_t i = 0; i < n_nodes; i++) {
+				as_node_release(nodes->array[i]);
+			}
+
+			// Release nodes array.
+			as_nodes_release(nodes);
+			return status;
+		}
+	}
+
 	uint64_t task_id;
 	if (task_id_ptr) {
 		if (*task_id_ptr == 0) {
@@ -508,8 +555,10 @@ as_scan_generic(
 	task.err = err;
 	task.error_mutex = &error_mutex;
 	task.task_id = task_id;
+	task.cluster_key = cluster_key;
 	task.cmd = cmd;
 	task.cmd_size = size;
+	task.first = true;
 	
 	as_status status = AEROSPIKE_OK;
 	
@@ -524,7 +573,7 @@ as_scan_generic(
 			as_scan_task* task_node = alloca(sizeof(as_scan_task));
 			memcpy(task_node, &task, sizeof(as_scan_task));
 			task_node->node = nodes->array[i];
-			
+
 			int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_scan_worker, task_node);
 			
 			if (rc) {
@@ -537,6 +586,7 @@ as_scan_generic(
 				n_wait_nodes = i;
 				break;
 			}
+			task.first = false;
 		}
 
 		// Wait for tasks to complete.
@@ -559,6 +609,7 @@ as_scan_generic(
 		for (uint32_t i = 0; i < n_nodes && status == AEROSPIKE_OK; i++) {
 			task.node = nodes->array[i];
 			status = as_scan_command_execute(&task);
+			task.first = false;
 		}
 	}
 	
@@ -615,24 +666,20 @@ as_scan_async(
 	as_async_scan_executor* executor = cf_malloc(sizeof(as_async_scan_executor));
 	as_event_executor* exec = &executor->executor;
 	pthread_mutex_init(&exec->lock, NULL);
+	exec->commands = cf_malloc(sizeof(as_event_command*) * n_nodes);
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_scan_complete_async;
 	exec->udata = udata;
 	exec->err = NULL;
+	exec->ns = NULL;
+	exec->cluster_key = 0;
+	exec->max_concurrent = daisy_chain ? 1 : n_nodes;
 	exec->max = n_nodes;
 	exec->count = 0;
+	exec->queued = 0;
 	exec->notify = true;
 	exec->valid = true;
 	executor->listener = listener;
-	
-	if (daisy_chain) {
-		exec->commands = cf_malloc(sizeof(as_event_command*) * n_nodes);
-		exec->max_concurrent = 1;
-	}
-	else {
-		exec->commands = 0;
-		exec->max_concurrent = n_nodes;
-	}
 
 	// Create scan command buffer.
 	as_buffer argbuffer;
@@ -645,8 +692,6 @@ as_scan_async(
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.
 	size_t s = (sizeof(as_async_scan_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
-
-	as_status status = AEROSPIKE_OK;
 
 	// Create all scan commands.
 	for (uint32_t i = 0; i < n_nodes; i++) {
@@ -671,33 +716,29 @@ as_scan_async(
 		cmd->flags = AS_ASYNC_FLAGS_MASTER;
 		cmd->deserialize = scan->deserialize_list_map;
 		memcpy(cmd->buf, cmd_buf, size);
-		
-		if (daisy_chain) {
-			exec->commands[i] = cmd;
-		}
-		else {
-			status = as_event_command_execute(cmd, err);
-			
-			if (status != AEROSPIKE_OK) {
-				as_event_executor_cancel(exec, i);
-				break;
-			}
-		}
+		exec->commands[i] = cmd;
 	}
-	
+
 	// Free command buffer.
 	as_command_free(cmd_buf, size);
 
-	// If scanning one node at a time, start first command.
-	if (status == AEROSPIKE_OK && daisy_chain) {
-		as_event_command* cmd = exec->commands[0];
-		status = as_event_command_execute(cmd, err);
-		
+	if (policy->fail_on_cluster_change && (nodes[0]->features & AS_FEATURES_CLUSTER_STABLE)) {
+		// Verify migrations are not in progress.
+		return as_query_validate_begin_async(exec, scan->ns, err);
+	}
+
+	// Run scan commands.
+	for (uint32_t i = 0; i < exec->max_concurrent; i++) {
+		exec->queued++;
+		as_event_command* cmd = exec->commands[i];
+		as_status status = as_event_command_execute(cmd, err);
+
 		if (status != AEROSPIKE_OK) {
-			as_event_executor_cancel(exec, 0);
+			as_event_executor_cancel(exec, i);
+			return status;
 		}
 	}
-	return status;
+	return AEROSPIKE_OK;
 }
 
 /******************************************************************************
@@ -778,6 +819,17 @@ aerospike_scan_node(
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid node name: %s", node_name);
 	}
 
+	uint64_t cluster_key = 0;
+
+	if (policy->fail_on_cluster_change) {
+		as_status status = as_query_validate_begin(err, node, scan->ns, &cluster_key);
+
+		if (status) {
+			as_node_release(node);
+			return status;
+		}
+	}
+
 	// Create scan command
 	uint64_t task_id = as_random_get_uint64();
 	as_buffer argbuffer;
@@ -800,8 +852,10 @@ aerospike_scan_node(
 	task.complete_q = 0;
 	task.error_mutex = &error_mutex;
 	task.task_id = task_id;
+	task.cluster_key = cluster_key;
 	task.cmd = cmd;
 	task.cmd_size = size;
+	task.first = true;
 	
 	// Run scan.
 	as_status status = as_scan_command_execute(&task);
@@ -839,7 +893,7 @@ aerospike_scan_async(
 	for (uint32_t i = 0; i < n_nodes; i++) {
 		as_node_reserve(nodes->array[i]);
 	}
-	
+
 	as_status status = as_scan_async(as, err, policy, scan, scan_id, listener, udata, event_loop, nodes->array, n_nodes);
 	as_nodes_release(nodes);
 	return status;

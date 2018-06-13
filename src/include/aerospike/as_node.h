@@ -50,13 +50,14 @@ extern "C" {
 // Leave this is in for backwards compatibility.
 #define AS_NODE_NAME_MAX_SIZE AS_NODE_NAME_SIZE
 
-#define AS_FEATURES_GEO          (1 << 0)
-#define AS_FEATURES_DOUBLE       (1 << 1)
-#define AS_FEATURES_BATCH_INDEX  (1 << 2)
-#define AS_FEATURES_REPLICAS_ALL (1 << 3)
-#define AS_FEATURES_PIPELINING   (1 << 4)
-#define AS_FEATURES_PEERS        (1 << 5)
-#define AS_FEATURES_REPLICAS     (1 << 6)
+#define AS_FEATURES_GEO            (1 << 0)
+#define AS_FEATURES_DOUBLE         (1 << 1)
+#define AS_FEATURES_BATCH_INDEX    (1 << 2)
+#define AS_FEATURES_REPLICAS_ALL   (1 << 3)
+#define AS_FEATURES_PIPELINING     (1 << 4)
+#define AS_FEATURES_PEERS          (1 << 5)
+#define AS_FEATURES_REPLICAS       (1 << 6)
+#define AS_FEATURES_CLUSTER_STABLE (1 << 7)
 
 #define AS_ADDRESS4_MAX 4
 #define AS_ADDRESS6_MAX 8

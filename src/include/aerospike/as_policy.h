@@ -790,6 +790,11 @@ typedef struct as_policy_query_s {
 	as_policy_base base;
 
 	/**
+	 * Terminate query if cluster is in migration state.
+	 */
+	bool fail_on_cluster_change;
+
+	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
 	 * Default: true
@@ -811,7 +816,7 @@ typedef struct as_policy_scan_s {
 	as_policy_base base;
 
 	/**
-	 * Abort the scan if the cluster is not in a stable state.
+	 * Terminate scan if cluster is in migration state.
 	 */
 	bool fail_on_cluster_change;
 
@@ -1212,6 +1217,7 @@ as_policy_query_init(as_policy_query* p)
 	p->base.total_timeout = 0;
 	p->base.max_retries = 0;
 	p->base.sleep_between_retries = 0;
+	p->fail_on_cluster_change = false;
 	p->deserialize = true;
 	return p;
 }

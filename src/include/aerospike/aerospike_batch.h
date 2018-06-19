@@ -76,7 +76,7 @@ typedef struct as_batch_read_record_s {
 	
 	/**
 	 * The result of the read transaction.
-	 * <p>
+	 *
 	 * Values:
 	 * <ul>
 	 * <li>

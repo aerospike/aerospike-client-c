@@ -290,7 +290,7 @@ as_operations_add_map_remove_by_key_range(as_operations* ops, const as_bin_name 
  * Create map remove by key relative to index range operation.
  * Server removes map items nearest to key and greater by index.
  * Server returns removed data specified by return_type.
- * <p>
+ *
  * Examples for map [{0=17},{4=2},{5=15},{9=10}]:
  * <ul>
  * <li>(value,index) = [removed items]</li>
@@ -310,7 +310,7 @@ as_operations_add_map_remove_by_key_rel_index_range_to_end(as_operations* ops, c
  * Create map remove by key relative to index range operation.
  * Server removes map items nearest to key and greater by index with a count limit.
  * Server returns removed data specified by return_type.
- * <p>
+ *
  * Examples for map [{0=17},{4=2},{5=15},{9=10}]:
  * <ul>
  * <li>(value,index,count) = [removed items]</li>
@@ -361,7 +361,7 @@ as_operations_add_map_remove_by_value_range(as_operations* ops, const as_bin_nam
  * Create map remove by value relative to rank range operation.
  * Server removes map items nearest to value and greater by relative rank.
  * Server returns removed data specified by return_type.
- * <p>
+ *
  * Examples for map [{4=2},{9=10},{5=15},{0=17}]:
  * <ul>
  * <li>(value,rank) = [removed items]</li>
@@ -378,7 +378,7 @@ as_operations_add_map_remove_by_value_rel_rank_range_to_end(as_operations* ops, 
  * Create map remove by value relative to rank range operation.
  * Server removes map items nearest to value and greater by relative rank with a count limit.
  * Server returns removed data specified by return_type.
- * <p>
+ *
  * Examples for map [{4=2},{9=10},{5=15},{0=17}]:
  * <ul>
  * <li>(value,rank,count) = [removed items]</li>
@@ -491,7 +491,7 @@ as_operations_add_map_get_by_key_list(as_operations* ops, const as_bin_name name
  * Create map get by key relative to index range operation.
  * Server selects map items nearest to key and greater by index.
  * Server returns selected data specified by return_type.
- * <p>
+ *
  * Examples for ordered map [{0=17},{4=2},{5=15},{9=10}]:
  * <ul>
  * <li>(value,index) = [selected items]</li>
@@ -511,7 +511,7 @@ as_operations_add_map_get_by_key_rel_index_range_to_end(as_operations* ops, cons
  * Create map get by key relative to index range operation.
  * Server selects map items nearest to key and greater by index with a count limit.
  * Server returns selected data specified by return_type.
- * <p>
+ *
  * Examples for ordered map [{0=17},{4=2},{5=15},{9=10}]:
  * <ul>
  * <li>(value,index,count) = [selected items]</li>
@@ -562,7 +562,7 @@ as_operations_add_map_get_by_value_list(as_operations* ops, const as_bin_name na
  * Create map get by value relative to rank range operation.
  * Server selects map items nearest to value and greater by relative rank.
  * Server returns selected data specified by return_type.
- * <p>
+ *
  * Examples for map [{4=2},{9=10},{5=15},{0=17}]:
  * <ul>
  * <li>(value,rank) = [selected items]</li>
@@ -579,7 +579,7 @@ as_operations_add_map_get_by_value_rel_rank_range_to_end(as_operations* ops, con
  * Create map get by value relative to rank range operation.
  * Server selects map items nearest to value and greater by relative rank with a count limit.
  * Server returns selected data specified by return_type.
- * <p>
+ *
  * Examples for map [{4=2},{9=10},{5=15},{0=17}]:
  * <ul>
  * <li>(value,rank,count) = [selected items]</li>

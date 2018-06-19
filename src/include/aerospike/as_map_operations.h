@@ -16,6 +16,13 @@
  */
 #pragma once
 
+/**
+ * @defgroup map_operations Map Operations
+ * @ingroup client_operations
+ *
+ * Aerospike operations on a map bin.
+ */
+
 #include <aerospike/as_operations.h>
 
 #ifdef __cplusplus
@@ -29,8 +36,7 @@ extern "C" {
 /**
  * Map storage order.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 typedef enum as_map_order_e {
 	/**
@@ -52,8 +58,7 @@ typedef enum as_map_order_e {
 /**
  * Map write mode.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 typedef enum as_map_write_mode_e {
 	/**
@@ -78,8 +83,7 @@ typedef enum as_map_write_mode_e {
 /**
  * Map policy directives when creating a map and writing map items.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 typedef struct as_map_policy_s {
 	uint64_t attributes;
@@ -90,8 +94,7 @@ typedef struct as_map_policy_s {
 /**
  * Map return type. Type of data to return when selecting or removing items from the map.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 typedef enum as_map_return_type_e {
 	/**
@@ -167,8 +170,7 @@ typedef enum as_map_return_type_e {
 /**
  * Initialize map attributes to default unordered map with standard overwrite semantics.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN void
 as_map_policy_init(as_map_policy* policy);
@@ -176,8 +178,7 @@ as_map_policy_init(as_map_policy* policy);
 /**
  * Set map attributes to specified map order and write mode semantics.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN void
 as_map_policy_set(as_map_policy* policy, as_map_order order, as_map_write_mode mode);
@@ -186,8 +187,7 @@ as_map_policy_set(as_map_policy* policy, as_map_order order, as_map_write_mode m
  * Create set map policy operation.
  * Server sets map policy attributes.  Server does not return a value.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_set_policy(as_operations* ops, const as_bin_name name, as_map_policy* policy);
@@ -200,8 +200,7 @@ as_operations_add_map_set_policy(as_operations* ops, const as_bin_name name, as_
  * The map policy also specifies the mode used when writing items to the map.
  * See `as_map_policy` and `as_map_write_mode`.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_put(as_operations* ops, const as_bin_name name, as_map_policy* policy, as_val* key, as_val* value);
@@ -214,8 +213,7 @@ as_operations_add_map_put(as_operations* ops, const as_bin_name name, as_map_pol
  * The map policy also specifies the mode used when writing items to the map.
  * See `as_map_policy` and `as_map_write_mode`.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_put_items(as_operations* ops, const as_bin_name name, as_map_policy* policy, as_map *items);
@@ -229,8 +227,7 @@ as_operations_add_map_put_items(as_operations* ops, const as_bin_name name, as_m
  * The map policy also specifies the mode used when writing items to the map.
  * See `as_map_policy` and `as_map_write_mode`.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_increment(as_operations* ops, const as_bin_name name, as_map_policy* policy, as_val* key, as_val* value);
@@ -244,8 +241,7 @@ as_operations_add_map_increment(as_operations* ops, const as_bin_name name, as_m
  * The map policy also specifies the mode used when writing items to the map.
  * See `as_map_policy` and `as_map_write_mode`.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_decrement(as_operations* ops, const as_bin_name name, as_map_policy* policy, as_val* key, as_val* value);
@@ -254,8 +250,7 @@ as_operations_add_map_decrement(as_operations* ops, const as_bin_name name, as_m
  * Create map clear operation.
  * Server removes all items in map.  Server returns null.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_clear(as_operations* ops, const as_bin_name name);
@@ -264,8 +259,7 @@ as_operations_add_map_clear(as_operations* ops, const as_bin_name name);
  * Create map remove operation.
  * Server removes map item identified by key and returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_key(as_operations* ops, const as_bin_name name, as_val* key, as_map_return_type return_type);
@@ -274,8 +268,7 @@ as_operations_add_map_remove_by_key(as_operations* ops, const as_bin_name name, 
  * Create map remove operation.
  * Server removes map items identified by keys and returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_key_list(as_operations* ops, const as_bin_name name, as_list* keys, as_map_return_type return_type);
@@ -288,18 +281,56 @@ as_operations_add_map_remove_by_key_list(as_operations* ops, const as_bin_name n
  *
  * Server returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_key_range(as_operations* ops, const as_bin_name name, as_val* begin, as_val* end, as_map_return_type return_type);
 
 /**
+ * Create map remove by key relative to index range operation.
+ * Server removes map items nearest to key and greater by index.
+ * Server returns removed data specified by return_type.
+ * <p>
+ * Examples for map [{0=17},{4=2},{5=15},{9=10}]:
+ * <ul>
+ * <li>(value,index) = [removed items]</li>
+ * <li>(5,0) = [{5=15},{9=10}]</li>
+ * <li>(5,1) = [{9=10}]</li>
+ * <li>(5,-1) = [{4=2},{5=15},{9=10}]</li>
+ * <li>(3,2) = [{9=10}]</li>
+ * <li>(3,-2) = [{0=17},{4=2},{5=15},{9=10}]</li>
+ * </ul>
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_add_map_remove_by_key_rel_index_range_to_end(as_operations* ops, const as_bin_name name, as_val* key, int64_t index, as_map_return_type return_type);
+
+/**
+ * Create map remove by key relative to index range operation.
+ * Server removes map items nearest to key and greater by index with a count limit.
+ * Server returns removed data specified by return_type.
+ * <p>
+ * Examples for map [{0=17},{4=2},{5=15},{9=10}]:
+ * <ul>
+ * <li>(value,index,count) = [removed items]</li>
+ * <li>(5,0,1) = [{5=15}]</li>
+ * <li>(5,1,2) = [{9=10}]</li>
+ * <li>(5,-1,1) = [{4=2}]</li>
+ * <li>(3,2,1) = [{9=10}]</li>
+ * <li>(3,-2,2) = [{0=17}]</li>
+ * </ul>
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_add_map_remove_by_key_rel_index_range(as_operations* ops, const as_bin_name name, as_val* key, int64_t index, uint64_t count, as_map_return_type return_type);
+
+/**
  * Create map remove operation.
  * Server removes map items identified by value and returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_value(as_operations* ops, const as_bin_name name, as_val* value, as_map_return_type return_type);
@@ -308,8 +339,7 @@ as_operations_add_map_remove_by_value(as_operations* ops, const as_bin_name name
  * Create map remove operation.
  * Server removes map items identified by values and returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_value_list(as_operations* ops, const as_bin_name name, as_list* values, as_map_return_type return_type);
@@ -322,18 +352,50 @@ as_operations_add_map_remove_by_value_list(as_operations* ops, const as_bin_name
  *
  * Server returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_value_range(as_operations* ops, const as_bin_name name, as_val* begin, as_val* end, as_map_return_type return_type);
 
 /**
+ * Create map remove by value relative to rank range operation.
+ * Server removes map items nearest to value and greater by relative rank.
+ * Server returns removed data specified by return_type.
+ * <p>
+ * Examples for map [{4=2},{9=10},{5=15},{0=17}]:
+ * <ul>
+ * <li>(value,rank) = [removed items]</li>
+ * <li>(11,1) = [{0=17}]</li>
+ * <li>(11,-1) = [{9=10},{5=15},{0=17}]</li>
+ * </ul>
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_add_map_remove_by_value_rel_rank_range_to_end(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, as_map_return_type return_type);
+
+/**
+ * Create map remove by value relative to rank range operation.
+ * Server removes map items nearest to value and greater by relative rank with a count limit.
+ * Server returns removed data specified by return_type.
+ * <p>
+ * Examples for map [{4=2},{9=10},{5=15},{0=17}]:
+ * <ul>
+ * <li>(value,rank,count) = [removed items]</li>
+ * <li>(11,1,1) = [{0=17}]</li>
+ * <li>(11,-1,1) = [{9=10}]</li>
+ * </ul>
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_add_map_remove_by_value_rel_rank_range(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count, as_map_return_type return_type);
+
+/**
  * Create map remove operation.
  * Server removes map item identified by index and returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_index(as_operations* ops, const as_bin_name name, int64_t index, as_map_return_type return_type);
@@ -343,8 +405,7 @@ as_operations_add_map_remove_by_index(as_operations* ops, const as_bin_name name
  * Server removes map items starting at specified index to the end of map and returns removed
  * data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_index_range_to_end(as_operations* ops, const as_bin_name name, int64_t index, as_map_return_type return_type);
@@ -353,8 +414,7 @@ as_operations_add_map_remove_by_index_range_to_end(as_operations* ops, const as_
  * Create map remove operation.
  * Server removes `count` map items starting at specified index and returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_index_range(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count, as_map_return_type return_type);
@@ -363,8 +423,7 @@ as_operations_add_map_remove_by_index_range(as_operations* ops, const as_bin_nam
  * Create map remove operation.
  * Server removes map item identified by rank and returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_rank(as_operations* ops, const as_bin_name name, int64_t rank, as_map_return_type return_type);
@@ -374,8 +433,7 @@ as_operations_add_map_remove_by_rank(as_operations* ops, const as_bin_name name,
  * Server removes map items starting at specified rank to the last ranked item and returns removed
  * data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_rank_range_to_end(as_operations* ops, const as_bin_name name, int64_t rank, as_map_return_type return_type);
@@ -384,8 +442,7 @@ as_operations_add_map_remove_by_rank_range_to_end(as_operations* ops, const as_b
  * Create map remove operation.
  * Server removes `count` map items starting at specified rank and returns removed data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_remove_by_rank_range(as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count, as_map_return_type return_type);
@@ -394,8 +451,7 @@ as_operations_add_map_remove_by_rank_range(as_operations* ops, const as_bin_name
  * Create map size operation.
  * Server returns size of map.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_size(as_operations* ops, const as_bin_name name);
@@ -404,8 +460,7 @@ as_operations_add_map_size(as_operations* ops, const as_bin_name name);
  * Create map get by key operation.
  * Server selects map item identified by key and returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_key(as_operations* ops, const as_bin_name name, as_val* key, as_map_return_type return_type);
@@ -418,8 +473,7 @@ as_operations_add_map_get_by_key(as_operations* ops, const as_bin_name name, as_
  *
  * Server returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_key_range(as_operations* ops, const as_bin_name name, as_val* begin, as_val* end, as_map_return_type return_type);
@@ -428,18 +482,56 @@ as_operations_add_map_get_by_key_range(as_operations* ops, const as_bin_name nam
  * Create map get by key list operation.
  * Server selects map items identified by keys and returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_key_list(as_operations* ops, const as_bin_name name, as_list* keys, as_map_return_type return_type);
 
 /**
+ * Create map get by key relative to index range operation.
+ * Server selects map items nearest to key and greater by index.
+ * Server returns selected data specified by return_type.
+ * <p>
+ * Examples for ordered map [{0=17},{4=2},{5=15},{9=10}]:
+ * <ul>
+ * <li>(value,index) = [selected items]</li>
+ * <li>(5,0) = [{5=15},{9=10}]</li>
+ * <li>(5,1) = [{9=10}]</li>
+ * <li>(5,-1) = [{4=2},{5=15},{9=10}]</li>
+ * <li>(3,2) = [{9=10}]</li>
+ * <li>(3,-2) = [{0=17},{4=2},{5=15},{9=10}]</li>
+ * </ul>
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_add_map_get_by_key_rel_index_range_to_end(as_operations* ops, const as_bin_name name, as_val* key, int64_t index, as_map_return_type return_type);
+
+/**
+ * Create map get by key relative to index range operation.
+ * Server selects map items nearest to key and greater by index with a count limit.
+ * Server returns selected data specified by return_type.
+ * <p>
+ * Examples for ordered map [{0=17},{4=2},{5=15},{9=10}]:
+ * <ul>
+ * <li>(value,index,count) = [selected items]</li>
+ * <li>(5,0,1) = [{5=15}]</li>
+ * <li>(5,1,2) = [{9=10}]</li>
+ * <li>(5,-1,1) = [{4=2}]</li>
+ * <li>(3,2,1) = [{9=10}]</li>
+ * <li>(3,-2,2) = [{0=17}]</li>
+ * </ul>
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_add_map_get_by_key_rel_index_range(as_operations* ops, const as_bin_name name, as_val* key, int64_t index, uint64_t count, as_map_return_type return_type);
+
+/**
  * Create map get by value operation.
  * Server selects map items identified by value and returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_value(as_operations* ops, const as_bin_name name, as_val* value, as_map_return_type return_type);
@@ -452,8 +544,7 @@ as_operations_add_map_get_by_value(as_operations* ops, const as_bin_name name, a
  *
  * Server returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_value_range(as_operations* ops, const as_bin_name name, as_val* begin, as_val* end, as_map_return_type return_type);
@@ -462,18 +553,50 @@ as_operations_add_map_get_by_value_range(as_operations* ops, const as_bin_name n
  * Create map get by value list operation.
  * Server selects map items identified by values and returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_value_list(as_operations* ops, const as_bin_name name, as_list* values, as_map_return_type return_type);
 
 /**
+ * Create map get by value relative to rank range operation.
+ * Server selects map items nearest to value and greater by relative rank.
+ * Server returns selected data specified by return_type.
+ * <p>
+ * Examples for map [{4=2},{9=10},{5=15},{0=17}]:
+ * <ul>
+ * <li>(value,rank) = [selected items]</li>
+ * <li>(11,1) = [{0=17}]</li>
+ * <li>(11,-1) = [{9=10},{5=15},{0=17}]</li>
+ * </ul>
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_add_map_get_by_value_rel_rank_range_to_end(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, as_map_return_type return_type);
+
+/**
+ * Create map get by value relative to rank range operation.
+ * Server selects map items nearest to value and greater by relative rank with a count limit.
+ * Server returns selected data specified by return_type.
+ * <p>
+ * Examples for map [{4=2},{9=10},{5=15},{0=17}]:
+ * <ul>
+ * <li>(value,rank,count) = [selected items]</li>
+ * <li>(11,1,1) = [{0=17}]</li>
+ * <li>(11,-1,1) = [{9=10}]</li>
+ * </ul>
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_add_map_get_by_value_rel_rank_range(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count, as_map_return_type return_type);
+
+/**
  * Create map get by index operation.
  * Server selects map item identified by index and returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_index(as_operations* ops, const as_bin_name name, int64_t index, as_map_return_type return_type);
@@ -483,8 +606,7 @@ as_operations_add_map_get_by_index(as_operations* ops, const as_bin_name name, i
  * Server selects map items starting at specified index to the end of map and returns selected
  * data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_index_range_to_end(as_operations* ops, const as_bin_name name, int64_t index, as_map_return_type return_type);
@@ -493,8 +615,7 @@ as_operations_add_map_get_by_index_range_to_end(as_operations* ops, const as_bin
  * Create map get by index range operation.
  * Server selects `count` map items starting at specified index and returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_index_range(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count, as_map_return_type return_type);
@@ -503,8 +624,7 @@ as_operations_add_map_get_by_index_range(as_operations* ops, const as_bin_name n
  * Create map get by rank operation.
  * Server selects map item identified by rank and returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_rank(as_operations* ops, const as_bin_name name, int64_t rank, as_map_return_type return_type);
@@ -514,8 +634,7 @@ as_operations_add_map_get_by_rank(as_operations* ops, const as_bin_name name, in
  * Server selects map items starting at specified rank to the last ranked item and returns selected
  * data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_rank_range_to_end(as_operations* ops, const as_bin_name name, int64_t rank, as_map_return_type return_type);
@@ -524,8 +643,7 @@ as_operations_add_map_get_by_rank_range_to_end(as_operations* ops, const as_bin_
  * Create map get by rank range operation.
  * Server selects `count` map items starting at specified rank and returns selected data specified by return_type.
  *
- * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup map_operations
  */
 AS_EXTERN bool
 as_operations_add_map_get_by_rank_range(as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count, as_map_return_type return_type);

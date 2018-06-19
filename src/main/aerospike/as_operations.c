@@ -67,6 +67,7 @@ typedef enum as_cdt_optype_e {
 	AS_CDT_OP_LIST_GET_BY_INDEX_RANGE = 24,
 	AS_CDT_OP_LIST_GET_BY_VALUE_INTERVAL = 25,
 	AS_CDT_OP_LIST_GET_BY_RANK_RANGE = 26,
+	AS_CDT_OP_LIST_GET_BY_VALUE_REL_RANK_RANGE = 27,
 	AS_CDT_OP_LIST_REMOVE_BY_INDEX = 32,
 	AS_CDT_OP_LIST_REMOVE_BY_RANK = 34,
 	AS_CDT_OP_LIST_REMOVE_ALL_BY_VALUE = 35,
@@ -74,6 +75,7 @@ typedef enum as_cdt_optype_e {
 	AS_CDT_OP_LIST_REMOVE_BY_INDEX_RANGE = 37,
 	AS_CDT_OP_LIST_REMOVE_BY_VALUE_INTERVAL = 38,
 	AS_CDT_OP_LIST_REMOVE_BY_RANK_RANGE = 39,
+	AS_CDT_OP_LIST_REMOVE_BY_VALUE_REL_RANK_RANGE = 40,
 
 	// ------------------------------------------------------------------------
 	// Map Operation
@@ -97,6 +99,8 @@ typedef enum as_cdt_optype_e {
 	AS_CDT_OP_MAP_REMOVE_BY_INDEX_RANGE = 85,
 	AS_CDT_OP_MAP_REMOVE_BY_VALUE_INTERVAL = 86,
 	AS_CDT_OP_MAP_REMOVE_BY_RANK_RANGE = 87,
+	AS_CDT_OP_MAP_REMOVE_BY_KEY_REL_INDEX_RANGE = 88,
+	AS_CDT_OP_MAP_REMOVE_BY_VALUE_REL_RANK_RANGE = 89,
 	AS_CDT_OP_MAP_SIZE = 96,
 	AS_CDT_OP_MAP_GET_BY_KEY = 97,
 	AS_CDT_OP_MAP_GET_BY_INDEX = 98,
@@ -108,6 +112,8 @@ typedef enum as_cdt_optype_e {
 	AS_CDT_OP_MAP_GET_BY_RANK_RANGE = 106,
 	AS_CDT_OP_MAP_GET_BY_KEY_LIST = 107,
 	AS_CDT_OP_MAP_GET_BY_VALUE_LIST = 108,
+	AS_CDT_OP_MAP_GET_BY_KEY_REL_INDEX_RANGE = 109,
+	AS_CDT_OP_MAP_GET_BY_VALUE_REL_RANK_RANGE = 110,
 
 } as_cdt_optype;
 
@@ -188,6 +194,7 @@ const cdt_op_table_entry cdt_op_table[] = {
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_REMOVE_BY_INDEX_RANGE,    AS_OPERATOR_CDT_MODIFY, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_REMOVE_BY_VALUE_INTERVAL, AS_OPERATOR_CDT_MODIFY, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_PAYLOAD),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_REMOVE_BY_RANK_RANGE,     AS_OPERATOR_CDT_MODIFY, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
+	CDT_OP_ENTRY(AS_CDT_OP_LIST_REMOVE_BY_VALUE_REL_RANK_RANGE,	AS_OPERATOR_CDT_MODIFY, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_SET,                      AS_OPERATOR_CDT_MODIFY, 1, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_TRIM,                     AS_OPERATOR_CDT_MODIFY, 0, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_CLEAR,                    AS_OPERATOR_CDT_MODIFY, 0),
@@ -203,6 +210,7 @@ const cdt_op_table_entry cdt_op_table[] = {
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_GET_BY_INDEX_RANGE,       AS_OPERATOR_CDT_READ, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_GET_BY_VALUE_INTERVAL,    AS_OPERATOR_CDT_READ, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_PAYLOAD),
 	CDT_OP_ENTRY(AS_CDT_OP_LIST_GET_BY_RANK_RANGE,        AS_OPERATOR_CDT_READ, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
+	CDT_OP_ENTRY(AS_CDT_OP_LIST_GET_BY_VALUE_REL_RANK_RANGE,	AS_OPERATOR_CDT_READ, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 
 	//============================================
 	// MAP
@@ -226,6 +234,8 @@ const cdt_op_table_entry cdt_op_table[] = {
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_REMOVE_BY_INDEX_RANGE,	  AS_OPERATOR_MAP_MODIFY, 1, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_REMOVE_BY_VALUE_INTERVAL,  AS_OPERATOR_MAP_MODIFY, 1, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_PAYLOAD),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_REMOVE_BY_RANK_RANGE,	  AS_OPERATOR_MAP_MODIFY, 1, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
+	CDT_OP_ENTRY(AS_CDT_OP_MAP_REMOVE_BY_KEY_REL_INDEX_RANGE,	AS_OPERATOR_MAP_MODIFY, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
+	CDT_OP_ENTRY(AS_CDT_OP_MAP_REMOVE_BY_VALUE_REL_RANK_RANGE,	AS_OPERATOR_MAP_MODIFY, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_SIZE,					  AS_OPERATOR_MAP_READ, 0),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_GET_BY_KEY,				  AS_OPERATOR_MAP_READ, 0, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_PAYLOAD),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_GET_BY_INDEX,			  AS_OPERATOR_MAP_READ, 0, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_INDEX),
@@ -237,7 +247,8 @@ const cdt_op_table_entry cdt_op_table[] = {
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_GET_BY_RANK_RANGE,		  AS_OPERATOR_MAP_READ, 1, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_GET_BY_KEY_LIST,	          AS_OPERATOR_MAP_READ, 0, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_GET_BY_VALUE_LIST,		  AS_OPERATOR_MAP_READ, 0, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD),
-
+	CDT_OP_ENTRY(AS_CDT_OP_MAP_GET_BY_KEY_REL_INDEX_RANGE,	AS_OPERATOR_MAP_READ, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
+	CDT_OP_ENTRY(AS_CDT_OP_MAP_GET_BY_VALUE_REL_RANK_RANGE,	AS_OPERATOR_MAP_READ, 1, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_INDEX, AS_CDT_PARAM_COUNT),
 };
 
 const size_t cdt_op_table_size = sizeof(cdt_op_table) / sizeof(cdt_op_table_entry);
@@ -835,6 +846,18 @@ as_operations_add_list_remove_by_value_range(as_operations* ops, const as_bin_na
 }
 
 bool
+as_operations_add_list_remove_by_value_rel_rank_range_to_end(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, as_list_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_REMOVE_BY_VALUE_REL_RANK_RANGE, (uint64_t)return_type, value, rank);
+}
+
+bool
+as_operations_add_list_remove_by_value_rel_rank_range(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count, as_list_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_REMOVE_BY_VALUE_REL_RANK_RANGE, (uint64_t)return_type, value, rank, count);
+}
+
+bool
 as_operations_add_list_remove_by_index(as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_REMOVE_BY_INDEX, (uint64_t)return_type, index);
@@ -922,6 +945,18 @@ bool
 as_operations_add_list_get_by_value_list(as_operations* ops, const as_bin_name name, as_list* values, as_list_return_type return_type)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_GET_BY_VALUE_LIST, (uint64_t)return_type, values);
+}
+
+bool
+as_operations_add_list_get_by_value_rel_rank_range_to_end(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, as_list_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_GET_BY_VALUE_REL_RANK_RANGE, (uint64_t)return_type, value, rank);
+}
+
+bool
+as_operations_add_list_get_by_value_rel_rank_range(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count, as_list_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_LIST_GET_BY_VALUE_REL_RANK_RANGE, (uint64_t)return_type, value, rank, count);
 }
 
 bool
@@ -1084,6 +1119,18 @@ as_operations_add_map_remove_by_key_range(as_operations* ops, const as_bin_name 
 }
 
 bool
+as_operations_add_map_remove_by_key_rel_index_range_to_end(as_operations* ops, const as_bin_name name, as_val* key, int64_t index, as_map_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_REMOVE_BY_KEY_REL_INDEX_RANGE, (int64_t)return_type, key, index);
+}
+
+bool
+as_operations_add_map_remove_by_key_rel_index_range(as_operations* ops, const as_bin_name name, as_val* key, int64_t index, uint64_t count, as_map_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_REMOVE_BY_KEY_REL_INDEX_RANGE, (int64_t)return_type, key, index, count);
+}
+
+bool
 as_operations_add_map_remove_by_value(as_operations* ops, const as_bin_name name, as_val* value, as_map_return_type return_type)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_REMOVE_ALL_BY_VALUE, (int64_t)return_type, value);
@@ -1099,6 +1146,18 @@ bool
 as_operations_add_map_remove_by_value_range(as_operations* ops, const as_bin_name name, as_val* begin, as_val* end, as_map_return_type return_type)
 {
 	return as_map_range(ops, name, AS_CDT_OP_MAP_REMOVE_BY_VALUE_INTERVAL, begin, end, return_type);
+}
+
+bool
+as_operations_add_map_remove_by_value_rel_rank_range_to_end(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, as_map_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_REMOVE_BY_VALUE_REL_RANK_RANGE, (int64_t)return_type, value, rank);
+}
+
+bool
+as_operations_add_map_remove_by_value_rel_rank_range(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count, as_map_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_REMOVE_BY_VALUE_REL_RANK_RANGE, (int64_t)return_type, value, rank, count);
 }
 
 bool
@@ -1162,6 +1221,18 @@ as_operations_add_map_get_by_key_list(as_operations* ops, const as_bin_name name
 }
 
 bool
+as_operations_add_map_get_by_key_rel_index_range_to_end(as_operations* ops, const as_bin_name name, as_val* key, int64_t index, as_map_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_GET_BY_KEY_REL_INDEX_RANGE, (uint64_t)return_type, key, index);
+}
+
+bool
+as_operations_add_map_get_by_key_rel_index_range(as_operations* ops, const as_bin_name name, as_val* key, int64_t index, uint64_t count, as_map_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_GET_BY_KEY_REL_INDEX_RANGE, (uint64_t)return_type, key, index, count);
+}
+
+bool
 as_operations_add_map_get_by_value(as_operations* ops, const as_bin_name name, as_val* value, as_map_return_type return_type)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_GET_ALL_BY_VALUE, (int64_t)return_type, value);
@@ -1177,6 +1248,18 @@ bool
 as_operations_add_map_get_by_value_list(as_operations* ops, const as_bin_name name, as_list* values, as_map_return_type return_type)
 {
 	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_GET_BY_VALUE_LIST, (uint64_t)return_type, values);
+}
+
+bool
+as_operations_add_map_get_by_value_rel_rank_range_to_end(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, as_map_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_GET_BY_VALUE_REL_RANK_RANGE, (uint64_t)return_type, value, rank);
+}
+
+bool
+as_operations_add_map_get_by_value_rel_rank_range(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count, as_map_return_type return_type)
+{
+	return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_GET_BY_VALUE_REL_RANK_RANGE, (uint64_t)return_type, value, rank, count);
 }
 
 bool

@@ -1016,7 +1016,7 @@ as_operations_add_list_get_by_value_list(as_operations* ops, const as_bin_name n
  * Create list get by value relative to rank range operation.
  * Server selects list items nearest to value and greater by relative rank.
  * Server returns selected data specified by return_type.
- * <p>
+ *
  * Examples for ordered list [0,4,5,9,11,15]:
  * <ul>
  * <li>(value,rank) = [selected items]</li>
@@ -1037,7 +1037,7 @@ as_operations_add_list_get_by_value_rel_rank_range_to_end(as_operations* ops, co
  * Create list get by value relative to rank range operation.
  * Server selects list items nearest to value and greater by relative rank with a count limit.
  * Server returns selected data specified by return_type.
- * <p>
+ *
  * Examples for ordered list [0,4,5,9,11,15]:
  * <ul>
  * <li>(value,rank,count) = [selected items]</li>

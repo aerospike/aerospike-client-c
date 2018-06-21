@@ -99,7 +99,7 @@ as_lookup_end(as_address_iterator* iter)
 as_status
 as_lookup_node(
 	struct as_cluster_s* cluster, as_error* err, struct as_host_s* host, struct sockaddr* addr,
-	struct as_node_info_s* node_info
+	bool detect_load_balancer, struct as_node_info_s* node_info
 	);
 
 #ifdef __cplusplus

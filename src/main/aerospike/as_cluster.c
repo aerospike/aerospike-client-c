@@ -216,7 +216,7 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 		struct sockaddr* addr;
 
 		while (as_lookup_next(&iter, &addr)) {
-			status = as_lookup_node(cluster, &error_local, &host, addr, &node_info);
+			status = as_lookup_node(cluster, &error_local, &host, addr, true, &node_info);
 			
 			if (status == AEROSPIKE_OK) {
 				as_node* node = as_peers_find_local_node(&nodes_to_add, node_info.name);

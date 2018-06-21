@@ -19,7 +19,7 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
-#include <stdlib.h>
+#include <aerospike/as_string_builder.h>
 
 /******************************************************************************
  * Declarations
@@ -108,6 +108,91 @@ SWITCH_SUCCESS:
 	return status;
 }
 
+static as_status
+as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tls_name, as_node_info* node_info)
+{
+	if (! (*response)) {
+		// Server does not support service level call (service-clear-std, ...).
+		// Load balancer detection is not possible.
+		return AEROSPIKE_OK;
+	}
+
+	char addr_name[AS_IP_ADDRESS_SIZE];
+	as_address_short_name((struct sockaddr*)&node_info->addr, addr_name, sizeof(addr_name));
+
+	as_vector hosts;
+	as_vector_inita(&hosts, sizeof(as_host), 4);
+
+	if (! as_host_parse_addresses(response, &hosts)) {
+		as_vector_destroy(&hosts);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid service hosts string: '%s'", response);
+	}
+
+	// Search real hosts for seed.
+	as_host* host;
+	const char* hostname;
+
+	for (uint32_t i = 0; i < hosts.size; i++) {
+		host = as_vector_get(&hosts, i);
+		hostname = as_cluster_get_alternate_host(cluster, host->name);
+
+		if (strcmp(hostname, addr_name)) {
+			// Found seed which is not a load balancer.
+			as_vector_destroy(&hosts);
+			return AEROSPIKE_OK;
+		}
+	}
+
+	// Seed not found, so seed is probably a load balancer.
+	// Find first valid real host.
+	as_address_iterator iter;
+	struct sockaddr* addr;
+	as_error error_local;
+	as_status status;
+
+	for (uint32_t i = 0; i < hosts.size; i++) {
+		host = as_vector_get(&hosts, i);
+		hostname = as_cluster_get_alternate_host(cluster, host->name);
+		status = as_lookup_host(&iter, &error_local, hostname, host->port);
+
+		if (status != AEROSPIKE_OK) {
+			continue;
+		}
+
+		while (as_lookup_next(&iter, &addr)) {
+			uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
+			status = as_socket_create_and_connect(&node_info->socket, err, addr, cluster->tls_ctx,
+															host->tls_name, deadline);
+
+			if (status == AEROSPIKE_OK) {
+				status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
+										 node_info->session_token, node_info->session_token_length, 0, deadline);
+
+				if (status == AEROSPIKE_OK) {
+					node_info->host.name = (char*)hostname;
+					node_info->host.tls_name = tls_name;
+					node_info->host.port = host->port;
+					as_address_copy_storage(addr, &node_info->addr);
+					as_lookup_end(&iter);
+					as_vector_destroy(&hosts);
+					return AEROSPIKE_OK;
+				}
+
+				// Close and try next address.
+				as_socket_close(&node_info->socket);
+			}
+		}
+		as_lookup_end(&iter);
+	}
+
+	// Failed to find a valid address. IP Address is probably internal on the cloud
+	// because the server access-address is not configured.  Log warning and continue
+	// with original seed.
+	as_log_debug("Invalid address %s. access-address is probably not configured on server.", response);
+	as_vector_destroy(&hosts);
+	return AEROSPIKE_OK;
+}
+
 /******************************************************************************
  * Functions
  *****************************************************************************/
@@ -156,7 +241,7 @@ as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, u
 as_status
 as_lookup_node(
 	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr,
-	as_node_info* node_info
+	bool detect_load_balancer, as_node_info* node_info
 	)
 {
 	uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
@@ -194,23 +279,36 @@ as_lookup_node(
 				cf_free(node_info->session_token);
 				return status;
 			}
+
+			// Disable load balancer detection since non-TLS address has already
+			// been retrieved via service info command.
+			detect_load_balancer = false;
 		}
 	}
 
-	char* command;
-	int args;
-	
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 256, false);
+	as_string_builder_append(&sb, "node\npartition-generation\nfeatures\n");
+	int args = 3;
+
 	if (cluster->cluster_name) {
-		command = "node\npartition-generation\nfeatures\ncluster-name\n";
-		args = 4;
+		as_string_builder_append(&sb, "cluster-name\n");
+		args++;
 	}
-	else {
-		command = "node\npartition-generation\nfeatures\n";
-		args = 3;
+
+	if (detect_load_balancer) {
+		// Seed may be load balancer with changing address. Determine real address.
+		const char* address_command = (cluster->tls_ctx) ?
+			cluster->use_services_alternate ? "service-tls-alt" : "service-tls-std" :
+			cluster->use_services_alternate ? "service-clear-alt" : "service-clear-std";
+
+		as_string_builder_append(&sb, address_command);
+		as_string_builder_append_char(&sb, '\n');
+		args++;
 	}
-	
+
 	char* response = 0;
-	status = as_info_command(err, &node_info->socket, NULL, command, true, deadline, 0, &response);
+	status = as_info_command(err, &node_info->socket, NULL, sb.data, true, deadline, 0, &response);
 	
 	if (status) {
 		as_socket_error_append(err, (struct sockaddr*)&node_info->addr);
@@ -223,14 +321,16 @@ as_lookup_node(
 	
 	as_info_parse_multi_response(response, &values);
 	
-	if (values.size != args) {
+	if ((detect_load_balancer && values.size < args - 1) || (!detect_load_balancer && values.size != args)) {
 		// Vector was probably resized on heap. Destroy vector.
 		as_vector_destroy(&values);
 		goto Error;
 	}
 
+	args = 0;
+
 	// Process node name.
-	as_name_value* nv = as_vector_get(&values, 0);
+	as_name_value* nv = as_vector_get(&values, args++);
 	char* node_name = nv->value;
 	
 	if (node_name == 0 || *node_name == 0) {
@@ -239,7 +339,7 @@ as_lookup_node(
 	as_strncpy(node_info->name, node_name, AS_NODE_NAME_SIZE);
 
 	// Process partition generation.
-	nv = as_vector_get(&values, 1);
+	nv = as_vector_get(&values, args++);
 	uint32_t gen = (uint32_t)strtoul(nv->value, NULL, 10);
 
 	if (gen == (uint32_t)-1) {
@@ -252,33 +352,17 @@ as_lookup_node(
 		return AEROSPIKE_ERR_CLIENT;
 	}
 
-	// Process cluster name.
-	if (cluster->cluster_name) {
-		nv = as_vector_get(&values, 3);
-		
-		if (strcmp(cluster->cluster_name, nv->value) != 0) {
-			char addr_name[AS_IP_ADDRESS_SIZE];
-			as_address_name((struct sockaddr*)&node_info->addr, addr_name, sizeof(addr_name));
-			as_error_update(err, AEROSPIKE_ERR_CLIENT,
-					"Invalid node %s %s Expected cluster name '%s' Received '%s'",
-					node_info->name, addr_name, cluster->cluster_name, nv->value);
-			cf_free(response);
-			as_node_info_destroy(node_info);
-			return AEROSPIKE_ERR_CLIENT;
-		}
-	}
-	
 	// Process features.
-	nv = as_vector_get(&values, 2);
+	nv = as_vector_get(&values, args++);
 	char* begin = nv->value;
-	
+
 	if (begin == 0) {
 		goto Error;
 	}
-	
+
 	char* end = begin;
 	uint32_t features = 0;
-	
+
 	while (*begin) {
 		while (*end) {
 			if (*end == ';') {
@@ -287,7 +371,7 @@ as_lookup_node(
 			}
 			end++;
 		}
-		
+
 		if (strcmp(begin, "geo") == 0) {
 			features |= AS_FEATURES_GEO;
 		}
@@ -315,6 +399,34 @@ as_lookup_node(
 		begin = end;
 	}
 	node_info->features = features;
+
+	// Process cluster name.
+	if (cluster->cluster_name) {
+		nv = as_vector_get(&values, args++);
+		
+		if (strcmp(cluster->cluster_name, nv->value) != 0) {
+			char addr_name[AS_IP_ADDRESS_SIZE];
+			as_address_name((struct sockaddr*)&node_info->addr, addr_name, sizeof(addr_name));
+			as_error_update(err, AEROSPIKE_ERR_CLIENT,
+					"Invalid node %s %s Expected cluster name '%s' Received '%s'",
+					node_info->name, addr_name, cluster->cluster_name, nv->value);
+			cf_free(response);
+			as_node_info_destroy(node_info);
+			return AEROSPIKE_ERR_CLIENT;
+		}
+	}
+
+	if (detect_load_balancer && args < values.size) {
+		nv = as_vector_get(&values, args++);
+		status = as_set_node_address(cluster, err, nv->value, host->tls_name, node_info);
+
+		if (status != AEROSPIKE_OK) {
+			cf_free(response);
+			as_node_info_destroy(node_info);
+			return status;
+		}
+	}
+
 	cf_free(response);
 	return AEROSPIKE_OK;
 	

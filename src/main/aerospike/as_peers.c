@@ -167,7 +167,7 @@ as_peers_validate_node(
 	bool validated = false;
 	
 	while (as_lookup_next(&iter, &addr)) {
-		status = as_lookup_node(cluster, &err, host, addr, &node_info);
+		status = as_lookup_node(cluster, &err, host, addr, false, &node_info);
 		
 		if (status == AEROSPIKE_OK) {
 			if (expected_name == NULL || strcmp(node_info.name, expected_name) == 0) {

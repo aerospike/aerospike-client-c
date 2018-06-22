@@ -1814,6 +1814,120 @@ TEST(map_remove_relative, "Map Remove Relative")
 	as_record_destroy(rec);
 }
 
+TEST(map_partial, "Map Partial")
+{
+	if (! has_cdt_map()) {
+		info("cdt-map not enabled. skipping map tests.");
+		return;
+	}
+
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 16);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+
+	as_map_policy mp;
+	as_map_policy_init(&mp);
+
+	// Create map.
+	as_hashmap item_map;
+	as_hashmap_init(&item_map, 4);
+	as_integer mkey1;
+	as_integer mval1;
+	as_integer_init(&mkey1, 0);
+	as_integer_init(&mval1, 17);
+	as_hashmap_set(&item_map, (as_val*)&mkey1, (as_val*)&mval1);
+	as_integer mkey2;
+	as_integer mval2;
+	as_integer_init(&mkey2, 4);
+	as_integer_init(&mval2, 2);
+	as_hashmap_set(&item_map, (as_val*)&mkey2, (as_val*)&mval2);
+	as_integer mkey3;
+	as_integer mval3;
+	as_integer_init(&mkey3, 5);
+	as_integer_init(&mval3, 15);
+	as_hashmap_set(&item_map, (as_val*)&mkey3, (as_val*)&mval3);
+	as_integer mkey4;
+	as_integer mval4;
+	as_integer_init(&mkey4, 9);
+	as_integer_init(&mval4, 10);
+	as_hashmap_set(&item_map, (as_val*)&mkey4, (as_val*)&mval4);
+
+	as_operations_add_map_put_items(&ops, BIN_NAME, &mp, (as_map*)&item_map);
+
+	// Create map.
+	as_hashmap item_map2;
+	as_hashmap_init(&item_map2, 4);
+	as_integer_init(&mkey1, 0);
+	as_integer_init(&mval1, 17);
+	as_hashmap_set(&item_map2, (as_val*)&mkey1, (as_val*)&mval1);
+	as_integer_init(&mkey2, 4);
+	as_integer_init(&mval2, 2);
+	as_hashmap_set(&item_map2, (as_val*)&mkey2, (as_val*)&mval2);
+	as_integer_init(&mkey3, 5);
+	as_integer_init(&mval3, 15);
+	as_hashmap_set(&item_map2, (as_val*)&mkey3, (as_val*)&mval3);
+	as_integer_init(&mkey4, 9);
+	as_integer_init(&mval4, 10);
+	as_hashmap_set(&item_map2, (as_val*)&mkey4, (as_val*)&mval4);
+
+	as_operations_add_map_put_items(&ops, "bin2", &mp, (as_map*)&item_map2);
+
+	as_record* rec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+
+	as_operations_inita(&ops, 2);
+
+	as_hashmap source_map;
+	as_hashmap_init(&source_map, 2);
+	as_integer_init(&mkey1, 3);
+	as_integer_init(&mval1, 3);
+	as_hashmap_set(&source_map, (as_val*)&mkey1, (as_val*)&mval1);
+	as_integer_init(&mkey2, 5);
+	as_integer_init(&mval2, 15);
+	as_hashmap_set(&source_map, (as_val*)&mkey2, (as_val*)&mval2);
+
+	as_map_policy_set_flags(&mp, AS_MAP_UNORDERED, AS_MAP_WRITE_CREATE_ONLY | AS_MAP_WRITE_PARTIAL | AS_MAP_WRITE_NO_FAIL);
+	as_operations_add_map_put_items(&ops, BIN_NAME, &mp, (as_map*)&source_map);
+
+	as_hashmap source_map2;
+	as_hashmap_init(&source_map2, 2);
+	as_integer_init(&mkey1, 3);
+	as_integer_init(&mval1, 3);
+	as_hashmap_set(&source_map2, (as_val*)&mkey1, (as_val*)&mval1);
+	as_integer_init(&mkey2, 5);
+	as_integer_init(&mval2, 15);
+	as_hashmap_set(&source_map2, (as_val*)&mkey2, (as_val*)&mval2);
+
+	as_map_policy_set_flags(&mp, AS_MAP_UNORDERED, AS_MAP_WRITE_CREATE_ONLY | AS_MAP_WRITE_NO_FAIL);
+	as_operations_add_map_put_items(&ops, "bin2", &mp, (as_map*)&source_map2);
+
+	rec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	//example_dump_record(rec);
+
+	as_bin* results = rec->bins.entries;
+	uint32_t i = 0;
+
+	int64_t val = results[i++].valuep->integer.value;
+	assert_int_eq(val, 5);
+
+	val = results[i++].valuep->integer.value;
+	assert_int_eq(val, 4);
+
+	as_record_destroy(rec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1835,4 +1949,5 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_inverted);
 	suite_add(map_get_relative);
 	suite_add(map_remove_relative);
+	suite_add(map_partial);
 }

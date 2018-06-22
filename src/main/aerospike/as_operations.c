@@ -217,8 +217,8 @@ const cdt_op_table_entry cdt_op_table[] = {
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_SET_TYPE,				  AS_OPERATOR_MAP_MODIFY, 0, AS_CDT_PARAM_FLAGS),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_ADD,						  AS_OPERATOR_MAP_MODIFY, 1, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_ADD_ITEMS,				  AS_OPERATOR_MAP_MODIFY, 1, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS),
-	CDT_OP_ENTRY(AS_CDT_OP_MAP_PUT,						  AS_OPERATOR_MAP_MODIFY, 1, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS),
-	CDT_OP_ENTRY(AS_CDT_OP_MAP_PUT_ITEMS,				  AS_OPERATOR_MAP_MODIFY, 1, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS),
+	CDT_OP_ENTRY(AS_CDT_OP_MAP_PUT,						  AS_OPERATOR_MAP_MODIFY, 2, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_FLAGS),
+	CDT_OP_ENTRY(AS_CDT_OP_MAP_PUT_ITEMS,				  AS_OPERATOR_MAP_MODIFY, 2, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS, AS_CDT_PARAM_FLAGS),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_REPLACE,					  AS_OPERATOR_MAP_MODIFY, 0, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_PAYLOAD),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_REPLACE_ITEMS,			  AS_OPERATOR_MAP_MODIFY, 0, AS_CDT_PARAM_PAYLOAD),
 	CDT_OP_ENTRY(AS_CDT_OP_MAP_INCREMENT,				  AS_OPERATOR_MAP_MODIFY, 2, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_PAYLOAD, AS_CDT_PARAM_FLAGS),
@@ -1018,6 +1018,7 @@ void
 as_map_policy_init(as_map_policy* policy)
 {
 	policy->attributes = AS_MAP_UNORDERED;
+	policy->flags = AS_MAP_WRITE_DEFAULT;
 	policy->item_command = AS_CDT_OP_MAP_PUT;
 	policy->items_command = AS_CDT_OP_MAP_PUT_ITEMS;
 }
@@ -1026,6 +1027,7 @@ void
 as_map_policy_set(as_map_policy* policy, as_map_order order, as_map_write_mode mode)
 {
 	policy->attributes = order;
+	policy->flags = AS_MAP_WRITE_DEFAULT;
 
 	switch (mode) {
 		default:
@@ -1046,6 +1048,15 @@ as_map_policy_set(as_map_policy* policy, as_map_order order, as_map_write_mode m
 	}
 }
 
+void
+as_map_policy_set_flags(as_map_policy* policy, as_map_order order, uint32_t flags)
+{
+	policy->attributes = order;
+	policy->flags = flags;
+	policy->item_command = AS_CDT_OP_MAP_PUT;
+	policy->items_command = AS_CDT_OP_MAP_PUT_ITEMS;
+}
+
 bool
 as_operations_add_map_set_policy(as_operations* ops, const as_bin_name name, as_map_policy* policy)
 {
@@ -1055,7 +1066,10 @@ as_operations_add_map_set_policy(as_operations* ops, const as_bin_name name, as_
 bool
 as_operations_add_map_put(as_operations* ops, const as_bin_name name, as_map_policy* policy, as_val* key, as_val* value)
 {
-	if (policy->item_command == AS_CDT_OP_MAP_REPLACE) {
+	if (policy->flags != AS_MAP_WRITE_DEFAULT) {
+		return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_PUT, key, value, policy->attributes, policy->flags);
+	}
+	else if (policy->item_command == AS_CDT_OP_MAP_REPLACE) {
 		return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_REPLACE, key, value);
 	}
 	else {
@@ -1066,7 +1080,10 @@ as_operations_add_map_put(as_operations* ops, const as_bin_name name, as_map_pol
 bool
 as_operations_add_map_put_items(as_operations* ops, const as_bin_name name, as_map_policy* policy, as_map *items)
 {
-	if (policy->items_command == AS_CDT_OP_MAP_REPLACE_ITEMS) {
+	if (policy->flags != AS_MAP_WRITE_DEFAULT) {
+		return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_PUT_ITEMS, items, policy->attributes, policy->flags);
+	}
+	else if (policy->items_command == AS_CDT_OP_MAP_REPLACE_ITEMS) {
 		return AS_OPERATIONS_CDT_OP(ops, name, AS_CDT_OP_MAP_REPLACE_ITEMS, items);
 	}
 	else {

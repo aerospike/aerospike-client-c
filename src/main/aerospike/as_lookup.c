@@ -162,11 +162,14 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 		while (as_lookup_next(&iter, &addr)) {
 			uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
 			status = as_socket_create_and_connect(&node_info->socket, err, addr, cluster->tls_ctx,
-															host->tls_name, deadline);
+												  host->tls_name, deadline);
 
 			if (status == AEROSPIKE_OK) {
-				status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
-										 node_info->session_token, node_info->session_token_length, 0, deadline);
+				if (cluster->user) {
+					status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
+											 node_info->session_token, node_info->session_token_length,
+											 0, deadline);
+				}
 
 				if (status == AEROSPIKE_OK) {
 					node_info->host.name = (char*)hostname;

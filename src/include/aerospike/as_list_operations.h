@@ -68,7 +68,7 @@ typedef enum as_list_sort_flags_e {
 } as_list_sort_flags;
 
 /**
- * List write flags.
+ * List write bit flags.
  *
  * @ingroup list_operations
  */
@@ -88,6 +88,17 @@ typedef enum as_list_write_flags_e {
 	 * at index outside current list boundaries.
 	 */
 	AS_LIST_WRITE_INSERT_BOUNDED = 2,
+
+	/**
+	 * Do not raise error if a list item fails due to write flag constraints.
+	 */
+	AS_LIST_WRITE_NO_FAIL = 4,
+
+	/**
+	 * Allow other valid list items to be committed if a list item fails due to
+	 * write flag constraints.
+	 */
+	AS_LIST_WRITE_PARTIAL = 8,
 } as_list_write_flags;
 
 /**

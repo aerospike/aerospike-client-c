@@ -57,6 +57,8 @@ typedef enum as_map_order_e {
 
 /**
  * Map write mode.
+ * This enum should only be used for server versions < 4.3.
+ * #as_map_write_flags is recommended for server versions >= 4.3.
  *
  * @ingroup map_operations
  */
@@ -81,12 +83,49 @@ typedef enum as_map_write_mode_e {
 } as_map_write_mode;
 
 /**
+ * Map write bit flags.
+ * Requires server versions >= 4.3.
+ *
+ * @ingroup map_operations
+ */
+typedef enum as_map_write_flags_e {
+	/**
+	 * Default.  Allow create or update.
+	 */
+	AS_MAP_WRITE_DEFAULT = 0,
+
+	/**
+	 * If the key already exists, the item will be denied.
+	 * If the key does not exist, a new item will be created.
+	 */
+	AS_MAP_WRITE_CREATE_ONLY = 1,
+
+	/**
+	 * If the key already exists, the item will be overwritten.
+	 * If the key does not exist, the item will be denied.
+	 */
+	AS_MAP_WRITE_UPDATE_ONLY = 2,
+
+	/**
+	 * Do not raise error if a map item is denied due to write flag constraints.
+	 */
+	AS_MAP_WRITE_NO_FAIL = 4,
+
+	/**
+	 * Allow other valid map items to be committed if a map item is denied due to
+	 * write flag constraints.
+	 */
+	AS_MAP_WRITE_PARTIAL = 8
+} as_map_write_flags;
+
+/**
  * Map policy directives when creating a map and writing map items.
  *
  * @ingroup map_operations
  */
 typedef struct as_map_policy_s {
 	uint64_t attributes;
+	uint32_t flags;
 	int item_command;
 	int items_command;
 } as_map_policy;
@@ -178,10 +217,21 @@ as_map_policy_init(as_map_policy* policy);
 /**
  * Set map attributes to specified map order and write mode semantics.
  *
+ * This function should only be used for server versions < 4.3.
+ * #as_map_policy_set_flags is recommended for server versions >= 4.3.
+ *
  * @ingroup map_operations
  */
 AS_EXTERN void
 as_map_policy_set(as_map_policy* policy, as_map_order order, as_map_write_mode mode);
+
+/**
+ * Set map attributes to specified map order and write flags (See #as_map_write_flags).
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN void
+as_map_policy_set_flags(as_map_policy* policy, as_map_order order, uint32_t flags);
 
 /**
  * Create set map policy operation.

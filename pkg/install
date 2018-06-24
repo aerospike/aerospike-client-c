@@ -2,10 +2,26 @@
 # Install libraries and header files.
 set -e
 
-if [ $EUID -ne 0 ]
+if [ "$platform" = "mac" ]
 then
-  echo "This script requires root or sudo privileges."
-  exit 1
+  # Mac OS X does not have /usr or /opt, so use /usr/local instead.
+  installDir=/usr/local
+  luaDir=/usr/local
+else
+  installDir=/usr
+  luaDir=/opt
+fi
+
+if [ -n "$INSTALL_PREFIX" ]
+then
+  installDir=$INSTALL_PREFIX
+  luaDir=$INSTALL_PREFIX
+else
+  if [ $EUID -ne 0 ]
+  then
+    echo "This script requires root or sudo privileges."
+    exit 1
+  fi
 fi
 
 if [ $# -ne 1 ]
@@ -25,14 +41,13 @@ then
   exit 1
 fi
 
-if [ "$platform" = "mac" ]
+if [ ! -d "$installDir/include" ]
 then
-	# Mac OS X does not have /usr or /opt, so use /usr/local instead.
-	installDir=/usr/local
-	luaDir=/usr/local
-else
-	installDir=/usr
-	luaDir=/opt
+  mkdir -p "$installDir/include"
+fi
+if [ ! -d "$installDir/lib" ]
+then
+  mkdir -p "$installDir/lib"
 fi
 
 # Install header files.

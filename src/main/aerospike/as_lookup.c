@@ -145,6 +145,7 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 
 	// Seed not found, so seed is probably a load balancer.
 	// Find first valid real host.
+	as_socket sock;
 	as_address_iterator iter;
 	struct sockaddr* addr;
 	as_error error_local;
@@ -161,17 +162,19 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 
 		while (as_lookup_next(&iter, &addr)) {
 			uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
-			status = as_socket_create_and_connect(&node_info->socket, err, addr, cluster->tls_ctx,
+			status = as_socket_create_and_connect(&sock, err, addr, cluster->tls_ctx,
 												  tls_name, deadline);
 
 			if (status == AEROSPIKE_OK) {
 				if (cluster->user) {
-					status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
+					status = as_authenticate(cluster, &error_local, &sock, NULL,
 											 node_info->session_token, node_info->session_token_length,
 											 0, deadline);
 				}
 
 				if (status == AEROSPIKE_OK) {
+					as_socket_close(&node_info->socket);
+					memcpy(&node_info->socket, &sock, sizeof(as_socket));
 					node_info->host.name = (char*)hostname;
 					node_info->host.tls_name = tls_name;
 					node_info->host.port = host->port;
@@ -182,7 +185,7 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 				}
 
 				// Close and try next address.
-				as_socket_close(&node_info->socket);
+				as_socket_close(&sock);
 			}
 		}
 		as_lookup_end(&iter);

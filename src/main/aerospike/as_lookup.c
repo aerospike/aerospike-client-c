@@ -136,7 +136,7 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 		host = as_vector_get(&hosts, i);
 		hostname = as_cluster_get_alternate_host(cluster, host->name);
 
-		if (strcmp(hostname, addr_name)) {
+		if (strcmp(hostname, addr_name) == 0) {
 			// Found seed which is not a load balancer.
 			as_vector_destroy(&hosts);
 			return AEROSPIKE_OK;
@@ -162,7 +162,7 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 		while (as_lookup_next(&iter, &addr)) {
 			uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
 			status = as_socket_create_and_connect(&node_info->socket, err, addr, cluster->tls_ctx,
-												  host->tls_name, deadline);
+												  tls_name, deadline);
 
 			if (status == AEROSPIKE_OK) {
 				if (cluster->user) {
@@ -191,7 +191,7 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 	// Failed to find a valid address. IP Address is probably internal on the cloud
 	// because the server access-address is not configured.  Log warning and continue
 	// with original seed.
-	as_log_debug("Invalid address %s. access-address is probably not configured on server.", response);
+	as_log_info("Invalid address %s. access-address is probably not configured on server.", response);
 	as_vector_destroy(&hosts);
 	return AEROSPIKE_OK;
 }

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_node.h>
 
 /**
  * @defgroup cluster_stats Cluster Statistics
@@ -56,6 +57,11 @@ typedef struct as_conn_stats_s {
  * @ingroup cluster_stats
  */
 typedef struct as_node_stats_s {
+	/**
+	 * Node.
+	 */
+	as_node* node;
+
 	/**
 	 * Sync connection statistics on this node.
 	 */
@@ -97,22 +103,10 @@ typedef struct as_cluster_stats_s {
 } as_cluster_stats;
 
 struct as_cluster_s;
-struct as_node_s;
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
-
-/**
- * Retrieve aerospike node statistics.
- *
- * @param node		The server node.
- * @param stats		The statistics summary for specified node.
- *
- * @ingroup cluster_stats
- */
-AS_EXTERN void
-aerospike_node_stats(struct as_node_s* node, as_node_stats* stats);
 
 /**
  * Retrieve aerospike cluster statistics.
@@ -146,16 +140,37 @@ aerospike_stats(aerospike* as, as_cluster_stats* stats)
 }
 
 /**
- * Release memory allocated in aerospike_stats().
+ * Release node references and memory allocated in aerospike_stats().
  *
  * @param stats		The cluster statistics summary.
  *
  * @ingroup cluster_stats
  */
+AS_EXTERN void
+aerospike_stats_destroy(as_cluster_stats* stats);
+
+/**
+ * Retrieve aerospike node statistics.
+ *
+ * @param node		The server node.
+ * @param stats		The statistics summary for specified node.
+ *
+ * @ingroup cluster_stats
+ */
+AS_EXTERN void
+aerospike_node_stats(as_node* node, as_node_stats* stats);
+
+/**
+ * Release node reference allocated in aerospike_node_stats().
+ *
+ * @param stats		The statistics summary for specified node.
+ *
+ * @ingroup cluster_stats
+ */
 static inline void
-aerospike_stats_destroy(as_cluster_stats* stats)
+aerospike_node_stats_destroy(as_node_stats* stats)
 {
-	cf_free(stats->nodes);
+	as_node_release(stats->node);
 }
 
 #ifdef __cplusplus

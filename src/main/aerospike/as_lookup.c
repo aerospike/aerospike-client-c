@@ -295,7 +295,7 @@ as_lookup_node(
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 256, false);
 	as_string_builder_append(&sb, "node\npartition-generation\nfeatures\n");
-	int args = 3;
+	uint32_t args = 3;
 
 	if (cluster->cluster_name) {
 		as_string_builder_append(&sb, "cluster-name\n");

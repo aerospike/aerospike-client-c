@@ -425,7 +425,7 @@ print_args(arguments* args)
 
 	if (args->async) {
 		blog_line("async max commands:     %d", args->async_max_commands);
-		blog_line("async selector threads: %d", args->event_loop_capacity);
+		blog_line("event loops:            %d", args->event_loop_capacity);
 	}
 
 	if (args->tls.enable) {

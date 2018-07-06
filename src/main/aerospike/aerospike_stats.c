@@ -40,12 +40,19 @@ static inline void
 as_sum_no_lock(as_conn_pool* pool, as_conn_stats* stats)
 {
 	// Warning: cross-thread reference without a lock.
-	// Timing issues may cause values to go negative. Adjust.
 	int tmp = as_queue_size(&pool->queue);
-	stats->in_pool = (tmp >= 0) ? tmp : 0;
 
-	tmp = pool->total - stats->in_pool;
-	stats->in_use = (tmp >= 0) ? tmp : 0;
+	// Timing issues may cause values to go negative. Adjust.
+	if (tmp < 0) {
+		tmp = 0;
+	}
+	stats->in_pool += tmp;
+	tmp = pool->total - tmp;
+
+	if (tmp < 0) {
+		tmp = 0;
+	}
+	stats->in_use += tmp;
 }
 
 /******************************************************************************
@@ -69,9 +76,22 @@ aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
 }
 
 void
+aerospike_stats_destroy(as_cluster_stats* stats)
+{
+	uint32_t max = stats->nodes_size;
+
+	// Release individual nodes.
+	for (uint32_t i = 0; i < max; i++) {
+		aerospike_node_stats_destroy(&stats->nodes[i]);
+	}
+	cf_free(stats->nodes);
+}
+
+void
 aerospike_node_stats(as_node* node, as_node_stats* stats)
 {
-	as_node_reserve(node);
+	as_node_reserve(node); // Released in aerospike_node_stats_destroy()
+	stats->node = node;
 
 	as_sum_init(&stats->sync);
 	as_sum_init(&stats->async);
@@ -102,5 +122,5 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 			as_sum_no_lock(&node->pipe_conn_pools[i], &stats->pipeline);
 		}
 	}
-	as_node_release(node);
 }
+

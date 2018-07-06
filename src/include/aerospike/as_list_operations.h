@@ -1041,7 +1041,7 @@ as_operations_add_list_get_by_value_list(as_operations* ops, const as_bin_name n
  *
  * @ingroup list_operations
  */
-bool
+AS_EXTERN bool
 as_operations_add_list_get_by_value_rel_rank_range_to_end(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, as_list_return_type return_type);
 
 /**
@@ -1062,7 +1062,7 @@ as_operations_add_list_get_by_value_rel_rank_range_to_end(as_operations* ops, co
  *
  * @ingroup list_operations
  */
-bool
+AS_EXTERN bool
 as_operations_add_list_get_by_value_rel_rank_range(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count, as_list_return_type return_type);
 
 /**

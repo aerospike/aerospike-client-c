@@ -350,6 +350,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_cluster.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_command.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_config.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_cpu.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_error.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_event.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_event_internal.h" />

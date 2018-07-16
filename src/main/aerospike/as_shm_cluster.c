@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_cpu.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_policy.h>
@@ -575,6 +576,13 @@ as_shm_tender(void* userdata)
 {
 	// Shared memory cluster tender.
 	as_cluster* cluster = userdata;
+
+	if (cluster->tend_thread_cpu >= 0) {
+		if (! as_cpu_assign_thread(pthread_self(), cluster->tend_thread_cpu)) {
+			as_log_warn("Failed to assign tend thread to cpu %d", cluster->tend_thread_cpu);
+		}
+	}
+
 	as_shm_info* shm_info = cluster->shm_info;
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	uint64_t threshold = shm_info->takeover_threshold_ms;

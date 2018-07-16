@@ -17,6 +17,7 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_address.h>
 #include <aerospike/as_admin.h>
+#include <aerospike/as_cpu.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
@@ -657,7 +658,13 @@ static void*
 as_cluster_tender(void* data)
 {
 	as_cluster* cluster = (as_cluster*)data;
-	
+
+	if (cluster->tend_thread_cpu >= 0) {
+		if (! as_cpu_assign_thread(pthread_self(), cluster->tend_thread_cpu)) {
+			as_log_warn("Failed to assign tend thread to cpu %d", cluster->tend_thread_cpu);
+		}
+	}
+
 	struct timespec delta;
 	cf_clock_set_timespec_ms(cluster->tend_interval, &delta);
 	
@@ -1003,6 +1010,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
 	cluster->login_timeout_ms = (config->login_timeout_ms == 0) ? 5000 : config->login_timeout_ms;
 	cluster->max_socket_idle = (config->max_socket_idle > 86400) ? 86400 : config->max_socket_idle;
+	cluster->tend_thread_cpu = config->tend_thread_cpu;
 	cluster->async_max_conns_per_node = config->async_max_conns_per_node;
 	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;;
 	cluster->conn_pools_per_node = config->conn_pools_per_node;

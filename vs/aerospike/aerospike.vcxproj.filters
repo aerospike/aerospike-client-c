@@ -375,6 +375,9 @@
     <ClInclude Include="..\..\src\include\aerospike\as_query_validate.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\aerospike\as_cpu.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\main\aerospike\_bin.c">

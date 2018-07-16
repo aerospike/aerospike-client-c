@@ -46,6 +46,7 @@ as_config_init(as_config* c)
 	c->max_socket_idle = 0;
 	c->tender_interval = 1000;
 	c->thread_pool_size = 16;
+	c->tend_thread_cpu = -1;
 	as_policies_init(&c->policies);
 	as_config_lua_init(&c->lua);
 	memset(&c->tls, 0, sizeof(as_config_tls));

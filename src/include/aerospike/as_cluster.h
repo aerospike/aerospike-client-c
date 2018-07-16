@@ -262,6 +262,12 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Assign tend thread to this specific CPU ID.
+	 */
+	int tend_thread_cpu;
+
+	/**
+	 * @private
 	 * Authentication mode.
 	 */
 	as_auth_mode auth_mode;

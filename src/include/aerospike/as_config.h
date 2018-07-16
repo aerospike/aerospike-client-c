@@ -556,7 +556,13 @@ typedef struct as_config_s {
 	 * Default: 16
 	 */
 	uint32_t thread_pool_size;
-	
+
+	/**
+	 * Assign tend thread to this specific CPU ID.
+	 * Default: -1 (Any CPU).
+	 */
+	int tend_thread_cpu;
+
 	/**
 	 * Client policies
 	 */

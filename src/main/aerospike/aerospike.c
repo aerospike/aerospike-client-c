@@ -31,13 +31,17 @@
 #if defined(_MSC_VER)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-static bool library_initialized = false;
 #endif
 
 pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
 
 extern uint32_t as_event_loop_capacity;
+extern bool as_event_single_thread;
 static bool lua_initialized = false;
+
+#if defined(_MSC_VER) || defined(AS_USE_LIBEVENT)
+static bool library_initialized = false;
+#endif
 
 void
 as_config_destroy(as_config* config);
@@ -68,21 +72,32 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 as_status
 aerospike_library_init(as_error* err)
 {
-#if defined(_MSC_VER)
-	// Aerospike library initialization on windows.
+#if defined(_MSC_VER) || defined(AS_USE_LIBEVENT)
 	pthread_mutex_lock(&init_lock);
 
 	if (!library_initialized) {
+#if defined(_MSC_VER)
 		if (!cf_clock_init()) {
 			pthread_mutex_unlock(&init_lock);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "cf_clock_init() failed");
 		}
+#endif
 
 #if defined(AS_USE_LIBEVENT)
-		int evthread_use_windows_threads();
-		if (evthread_use_windows_threads() == -1) {
-			pthread_mutex_unlock(&init_lock);
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "evthread_use_windows_threads() failed");
+		if (! as_event_single_thread) {
+#if defined(_MSC_VER)
+			int evthread_use_windows_threads();
+			if (evthread_use_windows_threads() == -1) {
+				pthread_mutex_unlock(&init_lock);
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "evthread_use_windows_threads() failed");
+			}
+#else
+			int evthread_use_pthreads();
+			if (evthread_use_pthreads() == -1) {
+				pthread_mutex_unlock(&init_lock);
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "evthread_use_pthreads() failed");
+			}
+#endif
 		}
 #endif
 		library_initialized = true;

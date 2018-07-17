@@ -50,20 +50,6 @@ as_event_callback(evutil_socket_t sock, short revents, void* udata);
  * LIBEVENT FUNCTIONS
  *****************************************************************************/
 
-#if !defined(_MSC_VER)
-// Linux library initialization.
-// Windows initialization is performed in aerospike_library_init().
-__attribute__((constructor)) void as_event_library_init()
-{
-    if (evthread_use_pthreads() == -1) {
-		// Can't use as_log_error() because logging mechanism has not been
-		// inititialized yet.
-        printf("as_event_library_init: evthread_use_pthreads failed\n");
-        abort();
-    }
-}
-#endif
-
 static void
 as_event_close_loop(as_event_loop* event_loop)
 {

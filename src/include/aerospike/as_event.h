@@ -141,10 +141,24 @@ typedef struct as_event_loop {
 AS_EXTERN extern as_event_loop* as_event_loops;
 AS_EXTERN extern as_event_loop* as_event_loop_current;
 AS_EXTERN extern uint32_t as_event_loop_size;
+AS_EXTERN extern bool as_event_single_thread;
 
 /******************************************************************************
  * PUBLIC FUNCTIONS
  *****************************************************************************/
+
+/**
+ * Set flag to signify that all async commands will be created in their associated event loop thread.
+ * If enabled, the client can remove locks associated with sending async commands to the event loop.
+ * This flag is only referenced when running the client with the libevent framework.
+ *
+ * By default, async single thread mode is false.
+ */
+static inline void
+as_event_set_single_thread(bool single_thread)
+{
+	as_event_single_thread = single_thread;
+}
 
 /**
  * Initialize event loop configuration variables.

@@ -47,6 +47,7 @@ uint32_t as_event_loop_size = 0;
 int as_event_send_buffer_size = 0;
 int as_event_recv_buffer_size = 0;
 bool as_event_threads_created = false;
+bool as_event_single_thread = false;
 
 as_status aerospike_library_init(as_error* err);
 

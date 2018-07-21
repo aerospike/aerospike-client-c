@@ -578,7 +578,7 @@ as_shm_tender(void* userdata)
 	as_cluster* cluster = userdata;
 
 	if (cluster->tend_thread_cpu >= 0) {
-		if (! as_cpu_assign_thread(pthread_self(), cluster->tend_thread_cpu)) {
+		if (as_cpu_assign_thread(pthread_self(), cluster->tend_thread_cpu) != 0) {
 			as_log_warn("Failed to assign tend thread to cpu %d", cluster->tend_thread_cpu);
 		}
 	}
@@ -853,7 +853,19 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	cluster->valid = true;
 	
 	// Run tending thread which handles both master and prole tending.
-	pthread_create(&cluster->tend_thread, 0, as_shm_tender, cluster);
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+
+	if (cluster->tend_thread_cpu >= 0) {
+		as_cpu_assign_thread_attr(&attr, cluster->tend_thread_cpu);
+	}
+
+	if (pthread_create(&cluster->tend_thread, &attr, as_shm_tender, cluster) != 0) {
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s pid: %d",
+						strerror(errno), pid);
+		as_shm_destroy(cluster);
+		return err->code;
+	}
 	return AEROSPIKE_OK;
 }
 

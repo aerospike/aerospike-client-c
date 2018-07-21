@@ -660,7 +660,7 @@ as_cluster_tender(void* data)
 	as_cluster* cluster = (as_cluster*)data;
 
 	if (cluster->tend_thread_cpu >= 0) {
-		if (! as_cpu_assign_thread(pthread_self(), cluster->tend_thread_cpu)) {
+		if (as_cpu_assign_thread(pthread_self(), cluster->tend_thread_cpu) != 0) {
 			as_log_warn("Failed to assign tend thread to cpu %d", cluster->tend_thread_cpu);
 		}
 	}
@@ -1113,7 +1113,19 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 			return status;
 		}
 		// Run cluster tend thread.
-		pthread_create(&cluster->tend_thread, 0, as_cluster_tender, cluster);
+		pthread_attr_t attr;
+		pthread_attr_init(&attr);
+
+		if (cluster->tend_thread_cpu >= 0) {
+			as_cpu_assign_thread_attr(&attr, cluster->tend_thread_cpu);
+		}
+
+		if (pthread_create(&cluster->tend_thread, &attr, as_cluster_tender, cluster) != 0) {
+			status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s", strerror(errno));
+			as_cluster_destroy(cluster);
+			*cluster_out = 0;
+			return status;
+		}
 	}
 	*cluster_out = cluster;
 	return AEROSPIKE_OK;

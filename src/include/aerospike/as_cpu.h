@@ -31,23 +31,36 @@ extern "C" {
  *****************************************************************************/
 
 /**
- * Assign a thread to a specific cpu core.
+ * Assign a thread attribute to a specific cpu core.
  */
-static inline bool
-as_cpu_assign_thread(pthread_t thread, int cpu_id)
+static inline int
+as_cpu_assign_thread_attr(pthread_attr_t* attr, int cpu_id)
 {
-	int rv;
 #if defined(__APPLE__)
-	thread_affinity_policy_data_t policy = {cpu_id};
-	thread_port_t mach_thread = pthread_mach_thread_np(thread);
-	rv = thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY, (thread_policy_t)&policy, 1);
+	// CPU affinity will be set later.
+	return 0;
 #else
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);
 	CPU_SET(cpu_id, &cpuset);
-	rv = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+	return pthread_attr_setaffinity_np(attr, sizeof(cpu_set_t), &cpuset);
 #endif
-	return (rv == 0) ? true : false;
+}
+
+/**
+ * Assign a running thread to a specific cpu core.
+ */
+static inline int
+as_cpu_assign_thread(pthread_t thread, int cpu_id)
+{
+#if defined(__APPLE__)
+	thread_affinity_policy_data_t policy = {cpu_id};
+	thread_port_t mach_thread = pthread_mach_thread_np(thread);
+	return thread_policy_set(mach_thread, THREAD_AFFINITY_POLICY, (thread_policy_t)&policy, 1);
+#else
+	// CPU affinity already set.
+	return 0;
+#endif
 }
 
 #ifdef __cplusplus

@@ -863,9 +863,11 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	if (pthread_create(&cluster->tend_thread, &attr, as_shm_tender, cluster) != 0) {
 		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s pid: %d",
 						strerror(errno), pid);
+		pthread_attr_destroy(&attr);
 		as_shm_destroy(cluster);
 		return err->code;
 	}
+	pthread_attr_destroy(&attr);
 	return AEROSPIKE_OK;
 }
 

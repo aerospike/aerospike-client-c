@@ -1122,10 +1122,12 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 		if (pthread_create(&cluster->tend_thread, &attr, as_cluster_tender, cluster) != 0) {
 			status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s", strerror(errno));
+			pthread_attr_destroy(&attr);
 			as_cluster_destroy(cluster);
 			*cluster_out = 0;
 			return status;
 		}
+		pthread_attr_destroy(&attr);
 	}
 	*cluster_out = cluster;
 	return AEROSPIKE_OK;

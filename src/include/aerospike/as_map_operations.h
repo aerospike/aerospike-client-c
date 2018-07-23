@@ -125,7 +125,7 @@ typedef enum as_map_write_flags_e {
  */
 typedef struct as_map_policy_s {
 	uint64_t attributes;
-	uint32_t flags;
+	uint64_t flags;
 	int item_command;
 	int items_command;
 } as_map_policy;

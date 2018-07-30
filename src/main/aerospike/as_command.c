@@ -437,7 +437,7 @@ as_command_execute(
 	if (total_timeout > 0) {
 		deadline_ms = cf_getms() + policy->total_timeout;
 
-		if (socket_timeout > total_timeout) {
+		if (socket_timeout == 0 || socket_timeout > total_timeout) {
 			socket_timeout = total_timeout;
 		}
 	}

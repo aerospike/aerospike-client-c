@@ -336,13 +336,14 @@ typedef struct as_policy_base_s {
 	/**
 	 * Socket idle timeout in milliseconds when processing a database command.
 	 *
-	 * If socket_timeout is not zero and the socket has been idle for at least socket_timeout,
+	 * If socket_timeout is zero and total_timeout is non-zero, then socket_timeout will be set
+	 * to total_timeout.  If both socket_timeout and total_timeout are non-zero and
+	 * socket_timeout > total_timeout, then socket_timeout will be set to total_timeout. If both
+	 * socket_timeout and total_timeout are zero, then there will be no socket idle limit.
+	 *
+	 * If socket_timeout is non-zero and the socket has been idle for at least socket_timeout,
 	 * both max_retries and total_timeout are checked.  If max_retries and total_timeout are not
 	 * exceeded, the transaction is retried.
-	 *
-	 * If both socket_timeout and total_timeout are non-zero and socket_timeout > total_timeout,
-	 * then socket_timeout will be set to total_timeout.  If socket_timeout is zero, there will be
-	 * no socket idle limit.
 	 *
 	 * Default for everything but scan/query: 0 (no socket idle time limit).
 	 *

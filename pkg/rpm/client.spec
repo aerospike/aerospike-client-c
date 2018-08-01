@@ -25,6 +25,7 @@ if ! id -g aerospike >/dev/null 2>&1; then
 fi
 if ! id -u aerospike >/dev/null 2>&1; then
 	echo "Adding user aerospike"
+	mkdir -p /opt
 	/usr/sbin/useradd -d /opt/aerospike -c 'Aerospike' -g aerospike aerospike
 fi
 

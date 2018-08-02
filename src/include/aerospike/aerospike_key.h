@@ -67,7 +67,10 @@ extern "C" {
  * @param err			The as_error to be populated if an error occurs.
  * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  * @param key			The key of the record.
- * @param rec 			The record to be populated with the data from request.
+ * @param rec 			The record to be populated with the data from request. If the record pointer is
+ *						preset to NULL, the record will be created and initialized. If the record pointer
+ *						is not NULL, the record is assumed to be valid and will be reused. Either way,
+ *						the record must be preset.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  *
@@ -143,7 +146,10 @@ aerospike_key_get_async(
  * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  * @param key			The key of the record.
  * @param bins			The bins to select. A NULL terminated array of NULL terminated strings.
- * @param rec 			The record to be populated with the data from request.
+ * @param rec 			The record to be populated with the data from request. If the record pointer is
+ *						preset to NULL, the record will be created and initialized. If the record pointer
+ *						is not NULL, the record is assumed to be valid and will be reused. Either way,
+ *						the record must be preset.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  *
@@ -226,7 +232,10 @@ aerospike_key_select_async(
  * @param err			The as_error to be populated if an error occurs.
  * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  * @param key			The key of the record.
- * @param rec    		The metadata will be populated if the record exists.
+ * @param rec    		The metadata will be populated if the record exists. If the record pointer is
+ *						preset to NULL, the record will be created and initialized. If the record pointer
+ *						is not NULL, the record is assumed to be valid and will be reused. Either way,
+ *						the record must be preset.
  *
  * @return AEROSPIKE_OK if successful. AEROSPIKE_ERR_RECORD_NOT_FOUND if not found. Otherwise an error.
  *

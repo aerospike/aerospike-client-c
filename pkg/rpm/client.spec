@@ -15,19 +15,6 @@ The Aerospike C client is used to connect with an Aerospike server and perform d
 %files
 %defattr(-,root,root)
 /usr/lib/libaerospike.so
-%defattr(-,aerospike,aerospike)
-/opt/aerospike/client
-
-%pre
-if ! id -g aerospike >/dev/null 2>&1; then
-	echo "Adding group aerospike"
-	/usr/sbin/groupadd -r aerospike
-fi
-if ! id -u aerospike >/dev/null 2>&1; then
-	echo "Adding user aerospike"
-	mkdir -p /opt
-	/usr/sbin/useradd -d /opt/aerospike -c 'Aerospike' -g aerospike aerospike
-fi
 
 %post
 /sbin/ldconfig

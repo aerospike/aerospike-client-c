@@ -517,18 +517,6 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	// Initialize default lua configuration.
 	as_config_lua lua;
 	as_config_lua_init(&lua);
-
-	// Examples can be run from client binary package-installed lua files or
-	// from git client source tree lua files. If client binary package is not
-	// installed, look for lua system files in client source tree.	
-	if (! as_dir_exists(lua.system_path)) {
-		// Use lua files in source tree if they exist.
-		char* path = "../../../modules/lua-core/src";
-		
-		if (as_dir_exists(path)) {
-			strcpy(lua.system_path, path);
-		}
-	}
 	
 	if (lua_user_path) {
 		strcpy(lua.user_path, lua_user_path);

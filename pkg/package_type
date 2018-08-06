@@ -101,9 +101,6 @@ function CreatePackage {
     cp -p $baseDir/target/$os/lib/libaerospike.* $topDir/lib
     rm $topDir/lib/libaerospike.a
     chmod g-w,o-w $topDir/lib/libaerospike.*
-    mkdir -p $optDir/aerospike/client/sys/udf/lua
-    mkdir -p $optDir/aerospike/client/usr/udf/lua
-    cp -p $baseDir/modules/lua-core/src/{aerospike.lua,as.lua,stream_ops.lua} $optDir/aerospike/client/sys/udf/lua   
   fi
 }
 

@@ -32,23 +32,16 @@ extern "C" {
 
 #ifdef __linux__
 /**
- * Default path to the system UDF files.
- */
-#define AS_CONFIG_LUA_SYSTEM_PATH "/opt/aerospike/client/sys/udf/lua"
-
-/**
  * Default path to the user UDF files.
  */
 #define AS_CONFIG_LUA_USER_PATH "/opt/aerospike/client/usr/udf/lua"
 #endif
 
 #if defined(__APPLE__) || defined(__FreeBSD__)
-#define AS_CONFIG_LUA_SYSTEM_PATH "/usr/local/aerospike/client/sys/udf/lua"
 #define AS_CONFIG_LUA_USER_PATH "/usr/local/aerospike/client/usr/udf/lua"
 #endif
 
 #if defined(_MSC_VER)
-#define AS_CONFIG_LUA_SYSTEM_PATH "C:/aerospike/client/sys/udf/lua"
 #define AS_CONFIG_LUA_USER_PATH "C:/aerospike/client/usr/udf/lua"
 #endif
 
@@ -188,13 +181,6 @@ typedef struct as_config_lua_s {
 	 * application.
 	 */
 	bool cache_enabled;
-
-	/**
-	 * The path to the system UDF files. These UDF files 
-	 * are installed with the aerospike client library.
-	 * Default location defined in: AS_CONFIG_LUA_SYSTEM_PATH
-	 */
-	char system_path[AS_CONFIG_PATH_MAX_SIZE];
 
 	/**
 	 * The path to user's UDF files.
@@ -583,7 +569,6 @@ typedef struct as_config_s {
 	 *
 	 * // Optionally modify lua defaults.
 	 * lua.cache_enabled = <enable lua cache>;
-	 * strcpy(lua.system_path, <lua system directory>);
 	 * strcpy(lua.user_path, <lua user directory>);
 	 *
 	 * // Initialize global lua configuration.
@@ -787,7 +772,6 @@ static inline void
 as_config_lua_init(as_config_lua* lua)
 {
 	lua->cache_enabled = false;
-	strcpy(lua->system_path, AS_CONFIG_LUA_SYSTEM_PATH);
 	strcpy(lua->user_path, AS_CONFIG_LUA_USER_PATH);
 }
 

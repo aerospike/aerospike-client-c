@@ -23,17 +23,14 @@ if [ "$platform" = "mac" ]
 then
   # Mac OS X does not have /usr or /opt, so use /usr/local instead.
   installDir=/usr/local
-  luaDir=/usr/local
 else
   installDir=/usr
-  luaDir=/opt
 fi
 
 if [ -n "$INSTALL_PREFIX" ]
 then
   # Install dir might not require sudo, so do not enforce that requirement.
   installDir=$INSTALL_PREFIX
-  luaDir=$INSTALL_PREFIX
 else
   if [ $EUID -ne 0 ]
   then
@@ -55,11 +52,3 @@ chmod -R g-w,o-w $installDir/include/{aerospike,citrusleaf}
 echo cp $targetDir/lib/libaerospike.* $installDir/lib
 cp $targetDir/lib/libaerospike.* $installDir/lib
 chmod g-w,o-w $installDir/lib/libaerospike.*
-
-# Install Lua files.
-mkdir -p $luaDir/aerospike/client/sys/udf/lua
-mkdir -p $luaDir/aerospike/client/usr/udf/lua
-
-echo cp modules/lua-core/src/{aerospike.lua,as.lua,stream_ops.lua} $luaDir/aerospike/client/sys/udf/lua
-cp modules/lua-core/src/{aerospike.lua,as.lua,stream_ops.lua} $luaDir/aerospike/client/sys/udf/lua
-chmod g-w,o-w $luaDir/aerospike/client/sys/udf/lua/* $luaDir/aerospike/client/sys/udf/lua/*

@@ -6,10 +6,6 @@
 	path = modules/mod-lua
 	url = https://github.com/aerospike/aerospike-mod-lua
 	ignore = dirty
-[submodule "modules/lua-core"]
-	path = modules/lua-core
-	url = https://github.com/aerospike/aerospike-lua-core
-	ignore = dirty
 [submodule "modules/lua"]
 	path = modules/lua
 	url = https://github.com/aerospike/lua.git

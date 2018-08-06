@@ -142,10 +142,8 @@ aerospike_init_lua(as_config_lua* config)
     mod_lua_config lua = {
         .server_mode    = false,
         .cache_enabled  = config->cache_enabled,
-        .system_path    = {0},
         .user_path      = {0}
     };
-    as_strncpy(lua.system_path, config->system_path, sizeof(lua.system_path));
     as_strncpy(lua.user_path, config->user_path, sizeof(lua.user_path));
     
     as_module_configure(&mod_lua, &lua);

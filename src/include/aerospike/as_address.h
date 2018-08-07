@@ -95,6 +95,23 @@ as_address_copy_storage(struct sockaddr* src, struct sockaddr_storage* trg)
 	memcpy(trg, src, size);
 }
 
+/**
+ * @private
+ * Return if socket address is localhost.
+ */
+static inline bool
+as_address_is_local(struct sockaddr* addr)
+{
+	if (addr->sa_family == AF_INET) {
+		struct sockaddr_in* a = (struct sockaddr_in*)addr;
+		return (cf_swap_to_be32(a->sin_addr.s_addr) & 0xff000000) == 0x7f000000;
+	}
+	else {
+		struct sockaddr_in6* a = (struct sockaddr_in6*)addr;
+		return memcmp(&a->sin6_addr, &in6addr_loopback, sizeof(struct in6_addr)) == 0;
+	}
+}
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

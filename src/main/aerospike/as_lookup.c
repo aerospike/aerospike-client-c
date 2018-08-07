@@ -303,14 +303,20 @@ as_lookup_node(
 	}
 
 	if (detect_load_balancer) {
-		// Seed may be load balancer with changing address. Determine real address.
-		const char* address_command = (cluster->tls_ctx) ?
-			cluster->use_services_alternate ? "service-tls-alt" : "service-tls-std" :
-			cluster->use_services_alternate ? "service-clear-alt" : "service-clear-std";
+		if (as_address_is_local(addr)) {
+			// localhost is never a load balancer.
+			detect_load_balancer = false;
+		}
+		else {
+			// Seed may be load balancer with changing address. Determine real address.
+			const char* address_command = (cluster->tls_ctx) ?
+				cluster->use_services_alternate ? "service-tls-alt" : "service-tls-std" :
+				cluster->use_services_alternate ? "service-clear-alt" : "service-clear-std";
 
-		as_string_builder_append(&sb, address_command);
-		as_string_builder_append_char(&sb, '\n');
-		args++;
+			as_string_builder_append(&sb, address_command);
+			as_string_builder_append_char(&sb, '\n');
+			args++;
+		}
 	}
 
 	char* response = 0;

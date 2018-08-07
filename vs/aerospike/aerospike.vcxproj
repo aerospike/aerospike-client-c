@@ -447,6 +447,7 @@
     <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_record.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_reg.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_stream.c" />
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_system.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_val.c" />
     <ClCompile Include="..\..\src\main\aerospike\aerospike.c" />
     <ClCompile Include="..\..\src\main\aerospike\aerospike_batch.c" />

@@ -710,6 +710,9 @@
     <ClCompile Include="..\..\src\main\aerospike\as_query_validate.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_system.c">
+      <Filter>Source Files\mod-lua</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

@@ -16,6 +16,8 @@
  */
 #pragma once
 
+#include <aerospike/as_std.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

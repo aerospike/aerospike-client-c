@@ -306,26 +306,6 @@ AS_EXTERN as_record*
 as_record_init(as_record* rec, uint16_t nbins);
 
 /**
- * Shallow copy all record fields except the key.  The bin values will have their
- * reference counts incremented.  This function is useful when copying a stack allocated
- * record to the heap.
- *
- * If the source record is already heap allocated, then just calling `as_val_reserve(record)`
- * is sufficient.
- *
- * When finished using the copied `as_record` instance, release the
- * resources allocated to it by calling `as_record_destroy()`.
- *
- * @param src		The source record.
- *
- * @return a pointer to the new copied as_record.
- *
- * @relates as_record
- */
-AS_EXTERN as_record*
-as_record_copy(as_record* src);
-
-/**
  * Destroy the as_record and associated resources.
  *
  * @param rec The record to destroy.

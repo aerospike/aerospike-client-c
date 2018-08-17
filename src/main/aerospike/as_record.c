@@ -169,34 +169,6 @@ as_record_init(as_record* rec, uint16_t nbins)
 	return as_record_defaults(rec, false, nbins);
 }
 
-as_record*
-as_record_copy(as_record* src)
-{
-	uint16_t size = src->bins.size;
-	as_record* trg = as_record_new(size);
-
-	trg->gen = src->gen;
-	trg->ttl = src->ttl;
-	trg->bins.size = size;
-
-	for (uint16_t i = 0; i < size; i++) {
-		as_bin* src_bin = &src->bins.entries[i];
-		as_bin* trg_bin = &trg->bins.entries[i];
-
-		as_val_reserve(src_bin->valuep);
-		strcpy(trg_bin->name, src_bin->name);
-		trg_bin->value = src_bin->value;
-
-		if (src_bin->valuep == &src_bin->value) {
-			trg_bin->valuep = &trg_bin->value;
-		}
-		else {
-			trg_bin->valuep = src_bin->valuep;
-		}
-	}
-	return trg;
-}
-
 void
 as_record_destroy(as_record* rec)
 {

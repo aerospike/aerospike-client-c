@@ -847,8 +847,8 @@ as_predexp_mapkey_iterate_or(char const * varname);
  * as_query_predexp_add(&q, as_predexp_string_var("item"));
  * as_query_predexp_add(&q, as_predexp_string_equal());
  * as_query_predexp_add(&q, as_predexp_not());
- * as_query_predexp_add(&q, as_predexp_map_bin("petcount"));
- * as_query_predexp_add(&q, as_predexp_mapkey_iterate_or("item"));
+ * as_query_predexp_add(&q, as_predexp_map_bin("pet"));
+ * as_query_predexp_add(&q, as_predexp_mapkey_iterate_and("item"));
  * ~~~~~~~~~~
  *
  * @param varname	The name of the map key iteration variable.

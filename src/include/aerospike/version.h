@@ -3,6 +3,6 @@
 // N: minor
 // P: patch
 // B: build id
-#define AEROSPIKE_CLIENT_VERSION 403150000L
+#define AEROSPIKE_CLIENT_VERSION 403160000L
 
 extern char* aerospike_client_version;

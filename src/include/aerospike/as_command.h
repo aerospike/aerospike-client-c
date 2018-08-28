@@ -212,7 +212,7 @@ as_command_bin_size(const as_bin* bin, as_buffer* buffer)
 
 /**
  * @private
- * Calculate size of bin name.  Return error is bin name greater than 14 characters.
+ * Calculate size of bin name. Return error is bin name greater than AS_BIN_NAME_MAX_LEN characters.
  */
 static inline as_status
 as_command_bin_name_size(as_error* err, const char* name, size_t* size)

@@ -35,7 +35,7 @@ extern "C" {
 /**
  * Maximum bin name size
  */
-#define AS_BIN_NAME_MAX_SIZE 15
+#define AS_BIN_NAME_MAX_SIZE 16
 
 /**
  * Maximum bin name length

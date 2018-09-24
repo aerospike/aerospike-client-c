@@ -132,7 +132,7 @@ reserve_node(as_cluster* cluster, as_node* node, bool cp_mode)
 		as_node_reserve(node);
 		return node;
 	}
-	return cp_mode ? NULL : as_node_get_random(cluster);
+	return NULL;
 }
 
 static as_node*

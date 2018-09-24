@@ -470,7 +470,7 @@ as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_in
 			return node;
 		}
 	}
-	return cp_mode ? NULL : as_node_get_random(cluster);
+	return NULL;
 }
 
 static as_node*

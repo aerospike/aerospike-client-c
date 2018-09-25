@@ -446,11 +446,6 @@ as_command_execute(
 	while (true) {
 		if (cn->node) {
 			node = cn->node;
-
-			if (! node) {
-				// There are no active nodes in the cluster.  It's not worth retrying.
-				return as_error_set_message(err, AEROSPIKE_ERR_INVALID_NODE, "Invalid namespace or node");
-			}
 			release_node = false;
 		}
 		else {

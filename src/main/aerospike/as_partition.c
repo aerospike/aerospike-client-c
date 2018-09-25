@@ -224,7 +224,7 @@ force_replicas_refresh(as_node* node)
 }
 
 static void
-as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint32_t regime)
+as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint32_t regime, bool* regime_error)
 {
 	// Volatile reads are not necessary because the tend thread exclusively modifies partition.
 	// Volatile writes are used so other threads can view change.
@@ -236,18 +236,27 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint
 			}
 		}
 		else {
-			if (owns && regime >= p->regime) {
-				as_node* tmp = p->master;
-				as_node_reserve(node);
-				set_node(&p->master, node);
+			if (owns) {
+				if (regime >= p->regime) {
+					as_node* tmp = p->master;
+					as_node_reserve(node);
+					set_node(&p->master, node);
 
-				if (regime > p->regime) {
-					p->regime = regime;
+					if (regime > p->regime) {
+						p->regime = regime;
+					}
+
+					if (tmp) {
+						force_replicas_refresh(tmp);
+						as_node_release(tmp);
+					}
 				}
-
-				if (tmp) {
-					force_replicas_refresh(tmp);
-					as_node_release(tmp);
+				else {
+					if (!(*regime_error)) {
+						as_log_info("%s regime(%u) < old regime(%u)",
+									as_node_get_address_string(node), regime, p->regime);
+						*regime_error = true;
+					}
 				}
 			}
 		}
@@ -260,18 +269,27 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint
 			}
 		}
 		else {
-			if (owns && regime >= p->regime) {
-				as_node* tmp = p->prole;
-				as_node_reserve(node);
-				set_node(&p->prole, node);
+			if (owns) {
+				if (regime >= p->regime) {
+					as_node* tmp = p->prole;
+					as_node_reserve(node);
+					set_node(&p->prole, node);
 
-				if (regime > p->regime) {
-					p->regime = regime;
+					if (regime > p->regime) {
+						p->regime = regime;
+					}
+
+					if (tmp) {
+						force_replicas_refresh(tmp);
+						as_node_release(tmp);
+					}
 				}
-
-				if (tmp) {
-					force_replicas_refresh(tmp);
-					as_node_release(tmp);
+				else {
+					if (!(*regime_error)) {
+						as_log_info("%s regime(%u) < old regime(%u)",
+									as_node_get_address_string(node), regime, p->regime);
+						*regime_error = true;
+					}
 				}
 			}
 		}
@@ -294,7 +312,7 @@ as_partition_vector_get(as_vector* tables, const char* ns)
 }
 
 static void
-decode_and_update(char* bitmap_b64, uint32_t len, as_partition_table* table, as_node* node, bool master, uint32_t regime)
+decode_and_update(char* bitmap_b64, uint32_t len, as_partition_table* table, as_node* node, bool master, uint32_t regime, bool* regime_error)
 {
 	// Size allows for padding - is actual size rounded up to multiple of 3.
 	uint8_t* bitmap = (uint8_t*)alloca(cf_b64_decoded_buf_size(len));
@@ -310,7 +328,7 @@ decode_and_update(char* bitmap_b64, uint32_t len, as_partition_table* table, as_
 			as_log_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i, node->name);
 		}
 		*/
-		as_partition_update(&table->partitions[i], node, master, owns, regime);
+		as_partition_update(&table->partitions[i], node, master, owns, regime, regime_error);
 	}
 }
 
@@ -351,6 +369,7 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 	char* ns = p;
 	char* bitmap_b64 = 0;
 	int64_t len;
+	bool regime_error = false;
 	
 	// Add all tables at once to avoid copying entire array multiple times.
 	as_vector tables_to_add;
@@ -406,7 +425,7 @@ as_partition_tables_update(as_cluster* cluster, as_node* node, char* buf, bool m
 				}
 
 				// Decode partition bitmap and update client's view.
-				decode_and_update(bitmap_b64, (uint32_t)len, table, node, master, 0);
+				decode_and_update(bitmap_b64, (uint32_t)len, table, node, master, 0, &regime_error);
 			}
 			ns = ++p;
 		}
@@ -439,6 +458,7 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 	char* begin = 0;
 	int64_t len;
 	uint32_t regime = 0;
+	bool regime_error = false;
 
 	// Add all tables at once to avoid copying entire array multiple times.
 	as_vector tables_to_add;
@@ -522,7 +542,7 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 						}
 						
 						// Decode partition bitmap and update client's view.
-						decode_and_update(begin, (uint32_t)len, table, node, master, regime);
+						decode_and_update(begin, (uint32_t)len, table, node, master, regime, &regime_error);
 					}
 				}
 			}

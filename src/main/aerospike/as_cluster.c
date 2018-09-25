@@ -883,6 +883,14 @@ as_cluster_get_node(
 
 	if (! table) {
 		*node_pp = NULL;
+
+		as_nodes* nodes = as_nodes_reserve(cluster);
+		uint32_t n_nodes = nodes->size;
+		as_nodes_release(nodes);
+
+		if (n_nodes == 0) {
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+		}
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
 	}
 
@@ -893,7 +901,8 @@ as_cluster_get_node(
 
 	if (! node) {
 		*node_pp = NULL;
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid node for key.");
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node not found for partition %s:%u",
+							   ns, partition_id);
 	}
 
 	*node_pp = node;

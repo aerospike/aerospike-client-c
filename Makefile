@@ -37,9 +37,6 @@ endif
 # Override optimizations via: make O=n
 O = 3
 
-# Use SystemTap?  [By default, no.]
-USE_SYSTEMTAP = 0
-
 # Make-local Compiler Flags
 CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O$(O)
 CC_FLAGS += -fno-common -fno-strict-aliasing 
@@ -81,10 +78,6 @@ else ifeq ($(OS),FreeBSD)
 else
   CC_FLAGS += -finline-functions -rdynamic
   LUA_PLATFORM = linux
-endif
-
-ifeq ($(USE_SYSTEMTAP),1)
-CC_FLAGS +=	-DUSE_SYSTEMTAP
 endif
 
 # Linker flags
@@ -132,14 +125,6 @@ else
     endif
     LIB_LUA += -llua$(LUA_SUFFIX)
   endif
-endif
-
-ifeq ($(USE_SYSTEMTAP),1)
-## SYSTEMTAP_PROBES_H = $(COMMON)/$(SOURCE_INCL)/aerospike/probes.h
-SYSTEMTAP_PROBES_H = $(SOURCE_MAIN)/aerospike/probes.h
-SYSTEMTAP_PROBES_D = $(SOURCE_MAIN)/aerospike/probes.d
-SYSTEMTAP_PROBES_O = $(TARGET_OBJ)/probes.o
-## SYSTEMTAP_PROBES_O = $(COMMON)/$(TARGET_OBJ)/common/aerospike/probes.o
 endif
 
 ###############################################################################
@@ -277,7 +262,7 @@ all: modules build prepare
 
 .PHONY: clean
 clean: modules-clean docs-clean package-clean
-	@rm -rf $(TARGET) $(SYSTEMTAP_PROBES_H)
+	@rm -rf $(TARGET)
 
 .PHONY: version
 version:
@@ -295,7 +280,7 @@ prepare-clean:
 	@rm -rf $(TARGET_INCL)
 
 .PHONY: libaerospike
-libaerospike: $(SYSTEMTAP_PROBES_H) libaerospike.a libaerospike.$(DYNAMIC_SUFFIX)
+libaerospike: libaerospike.a libaerospike.$(DYNAMIC_SUFFIX)
 
 .PHONY: libaerospike.a libaerospike.$(DYNAMIC_SUFFIX)
 libaerospike.a: $(TARGET_LIB)/libaerospike.a
@@ -335,10 +320,10 @@ $(TARGET_OBJ)/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TA
 $(TARGET_OBJ)/aerospike/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/aerospike/%.c $(SOURCE_INCL)/citrusleaf/*.h $(SOURCE_INCL)/aerospike/*.h | modules
 	$(object)
 
-$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(SYSTEMTAP_PROBES_O) | modules
+$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) | modules
 	$(library) $(DEPS) $(LUA_DYNAMIC_OBJ)
 
-$(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(SYSTEMTAP_PROBES_O) | modules
+$(TARGET_LIB)/libaerospike.a: $(OBJECTS) | modules
 	$(archive) $(DEPS) $(LUA_STATIC_OBJ)
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)
@@ -346,14 +331,6 @@ $(TARGET_INCL)/aerospike: | $(TARGET_INCL)
 
 $(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
 	cp -p $^ $@
-
-ifeq ($(USE_SYSTEMTAP),1)
-$(SYSTEMTAP_PROBES_H):	$(SYSTEMTAP_PROBES_D)
-	dtrace -h -s $< -o $@
-
-$(SYSTEMTAP_PROBES_O):	$(SYSTEMTAP_PROBES_D)
-	dtrace -G -s $< -o $@
-endif
 
 ###############################################################################
 include project/modules.mk project/test.mk project/rules.mk

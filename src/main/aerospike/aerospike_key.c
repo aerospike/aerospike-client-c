@@ -36,8 +36,6 @@
 #include <aerospike/as_status.h>
 #include <citrusleaf/cf_clock.h>
 
-#include "as_stap.h"
-
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -384,11 +382,6 @@ aerospike_key_put(
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 
-#if defined(USE_SYSTEMTAP)
-	size += as_command_field_size(8);
-	n_fields++;
-#endif
-
 	memset(buffers, 0, sizeof(as_buffer) * n_bins);
 	
 	for (uint32_t i = 0; i < n_bins; i++) {
@@ -401,11 +394,6 @@ aerospike_key_put(
 					n_bins, policy->durable_delete);
 		
 	p = as_command_write_key(p, policy->key, key);
-	
-#if defined(USE_SYSTEMTAP)
-	uint64_t task_id = as_random_get_uint64();
-	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
-#endif
 
 	for (uint32_t i = 0; i < n_bins; i++) {
 		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
@@ -418,9 +406,7 @@ aerospike_key_put(
 	
 	if (policy->compression_threshold == 0 || (size <= policy->compression_threshold)) {
 		// Send uncompressed command.
-		AEROSPIKE_PUT_EXECUTE_STARTING(task_id);
 		status = as_command_execute(as->cluster, err, &policy->base, &cn, cmd, size, as_command_parse_header, &msg, false);
-		AEROSPIKE_PUT_EXECUTE_FINISHED(task_id);
 	}
 	else {
 		// Send compressed command.
@@ -429,9 +415,7 @@ aerospike_key_put(
 		status = as_command_compress(err, cmd, size, comp_cmd, &comp_size);
 		
 		if (status == AEROSPIKE_OK) {
-			AEROSPIKE_PUT_EXECUTE_STARTING(task_id);
 			status = as_command_execute(as->cluster, err, &policy->base, &cn, comp_cmd, comp_size, as_command_parse_header, &msg, false);
-			AEROSPIKE_PUT_EXECUTE_FINISHED(task_id);
 		}
 		as_command_free(comp_cmd, comp_size);
 	}

@@ -35,8 +35,6 @@
 #include <aerospike/as_udf_context.h>
 #include <aerospike/mod_lua.h>
 
-#include "as_stap.h"
-
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -274,30 +272,22 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 	bool rv = true;
 	
 	if (task->input_queue) {
-		AEROSPIKE_QUERY_AGGPARSE_STARTING(task->task_id, task->node->name);
-
 		// Parse aggregate return values.
 		as_val* val = 0;
 		as_status status = as_command_parse_success_failure_bins(pp, err, msg, &val);
 		
-		AEROSPIKE_QUERY_AGGPARSE_FINISHED(task->task_id, task->node->name);
-
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 		
 		if (task->callback) {
-			AEROSPIKE_QUERY_AGGCB_STARTING(task->task_id, task->node->name);
 			rv = task->callback(val, task->udata);
-			AEROSPIKE_QUERY_AGGCB_FINISHED(task->task_id, task->node->name);
 		}
 		else {
 			as_val_destroy(val);
 		}
 	}
 	else {
-		AEROSPIKE_QUERY_RECPARSE_STARTING(task->task_id, task->node->name);
-
 		// Parse normal record values.
 		as_record rec;
 		as_record_inita(&rec, msg->n_ops);
@@ -306,11 +296,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 		*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
 
-		AEROSPIKE_QUERY_RECPARSE_BINS(task->task_id, task->node->name);
-
 		as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->query_policy->deserialize);
-
-		AEROSPIKE_QUERY_RECPARSE_FINISHED(task->task_id, task->node->name);
 
 		if (status != AEROSPIKE_OK) {
 			as_record_destroy(&rec);
@@ -318,9 +304,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		}
 
 		if (task->callback) {
-			AEROSPIKE_QUERY_RECCB_STARTING(task->task_id, task->node->name);
 			rv = task->callback((as_val*)&rec, task->udata);
-			AEROSPIKE_QUERY_RECCB_FINISHED(task->task_id, task->node->name);
 		}
 		as_record_destroy(&rec);
 	}
@@ -333,11 +317,6 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 	uint8_t* p = buf;
 	uint8_t* end = buf + size;
 	as_status status;
-#if defined(USE_SYSTEMTAP)
-    size_t nrecs = 0;
-#endif
-
-	AEROSPIKE_QUERY_PARSE_RECORDS_STARTING(task->task_id, task->node->name, size);
 
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
@@ -350,40 +329,28 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 			// We are sending "no more records back" to the caller which will
 			// send OK to the main worker thread.
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-				AEROSPIKE_QUERY_PARSE_RECORDS_FINISHED(task->task_id, task->node->name, nrecs, AEROSPIKE_NO_MORE_RECORDS);
 				return AEROSPIKE_NO_MORE_RECORDS;
 			}
 			status = as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
-			AEROSPIKE_QUERY_PARSE_RECORDS_FINISHED(task->task_id, task->node->name, nrecs, status);
 			return status;
 		}
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			AEROSPIKE_QUERY_PARSE_RECORDS_FINISHED(task->task_id, task->node->name, nrecs, AEROSPIKE_NO_MORE_RECORDS);
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
 		
 		status = as_query_parse_record(&p, msg, task, err);
 		
 		if (status != AEROSPIKE_OK) {
-			AEROSPIKE_QUERY_PARSE_RECORDS_FINISHED(task->task_id, task->node->name, nrecs, status);
 			return status;
 		}
-		
 
-#if defined(USE_SYSTEMTAP)
-		++nrecs;
-#endif
 		if (as_load_uint32(task->error_mutex)) {
 			err->code = AEROSPIKE_ERR_QUERY_ABORTED;
-			AEROSPIKE_QUERY_PARSE_RECORDS_FINISHED(task->task_id, task->node->name, nrecs, err->code);
 			return err->code;
 		}
 	}
-
-	AEROSPIKE_QUERY_PARSE_RECORDS_FINISHED(task->task_id, task->node->name, nrecs, AEROSPIKE_OK);
-
 	return AEROSPIKE_OK;
 }
 
@@ -441,8 +408,6 @@ as_query_command_execute(as_query_task* task)
 	as_command_node cn;
 	cn.node = task->node;
 	
-	AEROSPIKE_QUERY_COMMAND_EXECUTE(task->task_id, task->node->name);
-
 	as_error err;
 	as_error_init(&err);
 
@@ -935,8 +900,6 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 				n_wait_nodes = i;
 				break;
 			}
-
-			AEROSPIKE_QUERY_ENQUEUE_TASK(task->task_id, task_node->node->name);
 		} else {
 			if ((status = as_query_command_execute(task_node)) != AEROSPIKE_OK) {
 				break;
@@ -951,8 +914,6 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 			as_query_complete_task complete;
 			cf_queue_pop(task->complete_q, &complete, CF_QUEUE_FOREVER);
 			
-			AEROSPIKE_QUERY_COMMAND_COMPLETE(task->task_id, complete.node->name);
-
 			if (complete.result != AEROSPIKE_OK && status == AEROSPIKE_OK) {
 				status = complete.result;
 			}
@@ -1086,8 +1047,6 @@ aerospike_query_foreach(
 		.first = true
 	};
 	
-	AEROSPIKE_QUERY_FOREACH_STARTING(task.task_id);
-
 	if (query->apply.function[0]) {
 		// Query with aggregation.
 		task.input_queue = cf_queue_create(sizeof(void*), true);
@@ -1153,8 +1112,6 @@ aerospike_query_foreach(
 
 	// Release nodes array.
 	as_nodes_release(nodes);
-
-	AEROSPIKE_QUERY_FOREACH_FINISHED(task.task_id);
 
 	return status;
 }

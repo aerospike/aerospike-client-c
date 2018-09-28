@@ -378,6 +378,9 @@
     <ClInclude Include="..\..\src\include\aerospike\as_cpu.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_msgpack_ext.h">
+      <Filter>Header Files\common\aerospike</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\main\aerospike\_bin.c">
@@ -712,6 +715,9 @@
     </ClCompile>
     <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_system.c">
       <Filter>Source Files\mod-lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_msgpack_ext.c">
+      <Filter>Source Files\common\aerospike</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

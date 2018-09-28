@@ -294,6 +294,7 @@
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_module.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_monitor.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_msgpack.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_msgpack_ext.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_msgpack_serializer.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_nil.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_pair.h" />
@@ -407,6 +408,7 @@
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_memtracker.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_module.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_msgpack.c" />
+    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_msgpack_ext.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_msgpack_serializer.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_nil.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_pair.c" />

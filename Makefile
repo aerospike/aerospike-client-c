@@ -222,6 +222,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_log.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_monitor.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_msgpack_ext.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_nil.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_pair.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_password.h

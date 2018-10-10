@@ -133,7 +133,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->friends = 0;
 	node->failures = 0;
 	node->index = 0;
-	node->perform_login = false;
+	node->perform_login = 0;
 	node->active = true;
 	node->partition_changed = false;
 	return node;
@@ -517,6 +517,32 @@ as_node_login(as_error* err, as_node* node, as_socket* sock)
 	node->session_token = node_info.session_token;
 	node->session_token_length = node_info.session_token_length;
 	as_store_uint8(&node->perform_login, 0);
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_node_ensure_login_shm(as_error* err, as_node* node)
+{
+	if (as_load_uint8(&node->perform_login) || (node->session_expiration > 0 && cf_getns() >= node->session_expiration)) {
+		as_socket sock;
+		uint64_t deadline_ms = as_socket_deadline(node->cluster->conn_timeout_ms);
+		as_status status = as_node_create_socket(err, node, NULL, &sock, deadline_ms);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
+		status = as_node_login(err, node, &sock);
+
+		if (status != AEROSPIKE_OK) {
+			as_socket_close(&sock);
+			return status;
+		}
+
+		// Shared memory prole tender only needs updated session token and not the socket.
+		// Close socket immediately.
+		as_socket_close(&sock);
+	}
 	return AEROSPIKE_OK;
 }
 

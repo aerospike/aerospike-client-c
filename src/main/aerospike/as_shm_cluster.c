@@ -55,6 +55,9 @@ as_cluster_add_seeds(as_cluster* cluster);
 as_status
 as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings);
 
+as_status
+as_node_ensure_login_shm(as_error* err, as_node* node);
+
 void
 as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add);
 
@@ -233,6 +236,39 @@ as_shm_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_re
 }
 
 static void
+as_shm_ensure_login_node(as_error* err, as_node* node)
+{
+	as_status status = as_node_ensure_login_shm(err, node);
+
+	if (status != AEROSPIKE_OK) {
+		as_log_error("Failed to retrieve session token in shared memory prole tender: %d %s",
+					 err->code, err->message);
+	}
+}
+
+static void
+as_shm_ensure_login(as_cluster* cluster, as_error* err)
+{
+	as_shm_info* shm_info = cluster->shm_info;
+	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
+	as_node_shm* nodes_shm = cluster_shm->nodes;
+	uint32_t max = as_load_uint32(&cluster_shm->nodes_size);
+
+	for (uint32_t i = 0; i < max; i++) {
+		as_node_shm* node_shm = &nodes_shm[i];
+
+		as_swlock_read_lock(&node_shm->lock);
+		uint8_t active = node_shm->active;
+		as_swlock_read_unlock(&node_shm->lock);
+
+		if (active) {
+			as_node* node = shm_info->local_nodes[i];
+			as_shm_ensure_login_node(err, node);
+		}
+	}
+}
+
+static void
 as_shm_reset_nodes(as_cluster* cluster)
 {
 	// Synchronize shared memory nodes with local nodes.
@@ -268,8 +304,18 @@ as_shm_reset_nodes(as_cluster* cluster)
 				node_info.host.tls_name = node_tmp.tls_name;
 				node_info.host.port = 0;
 				as_address_copy_storage((struct sockaddr*)&node_tmp.addr, &node_info.addr);
+				node_info.session_expiration = 0;
+				node_info.session_token = NULL;
+				node_info.session_token_length = 0;
 				node = as_node_create(cluster, &node_info);
 				node->index = i;
+
+				if (cluster->user) {
+					// Retrieve session token.
+					as_error err;
+					node->perform_login = 1;
+					as_shm_ensure_login_node(&err, node);
+				}
 				as_vector_append(&nodes_to_add, &node);
 				as_store_ptr(&shm_info->local_nodes[i], node);
 			}
@@ -620,6 +666,10 @@ as_shm_tender(void* userdata)
 			}
 		}
 		else {
+			if (cluster->user) {
+				as_shm_ensure_login(cluster, &err);
+			}
+
 			// Follow shared memory cluster.
 			// Check if tend owner has released lock.
 			if (as_cas_uint8(&cluster_shm->lock, 0, 1)) {

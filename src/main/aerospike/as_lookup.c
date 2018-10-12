@@ -173,6 +173,10 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 				}
 
 				if (status == AEROSPIKE_OK) {
+					char new_addr_name[AS_IP_ADDRESS_SIZE];
+					as_address_short_name(addr, new_addr_name, sizeof(new_addr_name));
+					as_log_info("Switch node address from %s to node's access-address %s", addr_name, new_addr_name);
+
 					as_socket_close(&node_info->socket);
 					memcpy(&node_info->socket, &sock, sizeof(as_socket));
 					node_info->host.name = (char*)hostname;

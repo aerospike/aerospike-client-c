@@ -173,21 +173,35 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 				}
 
 				if (status == AEROSPIKE_OK) {
-					char new_addr_name[AS_IP_ADDRESS_SIZE];
-					as_address_short_name(addr, new_addr_name, sizeof(new_addr_name));
-					as_log_info("Switch node address from %s to node's access-address %s", addr_name, new_addr_name);
+					// Socket is non-blocking, so must use socket to really tell if connect succeeded.
+					char* response2 = 0;
+					status = as_info_command(err, &sock, NULL, "node", true, deadline, 0, &response2);
 
-					as_socket_close(&node_info->socket);
-					memcpy(&node_info->socket, &sock, sizeof(as_socket));
-					node_info->host.name = (char*)hostname;
-					node_info->host.tls_name = tls_name;
-					node_info->host.port = host->port;
-					as_address_copy_storage(addr, &node_info->addr);
-					as_lookup_end(&iter);
-					as_vector_destroy(&hosts);
-					return AEROSPIKE_OK;
+					if (status == AEROSPIKE_OK) {
+						// Verify node name.
+						char* node_name = 0;
+						status = as_info_parse_single_response(response2, &node_name);
+
+						if (status == AEROSPIKE_OK && strcmp(node_name, node_info->name) == 0) {
+							// Switch address.
+							char new_addr_name[AS_IP_ADDRESS_SIZE];
+							as_address_short_name(addr, new_addr_name, sizeof(new_addr_name));
+							as_log_info("Switch node address from %s to node's access-address %s", addr_name, new_addr_name);
+
+							as_socket_close(&node_info->socket);
+							memcpy(&node_info->socket, &sock, sizeof(as_socket));
+							node_info->host.name = (char*)hostname;
+							node_info->host.tls_name = tls_name;
+							node_info->host.port = host->port;
+							as_address_copy_storage(addr, &node_info->addr);
+							as_lookup_end(&iter);
+							as_vector_destroy(&hosts);
+							cf_free(response2);
+							return AEROSPIKE_OK;
+						}
+						cf_free(response2);
+					}
 				}
-
 				// Close and try next address.
 				as_socket_close(&sock);
 			}

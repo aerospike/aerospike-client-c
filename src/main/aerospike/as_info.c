@@ -105,13 +105,19 @@ as_info_command_node(
 	}
 	
 	status = as_info_command(err, &socket, node, command, send_asis, deadline_ms, 0, response);
-	
-	if (status == AEROSPIKE_ERR_TIMEOUT || status == AEROSPIKE_ERR_CLIENT) {
-		as_node_close_connection(&socket);
+
+	if (status != AEROSPIKE_OK) {
+		if (status == AEROSPIKE_ERR_TIMEOUT || status == AEROSPIKE_ERR_CLIENT) {
+			// Add node address to error message.
+			char str[512];
+			snprintf(str, sizeof(str), " from %s", as_node_get_address_string(node));
+			as_error_append(err, str);
+			as_node_close_connection(&socket);
+			return status;
+		}
 	}
-	else {
-		as_node_put_connection(&socket, node->cluster->max_socket_idle);
-	}
+
+	as_node_put_connection(&socket, node->cluster->max_socket_idle);
 	return status;
 }
 

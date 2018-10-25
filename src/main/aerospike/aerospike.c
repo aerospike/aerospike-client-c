@@ -285,6 +285,19 @@ aerospike_stop_on_interrupt(bool stop)
 as_status
 aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const char* ns, const char* set, uint64_t before_nanos)
 {
+	as_error_reset(err);
+
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
+
+	// Send truncate command to one node. That node will distribute the command to other nodes.
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
+	}
+
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 500, false);
 	as_string_builder_append(&sb, "truncate:namespace=");
@@ -302,9 +315,25 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
 		snprintf(buff, sizeof(buff), "%" PRIu64, before_nanos);
 		as_string_builder_append(&sb, buff);
 	}
+	else {
+		// Servers >= 4.3.1.4 require lut argument.
+		if (node->features & AS_FEATURES_LUT_NOW) {
+			as_string_builder_append(&sb, ";lut=now");
+		}
+	}
+	as_string_builder_append_char(&sb, '\n');
 
-	// Send truncate command to one node. That node will distribute the command to other nodes.
-	return as_info_command_random_node(as, err, policy, sb.data);
+	uint64_t deadline = as_socket_deadline(policy->timeout);
+	char* response;
+
+	as_status status = as_info_command_node(err, node, sb.data, true, deadline, &response);
+
+	if (status == AEROSPIKE_OK) {
+		cf_free(response);
+	}
+
+	as_node_release(node);
+	return status;
 }
 
 as_status

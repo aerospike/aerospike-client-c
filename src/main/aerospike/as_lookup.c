@@ -426,6 +426,9 @@ as_lookup_node(
 		else if (strcmp(begin, "cluster-stable") == 0) {
 			features |= AS_FEATURES_CLUSTER_STABLE;
 		}
+		else if (strcmp(begin, "lut-now") == 0) {
+			features |= AS_FEATURES_LUT_NOW;
+		}
 		begin = end;
 	}
 	node_info->features = features;

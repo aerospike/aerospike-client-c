@@ -58,6 +58,7 @@ extern "C" {
 #define AS_FEATURES_PEERS          (1 << 5)
 #define AS_FEATURES_REPLICAS       (1 << 6)
 #define AS_FEATURES_CLUSTER_STABLE (1 << 7)
+#define AS_FEATURES_LUT_NOW        (1 << 8)
 
 #define AS_ADDRESS4_MAX 4
 #define AS_ADDRESS6_MAX 8

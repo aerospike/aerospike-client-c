@@ -726,21 +726,6 @@ typedef struct as_policy_batch_s {
 	bool concurrent;
 
 	/**
-	 * Use old batch direct protocol where batch reads are handled by direct low-level batch server
-	 * database routines.  The batch direct protocol can be faster when there is a single namespace,
-	 * but there is one important drawback.  The batch direct protocol will not proxy to a different
-	 * server node when the mapped node has migrated a record to another node (resulting in not
-	 * found record).
-	 *
-	 * This can happen after a node has been added/removed from the cluster and there is a lag
-	 * between records being migrated and client partition map update (once per second).
-	 *
-	 * The new batch index protocol will perform this record proxy when necessary.
-	 * Default: false (use new batch index protocol if server supports it)
-	 */
-	bool use_batch_direct;
-
-	/**
 	 * Allow batch to be processed immediately in the server's receiving thread when the server
 	 * deems it to be appropriate.  If false, the batch will always be processed in separate
 	 * transaction threads.  This field is only relevant for the new batch index protocol.
@@ -1147,7 +1132,6 @@ as_policy_batch_init(as_policy_batch* p)
 	p->base.sleep_between_retries = 0;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	p->concurrent = false;
-	p->use_batch_direct = false;
 	p->allow_inline = true;
 	p->send_set_name = false;
 	p->deserialize = true;

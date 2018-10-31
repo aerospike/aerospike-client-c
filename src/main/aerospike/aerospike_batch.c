@@ -90,7 +90,7 @@ typedef struct as_async_batch_command {
 static inline bool
 as_batch_use_new(const as_policy_batch* policy, as_node* node)
 {
-	return ! policy->use_batch_direct && (node->features & AS_FEATURES_BATCH_INDEX);
+	return (node->features & AS_FEATURES_BATCH_INDEX);
 }
 
 static uint8_t*

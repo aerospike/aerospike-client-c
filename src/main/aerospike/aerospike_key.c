@@ -69,6 +69,14 @@ as_event_command_init(as_cluster* cluster, as_error* err, const as_key* key, voi
 
 		if (! table) {
 			*partition = NULL;
+
+			as_nodes* nodes = as_nodes_reserve(cluster);
+			uint32_t n_nodes = nodes->size;
+			as_nodes_release(nodes);
+
+			if (n_nodes == 0) {
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+			}
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
 		}
 
@@ -84,6 +92,14 @@ as_event_command_init(as_cluster* cluster, as_error* err, const as_key* key, voi
 
 		if (! table) {
 			*partition = NULL;
+
+			as_nodes* nodes = as_nodes_reserve(cluster);
+			uint32_t n_nodes = nodes->size;
+			as_nodes_release(nodes);
+
+			if (n_nodes == 0) {
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+			}
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
 		}
 

@@ -78,6 +78,10 @@ else ifeq ($(OS),FreeBSD)
 else
   CC_FLAGS += -finline-functions -rdynamic
   LUA_PLATFORM = linux
+
+  ifneq ($(wildcard /etc/alpine-release),)
+    CC_FLAGS += -DAS_ALPINE
+  endif
 endif
 
 # Linker flags

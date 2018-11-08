@@ -349,7 +349,7 @@ as_shm_cluster_get_node(struct as_cluster_s* cluster, as_error* err, const char*
  * as_nodes_release() must be called when done with node.
  */
 as_node*
-as_partition_shm_get_node(struct as_cluster_s* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master, bool cp_mode);
+as_partition_shm_get_node(struct as_cluster_s* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master);
 
 /**
  * @private

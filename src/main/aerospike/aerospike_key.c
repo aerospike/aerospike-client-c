@@ -52,7 +52,7 @@ as_command_node_init(
 }
 
 static as_status
-as_event_command_init(as_cluster* cluster, as_error* err, const as_key* key, void** partition, uint8_t* flags)
+as_event_command_init(as_cluster* cluster, as_error* err, const as_key* key, void** partition)
 {
 	as_error_reset(err);
 
@@ -80,10 +80,6 @@ as_event_command_init(as_cluster* cluster, as_error* err, const as_key* key, voi
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
 		}
 
-		if (table->cp_mode) {
-			*flags |= AS_ASYNC_FLAGS_CP_MODE;
-		}
-
 		uint32_t partition_id = as_partition_getid(key->digest.value, cluster_shm->n_partitions);
 		*partition = &table->partitions[partition_id];
 	}
@@ -101,10 +97,6 @@ as_event_command_init(as_cluster* cluster, as_error* err, const as_key* key, voi
 				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
 			}
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
-		}
-
-		if (table->cp_mode) {
-			*flags |= AS_ASYNC_FLAGS_CP_MODE;
 		}
 
 		uint32_t partition_id = as_partition_getid(key->digest.value, cluster->n_partitions);
@@ -166,7 +158,7 @@ aerospike_key_get_async(
 	
 	void* partition;
 	uint8_t flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
-	as_status status = as_event_command_init(as->cluster, err, key, &partition, &flags);
+	as_status status = as_event_command_init(as->cluster, err, key, &partition);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -253,7 +245,7 @@ aerospike_key_select_async(
 	
 	void* partition;
 	uint8_t flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
-	as_status status = as_event_command_init(as->cluster, err, key, &partition, &flags);
+	as_status status = as_event_command_init(as->cluster, err, key, &partition);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -353,7 +345,7 @@ aerospike_key_exists_async(
 	
 	void* partition;
 	uint8_t flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
-	as_status status = as_event_command_init(as->cluster, err, key, &partition, &flags);
+	as_status status = as_event_command_init(as->cluster, err, key, &partition);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -452,7 +444,7 @@ aerospike_key_put_async_ex(
 
 	void* partition;
 	uint8_t flags = AS_ASYNC_FLAGS_MASTER;
-	as_status status = as_event_command_init(as->cluster, err, key, &partition, &flags);
+	as_status status = as_event_command_init(as->cluster, err, key, &partition);
 	
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -604,7 +596,7 @@ aerospike_key_remove_async_ex(
 	
 	void* partition;
 	uint8_t flags = AS_ASYNC_FLAGS_MASTER;
-	as_status status = as_event_command_init(as->cluster, err, key, &partition, &flags);
+	as_status status = as_event_command_init(as->cluster, err, key, &partition);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -797,7 +789,7 @@ aerospike_key_operate_async(
 
 	void* partition;
 	uint8_t flags = AS_ASYNC_FLAGS_MASTER;
-	as_status status = as_event_command_init(as->cluster, err, key, &partition, &flags);
+	as_status status = as_event_command_init(as->cluster, err, key, &partition);
 
 	if (status != AEROSPIKE_OK) {
 		for (uint32_t i = 0; i < n_operations; i++) {
@@ -896,7 +888,7 @@ aerospike_key_apply_async(
 	
 	void* partition;
 	uint8_t flags = AS_ASYNC_FLAGS_MASTER;
-	as_status status = as_event_command_init(as->cluster, err, key, &partition, &flags);
+	as_status status = as_event_command_init(as->cluster, err, key, &partition);
 
 	if (status != AEROSPIKE_OK) {
 		return status;

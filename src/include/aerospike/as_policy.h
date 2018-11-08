@@ -465,7 +465,7 @@ typedef struct as_policy_write_s {
 	as_policy_key key;
 
 	/**
-	 * Specifies the replica to be consulted for the read.
+	 * Specifies the replica to be consulted.
 	 */
 	as_policy_replica replica;
 

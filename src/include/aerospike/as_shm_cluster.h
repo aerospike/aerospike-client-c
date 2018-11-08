@@ -32,7 +32,7 @@ extern "C" {
 
 /**
  * @private
- * Shared memory representation of node. 48 bytes.
+ * Shared memory representation of node. 416 bytes.
  */
 typedef struct as_node_shm_s {
 	/**
@@ -80,7 +80,7 @@ typedef struct as_node_shm_s {
 
 /**
  * @private
- *  Shared memory representation of map of namespace data partitions to nodes. 8 bytes.
+ *  Shared memory representation of map of namespace data partitions to nodes. 16 bytes.
  */
 typedef struct as_partition_shm_s {
 	/**
@@ -110,7 +110,7 @@ typedef struct as_partition_shm_s {
 
 /**
  * @private
- * Shared memory representation of map of namespace to data partitions. 32 bytes + partitions size.
+ * Shared memory representation of map of namespace to data partitions. 40 bytes + partitions size.
  */
 typedef struct as_partition_table_shm_s {
 	/**

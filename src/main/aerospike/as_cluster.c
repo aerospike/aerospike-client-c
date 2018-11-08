@@ -896,7 +896,7 @@ as_cluster_get_node(
 
 	uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);
 	as_partition* p = &table->partitions[partition_id];
-	as_node* node = as_partition_get_node(cluster, p, replica, master, table->cp_mode);
+	as_node* node = as_partition_get_node(cluster, p, replica, master);
 #endif
 
 	if (! node) {

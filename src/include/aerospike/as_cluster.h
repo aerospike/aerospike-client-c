@@ -426,7 +426,7 @@ as_cluster_get_partition_table(as_cluster* cluster, const char* ns)
  * as_nodes_release() must be called when done with node.
  */
 as_node*
-as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master, bool cp_mode);
+as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master);
 
 /**
  * @private

@@ -125,7 +125,7 @@ reserve_master(as_cluster* cluster, as_node* node)
 }
 
 static inline as_node*
-reserve_node(as_cluster* cluster, as_node* node, bool cp_mode)
+reserve_node(as_cluster* cluster, as_node* node)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (node && as_load_uint8(&node->active)) {
@@ -136,20 +136,20 @@ reserve_node(as_cluster* cluster, as_node* node, bool cp_mode)
 }
 
 static as_node*
-reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate, bool cp_mode)
+reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (as_load_uint8(&chosen->active)) {
 		as_node_reserve(chosen);
 		return chosen;
 	}
-	return reserve_node(cluster, alternate, cp_mode);
+	return reserve_node(cluster, alternate);
 }
 
 static uint32_t g_randomizer = 0;
 
 as_node*
-as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master, bool cp_mode)
+as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	as_node* master = (as_node*)as_load_ptr(&p->master);
@@ -161,11 +161,11 @@ as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica re
 	as_node* prole = (as_node*)as_load_ptr(&p->prole);
 
 	if (! prole) {
-		return reserve_node(cluster, master, cp_mode);
+		return reserve_node(cluster, master);
 	}
 
 	if (! master) {
-		return reserve_node(cluster, prole, cp_mode);
+		return reserve_node(cluster, prole);
 	}
 
 	if (replica == AS_POLICY_REPLICA_ANY) {
@@ -176,9 +176,9 @@ as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica re
 
 	// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
 	if (use_master) {
-		return reserve_node_alternate(cluster, master, prole, cp_mode);
+		return reserve_node_alternate(cluster, master, prole);
 	}
-	return reserve_node_alternate(cluster, prole, master, cp_mode);
+	return reserve_node_alternate(cluster, prole, master);
 }
 
 as_partition_table*

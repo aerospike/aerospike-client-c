@@ -505,7 +505,7 @@ as_shm_reserve_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_
 }
 
 static inline as_node*
-as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index, bool cp_mode)
+as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
@@ -520,7 +520,7 @@ as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_in
 }
 
 static as_node*
-as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index, bool cp_mode)
+as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index)
 {
 	// index values start at one (zero indicates unset).
 	as_node* chosen = (as_node*)as_load_ptr(&local_nodes[chosen_index-1]);
@@ -530,7 +530,7 @@ as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32
 		as_node_reserve(chosen);
 		return chosen;
 	}
-	return as_shm_reserve_node(cluster, local_nodes, alternate_index, cp_mode);
+	return as_shm_reserve_node(cluster, local_nodes, alternate_index);
 }
 
 as_status
@@ -554,7 +554,7 @@ as_shm_cluster_get_node(as_cluster* cluster, as_error* err, const char* ns, cons
 
 	uint32_t partition_id = as_partition_getid(digest, cluster_shm->n_partitions);
 	as_partition_shm* p = &table->partitions[partition_id];
-	as_node* node = as_partition_shm_get_node(cluster, p, replica, use_master, table->cp_mode);
+	as_node* node = as_partition_shm_get_node(cluster, p, replica, use_master);
 
 	if (! node) {
 		*node_pp = NULL;
@@ -569,7 +569,7 @@ as_shm_cluster_get_node(as_cluster* cluster, as_error* err, const char* ns, cons
 static uint32_t g_shm_randomizer = 0;
 
 as_node*
-as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master, bool cp_mode)
+as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	as_node** local_nodes = cluster->shm_info->local_nodes;
@@ -582,11 +582,11 @@ as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_re
 	uint32_t prole = as_load_uint32(&p->prole);
 
 	if (! prole) {
-		return as_shm_reserve_node(cluster, local_nodes, master, cp_mode);
+		return as_shm_reserve_node(cluster, local_nodes, master);
 	}
 
 	if (! master) {
-		return as_shm_reserve_node(cluster, local_nodes, prole, cp_mode);
+		return as_shm_reserve_node(cluster, local_nodes, prole);
 	}
 
 	if (replica == AS_POLICY_REPLICA_ANY) {
@@ -597,9 +597,9 @@ as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_re
 
 	// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
 	if (use_master) {
-		return as_shm_reserve_node_alternate(cluster, local_nodes, master, prole, cp_mode);
+		return as_shm_reserve_node_alternate(cluster, local_nodes, master, prole);
 	}
-	return as_shm_reserve_node_alternate(cluster, local_nodes, prole, master, cp_mode);
+	return as_shm_reserve_node_alternate(cluster, local_nodes, prole, master);
 }
 
 static void

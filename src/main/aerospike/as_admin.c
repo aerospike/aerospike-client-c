@@ -63,7 +63,7 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define PRIVILEGES 12
 
 // Misc
-#define MSG_VERSION 0ULL
+#define MSG_VERSION 2ULL
 #define MSG_TYPE 2ULL
 #define FIELD_HEADER_SIZE 5
 #define HEADER_SIZE 24

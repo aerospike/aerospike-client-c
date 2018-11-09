@@ -206,6 +206,10 @@ typedef struct as_node_s {
 	 */
 	as_vector /* <as_alias> */ aliases;
 
+	/**
+	 * @private
+	 * Cluster from which this node resides.
+	 */
 	struct as_cluster_s* cluster;
 	
 	/**

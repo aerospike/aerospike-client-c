@@ -80,6 +80,25 @@ typedef struct as_node_stats_s {
 } as_node_stats;
 
 /**
+ * Event loop statistics.
+ * @ingroup cluster_stats
+ */
+typedef struct as_event_loop_stats_s {
+	/**
+	 * Approximate number of commands actively being processed on
+	 * the event loop.
+	 */
+	int process_size;
+
+	/**
+	 * Approximate number of commands stored on this event loop's
+	 * delay queue that have not been started yet.
+	 */
+	uint32_t queue_size;
+
+} as_event_loop_stats;
+
+/**
  * Cluster statistics.
  * @ingroup cluster_stats
  */
@@ -90,9 +109,19 @@ typedef struct as_cluster_stats_s {
 	as_node_stats* nodes;
 
 	/**
+	 * Statistics for all event loops.
+	 */
+	as_event_loop_stats* event_loops;
+
+	/**
 	 * Node count.
 	 */
 	uint32_t nodes_size;
+
+	/**
+	 * Event loop count.
+	 */
+	uint32_t event_loops_size;
 
 	/**
 	 * Count of sync batch/scan/query tasks awaiting execution. If the count is greater than zero,
@@ -171,6 +200,22 @@ static inline void
 aerospike_node_stats_destroy(as_node_stats* stats)
 {
 	as_node_release(stats->node);
+}
+
+/**
+ * Retrieve aerospike event loop statistics.
+ *
+ * @param event_loop	The event loop.
+ * @param stats			The statistics summary for specified event loop.
+ *
+ * @ingroup cluster_stats
+ */
+static inline void
+aerospike_event_loop_stats(as_event_loop* event_loop, as_event_loop_stats* stats)
+{
+	// Warning: cross-thread references without a lock.
+	stats->process_size = as_event_loop_get_process_size(event_loop);
+	stats->queue_size = as_event_loop_get_queue_size(event_loop);
 }
 
 #ifdef __cplusplus

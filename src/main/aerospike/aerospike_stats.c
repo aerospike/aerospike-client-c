@@ -22,6 +22,7 @@
  * GLOBALS
  *****************************************************************************/
 
+extern as_event_loop* as_event_loops;
 extern uint32_t as_event_loop_capacity;
 extern uint32_t as_event_loop_size;
 
@@ -62,6 +63,7 @@ as_sum_no_lock(as_conn_pool* pool, as_conn_stats* stats)
 void
 aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
 {
+	// Node stats.
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	stats->nodes = cf_malloc(sizeof(as_node_stats) * nodes->size);
 	stats->nodes_size = nodes->size;
@@ -69,10 +71,24 @@ aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		aerospike_node_stats(nodes->array[i], &stats->nodes[i]);
 	}
+	as_nodes_release(nodes);
+
+	// Event loop stats.
+	if (as_event_loop_capacity > 0) {
+		stats->event_loops_size = as_event_loop_size;
+		stats->event_loops = cf_malloc(sizeof(as_event_loop_stats) * stats->event_loops_size);
+
+		for (uint32_t i = 0; i < stats->event_loops_size; i++) {
+			aerospike_event_loop_stats(&as_event_loops[i], &stats->event_loops[i]);
+		}
+	}
+	else {
+		stats->event_loops_size = 0;
+		stats->event_loops = NULL;
+	}
 
 	// cf_queue applies locks, so we are safe here.
 	stats->thread_pool_queued_tasks = cf_queue_sz(cluster->thread_pool.dispatch_queue);
-	as_nodes_release(nodes);
 }
 
 void
@@ -85,6 +101,10 @@ aerospike_stats_destroy(as_cluster_stats* stats)
 		aerospike_node_stats_destroy(&stats->nodes[i]);
 	}
 	cf_free(stats->nodes);
+
+	if (stats->event_loops) {
+		cf_free(stats->event_loops);
+	}
 }
 
 void
@@ -123,4 +143,3 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 		}
 	}
 }
-

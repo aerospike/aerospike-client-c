@@ -58,6 +58,9 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings);
 as_status
 as_node_ensure_login_shm(as_error* err, as_node* node);
 
+as_status
+as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node);
+
 void
 as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add);
 
@@ -319,6 +322,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				as_vector_append(&nodes_to_add, &node);
 				as_store_ptr(&shm_info->local_nodes[i], node);
 			}
+			node->rebalance_generation = node_tmp.rebalance_generation;
 		}
 		else {
 			if (node) {
@@ -341,6 +345,71 @@ as_shm_reset_nodes(as_cluster* cluster)
 	
 	as_vector_destroy(&nodes_to_add);
 	as_vector_destroy(&nodes_to_remove);
+}
+
+static as_status
+as_shm_reset_racks_node(as_cluster* cluster, as_error* err, as_node* node)
+{
+	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
+	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &node->info_socket);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = as_node_refresh_racks(cluster, err, node);
+
+	if (status != AEROSPIKE_OK) {
+		as_socket_close(&node->info_socket);
+		return status;
+	}
+
+	as_node_put_connection(&node->info_socket, cluster->max_socket_idle);
+	return status;
+}
+
+static void
+as_shm_reset_racks(as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, as_error* err)
+{
+	// Per namespace racks not stored in shared memory.
+	// Retrieve racks from server on prole tender.
+	as_node_shm* nodes_shm = cluster_shm->nodes;
+	uint32_t max = as_load_uint32(&cluster_shm->nodes_size);
+	int rack_id;
+	uint8_t active;
+
+	for (uint32_t i = 0; i < max; i++) {
+		as_node_shm* node_shm = &nodes_shm[i];
+
+		as_swlock_read_lock(&node_shm->lock);
+		rack_id = node_shm->rack_id;
+		active = node_shm->active;
+		as_swlock_read_unlock(&node_shm->lock);
+
+		// Retrieve racks only when different rack ids per namespace (rack_id == -1).
+		if (rack_id == -1 && active) {
+			as_node* node = shm_info->local_nodes[i];
+			as_status status = as_shm_reset_racks_node(cluster, err, node);
+
+			if (status != AEROSPIKE_OK) {
+				as_log_error("Node %s shm rack refresh failed: %s %s",
+							node->name, as_error_string(status), err->message);
+			}
+		}
+	}
+}
+
+void
+as_shm_node_replace_racks(as_cluster_shm* cluster_shm, as_node* node, as_racks* racks)
+{
+	as_node_shm* node_shm = &cluster_shm->nodes[node->index];
+	int rack_id = (racks->size == 0)? racks->rack_id : -1;
+
+	// Update shared memory node in write lock.
+	as_swlock_write_lock(&node_shm->lock);
+	node_shm->rebalance_generation = node->rebalance_generation;
+	node_shm->rack_id = rack_id;
+	as_swlock_write_unlock(&node_shm->lock);
 }
 
 bool
@@ -520,7 +589,9 @@ as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_in
 }
 
 static as_node*
-as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index)
+as_shm_reserve_node_alternate(
+	as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index
+	)
 {
 	// index values start at one (zero indicates unset).
 	as_node* chosen = (as_node*)as_load_ptr(&local_nodes[chosen_index-1]);
@@ -533,8 +604,136 @@ as_shm_reserve_node_alternate(as_cluster* cluster, as_node** local_nodes, uint32
 	return as_shm_reserve_node(cluster, local_nodes, alternate_index);
 }
 
+static as_node*
+shm_get_sequence_node(
+	as_cluster* cluster, as_node** local_nodes, as_partition_shm* p, bool use_master
+	)
+{
+	uint32_t master = as_load_uint32(&p->master);
+	uint32_t prole = as_load_uint32(&p->prole);
+
+	if (! prole) {
+		return as_shm_reserve_node(cluster, local_nodes, master);
+	}
+
+	if (! master) {
+		return as_shm_reserve_node(cluster, local_nodes, prole);
+	}
+
+	if (use_master) {
+		return as_shm_reserve_node_alternate(cluster, local_nodes, master, prole);
+	}
+	return as_shm_reserve_node_alternate(cluster, local_nodes, prole, master);
+}
+
+static inline as_node*
+shm_try_rack_node(
+	as_cluster* cluster, as_node_shm* nodes_shm, as_node** local_nodes, const char* ns,
+	uint32_t node_index
+	)
+{
+	// node_index starts at one (zero indicates unset).
+	if (node_index == 0) {
+		return NULL;
+	}
+	node_index--;
+
+	as_node_shm* node_shm = &nodes_shm[node_index];
+	int rack_id;
+	uint8_t active;
+
+	as_swlock_read_lock(&node_shm->lock);
+	rack_id = node_shm->rack_id;
+	active = node_shm->active;
+	as_swlock_read_unlock(&node_shm->lock);
+
+	if (! active) {
+		return NULL;
+	}
+
+	// Check rack id on node's shared memory first.
+	if (rack_id == cluster->rack_id) {
+		as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index]);
+		as_node_reserve(node);
+		return node;
+	}
+
+	if (rack_id != -1) {
+		return NULL;
+	}
+
+	// Rack ids are per namespace and are stored on local node because there is not
+	// enough node shared memory to cover this case.
+	as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index]);
+
+	if (as_node_has_rack(cluster, node, ns, cluster->rack_id)) {
+		as_node_reserve(node);
+		return node;
+	}
+	return NULL;
+}
+
+static as_node*
+shm_prefer_rack_node(
+	as_cluster* cluster, as_node** local_nodes, const char* ns, as_partition_shm* p, bool use_master
+	)
+{
+	as_node_shm* nodes_shm = cluster->shm_info->cluster_shm->nodes;
+	as_node* node;
+	uint32_t master;
+	uint32_t prole;
+
+	if (use_master) {
+		master = as_load_uint32(&p->master);
+		node = shm_try_rack_node(cluster, nodes_shm, local_nodes, ns, master);
+
+		if (node) {
+			return node;
+		}
+
+		prole = as_load_uint32(&p->prole);
+		node = shm_try_rack_node(cluster, nodes_shm, local_nodes, ns, prole);
+
+		if (node) {
+			return node;
+		}
+	}
+	else {
+		prole = as_load_uint32(&p->prole);
+		node = shm_try_rack_node(cluster, nodes_shm, local_nodes, ns, prole);
+
+		if (node) {
+			return node;
+		}
+
+		master = as_load_uint32(&p->master);
+		node = shm_try_rack_node(cluster, nodes_shm, local_nodes, ns, master);
+
+		if (node) {
+			return node;
+		}
+	}
+
+	// Default to sequence mode.
+	if (! prole) {
+		return as_shm_reserve_node(cluster, local_nodes, master);
+	}
+
+	if (! master) {
+		return as_shm_reserve_node(cluster, local_nodes, prole);
+	}
+
+	if (use_master) {
+		return as_shm_reserve_node_alternate(cluster, local_nodes, master, prole);
+	}
+	return as_shm_reserve_node_alternate(cluster, local_nodes, prole, master);
+}
+
 as_status
-as_shm_cluster_get_node(as_cluster* cluster, as_error* err, const char* ns, const uint8_t* digest, as_policy_replica replica, bool use_master, as_node** node_pp)
+as_shm_cluster_get_node(
+	as_cluster* cluster, as_error* err, const char* ns, const uint8_t* digest,
+	as_policy_replica replica, bool use_master, as_node** node_pp
+	)
 {
 	as_cluster_shm* cluster_shm = cluster->shm_info->cluster_shm;
 	as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
@@ -554,7 +753,7 @@ as_shm_cluster_get_node(as_cluster* cluster, as_error* err, const char* ns, cons
 
 	uint32_t partition_id = as_partition_getid(digest, cluster_shm->n_partitions);
 	as_partition_shm* p = &table->partitions[partition_id];
-	as_node* node = as_partition_shm_get_node(cluster, p, replica, use_master);
+	as_node* node = as_partition_shm_get_node(cluster, ns, p, replica, use_master);
 
 	if (! node) {
 		*node_pp = NULL;
@@ -569,45 +768,67 @@ as_shm_cluster_get_node(as_cluster* cluster, as_error* err, const char* ns, cons
 static uint32_t g_shm_randomizer = 0;
 
 as_node*
-as_partition_shm_get_node(as_cluster* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master)
+as_partition_shm_get_node(
+	as_cluster* cluster, const char* ns, as_partition_shm* p, as_policy_replica replica,
+	bool use_master
+	)
 {
-	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	as_node** local_nodes = cluster->shm_info->local_nodes;
-	uint32_t master = as_load_uint32(&p->master);
 
-	if (replica == AS_POLICY_REPLICA_MASTER) {
-		return as_shm_reserve_master(cluster, local_nodes, master);
+	switch (replica) {
+		case AS_POLICY_REPLICA_MASTER: {
+			// Make volatile reference so changes to tend thread will be reflected in this thread.
+			uint32_t master = as_load_uint32(&p->master);
+			return as_shm_reserve_master(cluster, local_nodes, master);
+		}
+
+		case AS_POLICY_REPLICA_ANY: {
+			// Alternate between master and prole for reads with global iterator.
+			uint32_t r = as_faa_uint32(&g_shm_randomizer, 1);
+			use_master = (r & 1);
+			return shm_get_sequence_node(cluster, local_nodes, p, use_master);
+		}
+
+		default:
+		case AS_POLICY_REPLICA_SEQUENCE: {
+			return shm_get_sequence_node(cluster, local_nodes, p, use_master);
+		}
+
+		case AS_POLICY_REPLICA_PREFER_RACK: {
+			return shm_prefer_rack_node(cluster, local_nodes, ns, p, use_master);
+		}
 	}
-
-	uint32_t prole = as_load_uint32(&p->prole);
-
-	if (! prole) {
-		return as_shm_reserve_node(cluster, local_nodes, master);
-	}
-
-	if (! master) {
-		return as_shm_reserve_node(cluster, local_nodes, prole);
-	}
-
-	if (replica == AS_POLICY_REPLICA_ANY) {
-		// Alternate between master and prole for reads with global iterator.
-		uint32_t r = as_faa_uint32(&g_shm_randomizer, 1);
-		use_master = (r & 1);
-	}
-
-	// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
-	if (use_master) {
-		return as_shm_reserve_node_alternate(cluster, local_nodes, master, prole);
-	}
-	return as_shm_reserve_node_alternate(cluster, local_nodes, prole, master);
 }
 
 static void
-as_shm_takeover_cluster(as_shm_info* shm_info, as_cluster_shm* cluster_shm, uint32_t pid)
+as_shm_reset_rebalance_gen(as_shm_info* shm_info, as_cluster_shm* cluster_shm)
+{
+	// Copy shared memory node rebalance generation to local nodes.
+	as_node_shm* nodes_shm = cluster_shm->nodes;
+	uint32_t max = as_load_uint32(&cluster_shm->nodes_size);
+	uint32_t gen;
+
+	for (uint32_t i = 0; i < max; i++) {
+		as_node_shm* node_shm = &nodes_shm[i];
+
+		as_swlock_read_lock(&node_shm->lock);
+		gen = node_shm->rebalance_generation;
+		as_swlock_read_unlock(&node_shm->lock);
+
+		shm_info->local_nodes[i]->rebalance_generation = gen;
+	}
+}
+
+static void
+as_shm_takeover_cluster(as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, uint32_t pid)
 {
 	as_log_info("Take over shared memory cluster: %d", pid);
 	as_store_uint32(&cluster_shm->owner_pid, pid);
 	shm_info->is_tend_master = true;
+
+	if (cluster->rack_aware) {
+		as_shm_reset_rebalance_gen(shm_info, cluster_shm);
+	}
 }
 
 static bool
@@ -644,7 +865,8 @@ as_shm_tender(void* userdata)
 	uint64_t limit = 0;
 	uint32_t pid = getpid();
 	uint32_t nodes_gen = 0;
-	
+	uint32_t rebalance_gen = 0;
+
 	struct timespec delta;
 	cf_clock_set_timespec_ms(cluster->tend_interval, &delta);
 	
@@ -673,7 +895,7 @@ as_shm_tender(void* userdata)
 			// Follow shared memory cluster.
 			// Check if tend owner has released lock.
 			if (as_cas_uint8(&cluster_shm->lock, 0, 1)) {
-				as_shm_takeover_cluster(shm_info, cluster_shm, pid);
+				as_shm_takeover_cluster(cluster, shm_info, cluster_shm, pid);
 				continue;
 			}
 			
@@ -701,7 +923,7 @@ as_shm_tender(void* userdata)
 							as_store_uint64(&cluster_shm->timestamp, now);
 							as_store_uint8(&cluster_shm->lock, 1);
 							as_spinlock_unlock(&cluster_shm->take_over_lock);
-							as_shm_takeover_cluster(shm_info, cluster_shm, pid);
+							as_shm_takeover_cluster(cluster, shm_info, cluster_shm, pid);
 							continue;
 						}
 						as_spinlock_unlock(&cluster_shm->take_over_lock);
@@ -716,6 +938,16 @@ as_shm_tender(void* userdata)
 			if (nodes_gen != gen) {
 				nodes_gen = gen;
 				as_shm_reset_nodes(cluster);
+			}
+
+			if (cluster->rack_aware) {
+				// Synchronize racks
+				gen = as_load_uint32(&cluster_shm->rebalance_gen);
+
+				if (rebalance_gen != gen) {
+					as_shm_reset_racks(cluster, shm_info, cluster_shm, &err);
+					rebalance_gen = gen;
+				}
 			}
 		}
 

@@ -126,6 +126,7 @@ typedef struct as_event_command {
 	as_event_connection* conn;
 	as_cluster* cluster;
 	as_node* node;
+	const char* ns;
 	void* partition;  // as_partition* or as_partition_shm*
 	void* udata;
 	as_event_parse_results_fn parse_results;

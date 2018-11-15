@@ -606,6 +606,29 @@ typedef struct as_config_s {
 	bool use_services_alternate;
 
 	/**
+	 * Track server rack data.  This field is useful when directing read commands to 
+	 * the server node that contains the key and exists on the same rack as the client.
+	 * This serves to lower cloud provider costs when nodes are distributed across different
+	 * racks/data centers.
+	 *
+	 * rack_id, AS_POLICY_REPLICA_PREFER_RACK and server rack configuration must also be
+	 * set to enable this functionality.
+	 *
+	 * Default: false
+	 */
+	bool rack_aware;
+
+	/**
+	 * Rack where this client instance resides.
+	 *
+	 * rack_aware, AS_POLICY_REPLICA_PREFER_RACK and server rack configuration must also be
+	 * set to enable this functionality.
+	 *
+	 * Default: 0
+	 */
+	int rack_id;
+
+	/**
 	 * Indicates if shared memory should be used for cluster tending.  Shared memory
 	 * is useful when operating in single threaded mode with multiple client processes.
 	 * This model is used by wrapper languages such as PHP and Python.  When enabled, 
@@ -622,7 +645,7 @@ typedef struct as_config_s {
 	 * Each shared memory segment contains state for one Aerospike cluster.  If there are
 	 * multiple Aerospike clusters, a different shm_key must be defined for each cluster.
 	 * 
-	 * Default: 0xA7000000
+	 * Default: 0xA8000000
 	 */
 	int shm_key;
 	

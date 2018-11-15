@@ -823,7 +823,7 @@ as_batch_execute(
 		}
 
 		as_node* node;
-		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false, &node);
+		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, policy->replica, true, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(batch_nodes, n_batch_nodes);
@@ -1063,6 +1063,7 @@ as_batch_read_execute_async(
 		cmd->event_loop = exec->event_loop;
 		cmd->cluster = cluster;
 		cmd->node = batch_node->node;
+		cmd->ns = NULL;
 		cmd->partition = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_batch_async_parse_records;
@@ -1165,7 +1166,7 @@ as_batch_read_execute(
 		}
 		
 		as_node* node;
-		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, AS_POLICY_REPLICA_MASTER, false, &node);
+		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, policy->replica, true, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);

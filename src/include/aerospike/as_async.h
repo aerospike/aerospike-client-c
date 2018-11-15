@@ -74,9 +74,10 @@ typedef struct as_async_info_command {
 
 static inline as_event_command*
 as_async_write_command_create(
-	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, void* partition,
-	uint8_t flags, as_async_write_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
+	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, const char* ns,
+	void* partition, uint8_t flags, as_async_write_listener listener, void* udata,
+	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
+	as_event_parse_results_fn parse_results
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -92,6 +93,7 @@ as_async_write_command_create(
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
+	cmd->ns = ns;
 	cmd->partition = partition;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
@@ -108,8 +110,8 @@ as_async_write_command_create(
 	
 static inline as_event_command*
 as_async_record_command_create(
-	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, void* partition,
-	bool deserialize, uint8_t flags, as_async_record_listener listener, void* udata,
+	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, const char* ns,
+	void* partition, bool deserialize, uint8_t flags, as_async_record_listener listener, void* udata,
 	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
 	as_event_parse_results_fn parse_results
 	)
@@ -128,6 +130,7 @@ as_async_record_command_create(
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
+	cmd->ns = ns;
 	cmd->partition = partition;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
@@ -144,9 +147,10 @@ as_async_record_command_create(
 
 static inline as_event_command*
 as_async_value_command_create(
-	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, void* partition,
-	uint8_t flags, as_async_value_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
+	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, const char* ns,
+	void* partition, uint8_t flags, as_async_value_listener listener, void* udata,
+	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
+	as_event_parse_results_fn parse_results
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -163,6 +167,7 @@ as_async_value_command_create(
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
+	cmd->ns = ns;
 	cmd->partition = partition;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
@@ -196,6 +201,7 @@ as_async_info_command_create(
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->cluster = node->cluster;
 	cmd->node = node;
+	cmd->ns = NULL;
 	cmd->partition = NULL;
 	cmd->udata = udata;
 	cmd->parse_results = as_event_command_parse_info;

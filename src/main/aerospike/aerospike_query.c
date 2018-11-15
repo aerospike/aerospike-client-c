@@ -1192,6 +1192,7 @@ aerospike_query_async(
 		cmd->event_loop = exec->event_loop;
 		cmd->cluster = as->cluster;
 		cmd->node = nodes->array[i];
+		cmd->ns = NULL;
 		cmd->partition = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_query_parse_records_async;

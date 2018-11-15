@@ -277,8 +277,17 @@ typedef enum as_policy_replica_e {
 	 * `retry_on_timeout` is true, try node containing prole partition.
 	 * Currently restricted to master and one prole.
 	 */
-	AS_POLICY_REPLICA_SEQUENCE
-	
+	AS_POLICY_REPLICA_SEQUENCE,
+
+	/**
+	 * Try node on the same rack as the client first.  If there are no nodes on the
+	 * same rack, use SEQUENCE instead.
+	 *
+	 * as_config.rack_aware, as_config.rack_id, and server rack configuration must also
+	 * be set to enable this functionality.
+	 */
+	AS_POLICY_REPLICA_PREFER_RACK
+
 } as_policy_replica;
 
 /**
@@ -699,6 +708,11 @@ typedef struct as_policy_batch_s {
 	 * Generic policy fields.
 	 */
 	as_policy_base base;
+
+	/**
+	 * Specifies the replica to be consulted for the read.
+	 */
+	as_policy_replica replica;
 
 	/**
 	 * How duplicates should be consulted in a read operation.
@@ -1130,6 +1144,7 @@ as_policy_batch_init(as_policy_batch* p)
 	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
 	p->base.max_retries = 2;
 	p->base.sleep_between_retries = 0;
+	p->replica = AS_POLICY_REPLICA_MASTER;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	p->concurrent = false;
 	p->allow_inline = true;

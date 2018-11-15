@@ -146,18 +146,10 @@ reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 	return reserve_node(cluster, alternate);
 }
 
-static uint32_t g_randomizer = 0;
-
-as_node*
-as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master)
+static as_node*
+get_sequence_node(as_cluster* cluster, as_partition* p, bool use_master)
 {
-	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	as_node* master = (as_node*)as_load_ptr(&p->master);
-
-	if (replica == AS_POLICY_REPLICA_MASTER) {
-		return reserve_master(cluster, master);
-	}
-
 	as_node* prole = (as_node*)as_load_ptr(&p->prole);
 
 	if (! prole) {
@@ -167,18 +159,99 @@ as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica re
 	if (! master) {
 		return reserve_node(cluster, prole);
 	}
-
-	if (replica == AS_POLICY_REPLICA_ANY) {
-		// Alternate between master and prole for reads with global iterator.
-		uint32_t r = as_faa_uint32(&g_randomizer, 1);
-		use_master = (r & 1);
-	}
-
-	// AS_POLICY_REPLICA_SEQUENCE uses the use_master preference without modification.
+	
 	if (use_master) {
 		return reserve_node_alternate(cluster, master, prole);
 	}
 	return reserve_node_alternate(cluster, prole, master);
+}
+
+static inline bool
+try_rack_node(as_cluster* cluster, const char* ns, as_node* node)
+{
+	if (node && as_load_uint8(&node->active) && as_node_has_rack(cluster, node, ns, cluster->rack_id)) {
+		as_node_reserve(node);
+		return true;
+	}
+	return false;
+}
+
+static as_node*
+prefer_rack_node(as_cluster* cluster, const char* ns, as_partition* p, bool use_master)
+{
+	as_node* master;
+	as_node* prole;
+
+	if (use_master) {
+		master = (as_node*)as_load_ptr(&p->master);
+
+		if (try_rack_node(cluster, ns, master)) {
+			return master;
+		}
+
+		prole = (as_node*)as_load_ptr(&p->prole);
+
+		if (try_rack_node(cluster, ns, prole)) {
+			return prole;
+		}
+	}
+	else {
+		prole = (as_node*)as_load_ptr(&p->prole);
+
+		if (try_rack_node(cluster, ns, prole)) {
+			return prole;
+		}
+
+		master = (as_node*)as_load_ptr(&p->master);
+
+		if (try_rack_node(cluster, ns, master)) {
+			return master;
+		}
+	}
+
+	// Default to sequence mode.
+	if (! prole) {
+		return reserve_node(cluster, master);
+	}
+
+	if (! master) {
+		return reserve_node(cluster, prole);
+	}
+
+	if (use_master) {
+		return reserve_node_alternate(cluster, master, prole);
+	}
+	return reserve_node_alternate(cluster, prole, master);
+}
+
+static uint32_t g_randomizer = 0;
+
+as_node*
+as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master)
+{
+	switch (replica) {
+		case AS_POLICY_REPLICA_MASTER: {
+			// Make volatile reference so changes to tend thread will be reflected in this thread.
+			as_node* master = (as_node*)as_load_ptr(&p->master);
+			return reserve_master(cluster, master);
+		}
+
+		case AS_POLICY_REPLICA_ANY: {
+			// Alternate between master and prole for reads with global iterator.
+			uint32_t r = as_faa_uint32(&g_randomizer, 1);
+			use_master = (r & 1);
+			return get_sequence_node(cluster, p, use_master);
+		}
+
+		default:
+		case AS_POLICY_REPLICA_SEQUENCE: {
+			return get_sequence_node(cluster, p, use_master);
+		}
+
+		case AS_POLICY_REPLICA_PREFER_RACK: {
+			return prefer_rack_node(cluster, ns, p, use_master);
+		}
+	}
 }
 
 as_partition_table*

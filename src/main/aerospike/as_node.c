@@ -25,6 +25,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_queue.h>
+#include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_tls.h>
@@ -51,6 +52,15 @@ extern uint32_t as_event_loop_capacity;
 /******************************************************************************
  * Functions.
  *****************************************************************************/
+
+static inline void
+as_racks_release(as_racks* racks)
+{
+	//as_fence_release();
+	if (as_aaf_uint32(&racks->ref_count, -1) == 0) {
+		cf_free(racks);
+	}
+}
 
 static as_conn_pool*
 as_node_create_async_pools(uint32_t max_conns_per_node)
@@ -82,6 +92,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->ref_count = 1;
 	node->peers_generation = 0xFFFFFFFF;
 	node->partition_generation = 0xFFFFFFFF;
+	node->rebalance_generation = 0xFFFFFFFF;
 	node->cluster = cluster;
 
 	strcpy(node->name, node_info->name);
@@ -129,6 +140,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 		node->pipe_conn_pools = 0;
 	}
 
+	node->racks = NULL;
 	node->peers_count = 0;
 	node->friends = 0;
 	node->failures = 0;
@@ -136,6 +148,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->perform_login = 0;
 	node->active = true;
 	node->partition_changed = false;
+	node->rebalance_changed = false;
 	return node;
 }
 
@@ -180,6 +193,12 @@ as_node_destroy(as_node* node)
 
 	if (node->session_token) {
 		cf_free(node->session_token);
+	}
+
+	as_racks* racks = (as_racks*)as_load_ptr(&node->racks);
+
+	if (racks) {
+		as_racks_release(racks);
 	}
 	cf_free(node);
 }
@@ -563,6 +582,40 @@ as_node_ensure_login(as_error* err, as_node* node, as_socket* sock, bool* auth)
 	return AEROSPIKE_OK;
 }
 
+bool
+as_node_has_rack(as_cluster* cluster, as_node* node, const char* ns, int rack_id)
+{
+	as_racks* racks = (as_racks*)as_load_ptr(&node->racks);
+
+	if (! racks) {
+		return false;
+	}
+
+	// Reserve racks.
+	as_incr_uint32(&racks->ref_count);
+
+	// Try optimized check.
+	if (racks->size == 0) {
+		bool result = (racks->rack_id == rack_id);
+		as_racks_release(racks);
+		return result;
+	}
+
+	// Must search through namespaces.
+	as_rack* r = racks->racks;
+
+	for (uint32_t i = 0; i < racks->size; i++) {
+		if (strcmp(r->ns, ns) == 0) {
+			bool result = (r->rack_id == rack_id);
+			as_racks_release(racks);
+			return result;
+		}
+		r++;
+	}
+	as_racks_release(racks);
+	return false;
+}
+
 static as_status
 as_node_get_tend_connection(as_error* err, as_node* node)
 {
@@ -698,6 +751,7 @@ as_node_verify_name(as_error* err, as_node* node, const char* name)
 	return AEROSPIKE_OK;
 }
 
+static const char INFO_STR_CHECK_RACK[] = "node\npeers-generation\npartition-generation\nrebalance-generation\n";
 static const char INFO_STR_CHECK_PEERS[] = "node\npeers-generation\npartition-generation\n";
 static const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
 static const char INFO_STR_CHECK_SVCALT[] = "node\npartition-generation\nservices-alternate\n";
@@ -730,6 +784,13 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 				node->partition_changed = true;
 			}
 		}
+		else if (strcmp(nv->name, "rebalance-generation") == 0) {
+			uint32_t gen = (uint32_t)strtoul(nv->value, NULL, 10);
+			if (node->rebalance_generation != gen) {
+				as_log_debug("Node %s partition generation changed: %u", node->name, gen);
+				node->rebalance_changed = true;
+			}
+		}
 		else if (strcmp(nv->name, "services") == 0 || strcmp(nv->name, "services-alternate") == 0) {
 			as_peers_parse_services(peers, cluster, node, nv->value);
 		}
@@ -759,8 +820,14 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	size_t command_len;
 	
 	if (peers->use_peers) {
-		command = INFO_STR_CHECK_PEERS;
-		command_len = sizeof(INFO_STR_CHECK_PEERS) - 1;
+		if (cluster->rack_aware) {
+			command = INFO_STR_CHECK_RACK;
+			command_len = sizeof(INFO_STR_CHECK_RACK) - 1;
+		}
+		else {
+			command = INFO_STR_CHECK_PEERS;
+			command_len = sizeof(INFO_STR_CHECK_PEERS) - 1;
+		}
 	}
 	else {
 		if (cluster->use_services_alternate) {
@@ -930,25 +997,199 @@ as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 		command = INFO_STR_GET_REPLICAS_OLD;
 		command_len = sizeof(INFO_STR_GET_REPLICAS_OLD) - 1;
 	}
-	
+
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
-	
+
 	if (! buf) {
 		as_socket_close(&node->info_socket);
 		return err->code;
 	}
-	
+
 	as_vector values;
 	as_vector_inita(&values, sizeof(as_name_value), 4);
 
 	as_info_parse_multi_response((char*)buf, &values);
 	as_status status = as_node_process_partitions(cluster, err, node, &values);
-	
+
 	if (buf != stack_buf) {
 		cf_free(buf);
 	}
-	
+
+	as_vector_destroy(&values);
+	return status;
+}
+
+/**
+ * Use non-inline function for garbarge collector function pointer reference.
+ * Forward to inlined release.
+ */
+static void
+release_racks(as_racks* racks)
+{
+	as_racks_release(racks);
+}
+
+static void
+as_node_replace_racks(as_cluster* cluster, as_node* node, as_racks* racks)
+{
+	racks->ref_count = 1;
+	racks->pad = 0;
+
+	if (cluster->shm_info) {
+		as_shm_node_replace_racks(cluster->shm_info->cluster_shm, node, racks);
+	}
+
+	as_racks* old = node->racks;
+
+	as_fence_store();
+	as_store_ptr(&node->racks, racks);
+
+	if (old) {
+		// Put old racks on garbage collector stack.
+		as_gc_item item;
+		item.data = old;
+		item.release_fn = (as_release_fn)release_racks;
+		as_vector_append(cluster->gc, &item);
+	}
+}
+
+static as_status
+as_node_parse_racks(as_cluster* cluster, as_error* err, as_node* node, char* buf)
+{
+	// Use destructive parsing (ie modifying input buffer with null termination) for performance.
+	// Receive format: <ns1>:<rack1>;<ns2>:<rack2>...\n
+
+	// First, check if rack_ids are the same and get size of racks array.
+	int rack_id = 0;
+	bool first = true;
+	bool same = true;
+	char* p = buf;
+	uint32_t size = 0;
+
+	while (*p) {
+		if (*p == ':') {
+			p++;
+			size++;
+
+			if (same) {
+				int r = (int)strtol(p, NULL, 10);
+
+				if (first) {
+					rack_id = r;
+					first = false;
+				}
+				else if (rack_id != r) {
+					same = false;
+				}
+			}
+		}
+		else {
+			p++;
+		}
+	}
+
+	if (same) {
+		// Create optimized version of racks structure.
+		as_racks* racks = cf_malloc(sizeof(as_racks));
+		racks->rack_id = rack_id;
+		racks->size = 0;
+		as_node_replace_racks(cluster, node, racks);
+		return AEROSPIKE_OK;
+	}
+
+	// Parse unoptimized version of racks structure.
+	as_racks* racks = cf_malloc(sizeof(as_racks) + (sizeof(as_rack) * size));
+	racks->rack_id = 0;
+	racks->size = size;
+
+	p = buf;
+	char* begin = 0;
+	char* ns = p;
+	int64_t len;
+	int current = 0;
+
+	while (*p) {
+		if (*p == ':') {
+			// Parse namespace.
+			*p = 0;
+			len = p - ns;
+
+			if (len <= 0 || len >= 32) {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+									   "Racks update. Invalid rack namespace %s", ns);
+			}
+			begin = ++p;
+
+			// Parse rack.
+			while (*p) {
+				if (*p == ';' || *p == '\n') {
+					*p = 0;
+					break;
+				}
+				p++;
+			}
+
+			int r = (int)strtol(begin, NULL, 10);
+			as_rack* rack = &racks->racks[current++];
+
+			strcpy(rack->ns, ns);
+			rack->rack_id = r;
+			ns = ++p;
+		}
+		else {
+			p++;
+		}
+	}
+
+	as_node_replace_racks(cluster, node, racks);
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_node_process_racks(as_cluster* cluster, as_error* err, as_node* node, as_vector* values)
+{
+	for (uint32_t i = 0; i < values->size; i++) {
+		as_name_value* nv = as_vector_get(values, i);
+
+		if (strcmp(nv->name, "rebalance-generation") == 0) {
+			node->rebalance_generation = (uint32_t)strtoul(nv->value, NULL, 10);
+		}
+		else if (strcmp(nv->name, "rack-ids") == 0) {
+			return as_node_parse_racks(cluster, err, node, nv->value);
+		}
+		else {
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s did not request info '%s'", node->name, nv->name);
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+static const char INFO_STR_GET_RACKS[] = "rebalance-generation\nrack-ids\n";
+
+as_status
+as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node)
+{
+	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
+
+	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
+	uint8_t* buf = as_node_get_info(err, node, INFO_STR_GET_RACKS, sizeof(INFO_STR_GET_RACKS) - 1, deadline_ms, stack_buf);
+
+	if (! buf) {
+		as_socket_close(&node->info_socket);
+		return err->code;
+	}
+
+	as_vector values;
+	as_vector_inita(&values, sizeof(as_name_value), 4);
+
+	as_info_parse_multi_response((char*)buf, &values);
+	as_status status = as_node_process_racks(cluster, err, node, &values);
+
+	if (buf != stack_buf) {
+		cf_free(buf);
+	}
+
 	as_vector_destroy(&values);
 	return status;
 }

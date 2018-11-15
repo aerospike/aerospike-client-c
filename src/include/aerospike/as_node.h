@@ -21,6 +21,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_socket.h>
+#include <aerospike/as_partition.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_vector.h>
 
@@ -147,6 +148,62 @@ typedef struct as_conn_pool_lock_s {
 
 } as_conn_pool_lock;
 
+/**
+ * @private
+ * Rack.
+ */
+typedef struct as_rack_s {
+	/**
+	 * @private
+	 * Namespace
+	 */
+	char ns[AS_MAX_NAMESPACE_SIZE];
+
+	/**
+	 * @private
+	 * Rack ID
+	 */
+	int rack_id;
+
+} as_rack;
+
+/**
+ * @private
+ * Racks.
+ */
+typedef struct as_racks_s {
+	/**
+	 * @private
+	 * Reference count of racks array.
+	 */
+	uint32_t ref_count;
+
+	/**
+	 * @private
+	 * Rack ID when all namespaces use same rack.
+	 */
+	int rack_id;
+
+	/**
+	 * @private
+	 * Length of racks array.
+	 */
+	uint32_t size;
+
+	/**
+	 * @private
+	 * Pad to 8 byte boundary.
+	 */
+	uint32_t pad;
+
+	/**
+	 * @private
+	 * Racks array.
+	 */
+	as_rack racks[];
+
+} as_racks;
+
 struct as_cluster_s;
 
 /**
@@ -233,6 +290,12 @@ typedef struct as_node_s {
 
 	/**
 	 * @private
+	 * Racks data.
+	 */
+	as_racks* racks;
+
+	/**
+	 * @private
 	 * Socket used exclusively for cluster tend thread info requests.
 	 */
 	as_socket info_socket;
@@ -281,6 +344,12 @@ typedef struct as_node_s {
 
 	/**
 	 * @private
+	 * Server's generation count for partition rebalancing.
+	 */
+	uint32_t rebalance_generation;
+
+	/**
+	 * @private
 	 * Number of other nodes that consider this node a member of the cluster.
 	 */
 	uint32_t friends;
@@ -314,7 +383,13 @@ typedef struct as_node_s {
 	 * Did partition change in current cluster tend.
 	 */
 	bool partition_changed;
-	
+
+	/**
+	 * @private
+	 * Did rebalance generation change in current cluster tend.
+	 */
+	bool rebalance_changed;
+
 } as_node;
 
 /**
@@ -611,6 +686,13 @@ as_node_info_destroy(as_node_info* node_info)
  */
 void
 as_node_signal_login(as_node* node);
+
+/**
+ * @private
+ * Does node contain rack.
+ */
+bool
+as_node_has_rack(struct as_cluster_s* cluster, as_node* node, const char* ns, int rack_id);
 
 #ifdef __cplusplus
 } // end extern "C"

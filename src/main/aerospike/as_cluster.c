@@ -53,6 +53,9 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 as_status
 as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers);
 
+as_status
+as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node);
+
 /******************************************************************************
  * Functions
  *****************************************************************************/
@@ -510,12 +513,15 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 	as_vector_inita(&peers.nodes, sizeof(as_node*), 16);
 	peers.use_peers = true;
 	peers.gen_changed = false;
+
+	bool rebalance = false;
 	
 	nodes = cluster->nodes;
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		node->friends = 0;
 		node->partition_changed = false;
+		node->rebalance_changed = false;
 		
 		if (! (node->features & AS_FEATURES_PEERS)) {
 			peers.use_peers = false;
@@ -580,7 +586,23 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 			as_status status = as_node_refresh_partitions(cluster, &error_local, node, &peers);
 			
 			if (status != AEROSPIKE_OK) {
-				as_log_warn("Node %s partition refresh failed: %s %s", node->name, as_error_string(status), error_local.message);
+				as_log_warn("Node %s partition refresh failed: %s %s",
+							node->name, as_error_string(status), error_local.message);
+				node->failures++;
+			}
+		}
+
+		if (node->rebalance_changed && node->failures == 0 && node->active) {
+			as_status status = as_node_refresh_racks(cluster, &error_local, node);
+
+			if (status == AEROSPIKE_OK) {
+				if (cluster->shm_info && node->racks && node->racks->size > 0) {
+					rebalance = true;
+				}
+			}
+			else {
+				as_log_warn("Node %s rack refresh failed: %s %s",
+							node->name, as_error_string(status), error_local.message);
 				node->failures++;
 			}
 		}
@@ -604,7 +626,12 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 	if (peers.nodes.size > 0) {
 		as_cluster_add_nodes(cluster, &peers.nodes);
 	}
-	
+
+	if (rebalance && cluster->shm_info) {
+		// Update shared memory to notify prole tenders to rebalance (retrieve racks info).
+		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
+	}
+
 	as_vector* hosts = &peers.hosts;
 	
 	for (uint32_t i = 0; i < hosts->size; i++) {
@@ -896,7 +923,7 @@ as_cluster_get_node(
 
 	uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);
 	as_partition* p = &table->partitions[partition_id];
-	as_node* node = as_partition_get_node(cluster, p, replica, master);
+	as_node* node = as_partition_get_node(cluster, table->ns, p, replica, master);
 #endif
 
 	if (! node) {
@@ -1024,6 +1051,8 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;;
 	cluster->conn_pools_per_node = config->conn_pools_per_node;
 	cluster->use_services_alternate = config->use_services_alternate;
+	cluster->rack_aware = config->rack_aware;
+	cluster->rack_id = config->rack_id;
 
 	// Initialize seed hosts.  Round initial capacity up to multiple of 16.
 	as_vector* src = config->hosts;

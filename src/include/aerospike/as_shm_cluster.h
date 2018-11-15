@@ -32,7 +32,7 @@ extern "C" {
 
 /**
  * @private
- * Shared memory representation of node. 416 bytes.
+ * Shared memory representation of node. 424 bytes.
  */
 typedef struct as_node_shm_s {
 	/**
@@ -67,6 +67,18 @@ typedef struct as_node_shm_s {
 
 	/**
 	 * @private
+	 * Server's generation count for partition rebalancing.
+	 */
+	uint32_t rebalance_generation;
+
+	/**
+	 * @private
+	 * Rack ID.
+	 */
+	int rack_id;
+
+	/**
+	 * @private
 	 * Is node currently active.
 	 */
 	uint8_t active;
@@ -80,7 +92,7 @@ typedef struct as_node_shm_s {
 
 /**
  * @private
- *  Shared memory representation of map of namespace data partitions to nodes. 16 bytes.
+ * Shared memory representation of map of namespace data partitions to nodes. 16 bytes.
  */
 typedef struct as_partition_shm_s {
 	/**
@@ -227,9 +239,15 @@ typedef struct as_cluster_shm_s {
 	
 	/**
 	 * @private
-	 * Pad to 8 byte boundary.
+	 * Pad to 4 byte boundary.
 	 */
-	char pad[6];
+	char pad[2];
+
+	/**
+	 * @private
+	 * Cluster rebalance generation count.
+	 */
+	uint32_t rebalance_gen;
 
 	/*
 	 * @private
@@ -316,6 +334,13 @@ as_shm_remove_nodes(struct as_cluster_s* cluster, as_vector* /* <as_node*> */ no
 
 /**
  * @private
+ * Update shared memory node racks.
+ */
+void
+as_shm_node_replace_racks(as_cluster_shm* cluster_shm, as_node* node, as_racks* racks);
+
+/**
+ * @private
  * Determine if node exists in shared memory partition map.
  */
 bool
@@ -333,15 +358,21 @@ as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns);
  * Update shared memory partition tables for given namespace.
  */
 void
-as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node, bool master, uint32_t regime);
+as_shm_update_partitions(
+	as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node,
+	bool master, uint32_t regime
+	);
 
 /**
  * @private
- * Get shared memory mapped node given digest key. If there is no mapped node, another node is used based on replica.
- * If successful, as_nodes_release() must be called when done with node.
+ * Get shared memory mapped node given digest key. If there is no mapped node, another node is used
+ * based on replica.  If successful, as_nodes_release() must be called when done with node.
  */
 as_status
-as_shm_cluster_get_node(struct as_cluster_s* cluster, as_error* err, const char* ns, const uint8_t* digest, as_policy_replica replica, bool use_master, as_node** node_pp);
+as_shm_cluster_get_node(
+	struct as_cluster_s* cluster, as_error* err, const char* ns, const uint8_t* digest,
+	as_policy_replica replica, bool use_master, as_node** node_pp
+	);
 
 /**
  * @private
@@ -349,7 +380,10 @@ as_shm_cluster_get_node(struct as_cluster_s* cluster, as_error* err, const char*
  * as_nodes_release() must be called when done with node.
  */
 as_node*
-as_partition_shm_get_node(struct as_cluster_s* cluster, as_partition_shm* p, as_policy_replica replica, bool use_master);
+as_partition_shm_get_node(
+	struct as_cluster_s* cluster, const char* ns, as_partition_shm* p, as_policy_replica replica,
+	bool use_master
+	);
 
 /**
  * @private
@@ -366,7 +400,9 @@ as_shm_get_partition_tables(as_cluster_shm* cluster_shm)
  * Get partition table identified by index.
  */
 static inline as_partition_table_shm*
-as_shm_get_partition_table(as_cluster_shm* cluster_shm, as_partition_table_shm* tables, uint32_t index)
+as_shm_get_partition_table(
+	as_cluster_shm* cluster_shm, as_partition_table_shm* tables, uint32_t index
+	)
 {
 	return (as_partition_table_shm*) ((char*)tables + (cluster_shm->partition_table_byte_size * index));
 }

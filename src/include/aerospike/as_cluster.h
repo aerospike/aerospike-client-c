@@ -268,6 +268,12 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Rack id.
+	 */
+	int rack_id;
+
+	/**
+	 * @private
 	 * Authentication mode.
 	 */
 	as_auth_mode auth_mode;
@@ -284,6 +290,12 @@ typedef struct as_cluster_s {
 	 */
 	bool use_services_alternate;
 	
+	/**
+	 * @private
+	 * Request server rack ids.
+	 */
+	bool rack_aware;
+
 	/**
 	 * @private
 	 * Should continue to tend cluster.
@@ -426,7 +438,7 @@ as_cluster_get_partition_table(as_cluster* cluster, const char* ns)
  * as_nodes_release() must be called when done with node.
  */
 as_node*
-as_partition_get_node(as_cluster* cluster, as_partition* p, as_policy_replica replica, bool use_master);
+as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master);
 
 /**
  * @private

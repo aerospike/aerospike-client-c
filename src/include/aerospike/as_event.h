@@ -397,6 +397,34 @@ as_event_loop_get()
 }
 	
 /**
+ * Return the approximate number of commands currently being processed on
+ * the event loop.  The value is approximate because the call may be from a
+ * different thread than the event loop’s thread and there are no locks or
+ * atomics used.
+ *
+ * @ingroup async_events
+ */
+static inline int
+as_event_loop_get_process_size(as_event_loop* event_loop)
+{
+	return event_loop->pending;
+}
+
+/**
+ * Return the approximate number of commands stored on this event loop's
+ * delay queue that have not been started yet.  The value is approximate
+ * because the call may be from a different thread than the event loop’s
+ * thread and there are no locks or atomics used.
+ *
+ * @ingroup async_events
+ */
+static inline uint32_t
+as_event_loop_get_queue_size(as_event_loop* event_loop)
+{
+	return as_queue_size(&event_loop->delay_queue);
+}
+
+/**
  * Close internal event loops and release watchers for internal and external event loops.
  * The global event loop array will also be destroyed for internal event loops.
  *

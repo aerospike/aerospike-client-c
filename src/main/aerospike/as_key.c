@@ -29,22 +29,25 @@
  *****************************************************************************/
 
 static as_key*
-as_key_cons(as_key* key, bool free, const as_namespace ns, const char * set, const as_key_value* valuep, const as_digest_value digest)
+as_key_cons(
+	as_key* key, bool free, const as_namespace ns, const char* set, const as_key_value* valuep,
+	const as_digest_value digest
+	)
 {
-	if ( ! set ) {
-		set = "";
+	if (as_strncpy(key->ns, ns, AS_NAMESPACE_MAX_SIZE)) {
+		// Truncation occurred.
+		return NULL;
 	}
 
-	if ( ! (ns && *ns != '\0' && strlen(ns) < AS_NAMESPACE_MAX_SIZE && strlen(set) < AS_SET_MAX_SIZE) ) {
+	if (as_strncpy(key->set, set, AS_SET_MAX_SIZE)) {
+		// Truncation occurred.
 		return NULL;
 	}
 
 	key->_free = free;
-	strcpy(key->ns, ns);
-	strcpy(key->set, set);
 	key->valuep = (as_key_value *) valuep;
 	
-	if ( digest == NULL ) {
+	if (digest == NULL) {
 		key->digest.init = false;
 		memset(key->digest.value, 0, AS_DIGEST_VALUE_SIZE);	
 	}
@@ -68,43 +71,48 @@ as_key_init(as_key* key, const as_namespace ns, const as_set set, const char* va
 as_key*
 as_key_init_int64(as_key* key, const as_namespace ns, const as_set set, int64_t value)
 {
-	if ( !key ) return key;
-
-	as_integer_init((as_integer *) &key->value, value);
+	if (! key) {
+		return key;
+	}
+	as_integer_init((as_integer*)&key->value, value);
 	return as_key_cons(key, false, ns, set, &key->value, NULL);
 }
 
 as_key*
 as_key_init_strp(as_key* key, const as_namespace ns, const as_set set, const char* value, bool free)
 {
-	if ( !key ) return key;
-	
-	as_string_init((as_string *) &key->value, (char *) value, free);
+	if (! key) {
+		return key;
+	}
+	as_string_init((as_string*)&key->value, (char*)value, free);
 	return as_key_cons(key, false, ns, set, &key->value, NULL);
 }
 
 as_key*
 as_key_init_rawp(as_key* key, const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool free)
 {
-	if ( !key ) return key;
-	
-	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, free);
+	if (! key) {
+		return key;
+	}
+	as_bytes_init_wrap((as_bytes*)&key->value, (uint8_t*) value, size, free);
 	return as_key_cons(key, false, ns, set, &key->value, NULL);
 }
 
 as_key*
 as_key_init_digest(as_key* key, const as_namespace ns, const as_set set, const as_digest_value digest)
 {
-	if ( !key ) return key;
-
+	if (! key) {
+		return key;
+	}
 	return as_key_cons(key, false, ns, set, NULL, digest);
 }
 
 as_key*
 as_key_init_value(as_key* key, const as_namespace ns, const as_set set, const as_key_value* value)
 {
-	if ( !key ) return key;
-
+	if (! key) {
+		return key;
+	}
 	return as_key_cons(key, false, ns, set, value, NULL);
 }
 
@@ -117,59 +125,99 @@ as_key_new(const as_namespace ns, const as_set set, const char* value)
 as_key*
 as_key_new_int64(const as_namespace ns, const as_set set, int64_t value)
 {
-	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
-	if ( !key ) return key;
+	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 
-	as_integer_init((as_integer *) &key->value, value);
-	return as_key_cons(key, true, ns, set, &key->value, NULL);
+	if (! key) {
+		return key;
+	}
+
+	as_integer_init((as_integer*)&key->value, value);
+
+	if (! as_key_cons(key, true, ns, set, &key->value, NULL)) {
+		cf_free(key);
+		return NULL;
+	}
+	return key;
 }
 
 as_key*
 as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool free)
 {
-	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
-	if ( !key ) return key;
-	
-	as_string_init((as_string *) &key->value, (char *) value, free);
-	return as_key_cons(key, true, ns, set, &key->value, NULL);
+	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
+
+	if (! key) {
+		return key;
+	}
+
+	as_string_init((as_string*)&key->value, (char*) value, free);
+
+	if (! as_key_cons(key, true, ns, set, &key->value, NULL)) {
+		cf_free(key);
+		return NULL;
+	}
+	return key;
 }
 
 as_key*
 as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool free)
 {
-	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
-	if ( !key ) return key;
-	
-	as_bytes_init_wrap((as_bytes *) &key->value, (uint8_t *) value, size, free);
-	return as_key_cons(key, true, ns, set, &key->value, NULL);
+	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
+
+	if (! key) {
+		return key;
+	}
+
+	as_bytes_init_wrap((as_bytes*)&key->value, (uint8_t*) value, size, free);
+
+	if (! as_key_cons(key, true, ns, set, &key->value, NULL)) {
+		cf_free(key);
+		return NULL;
+	}
+	return key;
 }
 
 as_key*
 as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest)
 {
-	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
-	if ( !key ) return key;
+	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 
-	return as_key_cons(key, true, ns, set, NULL, digest);
+	if (! key) {
+		return key;
+	}
+
+	if (! as_key_cons(key, true, ns, set, NULL, digest)) {
+		cf_free(key);
+		return NULL;
+	}
+	return key;
 }
 
 as_key*
 as_key_new_value(const as_namespace ns, const as_set set, const as_key_value* value)
 {
-	as_key* key = (as_key *) cf_malloc(sizeof(as_key));
-	if ( !key ) return key;
+	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 
-	return as_key_cons(key, true, ns, set, value, NULL);
+	if (! key) {
+		return key;
+	}
+
+	if (! as_key_cons(key, true, ns, set, value, NULL)) {
+		cf_free(key);
+		return NULL;
+	}
+	return key;
 }
 
 void
 as_key_destroy(as_key* key)
 {
-	if ( !key ) return;
+	if (! key) {
+		return;
+	}
 
-	as_val_destroy((as_val *) key->valuep);
+	as_val_destroy((as_val*)key->valuep);
 
-	if ( key->_free ) {
+	if (key->_free) {
 		cf_free(key);
 	}
 }

@@ -131,11 +131,6 @@ typedef enum as_status_e {
 	 * AS_POLICY_EXISTS_CREATE.
 	 */
 	AEROSPIKE_ERR_RECORD_EXISTS = 5,
-	
-	/**
-	 * Bin already exists.
-	 */
-	AEROSPIKE_ERR_BIN_EXISTS = 6,
 
 	/**
 	 * A cluster state change occurred during the request. This may also be
@@ -190,12 +185,7 @@ typedef enum as_status_e {
 	 * processed something that the server is not ready for (unsupported feature).
 	 */
 	AEROSPIKE_ERR_UNSUPPORTED_FEATURE = 16,
-	
-	/**
-	 * Bin-level replace-only supported on server but not on client.
-	 */
-    AEROSPIKE_ERR_BIN_NOT_FOUND = 17,
-	
+
 	/**
 	 * The server node's storage device(s) can't keep up with the write load.
 	 */

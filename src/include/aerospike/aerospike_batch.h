@@ -238,13 +238,6 @@ AS_EXTERN void
 as_batch_read_destroy(as_batch_read_records* records);
 
 /**
- * Do the connected servers support the new batch index protocol.
- * The cluster must already be connected (aerospike_connect()) prior to making this call.
- */
-AS_EXTERN bool
-aerospike_has_batch_index(aerospike* as);
-
-/**
  * Read multiple records for specified batch keys in one batch call.
  * This method allows different namespaces/bins to be requested for each key in the batch.
  * The returned records are located in the same batch array.

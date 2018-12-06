@@ -64,7 +64,6 @@ typedef struct as_batch_task_s {
 
 	uint8_t read_attr;      // Old aerospike_batch_get()
 	bool use_batch_records;
-	bool use_new_batch;
 } as_batch_task;
 
 typedef struct as_batch_complete_task_s {
@@ -86,12 +85,6 @@ typedef struct as_async_batch_command {
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
-
-static inline bool
-as_batch_use_new(const as_policy_batch* policy, as_node* node)
-{
-	return (node->features & AS_FEATURES_BATCH_INDEX);
-}
 
 static uint8_t*
 as_batch_parse_fields(uint8_t* p, uint32_t n_fields, uint8_t** digest)
@@ -244,13 +237,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
 
-		uint32_t offset;
-		if (task->use_new_batch) {
-			offset = msg->transaction_ttl;  // overloaded to contain batch index
-		}
-		else {
-			offset = *(uint32_t*)as_vector_get(&task->offsets, task->index++);
-		}
+		uint32_t offset = msg->transaction_ttl;  // overloaded to contain batch index
 
 		if (offset >= task->n_keys) {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Batch index %u >= batch size: %u", offset, task->n_keys);
@@ -637,84 +624,20 @@ as_batch_index_execute(as_batch_task* task)
 	return status;
 }
 
-static as_status
-as_batch_direct_execute(as_batch_task* task)
-{
-	const as_policy_batch* policy = task->policy;
-
-	size_t size = AS_HEADER_SIZE;
-	size += as_command_string_field_size(task->ns);
-	
-	uint32_t n_offsets = task->offsets.size;
-	uint32_t byte_size = n_offsets * AS_DIGEST_VALUE_SIZE;
-	size += as_command_field_size(byte_size);
-	
-	if (task->n_bins) {
-		for (uint32_t i = 0; i < task->n_bins; i++) {
-			size += as_command_string_operation_size(task->bins[i]);
-		}
-	}
-	
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, task->read_attr, policy->consistency_level,
-					policy->linearize_read, policy->base.total_timeout, 2, task->n_bins);
-	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, task->ns);
-	p = as_command_write_field_header(p, AS_FIELD_DIGEST_ARRAY, byte_size);
-	
-	for (uint32_t i = 0; i < n_offsets; i++) {
-		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
-		as_key* key = &task->keys[offset];
-		memcpy(p, key->digest.value, AS_DIGEST_VALUE_SIZE);
-		p += AS_DIGEST_VALUE_SIZE;
-	}
-	
-	if (task->n_bins) {
-		for (uint32_t i = 0; i < task->n_bins; i++) {
-			p = as_command_write_bin_name(p, task->bins[i]);
-		}
-	}
-	
-	size = as_command_write_end(cmd, p);
-	
-	as_command_node cn;
-	cn.node = task->node;
-	
-	as_error err;
-	as_error_init(&err);
-
-	as_status status = as_command_execute(task->cluster, &err, &policy->base, &cn, cmd, size, as_batch_parse, task, true);
-	
-	as_command_free(cmd, size);
-	
-	if (status) {
-		// Copy error to main error only once.
-		if (as_fas_uint32(task->error_mutex, 1) == 0) {
-			as_error_copy(task->err, &err);
-		}
-	}
-	return status;
-}
-
 static inline as_status
 as_batch_command_execute(as_batch_task* task)
 {
 	as_status status;
 	
-	if (task->use_new_batch) {
-		// New batch protocol
-		if (task->use_batch_records) {
-			// Use as_batch_read_records referenced in aerospike_batch_read().
-			status = as_batch_index_records_execute(task);
-		}
-		else {
-			// Use as_batch referenced in aerospike_batch_get(), aerospike_batch_get_bins()
-			// and aerospike_batch_exists().
-			status = as_batch_index_execute(task);
-		}
+	// New batch protocol
+	if (task->use_batch_records) {
+		// Use as_batch_read_records referenced in aerospike_batch_read().
+		status = as_batch_index_records_execute(task);
 	}
 	else {
-		// Old batch protocol
-		status = as_batch_direct_execute(task);
+		// Use as_batch referenced in aerospike_batch_get(), aerospike_batch_get_bins()
+		// and aerospike_batch_exists().
+		status = as_batch_index_execute(task);
 	}
 	return status;
 }
@@ -831,15 +754,6 @@ as_batch_execute(
 			return status;
 		}
 
-		if (! as_batch_use_new(policy, node)) {
-			// Batch direct only supports batch commands with all keys in the same namespace.
-			if (strcmp(ns, key->ns)) {
-				as_batch_release_nodes(batch_nodes, n_batch_nodes);
-				as_nodes_release(nodes);
-				return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Batch keys must all be in the same namespace.");
-			}
-		}
-		
 		as_batch_node* batch_node = as_batch_node_find(batch_nodes, n_batch_nodes, node);
 		
 		if (batch_node) {
@@ -891,7 +805,6 @@ as_batch_execute(
 			memcpy(task_node, &task, sizeof(as_batch_task));
 			
 			as_batch_node* batch_node = &batch_nodes[i];
-			task_node->use_new_batch = as_batch_use_new(policy, batch_node->node);
 			task_node->node = batch_node->node;
 			memcpy(&task_node->offsets, &batch_node->offsets, sizeof(as_vector));
 			
@@ -927,7 +840,6 @@ as_batch_execute(
 		for (uint32_t i = 0; status == AEROSPIKE_OK && i < n_batch_nodes; i++) {
 			as_batch_node* batch_node = &batch_nodes[i];
 			
-			task.use_new_batch = as_batch_use_new(policy, batch_node->node);
 			task.node = batch_node->node;
 			task.index = 0;
 			memcpy(&task.offsets, &batch_node->offsets, sizeof(as_vector));
@@ -986,7 +898,6 @@ as_batch_read_execute_sync(
 			memcpy(task_node, &task, sizeof(as_batch_task));
 			
 			as_batch_node* batch_node = &batch_nodes[i];
-			task_node->use_new_batch = true;
 			task_node->node = batch_node->node;
 			memcpy(&task_node->offsets, &batch_node->offsets, sizeof(as_vector));
 			
@@ -1022,7 +933,6 @@ as_batch_read_execute_sync(
 		for (uint32_t i = 0; status == AEROSPIKE_OK && i < n_batch_nodes; i++) {
 			as_batch_node* batch_node = &batch_nodes[i];
 			
-			task.use_new_batch = true;
 			task.node = batch_node->node;
 			memcpy(&task.offsets, &batch_node->offsets, sizeof(as_vector));
 			status = as_batch_command_execute(&task);
@@ -1173,11 +1083,6 @@ as_batch_read_execute(
 			return status;
 		}
 
-		if (! as_batch_use_new(policy, node)) {
-			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);
-			return as_error_set_message(err, AEROSPIKE_ERR_UNSUPPORTED_FEATURE, "aerospike_batch_read() requires a server that supports new batch index protocol.");
-		}
-		
 		as_batch_node* batch_node = as_batch_node_find(batch_nodes, n_batch_nodes, node);
 		
 		if (batch_node) {
@@ -1212,26 +1117,6 @@ as_batch_read_execute(
 /******************************************************************************
  * PUBLIC FUNCTIONS
  *****************************************************************************/
-
-bool
-aerospike_has_batch_index(aerospike* as)
-{
-	as_nodes* nodes = as_nodes_reserve(as->cluster);
-	
-	if (nodes->size == 0) {
-		as_nodes_release(nodes);
-		return false;
-	}
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		if (! (nodes->array[i]->features & AS_FEATURES_BATCH_INDEX)) {
-			as_nodes_release(nodes);
-			return false;
-		}
-	}
-	as_nodes_release(nodes);
-	return true;
-}
 
 as_status
 aerospike_batch_read(

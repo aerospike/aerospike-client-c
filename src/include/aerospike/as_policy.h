@@ -67,7 +67,7 @@ extern "C" {
  *
  * @ingroup client_policies
  */
-#define AS_POLICY_SOCKET_TIMEOUT_DEFAULT 0
+#define AS_POLICY_SOCKET_TIMEOUT_DEFAULT 30000
 
 /**
  * Default total timeout value
@@ -354,9 +354,7 @@ typedef struct as_policy_base_s {
 	 * both max_retries and total_timeout are checked.  If max_retries and total_timeout are not
 	 * exceeded, the transaction is retried.
 	 *
-	 * Default for everything but scan/query: 0 (no socket idle time limit).
-	 *
-	 * Default for scan/query: 30000ms
+	 * Default: 30000ms
 	 */
 	uint32_t socket_timeout;
 
@@ -1179,7 +1177,7 @@ as_policy_batch_copy(const as_policy_batch* src, as_policy_batch* trg)
 static inline as_policy_scan*
 as_policy_scan_init(as_policy_scan* p)
 {
-	p->base.socket_timeout = 30000;
+	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->base.total_timeout = 0;
 	p->base.max_retries = 0;
 	p->base.sleep_between_retries = 0;
@@ -1213,7 +1211,7 @@ as_policy_scan_copy(const as_policy_scan* src, as_policy_scan* trg)
 static inline as_policy_query*
 as_policy_query_init(as_policy_query* p)
 {
-	p->base.socket_timeout = 30000;
+	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->base.total_timeout = 0;
 	p->base.max_retries = 0;
 	p->base.sleep_between_retries = 0;

@@ -627,13 +627,6 @@ aerospike_key_apply_async(
 	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener
 	);
-	
-/**
- * Do the connected servers support the new floating point type.
- * The cluster must already be connected (aerospike_connect()) prior to making this call.
- */
-AS_EXTERN bool
-aerospike_has_double(aerospike* as);
 
 /**
  * Do the connected servers support geospatial data and queries.

@@ -408,9 +408,6 @@ as_lookup_node(
 		else if (strcmp(begin, "float") == 0) {
 			features |= AS_FEATURES_DOUBLE;
 		}
-		else if (strcmp(begin, "batch-index") == 0) {
-			features |= AS_FEATURES_BATCH_INDEX;
-		}
 		else if (strcmp(begin, "replicas-all") == 0) {
 			features |= AS_FEATURES_REPLICAS_ALL;
 		}

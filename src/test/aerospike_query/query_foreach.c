@@ -51,7 +51,6 @@
  *****************************************************************************/
 
 extern aerospike * as;
-static bool server_has_double = false;
 static uint64_t g_epochns;
 
 /******************************************************************************
@@ -1464,8 +1463,6 @@ TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
 
 SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 
-	server_has_double = aerospike_has_double(as);
-
 	suite_before( before );
 	suite_after( after   );
 
@@ -1510,8 +1507,5 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_agg_quit_early );
 	suite_add( query_filter_map_bytes );
 	suite_add( query_foreach_nullset );
-
-	if (server_has_double) {
-		suite_add( query_foreach_int_with_double_bin );
-	}
+	suite_add( query_foreach_int_with_double_bin );
 }

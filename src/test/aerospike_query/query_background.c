@@ -43,7 +43,6 @@
  *****************************************************************************/
 
 extern aerospike* as;
-static bool server_has_double = false;
 
 /******************************************************************************
  * MACROS
@@ -318,17 +317,11 @@ TEST(query_aggregation_double, "query aggregation validate")
 
 SUITE(query_background, "aerospike_query_background tests")
 {
-	server_has_double = aerospike_has_double(as);
-
 	suite_before(before);
 	suite_after(after);
 
 	suite_add(query_background_create);
 	suite_add(query_background1);
 	suite_add(query_validate1);
-
-	if (server_has_double) {
-		suite_add( query_aggregation_double );
-	}
-
+	suite_add(query_aggregation_double);
 }

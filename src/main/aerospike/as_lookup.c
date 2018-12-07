@@ -405,9 +405,6 @@ as_lookup_node(
 		if (strcmp(begin, "geo") == 0) {
 			features |= AS_FEATURES_GEO;
 		}
-		else if (strcmp(begin, "replicas-all") == 0) {
-			features |= AS_FEATURES_REPLICAS_ALL;
-		}
 		else if (strcmp(begin, "pipelining") == 0) {
 			features |= AS_FEATURES_PIPELINING;
 		}

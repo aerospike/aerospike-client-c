@@ -42,9 +42,6 @@ const char*
 as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
 
 bool
-as_partition_tables_update(struct as_cluster_s* cluster, as_node* node, char* buf, bool master);
-
-bool
 as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bool has_regime);
 
 extern uint32_t as_event_loop_capacity;
@@ -946,7 +943,6 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 	return status;
 }
 
-static const char INFO_STR_GET_REPLICAS_OLD[] = "partition-generation\nreplicas-master\nreplicas-prole\n";
 static const char INFO_STR_GET_REPLICAS_ALL[] = "partition-generation\nreplicas-all\n";
 static const char INFO_STR_GET_REPLICAS_REGIME[] = "partition-generation\nreplicas\n";
 
@@ -964,12 +960,6 @@ as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 		}
 		else if (strcmp(nv->name, "replicas-all") == 0) {
 			as_partition_tables_update_all(cluster, node, nv->value, false);
-		}
-		else if (strcmp(nv->name, "replicas-master") == 0) {
-			as_partition_tables_update(cluster, node, nv->value, true);
-		}
-		else if (strcmp(nv->name, "replicas-prole") == 0) {
-			as_partition_tables_update(cluster, node, nv->value, false);
 		}
 		else {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s did not request info '%s'", node->name, nv->name);
@@ -989,13 +979,9 @@ as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 		command = INFO_STR_GET_REPLICAS_REGIME;
 		command_len = sizeof(INFO_STR_GET_REPLICAS_REGIME) - 1;
 	}
-	else if (node->features & AS_FEATURES_REPLICAS_ALL) {
+	else {
 		command = INFO_STR_GET_REPLICAS_ALL;
 		command_len = sizeof(INFO_STR_GET_REPLICAS_ALL) - 1;
-	}
-	else {
-		command = INFO_STR_GET_REPLICAS_OLD;
-		command_len = sizeof(INFO_STR_GET_REPLICAS_OLD) - 1;
 	}
 
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];

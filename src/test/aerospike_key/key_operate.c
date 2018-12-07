@@ -37,7 +37,6 @@
  *****************************************************************************/
 
 extern aerospike * as;
-static bool server_has_double = false;
 
 /******************************************************************************
  * MACROS
@@ -203,61 +202,59 @@ TEST( key_operate_gen_equal , "operate: only if expected generation " )
 
 TEST( key_operate_float , "operate: (test,test,opfloat) = {append, read, write, read, incr, read, prepend}" ) {
 
-	if (server_has_double) {
-		as_error err;
-		as_error_reset(&err);
+	as_error err;
+	as_error_reset(&err);
 
-		as_key key;
-		as_operations asops;
-		as_operations *ops = &asops;
-		as_record *rec = NULL;
-		int rc;
+	as_key key;
+	as_operations asops;
+	as_operations *ops = &asops;
+	as_record *rec = NULL;
+	int rc;
 
-		as_key_init( &key, NAMESPACE, SET, "opfloat" );
-		rc = aerospike_key_remove(as, &err, NULL, &key);
-		assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	as_key_init( &key, NAMESPACE, SET, "opfloat" );
+	rc = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true( rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
-		// Make sure we can write and read double
-		as_operations_init( ops, 2);
+	// Make sure we can write and read double
+	as_operations_init( ops, 2);
 
-		as_double dbl;
-		as_double_init(&dbl, 3.45);
+	as_double dbl;
+	as_double_init(&dbl, 3.45);
 
-		as_operations_add_write( ops, "incr", (as_bin_value*) &dbl );
-		as_operations_add_read( ops, "incr" );
-		rc = aerospike_key_operate(as, &err, NULL, &key, ops, &rec );
-		assert_int_eq( rc, AEROSPIKE_OK );
+	as_operations_add_write( ops, "incr", (as_bin_value*) &dbl );
+	as_operations_add_read( ops, "incr" );
+	rc = aerospike_key_operate(as, &err, NULL, &key, ops, &rec );
+	assert_int_eq( rc, AEROSPIKE_OK );
 
-		assert_double_eq( as_record_get_double(rec,"incr",0.0), 3.45);
+	assert_double_eq( as_record_get_double(rec,"incr",0.0), 3.45);
 
-		as_record_destroy( rec );
-		as_operations_destroy( ops );
-		rec = NULL;
+	as_record_destroy( rec );
+	as_operations_destroy( ops );
+	rec = NULL;
 
-		// Make sure we can increment double
-		as_operations_init( ops, 3);
+	// Make sure we can increment double
+	as_operations_init( ops, 3);
 
-		as_operations_add_incr_double( ops, "incr", 19.03 );
-		as_operations_add_incr_double( ops, "incr", -5.03 );
-		as_operations_add_read( ops, "incr" );
-		rc = aerospike_key_operate(as, &err, NULL, &key, ops, &rec );
-		assert_int_eq( rc, AEROSPIKE_OK );
+	as_operations_add_incr_double( ops, "incr", 19.03 );
+	as_operations_add_incr_double( ops, "incr", -5.03 );
+	as_operations_add_read( ops, "incr" );
+	rc = aerospike_key_operate(as, &err, NULL, &key, ops, &rec );
+	assert_int_eq( rc, AEROSPIKE_OK );
 
-		assert_double_eq( as_record_get_double(rec,"incr",0.0), 17.45);
+	assert_double_eq( as_record_get_double(rec,"incr",0.0), 17.45);
 
-		as_record_destroy( rec );
-		as_operations_destroy( ops );
-		rec = NULL;
+	as_record_destroy( rec );
+	as_operations_destroy( ops );
+	rec = NULL;
 
-		// Make sure append string fails
-		as_operations_init( ops, 1);
-		as_operations_add_append_str( ops, "incr", "my string" );
-		rc = aerospike_key_operate( as, &err, NULL, &key, ops, &rec );
-		assert_int_eq( rc, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE );
+	// Make sure append string fails
+	as_operations_init( ops, 1);
+	as_operations_add_append_str( ops, "incr", "my string" );
+	rc = aerospike_key_operate( as, &err, NULL, &key, ops, &rec );
+	assert_int_eq( rc, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE );
 
-		as_record_destroy( rec );
-		as_operations_destroy( ops );
-	}
+	as_record_destroy( rec );
+	as_operations_destroy( ops );
 }
 
 /******************************************************************************
@@ -265,8 +262,6 @@ TEST( key_operate_float , "operate: (test,test,opfloat) = {append, read, write, 
  *****************************************************************************/
 
 SUITE( key_operate, "aerospike_key_operate tests" ) {
-	server_has_double = aerospike_has_double(as);
-
 	suite_add( key_operate_touchget );
 	suite_add( key_operate_9 );
 	suite_add( key_operate_gen_equal );

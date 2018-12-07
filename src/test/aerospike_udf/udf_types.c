@@ -43,8 +43,6 @@
 
 extern aerospike * as;
 
-static bool server_has_double = false;
-
 /******************************************************************************
  * MACROS
  *****************************************************************************/
@@ -61,8 +59,6 @@ static bool server_has_double = false;
 static bool
 udf_types_pre(atf_suite* suite)
 {
-	server_has_double = aerospike_has_double(as);
-
 	const char * filename = UDF_FILE".lua";
 
 	as_error err;
@@ -347,107 +343,105 @@ TEST(udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i: 
 	as_key_destroy(&key);
 }
 
-TEST(udf_types_double, "udf_types.write_f(rec, bname, float_binval) == udf_type_read_f(rec, bname, float_add) + float_add") {
+TEST(udf_types_double, "udf_types.write_f(rec, bname, float_binval) == udf_type_read_f(rec, bname, float_add) + float_add")
+{
+	as_error err;
 
-	if (server_has_double) {
-		as_error err;
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "udf_double");
 
-		as_key key;
-		as_key_init(&key, NAMESPACE, SET, "udf_double");
+	// remove record to make sure we are clean
+	aerospike_key_remove(as, &err, NULL, &key);
 
-		// remove record to make sure we are clean
-		aerospike_key_remove(as, &err, NULL, &key);
+	// write a double bin value, list value, map value
+	as_arraylist args;
+	as_arraylist_inita(&args, 4);
+	as_arraylist_append_str(&args, "bin1");
+	as_arraylist_append_str(&args, "binlist");
+	as_arraylist_append_str(&args, "binmap");
+	as_arraylist_append_double(&args,4.4);
 
-		// write a double bin value, list value, map value
-		as_arraylist args;
-		as_arraylist_inita(&args, 4);
-		as_arraylist_append_str(&args, "bin1");
-		as_arraylist_append_str(&args, "binlist");
-		as_arraylist_append_str(&args, "binmap");
-		as_arraylist_append_double(&args,4.4);
+	as_val * res = NULL;
 
-		as_val * res = NULL;
+	aerospike_key_apply(as, &err, NULL, &key, "udf_types", "write_f", (as_list*)&args, &res);
 
-		aerospike_key_apply(as, &err, NULL, &key, "udf_types", "write_f", (as_list*)&args, &res);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(as_val_type(res), AS_NIL);
 
-		assert_int_eq(err.code, AEROSPIKE_OK);
-		assert_int_eq(as_val_type(res), AS_NIL);
+	as_val_destroy(res);
+	as_val_destroy(&args);
+	res = NULL;
 
-		as_val_destroy(res);
-		as_val_destroy(&args);
-		res = NULL;
+	// read bin value back via udf and pass it back
+	as_arraylist_inita(&args, 1);
+	as_arraylist_append_str(&args, "bin1");
 
-		// read bin value back via udf and pass it back
-		as_arraylist_inita(&args, 1);
-		as_arraylist_append_str(&args, "bin1");
+	aerospike_key_apply(as, &err, NULL, &key, "udf_types", "read_f", (as_list*)&args, &res);
 
-		aerospike_key_apply(as, &err, NULL, &key, "udf_types", "read_f", (as_list*)&args, &res);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(as_val_type(res), AS_DOUBLE);
 
-		assert_int_eq(err.code, AEROSPIKE_OK);
-		assert_int_eq(as_val_type(res), AS_DOUBLE);
+	double result = as_double_get((as_double *)res);
+	info ("double = %lf", result);
+	assert_true((result > 4.39 && result < 4.41));
 
-		double result = as_double_get((as_double *)res);
-		info ("double = %lf", result);
-		assert_true((result > 4.39 && result < 4.41));
+	as_val_destroy(res);
+	as_val_destroy(&args);
 
-		as_val_destroy(res);
-		as_val_destroy(&args);
+	// read list value back via udf pass it back
+	as_arraylist_inita(&args, 1);
+	as_arraylist_append_str(&args, "binlist");
 
-		// read list value back via udf pass it back
-		as_arraylist_inita(&args, 1);
-		as_arraylist_append_str(&args, "binlist");
+	aerospike_key_apply(as, &err, NULL, &key, "udf_types", "read_f", (as_list*)&args, &res);
 
-		aerospike_key_apply(as, &err, NULL, &key, "udf_types", "read_f", (as_list*)&args, &res);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(as_val_type(res), AS_LIST);
 
-		assert_int_eq(err.code, AEROSPIKE_OK);
-		assert_int_eq(as_val_type(res), AS_LIST);
+	result = as_arraylist_get_double((as_arraylist *)res, 0);
 
-		result = as_arraylist_get_double((as_arraylist *)res, 0);
+	info ("list[0] = %lf", result);
+	assert_true((result> 1.19 && result < 1.21));
 
-		info ("list[0] = %lf", result);
-		assert_true((result> 1.19 && result < 1.21));
+	result = as_arraylist_get_double((as_arraylist *)res, 1);
 
-		result = as_arraylist_get_double((as_arraylist *)res, 1);
+	info ("list[1] = %lf", result);
+	assert_true((result> 3.39 && result < 3.41));
 
-		info ("list[1] = %lf", result);
-		assert_true((result> 3.39 && result < 3.41));
+	as_val_destroy(res);
+	as_val_destroy(&args);
 
-		as_val_destroy(res);
-		as_val_destroy(&args);
+	// read map value back via udf pass it back
+	as_arraylist_inita(&args, 1);
+	as_arraylist_append_str(&args, "binmap");
 
-		// read map value back via udf pass it back
-		as_arraylist_inita(&args, 1);
-		as_arraylist_append_str(&args, "binmap");
+	aerospike_key_apply(as, &err, NULL, &key, "udf_types", "read_f", (as_list*)&args, &res);
 
-		aerospike_key_apply(as, &err, NULL, &key, "udf_types", "read_f", (as_list*)&args, &res);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(as_val_type(res), AS_MAP);
 
-		assert_int_eq(err.code, AEROSPIKE_OK);
-		assert_int_eq(as_val_type(res), AS_MAP);
+	as_hashmap_iterator it;
+	as_hashmap_iterator_init(&it, (const as_hashmap*)res);
 
-		as_hashmap_iterator it;
-		as_hashmap_iterator_init(&it, (const as_hashmap*)res);
-
-		while (as_hashmap_iterator_has_next(&it)) {
-			as_pair* p_pair = (as_pair *)as_hashmap_iterator_next(&it);
-			const char* p_key = as_string_val_tostring(as_pair_1(p_pair));
-			as_val* p_val = as_pair_2(p_pair);
-			if (strcmp (p_key,"\"a\"") == 0) { // AER-4267 should not contain extra ""
-				result = as_double_get((const as_double *)p_val);
-				info ("map['a'] = %lf", result);
-				assert_true((result> 5.59 && result < 5.61));
-			} else if (strcmp (p_key,"\"b\"") == 0) {
-				result = as_double_get((const as_double *)p_val);
-				info ("map['b'] = %lf", result);
-				assert_true((result> 7.79 && result < 7.81));
-			}
-			free ((void *)p_key);
+	while (as_hashmap_iterator_has_next(&it)) {
+		as_pair* p_pair = (as_pair *)as_hashmap_iterator_next(&it);
+		const char* p_key = as_string_val_tostring(as_pair_1(p_pair));
+		as_val* p_val = as_pair_2(p_pair);
+		if (strcmp (p_key,"\"a\"") == 0) { // AER-4267 should not contain extra ""
+			result = as_double_get((const as_double *)p_val);
+			info ("map['a'] = %lf", result);
+			assert_true((result> 5.59 && result < 5.61));
+		} else if (strcmp (p_key,"\"b\"") == 0) {
+			result = as_double_get((const as_double *)p_val);
+			info ("map['b'] = %lf", result);
+			assert_true((result> 7.79 && result < 7.81));
 		}
-
-		as_val_destroy(res);
-		as_val_destroy(&args);
-
-		as_key_destroy(&key);
+		free ((void *)p_key);
 	}
+
+	as_val_destroy(res);
+	as_val_destroy(&args);
+
+	as_key_destroy(&key);
 }
 
 /******************************************************************************

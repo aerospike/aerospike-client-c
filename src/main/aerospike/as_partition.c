@@ -302,67 +302,51 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint
 	// Volatile reads are not necessary because the tend thread exclusively modifies partition.
 	// Volatile writes are used so other threads can view change.
 	if (master) {
-		if (node == p->master) {
-			if (! owns) {
-				set_node(&p->master, NULL);
-				as_node_release(node);
-			}
-		}
-		else {
-			if (owns) {
-				if (regime >= p->regime) {
-					as_node* tmp = p->master;
-					as_node_reserve(node);
-					set_node(&p->master, node);
+		if (owns && node != p->master) {
+			if (regime >= p->regime) {
+				as_node* tmp = p->master;
+				as_node_reserve(node);
+				set_node(&p->master, node);
 
-					if (regime > p->regime) {
-						p->regime = regime;
-					}
-
-					if (tmp) {
-						force_replicas_refresh(tmp);
-						as_node_release(tmp);
-					}
+				if (regime > p->regime) {
+					p->regime = regime;
 				}
-				else {
-					if (!(*regime_error)) {
-						as_log_info("%s regime(%u) < old regime(%u)",
-									as_node_get_address_string(node), regime, p->regime);
-						*regime_error = true;
-					}
+
+				if (tmp) {
+					force_replicas_refresh(tmp);
+					as_node_release(tmp);
+				}
+			}
+			else {
+				if (!(*regime_error)) {
+					as_log_info("%s regime(%u) < old regime(%u)",
+								as_node_get_address_string(node), regime, p->regime);
+					*regime_error = true;
 				}
 			}
 		}
 	}
 	else {
-		if (node == p->prole) {
-			if (! owns) {
-				set_node(&p->prole, NULL);
-				as_node_release(node);
-			}
-		}
-		else {
-			if (owns) {
-				if (regime >= p->regime) {
-					as_node* tmp = p->prole;
-					as_node_reserve(node);
-					set_node(&p->prole, node);
+		if (owns && node != p->prole) {
+			if (regime >= p->regime) {
+				as_node* tmp = p->prole;
+				as_node_reserve(node);
+				set_node(&p->prole, node);
 
-					if (regime > p->regime) {
-						p->regime = regime;
-					}
-
-					if (tmp) {
-						force_replicas_refresh(tmp);
-						as_node_release(tmp);
-					}
+				if (regime > p->regime) {
+					p->regime = regime;
 				}
-				else {
-					if (!(*regime_error)) {
-						as_log_info("%s regime(%u) < old regime(%u)",
-									as_node_get_address_string(node), regime, p->regime);
-						*regime_error = true;
-					}
+
+				if (tmp) {
+					force_replicas_refresh(tmp);
+					as_node_release(tmp);
+				}
+			}
+			else {
+				if (!(*regime_error)) {
+					as_log_info("%s regime(%u) < old regime(%u)",
+								as_node_get_address_string(node), regime, p->regime);
+					*regime_error = true;
 				}
 			}
 		}

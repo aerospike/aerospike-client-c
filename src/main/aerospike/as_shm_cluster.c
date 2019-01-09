@@ -481,44 +481,6 @@ as_shm_force_replicas_refresh(as_shm_info* shm_info, uint32_t node_index)
 }
 
 static void
-as_shm_partition_update(as_shm_info* shm_info, as_partition_shm* p, uint32_t node_index, bool master, bool owns, uint32_t regime)
-{
-	// node_index starts at one (zero indicates unset).
-	if (master) {
-		if (owns) {
-			if (regime >= as_load_uint32(&p->regime)) {
-				if (regime > p->regime) {
-					as_store_uint32(&p->regime, regime);
-				}
-
-				if (node_index != p->master) {
-					if (p->master) {
-						as_shm_force_replicas_refresh(shm_info, p->master);
-					}
-					as_store_uint32(&p->master, node_index);
-				}
-			}
-		}
-	}
-	else {
-		if (owns) {
-			if (regime >= as_load_uint32(&p->regime)) {
-				if (regime > p->regime) {
-					as_store_uint32(&p->regime, regime);
-				}
-
-				if (node_index != p->prole) {
-					if (p->prole) {
-						as_shm_force_replicas_refresh(shm_info, p->prole);
-					}
-					as_store_uint32(&p->prole, node_index);
-				}
-			}
-		}
-	}
-}
-
-static void
 as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, as_partition_table_shm* table, uint32_t node_index, bool master, uint32_t regime)
 {
 	// Size allows for padding - is actual size rounded up to multiple of 3.
@@ -531,8 +493,34 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 	uint32_t max = shm_info->cluster_shm->n_partitions;
 
 	for (uint32_t i = 0; i < max; i++) {
-		bool owns = ((bitmap[i >> 3] & (0x80 >> (i & 7))) != 0);
-		as_shm_partition_update(shm_info, &table->partitions[i], node_index, master, owns, regime);
+		if ((bitmap[i >> 3] & (0x80 >> (i & 7))) != 0) {
+			// This node claims ownership of partition.
+			as_partition_shm* p = &table->partitions[i];
+
+			if (regime >= as_load_uint32(&p->regime)) {
+				if (regime > p->regime) {
+					as_store_uint32(&p->regime, regime);
+				}
+
+				if (master) {
+					// node_index starts at one (zero indicates unset).
+					if (node_index != p->master) {
+						if (p->master) {
+							as_shm_force_replicas_refresh(shm_info, p->master);
+						}
+						as_store_uint32(&p->master, node_index);
+					}
+				}
+				else {
+					if (node_index != p->prole) {
+						if (p->prole) {
+							as_shm_force_replicas_refresh(shm_info, p->prole);
+						}
+						as_store_uint32(&p->prole, node_index);
+					}
+				}
+			}
+		}
 	}
 }
 

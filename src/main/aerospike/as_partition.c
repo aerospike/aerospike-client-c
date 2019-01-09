@@ -296,67 +296,6 @@ force_replicas_refresh(as_node* node)
 	node->partition_generation = (uint32_t)-1;
 }
 
-static void
-as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint32_t regime, bool* regime_error)
-{
-	// Volatile reads are not necessary because the tend thread exclusively modifies partition.
-	// Volatile writes are used so other threads can view change.
-	if (master) {
-		if (owns) {
-			if (regime >= p->regime) {
-				if (regime > p->regime) {
-					p->regime = regime;
-				}
-
-				if (node != p->master) {
-					as_node* tmp = p->master;
-					as_node_reserve(node);
-					set_node(&p->master, node);
-
-					if (tmp) {
-						force_replicas_refresh(tmp);
-						as_node_release(tmp);
-					}
-				}
-			}
-			else {
-				if (!(*regime_error)) {
-					as_log_info("%s regime(%u) < old regime(%u)",
-								as_node_get_address_string(node), regime, p->regime);
-					*regime_error = true;
-				}
-			}
-		}
-	}
-	else {
-		if (owns) {
-			if (regime >= p->regime) {
-				if (regime > p->regime) {
-					p->regime = regime;
-				}
-
-				if (node != p->prole) {
-					as_node* tmp = p->prole;
-					as_node_reserve(node);
-					set_node(&p->prole, node);
-
-					if (tmp) {
-						force_replicas_refresh(tmp);
-						as_node_release(tmp);
-					}
-				}
-			}
-			else {
-				if (!(*regime_error)) {
-					as_log_info("%s regime(%u) < old regime(%u)",
-								as_node_get_address_string(node), regime, p->regime);
-					*regime_error = true;
-				}
-			}
-		}
-	}
-}
-
 static as_partition_table*
 as_partition_vector_get(as_vector* tables, const char* ns)
 {
@@ -383,13 +322,52 @@ decode_and_update(char* bitmap_b64, uint32_t len, as_partition_table* table, as_
 
 	// Expand the bitmap.
 	for (uint32_t i = 0; i < table->size; i++) {
-		bool owns = ((bitmap[i >> 3] & (0x80 >> (i & 7))) != 0);
-		/*
-		if (owns) {
-			as_log_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i, node->name);
+		if ((bitmap[i >> 3] & (0x80 >> (i & 7))) != 0) {
+			// This node claims ownership of partition.
+			// as_log_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i, node->name);
+
+			// Volatile reads are not necessary because the tend thread exclusively modifies partition.
+			// Volatile writes are used so other threads can view change.
+			as_partition* p = &table->partitions[i];
+
+			if (regime >= p->regime) {
+				if (regime > p->regime) {
+					p->regime = regime;
+				}
+
+				if (master) {
+					if (node != p->master) {
+						as_node* tmp = p->master;
+						as_node_reserve(node);
+						set_node(&p->master, node);
+
+						if (tmp) {
+							force_replicas_refresh(tmp);
+							as_node_release(tmp);
+						}
+					}
+				}
+				else {
+					if (node != p->prole) {
+						as_node* tmp = p->prole;
+						as_node_reserve(node);
+						set_node(&p->prole, node);
+
+						if (tmp) {
+							force_replicas_refresh(tmp);
+							as_node_release(tmp);
+						}
+					}
+				}
+			}
+			else {
+				if (!(*regime_error)) {
+					as_log_info("%s regime(%u) < old regime(%u)",
+								as_node_get_address_string(node), regime, p->regime);
+					*regime_error = true;
+				}
+			}
 		}
-		*/
-		as_partition_update(&table->partitions[i], node, master, owns, regime, regime_error);
 	}
 }
 

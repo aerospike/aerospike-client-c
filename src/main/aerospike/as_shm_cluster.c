@@ -485,29 +485,33 @@ as_shm_partition_update(as_shm_info* shm_info, as_partition_shm* p, uint32_t nod
 {
 	// node_index starts at one (zero indicates unset).
 	if (master) {
-		if (owns && node_index != p->master) {
+		if (owns) {
 			if (regime >= as_load_uint32(&p->regime)) {
-				if (p->master) {
-					as_shm_force_replicas_refresh(shm_info, p->master);
-				}
-				as_store_uint32(&p->master, node_index);
-
 				if (regime > p->regime) {
 					as_store_uint32(&p->regime, regime);
+				}
+
+				if (node_index != p->master) {
+					if (p->master) {
+						as_shm_force_replicas_refresh(shm_info, p->master);
+					}
+					as_store_uint32(&p->master, node_index);
 				}
 			}
 		}
 	}
 	else {
-		if (owns && node_index != p->prole) {
+		if (owns) {
 			if (regime >= as_load_uint32(&p->regime)) {
-				if (p->prole) {
-					as_shm_force_replicas_refresh(shm_info, p->prole);
-				}
-				as_store_uint32(&p->prole, node_index);
-
 				if (regime > p->regime) {
 					as_store_uint32(&p->regime, regime);
+				}
+
+				if (node_index != p->prole) {
+					if (p->prole) {
+						as_shm_force_replicas_refresh(shm_info, p->prole);
+					}
+					as_store_uint32(&p->prole, node_index);
 				}
 			}
 		}

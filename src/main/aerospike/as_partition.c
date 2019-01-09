@@ -302,19 +302,21 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint
 	// Volatile reads are not necessary because the tend thread exclusively modifies partition.
 	// Volatile writes are used so other threads can view change.
 	if (master) {
-		if (owns && node != p->master) {
+		if (owns) {
 			if (regime >= p->regime) {
-				as_node* tmp = p->master;
-				as_node_reserve(node);
-				set_node(&p->master, node);
-
 				if (regime > p->regime) {
 					p->regime = regime;
 				}
 
-				if (tmp) {
-					force_replicas_refresh(tmp);
-					as_node_release(tmp);
+				if (node != p->master) {
+					as_node* tmp = p->master;
+					as_node_reserve(node);
+					set_node(&p->master, node);
+
+					if (tmp) {
+						force_replicas_refresh(tmp);
+						as_node_release(tmp);
+					}
 				}
 			}
 			else {
@@ -327,19 +329,21 @@ as_partition_update(as_partition* p, as_node* node, bool master, bool owns, uint
 		}
 	}
 	else {
-		if (owns && node != p->prole) {
+		if (owns) {
 			if (regime >= p->regime) {
-				as_node* tmp = p->prole;
-				as_node_reserve(node);
-				set_node(&p->prole, node);
-
 				if (regime > p->regime) {
 					p->regime = regime;
 				}
 
-				if (tmp) {
-					force_replicas_refresh(tmp);
-					as_node_release(tmp);
+				if (node != p->prole) {
+					as_node* tmp = p->prole;
+					as_node_reserve(node);
+					set_node(&p->prole, node);
+
+					if (tmp) {
+						force_replicas_refresh(tmp);
+						as_node_release(tmp);
+					}
 				}
 			}
 			else {

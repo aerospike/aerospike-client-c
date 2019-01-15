@@ -6,7 +6,7 @@
     <title>Aerospike C Client with libevent</title>
     <authors>Aerospike</authors>
     <owners>Aerospike</owners>
-    <licenseUrl>https://github.com/aerospike/aerospike-client-c/blob/master/LICENSE.md</licenseUrl>
+	<license type="expression">Apache-2.0</license>
     <projectUrl>https://www.aerospike.com/download/client/c</projectUrl>
     <iconUrl>http://wordpress-www.s3-us-west-1.amazonaws.com/wp-content/uploads/2015/03/bryan-as.png</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>

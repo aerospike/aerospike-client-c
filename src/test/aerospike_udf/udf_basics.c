@@ -67,8 +67,6 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
  	
 	aerospike_udf_remove(as, &err, NULL, filename);
 
-	assert_int_eq( err.code, AEROSPIKE_ERR_UDF );
-
 	as_sleep(100);
 
 	// list the files on the server

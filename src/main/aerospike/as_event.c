@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -50,6 +50,7 @@ bool as_event_threads_created = false;
 bool as_event_single_thread = false;
 
 as_status aerospike_library_init(as_error* err);
+int as_batch_retry_async(as_event_command* cmd);
 
 /******************************************************************************
  * PUBLIC FUNCTIONS
@@ -557,6 +558,7 @@ as_event_command_begin(as_event_command* cmd)
 			as_event_error_callback(cmd, &err);
 			return;
 		}
+		as_node_reserve(cmd->node);
 	}
 
 	if (cmd->pipe_listener) {
@@ -735,6 +737,20 @@ as_event_command_retry(as_event_command* cmd, bool alternate)
 	// Old connection should already be closed or is closing.
 	// Reset command connection so timeout watcher knows not to close connection twice.
 	cmd->conn = NULL;
+
+	// Batch retries can be split into multiple retries to different nodes.
+	if (cmd->type == AS_ASYNC_TYPE_BATCH) {
+		int rv = as_batch_retry_async(cmd);
+
+		// 1:  Split retry not attempted.  Go through normal retry.
+		// 0:  Split retry started.
+		// -1: Split retry failed to start. Error has been handled.
+		// -2: Split retry failed to start. Defer to original error.
+		if (rv <= 0) {
+			// This command should have been closed in as_batch_retry_async().
+			return rv >= -1;
+		}
+	}
 
 	// Retry command at the end of the queue so other commands have a chance to run first.
 	return as_event_execute(cmd->event_loop, (as_event_executable)as_event_command_begin, cmd);

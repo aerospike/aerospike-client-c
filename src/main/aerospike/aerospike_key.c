@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -41,14 +41,25 @@
  *****************************************************************************/
 
 static inline void
-as_command_node_init(
-	as_command_node* cn, const char* ns, const uint8_t* digest, as_policy_replica replica
+as_command_init(
+	as_command* cmd, as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica,
+	const as_key* key, uint8_t* buf, size_t size, uint8_t type, const as_parse_results_fn fn,
+	void* udata
 	)
 {
-	cn->node = 0;
-	cn->ns = ns;
-	cn->digest = digest;
-	cn->replica = replica;
+	cmd->cluster = cluster;
+	cmd->policy = policy;
+	cmd->node = NULL;
+	cmd->ns = key->ns;
+	cmd->digest = key->digest.value;
+	cmd->parse_results_fn = fn;
+	cmd->udata = udata;
+	cmd->buf = buf;
+	cmd->buf_size = size;
+	cmd->replica = replica;
+	cmd->type = type;
+
+	as_command_start_timer(cmd, policy);
 }
 
 static as_status
@@ -127,23 +138,23 @@ aerospike_key_get(
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 		
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL,
+	uint8_t* buf = as_command_buffer_init(size);
+	uint8_t* p = as_command_write_header_read(buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL,
 		policy->consistency_level, policy->linearize_read, policy->base.total_timeout, n_fields, 0);
 
 	p = as_command_write_key(p, policy->key, key);
-	size = as_command_write_end(cmd, p);
-	
-	as_command_node cn;
-	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica);
+	size = as_command_write_end(buf, p);
 
 	as_command_parse_result_data data;
 	data.record = rec;
 	data.deserialize = policy->deserialize;
-	
-	status = as_command_execute(as->cluster, err, &policy->base, &cn, cmd, size, as_command_parse_result, &data, true);
-	
-	as_command_free(cmd, size);
+
+	as_command cmd;
+	as_command_init(&cmd, as->cluster, &policy->base, policy->replica, key, buf, size,
+					AS_COMMAND_TYPE_READ, as_command_parse_result, &data);
+
+	status = as_command_execute(&cmd, err);
+	as_command_buffer_free(buf, size);
 	return status;
 }
 
@@ -212,8 +223,8 @@ aerospike_key_select(
 		}
 	}
 	
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ, policy->consistency_level,
+	uint8_t* buf = as_command_buffer_init(size);
+	uint8_t* p = as_command_write_header_read(buf, AS_MSG_INFO1_READ, policy->consistency_level,
 		policy->linearize_read, policy->base.total_timeout, n_fields, nvalues);
 
 	p = as_command_write_key(p, policy->key, key);
@@ -221,18 +232,19 @@ aerospike_key_select(
 	for (int i = 0; i < nvalues; i++) {
 		p = as_command_write_bin_name(p, bins[i]);
 	}
-	size = as_command_write_end(cmd, p);
+	size = as_command_write_end(buf, p);
 
-	as_command_node cn;
-	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica);
-	
 	as_command_parse_result_data data;
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 
-	status = as_command_execute(as->cluster, err, &policy->base, &cn, cmd, size, as_command_parse_result, &data, true);
-	
-	as_command_free(cmd, size);
+	as_command cmd;
+	as_command_init(&cmd, as->cluster, &policy->base, policy->replica, key, buf, size,
+					AS_COMMAND_TYPE_READ, as_command_parse_result, &data);
+
+	status = as_command_execute(&cmd, err);
+
+	as_command_buffer_free(buf, size);
 	return status;
 }
 
@@ -303,20 +315,21 @@ aerospike_key_exists(
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header_read(cmd, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA,
+	uint8_t* buf = as_command_buffer_init(size);
+	uint8_t* p = as_command_write_header_read(buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA,
 		policy->consistency_level, policy->linearize_read, policy->base.total_timeout, n_fields, 0);
 
 	p = as_command_write_key(p, policy->key, key);
-	size = as_command_write_end(cmd, p);
+	size = as_command_write_end(buf, p);
 
-	as_command_node cn;
-	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica);
-	
 	as_proto_msg msg;
-	status = as_command_execute(as->cluster, err, &policy->base, &cn, cmd, size, as_command_parse_header, &msg, true);
-	
-	as_command_free(cmd, size);
+	as_command cmd;
+	as_command_init(&cmd, as->cluster, &policy->base, policy->replica, key, buf, size,
+					AS_COMMAND_TYPE_READ, as_command_parse_header, &msg);
+
+	status = as_command_execute(&cmd, err);
+
+	as_command_buffer_free(buf, size);
 
 	if (rec) {
 		if (status == AEROSPIKE_OK) {
@@ -401,8 +414,8 @@ aerospike_key_put(
 		size += as_command_bin_size(&bins[i], &buffers[i]);
 	}
 
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, false,
+	uint8_t* buf = as_command_buffer_init(size);
+	uint8_t* p = as_command_write_header(buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0, false,
 					policy->exists, policy->gen, rec->gen, rec->ttl, policy->base.total_timeout, n_fields,
 					n_bins, policy->durable_delete);
 		
@@ -411,28 +424,33 @@ aerospike_key_put(
 	for (uint32_t i = 0; i < n_bins; i++) {
 		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
 	}
-	size = as_command_write_end(cmd, p);
+	size = as_command_write_end(buf, p);
 
-	as_command_node cn;
-	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica);
 	as_proto_msg msg;
-	
+	as_command cmd;
+
 	if (policy->compression_threshold == 0 || (size <= policy->compression_threshold)) {
 		// Send uncompressed command.
-		status = as_command_execute(as->cluster, err, &policy->base, &cn, cmd, size, as_command_parse_header, &msg, false);
+		as_command_init(&cmd, as->cluster, &policy->base, policy->replica, key, buf, size,
+						AS_COMMAND_TYPE_WRITE, as_command_parse_header, &msg);
+
+		status = as_command_execute(&cmd, err);
 	}
 	else {
 		// Send compressed command.
 		size_t comp_size = as_command_compress_max_size(size);
-		uint8_t* comp_cmd = as_command_init(comp_size);
-		status = as_command_compress(err, cmd, size, comp_cmd, &comp_size);
+		uint8_t* comp_cmd = as_command_buffer_init(comp_size);
+		status = as_command_compress(err, buf, size, comp_cmd, &comp_size);
 		
 		if (status == AEROSPIKE_OK) {
-			status = as_command_execute(as->cluster, err, &policy->base, &cn, comp_cmd, comp_size, as_command_parse_header, &msg, false);
+			as_command_init(&cmd, as->cluster, &policy->base, policy->replica, key, comp_cmd, comp_size,
+							AS_COMMAND_TYPE_WRITE, as_command_parse_header, &msg);
+
+			status = as_command_execute(&cmd, err);
 		}
-		as_command_free(comp_cmd, comp_size);
+		as_command_buffer_free(comp_cmd, comp_size);
 	}
-	as_command_free(cmd, size);
+	as_command_buffer_free(buf, size);
 	return status;
 }
 
@@ -497,7 +515,7 @@ aerospike_key_put_async_ex(
 	else {
 		// Send compressed command.
 		// First write uncompressed buffer.
-		uint8_t* cmd = as_command_init(size);
+		uint8_t* cmd = as_command_buffer_init(size);
 		uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
 				false, policy->exists, policy->gen, rec->gen, rec->ttl, policy->base.total_timeout,
 				n_fields, n_bins, policy->durable_delete);
@@ -518,7 +536,7 @@ aerospike_key_put_async_ex(
 
 		// Compress buffer and execute.
 		status = as_command_compress(err, cmd, size, comp_cmd->buf, &comp_size);
-		as_command_free(cmd, size);
+		as_command_buffer_free(cmd, size);
 		
 		if (status == AEROSPIKE_OK) {
 			comp_cmd->write_len = (uint32_t)comp_size;
@@ -569,22 +587,23 @@ aerospike_key_remove(
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 		
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE,
+	uint8_t* buf = as_command_buffer_init(size);
+	uint8_t* p = as_command_write_header(buf, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE,
 					policy->commit_level, 0, false, AS_POLICY_EXISTS_IGNORE, policy->gen,
 					policy->generation, 0, policy->base.total_timeout, n_fields, 0,
 					policy->durable_delete);
 
 	p = as_command_write_key(p, policy->key, key);
-	size = as_command_write_end(cmd, p);
+	size = as_command_write_end(buf, p);
 
-	as_command_node cn;
-	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica);
-	
 	as_proto_msg msg;
-	status = as_command_execute(as->cluster, err, &policy->base, &cn, cmd, size, as_command_parse_header, &msg, false);
-	
-	as_command_free(cmd, size);
+	as_command cmd;
+	as_command_init(&cmd, as->cluster, &policy->base, policy->replica, key, buf, size,
+					AS_COMMAND_TYPE_WRITE, as_command_parse_header, &msg);
+
+	status = as_command_execute(&cmd, err);
+
+	as_command_buffer_free(buf, size);
 	return status;
 }
 
@@ -727,8 +746,8 @@ aerospike_key_operate(
 	uint16_t n_fields;
 	size += as_command_key_size(policy->key, key, &n_fields);
 
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header(cmd, read_attr, write_attr, policy->commit_level,
+	uint8_t* buf = as_command_buffer_init(size);
+	uint8_t* p = as_command_write_header(buf, read_attr, write_attr, policy->commit_level,
 				policy->consistency_level, policy->linearize_read, policy->exists,
 				policy->gen, ops->gen, ops->ttl, policy->base.total_timeout, n_fields, n_operations,
 				policy->durable_delete);
@@ -740,18 +759,19 @@ aerospike_key_operate(
 		p = as_command_write_bin(p, op->op, &op->bin, &buffers[i]);
 	}
 
-	size = as_command_write_end(cmd, p);
+	size = as_command_write_end(buf, p);
 
-	as_command_node cn;
-	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica);
-	
 	as_command_parse_result_data data;
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 
-	status = as_command_execute(as->cluster, err, &policy->base, &cn, cmd, size, as_command_parse_result, &data, false);
-	
-	as_command_free(cmd, size);
+	as_command cmd;
+	as_command_init(&cmd, as->cluster, &policy->base, policy->replica, key, buf, size,
+					AS_COMMAND_TYPE_WRITE, as_command_parse_result, &data);
+
+	status = as_command_execute(&cmd, err);
+
+	as_command_buffer_free(buf, size);
 	return status;
 }
 
@@ -858,8 +878,8 @@ aerospike_key_apply(
 	size += as_command_field_size(args.size);
 	n_fields += 3;
 
-	uint8_t* cmd = as_command_init(size);
-	uint8_t* p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
+	uint8_t* buf = as_command_buffer_init(size);
+	uint8_t* p = as_command_write_header(buf, 0, AS_MSG_INFO2_WRITE, policy->commit_level, 0,
 		policy->linearize_read, 0, policy->gen, policy->gen_value, policy->ttl,
 		policy->base.total_timeout, n_fields, 0, policy->durable_delete);
 
@@ -867,14 +887,15 @@ aerospike_key_apply(
 	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, module);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, function);
 	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &args);
-	size = as_command_write_end(cmd, p);
+	size = as_command_write_end(buf, p);
 	
-	as_command_node cn;
-	as_command_node_init(&cn, key->ns, key->digest.value, policy->replica);
-	
-	status = as_command_execute(as->cluster, err, &policy->base, &cn, cmd, size, as_command_parse_success_failure, result, false);
-	
-	as_command_free(cmd, size);
+	as_command cmd;
+	as_command_init(&cmd, as->cluster, &policy->base, policy->replica, key, buf, size,
+					AS_COMMAND_TYPE_WRITE, as_command_parse_success_failure, result);
+
+	status = as_command_execute(&cmd, err);
+
+	as_command_buffer_free(buf, size);
 	as_buffer_destroy(&args);
 	as_serializer_destroy(&ser);
 	return status;

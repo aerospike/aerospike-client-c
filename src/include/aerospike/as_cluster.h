@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -434,16 +434,16 @@ as_cluster_get_partition_table(as_cluster* cluster, const char* ns)
 
 /**
  * @private
- * Get mapped node given partition.  
- * as_nodes_release() must be called when done with node.
+ * Get mapped node given partition and replica.  This function does not reserve the node.
+ * The caller must reserve the node for future use.
  */
 as_node*
 as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master);
 
 /**
  * @private
- * Get mapped node given digest key.  If there is no mapped node, another node is used based on replica.
- * If successful, as_nodes_release() must be called when done with node.
+ * Get mapped node given digest key and replica.  The function does not reserve the node.
+ * The caller must reserve the node for future use.
  */
 as_status
 as_cluster_get_node(

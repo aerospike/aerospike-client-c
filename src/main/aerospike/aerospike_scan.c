@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -241,9 +241,9 @@ as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_tim
 		if (size > 0) {
 			// Prepare buffer
 			if (size > capacity) {
-				as_command_free(buf, capacity);
+				as_command_buffer_free(buf, capacity);
 				capacity = size;
-				buf = as_command_init(capacity);
+				buf = as_command_buffer_init(capacity);
 			}
 			
 			// Read remaining message bytes in group
@@ -263,16 +263,13 @@ as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_tim
 			}
 		}
 	}
-	as_command_free(buf, capacity);
+	as_command_buffer_free(buf, capacity);
 	return status;
 }
 
 static as_status
 as_scan_command_execute(as_scan_task* task)
 {
-	as_command_node cn;
-	cn.node = task->node;
-	
 	as_error err;
 	as_error_init(&err);
 
@@ -290,9 +287,21 @@ as_scan_command_execute(as_scan_task* task)
 		}
 	}
 
-	status = as_command_execute(task->cluster, &err, &task->policy->base, &cn, task->cmd, task->cmd_size,
-										  as_scan_parse, task, true);
-	
+	as_command cmd;
+	cmd.cluster = task->cluster;
+	cmd.policy = &task->policy->base;
+	// No need to set ns, digest, replica because not referenced when node is set.
+	cmd.node = task->node;
+	cmd.parse_results_fn = as_scan_parse;
+	cmd.udata = task;
+	cmd.buf = task->cmd;
+	cmd.buf_size = task->cmd_size;
+	cmd.type = AS_COMMAND_TYPE_READ;
+
+	as_command_start_timer(&cmd, cmd.policy);
+
+	status = as_command_execute(&cmd, &err);
+
 	if (status) {
 		// Set main error only once.
 		if (as_fas_uint32(task->error_mutex, 1) == 0) {
@@ -541,7 +550,7 @@ as_scan_generic(
 	uint16_t n_fields = 0;
 	uint32_t predexp_sz = 0;
 	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer, &predexp_sz);
-	uint8_t* cmd = as_command_init(size);
+	uint8_t* cmd = as_command_buffer_init(size);
 	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
 	
 	// Initialize task.
@@ -622,7 +631,7 @@ as_scan_generic(
 	as_nodes_release(nodes);
 
 	// Free command memory.
-	as_command_free(cmd, size);
+	as_command_buffer_free(cmd, size);
 
 	// If user aborts query, command is considered successful.
 	if (status == AEROSPIKE_ERR_CLIENT_ABORT) {
@@ -686,7 +695,7 @@ as_scan_async(
 	uint16_t n_fields = 0;
 	uint32_t predexp_sz = 0;
 	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer, &predexp_sz);
-	uint8_t* cmd_buf = as_command_init(size);
+	uint8_t* cmd_buf = as_command_buffer_init(size);
 	size = as_scan_command_init(cmd_buf, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
@@ -721,7 +730,7 @@ as_scan_async(
 	}
 
 	// Free command buffer.
-	as_command_free(cmd_buf, size);
+	as_command_buffer_free(cmd_buf, size);
 
 	if (policy->fail_on_cluster_change && (nodes[0]->features & AS_FEATURES_CLUSTER_STABLE)) {
 		// Verify migrations are not in progress.
@@ -837,7 +846,7 @@ aerospike_scan_node(
 	uint16_t n_fields = 0;
 	uint32_t predexp_sz = 0;
 	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer, &predexp_sz);
-	uint8_t* cmd = as_command_init(size);
+	uint8_t* cmd = as_command_buffer_init(size);
 	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
 	
 	// Initialize task.
@@ -862,7 +871,7 @@ aerospike_scan_node(
 	as_status status = as_scan_command_execute(&task);
 		
 	// Free command memory.
-	as_command_free(cmd, size);
+	as_command_buffer_free(cmd, size);
 	
 	// Release node.
 	as_node_release(node);

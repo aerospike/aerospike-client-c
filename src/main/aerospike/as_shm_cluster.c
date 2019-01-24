@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -540,14 +540,13 @@ as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64
 }
 
 static inline as_node*
-as_shm_reserve_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
+as_shm_try_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
 		as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index-1]);
 
 		if (node && as_load_uint8(&node->active)) {
-			as_node_reserve(node);
 			return node;
 		}
 	}
@@ -556,14 +555,13 @@ as_shm_reserve_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_
 }
 
 static inline as_node*
-as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
+as_shm_try_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
 		as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index-1]);
 
 		if (node && as_load_uint8(&node->active)) {
-			as_node_reserve(node);
 			return node;
 		}
 	}
@@ -571,7 +569,7 @@ as_shm_reserve_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_in
 }
 
 static as_node*
-as_shm_reserve_node_alternate(
+as_shm_try_node_alternate(
 	as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index
 	)
 {
@@ -580,10 +578,9 @@ as_shm_reserve_node_alternate(
 	
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (chosen && as_load_uint8(&chosen->active)) {
-		as_node_reserve(chosen);
 		return chosen;
 	}
-	return as_shm_reserve_node(cluster, local_nodes, alternate_index);
+	return as_shm_try_node(cluster, local_nodes, alternate_index);
 }
 
 static as_node*
@@ -595,17 +592,17 @@ shm_get_sequence_node(
 	uint32_t prole = as_load_uint32(&p->prole);
 
 	if (! prole) {
-		return as_shm_reserve_node(cluster, local_nodes, master);
+		return as_shm_try_node(cluster, local_nodes, master);
 	}
 
 	if (! master) {
-		return as_shm_reserve_node(cluster, local_nodes, prole);
+		return as_shm_try_node(cluster, local_nodes, prole);
 	}
 
 	if (use_master) {
-		return as_shm_reserve_node_alternate(cluster, local_nodes, master, prole);
+		return as_shm_try_node_alternate(cluster, local_nodes, master, prole);
 	}
-	return as_shm_reserve_node_alternate(cluster, local_nodes, prole, master);
+	return as_shm_try_node_alternate(cluster, local_nodes, prole, master);
 }
 
 static inline as_node*
@@ -635,9 +632,7 @@ shm_try_rack_node(
 
 	// Check rack id on node's shared memory first.
 	if (rack_id == cluster->rack_id) {
-		as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index]);
-		as_node_reserve(node);
-		return node;
+		return (as_node*)as_load_ptr(&local_nodes[node_index]);
 	}
 
 	if (rack_id != -1) {
@@ -649,7 +644,6 @@ shm_try_rack_node(
 	as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index]);
 
 	if (as_node_has_rack(cluster, node, ns, cluster->rack_id)) {
-		as_node_reserve(node);
 		return node;
 	}
 	return NULL;
@@ -698,17 +692,17 @@ shm_prefer_rack_node(
 
 	// Default to sequence mode.
 	if (! prole) {
-		return as_shm_reserve_node(cluster, local_nodes, master);
+		return as_shm_try_node(cluster, local_nodes, master);
 	}
 
 	if (! master) {
-		return as_shm_reserve_node(cluster, local_nodes, prole);
+		return as_shm_try_node(cluster, local_nodes, prole);
 	}
 
 	if (use_master) {
-		return as_shm_reserve_node_alternate(cluster, local_nodes, master, prole);
+		return as_shm_try_node_alternate(cluster, local_nodes, master, prole);
 	}
-	return as_shm_reserve_node_alternate(cluster, local_nodes, prole, master);
+	return as_shm_try_node_alternate(cluster, local_nodes, prole, master);
 }
 
 as_status
@@ -761,7 +755,7 @@ as_partition_shm_get_node(
 		case AS_POLICY_REPLICA_MASTER: {
 			// Make volatile reference so changes to tend thread will be reflected in this thread.
 			uint32_t master = as_load_uint32(&p->master);
-			return as_shm_reserve_master(cluster, local_nodes, master);
+			return as_shm_try_master(cluster, local_nodes, master);
 		}
 
 		case AS_POLICY_REPLICA_ANY: {

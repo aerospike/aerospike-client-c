@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -365,8 +365,8 @@ as_shm_update_partitions(
 
 /**
  * @private
- * Get shared memory mapped node given digest key. If there is no mapped node, another node is used
- * based on replica.  If successful, as_nodes_release() must be called when done with node.
+ * Get mapped node given digest key and replica.  The function does not reserve the node.
+ * The caller must reserve the node for future use.
  */
 as_status
 as_shm_cluster_get_node(
@@ -376,8 +376,8 @@ as_shm_cluster_get_node(
 
 /**
  * @private
- * Get shared memory mapped node given partition.
- * as_nodes_release() must be called when done with node.
+ * Get mapped node given partition and replica.  The function does not reserve the node.
+ * The caller must reserve the node for future use.
  */
 as_node*
 as_partition_shm_get_node(

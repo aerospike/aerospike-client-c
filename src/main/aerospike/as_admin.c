@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -254,9 +254,9 @@ as_admin_read_blocks(as_error* err, as_socket* sock, as_node* node, uint64_t dea
 		if (size > 0) {
 			// Prepare buffer
 			if (size > capacity) {
-				as_command_free(buf, capacity);
+				as_command_buffer_free(buf, capacity);
 				capacity = size;
-				buf = as_command_init(capacity);
+				buf = as_command_buffer_init(capacity);
 			}
 			
 			// Read remaining message bytes in group
@@ -279,7 +279,7 @@ as_admin_read_blocks(as_error* err, as_socket* sock, as_node* node, uint64_t dea
 			}
 		}
 	}
-	as_command_free(buf, capacity);
+	as_command_buffer_free(buf, capacity);
 	return status;
 }
 

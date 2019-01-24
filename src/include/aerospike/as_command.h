@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,6 +32,11 @@ extern "C" {
 /******************************************************************************
  * MACROS
  *****************************************************************************/
+
+// Command Types
+#define AS_COMMAND_TYPE_READ 1
+#define AS_COMMAND_TYPE_WRITE 2
+#define AS_COMMAND_TYPE_BATCH 4
 
 // Field IDs
 #define AS_FIELD_NAMESPACE 0
@@ -106,7 +111,6 @@ extern "C" {
  * Macros use these stand-ins for cf_malloc() / cf_free(), so that
  * instrumentation properly substitutes them.
  */
-
 static inline void*
 local_malloc(size_t size)
 {
@@ -123,13 +127,13 @@ local_free(void* memory)
  * @private
  * Allocate command buffer on stack or heap depending on given size.
  */
-#define as_command_init(_sz) (_sz > AS_STACK_BUF_SIZE) ? (uint8_t*)local_malloc(_sz) : (uint8_t*)alloca(_sz)
+#define as_command_buffer_init(_sz) (_sz > AS_STACK_BUF_SIZE) ? (uint8_t*)local_malloc(_sz) : (uint8_t*)alloca(_sz)
 
 /**
  * @private
  * Free command buffer.
  */
-#define as_command_free(_buf, _sz) if (_sz > AS_STACK_BUF_SIZE) {local_free(_buf);}
+#define as_command_buffer_free(_buf, _sz) if (_sz > AS_STACK_BUF_SIZE) {local_free(_buf);}
 
 /******************************************************************************
  * TYPES
@@ -137,14 +141,35 @@ local_free(void* memory)
 
 /**
  * @private
- * Node map data used in as_command_execute().
+ * Parse results callback used in as_command_execute().
  */
-typedef struct as_command_node_s {
+typedef as_status (*as_parse_results_fn) (
+	as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms,
+	void* user_data
+	);
+	
+/**
+ * @private
+ * Synchronous command data.
+ */
+typedef struct as_command_s {
+	as_cluster* cluster;
+	const as_policy_base* policy;
 	as_node* node;
 	const char* ns;
 	const uint8_t* digest;
+	as_parse_results_fn parse_results_fn;
+	void* udata;
+	uint8_t* buf;
+	size_t buf_size;
+	uint64_t deadline_ms;
+	uint32_t socket_timeout;
+	uint32_t total_timeout;
+	uint32_t iteration;
 	as_policy_replica replica;
-} as_command_node;
+	uint8_t type;
+	bool master;
+} as_command;
 
 /**
  * @private
@@ -154,12 +179,6 @@ typedef struct as_command_parse_result_data_s {
 	as_record** record;
 	bool deserialize;
 } as_command_parse_result_data;
-
-/**
- * @private
- * Parse results callback used in as_command_execute().
- */
-typedef as_status (*as_parse_results_fn) (as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
 
 /******************************************************************************
  * FUNCTIONS
@@ -424,14 +443,35 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 
 /**
  * @private
+ * Start command timer.
+ */
+static inline void
+as_command_start_timer(as_command* cmd, const as_policy_base* policy)
+{
+	cmd->iteration = 0;
+	cmd->master = true;
+
+	if (policy->total_timeout > 0) {
+		cmd->socket_timeout = (policy->socket_timeout == 0 ||
+							   policy->socket_timeout > policy->total_timeout)?
+								   policy->total_timeout : policy->socket_timeout;
+
+		cmd->total_timeout = policy->total_timeout;
+		cmd->deadline_ms = cf_getms() + policy->total_timeout;
+	}
+	else {
+		cmd->socket_timeout = policy->socket_timeout;
+		cmd->total_timeout = policy->total_timeout;
+		cmd->deadline_ms = 0;
+	}
+}
+
+/**
+ * @private
  * Send command to the server.
  */
 as_status
-as_command_execute(
-	as_cluster* cluster, as_error* err, const as_policy_base* policy, as_command_node* cn,
-	uint8_t* command, size_t command_len, as_parse_results_fn parse_results_fn, void* parse_results_data,
-	bool is_read
-);
+as_command_execute(as_command* cmd, as_error* err);
 
 /**
  * @private

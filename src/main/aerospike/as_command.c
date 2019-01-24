@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -34,6 +34,7 @@
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+bool as_batch_retry(as_command* cmd, as_error* err);
 
 static size_t
 as_command_user_key_size(const as_key* key)
@@ -418,56 +419,42 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 }
 
 as_status
-as_command_execute(
-	as_cluster* cluster, as_error* err, const as_policy_base* policy, as_command_node* cn,
-	uint8_t* command, size_t command_len, as_parse_results_fn parse_results_fn, void* parse_results_data,
-	bool is_read
-)
+as_command_execute(as_command* cmd, as_error* err)
 {
 	as_node* node;
-	uint64_t deadline_ms = 0;
-	uint32_t socket_timeout = policy->socket_timeout;
-	uint32_t total_timeout = policy->total_timeout;
-	uint32_t iteration = 0;
 	uint32_t command_sent_counter = 0;
 	as_status status;
-	bool master = true;
 	bool release_node;
-
-	if (total_timeout > 0) {
-		deadline_ms = cf_getms() + policy->total_timeout;
-
-		if (socket_timeout == 0 || socket_timeout > total_timeout) {
-			socket_timeout = total_timeout;
-		}
-	}
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
-		if (cn->node) {
-			node = cn->node;
+		if (cmd->node) {
+			node = cmd->node;
 			release_node = false;
 		}
 		else {
-			status = as_cluster_get_node(cluster, err, cn->ns, cn->digest, cn->replica, master, &node);
+			status = as_cluster_get_node(cmd->cluster, err, cmd->ns, cmd->digest, cmd->replica,
+										 cmd->master, &node);
 
 			if (status) {
 				// Invalid namespace or there are no active nodes. It's not worth retrying.
 				return status;
 			}
+			as_node_reserve(node);
 			release_node = true;
 		}
 
 		as_socket socket;
-		status = as_node_get_connection(err, node, socket_timeout, deadline_ms, &socket);
+		status = as_node_get_connection(err, node, cmd->socket_timeout, cmd->deadline_ms, &socket);
 		
 		if (status) {
-			master = !master;  // Alternate between master and prole.
+			cmd->master = !cmd->master;  // Alternate between master and prole.
 			goto Retry;
 		}
 		
 		// Send command.
-		status = as_socket_write_deadline(err, &socket, node, command, command_len, socket_timeout, deadline_ms);
+		status = as_socket_write_deadline(err, &socket, node, cmd->buf, cmd->buf_size,
+										  cmd->socket_timeout, cmd->deadline_ms);
 		
 		if (status) {
 			// Socket errors are considered temporary anomalies.  Retry.
@@ -476,19 +463,20 @@ as_command_execute(
 
 			// Alternate between master and prole on socket errors or database reads.
 			// Timeouts are not a good indicator of impending data migration.
-			if (status != AEROSPIKE_ERR_TIMEOUT || is_read) {
-				master = !master;
+			if (status != AEROSPIKE_ERR_TIMEOUT || (cmd->type & AS_COMMAND_TYPE_READ)) {
+				cmd->master = !cmd->master;  // Alternate between master and prole.
 			}
 			goto Retry;
 		}
 		command_sent_counter++;
 
 		// Parse results returned by server.
-		status = parse_results_fn(err, &socket, node, socket_timeout, deadline_ms, parse_results_data);
+		status = cmd->parse_results_fn(err, &socket, node, cmd->socket_timeout, cmd->deadline_ms,
+								  cmd->udata);
 		
 		if (status == AEROSPIKE_OK) {
 			// Reset error code if retry had occurred.
-			if (iteration > 0) {
+			if (cmd->iteration > 0) {
 				as_error_reset(err);
 			}
 		}
@@ -499,7 +487,7 @@ as_command_execute(
 			switch (status) {
 				case AEROSPIKE_ERR_CONNECTION:
 					as_node_close_connection(&socket);
-					master = !master;  // Alternate between master and prole.
+					cmd->master = !cmd->master;  // Alternate between master and prole.
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
@@ -507,8 +495,8 @@ as_command_execute(
 
 					// Alternate between master and prole on database reads.
 					// Timeouts are not a good indicator of impending data migration.
-					if (is_read) {
-						master = !master;
+					if (cmd->type & AS_COMMAND_TYPE_READ) {
+						cmd->master = !cmd->master;  // Alternate between master and prole.
 					}
 					goto Retry;
 
@@ -522,17 +510,17 @@ as_command_execute(
 					if (release_node) {
 						as_node_release(node);
 					}
-					as_error_set_in_doubt(err, is_read, command_sent_counter);
+					as_error_set_in_doubt(err, cmd->type & AS_COMMAND_TYPE_READ, command_sent_counter);
 					return status;
 				
 				default:
-					as_error_set_in_doubt(err, is_read, command_sent_counter);
+					as_error_set_in_doubt(err, cmd->type & AS_COMMAND_TYPE_READ, command_sent_counter);
 					break;
 			}
 		}
 		
 		// Put connection back in pool.
-		as_node_put_connection(&socket, cluster->max_socket_idle);
+		as_node_put_connection(&socket, cmd->cluster->max_socket_idle);
 		
 		// Release resources.
 		if (release_node) {
@@ -542,25 +530,25 @@ as_command_execute(
 
 Retry:
 		// Check if max retries reached.
-		if (++iteration > policy->max_retries) {
+		if (++cmd->iteration > cmd->policy->max_retries) {
 			break;
 		}
 
-		if (deadline_ms > 0) {
+		if (cmd->deadline_ms > 0) {
 			// Check for total timeout.
-			int64_t remaining = deadline_ms - cf_getms() - policy->sleep_between_retries;
+			int64_t remaining = cmd->deadline_ms - cf_getms() - cmd->policy->sleep_between_retries;
 
 			if (remaining <= 0) {
 				break;
 			}
 
-			if (remaining < total_timeout) {
-				total_timeout = (uint32_t)remaining;
+			if (remaining < cmd->total_timeout) {
+				cmd->total_timeout = (uint32_t)remaining;
 				// Reset timeout in send buffer (destined for server).
-				*(uint32_t*)(command + 22) = cf_swap_to_be32(total_timeout);
+				*(uint32_t*)(cmd->buf + 22) = cf_swap_to_be32(cmd->total_timeout);
 
-				if (socket_timeout > total_timeout) {
-					socket_timeout = total_timeout;
+				if (cmd->socket_timeout > cmd->total_timeout) {
+					cmd->socket_timeout = cmd->total_timeout;
 				}
 			}
 		}
@@ -570,9 +558,17 @@ Retry:
 			as_node_release(node);
 		}
 
-		if (policy->sleep_between_retries > 0) {
+		if (cmd->policy->sleep_between_retries > 0) {
 			// Sleep before trying again.
-			as_sleep(policy->sleep_between_retries);
+			as_sleep(cmd->policy->sleep_between_retries);
+		}
+
+		if ((cmd->type & AS_COMMAND_TYPE_BATCH) && as_batch_retry(cmd, err)) {
+			// Batch split retry attempted.  Exit this command.
+			if (release_node) {
+				as_node_release(node);
+			}
+			return err->code;
 		}
 	}
 	
@@ -583,13 +579,14 @@ Retry:
 		const char* type = (err->message[0])? "Server" : "Client";
 		as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
 			"%s timeout: socket=%u total=%u iterations=%u lastNode=%s",
-			type, policy->socket_timeout, policy->total_timeout, iteration, as_node_get_address_string(node));
+			type, cmd->policy->socket_timeout, cmd->policy->total_timeout, cmd->iteration,
+			as_node_get_address_string(node));
 	}
 
 	if (release_node) {
 		as_node_release(node);
 	}
-	as_error_set_in_doubt(err, is_read, command_sent_counter);
+	as_error_set_in_doubt(err, cmd->type & AS_COMMAND_TYPE_READ, command_sent_counter);
 	return err->code;
 }
 
@@ -1112,11 +1109,11 @@ as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint32_t 
 	
 	if (size > 0) {
 		// Read remaining message bytes.
-		buf = as_command_init(size);
+		buf = as_command_buffer_init(size);
 		status = as_socket_read_deadline(err, sock, node, buf, size, socket_timeout, deadline_ms);
 		
 		if (status) {
-			as_command_free(buf, size);
+			as_command_buffer_free(buf, size);
 			return status;
 		}
 	}
@@ -1177,7 +1174,7 @@ as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint32_t 
 			as_error_update(err, status, "%s %s", as_node_get_address_string(node), as_error_string(status));
 			break;
 	}
-	as_command_free(buf, size);
+	as_command_buffer_free(buf, size);
 	return status;
 }
 
@@ -1199,11 +1196,11 @@ as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, 
 	
 	if (size > 0) {
 		// Read remaining message bytes.
-		buf = as_command_init(size);
+		buf = as_command_buffer_init(size);
 		status = as_socket_read_deadline(err, sock, node, buf, size, socket_timeout, deadline_ms);
 		
 		if (status) {
-			as_command_free(buf, size);
+			as_command_buffer_free(buf, size);
 			return status;
 		}
 	}
@@ -1241,6 +1238,6 @@ as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, 
 			}
 			break;
 	}
-	as_command_free(buf, size);
+	as_command_buffer_free(buf, size);
 	return status;
 }

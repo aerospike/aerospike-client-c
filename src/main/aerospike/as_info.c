@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -238,7 +238,7 @@ as_info_command(
 		names = "";
 	}
 
-	uint8_t* cmd = as_command_init(size);
+	uint8_t* cmd = as_command_buffer_init(size);
 	
 	// Write request
 	uint8_t* p = cmd + 8;
@@ -256,7 +256,7 @@ as_info_command(
 	
 	// Write command
 	as_status status = as_socket_write_deadline(err, sock, node, cmd, size, 0, deadline_ms);
-	as_command_free(cmd, size);
+	as_command_buffer_free(cmd, size);
 	
 	if (status) {
 		return status;

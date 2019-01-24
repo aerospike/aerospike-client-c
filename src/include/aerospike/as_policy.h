@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1142,7 +1142,7 @@ as_policy_batch_init(as_policy_batch* p)
 	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
 	p->base.max_retries = 2;
 	p->base.sleep_between_retries = 0;
-	p->replica = AS_POLICY_REPLICA_MASTER;
+	p->replica = AS_POLICY_REPLICA_SEQUENCE;
 	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
 	p->concurrent = false;
 	p->allow_inline = true;

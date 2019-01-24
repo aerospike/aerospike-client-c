@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -376,9 +376,9 @@ as_query_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_ti
 		if (size > 0) {
 			// Prepare buffer
 			if (size > capacity) {
-				as_command_free(buf, capacity);
+				as_command_buffer_free(buf, capacity);
 				capacity = size;
-				buf = as_command_init(capacity);
+				buf = as_command_buffer_init(capacity);
 			}
 			
 			// Read remaining message bytes in group
@@ -398,16 +398,13 @@ as_query_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_ti
 			}
 		}
 	}
-	as_command_free(buf, capacity);
+	as_command_buffer_free(buf, capacity);
 	return status;
 }
 
 static as_status
 as_query_command_execute(as_query_task* task)
 {
-	as_command_node cn;
-	cn.node = task->node;
-	
 	as_error err;
 	as_error_init(&err);
 
@@ -426,19 +423,31 @@ as_query_command_execute(as_query_task* task)
 	}
 
 	const as_policy_base* policy;
-	bool is_read;
+	uint8_t type;
 
 	if (task->query_policy) {
 		policy = &task->query_policy->base;
-		is_read = true;
+		type = AS_COMMAND_TYPE_READ;
 	}
 	else {
 		policy = &task->write_policy->base;
-		is_read = false;
+		type = AS_COMMAND_TYPE_WRITE;
 	}
 
-	status = as_command_execute(task->cluster, &err, policy, &cn, task->cmd, task->cmd_size,
-										  as_query_parse, task, is_read);
+	as_command cmd;
+	cmd.cluster = task->cluster;
+	cmd.policy = policy;
+	// No need to set ns, digest, replica because not referenced when node is set.
+	cmd.node = task->node;
+	cmd.parse_results_fn = as_query_parse;
+	cmd.udata = task;
+	cmd.buf = task->cmd;
+	cmd.buf_size = task->cmd_size;
+	cmd.type = type;
+
+	as_command_start_timer(&cmd, policy);
+
+	status = as_command_execute(&cmd, &err);
 
 	if (status) {
 		// Set main error only once.
@@ -867,7 +876,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	uint32_t timeout = (task->query_policy)? task->query_policy->base.total_timeout : task->write_policy->base.total_timeout;
 	
 	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &predexp_size, &bin_name_size);
-	uint8_t* cmd = as_command_init(size);
+	uint8_t* cmd = as_command_buffer_init(size);
 	size = as_query_command_init(cmd, query, query_type, task->query_policy, task->write_policy, task->task_id,
 								 timeout, n_fields, filter_size, predexp_size, bin_name_size, &argbuffer);
 	
@@ -934,7 +943,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	cf_queue_destroy(task->complete_q);
 	
 	// Free command memory.
-	as_command_free(cmd, size);
+	as_command_buffer_free(cmd, size);
 	
 	return status;
 }
@@ -1173,7 +1182,7 @@ aerospike_query_async(
 	uint16_t n_fields = 0;
 	
 	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &predexp_size, &bin_name_size);
-	uint8_t* cmd_buf = as_command_init(size);
+	uint8_t* cmd_buf = as_command_buffer_init(size);
 	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, policy, NULL, task_id, policy->base.total_timeout,
 								 n_fields, filter_size, predexp_size, bin_name_size, &argbuffer);
 	
@@ -1209,7 +1218,7 @@ aerospike_query_async(
 	}
 	
 	// Free command buffer.
-	as_command_free(cmd_buf, size);
+	as_command_buffer_free(cmd_buf, size);
 	
 	as_status status = AEROSPIKE_OK;
 

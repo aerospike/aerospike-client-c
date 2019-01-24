@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -113,11 +113,10 @@ as_partition_tables_create(uint32_t capacity)
 }
 
 static inline as_node*
-reserve_master(as_cluster* cluster, as_node* node)
+try_master(as_cluster* cluster, as_node* node)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (node && as_load_uint8(&node->active)) {
-		as_node_reserve(node);
 		return node;
 	}
 	// When master only specified, should never get random nodes.
@@ -125,25 +124,23 @@ reserve_master(as_cluster* cluster, as_node* node)
 }
 
 static inline as_node*
-reserve_node(as_cluster* cluster, as_node* node)
+try_node(as_cluster* cluster, as_node* node)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (node && as_load_uint8(&node->active)) {
-		as_node_reserve(node);
 		return node;
 	}
 	return NULL;
 }
 
 static as_node*
-reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
+try_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (as_load_uint8(&chosen->active)) {
-		as_node_reserve(chosen);
 		return chosen;
 	}
-	return reserve_node(cluster, alternate);
+	return try_node(cluster, alternate);
 }
 
 static as_node*
@@ -153,24 +150,23 @@ get_sequence_node(as_cluster* cluster, as_partition* p, bool use_master)
 	as_node* prole = (as_node*)as_load_ptr(&p->prole);
 
 	if (! prole) {
-		return reserve_node(cluster, master);
+		return try_node(cluster, master);
 	}
 
 	if (! master) {
-		return reserve_node(cluster, prole);
+		return try_node(cluster, prole);
 	}
 	
 	if (use_master) {
-		return reserve_node_alternate(cluster, master, prole);
+		return try_node_alternate(cluster, master, prole);
 	}
-	return reserve_node_alternate(cluster, prole, master);
+	return try_node_alternate(cluster, prole, master);
 }
 
 static inline bool
 try_rack_node(as_cluster* cluster, const char* ns, as_node* node)
 {
 	if (node && as_load_uint8(&node->active) && as_node_has_rack(cluster, node, ns, cluster->rack_id)) {
-		as_node_reserve(node);
 		return true;
 	}
 	return false;
@@ -211,17 +207,17 @@ prefer_rack_node(as_cluster* cluster, const char* ns, as_partition* p, bool use_
 
 	// Default to sequence mode.
 	if (! prole) {
-		return reserve_node(cluster, master);
+		return try_node(cluster, master);
 	}
 
 	if (! master) {
-		return reserve_node(cluster, prole);
+		return try_node(cluster, prole);
 	}
 
 	if (use_master) {
-		return reserve_node_alternate(cluster, master, prole);
+		return try_node_alternate(cluster, master, prole);
 	}
-	return reserve_node_alternate(cluster, prole, master);
+	return try_node_alternate(cluster, prole, master);
 }
 
 static uint32_t g_randomizer = 0;
@@ -233,7 +229,7 @@ as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_p
 		case AS_POLICY_REPLICA_MASTER: {
 			// Make volatile reference so changes to tend thread will be reflected in this thread.
 			as_node* master = (as_node*)as_load_ptr(&p->master);
-			return reserve_master(cluster, master);
+			return try_master(cluster, master);
 		}
 
 		case AS_POLICY_REPLICA_ANY: {

@@ -301,7 +301,7 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 300, false);
 
-	if (set && *set) {
+	if (set) {
 		as_string_builder_append(&sb, "truncate:namespace=");
 		as_string_builder_append(&sb, ns);
 		as_string_builder_append(&sb, ";set=");

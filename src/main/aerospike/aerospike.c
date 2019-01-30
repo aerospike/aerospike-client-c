@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -299,13 +299,24 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
 	}
 
 	as_string_builder sb;
-	as_string_builder_inita(&sb, 500, false);
-	as_string_builder_append(&sb, "truncate:namespace=");
-	as_string_builder_append(&sb, ns);
+	as_string_builder_inita(&sb, 300, false);
 
-	if (set) {
+	if (set && *set) {
+		as_string_builder_append(&sb, "truncate:namespace=");
+		as_string_builder_append(&sb, ns);
 		as_string_builder_append(&sb, ";set=");
 		as_string_builder_append(&sb, set);
+	}
+	else {
+		// Servers >= 4.5.1.0 support truncate-namespace.
+		if (node->features & AS_FEATURES_TRUNCATE_NS) {
+			as_string_builder_append(&sb, "truncate-namespace:namespace=");
+			as_string_builder_append(&sb, ns);
+		}
+		else {
+			as_string_builder_append(&sb, "truncate:namespace=");
+			as_string_builder_append(&sb, ns);
+		}
 	}
 
 	if (before_nanos) {
@@ -316,7 +327,7 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
 		as_string_builder_append(&sb, buff);
 	}
 	else {
-		// Servers >= 4.3.1.4 require lut argument.
+		// Servers >= 4.3.1.4 and <= 4.5.0.1 require lut argument.
 		if (node->features & AS_FEATURES_LUT_NOW) {
 			as_string_builder_append(&sb, ";lut=now");
 		}

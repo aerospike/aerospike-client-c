@@ -420,6 +420,9 @@ as_lookup_node(
 		else if (strcmp(begin, "lut-now") == 0) {
 			features |= AS_FEATURES_LUT_NOW;
 		}
+		else if (strcmp(begin, "truncate-namespace") == 0) {
+			features |= AS_FEATURES_TRUNCATE_NS;
+		}
 		begin = end;
 	}
 	node_info->features = features;

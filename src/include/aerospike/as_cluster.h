@@ -448,7 +448,7 @@ as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_p
 as_status
 as_cluster_get_node(
 	struct as_cluster_s* cluster, as_error* err, const char* ns, const uint8_t* digest,
-	as_policy_replica replica, bool master, as_node** node
+	as_policy_replica replica, uint8_t type, bool master, as_node** node
 	);
 
 #ifdef __cplusplus

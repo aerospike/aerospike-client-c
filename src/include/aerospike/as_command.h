@@ -37,6 +37,7 @@ extern "C" {
 #define AS_COMMAND_TYPE_READ 1
 #define AS_COMMAND_TYPE_WRITE 2
 #define AS_COMMAND_TYPE_BATCH 4
+#define AS_COMMAND_TYPE_LINEARIZE 8
 
 // Field IDs
 #define AS_FIELD_NAMESPACE 0

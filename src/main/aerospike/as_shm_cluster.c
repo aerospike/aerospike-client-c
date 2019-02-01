@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_cpu.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_node.h>
@@ -708,7 +709,7 @@ shm_prefer_rack_node(
 as_status
 as_shm_cluster_get_node(
 	as_cluster* cluster, as_error* err, const char* ns, const uint8_t* digest,
-	as_policy_replica replica, bool use_master, as_node** node_pp
+	as_policy_replica replica, uint8_t type, bool use_master, as_node** node_pp
 	)
 {
 	as_cluster_shm* cluster_shm = cluster->shm_info->cluster_shm;
@@ -725,6 +726,11 @@ as_shm_cluster_get_node(
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
 		}
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
+	}
+
+	if (table->cp_mode && (type & AS_COMMAND_TYPE_READ) && !(type & AS_COMMAND_TYPE_LINEARIZE)) {
+		// Strong consistency namespaces always use master node when read policy is sequential.
+		replica = AS_POLICY_REPLICA_MASTER;
 	}
 
 	uint32_t partition_id = as_partition_getid(digest, cluster_shm->n_partitions);

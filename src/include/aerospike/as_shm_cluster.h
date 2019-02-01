@@ -371,7 +371,7 @@ as_shm_update_partitions(
 as_status
 as_shm_cluster_get_node(
 	struct as_cluster_s* cluster, as_error* err, const char* ns, const uint8_t* digest,
-	as_policy_replica replica, bool use_master, as_node** node_pp
+	as_policy_replica replica, uint8_t type, bool use_master, as_node** node_pp
 	);
 
 /**

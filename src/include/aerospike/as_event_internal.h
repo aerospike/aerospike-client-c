@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -61,6 +61,7 @@ extern "C" {
 #define AS_ASYNC_FLAGS_USING_SOCKET_TIMER 8
 #define AS_ASYNC_FLAGS_EVENT_RECEIVED 16
 #define AS_ASYNC_FLAGS_FREE_BUF 32
+#define AS_ASYNC_FLAGS_LINEARIZE 64
 
 #define AS_ASYNC_AUTH_RETURN_CODE 1
 

@@ -657,7 +657,9 @@ as_event_socket_timeout(as_event_command* cmd)
 
 	// Attempt retry.
 	// Read commands shift to prole node on timeout.
-	if (! as_event_command_retry(cmd, cmd->flags & AS_ASYNC_FLAGS_READ)) {
+	bool alternate = (cmd->flags & AS_ASYNC_FLAGS_READ) && ! (cmd->flags & AS_ASYNC_FLAGS_LINEARIZE);
+
+	if (! as_event_command_retry(cmd, alternate)) {
 		as_event_stop_timer(cmd);
 
 		as_error err;

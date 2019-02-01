@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,6 +17,7 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_address.h>
 #include <aerospike/as_admin.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_cpu.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
@@ -896,14 +897,14 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names)
 as_status
 as_cluster_get_node(
 	as_cluster* cluster, as_error* err, const char* ns, const uint8_t* digest,
-	as_policy_replica replica, bool master, as_node** node_pp
+	as_policy_replica replica, uint8_t type, bool master, as_node** node_pp
 	)
 {
 #ifdef AS_TEST_PROXY
 	as_node* node = as_node_get_random(cluster);
 #else
 	if (cluster->shm_info) {
-		return as_shm_cluster_get_node(cluster, err, ns, digest, replica, master, node_pp);
+		return as_shm_cluster_get_node(cluster, err, ns, digest, replica, type, master, node_pp);
 	}
 
 	as_partition_table* table = as_cluster_get_partition_table(cluster, ns);
@@ -919,6 +920,11 @@ as_cluster_get_node(
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
 		}
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
+	}
+
+	if (table->cp_mode && (type & AS_COMMAND_TYPE_READ) && !(type & AS_COMMAND_TYPE_LINEARIZE)) {
+		// Strong consistency namespaces always use master node when read policy is sequential.
+		replica = AS_POLICY_REPLICA_MASTER;
 	}
 
 	uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);

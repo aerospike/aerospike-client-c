@@ -418,6 +418,12 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 	return AEROSPIKE_OK;
 }
 
+static bool
+as_shift_sequence(as_command* cmd)
+{
+	return (cmd->type & AS_COMMAND_TYPE_READ) && !(cmd->type & AS_COMMAND_TYPE_LINEARIZE);
+}
+
 as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
@@ -434,7 +440,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 		else {
 			status = as_cluster_get_node(cmd->cluster, err, cmd->ns, cmd->digest, cmd->replica,
-										 cmd->master, &node);
+										 cmd->type, cmd->master, &node);
 
 			if (status) {
 				// Invalid namespace or there are no active nodes. It's not worth retrying.
@@ -463,7 +469,7 @@ as_command_execute(as_command* cmd, as_error* err)
 
 			// Alternate between master and prole on socket errors or database reads.
 			// Timeouts are not a good indicator of impending data migration.
-			if (status != AEROSPIKE_ERR_TIMEOUT || (cmd->type & AS_COMMAND_TYPE_READ)) {
+			if (status != AEROSPIKE_ERR_TIMEOUT || as_shift_sequence(cmd)) {
 				cmd->master = !cmd->master;  // Alternate between master and prole.
 			}
 			goto Retry;
@@ -495,7 +501,7 @@ as_command_execute(as_command* cmd, as_error* err)
 
 					// Alternate between master and prole on database reads.
 					// Timeouts are not a good indicator of impending data migration.
-					if (cmd->type & AS_COMMAND_TYPE_READ) {
+					if (as_shift_sequence(cmd)) {
 						cmd->master = !cmd->master;  // Alternate between master and prole.
 					}
 					goto Retry;

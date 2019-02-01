@@ -508,6 +508,22 @@ as_batch_index_records_write(
 	return as_command_write_end(cmd, p);
 }
 
+static inline uint8_t
+as_batch_type(const as_policy_batch* policy)
+{
+	return policy->linearize_read ?
+		AS_COMMAND_TYPE_READ | AS_COMMAND_TYPE_BATCH | AS_COMMAND_TYPE_LINEARIZE :
+		AS_COMMAND_TYPE_READ | AS_COMMAND_TYPE_BATCH;
+}
+
+static inline uint8_t
+as_batch_flags(const as_policy_batch* policy)
+{
+	return policy->linearize_read ?
+		AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ | AS_ASYNC_FLAGS_LINEARIZE :
+		AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
+}
+
 static inline void
 as_batch_command_init(
 	as_command* cmd, as_batch_task* task, const as_policy_batch* policy, uint8_t* buf, size_t size,
@@ -522,7 +538,7 @@ as_batch_command_init(
 	cmd->udata = task;
 	cmd->buf = buf;
 	cmd->buf_size = size;
-	cmd->type = AS_COMMAND_TYPE_READ | AS_COMMAND_TYPE_BATCH;
+	cmd->type = as_batch_type(policy);
 
 	if (! parent) {
 		// Normal batch.
@@ -806,7 +822,9 @@ as_batch_keys_execute(
 	if (offsets_capacity < 10) {
 		offsets_capacity = 10;
 	}
-	
+
+	uint8_t type = as_batch_type(policy);
+
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_key* key = &batch->keys.entries[i];
@@ -828,7 +846,7 @@ as_batch_keys_execute(
 
 		as_node* node;
 		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, policy->replica,
-									 true, &node);
+									 type, true, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(batch_nodes, n_batch_nodes);
@@ -1044,7 +1062,8 @@ as_batch_read_execute_async(
 	exec->max_concurrent = exec->max = exec->queued = n_batch_nodes;
 	
 	as_status status = AEROSPIKE_OK;
-	
+	uint8_t flags = as_batch_flags(policy);
+
 	for (uint32_t i = 0; i < n_batch_nodes; i++) {
 		as_batch_node* batch_node = &batch_nodes[i];
 		
@@ -1073,7 +1092,7 @@ as_batch_read_execute_async(
 		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_batch_command));
 		cmd->type = AS_ASYNC_TYPE_BATCH;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
+		cmd->flags = flags;
 		cmd->deserialize = policy->deserialize;
 		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy,
 														  cmd->buf);
@@ -1145,6 +1164,8 @@ as_batch_records_execute(
 		offsets_capacity = 10;
 	}
 	
+	uint8_t type = as_batch_type(policy);
+
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_read_record* record = as_vector_get(list, i);
@@ -1162,7 +1183,7 @@ as_batch_records_execute(
 		
 		as_node* node;
 		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, policy->replica,
-									 true, &node);
+									 type, true, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_read_cleanup(async_executor, nodes, batch_nodes, n_batch_nodes);
@@ -1242,7 +1263,7 @@ as_batch_retry_records(
 
 		as_node* node;
 		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, replica,
-									 parent->master, &node);
+									 parent->type, parent->master, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(batch_nodes, n_batch_nodes);
@@ -1274,7 +1295,6 @@ as_batch_retry_records(
 	// Batch split retry will now be attempted. Reset error code.
 	as_error_reset(err);
 
-	// TODO: HANDLE ASYNC TOO!
 	status = as_batch_read_execute_sync(cluster, err, task->policy, list, task->n_keys,
 										n_batch_nodes, batch_nodes, parent);
 
@@ -1317,7 +1337,8 @@ as_batch_retry_keys(
 		as_key* key = &btk->batch->keys.entries[offset];
 
 		as_node* node;
-		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, replica, parent->master, &node);
+		status = as_cluster_get_node(cluster, err, key->ns, key->digest.value, replica,
+									 parent->type, parent->master, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(batch_nodes, n_batch_nodes);
@@ -1438,6 +1459,8 @@ as_batch_retry_async(as_event_command* parent)
 		offsets_capacity = 10;
 	}
 
+	uint8_t type = as_batch_type(&policy);
+
 	as_batch_node* batch_nodes = alloca(sizeof(as_batch_node) * n_nodes);
 	uint32_t n_batch_nodes = 0;
 	as_status status;
@@ -1453,7 +1476,7 @@ as_batch_retry_async(as_event_command* parent)
 
 		as_node* node;
 		status = as_cluster_get_node(cluster, &err, key->ns, key->digest.value, parent->replica,
-									 parent->flags & AS_ASYNC_FLAGS_MASTER, &node);
+									 type, parent->flags & AS_ASYNC_FLAGS_MASTER, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(batch_nodes, n_batch_nodes);

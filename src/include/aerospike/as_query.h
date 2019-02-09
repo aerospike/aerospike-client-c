@@ -655,10 +655,8 @@ as_query_select(as_query* query, const char * bin);
  * For heap allocation, use `as_query_where_init()`.
  *
  * ~~~~~~~~~~{.c}
- * as_query_where_inita(&query, 3);
+ * as_query_where_inita(&query, 1);
  * as_query_where(&query, "bin1", as_string_equals("abc"));
- * as_query_where(&query, "bin2", as_integer_equals(123));
- * as_query_where(&query, "bin3", as_integer_range(0,123));
  * ~~~~~~~~~~
  *
  * @param __query	The query to initialize.
@@ -686,10 +684,8 @@ as_query_select(as_query* query, const char * bin);
  * For stack allocation, use `as_query_where_inita()`.
  *
  * ~~~~~~~~~~{.c}
- * as_query_where_init(&query, 3);
- * as_query_where(&query, "bin1", as_string_equals("abc"));
+ * as_query_where_init(&query, 1);
  * as_query_where(&query, "bin1", as_integer_equals(123));
- * as_query_where(&query, "bin1", as_integer_range(0,123));
  * ~~~~~~~~~~
  *
  * @param query	The query to initialize.

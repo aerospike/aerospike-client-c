@@ -233,33 +233,35 @@ as_uv_get_command(as_event_connection* conn)
 // freed all commands, we might still get read or write callbacks. This function
 // tests, whether we're dealing with a canceled pipelined connection.
 static inline bool
-as_uv_connection_alive(uv_stream_t* handle)
+as_uv_connection_alive(uv_handle_t* handle)
 {
-	if (uv_is_closing((uv_handle_t*)handle)) {
+	if (uv_is_closing(handle)) {
 		return false;
 	}
-	
-	as_event_connection* econ = (as_event_connection*)handle;
 
-	if (!econ->pipeline) {
+	if (!((as_event_connection*)handle)->pipeline) {
 		return true;
 	}
 
-	as_pipe_connection* pcon = (as_pipe_connection*)econ;
-	return !pcon->canceled;
+	return !((as_pipe_connection*)handle)->canceled;
 }
 
 static void
 as_uv_command_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 {
-	as_event_command* cmd = as_uv_get_command(handle->data);
-	*buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->len - cmd->pos);
+	if (as_uv_connection_alive(handle)) {
+		as_event_command* cmd = as_uv_get_command(handle->data);
+		*buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->len - cmd->pos);
+	}
+	else {
+		*buf = uv_buf_init(NULL, 0);
+	}
 }
 
 static void
 as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
-	if (!as_uv_connection_alive(stream)) {
+	if (!as_uv_connection_alive((uv_handle_t*)stream)) {
 		return;
 	}
 
@@ -351,7 +353,7 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 static void
 as_uv_command_write_complete(uv_write_t* req, int status)
 {
-	if (!as_uv_connection_alive(req->handle)) {
+	if (!as_uv_connection_alive((uv_handle_t*)req->handle)) {
 		return;
 	}
 

@@ -248,7 +248,7 @@ print_usage(const char* program)
 	blog_line("   Enable asynchronous mode.");
 	blog_line("");
 	
-	blog_line("-c --asyncMaxCommands <command count> # Default: 200");
+	blog_line("-c --asyncMaxCommands <command count> # Default: 50");
 	blog_line("   Maximum number of concurrent asynchronous commands that are active at any point");
 	blog_line("   in time.");
 	blog_line("");
@@ -882,7 +882,7 @@ main(int argc, char * const * argv)
 	args.durable_deletes = false;
 	args.conn_pools_per_node = 1;
 	args.async = false;
-	args.async_max_commands = 200;
+	args.async_max_commands = 50;
 	args.event_loop_capacity = 1;
 	memset(&args.tls, 0, sizeof(as_config_tls));
 	args.auth_mode = AS_AUTH_INTERNAL;

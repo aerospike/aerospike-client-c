@@ -488,8 +488,13 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 static void
 as_uv_auth_command_buffer(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf)
 {
-	as_event_command* cmd = as_uv_auth_get_command(handle->data);
-	*buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->len - cmd->pos);
+	if (as_uv_connection_alive(handle)) {
+		as_event_command* cmd = as_uv_auth_get_command(handle->data);
+		*buf = uv_buf_init((char*)cmd->buf + cmd->pos, cmd->len - cmd->pos);
+	}
+	else {
+		*buf = uv_buf_init(NULL, 0);
+	}
 }
 
 static void

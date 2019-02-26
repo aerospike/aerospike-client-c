@@ -739,7 +739,7 @@ as_shm_cluster_get_node(
 
 	if (! node) {
 		*node_pp = NULL;
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node not found for partition %s:%u",
+		return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE, "Node not found for partition %s:%u",
 							   ns, partition_id);
 	}
 

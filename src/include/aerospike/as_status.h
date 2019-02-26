@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -155,7 +155,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_ALWAYS_FORBIDDEN = 10,
 	
 	/**
-	 * Generic cluster discovery & connection error.
+	 * Partition is unavailable.
 	 */
 	AEROSPIKE_ERR_CLUSTER = 11,
 	

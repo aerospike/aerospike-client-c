@@ -113,13 +113,21 @@ as_partition_tables_create(uint32_t capacity)
 }
 
 static inline as_node*
-reserve_master(as_cluster* cluster, as_node* node)
+reserve_master(as_cluster* cluster, as_node* node, as_partition_error* pe)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (node && as_load_uint8(&node->active)) {
+	if (node) {
 		as_node_reserve(node);
-		return node;
+
+		if (as_load_uint8(&node->active)) {
+			return node;
+		}
+		else {
+			pe->node_master = node;
+		}
 	}
+	pe->start_master = true;
+	pe->count = 1;
 	// When master only specified, should never get random nodes.
 	return NULL;
 }
@@ -147,23 +155,66 @@ reserve_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 }
 
 static as_node*
-get_sequence_node(as_cluster* cluster, as_partition* p, bool use_master)
+get_sequence_node(as_cluster* cluster, as_partition* p, bool use_master, as_partition_error* pe)
 {
-	as_node* master = (as_node*)as_load_ptr(&p->master);
-	as_node* prole = (as_node*)as_load_ptr(&p->prole);
-
-	if (! prole) {
-		return reserve_node(cluster, master);
-	}
-
-	if (! master) {
-		return reserve_node(cluster, prole);
-	}
-	
 	if (use_master) {
-		return reserve_node_alternate(cluster, master, prole);
+		as_node* master = (as_node*)as_load_ptr(&p->master);
+		
+		if (master) {
+			as_node_reserve(master);
+
+			if (as_load_uint8(&master->active)) {
+				return master;
+			}
+			else {
+				pe->node_master = master;
+			}
+		}
+
+		as_node* prole = (as_node*)as_load_ptr(&p->prole);
+
+		if (prole) {
+			as_node_reserve(prole);
+
+			if (as_load_uint8(&prole->active)) {
+				return prole;
+			}
+			else {
+				pe->node_prole = prole;
+			}
+		}
+		pe->start_master = true;
 	}
-	return reserve_node_alternate(cluster, prole, master);
+	else {
+		as_node* prole = (as_node*)as_load_ptr(&p->prole);
+
+		if (prole) {
+			as_node_reserve(prole);
+
+			if (as_load_uint8(&prole->active)) {
+				return prole;
+			}
+			else {
+				pe->node_prole = prole;
+			}
+		}
+
+		as_node* master = (as_node*)as_load_ptr(&p->master);
+
+		if (master) {
+			as_node_reserve(master);
+
+			if (as_load_uint8(&master->active)) {
+				return master;
+			}
+			else {
+				pe->node_master = master;
+			}
+		}
+		pe->start_master = false;
+	}
+	pe->count = 2;
+	return NULL;
 }
 
 static inline bool
@@ -227,25 +278,25 @@ prefer_rack_node(as_cluster* cluster, const char* ns, as_partition* p, bool use_
 static uint32_t g_randomizer = 0;
 
 as_node*
-as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master)
+as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master, as_partition_error* pe)
 {
 	switch (replica) {
 		case AS_POLICY_REPLICA_MASTER: {
 			// Make volatile reference so changes to tend thread will be reflected in this thread.
 			as_node* master = (as_node*)as_load_ptr(&p->master);
-			return reserve_master(cluster, master);
+			return reserve_master(cluster, master, pe);
 		}
 
 		case AS_POLICY_REPLICA_ANY: {
 			// Alternate between master and prole for reads with global iterator.
 			uint32_t r = as_faa_uint32(&g_randomizer, 1);
 			use_master = (r & 1);
-			return get_sequence_node(cluster, p, use_master);
+			return get_sequence_node(cluster, p, use_master, pe);
 		}
 
 		default:
 		case AS_POLICY_REPLICA_SEQUENCE: {
-			return get_sequence_node(cluster, p, use_master);
+			return get_sequence_node(cluster, p, use_master, pe);
 		}
 
 		case AS_POLICY_REPLICA_PREFER_RACK: {
@@ -339,6 +390,7 @@ decode_and_update(char* bitmap_b64, uint32_t len, as_partition_table* table, as_
 					if (node != p->master) {
 						as_node* tmp = p->master;
 						as_node_reserve(node);
+						as_log_debug("PTU,%s,%s,%u,M", as_node_get_address_string(node), table->ns, i);
 						set_node(&p->master, node);
 
 						if (tmp) {
@@ -351,6 +403,7 @@ decode_and_update(char* bitmap_b64, uint32_t len, as_partition_table* table, as_
 					if (node != p->prole) {
 						as_node* tmp = p->prole;
 						as_node_reserve(node);
+						as_log_debug("PTU,%s,%s,%u,P", as_node_get_address_string(node), table->ns, i);
 						set_node(&p->prole, node);
 
 						if (tmp) {

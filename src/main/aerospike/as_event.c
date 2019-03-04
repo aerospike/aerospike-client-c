@@ -538,18 +538,35 @@ as_event_command_begin(as_event_command* cmd)
 			as_node_release(cmd->node);
 		}
 
+		as_partition_error pe;
+		memset(&pe, 0, sizeof(as_partition_error));
+
 		if (cmd->cluster->shm_info) {
 			cmd->node = as_partition_shm_get_node(cmd->cluster, cmd->ns, cmd->partition,
 												  cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER);
 		}
 		else {
 			cmd->node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->replica,
-											  cmd->flags & AS_ASYNC_FLAGS_MASTER);
+											  cmd->flags & AS_ASYNC_FLAGS_MASTER, &pe);
 		}
 
 		if (! cmd->node) {
+			const char* mstr = pe.node_master ? as_node_get_address_string(pe.node_master) : "null";
+			const char* pstr = pe.node_prole ? as_node_get_address_string(pe.node_prole) : "null";
+			const char* sm = pe.start_master ? "true" : "false";
 			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+			as_error_update(&err, AEROSPIKE_ERR_CLIENT,
+							"Node not found for partition %s %s,%s,%s,%u",
+							cmd->ns, mstr, pstr, sm, (uint32_t)pe.count
+							);
+
+			if (pe.node_master) {
+				as_node_release(pe.node_master);
+			}
+
+			if (pe.node_prole) {
+				as_node_release(pe.node_prole);
+			}
 
 			if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
 				as_event_stop_timer(cmd);

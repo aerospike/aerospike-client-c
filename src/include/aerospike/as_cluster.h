@@ -432,13 +432,20 @@ as_cluster_get_partition_table(as_cluster* cluster, const char* ns)
 	return table;
 }
 
+typedef struct as_partition_error_s {
+	as_node* node_master;
+	as_node* node_prole;
+	bool start_master;
+	uint8_t count;
+} as_partition_error;
+
 /**
  * @private
  * Get mapped node given partition.  
  * as_nodes_release() must be called when done with node.
  */
 as_node*
-as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master);
+as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master, as_partition_error* pe);
 
 /**
  * @private

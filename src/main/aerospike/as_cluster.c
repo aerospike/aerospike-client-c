@@ -923,13 +923,28 @@ as_cluster_get_node(
 
 	uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);
 	as_partition* p = &table->partitions[partition_id];
-	as_node* node = as_partition_get_node(cluster, table->ns, p, replica, master);
+	as_partition_error pe;
+	memset(&pe, 0, sizeof(as_partition_error));
+	as_node* node = as_partition_get_node(cluster, table->ns, p, replica, master, &pe);
 #endif
 
 	if (! node) {
+		const char* mstr = pe.node_master ? as_node_get_address_string(pe.node_master) : "null";
+		const char* pstr = pe.node_prole ? as_node_get_address_string(pe.node_prole) : "null";
+		const char* sm = pe.start_master ? "true" : "false";
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node not found for partition %s:%u %s,%s,%s,%u",
+							   ns, partition_id, mstr, pstr, sm, (uint32_t)pe.count
+							   );
+
+		if (pe.node_master) {
+			as_node_release(pe.node_master);
+		}
+
+		if (pe.node_prole) {
+			as_node_release(pe.node_prole);
+		}
 		*node_pp = NULL;
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node not found for partition %s:%u",
-							   ns, partition_id);
+		return err->code;
 	}
 
 	*node_pp = node;

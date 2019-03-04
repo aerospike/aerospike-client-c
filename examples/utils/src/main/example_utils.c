@@ -464,10 +464,25 @@ usage(const char* short_opts)
 static bool
 example_log_callback(as_log_level level, const char * func, const char * file, uint32_t line, const char * fmt, ...)
 {
+	// Write message all at once so messages generated from multiple threads have less of a chance
+	// of getting garbled.
 	va_list ap;
 	va_start(ap, fmt);
-	vprintf(fmt, ap);
-	printf("\n");
+
+	char fmtbuf[1024];
+	time_t now = time(NULL);
+	struct tm* t = localtime(&now);
+	int len = sprintf(fmtbuf, "%d-%02d-%02d %02d:%02d:%02d %s ",
+					  t->tm_year+1900, t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min, t->tm_sec,
+					  as_log_level_tostring(level));
+	size_t len2 = strlen(fmt);
+	char* p = fmtbuf + len;
+	memcpy(p, fmt, len2);
+	p += len2;
+	*p++ = '\n';
+	*p = 0;
+
+	vprintf(fmtbuf, ap);
 	va_end(ap);
 	return true;
 }
@@ -512,6 +527,7 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 		const char* lua_user_path)
 {
 	// Initialize logging.
+	as_log_set_level(AS_LOG_LEVEL_DEBUG);
 	as_log_set_callback(example_log_callback);
 
 	// Initialize default lua configuration.

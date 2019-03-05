@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -54,8 +54,7 @@ typedef enum as_tls_protocol_e {
 
 	AS_TLS_PROTOCOL_NONE	= 0x00,
 
-	AS_TLS_PROTOCOL_ALL		= (AS_TLS_PROTOCOL_SSLV3 |
-							   AS_TLS_PROTOCOL_TLSV1 |
+	AS_TLS_PROTOCOL_ALL		= (AS_TLS_PROTOCOL_TLSV1 |
 							   AS_TLS_PROTOCOL_TLSV1_1 |
 							   AS_TLS_PROTOCOL_TLSV1_2),
 
@@ -96,7 +95,8 @@ protocols_parse(as_config_tls* tlscfg, uint16_t* oprotocols, as_error* errp)
 										"SSLv2 not supported (RFC 6176)");
 		}
 		else if (strcasecmp(tok, "SSLv3") == 0) {
-			current = AS_TLS_PROTOCOL_SSLV3;
+			return as_error_set_message(errp, AEROSPIKE_ERR_TLS_ERROR,
+										"SSLv3 not supported");
 		}
 		else if (strcasecmp(tok, "TLSv1") == 0) {
 			current = AS_TLS_PROTOCOL_TLSV1;
@@ -465,16 +465,7 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	// If the selected protocol set is a single protocol we
 	// can use a specific method.
 	//
-	if (protocols == AS_TLS_PROTOCOL_SSLV3) {
-#ifndef OPENSSL_NO_SSL3_METHOD
-		method = SSLv3_client_method();
-#else
-		cert_blacklist_destroy(cert_blacklist);
-		pthread_mutex_destroy(&octx->lock);
-		return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR, "SSLV3 protocol is not allowed");
-#endif
-	}
-	else if (protocols == AS_TLS_PROTOCOL_TLSV1) {
+	if (protocols == AS_TLS_PROTOCOL_TLSV1) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		method = TLS_client_method();
 #else
@@ -518,11 +509,9 @@ as_tls_context_setup(as_config_tls* tlscfg,
 
 	/* always disable SSLv2, as per RFC 6176 */
     SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
+	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3);
 
 	// Turn off non-enabled protocols.
-	if (! (protocols & AS_TLS_PROTOCOL_SSLV3)) {
-        SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3);
-    }
 	if (! (protocols & AS_TLS_PROTOCOL_TLSV1)) {
         SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1);
     }

@@ -169,6 +169,7 @@
 		BFD8FE7C20CF6DFC000A80F1 /* as_query_validate.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD8FE7B20CF6DFC000A80F1 /* as_query_validate.c */; };
 		BFE3C3991D6270C200AA7F20 /* as_address.h in Headers */ = {isa = PBXBuildFile; fileRef = BFE3C3981D6270C200AA7F20 /* as_address.h */; };
 		BFE3C39B1D62720800AA7F20 /* as_address.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE3C39A1D62720800AA7F20 /* as_address.c */; };
+		BFEAF6322228638E00FB4248 /* as_conn_pool.h in Headers */ = {isa = PBXBuildFile; fileRef = BFEAF6312228638E00FB4248 /* as_conn_pool.h */; };
 		BFF344B01CDAC67700FD1976 /* as_map_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BFF344AF1CDAC67700FD1976 /* as_map_operations.h */; };
 		BFF344C31CEA7ACD00FD1976 /* as_list_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */; };
 /* End PBXBuildFile section */
@@ -339,6 +340,7 @@
 		BFD8FE7B20CF6DFC000A80F1 /* as_query_validate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_query_validate.c; path = ../src/main/aerospike/as_query_validate.c; sourceTree = "<group>"; };
 		BFE3C3981D6270C200AA7F20 /* as_address.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_address.h; path = ../src/include/aerospike/as_address.h; sourceTree = "<group>"; };
 		BFE3C39A1D62720800AA7F20 /* as_address.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_address.c; path = ../src/main/aerospike/as_address.c; sourceTree = "<group>"; };
+		BFEAF6312228638E00FB4248 /* as_conn_pool.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_conn_pool.h; path = ../src/include/aerospike/as_conn_pool.h; sourceTree = "<group>"; };
 		BFF344AF1CDAC67700FD1976 /* as_map_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_map_operations.h; path = ../src/include/aerospike/as_map_operations.h; sourceTree = "<group>"; };
 		BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_list_operations.h; path = ../src/include/aerospike/as_list_operations.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -595,6 +597,7 @@
 				BFC65B471C921E9E0079DF5A /* as_cluster.h */,
 				BFC65B481C921E9E0079DF5A /* as_command.h */,
 				BFC65B491C921E9E0079DF5A /* as_config.h */,
+				BFEAF6312228638E00FB4248 /* as_conn_pool.h */,
 				BFA5B20F20FD3FA4002AF0BB /* as_cpu.h */,
 				BFC65B4A1C921E9E0079DF5A /* as_error.h */,
 				BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */,
@@ -664,6 +667,7 @@
 				BFC65B6F1C921E9E0079DF5A /* as_async.h in Headers */,
 				BFC65B6D1C921E9E0079DF5A /* as_admin.h in Headers */,
 				BFC65B851C921E9E0079DF5A /* as_record_iterator.h in Headers */,
+				BFEAF6322228638E00FB4248 /* as_conn_pool.h in Headers */,
 				BFC65B701C921E9E0079DF5A /* as_batch.h in Headers */,
 				BF5736441F91521400B7D323 /* as_poll.h in Headers */,
 				BFC65B611C921E9E0079DF5A /* aerospike_batch.h in Headers */,

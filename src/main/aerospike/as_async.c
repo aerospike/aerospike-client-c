@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -77,7 +77,7 @@ as_async_get_connections(as_cluster* cluster)
 void
 as_async_update_max_idle(as_cluster* cluster, uint32_t max_idle)
 {
-	cluster->max_socket_idle = max_idle;
+	cluster->max_socket_idle_ns = (uint64_t)max_idle * 1000 * 1000 * 1000;
 }
 
 void
@@ -96,10 +96,10 @@ as_async_update_max_conns(as_cluster* cluster, bool pipe, uint32_t max_conns)
 			uint32_t limit = j < rem ? max + 1 : max;
 
 			if (pipe) {
-				node->pipe_conn_pools[j].limit = limit;
+				node->pipe_conn_pools[j].capacity = limit;
 			}
 			else {
-				node->async_conn_pools[j].limit = limit;
+				node->async_conn_pools[j].capacity = limit;
 			}
 		}
 	}

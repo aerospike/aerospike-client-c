@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -69,7 +69,7 @@ typedef struct as_tls_context_s {
 	bool for_login_only;
 } as_tls_context;
 
-struct as_conn_pool_lock_s;
+struct as_conn_pool_s;
 struct as_node_s;
 
 /**
@@ -83,11 +83,8 @@ typedef struct as_socket_s {
 	SOCKET fd;
 #endif
 	union {
-		struct as_conn_pool_lock_s* pool_lock; // Used when sync socket is active.
-		struct {
-			uint32_t max_socket_idle;
-			uint32_t last_used;
-		} idle_check;                          // Used when socket in pool.
+		struct as_conn_pool_s* pool; // Used when sync socket is active.
+		uint64_t last_used; // Last used nano timestamp. Used when socket in pool.
 	};
 	as_tls_context* ctx;
 	const char* tls_name;
@@ -193,6 +190,16 @@ as_socket_error_append(as_error* err, struct sockaddr* addr);
 
 /**
  * @private
+ * Is socket idle time less than or equals to max_socket_idle.
+ */
+static inline bool
+as_socket_current(as_socket* sock, uint64_t max_socket_idle_ns)
+{
+	return (cf_getns() - sock->last_used) <= max_socket_idle_ns;
+}
+
+/**
+ * @private
  * Peek for socket connection status using underlying fd.
  *  Needed to support libuv.
  *
@@ -211,8 +218,14 @@ as_socket_validate_fd(as_socket_fd fd);
  * 		> 0 : byte size of data available.
  * 		< 0 : socket is invalid.
  */
-int
-as_socket_validate(as_socket* sock);
+static inline int
+as_socket_validate(as_socket* sock, uint64_t max_socket_idle_ns)
+{
+	if (! as_socket_current(sock, max_socket_idle_ns)) {
+		return -1;
+	}
+	return as_socket_validate_fd(sock->fd);
+}
 
 /**
  * @private

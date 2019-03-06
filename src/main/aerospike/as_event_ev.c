@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -78,7 +78,7 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 			as_ev_close_loop(event_loop);
 			return;
 		}
-		cmd.executable(cmd.udata);
+		cmd.executable(event_loop, cmd.udata);
 
 		if (++i < size) {
 			pthread_mutex_lock(&event_loop->lock);
@@ -865,25 +865,15 @@ as_ev_socket_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
 	as_event_socket_timeout(timer->data);
 }
 
-void
-as_event_close_connection(as_event_connection* conn)
-{
-	as_socket_close(&conn->socket);
-	cf_free(conn);
-}
-
 static void
-as_ev_close_connections(as_node* node, as_conn_pool* pool)
+as_ev_close_connections(as_node* node, as_queue* pool)
 {
 	as_event_connection* conn;
 	
-	// Queue connection commands to event loops.
-	while (as_conn_pool_get(pool, &conn)) {
-		as_socket_close(&conn->socket);
-		cf_free(conn);
-		as_conn_pool_dec(pool);
+	while (as_queue_pop(pool, &conn)) {
+		as_event_release_connection(conn, pool);
 	}
-	as_conn_pool_destroy(pool);
+	as_queue_destroy(pool);
 }
 
 void

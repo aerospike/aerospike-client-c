@@ -222,7 +222,7 @@ as_admin_execute(aerospike* as, as_error* err, const as_policy_admin* policy, ui
 		return status;
 	}
 	
-	as_node_put_connection(&socket, cluster->max_socket_idle);
+	as_node_put_connection(&socket);
 	as_node_release(node);
 	
 	status = buffer[RESULT_CODE];
@@ -322,7 +322,7 @@ as_admin_read_list(aerospike* as, as_error* err, const as_policy_admin* policy, 
 		return status;
 	}
 
-	as_node_put_connection(&socket, cluster->max_socket_idle);
+	as_node_put_connection(&socket);
 	as_node_release(node);
 	return status;
 }

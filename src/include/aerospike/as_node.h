@@ -18,6 +18,7 @@
 
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_conn_pool.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_socket.h>
@@ -100,51 +101,6 @@ typedef struct as_alias_s {
 	uint16_t port;
 	
 } as_alias;
-
-/**
- * @private
- * Connection pool; not thread-safe.
- */
-typedef struct as_conn_pool_s {
-	/**
-	 * @private
-	 * Queue.
-	 */
-	as_queue queue;
-	
-	/**
-	 * @private
-	 * Total number of connections associated with this pool, whether currently
-	 * queued or not.
-	 */
-	uint32_t total;
-
-	/**
-	 * @private
-	 * The limit on the above total number of connections.
-	 */
-	uint32_t limit;
-
-} as_conn_pool;
-
-/**
- * @private
- * Connection pool with lock.
- */
-typedef struct as_conn_pool_lock_s {
-	/**
-	 * @private
-	 * Mutex lock.
-	 */
-	pthread_mutex_t lock;
-
-	/**
-	 * @private
-	 * Actual pool.
-	 */
-	as_conn_pool pool;
-
-} as_conn_pool_lock;
 
 /**
  * @private
@@ -271,20 +227,20 @@ typedef struct as_node_s {
 	 * @private
 	 * Pools of current, cached sockets.
 	 */
-	as_conn_pool_lock* conn_pool_locks;
+	as_conn_pool* sync_conn_pools;
 	
 	/**
 	 * @private
 	 * Array of connection pools used in async commands.  There is one pool per node/event loop.
 	 * Only used by event loop threads. Not thread-safe.
 	 */
-	as_conn_pool* async_conn_pools;
+	as_queue* async_conn_pools;
 	
 	/**
 	 * @private
 	 * Pool of connections used in pipelined async commands.  Also not thread-safe.
 	 */
-	as_conn_pool* pipe_conn_pools;
+	as_queue* pipe_conn_pools;
 
 	/**
 	 * @private
@@ -442,78 +398,6 @@ typedef struct as_node_info_s {
  ******************************************************************************/
 
 /**
- *  @private
- *  Initialize a connection pool.
- */
-static inline void
-as_conn_pool_init(as_conn_pool* pool, uint32_t size, uint32_t limit)
-{
-	pool->limit = limit;
-	pool->total = 0;
-
-	as_queue_init(&pool->queue, size, limit);
-}
-
-/**
- *  @private
- *  Destroy an empty connection pool.
- */
-static inline void
-as_conn_pool_destroy(as_conn_pool* pool)
-{
-	as_queue_destroy(&pool->queue);
-}
-
-/**
- *  @private
- *  Reduce the total count of connections associated with this pool.
- */
-static inline void
-as_conn_pool_dec(as_conn_pool* pool)
-{
-	pool->total--;
-}
-
-/**
- *  @private
- *  Increase the total count of connections associated with this pool.
- */
-static inline bool
-as_conn_pool_inc(as_conn_pool* pool)
-{
-	if (pool->total >= pool->limit) {
-		return false;
-	}
-
-	pool->total++;
-	return true;
-}
-
-/**
- *  @private
- * Get a connection from the pool.
- */
-static inline bool
-as_conn_pool_get(as_conn_pool* pool, void* conn)
-{
-	return as_queue_pop(&pool->queue, conn);
-}
-
-/**
- *  @private
- *  Return a connection to the pool.
- */
-static inline bool
-as_conn_pool_put(as_conn_pool* pool, void* conn)
-{
-	if (pool->total > pool->limit) {
-		return false;
-	}
-
-	return as_queue_push(&pool->queue, conn);
-}
-
-/**
  * @private
  * Create new cluster node.
  */
@@ -614,11 +498,8 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
  */
 static inline void
 as_node_close_connection(as_socket* sock) {
-	as_conn_pool_lock* pool_lock = sock->pool_lock;
 	as_socket_close(sock);
-	pthread_mutex_lock(&pool_lock->lock);
-	as_conn_pool_dec(&pool_lock->pool);
-	pthread_mutex_unlock(&pool_lock->lock);
+	as_conn_pool_decr(sock->pool);
 }
 
 /**
@@ -626,36 +507,26 @@ as_node_close_connection(as_socket* sock) {
  * Put connection back into pool.
  */
 static inline void
-as_node_put_connection(as_socket* sock, uint32_t max_socket_idle)
+as_node_put_connection(as_socket* sock)
 {
 	// Save pool.
-	as_conn_pool_lock* pool_lock = sock->pool_lock;
+	as_conn_pool* pool = sock->pool;
 
-	// TLS connections default to 55 seconds.
-	if (max_socket_idle == 0 && sock->ctx) {
-		max_socket_idle = 55;
-	}
-
-	if (max_socket_idle > 0) {
-		sock->idle_check.max_socket_idle = max_socket_idle;
-		sock->idle_check.last_used = (uint32_t)cf_get_seconds();
-	}
-	else {
-		sock->idle_check.max_socket_idle = sock->idle_check.last_used = 0;
-	}
+	// Update last used timestamp.
+	sock->last_used = cf_getns();
 
 	// Put into pool.
-	pthread_mutex_lock(&pool_lock->lock);
-	bool status = as_conn_pool_put(&pool_lock->pool, sock);
-	pthread_mutex_unlock(&pool_lock->lock);
-
-	if (! status) {
-		as_socket_close(sock);
-		pthread_mutex_lock(&pool_lock->lock);
-		as_conn_pool_dec(&pool_lock->pool);
-		pthread_mutex_unlock(&pool_lock->lock);
+	if (! as_conn_pool_push_head(pool, sock)) {
+		as_node_close_connection(sock);
 	}
 }
+
+/**
+ * @private
+ * Close idle sync connections.
+ */
+void
+as_node_close_idle_connections(as_node* node);
 
 /**
  * @private

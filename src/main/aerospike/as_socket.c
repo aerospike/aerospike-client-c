@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -159,7 +159,7 @@ as_socket_wrap(as_socket* sock, int family, as_socket_fd fd, as_tls_context* ctx
 #if !defined(_MSC_VER)
 	sock->family = family;
 #endif
-	sock->idle_check.max_socket_idle = sock->idle_check.last_used = 0;
+	sock->last_used = 0;
 
 	if (ctx) {
 		if (as_tls_wrap(ctx, sock, tls_name) < 0) {
@@ -291,20 +291,6 @@ as_socket_validate_fd(as_socket_fd fd)
 	int rv = ioctlsocket(fd, FIONREAD, &bytes);
 	return (rv == 0) ? bytes : -1;
 #endif
-}
-
-int
-as_socket_validate(as_socket* sock)
-{
-	if (sock->idle_check.max_socket_idle > 0) {
-		uint32_t idle = (uint32_t)cf_get_seconds() - sock->idle_check.last_used;
-
-		if (idle > sock->idle_check.max_socket_idle) {
-			return -1;
-		}
-	}
-
-	return as_socket_validate_fd(sock->fd);
 }
 
 as_status

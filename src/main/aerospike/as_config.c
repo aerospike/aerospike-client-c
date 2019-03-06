@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -43,7 +43,7 @@ as_config_init(as_config* c)
 	c->conn_pools_per_node = 1;
 	c->conn_timeout_ms = 1000;
 	c->login_timeout_ms = 5000;
-	c->max_socket_idle = 0;
+	c->max_socket_idle = 55;
 	c->tender_interval = 1000;
 	c->thread_pool_size = 16;
 	c->tend_thread_cpu = -1;

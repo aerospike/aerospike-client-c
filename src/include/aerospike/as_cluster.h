@@ -204,9 +204,21 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Maximum socket idle in nanoseconds.
+	 */
+	uint64_t max_socket_idle_ns;
+
+	/**
+	 * @private
 	 * Milliseconds between cluster tends.
 	 */
 	uint32_t tend_interval;
+
+	/**
+	 * @private
+	 * Cluster tend counter.
+	 */
+	uint32_t tend_count;
 
 	/**
 	 * @private
@@ -248,12 +260,6 @@ typedef struct as_cluster_s {
 	 */
 	uint32_t login_timeout_ms;
 
-	/**
-	 * @private
-	 * Maximum socket idle in seconds.
-	 */
-	uint32_t max_socket_idle;
-	
 	/**
 	 * @private
 	 * Random node index.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -520,7 +520,11 @@ typedef struct as_config_s {
 	 * (default 60000 milliseconds or 1 minute), so the client does not attempt to use a socket
 	 * that has already been reaped by the server.
 	 *
-	 * Default: 0 seconds (disabled) for non-TLS connections, 55 seconds for TLS connections.
+	 * Connection pools are now implemented by a LIFO stack.  Connections at the tail of the
+	 * stack will always be the least used.  These connections are checked for maxSocketIdle
+	 * once every 30 tend iterations (usually 30 seconds).
+	 *
+	 * Default: 55 seconds
 	 */
 	uint32_t max_socket_idle;
 

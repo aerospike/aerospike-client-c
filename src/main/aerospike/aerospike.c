@@ -189,7 +189,12 @@ aerospike_connect(aerospike* as, as_error* err)
 	if (hosts == NULL || hosts->size == 0) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No hosts provided");
 	}
-	
+
+	// Verify max_socket_idle.
+	if (config->max_socket_idle <= 0 || config->max_socket_idle > 86400) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "max_socket_idle must be > 0 and <= 86400");
+	}
+
 	// Set TLS names to default when enabled.
 	if (config->tls.enable) {
 		for (uint32_t i = 0; i < hosts->size; i++) {

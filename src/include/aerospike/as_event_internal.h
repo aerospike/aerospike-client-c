@@ -85,6 +85,7 @@ typedef struct {
 		uv_connect_t connect;
 		uv_write_t write;
 	} req;
+	uint64_t last_used;
 #elif defined(AS_USE_LIBEVENT)
 	struct event watcher;
 	as_socket socket;
@@ -104,7 +105,7 @@ typedef struct {
 	void* udata;
 } as_queued_pipe_cb;
 
-typedef void (*as_event_executable) (void* udata);
+typedef void (*as_event_executable) (as_event_loop* event_loop, void* udata);
 typedef bool (*as_event_parse_results_fn) (struct as_event_command* cmd);
 typedef void (*as_event_executor_complete_fn) (struct as_event_executor* executor);
 typedef void (*as_event_executor_destroy_fn) (struct as_event_executor* executor);
@@ -255,9 +256,6 @@ void
 as_event_connect(as_event_command* cmd);
 
 void
-as_event_close_connection(as_event_connection* conn);
-
-void
 as_event_node_destroy(as_node* node);
 
 /******************************************************************************
@@ -269,27 +267,29 @@ as_event_node_destroy(as_node* node);
 void as_ev_socket_timeout(struct ev_loop* loop, ev_timer* timer, int revents);
 void as_ev_total_timeout(struct ev_loop* loop, ev_timer* timer, int revents);
 
-static inline int
-as_event_validate_connection(as_event_connection* conn)
+static inline bool
+as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
-	return as_socket_validate(&conn->socket);
+	return as_socket_current(&conn->socket, max_socket_idle_ns);
+}
+
+static inline int
+as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle_ns)
+{
+	return as_socket_validate(&conn->socket, max_socket_idle_ns);
 }
 
 static inline void
-as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
+as_event_close_connection(as_event_connection* conn)
 {
-	// TLS connections default to 55 seconds.
-	if (max_socket_idle == 0 && conn->socket.ctx) {
-		max_socket_idle = 55;
-	}
+	as_socket_close(&conn->socket);
+	cf_free(conn);
+}
 
-	if (max_socket_idle > 0) {
-		conn->socket.idle_check.max_socket_idle = max_socket_idle;
-		conn->socket.idle_check.last_used = (uint32_t)cf_get_seconds();
-	}
-	else {
-		conn->socket.idle_check.max_socket_idle = conn->socket.idle_check.last_used = 0;
-	}
+static inline void
+as_event_set_conn_last_used(as_event_connection* conn)
+{
+	conn->socket.last_used = cf_getns();
 }
 
 static inline void
@@ -352,12 +352,23 @@ as_event_command_release(as_event_command* cmd)
 
 #elif defined(AS_USE_LIBUV)
 
+void as_uv_connection_closed(uv_handle_t* socket);
 void as_uv_total_timeout(uv_timer_t* timer);
 void as_uv_socket_timeout(uv_timer_t* timer);
 
-static inline int
-as_event_validate_connection(as_event_connection* conn)
+static inline bool
+as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
+	return (cf_getns() - conn->last_used) <= max_socket_idle_ns;
+}
+
+static inline int
+as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle_ns)
+{
+	if (! as_event_connection_current(conn, max_socket_idle_ns)) {
+		return -1;
+	}
+
 	// Libuv does not have a peek function, so use fd directly.
 	uv_os_fd_t fd;
 	
@@ -368,8 +379,15 @@ as_event_validate_connection(as_event_connection* conn)
 }
 	
 static inline void
-as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
+as_event_close_connection(as_event_connection* conn)
 {
+	uv_close((uv_handle_t*)&conn->socket, as_uv_connection_closed);
+}
+	
+static inline void
+as_event_set_conn_last_used(as_event_connection* conn)
+{
+	conn->last_used = cf_getns();
 }
 
 static inline void
@@ -442,27 +460,29 @@ as_event_command_release(as_event_command* cmd)
 void as_libevent_socket_timeout(evutil_socket_t sock, short events, void* udata);
 void as_libevent_total_timeout(evutil_socket_t sock, short events, void* udata);
 
-static inline int
-as_event_validate_connection(as_event_connection* conn)
+static inline bool
+as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
-	return as_socket_validate(&conn->socket);
+	return as_socket_current(&conn->socket, max_socket_idle_ns);
+}
+
+static inline int
+as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle_ns)
+{
+	return as_socket_validate(&conn->socket, max_socket_idle_ns);
 }
 
 static inline void
-as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
+as_event_close_connection(as_event_connection* conn)
 {
-	// TLS connections default to 55 seconds.
-	if (max_socket_idle == 0 && conn->socket.ctx) {
-		max_socket_idle = 55;
-	}
+	as_socket_close(&conn->socket);
+	cf_free(conn);
+}
 
-	if (max_socket_idle > 0) {
-		conn->socket.idle_check.max_socket_idle = max_socket_idle;
-		conn->socket.idle_check.last_used = (uint32_t)cf_get_seconds();
-	}
-	else {
-		conn->socket.idle_check.max_socket_idle = conn->socket.idle_check.last_used = 0;
-	}
+static inline void
+as_event_set_conn_last_used(as_event_connection* conn)
+{
+	conn->socket.last_used = cf_getns();
 }
 
 static inline void
@@ -531,14 +551,25 @@ as_event_command_release(as_event_command* cmd)
 
 #else
 
+static inline bool
+as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
+{
+	return false;
+}
+
 static inline int
-as_event_validate_connection(as_event_connection* conn)
+as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
 	return -1;
 }
 
 static inline void
-as_event_set_conn_last_used(as_event_connection* conn, uint32_t max_socket_idle)
+as_event_close_connection(as_event_connection* conn)
+{
+}
+
+static inline void
+as_event_set_conn_last_used(as_event_connection* conn)
 {
 }
 
@@ -633,31 +664,31 @@ as_event_set_write(as_event_command* cmd)
 }
 
 static inline void
-as_event_release_connection(as_event_connection* conn, as_conn_pool* pool)
+as_event_release_connection(as_event_connection* conn, as_queue* pool)
 {
 	as_event_close_connection(conn);
-	as_conn_pool_dec(pool);
+	as_queue_decr_total(pool);
 }
 
 static inline void
 as_event_release_async_connection(as_event_command* cmd)
 {
-	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_queue* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	as_event_release_connection(cmd->conn, pool);
 }
 
 static inline void
 as_event_decr_conn(as_event_command* cmd)
 {
-	as_conn_pool* pool = cmd->pipe_listener != NULL ?
+	as_queue* pool = cmd->pipe_listener != NULL ?
 		&cmd->node->pipe_conn_pools[cmd->event_loop->index] :
 		&cmd->node->async_conn_pools[cmd->event_loop->index];
-	
-	as_conn_pool_dec(pool);
+
+	as_queue_decr_total(pool);
 }
 
 static inline void
-as_event_connection_timeout(as_event_command* cmd, as_conn_pool* pool)
+as_event_connection_timeout(as_event_command* cmd, as_queue* pool)
 {
 	as_event_connection* conn = cmd->conn;
 
@@ -668,7 +699,7 @@ as_event_connection_timeout(as_event_command* cmd, as_conn_pool* pool)
 		}
 		else {
 			cf_free(conn);
-			as_conn_pool_dec(pool);
+			as_queue_decr_total(pool);
 		}
 	}
 }

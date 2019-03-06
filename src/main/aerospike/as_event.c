@@ -343,8 +343,8 @@ as_event_destroy_loops()
  * PRIVATE FUNCTIONS
  *****************************************************************************/
 
-static void as_event_command_execute_in_loop(as_event_command* cmd);
-static void as_event_command_begin(as_event_command* cmd);
+static void as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd);
+static void as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd);
 
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
@@ -361,7 +361,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 	// event loop when consecutive recursive errors reaches an approximate limit.
 	if (as_in_event_loop(event_loop->thread) && event_loop->errors < 5) {
 		// We are already in event loop thread, so start processing.
-		as_event_command_execute_in_loop(cmd);
+		as_event_command_execute_in_loop(event_loop, cmd);
 	}
 	else {
 		// Send command through queue so it can be executed in event loop thread.
@@ -371,7 +371,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 		}
 		cmd->state = AS_ASYNC_STATE_REGISTERED;
 
-		if (! as_event_execute(cmd->event_loop, (as_event_executable)as_event_command_execute_in_loop, cmd)) {
+		if (! as_event_execute(event_loop, (as_event_executable)as_event_command_execute_in_loop, cmd)) {
 			event_loop->errors++;  // Not in event loop thread, so not exactly accurate.
 			if (cmd->node) {
 				as_node_release(cmd->node);
@@ -416,7 +416,7 @@ as_event_execute_from_delay_queue(as_event_loop* event_loop)
 		}
 
 		event_loop->pending++;
-		as_event_command_begin(cmd);
+		as_event_command_begin(event_loop, cmd);
 	}
 	event_loop->using_delay_queue = false;
 }
@@ -430,10 +430,8 @@ as_event_prequeue_error(as_event_loop* event_loop, as_event_command* cmd, as_err
 }
 
 static void
-as_event_command_execute_in_loop(as_event_command* cmd)
+as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd)
 {
-	as_event_loop* event_loop = cmd->event_loop;
-
 	if (cmd->cluster->pending[event_loop->index]++ == -1) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster has been closed");
@@ -525,11 +523,11 @@ as_event_command_execute_in_loop(as_event_command* cmd)
 	
 	// Start processing.
 	event_loop->pending++;
-	as_event_command_begin(cmd);
+	as_event_command_begin(event_loop, cmd);
 }
 
 static void
-as_event_command_begin(as_event_command* cmd)
+as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_CONNECT;
 
@@ -566,18 +564,18 @@ as_event_command_begin(as_event_command* cmd)
 		return;
 	}
 
-	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_queue* pool = &cmd->node->async_conn_pools[event_loop->index];
 	as_async_connection* conn;
 
 	// Find connection.
-	while (as_conn_pool_get(pool, &conn)) {
+	while (as_queue_pop(pool, &conn)) {
 		// Verify that socket is active and receive buffer is empty.
-		int len = as_event_validate_connection(&conn->base);
+		int len = as_event_validate_connection(&conn->base, cmd->cluster->max_socket_idle_ns);
 
 		if (len == 0) {
 			conn->cmd = cmd;
 			cmd->conn = (as_event_connection*)conn;
-			cmd->event_loop->errors = 0;  // Reset errors on valid connection.
+			event_loop->errors = 0;  // Reset errors on valid connection.
 			as_event_command_write_start(cmd);
 			return;
 		}
@@ -587,7 +585,7 @@ as_event_command_begin(as_event_command* cmd)
 	}
 
 	// Create connection structure only when node connection count within queue limit.
-	if (as_conn_pool_inc(pool)) {
+	if (as_queue_incr_total(pool)) {
 		conn = cf_malloc(sizeof(as_async_connection));
 		conn->base.pipeline = false;
 		conn->base.watching = 0;
@@ -597,13 +595,13 @@ as_event_command_begin(as_event_command* cmd)
 		return;
 	}
 
-	cmd->event_loop->errors++;
+	event_loop->errors++;
 
 	if (! as_event_command_retry(cmd, true)) {
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
 						"Max node/event loop %s async connections would be exceeded: %u",
-						cmd->node->name, pool->limit);
+						cmd->node->name, pool->capacity);
 
 		if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
 			as_event_stop_timer(cmd);
@@ -759,11 +757,11 @@ as_event_command_retry(as_event_command* cmd, bool alternate)
 }
 
 static inline void
-as_event_put_connection(as_event_command* cmd, as_conn_pool* pool)
+as_event_put_connection(as_event_command* cmd, as_queue* pool)
 {
-	as_event_set_conn_last_used(cmd->conn, cmd->cluster->max_socket_idle);
+	as_event_set_conn_last_used(cmd->conn);
 
-	if (! as_conn_pool_put(pool, &cmd->conn)) {
+	if (! as_queue_push_head_limit(pool, &cmd->conn)) {
 		as_event_release_connection(cmd->conn, pool);
 	}
 }
@@ -781,7 +779,7 @@ as_event_response_complete(as_event_command* cmd)
 	}
 	as_event_stop_watcher(cmd, cmd->conn);
 
-	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_queue* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	as_event_put_connection(cmd, pool);
 }
 
@@ -1009,7 +1007,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	}
 	as_event_stop_watcher(cmd, cmd->conn);
 	
-	as_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_queue* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 
 	// Close socket on errors that can leave unread data in socket.
 	switch (err->code) {
@@ -1193,36 +1191,117 @@ as_event_command_free(as_event_command* cmd)
 }
 
 /******************************************************************************
+ * CONNECTION CLOSE FUNCTIONS
+ *****************************************************************************/
+
+typedef struct {
+	as_cluster* cluster;
+	uint32_t event_loop_count;
+} as_event_close_conn_state;
+
+static void
+as_event_close_idle_connections_complete(as_event_close_conn_state* state)
+{
+	if (as_aaf_uint32(&state->event_loop_count, -1) == 0) {
+		cf_free(state);
+	}
+}
+
+static void
+as_event_close_idle_connections_pool(as_queue* pool, uint64_t max_socket_idle_ns)
+{
+	as_event_connection* conn;
+
+	while (as_queue_pop_tail(pool, &conn)) {
+		if (as_event_connection_current(conn, max_socket_idle_ns)) {
+			if (! as_queue_push_limit(pool, &conn)) {
+				as_event_release_connection(conn, pool);
+			}
+			break;
+		}
+		as_event_release_connection(conn, pool);
+	}
+}
+
+static void
+as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_conn_state* state)
+{
+	as_nodes* nodes = as_nodes_reserve(state->cluster);
+
+	// Reserve each node.
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node_reserve(nodes->array[i]);
+	}
+
+	// Close idle connections.
+	uint64_t max_socket_idle_ns = state->cluster->max_socket_idle_ns;
+	int index = event_loop->index;
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+		as_event_close_idle_connections_pool(&node->async_conn_pools[index], max_socket_idle_ns);
+		as_event_close_idle_connections_pool(&node->pipe_conn_pools[index], max_socket_idle_ns);
+	}
+
+	// Release each node.
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node_release(nodes->array[i]);
+	}
+
+	as_nodes_release(nodes);
+	as_event_close_idle_connections_complete(state);
+}
+
+void
+as_event_close_idle_connections(as_cluster* cluster)
+{
+	if (as_event_loop_size == 0) {
+		return;
+	}
+
+	as_event_close_conn_state* state = cf_malloc(sizeof(as_event_close_conn_state));
+	state->cluster = cluster;
+	state->event_loop_count = as_event_loop_size;
+
+	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+		as_event_loop* event_loop = &as_event_loops[i];
+
+		if (! as_event_execute(event_loop, (as_event_executable)as_event_close_idle_connections_cb, state)) {
+			as_log_error("Failed to queue close idle connections command");
+			as_event_close_idle_connections_complete(state);
+		}
+	}
+}
+
+/******************************************************************************
  * CLUSTER CLOSE FUNCTIONS
  *****************************************************************************/
 
 typedef struct {
 	as_monitor* monitor;
 	as_cluster* cluster;
-	as_event_loop* event_loop;
-	uint32_t* event_loop_count;
+	uint32_t event_loop_count;
 } as_event_close_state;
 
 static void
-as_event_close_cluster_event_loop(as_event_close_state* state)
+as_event_close_cluster_event_loop(as_event_loop* event_loop, as_event_close_state* state)
 {
-	state->cluster->pending[state->event_loop->index] = -1;
+	state->cluster->pending[event_loop->index] = -1;
 
-	if (as_aaf_uint32(state->event_loop_count, -1) == 0) {
+	if (as_aaf_uint32(&state->event_loop_count, -1) == 0) {
 		as_cluster_destroy(state->cluster);
-		cf_free(state->event_loop_count);
 
 		if (state->monitor) {
 			as_monitor_notify(state->monitor);
 		}
+		cf_free(state);
 	}
-	cf_free(state);
 }
 
 static void
-as_event_close_cluster_cb(as_event_close_state* state)
+as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state)
 {
-	int pending = state->cluster->pending[state->event_loop->index];
+	int pending = state->cluster->pending[event_loop->index];
 
 	if (pending < 0) {
 		// Cluster's event loop connections are already closed.
@@ -1232,18 +1311,22 @@ as_event_close_cluster_cb(as_event_close_state* state)
 	if (pending > 0) {
 		// Cluster has pending commands.
 		// Check again after all other commands run.
-		if (as_event_execute(state->event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
+		if (as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
 			return;
 		}
 		as_log_error("Failed to queue cluster close command");
 	}
 
-	as_event_close_cluster_event_loop(state);
+	as_event_close_cluster_event_loop(event_loop, state);
 }
 
 void
 as_event_close_cluster(as_cluster* cluster)
 {
+	if (as_event_loop_size == 0) {
+		return;
+	}
+
 	// Determine if current thread is an event loop thread.
 	bool in_event_loop = false;
 
@@ -1263,22 +1346,18 @@ as_event_close_cluster(as_cluster* cluster)
 		as_monitor_init(monitor);
 	}
 
-	uint32_t* event_loop_count = cf_malloc(sizeof(uint32_t));
-	*event_loop_count = as_event_loop_size;
+	as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
+	state->monitor = monitor;
+	state->cluster = cluster;
+	state->event_loop_count = as_event_loop_size;
 
 	// Send cluster close notification to async event loops.
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
 
-		as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
-		state->monitor = monitor;
-		state->cluster = cluster;
-		state->event_loop = event_loop;
-		state->event_loop_count = event_loop_count;
-
 		if (! as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
 			as_log_error("Failed to queue cluster close command");
-			as_event_close_cluster_event_loop(state);
+			as_event_close_cluster_event_loop(event_loop, state);
 		}
 	}
 

@@ -57,6 +57,9 @@ as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 as_status
 as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node);
 
+void
+as_event_close_idle_connections(as_cluster* cluster);
+
 /******************************************************************************
  * Functions
  *****************************************************************************/
@@ -462,6 +465,22 @@ as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 	return status;
 }
 
+void
+as_cluster_close_idle_connections(as_cluster* cluster)
+{
+	// Close idle connections every 30 tend intervals.
+	if (++cluster->tend_count >= 30) {
+		cluster->tend_count = 0;
+
+		as_nodes* nodes = cluster->nodes;
+
+		for (uint32_t i = 0; i < nodes->size; i++) {
+			as_node_close_idle_connections(nodes->array[i]);
+		}
+		as_event_close_idle_connections(cluster);
+	}
+}
+
 /**
  * Release data structures schuleduled for removal in previous cluster tend.
  */
@@ -641,6 +660,9 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 	}
 	as_vector_destroy(hosts);
 	as_vector_destroy(&peers.nodes);
+
+	as_cluster_close_idle_connections(cluster);
+
 	return AEROSPIKE_OK;
 }
 
@@ -1051,7 +1073,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->max_conns_per_node = config->max_conns_per_node;
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
 	cluster->login_timeout_ms = (config->login_timeout_ms == 0) ? 5000 : config->login_timeout_ms;
-	cluster->max_socket_idle = (config->max_socket_idle > 86400) ? 86400 : config->max_socket_idle;
+	cluster->max_socket_idle_ns = config->max_socket_idle * 1000 * 1000 * 1000;
 	cluster->tend_thread_cpu = config->tend_thread_cpu;
 	cluster->async_max_conns_per_node = config->async_max_conns_per_node;
 	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;;

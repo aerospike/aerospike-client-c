@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -38,10 +38,10 @@ as_sum_init(as_conn_stats* stats)
 }
 
 static inline void
-as_sum_no_lock(as_conn_pool* pool, as_conn_stats* stats)
+as_sum_no_lock(as_queue* pool, as_conn_stats* stats)
 {
 	// Warning: cross-thread reference without a lock.
-	int tmp = as_queue_size(&pool->queue);
+	int tmp = as_queue_size(pool);
 
 	// Timing issues may cause values to go negative. Adjust.
 	if (tmp < 0) {
@@ -121,12 +121,12 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 
 	// Sync connection summary.
 	for (uint32_t i = 0; i < max; i++) {
-		as_conn_pool_lock* pool_lock = &node->conn_pool_locks[i];
+		as_conn_pool* pool = &node->sync_conn_pools[i];
 
-		pthread_mutex_lock(&pool_lock->lock);
-		uint32_t in_pool = as_queue_size(&pool_lock->pool.queue);
-		uint32_t total = pool_lock->pool.total;
-		pthread_mutex_unlock(&pool_lock->lock);
+		pthread_mutex_lock(&pool->lock);
+		uint32_t in_pool = as_queue_size(&pool->queue);
+		uint32_t total = pool->queue.total;
+		pthread_mutex_unlock(&pool->lock);
 
 		stats->sync.in_pool += in_pool;
 		stats->sync.in_use += total - in_pool;

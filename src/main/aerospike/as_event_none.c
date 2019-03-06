@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -47,11 +47,6 @@ as_event_command_write_start(as_event_command* cmd)
 
 void
 as_event_connect(as_event_command* cmd)
-{
-}
-
-void
-as_event_close_connection(as_event_connection* conn)
 {
 }
 

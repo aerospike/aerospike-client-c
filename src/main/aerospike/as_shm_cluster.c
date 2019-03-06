@@ -68,6 +68,9 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 void
 as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove);
 
+void
+as_cluster_close_idle_connections(as_cluster* cluster);
+
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
@@ -365,7 +368,7 @@ as_shm_reset_racks_node(as_cluster* cluster, as_error* err, as_node* node)
 		return status;
 	}
 
-	as_node_put_connection(&node->info_socket, cluster->max_socket_idle);
+	as_node_put_connection(&node->info_socket);
 	return status;
 }
 
@@ -931,6 +934,8 @@ as_shm_tender(void* userdata)
 					rebalance_gen = gen;
 				}
 			}
+
+			as_cluster_close_idle_connections(cluster);
 		}
 
 		// Convert tend interval into absolute timeout.

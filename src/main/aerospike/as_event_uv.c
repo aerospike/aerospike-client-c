@@ -57,7 +57,7 @@ as_uv_wakeup_closed(uv_handle_t* handle)
 	cf_free(handle);
 }
 
-static void
+void
 as_uv_connection_closed(uv_handle_t* socket)
 {
 	// socket->data has as_event_command ptr but that may have already been freed,
@@ -101,7 +101,7 @@ as_uv_wakeup(uv_async_t* wakeup)
 			as_uv_close_loop(event_loop);
 			return;
 		}
-		cmd.executable(cmd.udata);
+		cmd.executable(event_loop, cmd.udata);
 
 		if (++i < size) {
 			pthread_mutex_lock(&event_loop->lock);
@@ -688,22 +688,21 @@ as_uv_socket_timeout(uv_timer_t* timer)
 	as_event_socket_timeout(timer->data);
 }
 
-void
-as_event_close_connection(as_event_connection* conn)
-{
-	uv_close((uv_handle_t*)&conn->socket, as_uv_connection_closed);
+static void
+as_event_close_connection_cb(as_event_loop* event_loop, as_event_connection* conn) {
+	as_event_close_connection(conn);
 }
 
 static bool
-as_uv_queue_close_connections(as_node* node, as_conn_pool* pool, as_queue* cmd_queue)
+as_uv_queue_close_connections(as_node* node, as_queue* pool, as_queue* cmd_queue)
 {
 	as_event_commander qcmd;
-	qcmd.executable = (as_event_executable)as_event_close_connection;
+	qcmd.executable = (as_event_executable)as_event_close_connection_cb;
 	
 	as_event_connection* conn;
 	
 	// Queue connection commands to event loops.
-	while (as_conn_pool_get(pool, &conn)) {
+	while (as_queue_pop(pool, &conn)) {
 		qcmd.udata = conn;
 		
 		if (! as_queue_push(cmd_queue, &qcmd)) {
@@ -715,7 +714,7 @@ as_uv_queue_close_connections(as_node* node, as_conn_pool* pool, as_queue* cmd_q
 		// This is done because the node will be invalid when the deferred connection close occurs.
 		// Since node destroy always waits till there are no node references, all transactions that
 		// referenced this node should be completed by the time this code is executed.
-		as_conn_pool_dec(pool);
+		as_queue_decr_total(pool);
 	}
 	return true;
 }
@@ -737,8 +736,8 @@ as_event_node_destroy(as_node* node)
 		
 	// Destroy all queues.
 	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
-		as_conn_pool_destroy(&node->async_conn_pools[i]);
-		as_conn_pool_destroy(&node->pipe_conn_pools[i]);
+		as_queue_destroy(&node->async_conn_pools[i]);
+		as_queue_destroy(&node->pipe_conn_pools[i]);
 	}
 	cf_free(node->async_conn_pools);
 	cf_free(node->pipe_conn_pools);

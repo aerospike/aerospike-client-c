@@ -117,7 +117,7 @@ as_info_command_node(
 		}
 	}
 
-	as_node_put_connection(&socket, node->cluster->max_socket_idle);
+	as_node_put_connection(&socket);
 	return status;
 }
 

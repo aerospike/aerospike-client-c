@@ -112,7 +112,7 @@ as_info_command_node(
 			char str[512];
 			snprintf(str, sizeof(str), " from %s", as_node_get_address_string(node));
 			as_error_append(err, str);
-			as_node_close_connection(&socket);
+			as_node_close_connection(&socket, socket.pool);
 			return status;
 		}
 	}

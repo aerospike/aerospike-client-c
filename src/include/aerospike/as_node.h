@@ -497,9 +497,9 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
  * Close a node's connection and do not put back into pool.
  */
 static inline void
-as_node_close_connection(as_socket* sock) {
+as_node_close_connection(as_socket* sock, as_conn_pool* pool) {
 	as_socket_close(sock);
-	as_conn_pool_decr(sock->pool);
+	as_conn_pool_decr(pool);
 }
 
 /**
@@ -517,7 +517,7 @@ as_node_put_connection(as_socket* sock)
 
 	// Put into pool.
 	if (! as_conn_pool_push_head(pool, sock)) {
-		as_node_close_connection(sock);
+		as_node_close_connection(sock, pool);
 	}
 }
 

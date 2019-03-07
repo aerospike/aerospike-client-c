@@ -465,7 +465,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		if (status) {
 			// Socket errors are considered temporary anomalies.  Retry.
 			// Close socket to flush out possible garbage.	Do not put back in pool.
-			as_node_close_connection(&socket);
+			as_node_close_connection(&socket, socket.pool);
 
 			// Alternate between master and prole on socket errors or database reads.
 			// Timeouts are not a good indicator of impending data migration.
@@ -492,12 +492,12 @@ as_command_execute(as_command* cmd, as_error* err)
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
 				case AEROSPIKE_ERR_CONNECTION:
-					as_node_close_connection(&socket);
+					as_node_close_connection(&socket, socket.pool);
 					cmd->master = !cmd->master;  // Alternate between master and prole.
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
-					as_node_close_connection(&socket);
+					as_node_close_connection(&socket, socket.pool);
 
 					// Alternate between master and prole on database reads.
 					// Timeouts are not a good indicator of impending data migration.
@@ -512,7 +512,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
-					as_node_close_connection(&socket);
+					as_node_close_connection(&socket, socket.pool);
 					if (release_node) {
 						as_node_release(node);
 					}

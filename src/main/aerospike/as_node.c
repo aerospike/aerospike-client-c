@@ -445,7 +445,7 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 			}
 
 			as_log_debug("Invalid socket %d from pool: %d", s.fd, len);
-			as_node_close_connection(&s);
+			as_node_close_connection(&s, pool);
 		}
 		else if (as_conn_pool_incr(pool)) {
 			// Socket not found and queue has available slot.
@@ -494,13 +494,11 @@ as_node_close_idle_connections(as_node* node)
 		while (as_conn_pool_pop_tail(pool, &s)) {
 			if (as_socket_current(&s, node->cluster->max_socket_idle_ns)) {
 				if (! as_conn_pool_push_tail(pool, &s)) {
-					as_socket_close(&s);
-					as_conn_pool_decr(pool);
+					as_node_close_connection(&s, pool);
 				}
 				break;
 			}
-			as_socket_close(&s);
-			as_conn_pool_decr(pool);
+			as_node_close_connection(&s, pool);
 		}
 	}
 }

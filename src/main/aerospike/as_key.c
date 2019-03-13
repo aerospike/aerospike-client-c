@@ -141,7 +141,7 @@ as_key_new_int64(const as_namespace ns, const as_set set, int64_t value)
 }
 
 as_key*
-as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool free)
+as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool do_free)
 {
 	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 
@@ -149,7 +149,7 @@ as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool
 		return key;
 	}
 
-	as_string_init((as_string*)&key->value, (char*) value, free);
+	as_string_init((as_string*)&key->value, (char*) value, do_free);
 
 	if (! as_key_cons(key, true, ns, set, &key->value, NULL)) {
 		cf_free(key);
@@ -159,7 +159,7 @@ as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool
 }
 
 as_key*
-as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool free)
+as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool do_free)
 {
 	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 
@@ -167,7 +167,7 @@ as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t* value, u
 		return key;
 	}
 
-	as_bytes_init_wrap((as_bytes*)&key->value, (uint8_t*) value, size, free);
+	as_bytes_init_wrap((as_bytes*)&key->value, (uint8_t*) value, size, do_free);
 
 	if (! as_key_cons(key, true, ns, set, &key->value, NULL)) {
 		cf_free(key);

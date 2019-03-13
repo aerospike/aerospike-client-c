@@ -207,7 +207,7 @@ aerospike_key_get_async(
 		policy = &as->config.policies.read;
 	}
 
-	as_partition_info pi;
+	as_partition_info pi = { 0 };
 	as_status status = as_event_command_init(as->cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
@@ -406,7 +406,7 @@ aerospike_key_exists_async(
 		policy = &as->config.policies.read;
 	}
 	
-	as_partition_info pi;
+	as_partition_info pi = { 0 };
 	as_status status = as_event_command_init(as->cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
@@ -665,7 +665,7 @@ aerospike_key_remove_async_ex(
 		policy = &as->config.policies.remove;
 	}
 
-	as_partition_info pi;
+	as_partition_info pi = { 0 };
 	as_status status = as_event_command_init(as->cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {

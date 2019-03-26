@@ -50,7 +50,7 @@ bool as_event_threads_created = false;
 bool as_event_single_thread = false;
 
 as_status aerospike_library_init(as_error* err);
-int as_batch_retry_async(as_event_command* cmd);
+int as_batch_retry_async(as_event_command* cmd, bool timeout);
 
 /******************************************************************************
  * PUBLIC FUNCTIONS
@@ -373,8 +373,13 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 
 		if (! as_event_execute(event_loop, (as_event_executable)as_event_command_execute_in_loop, cmd)) {
 			event_loop->errors++;  // Not in event loop thread, so not exactly accurate.
+
 			if (cmd->node) {
 				as_node_release(cmd->node);
+			}
+
+			if (cmd->flags2 & AS_ASYNC_FLAGS2_RELEASE_PARTITIONS) {
+				as_partition_tables_release(cmd->cluster->partition_tables);
 			}
 			cf_free(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
@@ -537,18 +542,13 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 			as_node_release(cmd->node);
 		}
 
-		if (cmd->cluster->shm_info) {
-			cmd->node = as_partition_shm_get_node(cmd->cluster, cmd->ns, cmd->partition,
-												  cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER);
-		}
-		else {
-			cmd->node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->replica,
-											  cmd->flags & AS_ASYNC_FLAGS_MASTER);
-		}
+		cmd->node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->replica,
+										  cmd->flags & AS_ASYNC_FLAGS_MASTER);
 
 		if (! cmd->node) {
 			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+			as_error_update(&err, AEROSPIKE_ERR_INVALID_NODE, "Node not found for partition %s",
+							cmd->ns);
 
 			if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
 				as_event_stop_timer(cmd);
@@ -595,19 +595,17 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		return;
 	}
 
+	// Do not retry on connection limit error.
 	event_loop->errors++;
+	as_error err;
+	as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
+					"Max node/event loop %s async connections would be exceeded: %u",
+					cmd->node->name, pool->capacity);
 
-	if (! as_event_command_retry(cmd, true)) {
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
-						"Max node/event loop %s async connections would be exceeded: %u",
-						cmd->node->name, pool->capacity);
-
-		if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-			as_event_stop_timer(cmd);
-		}
-		as_event_error_callback(cmd, &err);
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(cmd);
 	}
+	as_event_error_callback(cmd, &err);
 }
 
 void
@@ -653,11 +651,7 @@ as_event_socket_timeout(as_event_command* cmd)
 	// Node should not be null at this point.
 	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
 
-	// Attempt retry.
-	// Read commands shift to prole node on timeout.
-	bool alternate = (cmd->flags & AS_ASYNC_FLAGS_READ) && ! (cmd->flags & AS_ASYNC_FLAGS_LINEARIZE);
-
-	if (! as_event_command_retry(cmd, alternate)) {
+	if (! as_event_command_retry(cmd, true)) {
 		as_event_stop_timer(cmd);
 
 		as_error err;
@@ -697,7 +691,7 @@ as_event_total_timeout(as_event_command* cmd)
 }
 
 bool
-as_event_command_retry(as_event_command* cmd, bool alternate)
+as_event_command_retry(as_event_command* cmd, bool timeout)
 {
 	// Check max retries.
 	if (++(cmd->iteration) > cmd->max_retries) {
@@ -730,8 +724,12 @@ as_event_command_retry(as_event_command* cmd, bool alternate)
 		as_event_repeat_socket_timer(cmd);
 	}
 
-	if (alternate) {
-		cmd->flags ^= AS_ASYNC_FLAGS_MASTER;  // Alternate between master and prole.
+	// Alternate between master and prole on socket errors or database reads.
+	// Timeouts are not a good indicator of impending data migration.
+	if (! timeout || ((cmd->flags & AS_ASYNC_FLAGS_READ) &&
+					  !(cmd->flags & AS_ASYNC_FLAGS_LINEARIZE))) {
+		// Note: SC session read will ignore this setting because it uses master only.
+		cmd->flags ^= AS_ASYNC_FLAGS_MASTER;
 	}
 
 	// Old connection should already be closed or is closing.
@@ -740,7 +738,7 @@ as_event_command_retry(as_event_command* cmd, bool alternate)
 
 	// Batch retries can be split into multiple retries to different nodes.
 	if (cmd->type == AS_ASYNC_TYPE_BATCH) {
-		int rv = as_batch_retry_async(cmd);
+		int rv = as_batch_retry_async(cmd, timeout);
 
 		// 1:  Split retry not attempted.  Go through normal retry.
 		// 0:  Split retry started.
@@ -1071,7 +1069,8 @@ as_event_command_parse_result(as_event_command* cmd)
 			rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 			
 			p = as_command_ignore_fields(p, msg->n_fields);
-			status = as_command_parse_bins(&p, &err, &rec, msg->n_ops, cmd->deserialize);
+			status = as_command_parse_bins(&p, &err, &rec, msg->n_ops,
+										   cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
 
 			if (status == AEROSPIKE_OK) {
 				as_event_response_complete(cmd);
@@ -1179,9 +1178,14 @@ as_event_command_free(as_event_command* cmd)
 		as_node_release(cmd->node);
 	}
 
+	if (cmd->flags2 & AS_ASYNC_FLAGS2_RELEASE_PARTITIONS) {
+		as_partition_tables_release(cmd->cluster->partition_tables);
+	}
+
 	if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
 		cf_free(cmd->buf);
 	}
+
 	cf_free(cmd);
 
 	if (event_loop->max_commands_in_process > 0 && ! event_loop->using_delay_queue) {

@@ -17,6 +17,7 @@
 #include <aerospike/as_partition.h>
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_policy.h>
@@ -73,14 +74,15 @@ set_node(as_node** trg, as_node* src)
 }
 
 static as_partition_table*
-as_partition_table_create(const char* ns, uint32_t capacity, bool cp_mode)
+as_partition_table_create(const char* ns, uint32_t capacity, bool sc_mode)
 {
 	size_t len = sizeof(as_partition_table) + (sizeof(as_partition) * capacity);
 	as_partition_table* table = cf_malloc(len);
 	memset(table, 0, len);
-	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
-	table->cp_mode = cp_mode;
+	table->ref_count = 1;
 	table->size = capacity;
+	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
+	table->sc_mode = sc_mode;
 	return table;
 }
 
@@ -101,6 +103,21 @@ as_partition_table_destroy(as_partition_table* table)
 	cf_free(table);
 }
 
+static inline void
+as_partition_table_reserve(as_partition_table** table)
+{
+	as_partition_table* pt = (as_partition_table*)as_load_ptr(table);
+	as_incr_uint32(&pt->ref_count);
+}
+
+static inline void
+as_partition_table_release(as_partition_table* table)
+{
+	if (as_aaf_uint32(&table->ref_count, -1) == 0) {
+		as_partition_table_destroy(table);
+	}
+}
+
 as_partition_tables*
 as_partition_tables_create(uint32_t capacity)
 {
@@ -109,6 +126,23 @@ as_partition_tables_create(uint32_t capacity)
 	memset(tables, 0, size);
 	tables->ref_count = 1;
 	tables->size = capacity;
+	return tables;
+}
+
+void
+as_partition_tables_destroy(as_partition_tables* tables)
+{
+	for (uint32_t i = 0; i < tables->size; i++) {
+		as_partition_table_release(tables->array[i]);
+	}
+	cf_free(tables);
+}
+
+static inline as_partition_tables*
+as_partition_tables_reserve(as_cluster* cluster)
+{
+	as_partition_tables* tables = (as_partition_tables*)as_load_ptr(&cluster->partition_tables);
+	as_incr_uint32(&tables->ref_count);
 	return tables;
 }
 
@@ -166,7 +200,8 @@ get_sequence_node(as_cluster* cluster, as_partition* p, bool use_master)
 static inline bool
 try_rack_node(as_cluster* cluster, const char* ns, as_node* node)
 {
-	if (node && as_load_uint8(&node->active) && as_node_has_rack(cluster, node, ns, cluster->rack_id)) {
+	if (node && as_load_uint8(&node->active) &&
+		as_node_has_rack(cluster, node, ns, cluster->rack_id)) {
 		return true;
 	}
 	return false;
@@ -223,7 +258,9 @@ prefer_rack_node(as_cluster* cluster, const char* ns, as_partition* p, bool use_
 static uint32_t g_randomizer = 0;
 
 as_node*
-as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master)
+as_partition_reg_get_node(
+	as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master
+	)
 {
 	switch (replica) {
 		case AS_POLICY_REPLICA_MASTER: {
@@ -248,6 +285,57 @@ as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_p
 			return prefer_rack_node(cluster, ns, p, use_master);
 		}
 	}
+}
+
+as_status
+as_partition_info_init(as_partition_info* pi, as_cluster* cluster, as_error* err, const as_key* key)
+{
+	if (cluster->shm_info) {
+		as_cluster_shm* cluster_shm = cluster->shm_info->cluster_shm;
+		as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, key->ns);
+
+		if (! table) {
+			as_nodes* nodes = as_nodes_reserve(cluster);
+			uint32_t n_nodes = nodes->size;
+			as_nodes_release(nodes);
+
+			if (n_nodes == 0) {
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+			}
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
+		}
+		pi->ns = table->ns;
+		pi->partition_id = as_partition_getid(key->digest.value, cluster_shm->n_partitions);
+		pi->partition = &table->partitions[pi->partition_id];
+		pi->sc_mode = table->sc_mode;
+	}
+	else {
+		// Partition tables array size does not currently change after first cluster tend.
+		// Also, there is a one second delayed garbage collection coupled with as_partition_tables_get()
+		// being very fast.  Reference counting the tables array is not currently necessary, but do it
+		// anyway in case the server starts supporting dynamic namespaces.
+		//
+		// Note: as_partition_tables must be released when done with partition.
+		as_partition_tables* tables = as_partition_tables_reserve(cluster);
+		as_partition_table* table = as_partition_tables_get(tables, key->ns);
+
+		if (! table) {
+			as_partition_tables_release(tables);
+			as_nodes* nodes = as_nodes_reserve(cluster);
+			uint32_t n_nodes = nodes->size;
+			as_nodes_release(nodes);
+
+			if (n_nodes == 0) {
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+			}
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
+		}
+		pi->ns = table->ns;
+		pi->partition_id = as_partition_getid(key->digest.value, cluster->n_partitions);
+		pi->partition = &table->partitions[pi->partition_id];
+		pi->sc_mode = table->sc_mode;
+	}
+	return AEROSPIKE_OK;
 }
 
 as_partition_table*
@@ -308,7 +396,10 @@ as_partition_vector_get(as_vector* tables, const char* ns)
 }
 
 static void
-decode_and_update(char* bitmap_b64, uint32_t len, as_partition_table* table, as_node* node, bool master, uint32_t regime, bool* regime_error)
+decode_and_update(
+	char* bitmap_b64, uint32_t len, as_partition_table* table, as_node* node, bool master,
+	uint32_t regime, bool* regime_error
+	)
 {
 	// Size allows for padding - is actual size rounded up to multiple of 3.
 	uint8_t* bitmap = (uint8_t*)alloca(cf_b64_decoded_buf_size(len));
@@ -320,10 +411,11 @@ decode_and_update(char* bitmap_b64, uint32_t len, as_partition_table* table, as_
 	for (uint32_t i = 0; i < table->size; i++) {
 		if ((bitmap[i >> 3] & (0x80 >> (i & 7))) != 0) {
 			// This node claims ownership of partition.
-			// as_log_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i, node->name);
+			// as_log_debug("Set partition %s:%s:%u:%s", master? "master" : "prole", table->ns, i,
+			//				node->name);
 
-			// Volatile reads are not necessary because the tend thread exclusively modifies partition.
-			// Volatile writes are used so other threads can view change.
+			// Volatile reads are not necessary because the tend thread exclusively modifies
+			// partition.  Volatile writes are used so other threads can view change.
 			as_partition* p = &table->partitions[i];
 
 			if (regime >= p->regime) {
@@ -374,17 +466,27 @@ release_partition_tables(as_partition_tables* tables)
 }
 
 static void
-as_partition_tables_copy_add(as_cluster* cluster, as_partition_tables* tables_old, as_vector* /* <as_partition_table*> */ tables_to_add)
+as_partition_tables_copy_add(
+	as_cluster* cluster, as_partition_tables* tables_old,
+	as_vector* /* <as_partition_table*> */ tables_to_add)
 {
+	// Increment reference count on old partition tables.
+	for (uint32_t i = 0; i < tables_old->size; i++) {
+		as_partition_table_reserve(&tables_old->array[i]);
+	}
+
 	// Create new tables array.
-	as_partition_tables* tables_new = as_partition_tables_create(tables_old->size + tables_to_add->size);
+	as_partition_tables* tables_new =
+		as_partition_tables_create(tables_old->size + tables_to_add->size);
 	
 	// Add existing tables.
 	memcpy(tables_new->array, tables_old->array, sizeof(as_partition_table*) * tables_old->size);
 	
 	// Add new tables.
-	memcpy(&tables_new->array[tables_old->size], tables_to_add->list, sizeof(as_partition_table*) * tables_to_add->size);
-	
+	memcpy(&tables_new->array[tables_old->size], tables_to_add->list,
+		   sizeof(as_partition_table*) * tables_to_add->size);
+
+
 	// Replace tables with copy.
 	set_partition_tables(cluster, tables_new);
 	
@@ -400,8 +502,8 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 {
 	// Use destructive parsing (ie modifying input buffer with null termination) for performance.
 	// Receive format: replicas-all\t or replicas\t
-	//                 <ns1>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;
-	//                 <ns2>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;\n
+	//              <ns1>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;
+	//              <ns2>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;\n
 	as_partition_tables* tables = cluster->partition_tables;
 	uint32_t bitmap_size = (cluster->n_partitions + 7) / 8;
 	long expected_len = (long)cf_b64_encoded_len(bitmap_size);
@@ -468,7 +570,9 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 				int64_t len = p - begin;
 				
 				if (expected_len != len) {
-					as_log_error("Partition update. unexpected partition map encoded length %" PRId64 " for namespace %s", len, ns);
+					as_log_error(
+						"Partition update. unexpected partition map encoded length %" PRId64 " for namespace %s",
+						len, ns);
 					as_vector_destroy(&tables_to_add);
 					return false;
 				}
@@ -480,7 +584,8 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 					bool master = (i == 0);
 					
 					if (cluster->shm_info) {
-						as_shm_update_partitions(cluster->shm_info, ns, begin, len, node, master, regime);
+						as_shm_update_partitions(cluster->shm_info, ns, begin, len, node, master,
+												 regime);
 					}
 					else {
 						as_partition_table* table = as_partition_tables_get(tables, ns);
@@ -489,13 +594,15 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 							table = as_partition_vector_get(&tables_to_add, ns);
 							
 							if (! table) {
-								table = as_partition_table_create(ns, cluster->n_partitions, regime != 0);
+								table = as_partition_table_create(ns, cluster->n_partitions,
+																  regime != 0);
 								as_vector_append(&tables_to_add, &table);
 							}
 						}
 						
 						// Decode partition bitmap and update client's view.
-						decode_and_update(begin, (uint32_t)len, table, node, master, regime, &regime_error);
+						decode_and_update(begin, (uint32_t)len, table, node, master, regime,
+										  &regime_error);
 					}
 				}
 			}

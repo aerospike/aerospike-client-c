@@ -33,11 +33,10 @@ extern "C" {
  * MACROS
  *****************************************************************************/
 
-// Command Types
-#define AS_COMMAND_TYPE_READ 1
-#define AS_COMMAND_TYPE_WRITE 2
-#define AS_COMMAND_TYPE_BATCH 4
-#define AS_COMMAND_TYPE_LINEARIZE 8
+// Command Flags
+#define AS_COMMAND_FLAGS_READ 1
+#define AS_COMMAND_FLAGS_BATCH 2
+#define AS_COMMAND_FLAGS_LINEARIZE 4
 
 // Field IDs
 #define AS_FIELD_NAMESPACE 0
@@ -88,8 +87,20 @@ extern "C" {
 #define AS_MSG_INFO3_UPDATE_ONLY		(1 << 3) // update existing record only, do not create new record
 #define AS_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4) // completely replace existing record, or create new record
 #define AS_MSG_INFO3_REPLACE_ONLY		(1 << 5) // completely replace existing record, do not create new record
-#define AS_MSG_INFO3_LINEARIZE_READ		(1 << 6) // linearize read when in strong consistency mode.
-// (Note:  Bit 7 is unused.)
+#define AS_MSG_INFO3_SC_READ_TYPE		(1 << 6) // see below
+#define AS_MSG_INFO3_SC_READ_RELAX		(1 << 7) // see below
+// Interpret SC_READ bits in info3.
+//
+// RELAX   TYPE
+//                strict
+//                ------
+//   0      0     sequential (default)
+//   0      1     linearize
+//
+//                relaxed
+//                -------
+//   1      0     allow prole
+//   1      1     allow unavailable
 
 // Transaction message
 #define AS_MESSAGE_VERSION 2
@@ -158,18 +169,20 @@ typedef struct as_command_s {
 	const as_policy_base* policy;
 	as_node* node;
 	const char* ns;
-	const uint8_t* digest;
+	void* partition;
 	as_parse_results_fn parse_results_fn;
 	void* udata;
 	uint8_t* buf;
 	size_t buf_size;
+	uint32_t partition_id;
+	as_policy_replica replica;
 	uint64_t deadline_ms;
 	uint32_t socket_timeout;
 	uint32_t total_timeout;
 	uint32_t iteration;
-	as_policy_replica replica;
-	uint8_t type;
+	uint8_t flags;
 	bool master;
+	bool master_sc; // Used in batch only.
 } as_command;
 
 /**
@@ -260,29 +273,59 @@ as_command_string_operation_size(const char* value)
  * Write command header for all commands.
  */
 uint8_t*
-as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
-	as_policy_commit_level commit_level, as_policy_consistency_level consistency,
-	bool linearize_read, as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen,
-	uint32_t ttl, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins, bool durable_delete);
+as_command_write_header(
+	uint8_t* cmd, uint8_t read_attr, uint8_t write_attr, uint8_t info_attr,
+	as_policy_commit_level commit_level, as_policy_exists exists, as_policy_gen gen_policy,
+	uint32_t gen, uint32_t ttl, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins,
+	bool durable_delete
+	);
 
+/**
+ * @private
+ * Set read attributes.
+ */
+static inline void
+as_command_set_attr_read(
+	as_policy_read_mode_ap read_mode_ap, as_policy_read_mode_sc read_mode_sc, uint8_t* read_attr,
+	uint8_t* info_attr
+	)
+{
+	switch (read_mode_sc) {
+		default:
+		case AS_POLICY_READ_MODE_SC_SESSION:
+			break;
+
+		case AS_POLICY_READ_MODE_SC_LINEARIZE:
+			*info_attr |= AS_MSG_INFO3_SC_READ_TYPE;
+			break;
+
+		case AS_POLICY_READ_MODE_SC_ALLOW_REPLICA:
+			*info_attr |= AS_MSG_INFO3_SC_READ_RELAX;
+			break;
+
+		case AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE:
+			*info_attr |= AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
+			break;
+	}
+
+	if (read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
+		*read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
+	}
+}
+	
 /**
  * @private
  * Write command header for read commands only.
  */
 static inline uint8_t*
-as_command_write_header_read(uint8_t* cmd, uint8_t read_attr, as_policy_consistency_level consistency,
-	bool linearize_read, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins)
+as_command_write_header_read(
+	uint8_t* cmd, uint8_t read_attr, as_policy_read_mode_ap read_mode_ap,
+	as_policy_read_mode_sc read_mode_sc, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins
+	)
 {
 	uint8_t info_attr = 0;
+	as_command_set_attr_read(read_mode_ap, read_mode_sc, &read_attr, &info_attr);
 
-	if (linearize_read) {
-		info_attr |= AS_MSG_INFO3_LINEARIZE_READ;
-	}
-
-	if (consistency == AS_POLICY_CONSISTENCY_LEVEL_ALL) {
-		read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
-	}
-	
 	cmd[8] = 22;
 	cmd[9] = read_attr;
 	cmd[10] = 0;
@@ -447,10 +490,12 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
  * Start command timer.
  */
 static inline void
-as_command_start_timer(as_command* cmd, const as_policy_base* policy)
+as_command_start_timer(as_command* cmd)
 {
 	cmd->iteration = 0;
 	cmd->master = true;
+
+	const as_policy_base* policy = cmd->policy;
 
 	if (policy->total_timeout > 0) {
 		cmd->socket_timeout = (policy->socket_timeout == 0 ||

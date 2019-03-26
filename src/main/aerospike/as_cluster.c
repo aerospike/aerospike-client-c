@@ -916,54 +916,6 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names)
 	as_nodes_release(nodes);
 }
 
-as_status
-as_cluster_get_node(
-	as_cluster* cluster, as_error* err, const char* ns, const uint8_t* digest,
-	as_policy_replica replica, uint8_t type, bool master, as_node** node_pp
-	)
-{
-#ifdef AS_TEST_PROXY
-	as_node* node = as_node_get_random(cluster);
-#else
-	if (cluster->shm_info) {
-		return as_shm_cluster_get_node(cluster, err, ns, digest, replica, type, master, node_pp);
-	}
-
-	as_partition_table* table = as_cluster_get_partition_table(cluster, ns);
-
-	if (! table) {
-		*node_pp = NULL;
-
-		as_nodes* nodes = as_nodes_reserve(cluster);
-		uint32_t n_nodes = nodes->size;
-		as_nodes_release(nodes);
-
-		if (n_nodes == 0) {
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
-		}
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
-	}
-
-	if (table->cp_mode && (type & AS_COMMAND_TYPE_READ) && !(type & AS_COMMAND_TYPE_LINEARIZE)) {
-		// Strong consistency namespaces always use master node when read policy is sequential.
-		replica = AS_POLICY_REPLICA_MASTER;
-	}
-
-	uint32_t partition_id = as_partition_getid(digest, cluster->n_partitions);
-	as_partition* p = &table->partitions[partition_id];
-	as_node* node = as_partition_get_node(cluster, table->ns, p, replica, master);
-#endif
-
-	if (! node) {
-		*node_pp = NULL;
-		return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE, "Node not found for partition %s:%u",
-							   ns, partition_id);
-	}
-
-	*node_pp = node;
-	return AEROSPIKE_OK;
-}
-
 bool
 as_cluster_is_connected(as_cluster* cluster)
 {
@@ -1231,12 +1183,8 @@ as_cluster_destroy(as_cluster* cluster)
 	as_vector_destroy(cluster->gc);
 		
 	// Release partition tables.
-	as_partition_tables* tables = cluster->partition_tables;
-	for (uint32_t i = 0; i < tables->size; i++) {
-		as_partition_table_destroy(tables->array[i]);
-	}
-	as_partition_tables_release(tables);
-	
+	as_partition_tables_release(cluster->partition_tables);
+
 	// Release nodes.
 	as_nodes* nodes = cluster->nodes;
 	for (uint32_t i = 0; i < nodes->size; i++) {

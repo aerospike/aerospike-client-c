@@ -130,15 +130,15 @@ as_command_value_size(as_val* val, as_buffer* buffer)
 }
 
 uint8_t*
-as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
-	as_policy_commit_level commit_level, as_policy_consistency_level consistency,
-	bool linearize_read, as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen,
-	uint32_t ttl, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins, bool durable_delete)
+as_command_write_header(
+	uint8_t* cmd, uint8_t read_attr, uint8_t write_attr, uint8_t info_attr,
+	as_policy_commit_level commit_level, as_policy_exists exists, as_policy_gen gen_policy,
+	uint32_t gen, uint32_t ttl, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins,
+	bool durable_delete
+	)
 {
-	uint32_t generation = 0;
-	uint8_t info_attr = 0;
-
 	switch (exists) {
+		default:
 		case AS_POLICY_EXISTS_IGNORE:
 			break;
 			
@@ -159,8 +159,12 @@ as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 			break;
 	}
 
+	uint32_t generation;
+
 	switch (gen_policy) {
+		default:
 		case AS_POLICY_GEN_IGNORE:
+			generation = 0;
 			break;
 			
 		case AS_POLICY_GEN_EQ:
@@ -172,23 +176,12 @@ as_command_write_header(uint8_t* cmd, uint8_t read_attr, uint8_t write_attr,
 			generation = gen;
 			write_attr |= AS_MSG_INFO2_GENERATION_GT;
 			break;
-			
-		default:
-			break;
 	}
 
 	if (commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
 		info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 
-	if (linearize_read) {
-		info_attr |= AS_MSG_INFO3_LINEARIZE_READ;
-	}
-
-	if (consistency == AS_POLICY_CONSISTENCY_LEVEL_ALL) {
-		read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
-	}
-	
 	if (durable_delete) {
 		write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
 	}
@@ -418,12 +411,6 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 	return AEROSPIKE_OK;
 }
 
-static bool
-as_shift_sequence(as_command* cmd)
-{
-	return (cmd->type & AS_COMMAND_TYPE_READ) && !(cmd->type & AS_COMMAND_TYPE_LINEARIZE);
-}
-
 as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
@@ -439,12 +426,13 @@ as_command_execute(as_command* cmd, as_error* err)
 			release_node = false;
 		}
 		else {
-			status = as_cluster_get_node(cmd->cluster, err, cmd->ns, cmd->digest, cmd->replica,
-										 cmd->type, cmd->master, &node);
+			node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->replica,
+										 cmd->master);
 
-			if (status) {
-				// Invalid namespace or there are no active nodes. It's not worth retrying.
-				return status;
+			if (! node) {
+				return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
+									   "Node not found for partition %s:%u",
+									   cmd->ns, cmd->partition_id);
 			}
 			as_node_reserve(node);
 			release_node = true;
@@ -453,8 +441,16 @@ as_command_execute(as_command* cmd, as_error* err)
 		as_socket socket;
 		status = as_node_get_connection(err, node, cmd->socket_timeout, cmd->deadline_ms, &socket);
 		
-		if (status) {
-			cmd->master = !cmd->master;  // Alternate between master and prole.
+		if (status != AEROSPIKE_OK) {
+			// Do not retry on connection limit error or server error response.
+			if (status == AEROSPIKE_ERR_NO_MORE_CONNECTIONS ||
+				(status > 0 && status != AEROSPIKE_ERR_TIMEOUT)) {
+				if (release_node) {
+					as_node_release(node);
+				}
+				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
+				return status;
+			}
 			goto Retry;
 		}
 		
@@ -462,16 +458,10 @@ as_command_execute(as_command* cmd, as_error* err)
 		status = as_socket_write_deadline(err, &socket, node, cmd->buf, cmd->buf_size,
 										  cmd->socket_timeout, cmd->deadline_ms);
 		
-		if (status) {
+		if (status != AEROSPIKE_OK) {
 			// Socket errors are considered temporary anomalies.  Retry.
 			// Close socket to flush out possible garbage.	Do not put back in pool.
 			as_node_close_connection(&socket, socket.pool);
-
-			// Alternate between master and prole on socket errors or database reads.
-			// Timeouts are not a good indicator of impending data migration.
-			if (status != AEROSPIKE_ERR_TIMEOUT || as_shift_sequence(cmd)) {
-				cmd->master = !cmd->master;  // Alternate between master and prole.
-			}
 			goto Retry;
 		}
 		command_sent_counter++;
@@ -492,18 +482,8 @@ as_command_execute(as_command* cmd, as_error* err)
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
 				case AEROSPIKE_ERR_CONNECTION:
-					as_node_close_connection(&socket, socket.pool);
-					cmd->master = !cmd->master;  // Alternate between master and prole.
-					goto Retry;
-
 				case AEROSPIKE_ERR_TIMEOUT:
 					as_node_close_connection(&socket, socket.pool);
-
-					// Alternate between master and prole on database reads.
-					// Timeouts are not a good indicator of impending data migration.
-					if (as_shift_sequence(cmd)) {
-						cmd->master = !cmd->master;  // Alternate between master and prole.
-					}
 					goto Retry;
 
 				case AEROSPIKE_NOT_AUTHENTICATED:
@@ -516,11 +496,11 @@ as_command_execute(as_command* cmd, as_error* err)
 					if (release_node) {
 						as_node_release(node);
 					}
-					as_error_set_in_doubt(err, cmd->type & AS_COMMAND_TYPE_READ, command_sent_counter);
+					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
 					return status;
 				
 				default:
-					as_error_set_in_doubt(err, cmd->type & AS_COMMAND_TYPE_READ, command_sent_counter);
+					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
 					break;
 			}
 		}
@@ -569,7 +549,15 @@ Retry:
 			as_sleep(cmd->policy->sleep_between_retries);
 		}
 
-		if ((cmd->type & AS_COMMAND_TYPE_BATCH) && as_batch_retry(cmd, err)) {
+		// Alternate between master and prole on socket errors or database reads.
+		// Timeouts are not a good indicator of impending data migration.
+		if (status != AEROSPIKE_ERR_TIMEOUT || ((cmd->flags & AS_COMMAND_FLAGS_READ) &&
+			!(cmd->flags & AS_COMMAND_FLAGS_LINEARIZE))) {
+			// Note: SC session read will ignore this setting because it uses master only.
+			cmd->master = !cmd->master;
+		}
+
+		if ((cmd->flags & AS_COMMAND_FLAGS_BATCH) && as_batch_retry(cmd, err)) {
 			// Batch split retry attempted.  Exit this command.
 			if (release_node) {
 				as_node_release(node);
@@ -577,7 +565,7 @@ Retry:
 			return err->code;
 		}
 	}
-	
+
 	// Retries have been exhausted.
 	// Fill in timeout stats if timeout occurred.
 	if (err->code == AEROSPIKE_ERR_TIMEOUT) {
@@ -592,7 +580,7 @@ Retry:
 	if (release_node) {
 		as_node_release(node);
 	}
-	as_error_set_in_doubt(err, cmd->type & AS_COMMAND_TYPE_READ, command_sent_counter);
+	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
 	return err->code;
 }
 

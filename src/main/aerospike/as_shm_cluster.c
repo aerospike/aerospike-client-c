@@ -454,7 +454,7 @@ as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns)
 }
 
 static as_partition_table_shm*
-as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns, bool cp_mode)
+as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns, bool sc_mode)
 {
 	if (cluster_shm->partition_tables_size >= cluster_shm->partition_tables_capacity) {
 		// There are no more partition table slots available in shared memory.
@@ -466,7 +466,7 @@ as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns, bool cp_
 	as_partition_table_shm* tables = as_shm_get_partition_tables(cluster_shm);
 	as_partition_table_shm* table = as_shm_get_partition_table(cluster_shm, tables, cluster_shm->partition_tables_size);
 	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
-	table->cp_mode = cp_mode;
+	table->sc_mode = sc_mode;
 	
 	// Increment partition tables array size.
 	as_incr_uint32(&cluster_shm->partition_tables_size);
@@ -707,47 +707,6 @@ shm_prefer_rack_node(
 		return as_shm_try_node_alternate(cluster, local_nodes, master, prole);
 	}
 	return as_shm_try_node_alternate(cluster, local_nodes, prole, master);
-}
-
-as_status
-as_shm_cluster_get_node(
-	as_cluster* cluster, as_error* err, const char* ns, const uint8_t* digest,
-	as_policy_replica replica, uint8_t type, bool use_master, as_node** node_pp
-	)
-{
-	as_cluster_shm* cluster_shm = cluster->shm_info->cluster_shm;
-	as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
-
-	if (! table) {
-		*node_pp = NULL;
-
-		as_nodes* nodes = as_nodes_reserve(cluster);
-		uint32_t n_nodes = nodes->size;
-		as_nodes_release(nodes);
-
-		if (n_nodes == 0) {
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
-		}
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
-	}
-
-	if (table->cp_mode && (type & AS_COMMAND_TYPE_READ) && !(type & AS_COMMAND_TYPE_LINEARIZE)) {
-		// Strong consistency namespaces always use master node when read policy is sequential.
-		replica = AS_POLICY_REPLICA_MASTER;
-	}
-
-	uint32_t partition_id = as_partition_getid(digest, cluster_shm->n_partitions);
-	as_partition_shm* p = &table->partitions[partition_id];
-	as_node* node = as_partition_shm_get_node(cluster, ns, p, replica, use_master);
-
-	if (! node) {
-		*node_pp = NULL;
-		return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE, "Node not found for partition %s:%u",
-							   ns, partition_id);
-	}
-
-	*node_pp = node;
-	return AEROSPIKE_OK;
 }
 
 static uint32_t g_shm_randomizer = 0;

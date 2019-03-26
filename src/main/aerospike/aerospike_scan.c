@@ -89,7 +89,8 @@ as_scan_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as_
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
 
-	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, cmd->deserialize);
+	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops,
+											 cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
 
 	if (status != AEROSPIKE_OK) {
 		as_record_destroy(&rec);
@@ -290,15 +291,18 @@ as_scan_command_execute(as_scan_task* task)
 	as_command cmd;
 	cmd.cluster = task->cluster;
 	cmd.policy = &task->policy->base;
-	// No need to set ns, digest, replica because not referenced when node is set.
 	cmd.node = task->node;
+	cmd.ns = NULL;        // Not referenced when node set.
+	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_scan_parse;
 	cmd.udata = task;
 	cmd.buf = task->cmd;
 	cmd.buf_size = task->cmd_size;
-	cmd.type = AS_COMMAND_TYPE_READ;
+	cmd.partition_id = 0; // Not referenced when node set.
+	cmd.replica = 0;      // Not referenced when node set.
+	cmd.flags = AS_COMMAND_FLAGS_READ;
 
-	as_command_start_timer(&cmd, cmd.policy);
+	as_command_start_timer(&cmd);
 
 	status = as_command_execute(&cmd, &err);
 
@@ -426,15 +430,14 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 	uint8_t* p;
 	
 	if (scan->apply_each.function[0]) {
-		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE,
-			AS_POLICY_COMMIT_LEVEL_ALL, AS_POLICY_CONSISTENCY_LEVEL_ONE, false,
-			AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0, policy->base.total_timeout,
-			n_fields, 0, policy->durable_delete);
+		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE, 0,
+			AS_POLICY_COMMIT_LEVEL_ALL, AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0,
+			policy->base.total_timeout, n_fields, 0, policy->durable_delete);
 	}
 	else {
 		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
-		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, false,
-			policy->base.total_timeout, n_fields, scan->select.size);
+		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_READ_MODE_AP_ONE,
+			AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, n_fields, scan->select.size);
 	}
 	
 	if (scan->ns[0]) {
@@ -724,7 +727,7 @@ as_scan_async(
 		cmd->type = AS_ASYNC_TYPE_SCAN;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 		cmd->flags = AS_ASYNC_FLAGS_MASTER;
-		cmd->deserialize = scan->deserialize_list_map;
+		cmd->flags2 = scan->deserialize_list_map ? AS_ASYNC_FLAGS2_DESERIALIZE : 0;
 		memcpy(cmd->buf, cmd_buf, size);
 		exec->commands[i] = cmd;
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,7 +16,9 @@
  */
 #pragma once
 
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_std.h>
+#include <aerospike/as_status.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,29 +37,19 @@ extern "C" {
  * TYPES
  *****************************************************************************/
 struct as_node_s;
+struct as_cluster_s;
+struct as_error_s;
+struct as_key_s;
 
 /**
  * @private
  * Map of namespace data partitions to nodes.
+ *
+ * TODO - not ideal for replication factor > 2.
  */
 typedef struct as_partition_s {
-	/**
-	 * @private
-	 * Master node for this partition.
-	 */
 	struct as_node_s* master;
-	
-	/**
-	 * @private
-	 * Prole node for this partition.
-	 * TODO - not ideal for replication factor > 2.
-	 */
 	struct as_node_s* prole;
-
-	/**
-	 * @private
-	 * Currrent regime for strong consistency mode.
-	 */
 	uint32_t regime;
 } as_partition;
 
@@ -66,29 +58,11 @@ typedef struct as_partition_s {
  * Map of namespace to data partitions.
  */
 typedef struct as_partition_table_s {
-	/**
-	 * @private
-	 * Namespace
-	 */
-	char ns[AS_MAX_NAMESPACE_SIZE];
-
-	/**
-	 * @private
-	 * Is namespace running in strong consistency mode.
-	 */
-	bool cp_mode;
-	char pad[3];
-
-	/**
-	 * @private
-	 * Fixed length of partition array.
-	 */
+	uint32_t ref_count;
 	uint32_t size;
-
-	/**
-	 * @private
-	 * Array of partitions for a given namespace.
-	 */
+	char ns[AS_MAX_NAMESPACE_SIZE];
+	bool sc_mode;
+	char pad[7];
 	as_partition partitions[];
 } as_partition_table;
 
@@ -97,24 +71,21 @@ typedef struct as_partition_table_s {
  * Reference counted array of partition table pointers.
  */
 typedef struct as_partition_tables_s {
-	/**
-	 * @private
-	 * Reference count of partition table array.
-	 */
 	uint32_t ref_count;
-	
-	/**
-	 * @private
-	 * Length of partition table array.
-	 */
 	uint32_t size;
-
-	/**
-	 * @private
-	 * Partition table array.
-	 */
 	as_partition_table* array[];
 } as_partition_tables;
+
+/**
+ * @private
+ * Partition info.
+ */
+typedef struct as_partition_info_s {
+	const char* ns;
+	void* partition;  // as_partition or as_shm_partition.
+	uint32_t partition_id;
+	bool sc_mode;
+} as_partition_info;
 
 /******************************************************************************
  * FUNCTIONS
@@ -126,6 +97,25 @@ typedef struct as_partition_tables_s {
  */
 as_partition_tables*
 as_partition_tables_create(uint32_t capacity);
+
+/**
+ * @private
+ * Destroy partition tables.
+ */
+void
+as_partition_tables_destroy(as_partition_tables* tables);
+
+/**
+ * @private
+ * Release reference counted access to partition tables.
+ */
+static inline void
+as_partition_tables_release(as_partition_tables* tables)
+{
+	if (as_aaf_uint32(&tables->ref_count, -1) == 0) {
+		as_partition_tables_destroy(tables);
+	}
+}
 
 /**
  * @private
@@ -157,6 +147,17 @@ as_partition_getid(const uint8_t* digest, uint32_t n_partitions)
 {
 	return (*(uint16_t*)digest) & (n_partitions - 1);
 }
+
+/**
+ * @private
+ * Initialize partition info given key.  If this function succeeds and not using shared memory,
+ * as_partition_tables_release() must be called when done with partition.
+ */
+as_status
+as_partition_info_init(
+	as_partition_info* pi, struct as_cluster_s* cluster, struct as_error_s* err,
+	const struct as_key_s* key
+	);
 
 #ifdef __cplusplus
 } // end extern "C"

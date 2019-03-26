@@ -75,9 +75,9 @@ next_reader(as_event_command* reader)
 }
 
 static void
-cancel_command(as_event_command* cmd, as_error* err, bool retry, bool alternate)
+cancel_command(as_event_command* cmd, as_error* err, bool retry, bool timeout)
 {
-	if (retry && as_event_command_retry(cmd, alternate)) {
+	if (retry && as_event_command_retry(cmd, timeout)) {
 		return;
 	}
 
@@ -93,7 +93,7 @@ cancel_command(as_event_command* cmd, as_error* err, bool retry, bool alternate)
 #define CANCEL_CONNECTION_TIMEOUT 3
 
 static void
-cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool retry, bool alternate_on_write)
+cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool retry, bool timeout)
 {
 	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
 	as_node* node = cmd->node;
@@ -113,7 +113,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool ret
 
 	if (conn->writer != NULL) {
 		as_log_trace("Canceling writer %p on %p", conn->writer, conn);
-		cancel_command(conn->writer, err, retry, alternate_on_write);
+		cancel_command(conn->writer, err, retry, timeout);
 	}
 
 	bool is_reader = false;
@@ -128,7 +128,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool ret
 
 		as_log_trace("Canceling reader %p on %p", walker, conn);
 		cf_ll_delete(&conn->readers, link);
-		cancel_command(walker, err, retry, true);
+		cancel_command(walker, err, retry, false);
 	}
 
 	if (source == CANCEL_CONNECTION_TIMEOUT) {
@@ -362,19 +362,17 @@ as_pipe_get_connection(as_event_command* cmd)
 		return;
 	}
 
+	// Do not retry on connection limit error.
 	cmd->event_loop->errors++;
+	as_error err;
+	as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
+					"Max node/event loop %s pipeline connections would be exceeded: %u",
+					cmd->node->name, pool->capacity);
 
-	if (! as_event_command_retry(cmd, true)) {
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
-						"Max node/event loop %s pipeline connections would be exceeded: %u",
-						cmd->node->name, pool->capacity);
-
-		if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-			as_event_stop_timer(cmd);
-		}
-		as_event_error_callback(cmd, &err);
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(cmd);
 	}
+	as_event_error_callback(cmd, &err);
 }
 
 bool
@@ -424,7 +422,7 @@ void
 as_pipe_socket_error(as_event_command* cmd, as_error* err, bool retry)
 {
 	as_log_trace("Socket error for command %p", cmd);
-	cancel_connection(cmd, err, CANCEL_CONNECTION_SOCKET, retry, true);
+	cancel_connection(cmd, err, CANCEL_CONNECTION_SOCKET, retry, false);
 }
 
 void
@@ -436,7 +434,7 @@ as_pipe_timeout(as_event_command* cmd, bool retry)
 	// Node should not be null at this point.
 	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Pipeline timeout: iterations=%u lastNode=%s",
 					cmd->iteration + 1, as_node_get_address_string(cmd->node));
-	cancel_connection(cmd, &err, CANCEL_CONNECTION_TIMEOUT, retry, false);
+	cancel_connection(cmd, &err, CANCEL_CONNECTION_TIMEOUT, retry, true);
 }
 
 void
@@ -453,7 +451,7 @@ as_pipe_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
 			as_log_trace("Error is fatal");
-			cancel_connection(cmd, err, CANCEL_CONNECTION_RESPONSE, false, false);
+			cancel_connection(cmd, err, CANCEL_CONNECTION_RESPONSE, false, true);
 			break;
 
 		default:

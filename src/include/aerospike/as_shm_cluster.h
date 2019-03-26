@@ -135,7 +135,7 @@ typedef struct as_partition_table_shm_s {
 	 * @private
 	 * Is namespace running in strong consistency mode.
 	 */
-	uint8_t cp_mode;
+	uint8_t sc_mode;
 
 	/**
 	 * @private
@@ -361,28 +361,6 @@ void
 as_shm_update_partitions(
 	as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node,
 	bool master, uint32_t regime
-	);
-
-/**
- * @private
- * Get mapped node given digest key and replica.  The function does not reserve the node.
- * The caller must reserve the node for future use.
- */
-as_status
-as_shm_cluster_get_node(
-	struct as_cluster_s* cluster, as_error* err, const char* ns, const uint8_t* digest,
-	as_policy_replica replica, uint8_t type, bool use_master, as_node** node_pp
-	);
-
-/**
- * @private
- * Get mapped node given partition and replica.  The function does not reserve the node.
- * The caller must reserve the node for future use.
- */
-as_node*
-as_partition_shm_get_node(
-	struct as_cluster_s* cluster, const char* ns, as_partition_shm* p, as_policy_replica replica,
-	bool use_master
 	);
 
 /**

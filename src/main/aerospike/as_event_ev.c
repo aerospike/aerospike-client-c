@@ -788,7 +788,7 @@ as_ev_connect_error(as_event_command* cmd, as_address* primary, int rv)
 	as_event_decr_conn(cmd);
 	cmd->event_loop->errors++;
 
-	if (as_event_command_retry(cmd, true)) {
+	if (as_event_command_retry(cmd, false)) {
 		return;
 	}
 

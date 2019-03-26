@@ -62,6 +62,10 @@ extern "C" {
 #define AS_ASYNC_FLAGS_EVENT_RECEIVED 16
 #define AS_ASYNC_FLAGS_FREE_BUF 32
 #define AS_ASYNC_FLAGS_LINEARIZE 64
+#define AS_ASYNC_FLAGS_MASTER_SC 128
+
+#define AS_ASYNC_FLAGS2_DESERIALIZE 1
+#define AS_ASYNC_FLAGS2_RELEASE_PARTITIONS 2
 
 #define AS_ASYNC_AUTH_RETURN_CODE 1
 
@@ -146,7 +150,7 @@ typedef struct as_event_command {
 	uint8_t type;
 	uint8_t state;
 	uint8_t flags;
-	bool deserialize;
+	uint8_t flags2;
 } as_event_command;
 
 typedef struct {
@@ -185,7 +189,7 @@ void
 as_event_total_timeout(as_event_command* cmd);
 
 bool
-as_event_command_retry(as_event_command* cmd, bool alternate);
+as_event_command_retry(as_event_command* cmd, bool timeout);
 	
 void
 as_event_query_complete(as_event_command* cmd);
@@ -713,7 +717,7 @@ as_event_socket_retry(as_event_command* cmd)
 
 	as_event_stop_watcher(cmd, cmd->conn);
 	as_event_release_async_connection(cmd);
-	return as_event_command_retry(cmd, true);
+	return as_event_command_retry(cmd, false);
 }
 
 static inline void
@@ -726,7 +730,7 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 static inline void
 as_event_command_destroy(as_event_command* cmd)
 {
-	// Use this function to free commands that were never started.
+	// Use this function to free batch/scan/query commands that were never started.
 	as_node_release(cmd->node);
 	cf_free(cmd);
 }

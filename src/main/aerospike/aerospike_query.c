@@ -204,7 +204,8 @@ as_query_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
 
-	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, cmd->deserialize);
+	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops,
+											 cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
 
 	if (status != AEROSPIKE_OK) {
 		as_record_destroy(&rec);
@@ -423,29 +424,32 @@ as_query_command_execute(as_query_task* task)
 	}
 
 	const as_policy_base* policy;
-	uint8_t type;
+	uint8_t flags;
 
 	if (task->query_policy) {
 		policy = &task->query_policy->base;
-		type = AS_COMMAND_TYPE_READ;
+		flags = AS_COMMAND_FLAGS_READ;
 	}
 	else {
 		policy = &task->write_policy->base;
-		type = AS_COMMAND_TYPE_WRITE;
+		flags = 0;
 	}
 
 	as_command cmd;
 	cmd.cluster = task->cluster;
 	cmd.policy = policy;
-	// No need to set ns, digest, replica because not referenced when node is set.
 	cmd.node = task->node;
+	cmd.ns = NULL;        // Not referenced when node set.
+	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse;
 	cmd.udata = task;
 	cmd.buf = task->cmd;
 	cmd.buf_size = task->cmd_size;
-	cmd.type = type;
+	cmd.partition_id = 0; // Not referenced when node set.
+	cmd.replica = 0;      // Not referenced when node set.
+	cmd.flags = flags;
 
-	as_command_start_timer(&cmd, policy);
+	as_command_start_timer(&cmd);
 
 	status = as_command_execute(&cmd, &err);
 
@@ -716,13 +720,13 @@ as_query_command_init(
 	
 	if (query_policy) {
 		uint8_t read_attr = (query->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
-		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_CONSISTENCY_LEVEL_ONE, false,
-				timeout, n_fields, n_ops);
+		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_READ_MODE_AP_ONE,
+				AS_POLICY_READ_MODE_SC_SESSION, timeout, n_fields, n_ops);
 	}
 	else {
-		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE,
-				write_policy->commit_level, 0, false, write_policy->exists, AS_POLICY_GEN_IGNORE, 0,
-				0, timeout, n_fields, n_ops, write_policy->durable_delete);
+		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE, 0,
+				write_policy->commit_level, write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0,
+				timeout, n_fields, n_ops, write_policy->durable_delete);
 	}
 	
 	// Write namespace.
@@ -1212,7 +1216,7 @@ aerospike_query_async(
 		cmd->type = AS_ASYNC_TYPE_QUERY;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 		cmd->flags = AS_ASYNC_FLAGS_MASTER;
-		cmd->deserialize = policy->deserialize;
+		cmd->flags2 = policy->deserialize ? AS_ASYNC_FLAGS2_DESERIALIZE : 0;
 		memcpy(cmd->buf, cmd_buf, size);
 		exec->commands[i] = cmd;
 	}

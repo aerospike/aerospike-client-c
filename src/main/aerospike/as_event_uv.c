@@ -577,7 +577,7 @@ as_uv_connect_error(as_event_command* cmd, as_error* err)
 	as_event_decr_conn(cmd);
 	cmd->event_loop->errors++;
 
-	if (! as_event_command_retry(cmd, true)) {
+	if (! as_event_command_retry(cmd, false)) {
 		if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
 			as_event_stop_timer(cmd);
 		}

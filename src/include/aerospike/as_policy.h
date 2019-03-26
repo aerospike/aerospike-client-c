@@ -112,11 +112,18 @@ extern "C" {
 #define AS_POLICY_REPLICA_DEFAULT AS_POLICY_REPLICA_SEQUENCE
 
 /**
- * Default as_policy_consistency_level value for read
+ * Default as_policy_read_mode_ap value
  *
  * @ingroup client_policies
  */
-#define AS_POLICY_CONSISTENCY_LEVEL_DEFAULT AS_POLICY_CONSISTENCY_LEVEL_ONE
+#define AS_POLICY_READ_MODE_AP_DEFAULT AS_POLICY_READ_MODE_AP_ONE
+
+/**
+ * Default as_policy_read_mode_sc value
+ *
+ * @ingroup client_policies
+ */
+#define AS_POLICY_READ_MODE_SC_DEFAULT AS_POLICY_READ_MODE_SC_SESSION
 
 /**
  * Default as_policy_commit_level value for write
@@ -291,26 +298,61 @@ typedef enum as_policy_replica_e {
 } as_policy_replica;
 
 /**
- * Consistency Level
+ * Read policy for AP (availability) namespaces.
  *
  * How duplicates should be consulted in a read operation.
  * Only makes a difference during migrations and only applicable in AP mode.
  *
  * @ingroup client_policies
  */
-typedef enum as_policy_consistency_level_e {
+typedef enum as_policy_read_mode_ap_e {
 
 	/**
-	 * Involve master only in the read operation.
+	 * Involve single node in the read operation.
 	 */
-	AS_POLICY_CONSISTENCY_LEVEL_ONE,
+	AS_POLICY_READ_MODE_AP_ONE,
 
 	/**
 	 * Involve all duplicates in the read operation.
 	 */
-	AS_POLICY_CONSISTENCY_LEVEL_ALL,
+	AS_POLICY_READ_MODE_AP_ALL,
 
-} as_policy_consistency_level;
+} as_policy_read_mode_ap;
+
+/**
+ * Read policy for SC (strong consistency) namespaces.
+ *
+ * Determines SC read consistency options.
+ *
+ * @ingroup client_policies
+ */
+typedef enum as_policy_read_mode_sc_e {
+
+	/**
+	 * Ensures this client will only see an increasing sequence of record versions.
+	 * Server only reads from master.  This is the default.
+	 */
+	AS_POLICY_READ_MODE_SC_SESSION,
+
+	/**
+	 * Ensures ALL clients will only see an increasing sequence of record versions.
+	 * Server only reads from master.
+	 */
+	AS_POLICY_READ_MODE_SC_LINEARIZE,
+
+	/**
+	 * Server may read from master or any full (non-migrating) replica.
+	 * Increasing sequence of record versions is not guaranteed.
+	 */
+	AS_POLICY_READ_MODE_SC_ALLOW_REPLICA,
+
+	/**
+	 * Server may read from master or any full (non-migrating) replica or from unavailable
+	 * partitions.  Increasing sequence of record versions is not guaranteed.
+	 */
+	AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE,
+
+} as_policy_read_mode_sc;
 
 /**
  * Commit Level
@@ -435,9 +477,16 @@ typedef struct as_policy_read_s {
 	as_policy_replica replica;
 
 	/**
-	 * How duplicates should be consulted in a read operation.
+	 * Read policy for AP (availability) namespaces.
+	 * Default: AS_POLICY_READ_MODE_AP_ONE
 	 */
-	as_policy_consistency_level consistency_level;
+	as_policy_read_mode_ap read_mode_ap;
+
+	/**
+	 * Read policy for SC (strong consistency) namespaces.
+	 * Default: AS_POLICY_READ_MODE_SC_SESSION
+	 */
+	as_policy_read_mode_sc read_mode_sc;
 
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
@@ -445,12 +494,6 @@ typedef struct as_policy_read_s {
 	 * Default: true
 	 */
 	bool deserialize;
-
-	/**
-	 * Force reads to be linearized for server namespaces that support strong consistency mode.
-	 * Default: false
-	 */
-	bool linearize_read;
 
 } as_policy_read;
 	
@@ -571,12 +614,6 @@ typedef struct as_policy_apply_s {
 	 */
 	bool durable_delete;
 
-	/**
-	 * Force reads to be linearized for server namespaces that support strong consistency mode.
-	 * Default: false
-	 */
-	bool linearize_read;
-
 } as_policy_apply;
 
 /**
@@ -602,9 +639,16 @@ typedef struct as_policy_operate_s {
 	as_policy_replica replica;
 
 	/**
-	 * How duplicates should be consulted in a read operation.
+	 * Read policy for AP (availability) namespaces.
+	 * Default: AS_POLICY_READ_MODE_AP_ONE
 	 */
-	as_policy_consistency_level consistency_level;
+	as_policy_read_mode_ap read_mode_ap;
+
+	/**
+	 * Read policy for SC (strong consistency) namespaces.
+	 * Default: AS_POLICY_READ_MODE_SC_SESSION
+	 */
+	as_policy_read_mode_sc read_mode_sc;
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
@@ -637,12 +681,6 @@ typedef struct as_policy_operate_s {
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
-
-	/**
-	 * Force reads to be linearized for server namespaces that support strong consistency mode.
-	 * Default: false
-	 */
-	bool linearize_read;
 
 } as_policy_operate;
 
@@ -713,9 +751,16 @@ typedef struct as_policy_batch_s {
 	as_policy_replica replica;
 
 	/**
-	 * How duplicates should be consulted in a read operation.
+	 * Read policy for AP (availability) namespaces.
+	 * Default: AS_POLICY_READ_MODE_AP_ONE
 	 */
-	as_policy_consistency_level consistency_level;
+	as_policy_read_mode_ap read_mode_ap;
+
+	/**
+	 * Read policy for SC (strong consistency) namespaces.
+	 * Default: AS_POLICY_READ_MODE_SC_SESSION
+	 */
+	as_policy_read_mode_sc read_mode_sc;
 
 	/**
 	 * Determine if batch commands to each server are run in parallel threads.
@@ -766,12 +811,6 @@ typedef struct as_policy_batch_s {
 	 * Default: true
 	 */
 	bool deserialize;
-	
-	/**
-	 * Force reads to be linearized for server namespaces that support strong consistency mode.
-	 * Default: false
-	 */
-	bool linearize_read;
 
 } as_policy_batch;
 	
@@ -949,9 +988,9 @@ as_policy_read_init(as_policy_read* p)
 	p->base.sleep_between_retries = 0;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
-	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
 	p->deserialize = true;
-	p->linearize_read = false;
 	return p;
 }
 
@@ -1025,13 +1064,13 @@ as_policy_operate_init(as_policy_operate* p)
 	p->base.sleep_between_retries = 0;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
-	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_DEFAULT;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->deserialize = true;
 	p->durable_delete = false;
-	p->linearize_read = false;
 	return p;
 }
 
@@ -1109,7 +1148,6 @@ as_policy_apply_init(as_policy_apply* p)
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->gen_value = 0;
 	p->durable_delete = false;
-	p->linearize_read = false;
 	return p;
 }
 
@@ -1143,12 +1181,12 @@ as_policy_batch_init(as_policy_batch* p)
 	p->base.max_retries = 2;
 	p->base.sleep_between_retries = 0;
 	p->replica = AS_POLICY_REPLICA_SEQUENCE;
-	p->consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
 	p->concurrent = false;
 	p->allow_inline = true;
 	p->send_set_name = false;
 	p->deserialize = true;
-	p->linearize_read = false;
 	return p;
 }
 

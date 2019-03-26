@@ -398,44 +398,14 @@ as_node_get_by_name(as_cluster* cluster, const char* name);
 
 /**
  * @private
- * Reserve reference counted access to partition tables.
- * as_partition_tables_release() must be called when done with tables.
- */
-static inline as_partition_tables*
-as_partition_tables_reserve(as_cluster* cluster)
-{
-	as_partition_tables* tables = (as_partition_tables *)as_load_ptr(&cluster->partition_tables);
-	as_incr_uint32(&tables->ref_count);
-	return tables;
-}
-
-/**
- * @private
- * Release reference counted access to partition tables.
+ * Release partition only if not using shared memory.
  */
 static inline void
-as_partition_tables_release(as_partition_tables* tables)
+as_cluster_release_partitions(as_cluster* cluster)
 {
-	if (as_aaf_uint32(&tables->ref_count, -1) == 0) {
-		cf_free(tables);
+	if (! cluster->shm_info) {
+		as_partition_tables_release(cluster->partition_tables);
 	}
-}
-
-/**
- * @private
- * Get partition table given namespace.
- */
-static inline as_partition_table*
-as_cluster_get_partition_table(as_cluster* cluster, const char* ns)
-{
-	// Partition tables array size does not currently change after first cluster tend.
-	// Also, there is a one second delayed garbage collection coupled with as_partition_tables_get()
-	// being very fast.  Reference counting the tables array is not currently necessary, but do it
-	// anyway in case the server starts supporting dynamic namespaces.
-	as_partition_tables* tables = as_partition_tables_reserve(cluster);
-	as_partition_table* table = as_partition_tables_get(tables, ns);
-	as_partition_tables_release(tables);
-	return table;
 }
 
 /**
@@ -444,18 +414,42 @@ as_cluster_get_partition_table(as_cluster* cluster, const char* ns)
  * The caller must reserve the node for future use.
  */
 as_node*
-as_partition_get_node(as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master);
+as_partition_reg_get_node(
+	as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica,
+	bool use_master
+	);
+
+struct as_partition_shm_s;
+
+/**
+* @private
+* Get mapped node given partition and replica.  The function does not reserve the node.
+* The caller must reserve the node for future use.
+*/
+as_node*
+as_partition_shm_get_node(
+	struct as_cluster_s* cluster, const char* ns, struct as_partition_shm_s* partition,
+	as_policy_replica replica, bool use_master
+	);
 
 /**
  * @private
- * Get mapped node given digest key and replica.  The function does not reserve the node.
+ * Get mapped node given partition and replica.  This function does not reserve the node.
  * The caller must reserve the node for future use.
  */
-as_status
-as_cluster_get_node(
-	struct as_cluster_s* cluster, as_error* err, const char* ns, const uint8_t* digest,
-	as_policy_replica replica, uint8_t type, bool master, as_node** node
-	);
+static inline as_node*
+as_partition_get_node(
+	as_cluster* cluster, const char* ns, void* partition, as_policy_replica replica,
+	bool master
+	)
+{
+	if (cluster->shm_info) {
+		return as_partition_shm_get_node(cluster, ns, partition, replica, master);
+	}
+	else {
+		return as_partition_reg_get_node(cluster, ns, partition, replica, master);
+	}
+}
 
 #ifdef __cplusplus
 } // end extern "C"

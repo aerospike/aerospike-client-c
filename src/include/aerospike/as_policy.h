@@ -34,7 +34,8 @@
  * - as_policy_gen
  * - as_policy_exists
  * - as_policy_replica
- * - as_policy_consistency_level
+ * - as_policy_read_mode_ap
+ * - as_policy_read_mode_sc
  * - as_policy_commit_level
  *
  * ## Operation Policies

@@ -30,7 +30,7 @@
 #endif
 #include <getopt.h>
 
-static const char* short_options = "h:p:U:P::n:s:K:k:b:o:Rt:w:z:g:T:dL:SC:N:M:Y:Dac:W:u";
+static const char* short_options = "h:p:U:P::n:s:K:k:b:o:Rt:w:z:g:T:dL:SC:N:B:M:Y:Dac:W:u";
 
 static struct option long_options[] = {
 	{"hosts",                required_argument, 0, 'h'},
@@ -56,7 +56,8 @@ static struct option long_options[] = {
 	{"latency",              required_argument, 0, 'L'},
 	{"shared",               no_argument,       0, 'S'},
 	{"replica",              required_argument, 0, 'C'},
-	{"consistencyLevel",     required_argument, 0, 'N'},
+	{"readModeAP",           required_argument, 0, 'N'},
+	{"readModeSC",           required_argument, 0, 'B'},
 	{"commitLevel",          required_argument, 0, 'M'},
 	{"connPoolsPerNode",     required_argument, 0, 'Y'},
 	{"durableDelete",        no_argument,       0, 'D'},
@@ -226,8 +227,12 @@ print_usage(const char* program)
 	blog_line("   Which replica to use for reads.");
 	blog_line("");
 
-	blog_line("-N --consistencyLevel {one,all} # Default: one");
-	blog_line("   Read consistency guarantee level.");
+	blog_line("-N --readModeAP {one,all} # Default: one");
+	blog_line("   Read mode for AP (availability) namespaces.");
+	blog_line("");
+
+	blog_line("-B --readModeSC {session,linearize,allowReplica,allowUnavailable} # Default: session");
+	blog_line("   Read mode for SC (strong consistency) namespaces.");
 	blog_line("");
 
 	blog_line("-M --commitLevel {all,master} # Default: all");
@@ -401,24 +406,44 @@ print_args(arguments* args)
 	
 	blog_line("shared memory:          %s", boolstring(args->use_shm));
 
-	const char* rep;
+	const char* str;
 	switch (args->replica) {
 		case AS_POLICY_REPLICA_MASTER:
-			rep = "master";
+			str = "master";
 			break;
 		case AS_POLICY_REPLICA_ANY:
-			rep = "any";
+			str = "any";
 			break;
 		case AS_POLICY_REPLICA_SEQUENCE:
-			rep = "sequence";
+			str = "sequence";
 			break;
 		default:
-			rep = "unknown";
+			str = "unknown";
 			break;
 	}
 
-	blog_line("read replica:           %s", rep);
-	blog_line("read consistency level: %s", (AS_POLICY_CONSISTENCY_LEVEL_ONE == args->read_consistency_level ? "one" : "all"));
+	blog_line("read replica:           %s", str);
+	blog_line("read mode AP:           %s", (AS_POLICY_READ_MODE_AP_ONE == args->read_mode_ap ? "one" : "all"));
+
+	switch (args->read_mode_sc) {
+		case AS_POLICY_READ_MODE_SC_SESSION:
+			str = "session";
+			break;
+		case AS_POLICY_READ_MODE_SC_LINEARIZE:
+			str = "linearize";
+			break;
+		case AS_POLICY_READ_MODE_SC_ALLOW_REPLICA:
+			str = "allowReplica";
+			break;
+		case AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE:
+			str = "allowUnavailable";
+			break;
+		default:
+			str = "unknown";
+			break;
+	}
+
+	blog_line("read mode SC:           %s", str);
 	blog_line("write commit level:     %s", (AS_POLICY_COMMIT_LEVEL_ALL == args->write_commit_level ? "all" : "master"));
 	blog_line("conn pools per node:    %d", args->conn_pools_per_node);
 	blog_line("asynchronous mode:      %s", args->async ? "on" : "off");
@@ -737,13 +762,32 @@ set_args(int argc, char * const * argv, arguments* args)
 
 			case 'N':
 				if (strcmp(optarg, "one") == 0) {
-					args->read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
+					args->read_mode_ap = AS_POLICY_READ_MODE_AP_ONE;
 				}
 				else if (strcmp(optarg, "all") == 0) {
-					args->read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ALL;
+					args->read_mode_ap = AS_POLICY_READ_MODE_AP_ALL;
 				}
 				else {
-					blog_line("consistencyLevel must be one or all");
+					blog_line("readModeAP must be one or all");
+					return 1;
+				}
+				break;
+
+			case 'B':
+				if (strcmp(optarg, "session") == 0) {
+					args->read_mode_sc = AS_POLICY_READ_MODE_SC_SESSION;
+				}
+				else if (strcmp(optarg, "linearize") == 0) {
+					args->read_mode_sc = AS_POLICY_READ_MODE_SC_LINEARIZE;
+				}
+				else if (strcmp(optarg, "allowReplica") == 0) {
+					args->read_mode_sc = AS_POLICY_READ_MODE_SC_ALLOW_REPLICA;
+				}
+				else if (strcmp(optarg, "allowUnavailable") == 0) {
+					args->read_mode_sc = AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE;
+				}
+				else {
+					blog_line("readModeSC must be session | linearize | allowReplica | allowUnavailable");
 					return 1;
 				}
 				break;
@@ -877,7 +921,8 @@ main(int argc, char * const * argv)
 	args.latency_shift = 3;
 	args.use_shm = false;
 	args.replica = AS_POLICY_REPLICA_SEQUENCE;
-	args.read_consistency_level = AS_POLICY_CONSISTENCY_LEVEL_ONE;
+	args.read_mode_ap = AS_POLICY_READ_MODE_AP_ONE;
+	args.read_mode_sc = AS_POLICY_READ_MODE_SC_SESSION;
 	args.write_commit_level = AS_POLICY_COMMIT_LEVEL_ALL;
 	args.durable_deletes = false;
 	args.conn_pools_per_node = 1;

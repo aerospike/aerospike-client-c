@@ -433,7 +433,7 @@ as_batch_index_records_write(
 	uint8_t read_attr = AS_MSG_INFO1_READ;
 
 	if (policy->read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
-		read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
+		read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
 	}
 
 	uint32_t n_offsets = offsets->size;
@@ -673,7 +673,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_command* parent)
 	}
 
 	if (policy->read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
-		btk->read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
+		btk->read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
 	}
 
 	// Write command
@@ -1513,7 +1513,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	uint8_t* p = (uint8_t*)parent + parent->write_offset;
 	uint8_t read_attr = p[9];
 
-	if (read_attr & AS_MSG_INFO1_CONSISTENCY_ALL) {
+	if (read_attr & AS_MSG_INFO1_READ_MODE_AP_ALL) {
 		policy.read_mode_ap = AS_POLICY_READ_MODE_AP_ALL;
 	}
 

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2019 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -129,7 +129,8 @@ connect_to_server(arguments* args, aerospike* client)
 	p->read.base.total_timeout = args->read_timeout;
 	p->read.base.max_retries = args->max_retries;
 	p->read.replica = args->replica;
-	p->read.consistency_level = args->read_consistency_level;
+	p->read.read_mode_ap = args->read_mode_ap;
+	p->read.read_mode_sc = args->read_mode_sc;
 
 	p->write.base.total_timeout = args->write_timeout;
 	p->write.base.max_retries = args->max_retries;
@@ -142,6 +143,8 @@ connect_to_server(arguments* args, aerospike* client)
 	p->operate.replica = args->replica;
 	p->operate.commit_level = args->write_commit_level;
 	p->operate.durable_delete = args->durable_deletes;
+	p->operate.read_mode_ap = args->read_mode_ap;
+	p->operate.read_mode_sc = args->read_mode_sc;
 
 	p->remove.base.total_timeout = args->write_timeout;
 	p->remove.base.max_retries = args->max_retries;

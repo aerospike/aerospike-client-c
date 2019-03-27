@@ -67,7 +67,7 @@ extern "C" {
 #define AS_MSG_INFO1_BATCH_INDEX		(1 << 3) // batch read
 #define AS_MSG_INFO1_XDR				(1 << 4) // operation is being performed by XDR
 #define AS_MSG_INFO1_GET_NOBINDATA		(1 << 5) // do not get information about bins and its data
-#define AS_MSG_INFO1_CONSISTENCY_ALL	(1 << 6) // read consistency level - bit 0
+#define AS_MSG_INFO1_READ_MODE_AP_ALL	(1 << 6) // read mode all for AP namespaces.
 // (Note:  Bit 7 is unused.)
 
 // Message info2 bits
@@ -309,7 +309,7 @@ as_command_set_attr_read(
 	}
 
 	if (read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
-		*read_attr |= AS_MSG_INFO1_CONSISTENCY_ALL;
+		*read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
 	}
 }
 	

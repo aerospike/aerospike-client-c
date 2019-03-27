@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2019 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -64,7 +64,8 @@ typedef struct arguments_t {
 	int latency_shift;
 	bool use_shm;
 	as_policy_replica replica;
-	as_policy_consistency_level read_consistency_level;
+	as_policy_read_mode_ap read_mode_ap;
+	as_policy_read_mode_sc read_mode_sc;
 	as_policy_commit_level write_commit_level;
 	int conn_pools_per_node;
 	bool durable_deletes;

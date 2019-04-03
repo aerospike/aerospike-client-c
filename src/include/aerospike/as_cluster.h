@@ -422,13 +422,13 @@ as_partition_reg_get_node(
 struct as_partition_shm_s;
 
 /**
-* @private
-* Get mapped node given partition and replica.  The function does not reserve the node.
-* The caller must reserve the node for future use.
-*/
+ * @private
+ * Get mapped node given partition and replica.  The function does not reserve the node.
+ * The caller must reserve the node for future use.
+ */
 as_node*
 as_partition_shm_get_node(
-	struct as_cluster_s* cluster, const char* ns, struct as_partition_shm_s* partition,
+	as_cluster* cluster, const char* ns, struct as_partition_shm_s* partition,
 	as_policy_replica replica, bool use_master
 	);
 
@@ -444,10 +444,10 @@ as_partition_get_node(
 	)
 {
 	if (cluster->shm_info) {
-		return as_partition_shm_get_node(cluster, ns, partition, replica, master);
+		return as_partition_shm_get_node(cluster, ns, (struct as_partition_shm_s*)partition, replica, master);
 	}
 	else {
-		return as_partition_reg_get_node(cluster, ns, partition, replica, master);
+		return as_partition_reg_get_node(cluster, ns, (as_partition*)partition, replica, master);
 	}
 }
 

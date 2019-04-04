@@ -345,6 +345,12 @@ as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 }
 
 static inline void
+as_event_stop_read(as_event_connection* conn)
+{
+	// This method only needed for libuv pipelined connections.
+}
+
+static inline void
 as_event_command_release(as_event_command* cmd)
 {
 	as_event_command_free(cmd);
@@ -437,7 +443,14 @@ as_event_stop_timer(as_event_command* cmd)
 static inline void
 as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 {
-	// Watcher already stopped by design in libuv.
+	// uv_read_stop() will handle case where read is already stopped.
+	uv_read_stop((uv_stream_t*)conn);
+}
+
+static inline void
+as_event_stop_read(as_event_connection* conn)
+{
+	uv_read_stop((uv_stream_t*)conn);
 }
 
 void
@@ -544,6 +557,12 @@ as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 }
 
 static inline void
+as_event_stop_read(as_event_connection* conn)
+{
+	// This method only needed for libuv pipelined connections.
+}
+
+static inline void
 as_event_command_release(as_event_command* cmd)
 {
 	as_event_command_free(cmd);
@@ -609,6 +628,11 @@ as_event_stop_timer(as_event_command* cmd)
 
 static inline void
 as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
+{
+}
+
+static inline void
+as_event_stop_read(as_event_connection* conn)
 {
 }
 

@@ -268,8 +268,6 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	as_event_command* cmd = as_uv_get_command(stream->data);
 			
 	if (nread < 0) {
-		uv_read_stop(stream);
-
 		if (! as_event_socket_retry(cmd)) {
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Socket read failed: %zd", nread);
@@ -296,7 +294,6 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		cmd->state = AS_ASYNC_STATE_COMMAND_READ_BODY;
 		
 		if (cmd->len < sizeof(as_msg)) {
-			uv_read_stop(stream);
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Invalid record header size: %u", cmd->len);
 			as_event_parse_error(cmd, &err);
@@ -314,35 +311,7 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		return;
 	}
 
-	as_pipe_connection* conn_to_read = NULL;
-
-	if (cmd->pipe_listener != NULL) {
-		conn_to_read = (as_pipe_connection*)cmd->conn;
-
-		if (cf_ll_size(&conn_to_read->readers) < 2) {
-			conn_to_read = NULL;
-		}
-	}
-
-	if (cmd->parse_results(cmd)) {
-		uv_read_stop(stream);
-
-		// Register the next reader, if there are readers left.
-		if (conn_to_read != NULL) {
-			stream->data = conn_to_read;
-
-			int status = uv_read_start(stream, as_uv_command_buffer, as_uv_command_read);
-
-			if (status) {
-				if (! as_event_socket_retry(cmd)) {
-					as_error err;
-					as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "uv_read_start failed: %s", uv_strerror(status));
-					as_event_socket_error(cmd, &err);
-				}
-			}
-		}
-	}
-	else {
+	if (! cmd->parse_results(cmd)) {
 		// Batch, scan, query is not finished.
 		cmd->len = sizeof(as_proto);
 		cmd->pos = 0;
@@ -438,8 +407,6 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	as_event_command* cmd = as_uv_auth_get_command(stream->data);
 		
 	if (nread < 0) {
-		uv_read_stop(stream);
-
 		if (! as_event_socket_retry(cmd)) {
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Authenticate socket read failed: %zd", nread);
@@ -459,7 +426,6 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		as_event_set_auth_parse_header(cmd);
 		
 		if (cmd->len > cmd->read_capacity) {
-			uv_read_stop(stream);
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_CLIENT, "Authenticate response size is corrupt: %u", cmd->len);
 			as_event_parse_error(cmd, &err);

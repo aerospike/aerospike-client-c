@@ -56,19 +56,26 @@ next_reader(as_event_command* reader)
 		as_event_stop_timer(reader);
 	}
 
-	if (conn->writer == NULL && cf_ll_size(&conn->readers) == 0) {
-		as_log_trace("No writer and no reader left");
-		as_event_stop_watcher(reader, reader->conn);
+	if (cf_ll_size(&conn->readers) == 0) {
+		if (conn->writer == NULL) {
+			// Stopping watcher also stops read.
+			as_log_trace("No writer and no reader left");
+			as_event_stop_watcher(reader, reader->conn);
 
-		if (conn->in_pool) {
-			as_log_trace("Pipeline connection still in pool");
+			if (conn->in_pool) {
+				as_log_trace("Pipeline connection still in pool");
+				return;
+			}
+
+			as_log_trace("Closing non-pooled pipeline connection %p", conn);
+			as_queue* pool = &reader->node->pipe_conn_pools[reader->event_loop->index];
+			as_event_release_connection(reader->conn, pool);
 			return;
 		}
-
-		as_log_trace("Closing non-pooled pipeline connection %p", conn);
-		as_queue* pool = &reader->node->pipe_conn_pools[reader->event_loop->index];
-		as_event_release_connection(reader->conn, pool);
-		return;
+		else {
+			// Stop read is only necessary for libuv.
+			as_event_stop_read(reader->conn);
+		}
 	}
 
 	as_log_trace("Pipeline connection %p has %d reader(s)", conn, cf_ll_size(&conn->readers));

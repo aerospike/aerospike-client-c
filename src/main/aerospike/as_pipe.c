@@ -183,7 +183,7 @@ put_connection(as_event_command* cmd)
 	as_log_trace("Returning pipeline connection for writer %p, pipeline connection %p", cmd, conn);
 	as_queue* pool = &cmd->node->pipe_conn_pools[cmd->event_loop->index];
 
-	if (as_queue_push_head_limit(pool, &conn)) {
+	if (as_queue_push_limit(pool, &conn)) {
 		conn->in_pool = true;
 		return;
 	}

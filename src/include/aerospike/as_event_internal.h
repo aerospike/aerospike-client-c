@@ -29,6 +29,7 @@
 #include <ev.h>
 #elif defined(AS_USE_LIBUV)
 #include <uv.h>
+struct as_uv_tls;
 #elif defined(AS_USE_LIBEVENT)
 #include <event2/event.h>
 #else
@@ -77,13 +78,14 @@ extern "C" {
 	
 struct as_event_command;
 struct as_event_executor;
-	
+
 typedef struct {
 #if defined(AS_USE_LIBEV)
 	struct ev_io watcher;
 	as_socket socket;
 #elif defined(AS_USE_LIBUV)
 	uv_tcp_t socket;
+	struct as_uv_tls* tls;
 	// Reuse memory for requests, because only one request is active at a time.
 	union {
 		uv_connect_t connect;
@@ -362,9 +364,9 @@ as_event_command_release(as_event_command* cmd)
 
 #elif defined(AS_USE_LIBUV)
 
-void as_uv_connection_closed(uv_handle_t* socket);
 void as_uv_total_timeout(uv_timer_t* timer);
 void as_uv_socket_timeout(uv_timer_t* timer);
+void as_event_close_connection(as_event_connection* conn);
 
 static inline bool
 as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
@@ -386,12 +388,6 @@ as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle
 		return as_socket_validate_fd((as_socket_fd)fd);
 	}
 	return false;
-}
-	
-static inline void
-as_event_close_connection(as_event_connection* conn)
-{
-	uv_close((uv_handle_t*)&conn->socket, as_uv_connection_closed);
 }
 	
 static inline void

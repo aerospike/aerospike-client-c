@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -22,15 +22,17 @@
 #include <aerospike/as_socket.h>
 #include <openssl/ssl.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void as_tls_check_init();
 
 void as_tls_cleanup(void);
 
 AS_EXTERN void as_tls_thread_cleanup();
 
-as_status as_tls_context_setup(as_config_tls* tlscfg,
-							   as_tls_context* octx,
-							   as_error* err);
+as_status as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* err);
 
 void as_tls_context_destroy(as_tls_context* ctx);
 
@@ -40,11 +42,12 @@ int as_tls_wrap(as_tls_context* ctx, as_socket* sock, const char* tls_name);
 
 void as_tls_set_name(as_socket* sock, const char* tls_name);
 
+struct ssl_st;
+void as_tls_set_context_name(struct ssl_st* ssl, as_tls_context* ctx, const char* tls_name);
+
 int as_tls_connect_once(as_socket* sock);
 
 int as_tls_connect(as_socket* sock, uint64_t deadline);
-
-// int as_tls_peek(as_socket* sock, void* buf, int num);
 
 int as_tls_read_pending(as_socket* sock);
 
@@ -55,3 +58,7 @@ int as_tls_read(as_socket* sock, void* buf, size_t num, uint32_t socket_timeout,
 int as_tls_write_once(as_socket* sock, void* buf, size_t num);
 
 int as_tls_write(as_socket* sock, void* buf, size_t num, uint32_t socket_timeout, uint64_t deadline);
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

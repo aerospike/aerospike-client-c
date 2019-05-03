@@ -416,35 +416,23 @@ password_cb(char* buf, int size, int rwflag, void* udata)
 }
 
 as_status
-as_tls_context_setup(as_config_tls* tlscfg,
-					 as_tls_context* octx,
-					 as_error* errp)
+as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 {
 	// Clear the destination, in case we don't make it.
-	octx->ssl_ctx = NULL;
-	octx->cert_blacklist = NULL;
-	octx->log_session_info = false;
-	octx->for_login_only = false;
+	ctx->ssl_ctx = NULL;
+	ctx->pkey = NULL;
+	ctx->cert_blacklist = NULL;
+	ctx->log_session_info = tlscfg->log_session_info;
+	ctx->for_login_only = tlscfg->for_login_only;
 
-	if (! tlscfg->enable) {
-		return AEROSPIKE_OK;
-	}
-
-#if defined(AS_USE_LIBUV)
-	return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
-		"TLS not supported with libuv");
-#endif
-
-	pthread_mutex_init(&octx->lock, NULL);
-	
-	// Only initialize OpenSSL if we've enabled TLS.
 	as_tls_check_init();
-	
-	void* cert_blacklist = NULL;
+	pthread_mutex_init(&ctx->lock, NULL);
+
 	if (tlscfg->cert_blacklist) {
-		cert_blacklist = cert_blacklist_read(tlscfg->cert_blacklist);
-		if (! cert_blacklist) {
-			pthread_mutex_destroy(&octx->lock);
+		ctx->cert_blacklist = cert_blacklist_read(tlscfg->cert_blacklist);
+
+		if (! ctx->cert_blacklist) {
+			as_tls_context_destroy(ctx);
 			return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
 								   "Failed to read certificate blacklist: %s",
 								   tlscfg->cert_blacklist);
@@ -452,19 +440,16 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	}
 	
 	uint16_t protocols = AS_TLS_PROTOCOL_NONE;
-
 	as_status status = protocols_parse(tlscfg, &protocols, errp);
+
 	if (status != AEROSPIKE_OK) {
-		cert_blacklist_destroy(cert_blacklist);
-		pthread_mutex_destroy(&octx->lock);
+		as_tls_context_destroy(ctx);
 		return status;
 	}
 
 	const SSL_METHOD* method = NULL;
 
-	// If the selected protocol set is a single protocol we
-	// can use a specific method.
-	//
+	// If the selected protocol set is a single protocol we can use a specific method.
 	if (protocols == AS_TLS_PROTOCOL_TLSV1) {
 #if OPENSSL_VERSION_NUMBER >= 0x10100000L
 		method = TLS_client_method();
@@ -495,11 +480,11 @@ as_tls_context_setup(as_config_tls* tlscfg,
 #endif
 	}
 
-	SSL_CTX* ctx = SSL_CTX_new(method);
-	if (ctx == NULL) {
-		cert_blacklist_destroy(cert_blacklist);
-		pthread_mutex_destroy(&octx->lock);
-		
+	ctx->ssl_ctx = SSL_CTX_new(method);
+
+	if (ctx->ssl_ctx == NULL) {
+		as_tls_context_destroy(ctx);
+
 		unsigned long errcode = ERR_get_error();
 		char errbuf[1024];
 		ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
@@ -508,30 +493,29 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	}
 
 	/* always disable SSLv2, as per RFC 6176 */
-    SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2);
-	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv3);
+    SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2);
+	SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv3);
 
 	// Turn off non-enabled protocols.
 	if (! (protocols & AS_TLS_PROTOCOL_TLSV1)) {
-        SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1);
+        SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1);
     }
 	if (! (protocols & AS_TLS_PROTOCOL_TLSV1_1)) {
-        SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1_1);
+        SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1_1);
     }
 	if (! (protocols & AS_TLS_PROTOCOL_TLSV1_2)) {
-        SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1_2);
+        SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1_2);
     }
 	
 	if (tlscfg->cafile || tlscfg->capath) {
-		int rv =
-			SSL_CTX_load_verify_locations(ctx, tlscfg->cafile, tlscfg->capath);
+		int rv = SSL_CTX_load_verify_locations(ctx->ssl_ctx, tlscfg->cafile, tlscfg->capath);
+
 		if (rv != 1) {
-			cert_blacklist_destroy(cert_blacklist);
-			SSL_CTX_free(ctx);
-			pthread_mutex_destroy(&octx->lock);
+			as_tls_context_destroy(ctx);
 
 			char errbuf[1024];
 			unsigned long errcode = ERR_get_error();
+
 			if (errcode != 0) {
 				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
 				return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
@@ -543,7 +527,8 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	}
 
 	if (tlscfg->certfile) {
-		int rv = SSL_CTX_use_certificate_chain_file(ctx, tlscfg->certfile);
+		int rv = SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, tlscfg->certfile);
+
 		if (rv != 1) {
 			// We seem to be seeing this bug:
 			// https://groups.google.com/
@@ -552,17 +537,16 @@ as_tls_context_setup(as_config_tls* tlscfg,
 			// error assume we are OK.
 			//
 			unsigned long errcode = ERR_peek_error();
+
 			if (errcode != SSL_ERROR_NONE) {
 				// There *was* an error after all.
-				cert_blacklist_destroy(cert_blacklist);
-				SSL_CTX_free(ctx);
-				pthread_mutex_destroy(&octx->lock);
+				as_tls_context_destroy(ctx);
 
 				unsigned long errcode = ERR_get_error();
 				char errbuf[1024];
 				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
 				return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
-							  "SSL_CTX_use_certificate_chain_file failed: %s",
+									   "SSL_CTX_use_certificate_chain_file failed: %s",
 									   errbuf);
 			}
 		}
@@ -609,7 +593,8 @@ as_tls_context_setup(as_config_tls* tlscfg,
 				}
 			}
 			else {
-				SSL_CTX_use_PrivateKey(ctx, pkey);
+				ctx->pkey = pkey;
+				SSL_CTX_use_PrivateKey(ctx->ssl_ctx, pkey);
 				ok = true;
 			}
 
@@ -617,26 +602,24 @@ as_tls_context_setup(as_config_tls* tlscfg,
 		}
 
 		if (!ok) {
-				cert_blacklist_destroy(cert_blacklist);
-				SSL_CTX_free(ctx);
-				pthread_mutex_destroy(&octx->lock);
-				return AEROSPIKE_ERR_TLS_ERROR;
+			as_tls_context_destroy(ctx);
+			return AEROSPIKE_ERR_TLS_ERROR;
 		}
 	}
 
 	if (tlscfg->cipher_suite) {
-		int rv = SSL_CTX_set_cipher_list(ctx, tlscfg->cipher_suite);
+		int rv = SSL_CTX_set_cipher_list(ctx->ssl_ctx, tlscfg->cipher_suite);
+
 		if (rv != 1) {
-			cert_blacklist_destroy(cert_blacklist);
-			SSL_CTX_free(ctx);
-			pthread_mutex_destroy(&octx->lock);
+			as_tls_context_destroy(ctx);
 			return as_error_set_message(errp, AEROSPIKE_ERR_TLS_ERROR,
 										"no compatible cipher found");
 		}
 		// It's bogus that we have to create an SSL just to get the
 		// cipher list, but SSL_CTX_get_ciphers doesn't appear to
 		// exist ...
-		SSL * ssl = SSL_new(ctx);
+		SSL* ssl = SSL_new(ctx->ssl_ctx);
+
 		for (int prio = 0; true; ++prio) {
 			char const * cipherstr = SSL_get_cipher_list(ssl, prio);
 			if (!cipherstr) {
@@ -650,22 +633,18 @@ as_tls_context_setup(as_config_tls* tlscfg,
 	if (tlscfg->crl_check || tlscfg->crl_check_all) {
 		X509_VERIFY_PARAM* param = X509_VERIFY_PARAM_new();
 		unsigned long flags = X509_V_FLAG_CRL_CHECK;
+
 		if (tlscfg->crl_check_all) {
 			flags |= X509_V_FLAG_CRL_CHECK_ALL;
 		}
+
 		X509_VERIFY_PARAM_set_flags(param, flags);
-		SSL_CTX_set1_param(ctx, param);
+		SSL_CTX_set1_param(ctx->ssl_ctx, param);
 		X509_VERIFY_PARAM_free(param);
 	}
 
-	SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, verify_callback);
-
+	SSL_CTX_set_verify(ctx->ssl_ctx, SSL_VERIFY_PEER, verify_callback);
 	manage_sigpipe();
-
-	octx->ssl_ctx = ctx;
-	octx->cert_blacklist = cert_blacklist;
-	octx->log_session_info = tlscfg->log_session_info;
-	octx->for_login_only = tlscfg->for_login_only;
 	return AEROSPIKE_OK;
 }
 
@@ -675,11 +654,15 @@ as_tls_context_destroy(as_tls_context* ctx)
 	if (ctx->cert_blacklist) {
 		cert_blacklist_destroy(ctx->cert_blacklist);
 	}
+
+	if (ctx->pkey) {
+		EVP_PKEY_free(ctx->pkey);
+	}
 	
 	if (ctx->ssl_ctx) {
 		SSL_CTX_free(ctx->ssl_ctx);
-		pthread_mutex_destroy(&ctx->lock);
 	}
+	pthread_mutex_destroy(&ctx->lock);
 }
 
 as_status
@@ -769,6 +752,13 @@ as_tls_set_name(as_socket* sock, const char* tls_name)
 {
 	sock->tls_name = tls_name;
 	SSL_set_ex_data(sock->ssl, s_ex_name_index, (void*)tls_name);
+}
+
+void
+as_tls_set_context_name(struct ssl_st* ssl, as_tls_context* ctx, const char* tls_name)
+{
+	SSL_set_ex_data(ssl, s_ex_name_index, (char*)tls_name);
+	SSL_set_ex_data(ssl, s_ex_ctxt_index, ctx);
 }
 
 static void

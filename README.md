@@ -54,16 +54,15 @@ Install one of the supported event libraries:
 
 #### [libuv 1.8.0+](http://docs.libuv.org) 
 
-libuv has excellent performance and supports all platforms.  The client does not
-support async TLS (SSL) sockets when using libuv.  Use `install_libuv` to install
-on Linux/MacOS.  See [Windows Build](vs) for libuv configuration on 
-Windows.
+libuv has excellent performance and supports all platforms.  If using libuv and TLS (SSL),
+OpenSSL 1.1.0 or greater is required.  Use `install_libuv` to install on Linux/MacOS.
+See [Windows Build](vs) for libuv configuration on Windows.
 
 #### [libev 4.24+](http://dist.schmorp.de/libev)
 
 libev has excellent performance on Linux/MacOS, but its Windows implementation
 is suboptimal.  Therefore, the C client supports libev on Linux/MacOS only.
-The client does support async TLS (SSL) sockets when using libev.  Use
+The client does support async TLS (SSL) sockets when using libev.  Use 
 `install_libev` to install.
 
 #### [libevent 2.0.22+](http://libevent.org)

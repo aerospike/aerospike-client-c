@@ -1244,7 +1244,6 @@ as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_con
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		as_event_close_idle_connections_pool(&node->async_conn_pools[index], max_socket_idle_ns);
-		as_event_close_idle_connections_pool(&node->pipe_conn_pools[index], max_socket_idle_ns);
 	}
 
 	// Release each node.

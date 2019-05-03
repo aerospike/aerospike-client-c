@@ -56,6 +56,7 @@ extern "C" {
 #endif
 
 struct ssl_ctx_st;
+struct evp_pkey_st;
 
 /**
  * This structure holds TLS context which can be shared (read-only)
@@ -64,6 +65,7 @@ struct ssl_ctx_st;
 typedef struct as_tls_context_s {
 	pthread_mutex_t lock;
 	struct ssl_ctx_st* ssl_ctx;
+	struct evp_pkey_st* pkey;
 	void* cert_blacklist;
 	bool log_session_info;
 	bool for_login_only;

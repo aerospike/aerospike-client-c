@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2019 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -746,7 +746,7 @@ example_register_udf(aerospike* p_as, const char* udf_file_path)
 	if (aerospike_udf_put(p_as, &err, NULL, base, AS_UDF_TYPE_LUA,
 			&udf_content) == AEROSPIKE_OK) {
 		// Wait for the system metadata to spread to all nodes.
-		aerospike_udf_put_wait(p_as, &err, NULL, base, 100);
+		aerospike_udf_put_wait(p_as, &err, NULL, base, 1000);
 	}
 	else {
 		LOG("aerospike_udf_put() returned %d - %s", err.code, err.message);

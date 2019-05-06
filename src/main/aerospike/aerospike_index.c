@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -146,18 +146,15 @@ aerospike_index_create_is_done(aerospike* as, as_error* err, as_policy_info* pol
 				
 				int pct = atoi(p);
 				
-				if (pct >= 0 && pct < 100) {
-					done = false;
+				if (pct == 100) {
 					cf_free(response);
-					break;
+					continue;
 				}
 			}
 			cf_free(response);
 		}
-		else {
-			done = false;
-			break;
-		}
+		done = false;
+		break;
 	}
 	as_nodes_release(nodes);
 	return done;

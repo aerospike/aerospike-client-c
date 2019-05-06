@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -302,9 +302,15 @@ static bool
 aerospike_udf_put_is_done(aerospike* as, as_error* err, const as_policy_info* policy, char* filter)
 {
 	// Query all nodes for task completion status.
-	bool done = true;
 	as_nodes* nodes = as_nodes_reserve(as->cluster);
 	
+	if (nodes->size == 0) {
+		as_nodes_release(nodes);
+		return false;
+	}
+
+	bool done = true;
+
 	for (uint32_t i = 0; i < nodes->size && done; i++) {
 		as_node* node = nodes->array[i];
 		
@@ -313,12 +319,15 @@ aerospike_udf_put_is_done(aerospike* as, as_error* err, const as_policy_info* po
 		
 		if (status == AEROSPIKE_OK) {
 			char* p = strstr(response, filter);
-			
-			if (! p) {
-				done = false;
+
+			if (p) {
+				cf_free(response);
+				continue;
 			}
 			cf_free(response);
 		}
+		done = false;
+		break;
 	}
 	as_nodes_release(nodes);
 	return done;

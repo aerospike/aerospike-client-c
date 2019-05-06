@@ -41,8 +41,10 @@ end
 -- already exists the value is incremented. The resulting map m is returned.
 local function parse_numbers(m, rec)
 	local s = rec['numbers-bin']
-	for n in string.gmatch(s, "%d+") do
-		m[n] = (m[n] or 0) + 1
+	if s ~= nil then
+		for n in string.gmatch(s, "%d+") do
+			m[n] = (m[n] or 0) + 1
+		end
 	end
 	return m
 end

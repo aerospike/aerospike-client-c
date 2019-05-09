@@ -958,7 +958,7 @@ as_uv_tls_read(as_event_command* cmd)
 
 		if (cmd->pos < cmd->len) {
 			// Read not finished.
-			return;
+			continue;
 		}
 
 		switch (cmd->state) {

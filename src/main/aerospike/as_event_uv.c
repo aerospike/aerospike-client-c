@@ -1024,12 +1024,15 @@ as_uv_tls_read(as_event_command* cmd)
 
 			case AS_ASYNC_STATE_COMMAND_READ_BODY: {
 				// Done reading command block.
-				if (! cmd->parse_results(cmd)) {
-					// Batch, scan, query is not finished.
-					cmd->len = sizeof(as_proto);
-					cmd->pos = 0;
-					cmd->state = AS_ASYNC_STATE_COMMAND_READ_HEADER;
+				if (cmd->parse_results(cmd)) {
+					// Done with command.
+					return;
 				}
+
+				// Batch, scan, query is not finished.
+				cmd->len = sizeof(as_proto);
+				cmd->pos = 0;
+				cmd->state = AS_ASYNC_STATE_COMMAND_READ_HEADER;
 				break;
 			}
 		}

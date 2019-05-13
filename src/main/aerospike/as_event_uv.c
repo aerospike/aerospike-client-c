@@ -55,7 +55,7 @@ typedef struct as_uv_tls {
 	struct bio_st* nbio;  // network bio.
 	as_uv_tls_fn callback;
 	char* buf;
-	uint32_t capacity;
+	int capacity;
 	int len;
 	int error;
 } as_uv_tls;

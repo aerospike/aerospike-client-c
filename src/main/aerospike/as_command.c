@@ -442,9 +442,8 @@ as_command_execute(as_command* cmd, as_error* err)
 		status = as_node_get_connection(err, node, cmd->socket_timeout, cmd->deadline_ms, &socket);
 		
 		if (status != AEROSPIKE_OK) {
-			// Do not retry on connection limit error or server error response.
-			if (status == AEROSPIKE_ERR_NO_MORE_CONNECTIONS ||
-				(status > 0 && status != AEROSPIKE_ERR_TIMEOUT)) {
+			// Do not retry on server error response such as invalid user/password.
+			if (status > 0 && status != AEROSPIKE_ERR_TIMEOUT) {
 				if (release_node) {
 					as_node_release(node);
 				}
@@ -550,9 +549,9 @@ Retry:
 		}
 
 		// Alternate between master and prole on socket errors or database reads.
-		// Timeouts are not a good indicator of impending data migration.
-		if (status != AEROSPIKE_ERR_TIMEOUT || ((cmd->flags & AS_COMMAND_FLAGS_READ) &&
-			!(cmd->flags & AS_COMMAND_FLAGS_LINEARIZE))) {
+		// Timeouts/NO_MORE_CONNECTIONS are not a good indicator of impending data migration.
+		if ((status != AEROSPIKE_ERR_TIMEOUT && status != AEROSPIKE_ERR_NO_MORE_CONNECTIONS) ||
+			((cmd->flags & AS_COMMAND_FLAGS_READ) && !(cmd->flags & AS_COMMAND_FLAGS_LINEARIZE))) {
 			// Note: SC session read will ignore this setting because it uses master only.
 			cmd->master = !cmd->master;
 		}

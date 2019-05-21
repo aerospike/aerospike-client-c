@@ -595,8 +595,14 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		return;
 	}
 
-	// Do not retry on connection limit error.
 	event_loop->errors++;
+
+	// AEROSPIKE_ERR_NO_MORE_CONNECTIONS should be handled as timeout (true) because
+	// it's not an indicator of impending data migration.  This retry is recursive.
+	if (as_event_command_retry(cmd, true)) {
+		return;
+	}
+
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
 					"Max node/event loop %s async connections would be exceeded: %u",

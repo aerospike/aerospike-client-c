@@ -614,6 +614,40 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 	as_event_error_callback(cmd, &err);
 }
 
+bool
+as_event_proto_parse(as_event_command* cmd, as_proto* proto, uint8_t expected_type)
+{
+	if (proto->version != AS_PROTO_VERSION) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_CLIENT,
+						"Received invalid proto version: %d Expected: %d",
+						proto->version, AS_PROTO_VERSION);
+		as_event_parse_error(cmd, &err);
+		return false;
+	}
+
+	if (proto->type != expected_type) {
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_CLIENT,
+						"Received invalid proto type: %d Expected: %d",
+						proto->type, expected_type);
+		as_event_parse_error(cmd, &err);
+		return false;
+	}
+
+	as_proto_swap_from_be(proto);
+
+	if (proto->sz > 128 * 1024 * 1024) { // 128 MB
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_CLIENT,
+						"Received invalid proto size: %" PRIu64,
+						proto->sz);
+		as_event_parse_error(cmd, &err);
+		return false;
+	}
+	return true;
+}
+
 void
 as_event_socket_timeout(as_event_command* cmd)
 {

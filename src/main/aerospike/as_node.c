@@ -685,7 +685,7 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	as_proto* proto = (as_proto*)stack_buf;
 	
 	proto->sz = names_len;
-	proto->version = AS_MESSAGE_VERSION;
+	proto->version = AS_PROTO_VERSION;
 	proto->type = AS_INFO_MESSAGE_TYPE;
 	as_proto_swap_to_be(proto);
 	
@@ -702,8 +702,13 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	}
 	
 	proto = (as_proto*)stack_buf;
-	as_proto_swap_from_be(proto);
-	
+
+	as_status status = as_proto_parse(err, proto, AS_INFO_MESSAGE_TYPE);
+
+	if (status) {
+		return 0;
+	}
+
 	// Sanity check body size.
 	if (proto->sz == 0 || proto->sz > 512 * 1024) {
 		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid info response size %lu", proto->sz);

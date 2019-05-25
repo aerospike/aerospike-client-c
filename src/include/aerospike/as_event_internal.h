@@ -184,6 +184,9 @@ typedef struct as_event_executor {
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err);
 
+bool
+as_event_proto_parse(as_event_command* cmd, as_proto* proto, uint8_t expected_type);
+
 void
 as_event_socket_timeout(as_event_command* cmd);
 
@@ -669,15 +672,20 @@ as_event_set_auth_read_header(as_event_command* cmd)
 	cmd->state = AS_ASYNC_STATE_AUTH_READ_HEADER;
 }
 	
-static inline void
+static inline bool
 as_event_set_auth_parse_header(as_event_command* cmd)
 {
 	// Authenticate read buffer uses the standard read buffer (buf).
 	as_proto* proto = (as_proto*)cmd->buf;
-	as_proto_swap_from_be(proto);
+
+	if (! as_event_proto_parse(cmd, proto, AS_ADMIN_MESSAGE_TYPE)) {
+		return false;
+	}
+
 	cmd->len = (uint32_t)proto->sz;
 	cmd->pos = 0;
 	cmd->state = AS_ASYNC_STATE_AUTH_READ_BODY;
+	return true;
 }
 
 static inline void

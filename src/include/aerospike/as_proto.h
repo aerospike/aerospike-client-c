@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,11 +17,25 @@
 #pragma once
 
 #include <aerospike/as_std.h>
+#include <aerospike/as_error.h>
 #include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+// Proto header version
+#define AS_PROTO_VERSION 2
+
+// Proto message types
+#define AS_INFO_MESSAGE_TYPE 1
+#define AS_ADMIN_MESSAGE_TYPE 2
+#define AS_MESSAGE_TYPE 3
+#define AS_COMPRESSED_MESSAGE_TYPE 4
 
 /******************************************************************************
  * TYPES
@@ -112,6 +126,7 @@ typedef struct as_proto_msg_s {
 void as_proto_swap_to_be(as_proto *m);
 void as_proto_swap_from_be(as_proto *m);
 void as_msg_swap_header_from_be(as_msg *m);
+as_status as_proto_parse(as_error* err, as_proto* proto, uint8_t expected_type);
 
 #ifdef __cplusplus
 } // end extern "C"

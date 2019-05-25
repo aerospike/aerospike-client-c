@@ -371,7 +371,13 @@ as_query_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_ti
 		if (status) {
 			break;
 		}
-		as_proto_swap_from_be(&proto);
+
+		status = as_proto_parse(err, &proto, AS_MESSAGE_TYPE);
+
+		if (status) {
+			break;
+		}
+
 		size_t size = proto.sz;
 		
 		if (size > 0) {

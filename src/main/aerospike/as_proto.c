@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -51,4 +51,29 @@ as_msg_swap_header_from_be(as_msg *m)
 	m->transaction_ttl = cf_swap_from_be32(m->transaction_ttl);
 	m->n_fields = cf_swap_from_be16(m->n_fields);
 	m->n_ops= cf_swap_from_be16(m->n_ops);
+}
+
+as_status
+as_proto_parse(as_error* err, as_proto* proto, uint8_t expected_type)
+{
+	if (proto->version != AS_PROTO_VERSION) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+							   "Received invalid proto version: %d Expected: %d",
+							   proto->version, AS_PROTO_VERSION);
+	}
+
+	if (proto->type != expected_type) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+							   "Received invalid proto type: %d Expected: %d",
+							   proto->type, expected_type);
+	}
+
+	as_proto_swap_from_be(proto);
+
+	if (proto->sz > 128 * 1024 * 1024) { // 128 MB
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+							   "Received invalid proto size: %" PRIu64,
+							   proto->sz);
+	}
+	return AEROSPIKE_OK;
 }

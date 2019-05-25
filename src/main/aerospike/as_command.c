@@ -594,8 +594,13 @@ as_command_parse_header(as_error* err, as_socket* sock, as_node* node, uint32_t 
 		return status;
 	}
 	
+	status = as_proto_parse(err, &msg->proto, AS_MESSAGE_TYPE);
+
+	if (status) {
+		return status;
+	}
+
 	// Ensure that there is no data left to read.
-	as_proto_swap_from_be(&msg->proto);
 	as_msg_swap_header_from_be(&msg->m);
 	size_t size = msg->proto.sz  - msg->m.header_sz;
 	
@@ -1094,8 +1099,13 @@ as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint32_t 
 	if (status) {
 		return status;
 	}
-	
-	as_proto_swap_from_be(&msg.proto);
+
+	status = as_proto_parse(err, &msg.proto, AS_MESSAGE_TYPE);
+
+	if (status) {
+		return status;
+	}
+
 	as_msg_swap_header_from_be(&msg.m);
 	size_t size = msg.proto.sz	- msg.m.header_sz;
 	uint8_t* buf = 0;
@@ -1182,7 +1192,12 @@ as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, 
 		return status;
 	}
 	
-	as_proto_swap_from_be(&msg.proto);
+	status = as_proto_parse(err, &msg.proto, AS_MESSAGE_TYPE);
+
+	if (status) {
+		return status;
+	}
+
 	as_msg_swap_header_from_be(&msg.m);
 	size_t size = msg.proto.sz	- msg.m.header_sz;
 	uint8_t* buf = 0;

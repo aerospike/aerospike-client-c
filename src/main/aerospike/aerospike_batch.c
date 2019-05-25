@@ -354,7 +354,13 @@ as_batch_parse(
 		if (status) {
 			break;
 		}
-		as_proto_swap_from_be(&proto);
+
+		status = as_proto_parse(err, &proto, AS_MESSAGE_TYPE);
+
+		if (status) {
+			break;
+		}
+
 		size_t size = proto.sz;
 		
 		if (size > 0) {

@@ -315,7 +315,11 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 
 	if (cmd->state == AS_ASYNC_STATE_COMMAND_READ_HEADER) {
 		as_proto* proto = (as_proto*)cmd->buf;
-		as_proto_swap_from_be(proto);
+
+		if (! as_event_proto_parse(cmd, proto, AS_MESSAGE_TYPE)) {
+			return;
+		}
+
 		size_t size = proto->sz;
 		
 		cmd->len = (uint32_t)size;
@@ -463,7 +467,9 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	}
 	
 	if (cmd->state == AS_ASYNC_STATE_AUTH_READ_HEADER) {
-		as_event_set_auth_parse_header(cmd);
+		if (! as_event_set_auth_parse_header(cmd)) {
+			return;
+		}
 		
 		if (cmd->len > cmd->read_capacity) {
 			as_error err;
@@ -964,7 +970,9 @@ as_uv_tls_read(as_event_command* cmd)
 		switch (cmd->state) {
 			case AS_ASYNC_STATE_AUTH_READ_HEADER:
 				// Done reading authentication header.
-				as_event_set_auth_parse_header(cmd);
+				if (! as_event_set_auth_parse_header(cmd)) {
+					return;
+				}
 
 				if (cmd->len > cmd->read_capacity) {
 					as_error err;
@@ -996,7 +1004,11 @@ as_uv_tls_read(as_event_command* cmd)
 			case AS_ASYNC_STATE_COMMAND_READ_HEADER: {
 				// Done reading command header.
 				as_proto* proto = (as_proto*)cmd->buf;
-				as_proto_swap_from_be(proto);
+
+				if (! as_event_proto_parse(cmd, proto, AS_MESSAGE_TYPE)) {
+					return;
+				}
+
 				size_t size = proto->sz;
 
 				cmd->len = (uint32_t)size;

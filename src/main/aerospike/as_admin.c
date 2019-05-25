@@ -63,8 +63,6 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define PRIVILEGES 12
 
 // Misc
-#define MSG_VERSION 2ULL
-#define MSG_TYPE 2ULL
 #define FIELD_HEADER_SIZE 5
 #define HEADER_SIZE 24
 #define HEADER_REMAINING 16
@@ -177,7 +175,7 @@ static as_status
 as_admin_send(as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint8_t* end, uint32_t socket_timeout, uint64_t deadline_ms)
 {
 	uint64_t len = end - buffer;
-	uint64_t proto = (len - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
+	uint64_t proto = (len - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_ADMIN_MESSAGE_TYPE << 48);
 	*(uint64_t*)buffer = cf_swap_to_be64(proto);
 	
 	return as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
@@ -248,7 +246,13 @@ as_admin_read_blocks(as_error* err, as_socket* sock, as_node* node, uint64_t dea
 		if (status) {
 			break;
 		}
-		as_proto_swap_from_be(&proto);
+
+		status = as_proto_parse(err, &proto, AS_ADMIN_MESSAGE_TYPE);
+
+		if (status) {
+			break;
+		}
+
 		size_t size = proto.sz;
 		
 		if (size > 0) {
@@ -410,7 +414,13 @@ as_cluster_login(
 
 	// Read session token.
 	as_proto* proto = (as_proto*)buffer;
-	as_proto_swap_from_be(proto);
+
+	status = as_proto_parse(err, proto, AS_ADMIN_MESSAGE_TYPE);
+
+	if (status) {
+		return status;
+	}
+
 	int64_t receive_size = proto->sz - HEADER_REMAINING;
 	int field_count = buffer[11];
 
@@ -484,7 +494,7 @@ as_authenticate_set(as_cluster* cluster, as_node* node, uint8_t* buffer)
 	}
 
 	uint64_t len = p - buffer;
-	uint64_t proto = (len - 8) | (MSG_VERSION << 56) | (MSG_TYPE << 48);
+	uint64_t proto = (len - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_ADMIN_MESSAGE_TYPE << 48);
 	*(uint64_t*)buffer = cf_swap_to_be64(proto);
 	return (uint32_t)len;
 }

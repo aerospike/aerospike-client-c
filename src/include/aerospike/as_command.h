@@ -102,15 +102,6 @@ extern "C" {
 //   1      0     allow prole
 //   1      1     allow unavailable
 
-// Transaction message
-#define AS_MESSAGE_VERSION 2
-#define AS_MESSAGE_TYPE 3
-#define AS_COMPRESSED_MESSAGE_TYPE 4
-
-// Info message
-#define AS_INFO_MESSAGE_VERSION 2
-#define AS_INFO_MESSAGE_TYPE 1
-
 // Misc
 #define AS_HEADER_SIZE 30
 #define AS_FIELD_HEADER_SIZE 5
@@ -448,7 +439,7 @@ static inline size_t
 as_command_write_end(uint8_t* begin, uint8_t* end)
 {
 	uint64_t len = end - begin;
-	uint64_t proto = (len - 8) | ((uint64_t)AS_MESSAGE_VERSION << 56) | ((uint64_t)AS_MESSAGE_TYPE << 48);
+	uint64_t proto = (len - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_MESSAGE_TYPE << 48);
 	*(uint64_t*)begin = cf_swap_to_be64(proto);
 	return len;
 }
@@ -461,7 +452,7 @@ static inline size_t
 as_command_compress_write_end(uint8_t* begin, uint8_t* end, uint64_t uncompressed_sz)
 {
 	uint64_t len = end - begin;
-	uint64_t proto = (len - 8) | ((uint64_t)AS_MESSAGE_VERSION << 56) | ((uint64_t)AS_COMPRESSED_MESSAGE_TYPE << 48);
+	uint64_t proto = (len - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_COMPRESSED_MESSAGE_TYPE << 48);
 	*(uint64_t*)begin = cf_swap_to_be64(proto);
 
 	// TODO: We are not passing this in network byte order because of a mistake

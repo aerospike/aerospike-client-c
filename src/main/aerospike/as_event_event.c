@@ -460,7 +460,11 @@ as_event_command_peek_block(as_event_command* cmd)
 	}
 	
 	as_proto* proto = (as_proto*)cmd->buf;
-	as_proto_swap_from_be(proto);
+
+	if (! as_event_proto_parse(cmd, proto, AS_MESSAGE_TYPE)) {
+		return AS_EVENT_READ_ERROR;
+	}
+
 	size_t size = proto->sz;
 	
 	cmd->len = (uint32_t)size;
@@ -511,7 +515,10 @@ as_event_parse_authentication(as_event_command* cmd)
 		if (rv != AS_EVENT_READ_COMPLETE) {
 			return rv;
 		}
-		as_event_set_auth_parse_header(cmd);
+
+		if (! as_event_set_auth_parse_header(cmd)) {
+			return AS_EVENT_READ_ERROR;
+		}
 
 		if (cmd->len > cmd->read_capacity) {
 			as_error err;
@@ -555,7 +562,11 @@ as_event_command_read(as_event_command* cmd)
 		}
 		
 		as_proto* proto = (as_proto*)cmd->buf;
-		as_proto_swap_from_be(proto);
+
+		if (! as_event_proto_parse(cmd, proto, AS_MESSAGE_TYPE)) {
+			return AS_EVENT_READ_ERROR;
+		}
+
 		size_t size = proto->sz;
 		
 		cmd->len = (uint32_t)size;

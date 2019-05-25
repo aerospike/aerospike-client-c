@@ -140,7 +140,7 @@ as_info_command_node_async(
 	memcpy(p, command, size);
 	p += size;
 	size = p - cmd->buf;
-	uint64_t proto = (size - 8) | ((uint64_t)AS_INFO_MESSAGE_VERSION << 56) | ((uint64_t)AS_INFO_MESSAGE_TYPE << 48);
+	uint64_t proto = (size - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_INFO_MESSAGE_TYPE << 48);
 	*(uint64_t*)cmd->buf = cf_swap_to_be64(proto);
 	cmd->write_len = (uint32_t)size;
 
@@ -251,7 +251,7 @@ as_info_command(
 	
 	// Write header
 	size = p - cmd;
-	uint64_t proto = (size - 8) | ((uint64_t)AS_INFO_MESSAGE_VERSION << 56) | ((uint64_t)AS_INFO_MESSAGE_TYPE << 48);
+	uint64_t proto = (size - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_INFO_MESSAGE_TYPE << 48);
 	*(uint64_t*)cmd = cf_swap_to_be64(proto);
 	
 	// Write command
@@ -270,8 +270,12 @@ as_info_command(
 		return status;
 	}
 	
-	as_proto_swap_from_be(&header);
-	
+	status = as_proto_parse(err, &header, AS_INFO_MESSAGE_TYPE);
+
+	if (status) {
+		return status;
+	}
+
 	if (header.sz) {
 		if (max_response_length > 0 && header.sz > max_response_length) {
 			// Response buffer is too big.  Read a few bytes just to see what the buffer contains.

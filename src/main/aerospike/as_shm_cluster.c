@@ -714,7 +714,7 @@ static uint32_t g_shm_randomizer = 0;
 as_node*
 as_partition_shm_get_node(
 	as_cluster* cluster, const char* ns, as_partition_shm* p, as_policy_replica replica,
-	bool use_master
+	bool use_master, bool is_retry
 	)
 {
 	as_node** local_nodes = cluster->shm_info->local_nodes;
@@ -739,7 +739,12 @@ as_partition_shm_get_node(
 		}
 
 		case AS_POLICY_REPLICA_PREFER_RACK: {
-			return shm_prefer_rack_node(cluster, local_nodes, ns, p, use_master);
+			if (!is_retry) {
+				return shm_prefer_rack_node(cluster, local_nodes, ns, p, use_master);
+			}
+			else {
+				return shm_get_sequence_node(cluster, local_nodes, p, use_master);
+			}
 		}
 	}
 }

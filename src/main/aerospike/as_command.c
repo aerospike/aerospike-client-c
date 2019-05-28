@@ -427,7 +427,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 		else {
 			node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->replica,
-										 cmd->master);
+										 cmd->master, cmd->iteration > 0);
 
 			if (! node) {
 				return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,

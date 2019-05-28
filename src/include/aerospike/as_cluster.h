@@ -416,7 +416,7 @@ as_cluster_release_partitions(as_cluster* cluster)
 as_node*
 as_partition_reg_get_node(
 	as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica,
-	bool use_master
+	bool use_master, bool is_retry
 	);
 
 struct as_partition_shm_s;
@@ -429,7 +429,7 @@ struct as_partition_shm_s;
 as_node*
 as_partition_shm_get_node(
 	as_cluster* cluster, const char* ns, struct as_partition_shm_s* partition,
-	as_policy_replica replica, bool use_master
+	as_policy_replica replica, bool use_master, bool is_retry
 	);
 
 /**
@@ -440,14 +440,16 @@ as_partition_shm_get_node(
 static inline as_node*
 as_partition_get_node(
 	as_cluster* cluster, const char* ns, void* partition, as_policy_replica replica,
-	bool master
+	bool master, bool is_retry
 	)
 {
 	if (cluster->shm_info) {
-		return as_partition_shm_get_node(cluster, ns, (struct as_partition_shm_s*)partition, replica, master);
+		return as_partition_shm_get_node(cluster, ns, (struct as_partition_shm_s*)partition,
+										 replica, master, is_retry);
 	}
 	else {
-		return as_partition_reg_get_node(cluster, ns, (as_partition*)partition, replica, master);
+		return as_partition_reg_get_node(cluster, ns, (as_partition*)partition, replica, master,
+										 is_retry);
 	}
 }
 

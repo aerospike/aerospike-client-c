@@ -259,7 +259,8 @@ static uint32_t g_randomizer = 0;
 
 as_node*
 as_partition_reg_get_node(
-	as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica, bool use_master
+	as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica,
+	bool use_master, bool is_retry
 	)
 {
 	switch (replica) {
@@ -282,7 +283,12 @@ as_partition_reg_get_node(
 		}
 
 		case AS_POLICY_REPLICA_PREFER_RACK: {
-			return prefer_rack_node(cluster, ns, p, use_master);
+			if (!is_retry) {
+				return prefer_rack_node(cluster, ns, p, use_master);
+			}
+			else {
+				return get_sequence_node(cluster, p, use_master);
+			}
 		}
 	}
 }

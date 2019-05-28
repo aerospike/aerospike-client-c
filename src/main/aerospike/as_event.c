@@ -543,7 +543,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		}
 
 		cmd->node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->replica,
-										  cmd->flags & AS_ASYNC_FLAGS_MASTER);
+										  cmd->flags & AS_ASYNC_FLAGS_MASTER, cmd->iteration > 0);
 
 		if (! cmd->node) {
 			as_error err;

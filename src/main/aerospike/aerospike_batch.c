@@ -534,7 +534,7 @@ as_batch_get_replica_sc(const as_policy_batch* policy)
 static as_status
 as_batch_get_node(
 	as_cluster* cluster, as_error* err, const as_key* key, as_policy_replica replica,
-	as_policy_replica replica_sc, bool master, bool master_sc, as_node** node_pp
+	as_policy_replica replica_sc, bool master, bool master_sc, bool is_retry, as_node** node_pp
 	)
 {
 	as_partition_info pi;
@@ -549,7 +549,7 @@ as_batch_get_node(
 		master = master_sc;
 	}
 
-	as_node* node = as_partition_get_node(cluster, pi.ns, pi.partition, replica, master);
+	as_node* node = as_partition_get_node(cluster, pi.ns, pi.partition, replica, master, is_retry);
 
 	as_cluster_release_partitions(cluster);
 
@@ -904,7 +904,8 @@ as_batch_keys_execute(
 		}
 
 		as_node* node;
-		status = as_batch_get_node(cluster, err, key, policy->replica, replica_sc, true, true, &node);
+		status = as_batch_get_node(cluster, err, key, policy->replica, replica_sc, true, true,
+								   false, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(&batch_nodes);
@@ -1252,7 +1253,8 @@ as_batch_records_execute(
 		}
 		
 		as_node* node;
-		status = as_batch_get_node(cluster, err, key, policy->replica, replica_sc, true, true, &node);
+		status = as_batch_get_node(cluster, err, key, policy->replica, replica_sc, true, true,
+								   false, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_read_cleanup(async_executor, nodes, &batch_nodes);
@@ -1331,7 +1333,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 
 		as_node* node;
 		status = as_batch_get_node(cluster, err, key, task->policy->replica, task->replica_sc,
-								   parent->master, parent->master_sc, &node);
+								   parent->master, parent->master_sc, true, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(&batch_nodes);
@@ -1408,7 +1410,7 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 
 		as_node* node;
 		status = as_batch_get_node(cluster, err, key, task->policy->replica, task->replica_sc,
-								   parent->master, parent->master_sc, &node);
+								   parent->master, parent->master_sc, true, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(&batch_nodes);
@@ -1579,7 +1581,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		as_node* node;
 		status = as_batch_get_node(cluster, &err, key, policy.replica, executor->replica_sc,
 								   parent->flags & AS_ASYNC_FLAGS_MASTER,
-								   parent->flags & AS_ASYNC_FLAGS_MASTER_SC, &node);
+								   parent->flags & AS_ASYNC_FLAGS_MASTER_SC,
+								   true, &node);
 
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(&batch_nodes);

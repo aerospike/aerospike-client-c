@@ -282,6 +282,11 @@ typedef enum as_status_e {
 	AEROSPIKE_INVALID_CREDENTIAL = 65,
 
 	/**
+	 * Login session expired.
+	 */
+	AEROSPIKE_EXPIRED_SESSION = 66,
+
+	/**
 	 * Role name is invalid.
 	 */
 	AEROSPIKE_INVALID_ROLE = 70,
@@ -297,6 +302,11 @@ typedef enum as_status_e {
 	AEROSPIKE_INVALID_PRIVILEGE = 72,
 	
 	/**
+	 * Invalid IP whitelist.
+	 */
+	AEROSPIKE_INVALID_WHITELIST = 73,
+
+	/**
 	 * User must be authentication before performing database operations.
 	 */
 	AEROSPIKE_NOT_AUTHENTICATED = 80,
@@ -306,6 +316,11 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ROLE_VIOLATION = 81,
 	
+	/**
+	 * Command not allowed because sender IP not whitelisted.
+	 */
+	AEROSPIKE_NOT_WHITELISTED = 82,
+
 	/**
 	 * Generic UDF error.
 	 */

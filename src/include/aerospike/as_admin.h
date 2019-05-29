@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -73,7 +73,12 @@ typedef enum as_privilege_code_e {
 	/**
 	 * User can read and write data through user defined functions.
 	 */
-	AS_PRIVILEGE_READ_WRITE_UDF = 12
+	AS_PRIVILEGE_READ_WRITE_UDF = 12,
+
+	/**
+	 * User can write data only.
+	 */
+	AS_PRIVILEGE_WRITE = 13
 } as_privilege_code;
 
 /**
@@ -106,7 +111,17 @@ typedef struct as_role_s {
 	 * Role name.
 	 */
 	char name[AS_ROLE_SIZE];
-	
+
+	/**
+	 * Array of allowable IP address strings.
+	 */
+	char** whitelist;
+
+	/**
+	 * Length of whitelist array.
+	 */
+	int whitelist_size;
+
 	/**
 	 * Length of privileges array.
 	 */
@@ -150,43 +165,74 @@ struct as_socket_s;
  * sending to server.
  */
 AS_EXTERN as_status
-aerospike_create_user(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name, const char* password, const char** roles, int roles_size);
+aerospike_create_user(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name,
+	const char* password, const char** roles, int roles_size
+	);
 
 /**
  * Remove user from cluster.
  */
 AS_EXTERN as_status
-aerospike_drop_user(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name);
+aerospike_drop_user(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name
+	);
 
 /**
- * Set user's password by user administrator.  Clear-text password will be hashed using bcrypt before sending to server.
+ * Set user's password by user administrator.  Clear-text password will be hashed using bcrypt
+ * before sending to server.
  */
 AS_EXTERN as_status
-aerospike_set_password(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name, const char* password);
+aerospike_set_password(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name,
+	const char* password
+	);
 
 /**
- * Change user's password by user.  Clear-text password will be hashed using bcrypt before sending to server.
+ * Change user's password by user.  Clear-text password will be hashed using bcrypt before
+ * sending to server.
  */
 AS_EXTERN as_status
-aerospike_change_password(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name, const char* password);
+aerospike_change_password(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name,
+	const char* password
+	);
 
 /**
  * Add role to user's list of roles.
  */
 AS_EXTERN as_status
-aerospike_grant_roles(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name, const char** roles, int roles_size);
+aerospike_grant_roles(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name,
+	const char** roles, int roles_size
+	);
 
 /**
  * Remove role from user's list of roles.
  */
 AS_EXTERN as_status
-aerospike_revoke_roles(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name, const char** roles, int roles_size);
+aerospike_revoke_roles(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name,
+	const char** roles, int roles_size
+	);
 
 /**
  * Create user defined role.
  */
 AS_EXTERN as_status
-aerospike_create_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role, as_privilege** privileges, int privileges_size);
+aerospike_create_role(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role,
+	as_privilege** privileges, int privileges_size
+	);
+
+/**
+ * Create user defined role with optional comma separated IP whitelist.
+ */
+AS_EXTERN as_status
+aerospike_create_role_whitelist(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role,
+	as_privilege** privileges, int privileges_size, const char** whitelist, int whitelist_size
+	);
 
 /**
  * Delete user defined role.
@@ -198,20 +244,38 @@ aerospike_drop_role(aerospike* as, as_error* err, const as_policy_admin* policy,
  * Add specified privileges to user.
  */
 AS_EXTERN as_status
-aerospike_grant_privileges(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role, as_privilege** privileges, int privileges_size);
+aerospike_grant_privileges(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role,
+	as_privilege** privileges, int privileges_size
+	);
 
 /**
  * Remove specified privileges from user.
  */
 AS_EXTERN as_status
-aerospike_revoke_privileges(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role, as_privilege** privileges, int privileges_size);
+aerospike_revoke_privileges(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role,
+	as_privilege** privileges, int privileges_size
+	);
+
+/**
+ * Set comma separated IP whitelist.  If whitelist is NULL, remove existing whitelist from role.
+ */
+AS_EXTERN as_status
+aerospike_set_whitelist(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role,
+	const char** whitelist, int whitelist_size
+	);
 
 /**
  * Retrieve roles for a given user.
  * When successful, as_user_destroy() must be called to free resources.
  */
 AS_EXTERN as_status
-aerospike_query_user(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name, as_user** user);
+aerospike_query_user(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name,
+	as_user** user
+	);
 
 /**
  * Release as_user_roles memory.
@@ -224,7 +288,9 @@ as_user_destroy(as_user* user);
  * When successful, as_users_destroy() must be called to free resources.
  */
 AS_EXTERN as_status
-aerospike_query_users(aerospike* as, as_error* err, const as_policy_admin* policy, as_user*** users, int* users_size);
+aerospike_query_users(
+	aerospike* as, as_error* err, const as_policy_admin* policy, as_user*** users, int* users_size
+	);
 
 /**
  * Release memory for as_user_roles array.
@@ -237,7 +303,10 @@ as_users_destroy(as_user** users, int users_size);
  * When successful, as_role_destroy() must be called to free resources.
  */
 AS_EXTERN as_status
-aerospike_query_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role_name, as_role** role);
+aerospike_query_role(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role_name,
+	as_role** role
+	);
 
 /**
  * Release as_role memory.
@@ -250,7 +319,9 @@ as_role_destroy(as_role* role);
  * When successful, as_roles_destroy() must be called to free resources.
  */
 AS_EXTERN as_status
-aerospike_query_roles(aerospike* as, as_error* err, const as_policy_admin* policy, as_role*** roles, int* roles_size);
+aerospike_query_roles(
+	aerospike* as, as_error* err, const as_policy_admin* policy, as_role*** roles, int* roles_size
+	);
 
 /**
  * Release memory for as_role array.
@@ -279,7 +350,8 @@ as_cluster_login(
 as_status
 as_authenticate(
 	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, struct as_node_s* node,
-	uint8_t* session_token, uint32_t session_token_length, uint32_t socket_timeout, uint64_t deadline_ms
+	uint8_t* session_token, uint32_t session_token_length, uint32_t socket_timeout,
+	uint64_t deadline_ms
 	);
 
 /**

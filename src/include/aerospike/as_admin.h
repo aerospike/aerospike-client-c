@@ -226,7 +226,8 @@ aerospike_create_role(
 	);
 
 /**
- * Create user defined role with optional comma separated IP whitelist.
+ * Create user defined role with optional privileges and whitelist.
+ * Whitelist IP addresses can contain wildcards (ie. 10.1.2.0/24).
  */
 AS_EXTERN as_status
 aerospike_create_role_whitelist(
@@ -259,7 +260,9 @@ aerospike_revoke_privileges(
 	);
 
 /**
- * Set comma separated IP whitelist.  If whitelist is NULL, remove existing whitelist from role.
+ * Set IP address whitelist for a role.
+ * If whitelist is NULL or empty, remove existing whitelist from role.
+ * IP addresses can contain wildcards (ie. 10.1.2.0/24).
  */
 AS_EXTERN as_status
 aerospike_set_whitelist(

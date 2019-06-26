@@ -17,7 +17,7 @@ and runtime.
 
 The C client library requires other third-party libraries depending on your platform.
 
-### Debian 7+ and Ubuntu 14+
+### Debian 8+ and Ubuntu 14+
 
   $ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++
 

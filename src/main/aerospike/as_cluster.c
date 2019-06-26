@@ -188,22 +188,19 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 }
 
 static as_status
-as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
+as_cluster_seed_node(as_cluster* cluster, as_error* err, bool enable_warnings)
 {
-	// Add all nodes at once to avoid copying entire array multiple times.
-	as_vector nodes_to_add;
-	as_vector_inita(&nodes_to_add, sizeof(as_node*), 64);
-
+	as_node* node = NULL;
 	as_node_info node_info;
 	as_error error_local;
-	as_error_init(&error_local); // AEROSPIKE_ERR_TIMEOUT doesn't come with a message; make sure it's initialized.
+	as_error_init(&error_local);
 	as_status status = AEROSPIKE_OK;
 	as_status conn_status = AEROSPIKE_ERR_CLIENT;
 	
 	pthread_mutex_lock(&cluster->seed_lock);
 	as_vector* seeds = cluster->seeds;
 
-	for (uint32_t i = 0; i < seeds->size; i++) {
+	for (uint32_t i = 0; i < seeds->size && node == NULL; i++) {
 		as_host* seed = as_vector_get(seeds, i);
 
 		as_host host;
@@ -227,20 +224,12 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 			status = as_lookup_node(cluster, &error_local, &host, addr, true, &node_info);
 			
 			if (status == AEROSPIKE_OK) {
-				as_node* node = as_peers_find_local_node(&nodes_to_add, node_info.name);
-
-				if (node) {
-					as_node_add_address(node, (struct sockaddr*)&node_info.addr);
-					as_node_info_destroy(&node_info);
-				}
-				else {
-					node = as_node_create(cluster, &node_info);
-					as_vector_append(&nodes_to_add, &node);
-				}
+				node = as_node_create(cluster, &node_info);
 
 				if (iter.hostname_is_alias) {
 					as_node_add_alias(node, host.name, host.port);
 				}
+				break;
 			}
 			else {
 				if (enable_warnings) {
@@ -253,15 +242,17 @@ as_cluster_seed_nodes(as_cluster* cluster, as_error* err, bool enable_warnings)
 	}
 	pthread_mutex_unlock(&cluster->seed_lock);
 
-	if (nodes_to_add.size > 0) {
+	if (node) {
+		as_vector nodes_to_add;
+		as_vector_inita(&nodes_to_add, sizeof(as_node*), 1);
+		as_vector_append(&nodes_to_add, &node);
 		as_cluster_add_nodes(cluster, &nodes_to_add);
+		as_vector_destroy(&nodes_to_add);
 		status = AEROSPIKE_OK;
 	}
 	else {
 		status = as_error_set_message(err, conn_status, "Failed to connect");
 	}
-	
-	as_vector_destroy(&nodes_to_add);
 	return status;
 }
 
@@ -511,7 +502,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 	as_nodes* nodes = cluster->nodes;
 
 	if (nodes->size == 0) {
-		as_status status = as_cluster_seed_nodes(cluster, err, enable_seed_warnings);
+		as_status status = as_cluster_seed_node(cluster, err, enable_seed_warnings);
 		
 		if (status != AEROSPIKE_OK) {
 			return status;

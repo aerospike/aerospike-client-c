@@ -161,6 +161,9 @@
     <ClCompile Include="..\..\src\test\aerospike_udf\udf_types.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\aerospike_bit\bit.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

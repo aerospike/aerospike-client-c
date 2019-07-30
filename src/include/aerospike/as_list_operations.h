@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -20,10 +20,69 @@
  * @defgroup list_operations List Operations
  * @ingroup client_operations
  *
- * Aerospike operations on a list bin.
+ * List bin operations. Create list operations used by client operate command.
+ *
+ * List operations support negative indexing.  If the index is negative, the
+ * resolved index starts backwards from end of list. If an index is out of bounds,
+ * a parameter error will be returned. If a range is partially out of bounds, the
+ * valid part of the range will be returned. Index/Range examples:
+ * <ul>
+ * <li>Index 0: First item in list.</li>
+ * <li>Index 4: Fifth item in list.</li>
+ * <li>Index -1: Last item in list.</li>
+ * <li>Index -3: Third to last item in list.</li>
+ * <li>Index 1 Count 2: Second and third items in list.</li>
+ * <li>Index -3 Count 3: Last three items in list.</li>
+ * <li>Index -5 Count 4: Range between fifth to last item to second to last item inclusive.</li>
+ * </ul>
+ *
+ * Example 1:
+ *
+ * ~~~~~~~~~~{.c}
+ * // list bin = [7,9,5]
+ * // Append 11 to list bin.
+ * as_operations ops;
+ * as_operations_inita(&ops, 1);
+ *
+ * as_integer val;
+ * as_integer_init(&val, 11);
+ * as_operations_list_append(&ops, "bin", NULL, NULL, &val);
+ * 
+ * as_record* rec = 0;
+ * as_error err;
+ * aerospike_key_operate(&as, &err, NULL, &key, &ops, &rec);
+ * // bin result = [7,9,5,11]
+ * as_operations_destroy(&ops);
+ * as_record_destroy(rec);
+ * ~~~~~~~~~~
+ *
+ * Nested CDT operations are supported by optional context (as_cdt_ctx).  Example:
+ *
+ * ~~~~~~~~~~{.c}
+ * // bin = [[7,9,5],[1,2,3],[6,5,4,1]]
+ * // Append 11 to last list.
+ * as_cdt_ctx ctx;
+ * as_cdt_ctx_inita(&ctx, 1);
+ * as_cdt_ctx_add_list_index(&ctx, -1);
+ *
+ * as_operations ops;
+ * as_operations_inita(&ops, 1);
+ *
+ * as_integer val;
+ * as_integer_init(&val, 11);
+ * as_operations_list_append(&ops, "bin", &ctx, NULL, &val);
+ * 
+ * as_record* rec = 0;
+ * as_error err;
+ * aerospike_key_operate(&as, &err, NULL, &key, &ops, &rec);
+ * // bin result = [[7,9,5],[1,2,3],[6,5,4,1,11]]
+ * as_operations_destroy(&ops);
+ * as_record_destroy(rec);
+ * ~~~~~~~~~~
  */
 
 #include <aerospike/as_operations.h>
+#include <aerospike/as_cdt_ctx.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -208,343 +267,73 @@ as_list_policy_set(as_list_policy* policy, as_list_order order, as_list_write_fl
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_set_order(as_operations* ops, const as_bin_name name, as_list_order order);
+as_operations_list_set_order(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_order order
+	);
 
 /**
  * Create list sort operation.
  * Server sorts list according to flags.
  * Server does not return a result by default.
  *
- * @return true on success. Otherwise an error occurred.
+ * @ingroup list_operations
+ */
+AS_EXTERN bool
+as_operations_list_sort(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_sort_flags flags
+	);
+
+/**
+ * Create list append operation with policy.
+ * Server appends value to list bin.
+ * Server returns list size.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_sort(as_operations* ops, const as_bin_name name, as_list_sort_flags flags);
-	
+as_operations_list_append(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	as_val* val
+	);
+
 /**
- * Add an as_val element to end of list.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param val		Value to append. Consumes a reference of this as_val.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list append items operation with policy.
+ * Server appends each input list item to end of list bin.
+ * Server returns list size.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_append(as_operations* ops, const as_bin_name name, as_val* val);
+as_operations_list_append_items(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	as_list* list
+	);
 
 /**
- * Add an as_val element to end of list with policy.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param policy 	The list write flags.
- * @param val		Value to append. Consumes a reference of this as_val.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create default list insert operation with policy.
+ * Server inserts value to specified index of list bin.
+ * Server returns list size.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_append_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, as_val* val);
+as_operations_list_insert(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	int64_t index, as_val* val
+	);
 
 /**
- * Add an integer to end of list. Convenience function of as_operations_add_list_append()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param value		An integer value.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create default list insert items operation with policy.
+ * Server inserts each input list item starting at specified index of list bin.
+ * Server returns list size.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_append_int64(as_operations* ops, const as_bin_name name, int64_t value);
-
-/**
- * Add a double to end of list. Convenience function of as_operations_add_list_append()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param value		A double value.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_append_double(as_operations* ops, const as_bin_name name, double value);
-
-/**
- * Add a string to end of list. Convenience function of as_operations_add_list_append()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param value		A c-string.
- * @param free		If true, then the value will be freed when the operations is destroyed.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_append_strp(as_operations* ops, const as_bin_name name, const char* value, bool free);
-
-/**
- * Add a string to end of list. Convenience function of as_operations_add_list_append()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param value		A c-string.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-static inline bool
-as_operations_add_list_append_str(as_operations* ops, const as_bin_name name, const char* value)
-{
-	return as_operations_add_list_append_strp(ops, name, value, false);
-}
-
-/**
- * Add a blob to end of list. Convenience function of as_operations_add_list_append()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param value		A blob.
- * @param size 		Size of the blob.
- * @param free		If true, then the value will be freed when the operations is destroyed.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_append_rawp(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size, bool free);
-
-/**
- * Add a blob to end of list. Convenience function of as_operations_add_list_append()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param value		A blob.
- * @param size 		Size of the blob.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-static inline bool
-as_operations_add_list_append_raw(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size)
-{
-	return as_operations_add_list_append_rawp(ops, name, value, size, false);
-}
-
-/**
- * Add multiple values to end of list.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param list		List of values to append. Consumes a reference of this as_list.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_append_items(as_operations* ops, const as_bin_name name, as_list* list);
-
-/**
- * Add multiple values to end of list with policy.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param policy 	The list write flags.
- * @param list		List of values to append. Consumes a reference of this as_list.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_append_items_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, as_list* list);
-
-/**
- * Insert an as_val element to list at index position.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position which the as_val will be inserted at. Negative index counts from end of list.
- * @param val		Value to insert. Consumes a reference of this as_list.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_insert(as_operations* ops, const as_bin_name name, int64_t index, as_val* val);
-
-/**
- * Insert an as_val element to list at index position with policy.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param policy 	The list write flags.
- * @param index 	Index position which the as_val will be inserted at. Negative index counts from end of list.
- * @param val		Value to insert. Consumes a reference of this as_list.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_insert_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* val);
-
-/**
- * Insert integer to list at index position. Convenience function of as_operations_add_list_insert()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position which the integer will be inserted at. Negative index counts from end of list.
- * @param value 	An integer value.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_insert_int64(as_operations* ops, const as_bin_name name, int64_t index, int64_t value);
-
-/**
- * Insert double to list at index position. Convenience function of as_operations_add_list_insert()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position which the double will be inserted at. Negative index counts from end of list.
- * @param value 	A double value.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_insert_double(as_operations* ops, const as_bin_name name, int64_t index, double value);
-
-/**
- * Insert string to list at index position. Convenience function of as_operations_add_list_insert()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position which the string will be inserted at. Negative index counts from end of list.
- * @param value 	A c-string.
- * @param free		If true, then the value will be freed when the operations is destroyed.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_insert_strp(as_operations* ops, const as_bin_name name, int64_t index, const char* value, bool free);
-
-/**
- * Insert string to list at index position. Convenience function of as_operations_add_list_insert()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position which the string will be inserted at. Negative index counts from end of list.
- * @param value 	A c-string.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-static inline bool
-as_operations_add_list_insert_str(as_operations* ops, const as_bin_name name, int64_t index, const char* value)
-{
-	return as_operations_add_list_insert_strp(ops, name, index, value, false);
-}
-
-/**
- * Insert blob to list at index position. Convenience function of as_operations_add_list_insert()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position which the blob will be inserted at. Negative index counts from end of list.
- * @param value 	A blob.
- * @param size 		Size of the blob.
- * @param free		If true, then the value will be freed when the operations is destroyed.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_insert_rawp(as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size, bool free);
-
-/**
- * Insert blob to list at index position. Convenience function of as_operations_add_list_insert()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position which the blob will be inserted at. Negative index counts from end of list.
- * @param value 	A blob.
- * @param size 		Size of the blob.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-static inline bool
-as_operations_add_list_insert_raw(as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size)
-{
-	return as_operations_add_list_insert_rawp(ops, name, index, value, size, false);
-}
-
-/**
- * Insert multiple values to list at index position.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position which the blob will be inserted at. Negative index counts from end of list.
- * @param list 		List of values to insert. Consumes reference of list.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_insert_items(as_operations* ops, const as_bin_name name, int64_t index, as_list* list);
-
-/**
- * Insert multiple values to list at index position.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param policy 	The list write flags.
- * @param index 	Index position which the blob will be inserted at. Negative index counts from end of list.
- * @param list 		List of values to insert. Consumes reference of list.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_insert_items_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_list* list);
-
-/**
- * Create list increment operation.
- * Server increments value at index by incr and returns final result.
- * Valid only for numbers.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_increment(as_operations* ops, const as_bin_name name, int64_t index, as_val* incr);
+as_operations_list_insert_items(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	int64_t index, as_list* list
+	);
 
 /**
  * Create list increment operation with policy.
@@ -554,227 +343,91 @@ as_operations_add_list_increment(as_operations* ops, const as_bin_name name, int
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_increment_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* incr);
-
-//-----------------------------------------------------------------------------
-// Other list modifies
+as_operations_list_increment(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	int64_t index, as_val* incr
+	);
 
 /**
- * Set an as_val element of the list at the index position.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position to set. Negative index counts from end of list.
- * @param val		Consumes a reference of this as_val.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list set operation with policy.
+ * Server sets item value at specified index in list bin.
+ * Server does not return a result by default.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_set(as_operations* ops, const as_bin_name name, int64_t index, as_val* val);
-	
+as_operations_list_set(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	int64_t index, as_val* val
+	);
+
 /**
- * Set an as_val element of the list at the index position with policy.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param policy 	The list write flags.
- * @param index 	Index position to set. Negative index counts from end of list.
- * @param val		Consumes a reference of this as_val.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list pop operation.
+ * Server returns item at specified index and removes item from list bin.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_set_with_policy(as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* val);
+as_operations_list_pop(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index);
 
 /**
- * Set value at index as integer. Convenience function of as_operations_add_list_set()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position to set. Negative index counts from end of list.
- * @param value		An integer value.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list pop range operation.
+ * Server returns "count" items starting at specified index and removes items from list bin.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_set_int64(as_operations* ops, const as_bin_name name, int64_t index, int64_t value);
+as_operations_list_pop_range(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx,
+	int64_t index, uint64_t count
+	);
 
 /**
- * Set value at index as double. Convenience function of as_operations_add_list_set()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position to set. Negative index counts from end of list.
- * @param value		A double value.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list pop range operation.
+ * Server returns items starting at specified index to the end of list and removes those items
+ * from list bin.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_set_double(as_operations* ops, const as_bin_name name, int64_t index, double value);
+as_operations_list_pop_range_from(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index
+	);
 
 /**
- * Set value at index as string. Convenience function of as_operations_add_list_set()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position to set. Negative index counts from end of list.
- * @param value		A c-string.
- * @param free		If true, then the value will be freed when the operations is destroyed.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list remove operation.
+ * Server removes item at specified index from list bin.
+ * Server returns number of items removed.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_set_strp(as_operations* ops, const as_bin_name name, int64_t index, const char* value, bool free);
+as_operations_list_remove(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index
+	);
 
 /**
- * Set value at index as string. Convenience function of as_operations_add_list_set()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position to set. Negative index counts from end of list.
- * @param value		A c-string.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-static inline bool
-as_operations_add_list_set_str(as_operations* ops, const as_bin_name name, int64_t index, const char* value)
-{
-	return as_operations_add_list_set_strp(ops, name, index, value, false);
-}
-
-/**
- * Set value at index as blob. Convenience function of as_operations_add_list_set()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position to set. Negative index counts from end of list.
- * @param value		A blob.
- * @param size 		Size of the blob.
- * @param free		If true, then the value will be freed when the operations is destroyed.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list remove range operation.
+ * Server removes "count" items starting at specified index from list bin.
+ * Server returns number of items removed.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_set_rawp(as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size, bool free);
+as_operations_list_remove_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count
+	);
 
 /**
- * Set value at index as blob. Convenience function of as_operations_add_list_set()
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position to set. Negative index counts from end of list.
- * @param value		A blob.
- * @param size 		Size of the blob.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-static inline bool
-as_operations_add_list_set_raw(as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size)
-{
-	return as_operations_add_list_set_rawp(ops, name, index, value, size, false);
-}
-
-/**
- * Remove and return a value at index.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position at which the value will be removed and returned.  Negative index counts from end of list.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list remove range operation.
+ * Server removes items starting at specified index to the end of list.
+ * Server returns number of items removed.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_pop(as_operations* ops, const as_bin_name name, int64_t index);
-
-/**
- * Remove and return N values from index.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position at which to start the removal. Negative index counts from end of list.
- * @param count 	Number of values to remove. If not enough values in list, will remove to list end.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_pop_range(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count);
-
-/**
- * Remove and return all values from index to the end of list.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position at which to start the removal. Negative index counts from end of list.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_pop_range_from(as_operations* ops, const as_bin_name name, int64_t index);
-
-/**
- * Remove value at index.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position at which to start the removal. Negative index counts from end of list.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_remove(as_operations* ops, const as_bin_name name, int64_t index);
-
-/**
- * Remove N values from index.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position at which to start the removal. Negative index counts from end of list.
- * @param count 	Number of values to remove. If not enough values in list, will remove to list end.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_remove_range(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count);
-
-/**
- * Remove all values from index until end of list.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position at which to start the removal. Negative index counts from end of list.
- *
- * @return true on success. Otherwise an error occurred.
- *
- * @ingroup list_operations
- */
-AS_EXTERN bool
-as_operations_add_list_remove_range_from(as_operations* ops, const as_bin_name name, int64_t index);
+as_operations_list_remove_range_from(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index
+	);
 
 /**
  * Create list remove operation.
@@ -783,7 +436,10 @@ as_operations_add_list_remove_range_from(as_operations* ops, const as_bin_name n
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_value(as_operations* ops, const as_bin_name name, as_val* value, as_list_return_type return_type);
+as_operations_list_remove_by_value(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list remove operation.
@@ -792,7 +448,10 @@ as_operations_add_list_remove_by_value(as_operations* ops, const as_bin_name nam
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_value_list(as_operations* ops, const as_bin_name name, as_list* values, as_list_return_type return_type);
+as_operations_list_remove_by_value_list(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* values,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list remove operation.
@@ -805,7 +464,10 @@ as_operations_add_list_remove_by_value_list(as_operations* ops, const as_bin_nam
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_value_range(as_operations* ops, const as_bin_name name, as_val* begin, as_val* end, as_list_return_type return_type);
+as_operations_list_remove_by_value_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list remove by value relative to rank range operation.
@@ -826,7 +488,10 @@ as_operations_add_list_remove_by_value_range(as_operations* ops, const as_bin_na
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_value_rel_rank_range_to_end(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, as_list_return_type return_type);
+as_operations_list_remove_by_value_rel_rank_range_to_end(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list remove by value relative to rank range operation.
@@ -847,7 +512,10 @@ as_operations_add_list_remove_by_value_rel_rank_range_to_end(as_operations* ops,
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_value_rel_rank_range(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count, as_list_return_type return_type);
+as_operations_list_remove_by_value_rel_rank_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	uint64_t count, as_list_return_type return_type
+	);
 
 /**
  * Create list remove operation.
@@ -856,7 +524,10 @@ as_operations_add_list_remove_by_value_rel_rank_range(as_operations* ops, const 
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_index(as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type);
+as_operations_list_remove_by_index(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list remove operation.
@@ -866,16 +537,23 @@ as_operations_add_list_remove_by_index(as_operations* ops, const as_bin_name nam
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_index_range_to_end(as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type);
+as_operations_list_remove_by_index_range_to_end(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list remove operation.
- * Server removes `count` list items starting at specified index and returns removed data specified by return_type.
+ * Server removes `count` list items starting at specified index and returns removed data specified
+ * by return_type.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_index_range(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count, as_list_return_type return_type);
+as_operations_list_remove_by_index_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list remove operation.
@@ -884,7 +562,10 @@ as_operations_add_list_remove_by_index_range(as_operations* ops, const as_bin_na
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_rank(as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type);
+as_operations_list_remove_by_rank(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list remove operation.
@@ -894,103 +575,89 @@ as_operations_add_list_remove_by_rank(as_operations* ops, const as_bin_name name
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_rank_range_to_end(as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type);
+as_operations_list_remove_by_rank_range_to_end(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list remove operation.
- * Server removes `count` list items starting at specified rank and returns removed data specified by return_type.
+ * Server removes `count` list items starting at specified rank and returns removed data specified
+ * by return_type.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_remove_by_rank_range(as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count, as_list_return_type return_type);
+as_operations_list_remove_by_rank_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
+	as_list_return_type return_type
+	);
 
 /**
- * Remove values NOT within range(index, count).
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Values from 0-index position are removed. Negative index counts from end of list.
- * @param count 	Number of values to keep. All other values beyond count are removed.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list trim operation.
+ * Server removes items in list bin that do not fall into range specified by index
+ * and count range.  If the range is out of bounds, then all items will be removed.
+ * Server returns list size after trim.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_trim(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count);
+as_operations_list_trim(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count
+	);
 
 /**
- * Remove all values. Will leave empty list in bin.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list clear operation.
+ * Server removes all items in list bin.
+ * Server does not return a result by default.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_clear(as_operations* ops, const as_bin_name name);
+as_operations_list_clear(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx);
 	
 //-----------------------------------------------------------------------------
 // Read operations
 
 /**
- * Get number of values in list.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list size operation.
+ * Server returns size of list.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_size(as_operations* ops, const as_bin_name name);
+as_operations_list_size(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx);
 	
 /**
- * Get value of list at index.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position to get. Negative index counts from end of list.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list get operation.
+ * Server returns item at specified index in list bin.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get(as_operations* ops, const as_bin_name name, int64_t index);
+as_operations_list_get(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index);
 
 /**
- * Get multiple values of list starting at index.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position at which to start. Negative index counts from end of list.
- * @param count 	Number of values to get. If not enough in list, will return all remaining.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list get range operation.
+ * Server returns "count" items starting at specified index in list bin.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_range(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count);
+as_operations_list_get_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count
+	);
 
 /**
- * Get multiple values of list starting at index until end of list.
- *
- * @param ops		The `as_operations` to append the operation to.
- * @param name 		The name of the bin to perform the operation on.
- * @param index 	Index position at which to start. Negative index counts from end of list.
- *
- * @return true on success. Otherwise an error occurred.
+ * Create list get range operation.
+ * Server returns items starting at index to the end of list.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_range_from(as_operations* ops, const as_bin_name name, int64_t index);
+as_operations_list_get_range_from(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index
+	);
 
 /**
  * Create list get by value operation.
@@ -999,7 +666,10 @@ as_operations_add_list_get_range_from(as_operations* ops, const as_bin_name name
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_value(as_operations* ops, const as_bin_name name, as_val* value, as_list_return_type return_type);
+as_operations_list_get_by_value(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list get by value range operation.
@@ -1012,7 +682,10 @@ as_operations_add_list_get_by_value(as_operations* ops, const as_bin_name name, 
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_value_range(as_operations* ops, const as_bin_name name, as_val* begin, as_val* end, as_list_return_type return_type);
+as_operations_list_get_by_value_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list get by value list operation.
@@ -1021,7 +694,10 @@ as_operations_add_list_get_by_value_range(as_operations* ops, const as_bin_name 
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_value_list(as_operations* ops, const as_bin_name name, as_list* values, as_list_return_type return_type);
+as_operations_list_get_by_value_list(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* values,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list get by value relative to rank range operation.
@@ -1042,7 +718,10 @@ as_operations_add_list_get_by_value_list(as_operations* ops, const as_bin_name n
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_value_rel_rank_range_to_end(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, as_list_return_type return_type);
+as_operations_list_get_by_value_rel_rank_range_to_end(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list get by value relative to rank range operation.
@@ -1063,7 +742,10 @@ as_operations_add_list_get_by_value_rel_rank_range_to_end(as_operations* ops, co
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_value_rel_rank_range(as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count, as_list_return_type return_type);
+as_operations_list_get_by_value_rel_rank_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	uint64_t count, as_list_return_type return_type
+	);
 
 /**
  * Create list get by index operation.
@@ -1072,7 +754,10 @@ as_operations_add_list_get_by_value_rel_rank_range(as_operations* ops, const as_
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_index(as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type);
+as_operations_list_get_by_index(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list get by index range operation.
@@ -1082,16 +767,23 @@ as_operations_add_list_get_by_index(as_operations* ops, const as_bin_name name, 
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_index_range_to_end(as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type);
+as_operations_list_get_by_index_range_to_end(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list get by index range operation.
- * Server selects `count` list items starting at specified index and returns selected data specified by return_type.
+ * Server selects `count` list items starting at specified index and returns selected data specified
+ * by return_type.
  *
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_index_range(as_operations* ops, const as_bin_name name, int64_t index, uint64_t count, as_list_return_type return_type);
+as_operations_list_get_by_index_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list get by rank operation.
@@ -1100,7 +792,10 @@ as_operations_add_list_get_by_index_range(as_operations* ops, const as_bin_name 
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_rank(as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type);
+as_operations_list_get_by_rank(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list get by rank range operation.
@@ -1110,7 +805,10 @@ as_operations_add_list_get_by_rank(as_operations* ops, const as_bin_name name, i
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_rank_range_to_end(as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type);
+as_operations_list_get_by_rank_range_to_end(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_list_return_type return_type
+	);
 
 /**
  * Create list get by rank range operation.
@@ -1119,7 +817,1075 @@ as_operations_add_list_get_by_rank_range_to_end(as_operations* ops, const as_bin
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_add_list_get_by_rank_range(as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count, as_list_return_type return_type);
+as_operations_list_get_by_rank_range(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
+	as_list_return_type return_type
+	);
+
+/******************************************************************************
+ * LEGACY FUNCTIONS
+ *****************************************************************************/
+
+/**
+ * Create set list order operation.
+ * Server sets list order.  Server returns null.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_set_order(as_operations* ops, const as_bin_name name, as_list_order order)
+{
+	return as_operations_list_set_order(ops, name, NULL, order);
+}
+
+/**
+ * Create list sort operation.
+ * Server sorts list according to flags.
+ * Server does not return a result by default.
+ *
+ * @return true on success. Otherwise an error occurred.
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_sort(as_operations* ops, const as_bin_name name, as_list_sort_flags flags)
+{
+	return as_operations_list_sort(ops, name, NULL, flags);
+}
+
+/**
+ * Create list append operation.
+ * Server appends value to list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append(as_operations* ops, const as_bin_name name, as_val* val)
+{
+	return as_operations_list_append(ops, name, NULL, NULL, val);
+}
+
+/**
+ * Create list append operation with policy.
+ * Server appends value to list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append_with_policy(
+	as_operations* ops, const as_bin_name name, as_list_policy* policy, as_val* val
+	)
+{
+	return as_operations_list_append(ops, name, NULL, policy, val);
+}
+
+/**
+ * Create list append operation.
+ * Server appends integer to list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append_int64(as_operations* ops, const as_bin_name name, int64_t value)
+{
+	as_integer v;
+	as_integer_init(&v, value);
+	return as_operations_list_append(ops, name, NULL, NULL, (as_val*)&v);
+}
+
+/**
+ * Create list append operation.
+ * Server appends double to list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append_double(as_operations* ops, const as_bin_name name, double value)
+{
+	as_double v;
+	as_double_init(&v, value);
+	return as_operations_list_append(ops, name, NULL, NULL, (as_val*)&v);
+}
+
+/**
+ * Create list append operation.
+ * Server appends string to list bin.
+ * Server returns list size.
+ *
+ * If free is true, the value will be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append_strp(
+	as_operations* ops, const as_bin_name name, const char* value, bool free
+	)
+{
+	as_string v;
+	as_string_init(&v, (char*)value, free);
+	return as_operations_list_append(ops, name, NULL, NULL, (as_val*)&v);
+}
+
+/**
+ * Create list append operation.
+ * Server appends string to list bin.
+ * Server returns list size.
+ *
+ * The value will not be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append_str(as_operations* ops, const as_bin_name name, const char* value)
+{
+	return as_operations_add_list_append_strp(ops, name, value, false);
+}
+
+/**
+ * Create list append operation.
+ * Server appends blob (byte array) to list bin.
+ * Server returns list size.
+ *
+ * If free is true, the value will be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append_rawp(
+	as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size, bool free
+	)
+{
+	as_bytes v;
+	as_bytes_init_wrap(&v, (uint8_t*)value, size, free);
+	return as_operations_list_append(ops, name, NULL, NULL, (as_val*)&v);
+}
+
+/**
+ * Create list append operation.
+ * Server appends blob (byte array) to list bin.
+ * Server returns list size.
+ *
+ * The value will not be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append_raw(
+	as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size
+	)
+{
+	return as_operations_add_list_append_rawp(ops, name, value, size, false);
+}
+
+/**
+ * Create list append items operation.
+ * Server appends each input list item to end of list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append_items(as_operations* ops, const as_bin_name name, as_list* list)
+{
+	return as_operations_list_append_items(ops, name, NULL, NULL, list);
+}
+
+/**
+ * Create list append items operation with policy.
+ * Server appends each input list item to end of list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_append_items_with_policy(
+	as_operations* ops, const as_bin_name name, as_list_policy* policy, as_list* list
+	)
+{
+	return as_operations_list_append_items(ops, name, NULL, policy, list);
+}
+
+/**
+ * Create default list insert operation.
+ * Server inserts value to specified index of list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert(
+	as_operations* ops, const as_bin_name name, int64_t index, as_val* val
+	)
+{
+	return as_operations_list_insert(ops, name, NULL, NULL, index, val);
+}
+
+/**
+ * Create default list insert operation with policy.
+ * Server inserts value to specified index of list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert_with_policy(
+	as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* val
+	)
+{
+	return as_operations_list_insert(ops, name, NULL, policy, index, val);
+}
+
+/**
+ * Create default list insert operation with policy.
+ * Server inserts integer to specified index of list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert_int64(
+	as_operations* ops, const as_bin_name name, int64_t index, int64_t value
+	)
+{
+	as_integer v;
+	as_integer_init(&v, value);
+	return as_operations_list_insert(ops, name, NULL, NULL, index, (as_val*)&v);
+}
+
+/**
+ * Create default list insert operation with policy.
+ * Server inserts double to specified index of list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert_double(
+	as_operations* ops, const as_bin_name name, int64_t index, double value
+	)
+{
+	as_double v;
+	as_double_init(&v, value);
+	return as_operations_list_insert(ops, name, NULL, NULL, index, (as_val*)&v);
+}
+
+/**
+ * Create default list insert operation with policy.
+ * Server inserts string to specified index of list bin.
+ * Server returns list size.
+ *
+ * If free is true, the value will be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert_strp(
+	as_operations* ops, const as_bin_name name, int64_t index, const char* value, bool free
+	)
+{
+	as_string v;
+	as_string_init(&v, (char *)value, free);
+	return as_operations_list_insert(ops, name, NULL, NULL, index, (as_val*)&v);
+}
+
+/**
+ * Create default list insert operation with policy.
+ * Server inserts string to specified index of list bin.
+ * Server returns list size.
+ *
+ * The value will not be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert_str(
+	as_operations* ops, const as_bin_name name, int64_t index, const char* value
+	)
+{
+	return as_operations_add_list_insert_strp(ops, name, index, value, false);
+}
+
+/**
+ * Create default list insert operation with policy.
+ * Server inserts blob (byte array) to specified index of list bin.
+ * Server returns list size.
+ *
+ * If free is true, the value will be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert_rawp(
+	as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size,
+	bool free
+	)
+{
+	as_bytes v;
+	as_bytes_init_wrap(&v, (uint8_t *)value, size, free);
+	return as_operations_list_insert(ops, name, NULL, NULL, index, (as_val*)&v);
+}
+
+/**
+ * Create default list insert operation with policy.
+ * Server inserts blob (byte array) to specified index of list bin.
+ * Server returns list size.
+ *
+ * The value will not be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert_raw(
+	as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size
+	)
+{
+	return as_operations_add_list_insert_rawp(ops, name, index, value, size, false);
+}
+
+/**
+ * Create default list insert items operation.
+ * Server inserts each input list item starting at specified index of list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert_items(
+	as_operations* ops, const as_bin_name name, int64_t index, as_list* list
+	)
+{
+	return as_operations_list_insert_items(ops, name, NULL, NULL, index, list);
+}
+
+/**
+ * Create default list insert items operation with policy.
+ * Server inserts each input list item starting at specified index of list bin.
+ * Server returns list size.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_insert_items_with_policy(
+	as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index,
+	as_list* list
+	)
+{
+	return as_operations_list_insert_items(ops, name, NULL, policy, index, list);
+}
+
+/**
+ * Create list increment operation.
+ * Server increments value at index by incr and returns final result.
+ * Valid only for numbers.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_increment(
+	as_operations* ops, const as_bin_name name, int64_t index, as_val* incr
+	)
+{
+	return as_operations_list_increment(ops, name, NULL, NULL, index, incr);
+}
+
+/**
+ * Create list increment operation with policy.
+ * Server increments value at index by incr and returns final result.
+ * Valid only for numbers.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_increment_with_policy(
+	as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* incr
+	)
+{
+	return as_operations_list_increment(ops, name, NULL, policy, index, incr);
+}
+
+/**
+ * Create list set operation.
+ * Server sets item value at specified index in list bin.
+ * Server does not return a result by default.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_set(as_operations* ops, const as_bin_name name, int64_t index, as_val* val)
+{
+	return as_operations_list_set(ops, name, NULL, NULL, index, val);
+}
+	
+/**
+ * Create list set operation with policy.
+ * Server sets item value at specified index in list bin.
+ * Server does not return a result by default.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_set_with_policy(
+	as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* val
+	)
+{
+	return as_operations_list_set(ops, name, NULL, policy, index, val);
+}
+
+/**
+ * Create list set operation with policy.
+ * Server sets integer at specified index in list bin.
+ * Server does not return a result by default.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_set_int64(
+	as_operations* ops, const as_bin_name name, int64_t index, int64_t value
+	)
+{
+	as_integer v;
+	as_integer_init(&v, value);
+	return as_operations_list_set(ops, name, NULL, NULL, index, (as_val*)&v);
+}
+
+/**
+ * Create list set operation with policy.
+ * Server sets double at specified index in list bin.
+ * Server does not return a result by default.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_set_double(
+	as_operations* ops, const as_bin_name name, int64_t index, double value
+	)
+{
+	as_double v;
+	as_double_init(&v, value);
+	return as_operations_list_set(ops, name, NULL, NULL, index, (as_val*)&v);
+}
+
+/**
+ * Create list set operation with policy.
+ * Server sets string at specified index in list bin.
+ * Server does not return a result by default.
+ *
+ * If free is true, the value will be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_set_strp(
+	as_operations* ops, const as_bin_name name, int64_t index, const char* value, bool free
+	)
+{
+	as_string v;
+	as_string_init(&v, (char *)value, free);
+	return as_operations_list_set(ops, name, NULL, NULL, index, (as_val*)&v);
+}
+
+/**
+ * Create list set operation with policy.
+ * Server sets string at specified index in list bin.
+ * Server does not return a result by default.
+ *
+ * The value will not be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_set_str(
+	as_operations* ops, const as_bin_name name, int64_t index, const char* value
+	)
+{
+	return as_operations_add_list_set_strp(ops, name, index, value, false);
+}
+
+/**
+ * Create list set operation with policy.
+ * Server sets blob (byte array) at specified index in list bin.
+ * Server does not return a result by default.
+ *
+ * If free is true, the value will be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_set_rawp(
+	as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size,
+	bool free
+	)
+{
+	as_bytes v;
+	as_bytes_init_wrap(&v, (uint8_t *)value, size, free);
+	return as_operations_list_set(ops, name, NULL, NULL, index, (as_val*)&v);
+}
+
+/**
+ * Create list set operation with policy.
+ * Server sets blob (byte array) at specified index in list bin.
+ * Server does not return a result by default.
+ *
+ * The value will not be freed when the operations are destroyed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_set_raw(
+	as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size
+	)
+{
+	return as_operations_add_list_set_rawp(ops, name, index, value, size, false);
+}
+
+/**
+ * Create list pop operation.
+ * Server returns item at specified index and removes item from list bin.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_pop(as_operations* ops, const as_bin_name name, int64_t index)
+{
+	return as_operations_list_pop(ops, name, NULL, index);
+}
+
+/**
+ * Create list pop range operation.
+ * Server returns "count" items starting at specified index and removes items from list bin.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_pop_range(
+	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count
+	)
+{
+	return as_operations_list_pop_range(ops, name, NULL, index, count);
+}
+
+/**
+ * Create list pop range operation.
+ * Server returns items starting at specified index to the end of list and removes those items
+ * from list bin.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_pop_range_from(as_operations* ops, const as_bin_name name, int64_t index)
+{
+	return as_operations_list_pop_range_from(ops, name, NULL, index);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes item at specified index from list bin.
+ * Server returns number of items removed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove(as_operations* ops, const as_bin_name name, int64_t index)
+{
+	return as_operations_list_remove(ops, name, NULL, index);
+}
+
+/**
+ * Create list remove range operation.
+ * Server removes "count" items starting at specified index from list bin.
+ * Server returns number of items removed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_range(
+	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count
+	)
+{
+	return as_operations_list_remove_range(ops, name, NULL, index, count);
+}
+
+/**
+ * Create list remove range operation.
+ * Server removes items starting at specified index to the end of list.
+ * Server returns number of items removed.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_range_from(as_operations* ops, const as_bin_name name, int64_t index)
+{
+	return as_operations_list_remove_range_from(ops, name, NULL, index);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes list items identified by value and returns removed data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_value(
+	as_operations* ops, const as_bin_name name, as_val* value, as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_value(ops, name, NULL, value, return_type);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes list items identified by values and returns removed data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_value_list(
+	as_operations* ops, const as_bin_name name, as_list* values, as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_value_list(ops, name, NULL, values, return_type);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes list items identified by value range (begin inclusive, end exclusive).
+ * If begin is null, the range is less than end.
+ * If end is null, the range is greater than equal to begin.
+ *
+ * Server returns removed data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_value_range(
+	as_operations* ops, const as_bin_name name, as_val* begin, as_val* end,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_value_range(ops, name, NULL, begin, end, return_type);
+}
+
+/**
+ * Create list remove by value relative to rank range operation.
+ * Server removes list items nearest to value and greater by relative rank.
+ * Server returns removed data specified by return_type.
+ *
+ * Examples for ordered list [0,4,5,9,11,15]:
+ * <ul>
+ * <li>(value,rank) = [removed items]</li>
+ * <li>(5,0) = [5,9,11,15]</li>
+ * <li>(5,1) = [9,11,15]</li>
+ * <li>(5,-1) = [4,5,9,11,15]</li>
+ * <li>(3,0) = [4,5,9,11,15]</li>
+ * <li>(3,3) = [11,15]</li>
+ * <li>(3,-3) = [0,4,5,9,11,15]</li>
+ * </ul>
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_value_rel_rank_range_to_end(
+	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_value_rel_rank_range_to_end(ops, name, NULL, value, rank,
+																	return_type);
+}
+
+/**
+ * Create list remove by value relative to rank range operation.
+ * Server removes list items nearest to value and greater by relative rank with a count limit.
+ * Server returns removed data specified by return_type.
+ *
+ * Examples for ordered list [0,4,5,9,11,15]:
+ * <ul>
+ * <li>(value,rank,count) = [removed items]</li>
+ * <li>(5,0,2) = [5,9]</li>
+ * <li>(5,1,1) = [9]</li>
+ * <li>(5,-1,2) = [4,5]</li>
+ * <li>(3,0,1) = [4]</li>
+ * <li>(3,3,7) = [11,15]</li>
+ * <li>(3,-3,2) = []</li>
+ * </ul>
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_value_rel_rank_range(
+	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_value_rel_rank_range(ops, name, NULL, value, rank, count,
+															 return_type);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes list item identified by index and returns removed data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_index(
+	as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_index(ops, name, NULL, index, return_type);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes list items starting at specified index to the end of list and returns removed
+ * data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_index_range_to_end(
+	as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_index_range_to_end(ops, name, NULL, index, return_type);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes `count` list items starting at specified index and returns removed data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_index_range(
+	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_index_range(ops, name, NULL, index, count, return_type);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes list item identified by rank and returns removed data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_rank(
+	as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_rank(ops, name, NULL, rank, return_type);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes list items starting at specified rank to the last ranked item and returns removed
+ * data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_rank_range_to_end(
+	as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_rank_range_to_end(ops, name, NULL, rank, return_type);
+}
+
+/**
+ * Create list remove operation.
+ * Server removes `count` list items starting at specified rank and returns removed data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_remove_by_rank_range(
+	as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_remove_by_rank_range(ops, name, NULL, rank, count, return_type);
+}
+
+/**
+ * Create list trim operation.
+ * Server removes items in list bin that do not fall into range specified by index
+ * and count range.  If the range is out of bounds, then all items will be removed.
+ * Server returns list size after trim.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_trim(
+	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count
+	)
+{
+	return as_operations_list_trim(ops, name, NULL, index, count);
+}
+
+/**
+ * Create list clear operation.
+ * Server removes all items in list bin.
+ * Server does not return a result by default.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_clear(as_operations* ops, const as_bin_name name)
+{
+	return as_operations_list_clear(ops, name, NULL);
+}
+
+//-----------------------------------------------------------------------------
+// Read operations
+
+/**
+ * Create list size operation.
+ * Server returns size of list.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_size(as_operations* ops, const as_bin_name name)
+{
+	return as_operations_list_size(ops, name, NULL);
+}
+
+/**
+ * Create list get operation.
+ * Server returns item at specified index in list bin.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get(as_operations* ops, const as_bin_name name, int64_t index)
+{
+	return as_operations_list_get(ops, name, NULL, index);
+}
+
+/**
+ * Create list get range operation.
+ * Server returns "count" items starting at specified index in list bin.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_range(
+	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count
+	)
+{
+	return as_operations_list_get_range(ops, name, NULL, index, count);
+}
+
+/**
+ * Create list get range operation.
+ * Server returns items starting at index to the end of list.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_range_from(as_operations* ops, const as_bin_name name, int64_t index)
+{
+	return as_operations_list_get_range_from(ops, name, NULL, index);
+}
+
+/**
+ * Create list get by value operation.
+ * Server selects list items identified by value and returns selected data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_value(
+	as_operations* ops, const as_bin_name name, as_val* value, as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_value(ops, name, NULL, value, return_type);
+}
+
+/**
+ * Create list get by value range operation.
+ * Server selects list items identified by value range (begin inclusive, end exclusive).
+ * If begin is null, the range is less than end.
+ * If end is null, the range is greater than equal to begin.
+ *
+ * Server returns selected data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_value_range(
+	as_operations* ops, const as_bin_name name, as_val* begin, as_val* end,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_value_range(ops, name, NULL, begin, end, return_type);
+}
+
+/**
+ * Create list get by value list operation.
+ * Server selects list items identified by values and returns selected data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_value_list(
+	as_operations* ops, const as_bin_name name, as_list* values, as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_value_list(ops, name, NULL, values, return_type);
+}
+
+/**
+ * Create list get by value relative to rank range operation.
+ * Server selects list items nearest to value and greater by relative rank.
+ * Server returns selected data specified by return_type.
+ *
+ * Examples for ordered list [0,4,5,9,11,15]:
+ * <ul>
+ * <li>(value,rank) = [selected items]</li>
+ * <li>(5,0) = [5,9,11,15]</li>
+ * <li>(5,1) = [9,11,15]</li>
+ * <li>(5,-1) = [4,5,9,11,15]</li>
+ * <li>(3,0) = [4,5,9,11,15]</li>
+ * <li>(3,3) = [11,15]</li>
+ * <li>(3,-3) = [0,4,5,9,11,15]</li>
+ * </ul>
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_value_rel_rank_range_to_end(
+	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_value_rel_rank_range_to_end(ops, name, NULL, value, rank,
+																 return_type);
+}
+
+/**
+ * Create list get by value relative to rank range operation.
+ * Server selects list items nearest to value and greater by relative rank with a count limit.
+ * Server returns selected data specified by return_type.
+ *
+ * Examples for ordered list [0,4,5,9,11,15]:
+ * <ul>
+ * <li>(value,rank,count) = [selected items]</li>
+ * <li>(5,0,2) = [5,9]</li>
+ * <li>(5,1,1) = [9]</li>
+ * <li>(5,-1,2) = [4,5]</li>
+ * <li>(3,0,1) = [4]</li>
+ * <li>(3,3,7) = [11,15]</li>
+ * <li>(3,-3,2) = []</li>
+ * </ul>
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_value_rel_rank_range(
+	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_value_rel_rank_range(ops, name, NULL, value, rank, count,
+														  return_type);
+}
+
+/**
+ * Create list get by index operation.
+ * Server selects list item identified by index and returns selected data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_index(
+	as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_index(ops, name, NULL, index, return_type);
+}
+
+/**
+ * Create list get by index range operation.
+ * Server selects list items starting at specified index to the end of list and returns selected
+ * data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_index_range_to_end(
+	as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_index_range_to_end(ops, name, NULL, index, return_type);
+}
+
+/**
+ * Create list get by index range operation.
+ * Server selects `count` list items starting at specified index and returns selected data specified
+ * by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_index_range(
+	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_index_range(ops, name, NULL, index, count, return_type);
+}
+
+/**
+ * Create list get by rank operation.
+ * Server selects list item identified by rank and returns selected data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_rank(
+	as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_rank(ops, name, NULL, rank, return_type);
+}
+
+/**
+ * Create list get by rank range operation.
+ * Server selects list items starting at specified rank to the last ranked item and returns selected
+ * data specified by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_rank_range_to_end(
+	as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_rank_range_to_end(ops, name, NULL, rank, return_type);
+}
+
+/**
+ * Create list get by rank range operation.
+ * Server selects `count` list items starting at specified rank and returns selected data specified
+ * by return_type.
+ *
+ * @ingroup list_operations
+ */
+static inline bool
+as_operations_add_list_get_by_rank_range(
+	as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count,
+	as_list_return_type return_type
+	)
+{
+	return as_operations_list_get_by_rank_range(ops, name, NULL, rank, count, return_type);
+}
 
 #ifdef __cplusplus
 } // end extern "C"

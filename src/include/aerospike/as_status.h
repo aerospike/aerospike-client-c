@@ -133,6 +133,11 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_RECORD_EXISTS = 5,
 
 	/**
+	 * Bin already exists on a create-only operation.
+	 */
+	AEROSPIKE_ERR_BIN_EXISTS = 6,
+
+	/**
 	 * A cluster state change occurred during the request. This may also be
 	 * returned by scan operations with the fail_on_cluster_change flag set.
 	 */
@@ -187,6 +192,11 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_UNSUPPORTED_FEATURE = 16,
 
 	/**
+	 * Bin not found on update-only operation.
+	 */
+	AEROSPIKE_ERR_BIN_NOT_FOUND = 17,
+
+	/**
 	 * The server node's storage device(s) can't keep up with the write load.
 	 */
 	AEROSPIKE_ERR_DEVICE_OVERLOAD = 18,
@@ -212,9 +222,26 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_FAIL_FORBIDDEN = 22,
 
+	/**
+	 * Map element not found in UPDATE_ONLY write mode.
+	 */
 	AEROSPIKE_ERR_FAIL_ELEMENT_NOT_FOUND = 23,
 
+	/**
+	 * Map element exists in CREATE_ONLY write mode.
+	 */
 	AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS = 24,
+
+	/**
+	 * Attempt to use an Enterprise feature on a Community server or a server
+	 * without the applicable feature key.
+	 */
+	AEROSPIKE_ERR_ENTERPRISE_ONLY = 25,
+
+	/**
+	 * The operation cannot be applied to the current bin value on the server.
+	 */
+	AEROSPIKE_ERR_OP_NOT_APPLICABLE = 26,
 
 	/**
 	 * There are no more records left for query.

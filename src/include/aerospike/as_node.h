@@ -54,6 +54,7 @@ extern "C" {
 
 #define AS_FEATURES_GEO            (1 << 0)
 #define AS_FEATURES_TRUNCATE_NS    (1 << 1)
+#define AS_FEATURES_BIT_OP         (1 << 2)
 #define AS_FEATURES_PIPELINING     (1 << 4)
 #define AS_FEATURES_PEERS          (1 << 5)
 #define AS_FEATURES_REPLICAS       (1 << 6)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -21,6 +21,7 @@
 
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_hashmap.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_operations.h>
@@ -44,7 +45,6 @@ extern aerospike *as;
 #define NAMESPACE "test"
 #define SET "test_cdt"
 #define BIN_NAME "test-list-1"
-#define INFO_CALL "features"
 
 /******************************************************************************
  * TYPES
@@ -65,24 +65,6 @@ typedef struct as_testlist_s {
 void example_dump_record(const as_record* p_rec);
 
 static bool as_testlist_compare(as_testlist *tlist);
-
-bool
-has_cdt_list()
-{
-	char *res = NULL;
-	as_error err;
-	int rc = aerospike_info_any(as, &err, NULL, INFO_CALL, &res);
-
-	if (rc == AEROSPIKE_OK) {
-		char *st = strstr(res, "cdt-list");
-		free(res);
-
-		if (st) {
-			return true;
-		}
-	}
-	return false;
-}
 
 static bool
 as_val_is_equal(const as_val *v0, const as_val *v1)
@@ -558,11 +540,6 @@ as_testlist_compare(as_testlist *tlist)
 
 TEST( cdt_basics_op , "CDT operations test on a single bin" )
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_testlist tlist;
 	assert_true( as_testlist_init(&tlist, as) );
 
@@ -682,11 +659,6 @@ TEST( cdt_basics_op , "CDT operations test on a single bin" )
 
 TEST( cdt_incr , "CDT incr test on a single bin" )
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_testlist tlist;
 	assert_true( as_testlist_init(&tlist, as) );
 
@@ -709,11 +681,6 @@ TEST( cdt_incr , "CDT incr test on a single bin" )
 
 TEST(list_switch_sort, "List Switch Sort")
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 100);
 
@@ -817,11 +784,6 @@ TEST(list_switch_sort, "List Switch Sort")
 
 TEST(list_sort, "List Sort")
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 101);
 
@@ -866,11 +828,6 @@ TEST(list_sort, "List Sort")
 
 TEST(list_remove, "List Remove")
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 102);
 
@@ -958,11 +915,6 @@ TEST(list_remove, "List Remove")
 
 TEST(list_inverted, "List Inverted")
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 102);
 
@@ -1044,11 +996,6 @@ TEST(list_inverted, "List Inverted")
 
 TEST(list_insert, "List Insert")
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 103);
 
@@ -1104,11 +1051,6 @@ TEST(list_insert, "List Insert")
 
 TEST(list_increment, "List Increment")
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 104);
 
@@ -1168,11 +1110,6 @@ TEST(list_increment, "List Increment")
 
 TEST(list_get_relative, "List Get Relative")
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 105);
 
@@ -1319,11 +1256,6 @@ TEST(list_get_relative, "List Get Relative")
 
 TEST(list_remove_relative, "List Remove Relative")
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 106);
 
@@ -1407,11 +1339,6 @@ TEST(list_remove_relative, "List Remove Relative")
 
 TEST(list_partial, "List Partial")
 {
-	if (! has_cdt_list()) {
-		info("cdt-list not enabled. skipping test");
-		return;
-	}
-
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 107);
 
@@ -1502,6 +1429,191 @@ TEST(list_partial, "List Partial")
 	as_record_destroy(rec);
 }
 
+TEST(list_nested, "Nested List")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 108);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist l1;
+	as_arraylist_inita(&l1, 3);
+	as_arraylist_append_int64(&l1, 7);
+	as_arraylist_append_int64(&l1, 9);
+	as_arraylist_append_int64(&l1, 5);
+
+	as_arraylist l2;
+	as_arraylist_inita(&l2, 3);
+	as_arraylist_append_int64(&l2, 1);
+	as_arraylist_append_int64(&l2, 2);
+	as_arraylist_append_int64(&l2, 3);
+
+	as_arraylist l3;
+	as_arraylist_inita(&l3, 4);
+	as_arraylist_append_int64(&l3, 6);
+	as_arraylist_append_int64(&l3, 5);
+	as_arraylist_append_int64(&l3, 4);
+	as_arraylist_append_int64(&l3, 1);
+
+	as_arraylist item_list;
+	as_arraylist_inita(&item_list, 3);
+	as_arraylist_append(&item_list, (as_val*)&l1);
+	as_arraylist_append(&item_list, (as_val*)&l2);
+	as_arraylist_append(&item_list, (as_val*)&l3);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_list(&rec, BIN_NAME, (as_list*)&item_list);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 1);
+	as_cdt_ctx_add_list_index(&ctx, -1);
+
+	as_integer v;
+	as_integer_init(&v, 11);
+	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)&v);
+	as_operations_add_read(&ops, BIN_NAME);
+
+	as_record* prec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	//example_dump_record(prec);
+
+	as_bin* results = prec->bins.entries;
+	int i = 0;
+
+	int64_t val = results[i++].valuep->integer.value;
+	assert_int_eq(val, 5);
+
+	as_list* list = &results[i++].valuep->list;
+	assert_int_eq(as_list_size(list), 3);
+
+	as_list* l = as_list_get_list(list, 2);
+	assert_int_eq(as_list_size(l), 5);
+	assert_int_eq(as_list_get_int64(l, 0), 6);
+	assert_int_eq(as_list_get_int64(l, 1), 5);
+	assert_int_eq(as_list_get_int64(l, 2), 4);
+	assert_int_eq(as_list_get_int64(l, 3), 1);
+	assert_int_eq(as_list_get_int64(l, 4), 11);
+
+	as_record_destroy(prec);
+}
+
+TEST(list_nested_map, "Nested List Map")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 109);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist l11;
+	as_arraylist_inita(&l11, 3);
+	as_arraylist_append_int64(&l11, 7);
+	as_arraylist_append_int64(&l11, 9);
+	as_arraylist_append_int64(&l11, 5);
+
+	as_arraylist l12;
+	as_arraylist_inita(&l12, 1);
+	as_arraylist_append_int64(&l12, 13);
+
+	as_arraylist l1;
+	as_arraylist_inita(&l1, 2);
+	as_arraylist_append(&l1, (as_val*)&l11);
+	as_arraylist_append(&l1, (as_val*)&l12);
+
+	as_arraylist l21;
+	as_arraylist_inita(&l21, 1);
+	as_arraylist_append_int64(&l21, 9);
+
+	as_arraylist l22;
+	as_arraylist_inita(&l22, 2);
+	as_arraylist_append_int64(&l22, 2);
+	as_arraylist_append_int64(&l22, 4);
+
+	as_arraylist l23;
+	as_arraylist_inita(&l23, 3);
+	as_arraylist_append_int64(&l23, 6);
+	as_arraylist_append_int64(&l23, 1);
+	as_arraylist_append_int64(&l23, 9);
+
+	as_arraylist l2;
+	as_arraylist_inita(&l2, 3);
+	as_arraylist_append(&l2, (as_val*)&l21);
+	as_arraylist_append(&l2, (as_val*)&l22);
+	as_arraylist_append(&l2, (as_val*)&l23);
+
+	as_hashmap map;
+	as_hashmap_init(&map, 2);
+	as_string k1;
+	as_string_init(&k1, "key1", false);
+	as_hashmap_set(&map, (as_val*)&k1, (as_val*)&l1);
+	as_string k2;
+	as_string_init(&k2, "key2", false);
+	as_hashmap_set(&map, (as_val*)&k2, (as_val*)&l2);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_map(&rec, BIN_NAME, (as_map*)&map);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 2);
+	as_string_init(&k2, "key2", false);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)&k2);
+	as_cdt_ctx_add_list_rank(&ctx, 0);
+
+	as_integer v;
+	as_integer_init(&v, 11);
+	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)&v);
+	as_operations_add_read(&ops, BIN_NAME);
+
+	as_record* prec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	//example_dump_record(prec);
+
+	as_bin* results = prec->bins.entries;
+	int i = 0;
+
+	int64_t val = results[i++].valuep->integer.value;
+	assert_int_eq(val, 3);
+
+	as_map* m = &results[i++].valuep->map;
+	assert_int_eq(as_map_size(m), 2);
+
+	as_string_init(&k2, "key2", false);
+	as_list* lr = (as_list*)as_map_get(m, (as_val*)&k2);
+	as_list* lr2 = as_list_get_list(lr, 1);
+
+	assert_int_eq(as_list_size(lr2), 3);
+	assert_int_eq(as_list_get_int64(lr2, 0), 2);
+	assert_int_eq(as_list_get_int64(lr2, 1), 4);
+	assert_int_eq(as_list_get_int64(lr2, 2), 11);
+
+	as_record_destroy(prec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1519,4 +1631,6 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_get_relative);
 	suite_add(list_remove_relative);
 	suite_add(list_partial);
+	suite_add(list_nested);
+	suite_add(list_nested_map);
 }

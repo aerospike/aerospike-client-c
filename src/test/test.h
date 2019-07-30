@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -221,6 +221,11 @@ void atf_assert_double_eq(atf_test_result * result, const char * actual_exp, dou
 
 void atf_assert_string_eq(atf_test_result * result, const char * actual_exp, const char * actual, const char * expected, const char * file, int line);
 
+void atf_assert_bytes_eq(
+	atf_test_result * result, const char* actual_exp, uint8_t* actual, uint32_t actual_size,
+	uint8_t* expected, uint32_t expected_size, const char * file, int line
+	);
+
 void atf_assert_log(atf_test_result * result, const char * exp, const char * file, int line, const char * fmt, ...);
 
 
@@ -239,21 +244,21 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 #define assert_not_null(EXP) \
     if ( (EXP) == NULL ) return atf_assert_not_null(__result__, #EXP, __FILE__, __LINE__);
 
-
 #define assert_int_eq(ACTUAL, EXPECTED) \
     if ( (ACTUAL) != (EXPECTED) ) return atf_assert_int_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
 
 #define assert_int_ne(ACTUAL, EXPECTED) \
     if ( (ACTUAL) == (EXPECTED) ) return atf_assert_int_ne(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
 
-
 #define assert_double_eq(ACTUAL, EXPECTED) \
 	if ( fabs((ACTUAL) - (EXPECTED)) > 0.0000000001) return atf_assert_double_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
-
 
 #define assert_string_eq(ACTUAL, EXPECTED) \
     if ( strcmp(ACTUAL, EXPECTED) != 0 ) return atf_assert_string_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);
 
+#define assert_bytes_eq(ACTUAL, ACTUAL_SIZE, EXPECTED, EXPECTED_SIZE) \
+    if (ACTUAL_SIZE != EXPECTED_SIZE || memcmp(ACTUAL, EXPECTED, EXPECTED_SIZE) != 0)\
+		return atf_assert_bytes_eq(__result__, #ACTUAL, ACTUAL, ACTUAL_SIZE, EXPECTED, EXPECTED_SIZE, __FILE__, __LINE__);
 
 #define assert_log(EXP, fmt, ...) \
     if ( (EXP) == true ) return atf_assert_log(__result__, #EXP, __FILE__, __LINE__, fmt, ##__VA_ARGS__);

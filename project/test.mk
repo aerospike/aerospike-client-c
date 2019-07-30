@@ -4,6 +4,7 @@
 
 TEST_AEROSPIKE = aerospike_test.c
 TEST_AEROSPIKE += aerospike_batch/*.c
+TEST_AEROSPIKE += aerospike_bit/*.c
 TEST_AEROSPIKE += aerospike_index/*.c
 TEST_AEROSPIKE += aerospike_geo/*.c
 TEST_AEROSPIKE += aerospike_info/*.c

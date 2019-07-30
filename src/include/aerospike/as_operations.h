@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -44,8 +44,8 @@ typedef enum as_operator_e {
 	AS_OPERATOR_CDT_READ   = 3,
 	AS_OPERATOR_CDT_MODIFY = 4,
 
-	AS_OPERATOR_MAP_READ   = 6,  // eventually maps to AS_OPERATOR_CDT_READ
-	AS_OPERATOR_MAP_MODIFY = 7,  // eventually maps to AS_OPERATOR_MAP_MODIFY
+	AS_OPERATOR_MAP_READ   = 6, // eventually maps to AS_OPERATOR_CDT_READ
+	AS_OPERATOR_MAP_MODIFY = 7, // eventually maps to AS_OPERATOR_CDT_MODIFY
 
 	/**
 	 * Increment a bin containing an
@@ -68,7 +68,10 @@ typedef enum as_operator_e {
 	/**
 	 * Touch the record's ttl.
 	 */
-	AS_OPERATOR_TOUCH      = 11
+	AS_OPERATOR_TOUCH      = 11,
+
+	AS_OPERATOR_BIT_READ   = 12,
+	AS_OPERATOR_BIT_MODIFY = 13
 
 } as_operator;
 

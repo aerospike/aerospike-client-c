@@ -423,6 +423,9 @@ as_lookup_node(
 		else if (strcmp(begin, "truncate-namespace") == 0) {
 			features |= AS_FEATURES_TRUNCATE_NS;
 		}
+		else if (strcmp(begin, "blob-bits") == 0) {
+			features |= AS_FEATURES_BIT_OP;
+		}
 		begin = end;
 	}
 	node_info->features = features;

@@ -465,6 +465,8 @@
     <ClCompile Include="..\..\src\main\aerospike\as_admin.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_async.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_batch.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_bit_operations.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_cdt_internal.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_cluster.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_command.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_config.c" />
@@ -477,7 +479,9 @@
     <ClCompile Include="..\..\src\main\aerospike\as_info.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_job.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_key.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_list_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_lookup.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_map_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_node.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_partition.c" />

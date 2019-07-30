@@ -726,9 +726,10 @@ as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr
 		
 		switch (op->op)	{
 			case AS_OPERATOR_MAP_READ:
+				op->op = AS_OPERATOR_CDT_READ;
+			case AS_OPERATOR_BIT_READ:
 				// Map operations require respond_all_ops to be true.
 				respond_all_ops = true;
-				op->op = AS_OPERATOR_CDT_READ;
 				// Fall through to read.
 			case AS_OPERATOR_CDT_READ:
 			case AS_OPERATOR_READ:
@@ -736,9 +737,10 @@ as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr
 				break;
 				
 			case AS_OPERATOR_MAP_MODIFY:
+				op->op = AS_OPERATOR_CDT_MODIFY;
+			case AS_OPERATOR_BIT_MODIFY:
 				// Map operations require respond_all_ops to be true.
 				respond_all_ops = true;
-				op->op = AS_OPERATOR_CDT_MODIFY;
 				// Fall through to write.
 			default:
 				write_attr |= AS_MSG_INFO2_WRITE;

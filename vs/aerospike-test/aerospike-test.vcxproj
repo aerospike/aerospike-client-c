@@ -241,6 +241,7 @@
   <ItemGroup>
     <ClCompile Include="..\..\src\test\aerospike_batch\batch_get.c" />
     <ClCompile Include="..\..\src\test\aerospike_batch\batch_get_async.c" />
+    <ClCompile Include="..\..\src\test\aerospike_bit\bit.c" />
     <ClCompile Include="..\..\src\test\aerospike_geo\query_geospatial.c" />
     <ClCompile Include="..\..\src\test\aerospike_index\index_basics.c" />
     <ClCompile Include="..\..\src\test\aerospike_info\info_basics.c" />

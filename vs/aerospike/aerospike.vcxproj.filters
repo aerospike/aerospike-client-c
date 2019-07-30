@@ -722,6 +722,18 @@
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_msgpack_ext.c">
       <Filter>Source Files\common\aerospike</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_bit_operations.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_list_operations.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_map_operations.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_cdt_internal.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

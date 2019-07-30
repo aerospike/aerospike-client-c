@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -54,8 +54,6 @@ static as_monitor monitor;
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
-
-bool has_cdt_map();
 
 static bool
 before(atf_suite* suite)
@@ -117,11 +115,6 @@ write_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_
 
 TEST(async_map_op, "async map operate")
 {
-	if (! has_cdt_map()) {
-		info("cdt-map not enabled. skipping test");
-		return;
-	}
-	
 	as_monitor_begin(&monitor);
 	
 	as_key key;

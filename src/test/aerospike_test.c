@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -379,6 +379,7 @@ PLAN(aerospike_test) {
 	plan_add(map_basics);
 	plan_add(map_udf);
 	plan_add(map_index);
+	plan_add(bit);
 
 	// aerospike_info module
 	plan_add(info_basics);

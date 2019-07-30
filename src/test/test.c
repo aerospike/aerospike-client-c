@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,7 @@
  */
 #include "test.h"
 #include <aerospike/as_std.h>
+#include <aerospike/as_string_builder.h>
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -312,6 +313,27 @@ void atf_assert_double_eq(atf_test_result * result, const char * actual_exp, dou
 
 void atf_assert_string_eq(atf_test_result * result, const char * actual_exp, const char * actual, const char * expected, const char * file, int line) {
     snprintf(result->message, sizeof(result->message), "assertion failed: %s == \"%s\", when \"%s\" was expected. [at %s:%d]", actual_exp, actual, expected, file, line);
+    result->success = false;
+}
+
+void atf_assert_bytes_eq(
+	atf_test_result * result, const char* actual_exp, uint8_t* actual, uint32_t actual_size,
+	uint8_t* expected, uint32_t expected_size, const char * file, int line
+	)
+{
+	as_string_builder sb;
+	as_string_builder_assign(&sb, sizeof(result->message), result->message);
+	as_string_builder_append(&sb, "assertion failed: ");
+	as_string_builder_append(&sb, actual_exp);
+	as_string_builder_append(&sb, " == \"");
+	as_string_builder_append_bytes(&sb, actual, actual_size);
+	as_string_builder_append(&sb, "\", when \"");
+	as_string_builder_append_bytes(&sb, expected, expected_size);
+	as_string_builder_append(&sb, "\" was expected.  [at ");
+	as_string_builder_append(&sb, file);
+	as_string_builder_append_char(&sb, ':');
+	as_string_builder_append_int(&sb, line);
+	as_string_builder_append_char(&sb, ']');
     result->success = false;
 }
 

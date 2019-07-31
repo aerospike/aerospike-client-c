@@ -288,6 +288,7 @@ as_operations_list_sort(
  * Server appends value to list bin.
  * Server returns list size.
  *
+ * This function takes ownership and frees heap memory associated with val parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -301,6 +302,7 @@ as_operations_list_append(
  * Server appends each input list item to end of list bin.
  * Server returns list size.
  *
+ * This function takes ownership and frees heap memory associated with list parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -314,6 +316,7 @@ as_operations_list_append_items(
  * Server inserts value to specified index of list bin.
  * Server returns list size.
  *
+ * This function takes ownership and frees heap memory associated with val parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -327,6 +330,7 @@ as_operations_list_insert(
  * Server inserts each input list item starting at specified index of list bin.
  * Server returns list size.
  *
+ * This function takes ownership and frees heap memory associated with list parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -340,6 +344,7 @@ as_operations_list_insert_items(
  * Server increments value at index by incr and returns final result.
  * Valid only for numbers.
  *
+ * This function takes ownership and frees heap memory associated with incr parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -353,6 +358,7 @@ as_operations_list_increment(
  * Server sets item value at specified index in list bin.
  * Server does not return a result by default.
  *
+ * This function takes ownership and frees heap memory associated with val parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -433,6 +439,7 @@ as_operations_list_remove_range_from(
  * Create list remove operation.
  * Server removes list items identified by value and returns removed data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -445,6 +452,7 @@ as_operations_list_remove_by_value(
  * Create list remove operation.
  * Server removes list items identified by values and returns removed data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with values parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -461,6 +469,7 @@ as_operations_list_remove_by_value_list(
  *
  * Server returns removed data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with begin/end parameters.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -485,6 +494,7 @@ as_operations_list_remove_by_value_range(
  * <li>(3,-3) = [0,4,5,9,11,15]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -509,6 +519,7 @@ as_operations_list_remove_by_value_rel_rank_range_to_end(
  * <li>(3,-3,2) = []</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -663,6 +674,7 @@ as_operations_list_get_range_from(
  * Create list get by value operation.
  * Server selects list items identified by value and returns selected data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -679,6 +691,7 @@ as_operations_list_get_by_value(
  *
  * Server returns selected data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with begin/end parameters.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -691,6 +704,7 @@ as_operations_list_get_by_value_range(
  * Create list get by value list operation.
  * Server selects list items identified by values and returns selected data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with values parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -715,6 +729,7 @@ as_operations_list_get_by_value_list(
  * <li>(3,-3) = [0,4,5,9,11,15]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool
@@ -739,6 +754,7 @@ as_operations_list_get_by_value_rel_rank_range_to_end(
  * <li>(3,-3,2) = []</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup list_operations
  */
 AS_EXTERN bool

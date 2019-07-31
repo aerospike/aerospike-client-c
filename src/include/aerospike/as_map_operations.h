@@ -328,6 +328,7 @@ as_operations_map_set_policy(
  * The map policy also specifies the mode used when writing items to the map.
  * See `as_map_policy` and `as_map_write_mode`.
  *
+ * This function takes ownership and frees heap memory associated with key/value parameters.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -344,6 +345,7 @@ as_operations_map_put(
  * The map policy also specifies the mode used when writing items to the map.
  * See `as_map_policy` and `as_map_write_mode`.
  *
+ * This function takes ownership and frees heap memory associated with items parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -361,6 +363,7 @@ as_operations_map_put_items(
  * The map policy also specifies the mode used when writing items to the map.
  * See `as_map_policy` and `as_map_write_mode`.
  *
+ * This function takes ownership and frees heap memory associated with key/value parameters.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -378,6 +381,7 @@ as_operations_map_increment(
  * The map policy also specifies the mode used when writing items to the map.
  * See `as_map_policy` and `as_map_write_mode`.
  *
+ * This function takes ownership and frees heap memory associated with key/value parameters.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -399,6 +403,7 @@ as_operations_map_clear(as_operations* ops, const as_bin_name name, as_cdt_ctx* 
  * Create map remove operation.
  * Server removes map item identified by key and returns removed data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with key parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -411,6 +416,7 @@ as_operations_map_remove_by_key(
  * Create map remove operation.
  * Server removes map items identified by keys and returns removed data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with keys parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -427,6 +433,7 @@ as_operations_map_remove_by_key_list(
  *
  * Server returns removed data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with begin/end parameters.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -450,6 +457,7 @@ as_operations_map_remove_by_key_range(
  * <li>(3,-2) = [{0=17},{4=2},{5=15},{9=10}]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with key parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -473,6 +481,7 @@ as_operations_map_remove_by_key_rel_index_range_to_end(
  * <li>(3,-2,2) = [{0=17}]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with key parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -485,6 +494,7 @@ as_operations_map_remove_by_key_rel_index_range(
  * Create map remove operation.
  * Server removes map items identified by value and returns removed data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -497,6 +507,7 @@ as_operations_map_remove_by_value(
  * Create map remove operation.
  * Server removes map items identified by values and returns removed data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with values parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -513,6 +524,7 @@ as_operations_map_remove_by_value_list(
  *
  * Server returns removed data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with begin/end parameters.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -533,6 +545,7 @@ as_operations_map_remove_by_value_range(
  * <li>(11,-1) = [{9=10},{5=15},{0=17}]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -553,6 +566,7 @@ as_operations_map_remove_by_value_rel_rank_range_to_end(
  * <li>(11,-1,1) = [{9=10}]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -650,6 +664,7 @@ as_operations_map_size(as_operations* ops, const as_bin_name name, as_cdt_ctx* c
  * Create map get by key operation.
  * Server selects map item identified by key and returns selected data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with key parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -666,6 +681,7 @@ as_operations_map_get_by_key(
  *
  * Server returns selected data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with begin/end parameters.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -678,6 +694,7 @@ as_operations_map_get_by_key_range(
  * Create map get by key list operation.
  * Server selects map items identified by keys and returns selected data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with keys parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -701,6 +718,7 @@ as_operations_map_get_by_key_list(
  * <li>(3,-2) = [{0=17},{4=2},{5=15},{9=10}]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with key parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -724,6 +742,7 @@ as_operations_map_get_by_key_rel_index_range_to_end(
  * <li>(3,-2,2) = [{0=17}]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with key parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -736,6 +755,7 @@ as_operations_map_get_by_key_rel_index_range(
  * Create map get by value operation.
  * Server selects map items identified by value and returns selected data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -752,6 +772,7 @@ as_operations_map_get_by_value(
  *
  * Server returns selected data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with begin/end parameters.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -764,6 +785,7 @@ as_operations_map_get_by_value_range(
  * Create map get by value list operation.
  * Server selects map items identified by values and returns selected data specified by return_type.
  *
+ * This function takes ownership and frees heap memory associated with values parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -784,6 +806,7 @@ as_operations_map_get_by_value_list(
  * <li>(11,-1) = [{9=10},{5=15},{0=17}]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool
@@ -804,6 +827,7 @@ as_operations_map_get_by_value_rel_rank_range_to_end(
  * <li>(11,-1,1) = [{9=10}]</li>
  * </ul>
  *
+ * This function takes ownership and frees heap memory associated with value parameter.
  * @ingroup map_operations
  */
 AS_EXTERN bool

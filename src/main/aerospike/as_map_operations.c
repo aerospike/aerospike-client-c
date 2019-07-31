@@ -82,6 +82,8 @@ as_map_range(
 		as_pack_val(&pk, end);
 	}
 	as_cdt_end(&pk);
+	as_val_destroy(begin);
+	as_val_destroy(end);
 	return as_cdt_add_packed(&pk, ops, name, op_type);
 }
 
@@ -173,6 +175,8 @@ as_operations_map_put(
 		as_pack_uint64(&pk, policy->attributes);
 	}
 	as_cdt_end(&pk);
+	as_val_destroy(key);
+	as_val_destroy(value);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -207,6 +211,7 @@ as_operations_map_put_items(
 	}
 
 	as_cdt_end(&pk);
+	as_map_destroy(items);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -224,6 +229,8 @@ as_operations_map_increment(
 	as_pack_val(&pk, val);
 	as_pack_uint64(&pk, policy->attributes);
 	as_cdt_end(&pk);
+	as_val_destroy(key);
+	as_val_destroy(value);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -241,6 +248,8 @@ as_operations_map_decrement(
 	as_pack_val(&pk, val);
 	as_pack_uint64(&pk, policy->attributes);
 	as_cdt_end(&pk);
+	as_val_destroy(key);
+	as_val_destroy(value);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -264,6 +273,7 @@ as_operations_map_remove_by_key(
 	as_pack_int64(&pk, (int64_t)return_type);
 	as_pack_val(&pk, key);
 	as_cdt_end(&pk);
+	as_val_destroy(key);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -278,6 +288,7 @@ as_operations_map_remove_by_key_list(
 	as_pack_int64(&pk, (int64_t)return_type);
 	as_pack_val(&pk, (as_val*)keys);
 	as_cdt_end(&pk);
+	as_list_destroy(keys);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -303,6 +314,7 @@ as_operations_map_remove_by_key_rel_index_range_to_end(
 	as_pack_val(&pk, key);
 	as_pack_int64(&pk, index);
 	as_cdt_end(&pk);
+	as_val_destroy(key);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -319,6 +331,7 @@ as_operations_map_remove_by_key_rel_index_range(
 	as_pack_int64(&pk, index);
 	as_pack_uint64(&pk, count);
 	as_cdt_end(&pk);
+	as_val_destroy(key);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -333,6 +346,7 @@ as_operations_map_remove_by_value(
 	as_pack_int64(&pk, (int64_t)return_type);
 	as_pack_val(&pk, value);
 	as_cdt_end(&pk);
+	as_val_destroy(value);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -347,6 +361,7 @@ as_operations_map_remove_by_value_list(
 	as_pack_int64(&pk, (int64_t)return_type);
 	as_pack_val(&pk, (as_val*)values);
 	as_cdt_end(&pk);
+	as_list_destroy(values);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -372,6 +387,7 @@ as_operations_map_remove_by_value_rel_rank_range_to_end(
 	as_pack_val(&pk, value);
 	as_pack_int64(&pk, rank);
 	as_cdt_end(&pk);
+	as_val_destroy(value);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -388,6 +404,7 @@ as_operations_map_remove_by_value_rel_rank_range(
 	as_pack_int64(&pk, rank);
 	as_pack_uint64(&pk, count);
 	as_cdt_end(&pk);
+	as_val_destroy(value);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
@@ -497,6 +514,7 @@ as_operations_map_get_by_key(
 	as_pack_int64(&pk, (int64_t)return_type);
 	as_pack_val(&pk, key);
 	as_cdt_end(&pk);
+	as_val_destroy(key);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_READ);
 }
 
@@ -521,6 +539,7 @@ as_operations_map_get_by_key_list(
 	as_pack_int64(&pk, (int64_t)return_type);
 	as_pack_val(&pk, (as_val*)keys);
 	as_cdt_end(&pk);
+	as_list_destroy(keys);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_READ);
 }
 
@@ -536,6 +555,7 @@ as_operations_map_get_by_key_rel_index_range_to_end(
 	as_pack_val(&pk, key);
 	as_pack_int64(&pk, index);
 	as_cdt_end(&pk);
+	as_val_destroy(key);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_READ);
 }
 
@@ -552,6 +572,7 @@ as_operations_map_get_by_key_rel_index_range(
 	as_pack_int64(&pk, index);
 	as_pack_uint64(&pk, count);
 	as_cdt_end(&pk);
+	as_val_destroy(key);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_READ);
 }
 
@@ -566,6 +587,7 @@ as_operations_map_get_by_value(
 	as_pack_int64(&pk, (int64_t)return_type);
 	as_pack_val(&pk, value);
 	as_cdt_end(&pk);
+	as_val_destroy(value);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_READ);
 }
 
@@ -590,6 +612,7 @@ as_operations_map_get_by_value_list(
 	as_pack_int64(&pk, (int64_t)return_type);
 	as_pack_val(&pk, (as_val*)values);
 	as_cdt_end(&pk);
+	as_list_destroy(values);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_READ);
 }
 
@@ -605,6 +628,7 @@ as_operations_map_get_by_value_rel_rank_range_to_end(
 	as_pack_val(&pk, value);
 	as_pack_int64(&pk, rank);
 	as_cdt_end(&pk);
+	as_val_destroy(value);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_READ);
 }
 
@@ -621,6 +645,7 @@ as_operations_map_get_by_value_rel_rank_range(
 	as_pack_int64(&pk, rank);
 	as_pack_uint64(&pk, count);
 	as_cdt_end(&pk);
+	as_val_destroy(value);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_READ);
 }
 

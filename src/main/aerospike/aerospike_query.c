@@ -1220,6 +1220,7 @@ aerospike_query_async(
 		cmd->write_len = (uint32_t)size;
 		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_query_command));
 		cmd->type = AS_ASYNC_TYPE_QUERY;
+		cmd->proto_type = AS_MESSAGE_TYPE;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 		cmd->flags = AS_ASYNC_FLAGS_MASTER;
 		cmd->flags2 = policy->deserialize ? AS_ASYNC_FLAGS2_DESERIALIZE : 0;

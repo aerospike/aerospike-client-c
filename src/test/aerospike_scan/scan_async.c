@@ -413,10 +413,14 @@ TEST(scan_async_set1, "async scan "SET1"")
 	as_scan scan;
 	as_scan_init(&scan, NS, SET1);
 
+	as_policy_scan p;
+	as_policy_scan_init(&p);
+	p.fail_on_cluster_change = true;
+
 	as_monitor_begin(&monitor);
 	
 	as_error err;
-	as_status status = aerospike_scan_async(as, &err, NULL, &scan, 0, scan_listener, &check, 0);
+	as_status status = aerospike_scan_async(as, &err, &p, &scan, 0, scan_listener, &check, 0);
 	as_scan_destroy(&scan);
 	
 	assert_int_eq(status, AEROSPIKE_OK);

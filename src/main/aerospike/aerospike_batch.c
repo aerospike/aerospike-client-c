@@ -1159,6 +1159,7 @@ as_batch_read_execute_async(
 		cmd->write_len = (uint32_t)size;
 		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_batch_command));
 		cmd->type = AS_ASYNC_TYPE_BATCH;
+		cmd->proto_type = AS_MESSAGE_TYPE;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 		cmd->flags = flags;
 		cmd->flags2 = policy->deserialize ? AS_ASYNC_FLAGS2_DESERIALIZE : 0;
@@ -1690,6 +1691,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		cmd->write_len = (uint32_t)size;
 		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_batch_command));
 		cmd->type = AS_ASYNC_TYPE_BATCH;
+		cmd->proto_type = AS_MESSAGE_TYPE;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 		cmd->flags = parent->flags;
 		cmd->flags2 = parent->flags2;

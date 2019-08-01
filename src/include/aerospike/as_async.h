@@ -101,6 +101,7 @@ as_async_write_command_create(
 	cmd->buf = wcmd->space;
 	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_write_command));
 	cmd->type = AS_ASYNC_TYPE_WRITE;
+	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = flags;
 	cmd->flags2 = cluster->shm_info ? 0 : AS_ASYNC_FLAGS2_RELEASE_PARTITIONS;
@@ -138,6 +139,7 @@ as_async_record_command_create(
 	cmd->buf = rcmd->space;
 	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_record_command));
 	cmd->type = AS_ASYNC_TYPE_RECORD;
+	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = flags;
 	cmd->flags2 = cluster->shm_info ? 0 : AS_ASYNC_FLAGS2_RELEASE_PARTITIONS;
@@ -178,6 +180,7 @@ as_async_value_command_create(
 	cmd->buf = vcmd->space;
 	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_value_command));
 	cmd->type = AS_ASYNC_TYPE_VALUE;
+	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = flags;
 	cmd->flags2 = cluster->shm_info ? 0 : AS_ASYNC_FLAGS2_RELEASE_PARTITIONS;
@@ -212,6 +215,7 @@ as_async_info_command_create(
 	cmd->buf = icmd->space;
 	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_info_command));
 	cmd->type = AS_ASYNC_TYPE_INFO;
+	cmd->proto_type = AS_INFO_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = AS_ASYNC_FLAGS_MASTER;
 	cmd->flags2 = 0;

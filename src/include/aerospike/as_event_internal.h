@@ -150,6 +150,7 @@ typedef struct as_event_command {
 	uint32_t pos;
 
 	uint8_t type;
+	uint8_t proto_type;
 	uint8_t state;
 	uint8_t flags;
 	uint8_t flags2;

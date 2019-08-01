@@ -316,7 +316,7 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	if (cmd->state == AS_ASYNC_STATE_COMMAND_READ_HEADER) {
 		as_proto* proto = (as_proto*)cmd->buf;
 
-		if (! as_event_proto_parse(cmd, proto, AS_MESSAGE_TYPE)) {
+		if (! as_event_proto_parse(cmd, proto, cmd->proto_type)) {
 			return;
 		}
 
@@ -1005,7 +1005,7 @@ as_uv_tls_read(as_event_command* cmd)
 				// Done reading command header.
 				as_proto* proto = (as_proto*)cmd->buf;
 
-				if (! as_event_proto_parse(cmd, proto, AS_MESSAGE_TYPE)) {
+				if (! as_event_proto_parse(cmd, proto, cmd->proto_type)) {
 					return;
 				}
 

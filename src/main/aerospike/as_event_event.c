@@ -461,7 +461,7 @@ as_event_command_peek_block(as_event_command* cmd)
 	
 	as_proto* proto = (as_proto*)cmd->buf;
 
-	if (! as_event_proto_parse(cmd, proto, AS_MESSAGE_TYPE)) {
+	if (! as_event_proto_parse(cmd, proto, cmd->proto_type)) {
 		return AS_EVENT_READ_ERROR;
 	}
 
@@ -563,7 +563,7 @@ as_event_command_read(as_event_command* cmd)
 		
 		as_proto* proto = (as_proto*)cmd->buf;
 
-		if (! as_event_proto_parse(cmd, proto, AS_MESSAGE_TYPE)) {
+		if (! as_event_proto_parse(cmd, proto, cmd->proto_type)) {
 			return AS_EVENT_READ_ERROR;
 		}
 

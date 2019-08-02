@@ -536,7 +536,7 @@ as_event_parse_authentication(as_event_command* cmd)
 	// Parse authentication response.
 	uint8_t code = cmd->buf[AS_ASYNC_AUTH_RETURN_CODE];
 	
-	if (code) {
+	if (code && code != AEROSPIKE_SECURITY_NOT_ENABLED) {
 		// Can't authenticate socket, so must close it.
 		as_node_signal_login(cmd->node);
 		as_error err;

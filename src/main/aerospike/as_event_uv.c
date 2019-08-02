@@ -487,7 +487,7 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	// Parse authentication response.
 	uint8_t code = cmd->buf[AS_ASYNC_AUTH_RETURN_CODE];
 	
-	if (code) {
+	if (code && code != AEROSPIKE_SECURITY_NOT_ENABLED) {
 		// Can't authenticate socket, so must close it.
 		as_node_signal_login(cmd->node);
 		as_error err;
@@ -987,7 +987,7 @@ as_uv_tls_read(as_event_command* cmd)
 				// Parse authentication response.
 				uint8_t code = cmd->buf[AS_ASYNC_AUTH_RETURN_CODE];
 
-				if (code) {
+				if (code && code != AEROSPIKE_SECURITY_NOT_ENABLED) {
 					// Can't authenticate socket, so must close it.
 					as_node_signal_login(cmd->node);
 					as_error err;

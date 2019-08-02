@@ -20,6 +20,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
+#include <aerospike/as_status.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 #include <string.h>
@@ -70,9 +71,6 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define HEADER_REMAINING 16
 #define RESULT_CODE 9
 #define DEFAULT_TIMEOUT 60000  // one minute
-
-// Result Codes
-#define INVALID_COMMAND 54
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -443,9 +441,12 @@ as_cluster_login(
 	status = buffer[RESULT_CODE];
 
 	if (status) {
-		if (status == INVALID_COMMAND) {
+		if (status == AEROSPIKE_INVALID_COMMAND) {
 			// New login not supported.  Try old authentication.
 			return as_authenticate_old(err, sock, cluster->user, cluster->password_hash, deadline_ms);
+		}
+		if (status == AEROSPIKE_SECURITY_NOT_ENABLED) {
+			return AEROSPIKE_OK;
 		}
 		return as_error_set_message(err, status, as_error_string(status));
 	}
@@ -571,8 +572,12 @@ as_authenticate(
 	}
 	
 	status = buffer[RESULT_CODE];
-	
+
 	if (status) {
+		if (status == AEROSPIKE_SECURITY_NOT_ENABLED) {
+			return AEROSPIKE_OK;
+		}
+	
 		as_error_set_message(err, status, as_error_string(status));
 	}
 	return status;

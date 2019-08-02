@@ -54,11 +54,10 @@ as_info_command_node(
 /**
  * @private
  * Asynchronously send info command to specific node.
- * The values must be freed by the caller on success.
  */
 AS_EXTERN as_status
 as_info_command_node_async(
-	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, char* command,
+	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, const char* command,
 	as_async_info_listener listener, void* udata, as_event_loop* event_loop
 	);
 

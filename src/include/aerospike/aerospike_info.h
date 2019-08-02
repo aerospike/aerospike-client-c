@@ -27,6 +27,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_info.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
@@ -89,6 +90,46 @@ aerospike_info_node(
 	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
 	const char* req, char** res
 	);
+
+/**
+ * Asynchronously send an info request to a specific server node.
+ *
+ * ~~~~~~~~~~{.c}
+ * void my_listener(as_error* err, char* response, void* udata, as_event_loop* event_loop)
+ * {
+ *     if (err) {
+ *         printf("Command failed: %d %s\n", err->code, err->message);
+ *         return;
+ * 	   }
+ * 	   // Process response
+ * 	   // Do not free response because the calling function will do that for you.
+ * }
+ *
+ * aerospike_info_node_async(&as, &err, NULL, node, "info", my_listener, NULL, NULL);
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The info policy. If NULL, the default info policy will be used.
+ * @param node			The server node to send the request to.
+ * @param req			The info request to send.
+ * @param listener		User function to be called with command results.
+ * @param udata			User data to be forwarded to user callback.
+ * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be
+ *						choosen by round-robin.
+ *
+ * @return AEROSPIKE_OK on success. Otherwise an error.
+ *
+ * @ingroup info_operations
+ */
+static inline as_status
+aerospike_info_node_async(
+	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, const char* req,
+	as_async_info_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	return as_info_command_node_async(as, err, policy, node, req, listener, udata, event_loop);
+}
 
 /**
  * Send an info request to a specific host. The response must be freed by the caller on success.

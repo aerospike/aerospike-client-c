@@ -190,7 +190,7 @@ print_usage(const char* program)
 	blog_line("   Write timeout in milliseconds.");
 	blog_line("");
 	
-	blog_line("   --maxRetries {0,1}  # Default: 1");
+	blog_line("   --maxRetries <number> # Default: 1");
 	blog_line("   Maximum number of retries before aborting the current transaction.");
 	blog_line("");
 	
@@ -711,11 +711,6 @@ set_args(int argc, char * const * argv, arguments* args)
 
 			case 'r':
 				args->max_retries = atoi(optarg);
-				
-				if (args->max_retries > 1) {
-					blog_line("maxRetries must be 0 or 1");
-					return 1;
-				}
 				break;
 
 			case 'd':

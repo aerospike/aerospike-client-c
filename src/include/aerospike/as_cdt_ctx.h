@@ -89,11 +89,38 @@ typedef struct as_cdt_ctx {
  * @relates as_operations
  * @ingroup as_operations_object
  */
-#define as_cdt_ctx_inita(__ctx, __cap) as_vector_inita(&(__ctx)->list, sizeof(as_cdt_ctx), __cap)
+#define as_cdt_ctx_inita(__ctx, __cap) as_vector_inita(&(__ctx)->list, sizeof(as_cdt_ctx_item), __cap)
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
+/**
+ * Initialize a stack allocated nested CDT context list, with item storage on the heap.
+ */
+static inline void
+as_cdt_ctx_init(as_cdt_ctx* ctx, uint32_t capacity)
+{
+	as_vector_init(&ctx->list, sizeof(as_cdt_ctx_item), capacity);
+}
+
+/**
+ * Initialize a heap allocated nested CDT context list, with item storage on the heap.
+ */
+static inline as_cdt_ctx*
+as_cdt_ctx_create(uint32_t capacity)
+{
+	return (as_cdt_ctx*)as_vector_create(sizeof(as_cdt_ctx_item), capacity);
+}
+
+/**
+ * Free nested CDT context list.
+ */
+static inline void
+as_cdt_ctx_destroy(as_cdt_ctx* ctx)
+{
+	as_vector_destroy(&ctx->list);
+}
 
 /**
  * Lookup list by index offset.

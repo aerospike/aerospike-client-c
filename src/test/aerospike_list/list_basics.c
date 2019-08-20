@@ -1576,7 +1576,9 @@ TEST(list_nested_map, "Nested List Map")
 	as_operations_inita(&ops, 2);
 
 	as_cdt_ctx ctx;
-	as_cdt_ctx_inita(&ctx, 2);
+	// as_cdt_ctx_inita() is more efficient, but as_cdt_ctx_init() needs to be tested too.
+	// as_cdt_ctx_inita(&ctx, 2);
+	as_cdt_ctx_init(&ctx, 2);
 	as_string_init(&k2, "key2", false);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)&k2);
 	as_cdt_ctx_add_list_rank(&ctx, 0);
@@ -1584,6 +1586,7 @@ TEST(list_nested_map, "Nested List Map")
 	as_integer v;
 	as_integer_init(&v, 11);
 	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)&v);
+	as_cdt_ctx_destroy(&ctx);
 	as_operations_add_read(&ops, BIN_NAME);
 
 	as_record* prec = 0;

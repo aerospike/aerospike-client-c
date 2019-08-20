@@ -1990,18 +1990,21 @@ TEST(map_double_nested, "Double Nested Map")
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
-	as_cdt_ctx ctx;
-	as_cdt_ctx_inita(&ctx, 2);
+	// as_cdt_ctx_inita() is more efficient, but as_cdt_ctx_create() needs to be tested too.
+	// as_cdt_ctx ctx;
+	// as_cdt_ctx_inita(&ctx, 2);
+	as_cdt_ctx* ctx = as_cdt_ctx_create(2);
 	as_string_init(&k1, "key1", false);
-	as_cdt_ctx_add_map_key(&ctx, (as_val*)&k1);
-	as_cdt_ctx_add_map_rank(&ctx, -1);
+	as_cdt_ctx_add_map_key(ctx, (as_val*)&k1);
+	as_cdt_ctx_add_map_rank(ctx, -1);
 
 	as_operations ops;
 	as_operations_inita(&ops, 2);
 
 	as_string_init(&k211, "key121", false);
 	as_integer_init(&v211, 11);
-	as_operations_map_put(&ops, BIN_NAME, &ctx, NULL, (as_val*)&k211, (as_val*)&v211);
+	as_operations_map_put(&ops, BIN_NAME, ctx, NULL, (as_val*)&k211, (as_val*)&v211);
+	as_cdt_ctx_destroy(ctx);
 	as_operations_add_read(&ops, BIN_NAME);
 
 	as_record* prec = 0;

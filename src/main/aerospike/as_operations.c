@@ -245,3 +245,12 @@ as_operations_add_touch(as_operations* ops)
 	as_bin_init_nil(&binop->bin, "");
 	return true;
 }
+
+bool
+as_operations_add_delete(as_operations* ops)
+{
+	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_DELETE, "");
+	if ( !binop ) return false;
+	as_bin_init_nil(&binop->bin, "");
+	return true;
+}

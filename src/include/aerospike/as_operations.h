@@ -71,7 +71,8 @@ typedef enum as_operator_e {
 	AS_OPERATOR_TOUCH      = 11,
 
 	AS_OPERATOR_BIT_READ   = 12,
-	AS_OPERATOR_BIT_MODIFY = 13
+	AS_OPERATOR_BIT_MODIFY = 13,
+	AS_OPERATOR_DELETE = 14
 
 } as_operator;
 
@@ -743,6 +744,19 @@ as_operations_add_append_raw(as_operations* ops, const as_bin_name name, const u
  */
 AS_EXTERN bool
 as_operations_add_touch(as_operations* ops);
+
+/**
+ * Add a `AS_OPERATOR_DELETE` record operation.
+ *
+ * @param ops			The `as_operations` to append the operation to.
+ *
+ * @return true on success. Otherwise an error occurred.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
+ */
+AS_EXTERN bool
+as_operations_add_delete(as_operations* ops);
 
 /******************************************************************************
  * LIST FUNCTIONS

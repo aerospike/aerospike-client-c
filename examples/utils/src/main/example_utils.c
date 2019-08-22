@@ -931,6 +931,7 @@ operator_to_string(as_operator op)
 		OP_CASE_ASSIGN(AS_OPERATOR_MAP_READ);
 		OP_CASE_ASSIGN(AS_OPERATOR_BIT_MODIFY);
 		OP_CASE_ASSIGN(AS_OPERATOR_BIT_READ);
+		OP_CASE_ASSIGN(AS_OPERATOR_DELETE);
 	}
 
 	return "NOT DEFINED";
@@ -946,7 +947,7 @@ example_dump_op(const as_binop* p_binop)
 
 	const char* op_string = operator_to_string(p_binop->op);
 
-	if (p_binop->op == AS_OPERATOR_TOUCH) {
+	if (p_binop->op == AS_OPERATOR_TOUCH || p_binop->op == AS_OPERATOR_DELETE) {
 		LOG("  %s", op_string);
 		return;
 	}

@@ -45,23 +45,12 @@ extern aerospike * as;
 #define NAMESPACE "test"
 #define SET "test_operate"
 
-
-/******************************************************************************
- * TYPES
- *****************************************************************************/
-
-
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
-
-
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
 
-TEST( key_operate_touchget , "operate: (test,test,key2) = {touch, get}" ) {
-
+TEST(key_operate_touchget , "operate: (test,test,key2) = {touch, get}")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -106,8 +95,8 @@ TEST( key_operate_touchget , "operate: (test,test,key2) = {touch, get}" ) {
 
 }
 
-TEST( key_operate_9 , "operate: (test,test,key3) = {append, read, write, read, incr, read, prepend}" ) {
-
+TEST(key_operate_9 , "operate: (test,test,key3) = {append, read, write, read, incr, read, prepend}")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -149,7 +138,7 @@ TEST( key_operate_9 , "operate: (test,test,key3) = {append, read, write, read, i
     as_operations_destroy( ops );
 }
 
-TEST( key_operate_gen_equal , "operate: only if expected generation " )
+TEST(key_operate_gen_equal , "operate: only if expected generation ")
 {
 	as_error err;
 	as_error_reset(&err);
@@ -200,8 +189,8 @@ TEST( key_operate_gen_equal , "operate: only if expected generation " )
 	as_record_destroy(rec);
 }
 
-TEST( key_operate_float , "operate: (test,test,opfloat) = {append, read, write, read, incr, read, prepend}" ) {
-
+TEST(key_operate_float , "operate: (test,test,opfloat) = {append, read, write, read, incr, read, prepend}")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -257,13 +246,85 @@ TEST( key_operate_float , "operate: (test,test,opfloat) = {append, read, write, 
 	as_operations_destroy( ops );
 }
 
+TEST(key_operate_delete , "operate delete")
+{
+	as_error err;
+	as_error_reset(&err);
+
+	as_record r, *rec = &r;
+	as_record_init(rec, 1);
+	as_record_set_int64(rec, "a", 1);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "opdelkey");
+	
+	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
+	
+	rc = aerospike_key_put(as, &err, NULL, &key, rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+	as_record_destroy(rec);
+
+	// Read bin and then delete all.
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_add_read(&ops, "a");
+	as_operations_add_delete(&ops);
+
+	rc = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(rec, "a", 0);
+	assert_int_eq(val, 1);
+
+	as_record_destroy(rec);
+
+	// Verify record is gone.
+	rc = aerospike_key_exists(as, &err, NULL, &key, &rec);
+	assert_int_eq(rc, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	as_record_destroy(rec);
+
+	// Rewrite record.
+	rec = &r;
+	as_record_init(rec, 1);
+	as_record_set_int64(rec, "a", 1);
+
+	rc = aerospike_key_put(as, &err, NULL, &key, rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+	as_record_destroy(rec);
+
+	// Read bin1 and then delete all followed by a write of bin2.
+	as_operations_inita(&ops, 3);
+	as_operations_add_read(&ops, "a");
+	as_operations_add_delete(&ops);
+	as_operations_add_write_int64(&ops, "b", 2);
+
+	rc = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	val = as_record_get_int64(rec, "a", 0);
+	assert_int_eq(val, 1);
+	as_record_destroy(rec);
+
+	// Read record.
+	rc = aerospike_key_get(as, &err, NULL, &key, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_int_eq(rec->bins.size, 1);
+
+	val = as_record_get_int64(rec, "b", 0);
+	assert_int_eq(val, 2);
+
+	as_record_destroy(rec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( key_operate, "aerospike_key_operate tests" ) {
-	suite_add( key_operate_touchget );
-	suite_add( key_operate_9 );
-	suite_add( key_operate_gen_equal );
-	suite_add( key_operate_float );
+SUITE(key_operate, "aerospike_key_operate tests")
+{
+	suite_add(key_operate_touchget);
+	suite_add(key_operate_9);
+	suite_add(key_operate_gen_equal);
+	suite_add(key_operate_float);
+	suite_add(key_operate_delete);
 }

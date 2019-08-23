@@ -1994,8 +1994,10 @@ TEST(map_double_nested, "Double Nested Map")
 	// as_cdt_ctx ctx;
 	// as_cdt_ctx_inita(&ctx, 2);
 	as_cdt_ctx* ctx = as_cdt_ctx_create(2);
-	as_string_init(&k1, "key1", false);
-	as_cdt_ctx_add_map_key(ctx, (as_val*)&k1);
+	// as_string_init() is more efficient, but as_string_new() needs to be tested too.
+	// as_string_init(&k1, "key1", false);
+	// as_cdt_ctx_add_map_key(ctx, (as_val*)&k1);
+	as_cdt_ctx_add_map_key(ctx, (as_val*)as_string_new("key1", false));
 	as_cdt_ctx_add_map_rank(ctx, -1);
 
 	as_operations ops;

@@ -151,6 +151,7 @@ AEROSPIKE += as_admin.o
 AEROSPIKE += as_async.o
 AEROSPIKE += as_batch.o
 AEROSPIKE += as_bit_operations.o
+AEROSPIKE += as_cdt_ctx.o
 AEROSPIKE += as_cdt_internal.o
 AEROSPIKE += as_command.o
 AEROSPIKE += as_config.o

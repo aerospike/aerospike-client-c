@@ -466,6 +466,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_async.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_batch.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_bit_operations.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_cdt_ctx.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_cdt_internal.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_cluster.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_command.c" />

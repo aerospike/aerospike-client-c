@@ -125,6 +125,7 @@
 		BFBD205818BC3436009ED931 /* mod_lua_stream.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBD204D18BC3436009ED931 /* mod_lua_stream.c */; };
 		BFBD205918BC3436009ED931 /* mod_lua_val.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBD204E18BC3436009ED931 /* mod_lua_val.c */; };
 		BFBD205A18BC3436009ED931 /* mod_lua.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBD204F18BC3436009ED931 /* mod_lua.c */; };
+		BFBD9F8C2310500A0092FFD3 /* as_cdt_ctx.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBD9F8B2310500A0092FFD3 /* as_cdt_ctx.c */; };
 		BFBDAFE0191B0C5C007EB07C /* as_info.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBDAFDF191B0C5C007EB07C /* as_info.c */; };
 		BFC002881901BCB200CB9BC8 /* as_vector.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC002871901BCB200CB9BC8 /* as_vector.c */; };
 		BFC0028A1901E08500CB9BC8 /* as_lookup.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC002891901E08500CB9BC8 /* as_lookup.c */; };
@@ -301,6 +302,7 @@
 		BFBD204D18BC3436009ED931 /* mod_lua_stream.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = mod_lua_stream.c; path = "../modules/mod-lua/src/main/mod_lua_stream.c"; sourceTree = "<group>"; };
 		BFBD204E18BC3436009ED931 /* mod_lua_val.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = mod_lua_val.c; path = "../modules/mod-lua/src/main/mod_lua_val.c"; sourceTree = "<group>"; };
 		BFBD204F18BC3436009ED931 /* mod_lua.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; lineEnding = 0; name = mod_lua.c; path = "../modules/mod-lua/src/main/mod_lua.c"; sourceTree = "<group>"; };
+		BFBD9F8B2310500A0092FFD3 /* as_cdt_ctx.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_cdt_ctx.c; path = ../src/main/aerospike/as_cdt_ctx.c; sourceTree = "<group>"; };
 		BFBDAFDF191B0C5C007EB07C /* as_info.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_info.c; path = ../src/main/aerospike/as_info.c; sourceTree = "<group>"; };
 		BFC002871901BCB200CB9BC8 /* as_vector.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_vector.c; path = ../modules/common/src/main/aerospike/as_vector.c; sourceTree = "<group>"; };
 		BFC002891901E08500CB9BC8 /* as_lookup.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_lookup.c; path = ../src/main/aerospike/as_lookup.c; sourceTree = "<group>"; };
@@ -416,6 +418,7 @@
 				BF2AA7C018BEBFA400E54AF3 /* as_batch.c */,
 				BF457A8722B1B6F700409D04 /* as_bit_operations.c */,
 				BF90C76B22AB154A0062D920 /* as_cdt_internal.c */,
+				BFBD9F8B2310500A0092FFD3 /* as_cdt_ctx.c */,
 				BFBB64821905D5B500682A6E /* as_cluster.c */,
 				BF8EEB2C1A2CED34000F2B00 /* as_command.c */,
 				BF2AA7C218BEBFA400E54AF3 /* as_config.c */,
@@ -814,6 +817,7 @@
 				BF2AA7EE18BEBFA500E54AF3 /* as_policy.c in Sources */,
 				BF2AA7E918BEBFA500E54AF3 /* as_error.c in Sources */,
 				BF222CFD1BB33961006827A6 /* as_geojson.c in Sources */,
+				BFBD9F8C2310500A0092FFD3 /* as_cdt_ctx.c in Sources */,
 				BFBA105018B7D8B300A64E68 /* as_arraylist.c in Sources */,
 				BFC3A8EB1B97D24D00F2F758 /* version.c in Sources */,
 				BF90C77122AB30E40062D920 /* as_map_operations.c in Sources */,

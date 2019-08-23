@@ -734,6 +734,9 @@
     <ClCompile Include="..\..\src\main\aerospike\as_cdt_internal.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_cdt_ctx.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

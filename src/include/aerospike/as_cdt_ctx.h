@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_vector.h>
+#include <aerospike/as_val.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -83,6 +84,9 @@ typedef struct as_cdt_ctx {
  * as_cdt_ctx_add_list_index(&ctx, -1);
  * ~~~~~~~~~~
  *
+ * Call as_cdt_ctx_destroy() when done with the context list if any context levels contain
+ * a heap allocated as_val instance.  If in doubt, call as_cdt_ctx_destroy().
+ *
  * @param __ctx		The nested context to initialize.
  * @param __cap		The max number of context levels allowed.
  *
@@ -97,6 +101,10 @@ typedef struct as_cdt_ctx {
 
 /**
  * Initialize a stack allocated nested CDT context list, with item storage on the heap.
+ * Call as_cdt_ctx_destroy() when done with the context list.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
  */
 static inline void
 as_cdt_ctx_init(as_cdt_ctx* ctx, uint32_t capacity)
@@ -106,6 +114,10 @@ as_cdt_ctx_init(as_cdt_ctx* ctx, uint32_t capacity)
 
 /**
  * Initialize a heap allocated nested CDT context list, with item storage on the heap.
+ * Call as_cdt_ctx_destroy() when done with the context list.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
  */
 static inline as_cdt_ctx*
 as_cdt_ctx_create(uint32_t capacity)
@@ -114,13 +126,13 @@ as_cdt_ctx_create(uint32_t capacity)
 }
 
 /**
- * Free nested CDT context list.
+ * Destroy nested CDT context list and as_val based context items that were allocated on the heap.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
  */
-static inline void
-as_cdt_ctx_destroy(as_cdt_ctx* ctx)
-{
-	as_vector_destroy(&ctx->list);
-}
+AS_EXTERN void
+as_cdt_ctx_destroy(as_cdt_ctx* ctx);
 
 /**
  * Lookup list by index offset.
@@ -167,7 +179,7 @@ as_cdt_ctx_add_list_rank(as_cdt_ctx* ctx, int rank)
 }
 
 /**
- * Lookup list by value.
+ * Lookup list by value.  The ctx list takes ownership of val.
  *
  * @relates as_operations
  * @ingroup as_operations_object
@@ -226,7 +238,7 @@ as_cdt_ctx_add_map_rank(as_cdt_ctx* ctx, int rank)
 }
 
 /**
- * Lookup map by key.
+ * Lookup map by key.  The ctx list takes ownership of key.
  *
  * @relates as_operations
  * @ingroup as_operations_object
@@ -241,7 +253,7 @@ as_cdt_ctx_add_map_key(as_cdt_ctx* ctx, as_val* key)
 }
 
 /**
- * Lookup map by value.
+ * Lookup map by value.  The ctx list takes ownership of val.
  *
  * @relates as_operations
  * @ingroup as_operations_object

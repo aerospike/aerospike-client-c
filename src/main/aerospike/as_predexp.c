@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,6 +17,7 @@
 
 #include <aerospike/aerospike_index.h>
 #include <aerospike/as_bin.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_predexp.h>
@@ -88,6 +89,59 @@ VAL:	0x66 0x6f 0x6f
 #define AS_PREDEXP_MAPKEY_ITERATE_AND	254
 #define AS_PREDEXP_MAPVAL_ITERATE_AND	255
 
+// ----------------------------------------------------------------
+// predexp list
+// ----------------------------------------------------------------
+
+void
+as_predexp_list_destroy(as_predexp_list* predexp)
+{
+	if (! predexp) {
+		return;
+	}
+
+	as_vector* list = &predexp->list;
+	uint32_t max = list->size;
+
+	for (uint32_t i = 0; i < max; i++) {
+		as_predexp_base* bp = as_vector_get_ptr(list, i);
+
+		if (bp->dtor_fn) {
+			(*bp->dtor_fn)(bp);
+		}
+	}
+	as_vector_destroy(list);
+}
+
+size_t
+as_predexp_list_size(as_predexp_list* predexp, uint32_t* predexp_size)
+{
+	as_vector* list = &predexp->list;
+	uint32_t size = 0;
+	uint32_t max = list->size;
+
+	for (uint32_t i = 0; i < max; i++) {
+		as_predexp_base* bp = as_vector_get_ptr(list, i);
+		size += (uint32_t)(*bp->size_fn)(bp);
+	}
+	*predexp_size = size;
+	return (size_t)(size + AS_FIELD_HEADER_SIZE);
+}
+
+uint8_t*
+as_predexp_list_write(as_predexp_list* predexp, uint32_t predexp_size, uint8_t* p)
+{
+	p = as_command_write_field_header(p, AS_FIELD_PREDEXP, predexp_size);
+
+	as_vector* list = &predexp->list;
+	uint32_t max = list->size;
+
+	for (uint32_t i = 0; i < max; i++) {
+		as_predexp_base* bp = as_vector_get_ptr(list, i);
+		p = (*bp->write_fn)(bp, p);
+	}
+	return p;
+}
 
 // ----------------------------------------------------------------
 // as_predexp_and

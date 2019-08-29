@@ -381,6 +381,9 @@ PLAN(aerospike_test) {
 	plan_add(map_index);
 	plan_add(bit);
 
+	// predexp
+	plan_add(predexp);
+
 	// aerospike_info module
 	plan_add(info_basics);
 

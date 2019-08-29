@@ -137,6 +137,8 @@ extern "C" {
  * TYPES
  *****************************************************************************/
 
+struct as_predexp_list;
+
 /**
  * Retry Policy
  *
@@ -452,6 +454,21 @@ typedef struct as_policy_base_s {
 	 * Default: 0 (do not sleep between retries).
 	 */
 	uint32_t sleep_between_retries;
+
+	/**
+	 * Optional predicate expression filter list in postfix notation. If the predicate
+	 * expression exists and evaluates to false on the server, the transaction is ignored.
+	 * This can be used to eliminate a client/server roundtrip in some cases.
+	 *
+	 * aerospike_destroy() automatically calls as_predexp_list_destroy() on all global 
+	 * default policy predexp list instances.
+	 * 
+	 * The user is responsible for calling as_predexp_list_destroy() on predexp list when
+	 * setting temporary transaction policies.
+	 *
+	 * Default: NULL
+	 */
+	struct as_predexp_list* predexp;
 
 } as_policy_base;
 
@@ -973,6 +990,45 @@ typedef struct as_policies_s {
  *****************************************************************************/
 
 /**
+ * Initialize base defaults for reads.
+ */
+static inline void
+as_policy_base_read_init(as_policy_base* p)
+{
+	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	p->max_retries = 2;
+	p->sleep_between_retries = 0;
+	p->predexp = NULL;
+}
+
+/**
+ * Initialize base defaults for writes.
+ */
+static inline void
+as_policy_base_write_init(as_policy_base* p)
+{
+	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	p->max_retries = 0;
+	p->sleep_between_retries = 0;
+	p->predexp = NULL;
+}
+
+/**
+ * Initialize base defaults for scan/query.
+ */
+static inline void
+as_policy_base_query_init(as_policy_base* p)
+{
+	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	p->total_timeout = 0;
+	p->max_retries = 0;
+	p->sleep_between_retries = 0;
+	p->predexp = NULL;
+}
+
+/**
  * Initialize as_policy_read to default values.
  *
  * @param p	The policy to initialize.
@@ -983,10 +1039,7 @@ typedef struct as_policies_s {
 static inline as_policy_read*
 as_policy_read_init(as_policy_read* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
-	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = 2;
-	p->base.sleep_between_retries = 0;
+	as_policy_base_read_init(&p->base);
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
@@ -996,7 +1049,7 @@ as_policy_read_init(as_policy_read* p)
 }
 
 /**
- * Copy as_policy_read values.
+ * Shallow copy as_policy_read values.
  *
  * @param src	The source policy.
  * @param trg	The target policy.
@@ -1020,10 +1073,7 @@ as_policy_read_copy(const as_policy_read* src, as_policy_read* trg)
 static inline as_policy_write*
 as_policy_write_init(as_policy_write* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
-	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = 0;
-	p->base.sleep_between_retries = 0;
+	as_policy_base_write_init(&p->base);
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
@@ -1035,7 +1085,7 @@ as_policy_write_init(as_policy_write* p)
 }
 
 /**
- * Copy as_policy_write values.
+ * Shallow copy as_policy_write values.
  *
  * @param src	The source policy.
  * @param trg	The target policy.
@@ -1059,10 +1109,7 @@ as_policy_write_copy(const as_policy_write* src, as_policy_write* trg)
 static inline as_policy_operate*
 as_policy_operate_init(as_policy_operate* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
-	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = 0;
-	p->base.sleep_between_retries = 0;
+	as_policy_base_write_init(&p->base);
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
@@ -1076,7 +1123,7 @@ as_policy_operate_init(as_policy_operate* p)
 }
 
 /**
- * Copy as_policy_operate values.
+ * Shallow copy as_policy_operate values.
  *
  * @param src	The source policy.
  * @param trg	The target policy.
@@ -1100,10 +1147,7 @@ as_policy_operate_copy(const as_policy_operate* src, as_policy_operate* trg)
 static inline as_policy_remove*
 as_policy_remove_init(as_policy_remove* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
-	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = 0;
-	p->base.sleep_between_retries = 0;
+	as_policy_base_write_init(&p->base);
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
@@ -1114,7 +1158,7 @@ as_policy_remove_init(as_policy_remove* p)
 }
 
 /**
- * Copy as_policy_remove values.
+ * Shallow copy as_policy_remove values.
  *
  * @param src	The source policy.
  * @param trg	The target policy.
@@ -1138,10 +1182,7 @@ as_policy_remove_copy(const as_policy_remove* src, as_policy_remove* trg)
 static inline as_policy_apply*
 as_policy_apply_init(as_policy_apply* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
-	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = 0;
-	p->base.sleep_between_retries = 0;
+	as_policy_base_write_init(&p->base);
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
@@ -1153,7 +1194,7 @@ as_policy_apply_init(as_policy_apply* p)
 }
 
 /**
- * Copy as_policy_apply values.
+ * Shallow copy as_policy_apply values.
  *
  * @param src	The source policy.
  * @param trg	The target policy.
@@ -1177,10 +1218,7 @@ as_policy_apply_copy(const as_policy_apply* src, as_policy_apply* trg)
 static inline as_policy_batch*
 as_policy_batch_init(as_policy_batch* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
-	p->base.total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
-	p->base.max_retries = 2;
-	p->base.sleep_between_retries = 0;
+	as_policy_base_read_init(&p->base);
 	p->replica = AS_POLICY_REPLICA_SEQUENCE;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
@@ -1192,7 +1230,7 @@ as_policy_batch_init(as_policy_batch* p)
 }
 
 /**
- * Copy as_policy_batch values.
+ * Shallow copy as_policy_batch values.
  *
  * @param src	The source policy.
  * @param trg	The target policy.
@@ -1216,17 +1254,14 @@ as_policy_batch_copy(const as_policy_batch* src, as_policy_batch* trg)
 static inline as_policy_scan*
 as_policy_scan_init(as_policy_scan* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
-	p->base.total_timeout = 0;
-	p->base.max_retries = 0;
-	p->base.sleep_between_retries = 0;
+	as_policy_base_query_init(&p->base);
 	p->fail_on_cluster_change = false;
 	p->durable_delete = false;
 	return p;
 }
 
 /**
- * Copy as_policy_scan values.
+ * Shallow copy as_policy_scan values.
  *
  * @param src	The source policy.
  * @param trg	The target policy.
@@ -1250,17 +1285,14 @@ as_policy_scan_copy(const as_policy_scan* src, as_policy_scan* trg)
 static inline as_policy_query*
 as_policy_query_init(as_policy_query* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
-	p->base.total_timeout = 0;
-	p->base.max_retries = 0;
-	p->base.sleep_between_retries = 0;
+	as_policy_base_query_init(&p->base);
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;
 	return p;
 }
 
 /**
- * Copy as_policy_query values.
+ * Shallow copy as_policy_query values.
  *
  * @param src	The source policy.
  * @param trg	The target policy.
@@ -1334,12 +1366,22 @@ as_policy_admin_copy(const as_policy_admin* src, as_policy_admin* trg)
 }
 	
 /**
+ * @private
  * Initialize as_policies.
  *
  * @relates as_policies
  */
 as_policies*
 as_policies_init(as_policies* p);
+
+/**
+ * @private
+ * Destroy as_policies.
+ *
+ * @relates as_policies
+ */
+void
+as_policies_destroy(as_policies* p);
 
 #ifdef __cplusplus
 } // end extern "C"

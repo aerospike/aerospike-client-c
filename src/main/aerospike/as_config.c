@@ -83,6 +83,8 @@ as_config_destroy(as_config* config) {
 		cf_free(config->cluster_name);
 	}
 
+	as_policies_destroy(&config->policies);
+
 	as_config_tls* tls = &config->tls;
 
 	if (tls->cafile) {

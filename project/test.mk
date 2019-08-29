@@ -16,6 +16,7 @@ TEST_AEROSPIKE += aerospike_scan/*.c
 TEST_AEROSPIKE += aerospike_udf/*.c
 TEST_AEROSPIKE += policy/*.c
 TEST_AEROSPIKE += util/*.c
+TEST_AEROSPIKE += predexp.c
 
 TEST_SOURCE = $(wildcard $(addprefix $(SOURCE_TEST)/, $(TEST_AEROSPIKE)))
 

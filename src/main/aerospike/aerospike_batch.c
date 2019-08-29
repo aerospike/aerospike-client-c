@@ -24,6 +24,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_predexp.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
@@ -128,6 +129,12 @@ as_batch_complete_async(as_event_executor* executor)
 	e->listener(executor->err, e->records, executor->udata, executor->event_loop);
 }
 
+static inline bool
+as_batch_parse_stop(uint8_t rc)
+{
+	return rc && rc != AEROSPIKE_ERR_RECORD_NOT_FOUND && rc != AEROSPIKE_FILTERED_OUT;
+}
+
 static bool
 as_batch_async_skip_records(as_event_command* cmd)
 {
@@ -138,7 +145,7 @@ as_batch_async_skip_records(as_event_command* cmd)
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		
-		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		if (as_batch_parse_stop(msg->result_code)) {
 			as_error err;
 			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
 			as_event_response_error(cmd, &err);
@@ -177,7 +184,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		
-		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		if (as_batch_parse_stop(msg->result_code)) {
 			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
 			as_event_response_error(cmd, &err);
 			return true;
@@ -228,7 +235,7 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		
-		if (msg->result_code && msg->result_code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		if (as_batch_parse_stop(msg->result_code)) {
 			return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
 		}
 		p += sizeof(as_msg);
@@ -359,12 +366,32 @@ as_batch_parse(
 }
 
 static size_t
-as_batch_size_records(as_vector* records, as_vector* offsets, bool send_set_name)
+as_batch_size_records(
+	const as_policy_batch* policy, as_vector* records, as_vector* offsets,
+	uint16_t* field_count_header, uint32_t* pred_size, uint8_t* pred_field
+	)
 {
 	// Estimate buffer size.
 	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t) + 1;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, pred_size);
+		*field_count_header = 2;
+	}
+	else if (pred_field) {
+		// pred_field is only set on async batch retry with predicate expression.
+		// pred_size is already set in this case.
+		size += (*pred_size);
+		*field_count_header = 2;
+	}
+	else {
+		*field_count_header = 1;
+		*pred_size = 0;
+	}
+
 	as_batch_read_record* prev = 0;
 	uint32_t n_offsets = offsets->size;
+	bool send_set_name = policy->send_set_name;
 	
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
@@ -399,7 +426,8 @@ as_batch_size_records(as_vector* records, as_vector* offsets, bool send_set_name
 
 static size_t
 as_batch_index_records_write(
-	as_vector* records, as_vector* offsets, const as_policy_batch* policy, uint8_t* cmd
+	as_vector* records, as_vector* offsets, const as_policy_batch* policy, uint8_t* cmd,
+	uint16_t field_count_header, uint32_t pred_size, uint8_t* pred_field
 	)
 {
 	uint8_t read_attr = AS_MSG_INFO1_READ;
@@ -410,7 +438,18 @@ as_batch_index_records_write(
 
 	uint32_t n_offsets = offsets->size;
 	uint8_t* p = as_command_write_header_read(cmd, read_attr | AS_MSG_INFO1_BATCH_INDEX,
-					policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout, 1, 0);
+					policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout,
+					field_count_header, 0);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+	else if (pred_field) {
+		// pred_field is only set on async batch retry with predicate expression.
+		memcpy(p, pred_field, pred_size);
+		p += pred_size;
+	}
+
 	uint8_t* field_size_ptr = p;
 
 	p = as_command_write_field_header(p,
@@ -575,11 +614,15 @@ as_batch_execute_records(as_batch_task_records* btr, as_command* parent)
 	const as_policy_batch* policy = task->policy;
 
 	// Estimate buffer size.
-	size_t size = as_batch_size_records(btr->records, &task->offsets, policy->send_set_name);
+	uint16_t field_count_header;
+	uint32_t pred_size;
+	size_t size = as_batch_size_records(policy, btr->records, &task->offsets, &field_count_header,
+										&pred_size, NULL);
 		
 	// Write command
 	uint8_t* buf = as_command_buffer_init(size);
-	size = as_batch_index_records_write(btr->records, &task->offsets, policy, buf);
+	size = as_batch_index_records_write(btr->records, &task->offsets, policy, buf,
+										field_count_header, pred_size, NULL);
 
 	as_error err;
 	as_error_init(&err);
@@ -606,6 +649,16 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_command* parent)
 	as_batch_task* task = &btk->base;
 	const as_policy_batch* policy = task->policy;
 
+	// Estimate buffer size.
+	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 5;
+	uint32_t pred_size = 0;
+	uint16_t field_count_header = 1;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		field_count_header++;
+	}
+
 	// Calculate size of bin names.
 	uint16_t field_count = policy->send_set_name ? 2 : 1;
 	size_t bin_name_size = 0;
@@ -616,8 +669,6 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_command* parent)
 		}
 	}
 	
-	// Estimate buffer size.
-	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 5;
 	as_key* prev = 0;
 	uint32_t n_offsets = task->offsets.size;
 	
@@ -650,10 +701,16 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_command* parent)
 
 	// Write command
 	uint8_t* buf = as_command_buffer_init(size);
-	uint8_t* p = as_command_write_header_read(buf, btk->read_attr | AS_MSG_INFO1_BATCH_INDEX,
-					policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout, 1, 0);
-	uint8_t* field_size_ptr = p;
 
+	uint8_t* p = as_command_write_header_read(buf, btk->read_attr | AS_MSG_INFO1_BATCH_INDEX,
+					policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout,
+					field_count_header, 0);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
+	uint8_t* field_size_ptr = p;
 	p = as_command_write_field_header(p, policy->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET :
 																 AS_FIELD_BATCH_INDEX, 0);
 
@@ -1102,8 +1159,11 @@ as_batch_read_execute_async(
 		as_batch_node* batch_node = as_vector_get(batch_nodes, i);
 		
 		// Estimate buffer size.
-		size_t size = as_batch_size_records(records, &batch_node->offsets, policy->send_set_name);
-		
+		uint16_t field_count_header;
+		uint32_t pred_size;
+		size_t size = as_batch_size_records(policy, records, &batch_node->offsets,
+											&field_count_header, &pred_size, NULL);
+
 		// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
 		// fragmentation and to allow socket read to reuse buffer.
 		size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
@@ -1130,7 +1190,7 @@ as_batch_read_execute_async(
 		cmd->flags = flags;
 		cmd->flags2 = policy->deserialize ? AS_ASYNC_FLAGS2_DESERIALIZE : 0;
 		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy,
-														  cmd->buf);
+														  cmd->buf, field_count_header, pred_size, NULL);
 		
 		status = as_event_command_execute(cmd, err);
 		
@@ -1511,7 +1571,21 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 	}
 
-	p += AS_HEADER_SIZE + sizeof(uint32_t);
+	p += AS_HEADER_SIZE;
+	uint8_t* pred_field = p;
+	p += sizeof(uint32_t);
+	uint32_t pred_size;
+
+	if (*p == AS_FIELD_PREDEXP) {
+		// pred_size defined as full field size (including header) in this special case.
+		pred_size = cf_swap_from_be32(*(uint32_t*)pred_field) + sizeof(uint32_t);
+		p += pred_size;
+	}
+	else {
+		pred_field = NULL;
+		pred_size = 0;
+	}
+
 	policy.send_set_name = (*p++ == AS_FIELD_BATCH_INDEX_WITH_SET);
 
 	uint32_t offsets_size = cf_swap_from_be32(*(uint32_t*)p);
@@ -1634,7 +1708,9 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		as_batch_node* batch_node = as_vector_get(&batch_nodes, i);
 
 		// Estimate buffer size.
-		size_t size = as_batch_size_records(records, &batch_node->offsets, policy.send_set_name);
+		uint16_t field_count_header;
+		size_t size = as_batch_size_records(&policy, records, &batch_node->offsets,
+											&field_count_header, &pred_size, pred_field);
 
 		// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
 		// fragmentation and to allow socket read to reuse buffer.
@@ -1662,7 +1738,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		cmd->flags = parent->flags;
 		cmd->flags2 = parent->flags2;
 		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, &policy,
-														  cmd->buf);
+														  cmd->buf, field_count_header, pred_size,
+														  pred_field);
 
 		status = as_event_command_execute(cmd, &err);
 

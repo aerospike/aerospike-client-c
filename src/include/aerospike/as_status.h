@@ -244,6 +244,11 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_OP_NOT_APPLICABLE = 26,
 
 	/**
+	 * The transaction was not performed because the predexp was false.
+	 */
+	AEROSPIKE_FILTERED_OUT = 27,
+
+	/**
 	 * There are no more records left for query.
 	 */
 	AEROSPIKE_QUERY_END = 50,
@@ -352,11 +357,6 @@ typedef enum as_status_e {
 	 * Generic UDF error.
 	 */
 	AEROSPIKE_ERR_UDF = 100,
-	
-	/**
-	 * The requested item in a large collection was not found.
-	 */
-	AEROSPIKE_ERR_LARGE_ITEM_NOT_FOUND = 125,
 
 	/**
 	 * Batch functionality has been disabled.

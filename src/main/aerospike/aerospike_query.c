@@ -579,7 +579,8 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 }
 
 static size_t
-as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuffer,
+as_query_command_size(
+	const as_policy_base* policy_base, const as_query* query, uint16_t* fields, as_buffer* argbuffer,
     uint32_t* filter_sz, uint32_t* predexp_sz, uint32_t* bin_name_sz
 	)
 {
@@ -678,7 +679,11 @@ as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuf
 		size += predexp_size;
 		n_fields++;
 	}
-	
+	else if (policy_base->predexp) {
+		size += as_predexp_list_size(policy_base->predexp, &predexp_size);
+		n_fields++;
+	}
+
 	// Estimate background function size.
 	as_buffer_init(argbuffer);
 	
@@ -715,9 +720,10 @@ as_query_command_size(const as_query* query, uint16_t* fields, as_buffer* argbuf
 
 static size_t
 as_query_command_init(
-	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_query* query_policy,
-	const as_policy_write* write_policy, uint64_t task_id, uint32_t timeout, uint16_t n_fields,
-	uint32_t filter_size, uint32_t predexp_size, uint32_t bin_name_size, as_buffer* argbuffer
+	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_base* base_policy,
+	const as_policy_query* query_policy, const as_policy_write* write_policy, uint64_t task_id,
+	uint32_t timeout, uint16_t n_fields, uint32_t filter_size, uint32_t predexp_size,
+	uint32_t bin_name_size, as_buffer* argbuffer
 	)
 {
 	// Write command buffer.
@@ -839,7 +845,10 @@ as_query_command_init(
 			p = (*bp->write_fn)(bp, p);
 		}
 	}
-	
+	else if (base_policy->predexp) {
+		p = as_predexp_list_write(base_policy->predexp, predexp_size, p);
+	}
+
 	// Write aggregation function
 	if (query->apply.function[0]) {
 		p = as_command_write_field_header(p, AS_FIELD_UDF_OP, 1);
@@ -883,12 +892,16 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
-	uint32_t timeout = (task->query_policy)? task->query_policy->base.total_timeout : task->write_policy->base.total_timeout;
-	
-	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &predexp_size, &bin_name_size);
+	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
+															  &task->write_policy->base;
+	uint32_t timeout = base_policy->total_timeout;
+
+	size_t size = as_query_command_size(base_policy, query, &n_fields, &argbuffer, &filter_size,
+										&predexp_size, &bin_name_size);
 	uint8_t* cmd = as_command_buffer_init(size);
-	size = as_query_command_init(cmd, query, query_type, task->query_policy, task->write_policy, task->task_id,
-								 timeout, n_fields, filter_size, predexp_size, bin_name_size, &argbuffer);
+	size = as_query_command_init(cmd, query, query_type, base_policy, task->query_policy,
+								 task->write_policy, task->task_id, timeout, n_fields, filter_size,
+								 predexp_size, bin_name_size, &argbuffer);
 	
 	task->cmd = cmd;
 	task->cmd_size = size;
@@ -1191,10 +1204,12 @@ aerospike_query_async(
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
 	
-	size_t size = as_query_command_size(query, &n_fields, &argbuffer, &filter_size, &predexp_size, &bin_name_size);
+	size_t size = as_query_command_size(&policy->base, query, &n_fields, &argbuffer, &filter_size,
+										&predexp_size, &bin_name_size);
 	uint8_t* cmd_buf = as_command_buffer_init(size);
-	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, policy, NULL, task_id, policy->base.total_timeout,
-								 n_fields, filter_size, predexp_size, bin_name_size, &argbuffer);
+	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, &policy->base, policy, NULL,
+								 task_id, policy->base.total_timeout, n_fields, filter_size,
+								 predexp_size, bin_name_size, &argbuffer);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.

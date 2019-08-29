@@ -29,6 +29,7 @@
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_predexp.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
@@ -158,6 +159,7 @@ as_event_command_init_read(
 	}
 }
 
+
 as_status
 aerospike_key_get(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
@@ -177,12 +179,23 @@ aerospike_key_get(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
 		
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_read(buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL,
 		policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout, n_fields, 0);
 
 	p = as_command_write_key(p, policy->key, key);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	size = as_command_write_end(buf, p);
 
 	as_command_parse_result_data data;
@@ -223,6 +236,12 @@ aerospike_key_get_async(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
 
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, ri.replica, pi.ns, pi.partition, policy->deserialize,
@@ -233,6 +252,11 @@ aerospike_key_get_async(
 		policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout, n_fields, 0);
 
 	p = as_command_write_key(p, policy->key, key);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 	return as_event_command_execute(cmd, err);
 }
@@ -257,6 +281,13 @@ aerospike_key_select(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	int nvalues = 0;
 	
 	for (nvalues = 0; bins[nvalues] != NULL && bins[nvalues][0] != '\0'; nvalues++) {
@@ -273,7 +304,11 @@ aerospike_key_select(
 					policy->read_mode_sc, policy->base.total_timeout, n_fields, nvalues);
 
 	p = as_command_write_key(p, policy->key, key);
-	
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	for (int i = 0; i < nvalues; i++) {
 		p = as_command_write_bin_name(p, bins[i]);
 	}
@@ -316,6 +351,13 @@ aerospike_key_select_async(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	int nvalues = 0;
 	
 	for (nvalues = 0; bins[nvalues] != NULL && bins[nvalues][0] != '\0'; nvalues++) {
@@ -336,7 +378,11 @@ aerospike_key_select_async(
 					policy->read_mode_sc, policy->base.total_timeout, n_fields, nvalues);
 
 	p = as_command_write_key(p, policy->key, key);
-	
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	for (int i = 0; i < nvalues; i++) {
 		p = as_command_write_bin_name(p, bins[i]);
 	}
@@ -363,12 +409,23 @@ aerospike_key_exists(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_read(buf, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA,
 		policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout, n_fields, 0);
 
 	p = as_command_write_key(p, policy->key, key);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	size = as_command_write_end(buf, p);
 
 	as_proto_msg msg;
@@ -423,6 +480,12 @@ aerospike_key_exists_async(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
 
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, ri.replica, pi.ns, pi.partition, false,
@@ -433,6 +496,11 @@ aerospike_key_exists_async(
 		policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout, n_fields, 0);
 
 	p = as_command_write_key(p, policy->key, key);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 	return as_event_command_execute(cmd, err);
 }
@@ -460,6 +528,12 @@ aerospike_key_put(
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
 
 	memset(buffers, 0, sizeof(as_buffer) * n_bins);
 	
@@ -473,6 +547,10 @@ aerospike_key_put(
 					n_fields, n_bins, policy->durable_delete);
 		
 	p = as_command_write_key(p, policy->key, key);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
 
 	for (uint32_t i = 0; i < n_bins; i++) {
 		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
@@ -533,6 +611,13 @@ aerospike_key_put_async_ex(
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	memset(buffers, 0, sizeof(as_buffer) * n_bins);
 	
 	for (uint32_t i = 0; i < n_bins; i++) {
@@ -550,7 +635,11 @@ aerospike_key_put_async_ex(
 				n_fields, n_bins, policy->durable_delete);
 		
 		p = as_command_write_key(p, policy->key, key);
-		
+
+		if (policy->base.predexp) {
+			p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+		}
+
 		for (uint32_t i = 0; i < n_bins; i++) {
 			p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
 		}
@@ -575,7 +664,11 @@ aerospike_key_put_async_ex(
 				n_fields, n_bins, policy->durable_delete);
 		
 		p = as_command_write_key(p, policy->key, key);
-		
+
+		if (policy->base.predexp) {
+			p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+		}
+
 		for (uint32_t i = 0; i < n_bins; i++) {
 			p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
 		}
@@ -641,13 +734,24 @@ aerospike_key_remove(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-		
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header(buf, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0,
 					policy->commit_level, AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation,
 					0, policy->base.total_timeout, n_fields, 0, policy->durable_delete);
 
 	p = as_command_write_key(p, policy->key, key);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	size = as_command_write_end(buf, p);
 
 	as_proto_msg msg;
@@ -683,7 +787,13 @@ aerospike_key_remove_async_ex(
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	as_event_command* cmd = as_async_write_command_create(
 		cluster, &policy->base, policy->replica, pi.ns, pi.partition, AS_ASYNC_FLAGS_MASTER,
 		listener, udata, event_loop, pipe_listener, size, as_event_command_parse_header);
@@ -693,6 +803,11 @@ aerospike_key_remove_async_ex(
 		policy->base.total_timeout, n_fields, 0, policy->durable_delete);
 	
 	p = as_command_write_key(p, policy->key, key);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 
 	if (length != NULL) {
@@ -807,6 +922,13 @@ aerospike_key_operate(
 	uint16_t n_fields;
 	size += as_command_key_size(policy->key, key, &n_fields);
 
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header(buf, read_attr, write_attr, info_attr, policy->commit_level,
 										 policy->exists, policy->gen, ops->gen, ops->ttl,
@@ -814,7 +936,11 @@ aerospike_key_operate(
 										 policy->durable_delete);
 
 	p = as_command_write_key(p, policy->key, key);
-	
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	for (uint32_t i = 0; i < n_operations; i++) {
 		as_binop* op = &ops->binops.entries[i];
 		p = as_command_write_bin(p, op->op, &op->bin, &buffers[i]);
@@ -887,6 +1013,13 @@ aerospike_key_operate_async(
 	uint16_t n_fields;
 	size += as_command_key_size(policy->key, key, &n_fields);
 
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);
@@ -927,7 +1060,11 @@ aerospike_key_operate_async(
 								policy->durable_delete);
 
 	p = as_command_write_key(p, policy->key, key);
-	
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	for (uint32_t i = 0; i < n_operations; i++) {
 		as_binop* op = &ops->binops.entries[i];
 		p = as_command_write_bin(p, op->op, &op->bin, &buffers[i]);
@@ -956,6 +1093,13 @@ aerospike_key_apply(
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	size += as_command_string_field_size(module);
 	size += as_command_string_field_size(function);
 	
@@ -973,6 +1117,11 @@ aerospike_key_apply(
 		policy->durable_delete);
 
 	p = as_command_write_key(p, policy->key, key);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, module);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, function);
 	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &args);
@@ -1013,6 +1162,13 @@ aerospike_key_apply_async(
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
+	uint32_t pred_size = 0;
+
+	if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		n_fields++;
+	}
+
 	size += as_command_string_field_size(module);
 	size += as_command_string_field_size(function);
 	
@@ -1033,6 +1189,11 @@ aerospike_key_apply_async(
 		policy->ttl, policy->base.total_timeout, n_fields, 0, policy->durable_delete);
 
 	p = as_command_write_key(p, policy->key, key);
+
+	if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
 	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, module);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, function);
 	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &args);

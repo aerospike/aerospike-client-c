@@ -248,21 +248,19 @@ TEST(key_operate_float , "operate: (test,test,opfloat) = {append, read, write, r
 
 TEST(key_operate_delete , "operate delete")
 {
-	as_error err;
-	as_error_reset(&err);
-
-	as_record r, *rec = &r;
-	as_record_init(rec, 1);
-	as_record_set_int64(rec, "a", 1);
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, "a", 1);
 
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "opdelkey");
 	
+	as_error err;
 	as_status rc = aerospike_key_remove(as, &err, NULL, &key);
 	
-	rc = aerospike_key_put(as, &err, NULL, &key, rec);
+	rc = aerospike_key_put(as, &err, NULL, &key, &rec);
 	assert_int_eq(rc, AEROSPIKE_OK);
-	as_record_destroy(rec);
+	as_record_destroy(&rec);
 
 	// Read bin and then delete all.
 	as_operations ops;
@@ -270,27 +268,28 @@ TEST(key_operate_delete , "operate delete")
 	as_operations_add_read(&ops, "a");
 	as_operations_add_delete(&ops);
 
-	rc = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_record* prec = NULL;
+	rc = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
 	assert_int_eq(rc, AEROSPIKE_OK);
 
-	int64_t val = as_record_get_int64(rec, "a", 0);
+	int64_t val = as_record_get_int64(prec, "a", 0);
 	assert_int_eq(val, 1);
 
-	as_record_destroy(rec);
+	as_record_destroy(prec);
 
 	// Verify record is gone.
-	rc = aerospike_key_exists(as, &err, NULL, &key, &rec);
+	prec = NULL;
+	rc = aerospike_key_exists(as, &err, NULL, &key, &prec);
 	assert_int_eq(rc, AEROSPIKE_ERR_RECORD_NOT_FOUND);
-	as_record_destroy(rec);
+	as_record_destroy(prec);
 
 	// Rewrite record.
-	rec = &r;
-	as_record_init(rec, 1);
-	as_record_set_int64(rec, "a", 1);
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, "a", 1);
 
-	rc = aerospike_key_put(as, &err, NULL, &key, rec);
+	rc = aerospike_key_put(as, &err, NULL, &key, &rec);
 	assert_int_eq(rc, AEROSPIKE_OK);
-	as_record_destroy(rec);
+	as_record_destroy(&rec);
 
 	// Read bin1 and then delete all followed by a write of bin2.
 	as_operations_inita(&ops, 3);
@@ -298,22 +297,24 @@ TEST(key_operate_delete , "operate delete")
 	as_operations_add_delete(&ops);
 	as_operations_add_write_int64(&ops, "b", 2);
 
-	rc = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	prec = NULL;
+	rc = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
 	assert_int_eq(rc, AEROSPIKE_OK);
 
-	val = as_record_get_int64(rec, "a", 0);
+	val = as_record_get_int64(prec, "a", 0);
 	assert_int_eq(val, 1);
-	as_record_destroy(rec);
+	as_record_destroy(prec);
 
 	// Read record.
-	rc = aerospike_key_get(as, &err, NULL, &key, &rec);
+	prec = NULL;
+	rc = aerospike_key_get(as, &err, NULL, &key, &prec);
 	assert_int_eq(rc, AEROSPIKE_OK);
-	assert_int_eq(rec->bins.size, 1);
+	assert_int_eq(prec->bins.size, 1);
 
-	val = as_record_get_int64(rec, "b", 0);
+	val = as_record_get_int64(prec, "b", 0);
 	assert_int_eq(val, 2);
 
-	as_record_destroy(rec);
+	as_record_destroy(prec);
 }
 
 /******************************************************************************

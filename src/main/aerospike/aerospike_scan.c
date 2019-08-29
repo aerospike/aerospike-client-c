@@ -357,7 +357,10 @@ as_scan_worker(void* data)
 }
 
 static size_t
-as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer, uint32_t* predexp_sz)
+as_scan_command_size(
+	const as_policy_scan* policy, const as_scan* scan, uint16_t* fields, as_buffer* argbuffer,
+	uint32_t* predexp_sz
+	)
 {
 	// Build Command.  It's okay to share command across threads because scan does not have retries.
 	// If retries were allowed, the timeout field in the command would change on retry which
@@ -416,6 +419,11 @@ as_scan_command_size(const as_scan* scan, uint16_t* fields, as_buffer* argbuffer
 		size += predexp_size;
 		n_fields++;
 	}
+	else if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &predexp_size);
+		n_fields++;
+	}
+
 	*predexp_sz = predexp_size;
 	*fields = n_fields;
 
@@ -491,7 +499,10 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 			p = (*bp->write_fn)(bp, p);
 		}
 	}
-	
+	else if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, predexp_size, p);
+	}
+
 	if (scan->select.size > 0) {
 		for (uint16_t i = 0; i < scan->select.size; i++) {
 			p = as_command_write_bin_name(p, scan->select.entries[i]);
@@ -558,7 +569,7 @@ as_scan_generic(
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
 	uint32_t predexp_sz = 0;
-	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer, &predexp_sz);
+	size_t size = as_scan_command_size(policy, scan, &n_fields, &argbuffer, &predexp_sz);
 	uint8_t* cmd = as_command_buffer_init(size);
 	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
 	
@@ -703,7 +714,7 @@ as_scan_async(
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
 	uint32_t predexp_sz = 0;
-	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer, &predexp_sz);
+	size_t size = as_scan_command_size(policy, scan, &n_fields, &argbuffer, &predexp_sz);
 	uint8_t* cmd_buf = as_command_buffer_init(size);
 	size = as_scan_command_init(cmd_buf, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
 	
@@ -855,7 +866,7 @@ aerospike_scan_node(
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
 	uint32_t predexp_sz = 0;
-	size_t size = as_scan_command_size(scan, &n_fields, &argbuffer, &predexp_sz);
+	size_t size = as_scan_command_size(policy, scan, &n_fields, &argbuffer, &predexp_sz);
 	uint8_t* cmd = as_command_buffer_init(size);
 	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
 	

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,11 +16,71 @@
  */
 #pragma once
 
+/**
+ * @defgroup predexp_operations Predicate Expression Filters.
+ * @ingroup client_operations
+ *
+ * Predexp filters are stored in postfix notation and are applied on each
+ * applicable server record.
+ *
+ * If the filter exists and evaluates to false in a single record transaction,
+ * the transaction is ignored and AEROSPIKE_FILTERED_OUT is returned as an error code.
+ *
+ * If the filter exists and evaluates to false in a batch record row, AEROSPIKE_FILTERED_OUT
+ * is returned as a status for that record row in the batch.
+ *
+ * If the filter exists and evaluates to false on a scan/query record, that record is not
+ * returned.
+ *
+ * Prior to client version 4.6.8, predexp filters could only be defined on as_scan
+ * or as_query structures.  
+ *
+ * ~~~~~~~~~~{.c}
+ * as_scan s;
+ * as_scan_predexp_inita(&s, 3);
+ * as_scan_predexp_add(&s, as_predexp_string_bin("fruit"));
+ * as_scsn_predexp_add(&s, as_predexp_string_value("apple"));
+ * as_scsn_predexp_add(&s, as_predexp_string_equal());
+ * ...
+ * as_scan_destroy(&s);
+ *
+ * as_query q;
+ * as_query_predexp_inita(&q, 3);
+ * as_query_predexp_add(&q, as_predexp_string_bin("fruit"));
+ * as_query_predexp_add(&q, as_predexp_string_value("apple"));
+ * as_query_predexp_add(&q, as_predexp_string_equal());
+ * ...
+ * as_query_destroy(&q);
+ * ~~~~~~~~~~
+ *
+ * Predexp filters can now be defined on all transactions through the transaction policy
+ * (as_policy_base contained in as_policy_read, as_policy_write, ...).
+ * 
+ * ~~~~~~~~~~{.c}
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("fruit"));
+ * as_predexp_list_add(&predexp, as_predexp_string_value("apple"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ *
+ * as_policy_write p;
+ * as_policy_write_init(&p);
+ * p.base.predexp_list = &predexp;
+ * ...
+ * as_predexp_list_destroy(&predexp);
+ * ~~~~~~~~~~
+ */
+
 #include <aerospike/as_std.h>
+#include <aerospike/as_vector.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/******************************************************************************
+ * TYPES
+ *****************************************************************************/
 
 struct as_predexp_base_s;
 
@@ -29,7 +89,9 @@ typedef size_t (*as_predexp_base_size_fn) (struct as_predexp_base_s *);
 typedef uint8_t * (*as_predexp_base_write_fn) (struct as_predexp_base_s *, uint8_t *p);
 	
 /**
- * Defines a predicate expression base.
+ * Predicate expression base.
+ *
+ * @ingroup predexp_operations
  */
 typedef struct as_predexp_base_s {
 
@@ -51,6 +113,108 @@ typedef struct as_predexp_base_s {
 } as_predexp_base;
 
 /**
+ * Predicate expression filter list.
+ *
+ * @ingroup predexp_operations
+ */
+typedef struct as_predexp_list {
+	/**
+	 * List of predicate expressions.
+	 */
+	as_vector list;
+} as_predexp_list;
+
+/******************************************************************************
+ * PREDICATE EXPRESSION LIST FUNCTIONS
+ *****************************************************************************/
+
+/**
+ * Initialize predicate expression list on the stack.
+ * Predicate items still have a heap component, so call as_predexp_list_destroy()
+ * when done with the predicate expression list.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("apple"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("fruit"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * ...
+ * as_predexp_list_destroy(&predexp);
+ * ~~~~~~~~~~
+ *
+ * @param __predexp	Predicate expression list.
+ * @param __cap		The capacity of the predicate expression list.
+ *
+ * @ingroup predexp_operations
+ */
+#define as_predexp_list_inita(__predexp, __cap) \
+		as_vector_inita(&(__predexp)->list, sizeof(as_predexp_base*), __cap)
+
+/**
+ * Initialize stack allocated predicate expression list, with item storage on
+ * the heap. Call as_predexp_list_destroy() when done with the predicate
+ * expression list.
+ *
+ * @ingroup predexp_operations
+ */
+static inline void
+as_predexp_list_init(as_predexp_list* predexp, uint32_t capacity)
+{
+	as_vector_init(&predexp->list, sizeof(as_predexp_base*), capacity);
+}
+
+/**
+ * Initialize heap allocated predicate expression list, with item storage on
+ * the heap. Call as_predexp_list_destroy() when done with the predicate
+ * expression list.
+ *
+ * @ingroup predexp_operations
+ */
+static inline as_predexp_list*
+as_predexp_list_create(uint32_t capacity)
+{
+	return (as_predexp_list*)as_vector_create(sizeof(as_predexp_base*), capacity);
+}
+
+/**
+ * Destroy predicate expression filter list and items that were allocated on the heap.
+ *
+ * @ingroup predexp_operations
+ */
+AS_EXTERN void
+as_predexp_list_destroy(as_predexp_list* predexp);
+
+/**
+ * Add predicate expression to filter list.
+ *
+ * @ingroup predexp_operations
+ */
+static inline void
+as_predexp_list_add(as_predexp_list* predexp, as_predexp_base* predbase)
+{
+	as_vector_append(&predexp->list, &predbase);
+}
+
+/**
+ * @private
+ * Compute byte size of predicate expression list.
+ */
+size_t
+as_predexp_list_size(as_predexp_list* predexp, uint32_t* pred_size);
+
+/**
+ * @private
+ * Serialize predicate expression list.
+ */
+uint8_t*
+as_predexp_list_write(as_predexp_list* predexp, uint32_t predexp_size, uint8_t* p);
+
+/******************************************************************************
+ * PREDICATE EXPRESSION FUNCTIONS
+ *****************************************************************************/
+
+/**
  * Create an AND logical predicate expression.
  *
  * The AND predicate expression returns true if all of its children
@@ -65,19 +229,21 @@ typedef struct as_predexp_base_s {
  * inclusive:
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 7);
- * as_query_predexp_add(&q, as_predexp_integer_bin("c"));
- * as_query_predexp_add(&q, as_predexp_integer_value(11));
- * as_query_predexp_add(&q, as_predexp_integer_greatereq());
- * as_query_predexp_add(&q, as_predexp_integer_bin("c"));
- * as_query_predexp_add(&q, as_predexp_integer_value(20));
- * as_query_predexp_add(&q, as_predexp_integer_lesseq());
- * as_query_predexp_add(&q, as_predexp_and(2));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 7);
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("c"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(11));
+ * as_predexp_list_add(&predexp, as_predexp_integer_greatereq());
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("c"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(20));
+ * as_predexp_list_add(&predexp, as_predexp_integer_lesseq());
+ * as_predexp_list_add(&predexp, as_predexp_and(2));
  * ~~~~~~~~~~
  *
  * @param nexpr	The number of child expressions to AND.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_and(uint16_t nexpr);
@@ -96,20 +262,21 @@ as_predexp_and(uint16_t nexpr);
  * selects records where the value of bin "pet" is "cat" or "dog".
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 7);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_bin("pet"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_string_value("dog"));
- * as_query_predexp_add(&q, as_predexp_string_bin("pet"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_or(2));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 7);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_string_value("dog"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_or(2));
  * ~~~~~~~~~~
  *
  * @param nexpr	The number of child expressions to OR.
  *
- * @returns a predicate expression suitable for adding to a query or
- * scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_or(uint16_t nexpr);
@@ -127,14 +294,16 @@ as_predexp_or(uint16_t nexpr);
  * selects records where the value of bin "pet" is not "dog".
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 4);
- * as_query_predexp_add(&q, as_predexp_string_value("dog"));
- * as_query_predexp_add(&q, as_predexp_string_bin("pet"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_not());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 4);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("dog"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_not());
  * ~~~~~~~~~~
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_not();
@@ -150,19 +319,21 @@ as_predexp_not();
  * inclusive:
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 7);
- * as_query_predexp_add(&q, as_predexp_integer_bin("c"));
- * as_query_predexp_add(&q, as_predexp_integer_value(11));
- * as_query_predexp_add(&q, as_predexp_integer_greatereq());
- * as_query_predexp_add(&q, as_predexp_integer_bin("c"));
- * as_query_predexp_add(&q, as_predexp_integer_value(20));
- * as_query_predexp_add(&q, as_predexp_integer_lesseq());
- * as_query_predexp_add(&q, as_predexp_and(2));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 7);
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("c"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(11));
+ * as_predexp_list_add(&predexp, as_predexp_integer_greatereq());
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("c"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(20));
+ * as_predexp_list_add(&predexp, as_predexp_integer_lesseq());
+ * as_predexp_list_add(&predexp, as_predexp_and(2));
  * ~~~~~~~~~~
  *
  * @param value	The integer value.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_integer_value(int64_t value);
@@ -177,22 +348,24 @@ as_predexp_integer_value(int64_t value);
  * selects records where the value of bin "pet" is "cat" or "dog":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 7);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_bin("pet"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_string_value("dog"));
- * as_query_predexp_add(&q, as_predexp_string_bin("pet"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_or(2));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 7);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_string_value("dog"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_or(2));
  * ~~~~~~~~~~
  *
  * @param value	The string value.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_string_value(char const * value);
+as_predexp_string_value(char const* value);
 
 /**
  * Create a constant GeoJSON value predicate expression.
@@ -205,7 +378,7 @@ as_predexp_string_value(char const * value);
  * specified polygon:
  *
  * ~~~~~~~~~~{.c}
- * char const * region =
+ * char const* region =
  * 	"{ "
  * 	"    \"type\": \"Polygon\", "
  * 	"    \"coordinates\": [ "
@@ -215,18 +388,20 @@ as_predexp_string_value(char const * value);
  * 	"    ] "
  * 	" } ";
  *
- * as_query_predexp_inita(&query, 3);
- * as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
- * as_query_predexp_add(&query, as_predexp_geojson_value(region));
- * as_query_predexp_add(&query, as_predexp_geojson_within());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexpuery, 3);
+ * as_predexp_list_add(&predexpuery, as_predexp_geojson_bin("loc"));
+ * as_predexp_list_add(&predexpuery, as_predexp_geojson_value(region));
+ * as_predexp_list_add(&predexpuery, as_predexp_geojson_within());
  * ~~~~~~~~~~
  *
  * @param value	The GeoJSON string value.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_geojson_value(char const * value);
+as_predexp_geojson_value(char const* value);
 
 /**
  * Create an integer bin value predicate expression.
@@ -239,22 +414,24 @@ as_predexp_geojson_value(char const * value);
  * inclusive:
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 7);
- * as_query_predexp_add(&q, as_predexp_integer_bin("c"));
- * as_query_predexp_add(&q, as_predexp_integer_value(11));
- * as_query_predexp_add(&q, as_predexp_integer_greatereq());
- * as_query_predexp_add(&q, as_predexp_integer_bin("c"));
- * as_query_predexp_add(&q, as_predexp_integer_value(20));
- * as_query_predexp_add(&q, as_predexp_integer_lesseq());
- * as_query_predexp_add(&q, as_predexp_and(2));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 7);
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("c"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(11));
+ * as_predexp_list_add(&predexp, as_predexp_integer_greatereq());
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("c"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(20));
+ * as_predexp_list_add(&predexp, as_predexp_integer_lesseq());
+ * as_predexp_list_add(&predexp, as_predexp_and(2));
  * ~~~~~~~~~~
  *
  * @param binname	The name of the bin.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_integer_bin(char const * binname);
+as_predexp_integer_bin(char const* binname);
 
 /**
  * Create an string bin value predicate expression.
@@ -266,22 +443,24 @@ as_predexp_integer_bin(char const * binname);
  * selects records where the value of bin "pet" is "cat" or "dog":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 7);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_bin("pet"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_string_value("dog"));
- * as_query_predexp_add(&q, as_predexp_string_bin("pet"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_or(2));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 7);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_string_value("dog"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_or(2));
  * ~~~~~~~~~~
  *
  * @param binname	The name of the bin.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_string_bin(char const * binname);
+as_predexp_string_bin(char const* binname);
 
 /**
  * Create an GeoJSON bin value predicate expression.
@@ -294,7 +473,7 @@ as_predexp_string_bin(char const * binname);
  * specified polygon:
  *
  * ~~~~~~~~~~{.c}
- * char const * region =
+ * char const* region =
  * 	"{ "
  * 	"    \"type\": \"Polygon\", "
  * 	"    \"coordinates\": [ "
@@ -304,18 +483,20 @@ as_predexp_string_bin(char const * binname);
  * 	"    ] "
  * 	" } ";
  *
- * as_query_predexp_inita(&query, 3);
- * as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
- * as_query_predexp_add(&query, as_predexp_geojson_value(region));
- * as_query_predexp_add(&query, as_predexp_geojson_within());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexpuery, 3);
+ * as_predexp_list_add(&predexpuery, as_predexp_geojson_bin("loc"));
+ * as_predexp_list_add(&predexpuery, as_predexp_geojson_value(region));
+ * as_predexp_list_add(&predexpuery, as_predexp_geojson_within());
  * ~~~~~~~~~~
  *
  * @param binname	The name of the bin.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_geojson_bin(char const * binname);
+as_predexp_geojson_bin(char const* binname);
 
 /**
  * Create a list bin value predicate expression.
@@ -329,20 +510,22 @@ as_predexp_geojson_bin(char const * binname);
  * selects records where one of the list items is "cat":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 5);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_var("item"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_list_bin("pets"));
- * as_query_predexp_add(&q, as_predexp_list_iterate_or("item"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 5);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_var("item"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_list_bin("pets"));
+ * as_predexp_list_add(&predexp, as_predexp_list_iterate_or("item"));
  * ~~~~~~~~~~
  *
  * @param binname	The name of the bin.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_list_bin(char const * binname);
+as_predexp_list_bin(char const* binname);
 
 /**
  * Create a map bin value predicate expression.
@@ -356,20 +539,22 @@ as_predexp_list_bin(char const * binname);
  * selects records where the map contains a key of "cat":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 5);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_var("key"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_map_bin("petcount"));
- * as_query_predexp_add(&q, as_predexp_mapkey_iterate_or("key"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 5);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_var("key"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_map_bin("petcount"));
+ * as_predexp_list_add(&predexp, as_predexp_mapkey_iterate_or("key"));
  * ~~~~~~~~~~
  *
  * @param binname	The name of the bin.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_map_bin(char const * binname);
+as_predexp_map_bin(char const* binname);
 
 /**
  * Create an integer iteration variable (value) predicate expression.
@@ -382,20 +567,22 @@ as_predexp_map_bin(char const * binname);
  * selects records where the list contains a value of 42:
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 5);
- * as_query_predexp_add(&q, as_predexp_integer_var("item"));
- * as_query_predexp_add(&q, as_predexp_integer_value(42));
- * as_query_predexp_add(&q, as_predexp_integer_equal());
- * as_query_predexp_add(&q, as_predexp_list_bin("numbers"));
- * as_query_predexp_add(&q, as_predexp_list_iterate_or("item"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 5);
+ * as_predexp_list_add(&predexp, as_predexp_integer_var("item"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(42));
+ * as_predexp_list_add(&predexp, as_predexp_integer_equal());
+ * as_predexp_list_add(&predexp, as_predexp_list_bin("numbers"));
+ * as_predexp_list_add(&predexp, as_predexp_list_iterate_or("item"));
  * ~~~~~~~~~~
  *
  * @param varname	The name of the iteration variable.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_integer_var(char const * varname);
+as_predexp_integer_var(char const* varname);
 
 /**
  * Create an string iteration variable (value) predicate expression.
@@ -408,20 +595,22 @@ as_predexp_integer_var(char const * varname);
  * selects records where one of the list items is "cat":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 5);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_var("item"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_list_bin("pets"));
- * as_query_predexp_add(&q, as_predexp_list_iterate_or("item"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 5);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_var("item"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_list_bin("pets"));
+ * as_predexp_list_add(&predexp, as_predexp_list_iterate_or("item"));
  * ~~~~~~~~~~
  *
  * @param varname	The name of the iteration variable.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_string_var(char const * varname);
+as_predexp_string_var(char const* varname);
 
 /**
  * Create an GeoJSON iteration variable (value) predicate expression.
@@ -432,10 +621,11 @@ as_predexp_string_var(char const * varname);
  *
  * @param varname	The name of the iteration variable.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_geojson_var(char const * varname);
+as_predexp_geojson_var(char const* varname);
 
 /**
  * Create a record device size metadata value predicate expression.
@@ -448,13 +638,15 @@ as_predexp_geojson_var(char const * varname);
  * selects records whose device storage size is larger than 65K:
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 3);
- * as_query_predexp_add(&q, as_predexp_rec_device_size());
- * as_query_predexp_add(&q, as_predexp_integer_value(65 * 1024));
- * as_query_predexp_add(&q, as_predexp_integer_greater());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_rec_device_size());
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(65 * 1024));
+ * as_predexp_list_add(&predexp, as_predexp_integer_greater());
  * ~~~~~~~~~~
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_rec_device_size();
@@ -470,13 +662,15 @@ as_predexp_rec_device_size();
  * selects records that have been updated after an timestamp:
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 3);
- * as_query_predexp_add(&q, as_predexp_rec_last_update());
- * as_query_predexp_add(&q, as_predexp_integer_value(g_tstampns));
- * as_query_predexp_add(&q, as_predexp_integer_greater());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_rec_last_update());
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(g_tstampns));
+ * as_predexp_list_add(&predexp, as_predexp_integer_greater());
  * ~~~~~~~~~~
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_rec_last_update();
@@ -492,13 +686,15 @@ as_predexp_rec_last_update();
  * selects records that have void time set to 0 (no expiration):
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 3);
- * as_query_predexp_add(&q, as_predexp_rec_void_time());
- * as_query_predexp_add(&q, as_predexp_integer_value(0));
- * as_query_predexp_add(&q, as_predexp_integer_equal());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_rec_void_time());
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(0));
+ * as_predexp_list_add(&predexp, as_predexp_integer_equal());
  * ~~~~~~~~~~
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_rec_void_time();
@@ -513,15 +709,17 @@ as_predexp_rec_void_time();
  * selects records that have digest(key) % 3 == 1):
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 3);
- * as_query_predexp_add(&q, as_predexp_rec_digest_modulo(3));
- * as_query_predexp_add(&q, as_predexp_integer_value(1));
- * as_query_predexp_add(&q, as_predexp_integer_equal());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_rec_digest_modulo(3));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(1));
+ * as_predexp_list_add(&predexp, as_predexp_integer_equal());
  * ~~~~~~~~~~
  *
  * @param mod	The modulus argument.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_rec_digest_modulo(int32_t mod);
@@ -545,29 +743,101 @@ as_predexp_rec_digest_modulo(int32_t mod);
  * selects records that have bin "foo" greater than 42:
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 3);
- * as_query_predexp_add(&q, as_predexp_integer_bin("foo"));
- * as_query_predexp_add(&q, as_predexp_integer_value(42));
- * as_query_predexp_add(&q, as_predexp_integer_greater());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("foo"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(42));
+ * as_predexp_list_add(&predexp, as_predexp_integer_greater());
  * ~~~~~~~~~~
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_integer_equal();
 
+/**
+ * Create an integer unequal comparison predicate expression.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("foo"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(42));
+ * as_predexp_list_add(&predexp, as_predexp_integer_unequal());
+ * ~~~~~~~~~~
+ *
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
+ */
 AS_EXTERN as_predexp_base*
 as_predexp_integer_unequal();
 
+/**
+ * Create an integer greater than comparison predicate expression.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("foo"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(42));
+ * as_predexp_list_add(&predexp, as_predexp_integer_greater());
+ * ~~~~~~~~~~
+ *
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
+ */
 AS_EXTERN as_predexp_base*
 as_predexp_integer_greater();
 
+/**
+ * Create an integer greater than or equal comparison predicate expression.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("foo"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(42));
+ * as_predexp_list_add(&predexp, as_predexp_integer_greatereq());
+ * ~~~~~~~~~~
+ *
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
+ */
 AS_EXTERN as_predexp_base*
 as_predexp_integer_greatereq();
 
+/**
+ * Create an integer less than comparison predicate expression.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("foo"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(42));
+ * as_predexp_list_add(&predexp, as_predexp_integer_less());
+ * ~~~~~~~~~~
+ *
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
+ */
 AS_EXTERN as_predexp_base*
 as_predexp_integer_less();
 
+/**
+ * Create an integer less than or equal comparison predicate expression.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_integer_bin("foo"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(42));
+ * as_predexp_list_add(&predexp, as_predexp_integer_lesseq());
+ * ~~~~~~~~~~
+ *
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
+ */
 AS_EXTERN as_predexp_base*
 as_predexp_integer_lesseq();
 
@@ -590,17 +860,33 @@ as_predexp_integer_lesseq();
  * selects records that have bin "pet" equal to "cat":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 3);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_bin("pet"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
  * ~~~~~~~~~~
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_string_equal();
 
+/**
+ * Create an string unequal comparison predicate expression.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_string_unequal());
+ * ~~~~~~~~~~
+ *
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
+ */
 AS_EXTERN as_predexp_base*
 as_predexp_string_unequal();
 
@@ -625,15 +911,17 @@ as_predexp_string_unequal();
  * selects records that have bin "hex" value ending in '1' or '2':
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 3);
- * as_query_predexp_add(&q, as_predexp_string_bin("hex"));
- * as_query_predexp_add(&q, as_predexp_string_value("0x00.[12]"));
- * as_query_predexp_add(&q, as_predexp_string_regex(REG_ICASE));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_string_bin("hex"));
+ * as_predexp_list_add(&predexp, as_predexp_string_value("0x00.[12]"));
+ * as_predexp_list_add(&predexp, as_predexp_string_regex(REG_ICASE));
  * ~~~~~~~~~~
  *
  * @param cflags	POSIX regex cflags value.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_string_regex(uint32_t cflags);
@@ -657,7 +945,7 @@ as_predexp_string_regex(uint32_t cflags);
  * specified polygon:
  *
  * ~~~~~~~~~~{.c}
- * char const * region =
+ * char const* region =
  * 	"{ "
  * 	"    \"type\": \"Polygon\", "
  * 	"    \"coordinates\": [ "
@@ -667,13 +955,15 @@ as_predexp_string_regex(uint32_t cflags);
  * 	"    ] "
  * 	" } ";
  *
- * as_query_predexp_inita(&query, 3);
- * as_query_predexp_add(&query, as_predexp_geojson_bin("loc"));
- * as_query_predexp_add(&query, as_predexp_geojson_value(region));
- * as_query_predexp_add(&query, as_predexp_geojson_within());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_geojson_bin("loc"));
+ * as_predexp_list_add(&predexp, as_predexp_geojson_value(region));
+ * as_predexp_list_add(&predexp, as_predexp_geojson_within());
  * ~~~~~~~~~~
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_geojson_within();
@@ -697,19 +987,21 @@ as_predexp_geojson_within();
  * query point:
  *
  * ~~~~~~~~~~{.c}
- * char const * point =
+ * char const* point =
  * 	"{ "
  * 	"    \"type\": \"Point\", "
  * 	"    \"coordinates\": [ -122.0986857, 37.4214209 ] "
  * 	"} ";
  *
- * as_query_predexp_inita(&query, 3);
- * as_query_predexp_add(&query, as_predexp_geojson_bin("rgn"));
- * as_query_predexp_add(&query, as_predexp_geojson_value(point));
- * as_query_predexp_add(&query, as_predexp_geojson_contains());
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 3);
+ * as_predexp_list_add(&predexp, as_predexp_geojson_bin("rgn"));
+ * as_predexp_list_add(&predexp, as_predexp_geojson_value(point));
+ * as_predexp_list_add(&predexp, as_predexp_geojson_contains());
  * ~~~~~~~~~~
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
 as_predexp_geojson_contains();
@@ -734,20 +1026,22 @@ as_predexp_geojson_contains();
  * selects records where one of the list items is "cat":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 5);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_var("item"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_list_bin("pets"));
- * as_query_predexp_add(&q, as_predexp_list_iterate_or("item"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 5);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_var("item"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_list_bin("pets"));
+ * as_predexp_list_add(&predexp, as_predexp_list_iterate_or("item"));
  * ~~~~~~~~~~
  *
  * @param varname	The name of the list item iteration variable.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_list_iterate_or(char const * varname);
+as_predexp_list_iterate_or(char const* varname);
 
 /**
  * Create an list iteration AND logical predicate expression.
@@ -770,21 +1064,23 @@ as_predexp_list_iterate_or(char const * varname);
  * selects records where none of the list items is "cat":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 6);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_var("item"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_not());
- * as_query_predexp_add(&q, as_predexp_list_bin("pets"));
- * as_query_predexp_add(&q, as_predexp_list_iterate_and("item"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 6);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_var("item"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_not());
+ * as_predexp_list_add(&predexp, as_predexp_list_bin("pets"));
+ * as_predexp_list_add(&predexp, as_predexp_list_iterate_and("item"));
  * ~~~~~~~~~~
  *
  * @param varname	The name of the list item iteration variable.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_list_iterate_and(char const * varname);
+as_predexp_list_iterate_and(char const* varname);
 
 /**
  * Create an map key iteration OR logical predicate expression.
@@ -806,20 +1102,22 @@ as_predexp_list_iterate_and(char const * varname);
  * selects records where one of the map keys is "cat":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 5);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_var("item"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_map_bin("petcount"));
- * as_query_predexp_add(&q, as_predexp_mapkey_iterate_or("item"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 5);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_var("item"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_map_bin("petcount"));
+ * as_predexp_list_add(&predexp, as_predexp_mapkey_iterate_or("item"));
  * ~~~~~~~~~~
  *
  * @param varname	The name of the map key iteration variable.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_mapkey_iterate_or(char const * varname);
+as_predexp_mapkey_iterate_or(char const* varname);
 
 /**
  * Create an map key iteration AND logical predicate expression.
@@ -842,21 +1140,23 @@ as_predexp_mapkey_iterate_or(char const * varname);
  * selects records where none of the map keys is "cat":
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 6);
- * as_query_predexp_add(&q, as_predexp_string_value("cat"));
- * as_query_predexp_add(&q, as_predexp_string_var("item"));
- * as_query_predexp_add(&q, as_predexp_string_equal());
- * as_query_predexp_add(&q, as_predexp_not());
- * as_query_predexp_add(&q, as_predexp_map_bin("pet"));
- * as_query_predexp_add(&q, as_predexp_mapkey_iterate_and("item"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 6);
+ * as_predexp_list_add(&predexp, as_predexp_string_value("cat"));
+ * as_predexp_list_add(&predexp, as_predexp_string_var("item"));
+ * as_predexp_list_add(&predexp, as_predexp_string_equal());
+ * as_predexp_list_add(&predexp, as_predexp_not());
+ * as_predexp_list_add(&predexp, as_predexp_map_bin("pet"));
+ * as_predexp_list_add(&predexp, as_predexp_mapkey_iterate_and("item"));
  * ~~~~~~~~~~
  *
  * @param varname	The name of the map key iteration variable.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_mapkey_iterate_and(char const * varname);
+as_predexp_mapkey_iterate_and(char const* varname);
 
 /**
  * Create an map value iteration OR logical predicate expression.
@@ -878,20 +1178,22 @@ as_predexp_mapkey_iterate_and(char const * varname);
  * selects records where one of the map values is 0:
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 5);
- * as_query_predexp_add(&q, as_predexp_integer_var("count"));
- * as_query_predexp_add(&q, as_predexp_integer_value(0));
- * as_query_predexp_add(&q, as_predexp_integer_equal());
- * as_query_predexp_add(&q, as_predexp_map_bin("petcount"));
- * as_query_predexp_add(&q, as_predexp_mapval_iterate_or("count"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 5);
+ * as_predexp_list_add(&predexp, as_predexp_integer_var("count"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(0));
+ * as_predexp_list_add(&predexp, as_predexp_integer_equal());
+ * as_predexp_list_add(&predexp, as_predexp_map_bin("petcount"));
+ * as_predexp_list_add(&predexp, as_predexp_mapval_iterate_or("count"));
  * ~~~~~~~~~~
  *
  * @param varname	The name of the map value iteration variable.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_mapval_iterate_or(char const * varname);
+as_predexp_mapval_iterate_or(char const* varname);
 
 /**
  * Create an map value iteration AND logical predicate expression.
@@ -914,21 +1216,23 @@ as_predexp_mapval_iterate_or(char const * varname);
  * selects records where none of the map values is 0:
  *
  * ~~~~~~~~~~{.c}
- * as_query_predexp_inita(&q, 6);
- * as_query_predexp_add(&q, as_predexp_integer_var("count"));
- * as_query_predexp_add(&q, as_predexp_integer_value(0));
- * as_query_predexp_add(&q, as_predexp_integer_equal());
- * as_query_predexp_add(&q, as_predexp_not());
- * as_query_predexp_add(&q, as_predexp_map_bin("petcount"));
- * as_query_predexp_add(&q, as_predexp_mapval_iterate_and("count"));
+ * as_predexp_list predexp;
+ * as_predexp_list_inita(&predexp, 6);
+ * as_predexp_list_add(&predexp, as_predexp_integer_var("count"));
+ * as_predexp_list_add(&predexp, as_predexp_integer_value(0));
+ * as_predexp_list_add(&predexp, as_predexp_integer_equal());
+ * as_predexp_list_add(&predexp, as_predexp_not());
+ * as_predexp_list_add(&predexp, as_predexp_map_bin("petcount"));
+ * as_predexp_list_add(&predexp, as_predexp_mapval_iterate_and("count"));
  * ~~~~~~~~~~
  *
  * @param varname	The name of the map value iteration variable.
  *
- * @returns a predicate expression suitable for adding to a query or scan.
+ * @returns a predicate expression suitable for adding to a predicate list.
+ * @ingroup predexp_operations
  */
 AS_EXTERN as_predexp_base*
-as_predexp_mapval_iterate_and(char const * varname);
+as_predexp_mapval_iterate_and(char const* varname);
 
 #ifdef __cplusplus
 } // end extern "C"

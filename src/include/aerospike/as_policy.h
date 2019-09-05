@@ -846,12 +846,15 @@ typedef struct as_policy_query_s {
 
 	/**
 	 * Terminate query if cluster is in migration state.
+	 *
+	 * Default: false
 	 */
 	bool fail_on_cluster_change;
 
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
+	 *
 	 * Default: true
 	 */
 	bool deserialize;
@@ -871,7 +874,17 @@ typedef struct as_policy_scan_s {
 	as_policy_base base;
 
 	/**
+	 * Limit returned records per second (rps) rate for each server.
+	 * Do not apply rps limit if records_per_second is zero.
+	 *
+	 * Default: 0
+	 */
+	uint32_t records_per_second;
+
+	/**
 	 * Terminate scan if cluster is in migration state.
+	 *
+	 * Default: false
 	 */
 	bool fail_on_cluster_change;
 
@@ -1255,6 +1268,7 @@ static inline as_policy_scan*
 as_policy_scan_init(as_policy_scan* p)
 {
 	as_policy_base_query_init(&p->base);
+	p->records_per_second = 0;
 	p->fail_on_cluster_change = false;
 	p->durable_delete = false;
 	return p;

@@ -46,6 +46,7 @@ extern "C" {
 #define AS_FIELD_TASK_ID 7
 #define AS_FIELD_SCAN_OPTIONS 8
 #define AS_FIELD_SCAN_TIMEOUT 9
+#define AS_FIELD_SCAN_RPS 10
 #define AS_FIELD_INDEX_RANGE 22
 #define AS_FIELD_INDEX_FILTER 23
 #define AS_FIELD_INDEX_LIMIT 24
@@ -356,6 +357,18 @@ as_command_write_field_string(uint8_t* begin, uint8_t id, const char* val)
 	}
 	as_command_write_field_header(begin, id, (uint32_t)(p - begin - AS_FIELD_HEADER_SIZE));
 	return p;
+}
+
+/**
+ * @private
+ * Write uint32_t field.
+ */
+static inline uint8_t*
+as_command_write_field_uint32(uint8_t* p, uint8_t id, uint32_t val)
+{
+	p = as_command_write_field_header(p, id, sizeof(uint32_t));
+	*(uint32_t*)p = cf_swap_to_be32(val);
+	return p + sizeof(uint32_t);
 }
 
 /**

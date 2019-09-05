@@ -379,6 +379,11 @@ as_scan_command_size(
 		n_fields++;
 	}
 	
+	if (policy->records_per_second > 0) {
+		size += as_command_field_size(sizeof(uint32_t));
+		n_fields++;
+	}
+
 	// Estimate scan options size.
 	size += as_command_field_size(2);
 	n_fields++;
@@ -462,6 +467,10 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 		p = as_command_write_field_string(p, AS_FIELD_SETNAME, scan->set);
 	}
 
+	if (policy->records_per_second > 0) {
+		p = as_command_write_field_uint32(p, AS_FIELD_SCAN_RPS, policy->records_per_second);
+	}
+
 	// Write scan options
 	p = as_command_write_field_header(p, AS_FIELD_SCAN_OPTIONS, 2);
 	uint8_t priority = scan->priority << 4;
@@ -474,9 +483,7 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 	*p++ = scan->percent;
 
 	// Write socket timeout.
-	p = as_command_write_field_header(p, AS_FIELD_SCAN_TIMEOUT, sizeof(uint32_t));
-	*(uint32_t*)p = cf_swap_to_be32(policy->base.socket_timeout);
-	p += sizeof(uint32_t);
+	p = as_command_write_field_uint32(p, AS_FIELD_SCAN_TIMEOUT, policy->base.socket_timeout);
 
 	// Write taskId field
 	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);

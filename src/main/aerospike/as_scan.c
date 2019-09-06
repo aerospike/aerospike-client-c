@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_scan.h>
+#include <aerospike/as_operations.h>
 
 #include <citrusleaf/alloc.h>
 
@@ -53,7 +54,8 @@ as_scan_defaults(as_scan* scan, bool free, const as_namespace ns, const as_set s
 	scan->predexp.capacity = 0;
 	scan->predexp.size = 0;
 	scan->predexp.entries = NULL;
-	
+
+	scan->ops = NULL;
 	scan->priority = AS_SCAN_PRIORITY_DEFAULT;
 	scan->percent = AS_SCAN_PERCENT_DEFAULT;
 	scan->no_bins = AS_SCAN_NOBINS_DEFAULT;
@@ -113,6 +115,10 @@ as_scan_destroy(as_scan* scan)
 	}
 
 	as_udf_call_destroy(&scan->apply_each);
+
+	if (scan->ops) {
+		as_operations_destroy(scan->ops);
+	}
 
 	// If the whole structure should be freed
 	if ( scan->_free ) {

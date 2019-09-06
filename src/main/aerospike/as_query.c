@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -18,6 +18,7 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
+#include <aerospike/as_operations.h>
 #include <aerospike/as_predexp.h>
 #include <aerospike/as_udf.h>
 #include <citrusleaf/alloc.h>
@@ -51,6 +52,7 @@ as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_se
 	query->predexp.size = 0;
 	query->predexp.entries = NULL;
 
+	query->ops = NULL;
 	query->no_bins = false;
 
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
@@ -120,6 +122,10 @@ as_query_destroy(as_query* query)
 	query->predexp.entries = NULL;
 
 	as_udf_call_destroy(&query->apply);
+
+	if (query->ops) {
+		as_operations_destroy(query->ops);
+	}
 
 	if ( query->_free ) {
 		cf_free(query);

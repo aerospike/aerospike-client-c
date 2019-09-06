@@ -59,6 +59,35 @@ extern aerospike* as;
  *****************************************************************************/
 
 static bool
+write_recs()
+{
+	as_error err;
+	as_key key;
+	char keystr[64];
+	as_status status;
+		
+	for (int i = 1; i <= 10; i++) {
+		sprintf(keystr, "qekey%d", i);
+		as_key_init(&key, NAMESPACE, SET, keystr);
+
+		as_record r;
+		as_record_init(&r, 2);
+		as_record_set_int64(&r, "qebin1", i);
+		as_record_set_int64(&r, "qebin2", i);
+
+		status = aerospike_key_put(as, &err, NULL, &key, &r);
+
+		if (status != AEROSPIKE_OK) {
+			error("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+			return false;
+		}
+
+		as_record_destroy(&r);
+	}
+	return true;
+}
+
+static bool
 before(atf_suite * suite)
 {
 	if (! udf_put(LUA_FILE)) {
@@ -70,7 +99,22 @@ before(atf_suite * suite)
 		error("lua file does not exist: %s", LUA_FILE);
 		return false;
 	}
-	return true;
+
+	as_error err;
+	as_index_task task;
+	as_status status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "qebin1", "qeindex9", AS_INDEX_NUMERIC);
+
+	if (! (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_INDEX_FOUND)) {
+		error("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+		return false;
+	}
+
+	if (status != AEROSPIKE_ERR_INDEX_FOUND) {
+		if (! index_process_return_code(status, &err, &task)) {
+			return false;
+		}
+	}
+	return write_recs();
 }
 
 static bool
@@ -94,34 +138,6 @@ after(atf_suite * suite)
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
-
-TEST(query_background_create, "create records and indices")
-{
-	as_error err;
-	as_error_reset(&err);
-
-	as_index_task task;
-	as_status status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "qebin1", "qeindex9", AS_INDEX_NUMERIC);
-	index_process_return_code(status, &err, &task);
-
-	as_key key;
-	char keystr[64];
-		
-	for (int i = 1; i <= 10; i++) {
-		sprintf(keystr, "qekey%d", i);
-		as_key_init(&key, NAMESPACE, SET, keystr);
-
-		as_record r;
-		as_record_init(&r, 2);
-		as_record_set_int64(&r, "qebin1", i);
-		as_record_set_int64(&r, "qebin2", i);
-
-		status = aerospike_key_put(as, &err, NULL, &key, &r);
-		assert_int_eq(status, AEROSPIKE_OK);
-
-		as_record_destroy(&r);
-	}
-}
 
 TEST(query_background1, "query background1")
 {
@@ -311,6 +327,69 @@ TEST(query_aggregation_double, "query aggregation validate")
 	assert_int_eq( err.code, AEROSPIKE_OK );
 }
 
+static bool
+query_operate_callback(const as_val* v, void* udata)
+{
+	if (v == NULL) {
+		return false;
+	}
+
+	uint32_t* count = (uint32_t*)udata;
+	as_incr_uint32(count);
+
+	as_record* rec = (as_record*)v;
+	char* s = as_record_get_str(rec, "foo");
+
+	if (s == NULL) {
+		error("Bin foo not found");
+		return false;
+	}
+
+	if (strcmp(s, "bar") != 0) {
+		error("Expected bar, received %s", s);
+		return false;
+	}
+	return true;
+}
+
+TEST(query_operate, "query operate")
+{
+	write_recs();
+	
+	as_error err;
+	as_status status;
+	as_query q;
+
+	as_query_init(&q, NAMESPACE, SET);
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "qebin1", as_integer_range(3, 9));
+
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+	q.ops = &ops;
+
+	uint64_t query_id = 0;
+	status = aerospike_query_background(as, &err, NULL, &q, &query_id);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	aerospike_query_wait(as, &err, NULL, &q, query_id, 0);
+	as_query_destroy(&q);
+
+	as_query_init(&q, NAMESPACE, SET);
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "qebin1", as_integer_range(3, 9));
+
+	uint32_t count = 0;
+	status = aerospike_query_foreach(as, &err, NULL, &q, query_operate_callback, &count);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(count, 7);
+	as_query_destroy(&q);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -320,8 +399,8 @@ SUITE(query_background, "aerospike_query_background tests")
 	suite_before(before);
 	suite_after(after);
 
-	suite_add(query_background_create);
 	suite_add(query_background1);
 	suite_add(query_validate1);
 	suite_add(query_aggregation_double);
+	suite_add(query_operate);
 }

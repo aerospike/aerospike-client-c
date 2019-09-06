@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -57,6 +57,8 @@ extern "C" {
 /******************************************************************************
  * TYPES
  *****************************************************************************/
+
+struct as_operations_s;
 
 /**
  * Priority levels for a scan operation.
@@ -379,6 +381,12 @@ typedef struct as_scan_s {
 	 * Should be set via `as_scan_apply_each()`.
 	 */
 	as_udf_call apply_each;
+
+	/**
+	 * Perform write operations on a background scan.
+	 * If ops is set, ops will be destroyed when as_scan_destroy() is called.
+	 */
+	struct as_operations_s* ops;
 
 	/**
 	 * Percentage of the data to scan.

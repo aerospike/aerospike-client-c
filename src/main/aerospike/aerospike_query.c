@@ -23,6 +23,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_module.h>
 #include <aerospike/as_msgpack.h>
+#include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_query_validate.h>
@@ -580,8 +581,8 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 
 static size_t
 as_query_command_size(
-	const as_policy_base* policy_base, const as_query* query, uint16_t* fields, as_buffer* argbuffer,
-    uint32_t* filter_sz, uint32_t* predexp_sz, uint32_t* bin_name_sz
+	const as_policy_base* policy_base, const as_query* query, uint16_t* fields, uint32_t* filter_sz,
+	uint32_t* predexp_sz, uint32_t* bin_name_sz, as_buffer* argbuffer, as_buffer** opsbuffers
 	)
 {
 	size_t size = AS_HEADER_SIZE;
@@ -703,14 +704,31 @@ as_query_command_size(
 		n_fields += 4;
 	}
 	
-	// Estimate size for selected bin names on scan (query bin names already handled).
-	if (query->where.size == 0) {
-		if (query->select.size > 0) {
+	// Operations (used in background query) and bin names (used in foreground query)
+	// are mutually exclusive.
+	if (query->ops) {
+		// Estimate size for background operations.
+		as_operations* ops = query->ops;
+
+		as_buffer* buffers = cf_malloc(sizeof(as_buffer) * ops->binops.size);
+		memset(buffers, 0, sizeof(as_buffer) * ops->binops.size);
+
+		for (uint16_t i = 0; i < ops->binops.size; i++) {
+			as_binop* op = &ops->binops.entries[i];
+			size += as_command_bin_size(&op->bin, &buffers[i]);
+		}
+		*opsbuffers = buffers;
+	}
+	else {
+		// Estimate size for selected bin names on scan (query bin names already handled).
+		if (query->where.size == 0) {
 			for (uint16_t i = 0; i < query->select.size; i++) {
 				size += as_command_string_operation_size(query->select.entries[i]);
 			}
 		}
+		*opsbuffers = NULL;
 	}
+
 	*fields = n_fields;
 	*filter_sz = filter_size;
 	*predexp_sz = predexp_size;
@@ -723,11 +741,12 @@ as_query_command_init(
 	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_base* base_policy,
 	const as_policy_query* query_policy, const as_policy_write* write_policy, uint64_t task_id,
 	uint32_t timeout, uint16_t n_fields, uint32_t filter_size, uint32_t predexp_size,
-	uint32_t bin_name_size, as_buffer* argbuffer
+	uint32_t bin_name_size, as_buffer* argbuffer, as_buffer* opsbuffers
 	)
 {
 	// Write command buffer.
-	uint16_t n_ops = (query->where.size == 0)? query->select.size : 0;
+	uint16_t n_ops = (query->ops)? query->ops->binops.size :
+								   (query->where.size == 0)? query->select.size : 0;
 	uint8_t* p;
 	
 	if (query_policy) {
@@ -736,7 +755,7 @@ as_query_command_init(
 				AS_POLICY_READ_MODE_SC_SESSION, timeout, n_fields, n_ops);
 	}
 	else {
-		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE, 0,
+		p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, 0,
 				write_policy->commit_level, write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0,
 				timeout, n_fields, n_ops, write_policy->durable_delete);
 	}
@@ -859,15 +878,25 @@ as_query_command_init(
 	}
     as_buffer_destroy(argbuffer);
 	
-	// Estimate size for selected bin names on scan (query bin names already handled).
-	if (query->where.size == 0) {
-		if (query->select.size > 0) {
+	if (query->ops) {
+		as_operations* ops = query->ops;
+
+		for (uint16_t i = 0; i < ops->binops.size; i++) {
+			as_binop* op = &ops->binops.entries[i];
+			p = as_command_write_bin(p, op->op, &op->bin, &opsbuffers[i]);
+		}
+		// We are done with opsbuffers, so we can free here.
+		cf_free(opsbuffers);
+	}
+	else {
+		// Estimate size for selected bin names on scan (query bin names already handled).
+		if (query->where.size == 0) {
 			for (uint16_t i = 0; i < query->select.size; i++) {
 				p = as_command_write_bin_name(p, query->select.entries[i]);
 			}
 		}
 	}
-	
+
 	return as_command_write_end(cmd, p);
 }
 
@@ -888,6 +917,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	// If retries were allowed, the timeout field in the command would change on retry which
 	// would conflict with other threads.
 	as_buffer argbuffer;
+	as_buffer* opsbuffers;
 	uint32_t filter_size = 0;
 	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
@@ -896,12 +926,12 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 															  &task->write_policy->base;
 	uint32_t timeout = base_policy->total_timeout;
 
-	size_t size = as_query_command_size(base_policy, query, &n_fields, &argbuffer, &filter_size,
-										&predexp_size, &bin_name_size);
+	size_t size = as_query_command_size(base_policy, query, &n_fields, &filter_size, &predexp_size,
+										&bin_name_size, &argbuffer, &opsbuffers);
 	uint8_t* cmd = as_command_buffer_init(size);
 	size = as_query_command_init(cmd, query, query_type, base_policy, task->query_policy,
 								 task->write_policy, task->task_id, timeout, n_fields, filter_size,
-								 predexp_size, bin_name_size, &argbuffer);
+								 predexp_size, bin_name_size, &argbuffer, opsbuffers);
 	
 	task->cmd = cmd;
 	task->cmd_size = size;
@@ -1199,17 +1229,18 @@ aerospike_query_async(
 	executor->listener = listener;
 
 	as_buffer argbuffer;
+	as_buffer* opsbuffers;
 	uint32_t filter_size = 0;
 	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
 	
-	size_t size = as_query_command_size(&policy->base, query, &n_fields, &argbuffer, &filter_size,
-										&predexp_size, &bin_name_size);
+	size_t size = as_query_command_size(&policy->base, query, &n_fields, &filter_size,
+										&predexp_size, &bin_name_size, &argbuffer, &opsbuffers);
 	uint8_t* cmd_buf = as_command_buffer_init(size);
 	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, &policy->base, policy, NULL,
 								 task_id, policy->base.total_timeout, n_fields, filter_size,
-								 predexp_size, bin_name_size, &argbuffer);
+								 predexp_size, bin_name_size, &argbuffer, opsbuffers);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.
@@ -1281,7 +1312,7 @@ aerospike_query_background(
 		policy = &as->config.policies.write;
 	}
 	
-	if (! query->apply.function[0]) {
+	if (! (query->apply.function[0] || query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Function is required.");
 	}
 

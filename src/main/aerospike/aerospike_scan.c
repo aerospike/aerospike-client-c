@@ -22,6 +22,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_msgpack.h>
+#include <aerospike/as_operations.h>
 #include <aerospike/as_query_validate.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_serializer.h>
@@ -358,8 +359,8 @@ as_scan_worker(void* data)
 
 static size_t
 as_scan_command_size(
-	const as_policy_scan* policy, const as_scan* scan, uint16_t* fields, as_buffer* argbuffer,
-	uint32_t* predexp_sz
+	const as_policy_scan* policy, const as_scan* scan, uint16_t* fields, uint32_t* predexp_sz,
+	as_buffer* argbuffer, as_buffer** opsbuffers
 	)
 {
 	// Build Command.  It's okay to share command across threads because scan does not have retries.
@@ -432,31 +433,49 @@ as_scan_command_size(
 	*predexp_sz = predexp_size;
 	*fields = n_fields;
 
-	// Estimate size for selected bin names.
-	if (scan->select.size > 0) {
+	// Operations (used in background scans) and bin names (used in foreground scans)
+	// are mutually exclusive.
+	if (scan->ops) {
+		// Estimate size for background operations.
+		as_operations* ops = scan->ops;
+
+		as_buffer* buffers = cf_malloc(sizeof(as_buffer) * ops->binops.size);
+		memset(buffers, 0, sizeof(as_buffer) * ops->binops.size);
+
+		for (uint16_t i = 0; i < ops->binops.size; i++) {
+			as_binop* op = &ops->binops.entries[i];
+			size += as_command_bin_size(&op->bin, &buffers[i]);
+		}
+		*opsbuffers = buffers;
+	}
+	else {
+		// Estimate size for selected bin names.
 		for (uint16_t i = 0; i < scan->select.size; i++) {
 			size += as_command_string_operation_size(scan->select.entries[i]);
 		}
+		*opsbuffers = NULL;
 	}
-
 	return size;
 }
 
 static size_t
-as_scan_command_init(uint8_t* cmd, const as_policy_scan* policy, const as_scan* scan,
-uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size)
+as_scan_command_init(
+	uint8_t* cmd, const as_policy_scan* policy, const as_scan* scan, uint64_t task_id,
+	uint16_t n_fields, uint32_t predexp_size, as_buffer* argbuffer, as_buffer* opsbuffers
+	)
 {
+	uint16_t n_ops = (scan->ops) ? scan->ops->binops.size : scan->select.size;
 	uint8_t* p;
 	
 	if (scan->apply_each.function[0]) {
-		p = as_command_write_header(cmd, AS_MSG_INFO1_READ, AS_MSG_INFO2_WRITE, 0,
+		p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, 0,
 			AS_POLICY_COMMIT_LEVEL_ALL, AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0,
-			policy->base.total_timeout, n_fields, 0, policy->durable_delete);
+			policy->base.total_timeout, n_fields, n_ops, policy->durable_delete);
 	}
 	else {
 		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
 		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_READ_MODE_AP_ONE,
-			AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, n_fields, scan->select.size);
+			AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, n_fields, n_ops);
 	}
 	
 	if (scan->ns[0]) {
@@ -510,7 +529,17 @@ uint64_t task_id, uint16_t n_fields, as_buffer* argbuffer, uint32_t predexp_size
 		p = as_predexp_list_write(policy->base.predexp, predexp_size, p);
 	}
 
-	if (scan->select.size > 0) {
+	if (scan->ops) {
+		as_operations* ops = scan->ops;
+
+		for (uint16_t i = 0; i < ops->binops.size; i++) {
+			as_binop* op = &ops->binops.entries[i];
+			p = as_command_write_bin(p, op->op, &op->bin, &opsbuffers[i]);
+		}
+		// We are done with opsbuffers, so we can free here.
+		cf_free(opsbuffers);
+	}
+	else {
 		for (uint16_t i = 0; i < scan->select.size; i++) {
 			p = as_command_write_bin_name(p, scan->select.entries[i]);
 		}
@@ -574,11 +603,12 @@ as_scan_generic(
 
 	// Create scan command
 	as_buffer argbuffer;
+	as_buffer* opsbuffers;
 	uint16_t n_fields = 0;
 	uint32_t predexp_sz = 0;
-	size_t size = as_scan_command_size(policy, scan, &n_fields, &argbuffer, &predexp_sz);
+	size_t size = as_scan_command_size(policy, scan, &n_fields, &predexp_sz, &argbuffer, &opsbuffers);
 	uint8_t* cmd = as_command_buffer_init(size);
-	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
+	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, predexp_sz, &argbuffer, opsbuffers);
 	
 	// Initialize task.
 	uint32_t error_mutex = 0;
@@ -719,11 +749,12 @@ as_scan_async(
 
 	// Create scan command buffer.
 	as_buffer argbuffer;
+	as_buffer* opsbuffers;
 	uint16_t n_fields = 0;
 	uint32_t predexp_sz = 0;
-	size_t size = as_scan_command_size(policy, scan, &n_fields, &argbuffer, &predexp_sz);
+	size_t size = as_scan_command_size(policy, scan, &n_fields, &predexp_sz, &argbuffer, &opsbuffers);
 	uint8_t* cmd_buf = as_command_buffer_init(size);
-	size = as_scan_command_init(cmd_buf, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
+	size = as_scan_command_init(cmd_buf, policy, scan, task_id, n_fields, predexp_sz, &argbuffer, opsbuffers);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.
@@ -870,12 +901,13 @@ aerospike_scan_node(
 
 	// Create scan command
 	uint64_t task_id = as_random_get_uint64();
+	as_buffer* opsbuffers;
 	as_buffer argbuffer;
 	uint16_t n_fields = 0;
 	uint32_t predexp_sz = 0;
-	size_t size = as_scan_command_size(policy, scan, &n_fields, &argbuffer, &predexp_sz);
+	size_t size = as_scan_command_size(policy, scan, &n_fields, &predexp_sz, &argbuffer, &opsbuffers);
 	uint8_t* cmd = as_command_buffer_init(size);
-	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, &argbuffer, predexp_sz);
+	size = as_scan_command_init(cmd, policy, scan, task_id, n_fields, predexp_sz, &argbuffer, opsbuffers);
 	
 	// Initialize task.
 	uint32_t error_mutex = 0;

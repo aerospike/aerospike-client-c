@@ -112,6 +112,8 @@ extern "C" {
  * TYPES 	
  *****************************************************************************/
 
+struct as_operations_s;
+
 /**
  * Union of supported predicates
  */
@@ -502,6 +504,12 @@ typedef struct as_query_s {
 	 * Should be set via `as_query_apply()`.
 	 */
 	as_udf_call apply;
+
+	/**
+	 * Perform write operations on a background query.
+	 * If ops is set, ops will be destroyed when as_query_destroy() is called.
+	 */
+	struct as_operations_s* ops;
 
 	/**
 	 * Set to true if query should only return keys and no bin data.

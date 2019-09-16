@@ -41,25 +41,9 @@
  * as_record_destroy(rec);
  * ~~~~~~~~~~
  *
- * Nested CDT operations are supported by optional context (as_cdt_ctx):
- *
- * ~~~~~~~~~~{.c}
- * // Set first bitmap in a list of bitmaps.
- * as_cdt_ctx ctx;
- * as_cdt_ctx_inita(&ctx, 1);
- * as_cdt_ctx_add_list_index(&ctx, 0);
- *
- * as_operations ops;
- * as_operations_inita(&ops, 1);
- * uint8_t val[] = {0x11, 0x22, 0x33, 0x44};
- * as_operations_bit_set(&ops, "bin", &ctx, NULL, 0, 32, sizeof(val), val);
- *
- * as_record* rec = NULL;
- * as_error err;
- * aerospike_key_operate(&as, &err, NULL, &key, &ops, &rec);
- * as_operations_destroy(&ops);
- * as_record_destroy(rec);
- * ~~~~~~~~~~
+ * Bit operations on bitmap items nested in lists/maps are not currently
+ * supported by the server.  The as_cdt_ctx argument in bit operations must
+ * be set to NULL.
  */
 
 #include <aerospike/as_operations.h>

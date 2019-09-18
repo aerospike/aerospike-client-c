@@ -536,7 +536,7 @@ as_operations_bit_set_int(
  * <li>bin = [0b00000001, 0b01000010, 0b00000011, 0b00000100, 0b00000101]</li>
  * <li>bit_offset = 9</li>
  * <li>bit_size = 5</li>
- * <li>returns [0b1000000]</li>
+ * <li>returns [0b10000000]</li>
  * </ul>
  *
  * @ingroup bit_operations

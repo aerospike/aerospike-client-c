@@ -74,12 +74,6 @@ else
   COMMON_PATH = ../../$(COMMON)
 endif
 
-ifeq ($(LUA_CORE),$(abspath $(LUA_CORE)))
-  LUA_CORE_PATH = $(LUA_CORE)
-else
-  LUA_CORE_PATH = ../../$(LUA_CORE)
-endif
-
 ifeq ($(LUAJIT),$(abspath $(LUAJIT)))
   LUAJIT_PATH = $(LUAJIT)
 else
@@ -97,10 +91,10 @@ MOD_LUA-build: $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a
 
 .PHONY: MOD_LUA-clean
 MOD_LUA-clean:
-	$(MAKE) -e -C $(MOD_LUA) clean COMMON=$(COMMON_PATH) LUA_CORE=$(LUA_CORE_PATH) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT_PATH) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD_PATH)
+	$(MAKE) -e -C $(MOD_LUA) clean COMMON=$(COMMON_PATH) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT_PATH) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD_PATH)
 
 $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a:
-	$(MAKE) -e -C $(MOD_LUA) libmod_lua.a COMMON=$(COMMON_PATH) LUA_CORE=$(LUA_CORE_PATH) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT_PATH) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD_PATH) EXT_CFLAGS=-DAS_MOD_LUA_CLIENT
+	$(MAKE) -e -C $(MOD_LUA) libmod_lua.a COMMON=$(COMMON_PATH) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT_PATH) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD_PATH) EXT_CFLAGS=-DAS_MOD_LUA_CLIENT
 
 .PHONY: MOD_LUA-prepare
 MOD_LUA-prepare: MOD_LUA-make-prepare
@@ -108,7 +102,7 @@ MOD_LUA-prepare: MOD_LUA-make-prepare
 
 .PHONY: MOD_LUA-make-prepare
 MOD_LUA-make-prepare:
-	@$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON_PATH) LUA_CORE=$(LUA_CORE_PATH) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT_PATH) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD_PATH)
+	@$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON_PATH) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT_PATH) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD_PATH)
 
 ###############################################################################
 ##  LUA MODULE                                                               ##

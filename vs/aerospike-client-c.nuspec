@@ -16,7 +16,6 @@
   </metadata>
   <files>
 	<file src="aerospike-client-c.targets" target="build\native" />
-	<file src="..\modules\lua-core\src\*.lua" target="lua" />
     <file src="..\modules\common\src\include\aerospike\*.h" exclude="**\ssl_util.h" target="build\native\include\aerospike" />
     <file src="..\modules\common\src\include\citrusleaf\*.h" exclude="**\cf_crypto.h;**\cf_digest.h" target="build\native\include\citrusleaf" />
     <file src="..\src\include\aerospike\*.h" exclude="**\as_tls.h" target="build\native\include\aerospike" />	

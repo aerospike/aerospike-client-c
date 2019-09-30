@@ -1331,7 +1331,7 @@ as_uv_connected(uv_connect_t* req, int status)
 }
 
 void
-as_event_connect(as_event_command* cmd)
+as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 {
 	// Create a non-blocking socket.
 	as_address* address = as_node_get_address(cmd->node);
@@ -1399,6 +1399,7 @@ as_event_connect(as_event_command* cmd)
 		as_uv_connect_error(cmd, &err);
 		return;
 	}
+	pool->opened++;
 	cmd->event_loop->errors = 0; // Reset errors on valid connection.
 }
 
@@ -1422,7 +1423,7 @@ as_event_close_connection_cb(as_event_loop* event_loop, as_event_connection* con
 }
 
 static bool
-as_uv_queue_close_connections(as_node* node, as_queue* pool, as_queue* cmd_queue)
+as_uv_queue_close_connections(as_node* node, as_async_conn_pool* pool, as_queue* cmd_queue)
 {
 	as_event_commander qcmd;
 	qcmd.executable = (as_event_executable)as_event_close_connection_cb;
@@ -1430,7 +1431,7 @@ as_uv_queue_close_connections(as_node* node, as_queue* pool, as_queue* cmd_queue
 	as_event_connection* conn;
 	
 	// Queue connection commands to event loops.
-	while (as_queue_pop(pool, &conn)) {
+	while (as_queue_pop(&pool->queue, &conn)) {
 		qcmd.udata = conn;
 		
 		if (! as_queue_push(cmd_queue, &qcmd)) {
@@ -1442,7 +1443,7 @@ as_uv_queue_close_connections(as_node* node, as_queue* pool, as_queue* cmd_queue
 		// This is done because the node will be invalid when the deferred connection close occurs.
 		// Since node destroy always waits till there are no node references, all transactions that
 		// referenced this node should be completed by the time this code is executed.
-		as_queue_decr_total(pool);
+		as_queue_decr_total(&pool->queue);
 	}
 	return true;
 }
@@ -1464,8 +1465,8 @@ as_event_node_destroy(as_node* node)
 		
 	// Destroy all queues.
 	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
-		as_queue_destroy(&node->async_conn_pools[i]);
-		as_queue_destroy(&node->pipe_conn_pools[i]);
+		as_queue_destroy(&node->async_conn_pools[i].queue);
+		as_queue_destroy(&node->pipe_conn_pools[i].queue);
 	}
 	cf_free(node->async_conn_pools);
 	cf_free(node->pipe_conn_pools);

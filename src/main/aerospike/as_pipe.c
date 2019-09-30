@@ -68,7 +68,7 @@ next_reader(as_event_command* reader)
 			}
 
 			as_log_trace("Closing non-pooled pipeline connection %p", conn);
-			as_queue* pool = &reader->node->pipe_conn_pools[reader->event_loop->index];
+			as_async_conn_pool* pool = &reader->node->pipe_conn_pools[reader->event_loop->index];
 			as_event_release_connection(reader->conn, pool);
 			return;
 		}
@@ -146,7 +146,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool ret
 		as_log_trace("Closing canceled non-pooled pipeline connection %p", conn);
 		// For as_uv_connection_alive().
 		conn->canceled = true;
-		as_queue* pool = &node->pipe_conn_pools[loop->index];
+		as_async_conn_pool* pool = &node->pipe_conn_pools[loop->index];
 		as_event_release_connection((as_event_connection*)conn, pool);
 		as_node_release(node);
 		return;
@@ -161,7 +161,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool ret
 }
 
 static void
-release_connection(as_event_command* cmd, as_pipe_connection* conn, as_queue* pool)
+release_connection(as_event_command* cmd, as_pipe_connection* conn, as_async_conn_pool* pool)
 {
 	as_log_trace("Releasing pipeline connection %p", conn);
 
@@ -181,9 +181,9 @@ put_connection(as_event_command* cmd)
 	as_event_set_conn_last_used(cmd->conn);
 	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
 	as_log_trace("Returning pipeline connection for writer %p, pipeline connection %p", cmd, conn);
-	as_queue* pool = &cmd->node->pipe_conn_pools[cmd->event_loop->index];
+	as_async_conn_pool* pool = &cmd->node->pipe_conn_pools[cmd->event_loop->index];
 
-	if (as_queue_push_limit(pool, &conn)) {
+	if (as_queue_push_limit(&pool->queue, &conn)) {
 		conn->in_pool = true;
 		return;
 	}
@@ -302,7 +302,7 @@ void
 as_pipe_get_connection(as_event_command* cmd)
 {
 	as_log_trace("Getting pipeline connection for command %p", cmd);
-	as_queue* pool = &cmd->node->pipe_conn_pools[cmd->event_loop->index];
+	as_async_conn_pool* pool = &cmd->node->pipe_conn_pools[cmd->event_loop->index];
 	as_pipe_connection* conn;
 
 	// Prefer to open new connections, as long as we are below pool capacity. This is to
@@ -310,8 +310,8 @@ as_pipe_get_connection(as_event_command* cmd)
 	// tends to open very few connections, which isn't good for write parallelism on the
 	// server. The server processes all commands from the same connection sequentially.
 	// More connections thus mean more parallelism.
-	if (pool->total >= pool->capacity) {
-		while (as_queue_pop(pool, &conn)) {
+	if (pool->queue.total >= pool->queue.capacity) {
+		while (as_queue_pop(&pool->queue, &conn)) {
 			as_log_trace("Checking pipeline connection %p", conn);
 
 			if (conn->canceling) {
@@ -348,7 +348,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	// Create connection structure only when node connection count within limit.
 	as_log_trace("Creating new pipeline connection");
 
-	if (as_queue_incr_total(pool)) {
+	if (as_queue_incr_total(&pool->queue)) {
 		conn = cf_malloc(sizeof(as_pipe_connection));
 		assert(conn != NULL);
 
@@ -365,7 +365,7 @@ as_pipe_get_connection(as_event_command* cmd)
 		
 		cmd->conn = (as_event_connection*)conn;
 		write_start(cmd);
-		as_event_connect(cmd);
+		as_event_connect(cmd, pool);
 		return;
 	}
 
@@ -380,7 +380,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
 					"Max node/event loop %s pipeline connections would be exceeded: %u",
-					cmd->node->name, pool->capacity);
+					cmd->node->name, pool->queue.capacity);
 
 	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
 		as_event_stop_timer(cmd);

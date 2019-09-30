@@ -263,7 +263,7 @@ void
 as_event_command_write_start(as_event_command* cmd);
 
 void
-as_event_connect(as_event_command* cmd);
+as_event_connect(as_event_command* cmd, as_async_conn_pool* pool);
 
 void
 as_event_node_destroy(as_node* node);
@@ -697,31 +697,32 @@ as_event_set_write(as_event_command* cmd)
 }
 
 static inline void
-as_event_release_connection(as_event_connection* conn, as_queue* pool)
+as_event_release_connection(as_event_connection* conn, as_async_conn_pool* pool)
 {
 	as_event_close_connection(conn);
-	as_queue_decr_total(pool);
+	as_queue_decr_total(&pool->queue);
+	pool->closed++;
 }
 
 static inline void
 as_event_release_async_connection(as_event_command* cmd)
 {
-	as_queue* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	as_event_release_connection(cmd->conn, pool);
 }
 
 static inline void
 as_event_decr_conn(as_event_command* cmd)
 {
-	as_queue* pool = cmd->pipe_listener != NULL ?
+	as_async_conn_pool* pool = cmd->pipe_listener != NULL ?
 		&cmd->node->pipe_conn_pools[cmd->event_loop->index] :
 		&cmd->node->async_conn_pools[cmd->event_loop->index];
 
-	as_queue_decr_total(pool);
+	as_queue_decr_total(&pool->queue);
 }
 
 static inline void
-as_event_connection_timeout(as_event_command* cmd, as_queue* pool)
+as_event_connection_timeout(as_event_command* cmd, as_async_conn_pool* pool)
 {
 	as_event_connection* conn = cmd->conn;
 
@@ -732,7 +733,8 @@ as_event_connection_timeout(as_event_command* cmd, as_queue* pool)
 		}
 		else {
 			cf_free(conn);
-			as_queue_decr_total(pool);
+			as_queue_decr_total(&pool->queue);
+			pool->closed++;
 		}
 	}
 }

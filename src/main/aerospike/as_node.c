@@ -59,20 +59,22 @@ as_racks_release(as_racks* racks)
 	}
 }
 
-static as_queue*
+static as_async_conn_pool*
 as_node_create_async_pools(uint32_t max_conns_per_node)
 {
 	// Create one queue per event manager.
-	as_queue* pools = cf_malloc(sizeof(as_conn_pool) * as_event_loop_capacity);
+	as_async_conn_pool* pools = cf_malloc(sizeof(as_async_conn_pool) * as_event_loop_capacity);
 	
 	// Distribute max_conns_per_node over event loops taking remainder into account.
 	uint32_t max = max_conns_per_node / as_event_loop_capacity;
 	uint32_t rem = max_conns_per_node - (max * as_event_loop_capacity);
-	uint32_t capacity;
-	
+
 	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
-		capacity = i < rem ? max + 1 : max;
-		as_queue_init(&pools[i], sizeof(void*), capacity);
+		as_async_conn_pool* pool = &pools[i];
+		uint32_t capacity = i < rem ? max + 1 : max;
+		as_queue_init(&pool->queue, sizeof(void*), capacity);
+		pool->opened = 0;
+		pool->closed = 0;
 	}
 	return pools;
 }
@@ -116,6 +118,8 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	// Create connection pool queues.
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
 	node->conn_iter = 0;
+	node->sync_conns_opened = 1;
+	node->sync_conns_closed = 0;
 
 	uint32_t max = cluster->max_conns_per_node / cluster->conn_pools_per_node;
 	uint32_t rem = cluster->max_conns_per_node - (max * cluster->conn_pools_per_node);
@@ -132,8 +136,8 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 		node->pipe_conn_pools = as_node_create_async_pools(cluster->pipe_max_conns_per_node);
 	}
 	else {
-		node->async_conn_pools = 0;
-		node->pipe_conn_pools = 0;
+		node->async_conn_pools = NULL;
+		node->pipe_conn_pools = NULL;
 	}
 
 	node->racks = NULL;
@@ -340,7 +344,7 @@ as_node_create_socket(as_error* err, as_node* node, as_conn_pool* pool, as_socke
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s", node->name, primary->name);
 	}
 	sock->pool = pool;
-	
+
 	if (rv != index) {
 		// Replace invalid primary address with valid alias.
 		// Other threads may not see this change immediately.
@@ -348,6 +352,7 @@ as_node_create_socket(as_error* err, as_node* node, as_conn_pool* pool, as_socke
 		as_store_uint32(&node->address_index, rv);
 		as_log_debug("Change node address %s %s", node->name, as_node_get_address_string(node));
 	}
+	as_incr_uint32(&node->sync_conns_opened);
 	return AEROSPIKE_OK;
 }
 
@@ -369,7 +374,7 @@ as_node_create_connection(as_error* err, as_node* node, uint32_t socket_timeout,
 
 		if (status) {
 			as_node_signal_login(node);
-			as_socket_close(sock);
+			as_node_close_socket(node, sock);
 
 			if (pool) {
 				as_conn_pool_decr(pool);
@@ -400,7 +405,7 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 
 	status = as_authenticate(cluster, &err, &sock, node, node->session_token,
 							 node->session_token_length, 0, deadline_ms);
-	as_socket_close(&sock);
+	as_node_close_socket(node, &sock);
 	as_node_release(node);
 	return status;
 }
@@ -445,7 +450,7 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 			}
 
 			as_log_debug("Invalid socket %d from pool: %d", s.fd, len);
-			as_node_close_connection(&s, pool);
+			as_node_close_connection(node, &s, pool);
 		}
 		else if (as_conn_pool_incr(pool)) {
 			// Socket not found and queue has available slot.
@@ -494,11 +499,11 @@ as_node_close_idle_connections(as_node* node)
 		while (as_conn_pool_pop_tail(pool, &s)) {
 			if (as_socket_current(&s, node->cluster->max_socket_idle_ns)) {
 				if (! as_conn_pool_push_tail(pool, &s)) {
-					as_node_close_connection(&s, pool);
+					as_node_close_connection(node, &s, pool);
 				}
 				break;
 			}
-			as_node_close_connection(&s, pool);
+			as_node_close_connection(node, &s, pool);
 		}
 	}
 }
@@ -553,13 +558,13 @@ as_node_ensure_login_shm(as_error* err, as_node* node)
 		status = as_node_login(err, node, &sock);
 
 		if (status != AEROSPIKE_OK) {
-			as_socket_close(&sock);
+			as_node_close_socket(node, &sock);
 			return status;
 		}
 
 		// Shared memory prole tender only needs updated session token and not the socket.
 		// Close socket immediately.
-		as_socket_close(&sock);
+		as_node_close_socket(node, &sock);
 	}
 	return AEROSPIKE_OK;
 }
@@ -636,7 +641,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 			status = as_node_ensure_login(err, node, &sock, &auth);
 
 			if (status) {
-				as_socket_close(&sock);
+				as_node_close_socket(node, &sock);
 				return status;
 			}
 
@@ -653,7 +658,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 					status = as_node_login(err, node, &sock);
 
 					if (status) {
-						as_socket_close(&sock);
+						as_node_close_socket(node, &sock);
 						return status;
 					}
 				}
@@ -667,7 +672,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 			status = as_node_ensure_login(err, node, &node->info_socket, &auth);
 
 			if (status) {
-				as_socket_close(&node->info_socket);
+				as_node_close_socket(node, &node->info_socket);
 				return status;
 			}
 		}
@@ -848,7 +853,7 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
 	
 	if (! buf) {
-		as_socket_close(&node->info_socket);
+		as_node_close_socket(node, &node->info_socket);
 		return err->code;
 	}
 	
@@ -860,7 +865,7 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	status = as_node_process_response(cluster, err, node, &values, peers);
 
 	if (status == AEROSPIKE_ERR_CLIENT) {
-		as_socket_close(&node->info_socket);
+		as_node_close_socket(node, &node->info_socket);
 	}
 		
 	if (buf != stack_buf) {
@@ -932,7 +937,7 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
 	
 	if (! buf) {
-		as_socket_close(&node->info_socket);
+		as_node_close_socket(node, &node->info_socket);
 		return err->code;
 	}
 	
@@ -995,7 +1000,7 @@ as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
 
 	if (! buf) {
-		as_socket_close(&node->info_socket);
+		as_node_close_socket(node, &node->info_socket);
 		return err->code;
 	}
 
@@ -1169,7 +1174,7 @@ as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node)
 	uint8_t* buf = as_node_get_info(err, node, INFO_STR_GET_RACKS, sizeof(INFO_STR_GET_RACKS) - 1, deadline_ms, stack_buf);
 
 	if (! buf) {
-		as_socket_close(&node->info_socket);
+		as_node_close_socket(node, &node->info_socket);
 		return err->code;
 	}
 

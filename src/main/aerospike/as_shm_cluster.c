@@ -364,11 +364,11 @@ as_shm_reset_racks_node(as_cluster* cluster, as_error* err, as_node* node)
 	status = as_node_refresh_racks(cluster, err, node);
 
 	if (status != AEROSPIKE_OK) {
-		as_socket_close(&node->info_socket);
+		as_node_close_socket(node, &node->info_socket);
 		return status;
 	}
 
-	as_node_put_connection(&node->info_socket);
+	as_node_put_connection(node, &node->info_socket);
 	return status;
 }
 

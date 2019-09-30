@@ -46,7 +46,7 @@ as_event_command_write_start(as_event_command* cmd)
 }
 
 void
-as_event_connect(as_event_command* cmd)
+as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 {
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -49,6 +49,16 @@ typedef struct as_conn_stats_s {
 	 * There can be multiple pools per node. This value is a summary of those pools on this node.
 	 */
 	uint32_t in_use;
+
+	/**
+	 * Total number of node connections opened since node creation.
+	 */
+	uint32_t opened;
+
+	/**
+	 * Total number of node connections closed since node creation.
+	 */
+	uint32_t closed;
 
 } as_conn_stats;
 

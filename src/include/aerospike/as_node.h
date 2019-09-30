@@ -159,6 +159,31 @@ typedef struct as_racks_s {
 
 } as_racks;
 
+/**
+ * @private
+ * Async connection pool.
+ */
+typedef struct as_async_conn_pool_s {
+	/**
+	 * @private
+	 * Async connection queue.
+	 */
+	as_queue queue;
+
+	/**
+	 * @private
+	 * Total async connections opened.
+	 */
+	uint32_t opened;
+
+	/**
+	 * @private
+	 * Total async connections closed.
+	 */
+	uint32_t closed;
+
+} as_async_conn_pool;
+
 struct as_cluster_s;
 
 /**
@@ -235,13 +260,13 @@ typedef struct as_node_s {
 	 * Array of connection pools used in async commands.  There is one pool per node/event loop.
 	 * Only used by event loop threads. Not thread-safe.
 	 */
-	as_queue* async_conn_pools;
+	as_async_conn_pool* async_conn_pools;
 	
 	/**
 	 * @private
 	 * Pool of connections used in pipelined async commands.  Also not thread-safe.
 	 */
-	as_queue* pipe_conn_pools;
+	as_async_conn_pool* pipe_conn_pools;
 
 	/**
 	 * @private
@@ -284,6 +309,18 @@ typedef struct as_node_s {
 	 * Connection queue iterator.  Not atomic by design.
 	 */
 	uint32_t conn_iter;
+
+	/**
+	 * @private
+	 * Total sync connections opened.
+	 */
+	uint32_t sync_conns_opened;
+
+	/**
+	 * @private
+	 * Total sync connections closed.
+	 */
+	uint32_t sync_conns_closed;
 
 	/**
 	 * @private
@@ -495,12 +532,25 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 
 /**
  * @private
- * Close a node's connection and do not put back into pool.
+ * Close a node's connection and update node/pool statistics.
  */
 static inline void
-as_node_close_connection(as_socket* sock, as_conn_pool* pool) {
+as_node_close_connection(as_node* node, as_socket* sock, as_conn_pool* pool)
+{
 	as_socket_close(sock);
+	as_incr_uint32(&node->sync_conns_closed);
 	as_conn_pool_decr(pool);
+}
+
+/**
+ * @private
+ * Close a node's connection and update node statistics.
+ */
+static inline void
+as_node_close_socket(as_node* node, as_socket* sock)
+{
+	as_socket_close(sock);
+	as_incr_uint32(&node->sync_conns_closed);
 }
 
 /**
@@ -508,7 +558,7 @@ as_node_close_connection(as_socket* sock, as_conn_pool* pool) {
  * Put connection back into pool.
  */
 static inline void
-as_node_put_connection(as_socket* sock)
+as_node_put_connection(as_node* node, as_socket* sock)
 {
 	// Save pool.
 	as_conn_pool* pool = sock->pool;
@@ -518,7 +568,7 @@ as_node_put_connection(as_socket* sock)
 
 	// Put into pool.
 	if (! as_conn_pool_push_head(pool, sock)) {
-		as_node_close_connection(sock, pool);
+		as_node_close_connection(node, sock, pool);
 	}
 }
 

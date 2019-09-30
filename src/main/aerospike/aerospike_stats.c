@@ -18,6 +18,10 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_node.h>
 
+#if 0
+#include <aerospike/as_string_builder.h>
+#endif
+
 /******************************************************************************
  * GLOBALS
  *****************************************************************************/
@@ -35,26 +39,48 @@ as_sum_init(as_conn_stats* stats)
 {
 	stats->in_pool = 0;
 	stats->in_use = 0;
+	stats->opened = 0;
+	stats->closed = 0;
 }
 
 static inline void
-as_sum_no_lock(as_queue* pool, as_conn_stats* stats)
+as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats)
 {
 	// Warning: cross-thread reference without a lock.
-	int tmp = as_queue_size(pool);
+	int tmp = as_queue_size(&pool->queue);
 
 	// Timing issues may cause values to go negative. Adjust.
 	if (tmp < 0) {
 		tmp = 0;
 	}
 	stats->in_pool += tmp;
-	tmp = pool->total - tmp;
+	tmp = pool->queue.total - tmp;
 
 	if (tmp < 0) {
 		tmp = 0;
 	}
 	stats->in_use += tmp;
+	stats->opened += pool->opened;
+	stats->closed += pool->closed;
 }
+
+#if 0
+static void
+as_conn_stats_tostring(as_string_builder* sb, const char* title, as_conn_stats* cs)
+{
+	as_string_builder_append_char(sb, ' ');
+	as_string_builder_append(sb, title);
+	as_string_builder_append_char(sb, '(');
+	as_string_builder_append_uint(sb, cs->in_use);
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint(sb, cs->in_pool);
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint(sb, cs->opened);
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint(sb, cs->closed);
+	as_string_builder_append_char(sb, ')');
+}
+#endif
 
 /******************************************************************************
  * FUNCTIONS
@@ -131,6 +157,8 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 		stats->sync.in_pool += in_pool;
 		stats->sync.in_use += total - in_pool;
 	}
+	stats->sync.opened = node->sync_conns_opened;
+	stats->sync.closed = node->sync_conns_closed;
 
 	// Async connection summary.
 	if (as_event_loop_capacity > 0) {
@@ -143,3 +171,42 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 		}
 	}
 }
+
+#if 0
+char*
+aerospike_stats_to_string(as_cluster_stats* stats)
+{
+	as_string_builder sb;
+	as_string_builder_init(&sb, 4096, true);
+	as_string_builder_append(&sb, "nodes(inUse,inPool,opened,closed):");
+	as_string_builder_append_newline(&sb);
+
+	for (uint32_t i = 0; i < stats->nodes_size; i++) {
+		as_node_stats* node_stats = &stats->nodes[i];
+		as_string_builder_append(&sb, as_node_get_address_string(node_stats->node));
+		as_conn_stats_tostring(&sb, "sync", &node_stats->sync);
+		as_conn_stats_tostring(&sb, "async", &node_stats->async);
+		as_conn_stats_tostring(&sb, "pipeline", &node_stats->pipeline);
+		as_string_builder_append_newline(&sb);
+	}
+
+	if (stats->event_loops) {
+		as_string_builder_append(&sb, "event loops(processSize,queueSize): ");
+
+		for (uint32_t i = 0; i < stats->event_loops_size; i++) {
+			as_event_loop_stats* ev_stats = &stats->event_loops[i];
+
+			if (i > 0) {
+				as_string_builder_append_char(&sb, ',');
+			}
+			as_string_builder_append_char(&sb, '(');
+			as_string_builder_append_int(&sb, ev_stats->process_size);
+			as_string_builder_append_char(&sb, ',');
+			as_string_builder_append_uint(&sb, ev_stats->queue_size);
+			as_string_builder_append_char(&sb, ')');
+		}
+		as_string_builder_append_newline(&sb);
+	}
+	return sb.data;
+}
+#endif

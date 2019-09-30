@@ -67,7 +67,7 @@ as_async_get_connections(as_cluster* cluster)
 		as_node* node = nodes->array[i];
 
 		for (uint32_t j = 0; j < as_event_loop_size; j++) {
-			sum += node->async_conn_pools[j].total + node->pipe_conn_pools[j].total;
+			sum += node->async_conn_pools[j].queue.total + node->pipe_conn_pools[j].queue.total;
 		}
 	}
 	as_nodes_release(nodes);
@@ -96,10 +96,10 @@ as_async_update_max_conns(as_cluster* cluster, bool pipe, uint32_t max_conns)
 			uint32_t limit = j < rem ? max + 1 : max;
 
 			if (pipe) {
-				node->pipe_conn_pools[j].capacity = limit;
+				node->pipe_conn_pools[j].queue.capacity = limit;
 			}
 			else {
-				node->async_conn_pools[j].capacity = limit;
+				node->async_conn_pools[j].queue.capacity = limit;
 			}
 		}
 	}

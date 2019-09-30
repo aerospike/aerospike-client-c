@@ -564,11 +564,11 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		return;
 	}
 
-	as_queue* pool = &cmd->node->async_conn_pools[event_loop->index];
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[event_loop->index];
 	as_async_connection* conn;
 
 	// Find connection.
-	while (as_queue_pop(pool, &conn)) {
+	while (as_queue_pop(&pool->queue, &conn)) {
 		// Verify that socket is active and receive buffer is empty.
 		int len = as_event_validate_connection(&conn->base, cmd->cluster->max_socket_idle_ns);
 
@@ -585,13 +585,13 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 	}
 
 	// Create connection structure only when node connection count within queue limit.
-	if (as_queue_incr_total(pool)) {
+	if (as_queue_incr_total(&pool->queue)) {
 		conn = cf_malloc(sizeof(as_async_connection));
 		conn->base.pipeline = false;
 		conn->base.watching = 0;
 		conn->cmd = cmd;
 		cmd->conn = &conn->base;
-		as_event_connect(cmd);
+		as_event_connect(cmd, pool);
 		return;
 	}
 
@@ -606,7 +606,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
 					"Max node/event loop %s async connections would be exceeded: %u",
-					cmd->node->name, pool->capacity);
+					cmd->node->name, pool->queue.capacity);
 
 	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
 		as_event_stop_timer(cmd);
@@ -795,11 +795,11 @@ as_event_command_retry(as_event_command* cmd, bool timeout)
 }
 
 static inline void
-as_event_put_connection(as_event_command* cmd, as_queue* pool)
+as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 {
 	as_event_set_conn_last_used(cmd->conn);
 
-	if (! as_queue_push_head_limit(pool, &cmd->conn)) {
+	if (! as_queue_push_head_limit(&pool->queue, &cmd->conn)) {
 		as_event_release_connection(cmd->conn, pool);
 	}
 }
@@ -817,7 +817,7 @@ as_event_response_complete(as_event_command* cmd)
 	}
 	as_event_stop_watcher(cmd, cmd->conn);
 
-	as_queue* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	as_event_put_connection(cmd, pool);
 }
 
@@ -1045,7 +1045,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	}
 	as_event_stop_watcher(cmd, cmd->conn);
 	
-	as_queue* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 
 	// Close socket on errors that can leave unread data in socket.
 	switch (err->code) {
@@ -1252,13 +1252,13 @@ as_event_close_idle_connections_complete(as_event_close_conn_state* state)
 }
 
 static void
-as_event_close_idle_connections_pool(as_queue* pool, uint64_t max_socket_idle_ns)
+as_event_close_idle_connections_pool(as_async_conn_pool* pool, uint64_t max_socket_idle_ns)
 {
 	as_event_connection* conn;
 
-	while (as_queue_pop_tail(pool, &conn)) {
+	while (as_queue_pop_tail(&pool->queue, &conn)) {
 		if (as_event_connection_current(conn, max_socket_idle_ns)) {
-			if (! as_queue_push_limit(pool, &conn)) {
+			if (! as_queue_push_limit(&pool->queue, &conn)) {
 				as_event_release_connection(conn, pool);
 			}
 			break;

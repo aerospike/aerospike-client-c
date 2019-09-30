@@ -815,7 +815,7 @@ as_ev_connect_error(as_event_command* cmd, as_address* primary, int rv)
 }
 
 void
-as_event_connect(as_event_command* cmd)
+as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 {
 	// Try addresses.
 	as_socket sock;
@@ -859,6 +859,7 @@ as_event_connect(as_event_command* cmd)
 		as_log_debug("Change node address %s %s", node->name, as_node_get_address_string(node));
 	}
 
+	pool->opened++;
 	as_ev_watcher_init(cmd, &sock);
 	cmd->event_loop->errors = 0; // Reset errors on valid connection.
 }
@@ -877,14 +878,14 @@ as_ev_socket_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
 }
 
 static void
-as_ev_close_connections(as_node* node, as_queue* pool)
+as_ev_close_connections(as_node* node, as_async_conn_pool* pool)
 {
 	as_event_connection* conn;
 	
-	while (as_queue_pop(pool, &conn)) {
+	while (as_queue_pop(&pool->queue, &conn)) {
 		as_event_release_connection(conn, pool);
 	}
-	as_queue_destroy(pool);
+	as_queue_destroy(&pool->queue);
 }
 
 void

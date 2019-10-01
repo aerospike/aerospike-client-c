@@ -432,7 +432,8 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 		ctx->cert_blacklist = cert_blacklist_read(tlscfg->cert_blacklist);
 
 		if (! ctx->cert_blacklist) {
-			as_tls_context_destroy(ctx);
+			// as_tls_context_destroy() will be called in as_cluster_destroy()
+			// if an error is returned in this function.
 			return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
 								   "Failed to read certificate blacklist: %s",
 								   tlscfg->cert_blacklist);
@@ -443,7 +444,6 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 	as_status status = protocols_parse(tlscfg, &protocols, errp);
 
 	if (status != AEROSPIKE_OK) {
-		as_tls_context_destroy(ctx);
 		return status;
 	}
 
@@ -483,8 +483,6 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 	ctx->ssl_ctx = SSL_CTX_new(method);
 
 	if (ctx->ssl_ctx == NULL) {
-		as_tls_context_destroy(ctx);
-
 		unsigned long errcode = ERR_get_error();
 		char errbuf[1024];
 		ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
@@ -511,8 +509,6 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 		int rv = SSL_CTX_load_verify_locations(ctx->ssl_ctx, tlscfg->cafile, tlscfg->capath);
 
 		if (rv != 1) {
-			as_tls_context_destroy(ctx);
-
 			char errbuf[1024];
 			unsigned long errcode = ERR_get_error();
 
@@ -540,8 +536,6 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 
 			if (errcode != SSL_ERROR_NONE) {
 				// There *was* an error after all.
-				as_tls_context_destroy(ctx);
-
 				unsigned long errcode = ERR_get_error();
 				char errbuf[1024];
 				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
@@ -602,7 +596,6 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 		}
 
 		if (!ok) {
-			as_tls_context_destroy(ctx);
 			return AEROSPIKE_ERR_TLS_ERROR;
 		}
 	}
@@ -611,7 +604,6 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 		int rv = SSL_CTX_set_cipher_list(ctx->ssl_ctx, tlscfg->cipher_suite);
 
 		if (rv != 1) {
-			as_tls_context_destroy(ctx);
 			return as_error_set_message(errp, AEROSPIKE_ERR_TLS_ERROR,
 										"no compatible cipher found");
 		}

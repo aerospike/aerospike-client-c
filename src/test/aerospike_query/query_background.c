@@ -375,7 +375,7 @@ TEST(query_operate, "query operate")
 	uint64_t query_id = 0;
 	status = aerospike_query_background(as, &err, NULL, &q, &query_id);
 
-	assert_int_eq(status, AEROSPIKE_OK);
+	assert_ok(&err);
 	aerospike_query_wait(as, &err, NULL, &q, query_id, 0);
 	as_query_destroy(&q);
 

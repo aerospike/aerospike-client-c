@@ -270,7 +270,7 @@ TEST(key_operate_delete , "operate delete")
 
 	as_record* prec = NULL;
 	rc = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
-	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_ok(&err);
 
 	int64_t val = as_record_get_int64(prec, "a", 0);
 	assert_int_eq(val, 1);
@@ -299,7 +299,7 @@ TEST(key_operate_delete , "operate delete")
 
 	prec = NULL;
 	rc = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
-	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_ok(&err);
 
 	val = as_record_get_int64(prec, "a", 0);
 	assert_int_eq(val, 1);

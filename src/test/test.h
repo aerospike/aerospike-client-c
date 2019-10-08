@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_std.h>
+#include <aerospike/as_error.h>
 #include <math.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -228,6 +229,7 @@ void atf_assert_bytes_eq(
 
 void atf_assert_log(atf_test_result * result, const char * exp, const char * file, int line, const char * fmt, ...);
 
+void atf_assert_err(atf_test_result* result, as_error* err, const char* file, int line);
 
 #define assert(EXP) \
     if ( (EXP) != true ) return atf_assert(__result__, #EXP, __FILE__, __LINE__);
@@ -300,6 +302,9 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
 		as_monitor_notify(_mon_);\
 		return;\
 	}
+
+#define assert_ok(_err_) \
+    if ((_err_)->code != AEROSPIKE_OK) return atf_assert_err(__result__, (_err_), __FILE__, __LINE__);
 
 /******************************************************************************
  * atf_log

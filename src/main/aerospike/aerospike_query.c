@@ -290,6 +290,14 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		}
 	}
 	else {
+		// If a background query with operate command is sent to a server that does not support it
+		// (server versions < 4.7), that server will return query results to the client instead of
+		// running it in the background.  Return error when this happens.
+		if (! task->query_policy) {
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+										"Server does not support background query with operations");
+		}
+
 		// Parse normal record values.
 		as_record rec;
 		as_record_inita(&rec, msg->n_ops);

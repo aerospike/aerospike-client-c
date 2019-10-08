@@ -15,7 +15,7 @@
  * the License.
  */
 #include "test.h"
-#include <aerospike/as_std.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_string_builder.h>
 #include <sys/types.h>
 #include <stdio.h>
@@ -346,6 +346,14 @@ void atf_assert_log(atf_test_result * result, const char * exp, const char * fil
     va_end(ap);
 
     snprintf(result->message, sizeof(result->message), "assertion failed: %s. %s [at %s:%d]", exp, msg, file, line);
+    result->success = false;
+}
+
+void
+atf_assert_err(atf_test_result* result, as_error* err, const char* file, int line)
+{
+    snprintf(result->message, sizeof(result->message), "error(%d) %s [at %s:%d in test %s:%d]",
+			 err->code, err->message, err->file, err->line, file, line);
     result->success = false;
 }
 

@@ -708,7 +708,7 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	
 	proto = (as_proto*)stack_buf;
 
-	as_status status = as_proto_parse(err, proto, AS_INFO_MESSAGE_TYPE);
+	as_status status = as_proto_parse_type(err, proto, AS_INFO_MESSAGE_TYPE);
 
 	if (status) {
 		return 0;

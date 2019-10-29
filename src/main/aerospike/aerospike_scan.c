@@ -114,9 +114,9 @@ as_scan_parse_records_async(as_event_command* cmd)
 {
 	as_error err;
 	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
-	uint8_t* p = cmd->buf;
-	uint8_t* end = p + cmd->len;
-	
+	uint8_t* p = cmd->buf + cmd->pos;
+	uint8_t* end = cmd->buf + cmd->len;
+
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
@@ -180,8 +180,9 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 }
 
 static as_status
-as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task, as_error* err)
+as_scan_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata)
 {
+	as_scan_task* task = udata;
 	uint8_t* p = buf;
 	uint8_t* end = buf + size;
 	as_status status;
@@ -222,60 +223,6 @@ as_scan_parse_records(uint8_t* buf, size_t size, as_scan_task* task, as_error* e
 }
 
 static as_status
-as_scan_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* udata)
-{
-	as_scan_task* task = udata;
-	as_status status = AEROSPIKE_OK;
-	uint8_t* buf = 0;
-	size_t capacity = 0;
-	
-	while (true) {
-		// Read header
-		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), socket_timeout, deadline_ms);
-		
-		if (status) {
-			break;
-		}
-
-		status = as_proto_parse(err, &proto, AS_MESSAGE_TYPE);
-
-		if (status) {
-			break;
-		}
-
-		size_t size = proto.sz;
-		
-		if (size > 0) {
-			// Prepare buffer
-			if (size > capacity) {
-				as_command_buffer_free(buf, capacity);
-				capacity = size;
-				buf = as_command_buffer_init(capacity);
-			}
-			
-			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, socket_timeout, deadline_ms);
-			
-			if (status) {
-				break;
-			}
-			
-			status = as_scan_parse_records(buf, size, task, err);
-			
-			if (status != AEROSPIKE_OK) {
-				if (status == AEROSPIKE_NO_MORE_RECORDS) {
-					status = AEROSPIKE_OK;
-				}
-				break;
-			}
-		}
-	}
-	as_command_buffer_free(buf, capacity);
-	return status;
-}
-
-static as_status
 as_scan_command_execute(as_scan_task* task)
 {
 	as_error err;
@@ -301,7 +248,7 @@ as_scan_command_execute(as_scan_task* task)
 	cmd.node = task->node;
 	cmd.ns = NULL;        // Not referenced when node set.
 	cmd.partition = NULL; // Not referenced when node set.
-	cmd.parse_results_fn = as_scan_parse;
+	cmd.parse_results_fn = as_scan_parse_records;
 	cmd.udata = task;
 	cmd.buf = task->cmd;
 	cmd.buf_size = task->cmd_size;
@@ -468,14 +415,14 @@ as_scan_command_init(
 	uint8_t* p;
 	
 	if (scan->apply_each.function[0]) {
-		p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, 0,
-			AS_POLICY_COMMIT_LEVEL_ALL, AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0,
-			policy->base.total_timeout, n_fields, n_ops, policy->durable_delete);
+		p = as_command_write_header(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
+				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0, n_fields, n_ops,
+				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {
 		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
-		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_READ_MODE_AP_ONE,
-			AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, n_fields, n_ops);
+		p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
+				AS_POLICY_READ_MODE_SC_SESSION, n_fields, n_ops, read_attr);
 	}
 	
 	if (scan->ns[0]) {

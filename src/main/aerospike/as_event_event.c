@@ -461,7 +461,7 @@ as_event_command_peek_block(as_event_command* cmd)
 	
 	as_proto* proto = (as_proto*)cmd->buf;
 
-	if (! as_event_proto_parse(cmd, proto, cmd->proto_type)) {
+	if (! as_event_proto_parse(cmd, proto)) {
 		return AS_EVENT_READ_ERROR;
 	}
 
@@ -472,12 +472,13 @@ as_event_command_peek_block(as_event_command* cmd)
 	cmd->state = AS_ASYNC_STATE_COMMAND_READ_BODY;
 	
 	// Check for end block size.
-	if (cmd->len == sizeof(as_msg)) {
+	if (cmd->len == sizeof(as_msg) && cmd->proto_type_rcv != AS_COMPRESSED_MESSAGE_TYPE) {
 		// Look like we received end block.  Read and parse to make sure.
 		rv = as_event_read(cmd);
 		if (rv != AS_EVENT_READ_COMPLETE) {
 			return rv;
 		}
+		cmd->pos = 0;
 
 		if (! cmd->parse_results(cmd)) {
 			// We did not finish after all. Prepare to read next header.
@@ -563,7 +564,7 @@ as_event_command_read(as_event_command* cmd)
 		
 		as_proto* proto = (as_proto*)cmd->buf;
 
-		if (! as_event_proto_parse(cmd, proto, cmd->proto_type)) {
+		if (! as_event_proto_parse(cmd, proto)) {
 			return AS_EVENT_READ_ERROR;
 		}
 
@@ -587,6 +588,13 @@ as_event_command_read(as_event_command* cmd)
 	rv = as_event_read(cmd);
 	if (rv != AS_EVENT_READ_COMPLETE) {
 		return rv;
+	}
+	cmd->pos = 0;
+
+	if (cmd->proto_type_rcv == AS_COMPRESSED_MESSAGE_TYPE) {
+		if (! as_event_decompress(cmd)) {
+			return AS_EVENT_READ_ERROR;
+		}
 	}
 
 	if (! cmd->parse_results(cmd)) {

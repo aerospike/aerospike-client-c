@@ -229,9 +229,9 @@ as_query_parse_records_async(as_event_command* cmd)
 {
 	as_error err;
 	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
-	uint8_t* p = cmd->buf;
-	uint8_t* end = p + cmd->len;
-	
+	uint8_t* p = cmd->buf + cmd->pos;
+	uint8_t* end = cmd->buf + cmd->len;
+
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
@@ -322,8 +322,9 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 }
 
 static as_status
-as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error* err)
+as_query_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata)
 {
+	as_query_task* task = udata;
 	uint8_t* p = buf;
 	uint8_t* end = buf + size;
 	as_status status;
@@ -365,60 +366,6 @@ as_query_parse_records(uint8_t* buf, size_t size, as_query_task* task, as_error*
 }
 
 static as_status
-as_query_parse(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* udata)
-{
-	as_query_task* task = udata;
-	as_status status = AEROSPIKE_OK;
-	uint8_t* buf = 0;
-	size_t capacity = 0;
-	
-	while (true) {
-		// Read header
-		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), socket_timeout, deadline_ms);
-		
-		if (status) {
-			break;
-		}
-
-		status = as_proto_parse(err, &proto, AS_MESSAGE_TYPE);
-
-		if (status) {
-			break;
-		}
-
-		size_t size = proto.sz;
-		
-		if (size > 0) {
-			// Prepare buffer
-			if (size > capacity) {
-				as_command_buffer_free(buf, capacity);
-				capacity = size;
-				buf = as_command_buffer_init(capacity);
-			}
-			
-			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, socket_timeout, deadline_ms);
-			
-			if (status) {
-				break;
-			}
-			
-			status = as_query_parse_records(buf, size, task, err);
-			
-			if (status != AEROSPIKE_OK) {
-				if (status == AEROSPIKE_NO_MORE_RECORDS) {
-					status = AEROSPIKE_OK;
-				}
-				break;
-			}
-		}
-	}
-	as_command_buffer_free(buf, capacity);
-	return status;
-}
-
-static as_status
 as_query_command_execute(as_query_task* task)
 {
 	as_error err;
@@ -456,7 +403,7 @@ as_query_command_execute(as_query_task* task)
 	cmd.node = task->node;
 	cmd.ns = NULL;        // Not referenced when node set.
 	cmd.partition = NULL; // Not referenced when node set.
-	cmd.parse_results_fn = as_query_parse;
+	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;
 	cmd.buf = task->cmd;
 	cmd.buf_size = task->cmd_size;
@@ -748,8 +695,8 @@ static size_t
 as_query_command_init(
 	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_base* base_policy,
 	const as_policy_query* query_policy, const as_policy_write* write_policy, uint64_t task_id,
-	uint32_t timeout, uint16_t n_fields, uint32_t filter_size, uint32_t predexp_size,
-	uint32_t bin_name_size, as_buffer* argbuffer, as_buffer* opsbuffers
+	uint16_t n_fields, uint32_t filter_size, uint32_t predexp_size, uint32_t bin_name_size,
+	as_buffer* argbuffer, as_buffer* opsbuffers
 	)
 {
 	// Write command buffer.
@@ -758,14 +705,16 @@ as_query_command_init(
 	uint8_t* p;
 	
 	if (query_policy) {
-		uint8_t read_attr = (query->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
-		p = as_command_write_header_read(cmd, read_attr, AS_POLICY_READ_MODE_AP_ONE,
-				AS_POLICY_READ_MODE_SC_SESSION, timeout, n_fields, n_ops);
+		uint8_t read_attr = (query->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA :
+											  AS_MSG_INFO1_READ;
+
+		p = as_command_write_header_read(cmd, base_policy, AS_POLICY_READ_MODE_AP_ONE,
+				AS_POLICY_READ_MODE_SC_SESSION, n_fields, n_ops, read_attr);
 	}
 	else {
-		p = as_command_write_header(cmd, 0, AS_MSG_INFO2_WRITE, 0,
-				write_policy->commit_level, write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0,
-				timeout, n_fields, n_ops, write_policy->durable_delete);
+		p = as_command_write_header(cmd, base_policy, write_policy->commit_level,
+				write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0, n_fields, n_ops,
+				write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	
 	// Write namespace.
@@ -932,13 +881,11 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	uint16_t n_fields = 0;
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
-	uint32_t timeout = base_policy->total_timeout;
-
 	size_t size = as_query_command_size(base_policy, query, &n_fields, &filter_size, &predexp_size,
 										&bin_name_size, &argbuffer, &opsbuffers);
 	uint8_t* cmd = as_command_buffer_init(size);
 	size = as_query_command_init(cmd, query, query_type, base_policy, task->query_policy,
-								 task->write_policy, task->task_id, timeout, n_fields, filter_size,
+								 task->write_policy, task->task_id, n_fields, filter_size,
 								 predexp_size, bin_name_size, &argbuffer, opsbuffers);
 	
 	task->cmd = cmd;
@@ -1247,8 +1194,8 @@ aerospike_query_async(
 										&predexp_size, &bin_name_size, &argbuffer, &opsbuffers);
 	uint8_t* cmd_buf = as_command_buffer_init(size);
 	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, &policy->base, policy, NULL,
-								 task_id, policy->base.total_timeout, n_fields, filter_size,
-								 predexp_size, bin_name_size, &argbuffer, opsbuffers);
+								 task_id, n_fields, filter_size, predexp_size, bin_name_size,
+								 &argbuffer, opsbuffers);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.

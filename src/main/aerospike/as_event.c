@@ -354,6 +354,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 	cmd->buf += cmd->write_len;
 	cmd->command_sent_counter = 0;
 	cmd->conn = NULL;
+	cmd->proto_type_rcv = 0;
 
 	as_event_loop* event_loop = cmd->event_loop;
 
@@ -615,36 +616,74 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 }
 
 bool
-as_event_proto_parse(as_event_command* cmd, as_proto* proto, uint8_t expected_type)
+as_event_proto_parse(as_event_command* cmd, as_proto* proto)
 {
 	if (proto->version != AS_PROTO_VERSION) {
 		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_CLIENT,
-						"Received invalid proto version: %d Expected: %d",
-						proto->version, AS_PROTO_VERSION);
+		as_proto_version_error(&err, proto->version);
 		as_event_parse_error(cmd, &err);
 		return false;
 	}
 
-	if (proto->type != expected_type) {
+	if (proto->type != cmd->proto_type && proto->type != AS_COMPRESSED_MESSAGE_TYPE) {
 		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_CLIENT,
-						"Received invalid proto type: %d Expected: %d",
-						proto->type, expected_type);
+		as_proto_type_error(&err, proto->type, cmd->proto_type);
 		as_event_parse_error(cmd, &err);
 		return false;
 	}
 
+	cmd->proto_type_rcv = proto->type;
 	as_proto_swap_from_be(proto);
 
-	if (proto->sz > 128 * 1024 * 1024) { // 128 MB
+	if (proto->sz > PROTO_SIZE_MAX) {
 		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_CLIENT,
-						"Received invalid proto size: %" PRIu64,
-						proto->sz);
+		as_proto_size_error(&err, (size_t)proto->sz);
 		as_event_parse_error(cmd, &err);
 		return false;
 	}
+	return true;
+}
+
+bool
+as_event_proto_parse_type(as_event_command* cmd, as_proto* proto, uint8_t expected_type)
+{
+	if (proto->type != expected_type) {
+		as_error err;
+		as_proto_type_error(&err, proto->type, expected_type);
+		as_event_parse_error(cmd, &err);
+		return false;
+	}
+	return as_event_proto_parse(cmd, proto);
+}
+
+bool
+as_event_decompress(as_event_command* cmd)
+{
+	as_error err;
+	size_t size = (size_t)cf_swap_from_be64(*(uint64_t*)cmd->buf);
+
+	if (size > PROTO_SIZE_MAX) {
+		as_proto_size_error(&err, size);
+		as_event_parse_error(cmd, &err);
+		return false;
+	}
+
+	uint8_t* buf = cf_malloc(size);
+
+	if (as_proto_decompress(&err, buf, size, cmd->buf, cmd->len) != AEROSPIKE_OK) {
+		cf_free(buf);
+		as_event_parse_error(cmd, &err);
+		return false;
+	}
+
+	if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
+		cf_free(cmd->buf);
+	}
+	cmd->buf = buf;
+	cmd->len = size;
+	cmd->pos = sizeof(as_proto);
+	cmd->read_capacity = cmd->len;
+	cmd->flags |= AS_ASYNC_FLAGS_FREE_BUF;
 	return true;
 }
 
@@ -1070,7 +1109,8 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 bool
 as_event_command_parse_header(as_event_command* cmd)
 {
-	as_msg* msg = (as_msg*)cmd->buf;
+	uint8_t* p = cmd->buf + cmd->pos;
+	as_msg* msg = (as_msg*)p;
 	
 	if (msg->result_code == AEROSPIKE_OK) {
 		as_event_response_complete(cmd);
@@ -1089,11 +1129,13 @@ bool
 as_event_command_parse_result(as_event_command* cmd)
 {
 	as_error err;
-	as_msg* msg = (as_msg*)cmd->buf;
+	uint8_t* p = cmd->buf + cmd->pos;
+	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
-	uint8_t* p = cmd->buf + sizeof(as_msg);
 	as_status status = msg->result_code;
-	
+
+	p += sizeof(as_msg);
+
 	switch (status) {
 		case AEROSPIKE_OK: {
 			as_record rec;
@@ -1142,11 +1184,13 @@ as_event_command_parse_result(as_event_command* cmd)
 bool
 as_event_command_parse_success_failure(as_event_command* cmd)
 {
+	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)cmd->buf;
 	as_msg_swap_header_from_be(msg);
-	uint8_t* p = cmd->buf + sizeof(as_msg);
 	as_status status = msg->result_code;
 	
+	p += sizeof(as_msg);
+
 	switch (status) {
 		case AEROSPIKE_OK: {
 			as_error err;
@@ -1185,7 +1229,8 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 bool
 as_event_command_parse_info(as_event_command* cmd)
 {
-	char* response = (char*)cmd->buf;
+	uint8_t* p = cmd->buf + cmd->pos;
+	char* response = (char*)p;
 	response[cmd->len] = 0;
 
 	char* error = 0;

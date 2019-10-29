@@ -18,6 +18,7 @@
 
 #include <aerospike/as_std.h>
 #include <aerospike/as_error.h>
+#include <citrusleaf/cf_byte_order.h>
 #include <stddef.h>
 
 #ifdef __cplusplus
@@ -36,6 +37,7 @@ extern "C" {
 #define AS_ADMIN_MESSAGE_TYPE 2
 #define AS_MESSAGE_TYPE 3
 #define AS_COMPRESSED_MESSAGE_TYPE 4
+#define PROTO_SIZE_MAX (128 * 1024 * 1024)
 
 /******************************************************************************
  * TYPES
@@ -126,7 +128,42 @@ typedef struct as_proto_msg_s {
 void as_proto_swap_to_be(as_proto *m);
 void as_proto_swap_from_be(as_proto *m);
 void as_msg_swap_header_from_be(as_msg *m);
-as_status as_proto_parse(as_error* err, as_proto* proto, uint8_t expected_type);
+as_status as_proto_version_error(as_error* err, int version);
+as_status as_proto_type_error(as_error* err, int type, int expected);
+as_status as_proto_size_error(as_error* err, size_t size);
+as_status as_compressed_size_error(as_error* err, size_t size);
+as_status as_proto_parse(as_error* err, as_proto* proto);
+as_status as_proto_decompress(as_error* err, void* trg, size_t trg_sz, void* src, size_t src_sz);
+
+static inline as_status
+as_proto_parse_type(as_error* err, as_proto* proto, uint8_t expected_type)
+{
+	if (proto->type != expected_type) {
+		return as_proto_type_error(err, proto->type, expected_type);
+	}
+	return as_proto_parse(err, proto);
+}
+
+static inline as_status
+as_msg_parse(as_error* err, as_msg* msg, size_t size)
+{
+	if (size < sizeof(as_msg)) {
+		return as_proto_size_error(err, size);
+	}
+	as_msg_swap_header_from_be(msg);
+	return AEROSPIKE_OK;
+}
+
+static inline as_status
+as_compressed_size_parse(as_error* err, const uint8_t* buf, size_t* size)
+{
+	*size = (size_t)cf_swap_from_be64(*(uint64_t*)buf);
+
+	if (*size > PROTO_SIZE_MAX) {
+		return as_compressed_size_error(err, *size);
+	}
+	return AEROSPIKE_OK;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

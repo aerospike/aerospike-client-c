@@ -278,7 +278,7 @@ as_admin_read_blocks(
 			break;
 		}
 
-		status = as_proto_parse(err, &proto, AS_ADMIN_MESSAGE_TYPE);
+		status = as_proto_parse_type(err, &proto, AS_ADMIN_MESSAGE_TYPE);
 
 		if (status) {
 			break;
@@ -454,7 +454,7 @@ as_cluster_login(
 	// Read session token.
 	as_proto* proto = (as_proto*)buffer;
 
-	status = as_proto_parse(err, proto, AS_ADMIN_MESSAGE_TYPE);
+	status = as_proto_parse_type(err, proto, AS_ADMIN_MESSAGE_TYPE);
 
 	if (status) {
 		return status;

@@ -136,11 +136,8 @@ as_batch_parse_stop(uint8_t rc)
 }
 
 static bool
-as_batch_async_skip_records(as_event_command* cmd)
+as_batch_async_skip_records(as_event_command* cmd, uint8_t* p, uint8_t* end)
 {
-	uint8_t* p = cmd->buf;
-	uint8_t* end = p + cmd->len;
-	
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
@@ -167,18 +164,18 @@ as_batch_async_skip_records(as_event_command* cmd)
 static bool
 as_batch_async_parse_records(as_event_command* cmd)
 {
+	uint8_t* p = cmd->buf + cmd->pos;
+	uint8_t* end = cmd->buf + cmd->len;
 	as_async_batch_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
 
 	if (! executor->executor.valid) {
 		// An error has already been returned to the user and records have been deleted.
 		// Skip over remaining socket data so it's fully read and can be reused.
-		return as_batch_async_skip_records(cmd);
+		return as_batch_async_skip_records(cmd, p, end);
 	}
 	
 	as_error err;
 	as_vector* records = &executor->records->list;
-	uint8_t* p = cmd->buf;
-	uint8_t* end = p + cmd->len;
 
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
@@ -224,8 +221,9 @@ as_batch_async_parse_records(as_event_command* cmd)
 }
 
 static as_status
-as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* task)
+as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata)
 {
+	as_batch_task* task = udata;
 	bool deserialize = task->policy->deserialize;
 
 	uint8_t* p = buf;
@@ -307,64 +305,6 @@ as_batch_parse_records(as_error* err, uint8_t* buf, size_t size, as_batch_task* 
 	return AEROSPIKE_OK;
 }
 
-static as_status
-as_batch_parse(
-	as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms,
-	void* udata
-	)
-{
-	as_batch_task* task = udata;
-	as_status status = AEROSPIKE_OK;
-	uint8_t* buf = 0;
-	size_t capacity = 0;
-	
-	while (true) {
-		// Read header
-		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto),
-										 socket_timeout, deadline_ms);
-		
-		if (status) {
-			break;
-		}
-
-		status = as_proto_parse(err, &proto, AS_MESSAGE_TYPE);
-
-		if (status) {
-			break;
-		}
-
-		size_t size = proto.sz;
-		
-		if (size > 0) {
-			// Prepare buffer
-			if (size > capacity) {
-				as_command_buffer_free(buf, capacity);
-				capacity = size;
-				buf = as_command_buffer_init(capacity);
-			}
-			
-			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, socket_timeout, deadline_ms);
-			
-			if (status) {
-				break;
-			}
-			
-			status = as_batch_parse_records(err, buf, size, task);
-			
-			if (status != AEROSPIKE_OK) {
-				if (status == AEROSPIKE_NO_MORE_RECORDS) {
-					status = AEROSPIKE_OK;
-				}
-				break;
-			}
-		}
-	}
-	as_command_buffer_free(buf, capacity);
-	return status;
-}
-
 static size_t
 as_batch_size_records(
 	const as_policy_batch* policy, as_vector* records, as_vector* offsets,
@@ -437,9 +377,8 @@ as_batch_index_records_write(
 	}
 
 	uint32_t n_offsets = offsets->size;
-	uint8_t* p = as_command_write_header_read(cmd, read_attr | AS_MSG_INFO1_BATCH_INDEX,
-					policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout,
-					field_count_header, 0);
+	uint8_t* p = as_command_write_header_read(cmd, &policy->base, policy->read_mode_ap,
+		policy->read_mode_sc, field_count_header, 0, read_attr | AS_MSG_INFO1_BATCH_INDEX);
 
 	if (policy->base.predexp) {
 		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
@@ -579,7 +518,7 @@ as_batch_command_init(
 	cmd->node = task->node;
 	cmd->ns = NULL;        // Not referenced when node set.
 	cmd->partition = NULL; // Not referenced when node set.
-	cmd->parse_results_fn = as_batch_parse;
+	cmd->parse_results_fn = as_batch_parse_records;
 	cmd->udata = task;
 	cmd->buf = buf;
 	cmd->buf_size = size;
@@ -702,9 +641,8 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_command* parent)
 	// Write command
 	uint8_t* buf = as_command_buffer_init(size);
 
-	uint8_t* p = as_command_write_header_read(buf, btk->read_attr | AS_MSG_INFO1_BATCH_INDEX,
-					policy->read_mode_ap, policy->read_mode_sc, policy->base.total_timeout,
-					field_count_header, 0);
+	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
+		policy->read_mode_sc, field_count_header, 0, btk->read_attr | AS_MSG_INFO1_BATCH_INDEX);
 
 	if (policy->base.predexp) {
 		p = as_predexp_list_write(policy->base.predexp, pred_size, p);

@@ -69,7 +69,7 @@ extern "C" {
 #define AS_MSG_INFO1_XDR				(1 << 4) // operation is being performed by XDR
 #define AS_MSG_INFO1_GET_NOBINDATA		(1 << 5) // do not get information about bins and its data
 #define AS_MSG_INFO1_READ_MODE_AP_ALL	(1 << 6) // read mode all for AP namespaces.
-// (Note:  Bit 7 is unused.)
+#define AS_MSG_INFO1_COMPRESS_RESPONSE	(1 << 7) // tell server to compress it's response.
 
 // Message info2 bits
 #define AS_MSG_INFO2_WRITE				(1 << 0) // contains a write semantic
@@ -148,10 +148,9 @@ local_free(void* memory)
  * Parse results callback used in as_command_execute().
  */
 typedef as_status (*as_parse_results_fn) (
-	as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms,
-	void* user_data
+	as_error* err, as_node* node, uint8_t* buf, size_t size, void* user_data
 	);
-	
+
 /**
  * @private
  * Synchronous command data.
@@ -266,10 +265,10 @@ as_command_string_operation_size(const char* value)
  */
 uint8_t*
 as_command_write_header(
-	uint8_t* cmd, uint8_t read_attr, uint8_t write_attr, uint8_t info_attr,
-	as_policy_commit_level commit_level, as_policy_exists exists, as_policy_gen gen_policy,
-	uint32_t gen, uint32_t ttl, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins,
-	bool durable_delete
+	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
+	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
+	uint16_t n_fields, uint16_t n_bins, bool durable_delete, uint8_t read_attr, uint8_t write_attr,
+	uint8_t info_attr
 	);
 
 /**
@@ -278,8 +277,8 @@ as_command_write_header(
  */
 static inline void
 as_command_set_attr_read(
-	as_policy_read_mode_ap read_mode_ap, as_policy_read_mode_sc read_mode_sc, uint8_t* read_attr,
-	uint8_t* info_attr
+	as_policy_read_mode_ap read_mode_ap, as_policy_read_mode_sc read_mode_sc, bool compress,
+	uint8_t* read_attr, uint8_t* info_attr
 	)
 {
 	switch (read_mode_sc) {
@@ -303,6 +302,10 @@ as_command_set_attr_read(
 	if (read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
 		*read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
 	}
+
+	if (compress) {
+		*read_attr |= AS_MSG_INFO1_COMPRESS_RESPONSE;
+	}
 }
 	
 /**
@@ -311,19 +314,20 @@ as_command_set_attr_read(
  */
 static inline uint8_t*
 as_command_write_header_read(
-	uint8_t* cmd, uint8_t read_attr, as_policy_read_mode_ap read_mode_ap,
-	as_policy_read_mode_sc read_mode_sc, uint32_t timeout_ms, uint16_t n_fields, uint16_t n_bins
+	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
+	as_policy_read_mode_sc read_mode_sc, uint16_t n_fields, uint16_t n_bins, uint8_t read_attr
 	)
 {
 	uint8_t info_attr = 0;
-	as_command_set_attr_read(read_mode_ap, read_mode_sc, &read_attr, &info_attr);
+	as_command_set_attr_read(read_mode_ap, read_mode_sc, policy->compress_response, &read_attr,
+							 &info_attr);
 
 	cmd[8] = 22;
 	cmd[9] = read_attr;
 	cmd[10] = 0;
 	cmd[11] = info_attr;
 	memset(&cmd[12], 0, 10);
-	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout_ms);
+	*(uint32_t*)&cmd[22] = cf_swap_to_be32(policy->total_timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
 	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);
 	return cmd + AS_HEADER_SIZE;
@@ -528,21 +532,21 @@ as_command_execute(as_command* cmd, as_error* err);
  * Parse header of server response.
  */
 as_status
-as_command_parse_header(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
+as_command_parse_header(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata);
 
 /**
  * @private
  * Parse server record.  Used for reads.
  */
 as_status
-as_command_parse_result(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
+as_command_parse_result(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata);
 
 /**
  * @private
  * Parse server success or failure result.
  */
 as_status
-as_command_parse_success_failure(as_error* err, as_socket* sock, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, void* user_data);
+as_command_parse_success_failure(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata);
 
 /**
  * @private

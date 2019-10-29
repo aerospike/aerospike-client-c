@@ -470,6 +470,13 @@ typedef struct as_policy_base_s {
 	 */
 	struct as_predexp_list* predexp;
 
+	/**
+	 * Tell the server to compress it's response using zlib.
+	 *
+	 * Default: false
+	 */
+	bool compress_response;
+
 } as_policy_base;
 
 /**
@@ -1013,6 +1020,7 @@ as_policy_base_read_init(as_policy_base* p)
 	p->max_retries = 2;
 	p->sleep_between_retries = 0;
 	p->predexp = NULL;
+	p->compress_response = false;
 }
 
 /**
@@ -1026,6 +1034,7 @@ as_policy_base_write_init(as_policy_base* p)
 	p->max_retries = 0;
 	p->sleep_between_retries = 0;
 	p->predexp = NULL;
+	p->compress_response = false;
 }
 
 /**
@@ -1039,6 +1048,7 @@ as_policy_base_query_init(as_policy_base* p)
 	p->max_retries = 0;
 	p->sleep_between_retries = 0;
 	p->predexp = NULL;
+	p->compress_response = false;
 }
 
 /**

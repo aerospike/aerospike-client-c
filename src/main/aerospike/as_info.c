@@ -270,7 +270,7 @@ as_info_command(
 		return status;
 	}
 	
-	status = as_proto_parse(err, &header, AS_INFO_MESSAGE_TYPE);
+	status = as_proto_parse_type(err, &header, AS_INFO_MESSAGE_TYPE);
 
 	if (status) {
 		return status;

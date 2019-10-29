@@ -17,6 +17,7 @@
 #include <aerospike/as_proto.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <string.h>
+#include <zlib.h>
 
 // Byte swap proto from current machine byte order to network byte order (big endian).
 void
@@ -54,26 +55,70 @@ as_msg_swap_header_from_be(as_msg *m)
 }
 
 as_status
-as_proto_parse(as_error* err, as_proto* proto, uint8_t expected_type)
+as_proto_version_error(as_error* err, int version)
+{
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid proto version: %d Expected: %d",
+						   version, AS_PROTO_VERSION);
+}
+
+as_status
+as_proto_type_error(as_error* err, int type, int expected)
+{
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid proto type: %d Expected: %d",
+						   type, expected);
+}
+
+as_status
+as_proto_size_error(as_error* err, size_t size)
+{
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid proto size: %zu", size);
+}
+
+as_status
+as_compressed_size_error(as_error* err, size_t size)
+{
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid compressed size: %zu", size);
+}
+
+as_status
+as_proto_parse(as_error* err, as_proto* proto)
 {
 	if (proto->version != AS_PROTO_VERSION) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-							   "Received invalid proto version: %d Expected: %d",
-							   proto->version, AS_PROTO_VERSION);
-	}
-
-	if (proto->type != expected_type) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-							   "Received invalid proto type: %d Expected: %d",
-							   proto->type, expected_type);
+		return as_proto_version_error(err, proto->version);
 	}
 
 	as_proto_swap_from_be(proto);
 
-	if (proto->sz > 128 * 1024 * 1024) { // 128 MB
+	if (proto->sz > PROTO_SIZE_MAX) {
+		return as_proto_size_error(err, (size_t)proto->sz);
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_proto_decompress(as_error* err, void* trg, size_t trg_sz, void* src, size_t src_sz)
+{
+	size_t sz = trg_sz;
+	int rv = uncompress(trg, &sz, src + sizeof(uint64_t), src_sz - sizeof(uint64_t));
+
+	if (rv != Z_OK) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Decompress failed: %d", rv);
+	}
+
+	if (sz != trg_sz) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-							   "Received invalid proto size: %" PRIu64,
-							   proto->sz);
+							   "Decompressed size %zu is not expected %zu", sz, trg_sz);
+	}
+
+	as_proto* proto = (as_proto*)trg;
+	as_proto_swap_from_be(proto);
+
+	if (! (proto->version == AS_PROTO_VERSION &&
+		   proto->type == AS_MESSAGE_TYPE &&
+		   sizeof(as_proto) + proto->sz == sz)) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+							   "Invalid decompressed proto(%d,%d,%zu,%zu)",
+							   (int)proto->version, (int)proto->type, (size_t)proto->sz, sz);
 	}
 	return AEROSPIKE_OK;
 }

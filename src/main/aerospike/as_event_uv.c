@@ -316,7 +316,7 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	if (cmd->state == AS_ASYNC_STATE_COMMAND_READ_HEADER) {
 		as_proto* proto = (as_proto*)cmd->buf;
 
-		if (! as_event_proto_parse(cmd, proto, cmd->proto_type)) {
+		if (! as_event_proto_parse(cmd, proto)) {
 			return;
 		}
 
@@ -342,6 +342,13 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 			cmd->flags |= AS_ASYNC_FLAGS_FREE_BUF;
 		}
 		return;
+	}
+	cmd->pos = 0;
+
+	if (cmd->proto_type_rcv == AS_COMPRESSED_MESSAGE_TYPE) {
+		if (! as_event_decompress(cmd)) {
+			return;
+		}
 	}
 
 	if (! cmd->parse_results(cmd)) {
@@ -1005,7 +1012,7 @@ as_uv_tls_read(as_event_command* cmd)
 				// Done reading command header.
 				as_proto* proto = (as_proto*)cmd->buf;
 
-				if (! as_event_proto_parse(cmd, proto, cmd->proto_type)) {
+				if (! as_event_proto_parse(cmd, proto)) {
 					return;
 				}
 
@@ -1036,6 +1043,14 @@ as_uv_tls_read(as_event_command* cmd)
 
 			case AS_ASYNC_STATE_COMMAND_READ_BODY: {
 				// Done reading command block.
+				cmd->pos = 0;
+
+				if (cmd->proto_type_rcv == AS_COMPRESSED_MESSAGE_TYPE) {
+					if (! as_event_decompress(cmd)) {
+						return;
+					}
+				}
+
 				if (cmd->parse_results(cmd)) {
 					// Done with command.
 					return;

@@ -558,20 +558,44 @@ as_batch_execute_records(as_batch_task_records* btr, as_command* parent)
 	size_t size = as_batch_size_records(policy, btr->records, &task->offsets, &field_count_header,
 										&pred_size, NULL);
 		
+	size_t capacity = size;
+
 	// Write command
-	uint8_t* buf = as_command_buffer_init(size);
+	uint8_t* buf = as_command_buffer_init(capacity);
 	size = as_batch_index_records_write(btr->records, &task->offsets, policy, buf,
 										field_count_header, pred_size, NULL);
 
 	as_error err;
 	as_error_init(&err);
+	as_status status;
+
+	if (policy->base.compress && size > AS_COMPRESS_THRESHOLD) {
+		// Compress command.
+		size_t comp_capacity = as_command_compress_max_size(size);
+		size_t comp_size = comp_capacity;
+		uint8_t* comp_buf = as_command_buffer_init(comp_capacity);
+		status = as_command_compress(&err, buf, size, comp_buf, &comp_size);
+		as_command_buffer_free(buf, capacity);
+
+		if (status != AEROSPIKE_OK) {
+			// Copy error to main error only once.
+			if (as_fas_uint32(task->error_mutex, 1) == 0) {
+				as_error_copy(task->err, &err);
+			}
+			as_command_buffer_free(comp_buf, comp_capacity);
+			return status;
+		}
+		capacity = comp_capacity;
+		buf = comp_buf;
+		size = comp_size;
+	}
 
 	as_command cmd;
 	as_batch_command_init(&cmd, task, policy, buf, size, parent);
 
-	as_status status = as_command_execute(&cmd, &err);
+	status = as_command_execute(&cmd, &err);
 
-	as_command_buffer_free(buf, size);
+	as_command_buffer_free(buf, capacity);
 	
 	if (status) {
 		// Copy error to main error only once.
@@ -639,7 +663,8 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_command* parent)
 	}
 
 	// Write command
-	uint8_t* buf = as_command_buffer_init(size);
+	size_t capacity = size;
+	uint8_t* buf = as_command_buffer_init(capacity);
 
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
 		policy->read_mode_sc, field_count_header, 0, btk->read_attr | AS_MSG_INFO1_BATCH_INDEX);
@@ -702,13 +727,35 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_command* parent)
 	
 	as_error err;
 	as_error_init(&err);
+	as_status status;
+
+	if (policy->base.compress && size > AS_COMPRESS_THRESHOLD) {
+		// Compress command.
+		size_t comp_capacity = as_command_compress_max_size(size);
+		size_t comp_size = comp_capacity;
+		uint8_t* comp_buf = as_command_buffer_init(comp_capacity);
+		status = as_command_compress(&err, buf, size, comp_buf, &comp_size);
+		as_command_buffer_free(buf, capacity);
+
+		if (status != AEROSPIKE_OK) {
+			// Copy error to main error only once.
+			if (as_fas_uint32(task->error_mutex, 1) == 0) {
+				as_error_copy(task->err, &err);
+			}
+			as_command_buffer_free(comp_buf, comp_capacity);
+			return status;
+		}
+		capacity = comp_capacity;
+		buf = comp_buf;
+		size = comp_size;
+	}
 
 	as_command cmd;
 	as_batch_command_init(&cmd, task, policy, buf, size, parent);
 
-	as_status status = as_command_execute(&cmd, &err);
+	status = as_command_execute(&cmd, &err);
 
-	as_command_buffer_free(buf, size);
+	as_command_buffer_free(buf, capacity);
 	
 	if (status) {
 		// Copy error to main error only once.
@@ -1075,6 +1122,39 @@ as_batch_read_execute_sync(
 	return status;
 }
 
+static inline as_event_command*
+as_batch_read_command_create(
+	as_cluster* cluster, const as_policy_batch* policy, as_node* node,
+	as_async_batch_executor* executor, size_t size, uint8_t flags
+	)
+{
+	// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
+	// fragmentation and to allow socket read to reuse buffer.
+	size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
+	as_event_command* cmd = cf_malloc(s);
+	cmd->total_deadline = policy->base.total_timeout;
+	cmd->socket_timeout = policy->base.socket_timeout;
+	cmd->max_retries = policy->base.max_retries;
+	cmd->iteration = 0;
+	cmd->replica = policy->replica;
+	cmd->event_loop = executor->executor.event_loop;
+	cmd->cluster = cluster;
+	cmd->node = node;
+	cmd->ns = NULL;
+	cmd->partition = NULL;
+	cmd->udata = executor;  // Overload udata to be the executor.
+	cmd->parse_results = as_batch_async_parse_records;
+	cmd->pipe_listener = NULL;
+	cmd->buf = ((as_async_batch_command*)cmd)->space;
+	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_batch_command));
+	cmd->type = AS_ASYNC_TYPE_BATCH;
+	cmd->proto_type = AS_MESSAGE_TYPE;
+	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
+	cmd->flags = flags;
+	cmd->flags2 = policy->deserialize ? AS_ASYNC_FLAGS2_DESERIALIZE : 0;
+	return cmd;
+}
+
 static as_status
 as_batch_read_execute_async(
 	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policy_replica replica_sc,
@@ -1102,36 +1182,44 @@ as_batch_read_execute_async(
 		size_t size = as_batch_size_records(policy, records, &batch_node->offsets,
 											&field_count_header, &pred_size, NULL);
 
-		// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
-		// fragmentation and to allow socket read to reuse buffer.
-		size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
-		as_event_command* cmd = cf_malloc(s);
-		cmd->total_deadline = policy->base.total_timeout;
-		cmd->socket_timeout = policy->base.socket_timeout;
-		cmd->max_retries = policy->base.max_retries;
-		cmd->iteration = 0;
-		cmd->replica = policy->replica;
-		cmd->event_loop = exec->event_loop;
-		cmd->cluster = cluster;
-		cmd->node = batch_node->node;
-		cmd->ns = NULL;
-		cmd->partition = NULL;
-		cmd->udata = executor;  // Overload udata to be the executor.
-		cmd->parse_results = as_batch_async_parse_records;
-		cmd->pipe_listener = NULL;
-		cmd->buf = ((as_async_batch_command*)cmd)->space;
-		cmd->write_len = (uint32_t)size;
-		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_batch_command));
-		cmd->type = AS_ASYNC_TYPE_BATCH;
-		cmd->proto_type = AS_MESSAGE_TYPE;
-		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->flags = flags;
-		cmd->flags2 = policy->deserialize ? AS_ASYNC_FLAGS2_DESERIALIZE : 0;
-		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, policy,
-														  cmd->buf, field_count_header, pred_size, NULL);
-		
-		status = as_event_command_execute(cmd, err);
-		
+		if (! (policy->base.compress && size > AS_COMPRESS_THRESHOLD)) {
+			// Send uncompressed command.
+			as_event_command* cmd = as_batch_read_command_create(cluster, policy, batch_node->node,
+				executor, size, flags);
+
+			cmd->write_len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets,
+				policy, cmd->buf, field_count_header, pred_size, NULL);
+
+			status = as_event_command_execute(cmd, err);
+		}
+		else {
+			// Send compressed command.
+			// First write uncompressed buffer.
+			size_t capacity = size;
+			uint8_t* buf = as_command_buffer_init(capacity);
+			size = as_batch_index_records_write(records, &batch_node->offsets, policy, buf,
+												field_count_header, pred_size, NULL);
+
+			// Allocate command with compressed upper bound.
+			size_t comp_size = as_command_compress_max_size(size);
+
+			as_event_command* cmd = as_batch_read_command_create(cluster, policy, batch_node->node,
+				executor, comp_size, flags);
+
+			// Compress buffer and execute.
+			status = as_command_compress(err, buf, size, cmd->buf, &comp_size);
+			as_command_buffer_free(buf, capacity);
+
+			if (status != AEROSPIKE_OK) {
+				as_event_executor_cancel(exec, i);
+				as_batch_release_nodes_cancel_async(batch_nodes, i + 1);
+				cf_free(cmd);
+				break;
+			}
+			cmd->write_len = (uint32_t)comp_size;
+			status = as_event_command_execute(cmd, err);
+		}
+
 		if (status != AEROSPIKE_OK) {
 			as_event_executor_cancel(exec, i);
 			as_batch_release_nodes_cancel_async(batch_nodes, i + 1);
@@ -1453,6 +1541,39 @@ as_batch_retry(as_command* parent, as_error* err)
 	}
 }
 
+static inline as_event_command*
+as_batch_retry_command_create(
+	as_event_command* parent, as_node* node, size_t size, uint64_t deadline
+	)
+{
+	// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
+	// fragmentation and to allow socket read to reuse buffer.
+	size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
+	as_event_command* cmd = cf_malloc(s);
+	cmd->total_deadline = deadline;
+	cmd->socket_timeout = parent->socket_timeout;
+	cmd->max_retries = parent->max_retries;
+	cmd->iteration = parent->iteration;
+	cmd->replica = parent->replica;
+	cmd->event_loop = parent->event_loop;
+	cmd->cluster = parent->cluster;
+	cmd->node = node;
+	cmd->ns = NULL;
+	cmd->partition = NULL;
+	cmd->udata = parent->udata;  // Overload udata to be the executor.
+	cmd->parse_results = parent->parse_results;
+	cmd->pipe_listener = parent->pipe_listener;
+	cmd->buf = ((as_async_batch_command*)cmd)->space;
+	cmd->write_len = (uint32_t)size;
+	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_batch_command));
+	cmd->type = AS_ASYNC_TYPE_BATCH;
+	cmd->proto_type = AS_MESSAGE_TYPE;
+	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
+	cmd->flags = parent->flags;
+	cmd->flags2 = parent->flags2;
+	return cmd;
+}
+
 int
 as_batch_retry_async(as_event_command* parent, bool timeout)
 {
@@ -1488,6 +1609,10 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 	if (read_attr & AS_MSG_INFO1_READ_MODE_AP_ALL) {
 		policy.read_mode_ap = AS_POLICY_READ_MODE_AP_ALL;
+	}
+
+	if (read_attr & AS_MSG_INFO1_COMPRESS_RESPONSE) {
+		policy.base.compress = true;
 	}
 
 	uint8_t info3 = p[11];
@@ -1650,36 +1775,43 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		size_t size = as_batch_size_records(&policy, records, &batch_node->offsets,
 											&field_count_header, &pred_size, pred_field);
 
-		// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
-		// fragmentation and to allow socket read to reuse buffer.
-		size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
-		as_event_command* cmd = cf_malloc(s);
-		cmd->total_deadline = deadline;
-		cmd->socket_timeout = parent->socket_timeout;
-		cmd->max_retries = parent->max_retries;
-		cmd->iteration = parent->iteration;
-		cmd->replica = parent->replica;
-		cmd->event_loop = parent->event_loop;
-		cmd->cluster = parent->cluster;
-		cmd->node = batch_node->node;
-		cmd->ns = NULL;
-		cmd->partition = NULL;
-		cmd->udata = parent->udata;  // Overload udata to be the executor.
-		cmd->parse_results = parent->parse_results;
-		cmd->pipe_listener = parent->pipe_listener;
-		cmd->buf = ((as_async_batch_command*)cmd)->space;
-		cmd->write_len = (uint32_t)size;
-		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_batch_command));
-		cmd->type = AS_ASYNC_TYPE_BATCH;
-		cmd->proto_type = AS_MESSAGE_TYPE;
-		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->flags = parent->flags;
-		cmd->flags2 = parent->flags2;
-		cmd->len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets, &policy,
-														  cmd->buf, field_count_header, pred_size,
-														  pred_field);
+		if (! (policy.base.compress && size > AS_COMPRESS_THRESHOLD)) {
+			as_event_command* cmd = as_batch_retry_command_create(parent, batch_node->node, size,
+									deadline);
 
-		status = as_event_command_execute(cmd, &err);
+			cmd->write_len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets,
+									&policy, cmd->buf, field_count_header, pred_size, pred_field);
+
+			status = as_event_command_execute(cmd, &err);
+		}
+		else {
+			// Send compressed command.
+			// First write uncompressed buffer.
+			size_t capacity = size;
+			uint8_t* buf = as_command_buffer_init(capacity);
+			size = as_batch_index_records_write(records, &batch_node->offsets, &policy, buf,
+									field_count_header, pred_size, pred_field);
+
+			// Allocate command with compressed upper bound.
+			size_t comp_size = as_command_compress_max_size(size);
+
+			as_event_command* cmd = as_batch_retry_command_create(parent, batch_node->node,
+									comp_size, deadline);
+
+			// Compress buffer and execute.
+			status = as_command_compress(&err, buf, size, cmd->buf, &comp_size);
+			as_command_buffer_free(buf, capacity);
+
+			if (status != AEROSPIKE_OK) {
+				as_event_executor_error(e, &err, batch_nodes.size - i);
+				as_batch_release_nodes_cancel_async(&batch_nodes, i + 1);
+				cf_free(cmd);
+				break;
+			}
+
+			cmd->write_len = (uint32_t)comp_size;
+			status = as_event_command_execute(cmd, &err);
+		}
 
 		if (status != AEROSPIKE_OK) {
 			as_event_executor_error(e, &err, batch_nodes.size - i);

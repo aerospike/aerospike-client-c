@@ -620,19 +620,19 @@ as_event_proto_parse(as_event_command* cmd, as_proto* proto)
 {
 	if (proto->version != AS_PROTO_VERSION) {
 		as_error err;
-		as_proto_version_error(&err, proto->version);
+		as_proto_version_error(&err, proto);
 		as_event_parse_error(cmd, &err);
 		return false;
 	}
 
 	if (proto->type != cmd->proto_type && proto->type != AS_COMPRESSED_MESSAGE_TYPE) {
 		as_error err;
-		as_proto_type_error(&err, proto->type, cmd->proto_type);
+		as_proto_type_error(&err, proto, cmd->proto_type);
 		as_event_parse_error(cmd, &err);
 		return false;
 	}
 
-	cmd->proto_type_rcv = proto->type;
+	cmd->proto_type_rcv = (uint8_t)proto->type;
 	as_proto_swap_from_be(proto);
 
 	if (proto->sz > PROTO_SIZE_MAX) {
@@ -649,7 +649,7 @@ as_event_proto_parse_type(as_event_command* cmd, as_proto* proto, uint8_t expect
 {
 	if (proto->type != expected_type) {
 		as_error err;
-		as_proto_type_error(&err, proto->type, expected_type);
+		as_proto_type_error(&err, proto, expected_type);
 		as_event_parse_error(cmd, &err);
 		return false;
 	}
@@ -680,7 +680,7 @@ as_event_decompress(as_event_command* cmd)
 		cf_free(cmd->buf);
 	}
 	cmd->buf = buf;
-	cmd->len = size;
+	cmd->len = (uint32_t)size;
 	cmd->pos = sizeof(as_proto);
 	cmd->read_capacity = cmd->len;
 	cmd->flags |= AS_ASYNC_FLAGS_FREE_BUF;

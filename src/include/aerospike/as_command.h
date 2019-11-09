@@ -109,6 +109,7 @@ extern "C" {
 #define AS_OPERATION_HEADER_SIZE 8
 
 #define AS_STACK_BUF_SIZE (1024 * 16)
+#define AS_COMPRESS_THRESHOLD 128
 
 /**
  * @private
@@ -142,6 +143,12 @@ local_free(void* memory)
 /******************************************************************************
  * TYPES
  *****************************************************************************/
+
+/**
+ * @private
+ * Write buffer callback used in as_command_send().
+ */
+typedef size_t (*as_write_fn) (void* udata, uint8_t* buf);
 
 /**
  * @private
@@ -261,23 +268,11 @@ as_command_string_operation_size(const char* value)
 
 /**
  * @private
- * Write command header for all commands.
- */
-uint8_t*
-as_command_write_header(
-	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
-	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
-	uint16_t n_fields, uint16_t n_bins, bool durable_delete, uint8_t read_attr, uint8_t write_attr,
-	uint8_t info_attr
-	);
-
-/**
- * @private
- * Set read attributes.
+ * Set read attributes for read header commands.
  */
 static inline void
-as_command_set_attr_read(
-	as_policy_read_mode_ap read_mode_ap, as_policy_read_mode_sc read_mode_sc, bool compress,
+as_command_set_attr_read_header(
+	as_policy_read_mode_ap read_mode_ap, as_policy_read_mode_sc read_mode_sc,
 	uint8_t* read_attr, uint8_t* info_attr
 	)
 {
@@ -302,36 +297,65 @@ as_command_set_attr_read(
 	if (read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
 		*read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
 	}
+}
 
+/**
+ * @private
+ * Set compress attributes when compress is true.
+ */
+static inline void
+as_command_set_attr_compress(bool compress, uint8_t* read_attr)
+{
 	if (compress) {
 		*read_attr |= AS_MSG_INFO1_COMPRESS_RESPONSE;
 	}
 }
+
+/**
+ * @private
+ * Set read attributes for read commands.
+ */
+static inline void
+as_command_set_attr_read(
+	as_policy_read_mode_ap read_mode_ap, as_policy_read_mode_sc read_mode_sc, bool compress,
+	uint8_t* read_attr, uint8_t* info_attr
+	)
+{
+	as_command_set_attr_read_header(read_mode_ap, read_mode_sc, read_attr, info_attr);
+	as_command_set_attr_compress(compress, read_attr);
+}
 	
 /**
  * @private
- * Write command header for read commands only.
+ * Write command header for write commands.
  */
-static inline uint8_t*
+uint8_t*
+as_command_write_header_write(
+	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
+	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
+	uint16_t n_fields, uint16_t n_bins, bool durable_delete, uint8_t read_attr, uint8_t write_attr,
+	uint8_t info_attr
+	);
+
+/**
+ * @private
+ * Write command header for read commands.
+ */
+uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, uint16_t n_fields, uint16_t n_bins, uint8_t read_attr
-	)
-{
-	uint8_t info_attr = 0;
-	as_command_set_attr_read(read_mode_ap, read_mode_sc, policy->compress_response, &read_attr,
-							 &info_attr);
+	);
 
-	cmd[8] = 22;
-	cmd[9] = read_attr;
-	cmd[10] = 0;
-	cmd[11] = info_attr;
-	memset(&cmd[12], 0, 10);
-	*(uint32_t*)&cmd[22] = cf_swap_to_be32(policy->total_timeout);
-	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
-	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);
-	return cmd + AS_HEADER_SIZE;
-}
+/**
+ * @private
+ * Write command header for read header commands.
+ */
+uint8_t*
+as_command_write_header_read_header(
+	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
+	as_policy_read_mode_sc read_mode_sc, uint16_t n_fields, uint16_t n_bins, uint8_t read_attr
+	);
 
 /**
  * @private
@@ -519,6 +543,15 @@ as_command_start_timer(as_command* cmd)
 		cmd->deadline_ms = 0;
 	}
 }
+
+/**
+ * @private
+ * Write buffer and send command to the server.
+ */
+as_status
+as_command_send(
+	as_command* cmd, as_error* err, uint32_t comp_threshold, as_write_fn write_fn, void* udata
+	);
 
 /**
  * @private

@@ -128,18 +128,18 @@ typedef struct as_proto_msg_s {
 void as_proto_swap_to_be(as_proto *m);
 void as_proto_swap_from_be(as_proto *m);
 void as_msg_swap_header_from_be(as_msg *m);
-as_status as_proto_version_error(as_error* err, int version);
-as_status as_proto_type_error(as_error* err, int type, int expected);
+as_status as_proto_version_error(as_error* err, as_proto* proto);
+as_status as_proto_type_error(as_error* err, as_proto* proto, uint8_t expected);
 as_status as_proto_size_error(as_error* err, size_t size);
 as_status as_compressed_size_error(as_error* err, size_t size);
 as_status as_proto_parse(as_error* err, as_proto* proto);
-as_status as_proto_decompress(as_error* err, void* trg, size_t trg_sz, void* src, size_t src_sz);
+as_status as_proto_decompress(as_error* err, uint8_t* trg, size_t trg_sz, uint8_t* src, size_t src_sz);
 
 static inline as_status
 as_proto_parse_type(as_error* err, as_proto* proto, uint8_t expected_type)
 {
 	if (proto->type != expected_type) {
-		return as_proto_type_error(err, proto->type, expected_type);
+		return as_proto_type_error(err, proto, expected_type);
 	}
 	return as_proto_parse(err, proto);
 }

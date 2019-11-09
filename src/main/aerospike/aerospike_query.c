@@ -712,7 +712,7 @@ as_query_command_init(
 				AS_POLICY_READ_MODE_SC_SESSION, n_fields, n_ops, read_attr);
 	}
 	else {
-		p = as_command_write_header(cmd, base_policy, write_policy->commit_level,
+		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
 				write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0, n_fields, n_ops,
 				write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}

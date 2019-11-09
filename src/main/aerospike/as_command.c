@@ -137,7 +137,7 @@ as_command_value_size(as_val* val, as_buffer* buffer)
 }
 
 uint8_t*
-as_command_write_header(
+as_command_write_header_write(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
 	uint16_t n_fields, uint16_t n_bins, bool durable_delete, uint8_t read_attr, uint8_t write_attr,
@@ -193,10 +193,6 @@ as_command_write_header(
 		write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
 	}
 
-	if (policy->compress_response) {
-		read_attr |= AS_MSG_INFO1_COMPRESS_RESPONSE;
-	}
-
 #if defined USE_XDR
 	read_attr |= AS_MSG_INFO1_XDR;
 #endif
@@ -208,6 +204,47 @@ as_command_write_header(
 	*(uint16_t*)&cmd[12] = 0;
 	*(uint32_t*)&cmd[14] = cf_swap_to_be32(generation);
 	*(uint32_t*)&cmd[18] = cf_swap_to_be32(ttl);
+	*(uint32_t*)&cmd[22] = cf_swap_to_be32(policy->total_timeout);
+	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
+	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);
+	return cmd + AS_HEADER_SIZE;
+}
+
+uint8_t*
+as_command_write_header_read(
+	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
+	as_policy_read_mode_sc read_mode_sc, uint16_t n_fields, uint16_t n_bins, uint8_t read_attr
+	)
+{
+	uint8_t info_attr = 0;
+	as_command_set_attr_read(read_mode_ap, read_mode_sc, policy->compress, &read_attr,
+							 &info_attr);
+
+	cmd[8] = 22;
+	cmd[9] = read_attr;
+	cmd[10] = 0;
+	cmd[11] = info_attr;
+	memset(&cmd[12], 0, 10);
+	*(uint32_t*)&cmd[22] = cf_swap_to_be32(policy->total_timeout);
+	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
+	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);
+	return cmd + AS_HEADER_SIZE;
+}
+
+uint8_t*
+as_command_write_header_read_header(
+	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
+	as_policy_read_mode_sc read_mode_sc, uint16_t n_fields, uint16_t n_bins, uint8_t read_attr
+	)
+{
+	uint8_t info_attr = 0;
+	as_command_set_attr_read_header(read_mode_ap, read_mode_sc, &read_attr, &info_attr);
+
+	cmd[8] = 22;
+	cmd[9] = read_attr;
+	cmd[10] = 0;
+	cmd[11] = info_attr;
+	memset(&cmd[12], 0, 10);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(policy->total_timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
 	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);
@@ -420,6 +457,39 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 	// Adjust the compressed size to include the header size
 	*compressed_size += sizeof(as_compressed_proto);
 	return AEROSPIKE_OK;
+}
+
+as_status
+as_command_send(
+	as_command* cmd, as_error* err, uint32_t comp_threshold, as_write_fn write_fn, void* udata
+	)
+{
+	size_t capacity = cmd->buf_size;
+	cmd->buf = as_command_buffer_init(capacity);
+	cmd->buf_size = write_fn(udata, cmd->buf);
+
+	if (comp_threshold > 0 && cmd->buf_size > comp_threshold) {
+		// Compress command.
+		size_t comp_capacity = as_command_compress_max_size(cmd->buf_size);
+		size_t comp_size = comp_capacity;
+		uint8_t* comp_buf = as_command_buffer_init(comp_capacity);
+		as_status status = as_command_compress(err, cmd->buf, cmd->buf_size, comp_buf, &comp_size);
+		as_command_buffer_free(cmd->buf, capacity);
+
+		if (status != AEROSPIKE_OK) {
+			as_command_buffer_free(comp_buf, comp_capacity);
+			return status;
+		}
+		capacity = comp_capacity;
+		cmd->buf = comp_buf;
+		cmd->buf_size = comp_size;
+	}
+
+	as_command_start_timer(cmd);
+
+	as_status status = as_command_execute(cmd, err);
+	as_command_buffer_free(cmd->buf, capacity);
+	return status;
 }
 
 as_status
@@ -672,7 +742,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 										   size2 - sizeof(as_proto), cmd->udata);
 		}
 		else {
-			as_proto_type_error(err, proto.type, AS_MESSAGE_TYPE);
+			as_proto_type_error(err, &proto, AS_MESSAGE_TYPE);
 			break;
 		}
 
@@ -748,7 +818,7 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 	}
 	else {
 		as_command_buffer_free(buf, size);
-		return as_proto_type_error(err, proto.type, AS_MESSAGE_TYPE);
+		return as_proto_type_error(err, &proto, AS_MESSAGE_TYPE);
 	}
 }
 

@@ -614,8 +614,6 @@ Retry:
 
 			if (remaining < cmd->total_timeout) {
 				cmd->total_timeout = (uint32_t)remaining;
-				// Reset timeout in send buffer (destined for server).
-				*(uint32_t*)(cmd->buf + 22) = cf_swap_to_be32(cmd->total_timeout);
 
 				if (cmd->socket_timeout > cmd->total_timeout) {
 					cmd->socket_timeout = cmd->total_timeout;

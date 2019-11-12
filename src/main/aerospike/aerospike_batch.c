@@ -1598,6 +1598,9 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		return 1;  // Go through normal retry.
 	}
 
+	as_status status;
+	as_error err;
+
 	// Batch policy and offsets are out of scope, so they
 	// must be parsed from the parent command's send buffer.
 	as_policy_batch policy;
@@ -1605,7 +1608,38 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	policy.replica = parent->replica;
 
 	uint8_t* p = (uint8_t*)parent + parent->write_offset;
-	uint8_t read_attr = p[9];
+	uint8_t* ubuf = NULL;
+	uint8_t type = ((as_proto*)p)->type;
+
+	if (type == AS_MESSAGE_TYPE) {
+		// Buffer already uncompressed.
+		p += 9;
+	}
+	else if (type == AS_COMPRESSED_MESSAGE_TYPE) {
+		// Uncompress. Be careful not to modify original compressed buffer.
+		uint64_t cproto = cf_swap_from_be64(*(uint64_t*)p);
+		size_t csize = (size_t)(cproto & 0xFFFFFFFFFFFFUL);
+		p += sizeof(uint64_t);
+		size_t usize = (size_t)(*(uint64_t*)p);
+		ubuf = cf_malloc(usize);
+
+		if (as_proto_decompress(&err, ubuf, usize, p, csize) != AEROSPIKE_OK) {
+			as_log_warn("Batch retry as_proto_decompress failed: %d:%s", err.code, err.message)
+			as_nodes_release(nodes);
+			cf_free(ubuf);
+			return 1;  // Go through normal retry.
+		}
+		p = ubuf + 9;
+	}
+	else {
+		as_proto_type_error(&err, (as_proto*)p, AS_MESSAGE_TYPE);
+		as_log_warn("Batch retry failed: %d:%s", err.code, err.message)
+		as_nodes_release(nodes);
+		return 1;  // Go through normal retry.
+	}
+
+	uint8_t read_attr = *p;
+	p += 2;
 
 	if (read_attr & AS_MSG_INFO1_READ_MODE_AP_ALL) {
 		policy.read_mode_ap = AS_POLICY_READ_MODE_AP_ALL;
@@ -1615,7 +1649,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		policy.base.compress = true;
 	}
 
-	uint8_t info3 = p[11];
+	uint8_t info3 = *p;
 
 	if (info3 & AS_MSG_INFO3_SC_READ_TYPE) {
 		if (info3 & AS_MSG_INFO3_SC_READ_RELAX) {
@@ -1634,7 +1668,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 	}
 
-	p += AS_HEADER_SIZE;
+	p += 19;
 	uint8_t* pred_field = p;
 	p += sizeof(uint32_t);
 	uint32_t pred_size;
@@ -1671,9 +1705,6 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
 
-	as_status status;
-	as_error err;
-
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = cf_swap_from_be32(*(uint32_t*)p);
@@ -1697,6 +1728,10 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 				as_event_stop_timer(parent);
 			}
 			as_event_error_callback(parent, &err);
+
+			if (ubuf) {
+				cf_free(ubuf);
+			}
 			return -1;  // Abort all retries.
 		}
 
@@ -1741,6 +1776,10 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		if (batch_node->node == parent->node) {
 			// Batch node is the same.  Go through normal retry.
 			as_batch_release_nodes(&batch_nodes);
+
+			if (ubuf) {
+				cf_free(ubuf);
+			}
 			return 1;  // Go through normal retry.
 		}
 	}
@@ -1757,6 +1796,10 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		else {
 			// Timeout occurred.
 			as_batch_release_nodes(&batch_nodes);
+
+			if (ubuf) {
+				cf_free(ubuf);
+			}
 			return -2;  // Timeout occurred, defer to original error.
 		}
 	}
@@ -1827,6 +1870,10 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		as_event_stop_timer(parent);
 	}
 	as_event_command_release(parent);
+
+	if (ubuf) {
+		cf_free(ubuf);
+	}
 	return 0;  // Split retry was initiated.
 }
 

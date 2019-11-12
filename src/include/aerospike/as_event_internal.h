@@ -114,7 +114,6 @@ typedef struct {
 typedef void (*as_event_executable) (as_event_loop* event_loop, void* udata);
 typedef bool (*as_event_parse_results_fn) (struct as_event_command* cmd);
 typedef void (*as_event_executor_complete_fn) (struct as_event_executor* executor);
-typedef void (*as_event_executor_destroy_fn) (struct as_event_executor* executor);
 
 typedef struct as_event_command {
 #if defined(AS_USE_LIBEV)

@@ -914,8 +914,7 @@ as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t com
 		}
 		as_event_executor_destroy(executor);
 	}
-	else if (first_error)
-	{
+	else if (first_error) {
 		// Save first error only.
 		executor->err = cf_malloc(sizeof(as_error));
 		as_error_copy(executor->err, err);

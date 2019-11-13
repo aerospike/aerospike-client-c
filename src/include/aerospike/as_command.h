@@ -495,11 +495,7 @@ as_command_compress_write_end(uint8_t* begin, uint8_t* end, uint64_t uncompresse
 	uint64_t len = end - begin;
 	uint64_t proto = (len - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_COMPRESSED_MESSAGE_TYPE << 48);
 	*(uint64_t*)begin = cf_swap_to_be64(proto);
-
-	// TODO: We are not passing this in network byte order because of a mistake
-	// in the past. Should be fixed in unison with server code.
-	((as_compressed_proto *)begin)->uncompressed_sz = uncompressed_sz;
-
+	((as_compressed_proto *)begin)->uncompressed_sz = cf_swap_to_be64(uncompressed_sz);
 	return len;
 }
 

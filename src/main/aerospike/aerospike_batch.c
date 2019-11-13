@@ -1620,7 +1620,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		uint64_t cproto = cf_swap_from_be64(*(uint64_t*)p);
 		size_t csize = (size_t)(cproto & 0xFFFFFFFFFFFFUL);
 		p += sizeof(uint64_t);
-		size_t usize = (size_t)(*(uint64_t*)p);
+		size_t usize = (size_t)cf_swap_from_be64(*(uint64_t*)p);
 		ubuf = cf_malloc(usize);
 
 		if (as_proto_decompress(&err, ubuf, usize, p, csize) != AEROSPIKE_OK) {

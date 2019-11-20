@@ -38,15 +38,16 @@ typedef struct atf_test_s atf_test;
 typedef struct atf_test_result_s atf_test_result;
 
 struct atf_test_s {
-    const char *    name;
-    const char *    desc;
-    void            (* run)(atf_test *, atf_test_result *);
+    const char* name;
+    const char* desc;
+    void (* run)(atf_test *, atf_test_result *);
 };
 
 struct atf_test_result_s {
-    atf_test *      test;
-    bool            success;
-    char            message[1024];
+    atf_test* test;
+    bool success;
+	// Pad error message with 64 bytes to account for appended test details.
+    char message[1024+64];
 };
 
 atf_test_result * atf_test_run(atf_test * test);

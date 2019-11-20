@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -36,7 +36,7 @@ static as_monitor monitor;
  *****************************************************************************/
 
 #define NS "test"
-#define SET_STRSZ 20
+#define SET_STRSZ 100
 #define NUM_RECS_SET1 100
 #define SET1 "asbs1"
 #define NUM_RECS_SET2 50
@@ -97,9 +97,10 @@ insert_data(uint32_t numrecs, const char *setname)
 	as_monitor_begin(&monitor);
 	
 	for (uint32_t i = 0; i < numrecs; i++) {
-		sprintf(strval, "str-%s-%u", setname ? setname : "noset", i);
-		sprintf(strkey, "key-%s-%u", setname, i);
-		
+		const char* sn = setname ? setname : "noset";
+		sprintf(strval, "str-%s-%d", sn, i);
+		sprintf(strkey, "key-%s-%d", sn, i);
+
 		// Map bin
         as_hashmap m;
         as_hashmap_init(&m, 8);

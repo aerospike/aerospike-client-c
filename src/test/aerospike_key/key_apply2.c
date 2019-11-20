@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -424,7 +424,7 @@ typedef struct {
 			error("(%d) %s [%s:%d]", err.code, err.message, err.file, err.line);\
 			assert(err.code != AEROSPIKE_OK);\
 		}\
-		for(uint32_t i = 0; i < kvp.vals_size && kvp.vals[i] != '\0'; i++) {\
+		for(uint32_t i = 0; i < kvp.vals_size && kvp.vals[i] != NULL; i++) {\
 			char * __val = kvp.vals[i]; \
 			__block; \
 			__val = NULL; \

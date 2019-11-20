@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -51,7 +51,7 @@ extern aerospike * as;
 #define LUA_FILE AS_START_DIR "src/test/aerospike_scan/aerospike_scan_test.lua"
 
 #define NS "test"
-#define SET_STRSZ 20
+#define SET_STRSZ 100
 #define NUM_RECS_SET1 100
 #define SET1 "sb_set1"
 #define NUM_RECS_SET2 50
@@ -340,8 +340,9 @@ static void insert_data(int numrecs, const char *setname)
 			the_ttl = 100 * 24 * 60 * 60;
 		}
 
-		sprintf(strval, "str-%s-%d", setname ? setname : "noset", i);
-		sprintf(strkey, "key-%s-%d", setname, i);
+		const char* sn = setname ? setname : "noset";
+		sprintf(strval, "str-%s-%d", sn, i);
+		sprintf(strkey, "key-%s-%d", sn, i);
 
 		// Map bin
         as_hashmap m;

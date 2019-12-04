@@ -1609,7 +1609,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 	uint8_t* p = (uint8_t*)parent + parent->write_offset;
 	uint8_t* ubuf = NULL;
-	uint8_t type = ((as_proto*)p)->type;
+	uint8_t type = (uint8_t)((as_proto*)p)->type;
 
 	if (type == AS_MESSAGE_TYPE) {
 		// Buffer already uncompressed.

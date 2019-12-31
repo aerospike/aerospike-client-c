@@ -414,7 +414,7 @@ as_scan_command_init(
 	uint16_t n_ops = (scan->ops) ? scan->ops->binops.size : scan->select.size;
 	uint8_t* p;
 	
-	if (scan->apply_each.function[0]) {
+	if (scan->apply_each.function[0] || scan->ops) {
 		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
 				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0, n_fields, n_ops,
 				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);

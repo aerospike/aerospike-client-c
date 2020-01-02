@@ -145,14 +145,14 @@ endif
 
 $(LUAMOD)/src/luaconf.h:	$(LUAMOD)/src/luaconf.h.orig
 ifeq ($(USE_LUAMOD),1)
-	(cd $(LUAMOD)/src; ln -s $(notdir $<) $(notdir $@))
+	(cd $(LUAMOD)/src; rm -f $(notdir $@); ln -s $(notdir $<) $(notdir $@))
 endif
 
 .PHONY: LUAMOD-clean
 LUAMOD-clean:
 ifeq ($(USE_LUAMOD),1)
 	$(MAKE) -e -C $(LUAMOD) clean
-	(cd $(LUAMOD)/src; $(RM) $(LUAMOD)/src/luaconf.h)
+	rm -f $(LUAMOD)/src/luaconf.h
 endif
 
 .PHONY: LUAMOD-prepare

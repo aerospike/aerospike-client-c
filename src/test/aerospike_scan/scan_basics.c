@@ -886,6 +886,43 @@ TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in backgr
 	as_scan_destroy(&scan2);
 }
 
+TEST(scan_operate, "scan operate")
+{
+	as_error err;
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	scan.ops = &ops;
+
+	uint64_t scanid = 0;
+	as_status status = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_scan_destroy(&scan);
+
+	aerospike_scan_wait(as, &err, NULL, scanid, 0);
+
+	as_key key;
+	as_key_init(&key, NS, SET2, "key-" SET2 "-5");
+	const char* bins[2] = {"foo", NULL};
+
+	as_record* rec = NULL;
+
+	status = aerospike_key_select(as, &err, NULL, &key, bins, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	char* result = as_record_get_str(rec, "foo");
+    assert_not_null(result);
+    assert_string_eq(result, "bar");
+
+	as_record_destroy(rec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -943,4 +980,5 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 	suite_add( scan_basics_background_delete_records_rec_predexp );
 	suite_add( scan_basics_background_delete_records_md_predexp );
 	suite_add( scan_basics_background_delete_records );
+	suite_add( scan_operate );
 }

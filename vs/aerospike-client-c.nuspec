@@ -6,21 +6,22 @@
     <title>Aerospike C Client</title>
     <authors>Aerospike</authors>
     <owners>Aerospike</owners>
-	<license type="expression">Apache-2.0</license>
+    <license type="expression">Apache-2.0</license>
     <projectUrl>https://www.aerospike.com/download/client/c</projectUrl>
-    <iconUrl>http://wordpress-www.s3-us-west-1.amazonaws.com/wp-content/uploads/2015/03/bryan-as.png</iconUrl>
+    <icon>icon.png</icon>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Aerospike C client library for synchronous database commands.</description>
     <copyright>Copyright 2008-2019 Aerospike, Inc.</copyright>
     <tags>Aerospike database C client native</tags>
   </metadata>
   <files>
-	<file src="aerospike-client-c.targets" target="build\native" />
+    <file src="icon.png" target="" />
+    <file src="aerospike-client-c.targets" target="build\native" />
     <file src="..\modules\common\src\include\aerospike\*.h" exclude="**\ssl_util.h" target="build\native\include\aerospike" />
     <file src="..\modules\common\src\include\citrusleaf\*.h" exclude="**\cf_crypto.h;**\cf_digest.h" target="build\native\include\citrusleaf" />
-    <file src="..\src\include\aerospike\*.h" exclude="**\as_tls.h" target="build\native\include\aerospike" />	
+    <file src="..\src\include\aerospike\*.h" exclude="**\as_tls.h" target="build\native\include\aerospike" />    
     
-	<file src="x64\Debug\aerospike.lib" target="build\native\lib\x64\Debug" />
+    <file src="x64\Debug\aerospike.lib" target="build\native\lib\x64\Debug" />
     <file src="x64\Debug\aerospike.dll" target="build\native\lib\x64\Debug" />
     <file src="x64\Debug\aerospike.pdb" target="build\native\lib\x64\Debug" />
     <file src="x64\Release\aerospike.lib" target="build\native\lib\x64\Release" />
@@ -29,8 +30,8 @@
     <file src="packages\aerospike-client-c-dependencies.*\build\native\include\pthread.h" target="build\native\include" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\include\sched.h" target="build\native\include" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\include\_ptw32.h" target="build\native\include" />
-	<file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.dll" target="build\native\lib\x64\Debug" />
-	<file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.pdb" target="build\native\lib\x64\Debug" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\lua51.dll" target="build\native\lib\x64\Debug" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\lua51.pdb" target="build\native\lib\x64\Debug" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\pthreadVC2d.lib" target="build\native\lib\x64\Debug" />
@@ -40,7 +41,7 @@
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\ssleay32.pdb" target="build\native\lib\x64\Debug" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\zlibd.dll" target="build\native\lib\x64\Debug" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\zlibd.pdb" target="build\native\lib\x64\Debug" />
-	<file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\libeay32.dll" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\libeay32.dll" target="build\native\lib\x64\Release" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\lua51.dll" target="build\native\lib\x64\Release" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\pthreadVC2.lib" target="build\native\lib\x64\Release" />
     <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\pthreadVC2.dll" target="build\native\lib\x64\Release" />

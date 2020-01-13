@@ -96,10 +96,10 @@ as_async_update_max_conns(as_cluster* cluster, bool pipe, uint32_t max_conns)
 			uint32_t limit = j < rem ? max + 1 : max;
 
 			if (pipe) {
-				node->pipe_conn_pools[j].queue.capacity = limit;
+				node->pipe_conn_pools[j].limit = limit;
 			}
 			else {
-				node->async_conn_pools[j].queue.capacity = limit;
+				node->async_conn_pools[j].limit = limit;
 			}
 		}
 	}

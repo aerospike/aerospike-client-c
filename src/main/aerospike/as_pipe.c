@@ -183,7 +183,7 @@ put_connection(as_event_command* cmd)
 	as_log_trace("Returning pipeline connection for writer %p, pipeline connection %p", cmd, conn);
 	as_async_conn_pool* pool = &cmd->node->pipe_conn_pools[cmd->event_loop->index];
 
-	if (as_queue_push_limit(&pool->queue, &conn)) {
+	if (as_async_conn_pool_push(pool, cmd->conn)) {
 		conn->in_pool = true;
 		return;
 	}
@@ -310,7 +310,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	// tends to open very few connections, which isn't good for write parallelism on the
 	// server. The server processes all commands from the same connection sequentially.
 	// More connections thus mean more parallelism.
-	if (pool->queue.total >= pool->queue.capacity) {
+	if (pool->queue.total >= pool->limit) {
 		while (as_queue_pop(&pool->queue, &conn)) {
 			as_log_trace("Checking pipeline connection %p", conn);
 
@@ -348,7 +348,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	// Create connection structure only when node connection count within limit.
 	as_log_trace("Creating new pipeline connection");
 
-	if (as_queue_incr_total(&pool->queue)) {
+	if (as_async_conn_pool_incr_total(pool)) {
 		conn = cf_malloc(sizeof(as_pipe_connection));
 		assert(conn != NULL);
 
@@ -380,7 +380,7 @@ as_pipe_get_connection(as_event_command* cmd)
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
 					"Max node/event loop %s pipeline connections would be exceeded: %u",
-					cmd->node->name, pool->queue.capacity);
+					cmd->node->name, pool->limit);
 
 	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
 		as_event_stop_timer(cmd);

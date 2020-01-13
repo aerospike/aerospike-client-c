@@ -701,6 +701,34 @@ as_event_set_write(as_event_command* cmd)
 	cmd->pos = 0;
 }
 
+static inline bool
+as_async_conn_pool_incr_total(as_async_conn_pool* pool)
+{
+	if (pool->queue.total >= pool->limit) {
+		return false;
+	}
+	pool->queue.total++;
+	return true;
+}
+
+static inline bool
+as_async_conn_pool_push_head(as_async_conn_pool* pool, as_event_connection* conn)
+{
+	if (pool->queue.total > pool->limit) {
+		return false;
+	}
+	return as_queue_push_head(&pool->queue, &conn);
+}
+
+static inline bool
+as_async_conn_pool_push(as_async_conn_pool* pool, as_event_connection* conn)
+{
+	if (pool->queue.total > pool->limit) {
+		return false;
+	}
+	return as_queue_push(&pool->queue, &conn);
+}
+
 static inline void
 as_event_release_connection(as_event_connection* conn, as_async_conn_pool* pool)
 {

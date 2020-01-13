@@ -172,6 +172,12 @@ typedef struct as_async_conn_pool_s {
 
 	/**
 	 * @private
+	 * Max connections allowed for this pool.
+	 */
+	uint32_t limit;
+
+	/**
+	 * @private
 	 * Total async connections opened.
 	 */
 	uint32_t opened;

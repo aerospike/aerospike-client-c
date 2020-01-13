@@ -582,7 +582,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 	}
 
 	// Create connection structure only when node connection count within queue limit.
-	if (as_queue_incr_total(&pool->queue)) {
+	if (as_async_conn_pool_incr_total(pool)) {
 		conn = cf_malloc(sizeof(as_async_connection));
 		conn->base.pipeline = false;
 		conn->base.watching = 0;
@@ -603,7 +603,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_NO_MORE_CONNECTIONS,
 					"Max node/event loop %s async connections would be exceeded: %u",
-					cmd->node->name, pool->queue.capacity);
+					cmd->node->name, pool->limit);
 
 	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
 		as_event_stop_timer(cmd);
@@ -834,7 +834,7 @@ as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 {
 	as_event_set_conn_last_used(cmd->conn);
 
-	if (! as_queue_push_head_limit(&pool->queue, &cmd->conn)) {
+	if (! as_async_conn_pool_push_head(pool, cmd->conn)) {
 		as_event_release_connection(cmd->conn, pool);
 	}
 }

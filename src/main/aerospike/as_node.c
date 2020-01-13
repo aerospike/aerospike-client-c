@@ -73,6 +73,7 @@ as_node_create_async_pools(uint32_t max_conns_per_node)
 		as_async_conn_pool* pool = &pools[i];
 		uint32_t capacity = i < rem ? max + 1 : max;
 		as_queue_init(&pool->queue, sizeof(void*), capacity);
+		pool->limit = capacity;
 		pool->opened = 0;
 		pool->closed = 0;
 	}

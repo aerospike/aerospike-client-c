@@ -495,8 +495,6 @@ as_batch_get_node(
 
 	as_node* node = as_partition_get_node(cluster, pi.ns, pi.partition, replica, master, is_retry);
 
-	as_cluster_release_partitions(cluster);
-
 	if (! node) {
 		*node_pp = NULL;
 		return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE, "Node not found for partition %s:%u",

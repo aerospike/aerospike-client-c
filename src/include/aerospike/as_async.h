@@ -104,7 +104,7 @@ as_async_write_command_create(
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = flags;
-	cmd->flags2 = cluster->shm_info ? 0 : AS_ASYNC_FLAGS2_RELEASE_PARTITIONS;
+	cmd->flags2 = 0;
 	wcmd->listener = listener;
 	return cmd;
 }
@@ -142,7 +142,7 @@ as_async_record_command_create(
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = flags;
-	cmd->flags2 = cluster->shm_info ? 0 : AS_ASYNC_FLAGS2_RELEASE_PARTITIONS;
+	cmd->flags2 = 0;
 	if (deserialize) {
 		cmd->flags2 |= AS_ASYNC_FLAGS2_DESERIALIZE;
 	}
@@ -183,7 +183,7 @@ as_async_value_command_create(
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = flags;
-	cmd->flags2 = cluster->shm_info ? 0 : AS_ASYNC_FLAGS2_RELEASE_PARTITIONS;
+	cmd->flags2 = 0;
 	vcmd->listener = listener;
 	return cmd;
 }

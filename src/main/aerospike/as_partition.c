@@ -50,21 +50,13 @@ void
 as_partition_tables_print(as_partition_tables* tables)
 {
 	for (uint32_t i = 0; i < tables->size; i++) {
-		as_partition_table* table = tables->array[i];
+		as_partition_table* table = tables->tables[i];
 		
 		printf("Namespace: %s\n", table->ns);
 		as_partition_table_print(table);
 	}
 }
 */
-
-static inline void
-set_partition_tables(as_cluster* cluster, as_partition_tables* tables)
-{
-	// Volatile write used so other threads can see node changes.
-	as_fence_store();
-	as_store_ptr(&cluster->partition_tables, tables);
-}
 
 static inline void
 set_node(as_node** trg, as_node* src)
@@ -79,9 +71,8 @@ as_partition_table_create(const char* ns, uint32_t capacity, bool sc_mode)
 	size_t len = sizeof(as_partition_table) + (sizeof(as_partition) * capacity);
 	as_partition_table* table = cf_malloc(len);
 	memset(table, 0, len);
-	table->ref_count = 1;
-	table->size = capacity;
 	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
+	table->size = capacity;
 	table->sc_mode = sc_mode;
 	return table;
 }
@@ -103,47 +94,14 @@ as_partition_table_destroy(as_partition_table* table)
 	cf_free(table);
 }
 
-static inline void
-as_partition_table_reserve(as_partition_table** table)
-{
-	as_partition_table* pt = (as_partition_table*)as_load_ptr(table);
-	as_incr_uint32(&pt->ref_count);
-}
-
-static inline void
-as_partition_table_release(as_partition_table* table)
-{
-	if (as_aaf_uint32(&table->ref_count, -1) == 0) {
-		as_partition_table_destroy(table);
-	}
-}
-
-as_partition_tables*
-as_partition_tables_create(uint32_t capacity)
-{
-	size_t size = sizeof(as_partition_tables) + (sizeof(as_partition_table*) * capacity);
-	as_partition_tables* tables = cf_malloc(size);
-	memset(tables, 0, size);
-	tables->ref_count = 1;
-	tables->size = capacity;
-	return tables;
-}
-
 void
 as_partition_tables_destroy(as_partition_tables* tables)
 {
-	for (uint32_t i = 0; i < tables->size; i++) {
-		as_partition_table_release(tables->array[i]);
-	}
-	cf_free(tables);
-}
+	uint32_t max = as_load_uint32(&tables->size);
 
-static inline as_partition_tables*
-as_partition_tables_reserve(as_cluster* cluster)
-{
-	as_partition_tables* tables = (as_partition_tables*)as_load_ptr(&cluster->partition_tables);
-	as_incr_uint32(&tables->ref_count);
-	return tables;
+	for (uint32_t i = 0; i < max; i++) {
+		as_partition_table_destroy(tables->tables[i]);
+	}
 }
 
 static inline as_node*
@@ -316,17 +274,9 @@ as_partition_info_init(as_partition_info* pi, as_cluster* cluster, as_error* err
 		pi->sc_mode = table->sc_mode;
 	}
 	else {
-		// Partition tables array size does not currently change after first cluster tend.
-		// Also, there is a one second delayed garbage collection coupled with as_partition_tables_get()
-		// being very fast.  Reference counting the tables array is not currently necessary, but do it
-		// anyway in case the server starts supporting dynamic namespaces.
-		//
-		// Note: as_partition_tables must be released when done with partition.
-		as_partition_tables* tables = as_partition_tables_reserve(cluster);
-		as_partition_table* table = as_partition_tables_get(tables, key->ns);
+		as_partition_table* table = as_partition_tables_get(&cluster->partition_tables, key->ns);
 
 		if (! table) {
-			as_partition_tables_release(tables);
 			as_nodes* nodes = as_nodes_reserve(cluster);
 			uint32_t n_nodes = nodes->size;
 			as_nodes_release(nodes);
@@ -347,16 +297,16 @@ as_partition_info_init(as_partition_info* pi, as_cluster* cluster, as_error* err
 as_partition_table*
 as_partition_tables_get(as_partition_tables* tables, const char* ns)
 {
-	as_partition_table* table;
+	uint32_t max = as_load_uint32(&tables->size);
 	
-	for (uint32_t i = 0; i < tables->size; i++) {
-		table = tables->array[i];
-		
+	for (uint32_t i = 0; i < max; i++) {
+		as_partition_table* table = tables->tables[i];
+
 		if (strcmp(table->ns, ns) == 0) {
 			return table;
 		}
 	}
-	return 0;
+	return NULL;
 }
 
 bool
@@ -366,7 +316,7 @@ as_partition_tables_find_node(as_partition_tables* tables, as_node* node)
 	as_partition* p;
 	
 	for (uint32_t i = 0; i < tables->size; i++) {
-		table = tables->array[i];
+		table = tables->tables[i];
 		
 		for (uint32_t j = 0; j < table->size; j++) {
 			p = &table->partitions[j];
@@ -384,21 +334,6 @@ static inline void
 force_replicas_refresh(as_node* node)
 {
 	node->partition_generation = (uint32_t)-1;
-}
-
-static as_partition_table*
-as_partition_vector_get(as_vector* tables, const char* ns)
-{
-	as_partition_table* table;
-	
-	for (uint32_t i = 0; i < tables->size; i++) {
-		table = as_vector_get_ptr(tables, i);
-		
-		if (strcmp(table->ns, ns) == 0) {
-			return table;
-		}
-	}
-	return 0;
 }
 
 static void
@@ -465,44 +400,6 @@ decode_and_update(
 	}
 }
 
-static void
-release_partition_tables(as_partition_tables* tables)
-{
-	as_partition_tables_release(tables);
-}
-
-static void
-as_partition_tables_copy_add(
-	as_cluster* cluster, as_partition_tables* tables_old,
-	as_vector* /* <as_partition_table*> */ tables_to_add)
-{
-	// Increment reference count on old partition tables.
-	for (uint32_t i = 0; i < tables_old->size; i++) {
-		as_partition_table_reserve(&tables_old->array[i]);
-	}
-
-	// Create new tables array.
-	as_partition_tables* tables_new =
-		as_partition_tables_create(tables_old->size + tables_to_add->size);
-	
-	// Add existing tables.
-	memcpy(tables_new->array, tables_old->array, sizeof(as_partition_table*) * tables_old->size);
-	
-	// Add new tables.
-	memcpy(&tables_new->array[tables_old->size], tables_to_add->list,
-		   sizeof(as_partition_table*) * tables_to_add->size);
-
-
-	// Replace tables with copy.
-	set_partition_tables(cluster, tables_new);
-	
-	// Put old tables on garbage collector stack.
-	as_gc_item item;
-	item.data = tables_old;
-	item.release_fn = (as_release_fn)release_partition_tables;
-	as_vector_append(cluster->gc, &item);
-}
-
 bool
 as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bool has_regime)
 {
@@ -510,7 +407,7 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 	// Receive format: replicas-all\t or replicas\t
 	//              <ns1>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;
 	//              <ns2>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;\n
-	as_partition_tables* tables = cluster->partition_tables;
+	as_partition_tables* tables = &cluster->partition_tables;
 	uint32_t bitmap_size = (cluster->n_partitions + 7) / 8;
 	long expected_len = (long)cf_b64_encoded_len(bitmap_size);
 
@@ -521,10 +418,6 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 	uint32_t regime = 0;
 	bool regime_error = false;
 
-	// Add all tables at once to avoid copying entire array multiple times.
-	as_vector tables_to_add;
-	as_vector_inita(&tables_to_add, sizeof(as_partition_table*), 16);
-
 	while (*p) {
 		if (*p == ':') {
 			// Parse namespace.
@@ -533,7 +426,6 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 			
 			if (len <= 0 || len >= 32) {
 				as_log_error("Partition update. Invalid partition namespace %s", ns);
-				as_vector_destroy(&tables_to_add);
 				return false;
 			}
 			begin = ++p;
@@ -579,7 +471,6 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 					as_log_error(
 						"Partition update. unexpected partition map encoded length %" PRId64 " for namespace %s",
 						len, ns);
-					as_vector_destroy(&tables_to_add);
 					return false;
 				}
 				
@@ -595,20 +486,28 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 					}
 					else {
 						as_partition_table* table = as_partition_tables_get(tables, ns);
-						
-						if (! table) {
-							table = as_partition_vector_get(&tables_to_add, ns);
-							
-							if (! table) {
-								table = as_partition_table_create(ns, cluster->n_partitions,
-																  regime != 0);
-								as_vector_append(&tables_to_add, &table);
+						bool create = !table;
+
+						if (create) {
+							if (tables->size >= AS_MAX_NAMESPACES) {
+								as_log_error("Partition update. Max namespaces exceeded %u",
+											 AS_MAX_NAMESPACES);
+								return false;
 							}
+
+							table = as_partition_table_create(ns, cluster->n_partitions,
+															  regime != 0);
 						}
 						
 						// Decode partition bitmap and update client's view.
 						decode_and_update(begin, (uint32_t)len, table, node, master, regime,
 										  &regime_error);
+
+						if (create) {
+							tables->tables[tables->size] = table;
+							as_fence_store();
+							tables->size++;
+						}
 					}
 				}
 			}
@@ -618,11 +517,5 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 			p++;
 		}
 	}
-	
-	if (tables_to_add.size > 0) {
-		// Make shallow copy of map and add new tables.
-		as_partition_tables_copy_add(cluster, tables, &tables_to_add);
-	}
-	as_vector_destroy(&tables_to_add);
 	return true;
 }

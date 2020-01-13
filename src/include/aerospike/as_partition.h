@@ -29,6 +29,11 @@ extern "C" {
  *****************************************************************************/
 
 /**
+ * Maximum number of namespaces allowed.
+ */
+#define AS_MAX_NAMESPACES 32
+
+/**
  * Maximum namespace size including null byte.  Effective maximum length is 31.
  */
 #define AS_MAX_NAMESPACE_SIZE 32
@@ -58,22 +63,20 @@ typedef struct as_partition_s {
  * Map of namespace to data partitions.
  */
 typedef struct as_partition_table_s {
-	uint32_t ref_count;
-	uint32_t size;
 	char ns[AS_MAX_NAMESPACE_SIZE];
+	uint32_t size;
 	bool sc_mode;
-	char pad[7];
+	char pad[3];
 	as_partition partitions[];
 } as_partition_table;
 
 /**
  * @private
- * Reference counted array of partition table pointers.
+ * Array of partition table pointers.
  */
 typedef struct as_partition_tables_s {
-	uint32_t ref_count;
+	as_partition_table* tables[AS_MAX_NAMESPACES];
 	uint32_t size;
-	as_partition_table* array[];
 } as_partition_tables;
 
 /**
@@ -93,29 +96,10 @@ typedef struct as_partition_info_s {
 
 /**
  * @private
- * Create reference counted structure containing partition tables.
- */
-as_partition_tables*
-as_partition_tables_create(uint32_t capacity);
-
-/**
- * @private
  * Destroy partition tables.
  */
 void
 as_partition_tables_destroy(as_partition_tables* tables);
-
-/**
- * @private
- * Release reference counted access to partition tables.
- */
-static inline void
-as_partition_tables_release(as_partition_tables* tables)
-{
-	if (as_aaf_uint32(&tables->ref_count, -1) == 0) {
-		as_partition_tables_destroy(tables);
-	}
-}
 
 /**
  * @private

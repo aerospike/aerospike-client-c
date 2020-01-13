@@ -378,10 +378,6 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 			if (cmd->node) {
 				as_node_release(cmd->node);
 			}
-
-			if (cmd->flags2 & AS_ASYNC_FLAGS2_RELEASE_PARTITIONS) {
-				as_partition_tables_release(cmd->cluster->partition_tables);
-			}
 			cf_free(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
 		}
@@ -1260,10 +1256,6 @@ as_event_command_free(as_event_command* cmd)
 
 	if (cmd->node) {
 		as_node_release(cmd->node);
-	}
-
-	if (cmd->flags2 & AS_ASYNC_FLAGS2_RELEASE_PARTITIONS) {
-		as_partition_tables_release(cmd->cluster->partition_tables);
 	}
 
 	if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {

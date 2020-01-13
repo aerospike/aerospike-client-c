@@ -219,7 +219,6 @@ aerospike_key_get(
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
 				policy->read_mode_sc, buf, size, &pi, as_command_parse_result, &data);
 
-	as_cluster_release_partitions(cluster);
 	as_command_buffer_free(buf, size);
 	return status;
 }
@@ -310,7 +309,6 @@ aerospike_key_select(
 		status = as_command_bin_name_size(err, bins[nvalues], &size);
 		
 		if (status != AEROSPIKE_OK) {
-			as_cluster_release_partitions(cluster);
 			return status;
 		}
 	}
@@ -337,7 +335,6 @@ aerospike_key_select(
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
 				policy->read_mode_sc, buf, size, &pi, as_command_parse_result, &data);
 
-	as_cluster_release_partitions(cluster);
 	as_command_buffer_free(buf, size);
 	return status;
 }
@@ -378,7 +375,6 @@ aerospike_key_select_async(
 		status = as_command_bin_name_size(err, bins[nvalues], &size);
 		
 		if (status != AEROSPIKE_OK) {
-			as_cluster_release_partitions(cluster);
 			return status;
 		}
 	}
@@ -449,7 +445,6 @@ aerospike_key_exists(
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
 				policy->read_mode_sc, buf, size, &pi, as_command_parse_header, rec);
 
-	as_cluster_release_partitions(cluster);
 	as_command_buffer_free(buf, size);
 
 	if (status != AEROSPIKE_OK && rec) {
@@ -616,7 +611,6 @@ aerospike_key_put(
 						  as_command_parse_header, NULL);
 
 	status = as_command_send(&cmd, err, compression_threshold, as_put_write, &put);
-	as_cluster_release_partitions(cluster);
 	return status;
 }
 
@@ -700,7 +694,6 @@ aerospike_key_put_async_ex(
 			return as_event_command_execute(cmd, err);
 		}
 		else {
-			as_cluster_release_partitions(cluster);
 			cf_free(cmd);
 			return status;
 		}
@@ -767,7 +760,6 @@ aerospike_key_remove(
 	as_command_start_timer(&cmd);
 	status = as_command_execute(&cmd, err);
 
-	as_cluster_release_partitions(cluster);
 	as_command_buffer_free(buf, size);
 	return status;
 }
@@ -1016,7 +1008,6 @@ aerospike_key_operate(
 
 	status = as_command_send(&cmd, err, compression_threshold, as_operate_write, &oper);
 
-	as_cluster_release_partitions(cluster);
 	return status;
 }
 
@@ -1101,7 +1092,6 @@ aerospike_key_operate_async(
 		as_command_buffer_free(buf, capacity);
 
 		if (status != AEROSPIKE_OK) {
-			as_cluster_release_partitions(cluster);
 			cf_free(cmd);
 			return status;
 		}
@@ -1213,7 +1203,6 @@ aerospike_key_apply(
 
 	status = as_command_send(&cmd, err, compression_threshold, as_apply_write, &ap);
 
-	as_cluster_release_partitions(cluster);
 	as_buffer_destroy(&ap.args);
 	as_serializer_destroy(&ap.ser);
 	return status;
@@ -1276,7 +1265,6 @@ aerospike_key_apply_async(
 		as_command_buffer_free(buf, capacity);
 
 		if (status != AEROSPIKE_OK) {
-			as_cluster_release_partitions(cluster);
 			cf_free(cmd);
 			return status;
 		}

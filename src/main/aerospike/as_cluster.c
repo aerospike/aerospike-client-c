@@ -262,7 +262,7 @@ as_cluster_find_node_in_map(as_cluster* cluster, as_node* node)
 	if (cluster->shm_info) {
 		return as_shm_partition_tables_find_node(cluster->shm_info->cluster_shm, node);
 	}
-	return as_partition_tables_find_node(cluster->partition_tables, node);
+	return as_partition_tables_find_node(&cluster->partition_tables, node);
 }
 
 static void
@@ -1060,10 +1060,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 	// Initialize empty nodes.
 	cluster->nodes = as_nodes_create(0);
-	
-	// Initialize empty partition tables.
-	cluster->partition_tables = as_partition_tables_create(0);
-	
+
 	// Initialize garbage collection array.
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
 	
@@ -1173,8 +1170,8 @@ as_cluster_destroy(as_cluster* cluster)
 	as_cluster_gc(cluster->gc);
 	as_vector_destroy(cluster->gc);
 		
-	// Release partition tables.
-	as_partition_tables_release(cluster->partition_tables);
+	// Destroy partition tables.
+	as_partition_tables_destroy(&cluster->partition_tables);
 
 	// Release nodes.
 	as_nodes* nodes = cluster->nodes;

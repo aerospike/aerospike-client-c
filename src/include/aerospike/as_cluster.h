@@ -93,8 +93,8 @@ typedef struct as_cluster_s {
 	 * @private
 	 * Hints for best node for a partition.
 	 */
-	as_partition_tables* partition_tables;
-		
+	as_partition_tables partition_tables;
+
 	/**
 	 * @private
 	 * Nodes to be garbage collected.
@@ -395,18 +395,6 @@ as_node_get_random(as_cluster* cluster);
  */
 AS_EXTERN as_node*
 as_node_get_by_name(as_cluster* cluster, const char* name);
-
-/**
- * @private
- * Release partition only if not using shared memory.
- */
-static inline void
-as_cluster_release_partitions(as_cluster* cluster)
-{
-	if (! cluster->shm_info) {
-		as_partition_tables_release(cluster->partition_tables);
-	}
-}
 
 /**
  * @private

@@ -198,10 +198,9 @@ create_threaddata(clientdata* cdata, uint64_t key_start, uint64_t n_keys)
 	as_record_init(&tdata->rec, cdata->numbins);
 	for (int i = 0; i < cdata->numbins; i++) {
 		tdata->rec.bins.entries[i].valuep = NULL;
+		as_val_reserve(cdata->fixed_value);
 	}
 	tdata->rec.bins.size = cdata->numbins;
-	
-	as_val_reserve(cdata->fixed_value);
 	return tdata;
 }
 

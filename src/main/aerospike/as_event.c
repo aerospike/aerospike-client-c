@@ -641,15 +641,31 @@ as_event_proto_parse(as_event_command* cmd, as_proto* proto)
 }
 
 bool
-as_event_proto_parse_type(as_event_command* cmd, as_proto* proto, uint8_t expected_type)
+as_event_proto_parse_auth(as_event_command* cmd, as_proto* proto)
 {
-	if (proto->type != expected_type) {
+	if (proto->version != AS_PROTO_VERSION) {
 		as_error err;
-		as_proto_type_error(&err, proto, expected_type);
+		as_proto_version_error(&err, proto);
 		as_event_parse_error(cmd, &err);
 		return false;
 	}
-	return as_event_proto_parse(cmd, proto);
+
+	if (proto->type != AS_ADMIN_MESSAGE_TYPE) {
+		as_error err;
+		as_proto_type_error(&err, proto, cmd->proto_type);
+		as_event_parse_error(cmd, &err);
+		return false;
+	}
+
+	as_proto_swap_from_be(proto);
+
+	if (proto->sz > PROTO_SIZE_MAX) {
+		as_error err;
+		as_proto_size_error(&err, (size_t)proto->sz);
+		as_event_parse_error(cmd, &err);
+		return false;
+	}
+	return true;
 }
 
 bool

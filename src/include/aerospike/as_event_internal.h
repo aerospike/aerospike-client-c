@@ -188,7 +188,7 @@ bool
 as_event_proto_parse(as_event_command* cmd, as_proto* proto);
 
 bool
-as_event_proto_parse_type(as_event_command* cmd, as_proto* proto, uint8_t expected_type);
+as_event_proto_parse_auth(as_event_command* cmd, as_proto* proto);
 
 bool
 as_event_decompress(as_event_command* cmd);
@@ -684,7 +684,7 @@ as_event_set_auth_parse_header(as_event_command* cmd)
 	// Authenticate read buffer uses the standard read buffer (buf).
 	as_proto* proto = (as_proto*)cmd->buf;
 
-	if (! as_event_proto_parse_type(cmd, proto, AS_ADMIN_MESSAGE_TYPE)) {
+	if (! as_event_proto_parse_auth(cmd, proto)) {
 		return false;
 	}
 

@@ -29,9 +29,10 @@ extern "C" {
  *****************************************************************************/
 
 /**
- * Maximum number of namespaces allowed.
+ * If the server removes then adds namespaces, the client may contain more
+ * than the server max of 32.
  */
-#define AS_MAX_NAMESPACES 32
+#define AS_MAX_NAMESPACES 128
 
 /**
  * Maximum namespace size including null byte.  Effective maximum length is 31.

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2019 by Aerospike.
+ * Copyright 2008-2020 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -48,6 +48,10 @@ static struct option long_options[] = {
 	{"workload",             required_argument, 0, 'w'},
 	{"threads",              required_argument, 0, 'z'},
 	{"throughput",           required_argument, 0, 'g'},
+	{"batchSize",            required_argument, 0, 1000},
+	{"socketTimeout",        required_argument, 0, 1001},
+	{"readSocketTimeout",    required_argument, 0, 1002},
+	{"writeSocketTimeout",   required_argument, 0, 1003},
 	{"timeout",              required_argument, 0, 'T'},
 	{"readTimeout",          required_argument, 0, 'X'},
 	{"writeTimeout",         required_argument, 0, 'V'},
@@ -178,16 +182,33 @@ print_usage(const char* program)
 	blog_line("   Used in read/write mode only.");
 	blog_line("");
 
+	blog_line("--batchSize <size> # Default: 0");
+	blog_line("   Enable batch mode with number of records to process in each batch get call.");
+	blog_line("   Batch mode is valid only for RU (read update) workloads. Batch mode is disabled by default.");
+	blog_line("");
+
+	blog_line("   --socketTimeout <ms> # Default: 30000");
+	blog_line("   Read/Write socket timeout in milliseconds.");
+	blog_line("");
+	
+	blog_line("   --readSocketTimeout <ms> # Default: 30000");
+	blog_line("   Read socket timeout in milliseconds.");
+	blog_line("");
+	
+	blog_line("   --writeSocketTimeout <ms> # Default: 30000");
+	blog_line("   Write socket timeout in milliseconds.");
+	blog_line("");
+
 	blog_line("-T --timeout <ms>    # Default: 0");
-	blog_line("   Read/Write timeout in milliseconds.");
+	blog_line("   Read/Write total timeout in milliseconds.");
 	blog_line("");
 	
 	blog_line("   --readTimeout <ms> # Default: 0");
-	blog_line("   Read timeout in milliseconds.");
+	blog_line("   Read total timeout in milliseconds.");
 	blog_line("");
 	
 	blog_line("   --writeTimeout <ms> # Default: 0");
-	blog_line("   Write timeout in milliseconds.");
+	blog_line("   Write total timeout in milliseconds.");
 	blog_line("");
 	
 	blog_line("   --maxRetries <number> # Default: 1");
@@ -392,8 +413,12 @@ print_args(arguments* args)
 	else {
 		blog_line("max throughput:         unlimited", args->throughput);
 	}
-	blog_line("read timeout:           %d ms", args->read_timeout);
-	blog_line("write timeout:          %d ms", args->write_timeout);
+
+	blog_line("batch size:             %d", args->batch_size);
+	blog_line("read socket timeout:    %d ms", args->read_socket_timeout);
+	blog_line("write socket timeout:   %d ms", args->write_socket_timeout);
+	blog_line("read total timeout:     %d ms", args->read_total_timeout);
+	blog_line("write total timeout:    %d ms", args->write_total_timeout);
 	blog_line("max retries:            %d", args->max_retries);
 	blog_line("debug:                  %s", boolstring(args->debug));
 	
@@ -537,14 +562,24 @@ validate_args(arguments* args)
 		blog_line("Invalid number of threads: %d  Valid values: [1-10000]", args->threads);
 		return 1;
 	}
-	
-	if (args->read_timeout < 0) {
-		blog_line("Invalid read timeout: %d  Valid values: [>= 0]", args->read_timeout);
+
+	if (args->read_socket_timeout < 0) {
+		blog_line("Invalid read socket timeout: %d  Valid values: [>= 0]", args->read_socket_timeout);
 		return 1;
 	}
 	
-	if (args->read_timeout < 0) {
-		blog_line("Invalid write timeout: %d  Valid values: [>= 0]", args->write_timeout);
+	if (args->write_socket_timeout < 0) {
+		blog_line("Invalid write socket timeout: %d  Valid values: [>= 0]", args->write_socket_timeout);
+		return 1;
+	}
+
+	if (args->read_total_timeout < 0) {
+		blog_line("Invalid read total timeout: %d  Valid values: [>= 0]", args->read_total_timeout);
+		return 1;
+	}
+	
+	if (args->write_total_timeout < 0) {
+		blog_line("Invalid write total timeout: %d  Valid values: [>= 0]", args->write_total_timeout);
 		return 1;
 	}
 	
@@ -696,17 +731,34 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->throughput = atoi(optarg);
 				break;
 
+			case 1000:
+				args->batch_size = atoi(optarg);
+				break;
+
+			case 1001:
+				args->read_socket_timeout = atoi(optarg);
+				args->write_socket_timeout = args->read_socket_timeout;
+				break;
+
+			case 1002:
+				args->read_socket_timeout = atoi(optarg);
+				break;
+
+			case 1003:
+				args->write_socket_timeout = atoi(optarg);
+				break;
+
 			case 'T':
-				args->read_timeout = atoi(optarg);
-				args->write_timeout = args->read_timeout;
+				args->read_total_timeout = atoi(optarg);
+				args->write_total_timeout = args->read_total_timeout;
 				break;
 				
 			case 'X':
-				args->read_timeout = atoi(optarg);
+				args->read_total_timeout = atoi(optarg);
 				break;
 				
 			case 'V':
-				args->write_timeout = atoi(optarg);
+				args->write_total_timeout = atoi(optarg);
 				break;
 
 			case 'r':
@@ -907,9 +959,12 @@ main(int argc, char * const * argv)
 	args.del_bin = false;
 	args.threads = 16;
 	args.throughput = 0;
-	args.read_timeout = 0;
-	args.write_timeout = 0;
-	args.max_retries = 1;
+	args.batch_size = 0;
+	args.read_socket_timeout = 30000;
+	args.write_socket_timeout = 30000;
+	args.read_total_timeout = 0;
+	args.write_total_timeout = 0;
+	args.max_retries = 2;
 	args.debug = false;
 	args.latency = false;
 	args.latency_columns = 4;

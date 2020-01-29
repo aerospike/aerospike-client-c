@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2020 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -20,6 +20,7 @@
  * IN THE SOFTWARE.
  ******************************************************************************/
 #include "benchmark.h"
+#include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_hashmap.h>
@@ -208,6 +209,16 @@ void
 destroy_threaddata(threaddata* tdata)
 {
 	as_key_destroy(&tdata->key);
+
+	// Only decrement ref count on null bin entries.
+	// Non-null bin entries references are decremented
+	// in as_record_destroy().
+	clientdata* cdata = tdata->cdata;
+	for (int i = 0; i < cdata->numbins; i++) {
+		if (tdata->rec.bins.entries[i].valuep == NULL) {
+			as_val_destroy(cdata->fixed_value);
+		}
+	}
 	as_record_destroy(&tdata->rec);
 	free(tdata->buffer);
 	free(tdata);
@@ -363,34 +374,35 @@ write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key)
 }
 
 int
-read_record_sync(uint64_t keyval, clientdata* data)
+read_record_sync(clientdata* cdata, threaddata* tdata)
 {
+	uint64_t keyval = as_random_next_uint64(tdata->random) % cdata->n_keys + cdata->key_start;
 	as_key key;
-	as_key_init_int64(&key, data->namespace, data->set, keyval);
+	as_key_init_int64(&key, cdata->namespace, cdata->set, keyval);
 	
 	as_record* rec = 0;
 	as_status status;
 	as_error err;
 	
-	if (data->latency) {
+	if (cdata->latency) {
 		uint64_t begin = cf_getms();
-		status = aerospike_key_get(&data->client, &err, 0, &key, &rec);
+		status = aerospike_key_get(&cdata->client, &err, 0, &key, &rec);
 		uint64_t end = cf_getms();
 		
 		// Record may not have been initialized, so not found is ok.
 		if (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			as_incr_uint32(&data->read_count);
-			latency_add(&data->read_latency, end - begin);
+			as_incr_uint32(&cdata->read_count);
+			latency_add(&cdata->read_latency, end - begin);
 			as_record_destroy(rec);
 			return status;
 		}
 	}
 	else {
-		status = aerospike_key_get(&data->client, &err, 0, &key, &rec);
+		status = aerospike_key_get(&cdata->client, &err, 0, &key, &rec);
 		
 		// Record may not have been initialized, so not found is ok.
 		if (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			as_incr_uint32(&data->read_count);
+			as_incr_uint32(&cdata->read_count);
 			as_record_destroy(rec);
 			return status;
 		}
@@ -398,14 +410,14 @@ read_record_sync(uint64_t keyval, clientdata* data)
 	
 	// Handle error conditions.
 	if (status == AEROSPIKE_ERR_TIMEOUT) {
-		as_incr_uint32(&data->read_timeout_count);
+		as_incr_uint32(&cdata->read_timeout_count);
 	}
 	else {
-		as_incr_uint32(&data->read_error_count);
+		as_incr_uint32(&cdata->read_error_count);
 		
-		if (data->debug) {
+		if (cdata->debug) {
 			blog_error("Read error: ns=%s set=%s key=%d bin=%s code=%d message=%s",
-					   data->namespace, data->set, keyval, data->bin_name, status, err.message);
+					   cdata->namespace, cdata->set, keyval, cdata->bin_name, status, err.message);
 		}
 	}
 	
@@ -413,8 +425,64 @@ read_record_sync(uint64_t keyval, clientdata* data)
 	return status;
 }
 
+int
+batch_record_sync(clientdata* cdata, threaddata* tdata)
+{
+	as_batch_read_records* records = as_batch_read_create(cdata->batch_size);
+
+	for (uint32_t i = 0; i < cdata->batch_size; i++) {
+		int64_t k = (int64_t)as_random_next_uint64(tdata->random) % cdata->n_keys + cdata->key_start;
+		as_batch_read_record* record = as_batch_read_reserve(records);
+		as_key_init_int64(&record->key, cdata->namespace, cdata->set, k);
+		record->read_all_bins = true;
+	}
+
+	as_status status;
+	as_error err;
+	
+	if (cdata->latency) {
+		uint64_t begin = cf_getms();
+		status = aerospike_batch_read(&cdata->client, &err, NULL, records);
+		uint64_t end = cf_getms();
+		
+		if (status == AEROSPIKE_OK) {
+			as_incr_uint32(&cdata->read_count);
+			latency_add(&cdata->read_latency, end - begin);
+			as_batch_read_destroy(records);
+			return status;
+		}
+	}
+	else {
+		status = aerospike_batch_read(&cdata->client, &err, 0, records);
+		
+		// Record may not have been initialized, so not found is ok.
+		if (status == AEROSPIKE_OK) {
+			as_incr_uint32(&cdata->read_count);
+			as_batch_read_destroy(records);
+			return status;
+		}
+	}
+
+	// Handle error conditions.
+	if (status == AEROSPIKE_ERR_TIMEOUT) {
+		as_incr_uint32(&cdata->read_timeout_count);
+	}
+	else {
+		as_incr_uint32(&cdata->read_error_count);
+		
+		if (cdata->debug) {
+			blog_error("Batch error: ns=%s set=%s bin=%s code=%d message=%s",
+					   cdata->namespace, cdata->set, cdata->bin_name, status, err.message);
+		}
+	}
+	
+	as_batch_read_destroy(records);
+	return status;
+}
+
 void
-throttle(clientdata* cdata) {
+throttle(clientdata* cdata)
+{
 	if (cdata->throughput > 0) {
 		int transactions = cdata->write_count + cdata->read_count;
 
@@ -496,6 +564,7 @@ linear_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 
 static void random_write_listener(as_error* err, void* udata, as_event_loop* event_loop);
 static void random_read_listener(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop);
+static void random_batch_listener(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop);
 
 void
 random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop)
@@ -512,9 +581,26 @@ random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 		if (cdata->latency) {
 			tdata->begin = cf_getms();
 		}
-		
-		if (aerospike_key_get_async(&cdata->client, &err, NULL, &tdata->key, random_read_listener, tdata, event_loop, NULL) != AEROSPIKE_OK) {
-			random_read_listener(&err, NULL, tdata, event_loop);
+
+		if (cdata->batch_size <= 1) {
+			if (aerospike_key_get_async(&cdata->client, &err, NULL, &tdata->key, random_read_listener, tdata, event_loop, NULL) != AEROSPIKE_OK) {
+				random_read_listener(&err, NULL, tdata, event_loop);
+			}
+		}
+		else {
+			as_batch_read_records* records = as_batch_read_create(cdata->batch_size);
+
+			for (uint32_t i = 0; i < cdata->batch_size; i++) {
+				int64_t k = (int64_t)as_random_next_uint64(tdata->random) % cdata->n_keys + cdata->key_start;
+				as_batch_read_record* record = as_batch_read_reserve(records);
+				as_key_init_int64(&record->key, cdata->namespace, cdata->set, k);
+				record->read_all_bins = true;
+			}
+
+			as_error err;
+			if (aerospike_batch_read_async(&cdata->client, &err, NULL, records, random_batch_listener, tdata, event_loop) != AEROSPIKE_OK) {
+				random_batch_listener(&err, records, NULL, event_loop);
+			}
 		}
 	}
 	else {
@@ -606,5 +692,36 @@ random_read_listener(as_error* err, as_record* rec, void* udata, as_event_loop* 
 			}
 		}
 	}
+	random_read_write_next(cdata, tdata, event_loop);
+}
+
+static void
+random_batch_listener(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop)
+{
+	threaddata* tdata = udata;
+	clientdata* cdata = tdata->cdata;
+	
+	if (!err) {
+		if (cdata->latency) {
+			uint64_t end = cf_getms();
+			latency_add(&cdata->read_latency, end - tdata->begin);
+		}
+		as_incr_uint32(&cdata->read_count);
+	}
+	else {
+		if (err->code == AEROSPIKE_ERR_TIMEOUT) {
+			as_incr_uint32(&cdata->read_timeout_count);
+		}
+		else {
+			as_incr_uint32(&cdata->read_error_count);
+			
+			if (cdata->debug) {
+				blog_error("Batch error: ns=%s set=%s key=%d bin=%s code=%d message=%s",
+						   cdata->namespace, cdata->set, tdata->key.value.integer.value,
+						   cdata->bin_name, err->code, err->message);
+			}
+		}
+	}
+	as_batch_read_destroy(records);
 	random_read_write_next(cdata, tdata, event_loop);
 }

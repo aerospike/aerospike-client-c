@@ -38,7 +38,8 @@
  * GLOBAL VARS
  *****************************************************************************/
 
-extern aerospike * as;
+extern aerospike* as;
+extern bool g_enterprise_server;
 
 /******************************************************************************
  * MACROS
@@ -764,27 +765,30 @@ TEST( key_basics_storekey , "store key" ) {
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( key_basics, "aerospike_key basic tests" ) {
+SUITE(key_basics, "aerospike_key basic tests") {
 	// Remove at beginning to clear out record.
-    suite_add( key_basics_put_key );
-    suite_add( key_basics_remove );
-	suite_add( key_basics_put );
-	suite_add( key_basics_exists );
-	suite_add( key_basics_notexists );
-	suite_add( key_basics_remove_generation );
-	suite_add( key_basics_put_generation );
-	suite_add( key_basics_put );
-	suite_add( key_basics_get );
-	suite_add( key_basics_select );
-	suite_add( key_basics_operate );
-	suite_add( key_basics_get2 );
-	suite_add( key_basics_remove );
-	suite_add( key_basics_remove_notexists );
-	suite_add( key_basics_notexists );
-	suite_add( key_basics_write_preserialized_list );
-	suite_add( key_basics_read_list );
-	suite_add( key_basics_read_raw_list );
-	suite_add( key_basics_list_map_double );
-	suite_add( key_basics_compression );
-	suite_add( key_basics_storekey );
+    suite_add(key_basics_put_key);
+    suite_add(key_basics_remove);
+	suite_add(key_basics_put);
+	suite_add(key_basics_exists);
+	suite_add(key_basics_notexists);
+	suite_add(key_basics_remove_generation);
+	suite_add(key_basics_put_generation);
+	suite_add(key_basics_put);
+	suite_add(key_basics_get);
+	suite_add(key_basics_select);
+	suite_add(key_basics_operate);
+	suite_add(key_basics_get2);
+	suite_add(key_basics_remove);
+	suite_add(key_basics_remove_notexists);
+	suite_add(key_basics_notexists);
+	suite_add(key_basics_write_preserialized_list);
+	suite_add(key_basics_read_list);
+	suite_add(key_basics_read_raw_list);
+	suite_add(key_basics_list_map_double);
+	suite_add(key_basics_storekey);
+
+	if (g_enterprise_server) {
+		suite_add(key_basics_compression);
+	}
 }

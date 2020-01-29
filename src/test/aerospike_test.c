@@ -22,6 +22,7 @@
 #include <getopt.h>
 
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_info.h>
 #include <aerospike/as_event.h>
 
 #include "test.h"
@@ -47,6 +48,7 @@ static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_SIZE];
 as_config_tls g_tls = {0};
 as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
+bool g_enterprise_server = false;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -317,15 +319,28 @@ static bool before(atf_plan * plan) {
 
 	as = aerospike_new(&config);
 
-	if ( aerospike_connect(as, &err) == AEROSPIKE_OK ) {
-    	return true;
-	}
-	else {
+	if (aerospike_connect(as, &err) != AEROSPIKE_OK) {
 		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
 		aerospike_destroy(as);
 		as_event_close_loops();
 		return false;
 	}
+
+	char* result;
+	if (aerospike_info_any(as, &err, NULL, "edition", &result) != AEROSPIKE_OK) {
+		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
+		aerospike_close(as, &err);
+		aerospike_destroy(as);
+		as_event_close_loops();
+		return false;
+	}
+
+	if (strstr(result, "Aerospike Enterprise Edition") != NULL) {
+		g_enterprise_server = true;
+	}
+
+	cf_free(result);
+	return true;
 }
 
 static bool after(atf_plan * plan) {

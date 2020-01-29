@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2020 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -93,23 +93,23 @@ random_worker(void* udata)
 {
 	clientdata* cdata = (clientdata*)udata;
 	threaddata* tdata = create_threaddata(cdata, cdata->key_start, cdata->n_keys);
-	uint64_t key_min = cdata->key_start;
-	uint64_t n_keys = cdata->n_keys;
-	uint64_t key;
 	int read_pct = cdata->read_pct;
 	int die;
 	
 	while (cdata->valid) {
-		// Choose key at random.
-		key = as_random_next_uint64(tdata->random) % n_keys + key_min;
-		
 		// Roll a percentage die.
 		die = as_random_next_uint32(tdata->random) % 100;
 		
 		if (die < read_pct) {
-			read_record_sync(key, cdata);
+			if (cdata->batch_size <= 1) {
+				read_record_sync(cdata, tdata);
+			}
+			else {
+				batch_record_sync(cdata, tdata);
+			}
 		}
 		else {
+			uint64_t key = as_random_next_uint64(tdata->random) % cdata->n_keys + cdata->key_start;
 			write_record_sync(cdata, tdata, key);
 		}
 		as_incr_uint64(&cdata->transactions_count);

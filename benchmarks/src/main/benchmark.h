@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2019 by Aerospike.
+ * Copyright 2008-2020 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -55,8 +55,11 @@ typedef struct arguments_t {
 	uint64_t transactions_limit;
 	int threads;
 	int throughput;
-	int read_timeout;
-	int write_timeout;
+	int batch_size;
+	int read_socket_timeout;
+	int write_socket_timeout;
+	int read_total_timeout;
+	int write_total_timeout;
 	int max_retries;
 	bool debug;
 	bool latency;
@@ -107,6 +110,7 @@ typedef struct clientdata_t {
 	int async_max_commands;
 	int threads;
 	int throughput;
+	int batch_size;
 	int read_pct;
 	int binlen;
 	int numbins;
@@ -140,7 +144,8 @@ threaddata* create_threaddata(clientdata* cdata, uint64_t key_start, uint64_t n_
 void destroy_threaddata(threaddata* tdata);
 
 bool write_record_sync(clientdata* cdata, threaddata* tdata, uint64_t key);
-int read_record_sync(uint64_t key, clientdata* data);
+int read_record_sync(clientdata* cdata, threaddata* tdata);
+int batch_record_sync(clientdata* cdata, threaddata* tdata);
 void throttle(clientdata* cdata);
 
 void linear_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* event_loop);

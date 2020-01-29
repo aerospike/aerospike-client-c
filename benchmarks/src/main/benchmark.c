@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2019 by Aerospike.
+ * Copyright 2008-2020 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -126,19 +126,22 @@ connect_to_server(arguments* args, aerospike* client)
 
 	as_policies* p = &cfg.policies;
 
-	p->read.base.total_timeout = args->read_timeout;
+	p->read.base.socket_timeout = args->read_socket_timeout;
+	p->read.base.total_timeout = args->read_total_timeout;
 	p->read.base.max_retries = args->max_retries;
 	p->read.replica = args->replica;
 	p->read.read_mode_ap = args->read_mode_ap;
 	p->read.read_mode_sc = args->read_mode_sc;
 
-	p->write.base.total_timeout = args->write_timeout;
+	p->write.base.socket_timeout = args->write_socket_timeout;
+	p->write.base.total_timeout = args->write_total_timeout;
 	p->write.base.max_retries = args->max_retries;
 	p->write.replica = args->replica;
 	p->write.commit_level = args->write_commit_level;
 	p->write.durable_delete = args->durable_deletes;
 
-	p->operate.base.total_timeout = args->write_timeout;
+	p->operate.base.socket_timeout = args->write_socket_timeout;
+	p->operate.base.total_timeout = args->write_total_timeout;
 	p->operate.base.max_retries = args->max_retries;
 	p->operate.replica = args->replica;
 	p->operate.commit_level = args->write_commit_level;
@@ -146,11 +149,19 @@ connect_to_server(arguments* args, aerospike* client)
 	p->operate.read_mode_ap = args->read_mode_ap;
 	p->operate.read_mode_sc = args->read_mode_sc;
 
-	p->remove.base.total_timeout = args->write_timeout;
+	p->remove.base.socket_timeout = args->write_socket_timeout;
+	p->remove.base.total_timeout = args->write_total_timeout;
 	p->remove.base.max_retries = args->max_retries;
 	p->remove.replica = args->replica;
 	p->remove.commit_level = args->write_commit_level;
 	p->remove.durable_delete = args->durable_deletes;
+
+	p->batch.base.socket_timeout = args->read_socket_timeout;
+	p->batch.base.total_timeout = args->read_total_timeout;
+	p->batch.base.max_retries = args->max_retries;
+	p->batch.replica = args->replica;
+	p->batch.read_mode_ap = args->read_mode_ap;
+	p->batch.read_mode_sc = args->read_mode_sc;
 
 	p->info.timeout = 10000;
 
@@ -251,6 +262,7 @@ run_benchmark(arguments* args)
 	data.set = args->set;
 	data.threads = args->threads;
 	data.throughput = args->throughput;
+	data.batch_size = args->batch_size;
 	data.read_pct = args->read_pct;
 	data.del_bin = args->del_bin;
 	data.bintype = args->bintype;

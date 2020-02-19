@@ -481,7 +481,8 @@ as_scan_command_init(
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
-			p = as_command_write_bin(p, op->op, &op->bin, &opsbuffers[i]);
+			as_operator o = (op->op == AS_OPERATOR_MAP_MODIFY)? AS_OPERATOR_CDT_MODIFY : op->op;
+			p = as_command_write_bin(p, o, &op->bin, &opsbuffers[i]);
 		}
 		// We are done with opsbuffers, so we can free here.
 		cf_free(opsbuffers);

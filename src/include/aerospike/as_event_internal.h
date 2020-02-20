@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -182,7 +182,10 @@ typedef struct as_event_executor {
  *****************************************************************************/
 
 as_status
-as_event_command_execute(as_event_command* cmd, as_error* err);
+as_event_command_send(as_event_command* cmd, as_error* err);
+
+void
+as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd);
 
 bool
 as_event_proto_parse(as_event_command* cmd, as_proto* proto);
@@ -651,6 +654,32 @@ as_event_command_release(as_event_command* cmd)
 /******************************************************************************
  * COMMON INLINE FUNCTIONS
  *****************************************************************************/
+
+// Use pointer comparison for performance.  If portability becomes an issue, use
+// "pthread_equal(event_loop->thread, pthread_self())" instead.
+#if !defined(_MSC_VER)
+#define as_in_event_loop(_t1) ((_t1) == pthread_self())
+#else
+#define as_in_event_loop(_t1) ((_t1).p == pthread_self().p)
+#endif
+
+static inline as_status
+as_event_command_execute(as_event_command* cmd, as_error* err)
+{
+	as_event_loop* event_loop = cmd->event_loop;
+
+	// Avoid recursive error death spiral by forcing command to be queued to
+	// event loop when consecutive recursive errors reaches an approximate limit.
+	if (as_in_event_loop(event_loop->thread) && event_loop->errors < 5) {
+		// We are already in event loop thread, so start processing.
+		as_event_command_execute_in_loop(event_loop, cmd);
+		return AEROSPIKE_OK;
+	}
+	else {
+		// Send command through queue so it can be executed in event loop thread.
+		return as_event_command_send(cmd, err);
+	}
+}
 
 static inline as_event_loop*
 as_event_assign(as_event_loop* event_loop)

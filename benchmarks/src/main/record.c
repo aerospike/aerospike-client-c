@@ -430,7 +430,7 @@ batch_record_sync(clientdata* cdata, threaddata* tdata)
 {
 	as_batch_read_records* records = as_batch_read_create(cdata->batch_size);
 
-	for (uint32_t i = 0; i < cdata->batch_size; i++) {
+	for (int i = 0; i < cdata->batch_size; i++) {
 		int64_t k = (int64_t)as_random_next_uint64(tdata->random) % cdata->n_keys + cdata->key_start;
 		as_batch_read_record* record = as_batch_read_reserve(records);
 		as_key_init_int64(&record->key, cdata->namespace, cdata->set, k);
@@ -590,7 +590,7 @@ random_read_write_async(clientdata* cdata, threaddata* tdata, as_event_loop* eve
 		else {
 			as_batch_read_records* records = as_batch_read_create(cdata->batch_size);
 
-			for (uint32_t i = 0; i < cdata->batch_size; i++) {
+			for (int i = 0; i < cdata->batch_size; i++) {
 				int64_t k = (int64_t)as_random_next_uint64(tdata->random) % cdata->n_keys + cdata->key_start;
 				as_batch_read_record* record = as_batch_read_reserve(records);
 				as_key_init_int64(&record->key, cdata->namespace, cdata->set, k);

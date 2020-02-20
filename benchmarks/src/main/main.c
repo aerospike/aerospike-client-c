@@ -48,10 +48,10 @@ static struct option long_options[] = {
 	{"workload",             required_argument, 0, 'w'},
 	{"threads",              required_argument, 0, 'z'},
 	{"throughput",           required_argument, 0, 'g'},
-	{"batchSize",            required_argument, 0, 1000},
-	{"socketTimeout",        required_argument, 0, 1001},
-	{"readSocketTimeout",    required_argument, 0, 1002},
-	{"writeSocketTimeout",   required_argument, 0, 1003},
+	{"batchSize",            required_argument, 0, '0'},
+	{"socketTimeout",        required_argument, 0, '1'},
+	{"readSocketTimeout",    required_argument, 0, '2'},
+	{"writeSocketTimeout",   required_argument, 0, '3'},
 	{"timeout",              required_argument, 0, 'T'},
 	{"readTimeout",          required_argument, 0, 'X'},
 	{"writeTimeout",         required_argument, 0, 'V'},
@@ -731,20 +731,20 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->throughput = atoi(optarg);
 				break;
 
-			case 1000:
+			case '0':
 				args->batch_size = atoi(optarg);
 				break;
 
-			case 1001:
+			case '1':
 				args->read_socket_timeout = atoi(optarg);
 				args->write_socket_timeout = args->read_socket_timeout;
 				break;
 
-			case 1002:
+			case '2':
 				args->read_socket_timeout = atoi(optarg);
 				break;
 
-			case 1003:
+			case '3':
 				args->write_socket_timeout = atoi(optarg);
 				break;
 

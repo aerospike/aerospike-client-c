@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1541,7 +1541,7 @@ as_batch_retry(as_command* parent, as_error* err)
 
 static inline as_event_command*
 as_batch_retry_command_create(
-	as_event_command* parent, as_node* node, size_t size, uint64_t deadline
+	as_event_command* parent, as_node* node, size_t size, uint64_t deadline, uint8_t flags
 	)
 {
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
@@ -1567,7 +1567,7 @@ as_batch_retry_command_create(
 	cmd->type = AS_ASYNC_TYPE_BATCH;
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = parent->flags;
+	cmd->flags = flags;
 	cmd->flags2 = parent->flags2;
 	return cmd;
 }
@@ -1575,14 +1575,14 @@ as_batch_retry_command_create(
 int
 as_batch_retry_async(as_event_command* parent, bool timeout)
 {
-	if (!(parent->replica == AS_POLICY_REPLICA_SEQUENCE ||
-		  parent->replica == AS_POLICY_REPLICA_PREFER_RACK)) {
-		return 1;  // Go through normal retry.
-	}
-
 	as_async_batch_executor* executor = parent->udata; // udata is overloaded to contain executor.
 
 	if (! executor->executor.valid) {
+		return -2;  // Defer to original error.
+	}
+
+	if (!(parent->replica == AS_POLICY_REPLICA_SEQUENCE ||
+		  parent->replica == AS_POLICY_REPLICA_PREFER_RACK)) {
 		return 1;  // Go through normal retry.
 	}
 
@@ -1806,7 +1806,11 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	pthread_mutex_lock(&e->lock);
 	e->max += batch_nodes.size - 1;
 	e->max_concurrent = e->max;
+	e->queued = e->max;
 	pthread_mutex_unlock(&e->lock);
+
+	uint8_t flags = AS_ASYNC_FLAGS_READ | (parent->flags & AS_ASYNC_FLAGS_MASTER) |
+					(parent->flags & AS_ASYNC_FLAGS_MASTER_SC);
 
 	for (uint32_t i = 0; i < batch_nodes.size; i++) {
 		as_batch_node* batch_node = as_vector_get(&batch_nodes, i);
@@ -1818,12 +1822,13 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 		if (! (policy.base.compress && size > AS_COMPRESS_THRESHOLD)) {
 			as_event_command* cmd = as_batch_retry_command_create(parent, batch_node->node, size,
-									deadline);
+									deadline, flags);
 
 			cmd->write_len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets,
 									&policy, cmd->buf, field_count_header, pred_size, pred_field);
 
-			status = as_event_command_execute(cmd, &err);
+			// Retry command at the end of the queue so other commands have a chance to run first.
+			status = as_event_command_send(cmd, &err);
 		}
 		else {
 			// Send compressed command.
@@ -1837,7 +1842,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			size_t comp_size = as_command_compress_max_size(size);
 
 			as_event_command* cmd = as_batch_retry_command_create(parent, batch_node->node,
-									comp_size, deadline);
+									comp_size, deadline, flags);
 
 			// Compress buffer and execute.
 			status = as_command_compress(&err, buf, size, cmd->buf, &comp_size);
@@ -1851,7 +1856,9 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			}
 
 			cmd->write_len = (uint32_t)comp_size;
-			status = as_event_command_execute(cmd, &err);
+
+			// Retry command at the end of the queue so other commands have a chance to run first.
+			status = as_event_command_send(cmd, &err);
 		}
 
 		if (status != AEROSPIKE_OK) {

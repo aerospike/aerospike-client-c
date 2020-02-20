@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -27,14 +27,6 @@
 #include <aerospike/as_shm_cluster.h>
 #include <citrusleaf/alloc.h>
 #include <pthread.h>
-
-// Use pointer comparison for performance.  If portability becomes an issue, use
-// "pthread_equal(event_loop->thread, pthread_self())" instead.
-#if !defined(_MSC_VER)
-#define as_in_event_loop(_t1) ((_t1) == pthread_self())
-#else
-#define as_in_event_loop(_t1) ((_t1).p == pthread_self().p)
-#endif
 
 /******************************************************************************
  * GLOBALS
@@ -343,85 +335,8 @@ as_event_destroy_loops()
  * PRIVATE FUNCTIONS
  *****************************************************************************/
 
-static void as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd);
 static void as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd);
-
-as_status
-as_event_command_execute(as_event_command* cmd, as_error* err)
-{
-	// Initialize read buffer (buf) to be located after write buffer.
-	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
-	cmd->buf += cmd->write_len;
-	cmd->command_sent_counter = 0;
-	cmd->conn = NULL;
-	cmd->proto_type_rcv = 0;
-
-	as_event_loop* event_loop = cmd->event_loop;
-
-	// Avoid recursive error death spiral by forcing command to be queued to
-	// event loop when consecutive recursive errors reaches an approximate limit.
-	if (as_in_event_loop(event_loop->thread) && event_loop->errors < 5) {
-		// We are already in event loop thread, so start processing.
-		as_event_command_execute_in_loop(event_loop, cmd);
-	}
-	else {
-		// Send command through queue so it can be executed in event loop thread.
-		if (cmd->total_deadline > 0) {
-			// Convert total timeout to deadline.
-			cmd->total_deadline += cf_getms();
-		}
-		cmd->state = AS_ASYNC_STATE_REGISTERED;
-
-		if (! as_event_execute(event_loop, (as_event_executable)as_event_command_execute_in_loop, cmd)) {
-			event_loop->errors++;  // Not in event loop thread, so not exactly accurate.
-
-			if (cmd->node) {
-				as_node_release(cmd->node);
-			}
-			cf_free(cmd);
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
-		}
-	}
-	return AEROSPIKE_OK;
-}
-
-static void
-as_event_execute_from_delay_queue(as_event_loop* event_loop)
-{
-	event_loop->using_delay_queue = true;
-
-	as_event_command* cmd;
-
-	while (event_loop->pending < event_loop->max_commands_in_process &&
-		   as_queue_pop(&event_loop->delay_queue, &cmd)) {
-
-		if (cmd->state == AS_ASYNC_STATE_QUEUE_ERROR) {
-			// Command timed out and user has already been notified.
-			as_event_command_release(cmd);
-			continue;
-		}
-
-		if (cmd->socket_timeout > 0) {
-			if (cmd->total_deadline > 0) {
-				if (cmd->socket_timeout < cmd->total_deadline - cf_getms()) {
-					// Transition from total timer to socket timer.
-					as_event_stop_timer(cmd);
-					as_event_set_socket_timer(cmd);
-					cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
-				}
-			}
-			else {
-				// Use socket timer.
-				as_event_init_socket_timer(cmd);
-				cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
-			}
-		}
-
-		event_loop->pending++;
-		as_event_command_begin(event_loop, cmd);
-	}
-	event_loop->using_delay_queue = false;
-}
+static void as_event_execute_from_delay_queue(as_event_loop* event_loop);
 
 static inline void
 as_event_prequeue_error(as_event_loop* event_loop, as_event_command* cmd, as_error* err)
@@ -431,9 +346,38 @@ as_event_prequeue_error(as_event_loop* event_loop, as_event_command* cmd, as_err
 	as_event_error_callback(cmd, err);
 }
 
-static void
+as_status
+as_event_command_send(as_event_command* cmd, as_error* err)
+{
+	// Send command through queue so it can be executed in event loop thread.
+	if (cmd->total_deadline > 0) {
+		// Convert total timeout to deadline.
+		cmd->total_deadline += cf_getms();
+	}
+	cmd->state = AS_ASYNC_STATE_REGISTERED;
+
+	if (! as_event_execute(cmd->event_loop, (as_event_executable)as_event_command_execute_in_loop, cmd)) {
+		cmd->event_loop->errors++;  // May not be in event loop thread, so not exactly accurate.
+
+		if (cmd->node) {
+			as_node_release(cmd->node);
+		}
+		cf_free(cmd);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
+	}
+	return AEROSPIKE_OK;
+}
+
+void
 as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd)
 {
+	// Initialize read buffer (buf) to be located after write buffer.
+	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
+	cmd->buf += cmd->write_len;
+	cmd->command_sent_counter = 0;
+	cmd->conn = NULL;
+	cmd->proto_type_rcv = 0;
+
 	if (cmd->cluster->pending[event_loop->index]++ == -1) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster has been closed");
@@ -526,6 +470,44 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	// Start processing.
 	event_loop->pending++;
 	as_event_command_begin(event_loop, cmd);
+}
+
+static void
+as_event_execute_from_delay_queue(as_event_loop* event_loop)
+{
+	event_loop->using_delay_queue = true;
+
+	as_event_command* cmd;
+
+	while (event_loop->pending < event_loop->max_commands_in_process &&
+		   as_queue_pop(&event_loop->delay_queue, &cmd)) {
+
+		if (cmd->state == AS_ASYNC_STATE_QUEUE_ERROR) {
+			// Command timed out and user has already been notified.
+			as_event_command_release(cmd);
+			continue;
+		}
+
+		if (cmd->socket_timeout > 0) {
+			if (cmd->total_deadline > 0) {
+				if (cmd->socket_timeout < cmd->total_deadline - cf_getms()) {
+					// Transition from total timer to socket timer.
+					as_event_stop_timer(cmd);
+					as_event_set_socket_timer(cmd);
+					cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+				}
+			}
+			else {
+				// Use socket timer.
+				as_event_init_socket_timer(cmd);
+				cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+			}
+		}
+
+		event_loop->pending++;
+		as_event_command_begin(event_loop, cmd);
+	}
+	event_loop->using_delay_queue = false;
 }
 
 static void

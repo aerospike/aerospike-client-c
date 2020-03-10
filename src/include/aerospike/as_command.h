@@ -347,7 +347,8 @@ as_command_write_header_write(
 uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
-	as_policy_read_mode_sc read_mode_sc, uint16_t n_fields, uint16_t n_bins, uint8_t read_attr
+	as_policy_read_mode_sc read_mode_sc, uint32_t timeout, uint16_t n_fields, uint16_t n_bins,
+	uint8_t read_attr
 	);
 
 /**
@@ -515,6 +516,17 @@ as_command_compress_max_size(size_t cmd_sz);
  */
 as_status
 as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compressed_cmd, size_t* compressed_size);
+
+/**
+ * @private
+ * Return timeout to be sent to server for single record transactions.
+ */
+static inline uint32_t
+as_command_server_timeout(const as_policy_base* policy)
+{
+	return (policy->socket_timeout < policy->total_timeout && policy->socket_timeout != 0)?
+			policy->socket_timeout : policy->total_timeout;
+}
 
 /**
  * @private

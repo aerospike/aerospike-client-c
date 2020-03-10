@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -199,10 +199,11 @@ aerospike_key_get(
 		size += as_predexp_list_size(policy->base.predexp, &pred_size);
 		n_fields++;
 	}
-		
+
 	uint8_t* buf = as_command_buffer_init(size);
+	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-					policy->read_mode_sc, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL);
+		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL);
 
 	p = as_command_write_key(p, policy->key, key);
 
@@ -259,8 +260,9 @@ aerospike_key_get_async(
 		ri.flags, listener, udata, event_loop, pipe_listener,
 		size, as_event_command_parse_result);
 
+	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-					policy->read_mode_sc, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL);
+		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL);
 
 	p = as_command_write_key(p, policy->key, key);
 
@@ -314,8 +316,9 @@ aerospike_key_select(
 	}
 	
 	uint8_t* buf = as_command_buffer_init(size);
+	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-					policy->read_mode_sc, n_fields, nvalues, AS_MSG_INFO1_READ);
+				policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ);
 
 	p = as_command_write_key(p, policy->key, key);
 
@@ -384,8 +387,9 @@ aerospike_key_select_async(
 		ri.flags, listener, udata, event_loop, pipe_listener,
 		size, as_event_command_parse_result);
 
+	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-					policy->read_mode_sc, n_fields, nvalues, AS_MSG_INFO1_READ);
+					policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ);
 
 	p = as_command_write_key(p, policy->key, key);
 

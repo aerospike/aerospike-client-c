@@ -710,7 +710,7 @@ as_query_command_init(
 											  AS_MSG_INFO1_READ;
 
 		p = as_command_write_header_read(cmd, base_policy, AS_POLICY_READ_MODE_AP_ONE,
-				AS_POLICY_READ_MODE_SC_SESSION, n_fields, n_ops, read_attr);
+				AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, n_fields, n_ops, read_attr);
 	}
 	else {
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,

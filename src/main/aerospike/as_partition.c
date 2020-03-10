@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -58,6 +58,55 @@ as_partition_tables_print(as_partition_tables* tables)
 }
 */
 
+static void
+as_partition_reserve_node(as_node* node)
+{
+	// Use a separate reference count for nodes in partition maps.
+	// Only call as_node_reserve() the first time a node is added to
+	// the partition maps.
+	//
+	// partition_ref_count is only referenced in the tend thread
+	// (except for cluster destroy), so the increment is non-atomic.
+	if (node->partition_ref_count++ == 0) {
+		as_node_reserve(node);
+	}
+}
+
+static void
+as_partition_release_node_delayed(as_node* node)
+{
+	// Only call as_node_release_delayed() when there are no more
+	// references in the partition maps.
+	//
+	// partition_ref_count is only referenced in the tend thread
+	// (except for cluster destroy), so the decrement is non-atomic.
+	if (--node->partition_ref_count == 0) {
+		// Delay node release to avoid race condition.
+		// See as_node_release_delayed() comments.
+		as_node_release_delayed(node);
+	}
+}
+
+static void
+as_partition_release_node_now(as_node* node)
+{
+	// Only call as_node_release() when there are no more references
+	// in the partition maps.
+	//
+	// The only call stack to this function is:
+	// as_cluster_destroy() -> as_partition_tables_destroy() ->
+	// as_partition_table_destroy() -> as_partition_release_node_now().
+	//
+	// as_cluster_destroy() is called from outside the tend thread,
+	// but it does stop the tend thread and wait for tending to
+	// finish before calling this method.  Therefore, it should
+	// be okay to use non-atomic decrement of partition_ref_count.
+	//
+	if (--node->partition_ref_count == 0) {
+		as_node_release(node);
+	}
+}
+
 static inline void
 set_node(as_node** trg, as_node* src)
 {
@@ -77,18 +126,18 @@ as_partition_table_create(const char* ns, uint32_t capacity, bool sc_mode)
 	return table;
 }
 
-void
+static void
 as_partition_table_destroy(as_partition_table* table)
 {
 	for (uint32_t i = 0; i < table->size; i++) {
 		as_partition* p = &table->partitions[i];
 		
 		if (p->master) {
-			as_node_release(p->master);
+			as_partition_release_node_now(p->master);
 		}
 		
 		if (p->prole) {
-			as_node_release(p->prole);
+			as_partition_release_node_now(p->prole);
 		}
 	}
 	cf_free(table);
@@ -309,27 +358,6 @@ as_partition_tables_get(as_partition_tables* tables, const char* ns)
 	return NULL;
 }
 
-bool
-as_partition_tables_find_node(as_partition_tables* tables, as_node* node)
-{
-	as_partition_table* table;
-	as_partition* p;
-	
-	for (uint32_t i = 0; i < tables->size; i++) {
-		table = tables->tables[i];
-		
-		for (uint32_t j = 0; j < table->size; j++) {
-			p = &table->partitions[j];
-			
-			// Use reference equality for performance.
-			if (p->master == node || p->prole == node) {
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
 static inline void
 force_replicas_refresh(as_node* node)
 {
@@ -367,24 +395,24 @@ decode_and_update(
 				if (master) {
 					if (node != p->master) {
 						as_node* tmp = p->master;
-						as_node_reserve(node);
+						as_partition_reserve_node(node);
 						set_node(&p->master, node);
 
 						if (tmp) {
 							force_replicas_refresh(tmp);
-							as_node_release(tmp);
+							as_partition_release_node_delayed(tmp);
 						}
 					}
 				}
 				else {
 					if (node != p->prole) {
 						as_node* tmp = p->prole;
-						as_node_reserve(node);
+						as_partition_reserve_node(node);
 						set_node(&p->prole, node);
 
 						if (tmp) {
 							force_replicas_refresh(tmp);
-							as_node_release(tmp);
+							as_partition_release_node_delayed(tmp);
 						}
 					}
 				}

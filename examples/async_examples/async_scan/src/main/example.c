@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2019 by Aerospike.
+ * Copyright 2008-2020 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -168,13 +168,11 @@ run_scan(as_event_loop* event_loop)
 	as_scan scan;
 	as_scan_init(&scan, g_namespace, g_set);
 
-	LOG("executing scan: where test-bin = 7");
+	LOG("execute scan");
 
 	as_policy_scan p;
 	as_policy_scan_init(&p);
-	p.base.total_timeout = 5000;
 	p.base.socket_timeout = 5000;
-	p.fail_on_cluster_change = true;
 
 	// Execute the scan.
 	as_error err;

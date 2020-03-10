@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/aerospike_query.h>
+#include <aerospike/aerospike_scan.h>
 #include <aerospike/as_aerospike.h>
 #include <aerospike/as_async.h>
 #include <aerospike/as_cluster.h>
@@ -859,7 +860,7 @@ as_query_command_init(
 }
 
 static as_status
-as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, uint32_t n_nodes, uint8_t query_type)
+as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, uint8_t query_type)
 {
 	as_status status = AEROSPIKE_OK;
 
@@ -893,11 +894,11 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	task->cmd_size = size;
 	task->complete_q = cf_queue_create(sizeof(as_query_complete_task), true);
 
-	uint32_t n_wait_nodes = n_nodes;
+	uint32_t n_wait_nodes = nodes->size;
 	uint32_t thread_pool_size = task->cluster->thread_pool.thread_size;
 
 	// Run tasks in parallel.
-	for (uint32_t i = 0; i < n_nodes; i++) {
+	for (uint32_t i = 0; i < nodes->size; i++) {
 		// Stack allocate task for each node.  It should be fine since the task
 		// only needs to be valid within this function.
 		as_query_task* task_node = alloca(sizeof(as_query_task));
@@ -1013,6 +1014,38 @@ as_query_aggregate(void* data)
 	cf_queue_push(task->complete_q, &status);
 }
 
+static void
+convert_query_to_scan(
+	const as_policy_query* query_policy, const as_query* query, as_policy_scan* scan_policy,
+	as_scan* scan
+	)
+{
+	as_policy_scan_init(scan_policy);
+	memcpy(&scan_policy->base, &query_policy->base, sizeof(as_policy_base));
+
+	as_scan_init(scan, query->ns, query->set);
+	scan->select.entries = query->select.entries;
+	scan->select.capacity = query->select.capacity;
+	scan->select.size = query->select.size;
+	scan->select._free = query->select._free;
+
+	scan->predexp.entries = query->predexp.entries;
+	scan->predexp.capacity = query->predexp.capacity;
+	scan->predexp.size = query->predexp.size;
+	scan->predexp._free = query->predexp._free;
+
+	strcpy(scan->apply_each.module, query->apply.module);
+	strcpy(scan->apply_each.function, query->apply.function);
+	scan->apply_each.arglist = query->apply.arglist;
+	scan->apply_each._free = query->apply._free;
+
+	scan->ops = query->ops;
+	scan->no_bins = query->no_bins;
+	scan->concurrent = true;
+	scan->deserialize_list_map = query_policy->deserialize;
+	scan->_free = query->_free;
+}
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -1022,27 +1055,31 @@ aerospike_query_foreach(
 	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
 	aerospike_query_foreach_callback callback, void* udata)
 {
-	as_error_reset(err);
-	
 	if (! policy) {
 		policy = &as->config.policies.query;
 	}
-	
+
 	as_cluster* cluster = as->cluster;
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	uint32_t n_nodes = nodes->size;
-	
-	if (n_nodes == 0) {
-		as_nodes_release(nodes);
-		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Command failed because cluster is empty.");
+
+	// Convert to a scan when filter doesn't exist and not aggregation query and
+	// partition scans are supported.
+	if (query->where.size == 0 && ! query->apply.function[0] && cluster->has_partition_scan) {
+		as_policy_scan scan_policy;
+		as_scan scan;
+		convert_query_to_scan(policy, query, &scan_policy, &scan);
+
+		return aerospike_scan_foreach(as, err, &scan_policy, &scan, callback, udata);
 	}
 
-	// Reserve each node in cluster.
-	for (uint32_t i = 0; i < n_nodes; i++) {
-		as_node_reserve(nodes->array[i]);
+	as_error_reset(err);
+
+	as_nodes* nodes;
+	as_status status = as_cluster_reserve_all_nodes(cluster, err, &nodes);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
-	as_status status = AEROSPIKE_OK;
 	uint32_t error_mutex = 0;
 	
 	// Initialize task.
@@ -1092,7 +1129,7 @@ aerospike_query_foreach(
 		int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_query_aggregate, &task_aggr);
 		
 		if (rc == 0) {
-			status = as_query_execute(&task, query, nodes, n_nodes, QUERY_FOREGROUND);
+			status = as_query_execute(&task, query, nodes, QUERY_FOREGROUND);
 			
 			// Wait for aggregation thread to finish.
 			as_status complete_status = AEROSPIKE_OK;
@@ -1120,17 +1157,10 @@ aerospike_query_foreach(
 		task.callback = callback;
 		task.udata = udata;
 		task.input_queue = 0;
-		status = as_query_execute(&task, query, nodes, n_nodes, QUERY_FOREGROUND);
-	}
-	
-	// Release each node in cluster.
-	for (uint32_t i = 0; i < n_nodes; i++) {
-		as_node_release(nodes->array[i]);
+		status = as_query_execute(&task, query, nodes, QUERY_FOREGROUND);
 	}
 
-	// Release nodes array.
-	as_nodes_release(nodes);
-
+	as_cluster_release_all_nodes(nodes);
 	return status;
 }
 
@@ -1139,8 +1169,6 @@ aerospike_query_async(
 	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
 	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop)
 {
-	as_error_reset(err);
-	
 	if (! policy) {
 		policy = &as->config.policies.query;
 	}
@@ -1148,36 +1176,43 @@ aerospike_query_async(
 	if (query->apply.function[0]) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Async aggregate queries are not supported.");
 	}
-	
+
+	as_cluster* cluster = as->cluster;
+
+	// Convert to a scan when filter doesn't exist and partition scans are supported.
+	if (query->where.size == 0 && cluster->has_partition_scan) {
+		as_policy_scan scan_policy;
+		as_scan scan;
+		convert_query_to_scan(policy, query, &scan_policy, &scan);
+
+		return aerospike_scan_async(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
+	}
+
+	as_error_reset(err);
+
 	uint64_t task_id = as_random_get_uint64();
-	
-	as_nodes* nodes = as_nodes_reserve(as->cluster);
-	uint32_t n_nodes = nodes->size;
-	
-	if (n_nodes == 0) {
-		as_nodes_release(nodes);
-		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Command failed because cluster is empty.");
+
+	as_nodes* nodes;
+	as_status status = as_cluster_reserve_all_nodes(cluster, err, &nodes);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
-	
-	// Reserve each node in cluster.
-	for (uint32_t i = 0; i < n_nodes; i++) {
-		as_node_reserve(nodes->array[i]);
-	}
-	
+
 	// Query will be split up into a command for each node.
 	// Allocate query data shared by each command.
 	as_async_query_executor* executor = cf_malloc(sizeof(as_async_query_executor));
 	as_event_executor* exec = &executor->executor;
 	pthread_mutex_init(&exec->lock, NULL);
-	exec->commands = cf_malloc(sizeof(as_event_command*) * n_nodes);
+	exec->commands = cf_malloc(sizeof(as_event_command*) * nodes->size);
 	exec->event_loop = as_event_assign(event_loop);
 	exec->complete_fn = as_query_complete_async;
 	exec->udata = udata;
 	exec->err = NULL;
 	exec->ns = NULL;
 	exec->cluster_key = 0;
-	exec->max_concurrent = n_nodes;
-	exec->max = n_nodes;
+	exec->max_concurrent = nodes->size;
+	exec->max = nodes->size;
 	exec->count = 0;
 	exec->queued = 0;
 	exec->notify = true;
@@ -1203,7 +1238,7 @@ aerospike_query_async(
 	size_t s = (sizeof(as_async_query_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 	
 	// Create all query commands.
-	for (uint32_t i = 0; i < n_nodes; i++) {
+	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_event_command* cmd = cf_malloc(s);
 		cmd->total_deadline = policy->base.total_timeout;
 		cmd->socket_timeout = policy->base.socket_timeout;
@@ -1211,7 +1246,7 @@ aerospike_query_async(
 		cmd->iteration = 0;
 		cmd->replica = AS_POLICY_REPLICA_MASTER;
 		cmd->event_loop = exec->event_loop;
-		cmd->cluster = as->cluster;
+		cmd->cluster = cluster;
 		cmd->node = nodes->array[i];
 		cmd->ns = NULL;
 		cmd->partition = NULL;
@@ -1233,8 +1268,6 @@ aerospike_query_async(
 	// Free command buffer.
 	as_command_buffer_free(cmd_buf, size);
 	
-	as_status status = AEROSPIKE_OK;
-
 	if (policy->fail_on_cluster_change && (nodes->array[0]->features & AS_FEATURES_CLUSTER_STABLE)) {
 		// Verify migrations are not in progress.
 		status = as_query_validate_begin_async(exec, query->ns, err);
@@ -1253,6 +1286,8 @@ aerospike_query_async(
 		}
 	}
 
+	// Do not call as_cluster_release_all_nodes() because individual nodes
+	// are released on each async command destroy.
 	as_nodes_release(nodes);
 	return status;
 }
@@ -1273,31 +1308,16 @@ aerospike_query_background(
 	}
 
 	as_cluster* cluster = as->cluster;
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	uint32_t n_nodes = nodes->size;
-	
-	if (n_nodes == 0) {
-		as_nodes_release(nodes);
-		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, "Command failed because cluster is empty.");
-	}
-	
-	// Reserve each node in cluster.
-	for (uint32_t i = 0; i < n_nodes; i++) {
-		as_node_reserve(nodes->array[i]);
-	}
-	
-	// Set task id
-	uint64_t task_id;
-	if (query_id) {
-		if (*query_id == 0) {
-			*query_id = as_random_get_uint64();
-		}
-		task_id = *query_id;
-	}
-	else {
-		task_id = as_random_get_uint64();
+
+	as_nodes* nodes;
+	as_status status = as_cluster_reserve_all_nodes(as->cluster, err, &nodes);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
+	// Set task id
+	uint64_t task_id = as_task_id_resolve(query_id);
 	uint32_t error_mutex = 0;
 
 	// Initialize task.
@@ -1320,14 +1340,8 @@ aerospike_query_background(
 		.first = false
 	};
 	
-	as_status status = as_query_execute(&task, query, nodes, n_nodes, QUERY_BACKGROUND);
+	status = as_query_execute(&task, query, nodes, QUERY_BACKGROUND);
 
-	// Release each node in cluster.
-	for (uint32_t i = 0; i < n_nodes; i++) {
-		as_node_release(nodes->array[i]);
-	}
-	
-	// Release nodes array.
-	as_nodes_release(nodes);
+	as_cluster_release_all_nodes(nodes);
 	return status;
 }

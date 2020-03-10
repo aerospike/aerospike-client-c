@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2020 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -31,8 +31,10 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_scan.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_partition.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_scan.h>
 #include <aerospike/as_status.h>
@@ -48,7 +50,7 @@
 bool scan_cb(const as_val* p_val, void* udata);
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
-
+as_status scan_partition(aerospike* p_as, as_error* err);
 
 //==========================================================
 // STANDARD SCAN Example
@@ -123,11 +125,17 @@ main(int argc, char* argv[])
 	// Destroy the as_scan object.
 	as_scan_destroy(&scan);
 
+	// Run scan partition functionality.
+	if (scan_partition(&as, &err) != AEROSPIKE_OK) {
+		LOG("scan_partition() returned %d - %s", err.code, err.message);
+		cleanup(&as);
+		exit(-1);
+	}
+
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);
 
-	LOG("standard scan example successfully completed");
-
+	LOG("standard scan examples successfully completed");
 	return 0;
 }
 
@@ -226,4 +234,141 @@ insert_records(aerospike* p_as)
 	LOG("insert succeeded");
 
 	return true;
+}
+
+//==========================================================
+// Scan Partition
+//
+
+static const char* g_pset = "pset";
+
+static as_status
+insert_records_in_one_partition(aerospike* p_as, as_error* err, uint32_t part_id, uint32_t* rec_count)
+{
+	// Write records that belong to the specified partition.
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, "bin1", 55);
+
+	uint32_t count = 0;
+	as_status status;
+
+	for (uint32_t i = 0; i < 80000; i++) {
+		as_key key;
+		as_key_init_int64(&key, g_namespace, g_pset, (int64_t)i);
+
+		status = as_key_set_digest(err, &key);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
+		uint32_t id = as_partition_getid(key.digest.value, p_as->cluster->n_partitions);
+
+		if (id != part_id) {
+			continue;
+		}
+
+		status = aerospike_key_put(p_as, err, NULL, &key, &rec);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+		count++;
+	}
+	*rec_count = count;
+	return AEROSPIKE_OK;
+}
+
+struct counter {
+	uint32_t count;
+	uint32_t max;
+	as_digest digest;
+};
+
+static bool
+pscan_cb1(const as_val* val, void* udata)
+{
+	if (! val) {
+		// Scan complete.
+		return true;
+	}
+
+	struct counter* c = udata;
+
+	if (as_aaf_uint32(&c->count, 1) == c->max) {
+		// Save digest cursor and stop scan.
+		as_record* rec = as_record_fromval(val);
+		c->digest = rec->key.digest;
+		return false;
+	}
+	return true;
+}
+
+static bool
+pscan_cb2(const as_val* val, void* udata)
+{
+	if (! val) {
+		// Scan complete.
+		return true;
+	}
+
+	struct counter* c = udata;
+	as_incr_uint32(&c->count);
+	return true;
+}
+
+as_status
+scan_partition(aerospike* p_as, as_error* err)
+{
+	LOG("write records for partition scan");
+
+	// Write records that belong to a single partition.
+	uint32_t part_id = 1000;
+	uint32_t rec_count;
+	as_status status = insert_records_in_one_partition(p_as, err, part_id, &rec_count);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	LOG("records written: %u", rec_count);
+	LOG("scan partition");
+
+	// Read first half of records from that partition.
+	struct counter c;
+	c.count = 0;
+	c.max = rec_count / 2;
+	c.digest.init = false;
+
+	as_scan scan;
+	as_scan_init(&scan, g_namespace, g_pset);
+
+	as_partition_filter pf;
+	as_partition_filter_set_id(&pf, part_id);
+
+	status = aerospike_scan_partitions(p_as, err, NULL, &scan, &pf, pscan_cb1, &c);
+
+	if (status != AEROSPIKE_OK) {
+		as_scan_destroy(&scan);
+		return status;
+	}
+
+	LOG("records scanned: %u", c.count);
+	LOG("scan partition again from cursor");
+
+	// Read remaining records from that partition using digest cursor.
+	as_partition_filter_set_after(&pf, &c.digest);
+	c.count = 0;
+
+	status = aerospike_scan_partitions(p_as, err, NULL, &scan, &pf, pscan_cb2, &c);
+
+	if (status != AEROSPIKE_OK) {
+		as_scan_destroy(&scan);
+		return status;
+	}
+
+	LOG("records scanned: %u", c.count);
+	as_scan_destroy(&scan);
+	return AEROSPIKE_OK;
 }

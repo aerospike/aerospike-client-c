@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -431,7 +431,12 @@ typedef struct as_policy_base_s {
 	 * writes which sets max_retries = 0;
 	 *
 	 * Default for read: 2 (initial attempt + 2 retries = 3 attempts)
-	 * Default for write/query/scan: 0 (no retries)
+	 *
+	 * Default for write: 0 (no retries)
+     *
+	 * Default for partition scan or query with null filter: 5
+	 *
+	 * No default for legacy scan/query. No retries are allowed for these commands.
 	 */
 	uint32_t max_retries;
 
@@ -858,6 +863,7 @@ typedef struct as_policy_query_s {
 
 	/**
 	 * Terminate query if cluster is in migration state.
+	 * Only used for server versions < 4.9.
 	 *
 	 * Default: false
 	 */
@@ -895,6 +901,7 @@ typedef struct as_policy_scan_s {
 
 	/**
 	 * Terminate scan if cluster is in migration state.
+	 * Only used for server versions < 4.9.
 	 *
 	 * Default: false
 	 */
@@ -1044,13 +1051,26 @@ as_policy_base_write_init(as_policy_base* p)
 
 /**
  * Initialize base defaults for scan/query.
+ *
+ * Set max_retries for scans and non-aggregation queries with a null filter
+ * on server versions >= 4.9. All other queries are not retried.
+ *
+ * The latest servers support retries on individual data partitions.
+ * This feature is useful when a cluster is migrating and partition(s)
+ * are missed or incomplete on the first query (with null filter) attempt.
+ *
+ * If the first query attempt misses 2 of 4096 partitions, then only
+ * those 2 partitions are retried in the next query attempt from the
+ * last key digest received for each respective partition. A higher
+ * default max_retries is used because it's wasteful to invalidate
+ * all query results because a single partition was missed.
  */
 static inline void
 as_policy_base_query_init(as_policy_base* p)
 {
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->total_timeout = 0;
-	p->max_retries = 0;
+	p->max_retries = 5;
 	p->sleep_between_retries = 0;
 	p->predexp = NULL;
 	p->compress = false;

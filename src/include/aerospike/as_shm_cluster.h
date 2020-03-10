@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -338,13 +338,6 @@ as_shm_remove_nodes(struct as_cluster_s* cluster, as_vector* /* <as_node*> */ no
  */
 void
 as_shm_node_replace_racks(as_cluster_shm* cluster_shm, as_node* node, as_racks* racks);
-
-/**
- * @private
- * Determine if node exists in shared memory partition map.
- */
-bool
-as_shm_partition_tables_find_node(as_cluster_shm* cluster_shm, as_node* node);
 
 /**
  * @private

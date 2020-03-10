@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -90,6 +90,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	}
 	
 	node->ref_count = 1;
+	node->partition_ref_count = 0;
 	node->peers_generation = 0xFFFFFFFF;
 	node->partition_generation = 0xFFFFFFFF;
 	node->rebalance_generation = 0xFFFFFFFF;
@@ -193,6 +194,39 @@ as_node_destroy(as_node* node)
 		as_racks_release(racks);
 	}
 	cf_free(node);
+}
+
+/**
+ * Use non-inline function for garbarge collector function pointer reference.
+ * Forward to inlined release.
+ */
+static void
+release_node(as_node* node)
+{
+	as_node_release(node);
+}
+
+/**
+ * Delay node release to avoid the following race condition:
+ *
+ * Transaction thread gets old node from partition map.
+ * Tend thread frees old node that is no longer referenced in the cluster.
+ * Transaction thread tries to reserve the node that has been freed.
+ *
+ * The gap between the transaction thread node retrieval and node reserve
+ * is just a few instructions, but the race condition could happen.
+ *
+ * Solve by delaying the tend thread node release until the next tend
+ * iteration. This minimum 1 second delay is enough time close the race 
+ * condition loophole.
+ */
+void
+as_node_release_delayed(as_node* node)
+{
+	as_gc_item item;
+	item.data = node;
+	item.release_fn = (as_release_fn)release_node;
+	as_vector_append(node->cluster->gc, &item);
 }
 
 void
@@ -342,7 +376,7 @@ as_node_create_socket(as_error* err, as_node* node, as_conn_pool* pool, as_socke
 		if (pool) {
 			as_conn_pool_decr(pool);
 		}
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to connect: %s %s", node->name, primary->name);
+		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Failed to connect: %s %s", node->name, primary->name);
 	}
 	sock->pool = pool;
 

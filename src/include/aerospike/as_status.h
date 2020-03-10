@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,6 +32,11 @@ typedef enum as_status_e {
 	/***************************************************************************
 	 * Client Errors
 	 **************************************************************************/
+	/**
+	 * Max retries limit reached.
+	 */
+	AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED = -12,
+
 	/**
 	 * Async command delay queue is full.
 	 */

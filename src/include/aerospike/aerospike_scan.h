@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -96,6 +96,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_listener.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_partition_filter.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_scan.h>
@@ -329,6 +330,46 @@ aerospike_scan_node(
 	);
 
 /**
+ * Scan records in specified namespace, set and partition filter.
+ *
+ * Call the callback function for each record scanned. When all records have 
+ * been scanned, then callback will be called with a NULL value for the record.
+ *
+ * Multiple threads will likely be calling the callback in parallel.  Therefore,
+ * your callback implementation should be thread safe.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_scan scan;
+ * as_scan_init(&scan, "test", "demo");
+ *
+ * as_partition_filter pf;
+ * as_partition_filter_set_range(&pf, 0, 1024);
+ * 
+ * if (aerospike_scan_partitions(&as, &err, NULL, &scan, &pf, callback, NULL) != AEROSPIKE_OK) {
+ * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ * }
+ * as_scan_destroy(&scan);
+ * ~~~~~~~~~~
+ * 
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param scan			The scan to execute against the cluster.
+ * @param pf			Partition filter.
+ * @param callback		The function to be called for each record scanned.
+ * @param udata			User-data to be passed to the callback.
+ *
+ * @return AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ * @ingroup scan_operations
+ */
+AS_EXTERN as_status
+aerospike_scan_partitions(
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	as_partition_filter* pf, aerospike_scan_foreach_callback callback, void* udata
+	);
+
+/**
  * Asynchronously scan the records in the specified namespace and set in the cluster.
  *
  * Call the listener function for each record scanned. When all records have
@@ -440,7 +481,63 @@ aerospike_scan_node_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
 	const char* node_name, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	);
-	
+
+/**
+ * Asynchronously scan records in specified namespace, set and partition filter.
+ *
+ * Call the listener function for each record scanned. When all records have
+ * been scanned, then listener will be called with a NULL value for the record.
+ *
+ * Scans of each node will be run on the same event loop, so the listener's implementation does
+ * not need to be thread safe.
+ *
+ * ~~~~~~~~~~{.c}
+ * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * {
+ * 	   if (err) {
+ * 	       printf("Scan failed: %d %s\n", err->code, err->message);
+ * 		   return false;
+ * 	   }
+ *
+ * 	   if (! record) {
+ * 	       printf("Scan ended\n");
+ * 	       return false;
+ * 	   }
+ *
+ * 	   // Process record
+ * 	   // Do not call as_record_destroy() because the calling function will do that for you.
+ * 	   return true;
+ * }
+ *
+ * as_scan scan;
+ * as_scan_init(&scan, "test", "demo");
+ *
+ * as_partition_filter pf;
+ * as_partition_filter_set_range(&pf, 0, 1024);
+ *
+ * as_status status = aerospike_scan_partitions_async(&as, &err, NULL, &scan, &pf, my_listener, NULL, NULL);
+ * as_scan_destroy(&scan);
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param scan			The scan to execute against the cluster.
+ * @param pf			Partition filter.
+ * @param listener		The function to be called for each record scanned.
+ * @param udata			User-data to be passed to the callback.
+ * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *
+ * @return AEROSPIKE_OK if async scan succesfully queued. Otherwise an error.
+ *
+ * @ingroup scan_operations
+ */
+AS_EXTERN as_status
+aerospike_scan_partitions_async(
+	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	as_partition_filter* pf, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

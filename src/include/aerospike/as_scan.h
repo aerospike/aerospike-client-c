@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -62,6 +62,7 @@ struct as_operations_s;
 
 /**
  * Priority levels for a scan operation.
+ * This enum is obsolete and will eventually be removed.
  */
 typedef enum as_scan_priority_e { 
 
@@ -328,7 +329,8 @@ typedef struct as_scan_predexp_s {
 typedef struct as_scan_s {
 
 	/**
-	 * Priority of scan.
+	 * Priority of scan. Only used on server versions < 4.9.
+	 * This field is obsolete and will eventually be removed.
 	 *
 	 * Default value is AS_SCAN_PRIORITY_DEFAULT.
 	 */

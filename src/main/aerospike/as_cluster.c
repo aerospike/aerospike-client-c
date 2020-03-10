@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -119,6 +119,68 @@ as_cluster_event_notify(as_cluster* cluster, as_node* node, as_cluster_event_typ
 	}
 }
 
+static bool
+as_cluster_has_partition_scan(as_nodes* nodes)
+{
+	if (nodes->size == 0) {
+		return false;
+	}
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+
+		if ((node->features & AS_FEATURES_PARTITION_SCAN) == 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+as_status
+as_cluster_reserve_all_nodes(as_cluster* cluster, as_error* err, as_nodes** nodes)
+{
+	as_nodes* nds = as_nodes_reserve(cluster);
+
+	if (nds->size == 0) {
+		as_nodes_release(nds);
+		return as_error_set_message(err, AEROSPIKE_ERR_SERVER,
+									"Command failed because cluster is empty.");
+	}
+
+	// Reserve each node in cluster.
+	for (uint32_t i = 0; i < nds->size; i++) {
+		as_node_reserve(nds->array[i]);
+	}
+	*nodes = nds;
+	return AEROSPIKE_OK;
+}
+
+void
+as_cluster_release_all_nodes(as_nodes* nodes)
+{
+	// Release each node in cluster.
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node_release(nodes->array[i]);
+	}
+	
+	// Release nodes array.
+	as_nodes_release(nodes);
+}
+
+as_status
+as_cluster_validate_size(as_cluster* cluster, as_error* err, uint32_t* size)
+{
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	*size = nodes->size;
+	as_nodes_release(nodes);
+
+	if (*size == 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_SERVER,
+									"Command failed because cluster is empty.");
+	}
+	return AEROSPIKE_OK;
+}
+
 /**
  * Add nodes using copy on write semantics.
  */
@@ -142,10 +204,12 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 		
 	// Add new nodes.
 	memcpy(&nodes_new->array[nodes_old->size], nodes_to_add->list, sizeof(as_node*) * nodes_to_add->size);
-		
+
 	// Replace nodes with copy.
 	set_nodes(cluster, nodes_new);
-	
+
+	cluster->has_partition_scan = as_cluster_has_partition_scan(nodes_new);
+
 	// Put old nodes on garbage collector stack.
 	as_gc_item item;
 	item.data = nodes_old;
@@ -256,15 +320,6 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, bool enable_warnings)
 	return status;
 }
 
-static bool
-as_cluster_find_node_in_map(as_cluster* cluster, as_node* node)
-{
-	if (cluster->shm_info) {
-		return as_shm_partition_tables_find_node(cluster->shm_info->cluster_shm, node);
-	}
-	return as_partition_tables_find_node(&cluster->partition_tables, node);
-}
-
 static void
 as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_vector* /* <as_node*> */ nodes_to_remove)
 {
@@ -291,8 +346,9 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 			// Node is not referenced by other nodes.
 			// Check if node responded to info request.
 			if (node->failures == 0) {
-				// Node is alive, but not referenced by other nodes.  Check if mapped.
-				if (! as_cluster_find_node_in_map(cluster, node)) {
+				// Node is alive, but not referenced by other nodes.
+				// Check if referenced in partition map.
+				if (node->partition_ref_count == 0) {
 					// Node doesn't have any partitions mapped to it.
 					// There is no point in keeping it in the cluster.
 					as_vector_append(nodes_to_remove, &node);
@@ -325,16 +381,6 @@ as_cluster_find_node_by_reference(as_vector* /* <as_node*> */ nodes_to_remove, a
 }
 
 /**
- * Use non-inline function for garbarge collector function pointer reference.
- * Forward to inlined release.
- */
-static void
-release_node(as_node* node)
-{
-	as_node_release(node);
-}
-
-/**
  * Remove nodes using copy on write semantics.
  */
 void
@@ -356,10 +402,7 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 		if (as_cluster_find_node_by_reference(nodes_to_remove, node)) {
 			as_log_info("Remove node %s %s", node->name, as_node_get_address_string(node));
 			as_cluster_event_notify(cluster, node, AS_CLUSTER_REMOVE_NODE);
-			as_gc_item item;
-			item.data = node;
-			item.release_fn = (as_release_fn)release_node;
-			as_vector_append(cluster->gc, &item);
+			as_node_release_delayed(node);
 		}
 		else {
 			if (count < nodes_new->size) {
@@ -378,6 +421,8 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 
 	// Replace nodes with copy.
 	set_nodes(cluster, nodes_new);
+
+	cluster->has_partition_scan = as_cluster_has_partition_scan(nodes_new);
 
 	if (nodes_new->size == 0) {
 		as_cluster_event_notify(cluster, NULL, AS_CLUSTER_DISCONNECTED);

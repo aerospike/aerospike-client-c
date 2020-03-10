@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -304,6 +304,12 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Does cluster support partition scans.
+	 */
+	bool has_partition_scan;
+
+	/**
+	 * @private
 	 * Should continue to tend cluster.
 	 */
 	volatile bool valid;
@@ -360,6 +366,24 @@ as_nodes_release(as_nodes* nodes)
 		cf_free(nodes);
 	}
 }
+
+/**
+ * Reserve nodes and all sub nodes.
+ */
+as_status
+as_cluster_reserve_all_nodes(as_cluster* cluster, as_error* err, as_nodes** nodes);
+
+/**
+ * Release nodes and all sub nodes.
+ */
+void
+as_cluster_release_all_nodes(as_nodes* nodes);
+
+/**
+ * Verify cluster contains nodes and return node count.
+ */
+as_status
+as_cluster_validate_size(as_cluster* cluster, as_error* err, uint32_t* size);
 
 /**
  * Add seed to cluster.

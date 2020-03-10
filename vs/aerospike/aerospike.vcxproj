@@ -367,6 +367,8 @@
     <ClInclude Include="..\..\src\include\aerospike\as_node.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_operations.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_partition.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_partition_filter.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_partition_tracker.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_peers.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_pipe.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_policy.h" />
@@ -486,6 +488,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_node.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_partition.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_partition_tracker.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_peers.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_pipe.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_policy.c" />

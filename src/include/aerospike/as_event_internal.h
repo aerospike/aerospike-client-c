@@ -221,6 +221,9 @@ void
 as_event_executor_complete(as_event_command* cmd);
 
 void
+as_event_error_callback(as_event_command* cmd, as_error* err);
+
+void
 as_event_notify_error(as_event_command* cmd, as_error* err);
 
 void
@@ -811,13 +814,6 @@ as_event_socket_retry(as_event_command* cmd)
 	as_event_stop_watcher(cmd, cmd->conn);
 	as_event_release_async_connection(cmd);
 	return as_event_command_retry(cmd, false);
-}
-
-static inline void
-as_event_error_callback(as_event_command* cmd, as_error* err)
-{
-	as_event_notify_error(cmd, err);
-	as_event_command_release(cmd);
 }
 
 static inline void

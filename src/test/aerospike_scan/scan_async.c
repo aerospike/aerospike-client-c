@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -293,6 +293,7 @@ scan_listener(as_error* err, as_record* rec, void* udata, as_event_loop* event_l
 	if (err) {
 		// Scan error occurred.
 		error("Scan failed: %d %s", err->code, err->message);
+		check->failed = true;
 		as_monitor_notify(&monitor);
 		return false;
 	}
@@ -416,7 +417,6 @@ TEST(scan_async_set1, "async scan "SET1"")
 
 	as_policy_scan p;
 	as_policy_scan_init(&p);
-	p.fail_on_cluster_change = true;
 
 	as_monitor_begin(&monitor);
 	

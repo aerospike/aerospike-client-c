@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -22,6 +22,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_proto.h>
+#include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
 #include <citrusleaf/cf_byte_order.h>
 
@@ -47,6 +48,8 @@ extern "C" {
 #define AS_FIELD_SCAN_OPTIONS 8
 #define AS_FIELD_SCAN_TIMEOUT 9
 #define AS_FIELD_SCAN_RPS 10
+#define AS_FIELD_PID_ARRAY 11
+#define AS_FIELD_DIGEST_ARRAY 12
 #define AS_FIELD_INDEX_RANGE 22
 #define AS_FIELD_INDEX_FILTER 23
 #define AS_FIELD_INDEX_LIMIT 24
@@ -84,7 +87,7 @@ extern "C" {
 // Message info3 bits
 #define AS_MSG_INFO3_LAST				(1 << 0) // this is the last of a multi-part message
 #define AS_MSG_INFO3_COMMIT_MASTER  	(1 << 1) // write commit level - bit 0
-// (Note:  Bit 2 is unused.)
+#define AS_MSG_INFO3_PARTITION_DONE  	(1 << 2) // Partition is complete response in scan.
 #define AS_MSG_INFO3_UPDATE_ONLY		(1 << 3) // update existing record only, do not create new record
 #define AS_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4) // completely replace existing record, or create new record
 #define AS_MSG_INFO3_REPLACE_ONLY		(1 << 5) // completely replace existing record, do not create new record
@@ -618,6 +621,23 @@ as_command_ignore_bins(uint8_t* p, uint32_t n_bins);
  */
 uint8_t*
 as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key);
+
+/**
+ * @private
+ * Return random task id if not specified.
+ */
+static inline uint64_t
+as_task_id_resolve(uint64_t* task_id_ptr)
+{
+	if (! task_id_ptr) {
+		return as_random_get_uint64();
+	}
+
+	if (*task_id_ptr == 0) {
+		*task_id_ptr = as_random_get_uint64();
+	}
+	return *task_id_ptr;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

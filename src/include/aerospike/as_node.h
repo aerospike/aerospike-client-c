@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -55,11 +55,12 @@ extern "C" {
 #define AS_FEATURES_GEO            (1 << 0)
 #define AS_FEATURES_TRUNCATE_NS    (1 << 1)
 #define AS_FEATURES_BIT_OP         (1 << 2)
-#define AS_FEATURES_PIPELINING     (1 << 4)
-#define AS_FEATURES_PEERS          (1 << 5)
-#define AS_FEATURES_REPLICAS       (1 << 6)
-#define AS_FEATURES_CLUSTER_STABLE (1 << 7)
-#define AS_FEATURES_LUT_NOW        (1 << 8)
+#define AS_FEATURES_PIPELINING     (1 << 3)
+#define AS_FEATURES_PEERS          (1 << 4)
+#define AS_FEATURES_REPLICAS       (1 << 5)
+#define AS_FEATURES_CLUSTER_STABLE (1 << 6)
+#define AS_FEATURES_LUT_NOW        (1 << 7)
+#define AS_FEATURES_PARTITION_SCAN (1 << 8)
 
 #define AS_ADDRESS4_MAX 4
 #define AS_ADDRESS6_MAX 8
@@ -204,10 +205,22 @@ typedef struct as_node_s {
 	
 	/**
 	 * @private
+	 * Reference count of node in partition maps.
+	 */
+	uint32_t partition_ref_count;
+
+	/**
+	 * @private
 	 * Server's generation count for partition management.
 	 */
 	uint32_t partition_generation;
 	
+	/**
+	 * @private
+	 * Features supported by server.  Stored in bitmap.
+	 */
+	uint32_t features;
+
 	/**
 	 * @private
 	 * TLS certificate name (needed for TLS only, NULL otherwise).
@@ -303,12 +316,6 @@ typedef struct as_node_s {
 	 * Session token length.
 	 */
 	uint32_t session_token_length;
-
-	/**
-	 * @private
-	 * Features supported by server.  Stored in bitmap.
-	 */
-	uint32_t features;
 
 	/**
 	 * @private
@@ -489,6 +496,13 @@ as_node_release(as_node* node)
 		as_node_destroy(node);
 	}
 }
+
+/**
+ * @private
+ * Release node on next cluster tend iteration.
+ */
+void
+as_node_release_delayed(as_node* node);
 
 /**
  * @private

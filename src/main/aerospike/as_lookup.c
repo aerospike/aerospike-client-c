@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -425,6 +425,9 @@ as_lookup_node(
 		}
 		else if (strcmp(begin, "blob-bits") == 0) {
 			features |= AS_FEATURES_BIT_OP;
+		}
+		else if (strcmp(begin, "pscans") == 0) {
+			features |= AS_FEATURES_PARTITION_SCAN;
 		}
 		begin = end;
 	}

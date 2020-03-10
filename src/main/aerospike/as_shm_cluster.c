@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -414,28 +414,6 @@ as_shm_node_replace_racks(as_cluster_shm* cluster_shm, as_node* node, as_racks* 
 	node_shm->rebalance_generation = node->rebalance_generation;
 	node_shm->rack_id = rack_id;
 	as_swlock_write_unlock(&node_shm->lock);
-}
-
-bool
-as_shm_partition_tables_find_node(as_cluster_shm* cluster_shm, as_node* node)
-{
-	as_partition_table_shm* table = as_shm_get_partition_tables(cluster_shm);
-	as_partition_shm* p;
-	uint32_t max_tables = cluster_shm->partition_tables_size;
-	uint32_t max_partitions = cluster_shm->n_partitions;
-	uint32_t node_index = node->index + 1;
-
-	for (uint32_t i = 0; i < max_tables; i++) {
-		for (uint32_t j = 0; j < max_partitions; j++) {
-			p = &table->partitions[j];
-
-			if (p->master == node_index || p->prole == node_index) {
-				return true;
-			}
-		}
-		table = as_shm_next_partition_table(cluster_shm, table);
-	}
-	return false;
 }
 
 as_partition_table_shm*

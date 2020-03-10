@@ -887,7 +887,7 @@ as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t com
 	bool first_error = executor->valid;
 	executor->valid = false;
 	executor->count += command_count;
-	bool complete = executor->count == executor->max;
+	bool complete = executor->count == executor->queued;
 	pthread_mutex_unlock(&executor->lock);
 
 	if (complete) {
@@ -922,8 +922,12 @@ as_event_executor_cancel(as_event_executor* executor, uint32_t queued_count)
 	// We are cancelling commands running in the event loop thread when this method
 	// is NOT running in the event loop thread.  Enforce thread-safety.
 	pthread_mutex_lock(&executor->lock);
+
+	// Do not call user listener because an error will be returned
+	// on initial batch, scan or query call.
+	executor->notify = false;
 	executor->valid = false;
-	
+
 	// Add tasks that were never queued.
 	executor->count += (executor->max - queued_count);
 	
@@ -931,8 +935,6 @@ as_event_executor_cancel(as_event_executor* executor, uint32_t queued_count)
 	pthread_mutex_unlock(&executor->lock);
 
 	if (complete) {
-		// Do not call user listener because an error will be returned
-		// on initial batch, scan or query call.
 		as_event_executor_destroy(executor);
 	}
 }
@@ -996,6 +998,20 @@ as_event_batch_complete(as_event_command* cmd)
 {
 	as_event_response_complete(cmd);
 	as_event_executor_complete(cmd);
+}
+
+bool
+as_partition_tracker_should_retry(as_status status);
+
+void
+as_event_error_callback(as_event_command* cmd, as_error* err)
+{
+	if (cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION && as_partition_tracker_should_retry(err->code)) {
+		as_event_executor_complete(cmd);
+		return;
+	}
+	as_event_notify_error(cmd, err);
+	as_event_command_release(cmd);
 }
 
 void

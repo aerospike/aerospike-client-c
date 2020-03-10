@@ -460,7 +460,8 @@ as_scan_command_init(
 	else {
 		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
 		p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
-				AS_POLICY_READ_MODE_SC_SESSION, sb->n_fields, n_ops, read_attr);
+				AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, sb->n_fields, n_ops,
+				read_attr);
 	}
 	
 	if (scan->ns[0]) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -204,7 +204,8 @@ as_command_write_header_write(
 	*(uint16_t*)&cmd[12] = 0;
 	*(uint32_t*)&cmd[14] = cf_swap_to_be32(generation);
 	*(uint32_t*)&cmd[18] = cf_swap_to_be32(ttl);
-	*(uint32_t*)&cmd[22] = cf_swap_to_be32(policy->total_timeout);
+	uint32_t timeout = as_command_server_timeout(policy);
+	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
 	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);
 	return cmd + AS_HEADER_SIZE;
@@ -213,7 +214,8 @@ as_command_write_header_write(
 uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
-	as_policy_read_mode_sc read_mode_sc, uint16_t n_fields, uint16_t n_bins, uint8_t read_attr
+	as_policy_read_mode_sc read_mode_sc, uint32_t timeout, uint16_t n_fields, uint16_t n_bins,
+	uint8_t read_attr
 	)
 {
 	uint8_t info_attr = 0;
@@ -225,7 +227,7 @@ as_command_write_header_read(
 	cmd[10] = 0;
 	cmd[11] = info_attr;
 	memset(&cmd[12], 0, 10);
-	*(uint32_t*)&cmd[22] = cf_swap_to_be32(policy->total_timeout);
+	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
 	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);
 	return cmd + AS_HEADER_SIZE;
@@ -245,7 +247,8 @@ as_command_write_header_read_header(
 	cmd[10] = 0;
 	cmd[11] = info_attr;
 	memset(&cmd[12], 0, 10);
-	*(uint32_t*)&cmd[22] = cf_swap_to_be32(policy->total_timeout);
+	uint32_t timeout = as_command_server_timeout(policy);
+	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
 	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);
 	return cmd + AS_HEADER_SIZE;

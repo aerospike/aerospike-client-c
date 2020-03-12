@@ -892,6 +892,18 @@ typedef struct as_policy_scan_s {
 	as_policy_base base;
 
 	/**
+	 * Approximate number of records to return to client. This number is divided by the
+	 * number of nodes involved in the scan.  The actual number of records returned
+	 * may be less than max_records if node record counts are small and unbalanced across
+	 * nodes.
+	 *
+	 * This field is supported on server versions >= 4.9.
+	 *
+	 * Default: 0 (do not limit record count)
+	 */
+	uint64_t max_records;
+
+	/**
 	 * Limit returned records per second (rps) rate for each server.
 	 * Do not apply rps limit if records_per_second is zero.
 	 *
@@ -1303,6 +1315,7 @@ static inline as_policy_scan*
 as_policy_scan_init(as_policy_scan* p)
 {
 	as_policy_base_query_init(&p->base);
+	p->max_records = 0;
 	p->records_per_second = 0;
 	p->fail_on_cluster_change = false;
 	p->durable_delete = false;

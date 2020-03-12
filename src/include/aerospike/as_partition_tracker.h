@@ -31,7 +31,7 @@ extern "C" {
  *****************************************************************************/
 struct as_node_s;
 struct as_cluster_s;
-struct as_policy_base_s;
+struct as_policy_scan_s;
 struct as_error_s;
 
 /**
@@ -52,6 +52,9 @@ typedef struct as_node_partitions_s {
 	struct as_node_s* node;
 	as_vector parts_full;
 	as_vector parts_partial;
+	uint64_t record_count;
+	uint64_t record_max;
+	uint32_t parts_requested;
 	uint32_t parts_received;
 } as_node_partitions;
 
@@ -66,8 +69,8 @@ typedef struct as_partition_tracker_s {
 	uint32_t node_capacity;
 	struct as_node_s* node_filter;
 	as_vector node_parts;
+	uint64_t max_records;
 	uint32_t parts_capacity;
-	uint32_t parts_requested;
 	uint32_t sleep_between_retries;
 	uint32_t socket_timeout;
 	uint32_t total_timeout;
@@ -82,19 +85,19 @@ typedef struct as_partition_tracker_s {
 
 void
 as_partition_tracker_init_nodes(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
 	uint32_t cluster_size
 	);
 
 void
 as_partition_tracker_init_node(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
 	struct as_node_s* node
 	);
 
 as_status
 as_partition_tracker_init_filter(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
 	uint32_t cluster_size, as_partition_filter* pf, struct as_error_s* err
 	);
 
@@ -111,10 +114,13 @@ as_partition_tracker_part_done(as_partition_tracker* pt, as_node_partitions* np,
 }
 
 static inline void
-as_partition_tracker_set_digest(as_partition_tracker* pt, as_digest* digest, uint32_t n_partitions)
+as_partition_tracker_set_digest(
+	as_partition_tracker* pt, as_node_partitions* np, as_digest* digest, uint32_t n_partitions
+	)
 {
 	uint32_t part_id = as_partition_getid(digest->value, n_partitions);
 	pt->parts_all[part_id - pt->part_begin].digest = *digest;
+	np->record_count++;
 }
 
 static inline uint16_t

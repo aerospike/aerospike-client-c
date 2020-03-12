@@ -23,7 +23,7 @@
  *****************************************************************************/
 
 static void
-tracker_init(as_partition_tracker* pt, const as_policy_base* policy, const as_digest* digest)
+tracker_init(as_partition_tracker* pt, const as_policy_scan* policy, const as_digest* digest)
 {
 	pt->parts_all = cf_malloc(sizeof(as_partition_status) * pt->part_count);
 
@@ -39,11 +39,13 @@ tracker_init(as_partition_tracker* pt, const as_policy_base* policy, const as_di
 	}
 
 	as_vector_init(&pt->node_parts, sizeof(as_node_partitions), pt->node_capacity);
-	pt->parts_requested = 0;
-	pt->sleep_between_retries = policy->sleep_between_retries;
-	pt->socket_timeout = policy->socket_timeout;
-	pt->total_timeout = policy->total_timeout;
-	pt->max_retries = policy->max_retries;
+	pt->max_records = policy->max_records;
+
+	const as_policy_base* pb = &policy->base;
+	pt->sleep_between_retries = pb->sleep_between_retries;
+	pt->socket_timeout = pb->socket_timeout;
+	pt->total_timeout = pb->total_timeout;
+	pt->max_retries = pb->max_retries;
 
 	if (pt->total_timeout > 0) {
 		pt->deadline = cf_getms() + pt->total_timeout;
@@ -94,7 +96,15 @@ assign_partition(as_partition_tracker* pt, as_partition_status* ps, as_node* nod
 	else {
 		as_vector_append(&np->parts_full, &ps->part_id);
 	}
-	pt->parts_requested++;
+	np->parts_requested++;
+}
+
+static void
+release_np(as_node_partitions* np)
+{
+	as_vector_destroy(&np->parts_full);
+	as_vector_destroy(&np->parts_partial);
+	as_node_release(np->node);
 }
 
 static void
@@ -102,9 +112,7 @@ release_node_partitions(as_vector* list)
 {
 	for (uint32_t i = 0; i < list->size; i++) {
 		as_node_partitions* np = as_vector_get(list, i);
-		as_vector_destroy(&np->parts_full);
-		as_vector_destroy(&np->parts_partial);
-		as_node_release(np->node);
+		release_np(np);
 	}
 }
 
@@ -114,7 +122,7 @@ release_node_partitions(as_vector* list)
 
 void
 as_partition_tracker_init_nodes(
-	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
+	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy,
 	uint32_t cluster_size
 	)
 {
@@ -132,7 +140,7 @@ as_partition_tracker_init_nodes(
 
 void
 as_partition_tracker_init_node(
-	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy, as_node* node
+	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy, as_node* node
 	)
 {
 	pt->part_begin = 0;
@@ -145,8 +153,8 @@ as_partition_tracker_init_node(
 
 as_status
 as_partition_tracker_init_filter(
-	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy, uint32_t cluster_size,
-	as_partition_filter* pf, as_error* err
+	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy,
+	uint32_t cluster_size, as_partition_filter* pf, as_error* err
 	)
 {
 	if (pf->digest.init) {
@@ -182,7 +190,6 @@ as_partition_tracker_assign(
 	)
 {
     //printf("Round %u\n", pt->iteration);
-	pt->parts_requested = 0;
 
 	if (!cluster->shm_info) {
 		as_partition_table* table = as_partition_tables_get(&cluster->partition_tables, ns);
@@ -253,24 +260,55 @@ as_partition_tracker_assign(
 			}
 		}
 	}
+
+	if (pt->max_records > 0) {
+		// Distribute max_records across nodes.
+		uint32_t node_size = pt->node_parts.size;
+
+		if (pt->max_records < node_size) {
+			// Only include nodes that have at least 1 record requested.
+			node_size = (uint32_t)pt->max_records;
+
+			// Delete unused node partitions.
+			for (uint32_t i = node_size; i < pt->node_parts.size; i++) {
+				as_node_partitions* np = as_vector_get(&pt->node_parts, i);
+				release_np(np);
+			}
+
+			// Reset list size.
+			pt->node_parts.size = node_size;
+		}
+
+		uint64_t max = pt->max_records / node_size;
+		uint32_t rem = (uint32_t)(pt->max_records - (max * node_size));
+
+		for (uint32_t i = 0; i < node_size; i++) {
+			as_node_partitions* np = as_vector_get(&pt->node_parts, i);
+			np->record_max = i < rem ? max + 1 : max;
+		}
+	}
 	return AEROSPIKE_OK;
 }
 
 as_status
 as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
 {
+	uint64_t record_count = 0;
+	uint32_t parts_requested = 0;
 	uint32_t parts_received = 0;
 	as_vector* list = &pt->node_parts;
 
 	for (uint32_t i = 0; i < list->size; i++) {
 		as_node_partitions* np = as_vector_get(list, i);
+		record_count += np->record_count;
+		parts_requested += np->parts_requested;
 		parts_received += np->parts_received;
-		//printf("Node %s partsFull=%u partsPartial=%u partsReceived=%u\n",
+		//printf("Node %s partsFull=%u partsPartial=%u partsReceived=%u recordsRequested=%llu recordsReceived=%llu\n",
 		//	as_node_get_address_string(np->node), np->parts_full.size, np->parts_partial.size,
-		//	np->parts_received);
+		//	np->parts_received, np->record_max, np->record_count);
 	}
 
-	if (parts_received >= pt->parts_requested) {
+	if (parts_received >= parts_requested || (pt->max_records > 0 && record_count >= pt->max_records)) {
 		return AEROSPIKE_OK;
 	}
 
@@ -299,9 +337,11 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
 	}
 
 	// Prepare for next iteration.
+	if (pt->max_records > 0) {
+		pt->max_records -= record_count;
+	}
 	release_node_partitions(&pt->node_parts);
 	as_vector_clear(&pt->node_parts);
-	pt->parts_capacity = pt->parts_requested - parts_received;
 	pt->iteration++;
 	return AEROSPIKE_ERR_CLIENT;
 }

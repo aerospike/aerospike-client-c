@@ -87,6 +87,7 @@ typedef struct as_scan_builder {
 	as_node_partitions* np;
 	as_buffer argbuffer;
 	as_buffer* opsbuffers;
+	uint64_t max_records;
 	uint32_t predexp_size;
 	uint32_t task_id_offset;
 	uint32_t parts_full_size;
@@ -94,6 +95,7 @@ typedef struct as_scan_builder {
 	uint32_t cmd_size_pre;
 	uint32_t cmd_size_post;
 	uint16_t n_fields;
+	bool pscan;
 } as_scan_builder;
 
 /******************************************************************************
@@ -185,7 +187,7 @@ as_scan_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as_
 	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
 
 	if (sc->np) {
-		as_partition_tracker_set_digest(se->pt, &rec.key.digest, sc->command.cluster->n_partitions);
+		as_partition_tracker_set_digest(se->pt, sc->np, &rec.key.digest, sc->command.cluster->n_partitions);
 	}
 
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops,
@@ -268,7 +270,7 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
 
 	if (task->pt) {
-		as_partition_tracker_set_digest(task->pt, &rec.key.digest, task->cluster->n_partitions);
+		as_partition_tracker_set_digest(task->pt, task->np, &rec.key.digest, task->cluster->n_partitions);
 	}
 
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->scan->deserialize_list_map);
@@ -361,9 +363,12 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 		n_fields++;
 	}
 
-	// Estimate scan options size.
-	size += as_command_field_size(2);
-	n_fields++;
+	// Only set scan options for server versions < 4.9.
+	if (!sb->pscan) {
+		// Estimate scan options size.
+		size += as_command_field_size(2);
+		n_fields++;
+	}
 	
 	// Estimate scan timeout size.
 	size += as_command_field_size(sizeof(uint32_t));
@@ -416,6 +421,12 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 		size += as_command_field_size(sb->parts_partial_size);
 		n_fields++;
 	}
+
+	if (sb->max_records > 0) {
+		size += as_command_field_size(8);
+		n_fields++;
+	}
+
 	sb->n_fields = n_fields;
 
 	// Operations (used in background scans) and bin names (used in foreground scans)
@@ -446,7 +457,7 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 static size_t
 as_scan_command_init(
 	uint8_t* cmd, const as_policy_scan* policy, const as_scan* scan, uint64_t task_id,
-	as_scan_builder* sb, bool pscan
+	as_scan_builder* sb
 	)
 {
 	uint16_t n_ops = (scan->ops) ? scan->ops->binops.size : scan->select.size;
@@ -476,22 +487,19 @@ as_scan_command_init(
 		p = as_command_write_field_uint32(p, AS_FIELD_SCAN_RPS, policy->records_per_second);
 	}
 
-	// Write scan options
-	p = as_command_write_field_header(p, AS_FIELD_SCAN_OPTIONS, 2);
+	// Only set scan options for server versions < 4.9.
+	if (!sb->pscan) {
+		// Write scan options
+		p = as_command_write_field_header(p, AS_FIELD_SCAN_OPTIONS, 2);
 
-	uint8_t priority = 0;
+		uint8_t priority = scan->priority << 4;
 
-	// Only set priority/fail_on_cluster_change for server versions < 4.9.
-	if (!pscan) {
-		priority = scan->priority << 4;
-		
 		if (policy->fail_on_cluster_change) {
 			priority |= 0x08;
 		}
+		*p++ = priority;
+		*p++ = scan->percent;
 	}
-
-	*p++ = priority;
-	*p++ = scan->percent;
 
 	// Write socket timeout.
 	p = as_command_write_field_uint32(p, AS_FIELD_SCAN_TIMEOUT, policy->base.socket_timeout);
@@ -549,6 +557,10 @@ as_scan_command_init(
 		}
 	}
 
+	if (sb->max_records > 0) {
+		p = as_command_write_field_uint64(p, AS_FIELD_SCAN_MAX_RECORDS, sb->max_records);
+	}
+
 	if (scan->ops) {
 		as_operations* ops = scan->ops;
 
@@ -594,9 +606,18 @@ as_scan_command_execute(as_scan_task* task)
 	sb.pt = task->pt;
 	sb.np = task->np;
 
+	if (task->pt) {
+		sb.max_records = task->np->record_max;
+		sb.pscan = true;
+	}
+	else {
+		sb.max_records = 0;
+		sb.pscan = false;
+	}
+
 	size_t size = as_scan_command_size(task->policy, task->scan, &sb);
 	uint8_t* buf = as_command_buffer_init(size);
-	size = as_scan_command_init(buf, task->policy, task->scan, task->task_id, &sb, sb.pt != NULL);
+	size = as_scan_command_init(buf, task->policy, task->scan, task->task_id, &sb);
 
 	as_command cmd;
 	cmd.cluster = task->cluster;
@@ -951,10 +972,12 @@ as_scan_async(
 	as_scan_builder sb;
 	sb.pt = NULL;
 	sb.np = NULL;
+	sb.max_records = 0;
+	sb.pscan = false;
 
 	size_t size = as_scan_command_size(policy, scan, &sb);
 	uint8_t* cmd_buf = as_command_buffer_init(size);
-	size = as_scan_command_init(cmd_buf, policy, scan, task_id, &sb, false);
+	size = as_scan_command_init(cmd_buf, policy, scan, task_id, &sb);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.
@@ -1023,7 +1046,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		as_node_partitions* np = as_vector_get(&pt->node_parts, i);
 		uint32_t parts_full_size = np->parts_full.size * 2;
 		uint32_t parts_partial_size = np->parts_partial.size * 20;
-		uint32_t size = se->cmd_size;
+		size_t size = se->cmd_size;
 		uint16_t n_fields = se->n_fields;
 
 		if (parts_full_size > 0) {
@@ -1033,6 +1056,11 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 
 		if (parts_partial_size > 0) {
 			size += parts_partial_size + AS_FIELD_HEADER_SIZE;
+			n_fields++;
+		}
+
+		if (np->record_max > 0) {
+			size += as_command_field_size(8);
 			n_fields++;
 		}
 
@@ -1080,9 +1108,14 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 			}
 		}
 
+		// Write record limit.
+		if (np->record_max > 0) {
+			p = as_command_write_field_uint64(p, AS_FIELD_SCAN_MAX_RECORDS, np->record_max);
+		}
+
 		memcpy(p, se->cmd_buf + se->cmd_size_pre, se->cmd_size_post);
 		p += se->cmd_size_post;
-		size = (uint32_t)as_command_write_end(cmd->buf, p);
+		size = as_command_write_end(cmd->buf, p);
 
 		cmd->total_deadline = pt->total_timeout;
 		cmd->socket_timeout = pt->socket_timeout;
@@ -1100,7 +1133,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		cmd->udata = se;  // Overload udata to be the executor.
 		cmd->parse_results = as_scan_parse_records_async;
 		cmd->pipe_listener = NULL;
-		cmd->write_len = size;
+		cmd->write_len = (uint32_t)size;
 		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_scan_command));
 		cmd->type = AS_ASYNC_TYPE_SCAN_PARTITION;
 		cmd->proto_type = AS_MESSAGE_TYPE;
@@ -1203,10 +1236,12 @@ as_scan_partition_async(
 	as_scan_builder sb;
 	sb.pt = NULL;
 	sb.np = NULL;
+	sb.max_records = 0;
+	sb.pscan = true;
 
 	size_t cmd_size = as_scan_command_size(policy, scan, &sb);
 	uint8_t* cmd_buf = cf_malloc(cmd_size);
-	cmd_size = as_scan_command_init(cmd_buf, policy, scan, task_id, &sb, true);
+	cmd_size = as_scan_command_init(cmd_buf, policy, scan, task_id, &sb);
 
 	as_async_scan_executor* se = cf_malloc(sizeof(as_async_scan_executor));
 	se->listener = listener;
@@ -1317,7 +1352,7 @@ aerospike_scan_foreach(
 		}
 
 		as_partition_tracker pt;
-		as_partition_tracker_init_nodes(&pt, cluster, &policy->base, n_nodes);
+		as_partition_tracker_init_nodes(&pt, cluster, policy, n_nodes);
 		status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 		as_partition_tracker_destroy(&pt);
 		return status;
@@ -1354,7 +1389,7 @@ aerospike_scan_node(
 		}
 
 		as_partition_tracker pt;
-		as_partition_tracker_init_node(&pt, cluster, &policy->base, node);
+		as_partition_tracker_init_node(&pt, cluster, policy, node);
 		status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 		as_partition_tracker_destroy(&pt);
 		as_node_release(node);
@@ -1430,7 +1465,7 @@ aerospike_scan_partitions(
 	}
 
 	as_partition_tracker pt;
-	status = as_partition_tracker_init_filter(&pt, cluster, &policy->base, n_nodes, pf, err);
+	status = as_partition_tracker_init_filter(&pt, cluster, policy, n_nodes, pf, err);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1468,7 +1503,7 @@ aerospike_scan_async(
 		}
 
 		as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-		as_partition_tracker_init_nodes(pt, cluster, &policy->base, n_nodes);
+		as_partition_tracker_init_nodes(pt, cluster, policy, n_nodes);
 		return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
 	}
 	else {
@@ -1517,7 +1552,7 @@ aerospike_scan_node_async(
 
 	if (cluster->has_partition_scan) {
 		as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-		as_partition_tracker_init_node(pt, cluster, &policy->base, node);
+		as_partition_tracker_init_node(pt, cluster, policy, node);
 		status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata,
 										 event_loop);
 		as_node_release(node);
@@ -1554,7 +1589,7 @@ aerospike_scan_partitions_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	status = as_partition_tracker_init_filter(pt, cluster, &policy->base, n_nodes, pf, err);
+	status = as_partition_tracker_init_filter(pt, cluster, policy, n_nodes, pf, err);
 
 	if (status != AEROSPIKE_OK) {
 		cf_free(pt);

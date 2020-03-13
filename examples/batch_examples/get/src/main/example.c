@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2020 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -49,7 +49,7 @@
 bool batch_read_cb(const as_batch_read* results, uint32_t n, void* udata);
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
-
+void batch_read_complex(aerospike* p_as);
 
 //==========================================================
 // BATCH GET Example
@@ -157,6 +157,8 @@ main(int argc, char* argv[])
 
 	LOG("second batch get call completed");
 
+	batch_read_complex(&as);
+
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);
 
@@ -248,4 +250,180 @@ insert_records(aerospike* p_as)
 	LOG("insert succeeded");
 
 	return true;
+}
+
+//==========================================================
+// Batch Read Complex Example
+//
+static bool
+insert_string_records(aerospike* p_as)
+{
+	// Create an as_record object with one (string value) bin. By using
+	// as_record_inita(), we won't need to destroy the record if we only set
+	// bins using as_key_init_strp() with a stack string buffer.
+	as_record rec;
+	as_record_inita(&rec, 1);
+
+	// Re-using rec, write records into the database such that each record's key
+	// and (test-bin) value is based on the loop index.
+	for (uint32_t i = 1; i <= 8; i++) {
+		as_error err;
+
+		// No need to destroy a stack as_key object, if we only use
+		// as_key_init_strp() with a stack string buffer.
+		as_key key;
+		char kb[8];
+		sprintf(kb, "k%u", i);
+		as_key_init_strp(&key, g_namespace, g_set, kb, false);
+
+		// In general it's ok to reset a bin value - all as_record_set_... calls
+		// destroy any previous value.
+		char vb[8];
+		sprintf(vb, "v%u", i);
+		as_record_set_strp(&rec, "test-bin", vb, false);
+
+		// Write a record to the database.
+		if (aerospike_key_put(p_as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {
+			LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool
+delete_string_records(aerospike* p_as)
+{
+	for (uint32_t i = 1; i <= 8; i++) {
+		as_error err;
+
+		// No need to destroy a stack as_key object, if we only use
+		// as_key_init_strp() with a stack string buffer.
+		as_key key;
+		char kb[64];
+		sprintf(kb, "k%u", i);
+		as_key_init_strp(&key, g_namespace, g_set, kb, false);
+
+		if (aerospike_key_remove(p_as, &err, NULL, &key) != AEROSPIKE_OK) {
+			LOG("aerospike_key_remove() returned %d - %s", err.code, err.message);
+			return false;
+		}
+	}
+	return true;
+}
+
+static void
+set_string_key(as_batch_read_record* r, char* kbuf, uint32_t index)
+{
+	sprintf(kbuf, "k%u", index);
+	as_key_init_strp(&r->key, g_namespace, g_set, kbuf, false);
+}
+
+void batch_read_complex(aerospike* p_as)
+{
+	LOG("batch_read_complex begin");
+
+	if (! insert_string_records(p_as)) {
+		return;
+	}
+
+	char* bin_names[] = {"test-bin"};
+
+	// Create mix of different stack-based read requests.
+	as_batch_read_records records;
+	as_batch_read_inita(&records, 9);
+
+	as_batch_read_record* r;
+
+	r = as_batch_read_reserve(&records);
+	char k1[8];
+	set_string_key(r, k1, 1);
+	r->n_bin_names = 1;
+	r->bin_names = bin_names;
+
+	r = as_batch_read_reserve(&records);
+	char k2[8];
+	set_string_key(r, k2, 2);
+	r->read_all_bins = true;
+
+	r = as_batch_read_reserve(&records);
+	char k3[8];
+	set_string_key(r, k3, 3);
+	r->read_all_bins = true;
+
+	r = as_batch_read_reserve(&records);
+	char k4[8];
+	set_string_key(r, k4, 4);
+	r->read_all_bins = false;
+
+	r = as_batch_read_reserve(&records);
+	char k5[8];
+	set_string_key(r, k5, 5);
+	r->read_all_bins = true;
+
+	r = as_batch_read_reserve(&records);
+	char k6[8];
+	set_string_key(r, k6, 6);
+	r->read_all_bins = true;
+
+	r = as_batch_read_reserve(&records);
+	char k7[8];
+	set_string_key(r, k7, 7);
+	r->n_bin_names = 1;
+	r->bin_names = bin_names;
+
+	// This record should be found, but the requested bin will not be found.
+	r = as_batch_read_reserve(&records);
+	char k8[8];
+	set_string_key(r, k8, 8);
+	r->n_bin_names = 1;
+	char* bns[] = {"binnotfound"};
+	r->bin_names = bns;
+
+	// This record should not be found.
+	r = as_batch_read_reserve(&records);
+	as_key_init_strp(&r->key, g_namespace, g_set, "keynotfound", false);
+	r->n_bin_names = 1;
+	r->bin_names = bin_names;
+
+	// Perform batch read.
+	as_error err;
+	as_status status = aerospike_batch_read(p_as, &err, NULL, &records);
+
+	if (status != AEROSPIKE_OK) {
+		LOG("aerospike_batch_read() returned %d - %s", err.code, err.message);
+		as_batch_read_destroy(&records);
+		return;
+	}
+
+	// Show results.
+	as_vector* list = &records.list;
+
+	for (uint32_t i = 0; i < list->size; i++) {
+		r = as_vector_get(list, i);
+		const char* key = r->key.valuep->string.value;
+
+		if (r->result == AEROSPIKE_OK) {
+			char* val = as_record_get_str(&r->record, "test-bin");
+
+			if (val) {
+				LOG("key %s: %s", key, val);
+			}
+			else {
+				// 4th key did not request bin values.
+				// 8th key requested bin that did not exist.
+				LOG("key %s: exists but bin not requested or bin was not found", key);
+			}
+		}
+		else if (r->result == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			LOG("key %s: not found", key);
+		}
+		else {
+			LOG("key %s error: %d", key, r->result);
+		}
+	}
+
+	as_batch_read_destroy(&records);
+	delete_string_records(p_as);
+	LOG("batch_read_complex end");
 }

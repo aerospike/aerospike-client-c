@@ -162,7 +162,7 @@ typedef void (*as_async_batch_listener)(as_error* err, as_batch_read_records* re
 /**
  * Initialize `as_batch_read_records` with specified capacity on the stack using alloca().
  *
- * When the batch is no longer needed, then use as_batch_destroy() to
+ * When the batch is no longer needed, then use as_batch_read_destroy() to
  * release the batch and associated resources.
  *
  * @param __records		Batch record list.
@@ -177,7 +177,7 @@ typedef void (*as_async_batch_listener)(as_error* err, as_batch_read_records* re
 /**
  * Initialize `as_batch_read_records` with specified capacity on the heap.
  *
- * When the batch is no longer needed, then use as_batch_destroy() to
+ * When the batch is no longer needed, then use as_batch_read_destroy() to
  * release the batch and associated resources.
  *
  * @param records	Batch record list.
@@ -195,7 +195,7 @@ as_batch_read_init(as_batch_read_records* records, uint32_t capacity)
 /**
  * Create `as_batch_read_records` on heap with specified list capacity on the heap.
  *
- * When the batch is no longer needed, then use as_batch_destroy() to
+ * When the batch is no longer needed, then use as_batch_read_destroy() to
  * release the batch and associated resources.
  *
  * @param capacity	Initial capacity of batch record list. List will resize when necessary.

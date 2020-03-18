@@ -1258,7 +1258,6 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
 				bin->valuep = &bin->value;
 				break;
 			}
-			case AS_BYTES_LDT:
 			case AS_BYTES_LIST:
 			case AS_BYTES_MAP: {
 				if (deserialize) {

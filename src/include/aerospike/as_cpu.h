@@ -22,6 +22,12 @@
 #include <mach/thread_policy.h>
 #endif
 
+#if defined(__FreeBSD__)
+#include <sys/_cpuset.h>
+#include <sys/cpuset.h>
+#include <pthread_np.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -39,6 +45,11 @@ as_cpu_assign_thread_attr(pthread_attr_t* attr, int cpu_id)
 #if defined(__APPLE__) || defined(AS_ALPINE)
 	// CPU affinity will be set later.
 	return 0;
+#elif defined(__FreeBSD__)
+	cpuset_t cpuset;
+	CPU_ZERO(&cpuset);
+	CPU_SET(cpu_id, &cpuset);
+	return pthread_attr_setaffinity_np(attr, sizeof(cpuset_t), &cpuset);
 #else
 	cpu_set_t cpuset;
 	CPU_ZERO(&cpuset);

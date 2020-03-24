@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include <aerospike/as_cdt_order.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
 
@@ -52,7 +53,7 @@ typedef enum {
  * @ingroup as_operations_object
  */
 typedef struct as_cdt_ctx_item {
-	as_cdt_ctx_type type;
+	uint32_t type;
 	union
 	{
 		int64_t ival;
@@ -159,6 +160,21 @@ as_cdt_ctx_add_list_index(as_cdt_ctx* ctx, int index)
 }
 
 /**
+ * Create list with given type at index offset.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
+ */
+static inline void
+as_cdt_ctx_add_list_index_create(as_cdt_ctx* ctx, int index, as_list_order order, bool pad)
+{
+	as_cdt_ctx_item item;
+	item.type = AS_CDT_CTX_LIST_INDEX | as_list_order_to_flag(order, pad);
+	item.val.ival = index;
+	as_vector_append(&ctx->list, &item);
+}
+
+/**
  * Lookup list by rank.
  * <ul>
  * <li>0 = smallest value</li>
@@ -248,6 +264,22 @@ as_cdt_ctx_add_map_key(as_cdt_ctx* ctx, as_val* key)
 {
 	as_cdt_ctx_item item;
 	item.type = AS_CDT_CTX_MAP_KEY;
+	item.val.pval = key;
+	as_vector_append(&ctx->list, &item);
+}
+
+/**
+ * Create map with given type at map key.
+ * The ctx list takes ownership of key.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
+ */
+static inline void
+as_cdt_ctx_add_map_key_create(as_cdt_ctx* ctx, as_val* key, as_map_order order)
+{
+	as_cdt_ctx_item item;
+	item.type = AS_CDT_CTX_MAP_KEY | as_map_order_to_flag(order);
 	item.val.pval = key;
 	as_vector_append(&ctx->list, &item);
 }

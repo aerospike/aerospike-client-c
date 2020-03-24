@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -194,7 +194,7 @@ static bool parse_opts(int argc, char* argv[])
 		case 'P':
 			as_password_acquire(g_password, optarg, AS_PASSWORD_SIZE);
 			break;
-				
+
 		case 'S':
 			// Exclude all but the specified suite from the plan.
 			atf_suite_filter(optarg);
@@ -204,7 +204,7 @@ static bool parse_opts(int argc, char* argv[])
 			// Exclude all but the specified test.
 			atf_test_filter(optarg);
 			break;
-				
+
 		case 'A':
 			g_tls.enable = true;
 			break;
@@ -263,10 +263,10 @@ static bool parse_opts(int argc, char* argv[])
 		case 'u':
 			usage();
 			return false;
-				
+
 		default:
-	        error("unrecognized options");
-	        usage();
+			error("unrecognized options");
+			usage();
 			return false;
 		}
 	}
@@ -274,17 +274,17 @@ static bool parse_opts(int argc, char* argv[])
 	return true;
 }
 
-static bool before(atf_plan * plan) {
-
-    if ( as ) {
-        error("aerospike was already initialized");
-        return false;
-    }
+static bool before(atf_plan* plan)
+{
+	if ( as ) {
+		error("aerospike was already initialized");
+		return false;
+	}
 
 	// Initialize logging.
 	as_log_set_level(AS_LOG_LEVEL_INFO);
 	as_log_set_callback(as_client_log_callback);
-	
+
 #if AS_EVENT_LIB_DEFINED
 	if (as_event_create_loops(1) == 0) {
 		error("failed to create event loops");
@@ -343,16 +343,16 @@ static bool before(atf_plan * plan) {
 	return true;
 }
 
-static bool after(atf_plan * plan) {
+static bool after(atf_plan* plan)
+{
+	if ( ! as ) {
+		error("aerospike was not initialized");
+		return false;
+	}
 
-    if ( ! as ) {
-        error("aerospike was not initialized");
-        return false;
-    }
-	
 	as_error err;
 	as_error_reset(&err);
-	
+
 	as_status status = aerospike_close(as, &err);
 	aerospike_destroy(as);
 
@@ -373,13 +373,13 @@ static bool after(atf_plan * plan) {
  * TEST PLAN
  *****************************************************************************/
 
-PLAN(aerospike_test) {
-
+PLAN(aerospike_test)
+{
 	// This needs to be done before we add the tests.
-    if (! parse_opts(g_argc, g_argv)) {
-    	return;
-    }
-		
+	if (! parse_opts(g_argc, g_argv)) {
+		return;
+	}
+
 	plan_before(before);
 	plan_after(after);
 
@@ -413,7 +413,7 @@ PLAN(aerospike_test) {
 	// aerospike_query module
 	plan_add(query_foreach);
 	plan_add(query_background);
-    plan_add(query_geospatial);
+	plan_add(query_geospatial);
 
 	// aerospike_scan module
 	plan_add(scan_basics);

@@ -16,49 +16,80 @@
  */
 #pragma once
 
-#include <aerospike/as_msgpack.h>
-#include <aerospike/as_cdt_ctx.h>
-#include <aerospike/as_operations.h>
+#include <aerospike/as_std.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /******************************************************************************
- * MACROS
+ * TYPES
  *****************************************************************************/
 
-#define as_cdt_begin() \
-	{0};\
-	while (true) {
+/**
+ * List storage order.
+ *
+ * @ingroup list_operations
+ */
+typedef enum as_list_order_e {
+	/**
+	 * List is not ordered.  This is the default.
+	 */
+	AS_LIST_UNORDERED = 0,
 
-#define as_cdt_end(pk) \
-		if (!(pk)->buffer) {\
-			(pk)->buffer = cf_malloc((pk)->offset);\
-			(pk)->capacity = (pk)->offset;\
-			(pk)->offset = 0;\
-			(pk)->head = NULL;\
-			(pk)->tail = NULL;\
-			continue;\
-		}\
-		break;\
-	}
+	/**
+	 * List is ordered.
+	 */
+	AS_LIST_ORDERED = 1,
+} as_list_order;
+
+/**
+ * Map storage order.
+ *
+ * @ingroup map_operations
+ */
+typedef enum as_map_order_e {
+	/**
+	 * Map is not ordered.  This is the default.
+	 */
+	AS_MAP_UNORDERED = 0,
+	
+	/**
+	 * Order map by key.
+	 */
+	AS_MAP_KEY_ORDERED = 1,
+	
+	/**
+	 * Order map by key, then value.
+	 */
+	AS_MAP_KEY_VALUE_ORDERED = 3
+} as_map_order;
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
 
-void
-as_cdt_pack_header(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32_t count);
+static inline uint32_t
+as_list_order_to_flag(as_list_order order, bool pad)
+{
+	return (order == AS_LIST_ORDERED)? 0xc0 : pad ? 0x80 : 0x40;
+}
 
-void
-as_cdt_pack_header_flag(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32_t count, uint32_t flag);
+static inline uint32_t
+as_map_order_to_flag(as_map_order order)
+{
+	switch (order) {
+		default:
+		case AS_MAP_UNORDERED:
+			return 0x40;
 
-void
-as_cdt_pack_ctx(as_packer* pk, as_cdt_ctx* ctx);
+		case AS_MAP_KEY_ORDERED:
+			return 0x80;
 
-bool
-as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operator op_type);
+		case AS_MAP_KEY_VALUE_ORDERED:
+			return 0xc0;
+	}
+}
 
 #ifdef __cplusplus
 } // end extern "C"

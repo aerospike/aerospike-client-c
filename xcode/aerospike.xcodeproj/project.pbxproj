@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BF162EBE2413000B001B1747 /* as_cdt_order.h in Headers */ = {isa = PBXBuildFile; fileRef = BF162EBD2413000B001B1747 /* as_cdt_order.h */; };
 		BF1C2ADF20BE031B00868695 /* aerospike_stats.h in Headers */ = {isa = PBXBuildFile; fileRef = BF1C2ADE20BE031B00868695 /* aerospike_stats.h */; };
 		BF1C2AE120BE089700868695 /* aerospike_stats.c in Sources */ = {isa = PBXBuildFile; fileRef = BF1C2AE020BE089700868695 /* aerospike_stats.c */; };
 		BF1FF985215ECA75000A8F3A /* as_msgpack_ext.c in Sources */ = {isa = PBXBuildFile; fileRef = BF1FF984215ECA75000A8F3A /* as_msgpack_ext.c */; };
@@ -187,6 +188,7 @@
 
 /* Begin PBXFileReference section */
 		BF07F63718B4252500CE1850 /* libaerospike.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libaerospike.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		BF162EBD2413000B001B1747 /* as_cdt_order.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_cdt_order.h; path = ../src/include/aerospike/as_cdt_order.h; sourceTree = "<group>"; };
 		BF1C2ADE20BE031B00868695 /* aerospike_stats.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_stats.h; path = ../src/include/aerospike/aerospike_stats.h; sourceTree = "<group>"; };
 		BF1C2AE020BE089700868695 /* aerospike_stats.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = aerospike_stats.c; path = ../src/main/aerospike/aerospike_stats.c; sourceTree = "<group>"; };
 		BF1FF984215ECA75000A8F3A /* as_msgpack_ext.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_msgpack_ext.c; path = ../modules/common/src/main/aerospike/as_msgpack_ext.c; sourceTree = "<group>"; };
@@ -625,6 +627,7 @@
 				BF457A8522B1AC6600409D04 /* as_bit_operations.h */,
 				BFB0ED5422A72260007FEA9C /* as_cdt_ctx.h */,
 				BF90C76922AB143C0062D920 /* as_cdt_internal.h */,
+				BF162EBD2413000B001B1747 /* as_cdt_order.h */,
 				BFC65B471C921E9E0079DF5A /* as_cluster.h */,
 				BFC65B481C921E9E0079DF5A /* as_command.h */,
 				BFC65B491C921E9E0079DF5A /* as_config.h */,
@@ -688,6 +691,7 @@
 				BFC65B731C921E9E0079DF5A /* as_command.h in Headers */,
 				BFF344B01CDAC67700FD1976 /* as_map_operations.h in Headers */,
 				BFC65B821C921E9E0079DF5A /* as_policy.h in Headers */,
+				BF162EBE2413000B001B1747 /* as_cdt_order.h in Headers */,
 				BFC65B801C921E9E0079DF5A /* as_partition.h in Headers */,
 				BFC65B7D1C921E9E0079DF5A /* as_lookup.h in Headers */,
 				BF4E4E2A1D48213700BEEF94 /* as_host.h in Headers */,

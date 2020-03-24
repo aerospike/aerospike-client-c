@@ -1002,7 +1002,9 @@ void
 as_event_notify_error(as_event_command* cmd, as_error* err)
 {
 	as_error_set_in_doubt(err, cmd->flags & AS_ASYNC_FLAGS_READ, cmd->command_sent_counter);
-
+	if (cmd->event_loop != NULL) {
+		cmd->event_loop->errors++;
+	}
 	switch (cmd->type) {
 		case AS_ASYNC_TYPE_WRITE:
 			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);

@@ -447,7 +447,7 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 {
 	*compressed_size -= sizeof(as_compressed_proto);
 	int ret_val = compress2(compressed_cmd + sizeof(as_compressed_proto), (uLongf*)compressed_size,
-							cmd, (uLong)cmd_sz, Z_DEFAULT_COMPRESSION);
+							cmd, (uLong)cmd_sz, Z_BEST_SPEED);
 	
 	if (ret_val) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Compress failed: %d", ret_val);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -23,17 +23,11 @@ as_cdt_ctx_destroy(as_cdt_ctx* ctx)
 	as_vector* list = &ctx->list;
 
 	for (uint32_t i = 0; i < list->size; i++) {
-		as_cdt_ctx_item* item = (as_cdt_ctx_item*)as_vector_get(list, i);
+		as_cdt_ctx_item* item = as_vector_get(list, i);
 
-		switch (item->type) {
-			case AS_CDT_CTX_LIST_VALUE:
-			case AS_CDT_CTX_MAP_KEY:
-			case AS_CDT_CTX_MAP_VALUE:
-				as_val_destroy(item->val.pval);
-				break;
-
-			default:
-				break;
+		// Destroy ctx entries that contain an as_val.
+		if (item->type & AS_CDT_CTX_VALUE) {
+			as_val_destroy(item->val.pval);
 		}
 	}
 	as_vector_destroy(list);

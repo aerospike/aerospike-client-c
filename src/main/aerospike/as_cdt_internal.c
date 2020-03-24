@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -39,6 +39,41 @@ as_cdt_pack_header(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32_t co
 			as_pack_list_header(pk, count);
 		}
 	}
+}
+
+void
+as_cdt_pack_header_flag(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32_t count, uint32_t flag)
+{
+	as_pack_list_header(pk, 3);
+	as_pack_uint64(pk, 0xff);
+	as_pack_list_header(pk, ctx->list.size * 2);
+
+	as_cdt_ctx_item* item;
+	uint32_t last = ctx->list.size - 1;
+
+	for (uint32_t i = 0; i < last; i++) {
+		item = as_vector_get(&ctx->list, i);
+		as_pack_uint64(pk, item->type);
+
+		if (item->type & AS_CDT_CTX_VALUE) {
+			as_pack_val(pk, item->val.pval);
+		}
+		else {
+			as_pack_int64(pk, item->val.ival);
+		}
+	}
+
+	item = as_vector_get(&ctx->list, last);
+	as_pack_uint64(pk, item->type | flag);
+
+	if (item->type & AS_CDT_CTX_VALUE) {
+		as_pack_val(pk, item->val.pval);
+	}
+	else {
+		as_pack_int64(pk, item->val.ival);
+	}
+	as_pack_list_header(pk, count + 1);
+	as_pack_uint64(pk, command);
 }
 
 void

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -128,6 +128,27 @@ as_map_policy_set_flags(as_map_policy* policy, as_map_order order, uint32_t flag
 	policy->flags = flags;
 	policy->item_command = PUT;
 	policy->items_command = PUT_ITEMS;
+}
+
+bool
+as_operations_map_create(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_map_order order
+	)
+{
+	// If context not defined, the set order for top-level bin list.
+	if (! ctx) {
+		as_map_policy policy;
+		as_map_policy_set(&policy, order, AS_MAP_UPDATE);
+		return as_operations_map_set_policy(ops, name, NULL, &policy);
+	}
+
+	uint32_t flag = as_map_order_to_flag(order);
+
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header_flag(&pk, ctx, SET_TYPE, 1, flag);
+	as_pack_uint64(&pk, (uint64_t)order);
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }
 
 bool

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -83,6 +83,7 @@
 
 #include <aerospike/as_operations.h>
 #include <aerospike/as_cdt_ctx.h>
+#include <aerospike/as_cdt_order.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -91,23 +92,6 @@ extern "C" {
 /******************************************************************************
  * TYPES
  *****************************************************************************/
-
-/**
- * List storage order.
- *
- * @ingroup list_operations
- */
-typedef enum as_list_order_e {
-	/**
-	 * List is not ordered.  This is the default.
-	 */
-	AS_LIST_UNORDERED = 0,
-
-	/**
-	 * List is ordered.
-	 */
-	AS_LIST_ORDERED = 1,
-} as_list_order;
 
 /**
  * List sort flags.
@@ -259,6 +243,19 @@ as_list_policy_set(as_list_policy* policy, as_list_order order, as_list_write_fl
 	policy->order = order;
 	policy->flags = flags;
 }
+
+/**
+ * Create list create operation.
+ * Server creates list at given context level. The context is allowed to be beyond list
+ * boundaries only if pad is set to true.  In that case, nil list entries will be inserted to
+ * satisfy the context position.
+ *
+ * @ingroup list_operations
+ */
+AS_EXTERN bool
+as_operations_list_create(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_order order, bool pad
+	);
 
 /**
  * Create set list order operation.

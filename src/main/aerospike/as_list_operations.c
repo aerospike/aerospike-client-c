@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -83,6 +83,25 @@ as_list_range(
 	as_val_destroy(begin);
 	as_val_destroy(end);
 	return as_cdt_add_packed(&pk, ops, name, op_type);
+}
+
+bool
+as_operations_list_create(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_order order, bool pad
+	)
+{
+	// If context not defined, the set order for top-level bin list.
+	if (! ctx) {
+		return as_operations_list_set_order(ops, name, NULL, order);
+	}
+
+	uint32_t flag = as_list_order_to_flag(order, pad);
+
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header_flag(&pk, ctx, SET_TYPE, 1, flag);
+	as_pack_uint64(&pk, (uint64_t)order);
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_MODIFY);
 }
 
 bool

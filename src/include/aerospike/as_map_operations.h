@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -99,6 +99,7 @@
  * ~~~~~~~~~~
  */
 
+#include <aerospike/as_cdt_order.h>
 #include <aerospike/as_operations.h>
 
 #ifdef __cplusplus
@@ -108,28 +109,6 @@ extern "C" {
 /******************************************************************************
  * TYPES
  *****************************************************************************/
-
-/**
- * Map storage order.
- *
- * @ingroup map_operations
- */
-typedef enum as_map_order_e {
-	/**
-	 * Map is not ordered.  This is the default.
-	 */
-	AS_MAP_UNORDERED = 0,
-	
-	/**
-	 * Order map by key.
-	 */
-	AS_MAP_KEY_ORDERED = 1,
-	
-	/**
-	 * Order map by key, then value.
-	 */
-	AS_MAP_KEY_VALUE_ORDERED = 3
-} as_map_order;
 
 /**
  * Map write mode.
@@ -308,6 +287,17 @@ as_map_policy_set(as_map_policy* policy, as_map_order order, as_map_write_mode m
  */
 AS_EXTERN void
 as_map_policy_set_flags(as_map_policy* policy, as_map_order order, uint32_t flags);
+
+/**
+ * Create map create operation.
+ * Server creates map at given context level.
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_map_create(
+	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_map_order order
+	);
 
 /**
  * Create set map policy operation.

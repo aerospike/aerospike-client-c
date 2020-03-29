@@ -1431,6 +1431,13 @@ as_uv_socket_timeout(uv_timer_t* timer)
 	as_event_socket_timeout(timer->data);
 }
 
+void
+as_uv_retry(uv_timer_t* timer)
+{
+	// One-off timers are automatically stopped by libuv.
+	as_event_execute_retry(timer->data);
+}
+
 static void
 as_event_close_connection_cb(as_event_loop* event_loop, as_event_connection* conn)
 {

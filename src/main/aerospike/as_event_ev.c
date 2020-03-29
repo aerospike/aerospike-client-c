@@ -885,6 +885,13 @@ as_ev_socket_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
 	as_event_socket_timeout(timer->data);
 }
 
+void
+as_ev_retry(struct ev_loop* loop, ev_timer* timer, int revents)
+{
+	// One-off timers are automatically stopped by libev.
+	as_event_execute_retry(timer->data);
+}
+
 static void
 as_ev_close_connections(as_node* node, as_async_conn_pool* pool)
 {

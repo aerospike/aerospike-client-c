@@ -48,6 +48,7 @@ int as_event_send_buffer_size = 0;
 int as_event_recv_buffer_size = 0;
 bool as_event_threads_created = false;
 bool as_event_single_thread = false;
+static pthread_mutex_t as_event_lock = PTHREAD_MUTEX_INITIALIZER;
 
 as_status aerospike_library_init(as_error* err);
 int as_batch_retry_async(as_event_command* cmd);
@@ -252,9 +253,14 @@ as_set_external_event_loop(as_error* err, as_policy_event* policy, void* loop, a
 		as_policy_event_init(policy);
 	}
 
-	uint32_t current = as_faa_uint32(&as_event_loop_size, 1);
-	
+	// Synchronize event loop registration calls that are coming from separate
+	// event loop threads.
+	pthread_mutex_lock(&as_event_lock);
+
+	uint32_t current = as_event_loop_size;
+
 	if (current >= as_event_loop_capacity) {
+		pthread_mutex_unlock(&as_event_lock);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to add external loop. Capacity is %u", as_event_loop_capacity);
 	}
 	
@@ -273,6 +279,12 @@ as_set_external_event_loop(as_error* err, as_policy_event* policy, void* loop, a
 		// Warning: not synchronized with as_event_loop_get()
 		as_event_loops[current - 1].next = event_loop;
 	}
+
+	// Set as_event_loop_size now that event loop has been fully initialized.
+	as_event_loop_size = current + 1;
+
+	pthread_mutex_unlock(&as_event_lock);
+
 	*event_loop_out = event_loop;
 	return AEROSPIKE_OK;
 }
@@ -547,6 +559,8 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		}
 
 		if (! cmd->node) {
+            cmd->event_loop->errors++;
+
 			as_error err;
 			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
 
@@ -738,6 +752,7 @@ as_event_command_retry(as_event_command* cmd, bool alternate)
 	// Reset command connection so timeout watcher knows not to close connection twice.
 	cmd->conn = NULL;
 
+	/* DISABLE SPLIT BATCH RETRIES FOR NOW
 	// Batch retries can be split into multiple retries to different nodes.
 	if (cmd->type == AS_ASYNC_TYPE_BATCH) {
 		int rv = as_batch_retry_async(cmd);
@@ -751,9 +766,66 @@ as_event_command_retry(as_event_command* cmd, bool alternate)
 			return rv >= -1;
 		}
 	}
+	*/
+
+	// Disable timeout.
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		as_event_stop_timer(cmd);
+	}
+	else {
+		cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER;
+	}
 
 	// Retry command at the end of the queue so other commands have a chance to run first.
-	return as_event_execute(cmd->event_loop, (as_event_executable)as_event_command_begin, cmd);
+	// Initialize event to eventually call as_event_execute_retry().
+	as_event_init_retry_timer(cmd);
+	return true;
+}
+
+void
+as_event_execute_retry(as_event_command* cmd)
+{
+	// Restore timer that was reset for retry.
+	if (cmd->total_deadline > 0) {
+		// Check total timeout.
+		uint64_t now = cf_getms();
+
+		if (now >= cmd->total_deadline) {
+			as_event_total_timeout(cmd);
+			return;
+		}
+
+		uint64_t remaining = cmd->total_deadline - now;
+
+		if (cmd->flags & AS_ASYNC_FLAGS_USING_SOCKET_TIMER) {
+			if (remaining <= cmd->socket_timeout) {
+				// Restore total timer.
+				cmd->flags &= ~AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+				as_event_init_total_timer(cmd, remaining);
+			}
+			else {
+				// Restore socket timer.
+				cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
+				as_event_init_socket_timer(cmd);
+			}
+		}
+		else {
+			// Restore total timer.
+			as_event_init_total_timer(cmd, remaining);
+		}
+	}
+	else if (cmd->flags & AS_ASYNC_FLAGS_USING_SOCKET_TIMER) {
+		// Restore socket timer.
+		cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
+		as_event_init_socket_timer(cmd);
+	}
+	else {
+		// Restore no timer.
+		cmd->flags &= ~AS_ASYNC_FLAGS_HAS_TIMER;
+	}
+
+	// Retry command.
+	as_event_command_begin(cmd->event_loop, cmd);
 }
 
 static inline void

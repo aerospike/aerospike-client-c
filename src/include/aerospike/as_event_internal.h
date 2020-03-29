@@ -192,6 +192,9 @@ bool
 as_event_command_retry(as_event_command* cmd, bool timeout);
 	
 void
+as_event_execute_retry(as_event_command* cmd);
+
+void
 as_event_query_complete(as_event_command* cmd);
 
 void
@@ -270,6 +273,7 @@ as_event_node_destroy(as_node* node);
 
 void as_ev_socket_timeout(struct ev_loop* loop, ev_timer* timer, int revents);
 void as_ev_total_timeout(struct ev_loop* loop, ev_timer* timer, int revents);
+void as_ev_retry(struct ev_loop* loop, ev_timer* timer, int revents);
 
 static inline bool
 as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
@@ -333,6 +337,14 @@ as_event_repeat_socket_timer(as_event_command* cmd)
 }
 
 static inline void
+as_event_init_retry_timer(as_event_command* cmd)
+{
+	ev_timer_init(&cmd->timer, as_ev_retry, 0.0, 0.0);
+	cmd->timer.data = cmd;
+	ev_timer_start(cmd->event_loop->loop, &cmd->timer);
+}
+
+static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
 	ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
@@ -342,6 +354,7 @@ static inline void
 as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 {
 	ev_io_stop(cmd->event_loop->loop, &conn->watcher);
+	conn->watching = 0;
 }
 
 static inline void
@@ -365,6 +378,7 @@ as_event_command_release(as_event_command* cmd)
 void as_uv_connection_closed(uv_handle_t* socket);
 void as_uv_total_timeout(uv_timer_t* timer);
 void as_uv_socket_timeout(uv_timer_t* timer);
+void as_uv_retry(uv_timer_t* timer);
 
 static inline bool
 as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
@@ -435,6 +449,14 @@ as_event_repeat_socket_timer(as_event_command* cmd)
 }
 
 static inline void
+as_event_init_retry_timer(as_event_command* cmd)
+{
+	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
+	cmd->timer.data = cmd;
+	uv_timer_start(&cmd->timer, as_uv_retry, 0, 0);
+}
+
+static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
 	uv_timer_stop(&cmd->timer);
@@ -476,6 +498,7 @@ as_event_command_release(as_event_command* cmd)
 
 void as_libevent_socket_timeout(evutil_socket_t sock, short events, void* udata);
 void as_libevent_total_timeout(evutil_socket_t sock, short events, void* udata);
+void as_libevent_retry(evutil_socket_t sock, short events, void* udata);
 
 static inline bool
 as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
@@ -545,6 +568,14 @@ as_event_repeat_socket_timer(as_event_command* cmd)
 }
 
 static inline void
+as_event_init_retry_timer(as_event_command* cmd)
+{
+	evtimer_assign(&cmd->timer, cmd->event_loop->loop, as_libevent_retry, cmd);
+	struct timeval tv = {0,0};
+	evtimer_add(&cmd->timer, &tv);
+}
+
+static inline void
 as_event_stop_timer(as_event_command* cmd)
 {
 	evtimer_del(&cmd->timer);
@@ -554,6 +585,7 @@ static inline void
 as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 {
 	event_del(&conn->watcher);
+	conn->watching = 0;
 }
 
 static inline void
@@ -618,6 +650,11 @@ as_event_set_socket_timer(as_event_command* cmd)
 
 static inline void
 as_event_repeat_socket_timer(as_event_command* cmd)
+{
+}
+
+static inline void
+as_event_init_retry_timer(as_event_command* cmd)
 {
 }
 

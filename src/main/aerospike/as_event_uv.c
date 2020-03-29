@@ -552,6 +552,8 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 static void
 as_uv_fd_error(as_event_command* cmd, as_error* err)
 {
+    cmd->event_loop->errors++;
+
 	// Only timer needs to be released on socket connection failure.
 	// Watcher has not been registered yet.
 	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
@@ -595,6 +597,8 @@ as_uv_connected(uv_connect_t* req, int status)
 	as_event_command* cmd = req->data;
 
 	if (status == 0) {
+		cmd->event_loop->errors = 0; // Reset errors on valid connection.
+
 		if (cmd->cluster->user) {
 			as_uv_auth_write_start(cmd, req->handle);
 		}
@@ -672,7 +676,6 @@ as_event_connect(as_event_command* cmd)
 		as_uv_connect_error(cmd, &err);
 		return;
 	}
-	cmd->event_loop->errors = 0; // Reset errors on valid connection.
 }
 
 void
@@ -686,6 +689,13 @@ void
 as_uv_socket_timeout(uv_timer_t* timer)
 {
 	as_event_socket_timeout(timer->data);
+}
+
+void
+as_uv_retry(uv_timer_t* timer)
+{
+	// One-off timers are automatically stopped by libuv.
+	as_event_execute_retry(timer->data);
 }
 
 void

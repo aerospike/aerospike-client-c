@@ -932,6 +932,13 @@ as_libevent_socket_timeout(evutil_socket_t sock, short events, void* udata)
 }
 
 void
+as_libevent_retry(evutil_socket_t sock, short events, void* udata)
+{
+	// One-off timers are automatically stopped by libevent.
+	as_event_execute_retry(udata);
+}
+
+void
 as_event_close_connection(as_event_connection* conn)
 {
 	as_socket_close(&conn->socket);

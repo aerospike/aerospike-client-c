@@ -348,6 +348,10 @@
     <ClInclude Include="..\..\src\include\aerospike\as_async_proto.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_batch.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_bin.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_bit_operations.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_cdt_ctx.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_cdt_internal.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_cdt_order.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_cluster.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_command.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_config.h" />
@@ -356,6 +360,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_error.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_event.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_event_internal.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_hll_operations.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_host.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_info.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_job.h" />
@@ -478,6 +483,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_event_event.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event_none.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event_uv.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_hll_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_host.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_info.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_job.c" />

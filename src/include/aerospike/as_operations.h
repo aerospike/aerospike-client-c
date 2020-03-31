@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -72,7 +72,9 @@ typedef enum as_operator_e {
 
 	AS_OPERATOR_BIT_READ   = 12,
 	AS_OPERATOR_BIT_MODIFY = 13,
-	AS_OPERATOR_DELETE = 14
+	AS_OPERATOR_DELETE = 14,
+	AS_OPERATOR_HLL_READ = 15,
+	AS_OPERATOR_HLL_MODIFY = 16
 
 } as_operator;
 

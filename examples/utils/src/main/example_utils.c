@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2019 by Aerospike.
+ * Copyright 2008-2020 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -932,6 +932,8 @@ operator_to_string(as_operator op)
 		OP_CASE_ASSIGN(AS_OPERATOR_BIT_MODIFY);
 		OP_CASE_ASSIGN(AS_OPERATOR_BIT_READ);
 		OP_CASE_ASSIGN(AS_OPERATOR_DELETE);
+		OP_CASE_ASSIGN(AS_OPERATOR_HLL_MODIFY);
+		OP_CASE_ASSIGN(AS_OPERATOR_HLL_READ);
 	}
 
 	return "NOT DEFINED";

@@ -136,6 +136,73 @@ TEST(hll_ops, "hll ops")
 	as_record_destroy(prec);
 }
 
+TEST(hll_read_write, "hll read write")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 102);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	// Create HLL bin.
+	as_arraylist list;
+	as_arraylist_init(&list, 3, 0);
+	as_arraylist_append_str(&list, "key1");
+	as_arraylist_append_str(&list, "key2");
+	as_arraylist_append_str(&list, "key3");
+
+	as_operations ops;
+	as_operations_inita(&ops, 5);
+	as_operations_hll_add(&ops, BIN_NAME, NULL, NULL, (as_list*)&list, 8);
+	as_arraylist_destroy(&list);
+
+	as_record* prec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(prec);
+
+	// Read HLL bin.
+	prec = 0;
+	status = aerospike_key_get(as, &err, NULL, &key, &prec);
+    assert_int_eq(status, AEROSPIKE_OK);
+	
+	as_bytes* bytes_hll = as_record_get_bytes(prec, BIN_NAME);
+	assert_not_null(bytes_hll);
+	assert_int_eq(bytes_hll->type, AS_BYTES_HLL);
+
+	// Reserve HLL bytes for future processing.
+	as_val_reserve((as_val*)bytes_hll);
+	uint8_t* bytes = bytes_hll->value;
+	uint32_t len = bytes_hll->size;
+	as_record_destroy(prec);
+
+	// Write HLL value to another bin
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_rawp(&rec, "bin2", bytes, len, true);
+
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	// Read both bins.
+	prec = 0;
+	status = aerospike_key_get(as, &err, NULL, &key, &prec);
+    assert_int_eq(status, AEROSPIKE_OK);
+
+	// Compare bins.
+	as_bytes* b1 = as_record_get_bytes(prec, BIN_NAME);
+	as_bytes* b2 = as_record_get_bytes(prec, "bin2");
+	//example_dump_record(prec);
+	assert_int_eq(b1->size, b2->size);
+
+	int rv = memcmp(b1->value, b2->value, b1->size);
+    assert_int_eq(rv, 0);
+	as_record_destroy(prec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -144,4 +211,5 @@ SUITE(hll, "HLL tests")
 {
 	suite_add(hll_init);
 	suite_add(hll_ops);
+	suite_add(hll_read_write);
 }

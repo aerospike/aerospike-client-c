@@ -862,6 +862,7 @@ as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr
 			case AS_OPERATOR_MAP_READ:
 				op->op = AS_OPERATOR_CDT_READ;
 			case AS_OPERATOR_BIT_READ:
+			case AS_OPERATOR_HLL_READ:
 				// Map operations require respond_all_ops to be true.
 				respond_all_ops = true;
 				// Fall through to read.
@@ -873,6 +874,7 @@ as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr
 			case AS_OPERATOR_MAP_MODIFY:
 				op->op = AS_OPERATOR_CDT_MODIFY;
 			case AS_OPERATOR_BIT_MODIFY:
+			case AS_OPERATOR_HLL_MODIFY:
 				// Map operations require respond_all_ops to be true.
 				respond_all_ops = true;
 				// Fall through to write.

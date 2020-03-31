@@ -667,7 +667,6 @@ TEST(cdt_basics_op , "CDT operations test on a single bin")
 	//debug("get_range");
 	assert_true(as_testlist_get_range(&tlist, 0, 22));
 	assert_true(as_testlist_get_range(&tlist, 10, 22));
-	assert_true(as_testlist_get_range_from(&tlist, 20));
 	assert_false(as_testlist_get_range_from(&tlist, 25));
 
 	//debug("set");
@@ -2354,6 +2353,7 @@ TEST(list_ctx_create_pad, "List ctx create with padding")
 	as_record *rec = as_record_new(1);
 	as_record_set_list(rec, BIN_NAME, (as_list*)inputList);
 	aerospike_key_put(as, &err, NULL, &rkey, rec);
+	as_record_destroy(rec);
 	rec = NULL;
 
 	as_cdt_ctx ctx;

@@ -395,6 +395,7 @@ PLAN(aerospike_test)
 	plan_add(map_udf);
 	plan_add(map_index);
 	plan_add(bit);
+	plan_add(hll);
 
 	// predexp
 	plan_add(predexp);

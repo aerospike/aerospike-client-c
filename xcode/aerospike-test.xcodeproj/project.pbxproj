@@ -10,6 +10,7 @@
 		BE9280C61E4AC2F0007F7DA7 /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280C51E4AC2F0007F7DA7 /* liblua.a */; };
 		BE9280C81E4AC521007F7DA7 /* libz.1.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280C71E4AC521007F7DA7 /* libz.1.dylib */; };
 		BF5D22741E69096800724AE3 /* info_helper.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5D22721E69096800724AE3 /* info_helper.c */; };
+		BF809CE52432B38300C16F3D /* hll_operate.c in Sources */ = {isa = PBXBuildFile; fileRef = BF809CE42432B38300C16F3D /* hll_operate.c */; };
 		BF8A328B1E4E73FD00DE2F4D /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BF8A328A1E4E73FD00DE2F4D /* libssl.dylib */; };
 		BF9750111E4EC8C900B737CF /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750101E4EC8C900B737CF /* libev.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750121E4ECA1C00B737CF /* libuv.a */; settings = {ATTRIBUTES = (Weak, ); }; };
@@ -88,6 +89,7 @@
 		BE9280C71E4AC521007F7DA7 /* libz.1.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.1.dylib; path = ../../../../../usr/lib/libz.1.dylib; sourceTree = "<group>"; };
 		BF5D22721E69096800724AE3 /* info_helper.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = info_helper.c; path = ../src/test/util/info_helper.c; sourceTree = "<group>"; };
 		BF5D22731E69096800724AE3 /* info_helper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = info_helper.h; path = ../src/test/util/info_helper.h; sourceTree = "<group>"; };
+		BF809CE42432B38300C16F3D /* hll_operate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hll_operate.c; path = ../src/test/aerospike_key/hll_operate.c; sourceTree = "<group>"; };
 		BF843C5018D3E61700A06CFB /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = "<group>"; };
 		BF8A328A1E4E73FD00DE2F4D /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = /usr/local/opt/openssl/lib/libssl.dylib; sourceTree = "<absolute>"; };
 		BF9750101E4EC8C900B737CF /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<group>"; };
@@ -340,6 +342,7 @@
 				BFC65C4E1C9227260079DF5A /* key_basics_async.c */,
 				BFC65C4F1C9227260079DF5A /* key_basics.c */,
 				BFC65C501C9227260079DF5A /* key_operate.c */,
+				BF809CE42432B38300C16F3D /* hll_operate.c */,
 				BFC65C511C9227260079DF5A /* key_pipeline.c */,
 			);
 			name = aerospike_key;
@@ -494,6 +497,7 @@
 				BFC65C521C9227260079DF5A /* key_apply_async.c in Sources */,
 				BFC65C461C9226E50079DF5A /* list_basics.c in Sources */,
 				BFC65C391C9226A60079DF5A /* scan_async.c in Sources */,
+				BF809CE52432B38300C16F3D /* hll_operate.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

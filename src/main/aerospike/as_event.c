@@ -560,6 +560,8 @@ as_event_command_begin(as_event_command* cmd)
 		}
 
 		if (! cmd->node) {
+			cmd->event_loop->errors++;
+
 			as_error err;
 			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
 

@@ -537,6 +537,8 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 										  cmd->flags & AS_ASYNC_FLAGS_MASTER, cmd->iteration > 0);
 
 		if (! cmd->node) {
+			event_loop->errors++;
+
 			as_error err;
 			as_error_update(&err, AEROSPIKE_ERR_INVALID_NODE, "Node not found for partition %s",
 							cmd->ns);

@@ -960,11 +960,11 @@ main(int argc, char * const * argv)
 	args.threads = 16;
 	args.throughput = 0;
 	args.batch_size = 0;
-	args.read_socket_timeout = 30000;
-	args.write_socket_timeout = 30000;
-	args.read_total_timeout = 0;
-	args.write_total_timeout = 0;
-	args.max_retries = 2;
+	args.read_socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	args.write_socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	args.read_total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	args.write_total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	args.max_retries = 1;
 	args.debug = false;
 	args.latency = false;
 	args.latency_columns = 4;

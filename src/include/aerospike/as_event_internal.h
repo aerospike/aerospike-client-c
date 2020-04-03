@@ -354,7 +354,7 @@ as_event_repeat_socket_timer(as_event_command* cmd)
 }
 
 static inline void
-as_event_init_retry_timer(as_event_command* cmd)
+as_event_set_retry_timer(as_event_command* cmd)
 {
 	ev_timer_init(&cmd->timer, as_ev_retry, 0.0, 0.0);
 	cmd->timer.data = cmd;
@@ -460,10 +460,8 @@ as_event_repeat_socket_timer(as_event_command* cmd)
 }
 
 static inline void
-as_event_init_retry_timer(as_event_command* cmd)
+as_event_set_retry_timer(as_event_command* cmd)
 {
-	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
-	cmd->timer.data = cmd;
 	uv_timer_start(&cmd->timer, as_uv_retry, 0, 0);
 }
 
@@ -477,8 +475,9 @@ static inline void
 as_event_stop_watcher(as_event_command* cmd, as_event_connection* conn)
 {
 	// uv_read_stop() will handle case where read is already stopped.
+	// Do not set watching to zero because conn is still initialized and active.
+	// libuv works differently here.
 	uv_read_stop((uv_stream_t*)conn);
-	conn->watching = 0;
 }
 
 static inline void
@@ -580,7 +579,7 @@ as_event_repeat_socket_timer(as_event_command* cmd)
 }
 
 static inline void
-as_event_init_retry_timer(as_event_command* cmd)
+as_event_set_retry_timer(as_event_command* cmd)
 {
 	evtimer_assign(&cmd->timer, cmd->event_loop->loop, as_libevent_retry, cmd);
 	struct timeval tv = {0,0};
@@ -666,7 +665,7 @@ as_event_repeat_socket_timer(as_event_command* cmd)
 }
 
 static inline void
-as_event_init_retry_timer(as_event_command* cmd)
+as_event_set_retry_timer(as_event_command* cmd)
 {
 }
 

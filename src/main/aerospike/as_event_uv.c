@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1300,6 +1300,8 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
 static void
 as_uv_fd_error(as_event_command* cmd, as_error* err)
 {
+	cmd->event_loop->errors++;
+
 	// Only timer needs to be released on socket connection failure.
 	// Watcher has not been registered yet.
 	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
@@ -1322,6 +1324,13 @@ as_uv_connected(uv_connect_t* req, int status)
 	as_event_command* cmd = req->data;
 
 	if (status == 0) {
+		cmd->event_loop->errors = 0; // Reset errors on valid connection.
+
+		as_async_conn_pool* pool = cmd->pipe_listener != NULL ?
+			&cmd->node->pipe_conn_pools[cmd->event_loop->index] :
+			&cmd->node->async_conn_pools[cmd->event_loop->index];
+		pool->opened++;
+
 		as_tls_context* ctx = as_socket_get_tls_context(cmd->cluster->tls_ctx);
 
 		if (!ctx) {
@@ -1404,6 +1413,9 @@ as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 	socket->data = conn;
 	conn->req.connect.data = cmd;
 		
+	// If the server has crashed, uv_tcp_connect() sometimes will not return invalid
+	// status nor call callback in a reasonable amount of time or not at all. It's
+	// important to use a timeout when using libuv, so the command can be cancelled.
 	status = uv_tcp_connect(&conn->req.connect, socket, (struct sockaddr*)&address->addr,
 							as_uv_connected);
 	
@@ -1414,8 +1426,6 @@ as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 		as_uv_connect_error(cmd, &err);
 		return;
 	}
-	pool->opened++;
-	cmd->event_loop->errors = 0; // Reset errors on valid connection.
 }
 
 void

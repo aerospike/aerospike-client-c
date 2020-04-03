@@ -847,7 +847,7 @@ as_event_command_retry(as_event_command* cmd, bool timeout)
 
 	// Retry command at the end of the queue so other commands have a chance to run first.
 	// Initialize event to eventually call as_event_execute_retry().
-	as_event_init_retry_timer(cmd);
+	as_event_set_retry_timer(cmd);
 	return true;
 }
 
@@ -870,23 +870,23 @@ as_event_execute_retry(as_event_command* cmd)
 			if (remaining <= cmd->socket_timeout) {
 				// Restore total timer.
 				cmd->flags &= ~AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
-				as_event_init_total_timer(cmd, remaining);
+				as_event_set_total_timer(cmd, remaining);
 			}
 			else {
 				// Restore socket timer.
 				cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
-				as_event_init_socket_timer(cmd);
+				as_event_set_socket_timer(cmd);
 			}
 		}
 		else {
 			// Restore total timer.
-			as_event_init_total_timer(cmd, remaining);
+			as_event_set_total_timer(cmd, remaining);
 		}
 	}
 	else if (cmd->flags & AS_ASYNC_FLAGS_USING_SOCKET_TIMER) {
 		// Restore socket timer.
 		cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
-		as_event_init_socket_timer(cmd);
+		as_event_set_socket_timer(cmd);
 	}
 	else {
 		// Restore no timer.

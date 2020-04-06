@@ -1413,9 +1413,6 @@ as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 	socket->data = conn;
 	conn->req.connect.data = cmd;
 		
-	// If the server has crashed, uv_tcp_connect() sometimes will not return invalid
-	// status nor call callback in a reasonable amount of time or not at all. It's
-	// important to use a timeout when using libuv, so the command can be cancelled.
 	status = uv_tcp_connect(&conn->req.connect, socket, (struct sockaddr*)&address->addr,
 							as_uv_connected);
 	

@@ -39,6 +39,8 @@
 
 extern aerospike *as;
 
+extern void example_dump_record(const as_record* p_rec);
+
 /******************************************************************************
  * MACROS
  *****************************************************************************/
@@ -68,8 +70,6 @@ typedef struct list_order_type_s
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
-
-void example_dump_record(const as_record* p_rec);
 
 static bool as_testlist_compare(as_testlist *tlist);
 
@@ -1686,8 +1686,37 @@ TEST(list_ctx_create_noop, "Nested List ctx")
 	// Set-no-op on a non-existent record&bin creates record&bin.
 	as_operations_init(&ops, 1);
 	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_UNORDERED, false);
+	as_operations_list_set_order(&ops, BIN_NAME, &ctx, AS_LIST_UNORDERED);
+	as_cdt_ctx_destroy(&ctx);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_list* ret = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(ret);
+	assert_int_eq(as_list_size(ret), 1);
+	ret = as_list_get_list(ret, 0);
+	assert_not_null(ret);
+	assert_int_eq(as_list_size(ret), 0);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	// Set-no-op on a non-existent record&bin creates record&bin, same but with ORDERED top level.
+	as_operations_init(&ops, 1);
+	as_cdt_ctx_init(&ctx, 1);
 	as_cdt_ctx_add_list_index_create(&ctx, 3, AS_LIST_ORDERED, false);
-	as_operations_list_set_order(&ops, BIN_NAME, &ctx, AS_LIST_ORDERED);
+	as_operations_list_set_order(&ops, BIN_NAME, &ctx, AS_LIST_UNORDERED);
 	as_cdt_ctx_destroy(&ctx);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -1699,7 +1728,7 @@ TEST(list_ctx_create_noop, "Nested List ctx")
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);
-	as_list* ret = as_record_get_list(rec, BIN_NAME);
+	ret = as_record_get_list(rec, BIN_NAME);
 	assert_not_null(ret);
 	assert_int_eq(as_list_size(ret), 1);
 	ret = as_list_get_list(ret, 0);
@@ -1849,7 +1878,7 @@ TEST(list_ctx_create, "Nested List ctx create")
 	as_list* cmp_list = (as_list*)as_arraylist_new(3, 3);
 	as_list_set_list(cmp_list, 3, (as_list*)as_arraylist_new(1, 1));
 	as_list_append_int64(as_list_get_list(cmp_list, 3), 1);
-	as_operations_init(&ops, 3);
+	as_operations_init(&ops, 1);
 	as_cdt_ctx_init(&ctx, 1);
 	as_cdt_ctx_add_list_index_create(&ctx, 3, AS_LIST_UNORDERED, true);
 	as_operations_list_append(&ops, BIN_NAME, &ctx, &pol, (as_val*)as_integer_new(1));
@@ -1980,7 +2009,7 @@ TEST(list_ctx_create_order, "Nested List ctx create ordered")
 	as_list_append_list(single_list, (as_list*)as_arraylist_new(1, 1));
 	as_list_append_int64(as_list_get_list(single_list, 0), 1);
 	as_list_insert_list(cmp_list, 0, single_list);
-	as_operations_init(&ops, 3);
+	as_operations_init(&ops, 1);
 	as_cdt_ctx_init(&ctx, 2);
 	as_cdt_ctx_add_list_index_create(&ctx, 3, AS_LIST_ORDERED, false); // Create ignored due to existing context.
 	as_cdt_ctx_add_list_index_create(&ctx, 3, AS_LIST_ORDERED, false);
@@ -2022,7 +2051,7 @@ TEST(list_ctx_create_double_nil, "Nested List ctx create nil filling")
 		as_operations ops;
 		as_record* rec = NULL;
 
-		as_operations_init(&ops, 3);
+		as_operations_init(&ops, 1);
 		as_cdt_ctx_init(&ctx, 2);
 		as_cdt_ctx_add_list_index_create(&ctx, index_top, AS_LIST_UNORDERED, true);
 		as_cdt_ctx_add_list_index_create(&ctx, index_top, AS_LIST_UNORDERED, true);
@@ -2102,7 +2131,7 @@ TEST(list_ctx_create_toplvl, "Nested List ctx create top level")
 			as_operations ops;
 			as_record* rec = NULL;
 
-			as_operations_init(&ops, 3);
+			as_operations_init(&ops, 1);
 			as_cdt_ctx_init(&ctx, 2);
 
 			as_cdt_ctx_add_list_index_create(&ctx, i, type.order, type.pad);

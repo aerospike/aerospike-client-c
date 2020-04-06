@@ -48,6 +48,7 @@ extern aerospike *as;
 #define NAMESPACE "test"
 #define SET "testmap"
 #define BIN_NAME "testmap"
+#define RAND_STR_LEN (26 + 26 + 1)
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -56,8 +57,8 @@ extern aerospike *as;
 static void
 rand_str(as_string* s)
 {
-	char buf[11];
-	as_random_get_str(buf, sizeof(buf) - 1);
+	char buf[RAND_STR_LEN + 1];
+	as_random_get_str(buf, as_random_get_uint32() % RAND_STR_LEN);
 	as_string_init(s, strdup(buf), true);
 }
 

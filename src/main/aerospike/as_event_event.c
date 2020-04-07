@@ -142,7 +142,7 @@ as_event_worker(void* udata)
 static inline void
 as_event_init_loop(as_event_loop* event_loop)
 {
-	memset(&event_loop->clusters, 0, sizeof(as_queue));
+	memset(&event_loop->clusters, 0, sizeof(as_vector));
 
 	if (evthread_make_base_notifiable(event_loop->loop) == -1) {
         as_log_error("evthread_make_base_notifiable failed");

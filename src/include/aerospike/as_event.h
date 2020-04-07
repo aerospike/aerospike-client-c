@@ -438,6 +438,7 @@ typedef void (*as_event_close_listener) (void* udata);
 /**
  * Register aerospike instance with event loop.
  * Should only be called in libevent single-thread mode.
+ * The call must occur in the event loop's thread.
  */
 AS_EXTERN void
 as_event_loop_register_aerospike(as_event_loop* event_loop, struct aerospike_s* as);
@@ -445,6 +446,7 @@ as_event_loop_register_aerospike(as_event_loop* event_loop, struct aerospike_s* 
 /**
  * Unregister and free aerospike instance resources associated with event loop.
  * Should only be called in libevent single-thread mode.
+ * The call must occur in the event loop's thread.
  *
  * Listener is called when all aerospike instance async commands have completed
  * on this event loop. Do not call aerospike_close() until listeners return on all

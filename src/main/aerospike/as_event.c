@@ -369,11 +369,22 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 
 	as_event_loop* event_loop = cmd->event_loop;
 
-	// Avoid recursive error death spiral by forcing command to be queued to
-	// event loop when consecutive recursive errors reaches an approximate limit.
-	if (as_in_event_loop(event_loop->thread) && event_loop->errors < 5) {
-		// We are already in event loop thread, so start processing.
-		as_event_command_execute_in_loop(event_loop, cmd);
+	if (as_in_event_loop(event_loop->thread)) {
+		// We are already in the event loop thread.
+		if (event_loop->errors < 5) {
+			// Start processing immediately.
+			as_event_command_execute_in_loop(event_loop, cmd);
+		}
+		else {
+			// Avoid recursive error death spiral by giving other commands
+			// a chance to run first.
+			if (cmd->total_deadline > 0) {
+				// Convert total timeout to deadline.
+				cmd->total_deadline += cf_getms();
+			}
+			cmd->state = AS_ASYNC_STATE_REGISTERED;
+			as_event_init_retry_timer(cmd);
+		}
 	}
 	else {
 		// Send command through queue so it can be executed in event loop thread.
@@ -785,6 +796,12 @@ as_event_command_retry(as_event_command* cmd, bool alternate)
 void
 as_event_execute_retry(as_event_command* cmd)
 {
+	if (cmd->state == AS_ASYNC_STATE_REGISTERED) {
+		// Start command from the beginning.
+		as_event_command_execute_in_loop(cmd->event_loop, cmd);
+		return;
+	}
+
 	// Restore timer that was reset for retry.
 	if (cmd->total_deadline > 0) {
 		// Check total timeout.
@@ -1295,10 +1312,10 @@ as_event_close_idle_connections_pool(as_queue* pool, uint64_t max_socket_idle_ns
 	}
 }
 
-static void
-as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_conn_state* state)
+void
+as_event_close_idle_connections_cluster(as_event_loop* event_loop, as_cluster* cluster)
 {
-	as_nodes* nodes = as_nodes_reserve(state->cluster);
+	as_nodes* nodes = as_nodes_reserve(cluster);
 
 	// Reserve each node.
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -1306,7 +1323,7 @@ as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_con
 	}
 
 	// Close idle connections.
-	uint64_t max_socket_idle_ns = state->cluster->max_socket_idle_ns;
+	uint64_t max_socket_idle_ns = cluster->max_socket_idle_ns;
 	int index = event_loop->index;
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -1321,6 +1338,12 @@ as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_con
 	}
 
 	as_nodes_release(nodes);
+}
+
+static void
+as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_conn_state* state)
+{
+	as_event_close_idle_connections_cluster(event_loop, state->cluster);
 	as_event_close_idle_connections_complete(state);
 }
 

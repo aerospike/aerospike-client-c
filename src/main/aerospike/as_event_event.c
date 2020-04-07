@@ -50,10 +50,15 @@ as_event_callback(evutil_socket_t sock, short revents, void* udata);
  * LIBEVENT FUNCTIONS
  *****************************************************************************/
 
-static void
+void
 as_event_close_loop(as_event_loop* event_loop)
 {
 	event_del(&event_loop->wakeup);
+
+	if (event_loop->clusters.capacity > 0) {
+		event_del(&event_loop->trim);
+		as_vector_destroy(&event_loop->clusters);
+	}
 
 	// Only stop event loop if client created event loop.
 	if (as_event_threads_created) {
@@ -137,6 +142,8 @@ as_event_worker(void* udata)
 static inline void
 as_event_init_loop(as_event_loop* event_loop)
 {
+	memset(&event_loop->clusters, 0, sizeof(as_queue));
+
 	if (evthread_make_base_notifiable(event_loop->loop) == -1) {
         as_log_error("evthread_make_base_notifiable failed");
         return;
@@ -193,6 +200,12 @@ as_event_register_external_loop(as_event_loop* event_loop)
 bool
 as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata)
 {
+	// Cross thread command queueing is not allowed in libevent single thread mode.
+	if (as_event_single_thread) {
+		as_log_error("Cross thread command queueing not allowed in single thread mode");
+		return false;
+	}
+
 	// Send command through queue so it can be executed in event loop thread.
 	pthread_mutex_lock(&event_loop->lock);
 	as_event_commander qcmd = {.executable = executable, .udata = udata};
@@ -959,6 +972,122 @@ as_event_node_destroy(as_node* node)
 	}
 	cf_free(node->async_conn_pools);
 	cf_free(node->pipe_conn_pools);
+}
+
+/******************************************************************************
+ * AEROSPIKE REGISTER/CLOSE FUNCTIONS
+ *****************************************************************************/
+
+void as_event_close_idle_connections_cluster(as_event_loop* event_loop, as_cluster* cluster);
+
+static int
+as_event_find_cluster(as_vector* clusters, as_cluster* cluster)
+{
+	for (uint32_t i = 0; i < clusters->size; i++) {
+		as_cluster* c = as_vector_get_ptr(clusters, i);
+
+		if (c == cluster) {
+			return (int)i;
+		}
+	}
+	return -1;
+}
+
+static void
+as_libevent_trim_conn(evutil_socket_t sock, short events, void* udata)
+{
+	as_event_loop* event_loop = udata;
+	as_vector* clusters = &event_loop->clusters;
+
+	for (uint32_t i = 0; i < clusters->size; i++) {
+		as_cluster* cluster = as_vector_get_ptr(clusters, i);
+		as_event_close_idle_connections_cluster(event_loop, cluster);
+	}
+}
+
+void
+as_event_loop_register_aerospike(as_event_loop* event_loop, aerospike* as)
+{
+	as_vector* clusters = &event_loop->clusters;
+
+	if (clusters->capacity == 0) {
+		// Create cluster vector.
+		as_vector_init(clusters, sizeof(as_cluster*), 4);
+		as_vector_append(clusters, &as->cluster);
+
+		// Create trim connections timer to run every 30 seconds.
+		event_assign(&event_loop->trim, event_loop->loop, -1, EV_PERSIST, as_libevent_trim_conn,
+			event_loop);
+		struct timeval tv = {30,0};
+		event_add(&event_loop->trim, &tv);
+	}
+	else {
+		int index = as_event_find_cluster(clusters, as->cluster);
+
+		if (index < 0) {
+			as_vector_append(clusters, &as->cluster);
+		}
+	}
+}
+
+typedef struct {
+	struct event timer;
+	as_event_loop* event_loop;
+	aerospike* as;
+	as_event_close_listener listener;
+	void* udata;
+} as_close_state;
+
+static void
+as_event_loop_close_aerospike_cb(evutil_socket_t sock, short events, void* udata)
+{
+	as_close_state* state = udata;
+	int pending = state->as->cluster->pending[state->event_loop->index];
+
+	if (pending <= 0) {
+		state->listener(state->udata);
+		cf_free(state);
+		return;
+	}
+
+	// Cluster has pending commands.
+	// Check again in 1 second.
+	evtimer_assign(&state->timer, state->event_loop->loop, as_event_loop_close_aerospike_cb, state);
+	struct timeval tv = {1,0};
+	evtimer_add(&state->timer, &tv);
+}
+
+void
+as_event_loop_close_aerospike(
+	as_event_loop* event_loop, aerospike* as, as_event_close_listener listener, void* udata
+	)
+{
+	// Remove cluster from registered clusters.
+	as_vector* clusters = &event_loop->clusters;
+	int index = as_event_find_cluster(clusters, as->cluster);
+
+	if (index >= 0) {
+		as_vector_remove(clusters, index);
+	}
+
+	int pending = as->cluster->pending[event_loop->index];
+
+	if (pending <= 0) {
+		listener(udata);
+		return;
+	}
+
+	// Cluster has pending commands.
+	// Check again in 1 second.
+	as_close_state* state = cf_malloc(sizeof(as_close_state));
+	state->event_loop = event_loop;
+	state->as = as;
+	state->listener = listener;
+	state->udata = udata;
+
+	evtimer_assign(&state->timer, event_loop->loop, as_event_loop_close_aerospike_cb, state);
+	struct timeval tv = {1,0};
+	evtimer_add(&state->timer, &tv);
 }
 
 #endif

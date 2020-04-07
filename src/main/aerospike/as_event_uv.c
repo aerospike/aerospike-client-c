@@ -65,8 +65,8 @@ as_uv_connection_closed(uv_handle_t* socket)
 	cf_free(socket);
 }
 
-static void
-as_uv_close_loop(as_event_loop* event_loop)
+void
+as_event_close_loop(as_event_loop* event_loop)
 {
 	uv_close((uv_handle_t*)event_loop->wakeup, as_uv_wakeup_closed);
 	
@@ -98,7 +98,7 @@ as_uv_wakeup(uv_async_t* wakeup)
 	while (status) {
 		if (! cmd.executable) {
 			// Received stop signal.
-			as_uv_close_loop(event_loop);
+			as_event_close_loop(event_loop);
 			return;
 		}
 		cmd.executable(event_loop, cmd.udata);

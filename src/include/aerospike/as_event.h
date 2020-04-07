@@ -36,6 +36,7 @@
 #include <uv.h>
 #elif defined(AS_USE_LIBEVENT)
 #include <event2/event_struct.h>
+#include <aerospike/as_vector.h>
 #else
 #endif
 
@@ -113,6 +114,8 @@ typedef struct as_event_loop {
 #elif defined(AS_USE_LIBEVENT)
 	struct event_base* loop;
 	struct event wakeup;
+	struct event trim;
+	as_vector clusters;
 #else
 	void* loop;
 #endif
@@ -424,6 +427,36 @@ as_event_loop_get_queue_size(as_event_loop* event_loop)
 	return as_queue_size(&event_loop->delay_queue);
 }
 
+#if defined(AS_USE_LIBEVENT)
+struct aerospike_s;
+
+/**
+ * Event loop close aerospike listener
+ */
+typedef void (*as_event_close_listener) (void* udata);
+
+/**
+ * Register aerospike instance with event loop.
+ * Should only be called in libevent single-thread mode.
+ */
+AS_EXTERN void
+as_event_loop_register_aerospike(as_event_loop* event_loop, struct aerospike_s* as);
+
+/**
+ * Unregister and free aerospike instance resources associated with event loop.
+ * Should only be called in libevent single-thread mode.
+ *
+ * Listener is called when all aerospike instance async commands have completed
+ * on this event loop. Do not call aerospike_close() until listeners return on all
+ * event loops.
+ */
+AS_EXTERN void
+as_event_loop_close_aerospike(
+	as_event_loop* event_loop, struct aerospike_s* as, as_event_close_listener listener, void* udata
+	);
+
+#endif
+
 /**
  * Close internal event loops and release watchers for internal and external event loops.
  * The global event loop array will also be destroyed for internal event loops.
@@ -452,6 +485,14 @@ as_event_loop_get_queue_size(as_event_loop* event_loop)
  */
 AS_EXTERN bool
 as_event_close_loops();
+
+/**
+ * Close internal event loop and release internal/external event loop watchers.
+ * This optional method can be used instead of as_event_close_loops().
+ * If used, must be called from event loop's thread.
+ */
+AS_EXTERN void
+as_event_close_loop(as_event_loop* event_loop);
 
 /**
  * Destroy global event loop array.  This function only needs to be called for external

@@ -42,8 +42,8 @@ extern bool as_event_threads_created;
 
 #if defined(AS_USE_LIBEV)
 
-static void
-as_ev_close_loop(as_event_loop* event_loop)
+void
+as_event_close_loop(as_event_loop* event_loop)
 {
 	ev_async_stop(event_loop->loop, &event_loop->wakeup);
 	
@@ -75,7 +75,7 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 	while (status) {
 		if (! cmd.executable) {
 			// Received stop signal.
-			as_ev_close_loop(event_loop);
+			as_event_close_loop(event_loop);
 			return;
 		}
 		cmd.executable(event_loop, cmd.udata);

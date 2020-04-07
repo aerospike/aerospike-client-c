@@ -1078,7 +1078,6 @@ as_event_loop_close_aerospike(
 	}
 
 	// Cluster has pending commands.
-	// Check again in 1 second.
 	as_close_state* state = cf_malloc(sizeof(as_close_state));
 	state->event_loop = event_loop;
 	state->as = as;
@@ -1086,7 +1085,10 @@ as_event_loop_close_aerospike(
 	state->udata = udata;
 
 	evtimer_assign(&state->timer, event_loop->loop, as_event_loop_close_aerospike_cb, state);
-	struct timeval tv = {1,0};
+	// If only one pending command, this function was probably called from last listener
+	// callback which has not decremented pending yet. In this case, set timer
+	// to next event loop iteration.  Otherwise, wait for 1 second before checking again.
+	struct timeval tv = {(pending == 1)? 0 : 1, 0};
 	evtimer_add(&state->timer, &tv);
 }
 

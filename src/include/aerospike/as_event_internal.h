@@ -55,6 +55,7 @@ extern "C" {
 #define AS_ASYNC_STATE_COMMAND_READ_HEADER 9
 #define AS_ASYNC_STATE_COMMAND_READ_BODY 10
 #define AS_ASYNC_STATE_QUEUE_ERROR 11
+#define AS_ASYNC_STATE_RETRY 12
 
 #define AS_ASYNC_FLAGS_MASTER 1
 #define AS_ASYNC_FLAGS_READ 2
@@ -182,10 +183,10 @@ typedef struct as_event_executor {
  *****************************************************************************/
 
 as_status
-as_event_command_send(as_event_command* cmd, as_error* err);
+as_event_command_execute(as_event_command* cmd, as_error* err);
 
 void
-as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd);
+as_event_command_schedule(as_event_command* cmd);
 
 bool
 as_event_proto_parse(as_event_command* cmd, as_proto* proto);
@@ -195,6 +196,9 @@ as_event_proto_parse_auth(as_event_command* cmd, as_proto* proto);
 
 bool
 as_event_decompress(as_event_command* cmd);
+
+void
+as_event_process_timer(as_event_command* cmd);
 
 void
 as_event_socket_timeout(as_event_command* cmd);
@@ -288,9 +292,8 @@ as_event_node_destroy(as_node* node);
 
 #if defined(AS_USE_LIBEV)
 
-void as_ev_socket_timeout(struct ev_loop* loop, ev_timer* timer, int revents);
-void as_ev_total_timeout(struct ev_loop* loop, ev_timer* timer, int revents);
-void as_ev_retry(struct ev_loop* loop, ev_timer* timer, int revents);
+void as_ev_timer_cb(struct ev_loop* loop, ev_timer* timer, int revents);
+void as_ev_repeat_cb(struct ev_loop* loop, ev_timer* timer, int revents);
 
 static inline bool
 as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
@@ -318,53 +321,36 @@ as_event_set_conn_last_used(as_event_connection* conn)
 }
 
 static inline void
-as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
+as_event_timer_once(as_event_command* cmd, uint64_t timeout)
 {
-	ev_timer_init(&cmd->timer, as_ev_total_timeout, (double)timeout / 1000.0, 0.0);
+	ev_timer_init(&cmd->timer, as_ev_timer_cb, (double)timeout / 1000.0, 0.0);
 	cmd->timer.data = cmd;
 	ev_timer_start(cmd->event_loop->loop, &cmd->timer);
-}
-	
-static inline void
-as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
-{
-	as_event_init_total_timer(cmd, timeout);
+	cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER;
 }
 
 static inline void
-as_event_init_socket_timer(as_event_command* cmd)
+as_event_timer_repeat(as_event_command* cmd, uint64_t repeat)
 {
-	ev_init(&cmd->timer, as_ev_socket_timeout);
-	cmd->timer.repeat = ((double)cmd->socket_timeout) / 1000.0;
+	ev_init(&cmd->timer, as_ev_repeat_cb);
+	cmd->timer.repeat = (double)repeat / 1000.0;
 	cmd->timer.data = cmd;
+	ev_timer_again(cmd->event_loop->loop, &cmd->timer);
+	cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+}
+
+static inline void
+as_event_timer_again(as_event_command* cmd)
+{
 	ev_timer_again(cmd->event_loop->loop, &cmd->timer);
 }
 
 static inline void
-as_event_set_socket_timer(as_event_command* cmd)
+as_event_timer_stop(as_event_command* cmd)
 {
-	as_event_init_socket_timer(cmd);
-}
-
-static inline void
-as_event_repeat_socket_timer(as_event_command* cmd)
-{
-	cmd->timer.repeat = (double)cmd->socket_timeout/ 1000.0;
-	ev_timer_again(cmd->event_loop->loop, &cmd->timer);
-}
-
-static inline void
-as_event_set_retry_timer(as_event_command* cmd)
-{
-	ev_timer_init(&cmd->timer, as_ev_retry, 0.0, 0.0);
-	cmd->timer.data = cmd;
-	ev_timer_start(cmd->event_loop->loop, &cmd->timer);
-}
-
-static inline void
-as_event_stop_timer(as_event_command* cmd)
-{
-	ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		ev_timer_stop(cmd->event_loop->loop, &cmd->timer);
+	}
 }
 
 static inline void
@@ -392,9 +378,8 @@ as_event_command_release(as_event_command* cmd)
 
 #elif defined(AS_USE_LIBUV)
 
-void as_uv_total_timeout(uv_timer_t* timer);
-void as_uv_socket_timeout(uv_timer_t* timer);
-void as_uv_retry(uv_timer_t* timer);
+void as_uv_timer_cb(uv_timer_t* timer);
+void as_uv_repeat_cb(uv_timer_t* timer);
 void as_event_close_connection(as_event_connection* conn);
 
 static inline bool
@@ -426,49 +411,39 @@ as_event_set_conn_last_used(as_event_connection* conn)
 }
 
 static inline void
-as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
+as_event_timer_once(as_event_command* cmd, uint64_t timeout)
 {
-	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
-	cmd->timer.data = cmd;
-	uv_timer_start(&cmd->timer, as_uv_total_timeout, timeout, 0);
+	if (!(cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER)) {
+		uv_timer_init(cmd->event_loop->loop, &cmd->timer);
+		cmd->timer.data = cmd;
+	}
+	uv_timer_start(&cmd->timer, as_uv_timer_cb, timeout, 0);
+	cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER;
 }
 
 static inline void
-as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
+as_event_timer_repeat(as_event_command* cmd, uint64_t repeat)
 {
-	uv_timer_start(&cmd->timer, as_uv_total_timeout, timeout, 0);
+	if (!(cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER)) {
+		uv_timer_init(cmd->event_loop->loop, &cmd->timer);
+		cmd->timer.data = cmd;
+	}
+	uv_timer_start(&cmd->timer, as_uv_repeat_cb, repeat, repeat);
+	cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
 }
 
 static inline void
-as_event_init_socket_timer(as_event_command* cmd)
+as_event_timer_again(as_event_command* cmd)
 {
-	uv_timer_init(cmd->event_loop->loop, &cmd->timer);
-	cmd->timer.data = cmd;
-	uv_timer_start(&cmd->timer, as_uv_socket_timeout, cmd->socket_timeout, cmd->socket_timeout);
+	// libuv socket timers automatically repeat.
 }
 
 static inline void
-as_event_set_socket_timer(as_event_command* cmd)
+as_event_timer_stop(as_event_command* cmd)
 {
-	uv_timer_start(&cmd->timer, as_uv_socket_timeout, cmd->socket_timeout, cmd->socket_timeout);
-}
-
-static inline void
-as_event_repeat_socket_timer(as_event_command* cmd)
-{
-	uv_timer_again(&cmd->timer);
-}
-
-static inline void
-as_event_set_retry_timer(as_event_command* cmd)
-{
-	uv_timer_start(&cmd->timer, as_uv_retry, 0, 0);
-}
-
-static inline void
-as_event_stop_timer(as_event_command* cmd)
-{
-	uv_timer_stop(&cmd->timer);
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		uv_timer_stop(&cmd->timer);
+	}
 }
 
 static inline void
@@ -507,9 +482,8 @@ as_event_command_release(as_event_command* cmd)
 
 #elif defined(AS_USE_LIBEVENT)
 
-void as_libevent_socket_timeout(evutil_socket_t sock, short events, void* udata);
-void as_libevent_total_timeout(evutil_socket_t sock, short events, void* udata);
-void as_libevent_retry(evutil_socket_t sock, short events, void* udata);
+void as_libevent_timer_cb(evutil_socket_t sock, short events, void* udata);
+void as_libevent_repeat_cb(evutil_socket_t sock, short events, void* udata);
 
 static inline bool
 as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
@@ -537,59 +511,39 @@ as_event_set_conn_last_used(as_event_connection* conn)
 }
 
 static inline void
-as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
+as_event_timer_once(as_event_command* cmd, uint64_t timeout)
 {
-	evtimer_assign(&cmd->timer, cmd->event_loop->loop, as_libevent_total_timeout, cmd);
-
+	evtimer_assign(&cmd->timer, cmd->event_loop->loop, as_libevent_timer_cb, cmd);
 	struct timeval tv;
 	tv.tv_sec = (uint32_t)timeout / 1000;
 	tv.tv_usec = ((uint32_t)timeout % 1000) * 1000;
-
 	evtimer_add(&cmd->timer, &tv);
+	cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER;
 }
 
 static inline void
-as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
+as_event_timer_repeat(as_event_command* cmd, uint64_t repeat)
 {
-	as_event_init_total_timer(cmd, timeout);
-}
-
-static inline void
-as_event_init_socket_timer(as_event_command* cmd)
-{
-	event_assign(&cmd->timer, cmd->event_loop->loop, -1, EV_PERSIST, as_libevent_socket_timeout, cmd);
-
+	event_assign(&cmd->timer, cmd->event_loop->loop, -1, EV_PERSIST, as_libevent_repeat_cb, cmd);
 	struct timeval tv;
-	tv.tv_sec = cmd->socket_timeout / 1000;
-	tv.tv_usec = (cmd->socket_timeout % 1000) * 1000;
-
+	tv.tv_sec = (uint32_t)repeat / 1000;
+	tv.tv_usec = ((uint32_t)repeat % 1000) * 1000;
 	evtimer_add(&cmd->timer, &tv);
+	cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
 }
 
 static inline void
-as_event_set_socket_timer(as_event_command* cmd)
-{
-	as_event_init_socket_timer(cmd);
-}
-
-static inline void
-as_event_repeat_socket_timer(as_event_command* cmd)
+as_event_timer_again(as_event_command* cmd)
 {
 	// libevent socket timers automatically repeat.
 }
 
 static inline void
-as_event_set_retry_timer(as_event_command* cmd)
+as_event_timer_stop(as_event_command* cmd)
 {
-	evtimer_assign(&cmd->timer, cmd->event_loop->loop, as_libevent_retry, cmd);
-	struct timeval tv = {0,0};
-	evtimer_add(&cmd->timer, &tv);
-}
-
-static inline void
-as_event_stop_timer(as_event_command* cmd)
-{
-	evtimer_del(&cmd->timer);
+	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
+		evtimer_del(&cmd->timer);
+	}
 }
 
 static inline void
@@ -640,37 +594,22 @@ as_event_set_conn_last_used(as_event_connection* conn)
 }
 
 static inline void
-as_event_init_total_timer(as_event_command* cmd, uint64_t timeout)
+as_event_timer_once(as_event_command* cmd, uint64_t timeout)
 {
 }
 
 static inline void
-as_event_set_total_timer(as_event_command* cmd, uint64_t timeout)
+as_event_timer_repeat(as_event_command* cmd, uint64_t repeat)
 {
 }
 
 static inline void
-as_event_init_socket_timer(as_event_command* cmd)
+as_event_timer_again(as_event_command* cmd)
 {
 }
 
 static inline void
-as_event_set_socket_timer(as_event_command* cmd)
-{
-}
-
-static inline void
-as_event_repeat_socket_timer(as_event_command* cmd)
-{
-}
-
-static inline void
-as_event_set_retry_timer(as_event_command* cmd)
-{
-}
-
-static inline void
-as_event_stop_timer(as_event_command* cmd)
+as_event_timer_stop(as_event_command* cmd)
 {
 }
 
@@ -694,32 +633,6 @@ as_event_command_release(as_event_command* cmd)
 /******************************************************************************
  * COMMON INLINE FUNCTIONS
  *****************************************************************************/
-
-// Use pointer comparison for performance.  If portability becomes an issue, use
-// "pthread_equal(event_loop->thread, pthread_self())" instead.
-#if !defined(_MSC_VER)
-#define as_in_event_loop(_t1) ((_t1) == pthread_self())
-#else
-#define as_in_event_loop(_t1) ((_t1).p == pthread_self().p)
-#endif
-
-static inline as_status
-as_event_command_execute(as_event_command* cmd, as_error* err)
-{
-	as_event_loop* event_loop = cmd->event_loop;
-
-	// Avoid recursive error death spiral by forcing command to be queued to
-	// event loop when consecutive recursive errors reaches an approximate limit.
-	if (as_in_event_loop(event_loop->thread) && event_loop->errors < 5) {
-		// We are already in event loop thread, so start processing.
-		as_event_command_execute_in_loop(event_loop, cmd);
-		return AEROSPIKE_OK;
-	}
-	else {
-		// Send command through queue so it can be executed in event loop thread.
-		return as_event_command_send(cmd, err);
-	}
-}
 
 static inline as_event_loop*
 as_event_assign(as_event_loop* event_loop)

@@ -29,6 +29,18 @@
 #include <pthread.h>
 
 /******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+// Use pointer comparison for performance.  If portability becomes an issue, use
+// "pthread_equal(event_loop->thread, pthread_self())" instead.
+#if !defined(_MSC_VER)
+#define as_in_event_loop(_t1) ((_t1) == pthread_self())
+#else
+#define as_in_event_loop(_t1) ((_t1).p == pthread_self().p)
+#endif
+
+/******************************************************************************
  * GLOBALS
  *****************************************************************************/
 
@@ -347,8 +359,64 @@ as_event_destroy_loops()
  * PRIVATE FUNCTIONS
  *****************************************************************************/
 
+static void as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd);
 static void as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd);
 static void as_event_execute_from_delay_queue(as_event_loop* event_loop);
+
+as_status
+as_event_command_execute(as_event_command* cmd, as_error* err)
+{
+	as_event_loop* event_loop = cmd->event_loop;
+
+	if (as_in_event_loop(event_loop->thread)) {
+		// We are already in the event loop thread.
+		if (event_loop->errors < 5) {
+			// Start processing immediately.
+			as_event_command_execute_in_loop(event_loop, cmd);
+		}
+		else {
+			// Avoid recursive error death spiral by giving other commands
+			// a chance to run first.
+			as_event_command_schedule(cmd);
+		}
+	}
+	else {
+		// Send command through queue so it can be executed in event loop thread.
+		if (cmd->total_deadline > 0) {
+			// Convert total timeout to deadline.
+			cmd->total_deadline += cf_getms();
+		}
+		cmd->state = AS_ASYNC_STATE_REGISTERED;
+
+		if (! as_event_execute(cmd->event_loop,
+			(as_event_executable)as_event_command_execute_in_loop, cmd)) {
+
+			cmd->event_loop->errors++;  // May not be in event loop thread, so not exactly accurate.
+
+			if (cmd->node) {
+				as_node_release(cmd->node);
+			}
+			cf_free(cmd);
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+void
+as_event_command_schedule(as_event_command* cmd)
+{
+	// Schedule command to execute in next event loop iteration.
+	// Must be run in event loop thread.
+	if (cmd->total_deadline > 0) {
+		// Convert total timeout to deadline.
+		cmd->total_deadline += cf_getms();
+	}
+
+	// Callback is as_event_process_timer().
+	cmd->state = AS_ASYNC_STATE_REGISTERED;
+	as_event_timer_once(cmd, 0);
+}
 
 static inline void
 as_event_prequeue_error(as_event_loop* event_loop, as_event_command* cmd, as_error* err)
@@ -356,28 +424,6 @@ as_event_prequeue_error(as_event_loop* event_loop, as_event_command* cmd, as_err
 	event_loop->errors++;
 	cmd->state = AS_ASYNC_STATE_QUEUE_ERROR;
 	as_event_error_callback(cmd, err);
-}
-
-as_status
-as_event_command_send(as_event_command* cmd, as_error* err)
-{
-	// Send command through queue so it can be executed in event loop thread.
-	if (cmd->total_deadline > 0) {
-		// Convert total timeout to deadline.
-		cmd->total_deadline += cf_getms();
-	}
-	cmd->state = AS_ASYNC_STATE_REGISTERED;
-
-	if (! as_event_execute(cmd->event_loop, (as_event_executable)as_event_command_execute_in_loop, cmd)) {
-		cmd->event_loop->errors++;  // May not be in event loop thread, so not exactly accurate.
-
-		if (cmd->node) {
-			as_node_release(cmd->node);
-		}
-		cf_free(cmd);
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
-	}
-	return AEROSPIKE_OK;
 }
 
 void
@@ -451,12 +497,11 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 				return;
 			}
 
-			if (total_timeout > 0) {
-				as_event_init_total_timer(cmd, total_timeout);
-				cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER;
-			}
-
 			cmd->state = AS_ASYNC_STATE_DELAY_QUEUE;
+
+			if (total_timeout > 0) {
+				as_event_timer_once(cmd, total_timeout);
+			}
 			return;
 		}
 	}
@@ -464,21 +509,18 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	if (total_timeout > 0) {
 		if (cmd->socket_timeout > 0 && cmd->socket_timeout < total_timeout) {
 			// Use socket timer.
-			as_event_init_socket_timer(cmd);
-			cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+			as_event_timer_repeat(cmd, cmd->socket_timeout);
 		}
 		else {
 			// Use total timer.
-			as_event_init_total_timer(cmd, total_timeout);
-			cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER;
+			as_event_timer_once(cmd, total_timeout);
 		}
 	}
 	else if (cmd->socket_timeout > 0) {
 		// Use socket timer.
-		as_event_init_socket_timer(cmd);
-		cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+		as_event_timer_repeat(cmd, cmd->socket_timeout);
 	}
-	
+
 	// Start processing.
 	event_loop->pending++;
 	as_event_command_begin(event_loop, cmd);
@@ -504,15 +546,13 @@ as_event_execute_from_delay_queue(as_event_loop* event_loop)
 			if (cmd->total_deadline > 0) {
 				if (cmd->socket_timeout < cmd->total_deadline - cf_getms()) {
 					// Transition from total timer to socket timer.
-					as_event_stop_timer(cmd);
-					as_event_set_socket_timer(cmd);
-					cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+					as_event_timer_stop(cmd);
+					as_event_timer_repeat(cmd, cmd->socket_timeout);
 				}
 			}
 			else {
 				// Use socket timer.
-				as_event_init_socket_timer(cmd);
-				cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER | AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
+				as_event_timer_repeat(cmd, cmd->socket_timeout);
 			}
 		}
 
@@ -543,9 +583,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 			as_error_update(&err, AEROSPIKE_ERR_INVALID_NODE, "Node not found for partition %s",
 							cmd->ns);
 
-			if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-				as_event_stop_timer(cmd);
-			}
+			as_event_timer_stop(cmd);
 			as_event_error_callback(cmd, &err);
 			return;
 		}
@@ -601,9 +639,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 					"Max node/event loop %s async connections would be exceeded: %u",
 					cmd->node->name, pool->limit);
 
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
+	as_event_timer_stop(cmd);
 	as_event_error_callback(cmd, &err);
 }
 
@@ -707,7 +743,7 @@ as_event_socket_timeout(as_event_command* cmd)
 			uint64_t now = cf_getms();
 
 			if (now >= cmd->total_deadline) {
-				as_event_stop_timer(cmd);
+				as_event_timer_stop(cmd);
 				as_event_total_timeout(cmd);
 				return;
 			}
@@ -717,15 +753,15 @@ as_event_socket_timeout(as_event_command* cmd)
 			if (remaining <= cmd->socket_timeout) {
 				// Transition to total timer.
 				cmd->flags &= ~AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
-				as_event_stop_timer(cmd);
-				as_event_set_total_timer(cmd, remaining);
+				as_event_timer_stop(cmd);
+				as_event_timer_once(cmd, remaining);
 			}
 			else {
-				as_event_repeat_socket_timer(cmd);
+				as_event_timer_again(cmd);
 			}
 		}
 		else {
-			as_event_repeat_socket_timer(cmd);
+			as_event_timer_again(cmd);
 		}
 		return;
 	}
@@ -739,7 +775,7 @@ as_event_socket_timeout(as_event_command* cmd)
 	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
 
 	if (! as_event_command_retry(cmd, true)) {
-		as_event_stop_timer(cmd);
+		as_event_timer_stop(cmd);
 
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
@@ -749,20 +785,47 @@ as_event_socket_timeout(as_event_command* cmd)
 	}
 }
 
+static void
+as_event_delay_timeout(as_event_command* cmd)
+{
+	cmd->state = AS_ASYNC_STATE_QUEUE_ERROR;
+
+	as_error err;
+	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Delay queue timeout");
+
+	// Notify user, but do not destroy command.
+	as_event_notify_error(cmd, &err);
+}
+
+void
+as_event_process_timer(as_event_command* cmd)
+{
+	switch (cmd->state) {
+		case AS_ASYNC_STATE_REGISTERED:
+			// Start command from the beginning.
+			as_event_command_execute_in_loop(cmd->event_loop, cmd);
+			break;
+
+		case AS_ASYNC_STATE_DELAY_QUEUE:
+			// Command timed out in delay queue.
+			as_event_delay_timeout(cmd);
+			break;
+
+		case AS_ASYNC_STATE_RETRY:
+			// Execute retry.
+			as_event_execute_retry(cmd);
+			break;
+
+		default:
+			// Total timeout.
+			as_event_total_timeout(cmd);
+			break;
+	}
+}
+
 void
 as_event_total_timeout(as_event_command* cmd)
 {
-	if (cmd->state == AS_ASYNC_STATE_DELAY_QUEUE) {
-		cmd->state = AS_ASYNC_STATE_QUEUE_ERROR;
-
-		as_error err;
-		as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Delay queue timeout");
-
-		// Notify user, but do not destroy command.
-		as_event_notify_error(cmd, &err);
-		return;
-	}
-
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, false);
 		return;
@@ -783,32 +846,6 @@ as_event_command_retry(as_event_command* cmd, bool timeout)
 	// Check max retries.
 	if (++(cmd->iteration) > cmd->max_retries) {
 		return false;
-	}
-
-	if (cmd->total_deadline > 0) {
-		// Check total timeout.
-		uint64_t now = cf_getms();
-
-		if (now >= cmd->total_deadline) {
-			return false;
-		}
-
-		if (cmd->flags & AS_ASYNC_FLAGS_USING_SOCKET_TIMER) {
-			uint64_t remaining = cmd->total_deadline - now;
-
-			if (remaining <= cmd->socket_timeout) {
-				// Transition to total timer.
-				cmd->flags &= ~AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
-				as_event_stop_timer(cmd);
-				as_event_set_total_timer(cmd, remaining);
-			}
-			else {
-				as_event_repeat_socket_timer(cmd);
-			}
-		}
-	}
-	else if (cmd->flags & AS_ASYNC_FLAGS_USING_SOCKET_TIMER) {
-		as_event_repeat_socket_timer(cmd);
 	}
 
 	// Alternate between master and prole on socket errors or database reads.
@@ -838,16 +875,12 @@ as_event_command_retry(as_event_command* cmd, bool timeout)
 	}
 
 	// Disable timeout.
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
-	else {
-		cmd->flags |= AS_ASYNC_FLAGS_HAS_TIMER;
-	}
+	as_event_timer_stop(cmd);
 
 	// Retry command at the end of the queue so other commands have a chance to run first.
 	// Initialize event to eventually call as_event_execute_retry().
-	as_event_set_retry_timer(cmd);
+	cmd->state = AS_ASYNC_STATE_RETRY;
+	as_event_timer_once(cmd, 0);
 	return true;
 }
 
@@ -870,27 +903,23 @@ as_event_execute_retry(as_event_command* cmd)
 			if (remaining <= cmd->socket_timeout) {
 				// Restore total timer.
 				cmd->flags &= ~AS_ASYNC_FLAGS_USING_SOCKET_TIMER;
-				as_event_set_total_timer(cmd, remaining);
+				as_event_timer_once(cmd, remaining);
 			}
 			else {
 				// Restore socket timer.
 				cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
-				as_event_set_socket_timer(cmd);
+				as_event_timer_repeat(cmd, cmd->socket_timeout);
 			}
 		}
 		else {
 			// Restore total timer.
-			as_event_set_total_timer(cmd, remaining);
+			as_event_timer_once(cmd, remaining);
 		}
 	}
 	else if (cmd->flags & AS_ASYNC_FLAGS_USING_SOCKET_TIMER) {
 		// Restore socket timer.
 		cmd->flags &= ~AS_ASYNC_FLAGS_EVENT_RECEIVED;
-		as_event_set_socket_timer(cmd);
-	}
-	else {
-		// Restore no timer.
-		cmd->flags &= ~AS_ASYNC_FLAGS_HAS_TIMER;
+		as_event_timer_repeat(cmd, cmd->socket_timeout);
 	}
 
 	// Retry command.
@@ -915,9 +944,7 @@ as_event_response_complete(as_event_command* cmd)
 		return;
 	}
 	
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
+	as_event_timer_stop(cmd);
 	as_event_stop_watcher(cmd, cmd->conn);
 
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
@@ -1123,10 +1150,7 @@ as_event_parse_error(as_event_command* cmd, as_error* err)
 	as_event_release_async_connection(cmd);
 
 	// Stop timer.
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
-
+	as_event_timer_stop(cmd);
 	as_event_error_callback(cmd, err);
 }
 
@@ -1141,10 +1165,7 @@ as_event_socket_error(as_event_command* cmd, as_error* err)
 
 	// Connection should already have been closed before calling this function.
 	// Stop timer.
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
-
+	as_event_timer_stop(cmd);
 	as_event_error_callback(cmd, err);
 }
 
@@ -1158,9 +1179,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	
 	// Server sent back error.
 	// Release resources, make callback and free command.
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
+	as_event_timer_stop(cmd);
 	as_event_stop_watcher(cmd, cmd->conn);
 	
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
@@ -1387,10 +1406,10 @@ as_event_close_idle_connections_pool(as_async_conn_pool* pool, uint64_t max_sock
 	}
 }
 
-static void
-as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_conn_state* state)
+void
+as_event_close_idle_connections_cluster(as_event_loop* event_loop, as_cluster* cluster)
 {
-	as_nodes* nodes = as_nodes_reserve(state->cluster);
+	as_nodes* nodes = as_nodes_reserve(cluster);
 
 	// Reserve each node.
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -1398,12 +1417,13 @@ as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_con
 	}
 
 	// Close idle connections.
-	uint64_t max_socket_idle_ns = state->cluster->max_socket_idle_ns;
+	uint64_t max_socket_idle_ns = cluster->max_socket_idle_ns;
 	int index = event_loop->index;
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		as_event_close_idle_connections_pool(&node->async_conn_pools[index], max_socket_idle_ns);
+		as_event_close_idle_connections_pool(&node->pipe_conn_pools[index], max_socket_idle_ns);
 	}
 
 	// Release each node.
@@ -1412,6 +1432,12 @@ as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_con
 	}
 
 	as_nodes_release(nodes);
+}
+
+static void
+as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_conn_state* state)
+{
+	as_event_close_idle_connections_cluster(event_loop, state->cluster);
 	as_event_close_idle_connections_complete(state);
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -240,7 +240,7 @@ aerospike_close(aerospike* as, as_error* err)
 	as_cluster* cluster = as->cluster;
 	
 	if (cluster) {
-		if (as_event_loop_capacity > 0) {
+		if (as_event_loop_capacity > 0 && !as_event_single_thread) {
 			// Async configurations will attempt to wait till pending async commands have completed.
 			as_event_close_cluster(cluster);
 		}

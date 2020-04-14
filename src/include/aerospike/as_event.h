@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -36,6 +36,7 @@
 #include <uv.h>
 #elif defined(AS_USE_LIBEVENT)
 #include <event2/event_struct.h>
+#include <aerospike/as_vector.h>
 #else
 #endif
 
@@ -113,6 +114,8 @@ typedef struct as_event_loop {
 #elif defined(AS_USE_LIBEVENT)
 	struct event_base* loop;
 	struct event wakeup;
+	struct event trim;
+	as_vector clusters;
 #else
 	void* loop;
 #endif
@@ -146,19 +149,6 @@ AS_EXTERN extern bool as_event_single_thread;
 /******************************************************************************
  * PUBLIC FUNCTIONS
  *****************************************************************************/
-
-/**
- * Set flag to signify that all async commands will be created in their associated event loop thread.
- * If enabled, the client can remove locks associated with sending async commands to the event loop.
- * This flag is only referenced when running the client with the libevent framework.
- *
- * By default, async single thread mode is false.
- */
-static inline void
-as_event_set_single_thread(bool single_thread)
-{
-	as_event_single_thread = single_thread;
-}
 
 /**
  * Initialize event loop configuration variables.
@@ -454,6 +444,14 @@ AS_EXTERN bool
 as_event_close_loops();
 
 /**
+ * Close internal event loop and release internal/external event loop watchers.
+ * This optional method can be used instead of as_event_close_loops().
+ * If used, must be called from event loop's thread.
+ */
+AS_EXTERN void
+as_event_close_loop(as_event_loop* event_loop);
+
+/**
  * Destroy global event loop array.  This function only needs to be called for external
  * event loops.
  *
@@ -461,6 +459,63 @@ as_event_close_loops();
  */
 AS_EXTERN void
 as_event_destroy_loops();
+
+/******************************************************************************
+ * LIBEVENT SINGLE THREAD MODE FUNCTIONS
+ *****************************************************************************/
+
+#if defined(AS_USE_LIBEVENT)
+struct aerospike_s;
+
+/**
+ * Event loop close aerospike listener
+ *
+ * @ingroup async_events
+ */
+typedef void (*as_event_close_listener) (void* udata);
+
+/**
+ * Set flag to signify that all async commands will be created in their associated event loop thread.
+ * If enabled, the client can remove locks associated with sending async commands to the event loop.
+ * This flag is only referenced when running the client with the libevent framework.
+ *
+ * By default, async single thread mode is false.
+ *
+ * @ingroup async_events
+ */
+static inline void
+as_event_set_single_thread(bool single_thread)
+{
+	as_event_single_thread = single_thread;
+}
+
+/**
+ * Register aerospike instance with event loop.
+ * Should only be called in libevent single-thread mode.
+ * The call must occur in the event loop's thread.
+ *
+ * @ingroup async_events
+ */
+AS_EXTERN void
+as_event_loop_register_aerospike(as_event_loop* event_loop, struct aerospike_s* as);
+
+/**
+ * Unregister and free aerospike instance resources associated with event loop.
+ * Should only be called in libevent single-thread mode.
+ * The call must occur in the event loop's thread.
+ *
+ * Listener is called when all aerospike instance async commands have completed
+ * on this event loop. Do not call aerospike_close() until listeners return on all
+ * event loops.
+ *
+ * @ingroup async_events
+ */
+AS_EXTERN void
+as_event_loop_close_aerospike(
+	as_event_loop* event_loop, struct aerospike_s* as, as_event_close_listener listener, void* udata
+	);
+
+#endif
 
 #ifdef __cplusplus
 } // end extern "C"

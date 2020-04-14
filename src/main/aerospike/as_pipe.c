@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -52,9 +52,7 @@ next_reader(as_event_command* reader)
 	assert(cf_ll_get_head(&conn->readers) == &reader->pipe_link);
 
 	cf_ll_delete(&conn->readers, &reader->pipe_link);
-	if (reader->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(reader);
-	}
+	as_event_timer_stop(reader);
 
 	if (cf_ll_size(&conn->readers) == 0) {
 		if (conn->writer == NULL) {
@@ -88,10 +86,7 @@ cancel_command(as_event_command* cmd, as_error* err, bool retry, bool timeout)
 		return;
 	}
 
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
-
+	as_event_timer_stop(cmd);
 	as_event_error_callback(cmd, err);
 }
 
@@ -382,9 +377,7 @@ as_pipe_get_connection(as_event_command* cmd)
 					"Max node/event loop %s pipeline connections would be exceeded: %u",
 					cmd->node->name, pool->limit);
 
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
+	as_event_timer_stop(cmd);
 	as_event_error_callback(cmd, &err);
 }
 

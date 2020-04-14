@@ -1724,9 +1724,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			as_nodes_release(nodes);
 
 			// Close parent command with error.
-			if (parent->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-				as_event_stop_timer(parent);
-			}
+			as_event_timer_stop(parent);
 			as_event_error_callback(parent, &err);
 
 			if (ubuf) {
@@ -1830,7 +1828,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 									&policy, cmd->buf, field_count_header, pred_size, pred_field);
 
 			// Retry command at the end of the queue so other commands have a chance to run first.
-			status = as_event_command_send(cmd, &err);
+			as_event_command_schedule(cmd);
 		}
 		else {
 			// Send compressed command.
@@ -1860,22 +1858,14 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			cmd->write_len = (uint32_t)comp_size;
 
 			// Retry command at the end of the queue so other commands have a chance to run first.
-			status = as_event_command_send(cmd, &err);
-		}
-
-		if (status != AEROSPIKE_OK) {
-			as_event_executor_error(e, &err, batch_nodes.size - i);
-			as_batch_release_nodes_cancel_async(&batch_nodes, i + 1);
-			break;
+			as_event_command_schedule(cmd);
 		}
 	}
 
 	as_batch_release_nodes_after_async(&batch_nodes);
 
 	// Close parent command.
-	if (parent->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(parent);
-	}
+	as_event_timer_stop(parent);
 	as_event_command_release(parent);
 
 	if (ubuf) {

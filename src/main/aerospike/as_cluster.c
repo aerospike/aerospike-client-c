@@ -39,6 +39,7 @@
  *****************************************************************************/
 
 extern uint32_t as_event_loop_capacity;
+extern bool as_event_single_thread;
 uint32_t as_cluster_count = 0;
 
 /******************************************************************************
@@ -513,7 +514,10 @@ as_cluster_close_idle_connections(as_cluster* cluster)
 		for (uint32_t i = 0; i < nodes->size; i++) {
 			as_node_close_idle_connections(nodes->array[i]);
 		}
-		as_event_close_idle_connections(cluster);
+
+		if (as_event_loop_capacity > 0 && !as_event_single_thread) {
+			as_event_close_idle_connections(cluster);
+		}
 	}
 }
 

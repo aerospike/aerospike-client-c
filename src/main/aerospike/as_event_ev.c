@@ -42,8 +42,8 @@ extern bool as_event_threads_created;
 
 #if defined(AS_USE_LIBEV)
 
-static void
-as_ev_close_loop(as_event_loop* event_loop)
+void
+as_event_close_loop(as_event_loop* event_loop)
 {
 	ev_async_stop(event_loop->loop, &event_loop->wakeup);
 	
@@ -75,7 +75,7 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 	while (status) {
 		if (! cmd.executable) {
 			// Received stop signal.
-			as_ev_close_loop(event_loop);
+			as_event_close_loop(event_loop);
 			return;
 		}
 		cmd.executable(event_loop, cmd.udata);
@@ -816,9 +816,7 @@ as_ev_connect_error(as_event_command* cmd, as_address* primary, int rv)
 
 	// Only timer needs to be released on socket connection failure.
 	// Watcher has not been registered yet.
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
+	as_event_timer_stop(cmd);
 	as_event_error_callback(cmd, &err);
 }
 
@@ -873,23 +871,15 @@ as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 }
 
 void
-as_ev_total_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
+as_ev_timer_cb(struct ev_loop* loop, ev_timer* timer, int revents)
 {
-	// One-off timers are automatically stopped by libev.
-	as_event_total_timeout(timer->data);
+	as_event_process_timer(timer->data);
 }
 
 void
-as_ev_socket_timeout(struct ev_loop* loop, ev_timer* timer, int revents)
+as_ev_repeat_cb(struct ev_loop* loop, ev_timer* timer, int revents)
 {
 	as_event_socket_timeout(timer->data);
-}
-
-void
-as_ev_retry(struct ev_loop* loop, ev_timer* timer, int revents)
-{
-	// One-off timers are automatically stopped by libev.
-	as_event_execute_retry(timer->data);
 }
 
 static void

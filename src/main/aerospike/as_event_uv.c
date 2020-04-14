@@ -94,8 +94,8 @@ as_uv_connection_closed(uv_handle_t* socket)
 	cf_free(conn);
 }
 
-static void
-as_uv_close_loop(as_event_loop* event_loop)
+void
+as_event_close_loop(as_event_loop* event_loop)
 {
 	uv_close((uv_handle_t*)event_loop->wakeup, as_uv_wakeup_closed);
 	
@@ -127,7 +127,7 @@ as_uv_wakeup(uv_async_t* wakeup)
 	while (status) {
 		if (! cmd.executable) {
 			// Received stop signal.
-			as_uv_close_loop(event_loop);
+			as_event_close_loop(event_loop);
 			return;
 		}
 		cmd.executable(event_loop, cmd.udata);
@@ -563,9 +563,7 @@ as_uv_connect_error(as_event_command* cmd, as_error* err)
 	cmd->event_loop->errors++;
 
 	if (! as_event_command_retry(cmd, true)) {
-		if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-			as_event_stop_timer(cmd);
-		}
+		as_event_timer_stop(cmd);
 		as_event_error_callback(cmd, err);
 	}
 }
@@ -1193,10 +1191,7 @@ as_uv_tls_connect_fatal_error(as_event_command* cmd, as_error* err)
 	uv_close((uv_handle_t*)cmd->conn, as_uv_connection_closed);
 	as_event_decr_conn(cmd);
 	cmd->event_loop->errors++;
-
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
+	as_event_timer_stop(cmd);
 	as_event_error_callback(cmd, err);
 }
 
@@ -1304,9 +1299,7 @@ as_uv_fd_error(as_event_command* cmd, as_error* err)
 
 	// Only timer needs to be released on socket connection failure.
 	// Watcher has not been registered yet.
-	if (cmd->flags & AS_ASYNC_FLAGS_HAS_TIMER) {
-		as_event_stop_timer(cmd);
-	}
+	as_event_timer_stop(cmd);
 
 	// Socket has already been closed.
 	cf_free(cmd->conn);
@@ -1426,23 +1419,15 @@ as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 }
 
 void
-as_uv_total_timeout(uv_timer_t* timer)
+as_uv_timer_cb(uv_timer_t* timer)
 {
-	// One-off timers are automatically stopped by libuv.
-	as_event_total_timeout(timer->data);
+	as_event_process_timer(timer->data);
 }
 
 void
-as_uv_socket_timeout(uv_timer_t* timer)
+as_uv_repeat_cb(uv_timer_t* timer)
 {
 	as_event_socket_timeout(timer->data);
-}
-
-void
-as_uv_retry(uv_timer_t* timer)
-{
-	// One-off timers are automatically stopped by libuv.
-	as_event_execute_retry(timer->data);
 }
 
 static void

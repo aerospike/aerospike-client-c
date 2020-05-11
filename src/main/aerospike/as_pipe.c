@@ -86,7 +86,10 @@ cancel_command(as_event_command* cmd, as_error* err, bool retry, bool timeout)
 		return;
 	}
 
+	// Timer is already stopped in total timeout case, but other cases require timer
+	// to be stopped. Calling this function twice is benign.
 	as_event_timer_stop(cmd);
+
 	as_event_error_callback(cmd, err);
 }
 
@@ -98,6 +101,14 @@ static void
 cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool retry, bool timeout)
 {
 	as_pipe_connection* conn = (as_pipe_connection*)cmd->conn;
+
+	// Connection may be null if socket fails, socket is closed and a timeout
+	// occurs between retry signal and actual retry.
+	if (conn == NULL) {
+		cancel_command(cmd, err, retry, timeout);
+		return;
+	}
+
 	as_node* node = cmd->node;
 	as_event_loop* loop = cmd->event_loop;
 	// So that cancel_command() doesn't free the node.

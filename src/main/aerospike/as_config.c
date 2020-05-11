@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -37,7 +37,9 @@ as_config_init(as_config* c)
 	c->event_callback_udata = NULL;
 	c->ip_map = NULL;
 	c->ip_map_size = 0;
+	c->min_conns_per_node = 0;
 	c->max_conns_per_node = 300;
+	c->async_min_conns_per_node = 0;
 	c->async_max_conns_per_node = 300;
 	c->pipe_max_conns_per_node = 64;
 	c->conn_pools_per_node = 1;

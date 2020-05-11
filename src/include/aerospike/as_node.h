@@ -173,6 +173,12 @@ typedef struct as_async_conn_pool_s {
 
 	/**
 	 * @private
+	 * Min connections allowed for this pool.
+	 */
+	uint32_t min_size;
+
+	/**
+	 * @private
 	 * Max connections allowed for this pool.
 	 */
 	uint32_t limit;
@@ -594,10 +600,10 @@ as_node_put_connection(as_node* node, as_socket* sock)
 
 /**
  * @private
- * Close idle sync connections.
+ * Balance sync connections.
  */
 void
-as_node_close_idle_connections(as_node* node);
+as_node_balance_connections(as_node* node);
 
 /**
  * @private

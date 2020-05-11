@@ -445,16 +445,56 @@ as_event_command_read_start(as_event_command* cmd)
 	}
 }
 
-void
-as_event_command_write_start(as_event_command* cmd)
+static inline void
+as_event_command_write(as_event_command* cmd)
 {
-	as_event_set_write(cmd);
-	cmd->state = AS_ASYNC_STATE_COMMAND_WRITE;
 	as_event_watch_write(cmd);
 
 	if (as_event_write(cmd) == AS_EVENT_WRITE_COMPLETE) {
 		// Done with write. Register for read.
 		as_event_command_read_start(cmd);
+	}
+}
+
+void
+as_event_command_write_start(as_event_command* cmd)
+{
+	cmd->state = AS_ASYNC_STATE_COMMAND_WRITE;
+	as_event_set_write(cmd);
+	as_event_command_write(cmd);
+}
+
+static inline void
+as_event_command_auth_write(as_event_command* cmd)
+{
+	as_event_watch_write(cmd);
+		
+	if (as_event_write(cmd) == AS_EVENT_WRITE_COMPLETE) {
+		// Done with auth write. Register for auth read.
+		as_event_set_auth_read_header(cmd);
+		as_event_watch_read(cmd);
+	}
+}
+
+static inline void
+as_event_command_auth_write_start(as_event_command* cmd)
+{
+	cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
+	as_event_set_auth_write(cmd);
+	as_event_command_auth_write(cmd);
+}
+
+static inline void
+as_event_command_start(as_event_command* cmd)
+{
+	if (cmd->cluster->user) {
+		as_event_command_auth_write_start(cmd);
+	}
+	else if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
+		as_event_connector_success(cmd);
+	}
+	else {
+		as_event_command_write_start(cmd);
 	}
 }
 
@@ -559,6 +599,11 @@ as_event_parse_authentication(as_event_command* cmd)
 		return AS_EVENT_READ_ERROR;
 	}
 	
+	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
+		as_event_connector_success(cmd);
+		return AS_EVENT_COMMAND_DONE;
+	}
+
 	as_event_command_write_start(cmd);
 	return AS_EVENT_READ_COMPLETE;
 }
@@ -622,6 +667,7 @@ bool
 as_event_tls_connect(as_event_command* cmd, as_event_connection* conn)
 {
 	int rv = as_tls_connect_once(&conn->socket);
+
 	if (rv < -2) {
 		if (! as_event_socket_retry(cmd)) {
 			// Failed, error has been logged.
@@ -631,15 +677,20 @@ as_event_tls_connect(as_event_command* cmd, as_event_connection* conn)
 		}
 		return false;
 	}
-	else if (rv == -1) {
+
+	if (rv == -1) {
 		// TLS needs a read.
 		as_event_watch_read(cmd);
+		return true;
 	}
-	else if (rv == -2) {
+
+	if (rv == -2) {
 		// TLS needs a write.
 		as_event_watch_write(cmd);
+		return true;
 	}
-	else if (rv == 0) {
+
+	if (rv == 0) {
 		if (! as_event_socket_retry(cmd)) {
 			as_error err;
 			as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS connection shutdown");
@@ -647,31 +698,29 @@ as_event_tls_connect(as_event_command* cmd, as_event_connection* conn)
 		}
 		return false;
 	}
-	else
-	{
-		// TLS connection established.
-		if (cmd->cluster->user) {
-			as_event_set_auth_write(cmd);
-			cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
-		}
-		else {
-			as_event_set_write(cmd);
-			cmd->state = AS_ASYNC_STATE_COMMAND_WRITE;
-		}
-		as_event_watch_write(cmd);
-	}
-	return true;
+
+	// TLS connection established.
+	as_event_command_start(cmd);
+	return false;
 }
 
 static void
 as_event_callback_common(as_event_command* cmd, as_event_connection* conn) {
 	switch (cmd->state) {
+	case AS_ASYNC_STATE_CONNECT:
+		as_event_command_start(cmd);
+		break;
+
 	case AS_ASYNC_STATE_TLS_CONNECT:
 		do {
 			if (! as_event_tls_connect(cmd, conn)) {
 				return;
 			}
 		} while (as_tls_read_pending(&cmd->conn->socket) > 0);
+		break;
+
+	case AS_ASYNC_STATE_AUTH_WRITE:
+		as_event_command_auth_write(cmd);
 		break;
 
 	case AS_ASYNC_STATE_AUTH_READ_HEADER:
@@ -696,6 +745,10 @@ as_event_callback_common(as_event_command* cmd, as_event_connection* conn) {
 		} while (as_tls_read_pending(&cmd->conn->socket) > 0);
 		break;
 
+	case AS_ASYNC_STATE_COMMAND_WRITE:
+		as_event_command_write(cmd);
+		break;
+
 	case AS_ASYNC_STATE_COMMAND_READ_HEADER:
 	case AS_ASYNC_STATE_COMMAND_READ_BODY:
 		// If we're using TLS we must loop until there are no bytes
@@ -716,22 +769,6 @@ as_event_callback_common(as_event_command* cmd, as_event_connection* conn) {
 				break;
 			}
 		} while (as_tls_read_pending(&cmd->conn->socket) > 0);
-		break;
-
-	case AS_ASYNC_STATE_AUTH_WRITE:
-	case AS_ASYNC_STATE_COMMAND_WRITE:
-		as_event_watch_write(cmd);
-		
-		if (as_event_write(cmd) == AS_EVENT_WRITE_COMPLETE) {
-			// Done with write. Register for read.
-			if (cmd->state == AS_ASYNC_STATE_AUTH_WRITE) {
-				as_event_set_auth_read_header(cmd);
-				as_event_watch_read(cmd);
-			}
-			else {
-				as_event_command_read_start(cmd);
-			}
-		}
 		break;
 
 	default:
@@ -793,16 +830,9 @@ as_event_watcher_init(as_event_command* cmd, as_socket* sock)
 	as_event_connection* conn = cmd->conn;
 	memcpy(&conn->socket, sock, sizeof(as_socket));
 
+	// Change state if using TLS.
 	if (as_socket_use_tls(cmd->cluster->tls_ctx)) {
 		cmd->state = AS_ASYNC_STATE_TLS_CONNECT;
-	}
-	else if (cmd->cluster->user) {
-		as_event_set_auth_write(cmd);
-		cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
-	}
-	else {
-		as_event_set_write(cmd);
-		cmd->state = AS_ASYNC_STATE_COMMAND_WRITE;
 	}
 
 	int watch = cmd->pipe_listener != NULL ? EV_WRITE | EV_READ : EV_WRITE;
@@ -988,7 +1018,7 @@ as_event_node_destroy(as_node* node)
  * AEROSPIKE REGISTER/CLOSE FUNCTIONS
  *****************************************************************************/
 
-void as_event_close_idle_connections_cluster(as_event_loop* event_loop, as_cluster* cluster);
+void as_event_balance_connections_cluster(as_event_loop* event_loop, as_cluster* cluster);
 
 static int
 as_event_find_cluster(as_vector* clusters, as_cluster* cluster)
@@ -1004,14 +1034,24 @@ as_event_find_cluster(as_vector* clusters, as_cluster* cluster)
 }
 
 static void
-as_libevent_trim_conn(evutil_socket_t sock, short events, void* udata)
+as_libevent_balance_conn(evutil_socket_t sock, short events, void* udata)
 {
 	as_event_loop* event_loop = udata;
 	as_vector* clusters = &event_loop->clusters;
 
 	for (uint32_t i = 0; i < clusters->size; i++) {
 		as_cluster* cluster = as_vector_get_ptr(clusters, i);
-		as_event_close_idle_connections_cluster(event_loop, cluster);
+		as_event_balance_connections_cluster(event_loop, cluster);
+	}
+}
+
+static void
+as_libevent_append_cluster(as_event_loop* event_loop, as_vector* clusters, as_cluster* cluster)
+{
+	as_vector_append(clusters, &cluster);
+
+	if (cluster->async_min_conns_per_node > 0) {
+		as_event_balance_connections_cluster(event_loop, cluster);
 	}
 }
 
@@ -1019,23 +1059,24 @@ void
 as_event_loop_register_aerospike(as_event_loop* event_loop, aerospike* as)
 {
 	as_vector* clusters = &event_loop->clusters;
+	as_cluster* cluster = as->cluster;
 
 	if (clusters->capacity == 0) {
 		// Create cluster vector.
 		as_vector_init(clusters, sizeof(as_cluster*), 4);
-		as_vector_append(clusters, &as->cluster);
+		as_libevent_append_cluster(event_loop, clusters, cluster);
 
 		// Create trim connections timer to run every 30 seconds.
-		event_assign(&event_loop->trim, event_loop->loop, -1, EV_PERSIST, as_libevent_trim_conn,
+		event_assign(&event_loop->trim, event_loop->loop, -1, EV_PERSIST, as_libevent_balance_conn,
 			event_loop);
 		struct timeval tv = {30,0};
 		event_add(&event_loop->trim, &tv);
 	}
 	else {
-		int index = as_event_find_cluster(clusters, as->cluster);
+		int index = as_event_find_cluster(clusters, cluster);
 
 		if (index < 0) {
-			as_vector_append(clusters, &as->cluster);
+			as_libevent_append_cluster(event_loop, clusters, cluster);
 		}
 	}
 }

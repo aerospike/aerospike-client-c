@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -43,6 +43,10 @@ typedef struct as_conn_pool_s {
 	 */
 	as_queue queue;
 
+	/**
+	 * Minimum number of connections.
+	 */
+	uint32_t min_size;
 } as_conn_pool;
 
 /******************************************************************************
@@ -54,10 +58,11 @@ typedef struct as_conn_pool_s {
  * Initialize a connection pool.
  */
 static inline void
-as_conn_pool_init(as_conn_pool* pool, uint32_t item_size, uint32_t capacity)
+as_conn_pool_init(as_conn_pool* pool, uint32_t item_size, uint32_t min_size, uint32_t max_size)
 {
 	pthread_mutex_init(&pool->lock, NULL);
-	as_queue_init(&pool->queue, item_size, capacity);
+	as_queue_init(&pool->queue, item_size, max_size);
+	pool->min_size = min_size;
 }
 
 /**
@@ -131,6 +136,16 @@ static inline void
 as_conn_pool_decr(as_conn_pool* pool)
 {
 	as_decr_uint32(&pool->queue.total);
+}
+
+/**
+ * @private
+ * Return number of connections that might be closed.
+ */
+static inline int
+as_conn_pool_excess(as_conn_pool* pool)
+{
+	return as_load_uint32(&pool->queue.total) - pool->min_size;
 }
 
 /**

@@ -405,7 +405,7 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 	}
 }
 
-static inline void
+static void
 as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 {
 	as_event_set_write(cmd);
@@ -426,6 +426,17 @@ as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 			as_event_socket_error(cmd, &err);
 		}
 	}
+}
+
+static inline void
+as_uv_command_start(as_event_command* cmd, uv_stream_t* stream)
+{
+	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
+		as_event_connector_success(cmd);
+		return;
+	}
+
+	as_uv_command_write_start(cmd, stream);
 }
 
 void
@@ -502,7 +513,8 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 		as_event_parse_error(cmd, &err);
 		return;
 	}
-	as_uv_command_write_start(cmd, stream);
+
+	as_uv_command_start(cmd, stream);
 }
 
 static void
@@ -917,6 +929,17 @@ as_uv_tls_command_write_start(as_event_command* cmd)
 	as_uv_tls_write(cmd);
 }
 
+static inline void
+as_uv_tls_command_start(as_event_command* cmd)
+{
+	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
+		as_event_connector_success(cmd);
+		return;
+	}
+
+	as_uv_tls_command_write_start(cmd);
+}
+
 static void
 as_uv_tls_read_want_write_complete(uv_write_t* req, int status)
 {
@@ -1002,7 +1025,7 @@ as_uv_tls_read(as_event_command* cmd)
 				}
 				// Done reading authentication data.
 				uv_read_stop((uv_stream_t*)&conn->socket);
-				as_uv_tls_command_write_start(cmd);
+				as_uv_tls_command_start(cmd);
 				return;
 			}
 
@@ -1129,7 +1152,7 @@ as_uv_tls_handshake_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf
 			as_uv_tls_auth_write_start(cmd);
 		}
 		else {
-			as_uv_tls_command_write_start(cmd);
+			as_uv_tls_command_start(cmd);
 		}
 		return;
 	}
@@ -1331,7 +1354,7 @@ as_uv_connected(uv_connect_t* req, int status)
 				as_uv_auth_write_start(cmd, req->handle);
 			}
 			else {
-				as_uv_command_write_start(cmd, req->handle);
+				as_uv_command_start(cmd, req->handle);
 			}
 		}
 		else {

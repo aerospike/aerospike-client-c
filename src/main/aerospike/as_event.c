@@ -362,6 +362,7 @@ as_event_destroy_loops()
 static void as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd);
 static void as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd);
 static void as_event_execute_from_delay_queue(as_event_loop* event_loop);
+static void connector_error(as_event_command* cmd, as_error* err);
 
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
@@ -563,6 +564,17 @@ as_event_execute_from_delay_queue(as_event_loop* event_loop)
 }
 
 static void
+as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
+{
+	as_async_connection* conn = cf_malloc(sizeof(as_async_connection));
+	conn->base.pipeline = false;
+	conn->base.watching = 0;
+	conn->cmd = cmd;
+	cmd->conn = &conn->base;
+	as_event_connect(cmd, pool);
+}
+
+static void
 as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_CONNECT;
@@ -615,14 +627,9 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_event_release_connection(&conn->base, pool);
 	}
 
-	// Create connection structure only when node connection count within queue limit.
+	// Create connection only when connection count within limit.
 	if (as_async_conn_pool_incr_total(pool)) {
-		conn = cf_malloc(sizeof(as_async_connection));
-		conn->base.pipeline = false;
-		conn->base.watching = 0;
-		conn->cmd = cmd;
-		cmd->conn = &conn->base;
-		as_event_connect(cmd, pool);
+		as_event_create_connection(cmd, pool);
 		return;
 	}
 
@@ -1129,6 +1136,9 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 		case AS_ASYNC_TYPE_INFO:
 			((as_async_info_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
 			break;
+		case AS_ASYNC_TYPE_CONNECTOR:
+			connector_error(cmd, err);
+			break;
 
 		default:
 			// Handle command that is part of a group (batch, scan, query).
@@ -1374,28 +1384,245 @@ as_event_command_free(as_event_command* cmd)
 }
 
 /******************************************************************************
- * CONNECTION CLOSE FUNCTIONS
+ * CONNECTION CREATE
  *****************************************************************************/
 
 typedef struct {
-	as_cluster* cluster;
-	uint32_t event_loop_count;
-} as_event_close_conn_state;
+	as_monitor* monitor;
+	uint32_t* loop_count;
+	as_node* node;
+	as_async_conn_pool* pool;
+	uint32_t conn_start;
+	uint32_t conn_count;
+	uint32_t conn_max;
+	uint32_t concur_max;
+	uint32_t timeout_ms;
+	bool error;
+} connector_shared;
+
+typedef struct {
+	as_event_command command;
+	uint8_t space[];
+} connector_command;
 
 static void
-as_event_close_idle_connections_complete(as_event_close_conn_state* state)
+connector_execute_command(as_event_loop* event_loop, connector_shared* cs);
+
+static inline void
+connector_release(as_monitor* monitor, uint32_t* loop_count)
 {
-	if (as_aaf_uint32(&state->event_loop_count, -1) == 0) {
-		cf_free(state);
+	if (as_aaf_uint32(loop_count, -1) == 0) {
+		as_monitor_notify(monitor);
 	}
 }
 
 static void
-as_event_close_idle_connections_pool(as_async_conn_pool* pool, uint64_t max_socket_idle_ns)
+connector_complete(connector_shared* cs)
+{
+	if (cs->monitor) {
+		// Initial connector is allocated on stack.
+		connector_release(cs->monitor, cs->loop_count);
+	}
+	else {
+		// Balance connector is allocated on heap.
+		cf_free(cs);
+	}
+}
+
+static void
+connector_command_complete(as_event_loop* event_loop, connector_shared* cs)
+{
+	if (++cs->conn_count == cs->conn_max) {
+		connector_complete(cs);
+		return;
+	}
+
+	if (cs->conn_start < cs->conn_max && !cs->error) {
+		cs->conn_start++;
+		connector_execute_command(event_loop, cs);
+	}
+}
+
+static void
+connector_abort(as_event_loop* event_loop, connector_shared* cs)
+{
+	if (!cs->error) {
+		// Add connections not started yet to count.
+		cs->conn_count += cs->conn_max - cs->conn_start;
+		cs->error = true;
+	}
+	connector_command_complete(event_loop, cs);
+}
+
+static void
+connector_error(as_event_command* cmd, as_error* err)
+{
+	// Connection failed.  Highly unlikely other connections will succeed.
+	// Stop executing new commands. Command is released by calling function.
+	as_log_debug("Async min connection failed: %d %s", err->code, err->message);
+	connector_abort(cmd->event_loop, cmd->udata);
+}
+
+void
+as_event_connector_success(as_event_command* cmd)
+{
+	as_event_loop* event_loop = cmd->event_loop;
+	connector_shared* cs = cmd->udata;
+
+	as_event_response_complete(cmd);
+	as_event_command_release(cmd);
+
+	connector_command_complete(event_loop, cs);
+}
+
+static void
+connector_execute_command(as_event_loop* event_loop, connector_shared* cs)
+{
+	if (! as_async_conn_pool_incr_total(cs->pool)) {
+		// We are already at max connections.
+		connector_abort(event_loop, cs);
+		return;
+	}
+
+	as_node* node = cs->node;
+	as_node_reserve(node);
+
+	as_cluster* cluster = node->cluster;
+
+	cluster->pending[event_loop->index]++;
+	event_loop->pending++;
+
+	size_t s = (sizeof(connector_command) + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
+	as_event_command* cmd = (as_event_command*)cf_malloc(s);
+	connector_command* cc = (connector_command*)cmd;
+
+	cmd->socket_timeout = 0;
+	cmd->iteration = 0;
+	cmd->max_retries = 0;
+	cmd->replica = AS_POLICY_REPLICA_MASTER;
+	cmd->event_loop = event_loop;
+	cmd->cluster = cluster;
+	cmd->node = node;
+	cmd->ns = NULL;
+	cmd->partition = NULL;
+	cmd->udata = cs;
+	cmd->parse_results = NULL;
+	cmd->pipe_listener = NULL;
+	cmd->buf = cc->space;
+	cmd->command_sent_counter = 0;
+	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
+	cmd->write_len = 0;
+	cmd->read_capacity = (uint32_t)(s - sizeof(connector_command));
+	cmd->type = AS_ASYNC_TYPE_CONNECTOR;
+	cmd->proto_type = AS_MESSAGE_TYPE;
+	cmd->proto_type_rcv = 0;
+	cmd->state = AS_ASYNC_STATE_CONNECT;
+	cmd->flags = AS_ASYNC_FLAGS_MASTER;
+	cmd->flags2 = 0;
+
+	cmd->total_deadline = cf_getms() + cs->timeout_ms;
+	as_event_timer_once(cmd, cs->timeout_ms);
+
+	as_event_create_connection(cmd, cs->pool);
+}
+
+static void
+connector_create_commands(as_event_loop* event_loop, connector_shared* cs)
+{
+	cs->conn_start = cs->concur_max;
+
+	for (uint32_t i = 0; i < cs->concur_max; i++) {
+		connector_execute_command(event_loop, cs);
+	}
+}
+
+void
+as_event_create_connections_wait(as_node* node, as_async_conn_pool* pools)
+{
+	as_monitor monitor;
+	as_monitor_init(&monitor);
+
+	uint32_t loop_max = as_event_loop_size;
+	uint32_t loop_count = loop_max;
+	uint32_t max_concurrent = 50 / loop_max + 1;
+	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
+
+	connector_shared* list = alloca(sizeof(connector_shared) * loop_max);
+
+	for (uint32_t i = 0; i < loop_max; i++) {
+		as_async_conn_pool* pool = &pools[i];
+		uint32_t min_size = pool->min_size;
+
+		if (min_size > 0) {
+			connector_shared* cs = &list[i];
+			cs->monitor = &monitor;
+			cs->loop_count = &loop_count;
+			cs->node = node;
+			cs->pool = pool;
+			cs->conn_count = 0;
+			cs->conn_max = min_size;
+			cs->concur_max = (min_size >= max_concurrent)? max_concurrent : min_size;
+			cs->timeout_ms = timeout_ms;
+			cs->error = false;
+
+			if (!as_event_execute(&as_event_loops[i],
+				(as_event_executable)connector_create_commands, cs)) {
+				as_log_error("Failed to queue connector");
+				connector_release(&monitor, &loop_count);
+			}
+		}
+		else {
+			connector_release(&monitor, &loop_count);
+		}
+	}
+	as_monitor_wait(&monitor);
+	as_monitor_destroy(&monitor);
+}
+
+static void
+create_connections(as_event_loop* event_loop, as_node* node, as_async_conn_pool* pool, int count)
+{
+	connector_shared* cs = cf_malloc(sizeof(connector_shared));
+	cs->monitor = NULL;
+	cs->loop_count = NULL;
+	cs->node = node;
+	cs->pool = pool;
+	cs->conn_count = 0;
+	cs->conn_max = count;
+	cs->concur_max = (count >= 5)? 5 : count;
+	cs->timeout_ms = node->cluster->conn_timeout_ms;
+	cs->error = false;
+
+	connector_create_commands(event_loop, cs);
+}
+
+/******************************************************************************
+ * CONNECTION BALANCE
+ *****************************************************************************/
+
+typedef struct {
+	as_cluster* cluster;
+	uint32_t loop_count;
+} balancer_shared;
+
+static inline void
+balancer_release(balancer_shared* bs)
+{
+	if (as_aaf_uint32(&bs->loop_count, -1) == 0) {
+		cf_free(bs);
+	}
+}
+
+static void
+close_idle_connections(as_async_conn_pool* pool, uint64_t max_socket_idle_ns, int count)
 {
 	as_event_connection* conn;
 
-	while (as_queue_pop_tail(&pool->queue, &conn)) {
+	while (count > 0) {
+		if (! as_queue_pop_tail(&pool->queue, &conn)) {
+			break;
+		}
+
 		if (as_event_connection_current(conn, max_socket_idle_ns)) {
 			if (! as_queue_push_limit(&pool->queue, &conn)) {
 				as_event_release_connection(conn, pool);
@@ -1403,11 +1630,12 @@ as_event_close_idle_connections_pool(as_async_conn_pool* pool, uint64_t max_sock
 			break;
 		}
 		as_event_release_connection(conn, pool);
+		count--;
 	}
 }
 
 void
-as_event_close_idle_connections_cluster(as_event_loop* event_loop, as_cluster* cluster)
+as_event_balance_connections_cluster(as_event_loop* event_loop, as_cluster* cluster)
 {
 	as_nodes* nodes = as_nodes_reserve(cluster);
 
@@ -1416,16 +1644,21 @@ as_event_close_idle_connections_cluster(as_event_loop* event_loop, as_cluster* c
 		as_node_reserve(nodes->array[i]);
 	}
 
-	// Close idle connections.
-	uint64_t max_socket_idle_ns = cluster->max_socket_idle_ns;
 	int index = event_loop->index;
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
-		as_event_close_idle_connections_pool(&node->async_conn_pools[index], max_socket_idle_ns);
-		// Do not close idle pipeline connections because pipelines work better with a stable
-		// number of connections.
-		// as_event_close_idle_connections_pool(&node->pipe_conn_pools[index], max_socket_idle_ns);
+		as_async_conn_pool* pool = &node->async_conn_pools[index];
+		int excess = pool->queue.total - pool->min_size;
+
+		if (excess > 0) {
+			close_idle_connections(pool, cluster->max_socket_idle_ns, excess);
+			// Do not close idle pipeline connections because pipelines work better with a stable
+			// number of connections.
+		}
+		else if (excess < 0) {
+			create_connections(event_loop, node, pool, -excess);
+		}
 	}
 
 	// Release each node.
@@ -1437,35 +1670,35 @@ as_event_close_idle_connections_cluster(as_event_loop* event_loop, as_cluster* c
 }
 
 static void
-as_event_close_idle_connections_cb(as_event_loop* event_loop, as_event_close_conn_state* state)
+balancer_in_loop(as_event_loop* event_loop, balancer_shared* bs)
 {
-	as_event_close_idle_connections_cluster(event_loop, state->cluster);
-	as_event_close_idle_connections_complete(state);
+	as_event_balance_connections_cluster(event_loop, bs->cluster);
+	balancer_release(bs);
 }
 
 void
-as_event_close_idle_connections(as_cluster* cluster)
+as_event_balance_connections(as_cluster* cluster)
 {
-	if (as_event_loop_size == 0) {
+	uint32_t loop_max = as_event_loop_size;
+
+	if (loop_max == 0) {
 		return;
 	}
 
-	as_event_close_conn_state* state = cf_malloc(sizeof(as_event_close_conn_state));
-	state->cluster = cluster;
-	state->event_loop_count = as_event_loop_size;
+	balancer_shared* bs = cf_malloc(sizeof(balancer_shared));
+	bs->cluster = cluster;
+	bs->loop_count = loop_max;
 
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		as_event_loop* event_loop = &as_event_loops[i];
-
-		if (! as_event_execute(event_loop, (as_event_executable)as_event_close_idle_connections_cb, state)) {
-			as_log_error("Failed to queue close idle connections command");
-			as_event_close_idle_connections_complete(state);
+	for (uint32_t i = 0; i < loop_max; i++) {
+		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop, bs)) {
+			as_log_error("Failed to queue connection balancer");
+			balancer_release(bs);
 		}
 	}
 }
 
 /******************************************************************************
- * CLUSTER CLOSE FUNCTIONS
+ * CLUSTER CLOSE
  *****************************************************************************/
 
 typedef struct {

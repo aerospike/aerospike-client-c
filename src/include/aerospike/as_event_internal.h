@@ -258,6 +258,12 @@ void
 as_event_command_free(as_event_command* cmd);
 
 void
+as_event_connector_success(as_event_command* cmd);
+
+void
+as_event_create_connections_wait(as_node* node, as_async_conn_pool* pools);
+
+void
 as_event_close_cluster(as_cluster* cluster);
 
 /******************************************************************************
@@ -681,6 +687,16 @@ as_event_set_write(as_event_command* cmd)
 {
 	cmd->len = cmd->write_len;
 	cmd->pos = 0;
+}
+
+static inline void
+as_async_conn_pool_init(as_async_conn_pool* pool, uint32_t min_size, uint32_t max_size)
+{
+	as_queue_init(&pool->queue, sizeof(void*), max_size);
+	pool->min_size = min_size;
+	pool->limit = max_size;
+	pool->opened = 0;
+	pool->closed = 0;
 }
 
 static inline bool

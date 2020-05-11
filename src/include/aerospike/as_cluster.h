@@ -222,23 +222,31 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Maximum number of synchronous connections allowed per server node.
+	 * Minimum sync connections per node.
+	 */
+	uint32_t min_conns_per_node;
+
+	/**
+	 * @private
+	 * Maximum sync connections per node.
 	 */
 	uint32_t max_conns_per_node;
 	
 	/**
 	 * @private
-	 * Maximum number of asynchronous (non-pipeline) connections allowed for each node.
-	 * Async transactions will be rejected if the maximum async node connections would be exceeded.
-	 * This variable is ignored if asynchronous event loops are not created.
+	 * Minimum async connections per node.
 	 */
-	uint32_t async_max_conns_per_node;
-	
+	uint32_t async_min_conns_per_node;
+
 	/**
 	 * @private
-	 * Maximum number of pipeline connections allowed for each node.
-	 * Pipeline transactions will be rejected if the maximum pipeline node connections would be exceeded.
-	 * This variable is ignored if asynchronous event loops are not created.
+	 * Maximum async (non-pipeline) connections per node.
+	 */
+	uint32_t async_max_conns_per_node;
+
+	/**
+	 * @private
+	 * Maximum pipeline connections per node.
 	 */
 	uint32_t pipe_max_conns_per_node;
 	

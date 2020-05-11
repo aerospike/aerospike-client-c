@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -456,9 +456,26 @@ typedef struct as_config_s {
 	uint32_t ip_map_size;
 	
 	/**
+	 * Minimum number of synchronous connections allowed per server node.  Preallocate min
+	 * connections on client node creation.  The client will periodically allocate new connections
+	 * if count falls below min connections.
+	 *
+	 * Server proto-fd-idle-ms may also need to be increased substantially if min connections are
+	 * defined.  The proto-fd-idle-ms default directs the server to close connections that are idle
+	 * for 60 seconds which can defeat the purpose of keeping connections in reserve for a future
+	 * burst of activity.
+	 *
+	 * If server proto-fd-idle-ms is changed, client max_socket_idle should also be changed to be a
+	 * few seconds less than proto-fd-idle-ms.
+	 *
+	 * Default: 0
+	 */
+	uint32_t min_conns_per_node;
+
+	/**
 	 * Maximum number of synchronous connections allowed per server node.  Synchronous transactions
-	 * will go through retry logic and potentially fail with error code "AEROSPIKE_ERR_NO_MORE_CONNECTIONS"
-	 * if the maximum number of connections would be exceeded.
+	 * will go through retry logic and potentially fail with error code
+	 * "AEROSPIKE_ERR_NO_MORE_CONNECTIONS" if the maximum number of connections would be exceeded.
 	 * 
 	 * The number of connections used per node depends on how many concurrent threads issue
 	 * database commands plus sub-threads used for parallel multi-node commands (batch, scan,
@@ -469,11 +486,29 @@ typedef struct as_config_s {
 	uint32_t max_conns_per_node;
 	
 	/**
+	 * Minimum number of asynchronous connections allowed per server node.  Preallocate min
+	 * connections on client node creation.  The client will periodically allocate new connections
+	 * if count falls below min connections.
+	 *
+	 * Server proto-fd-idle-ms may also need to be increased substantially if min connections are
+	 * defined.  The proto-fd-idle-ms default directs the server to close connections that are idle
+	 * for 60 seconds which can defeat the purpose of keeping connections in reserve for a future
+	 * burst of activity.
+	 *
+	 * If server proto-fd-idle-ms is changed, client max_socket_idle should also be changed to be a
+	 * few seconds less than proto-fd-idle-ms.
+	 *
+	 * Default: 0
+	 */
+	uint32_t async_min_conns_per_node;
+
+	/**
 	 * Maximum number of asynchronous (non-pipeline) connections allowed for each node.
 	 * This limit will be enforced at the node/event loop level.  If the value is 100 and 2 event
 	 * loops are created, then each node/event loop asynchronous (non-pipeline) connection pool 
 	 * will have a limit of 50. Async transactions will be rejected if the limit would be exceeded.
 	 * This variable is ignored if asynchronous event loops are not created.
+	 *
 	 * Default: 300
 	 */
 	uint32_t async_max_conns_per_node;
@@ -484,6 +519,7 @@ typedef struct as_config_s {
 	 * loops are created, then each node/event loop pipeline connection pool will have a limit of 50. 
 	 * Async transactions will be rejected if the limit would be exceeded.
 	 * This variable is ignored if asynchronous event loops are not created.
+	 *
 	 * Default: 64
 	 */
 	uint32_t pipe_max_conns_per_node;

@@ -11,7 +11,7 @@
     <icon>icon.png</icon>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Aerospike C client library for sync and async database commands using the libuv event framework.</description>
-    <copyright>Copyright 2008-2019 Aerospike, Inc.</copyright>
+    <copyright>Copyright 2008-2020 Aerospike, Inc.</copyright>
     <tags>Aerospike database C client native libuv</tags>
   </metadata>
   <files>

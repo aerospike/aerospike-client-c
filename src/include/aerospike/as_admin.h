@@ -31,7 +31,7 @@ extern "C" {
 /**
  * Maximum size of role string including null byte.
  */
-#define AS_ROLE_SIZE 32
+#define AS_ROLE_SIZE 64
 
 /******************************************************************************
  * TYPES

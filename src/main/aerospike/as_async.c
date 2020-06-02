@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -27,6 +27,9 @@ extern uint32_t as_event_loop_size;
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
+void
+as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec);
 
 uint32_t
 as_async_get_cluster_count()
@@ -77,7 +80,7 @@ as_async_get_connections(as_cluster* cluster)
 void
 as_async_update_max_idle(as_cluster* cluster, uint32_t max_idle)
 {
-	cluster->max_socket_idle_ns = (uint64_t)max_idle * 1000 * 1000 * 1000;
+	as_cluster_set_max_socket_idle(cluster, max_idle);
 }
 
 void

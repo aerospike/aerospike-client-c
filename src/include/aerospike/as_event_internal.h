@@ -304,7 +304,7 @@ void as_ev_repeat_cb(struct ev_loop* loop, ev_timer* timer, int revents);
 static inline bool
 as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
-	return as_socket_current(&conn->socket, max_socket_idle_ns);
+	return as_socket_current_trim(conn->socket.last_used, max_socket_idle_ns);
 }
 
 static inline int
@@ -391,13 +391,13 @@ void as_event_close_connection(as_event_connection* conn);
 static inline bool
 as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
-	return (cf_getns() - conn->last_used) <= max_socket_idle_ns;
+	return as_socket_current_trim(conn->last_used, max_socket_idle_ns);
 }
 
 static inline int
 as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
-	if (! as_event_connection_current(conn, max_socket_idle_ns)) {
+	if (! as_socket_current_tran(conn->last_used, max_socket_idle_ns)) {
 		return -1;
 	}
 
@@ -494,7 +494,7 @@ void as_libevent_repeat_cb(evutil_socket_t sock, short events, void* udata);
 static inline bool
 as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
-	return as_socket_current(&conn->socket, max_socket_idle_ns);
+	return as_socket_current_trim(conn->socket.last_used, max_socket_idle_ns);
 }
 
 static inline int

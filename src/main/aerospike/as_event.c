@@ -613,7 +613,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 	// Find connection.
 	while (as_queue_pop(&pool->queue, &conn)) {
 		// Verify that socket is active and receive buffer is empty.
-		int len = as_event_validate_connection(&conn->base, cmd->cluster->max_socket_idle_ns);
+		int len = as_event_validate_connection(&conn->base, cmd->cluster->max_socket_idle_ns_tran);
 
 		if (len == 0) {
 			conn->cmd = cmd;
@@ -1652,7 +1652,7 @@ as_event_balance_connections_cluster(as_event_loop* event_loop, as_cluster* clus
 		int excess = pool->queue.total - pool->min_size;
 
 		if (excess > 0) {
-			close_idle_connections(pool, cluster->max_socket_idle_ns, excess);
+			close_idle_connections(pool, cluster->max_socket_idle_ns_trim, excess);
 			// Do not close idle pipeline connections because pipelines work better with a stable
 			// number of connections.
 		}

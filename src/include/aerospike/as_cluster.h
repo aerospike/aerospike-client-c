@@ -204,9 +204,15 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Maximum socket idle in nanoseconds.
+	 * Maximum socket idle to validate connections in transactions.
 	 */
-	uint64_t max_socket_idle_ns;
+	uint64_t max_socket_idle_ns_tran;
+
+	/**
+	 * @private
+	 * Maximum socket idle to trim peak connections to min connections.
+	 */
+	uint64_t max_socket_idle_ns_trim;
 
 	/**
 	 * @private

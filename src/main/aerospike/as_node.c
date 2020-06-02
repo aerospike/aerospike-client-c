@@ -523,7 +523,7 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 		if (status) {
 			// Found socket.
 			// Verify that socket is active and receive buffer is empty.
-			len = as_socket_validate(&s, cluster->max_socket_idle_ns);
+			len = as_socket_validate(&s, cluster->max_socket_idle_ns_tran);
 
 			if (len == 0) {
 				*sock = s;
@@ -576,7 +576,7 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 static void
 as_node_close_idle_connections(as_node* node, as_conn_pool* pool, int count)
 {
-	uint64_t max_socket_idle_ns = node->cluster->max_socket_idle_ns;
+	uint64_t max_socket_idle_ns = node->cluster->max_socket_idle_ns_trim;
 	as_socket s;
 
 	while (count > 0) {
@@ -584,7 +584,7 @@ as_node_close_idle_connections(as_node* node, as_conn_pool* pool, int count)
 			break;
 		}
 
-		if (as_socket_current(&s, max_socket_idle_ns)) {
+		if (as_socket_current_trim(s.last_used, max_socket_idle_ns)) {
 			if (! as_conn_pool_push_tail(pool, &s)) {
 				as_node_close_connection(node, &s, pool);
 			}

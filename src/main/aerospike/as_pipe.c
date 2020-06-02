@@ -336,7 +336,7 @@ as_pipe_get_connection(as_event_command* cmd)
 			conn->in_pool = false;
 
 			// Verify that socket is active.  Socket receive buffer may already have data.
-			int len = as_event_validate_connection(&conn->base, cmd->cluster->max_socket_idle_ns);
+			int len = as_event_validate_connection(&conn->base, cmd->cluster->max_socket_idle_ns_tran);
 
 			if (len >= 0) {
 				as_log_trace("Validation OK");

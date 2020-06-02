@@ -1014,6 +1014,19 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
 	}
 }
 
+void
+as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec)
+{
+	if (max_socket_idle_sec == 0) {
+		cluster->max_socket_idle_ns_tran = 0;
+		cluster->max_socket_idle_ns_trim = (uint64_t)55 * 1000 * 1000 * 1000;
+	}
+	else {
+		cluster->max_socket_idle_ns_tran = (uint64_t)max_socket_idle_sec * 1000 * 1000 * 1000;
+		cluster->max_socket_idle_ns_trim = cluster->max_socket_idle_ns_tran;
+	}
+}
+
 as_status
 as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 {
@@ -1079,12 +1092,13 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->pipe_max_conns_per_node = config->pipe_max_conns_per_node;
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
 	cluster->login_timeout_ms = (config->login_timeout_ms == 0) ? 5000 : config->login_timeout_ms;
-	cluster->max_socket_idle_ns = (uint64_t)config->max_socket_idle * 1000 * 1000 * 1000;
 	cluster->tend_thread_cpu = config->tend_thread_cpu;
 	cluster->conn_pools_per_node = config->conn_pools_per_node;
 	cluster->use_services_alternate = config->use_services_alternate;
 	cluster->rack_aware = config->rack_aware;
 	cluster->rack_id = config->rack_id;
+
+	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
 
 	// Initialize seed hosts.  Round initial capacity up to multiple of 16.
 	as_vector* src = config->hosts;

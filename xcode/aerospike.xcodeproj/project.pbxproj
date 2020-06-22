@@ -119,7 +119,6 @@
 		BFBBBAEE18B6D9D0003FFD88 /* cf_crypto.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE418B6D9D0003FFD88 /* cf_crypto.c */; };
 		BFBBBAEF18B6D9D0003FFD88 /* cf_digest.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE518B6D9D0003FFD88 /* cf_digest.c */; };
 		BFBBBAF118B6D9D0003FFD88 /* cf_ll.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAE718B6D9D0003FFD88 /* cf_ll.c */; };
-		BFBBBAF418B6D9D0003FFD88 /* cf_vector.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBBBAEA18B6D9D0003FFD88 /* cf_vector.c */; };
 		BFBD205018BC3436009ED931 /* internal.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBD204518BC3435009ED931 /* internal.c */; };
 		BFBD205118BC3436009ED931 /* mod_lua_aerospike.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBD204618BC3436009ED931 /* mod_lua_aerospike.c */; };
 		BFBD205218BC3436009ED931 /* mod_lua_bytes.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBD204718BC3436009ED931 /* mod_lua_bytes.c */; };
@@ -302,7 +301,6 @@
 		BFBBBAE418B6D9D0003FFD88 /* cf_crypto.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_crypto.c; path = ../modules/common/src/main/citrusleaf/cf_crypto.c; sourceTree = "<group>"; };
 		BFBBBAE518B6D9D0003FFD88 /* cf_digest.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_digest.c; path = ../modules/common/src/main/citrusleaf/cf_digest.c; sourceTree = "<group>"; };
 		BFBBBAE718B6D9D0003FFD88 /* cf_ll.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_ll.c; path = ../modules/common/src/main/citrusleaf/cf_ll.c; sourceTree = "<group>"; };
-		BFBBBAEA18B6D9D0003FFD88 /* cf_vector.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_vector.c; path = ../modules/common/src/main/citrusleaf/cf_vector.c; sourceTree = "<group>"; };
 		BFBD204518BC3435009ED931 /* internal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = internal.c; path = "../modules/mod-lua/src/main/internal.c"; sourceTree = "<group>"; };
 		BFBD204618BC3436009ED931 /* mod_lua_aerospike.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = mod_lua_aerospike.c; path = "../modules/mod-lua/src/main/mod_lua_aerospike.c"; sourceTree = "<group>"; };
 		BFBD204718BC3436009ED931 /* mod_lua_bytes.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = mod_lua_bytes.c; path = "../modules/mod-lua/src/main/mod_lua_bytes.c"; sourceTree = "<group>"; };
@@ -606,7 +604,6 @@
 				BFBBBAE418B6D9D0003FFD88 /* cf_crypto.c */,
 				BFBBBAE518B6D9D0003FFD88 /* cf_digest.c */,
 				BFBBBAE718B6D9D0003FFD88 /* cf_ll.c */,
-				BFBBBAEA18B6D9D0003FFD88 /* cf_vector.c */,
 			);
 			name = citrusleaf;
 			sourceTree = "<group>";
@@ -909,7 +906,6 @@
 				BFBA106518B7D8B300A64E68 /* as_serializer.c in Sources */,
 				BFBA105718B7D8B300A64E68 /* as_hashmap.c in Sources */,
 				BF90C76C22AB154A0062D920 /* as_cdt_internal.c in Sources */,
-				BFBBBAF418B6D9D0003FFD88 /* cf_vector.c in Sources */,
 				BF26CF841BFE7C7900E143DC /* as_async.c in Sources */,
 				BFBA04AF1947AA9C00F9924E /* crypt_blowfish.c in Sources */,
 				BFBB64831905D5B500682A6E /* as_cluster.c in Sources */,

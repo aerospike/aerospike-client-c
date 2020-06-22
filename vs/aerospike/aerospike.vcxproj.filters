@@ -360,9 +360,6 @@
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_rchash.h">
       <Filter>Header Files\common\citrusleaf</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_vector.h">
-      <Filter>Header Files\common\citrusleaf</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\include\aerospike\as_poll.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -684,9 +681,6 @@
       <Filter>Source Files\common\citrusleaf</Filter>
     </ClCompile>
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_random.c">
-      <Filter>Source Files\common\citrusleaf</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_vector.c">
       <Filter>Source Files\common\citrusleaf</Filter>
     </ClCompile>
     <ClCompile Include="..\..\modules\mod-lua\src\main\internal.c">

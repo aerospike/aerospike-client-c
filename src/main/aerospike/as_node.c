@@ -514,16 +514,12 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 	as_socket s;
 	as_conn_pool* pool = &pools[initial_index];
 	uint32_t pool_index = initial_index;
-	int len;
-	bool status;
 
 	while (true) {
-		status = as_conn_pool_pop_head(pool, &s);
-
-		if (status) {
+		if (as_conn_pool_pop_head(pool, &s)) {
 			// Found socket.
 			// Verify that socket is active and receive buffer is empty.
-			len = as_socket_validate(&s, cluster->max_socket_idle_ns_tran);
+			int len = as_socket_validate(&s, cluster->max_socket_idle_ns_tran);
 
 			if (len == 0) {
 				*sock = s;
@@ -537,9 +533,10 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 		else if (as_conn_pool_incr(pool)) {
 			// Socket not found and queue has available slot.
 			// Create new connection.
-			status = as_node_create_connection(err, node, socket_timeout, deadline_ms, pool, sock);
+			as_status status = as_node_create_connection(err, node, socket_timeout, deadline_ms,
+														 pool, sock);
 
-			if (status) {
+			if (status != AEROSPIKE_OK) {
 				as_conn_pool_decr(pool);
 			}
 			return status;

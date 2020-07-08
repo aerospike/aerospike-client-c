@@ -33,6 +33,12 @@ typedef enum as_status_e {
 	 * Client Errors
 	 **************************************************************************/
 	/**
+	 * Abort split batch retry and use normal node retry instead.
+	 * Used internally and should not be returned to user.
+	 */
+	AEROSPIKE_USE_NORMAL_RETRY = -13,
+
+	/**
 	 * Max retries limit reached.
 	 */
 	AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED = -12,

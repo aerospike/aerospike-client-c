@@ -41,7 +41,8 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 static as_status
 as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node);
 
-bool as_batch_retry(as_command* cmd, as_error* err);
+as_status
+as_batch_retry(as_command* cmd, as_error* err);
 
 static size_t
 as_command_user_key_size(const as_key* key)
@@ -642,12 +643,12 @@ Retry:
 			cmd->master = !cmd->master;
 		}
 
-		if ((cmd->flags & AS_COMMAND_FLAGS_BATCH) && as_batch_retry(cmd, err)) {
-			// Batch split retry attempted.  Exit this command.
-			if (release_node) {
-				as_node_release(node);
+		if (cmd->flags & AS_COMMAND_FLAGS_BATCH) {
+			status = as_batch_retry(cmd, err);
+
+			if (status != AEROSPIKE_USE_NORMAL_RETRY) {
+				return status;
 			}
-			return err->code;
 		}
 	}
 
@@ -743,7 +744,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 										   size2 - sizeof(as_proto), cmd->udata);
 		}
 		else {
-			as_proto_type_error(err, &proto, AS_MESSAGE_TYPE);
+			status = as_proto_type_error(err, &proto, AS_MESSAGE_TYPE);
 			break;
 		}
 

@@ -1151,11 +1151,9 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		as_status status = as_event_command_execute(cmd, err);
 
 		if (status != AEROSPIKE_OK) {
-			// Release nodes not queued.
-			for (uint32_t j = i; j < n_nodes; j++) {
-				as_node_release(ee->commands[j]->node);
-			}
-
+			// as_event_executor_destroy() will release nodes that were not queued.
+			// as_event_executor_cancel() or as_event_executor_error() will eventually
+			// call as_event_executor_destroy().
 			if (pt->iteration == 0) {
 				// On first scan attempt, cleanup and do not call listener.
 				as_scan_partition_executor_destroy(se);

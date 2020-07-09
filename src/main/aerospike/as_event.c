@@ -991,7 +991,7 @@ as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t com
 	bool first_error = executor->valid;
 	executor->valid = false;
 	executor->count += command_count;
-	bool complete = executor->count == executor->queued;
+	bool complete = executor->count == executor->max;
 	pthread_mutex_unlock(&executor->lock);
 
 	if (complete) {

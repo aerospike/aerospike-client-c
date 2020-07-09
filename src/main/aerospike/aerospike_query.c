@@ -409,7 +409,7 @@ as_query_command_execute(as_query_task* task)
 	cmd.buf = task->cmd;
 	cmd.buf_size = task->cmd_size;
 	cmd.partition_id = 0; // Not referenced when node set.
-	cmd.replica = 0;      // Not referenced when node set.
+	cmd.replica = AS_POLICY_REPLICA_MASTER;
 	cmd.flags = flags;
 
 	as_command_start_timer(&cmd);

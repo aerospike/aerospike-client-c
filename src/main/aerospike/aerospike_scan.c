@@ -630,7 +630,7 @@ as_scan_command_execute(as_scan_task* task)
 	cmd.buf = buf;
 	cmd.buf_size = size;
 	cmd.partition_id = 0; // Not referenced when node set.
-	cmd.replica = 0;      // Not referenced when node set.
+	cmd.replica = AS_POLICY_REPLICA_MASTER;
 	cmd.flags = AS_COMMAND_FLAGS_READ;
 
 	as_command_start_timer(&cmd);

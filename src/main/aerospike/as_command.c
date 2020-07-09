@@ -608,9 +608,27 @@ Retry:
 			break;
 		}
 
+		uint32_t sleep_between_retries;
+
+		// Alternate between master and prole on socket errors or database reads.
+		// Timeouts/NO_MORE_CONNECTIONS are not a good indicator of impending data migration.
+		if (cmd->replica != AS_POLICY_REPLICA_MASTER &&
+			((status != AEROSPIKE_ERR_TIMEOUT && status != AEROSPIKE_ERR_NO_MORE_CONNECTIONS) ||
+			((cmd->flags & AS_COMMAND_FLAGS_READ) && !(cmd->flags & AS_COMMAND_FLAGS_LINEARIZE)))) {
+			// Note: SC session read will ignore this setting because it uses master only.
+			cmd->master = !cmd->master;
+
+			// Disable sleep on first failure because target node is likely to change.
+			sleep_between_retries = (cmd->iteration == 1)? 0 : cmd->policy->sleep_between_retries;
+		}
+		else {
+			// Sleep as defined because target node is not likely to change.
+			sleep_between_retries = cmd->policy->sleep_between_retries;
+		}
+
 		if (cmd->deadline_ms > 0) {
 			// Check for total timeout.
-			int64_t remaining = cmd->deadline_ms - cf_getms() - cmd->policy->sleep_between_retries;
+			int64_t remaining = cmd->deadline_ms - cf_getms() - sleep_between_retries;
 
 			if (remaining <= 0) {
 				break;
@@ -630,17 +648,9 @@ Retry:
 			as_node_release(node);
 		}
 
-		if (cmd->policy->sleep_between_retries > 0) {
+		if (sleep_between_retries > 0) {
 			// Sleep before trying again.
-			as_sleep(cmd->policy->sleep_between_retries);
-		}
-
-		// Alternate between master and prole on socket errors or database reads.
-		// Timeouts/NO_MORE_CONNECTIONS are not a good indicator of impending data migration.
-		if ((status != AEROSPIKE_ERR_TIMEOUT && status != AEROSPIKE_ERR_NO_MORE_CONNECTIONS) ||
-			((cmd->flags & AS_COMMAND_FLAGS_READ) && !(cmd->flags & AS_COMMAND_FLAGS_LINEARIZE))) {
-			// Note: SC session read will ignore this setting because it uses master only.
-			cmd->master = !cmd->master;
+			as_sleep(sleep_between_retries);
 		}
 
 		if (cmd->flags & AS_COMMAND_FLAGS_BATCH) {

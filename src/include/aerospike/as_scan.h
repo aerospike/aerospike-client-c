@@ -394,7 +394,8 @@ typedef struct as_scan_s {
 	 * Percentage of the data to scan. Valid integer range is 1 to 100.
 	 *
 	 * This field is supported on server versions < 4.9.
-	 * For server versions >= 4.9, use "as_policy_scan.max_records".
+	 * Server versions >= 4.9 might allow scan percent, but not in conjunction with
+	 * "as_policy_scan.max_records". Scan percent is eventually slated for removal.
 	 *
 	 * Default value is AS_SCAN_PERCENT_DEFAULT.
 	 */

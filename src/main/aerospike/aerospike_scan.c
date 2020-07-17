@@ -363,8 +363,8 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 		n_fields++;
 	}
 
-	// Only set scan options for server versions < 4.9.
-	if (!sb->pscan) {
+	// Only set scan options for server versions < 4.9 or if scan percent was modified.
+	if (!sb->pscan || scan->percent < 100) {
 		// Estimate scan options size.
 		size += as_command_field_size(2);
 		n_fields++;
@@ -487,8 +487,8 @@ as_scan_command_init(
 		p = as_command_write_field_uint32(p, AS_FIELD_SCAN_RPS, policy->records_per_second);
 	}
 
-	// Only set scan options for server versions < 4.9.
-	if (!sb->pscan) {
+	// Only set scan options for server versions < 4.9 or if scan percent was modified.
+	if (!sb->pscan || scan->percent < 100) {
 		// Write scan options
 		p = as_command_write_field_header(p, AS_FIELD_SCAN_OPTIONS, 2);
 
@@ -689,12 +689,18 @@ as_scan_worker(void* data)
 }
 
 static as_status
-as_scan_validate(as_error* err, const as_scan* scan)
+as_scan_validate(as_error* err, const as_policy_scan* policy, const as_scan* scan)
 {
 	as_error_reset(err);
 
 	if (scan->percent <= 0 || scan->percent > 100) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid scan percent: %u", scan->percent);
+	}
+
+	if (scan->percent != 100 && policy->max_records != 0) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "scan percent(%u) and maxRecords(%"
+			PRIu64 ") are mutually exclusive",
+			scan->percent, policy->max_records);
 	}
 	return AEROSPIKE_OK;
 }
@@ -705,7 +711,7 @@ as_scan_generic(
 	aerospike_scan_foreach_callback callback, void* udata, uint64_t* task_id_ptr
 	)
 {
-	as_status status = as_scan_validate(err, scan);
+	as_status status = as_scan_validate(err, policy, scan);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -814,10 +820,11 @@ as_scan_generic(
 
 static as_status
 as_scan_partitions_validate(
-	as_cluster* cluster, as_error* err, const as_scan* scan, uint32_t* n_nodes
+	as_cluster* cluster, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	uint32_t* n_nodes
 	)
 {
-	as_status status = as_scan_validate(err, scan);
+	as_status status = as_scan_validate(err, policy, scan);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1343,7 +1350,7 @@ aerospike_scan_foreach(
 
 	if (cluster->has_partition_scan) {
 		uint32_t n_nodes;
-		as_status status = as_scan_partitions_validate(cluster, err, scan, &n_nodes);
+		as_status status = as_scan_partitions_validate(cluster, err, policy, scan, &n_nodes);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -1380,7 +1387,7 @@ aerospike_scan_node(
 	}
 
 	if (cluster->has_partition_scan) {
-		as_status status = as_scan_validate(err, scan);
+		as_status status = as_scan_validate(err, policy, scan);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -1456,7 +1463,7 @@ aerospike_scan_partitions(
 	}
 
 	uint32_t n_nodes;
-	as_status status = as_scan_partitions_validate(cluster, err, scan, &n_nodes);
+	as_status status = as_scan_partitions_validate(cluster, err, policy, scan, &n_nodes);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1484,7 +1491,7 @@ aerospike_scan_async(
 		policy = &as->config.policies.scan;
 	}
 
-	as_status status = as_scan_validate(err, scan);
+	as_status status = as_scan_validate(err, policy, scan);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1533,7 +1540,7 @@ aerospike_scan_node_async(
 		policy = &as->config.policies.scan;
 	}
 
-	as_status status = as_scan_validate(err, scan);
+	as_status status = as_scan_validate(err, policy, scan);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1580,7 +1587,7 @@ aerospike_scan_partitions_async(
 	}
 
 	uint32_t n_nodes;
-	as_status status = as_scan_partitions_validate(cluster, err, scan, &n_nodes);
+	as_status status = as_scan_partitions_validate(cluster, err, policy, scan, &n_nodes);
 
 	if (status != AEROSPIKE_OK) {
 		return status;

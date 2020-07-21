@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -54,7 +54,7 @@
 /**
  * @defgroup client_operations Client Operations
  *
- * Client operations require an initialized @ref aerospike client.
+ * Client operations require an initialized aerospike client.
  */
 
 /**
@@ -88,17 +88,16 @@ extern "C" {
 struct as_cluster_s;
 
 /**
- * 	An instance of @ref aerospike is required to connect to and execute 
- * operations against an Aerospike Database cluster.
+ * The aerospike struct is used to connect and execute operations against an 
+ * Aerospike database cluster.
  *
  * ## Configuration
  *
- * An initialized client configuration is required to initialize a 
- * @ref aerospike client. See as_config for details on configuration options.
+ * A client configuration is required to initialize an aerospike client.
+ * See as_config for details on configuration options.
  * 
- * At a minimum, a configuration needs to be initialized and have at least
- * one host defined:
- * 
+ * At least one seed host must be defined.
+ *
  * ~~~~~~~~~~{.c}
  * as_config config;
  * as_config_init(&config);
@@ -112,20 +111,17 @@ struct as_cluster_s;
  * 
  * ## Initialization
  *
- * An initialized @ref aerospike object is required to connect to the 
- * database. Initialization requires a configuration to bind to the client
- * instance. 
+ * Initialization requires a configuration to bind to the client instance.
  *
- * The @ref aerospike object can be initialized via either:
+ * The aerospike instance can be initialized via either:
  *
- * 	- aerospike_init() — Initialize a stack allocated @ref aerospike.
- * - aerospike_new() — Create and initialize a heap allocated @ref aerospike.
+ * - aerospike_init() — Initialize a stack allocated aerospike instance.
+ * - aerospike_new() — Create and initialize a heap allocated aerospike instance.
  *
- * Both initialization functions require a configuration.  Once initialized, the ownership
- * of the as_config instance fields are transferred to @ref aerospike.  The user should never
- * call as_config_destroy() directly.
+ * Once initialized, the ownership of the as_config instance fields are transferred 
+ * to the aerospike instance.  The user should never call as_config_destroy() directly.
  *
- * The following uses a stack allocated @ref aerospike and initializes it
+ * The following uses a stack allocated aerospike instance and initializes it
  * with aerospike_init():
  *
  * ~~~~~~~~~~{.c}
@@ -135,19 +131,16 @@ struct as_cluster_s;
  * 
  * ## Connecting
  *
- * An application can connect to the database with an initialized
- * @ref aerospike. The client will be connected if `aerospike_connect()` completes
- * successfully:
+ * The client will be connected if `aerospike_connect()` completes successfully:
  * 
  * ~~~~~~~~~~{.c}
  * if (aerospike_connect(&as, &err) != AEROSPIKE_OK) {
- * 	fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * ~~~~~~~~~~
  *
- * The `err` parameter will be populated if an error while attempting to
- * connect to the database. See as_error, for more information on error 
- * handling.
+ * The `err` parameter will be populated if an error occurs. See as_error for more information
+ * on error handling.
  * 
  * An aerospike object internally keeps cluster state and maintains connection pools to the cluster. 
  * The same aerospike object should be reused by the application for database operations 
@@ -207,7 +200,7 @@ typedef struct aerospike_s {
  * The config parameter can be an instance of `as_config` or `NULL`. If `NULL`,
  * then the default configuration will be used.
  *
- * Ownership of the as_config instance fields are transferred to @ref aerospike.  
+ * Ownership of the as_config instance fields are transferred to the aerospike instance.
  * The user should never call as_config_destroy() directly.
  *
  * ~~~~~~~~~~{.c}
@@ -233,7 +226,7 @@ aerospike_init(aerospike* as, as_config* config);
 /**
  * Creates a new heap allocated aerospike instance.
  *
- * Ownership of the as_config instance fields are transferred to @ref aerospike.
+ * Ownership of the as_config instance fields are transferred to the aerospike instance.
  * The user should never call as_config_destroy() directly.
  *
  * ~~~~~~~~~~{.c}

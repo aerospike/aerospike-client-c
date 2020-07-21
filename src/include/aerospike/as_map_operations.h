@@ -113,7 +113,7 @@ extern "C" {
 /**
  * Map write mode.
  * This enum should only be used for server versions < 4.3.
- * #as_map_write_flags is recommended for server versions >= 4.3.
+ * as_map_write_flags is recommended for server versions >= 4.3.
  *
  * @ingroup map_operations
  */
@@ -281,7 +281,7 @@ AS_EXTERN void
 as_map_policy_set(as_map_policy* policy, as_map_order order, as_map_write_mode mode);
 
 /**
- * Set map attributes to specified map order and write flags (See #as_map_write_flags).
+ * Set map attributes to specified map order and write flags (See as_map_write_flags).
  *
  * @ingroup map_operations
  */

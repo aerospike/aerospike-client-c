@@ -17,17 +17,17 @@ and runtime.
 
 The C client library requires other third-party libraries depending on your platform.
 
-### Debian 8+ and Ubuntu 14+
+### Debian and Ubuntu
 
   $ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++
 
-  [Also do on Ubuntu 14+:]
+  [Also do on Ubuntu:]
   $ sudo apt-get install ncurses-dev
 
   [Optional:]
   $ sudo apt-get install liblua5.1-dev
 
-### Red Hat Enterprise Linux or CentOS 6+
+### Red Hat Enterprise Linux or CentOS
 
   $ sudo yum install openssl-devel glibc-devel autoconf automake libtool
 
@@ -35,7 +35,7 @@ The C client library requires other third-party libraries depending on your plat
   $ sudo yum install lua-devel
   $ sudo yum install gcc-c++ graphviz rpm-build 
 
-### Fedora 20+
+### Fedora
 
   $ sudo yum install openssl-devel glibc-devel autoconf automake libtool
 
@@ -43,7 +43,7 @@ The C client library requires other third-party libraries depending on your plat
   $ sudo yum install compat-lua-devel-5.1.5
   $ sudo yum install gcc-c++ graphviz rpm-build 
 
-### MacOS 10.9+
+### MacOS
 
 * [XCode](https://itunes.apple.com/us/app/xcode/id497799835)
 * [Brew Package Manager](http://brew.sh)
@@ -94,5 +94,5 @@ Only one of the installers is needed on each client machine.  All installers ins
 #### Debian/Ubuntu
     sudo dpkg -i aerospike-client-c[-<eventlib>][-devel]-<version>-<os>.x86_64.deb
 
-#### Mac OS X
+#### MacOS
     open aerospike-client-c[-<eventlib>][-devel]-<version>.pkg

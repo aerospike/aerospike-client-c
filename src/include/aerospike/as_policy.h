@@ -631,16 +631,6 @@ typedef struct as_policy_apply_s {
 	uint32_t ttl;
 
 	/**
-	 * Specifies the behavior for the generation value.
-	 */
-	as_policy_gen gen;
-
-	/**
-	 * The expected generation of the record.
-	 */
-	uint16_t gen_value;
-
-	/**
 	 * If the transaction results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
@@ -1247,8 +1237,6 @@ as_policy_apply_init(as_policy_apply* p)
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
-	p->gen = AS_POLICY_GEN_DEFAULT;
-	p->gen_value = 0;
 	p->durable_delete = false;
 	return p;
 }

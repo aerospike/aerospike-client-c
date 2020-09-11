@@ -1165,7 +1165,7 @@ as_apply_write(void* udata, uint8_t* buf)
 	const as_policy_apply* policy = ap->policy;
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level, 0,
-		policy->gen, policy->gen_value, policy->ttl, ap->n_fields, 0, policy->durable_delete,
+		AS_POLICY_GEN_IGNORE, 0, policy->ttl, ap->n_fields, 0, policy->durable_delete,
 		ap->read_attr, AS_MSG_INFO2_WRITE, 0);
 
 	p = as_command_write_key(p, policy->key, ap->key);

@@ -132,7 +132,7 @@ as_hll_policy_set_write_flags(as_hll_policy* policy, as_hll_write_flags flags)
  * @param ctx				Must set to NULL.
  * @param policy			Write policy. Use NULL for default.
  * @param index_bit_count	Number of index bits. Must be between 4 and 16 inclusive.
- * @param mh_bit_count      Number of min hash bits. Must be between 4 and 58 inclusive.
+ * @param mh_bit_count      Number of min hash bits. Must be between 4 and 51 inclusive.
  * @ingroup hll_operations
  */
 AS_EXTERN bool
@@ -173,7 +173,7 @@ as_operations_hll_init(
  * @param policy			Write policy. Use NULL for default.
  * @param list				List of values to be added.
  * @param index_bit_count	Number of index bits. Must be between 4 and 16 inclusive.
- * @param mh_bit_count      Number of min hash bits. Must be between 4 and 58 inclusive.
+ * @param mh_bit_count      Number of min hash bits. Must be between 4 and 51 inclusive.
  * @ingroup hll_operations
  */
 AS_EXTERN bool

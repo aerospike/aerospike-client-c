@@ -470,6 +470,13 @@ as_node_destroy(as_node* node);
 
 /**
  * @private
+ * Create configured minimum number of connections.
+ */
+void
+as_node_create_min_connections(as_node* node);
+
+/**
+ * @private
  * Set node to inactive.
  */
 static inline void

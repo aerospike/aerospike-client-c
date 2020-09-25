@@ -146,10 +146,6 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 		uint32_t min_size = i < rem_min ? min + 1 : min;
 		uint32_t max_size = i < rem_max ? max + 1 : max;
 		as_conn_pool_init(pool, sizeof(as_socket), min_size, max_size);
-
-		if (min_size > 0) {
-			as_node_create_connections(node, pool, cluster->conn_timeout_ms, min_size);
-		}
 	}
 
 	if (as_event_loop_capacity == 0) {
@@ -163,16 +159,6 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 		cluster->async_max_conns_per_node);
 
 	node->pipe_conn_pools = as_node_create_async_pools(0, cluster->pipe_max_conns_per_node);
-
-	if (as_event_loop_size == 0 || as_event_single_thread) {
-		return node;
-	}
-
-	// Preallocate connections.
-	if (cluster->async_min_conns_per_node > 0) {
-		as_event_create_connections_wait(node, node->async_conn_pools);
-	}
-
 	return node;
 }
 
@@ -216,6 +202,27 @@ as_node_destroy(as_node* node)
 		as_racks_release(racks);
 	}
 	cf_free(node);
+}
+
+void
+as_node_create_min_connections(as_node* node)
+{
+	// Create sync connections.
+	uint32_t max = node->cluster->conn_pools_per_node;
+
+	for (uint32_t i = 0; i < max; i++) {
+		as_conn_pool* pool = &node->sync_conn_pools[i];
+
+		if (pool->min_size > 0) {
+			as_node_create_connections(node, pool, node->cluster->conn_timeout_ms, pool->min_size);
+		}
+	}
+
+	// Create async connections.
+	if (as_event_loop_capacity > 0 && as_event_loop_size > 0 && !as_event_single_thread &&
+		node->cluster->async_min_conns_per_node > 0) {
+		as_event_create_connections_wait(node, node->async_conn_pools);
+	}
 }
 
 /**
@@ -978,6 +985,11 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	}
 
 	as_vector_destroy(&values);
+
+	if (status == AEROSPIKE_OK) {
+		node->failures = 0;
+		peers->refresh_count++;
+	}
 	return status;
 }
 
@@ -1057,6 +1069,10 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 	}
 	
 	as_vector_destroy(&values);
+
+	if (status == AEROSPIKE_OK) {
+		peers->refresh_count++;
+	}
 	return status;
 }
 

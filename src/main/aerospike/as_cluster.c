@@ -253,9 +253,10 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 }
 
 static as_status
-as_cluster_seed_node(as_cluster* cluster, as_error* err, bool enable_warnings)
+as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool enable_warnings)
 {
 	as_node* node = NULL;
+	as_node* fallback = NULL;
 	as_node_info node_info;
 	as_error error_local;
 	as_error_init(&error_local);
@@ -294,6 +295,54 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, bool enable_warnings)
 				if (iter.hostname_is_alias) {
 					as_node_add_alias(node, host.name, host.port);
 				}
+
+				status = as_node_refresh(cluster, &error_local, node, peers);
+
+				if (status != AEROSPIKE_OK) {
+					if (enable_warnings) {
+						as_log_warn("Failed to refresh seed node %s %d. %s %s",
+							host.name, host.port, as_error_string(status), error_local.message);
+					}
+					conn_status = status;
+					as_node_destroy(node);
+					node = NULL;
+					continue;
+				}
+
+				if (peers->gen_changed) {
+					peers->refresh_count = 0;
+					status = as_node_refresh_peers(cluster, &error_local, node, peers);
+	
+					if (status != AEROSPIKE_OK) {
+						if (enable_warnings) {
+							as_log_warn("Failed to refresh seed node peers %s %d. %s %s",
+								host.name, host.port, as_error_string(status), error_local.message);
+						}
+						conn_status = status;
+						as_node_destroy(node);
+						node = NULL;
+						continue;
+					}
+				}
+
+				if (node->peers_count == 0) {
+					// Node is suspect because it does not have any peers.
+					if (! fallback) {
+						fallback = node;
+					}
+					else {
+						as_node_destroy(node);
+					}
+					node = NULL;
+					continue;
+				}
+
+				// Node is valid. Drop fallback if it exists.
+				if (fallback) {
+					as_log_info("Skip orphan node: %s", as_node_get_address_string(fallback));
+					as_node_destroy(fallback);
+					fallback = NULL;
+				}
 				break;
 			}
 			else {
@@ -307,7 +356,13 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, bool enable_warnings)
 	}
 	pthread_mutex_unlock(&cluster->seed_lock);
 
+	if (! node && fallback) {
+		node = fallback;
+	}
+
 	if (node) {
+		as_node_create_min_connections(node);
+
 		as_vector nodes_to_add;
 		as_vector_inita(&nodes_to_add, sizeof(as_node*), 1);
 		as_vector_append(&nodes_to_add, &node);
@@ -547,36 +602,18 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 	// are stuck between assignment and incrementing the ref count.
 	as_cluster_gc(cluster->gc);
 
-	// If active nodes don't exist, seed cluster.
-	as_nodes* nodes = cluster->nodes;
-
-	if (nodes->size == 0) {
-		as_status status = as_cluster_seed_node(cluster, err, enable_seed_warnings);
-		
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
-	// Retrieve fixed number of partitions only once from any node.
-	if (cluster->n_partitions == 0) {
-		as_status status = as_cluster_set_partition_size(cluster, err);
-		
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-	
 	// Initialize tend iteration node statistics.
+	as_error error_local;
 	as_peers peers;
 	as_vector_inita(&peers.hosts, sizeof(as_host), 16);
 	as_vector_inita(&peers.nodes, sizeof(as_node*), 16);
+	peers.refresh_count = 0;
 	peers.use_peers = true;
 	peers.gen_changed = false;
 
+	as_nodes* nodes = cluster->nodes;
 	bool rebalance = false;
 	
-	nodes = cluster->nodes;
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		node->friends = 0;
@@ -588,53 +625,76 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 		}
 	}
 	
-	// Refresh all known nodes.
-	as_error error_local;
-	uint32_t refresh_count = 0;
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node* node = nodes->array[i];
+	// If active nodes don't exist, seed cluster.
+	if (nodes->size == 0) {
+		as_status status = as_cluster_seed_node(cluster, err, &peers, enable_seed_warnings);
 		
-		if (node->active) {
-			as_status status = as_node_refresh(cluster, &error_local, node, &peers);
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
+		// Retrieve fixed number of partitions only once from any node.
+		if (cluster->n_partitions == 0) {
+			as_status status = as_cluster_set_partition_size(cluster, err);
 			
-			if (status == AEROSPIKE_OK) {
-				node->failures = 0;
-				refresh_count++;
-			}
-			else {
-				// Use info level so aql doesn't see message by default.
-				as_log_info("Node %s refresh failed: %s %s", node->name, as_error_string(status), error_local.message);
-				if (peers.use_peers) {
-					peers.gen_changed = true;
-				}
-				node->failures++;
+			if (status != AEROSPIKE_OK) {
+				return status;
 			}
 		}
 	}
-	
-	// Refresh peers when necessary.
-	if (peers.gen_changed) {
-		// Refresh peers for all nodes that responded the first time even if only one node's peers changed.
-		refresh_count = 0;
+	else {
+		// Retrieve fixed number of partitions only once from any node.
+		if (cluster->n_partitions == 0) {
+			as_status status = as_cluster_set_partition_size(cluster, err);
+			
+			if (status != AEROSPIKE_OK) {
+				return status;
+			}
+		}
 
+		// Refresh all known nodes.
 		for (uint32_t i = 0; i < nodes->size; i++) {
 			as_node* node = nodes->array[i];
-			
-			if (node->failures == 0 && node->active) {
-				as_status status = as_node_refresh_peers(cluster, &error_local, node, &peers);
-				
-				if (status == AEROSPIKE_OK) {
-					refresh_count++;
-				}
-				else {
-					as_log_warn("Node %s peers refresh failed: %s %s", node->name, as_error_string(status), error_local.message);
+
+			if (node->active) {
+				as_status status = as_node_refresh(cluster, &error_local, node, &peers);
+
+				if (status != AEROSPIKE_OK) {
+					// Use info level so aql doesn't see message by default.
+					as_log_info("Node %s refresh failed: %s %s",
+						node->name, as_error_string(status), error_local.message);
+
+					if (peers.use_peers) {
+						peers.gen_changed = true;
+					}
 					node->failures++;
 				}
 			}
 		}
-	}
+
+		// Refresh peers when necessary.
+		if (peers.gen_changed) {
+			// Refresh peers for all nodes that responded the first time even if only one node's
+			// peers changed.
+			peers.refresh_count = 0;
+
+			for (uint32_t i = 0; i < nodes->size; i++) {
+				as_node* node = nodes->array[i];
+
+				if (node->failures == 0 && node->active) {
+					as_status status = as_node_refresh_peers(cluster, &error_local, node, &peers);
 	
+					if (status != AEROSPIKE_OK) {
+						as_log_warn("Node %s peers refresh failed: %s %s",
+							node->name, as_error_string(status), error_local.message);
+
+						node->failures++;
+					}
+				}
+			}
+		}
+	}
+
 	// Refresh partition map when necessary.
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
@@ -642,7 +702,8 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 		// Avoid "split cluster" case where this node thinks it's a 1-node cluster.
 		// Unchecked, such a node can dominate the partition map and cause all other
 		// nodes to be dropped.
-		if (node->partition_changed && node->failures == 0 && node->active && (node->peers_count > 0 || refresh_count == 1)) {
+		if (node->partition_changed && node->failures == 0 && node->active &&
+		   (node->peers_count > 0 || peers.refresh_count == 1)) {
 			as_status status = as_node_refresh_partitions(cluster, &error_local, node, &peers);
 			
 			if (status != AEROSPIKE_OK) {
@@ -673,7 +734,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 		as_vector nodes_to_remove;
 		as_vector_inita(&nodes_to_remove, sizeof(as_node*), nodes->size);
 
-		as_cluster_find_nodes_to_remove(cluster, refresh_count, &nodes_to_remove);
+		as_cluster_find_nodes_to_remove(cluster, peers.refresh_count, &nodes_to_remove);
 		
 		// Remove nodes in a batch.
 		if (nodes_to_remove.size > 0) {

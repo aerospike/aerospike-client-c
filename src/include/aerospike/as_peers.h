@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -28,6 +28,7 @@
 typedef struct as_peers_s {
 	as_vector /* as_host */ hosts;
 	as_vector /* as_node* */ nodes;
+	uint32_t refresh_count;
 	bool use_peers;
 	bool gen_changed;
 } as_peers;
@@ -43,7 +44,11 @@ struct as_node_s*
 as_peers_find_local_node(as_vector* nodes, const char* name);
 
 void
-as_peers_parse_services(as_peers* peers, struct as_cluster_s* cluster, struct as_node_s* node, char* buf);
+as_peers_parse_services(
+	as_peers* peers, struct as_cluster_s* cluster, struct as_node_s* node, char* buf
+	);
 
 as_status
-as_peers_parse_peers(as_peers* peers, as_error* err, struct as_cluster_s* cluster, struct as_node_s* node, char* buf);
+as_peers_parse_peers(
+	as_peers* peers, as_error* err, struct as_cluster_s* cluster, struct as_node_s* node, char* buf
+	);

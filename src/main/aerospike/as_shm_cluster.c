@@ -315,6 +315,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				node_info.session_token = NULL;
 				node_info.session_token_length = 0;
 				node = as_node_create(cluster, &node_info);
+				as_node_create_min_connections(node);
 				node->index = i;
 
 				if (cluster->user) {

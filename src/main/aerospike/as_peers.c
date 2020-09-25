@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -104,6 +104,7 @@ as_peers_create_node(
 {
 	// Create node.
 	as_node* node = as_node_create(cluster, node_info);
+	as_node_create_min_connections(node);
 
 	if (is_alias) {
 		as_node_add_alias(node, host->name, host->port);

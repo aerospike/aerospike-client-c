@@ -1038,7 +1038,7 @@ aerospike_query_foreach(
 
 	// Convert to a scan when filter doesn't exist and not aggregation query and
 	// partition scans are supported.
-	if (query->where.size == 0 && ! query->apply.function[0] && cluster->has_partition_scan) {
+	if (query->where.size == 0 && ! query->apply.function[0]) {
 		as_policy_scan scan_policy;
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
@@ -1155,7 +1155,7 @@ aerospike_query_async(
 	as_cluster* cluster = as->cluster;
 
 	// Convert to a scan when filter doesn't exist and partition scans are supported.
-	if (query->where.size == 0 && cluster->has_partition_scan) {
+	if (query->where.size == 0) {
 		as_policy_scan scan_policy;
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
@@ -1241,7 +1241,7 @@ aerospike_query_async(
 	// Free command buffer.
 	as_command_buffer_free(cmd_buf, size);
 	
-	if (policy->fail_on_cluster_change && (nodes->array[0]->features & AS_FEATURES_CLUSTER_STABLE)) {
+	if (policy->fail_on_cluster_change) {
 		// Verify migrations are not in progress.
 		status = as_query_validate_begin_async(exec, query->ns, err);
 	}

@@ -105,13 +105,6 @@ typedef struct as_scan_builder {
 static as_status
 as_scan_partition_retry_async(as_async_scan_executor* se, as_error* err);
 
-static void
-as_scan_complete_async(as_event_executor* ee)
-{
-	as_async_scan_executor* se = (as_async_scan_executor*)ee;
-	se->listener(ee->err, NULL, ee->udata, ee->event_loop);
-}
-
 static inline void
 as_scan_partition_executor_destroy(as_async_scan_executor* se)
 {
@@ -928,104 +921,6 @@ as_scan_partitions(
 }
 
 static as_status
-as_scan_async(
-	as_cluster* cluster, as_error* err, const as_policy_scan* policy, const as_scan* scan,
-	uint64_t* task_id_ptr, as_async_scan_listener listener, void* udata, as_event_loop* event_loop,
-	as_node** nodes, uint32_t n_nodes
-	)
-{
-	uint64_t task_id = as_task_id_resolve(task_id_ptr);
-
-	// Scan will be split up into a command for each node.
-	// Allocate scan data shared by each command.
-	as_async_scan_executor* se = cf_malloc(sizeof(as_async_scan_executor));
-	se->listener = listener;
-
-	as_event_executor* ee = &se->executor;
-	pthread_mutex_init(&ee->lock, NULL);
-	ee->max = n_nodes;
-	ee->max_concurrent = scan->concurrent ? n_nodes : 1;
-	ee->commands = cf_malloc(sizeof(as_event_command*) * n_nodes);
-	ee->event_loop = as_event_assign(event_loop);
-	ee->complete_fn = as_scan_complete_async;
-	ee->udata = udata;
-	ee->err = NULL;
-	ee->ns = NULL;
-	ee->cluster_key = 0;
-	ee->count = 0;
-	ee->queued = 0;
-	ee->notify = true;
-	ee->valid = true;
-
-	// Create scan command buffer.
-	as_scan_builder sb;
-	sb.pt = NULL;
-	sb.np = NULL;
-	sb.max_records = 0;
-	sb.pscan = false;
-
-	size_t size = as_scan_command_size(policy, scan, &sb);
-	uint8_t* cmd_buf = as_command_buffer_init(size);
-	size = as_scan_command_init(cmd_buf, policy, scan, task_id, &sb);
-	
-	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
-	// read to reuse buffer.
-	size_t s = (sizeof(as_async_scan_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
-
-	// Create all scan commands.
-	for (uint32_t i = 0; i < n_nodes; i++) {
-		as_async_scan_command* scmd = cf_malloc(s);
-		scmd->np = NULL;
-
-		as_event_command* cmd = (as_event_command*)scmd;
-		cmd->total_deadline = policy->base.total_timeout;
-		cmd->socket_timeout = policy->base.socket_timeout;
-		cmd->max_retries = 0;
-		cmd->iteration = 0;
-		cmd->replica = AS_POLICY_REPLICA_MASTER;
-		cmd->event_loop = ee->event_loop;
-		cmd->cluster = cluster;
-		cmd->node = nodes[i];
-		cmd->ns = NULL;
-		cmd->partition = NULL;
-		cmd->udata = se;  // Overload udata to be the executor.
-		cmd->parse_results = as_scan_parse_records_async;
-		cmd->pipe_listener = NULL;
-		cmd->buf = scmd->space;
-		cmd->write_len = (uint32_t)size;
-		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_scan_command));
-		cmd->type = AS_ASYNC_TYPE_SCAN;
-		cmd->proto_type = AS_MESSAGE_TYPE;
-		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-		cmd->flags = AS_ASYNC_FLAGS_MASTER;
-		cmd->flags2 = scan->deserialize_list_map ? AS_ASYNC_FLAGS2_DESERIALIZE : 0;
-		memcpy(cmd->buf, cmd_buf, size);
-		ee->commands[i] = cmd;
-	}
-
-	// Free command buffer.
-	as_command_buffer_free(cmd_buf, size);
-
-	if (policy->fail_on_cluster_change && (nodes[0]->features & AS_FEATURES_CLUSTER_STABLE)) {
-		// Verify migrations are not in progress.
-		return as_query_validate_begin_async(ee, scan->ns, err);
-	}
-
-	// Run scan commands.
-	for (uint32_t i = 0; i < ee->max_concurrent; i++) {
-		ee->queued++;
-		as_event_command* cmd = ee->commands[i];
-		as_status status = as_event_command_execute(cmd, err);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_executor_cancel(ee, i);
-			return status;
-		}
-	}
-	return AEROSPIKE_OK;
-}
-
-static as_status
 as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker* pt, as_error* err)
 {
 	as_event_executor* ee = &se->executor;
@@ -1329,24 +1224,18 @@ aerospike_scan_foreach(
 	}
 
 	as_cluster* cluster = as->cluster;
+	uint32_t n_nodes;
+	as_status status = as_scan_partitions_validate(cluster, err, policy, scan, &n_nodes);
 
-	if (cluster->has_partition_scan) {
-		uint32_t n_nodes;
-		as_status status = as_scan_partitions_validate(cluster, err, policy, scan, &n_nodes);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-
-		as_partition_tracker pt;
-		as_partition_tracker_init_nodes(&pt, cluster, policy, n_nodes);
-		status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
-		as_partition_tracker_destroy(&pt);
+	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-	else {
-		return as_scan_generic(cluster, err, policy, scan, callback, udata, NULL);
-	}
+
+	as_partition_tracker pt;
+	as_partition_tracker_init_nodes(&pt, cluster, policy, n_nodes);
+	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
+	as_partition_tracker_destroy(&pt);
+	return status;
 }
 
 as_status
@@ -1368,62 +1257,17 @@ aerospike_scan_node(
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid node name: %s", node_name);
 	}
 
-	if (cluster->has_partition_scan) {
-		as_status status = as_scan_validate(err, policy, scan);
+	as_status status = as_scan_validate(err, policy, scan);
 
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-
-		as_partition_tracker pt;
-		as_partition_tracker_init_node(&pt, cluster, policy, node);
-		status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
-		as_partition_tracker_destroy(&pt);
-		as_node_release(node);
+	if (status != AEROSPIKE_OK) {
 		return status;
 	}
 
-	as_error_reset(err);
-
-	uint64_t cluster_key = 0;
-
-	if (policy->fail_on_cluster_change) {
-		as_status status = as_query_validate_begin(err, node, scan->ns, &cluster_key);
-
-		if (status) {
-			as_node_release(node);
-			return status;
-		}
-	}
-
-	// Initialize task.
-	uint32_t error_mutex = 0;
-	as_scan_task task;
-	task.node = node;
-	task.np = NULL;
-	task.pt = NULL;
-	task.cluster = as->cluster;
-	task.policy = policy;
-	task.scan = scan;
-	task.callback = callback;
-	task.udata = udata;
-	task.err = err;
-	task.complete_q = 0;
-	task.error_mutex = &error_mutex;
-	task.task_id = as_random_get_uint64();
-	task.cluster_key = cluster_key;
-	task.first = true;
-
-	// Run scan.
-	as_status status = as_scan_command_execute(&task);
-
-	// Release node.
+	as_partition_tracker pt;
+	as_partition_tracker_init_node(&pt, cluster, policy, node);
+	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
+	as_partition_tracker_destroy(&pt);
 	as_node_release(node);
-	
-	// If completely successful, make the callback that signals completion.
-	if (callback && status == AEROSPIKE_OK) {
-		callback(NULL, udata);
-	}
 	return status;
 }
 
@@ -1434,11 +1278,6 @@ aerospike_scan_partitions(
 	)
 {
 	as_cluster* cluster = as->cluster;
-
-	if (!cluster->has_partition_scan) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-									"aerospike_scan_partitions() not supported");
-	}
 
 	if (! policy) {
 		policy = &as->config.policies.scan;
@@ -1480,35 +1319,16 @@ aerospike_scan_async(
 	}
 
 	as_cluster* cluster = as->cluster;
+	uint32_t n_nodes;
+	status = as_cluster_validate_size(cluster, err, &n_nodes);
 
-	if (cluster->has_partition_scan) {
-		uint32_t n_nodes;
-		status = as_cluster_validate_size(cluster, err, &n_nodes);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-
-		as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-		as_partition_tracker_init_nodes(pt, cluster, policy, n_nodes);
-		return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
-	}
-	else {
-		as_nodes* nodes;
-		status = as_cluster_reserve_all_nodes(cluster, err, &nodes);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-
-		status = as_scan_async(cluster, err, policy, scan, scan_id, listener, udata, event_loop,
-							   nodes->array, nodes->size);
-
-		// Do not call as_cluster_release_all_nodes() because individual nodes
-		// are released on each async command destroy.
-		as_nodes_release(nodes);
+	if (status != AEROSPIKE_OK) {
 		return status;
 	}
+
+	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
+	as_partition_tracker_init_nodes(pt, cluster, policy, n_nodes);
+	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
 }
 
 as_status
@@ -1537,18 +1357,12 @@ aerospike_scan_node_async(
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid node name: %s", node_name);
 	}
 
-	if (cluster->has_partition_scan) {
-		as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-		as_partition_tracker_init_node(pt, cluster, policy, node);
-		status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata,
-										 event_loop);
-		as_node_release(node);
-		return status;
-	}
-	else {
-		return as_scan_async(cluster, err, policy, scan, scan_id, listener, udata, event_loop,
-							 &node, 1);
-	}
+	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
+	as_partition_tracker_init_node(pt, cluster, policy, node);
+	status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata,
+									 event_loop);
+	as_node_release(node);
+	return status;
 }
 
 as_status
@@ -1558,11 +1372,6 @@ aerospike_scan_partitions_async(
 	)
 {
 	as_cluster* cluster = as->cluster;
-
-	if (!cluster->has_partition_scan) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-									"aerospike_scan_partitions_async() not supported");
-	}
 
 	if (! policy) {
 		policy = &as->config.policies.scan;

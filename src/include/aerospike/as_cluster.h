@@ -318,12 +318,6 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Does cluster support partition scans.
-	 */
-	bool has_partition_scan;
-
-	/**
-	 * @private
 	 * Should continue to tend cluster.
 	 */
 	volatile bool valid;

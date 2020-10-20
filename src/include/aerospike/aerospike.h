@@ -326,18 +326,6 @@ AS_EXTERN bool
 aerospike_cluster_is_connected(aerospike* as);
 
 /**
- * Do all server nodes in the cluster support async pipelining.
- *
- * @param as 		The aerospike instance to check.
- *
- * @returns true when all server nodes support pipelining.
- *
- * @relates aerospike
- */
-AS_EXTERN bool
-aerospike_has_pipelining(aerospike* as);
-
-/**
  * Should stop socket operation if interrupted by a signal.  Default is false which means
  * the socket operation will be retried until timeout.
  *

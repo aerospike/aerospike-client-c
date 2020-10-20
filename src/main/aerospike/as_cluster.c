@@ -120,23 +120,6 @@ as_cluster_event_notify(as_cluster* cluster, as_node* node, as_cluster_event_typ
 	}
 }
 
-static bool
-as_cluster_has_partition_scan(as_nodes* nodes)
-{
-	if (nodes->size == 0) {
-		return false;
-	}
-
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node* node = nodes->array[i];
-
-		if ((node->features & AS_FEATURES_PARTITION_SCAN) == 0) {
-			return false;
-		}
-	}
-	return true;
-}
-
 as_status
 as_cluster_reserve_all_nodes(as_cluster* cluster, as_error* err, as_nodes** nodes)
 {
@@ -208,8 +191,6 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 
 	// Replace nodes with copy.
 	set_nodes(cluster, nodes_new);
-
-	cluster->has_partition_scan = as_cluster_has_partition_scan(nodes_new);
 
 	// Put old nodes on garbage collector stack.
 	as_gc_item item;
@@ -478,8 +459,6 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	// Replace nodes with copy.
 	set_nodes(cluster, nodes_new);
 
-	cluster->has_partition_scan = as_cluster_has_partition_scan(nodes_new);
-
 	if (nodes_new->size == 0) {
 		as_cluster_event_notify(cluster, NULL, AS_CLUSTER_DISCONNECTED);
 	}
@@ -608,7 +587,6 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 	as_vector_inita(&peers.hosts, sizeof(as_host), 16);
 	as_vector_inita(&peers.nodes, sizeof(as_node*), 16);
 	peers.refresh_count = 0;
-	peers.use_peers = true;
 	peers.gen_changed = false;
 
 	as_nodes* nodes = cluster->nodes;
@@ -619,10 +597,6 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 		node->friends = 0;
 		node->partition_changed = false;
 		node->rebalance_changed = false;
-		
-		if (! (node->features & AS_FEATURES_PEERS)) {
-			peers.use_peers = false;
-		}
 	}
 	
 	// If active nodes don't exist, seed cluster.
@@ -664,9 +638,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 					as_log_info("Node %s refresh failed: %s %s",
 						node->name, as_error_string(status), error_local.message);
 
-					if (peers.use_peers) {
-						peers.gen_changed = true;
-					}
+					peers.gen_changed = true;
 					node->failures++;
 				}
 			}
@@ -729,7 +701,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 		}
 	}
 
-	if (peers.gen_changed || ! peers.use_peers) {
+	if (peers.gen_changed) {
 		// Handle nodes changes determined from refreshes.
 		as_vector nodes_to_remove;
 		as_vector_inita(&nodes_to_remove, sizeof(as_node*), nodes->size);

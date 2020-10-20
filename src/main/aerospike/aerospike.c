@@ -259,26 +259,6 @@ aerospike_cluster_is_connected(aerospike* as)
 	return as_cluster_is_connected(as->cluster);
 }
 
-bool
-aerospike_has_pipelining(aerospike* as)
-{
-	as_nodes* nodes = as_nodes_reserve(as->cluster);
-	
-	if (nodes->size == 0) {
-		as_nodes_release(nodes);
-		return false;
-	}
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		if (! (nodes->array[i]->features & AS_FEATURES_PIPELINING)) {
-			as_nodes_release(nodes);
-			return false;
-		}
-	}
-	as_nodes_release(nodes);
-	return true;
-}
-
 extern bool as_socket_stop_on_interrupt;
 
 void
@@ -313,15 +293,8 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
 		as_string_builder_append(&sb, set);
 	}
 	else {
-		// Servers >= 4.5.1.0 support truncate-namespace.
-		if (node->features & AS_FEATURES_TRUNCATE_NS) {
-			as_string_builder_append(&sb, "truncate-namespace:namespace=");
-			as_string_builder_append(&sb, ns);
-		}
-		else {
-			as_string_builder_append(&sb, "truncate:namespace=");
-			as_string_builder_append(&sb, ns);
-		}
+		as_string_builder_append(&sb, "truncate-namespace:namespace=");
+		as_string_builder_append(&sb, ns);
 	}
 
 	if (before_nanos) {
@@ -330,12 +303,6 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
 		char buff[100];
 		snprintf(buff, sizeof(buff), "%" PRIu64, before_nanos);
 		as_string_builder_append(&sb, buff);
-	}
-	else {
-		// Servers >= 4.3.1.4 and <= 4.5.0.1 require lut argument.
-		if (node->features & AS_FEATURES_LUT_NOW) {
-			as_string_builder_append(&sb, ";lut=now");
-		}
 	}
 	as_string_builder_append_char(&sb, '\n');
 

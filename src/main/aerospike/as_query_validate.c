@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -178,11 +178,6 @@ as_validate_end_listener(as_error* err, char* response, void* udata, as_event_lo
 as_status
 as_query_validate_begin(as_error* err, as_node* node, const as_namespace ns, uint64_t* cluster_key)
 {
-	if (!(node->features & AS_FEATURES_CLUSTER_STABLE)) {
-		*cluster_key = 0;
-		return AEROSPIKE_OK;
-	}
-
 	char cmd[256];
 	as_write_cluster_stable(cmd, sizeof(cmd), ns);
 
@@ -207,7 +202,7 @@ as_query_validate_begin(as_error* err, as_node* node, const as_namespace ns, uin
 as_status
 as_query_validate(as_error* err, as_node* node, const as_namespace ns, uint64_t expected_key)
 {
-	if (expected_key == 0 || !(node->features & AS_FEATURES_CLUSTER_STABLE)) {
+	if (expected_key == 0) {
 		return AEROSPIKE_OK;
 	}
 

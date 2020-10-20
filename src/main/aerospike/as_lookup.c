@@ -402,6 +402,9 @@ as_lookup_node(
 			end++;
 		}
 
+// No features to process since all old features are known to be supported
+// by required server 5.2.0.4+.
+#if 0
 		if (strcmp(begin, "geo") == 0) {
 			features |= AS_FEATURES_GEO;
 		}
@@ -429,6 +432,7 @@ as_lookup_node(
 		else if (strcmp(begin, "pscans") == 0) {
 			features |= AS_FEATURES_PARTITION_SCAN;
 		}
+#endif
 		begin = end;
 	}
 	node_info->features = features;

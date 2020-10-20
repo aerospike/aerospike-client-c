@@ -74,12 +74,6 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
-	// Ensure the server supports geospatial queries.
-	if (! aerospike_has_geo(&as)) {
-		fprintf(stderr, "server does not support geospatial\n");
-		exit(0);
-	}
-	
 	// Start clean.
 	example_remove_test_records(&as);
 	example_remove_index(&as, TEST_INDEX_NAME);

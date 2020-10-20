@@ -874,8 +874,6 @@ as_node_verify_name(as_error* err, as_node* node, const char* name)
 
 static const char INFO_STR_CHECK_RACK[] = "node\npeers-generation\npartition-generation\nrebalance-generation\n";
 static const char INFO_STR_CHECK_PEERS[] = "node\npeers-generation\npartition-generation\n";
-static const char INFO_STR_CHECK[] = "node\npartition-generation\nservices\n";
-static const char INFO_STR_CHECK_SVCALT[] = "node\npartition-generation\nservices-alternate\n";
 
 static as_status
 as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_vector* values,
@@ -912,9 +910,6 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 				node->rebalance_changed = true;
 			}
 		}
-		else if (strcmp(nv->name, "services") == 0 || strcmp(nv->name, "services-alternate") == 0) {
-			as_peers_parse_services(peers, cluster, node, nv->value);
-		}
 		else {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s did not request info '%s'", node->name, nv->name);
 		}
@@ -940,27 +935,15 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	const char* command;
 	size_t command_len;
 	
-	if (peers->use_peers) {
-		if (cluster->rack_aware) {
-			command = INFO_STR_CHECK_RACK;
-			command_len = sizeof(INFO_STR_CHECK_RACK) - 1;
-		}
-		else {
-			command = INFO_STR_CHECK_PEERS;
-			command_len = sizeof(INFO_STR_CHECK_PEERS) - 1;
-		}
+	if (cluster->rack_aware) {
+		command = INFO_STR_CHECK_RACK;
+		command_len = sizeof(INFO_STR_CHECK_RACK) - 1;
 	}
 	else {
-		if (cluster->use_services_alternate) {
-			command = INFO_STR_CHECK_SVCALT;
-			command_len = sizeof(INFO_STR_CHECK_SVCALT) - 1;
-		}
-		else {
-			command = INFO_STR_CHECK;
-			command_len = sizeof(INFO_STR_CHECK) - 1;
-		}
+		command = INFO_STR_CHECK_PEERS;
+		command_len = sizeof(INFO_STR_CHECK_PEERS) - 1;
 	}
-	
+
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
 	
@@ -1076,7 +1059,6 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 	return status;
 }
 
-static const char INFO_STR_GET_REPLICAS_ALL[] = "partition-generation\nreplicas-all\n";
 static const char INFO_STR_GET_REPLICAS_REGIME[] = "partition-generation\nreplicas\n";
 
 static as_status
@@ -1105,17 +1087,8 @@ as_status
 as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
 {
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
-	const char* command;
-	size_t command_len;
-
-	if (node->features & AS_FEATURES_REPLICAS) {
-		command = INFO_STR_GET_REPLICAS_REGIME;
-		command_len = sizeof(INFO_STR_GET_REPLICAS_REGIME) - 1;
-	}
-	else {
-		command = INFO_STR_GET_REPLICAS_ALL;
-		command_len = sizeof(INFO_STR_GET_REPLICAS_ALL) - 1;
-	}
+	const char* command = INFO_STR_GET_REPLICAS_REGIME;
+	size_t command_len = sizeof(INFO_STR_GET_REPLICAS_REGIME) - 1;
 
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);

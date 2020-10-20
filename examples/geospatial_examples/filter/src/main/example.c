@@ -86,12 +86,6 @@ main(int argc, char* argv[])
 	// Connect to the aerospike database cluster.
 	aerospike as;
 	example_connect_to_aerospike_with_udf_config(&as, UDF_USER_PATH);
-
-	// Ensure the server supports geospatial queries.
-	if (! aerospike_has_geo(&as)) {
-		fprintf(stderr, "server does not support geospatial\n");
-		exit(0);
-	}
 	
 	// Start clean.
 	example_remove_test_records(&as);

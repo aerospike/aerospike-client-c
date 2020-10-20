@@ -58,13 +58,7 @@ before(atf_suite* suite)
 		return false;
 	}
 
-	bool has_bit_ops = node->features & AS_FEATURES_BIT_OP;
 	as_node_release(node);
-
-	if (! has_bit_ops) {
-		info("Skip bit operation tests because not supported on server.")
-		return false;
-	}
 
 	as_key_init_int64(&REC_KEY, NAMESPACE, SET, 117);
 

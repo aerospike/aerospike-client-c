@@ -16,7 +16,7 @@ TEST_AEROSPIKE += aerospike_scan/*.c
 TEST_AEROSPIKE += aerospike_udf/*.c
 TEST_AEROSPIKE += policy/*.c
 TEST_AEROSPIKE += util/*.c
-TEST_AEROSPIKE += predexp.c
+TEST_AEROSPIKE += filter_exp.c
 
 TEST_SOURCE = $(wildcard $(addprefix $(SOURCE_TEST)/, $(TEST_AEROSPIKE)))
 
@@ -75,7 +75,7 @@ test-valgrind: test-build
 test-build: $(TARGET_TEST)/aerospike_test
 
 .PHONY: test-clean
-test-clean: 
+test-clean:
 	@rm -rf $(TARGET_TEST)
 
 $(TARGET_TEST)/%/%.o: CFLAGS = $(TEST_CFLAGS)

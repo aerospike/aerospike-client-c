@@ -32,6 +32,7 @@
  *   - Scan
  *   - Secondary index query
  *   - User defined Lua functions
+ *   - Expression filters
  * - Both synchronous and asynchronous command models
  * - Asynchronous model supports the following event frameworks.
  *   - libev

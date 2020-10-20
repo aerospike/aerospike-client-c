@@ -16,17 +16,8 @@
  */
 #include <aerospike/as_hll_operations.h>
 #include <aerospike/as_cdt_internal.h>
+#include <aerospike/as_msgpack.h>
 #include <citrusleaf/alloc.h>
-
-/******************************************************************************
- * MACROS
- *****************************************************************************/
-
-#define INIT 0
-#define ADD 1
-#define SET_UNION 2
-#define SET_COUNT 3
-#define FOLD 4
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -61,7 +52,7 @@ as_operations_hll_init_mh(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_hll_pack_header(&pk, ctx, INIT, 3);
+	as_hll_pack_header(&pk, ctx, AS_HLL_OP_INIT, 3);
 	as_pack_int64(&pk, index_bit_count);
 	as_pack_int64(&pk, mh_bit_count);
 	as_hll_pack_policy(&pk, policy);
@@ -76,7 +67,7 @@ as_operations_hll_add_mh(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_hll_pack_header(&pk, ctx, ADD, 4);
+	as_hll_pack_header(&pk, ctx, AS_HLL_OP_ADD, 4);
 	as_pack_val(&pk, (as_val*)list);
 	as_pack_int64(&pk, index_bit_count);
 	as_pack_int64(&pk, mh_bit_count);
@@ -92,7 +83,7 @@ as_operations_hll_set_union(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_hll_pack_header(&pk, ctx, SET_UNION, 2);
+	as_hll_pack_header(&pk, ctx, AS_HLL_OP_UNION, 2);
 	as_pack_val(&pk, (as_val*)list);
 	as_hll_pack_policy(&pk, policy);
 	as_cdt_end(&pk);
@@ -105,7 +96,7 @@ as_operations_hll_refresh_count(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_hll_pack_header(&pk, ctx, SET_COUNT, 0);
+	as_hll_pack_header(&pk, ctx, AS_HLL_OP_REFRESH_COUNT, 0);
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_HLL_MODIFY);
 }
@@ -116,7 +107,7 @@ as_operations_hll_fold(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_hll_pack_header(&pk, ctx, FOLD, 1);
+	as_hll_pack_header(&pk, ctx, AS_HLL_OP_FOLD, 1);
 	as_pack_int64(&pk, index_bit_count);
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_HLL_MODIFY);

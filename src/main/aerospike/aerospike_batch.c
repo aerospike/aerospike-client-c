@@ -19,12 +19,12 @@
 #include <aerospike/as_async.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_exp.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
-#include <aerospike/as_predexp.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
@@ -308,25 +308,26 @@ as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 static size_t
 as_batch_size_records(
 	const as_policy_batch* policy, as_vector* records, as_vector* offsets,
-	uint16_t* field_count_header, uint32_t* pred_size, uint8_t* pred_field
+	uint16_t* field_count_header, uint32_t* filter_size, uint8_t* filter_field
 	)
 {
 	// Estimate buffer size.
 	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t) + 1;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
+		*filter_size = (uint32_t)size;
 		*field_count_header = 2;
 	}
-	else if (pred_field) {
-		// pred_field is only set on async batch retry with predicate expression.
-		// pred_size is already set in this case.
-		size += (*pred_size);
+	else if (filter_field) {
+		// filter_field is only set on async batch retry with a filter expression.
+		// filter_size is already set in this case.
+		size += (*filter_size);
 		*field_count_header = 2;
 	}
 	else {
 		*field_count_header = 1;
-		*pred_size = 0;
+		*filter_size = 0;
 	}
 
 	as_batch_read_record* prev = 0;
@@ -367,7 +368,7 @@ as_batch_size_records(
 static size_t
 as_batch_index_records_write(
 	as_vector* records, as_vector* offsets, const as_policy_batch* policy, uint8_t* cmd,
-	uint16_t field_count_header, uint32_t pred_size, uint8_t* pred_field
+	uint16_t field_count_header, uint32_t filter_size, uint8_t* filter_field
 	)
 {
 	uint8_t read_attr = AS_MSG_INFO1_READ;
@@ -381,13 +382,13 @@ as_batch_index_records_write(
 		policy->read_mode_sc, policy->base.total_timeout, field_count_header, 0,
 		read_attr | AS_MSG_INFO1_BATCH_INDEX);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
-	else if (pred_field) {
-		// pred_field is only set on async batch retry with predicate expression.
-		memcpy(p, pred_field, pred_size);
-		p += pred_size;
+	else if (filter_field) {
+		// filter_field is only set on async batch retry with filter expression.
+		memcpy(p, filter_field, filter_size);
+		p += filter_size;
 	}
 
 	uint8_t* field_size_ptr = p;
@@ -555,16 +556,16 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 
 	// Estimate buffer size.
 	uint16_t field_count_header;
-	uint32_t pred_size;
+	uint32_t filter_size;
 	size_t size = as_batch_size_records(policy, btr->records, &task->offsets, &field_count_header,
-										&pred_size, NULL);
+										&filter_size, NULL);
 		
 	size_t capacity = size;
 
 	// Write command
 	uint8_t* buf = as_command_buffer_init(capacity);
 	size = as_batch_index_records_write(btr->records, &task->offsets, policy, buf,
-										field_count_header, pred_size, NULL);
+										field_count_header, filter_size, NULL);
 
 	as_status status;
 
@@ -603,11 +604,10 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 
 	// Estimate buffer size.
 	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 5;
-	uint32_t pred_size = 0;
 	uint16_t field_count_header = 1;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		field_count_header++;
 	}
 
@@ -659,8 +659,8 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 		policy->read_mode_sc, policy->base.total_timeout, field_count_header, 0,
 		btk->read_attr | AS_MSG_INFO1_BATCH_INDEX);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	uint8_t* field_size_ptr = p;
@@ -1162,9 +1162,9 @@ as_batch_read_execute_async(
 		
 		// Estimate buffer size.
 		uint16_t field_count_header;
-		uint32_t pred_size;
+		uint32_t filter_size;
 		size_t size = as_batch_size_records(policy, records, &batch_node->offsets,
-											&field_count_header, &pred_size, NULL);
+											&field_count_header, &filter_size, NULL);
 
 		if (! (policy->base.compress && size > AS_COMPRESS_THRESHOLD)) {
 			// Send uncompressed command.
@@ -1172,7 +1172,7 @@ as_batch_read_execute_async(
 				executor, size, flags);
 
 			cmd->write_len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets,
-				policy, cmd->buf, field_count_header, pred_size, NULL);
+				policy, cmd->buf, field_count_header, filter_size, NULL);
 
 			status = as_event_command_execute(cmd, err);
 		}
@@ -1182,7 +1182,7 @@ as_batch_read_execute_async(
 			size_t capacity = size;
 			uint8_t* buf = as_command_buffer_init(capacity);
 			size = as_batch_index_records_write(records, &batch_node->offsets, policy, buf,
-												field_count_header, pred_size, NULL);
+												field_count_header, filter_size, NULL);
 
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);
@@ -1649,18 +1649,18 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	}
 
 	p += 19;
-	uint8_t* pred_field = p;
+	uint8_t* filter_field = p;
 	p += sizeof(uint32_t);
-	uint32_t pred_size;
+	uint32_t filter_size;
 
-	if (*p == AS_FIELD_PREDEXP) {
-		// pred_size defined as full field size (including header) in this special case.
-		pred_size = cf_swap_from_be32(*(uint32_t*)pred_field) + sizeof(uint32_t);
-		p += pred_size;
+	if (*p == AS_FIELD_FILTER) {
+		// filter_size defined as full field size (including header) in this special case.
+		filter_size = cf_swap_from_be32(*(uint32_t*)filter_field) + sizeof(uint32_t);
+		p += filter_size;
 	}
 	else {
-		pred_field = NULL;
-		pred_size = 0;
+		filter_field = NULL;
+		filter_size = 0;
 	}
 
 	policy.send_set_name = (*p++ == AS_FIELD_BATCH_INDEX_WITH_SET);
@@ -1798,14 +1798,14 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		// Estimate buffer size.
 		uint16_t field_count_header;
 		size_t size = as_batch_size_records(&policy, records, &batch_node->offsets,
-											&field_count_header, &pred_size, pred_field);
+											&field_count_header, &filter_size, filter_field);
 
 		if (! (policy.base.compress && size > AS_COMPRESS_THRESHOLD)) {
 			as_event_command* cmd = as_batch_retry_command_create(parent, batch_node->node, size,
 									deadline, flags);
 
 			cmd->write_len = (uint32_t)as_batch_index_records_write(records, &batch_node->offsets,
-									&policy, cmd->buf, field_count_header, pred_size, pred_field);
+									&policy, cmd->buf, field_count_header, filter_size, filter_field);
 
 			// Retry command at the end of the queue so other commands have a chance to run first.
 			as_event_command_schedule(cmd);
@@ -1816,7 +1816,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			size_t capacity = size;
 			uint8_t* buf = as_command_buffer_init(capacity);
 			size = as_batch_index_records_write(records, &batch_node->offsets, &policy, buf,
-									field_count_header, pred_size, pred_field);
+									field_count_header, filter_size, filter_field);
 
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);

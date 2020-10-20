@@ -359,6 +359,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_error.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_event.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_event_internal.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_exp.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_hll_operations.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_host.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_info.h" />
@@ -377,7 +378,6 @@
     <ClInclude Include="..\..\src\include\aerospike\as_pipe.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_policy.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_poll.h" />
-    <ClInclude Include="..\..\src\include\aerospike\as_predexp.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_proto.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_query.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_query_validate.h" />
@@ -481,6 +481,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_event_event.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event_none.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event_uv.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_exp.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_hll_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_host.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_info.c" />
@@ -496,7 +497,6 @@
     <ClCompile Include="..\..\src\main\aerospike\as_peers.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_pipe.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_policy.c" />
-    <ClCompile Include="..\..\src\main\aerospike\as_predexp.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_proto.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_query.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_query_validate.c" />

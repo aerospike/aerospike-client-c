@@ -21,6 +21,7 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_exp.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_module.h>
 #include <aerospike/as_msgpack.h>
@@ -538,12 +539,11 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 static size_t
 as_query_command_size(
 	const as_policy_base* policy_base, const as_query* query, uint16_t* fields, uint32_t* filter_sz,
-	uint32_t* predexp_sz, uint32_t* bin_name_sz, as_buffer* argbuffer, as_buffer** opsbuffers
+	uint32_t* bin_name_sz, as_buffer* argbuffer, as_buffer** opsbuffers
 	)
 {
 	size_t size = AS_HEADER_SIZE;
 	uint32_t filter_size = 0;
-	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
 	
@@ -592,8 +592,8 @@ as_query_command_size(
 					break;
 				case AS_PREDICATE_RANGE:
 					if (pred->dtype == AS_INDEX_NUMERIC) {
-                        filter_size += sizeof(int64_t) * 2;
-                    }
+						filter_size += sizeof(int64_t) * 2;
+					}
 					else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
 						filter_size += (uint32_t)strlen(pred->value.string) * 2;
 					}
@@ -626,40 +626,30 @@ as_query_command_size(
 		n_fields++;
 	}
 
-	// Estimate predexp size.
-	if (query->predexp.size > 0) {
-		size += AS_FIELD_HEADER_SIZE;
-		for (uint16_t ii = 0; ii < query->predexp.size; ++ii) {
-			as_predexp_base * bp = query->predexp.entries[ii];
-			predexp_size += (uint32_t)(*bp->size_fn)(bp);
-		}
-		size += predexp_size;
-		n_fields++;
-	}
-	else if (policy_base->predexp) {
-		size += as_predexp_list_size(policy_base->predexp, &predexp_size);
+	if (policy_base->filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy_base->filter_exp->packed_sz;
 		n_fields++;
 	}
 
 	// Estimate background function size.
 	as_buffer_init(argbuffer);
-	
+
 	if (query->apply.function[0]) {
 		size += as_command_field_size(1);
 		size += as_command_string_field_size(query->apply.module);
 		size += as_command_string_field_size(query->apply.function);
-		
+
 		if (query->apply.arglist) {
 			// If the query has a udf w/ arglist, then serialize it.
 			as_serializer ser;
 			as_msgpack_init(&ser);
-            as_serializer_serialize(&ser, (as_val*)query->apply.arglist, argbuffer);
+			as_serializer_serialize(&ser, (as_val*)query->apply.arglist, argbuffer);
 			as_serializer_destroy(&ser);
 		}
 		size += as_command_field_size(argbuffer->size);
 		n_fields += 4;
 	}
-	
+
 	// Operations (used in background query) and bin names (used in foreground query)
 	// are mutually exclusive.
 	if (query->ops) {
@@ -687,7 +677,6 @@ as_query_command_size(
 
 	*fields = n_fields;
 	*filter_sz = filter_size;
-	*predexp_sz = predexp_size;
 	*bin_name_sz = bin_name_size;
 	return size;
 }
@@ -696,8 +685,8 @@ static size_t
 as_query_command_init(
 	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_base* base_policy,
 	const as_policy_query* query_policy, const as_policy_write* write_policy, uint64_t task_id,
-	uint16_t n_fields, uint32_t filter_size, uint32_t predexp_size, uint32_t bin_name_size,
-	as_buffer* argbuffer, as_buffer* opsbuffers
+	uint16_t n_fields, uint32_t filter_size, uint32_t bin_name_size, as_buffer* argbuffer,
+	as_buffer* opsbuffers
 	)
 {
 	// Write command buffer.
@@ -766,11 +755,11 @@ as_query_command_init(
 					break;
 				case AS_PREDICATE_RANGE:
 					if (pred->dtype == AS_INDEX_NUMERIC) {
-                        p = as_query_write_range_integer(p, pred->value.integer_range.min, pred->value.integer_range.max);
-                    }
+						p = as_query_write_range_integer(p, pred->value.integer_range.min, pred->value.integer_range.max);
+					}
 					else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
 						p = as_query_write_range_geojson(p, pred->value.string, pred->value.string);
-                    }
+					}
 					break;
 			}
 		}
@@ -814,16 +803,8 @@ as_query_command_init(
 		p += sizeof(uint32_t);
 	}
 
-	// Write predicate expressions.
-	if (query->predexp.size > 0) {
-		p = as_command_write_field_header(p, AS_FIELD_PREDEXP, predexp_size);
-		for (uint16_t ii = 0; ii < query->predexp.size; ++ii) {
-			as_predexp_base * bp = query->predexp.entries[ii];
-			p = (*bp->write_fn)(bp, p);
-		}
-	}
-	else if (base_policy->predexp) {
-		p = as_predexp_list_write(base_policy->predexp, predexp_size, p);
+	if (base_policy->filter_exp) {
+		p = as_exp_write(base_policy->filter_exp, p);
 	}
 
 	// Write aggregation function
@@ -834,7 +815,7 @@ as_query_command_init(
 		p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, query->apply.function);
 		p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, argbuffer);
 	}
-    as_buffer_destroy(argbuffer);
+	as_buffer_destroy(argbuffer);
 	
 	if (query->ops) {
 		as_operations* ops = query->ops;
@@ -878,17 +859,16 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	as_buffer argbuffer;
 	as_buffer* opsbuffers;
 	uint32_t filter_size = 0;
-	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
-	size_t size = as_query_command_size(base_policy, query, &n_fields, &filter_size, &predexp_size,
-										&bin_name_size, &argbuffer, &opsbuffers);
+	size_t size = as_query_command_size(base_policy, query, &n_fields, &filter_size,
+			&bin_name_size, &argbuffer, &opsbuffers);
 	uint8_t* cmd = as_command_buffer_init(size);
 	size = as_query_command_init(cmd, query, query_type, base_policy, task->query_policy,
-								 task->write_policy, task->task_id, n_fields, filter_size,
-								 predexp_size, bin_name_size, &argbuffer, opsbuffers);
+			task->write_policy, task->task_id, n_fields, filter_size,
+			bin_name_size, &argbuffer, opsbuffers);
 	
 	task->cmd = cmd;
 	task->cmd_size = size;
@@ -1028,11 +1008,6 @@ convert_query_to_scan(
 	scan->select.capacity = query->select.capacity;
 	scan->select.size = query->select.size;
 	scan->select._free = query->select._free;
-
-	scan->predexp.entries = query->predexp.entries;
-	scan->predexp.capacity = query->predexp.capacity;
-	scan->predexp.size = query->predexp.size;
-	scan->predexp._free = query->predexp._free;
 
 	strcpy(scan->apply_each.module, query->apply.module);
 	strcpy(scan->apply_each.function, query->apply.function);
@@ -1222,16 +1197,14 @@ aerospike_query_async(
 	as_buffer argbuffer;
 	as_buffer* opsbuffers;
 	uint32_t filter_size = 0;
-	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
 	
 	size_t size = as_query_command_size(&policy->base, query, &n_fields, &filter_size,
-										&predexp_size, &bin_name_size, &argbuffer, &opsbuffers);
+			&bin_name_size, &argbuffer, &opsbuffers);
 	uint8_t* cmd_buf = as_command_buffer_init(size);
 	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, &policy->base, policy, NULL,
-								 task_id, n_fields, filter_size, predexp_size, bin_name_size,
-								 &argbuffer, opsbuffers);
+			task_id, n_fields, filter_size, bin_name_size, &argbuffer, opsbuffers);
 	
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.

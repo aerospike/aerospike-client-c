@@ -22,6 +22,7 @@
 #include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
+#include <aerospike/as_exp.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_log.h>
@@ -29,7 +30,6 @@
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
-#include <aerospike/as_predexp.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
@@ -193,10 +193,9 @@ aerospike_key_get(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t pred_size = 0;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
 	}
 
@@ -207,8 +206,8 @@ aerospike_key_get(
 
 	p = as_command_write_key(p, policy->key, key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	size = as_command_write_end(buf, p);
@@ -248,10 +247,9 @@ aerospike_key_get_async(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t pred_size = 0;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
 	}
 
@@ -266,8 +264,8 @@ aerospike_key_get_async(
 
 	p = as_command_write_key(p, policy->key, key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
@@ -298,23 +296,22 @@ aerospike_key_select(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t pred_size = 0;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
 	}
 
 	int nvalues = 0;
-	
+
 	for (nvalues = 0; bins[nvalues] != NULL && bins[nvalues][0] != '\0'; nvalues++) {
 		status = as_command_bin_name_size(err, bins[nvalues], &size);
-		
+
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 	}
-	
+
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
@@ -322,8 +319,8 @@ aerospike_key_select(
 
 	p = as_command_write_key(p, policy->key, key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	for (int i = 0; i < nvalues; i++) {
@@ -365,18 +362,17 @@ aerospike_key_select_async(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t pred_size = 0;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
 	}
 
 	int nvalues = 0;
-	
+
 	for (nvalues = 0; bins[nvalues] != NULL && bins[nvalues][0] != '\0'; nvalues++) {
 		status = as_command_bin_name_size(err, bins[nvalues], &size);
-		
+
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
@@ -393,8 +389,8 @@ aerospike_key_select_async(
 
 	p = as_command_write_key(p, policy->key, key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	for (int i = 0; i < nvalues; i++) {
@@ -427,10 +423,9 @@ aerospike_key_exists(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t pred_size = 0;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
 	}
 
@@ -440,8 +435,8 @@ aerospike_key_exists(
 
 	p = as_command_write_key(p, policy->key, key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	size = as_command_write_end(buf, p);
@@ -481,10 +476,9 @@ aerospike_key_exists_async(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t pred_size = 0;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
 	}
 
@@ -498,8 +492,8 @@ aerospike_key_exists_async(
 
 	p = as_command_write_key(p, policy->key, key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
@@ -515,7 +509,6 @@ typedef struct as_put_s {
 	const as_key* key;
 	as_record* rec;
 	as_buffer* buffers;
-	uint32_t pred_size;
 	uint16_t n_fields;
 	uint16_t n_bins;
 } as_put;
@@ -536,16 +529,13 @@ as_put_init(
 	uint16_t n_bins = rec->bins.size;
 	put->n_bins = n_bins;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &put->pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		put->n_fields++;
-	}
-	else {
-		put->pred_size = 0;
 	}
 
 	memset(put->buffers, 0, sizeof(as_buffer) * n_bins);
-	
+
 	as_bin* bins = rec->bins.entries;
 
 	for (uint16_t i = 0; i < n_bins; i++) {
@@ -564,11 +554,11 @@ as_put_write(void* udata, uint8_t* buf)
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 		policy->exists, policy->gen, rec->gen, rec->ttl, put->n_fields, put->n_bins,
 		policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
-		
+
 	p = as_command_write_key(p, policy->key, put->key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, put->pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	as_bin* bins = rec->bins.entries;
@@ -736,10 +726,9 @@ aerospike_key_remove(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t pred_size = 0;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
 	}
 
@@ -750,8 +739,8 @@ aerospike_key_remove(
 
 	p = as_command_write_key(p, policy->key, key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	size = as_command_write_end(buf, p);
@@ -789,10 +778,9 @@ aerospike_key_remove_async_ex(
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t pred_size = 0;
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
 	}
 
@@ -806,8 +794,8 @@ aerospike_key_remove_async_ex(
 
 	p = as_command_write_key(p, policy->key, key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
@@ -838,7 +826,6 @@ typedef struct as_operate_s {
 	const as_key* key;
 	const as_operations* ops;
 	as_buffer* buffers;
-	uint32_t pred_size;
 	uint16_t n_fields;
 	uint16_t n_operations;
 	uint8_t read_attr;
@@ -928,13 +915,11 @@ as_operate_init(
 
 	size += as_command_key_size(policy->key, key, &oper->n_fields);
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &oper->pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		oper->n_fields++;
 	}
-	else {
-		oper->pred_size = 0;
-	}
+
 	return size;
 }
 
@@ -952,8 +937,8 @@ as_operate_write(void* udata, uint8_t* buf)
 
 	p = as_command_write_key(p, policy->key, oper->key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, oper->pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	uint16_t n_operations = oper->n_operations;
@@ -1118,7 +1103,6 @@ typedef struct as_apply_s {
 	const char* function;
 	as_serializer ser;
 	as_buffer args;
-	uint32_t pred_size;
 	uint16_t n_fields;
 	uint8_t read_attr;
 } as_apply;
@@ -1137,12 +1121,9 @@ as_apply_init(
 
 	size_t size = as_command_key_size(policy->key, key, &ap->n_fields);
 
-	if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &ap->pred_size);
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		ap->n_fields++;
-	}
-	else {
-		ap->pred_size = 0;
 	}
 
 	size += as_command_string_field_size(module);
@@ -1170,8 +1151,8 @@ as_apply_write(void* udata, uint8_t* buf)
 
 	p = as_command_write_key(p, policy->key, ap->key);
 
-	if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, ap->pred_size, p);
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
 	}
 
 	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, ap->module);

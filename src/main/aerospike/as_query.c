@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -19,7 +19,6 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_operations.h>
-#include <aerospike/as_predexp.h>
 #include <aerospike/as_udf.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -41,16 +40,11 @@ as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_se
 	query->select.capacity = 0;
 	query->select.size = 0;
 	query->select.entries = NULL;
-	
+
 	query->where._free = false;
 	query->where.capacity = 0;
 	query->where.size = 0;
 	query->where.entries = NULL;
-	
-	query->predexp._free = false;
-	query->predexp.capacity = 0;
-	query->predexp.size = 0;
-	query->predexp.entries = NULL;
 
 	query->ops = NULL;
 	query->no_bins = false;
@@ -100,26 +94,6 @@ as_query_destroy(as_query* query)
 	query->where.capacity = 0;
 	query->where.size = 0;
 	query->where.entries = NULL;
-
-	// NOTE - we need to check all of the registered predexp
-	// entries ... if they have a registered destructor (heap
-	// allocated) call it.
-	//
-	for (uint16_t ndx = 0; ndx < query->predexp.size; ++ndx) {
-		as_predexp_base * bp = query->predexp.entries[ndx];
-		if (bp->dtor_fn) {
-			(*bp->dtor_fn)(bp);
-		}
-	}
-
-	if ( query->predexp.entries && query->predexp._free) {
-		cf_free(query->predexp.entries);
-	}
-
-	query->predexp._free = false;
-	query->predexp.capacity = 0;
-	query->predexp.size = 0;
-	query->predexp.entries = NULL;
 
 	as_udf_call_destroy(&query->apply);
 
@@ -207,80 +181,37 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
 	p->type  = type;
 	p->dtype = dtype;
 	p->itype = itype;
-    va_list ap;
-    va_start(ap, dtype);
+	va_list ap;
+	va_start(ap, dtype);
 
-    switch(type) {
-    	case AS_PREDICATE_EQUAL:
-			if (dtype == AS_INDEX_STRING) {
-    			p->value.string = va_arg(ap, char *);
-			}
-			else if (dtype == AS_INDEX_NUMERIC) {
-				p->value.integer = va_arg(ap, int64_t);
-			}
-			else {
-				status = false;
-			}
-    		break;
-    	case AS_PREDICATE_RANGE:
-    		if (dtype == AS_INDEX_NUMERIC) {
-				p->value.integer_range.min = va_arg(ap, int64_t);
-    			p->value.integer_range.max = va_arg(ap, int64_t);
-    		}
-			else if (dtype == AS_INDEX_GEO2DSPHERE) {
-    			p->value.string = va_arg(ap, char *);
-			}
-			else {
-				status = false;
-			}
-			break;
-    }
+	switch(type) {
+	case AS_PREDICATE_EQUAL:
+		if (dtype == AS_INDEX_STRING) {
+			p->value.string = va_arg(ap, char *);
+		}
+		else if (dtype == AS_INDEX_NUMERIC) {
+			p->value.integer = va_arg(ap, int64_t);
+		}
+		else {
+			status = false;
+		}
+		break;
+	case AS_PREDICATE_RANGE:
+		if (dtype == AS_INDEX_NUMERIC) {
+			p->value.integer_range.min = va_arg(ap, int64_t);
+			p->value.integer_range.max = va_arg(ap, int64_t);
+		}
+		else if (dtype == AS_INDEX_GEO2DSPHERE) {
+			p->value.string = va_arg(ap, char *);
+		}
+		else {
+			status = false;
+		}
+		break;
+	}
 
-    va_end(ap);
+	va_end(ap);
 	return status;
-}
-
-/******************************************************************************
- * PREDEXP FUNCTIONS
- *****************************************************************************/
-
-bool
-as_query_predexp_init(as_query* query, uint16_t n)
-{
-	if ( !query ) return false;
-	if ( query->predexp.entries ) return false;
-
-	query->predexp.entries = (as_predexp_base **) cf_calloc(n, sizeof(as_bin_name));
-	if ( !query->predexp.entries ) return false;
-
-	query->predexp._free = true;
-	query->predexp.capacity = n;
-	query->predexp.size = 0;
-
-	return true;
-}
-
-bool
-as_query_predexp_add(as_query* query, as_predexp_base * predexp)
-{
-	// test preconditions
-	if ( !query ) {
-		return false;
-	}
-
-	// missing predexp
-	if ( !predexp ) {
-		return false;
-	}
-	
-	// insufficient capacity
-	if ( query->predexp.size >= query->predexp.capacity ) {
-		return false;
-	}
-
-	query->predexp.entries[query->predexp.size++] = predexp;
-
-	return true;
 }
 
 /******************************************************************************

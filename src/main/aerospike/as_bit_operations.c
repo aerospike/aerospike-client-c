@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,17 +16,12 @@
  */
 #include <aerospike/as_bit_operations.h>
 #include <aerospike/as_cdt_internal.h>
+#include <aerospike/as_msgpack.h>
 #include <citrusleaf/alloc.h>
 
 /******************************************************************************
  * MACROS
  *****************************************************************************/
-
-#define RESIZE 0
-#define INSERT 1
-#define REMOVE 2
-#define SET_INT 12
-#define GET_INT 54
 
 #define INT_FLAGS_SIGNED 1
 
@@ -135,7 +130,7 @@ as_operations_bit_resize(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, RESIZE, 3);
+	as_bit_pack_header(&pk, ctx, AS_BIT_OP_RESIZE, 3);
 	as_pack_uint64(&pk, byte_size);
 	as_bit_pack_policy(&pk, policy);
 	as_pack_uint64(&pk, (uint64_t)flags);
@@ -150,7 +145,7 @@ as_operations_bit_insert(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, INSERT, 3);
+	as_bit_pack_header(&pk, ctx, AS_BIT_OP_INSERT, 3);
 	as_pack_int64(&pk, byte_offset);
 	as_pack_bytes(&pk, value, value_byte_size);
 	as_bit_pack_policy(&pk, policy);
@@ -165,7 +160,7 @@ as_operations_bit_set_int(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, SET_INT, 4);
+	as_bit_pack_header(&pk, ctx, AS_BIT_OP_SET_INT, 4);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
 	as_pack_int64(&pk, value);
@@ -210,7 +205,7 @@ as_operations_bit_get_int(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, GET_INT, sign ? 3 : 2);
+	as_bit_pack_header(&pk, ctx, AS_BIT_OP_GET_INT, sign ? 3 : 2);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
 

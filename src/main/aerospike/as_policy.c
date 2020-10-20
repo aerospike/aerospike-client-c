@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,7 +15,7 @@
  * the License.
  */
 #include <aerospike/as_policy.h>
-#include <aerospike/as_predexp.h>
+#include <aerospike/as_exp.h>
 
 /******************************************************************************
  * FUNCTIONS
@@ -40,12 +40,12 @@ as_policies_init(as_policies* p)
 void
 as_policies_destroy(as_policies* p)
 {
-	as_predexp_list_destroy(p->read.base.predexp);
-	as_predexp_list_destroy(p->write.base.predexp);
-	as_predexp_list_destroy(p->operate.base.predexp);
-	as_predexp_list_destroy(p->remove.base.predexp);
-	as_predexp_list_destroy(p->apply.base.predexp);
-	as_predexp_list_destroy(p->batch.base.predexp);
-	as_predexp_list_destroy(p->scan.base.predexp);
-	as_predexp_list_destroy(p->query.base.predexp);
+	as_exp_destroy(p->read.base.filter_exp);
+	as_exp_destroy(p->write.base.filter_exp);
+	as_exp_destroy(p->operate.base.filter_exp);
+	as_exp_destroy(p->remove.base.filter_exp);
+	as_exp_destroy(p->apply.base.filter_exp);
+	as_exp_destroy(p->batch.base.filter_exp);
+	as_exp_destroy(p->scan.base.filter_exp);
+	as_exp_destroy(p->query.base.filter_exp);
 }

@@ -397,8 +397,8 @@ PLAN(aerospike_test)
 	plan_add(bit);
 	plan_add(hll);
 
-	// predexp
-	plan_add(predexp);
+	// filter expressions
+	plan_add(filter_exp);
 
 	// aerospike_info module
 	plan_add(info_basics);

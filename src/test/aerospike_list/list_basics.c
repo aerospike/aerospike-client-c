@@ -21,6 +21,7 @@
 
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_exp.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_hashmap_iterator.h>
 #include <aerospike/as_integer.h>
@@ -2488,6 +2489,319 @@ TEST(list_create, "Create list")
 	as_record_destroy(rec);
 }
 
+TEST(list_exp_mod, "List Modify Expressions")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 208);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_hashmap map;
+	as_hashmap_init(&map, 1);
+	as_hashmap_set(&map, (as_val*)as_integer_new(1), (as_val*)as_integer_new(1));
+
+	as_arraylist list;
+	as_arraylist_init(&list, 6, 6);
+	as_arraylist_append_double(&list, 1.1); // double > map
+	as_arraylist_append_map(&list, (as_map*)&map); // map > string
+	as_arraylist_append_str(&list, "7"); // string > int
+	as_arraylist_append_int64(&list, 9);
+	as_arraylist_append_int64(&list, 5);
+	as_arraylist_append_int64(&list, 3);
+
+	as_record *rec = as_record_new(1);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&list);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(
+			as_exp_list_get_by_index(NULL, AS_LIST_RETURN_VALUE, AS_EXP_TYPE_STR, as_exp_int(3),
+				as_exp_list_sort(NULL, 0, as_exp_bin_list(BIN_NAME))),
+			as_exp_str("7")));
+	assert_not_null(filter);
+
+	p.base.filter_exp = filter;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter);
+
+	as_exp_build(filter2,
+		as_exp_cmp_gt(
+			as_exp_list_get_by_index(NULL, AS_LIST_RETURN_VALUE, AS_EXP_TYPE_FLOAT, as_exp_int(5),
+				as_exp_list_sort(NULL, 0, as_exp_bin_list(BIN_NAME))),
+			as_exp_float(0.1)));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter2);
+
+	as_exp_build(filter3,
+		as_exp_cmp_eq(
+			as_exp_map_get_by_index(NULL, AS_MAP_RETURN_VALUE, AS_EXP_TYPE_INT, as_exp_int(0),
+				as_exp_list_get_by_rank(NULL, AS_LIST_RETURN_VALUE, AS_EXP_TYPE_MAP, as_exp_int(4),
+					as_exp_bin_list(BIN_NAME))),
+			as_exp_int(1)));
+	assert_not_null(filter3);
+
+	p.base.filter_exp = filter3;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter3);
+
+	as_arraylist add;
+	as_arraylist_init(&add, 2, 2);
+	as_arraylist_append_int64(&add, 1);
+	as_arraylist_append_int64(&add, 2);
+
+	as_exp_build(filter4,
+		as_exp_and(
+			as_exp_cmp_eq(
+				as_exp_list_size(NULL,
+					as_exp_list_insert(NULL, NULL, as_exp_int(2), as_exp_str("x"),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(7)),
+			as_exp_cmp_eq(
+				as_exp_list_size(NULL,
+					as_exp_list_insert_items(NULL, NULL, as_exp_int(3), as_exp_val(&add),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(8))));
+
+	as_arraylist_destroy(&add);
+	assert_not_null(filter4);
+
+	p.base.filter_exp = filter4;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter4);
+
+	as_arraylist expected;
+	as_arraylist_init(&expected, 3, 3);
+	as_arraylist_append_int64(&expected, 11);
+	as_arraylist_append_int64(&expected, 5);
+	as_arraylist_append_int64(&expected, 3);
+
+	as_exp_build(filter5,
+		as_exp_and(
+			as_exp_cmp_eq(
+				as_exp_list_get_by_rank(NULL, AS_LIST_RETURN_VALUE, AS_EXP_TYPE_INT, as_exp_int(0),
+					as_exp_list_increment(NULL, NULL, as_exp_int(5), as_exp_int(1),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(4)),
+			as_exp_cmp_eq(
+				as_exp_list_get_by_index_range(NULL, AS_LIST_RETURN_VALUE, as_exp_int(3), as_exp_int(3),
+					as_exp_list_set(NULL, NULL, as_exp_int(3), as_exp_int(11),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_val(&expected)),
+			as_exp_cmp_eq(
+				as_exp_list_size(NULL,
+					as_exp_list_remove_by_value(NULL, as_exp_int(5), as_exp_bin_list(BIN_NAME))),
+				as_exp_int(5)),
+			as_exp_cmp_eq(
+				as_exp_list_size(NULL,
+					as_exp_list_remove_by_value_list(NULL, as_exp_val(&expected), as_exp_bin_list(BIN_NAME))),
+				as_exp_int(4))));
+
+	as_arraylist_destroy(&expected);
+	assert_not_null(filter5);
+
+	p.base.filter_exp = filter5;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter5);
+
+	as_exp_build(filter6,
+		as_exp_not(as_exp_or(
+			as_exp_cmp_gt(
+				as_exp_list_size(NULL,
+					as_exp_list_remove_by_value_range(NULL, as_exp_int(3), as_exp_int(6),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(4)),
+			as_exp_cmp_gt(
+				as_exp_list_size(NULL,
+					as_exp_list_remove_by_rel_rank_range_to_end(NULL, as_exp_int(9), as_exp_int(0),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(2)),
+			as_exp_cmp_gt(
+				as_exp_list_size(NULL,
+					as_exp_list_remove_by_rel_rank_range(NULL, as_exp_int(9), as_exp_int(0), as_exp_int(3),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(3)))));
+	assert_not_null(filter6);
+
+	p.base.filter_exp = filter6;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter6);
+
+	as_arraylist_init(&expected, 3, 3);
+	as_arraylist_append_int64(&expected, 9);
+	as_arraylist_append_int64(&expected, 5);
+	as_arraylist_append_int64(&expected, 3);
+
+	as_arraylist empty;
+	as_arraylist_init(&empty, 1, 1);
+
+	as_exp_build(filter7,
+		as_exp_and(
+			as_exp_cmp_eq(
+				as_exp_list_size(NULL,
+					as_exp_list_remove_by_index(NULL, as_exp_int(3),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(5)),
+			as_exp_cmp_eq(
+				as_exp_list_get_by_index(NULL, AS_LIST_RETURN_VALUE, AS_EXP_TYPE_INT, as_exp_int(-1),
+					as_exp_list_remove_by_rank(NULL, as_exp_int(0),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(5)),
+			as_exp_cmp_eq(
+				as_exp_list_remove_by_rank_range_to_end(NULL, as_exp_int(3),
+					as_exp_bin_list(BIN_NAME)),
+				as_exp_val(&expected)),
+			as_exp_cmp_eq(
+				as_exp_list_remove_by_rank_range(NULL, as_exp_int(-3), as_exp_int(3),
+					as_exp_bin_list(BIN_NAME)),
+				as_exp_val(&expected)),
+			as_exp_cmp_eq(
+				as_exp_list_size(NULL,
+					as_exp_list_remove_by_index_range_to_end(NULL, as_exp_int(1),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(1)),
+			as_exp_cmp_eq(
+				as_exp_list_clear(NULL,
+					as_exp_bin_list(BIN_NAME)),
+				as_exp_val(&empty)),
+			as_exp_cmp_eq(
+				as_exp_list_remove_by_index_range(NULL, as_exp_int(0), as_exp_int(3),
+						as_exp_bin_list(BIN_NAME)),
+				as_exp_val(&expected))));
+
+	as_arraylist_destroy(&empty);
+	as_arraylist_destroy(&expected);
+	assert_not_null(filter7);
+
+	p.base.filter_exp = filter7;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter7);
+}
+
+
+TEST(list_exp_read, "List Read Expressions")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 209);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist list;
+	as_arraylist_init(&list, 6, 6);
+	as_arraylist_append_int64(&list, 19);
+	as_arraylist_append_int64(&list, 11);
+	as_arraylist_append_int64(&list, 16);
+	as_arraylist_append_int64(&list, 8);
+	as_arraylist_append_int64(&list, 5);
+	as_arraylist_append_int64(&list, 3);
+
+	as_record *rec = as_record_new(1);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&list);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	as_arraylist expected;
+	as_arraylist_init(&expected, 1, 1);
+	as_arraylist_append_int64(&expected, 8);
+
+	as_arraylist expected2;
+	as_arraylist_init(&expected2, 3, 1);
+	as_arraylist_append_int64(&expected2, 8);
+	as_arraylist_append_int64(&expected2, 5);
+	as_arraylist_append_int64(&expected2, 3);
+
+	as_arraylist get_list;
+	as_arraylist_init(&get_list, 3, 3);
+	as_arraylist_append_int64(&get_list, 3);
+	as_arraylist_append_int64(&get_list, 5);
+	as_arraylist_append_int64(&get_list, 8);
+
+	as_exp_build(filter,
+		as_exp_and(
+			as_exp_cmp_eq(
+				as_exp_list_get_by_value_range(NULL, AS_LIST_RETURN_VALUE, as_exp_int(8), as_exp_int(9),
+					as_exp_bin_list(BIN_NAME)),
+				as_exp_val(&expected)),
+			as_exp_cmp_eq(
+				as_exp_list_get_by_rel_rank_range_to_end(NULL, AS_LIST_RETURN_COUNT, as_exp_int(5), as_exp_int(0),
+					as_exp_list_get_by_value_list(NULL, AS_LIST_RETURN_VALUE, as_exp_val(&get_list),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_int(2)),
+			as_exp_cmp_eq(
+				as_exp_list_get_by_rel_rank_range(NULL, AS_LIST_RETURN_COUNT, as_exp_int(5), as_exp_int(0), as_exp_int(3),
+					as_exp_bin_list(BIN_NAME)),
+				as_exp_int(3)),
+			as_exp_cmp_eq(
+				as_exp_list_get_by_index_range_to_end(NULL, AS_LIST_RETURN_VALUE, as_exp_int(3),
+					as_exp_bin_list(BIN_NAME)),
+				as_exp_val(&expected2)),
+			as_exp_cmp_eq(
+				as_exp_list_get_by_rank_range(NULL, AS_LIST_RETURN_VALUE, as_exp_int(0), as_exp_int(1),
+					as_exp_list_get_by_rank_range_to_end(NULL, AS_LIST_RETURN_VALUE, as_exp_int(2),
+						as_exp_bin_list(BIN_NAME))),
+				as_exp_val(&expected))));
+
+	as_arraylist_destroy(&get_list);
+	as_arraylist_destroy(&expected);
+	as_arraylist_destroy(&expected2);
+	assert_not_null(filter);
+
+	p.base.filter_exp = filter;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -2516,4 +2830,6 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_ctx_create_nontoplvl_list);
 	suite_add(list_ctx_create_pad);
 	suite_add(list_create);
+	suite_add(list_exp_mod);
+	suite_add(list_exp_read);
 }

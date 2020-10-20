@@ -164,10 +164,10 @@
     <ClCompile Include="..\..\src\test\aerospike_bit\bit.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\test\predexp.c">
+    <ClCompile Include="..\..\src\test\aerospike_key\hll_operate.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\test\aerospike_key\hll_operate.c">
+    <ClCompile Include="..\..\src\test\filter_exp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

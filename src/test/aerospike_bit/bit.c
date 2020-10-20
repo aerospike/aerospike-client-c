@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/as_exp.h>
 #include <aerospike/as_bit_operations.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_record.h>
@@ -46,21 +47,47 @@ extern aerospike* as;
 
 void example_dump_record(const as_record* p_rec);
 
+as_key REC_KEY;
+
 static bool
 before(atf_suite* suite)
 {
 	as_node* node = as_node_get_random(as->cluster);
-	
+
 	if (! node) {
 		return false;
 	}
-	bool status = node->features & AS_FEATURES_BIT_OP;
+
+	bool has_bit_ops = node->features & AS_FEATURES_BIT_OP;
 	as_node_release(node);
 
-	if (! status) {
+	if (! has_bit_ops) {
 		info("Skip bit operation tests because not supported on server.")
+		return false;
 	}
-	return status;
+
+	as_key_init_int64(&REC_KEY, NAMESPACE, SET, 117);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &REC_KEY);
+
+	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		return false;
+	}
+
+	uint8_t bytes[] = {0x01, 0x42, 0x03, 0x04, 0x05};
+	as_record rec;
+	as_record_inita(&rec, 1);
+
+	as_record_set_rawp(&rec, BIN_NAME, bytes, sizeof(bytes), false);
+	status = aerospike_key_put(as, &err, NULL, &REC_KEY, &rec);
+	as_record_destroy(&rec);
+
+	if (status != AEROSPIKE_OK) {
+		return false;
+	}
+
+	return true;
 }
 
 /******************************************************************************
@@ -765,6 +792,906 @@ TEST(bit_get_int, "Bit Get Integer")
 	as_record_destroy(prec);
 }
 
+TEST(bit_filter_call_read_get, "Bit filter call read get")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_read_count, "Bit filter call read count")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_count(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_count(as_exp_int(32), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_count(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_count(as_exp_int(32), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_read_lscan, "Bit filter call read lscan")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_int(5),
+			as_exp_bit_lscan(as_exp_int(32), as_exp_uint(8),
+				as_exp_bool(true), as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_ne(
+			as_exp_int(5),
+			as_exp_bit_lscan(as_exp_int(0), as_exp_uint(8),
+				as_exp_bool(true), as_exp_bit_get(as_exp_int(32),
+					as_exp_uint(8), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter3,
+		as_exp_cmp_eq(
+			as_exp_int(5),
+			as_exp_bit_lscan(as_exp_int(0), as_exp_uint(8),
+				as_exp_bool(true), as_exp_bit_get(as_exp_int(32),
+					as_exp_uint(8), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter3);
+
+	p.base.filter_exp = filter3;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter3);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_exp_build(filter4,
+		as_exp_cmp_eq(
+			as_exp_int(5),
+			as_exp_bit_lscan(as_exp_int(32), as_exp_uint(8),
+				as_exp_bool(true), as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter4);
+
+	p.base.filter_exp = filter4;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter4);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_read_rscan, "Bit filter call read rscan")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_int(7),
+			as_exp_bit_rscan(as_exp_int(32), as_exp_uint(8),
+				as_exp_bool(true), as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_int(7),
+			as_exp_bit_rscan(as_exp_int(32), as_exp_uint(8),
+				as_exp_bool(true), as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_read_get_int, "Bit filter call read get int")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_int(0x05),
+			as_exp_bit_get_int(as_exp_int(32), as_exp_uint(8), true,
+				as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_int(0x05),
+			as_exp_bit_get_int(as_exp_int(32), as_exp_uint(8), true,
+				as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_resize, "Bit filter call modify resize")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_resize(NULL, as_exp_uint(6), 0,
+				as_exp_bin_blob(BIN_NAME)), as_exp_bit_resize(NULL,
+					as_exp_uint(6), 0, as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_resize(NULL, as_exp_uint(6), 0,
+				as_exp_bin_blob(BIN_NAME)), as_exp_bit_resize(NULL,
+					as_exp_uint(6), 0, as_exp_bin_blob(BIN_NAME))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_insert, "Bit filter call modify insert")
+{
+	uint8_t value = 0xFF;
+
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_int(value),
+			as_exp_bit_get_int(as_exp_int(8), as_exp_uint(8), false,
+				as_exp_bit_insert(NULL, as_exp_int(1),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_int(value),
+			as_exp_bit_get_int(as_exp_int(8), as_exp_uint(8), false,
+				as_exp_bit_insert(NULL, as_exp_int(1),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_remove, "Bit filter call modify remove")
+{
+	uint8_t value = 0x42;
+
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_int(value),
+			as_exp_bit_get_int(as_exp_int(0), as_exp_uint(8), false,
+				as_exp_bit_remove(NULL, as_exp_int(0),
+					as_exp_uint(1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_int(value),
+			as_exp_bit_get_int(as_exp_int(0), as_exp_uint(8), false,
+				as_exp_bit_remove(NULL, as_exp_int(0),
+					as_exp_uint(1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_set, "Bit filter call modify set")
+{
+	uint8_t value = 0x80;
+
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(32), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_set(NULL, as_exp_int(31), as_exp_uint(1),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(32), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_set(NULL, as_exp_int(31), as_exp_uint(1),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_set_sub, "Bit filter call modify set sub")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(32), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_set(NULL, as_exp_int(24), as_exp_uint(8),
+					as_exp_bit_get(as_exp_int(32), as_exp_uint(8),
+						as_exp_bin_blob(BIN_NAME)),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(32), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_set(NULL, as_exp_int(24), as_exp_uint(8),
+					as_exp_bit_get(as_exp_int(32), as_exp_uint(8),
+						as_exp_bin_blob(BIN_NAME)),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_or, "Bit filter call modify or")
+{
+	uint8_t value = 0x01;
+
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(32), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_or(NULL, as_exp_int(24), as_exp_uint(8),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(32), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_or(NULL, as_exp_int(24), as_exp_uint(8),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_xor, "Bit filter call modify xor")
+{
+	uint8_t value = 0x02;
+
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(0), as_exp_uint(8),
+				as_exp_bit_xor(NULL, as_exp_int(0), as_exp_uint(8),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(0), as_exp_uint(8),
+				as_exp_bit_xor(NULL, as_exp_int(0), as_exp_uint(8),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_and, "Bit filter modify and")
+{
+	uint8_t value = 0x01;
+
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(0), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bit_and(NULL, as_exp_int(16), as_exp_uint(8),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(0), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bit_and(NULL, as_exp_int(16), as_exp_uint(8),
+					as_exp_bytes(&value, 1), as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_not, "Bit filter call modify not")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(0), as_exp_uint(8),
+				as_exp_bit_not(NULL, as_exp_int(6), as_exp_uint(1),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(0), as_exp_uint(8),
+				as_exp_bit_not(NULL, as_exp_int(6), as_exp_uint(1),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_lshift, "Bit filter call modify lshift")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(2), as_exp_uint(6),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(0), as_exp_uint(6),
+				as_exp_bit_lshift(NULL, as_exp_int(0),
+					as_exp_uint(8), as_exp_uint(2),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(2), as_exp_uint(6),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(0), as_exp_uint(6),
+				as_exp_bit_lshift(NULL, as_exp_int(0),
+					as_exp_uint(8), as_exp_uint(2),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_rshift, "Bit filter call modify rshift")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(6),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(26), as_exp_uint(6),
+				as_exp_bit_rshift(NULL, as_exp_int(24),
+					as_exp_uint(8), as_exp_uint(2),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(6),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(26), as_exp_uint(6),
+				as_exp_bit_rshift(NULL, as_exp_int(24),
+					as_exp_uint(8), as_exp_uint(2),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_add, "Bit filter call modify add")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bit_add(NULL, as_exp_int(16), as_exp_uint(8),
+					as_exp_uint(1), AS_BIT_OVERFLOW_FAIL,
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bit_add(NULL, as_exp_int(16), as_exp_uint(8),
+					as_exp_uint(1), AS_BIT_OVERFLOW_FAIL,
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_subtract, "Bit filter call modify subtract")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_subtract(NULL, as_exp_int(24),
+					as_exp_uint(8), as_exp_uint(1), AS_BIT_OVERFLOW_FAIL,
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_subtract(NULL, as_exp_int(24),
+					as_exp_uint(8), as_exp_uint(1), AS_BIT_OVERFLOW_FAIL,
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_set_int, "Bit filter call modify set int")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(8), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_set_int(NULL, as_exp_int(24),
+					as_exp_uint(8), as_exp_uint(0x42),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(8), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_set_int(NULL, as_exp_int(24),
+					as_exp_uint(8), as_exp_uint(0x42),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
+TEST(bit_filter_call_modify_set_int_sub, "Bit filter call modify set int sub")
+{
+	as_exp_build(filter1,
+		as_exp_cmp_ne(
+			as_exp_bit_get(as_exp_int(8), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_set_int(NULL, as_exp_int(24), as_exp_uint(8),
+					as_exp_bit_get_int(as_exp_int(8), as_exp_uint(8),
+						true, as_exp_bin_blob(BIN_NAME)),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter1);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	p.base.filter_exp = filter1;
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter1);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_bit_get(as_exp_int(8), as_exp_uint(8),
+				as_exp_bin_blob(BIN_NAME)),
+			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
+				as_exp_bit_set_int(NULL, as_exp_int(24), as_exp_uint(8),
+					as_exp_bit_get_int(as_exp_int(8), as_exp_uint(8),
+						true, as_exp_bin_blob(BIN_NAME)),
+					as_exp_bin_blob(BIN_NAME)))));
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &p, &REC_KEY, &prec);
+	as_exp_destroy(filter2);
+	as_record_destroy(prec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -791,4 +1718,24 @@ SUITE(bit, "aerospike bitmap tests")
 	suite_add(bit_lscan);
 	suite_add(bit_rscan);
 	suite_add(bit_get_int);
+	suite_add(bit_filter_call_read_get);
+	suite_add(bit_filter_call_read_count);
+	suite_add(bit_filter_call_read_lscan);
+	suite_add(bit_filter_call_read_rscan);
+	suite_add(bit_filter_call_read_get_int);
+	suite_add(bit_filter_call_modify_resize);
+	suite_add(bit_filter_call_modify_insert);
+	suite_add(bit_filter_call_modify_remove);
+	suite_add(bit_filter_call_modify_set);
+	suite_add(bit_filter_call_modify_set_sub);
+	suite_add(bit_filter_call_modify_or);
+	suite_add(bit_filter_call_modify_xor);
+	suite_add(bit_filter_call_modify_and);
+	suite_add(bit_filter_call_modify_not);
+	suite_add(bit_filter_call_modify_lshift);
+	suite_add(bit_filter_call_modify_rshift);
+	suite_add(bit_filter_call_modify_add);
+	suite_add(bit_filter_call_modify_subtract);
+	suite_add(bit_filter_call_modify_set_int);
+	suite_add(bit_filter_call_modify_set_int_sub);
 }

@@ -255,7 +255,8 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_OP_NOT_APPLICABLE = 26,
 
 	/**
-	 * The transaction was not performed because the predexp was false.
+	 * The transaction was not performed because the filter expression was
+	 * false.
 	 */
 	AEROSPIKE_FILTERED_OUT = 27,
 

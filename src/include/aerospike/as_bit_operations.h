@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -151,6 +151,31 @@ typedef struct as_bit_policy_s {
 	uint64_t flags;
 } as_bit_policy;
 
+/**
+ * @private
+ * Bit operation codes.
+ */
+typedef enum {
+	AS_BIT_OP_RESIZE = 0,
+	AS_BIT_OP_INSERT = 1,
+	AS_BIT_OP_REMOVE = 2,
+	AS_BIT_OP_SET = 3,
+	AS_BIT_OP_OR = 4,
+	AS_BIT_OP_XOR = 5,
+	AS_BIT_OP_AND = 6,
+	AS_BIT_OP_NOT = 7,
+	AS_BIT_OP_LSHIFT = 8,
+	AS_BIT_OP_RSHIFT = 9,
+	AS_BIT_OP_ADD = 10,
+	AS_BIT_OP_SUBTRACT = 11,
+	AS_BIT_OP_SET_INT = 12,
+	AS_BIT_OP_GET = 50,
+	AS_BIT_OP_COUNT = 51,
+	AS_BIT_OP_LSCAN = 52,
+	AS_BIT_OP_RSCAN = 53,
+	AS_BIT_OP_GET_INT = 54
+} as_bit_op;
+
 /******************************************************************************
  * PRIVATE FUNCTIONS
  *****************************************************************************/
@@ -279,7 +304,7 @@ as_operations_bit_remove(
 	int byte_offset, uint32_t byte_size
 	)
 {
-	return as_bit_write(ops, name, ctx, policy, 2, byte_offset, byte_size);
+	return as_bit_write(ops, name, ctx, policy, AS_BIT_OP_REMOVE, byte_offset, byte_size);
 }
 
 /**
@@ -304,7 +329,7 @@ as_operations_bit_set(
 	int bit_offset, uint32_t bit_size, uint32_t value_byte_size, uint8_t* value
 	)
 {
-	return as_bit_byte_math(ops, name, ctx, policy, 3, bit_offset, bit_size, value_byte_size, value);
+	return as_bit_byte_math(ops, name, ctx, policy, AS_BIT_OP_SET, bit_offset, bit_size, value_byte_size, value);
 }
 
 /**
@@ -329,7 +354,7 @@ as_operations_bit_or(
 	int bit_offset, uint32_t bit_size, uint32_t value_byte_size, uint8_t* value
 	)
 {
-	return as_bit_byte_math(ops, name, ctx, policy, 4, bit_offset, bit_size, value_byte_size, value);
+	return as_bit_byte_math(ops, name, ctx, policy, AS_BIT_OP_OR, bit_offset, bit_size, value_byte_size, value);
 }
 
 /**
@@ -354,7 +379,7 @@ as_operations_bit_xor(
 	int bit_offset, uint32_t bit_size, uint32_t value_byte_size, uint8_t* value
 	)
 {
-	return as_bit_byte_math(ops, name, ctx, policy, 5, bit_offset, bit_size, value_byte_size, value);
+	return as_bit_byte_math(ops, name, ctx, policy, AS_BIT_OP_XOR, bit_offset, bit_size, value_byte_size, value);
 }
 
 /**
@@ -379,7 +404,7 @@ as_operations_bit_and(
 	int bit_offset, uint32_t bit_size, uint32_t value_byte_size, uint8_t* value
 	)
 {
-	return as_bit_byte_math(ops, name, ctx, policy, 6, bit_offset, bit_size, value_byte_size, value);
+	return as_bit_byte_math(ops, name, ctx, policy, AS_BIT_OP_AND, bit_offset, bit_size, value_byte_size, value);
 }
 
 /**
@@ -402,7 +427,7 @@ as_operations_bit_not(
 	int bit_offset, uint32_t bit_size
 	)
 {
-	return as_bit_write(ops, name, ctx, policy, 7, bit_offset, bit_size);
+	return as_bit_write(ops, name, ctx, policy, AS_BIT_OP_NOT, bit_offset, bit_size);
 }
 
 /**
@@ -426,7 +451,7 @@ as_operations_bit_lshift(
 	int bit_offset, uint32_t bit_size, uint32_t shift
 	)
 {
-	return as_bit_shift(ops, name, ctx, policy, 8, bit_offset, bit_size, shift);
+	return as_bit_shift(ops, name, ctx, policy, AS_BIT_OP_LSHIFT, bit_offset, bit_size, shift);
 }
 
 /**
@@ -450,7 +475,7 @@ as_operations_bit_rshift(
 	int bit_offset, uint32_t bit_size, uint32_t shift
 	)
 {
-	return as_bit_shift(ops, name, ctx, policy, 9, bit_offset, bit_size, shift);
+	return as_bit_shift(ops, name, ctx, policy, AS_BIT_OP_RSHIFT, bit_offset, bit_size, shift);
 }
 
 /**
@@ -477,7 +502,7 @@ as_operations_bit_add(
 	int bit_offset, uint32_t bit_size, int64_t value, bool sign, as_bit_overflow_action action
 	)
 {
-	return as_bit_math(ops, name, ctx, policy, 10, bit_offset, bit_size, value, sign, action);
+	return as_bit_math(ops, name, ctx, policy, AS_BIT_OP_ADD, bit_offset, bit_size, value, sign, action);
 }
 
 /**
@@ -504,7 +529,7 @@ as_operations_bit_subtract(
 	int bit_offset, uint32_t bit_size, int64_t value, bool sign, as_bit_overflow_action action
 	)
 {
-	return as_bit_math(ops, name, ctx, policy, 11, bit_offset, bit_size, value, sign, action);
+	return as_bit_math(ops, name, ctx, policy, AS_BIT_OP_SUBTRACT, bit_offset, bit_size, value, sign, action);
 }
 
 /**
@@ -546,7 +571,7 @@ as_operations_bit_get(
 	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size
 	)
 {
-	return as_bit_read(ops, name, ctx, 50, bit_offset, bit_size);
+	return as_bit_read(ops, name, ctx, AS_BIT_OP_GET, bit_offset, bit_size);
 }
 
 /**
@@ -567,7 +592,7 @@ as_operations_bit_count(
 	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size
 	)
 {
-	return as_bit_read(ops, name, ctx, 51, bit_offset, bit_size);
+	return as_bit_read(ops, name, ctx, AS_BIT_OP_COUNT, bit_offset, bit_size);
 }
 
 /**
@@ -591,7 +616,7 @@ as_operations_bit_lscan(
 	bool value
 	)
 {
-	return as_bit_scan(ops, name, ctx, 52, bit_offset, bit_size, value);
+	return as_bit_scan(ops, name, ctx, AS_BIT_OP_LSCAN, bit_offset, bit_size, value);
 }
 
 /**
@@ -615,7 +640,7 @@ as_operations_bit_rscan(
 	bool value
 	)
 {
-	return as_bit_scan(ops, name, ctx, 53, bit_offset, bit_size, value);
+	return as_bit_scan(ops, name, ctx, AS_BIT_OP_RSCAN, bit_offset, bit_size, value);
 }
 
 /**

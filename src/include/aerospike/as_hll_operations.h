@@ -82,6 +82,25 @@ typedef struct as_hll_policy_s {
 	uint64_t flags;
 } as_hll_policy;
 
+/**
+ * @private
+ * HLL operation codes.
+ */
+typedef enum {
+	AS_HLL_OP_INIT = 0,
+	AS_HLL_OP_ADD = 1,
+	AS_HLL_OP_UNION = 2,
+	AS_HLL_OP_REFRESH_COUNT = 3,
+	AS_HLL_OP_FOLD = 4,
+	AS_HLL_OP_COUNT = 50,
+	AS_HLL_OP_GET_UNION = 51,
+	AS_HLL_OP_UNION_COUNT = 52,
+	AS_HLL_OP_INTERSECT_COUNT = 53,
+	AS_HLL_OP_SIMILARITY = 54,
+	AS_HLL_OP_DESCRIBE = 55,
+	AS_HLL_OP_MAY_CONTAIN = 56
+} as_hll_op;
+
 /******************************************************************************
  * PRIVATE FUNCTIONS
  *****************************************************************************/
@@ -288,7 +307,7 @@ as_operations_hll_get_count(
 	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx
 	)
 {
-	return as_operations_hll_read(ops, name, ctx, 50);
+	return as_operations_hll_read(ops, name, ctx, AS_HLL_OP_COUNT);
 }
 
 /**
@@ -307,7 +326,7 @@ as_operations_hll_get_union(
 	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* list
 	)
 {
-	return as_operations_hll_read_list(ops, name, ctx, 51, list);
+	return as_operations_hll_read_list(ops, name, ctx, AS_HLL_OP_GET_UNION, list);
 }
 
 /**
@@ -326,7 +345,7 @@ as_operations_hll_get_union_count(
 	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* list
 	)
 {
-	return as_operations_hll_read_list(ops, name, ctx, 52, list);
+	return as_operations_hll_read_list(ops, name, ctx, AS_HLL_OP_UNION_COUNT, list);
 }
 
 /**
@@ -345,7 +364,7 @@ as_operations_hll_get_intersect_count(
 	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* list
 	)
 {
-	return as_operations_hll_read_list(ops, name, ctx, 53, list);
+	return as_operations_hll_read_list(ops, name, ctx, AS_HLL_OP_INTERSECT_COUNT, list);
 }
 
 /**
@@ -363,7 +382,7 @@ as_operations_hll_get_similarity(
 	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* list
 	)
 {
-	return as_operations_hll_read_list(ops, name, ctx, 54, list);
+	return as_operations_hll_read_list(ops, name, ctx, AS_HLL_OP_SIMILARITY, list);
 }
 
 /**
@@ -381,7 +400,7 @@ as_operations_hll_describe(
 	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx
 	)
 {
-	return as_operations_hll_read(ops, name, ctx, 55);
+	return as_operations_hll_read(ops, name, ctx, AS_HLL_OP_DESCRIBE);
 }
 
 #ifdef __cplusplus

@@ -1,0 +1,977 @@
+/*
+ * Copyright 2008-2020 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+#include <aerospike/aerospike.h>
+#include <aerospike/aerospike_batch.h>
+#include <aerospike/aerospike_key.h>
+#include <aerospike/as_exp.h>
+#include <aerospike/as_arraylist.h>
+#include <aerospike/as_hashmap.h>
+#include <aerospike/as_map_operations.h>
+#include "test.h"
+#include "util/udf.h"
+
+/******************************************************************************
+ * GLOBAL VARS
+ *****************************************************************************/
+
+extern aerospike* as;
+
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+#define NAMESPACE "test"
+#define SET "test_filter"
+#define LUA_FILE AS_START_DIR "src/test/lua/key_apply.lua"
+#define UDF_FILE "key_apply"
+
+static char* AString = "A";
+static char* BString = "B";
+static char* CString = "C";
+
+/******************************************************************************
+ * STATIC FUNCTIONS
+ *****************************************************************************/
+
+static bool
+before(atf_suite* suite)
+{
+	if (! udf_put(LUA_FILE)) {
+		error("failure while uploading: %s", LUA_FILE);
+		return false;
+	}
+
+	if (! udf_exists(LUA_FILE)) {
+		error("lua file does not exist: %s", LUA_FILE);
+		return false;
+	}
+	return true;
+}
+
+static bool
+after(atf_suite* suite)
+{
+	if (! udf_remove(LUA_FILE)) {
+		error("failure while removing: %s", LUA_FILE);
+		return false;
+	}
+	return true;
+}
+
+static bool
+filter_prepare(as_key* keyA, as_key* keyB)
+{
+	as_error err;
+	as_key_init(keyA, NAMESPACE, SET, AString);
+	as_status rc = aerospike_key_remove(as, &err, NULL, keyA);
+
+	if (! (rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND)) {
+		return false;
+	}
+
+	as_key_init_raw(keyB, NAMESPACE, SET, (const uint8_t*)BString,
+			(uint32_t)strlen(BString));
+	rc = aerospike_key_remove(as, &err, NULL, keyB);
+
+	if (! (rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND)) {
+		return false;
+	}
+
+	as_record rec;
+	as_record_inita(&rec, 3);
+	as_record_set_int64(&rec, AString, 1);
+	as_record_set_double(&rec, BString, 2.71);
+	as_record_set_strp(&rec, CString, "abcde", false);
+	rc = aerospike_key_put(as, &err, NULL, keyA, &rec);
+
+	if (rc != AEROSPIKE_OK) {
+		return false;
+	}
+
+	as_record_inita(&rec, 3);
+	as_record_set_int64(&rec, AString, 2);
+	as_record_set_double(&rec, BString, 3.14);
+	as_record_set_strp(&rec, CString, "abcdeabcde", false);
+	rc = aerospike_key_put(as, &err, NULL, keyB, &rec);
+
+	if (rc != AEROSPIKE_OK) {
+		return false;
+	}
+	return true;
+}
+
+/******************************************************************************
+ * TEST CASES
+ *****************************************************************************/
+
+TEST(filter_put, "filter put")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(as_exp_bin_int(AString), as_exp_int(1)));
+	assert_not_null(filter);
+
+	as_policy_write p;
+	as_policy_write_init(&p);
+	p.base.filter_exp = filter;
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, AString, 3);
+
+	as_error err;
+	as_status rc = aerospike_key_put(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* prec = NULL;
+	rc = aerospike_key_get(as, &err, NULL, &keyA, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(prec, AString, 0);
+	assert_int_eq(val, 3);
+	as_record_destroy(prec);
+
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, AString, 3);
+
+	rc = aerospike_key_put(as, &err, &p, &keyB, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+	as_record_destroy(&rec);
+
+	prec = NULL;
+	rc = aerospike_key_get(as, &err, NULL, &keyB, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	val = as_record_get_int64(prec, AString, 0);
+	assert_int_eq(val, 2);
+	as_record_destroy(prec);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_get, "filter get")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(as_exp_bin_int(AString), as_exp_int(1)));
+	assert_not_null(filter);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter;
+
+	as_error err;
+	as_record* prec = NULL;
+	as_status rc = aerospike_key_get(as, &err, &p, &keyA, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(prec, AString, 0);
+	assert_int_eq(val, 1);
+	as_record_destroy(prec);
+
+	prec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyB, &prec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_batch, "filter batch")
+{
+	as_exp_build(filter,
+		as_exp_cmp_eq(as_exp_bin_int(AString), as_exp_int(1)));
+	assert_not_null(filter);
+
+	as_policy_batch p;
+	as_policy_batch_init(&p);
+	p.base.filter_exp = filter;
+
+	as_batch_read_records records;
+	as_batch_read_inita(&records, 2);
+
+	as_batch_read_record* recA = as_batch_read_reserve(&records);
+	recA->read_all_bins = true;
+
+	as_batch_read_record* recB = as_batch_read_reserve(&records);
+	recB->read_all_bins = true;
+
+	bool b = filter_prepare(&recA->key, &recB->key);
+	assert_true(b);
+
+	as_error err;
+	as_status rc = aerospike_batch_read(as, &err, &p, &records);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	assert_int_eq(recA->result, AEROSPIKE_OK);
+	int64_t val = as_record_get_int64(&recA->record, AString, -1);
+	assert_int_eq(val, 1);
+
+	assert_int_eq(recB->result, AEROSPIKE_FILTERED_OUT);
+
+	as_batch_read_destroy(&records);
+	as_exp_destroy(filter);
+}
+
+TEST(filter_delete, "filter delete")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(as_exp_bin_int(AString), as_exp_int(1)));
+	assert_not_null(filter);
+
+	as_policy_remove p;
+	as_policy_remove_init(&p);
+	p.base.filter_exp = filter;
+
+	as_error err;
+	as_status rc = aerospike_key_remove(as, &err, &p, &keyA);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record* prec = NULL;
+	rc = aerospike_key_get(as, &err, NULL, &keyA, &prec);
+	assert_int_eq(rc, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	rc = aerospike_key_remove(as, &err, &p, &keyB);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	prec = NULL;
+	rc = aerospike_key_get(as, &err, NULL, &keyB, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(prec, AString, 0);
+	assert_int_eq(val, 2);
+	as_record_destroy(prec);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_operate, "filter operate read")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(as_exp_bin_int(AString), as_exp_int(1)));
+	assert_not_null(filter);
+
+	as_policy_operate p;
+	as_policy_operate_init(&p);
+	p.base.filter_exp = filter;
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_read(&ops, AString);
+
+	as_record* prec = NULL;
+	as_error err;
+	as_status rc = aerospike_key_operate(as, &err, &p, &keyA, &ops, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(prec, AString, 0);
+	assert_int_eq(val, 1);
+	as_record_destroy(prec);
+
+	as_operations_inita(&ops, 1);
+	as_operations_add_read(&ops, AString);
+
+	prec = NULL;
+	rc = aerospike_key_operate(as, &err, &p, &keyB, &ops, &prec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_udf, "filter udf")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(as_exp_bin_int(AString), as_exp_int(1)));
+	assert_not_null(filter);
+
+	as_policy_apply p;
+	as_policy_apply_init(&p);
+	p.base.filter_exp = filter;
+
+	as_val* res = NULL;
+	as_error err;
+	as_status rc = aerospike_key_apply(as, &err, &p, &keyA, UDF_FILE, "one", NULL, &res);
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_not_null(res);
+	as_val_destroy(res);
+
+	res = NULL;
+	rc = aerospike_key_apply(as, &err, &p, &keyB, UDF_FILE, "one", NULL, &res);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+	assert_null(res);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_call, "filter call")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_arraylist* list = as_arraylist_new(10, 10);
+	as_arraylist_append_int64(list, 1);
+	as_arraylist_append_int64(list, 2);
+	as_arraylist_append_int64(list, 3);
+	as_arraylist_append_int64(list, 4);
+
+	as_record rec;
+	as_status rc;
+	as_error err;
+	as_record_inita(&rec, 2);
+	as_val_reserve(list);
+	as_record_set_list(&rec, AString, (as_list*)list);
+	as_record_set_int64(&rec, BString, 1);
+	rc = aerospike_key_put(as, &err, NULL, &keyA, &rec);
+	assert_true(rc == AEROSPIKE_OK);
+
+	as_arraylist_insert_int64(list, 0, 0);
+
+	as_record_set_list(&rec, AString, (as_list*)list);
+	rc = aerospike_key_put(as, &err, NULL, &keyB, &rec);
+	as_record_destroy(&rec);
+	assert_true(rc == AEROSPIKE_OK);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(
+			as_exp_int(3),
+			as_exp_list_get_by_index(NULL, AS_LIST_RETURN_VALUE, AS_EXP_TYPE_INT, as_exp_int(2),
+				as_exp_bin_list(AString))));
+	assert_not_null(filter);
+
+	as_policy_operate p;
+	as_policy_operate_init(&p);
+	p.base.filter_exp = filter;
+
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_add_read(&ops, BString);
+
+	as_record* prec = NULL;
+	rc = aerospike_key_operate(as, &err, &p, &keyA, &ops, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(prec, BString, 0);
+	assert_int_eq(val, 1);
+	as_record_destroy(prec);
+	as_operations_destroy(&ops);
+
+	as_operations_init(&ops, 1);
+	as_operations_add_read(&ops, AString);
+
+	prec = NULL;
+	rc = aerospike_key_operate(as, &err, &p, &keyB, &ops, &prec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+	as_operations_destroy(&ops);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_call_chain, "filter call chain")
+{
+	as_error err;
+	as_key keyA;
+
+	as_key_init(&keyA, NAMESPACE, SET, AString);
+	as_status rc = aerospike_key_remove(as, &err, NULL, &keyA);
+	assert(rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	const uint32_t test_count = 100;
+
+	as_hashmap hm;
+	as_hashmap_init(&hm, test_count);
+
+	for (uint32_t i = 0; i < test_count; i++) {
+		as_hashmap_set(&hm, (as_val*)as_integer_new(i),
+				(as_val*)as_integer_new(i % 3));
+	}
+
+	as_record test_rec;
+	as_record_inita(&test_rec, 2);
+	as_record_set_list(&test_rec, AString, (as_list*)&hm);
+	as_record_set_int64(&test_rec, BString, 1);
+	rc = aerospike_key_put(as, &err, NULL, &keyA, &test_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+	as_record_destroy(&test_rec);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(
+			as_exp_list_get_by_index(NULL, AS_LIST_RETURN_VALUE, AS_EXP_TYPE_INT, as_exp_int(4),
+				as_exp_map_get_by_value(NULL, AS_MAP_RETURN_KEY, as_exp_int(1),
+					as_exp_bin_map(AString))),
+			as_exp_int(13)));
+	assert_not_null(filter);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(rec, BString, 0);
+	assert_int_eq(val, 1);
+	as_record_destroy(rec);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_call_modify, "filter call modify")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_status rc;
+	as_error err;
+
+	as_arraylist listA;
+	as_arraylist_init(&listA, 25, 25);
+
+	as_arraylist listB;
+	as_arraylist_init(&listB, 25, 25);
+
+	for (uint32_t i = 0; i < 10; i++) {
+		as_arraylist_append_int64(&listA, i * 100);
+		as_arraylist_append_int64(&listB, i * i);
+	}
+#if 0
+	char *sA = as_val_tostring(&listA);
+	char *sB = as_val_tostring(&listB);
+	info("A=%s B=%s", sA, sB);
+	cf_free(sA);
+	cf_free(sB);
+#endif
+	as_record recA;
+	as_record_init(&recA, 1);
+	as_record_set(&recA, BString, (as_bin_value*)&listA);
+	as_record recB;
+	as_record_init(&recB, 1);
+	as_record_set(&recB, BString, (as_bin_value*)&listB);
+
+	rc = aerospike_key_put(as, &err, NULL, &keyA, &recA);
+	assert_true(rc == AEROSPIKE_OK);
+	
+	rc = aerospike_key_put(as, &err, NULL, &keyB, &recB);
+	assert_true(rc == AEROSPIKE_OK);
+
+	as_operations ops;
+	as_record* rec = NULL;
+	as_operations_init(&ops, 1);
+
+	as_operations_add_list_set_order(&ops, BString, AS_LIST_ORDERED);
+	rc = aerospike_key_operate(as, &err, NULL, &keyA, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_list_policy pol;
+	as_list_policy_set(&pol, AS_LIST_ORDERED, AS_LIST_WRITE_ADD_UNIQUE | AS_LIST_WRITE_NO_FAIL | AS_LIST_WRITE_PARTIAL);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(
+			as_exp_list_size(NULL,
+				as_exp_list_append(NULL, &pol, as_exp_int(100),
+					as_exp_list_append_items(NULL, &pol, as_exp_val(&listB),
+						as_exp_bin_list(BString)))),
+			as_exp_int(19)));
+
+	as_arraylist_destroy(&listB);
+	assert_not_null(filter);
+
+	as_policy_operate p;
+	as_policy_operate_init(&p);
+	p.base.filter_exp = filter;
+
+	as_operations_init(&ops, 1);
+	as_operations_add_read(&ops, BString);
+
+	rc = aerospike_key_operate(as, &err, &p, &keyA, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_exp_destroy(filter);
+
+	as_exp_build(filter2,
+		as_exp_cmp_eq(
+			as_exp_list_size(NULL,
+				as_exp_list_append(NULL, &pol, as_exp_int(1000),
+					as_exp_list_append_items(NULL, &pol, as_exp_val(&listA),
+						as_exp_list_append(NULL, &pol, as_exp_int(81),
+							as_exp_bin_list(BString))))),
+			as_exp_int(20)));
+
+	as_arraylist_destroy(&listA);
+	assert_not_null(filter2);
+
+	p.base.filter_exp = filter2;
+
+	as_operations_init(&ops, 1);
+	as_operations_add_read(&ops, BString);
+
+	rc = aerospike_key_operate(as, &err, &p, &keyB, &ops, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_operations_destroy(&ops);
+	as_exp_destroy(filter2);
+	as_record_destroy(rec);
+	as_record_destroy(&recA);
+	as_record_destroy(&recB);
+}
+
+TEST(filter_call_context, "filter call ctx")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_arraylist* list = as_arraylist_new(10, 10);
+	as_arraylist_append_str(list, "a");
+	as_arraylist_append_str(list, "b");
+	as_arraylist_append_str(list, "c");
+	as_arraylist_append_str(list, "d");
+
+	as_arraylist* list0 = as_arraylist_new(10, 10);
+	as_arraylist_append_str(list0, "e");
+	as_arraylist_append_str(list0, "d");
+	as_arraylist_append_str(list0, "c");
+	as_arraylist_append_str(list0, "b");
+	as_arraylist_append_str(list0, "a");
+
+	as_arraylist_append(list, (as_val*)list0);
+
+	as_record rec;
+	as_status rc;
+	as_error err;
+	as_record_inita(&rec, 2);
+	as_val_reserve(list);
+	as_record_set_list(&rec, AString, (as_list*)list);
+	as_record_set_int64(&rec, BString, 1);
+	rc = aerospike_key_put(as, &err, NULL, &keyA, &rec);
+	assert_true(rc == AEROSPIKE_OK);
+
+	as_arraylist_insert_int64(list, 0, 0);
+
+	as_record_set_list(&rec, AString, (as_list*)list);
+	rc = aerospike_key_put(as, &err, NULL, &keyB, &rec);
+	as_record_destroy(&rec);
+	assert_true(rc == AEROSPIKE_OK);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index(&ctx, 4);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(
+			as_exp_list_get_by_index(&ctx, AS_LIST_RETURN_VALUE, AS_EXP_TYPE_STR, as_exp_int(2),
+				as_exp_bin_list(AString)),
+			as_exp_str("c")));
+	assert_not_null(filter);
+
+	as_policy_operate p;
+	as_policy_operate_init(&p);
+	p.base.filter_exp = filter;
+
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_add_read(&ops, BString);
+
+	as_record* prec = NULL;
+	rc = aerospike_key_operate(as, &err, &p, &keyA, &ops, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(prec, BString, 0);
+	assert_int_eq(val, 1);
+	as_record_destroy(prec);
+	as_operations_destroy(&ops);
+
+	as_operations_init(&ops, 1);
+	as_operations_add_read(&ops, AString);
+
+	prec = NULL;
+	rc = aerospike_key_operate(as, &err, &p, &keyB, &ops, &prec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+	as_operations_destroy(&ops);
+
+	as_cdt_ctx_destroy(&ctx);
+	as_exp_destroy(filter);
+}
+
+TEST(filter_call_context_param, "filter call ctx param")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_arraylist* list = as_arraylist_new(10, 10);
+	as_arraylist_append_str(list, "a");
+	as_arraylist_append_str(list, "b");
+	as_arraylist_append_str(list, "c");
+	as_arraylist_append_str(list, "d");
+
+	as_arraylist* list0 = as_arraylist_new(10, 10);
+	as_arraylist_append_str(list0, "e");
+	as_arraylist_append_str(list0, "d");
+	as_arraylist_append_str(list0, "c");
+	as_arraylist_append_str(list0, "b");
+	as_arraylist_append_str(list0, "a");
+
+	as_arraylist_append(list, (as_val*)list0);
+
+	as_arraylist* list1 = as_arraylist_new(10, 10);
+	as_arraylist_append_str(list1, "x");
+	as_arraylist_append_str(list1, "y");
+	as_arraylist_append_str(list1, "z");
+
+	as_record rec;
+	as_status rc;
+	as_error err;
+	as_record_inita(&rec, 2);
+	as_record_set_list(&rec, AString, (as_list*)list);
+	as_record_set_list(&rec, BString, (as_list*)list1);
+	rc = aerospike_key_put(as, &err, NULL, &keyA, &rec);
+	as_record_destroy(&rec);
+	assert_true(rc == AEROSPIKE_OK);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index(&ctx, 4);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(
+			as_exp_list_size(&ctx, as_exp_list_append_items(&ctx, NULL, as_exp_bin_list(BString), as_exp_bin_list(AString))),
+			as_exp_int(8)));
+	assert_not_null(filter);
+
+	as_policy_operate p;
+	as_policy_operate_init(&p);
+	p.base.filter_exp = filter;
+
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_add_read(&ops, BString);
+
+	as_record* prec = NULL;
+	rc = aerospike_key_operate(as, &err, &p, &keyA, &ops, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_list* val = as_record_get_list(prec, BString);
+	assert_int_eq(as_list_size(val), 3);
+	as_record_destroy(prec);
+	as_operations_destroy(&ops);
+
+	as_cdt_ctx_destroy(&ctx);
+	as_exp_destroy(filter);
+}
+
+TEST(filter_rec_key, "filter rec key")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_error err;
+	as_status rc = aerospike_key_remove(as, &err, NULL, &keyB);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_policy_write wp;
+	as_policy_write_init(&wp);
+	wp.key = AS_POLICY_KEY_SEND;
+
+	as_record new_rec;
+	as_record_inita(&new_rec, 1);
+	as_record_set_int64(&new_rec, AString, 3);
+	rc = aerospike_key_put(as, &err, &wp, &keyB, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_exp_build(filter,
+		as_exp_and(
+			as_exp_cmp_eq(as_exp_bin_type(AString),
+				as_exp_int(AS_BYTES_INTEGER)),
+			as_exp_key_exist()));
+	assert_not_null(filter);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyB, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(rec, AString, 0);
+	assert_int_eq(val, 3);
+	as_record_destroy(rec);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_float_bin, "filter float bin")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_policy_write wp;
+	as_policy_write_init(&wp);
+	wp.key = AS_POLICY_KEY_SEND;
+
+	as_record new_rec;
+	as_record_inita(&new_rec, 1);
+	as_record_set_int64(&new_rec, AString, 3);
+	as_error err;
+	as_status rc = aerospike_key_put(as, &err, &wp, &keyB, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_exp_build(filter,
+		as_exp_cmp_gt(as_exp_bin_float(BString), as_exp_float(3.01)));
+	assert_not_null(filter);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyB, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_blob_key, "filter blob key")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_policy_write wp;
+	as_policy_write_init(&wp);
+	wp.key = AS_POLICY_KEY_SEND;
+
+	as_record new_rec;
+	as_record_inita(&new_rec, 1);
+	as_record_set_int64(&new_rec, AString, 3);
+	as_error err;
+	as_status rc = aerospike_key_put(as, &err, &wp, &keyB, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_exp_build(filter,
+		as_exp_cmp_eq(as_exp_key_blob(),
+			as_exp_bytes((uint8_t*)BString, (uint32_t)strlen(BString))));
+	assert_not_null(filter);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyB, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_since_update, "filter since update")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_policy_write wp;
+	as_policy_write_init(&wp);
+	wp.key = AS_POLICY_KEY_SEND;
+
+	as_record new_rec;
+	as_record_inita(&new_rec, 1);
+	as_record_set_int64(&new_rec, AString, 3);
+	as_error err;
+	as_status rc = aerospike_key_put(as, &err, &wp, &keyB, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_exp_build(filter,
+		as_exp_cmp_ge(as_exp_since_update(), as_exp_int(0)));
+	assert_not_null(filter);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+	as_record_destroy(rec);
+
+	rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyB, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+}
+
+TEST(filter_compare_string_to_unk, "filter compare string to unk")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_policy_write wp;
+	as_policy_write_init(&wp);
+	wp.key = AS_POLICY_KEY_SEND;
+
+	as_record new_rec;
+	as_record_inita(&new_rec, 1);
+	as_record_set_int64(&new_rec, AString, 3);
+	as_error err;
+	as_status rc = aerospike_key_put(as, &err, &wp, &keyB, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_exp_build(filter,
+		as_exp_cmp_gt(as_exp_bin_str(CString), as_exp_bin_str("bogus")));
+	assert_not_null(filter);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyB, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	as_record_destroy(rec);
+
+	as_exp_destroy(filter);
+}
+
+TEST(filter_compare_strings, "filter compare strings")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_policy_write wp;
+	as_policy_write_init(&wp);
+	wp.key = AS_POLICY_KEY_SEND;
+
+	as_record new_rec;
+	as_record_inita(&new_rec, 1);
+	as_record_set_int64(&new_rec, AString, 3);
+	as_error err;
+	as_status rc = aerospike_key_put(as, &err, &wp, &keyB, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_exp_build(filter,
+		as_exp_cmp_gt(as_exp_bin_str(CString), as_exp_str("abcde")));
+	assert_not_null(filter);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+	rc = aerospike_key_get(as, &err, &p, &keyB, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+
+	as_exp_destroy(filter);
+}
+
+/******************************************************************************
+ * TEST SUITE
+ *****************************************************************************/
+
+SUITE(filter_exp, "filter expression tests")
+{
+	suite_before(before);
+	suite_after(after);
+
+	suite_add(filter_put);
+	suite_add(filter_get);
+	suite_add(filter_batch);
+	suite_add(filter_delete);
+	suite_add(filter_operate);
+	suite_add(filter_udf);
+	suite_add(filter_call);
+	suite_add(filter_call_chain);
+	suite_add(filter_call_modify);
+	suite_add(filter_call_context);
+	suite_add(filter_call_context_param);
+	suite_add(filter_rec_key);
+	suite_add(filter_float_bin);
+	suite_add(filter_blob_key);
+	suite_add(filter_since_update);
+	suite_add(filter_compare_string_to_unk);
+	suite_add(filter_compare_strings);
+}

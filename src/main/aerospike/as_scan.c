@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2020 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -37,7 +37,7 @@ as_scan_defaults(as_scan* scan, bool free, const as_namespace ns, const as_set s
 		scan->ns[0] = '\0';
 	}
 	
-    //check set==NULL and set name length
+	//check set==NULL and set name length
 	if ( set && strlen(set) < AS_SET_MAX_SIZE ) {
 		strcpy(scan->set, set);
 	}
@@ -49,11 +49,6 @@ as_scan_defaults(as_scan* scan, bool free, const as_namespace ns, const as_set s
 	scan->select.capacity = 0;
 	scan->select.size = 0;
 	scan->select.entries = NULL;
-
-	scan->predexp._free = false;
-	scan->predexp.capacity = 0;
-	scan->predexp.size = 0;
-	scan->predexp.entries = NULL;
 
 	scan->ops = NULL;
 	scan->priority = AS_SCAN_PRIORITY_DEFAULT;
@@ -90,26 +85,6 @@ as_scan_destroy(as_scan* scan)
 	scan->ns[0] = '\0';
 	scan->set[0] = '\0';
 
-	// NOTE - we need to check all of the registered predexp
-	// entries ... if they have a registered destructor (heap
-	// allocated) call it.
-	//
-	for (uint16_t ndx = 0; ndx < scan->predexp.size; ++ndx) {
-		as_predexp_base * bp = scan->predexp.entries[ndx];
-		if (bp->dtor_fn) {
-			(*bp->dtor_fn)(bp);
-		}
-	}
-
-	if ( scan->predexp.entries && scan->predexp._free) {
-		cf_free(scan->predexp.entries);
-	}
-
-	scan->predexp._free = false;
-	scan->predexp.capacity = 0;
-	scan->predexp.size = 0;
-	scan->predexp.entries = NULL;
-	
 	if ( scan->select._free ) {
 		cf_free(scan->select.entries);
 	}
@@ -159,44 +134,6 @@ as_scan_select(as_scan* scan, const char * bin)
 
 	strcpy(scan->select.entries[scan->select.size], bin);
 	scan->select.size++;
-
-	return true;
-}
-
-/******************************************************************************
- * PREDEXP FUNCTIONS
- *****************************************************************************/
-
-bool
-as_scan_predexp_init(as_scan* scan, uint16_t n)
-{
-	if ( !scan ) return false;
-	if ( scan->predexp.entries ) return false;
-
-	scan->predexp.entries = (as_predexp_base **) cf_calloc(n, sizeof(as_bin_name));
-	if ( !scan->predexp.entries ) return false;
-
-	scan->predexp._free = true;
-	scan->predexp.capacity = n;
-	scan->predexp.size = 0;
-
-	return true;
-}
-
-bool
-as_scan_predexp_add(as_scan* scan, as_predexp_base * predexp)
-{
-	// test preconditions
-	if ( !scan ) {
-		return false;
-	}
-
-	// insufficient capacity
-	if ( scan->predexp.size >= scan->predexp.capacity ) {
-		return false;
-	}
-
-	scan->predexp.entries[scan->predexp.size++] = predexp;
 
 	return true;
 }

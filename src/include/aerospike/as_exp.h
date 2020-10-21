@@ -276,9 +276,9 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * the key is not a string.
  *
  * ~~~~~~~~~~{.c}
- * // String record key <= "aaa"
+ * // String record key == "aaa"
  * as_exp_build(expression,
- *     as_exp_cmp_le(as_exp_key_str(), as_exp_str("aaa")));
+ *     as_exp_cmp_eq(as_exp_key_str(), as_exp_str("aaa")));
  * ~~~~~~~~~~
  *
  * @return (string value) String value of the key if the key is a string.
@@ -638,7 +638,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * ~~~~~~~~~~{.c}
  * // Records that have digest(key) % 3 == 1
  * as_exp_build(expression,
- * 		as_exp_cmp_eq(as_exp_digest_modulo(3), EXP_VAL_INT(1)));
+ * 		as_exp_cmp_eq(as_exp_digest_modulo(3), as_exp_int(1)));
  * ~~~~~~~~~~
  *
  * @param __mod			Divisor used to divide the digest to get a remainder.
@@ -657,8 +657,8 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * Create equals (==) expression.
  *
  * ~~~~~~~~~~{.c}
- * // Integer bin "a" == 0.
- * as_exp_build(expression, as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)));
+ * // Integer bin "a" == 11.
+ * as_exp_build(expression, as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(11)));
  * ~~~~~~~~~~
  *
  * @param __left			left expression in comparison.
@@ -673,8 +673,8 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * Create not equal (!=) expression.
  *
  * ~~~~~~~~~~{.c}
- * // Integer bin "a" != 0.
- * as_exp_build(expression, as_exp_cmp_ne(as_exp_bin_int("a"), as_exp_int(0)));
+ * // Integer bin "a" != 13.
+ * as_exp_build(expression, as_exp_cmp_ne(as_exp_bin_int("a"), as_exp_int(13)));
 
  * ~~~~~~~~~~
  *
@@ -687,11 +687,11 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 		{.op=_AS_EXP_CODE_CMP_NE, .count=3}, __left, __right
 
 /**
- * Create a greater than (<) expression.
+ * Create a greater than (>) expression.
  *
  * ~~~~~~~~~~{.c}
- * // Integer bin "a" >= 0.
- * as_exp_build(expression, as_exp_cmp_gt(as_exp_bin_int("a"), as_exp_int(0)));
+ * // Integer bin "a" > 8.
+ * as_exp_build(expression, as_exp_cmp_gt(as_exp_bin_int("a"), as_exp_int(8)));
  * ~~~~~~~~~~
  *
  * @param __left			left expression in comparison.
@@ -703,11 +703,11 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 		{.op=_AS_EXP_CODE_CMP_GT, .count=3}, __left, __right
 
 /**
- * Create a greater than or equals (<=) expression.
+ * Create a greater than or equals (>=) expression.
  *
  * ~~~~~~~~~~{.c}
- * // Integer bin "a" >= 0.
- * as_exp_build(expression, as_exp_cmp_ge(as_exp_bin_int("a"), as_exp_int(0)));
+ * // Integer bin "a" >= 88.
+ * as_exp_build(expression, as_exp_cmp_ge(as_exp_bin_int("a"), as_exp_int(88)));
  * ~~~~~~~~~~
  *
  * @param __left			left expression in comparison.
@@ -722,8 +722,8 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * Create a less than (<) expression.
  *
  * ~~~~~~~~~~{.c}
- * // Integer bin "a" < 0.
- * as_exp_build(expression, as_exp_cmp_lt(as_exp_bin_int("a"), as_exp_int(0)));
+ * // Integer bin "a" < 1000.
+ * as_exp_build(expression, as_exp_cmp_lt(as_exp_bin_int("a"), as_exp_int(1000)));
  * ~~~~~~~~~~
  *
  * @param __left			left expression in comparison.
@@ -738,8 +738,8 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * Create a less than or equals (<=) expression.
  *
  * ~~~~~~~~~~{.c}
- * // Integer bin "a" <= 0.
- * as_exp_build(expression, as_exp_cmp_le(as_exp_bin_int("a"), as_exp_int(0)));
+ * // Integer bin "a" <= 1.
+ * as_exp_build(expression, as_exp_cmp_le(as_exp_bin_int("a"), as_exp_int(1)));
  * ~~~~~~~~~~
  *
  * @param __left			left expression in comparison.
@@ -758,8 +758,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * // Select string bin "a" that starts with "prefix" and ends with "suffix".
  * // Ignore case and do not match newline.
  * as_exp_build(expression,
- *     as_exp_cmp_regex(REG_ICASE | REG_NEWLINE,
- *      as_exp_str("prefix.*suffix"), as_exp_bin_str("a")))
+ *     as_exp_cmp_regex(REG_ICASE | REG_NEWLINE, as_exp_str("prefix.*suffix"), as_exp_bin_str("a")));
  * ~~~~~~~~~~
  *
  * @param __options			POSIX regex flags defined in regex.h.
@@ -779,7 +778,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * ~~~~~~~~~~{.c}
  * // Geo bin "point" is within geo bin "region".
  * as_exp_build(expression,
- *     as_exp_cmp_geo(as_exp_bin_geo("point"), as_exp_bin_geo("region)));
+ *     as_exp_cmp_geo(as_exp_bin_geo("point"), as_exp_bin_geo("region")));
  * ~~~~~~~~~~
  *
  * @param __left			left expression in comparison.
@@ -802,7 +801,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * as_exp_build(expression,
  *     as_exp_not(as_exp_or(
  *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)),
- *         as_exp_cmp_ex(as_exp_bin_int("a"), as_exp_int(10)))));
+ *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)))));
   * ~~~~~~~~~~
  *
  * @param __expr			Boolean expression to negate.
@@ -819,8 +818,8 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * as_exp_build(expression,
  *     as_exp_and(
  *         as_exp_or(
- *             as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(5)),
- *             as_exp_cmp_ex(as_exp_bin_int("a"), as_exp_int(0)))
+ *             as_exp_cmp_gt(as_exp_bin_int("a"), as_exp_int(5)),
+ *             as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)))
  *         as_exp_cmp_lt(as_exp_bin_int("b"), as_exp_int(3))));
  * ~~~~~~~~~~
  *
@@ -835,13 +834,11 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * Create "or" (||) operator that applies to a variable number of expressions.
  *
  * ~~~~~~~~~~{.c}
- * // (a > 5 || a == 0) && b < 3
+ * // a == 0 || b == 0
  * as_exp_build(expression,
- *     as_exp_and(
- *         as_exp_or(
- *             as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(5)),
- *             as_exp_cmp_ex(as_exp_bin_int("a"), as_exp_int(0)))
- *         as_exp_cmp_lt(as_exp_bin_int("b"), as_exp_int(3))));
+ *     as_exp_or(
+ *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)),
+ *         as_exp_cmp_eq(as_exp_bin_int("b"), as_exp_int(0))));
  * ~~~~~~~~~~
  *
  * @param ...			Variable number of boolean expressions.
@@ -2589,11 +2586,9 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * Declare and build an expression variable.
  *
  * ~~~~~~~~~~{.c}
- * // ! (a == 0 || a == 10)
+ * // a == 10
  * as_exp_build(expression,
- *     as_exp_not(as_exp_or(
- *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)),
- *         as_exp_cmp_ex(as_exp_bin_int("a"), as_exp_int(10)))));
+ *     as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)));
  * ~~~~~~~~~~
  *
  * @param __name			Name of the variable to hold the expression
@@ -2608,14 +2603,6 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 
 /**
  * Declare and build an base64 packed expression variable.
- *
- * ~~~~~~~~~~{.c}
- * // ! (a == 0 || a == 10)
- * as_exp_build(expression,
- *     as_exp_not(as_exp_or(
- *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)),
- *         as_exp_cmp_ex(as_exp_bin_int("a"), as_exp_int(10)))));
- * ~~~~~~~~~~
  *
  * @param __name			Name of the variable to hold the expression
  * @ingroup expression

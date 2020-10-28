@@ -67,6 +67,9 @@ static uint64_t g_epochns;
 #define SET "query_foreach"
 #define NAMESPACE_INFO "namespace/test"
 
+bool namespace_has_persistence = false;
+bool namespace_in_memory = false;
+
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -728,10 +731,55 @@ TEST( query_with_rec_device_size_filter, "query_with_rec_device_size_filter" ) {
 
 	// We should match 100 - 65 records
 	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 35 );
+
+	if (namespace_has_persistence) {
+		assert_int_eq( count, 35 );
+	}
+	else {
+		assert_int_eq( count, 0 );
+	}
 
 	as_query_destroy(&q);
 }
+
+TEST( query_with_rec_memory_size_filter, "query_with_rec_memory_size_filter" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_exp_build(filter,
+		as_exp_cmp_ge(as_exp_memory_size(), as_exp_int(65 * 1024)));
+
+	as_policy_query p;
+	as_policy_query_init(&p);
+	p.base.filter_exp = filter;
+
+	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
+
+	// We should match 100 - 65 records
+	assert_int_eq( err.code, 0 );
+
+	if (namespace_in_memory) {
+		assert_int_eq( count, 35 );
+	}
+	else {
+		assert_int_eq( count, 0 );
+	}
+
+	as_query_destroy(&q);
+}
+
 
 TEST( query_intermittent_bin_filter, "query_intermittent_bin_filter" ) {
 
@@ -1485,11 +1533,25 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_after( after   );
 
 	// find out storage type of namespace
-	bool namespace_has_persistence = false;
 	char namespace_storage[128];
-	get_info_field(NAMESPACE_INFO,"storage-engine", namespace_storage, 128);
-	if ( strcmp(namespace_storage,"device")==0 || strcmp(namespace_storage,"file")==0 ) {
+	get_info_field(NAMESPACE_INFO, "storage-engine", namespace_storage,
+			sizeof(namespace_storage));
+	if ( strcmp(namespace_storage, "device") == 0 ||
+			strcmp(namespace_storage, "file") == 0 ) {
 		namespace_has_persistence = true;
+	}
+
+	if ( strcmp(namespace_storage, "memory") == 0) {
+		namespace_in_memory = true;
+	}
+
+	if (! namespace_in_memory) {
+		char namespace_dim[128];
+		get_info_field(NAMESPACE_INFO, "data-in-memory", namespace_dim,
+				sizeof(namespace_dim));
+		if ( strcmp(namespace_dim, "true") == 0 ) {
+			namespace_in_memory = true;
+		}
 	}
 
 	suite_add( query_foreach_1 );
@@ -1502,11 +1564,8 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_8 );
 	suite_add( query_with_range_filter );
 	suite_add( query_with_equality_filter );
-
-	if (namespace_has_persistence) {
-		suite_add( query_with_rec_device_size_filter );
-	}
-
+	suite_add( query_with_rec_device_size_filter );
+	suite_add( query_with_rec_memory_size_filter );
 	suite_add( query_intermittent_bin_filter );
 	suite_add( scan_with_rec_last_update_filter );
 	suite_add( scan_with_rec_last_update_filter_less );

@@ -87,6 +87,7 @@ typedef enum {
 	_AS_EXP_CODE_SET_NAME = 70,
 	_AS_EXP_CODE_KEY_EXIST = 71,
 	_AS_EXP_CODE_IS_TOMBSTONE = 72,
+	_AS_EXP_CODE_MEMORY_SIZE = 73,
 
 	_AS_EXP_CODE_KEY = 80,
 	_AS_EXP_CODE_BIN = 81,
@@ -631,6 +632,24 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * @ingroup expression
  */
 #define as_exp_is_tombstone() {.op=_AS_EXP_CODE_IS_TOMBSTONE, .count=1}
+
+/**
+ * Create expression that returns record size in memory when either the
+ * storage-engine is memory or data-in-memory is true, otherwise returns 0.
+ * This expression usually evaluates quickly because record meta data is cached
+ * in memory.
+ * This method requires Aerospike Server version >= 5.3.0.
+ *
+ * ~~~~~~~~~~{.c}
+ * // Record memory size >= 100 KB
+ * as_exp_build(expression,
+ * 		as_exp_cmp_ge(as_exp_memory_size(), as_exp_int(100 * 1024)));
+ * ~~~~~~~~~~
+ *
+ * @return (integer value) memory size of the record.
+ * @ingroup expression
+ */
+#define as_exp_memory_size() {.op=_AS_EXP_CODE_MEMORY_SIZE, .count=1}
 
 /**
  * Create expression that returns record digest modulo as integer.

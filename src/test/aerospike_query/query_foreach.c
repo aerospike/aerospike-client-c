@@ -1547,7 +1547,8 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 
 	if (! namespace_in_memory) {
 		char namespace_dim[128];
-		get_info_field(NAMESPACE_INFO, "data-in-memory", namespace_dim,
+		get_info_field(NAMESPACE_INFO, "storage-engine.data-in-memory",
+				namespace_dim,
 				sizeof(namespace_dim));
 		if ( strcmp(namespace_dim, "true") == 0 ) {
 			namespace_in_memory = true;

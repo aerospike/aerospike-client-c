@@ -1028,7 +1028,9 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 	}
 
 	// Run scan commands.
-	for (uint32_t i = 0; i < ee->max_concurrent; i++) {
+	uint32_t max = ee->max_concurrent;
+
+	for (uint32_t i = 0; i < max; i++) {
 		ee->queued++;
 
 		as_event_command* cmd = ee->commands[i];

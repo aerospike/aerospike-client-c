@@ -1247,7 +1247,9 @@ aerospike_query_async(
 	}
 	else {
 		// Run query commands.
-		for (uint32_t i = 0; i < exec->max_concurrent; i++) {
+		uint32_t max = exec->max_concurrent;
+
+		for (uint32_t i = 0; i < max; i++) {
 			exec->queued++;
 			as_event_command* cmd = exec->commands[i];
 			as_status status = as_event_command_execute(cmd, err);

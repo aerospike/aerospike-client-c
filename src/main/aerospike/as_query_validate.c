@@ -86,6 +86,7 @@ as_validate_begin_listener(as_error* err, char* response, void* udata, as_event_
 		return;
 	}
 
+	uint32_t max_concurrent = executor->max_concurrent;
 	as_status status = as_event_command_execute(cmd, &e);
 
 	if (status != AEROSPIKE_OK) {
@@ -94,7 +95,7 @@ as_validate_begin_listener(as_error* err, char* response, void* udata, as_event_
 		return;
 	}
 
-	for (uint32_t i = 1; i < executor->max_concurrent; i++) {
+	for (uint32_t i = 1; i < max_concurrent; i++) {
 		if (as_query_validate_next_async(executor, i) != AEROSPIKE_OK) {
 			return;
 		}

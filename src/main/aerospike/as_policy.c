@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_policy.h>
 #include <aerospike/as_exp.h>
+#include <aerospike/as_predexp.h>
 
 /******************************************************************************
  * FUNCTIONS
@@ -48,4 +49,13 @@ as_policies_destroy(as_policies* p)
 	as_exp_destroy(p->batch.base.filter_exp);
 	as_exp_destroy(p->scan.base.filter_exp);
 	as_exp_destroy(p->query.base.filter_exp);
+
+	as_predexp_list_destroy(p->read.base.predexp);
+	as_predexp_list_destroy(p->write.base.predexp);
+	as_predexp_list_destroy(p->operate.base.predexp);
+	as_predexp_list_destroy(p->remove.base.predexp);
+	as_predexp_list_destroy(p->apply.base.predexp);
+	as_predexp_list_destroy(p->batch.base.predexp);
+	as_predexp_list_destroy(p->scan.base.predexp);
+	as_predexp_list_destroy(p->query.base.predexp);
 }

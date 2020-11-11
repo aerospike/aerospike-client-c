@@ -20,6 +20,7 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_predexp.h>
 #include <aerospike/as_udf.h>
 
 #include <stdarg.h>
@@ -297,7 +298,44 @@ typedef struct as_query_predicates_s {
 
 } as_query_predicates;
 
-/** 
+/**
+ * This structure is deprecated and will eventually be removed.
+ * Use as_policy_base filter_exp instead.
+ *
+ * Sequence of predicate expressions to be applied to a query.
+ *
+ * Entries can either be initialized on the stack or on the heap.
+ *
+ * Initialization should be performed via a query object, using:
+ * - as_query_predexp_init()
+ * - as_query_predexp_inita()
+ */
+typedef struct as_query_predexp_s {
+
+	/**
+	 * @private
+	 * If true, then as_query_destroy() will free this instance.
+	 */
+	bool _free;
+
+	/**
+	 * Number of entries allocated
+	 */
+	uint16_t capacity;
+
+	/**
+	 * Number of entries used
+	 */
+	uint16_t size;
+
+	/**
+	 * Sequence of entries
+	 */
+	as_predexp_base ** entries;
+
+} as_query_predexp;
+
+/**
  * The as_query object is used define a query to be executed in the datasbase.
  *
  * ## Initialization
@@ -451,6 +489,23 @@ typedef struct as_query_s {
 	 * Use as_query_where() to populate.
 	 */
 	as_query_predicates where;
+
+	/**
+	 * This field is deprecated and will eventually be removed.
+	 * Use as_policy_base filter_exp instead.
+	 *
+	 * This field is mutually exclusive with as_policy_base predexp and filter_exp.
+	 * If all are defined, this field will be used and the others will be ignored.
+	 *
+	 * Predicate Expressions for filtering.
+	 * 
+	 * Use either of the following function to initialize:
+	 * - as_query_predexp_init() - To initialize on the heap.
+	 * - as_query_predexp_inita() -	To initialize on the stack.
+	 *
+	 * Use as_query_predexp() to populate.
+	 */
+	as_query_predexp predexp;
 
 	/**
 	 * UDF to apply to results of the query
@@ -691,6 +746,93 @@ as_query_where_init(as_query* query, uint16_t n);
 AS_EXTERN bool
 as_query_where(as_query* query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ...);
 
+/******************************************************************************
+ * PREDEXP FUNCTIONS
+ *****************************************************************************/
+
+ /**
+  * This macro is deprecated and will eventually be removed.
+  * Use as_policy_base filter_exp instead.
+  *
+  * Initializes `as_query.predexp` with a capacity of `n` using `alloca`
+  *
+  * For heap allocation, use `as_query_predexp_init()`.
+  *
+  * ~~~~~~~~~~{.c}
+  * as_query_predexp_inita(&query, 3);
+  * as_query_predexp_add(&query, as_predexp_string_value("apple"));
+  * as_query_predexp_add(&query, as_predexp_string_bin("fruit"));
+  * as_query_predexp_add(&query, as_predexp_string_equal());
+  * ~~~~~~~~~~
+  *
+  * @param __query	The query to initialize.
+  * @param __n		The number of predicate expression slots to allocate.
+  *
+  * @relates as_query
+  * @ingroup query_object
+  */
+#define as_query_predexp_inita(__query, __n) \
+	if ((__query)->predexp.entries == NULL) {\
+		(__query)->predexp.entries = (as_predexp_base**)alloca(__n * sizeof(as_predexp_base *));\
+		if ((__query)->predexp.entries) {\
+			(__query)->predexp.capacity = __n;\
+			(__query)->predexp.size = 0;\
+			(__query)->predexp._free = false;\
+		}\
+	}
+
+/** 
+ * This function is deprecated and will eventually be removed.
+ * Use as_policy_base filter_exp instead.
+ *
+ * Initializes `as_query.predexp` with a capacity of `n` using `malloc()`.
+ * 
+ * For stack allocation, use `as_query_predexp_inita()`.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_query_predexp_init(&query, 3);
+ * as_query_predexp_add(&query, as_predexp_string_value("apple"));
+ * as_query_predexp_add(&query, as_predexp_string_bin("fruit"));
+ * as_query_predexp_add(&query, as_predexp_string_equal());
+ * ~~~~~~~~~~
+ *
+ * @param query	The query to initialize.
+ * @param n		The number of predicate expression slots to allocate.
+ *
+ * @return On success, the initialized. Otherwise an error occurred.
+ *
+ * @relates as_query
+ * @ingroup query_object
+ */
+AS_EXTERN bool
+as_query_predexp_init(as_query* query, uint16_t n);
+
+/**
+ * This function is deprecated and will eventually be removed.
+ * Use as_policy_base filter_exp instead.
+ *
+ * Adds predicate expressions to a query.
+ *
+ * You have to ensure as_query.predexp has sufficient capacity, prior to 
+ * adding a predexp. If capacity is sufficient then false is returned.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_query_predexp_inita(&query, 3);
+ * as_query_predexp_add(&query, as_predexp_string_value("apple"));
+ * as_query_predexp_add(&query, as_predexp_string_bin("fruit"));
+ * as_query_predexp_add(&query, as_predexp_string_equal());
+ * ~~~~~~~~~~
+ *
+ * @param query 		The query to modify.
+ * @param predexp		Pointer to a constructed predicate expression.
+ *
+ * @return On success, true. Otherwise an error occurred.
+ *
+ * @relates as_query
+ * @ingroup query_object
+ */
+AS_EXTERN bool
+as_query_predexp_add(as_query* query, as_predexp_base * predexp);
 
 /******************************************************************************
  * QUERY MODIFIER FUNCTIONS

@@ -18,6 +18,7 @@
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_predexp.h>
 #include <aerospike/as_udf.h>
 
 #ifdef __cplusplus
@@ -172,6 +173,43 @@ typedef struct as_scan_bins_s {
 	bool _free;
 
 } as_scan_bins;
+
+/**
+ * This structure is deprecated and will eventually be removed.
+ * Use as_policy_base filter_exp instead.
+ *
+ * Sequence of predicate expressions to be applied to a scan.
+ *
+ * Entries can either be initialized on the stack or on the heap.
+ *
+ * Initialization should be performed via a scan object, using:
+ * -	as_scan_predexp_init()
+ * -	as_scan_predexp_inita()
+ */
+typedef struct as_scan_predexp_s {
+
+	/**
+	 * Sequence of entries
+	 */
+	as_predexp_base** entries;
+
+	/**
+	 * Number of entries allocated
+	 */
+	uint16_t capacity;
+
+	/**
+	 * Number of entries used
+	 */
+	uint16_t size;
+
+	/**
+	 * @private
+	 * If true, then as_scan_destroy() will free this instance.
+	 */
+	bool _free;
+
+} as_scan_predexp;
 
 /**
  * In order to execute a scan using the Scan API, an as_scan object
@@ -331,7 +369,24 @@ typedef struct as_scan_s {
 	 */
 	as_scan_bins select;
 
-	/** 
+	/**
+	 * This field is deprecated and will eventually be removed.
+	 * Use as_policy_base filter_exp instead.
+	 *
+	 * This field is mutually exclusive with as_policy_base predexp and filter_exp.
+	 * If all are defined, this field will be used and the others will be ignored.
+	 *
+	 * Predicate Expressions for filtering.
+	 * 
+	 * Use either of the following function to initialize:
+	 * - as_query_predexp_init() - To initialize on the heap.
+	 * - as_query_predexp_inita() -	To initialize on the stack.
+	 *
+	 * Use as_query_predexp() to populate.
+	 */
+	as_scan_predexp predexp;
+
+	/**
 	 * Apply the UDF for each record scanned on the server.
 	 *
 	 * Should be set via `as_scan_apply_each()`.
@@ -523,6 +578,93 @@ as_scan_select_init(as_scan* scan, uint16_t n);
 AS_EXTERN bool
 as_scan_select(as_scan* scan, const char * bin);
 
+/******************************************************************************
+ * PREDEXP FUNCTIONS
+ *****************************************************************************/
+
+/** 
+ * This function is deprecated and will eventually be removed.
+ * Use as_policy_base filter_exp instead.
+ *
+ * Initializes `as_scan.predexp` with a capacity of `n` using `alloca`
+ *
+ * For heap allocation, use `as_scan_predexp_init()`.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_scan_predexp_inita(&scan, 3);
+ * as_scan_predexp_add(&scan, as_predexp_integer_value(90));
+ * as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
+ * as_scan_predexp_add(&scan, as_predexp_integer_greatereq());
+ * ~~~~~~~~~~
+ * 
+ * @param __scan	The scan to initialize.
+ * @param __n		The number of predicate expression slots to allocate.
+ *
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+#define as_scan_predexp_inita(__scan, __n) \
+	if ((__scan)->predexp.entries == NULL) {\
+		(__scan)->predexp.entries =	(as_predexp_base**)alloca(__n * sizeof(as_predexp_base*));\
+		if ((__scan)->predexp.entries) {\
+			(__scan)->predexp.capacity = __n;\
+			(__scan)->predexp.size = 0;\
+			(__scan)->predexp._free = false;\
+		}\
+	}
+
+/** 
+ * This function is deprecated and will eventually be removed.
+ * Use as_policy_base filter_exp instead.
+ *
+ * Initializes `as_scan.predexp` with a capacity of `n` using `malloc()`.
+ *
+ * For stack allocation, use `as_scan_predexp_inita()`.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_scan_predexp_init(&scan, 3);
+ * as_scan_predexp_add(&scan, as_predexp_integer_value(90));
+ * as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
+ * as_scan_predexp_add(&scan, as_predexp_integer_greatereq());
+ * ~~~~~~~~~~
+ *
+ * @param scan	    The scan to initialize.
+ * @param n			The number of predicate expression slots to allocate.
+ *
+ * @return On success, the initialized. Otherwise an error occurred.
+ *
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+AS_EXTERN bool
+as_scan_predexp_init(as_scan* scan, uint16_t n);
+
+/**
+ * This function is deprecated and will eventually be removed.
+ * Use as_policy_base filter_exp instead.
+ *
+ * Adds predicate expressions to a scan.
+ *
+ * You have to ensure as_scan.predexp has sufficient capacity, prior to 
+ * adding a predexp. If capacity is sufficient then false is returned.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_scan_predexp_inita(&scan, 3);
+ * as_scan_predexp_add(&scan, as_predexp_integer_value(90));
+ * as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
+ * as_scan_predexp_add(&scan, as_predexp_integer_greatereq());
+ * ~~~~~~~~~~
+ *
+ * @param scan 			The scan to modify.
+ * @param predexp		Pointer to a constructed predicate expression.
+ *
+ * @return On success, true. Otherwise an error occurred.
+ *
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+AS_EXTERN bool
+as_scan_predexp_add(as_scan* scan, as_predexp_base * predexp);
 
 /******************************************************************************
  * MODIFIER FUNCTIONS

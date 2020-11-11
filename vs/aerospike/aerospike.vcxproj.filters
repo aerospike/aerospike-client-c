@@ -402,6 +402,9 @@
     <ClInclude Include="..\..\src\include\aerospike\as_exp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\aerospike\as_predexp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\main\aerospike\_bin.c">
@@ -756,6 +759,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_exp.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_predexp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

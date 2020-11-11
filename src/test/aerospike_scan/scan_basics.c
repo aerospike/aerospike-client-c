@@ -1197,6 +1197,163 @@ TEST(scan_filter_bin_exists, "scan filter bin exists")
 }
 
 /******************************************************************************
+ * PREDEXP TESTS
+ *****************************************************************************/
+
+TEST( scan_predexp_set1 , "scan "SET1" w/ 25 <= bin1 <= 33" ) {
+
+	scan_check check = {
+		.failed = false,
+		.set = SET1,
+		.count = 0,
+		.nobindata = false,
+		.bins = { "bin1", "bin2", "bin3", NULL },
+	};
+
+	as_error err;
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET1);
+
+	as_scan_predexp_inita(&scan, 7);
+	as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
+	as_scan_predexp_add(&scan, as_predexp_integer_value(25));
+	as_scan_predexp_add(&scan, as_predexp_integer_greatereq());
+	as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
+	as_scan_predexp_add(&scan, as_predexp_integer_value(33));
+	as_scan_predexp_add(&scan, as_predexp_integer_lesseq());
+	as_scan_predexp_add(&scan, as_predexp_and(2));
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
+
+	assert_int_eq( check.count, 9 );
+	info("Got %d records in the scan. Expected %d", check.count, 9);
+
+	as_scan_destroy(&scan);
+}
+
+TEST( scan_basics_background_delete_records_rec_predexp , "scan_basics_background_delete_records_rec_predexp" ) {
+
+	scan_check check = {
+		.failed = false,
+		.set = SET3,
+		.count = 0,
+		.nobindata = false,
+		.bins = { NULL } // look for all the bins
+	};
+
+	as_error err;
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET3);
+	as_scan_set_concurrent(&scan, true);
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
+
+	assert_int_eq( check.count, NUM_RECS_SET3 );
+	debug("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET3);
+
+	as_scan scan_del;
+	as_scan_init(&scan_del, NS, SET3);
+	as_scan_predexp_inita(&scan_del, 3);
+	as_scan_predexp_add(&scan_del, as_predexp_integer_bin("bin1"));
+	as_scan_predexp_add(&scan_del, as_predexp_integer_value(90));
+	as_scan_predexp_add(&scan_del, as_predexp_integer_greatereq());
+	as_scan_apply_each(&scan_del, "aerospike_scan_test", "scan_delete_rec", NULL);
+
+	uint64_t scanid = 0;
+	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan_del, &scanid);
+
+	assert_int_eq( udf_rc, AEROSPIKE_OK );
+
+	aerospike_scan_wait(as, &err, NULL, scanid, 0);
+
+	debug("Got done with deletion of some of the records in SET3. ");
+
+	as_scan scan2;
+	as_scan_init(&scan2, NS, SET3);
+	as_scan_set_concurrent(&scan2, true);
+	check.count = 0; // reset the param from previous call and re-use 
+
+	rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
+
+	debug("Got %d records in the scan after deletion ", check.count);
+	assert_int_eq( check.count, 90 );
+
+	as_scan_destroy(&scan);
+	as_scan_destroy(&scan_del);
+	as_scan_destroy(&scan2);
+}
+
+TEST( scan_basics_background_delete_records_md_predexp , "scan_basics_background_delete_records_md_predexp" ) {
+
+	scan_check check = {
+		.failed = false,
+		.set = SET4,
+		.count = 0,
+		.nobindata = false,
+		.bins = { NULL } // look for all the bins
+	};
+
+	as_error err;
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET4);
+	as_scan_set_concurrent(&scan, true);
+
+	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
+
+	assert_int_eq( check.count, NUM_RECS_SET4 );
+	debug("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET4);
+
+	as_scan scan_del;
+	as_scan_init(&scan_del, NS, SET4);
+	as_scan_predexp_inita(&scan_del, 3);
+	as_scan_predexp_add(&scan_del, as_predexp_integer_value(0));
+	as_scan_predexp_add(&scan_del, as_predexp_rec_void_time());
+	as_scan_predexp_add(&scan_del, as_predexp_integer_equal());
+	as_scan_apply_each(&scan_del, "aerospike_scan_test", "scan_delete_rec", NULL);
+
+	uint64_t scanid = 0;
+	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan_del, &scanid);
+
+	assert_int_eq( udf_rc, AEROSPIKE_OK );
+
+	aerospike_scan_wait(as, &err, NULL, scanid, 0);
+
+	debug("Got done with deletion of some of the records in SET4. ");
+
+	as_scan scan2;
+	as_scan_init(&scan2, NS, SET4);
+	as_scan_set_concurrent(&scan2, true);
+	check.count = 0; // reset the param from previous call and re-use 
+
+	rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
+	
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_false( check.failed );
+
+	debug("Got %d records in the scan after deletion ", check.count);
+	assert_int_eq( check.count, 70 );
+
+	as_scan_destroy(&scan);
+	as_scan_destroy(&scan_del);
+	as_scan_destroy(&scan2);
+}
+
+/******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
@@ -1251,6 +1408,7 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 	suite_add( scan_basics_null_set );
 	suite_add( scan_basics_set1 );
 	suite_add( scan_filter_set1 );
+	suite_add( scan_predexp_set1 );
 	suite_add( scan_basics_set1_concurrent );
 	suite_add( scan_basics_set1_select );
 	suite_add( scan_basics_set1_nodata );
@@ -1267,4 +1425,14 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 	suite_add( scan_filter_rec_str_key );
 	suite_add( scan_filter_rec_int_key );
 	suite_add( scan_filter_bin_exists );
+
+	/*
+	These old predexp tests run fine individually, but rely on records
+	that are deleted in "scan_basics_background_delete_records_rec_filter"
+	and "scan_basics_background_delete_records_md_filter" tests.  Comment
+	out and test manually when necessary.
+
+	suite_add( scan_basics_background_delete_records_rec_predexp );
+	suite_add( scan_basics_background_delete_records_md_predexp );
+	*/
 }

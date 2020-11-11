@@ -399,6 +399,7 @@ PLAN(aerospike_test)
 
 	// filter expressions
 	plan_add(filter_exp);
+	plan_add(predexp);
 
 	// aerospike_info module
 	plan_add(info_basics);

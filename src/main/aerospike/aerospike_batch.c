@@ -25,6 +25,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_predexp.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
@@ -319,6 +320,10 @@ as_batch_size_records(
 		*filter_size = (uint32_t)size;
 		*field_count_header = 2;
 	}
+	else if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, filter_size);
+		*field_count_header = 2;
+	}
 	else if (filter_field) {
 		// filter_field is only set on async batch retry with a filter expression.
 		// filter_size is already set in this case.
@@ -384,6 +389,9 @@ as_batch_index_records_write(
 
 	if (policy->base.filter_exp) {
 		p = as_exp_write(policy->base.filter_exp, p);
+	}
+	else if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, filter_size, p);
 	}
 	else if (filter_field) {
 		// filter_field is only set on async batch retry with filter expression.
@@ -604,10 +612,15 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 
 	// Estimate buffer size.
 	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 5;
+	uint32_t pred_size = 0;
 	uint16_t field_count_header = 1;
 
 	if (policy->base.filter_exp) {
 		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
+		field_count_header++;
+	}
+	else if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
 		field_count_header++;
 	}
 
@@ -661,6 +674,9 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 
 	if (policy->base.filter_exp) {
 		p = as_exp_write(policy->base.filter_exp, p);
+	}
+	else if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
 	}
 
 	uint8_t* field_size_ptr = p;

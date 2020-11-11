@@ -402,39 +402,27 @@ as_lookup_node(
 			end++;
 		}
 
-// No features to process since all old features are known to be supported
-// by required server 5.2.0.4+.
-#if 0
-		if (strcmp(begin, "geo") == 0) {
-			features |= AS_FEATURES_GEO;
-		}
-		else if (strcmp(begin, "pipelining") == 0) {
-			features |= AS_FEATURES_PIPELINING;
-		}
-		else if (strcmp(begin, "peers") == 0) {
-			features |= AS_FEATURES_PEERS;
-		}
-		else if (strcmp(begin, "replicas") == 0) {
-			features |= AS_FEATURES_REPLICAS;
-		}
-		else if (strcmp(begin, "cluster-stable") == 0) {
-			features |= AS_FEATURES_CLUSTER_STABLE;
-		}
-		else if (strcmp(begin, "lut-now") == 0) {
-			features |= AS_FEATURES_LUT_NOW;
-		}
-		else if (strcmp(begin, "truncate-namespace") == 0) {
-			features |= AS_FEATURES_TRUNCATE_NS;
-		}
-		else if (strcmp(begin, "blob-bits") == 0) {
-			features |= AS_FEATURES_BIT_OP;
-		}
-		else if (strcmp(begin, "pscans") == 0) {
+		if (strcmp(begin, "pscans") == 0) {
 			features |= AS_FEATURES_PARTITION_SCAN;
 		}
-#endif
+
 		begin = end;
 	}
+
+	// This client requires partition scan support. Partition scans were first
+	// supported in server version 4.9. Do not allow any server node into the
+	// cluster that is running server version < 4.9.
+	if ((features & AS_FEATURES_PARTITION_SCAN) == 0) {
+		char addr_name[AS_IP_ADDRESS_SIZE];
+		as_address_name((struct sockaddr*)&node_info->addr, addr_name, sizeof(addr_name));
+		as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Node %s %s version < 4.9. This client requires server version >= 4.9",
+			node_info->name, addr_name);
+		cf_free(response);
+		as_node_info_destroy(node_info);
+		return AEROSPIKE_ERR_CLIENT;
+	}
+
 	node_info->features = features;
 
 	// Process cluster name.

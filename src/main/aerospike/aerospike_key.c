@@ -30,6 +30,7 @@
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_predexp.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
@@ -170,6 +171,36 @@ as_event_command_init_read(
 	}
 }
 
+static inline uint32_t
+as_command_filter_size(const as_policy_base* policy, uint16_t* n_fields)
+{
+	if (policy->filter_exp) {
+		(*n_fields)++;
+		return AS_FIELD_HEADER_SIZE + policy->filter_exp->packed_sz;
+	}
+
+	if (policy->predexp) {
+		(*n_fields)++;
+		uint32_t tmp = 0;
+		return (uint32_t)as_predexp_list_size(policy->predexp, &tmp);
+	}
+	return 0;
+}
+
+static inline uint8_t*
+as_command_write_filter(const as_policy_base* policy, uint32_t filter_size, uint8_t* p)
+{
+	if (policy->filter_exp) {
+		return as_exp_write(policy->filter_exp, p);
+	}
+
+	if (policy->predexp) {
+		// filter_size includes header size, so subtract that out.
+		return as_predexp_list_write(policy->predexp, filter_size - AS_FIELD_HEADER_SIZE, p);
+	}
+	return p;
+}
+
 /******************************************************************************
  * GET
  *****************************************************************************/
@@ -193,11 +224,8 @@ aerospike_key_get(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		n_fields++;
-	}
+	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	size += filter_size;
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
@@ -205,11 +233,7 @@ aerospike_key_get(
 		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL);
 
 	p = as_command_write_key(p, policy->key, key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
-
+	p = as_command_write_filter(&policy->base, filter_size, p);
 	size = as_command_write_end(buf, p);
 
 	as_command_parse_result_data data;
@@ -247,11 +271,8 @@ aerospike_key_get_async(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		n_fields++;
-	}
+	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	size += filter_size;
 
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, ri.replica, pi.ns, pi.partition, policy->deserialize,
@@ -263,11 +284,7 @@ aerospike_key_get_async(
 		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL);
 
 	p = as_command_write_key(p, policy->key, key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
-
+	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 	return as_event_command_execute(cmd, err);
 }
@@ -296,11 +313,8 @@ aerospike_key_select(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		n_fields++;
-	}
+	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	size += filter_size;
 
 	int nvalues = 0;
 
@@ -318,10 +332,7 @@ aerospike_key_select(
 				policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ);
 
 	p = as_command_write_key(p, policy->key, key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
+	p = as_command_write_filter(&policy->base, filter_size, p);
 
 	for (int i = 0; i < nvalues; i++) {
 		p = as_command_write_bin_name(p, bins[i]);
@@ -362,11 +373,8 @@ aerospike_key_select_async(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		n_fields++;
-	}
+	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	size += filter_size;
 
 	int nvalues = 0;
 
@@ -388,10 +396,7 @@ aerospike_key_select_async(
 					policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ);
 
 	p = as_command_write_key(p, policy->key, key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
+	p = as_command_write_filter(&policy->base, filter_size, p);
 
 	for (int i = 0; i < nvalues; i++) {
 		p = as_command_write_bin_name(p, bins[i]);
@@ -423,22 +428,15 @@ aerospike_key_exists(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		n_fields++;
-	}
+	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	size += filter_size;
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_read_header(buf, &policy->base, policy->read_mode_ap,
 		policy->read_mode_sc, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 
 	p = as_command_write_key(p, policy->key, key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
-
+	p = as_command_write_filter(&policy->base, filter_size, p);
 	size = as_command_write_end(buf, p);
 
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
@@ -476,11 +474,8 @@ aerospike_key_exists_async(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		n_fields++;
-	}
+	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	size += filter_size;
 
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, ri.replica, pi.ns, pi.partition, false,
@@ -491,11 +486,7 @@ aerospike_key_exists_async(
 		policy->read_mode_sc, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 
 	p = as_command_write_key(p, policy->key, key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
-
+	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 	return as_event_command_execute(cmd, err);
 }
@@ -509,6 +500,7 @@ typedef struct as_put_s {
 	const as_key* key;
 	as_record* rec;
 	as_buffer* buffers;
+	uint32_t filter_size;
 	uint16_t n_fields;
 	uint16_t n_bins;
 } as_put;
@@ -529,10 +521,8 @@ as_put_init(
 	uint16_t n_bins = rec->bins.size;
 	put->n_bins = n_bins;
 
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		put->n_fields++;
-	}
+	put->filter_size = as_command_filter_size(&policy->base, &put->n_fields);
+	size += put->filter_size;
 
 	memset(put->buffers, 0, sizeof(as_buffer) * n_bins);
 
@@ -556,10 +546,7 @@ as_put_write(void* udata, uint8_t* buf)
 		policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 
 	p = as_command_write_key(p, policy->key, put->key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
+	p = as_command_write_filter(&policy->base, put->filter_size, p);
 
 	as_bin* bins = rec->bins.entries;
 	uint16_t n_bins = put->n_bins;
@@ -726,11 +713,8 @@ aerospike_key_remove(
 
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		n_fields++;
-	}
+	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	size += filter_size;
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
@@ -738,11 +722,7 @@ aerospike_key_remove(
 					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
 
 	p = as_command_write_key(p, policy->key, key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
-
+	p = as_command_write_filter(&policy->base, filter_size, p);
 	size = as_command_write_end(buf, p);
 
 	as_command cmd;
@@ -778,11 +758,8 @@ aerospike_key_remove_async_ex(
 	
 	uint16_t n_fields;
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
-
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		n_fields++;
-	}
+	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	size += filter_size;
 
 	as_event_command* cmd = as_async_write_command_create(
 		cluster, &policy->base, policy->replica, pi.ns, pi.partition, AS_ASYNC_FLAGS_MASTER,
@@ -793,11 +770,7 @@ aerospike_key_remove_async_ex(
 					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
 
 	p = as_command_write_key(p, policy->key, key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
-
+	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 
 	if (length != NULL) {
@@ -826,6 +799,7 @@ typedef struct as_operate_s {
 	const as_key* key;
 	const as_operations* ops;
 	as_buffer* buffers;
+	uint32_t filter_size;
 	uint16_t n_fields;
 	uint16_t n_operations;
 	uint8_t read_attr;
@@ -914,12 +888,8 @@ as_operate_init(
 							 &oper->read_attr, &oper->info_attr);
 
 	size += as_command_key_size(policy->key, key, &oper->n_fields);
-
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		oper->n_fields++;
-	}
-
+	oper->filter_size = as_command_filter_size(&policy->base, &oper->n_fields);
+	size += oper->filter_size;
 	return size;
 }
 
@@ -936,10 +906,7 @@ as_operate_write(void* udata, uint8_t* buf)
 		oper->info_attr);
 
 	p = as_command_write_key(p, policy->key, oper->key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
+	p = as_command_write_filter(&policy->base, oper->filter_size, p);
 
 	uint16_t n_operations = oper->n_operations;
 	as_buffer* buffers = oper->buffers;
@@ -1103,6 +1070,7 @@ typedef struct as_apply_s {
 	const char* function;
 	as_serializer ser;
 	as_buffer args;
+	uint32_t filter_size;
 	uint16_t n_fields;
 	uint8_t read_attr;
 } as_apply;
@@ -1121,10 +1089,8 @@ as_apply_init(
 
 	size_t size = as_command_key_size(policy->key, key, &ap->n_fields);
 
-	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		ap->n_fields++;
-	}
+	ap->filter_size = as_command_filter_size(&policy->base, &ap->n_fields);
+	size += ap->filter_size;
 
 	size += as_command_string_field_size(module);
 	size += as_command_string_field_size(function);
@@ -1150,11 +1116,7 @@ as_apply_write(void* udata, uint8_t* buf)
 		ap->read_attr, AS_MSG_INFO2_WRITE, 0);
 
 	p = as_command_write_key(p, policy->key, ap->key);
-
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
-	}
-
+	p = as_command_write_filter(&policy->base, ap->filter_size, p);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, ap->module);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, ap->function);
 	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &ap->args);

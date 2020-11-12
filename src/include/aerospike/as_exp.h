@@ -53,7 +53,6 @@
 #include <aerospike/as_map_operations.h>
 #include <aerospike/as_nil.h>
 #include <aerospike/as_std.h>
-#include <aerospike/as_msgpack.h>
 
 #ifdef __cplusplus
 extern "C" {

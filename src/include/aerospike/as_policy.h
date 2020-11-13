@@ -886,8 +886,8 @@ typedef struct as_policy_query_s {
 	as_policy_base base;
 
 	/**
-	 * Terminate query if cluster is in migration state.
-	 * Only used for server versions < 4.9.
+	 * Terminate query if cluster is in migration state. If query where clause not 
+	 * defined (scan), this field is ignored.
 	 *
 	 * Default: false
 	 */
@@ -921,8 +921,6 @@ typedef struct as_policy_scan_s {
 	 * may be less than max_records if node record counts are small and unbalanced across
 	 * nodes.
 	 *
-	 * This field is supported on server versions >= 4.9.
-	 *
 	 * Default: 0 (do not limit record count)
 	 */
 	uint64_t max_records;
@@ -936,10 +934,7 @@ typedef struct as_policy_scan_s {
 	uint32_t records_per_second;
 
 	/**
-	 * Terminate scan if cluster is in migration state.
-	 * Only used for server versions < 4.9.
-	 *
-	 * Default: false
+	 * This field is deprecated and will eventually be removed.
 	 */
 	bool fail_on_cluster_change;
 
@@ -1090,8 +1085,8 @@ as_policy_base_write_init(as_policy_base* p)
 /**
  * Initialize base defaults for scan/query.
  *
- * Set max_retries for scans and non-aggregation queries with a null filter
- * on server versions >= 4.9. All other queries are not retried.
+ * Set max_retries for scans and non-aggregation queries with a null filter.
+ * All other queries are not retried.
  *
  * The latest servers support retries on individual data partitions.
  * This feature is useful when a cluster is migrating and partition(s)

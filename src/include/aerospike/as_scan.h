@@ -332,7 +332,7 @@ typedef struct as_scan_predexp_s {
 typedef struct as_scan_s {
 
 	/**
-	 * Priority of scan. Only used on server versions < 4.9.
+	 * Priority of scan. Only used when "as_scan.percent" is defined.
 	 * This field is obsolete and will eventually be removed.
 	 *
 	 * Default value is AS_SCAN_PRIORITY_DEFAULT.
@@ -402,8 +402,7 @@ typedef struct as_scan_s {
 	/**
 	 * Percentage of the data to scan. Valid integer range is 1 to 100.
 	 *
-	 * This field is supported on server versions < 4.9.
-	 * Server versions >= 4.9 might allow scan percent, but not in conjunction with
+	 * Servers might allow scan percent, but not in conjunction with
 	 * "as_policy_scan.max_records". Scan percent is eventually slated for removal.
 	 *
 	 * Default value is AS_SCAN_PERCENT_DEFAULT.

@@ -49,6 +49,7 @@ static struct option long_options[] = {
 	{"threads",              required_argument, 0, 'z'},
 	{"throughput",           required_argument, 0, 'g'},
 	{"batchSize",            required_argument, 0, '0'},
+	{"compress",             no_argument,       0, '4'},
 	{"socketTimeout",        required_argument, 0, '1'},
 	{"readSocketTimeout",    required_argument, 0, '2'},
 	{"writeSocketTimeout",   required_argument, 0, '3'},
@@ -182,9 +183,14 @@ print_usage(const char* program)
 	blog_line("   Used in read/write mode only.");
 	blog_line("");
 
-	blog_line("--batchSize <size> # Default: 0");
+	blog_line("   --batchSize <size> # Default: 0");
 	blog_line("   Enable batch mode with number of records to process in each batch get call.");
 	blog_line("   Batch mode is valid only for RU (read update) workloads. Batch mode is disabled by default.");
+	blog_line("");
+
+	blog_line("   --compress");
+	blog_line("   Enable binary data compression through the aerospike client.");
+	blog_line("   Internally, this sets the compression policy to true.");
 	blog_line("");
 
 	blog_line("   --socketTimeout <ms> # Default: 30000");
@@ -415,6 +421,7 @@ print_args(arguments* args)
 	}
 
 	blog_line("batch size:             %d", args->batch_size);
+	blog_line("enable compression:     %s", boolstring(args->enable_compression));
 	blog_line("read socket timeout:    %d ms", args->read_socket_timeout);
 	blog_line("write socket timeout:   %d ms", args->write_socket_timeout);
 	blog_line("read total timeout:     %d ms", args->read_total_timeout);
@@ -735,6 +742,10 @@ set_args(int argc, char * const * argv, arguments* args)
 				args->batch_size = atoi(optarg);
 				break;
 
+			case '4':
+				args->enable_compression = true;
+				break;
+
 			case '1':
 				args->read_socket_timeout = atoi(optarg);
 				args->write_socket_timeout = args->read_socket_timeout;
@@ -960,6 +971,7 @@ main(int argc, char * const * argv)
 	args.threads = 16;
 	args.throughput = 0;
 	args.batch_size = 0;
+	args.enable_compression = false;
 	args.read_socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	args.write_socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	args.read_total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;

@@ -56,6 +56,7 @@ typedef struct arguments_t {
 	int threads;
 	int throughput;
 	int batch_size;
+	bool enable_compression;
 	int read_socket_timeout;
 	int write_socket_timeout;
 	int read_total_timeout;

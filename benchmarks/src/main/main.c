@@ -743,7 +743,7 @@ set_args(int argc, char * const * argv, arguments* args)
 				break;
 
 			case '1':
-                args->enable_compression = true;
+				args->enable_compression = true;
 				break;
 
 			case '2':

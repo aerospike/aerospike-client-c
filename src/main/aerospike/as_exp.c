@@ -374,10 +374,10 @@ as_exp_compile_b64(as_exp* exp)
 	}
 
 	uint32_t sz = cf_b64_encoded_len(exp->packed_sz);
-	char* b64 = cf_malloc(sz);
+	char* b64 = cf_malloc(sz + 1);
 
 	cf_b64_encode(exp->packed, exp->packed_sz, b64);
-
+	b64[sz] = 0;
 	return b64;
 }
 

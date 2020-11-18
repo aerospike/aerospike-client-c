@@ -346,7 +346,7 @@ aerospike_stop_on_interrupt(bool stop);
  *
  * @param as			Aerospike instance.
  * @param err			If an error occurs, the err will be populated.
- * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param policy		Info policy. If NULL, then the default policy will be used.
  * @param ns			Required namespace.
  * @param set			Optional set name.  Pass in NULL to delete all sets in namespace.
  * @param before_nanos	Optionally delete records before record last update time.
@@ -358,7 +358,10 @@ aerospike_stop_on_interrupt(bool stop);
  * @relates aerospike
  */
 AS_EXTERN as_status
-aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const char* ns, const char* set, uint64_t before_nanos);
+aerospike_truncate(
+	aerospike* as, as_error* err, as_policy_info* policy, const char* ns, const char* set,
+	uint64_t before_nanos
+	);
 
 /**
  * Refresh the current TLS configuration by reloading its certificate, key, and blacklist files.
@@ -372,6 +375,27 @@ aerospike_truncate(aerospike* as, as_error* err, as_policy_info* policy, const c
  */
 AS_EXTERN as_status
 aerospike_reload_tls_config(aerospike* as, as_error* err);
+
+/**
+ * Set XDR filter for given datacenter name and namespace. The expression filter indicates
+ * which records XDR should ship to the datacenter.
+ *
+ * @param as			Aerospike instance.
+ * @param err			If an error occurs, this will be populated.
+ * @param policy		Info policy. If NULL, then the default policy will be used.
+ * @param dc			Datacenter name.
+ * @param ns			Namespace.
+ * @param filter_b64	expression filter in base64 encoding. Use as_exp_build_b64() to create.
+ *
+ * @returns AEROSPIKE_OK on success. Otherwise an error occurred.
+ *
+ * @relates aerospike
+ */
+AS_EXTERN as_status
+aerospike_set_xdr_filter(
+	aerospike* as, as_error* err, as_policy_info* policy, const char* dc, const char* ns,
+	const char* filter_b64
+	);
 
 #ifdef __cplusplus
 } // end extern "C"

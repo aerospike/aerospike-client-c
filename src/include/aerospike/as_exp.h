@@ -170,8 +170,9 @@ typedef struct as_exp {
 
 AS_EXTERN as_exp* as_exp_compile(as_exp_entry* table, uint32_t n);
 AS_EXTERN char* as_exp_compile_b64(as_exp* exp);
-AS_EXTERN void as_exp_destroy(as_exp* p2);
-AS_EXTERN uint8_t* as_exp_write(as_exp* p2, uint8_t* ptr);
+AS_EXTERN void as_exp_destroy(as_exp* exp);
+AS_EXTERN void as_exp_destroy_b64(char* b64);
+AS_EXTERN uint8_t* as_exp_write(as_exp* exp, uint8_t* ptr);
 AS_EXTERN int64_t as_exp_get_ctx_type(const as_cdt_ctx* ctx, as_exp_type default_type);
 AS_EXTERN int64_t as_exp_get_list_type(as_exp_type default_type, as_list_return_type rtype, bool is_multi);
 AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype, bool is_multi);
@@ -2607,6 +2608,8 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * // a == 10
  * as_exp_build(expression,
  *     as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)));
+ * ...
+ * as_exp_destroy(expression);
  * ~~~~~~~~~~
  *
  * @param __name			Name of the variable to hold the expression
@@ -2621,6 +2624,14 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 
 /**
  * Declare and build an base64 packed expression variable.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a == 10
+ * as_exp_build_b64(expression,
+ *     as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)));
+ * ...
+ * as_exp_destroy_b64(expression);
+ * ~~~~~~~~~~
  *
  * @param __name			Name of the variable to hold the expression
  * @ingroup expression

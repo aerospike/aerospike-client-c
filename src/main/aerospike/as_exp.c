@@ -382,17 +382,23 @@ as_exp_compile_b64(as_exp* exp)
 }
 
 void
-as_exp_destroy(as_exp* p2)
+as_exp_destroy(as_exp* exp)
 {
-	cf_free(p2);
+	cf_free(exp);
+}
+
+void
+as_exp_destroy_b64(char* b64)
+{
+	cf_free(b64);
 }
 
 uint8_t*
-as_exp_write(as_exp* p2, uint8_t* ptr)
+as_exp_write(as_exp* exp, uint8_t* ptr)
 {
-	ptr = as_command_write_field_header(ptr, AS_FIELD_FILTER, p2->packed_sz);
-	memcpy(ptr, p2->packed, p2->packed_sz);
-	return ptr += p2->packed_sz;
+	ptr = as_command_write_field_header(ptr, AS_FIELD_FILTER, exp->packed_sz);
+	memcpy(ptr, exp->packed, exp->packed_sz);
+	return ptr += exp->packed_sz;
 }
 
 int64_t

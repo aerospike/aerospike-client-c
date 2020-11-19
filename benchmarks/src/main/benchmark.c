@@ -270,6 +270,7 @@ run_benchmark(arguments* args)
 	data.batch_size = args->batch_size;
 	data.read_pct = args->read_pct;
 	data.del_bin = args->del_bin;
+	data.compression_ratio = args->compression_ratio;
 	data.bintype = args->bintype;
 	data.binlen = args->binlen;
 	data.binlen_type = args->binlen_type;

@@ -28,6 +28,7 @@
 #include <aerospike/as_random.h>
 #include <aerospike/as_sleep.h>
 #include <citrusleaf/cf_clock.h>
+#include <assert.h>
 #include <stdlib.h>
 
 extern as_monitor monitor;
@@ -99,8 +100,22 @@ gen_value(arguments* args, as_val** valpp)
 		case 'B': {
 			// Generate byte array on heap.
 			int len = args->binlen;
-			uint8_t* buf = cf_malloc(len);
-			as_random_get_bytes(buf, len);
+			uint8_t * buf;
+
+			if (args->compression_ratio != 1.f) {
+				// if compression is enabled & the desired compression ratio is not
+				// 1, then only generate (compression_ratio * len) bytes of random
+				// data and pad the rest with 0
+				buf = cf_calloc(len, 1);
+				int compressed_len = (int) (len * args->compression_ratio);
+				assert(((unsigned) compressed_len) <= len);
+				as_random_get_bytes(buf, compressed_len);
+			}
+			else {
+				buf = cf_malloc(len);
+				as_random_get_bytes(buf, len);
+			}
+
 			*valpp = (as_val *) as_bytes_new_wrap(buf, len, true);
 			break;
 		}
@@ -264,7 +279,21 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 							  // Generate byte array in thread local buffer.
 							  uint8_t* buf = tdata->buffer;
 							  int len = cdata->binlen;
-							  as_random_next_bytes(tdata->random, buf, len);
+
+							  if (cdata->compression_ratio != 1.f) {
+								  // if compression is enabled & the desired compression ratio is not
+								  // 1, then only generate (compression_ratio * len) bytes of random
+								  // data and pad the rest with 0
+								  int compressed_len = (int) (len * cdata->compression_ratio);
+								  // sanity check, bad things would happen if this were false
+								  assert(((unsigned) compressed_len) <= len);
+								  as_random_next_bytes(tdata->random, buf, compressed_len);
+								  memset(buf + compressed_len, 0, len - compressed_len);
+							  }
+							  else {
+								  as_random_next_bytes(tdata->random, buf, len);
+							  }
+
 							  as_bytes_init_wrap((as_bytes*)&bin->value, buf, len, false);
 							  bin->valuep = &bin->value;
 							  break;

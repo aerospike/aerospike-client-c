@@ -50,6 +50,7 @@ static struct option long_options[] = {
 	{"throughput",           required_argument, 0, 'g'},
 	{"batchSize",            required_argument, 0, '0'},
 	{"compress",             no_argument,       0, '4'},
+	{"compressionRatio",     required_argument, 0, '5'},
 	{"socketTimeout",        required_argument, 0, '1'},
 	{"readSocketTimeout",    required_argument, 0, '2'},
 	{"writeSocketTimeout",   required_argument, 0, '3'},
@@ -191,6 +192,11 @@ print_usage(const char* program)
 	blog_line("   --compress");
 	blog_line("   Enable binary data compression through the aerospike client.");
 	blog_line("   Internally, this sets the compression policy to true.");
+	blog_line("");
+
+	blog_line("   --compressionRatio <ratio> # Default: 1");
+	blog_line("   Sets the desired compression ratio for binary data.");
+	blog_line("   Causes the benchmark tool to generate data which will roughly compress by this proportion.");
 	blog_line("");
 
 	blog_line("   --socketTimeout <ms> # Default: 30000");
@@ -422,6 +428,7 @@ print_args(arguments* args)
 
 	blog_line("batch size:             %d", args->batch_size);
 	blog_line("enable compression:     %s", boolstring(args->enable_compression));
+	blog_line("compression ratio:      %f", args->compression_ratio);
 	blog_line("read socket timeout:    %d ms", args->read_socket_timeout);
 	blog_line("write socket timeout:   %d ms", args->write_socket_timeout);
 	blog_line("read total timeout:     %d ms", args->read_total_timeout);
@@ -567,6 +574,16 @@ validate_args(arguments* args)
 	
 	if (args->threads <= 0 || args->threads > 10000) {
 		blog_line("Invalid number of threads: %d  Valid values: [1-10000]", args->threads);
+		return 1;
+	}
+
+	if (!args->enable_compression && args->compression_ratio != 1.f) {
+		blog_line("Compression ratio specified without enabling compression, add the --compress option when running");
+		return 1;
+	}
+
+	if (args->compression_ratio < 0.001 || args->compression_ratio > 1) {
+		blog_line("Compression ratio must be in the range [0.001, 1]\n");
 		return 1;
 	}
 
@@ -744,6 +761,10 @@ set_args(int argc, char * const * argv, arguments* args)
 
 			case '4':
 				args->enable_compression = true;
+				break;
+
+			case '5':
+				args->compression_ratio = (float) atof(optarg);
 				break;
 
 			case '1':
@@ -972,6 +993,7 @@ main(int argc, char * const * argv)
 	args.throughput = 0;
 	args.batch_size = 0;
 	args.enable_compression = false;
+	args.compression_ratio = 1.f;
 	args.read_socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	args.write_socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	args.read_total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;

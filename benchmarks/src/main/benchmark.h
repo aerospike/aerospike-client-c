@@ -57,6 +57,7 @@ typedef struct arguments_t {
 	int throughput;
 	int batch_size;
 	bool enable_compression;
+	float compression_ratio;
 	int read_socket_timeout;
 	int write_socket_timeout;
 	int read_total_timeout;
@@ -117,6 +118,7 @@ typedef struct clientdata_t {
 	int numbins;
 	len_type binlen_type;
 	
+	float compression_ratio;
 	char bintype;
 	bool del_bin;
 	bool random;

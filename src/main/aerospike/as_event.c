@@ -1044,9 +1044,8 @@ as_event_executor_cancel(as_event_executor* executor, uint32_t queued_count)
 }
 
 void
-as_event_executor_complete(as_event_command* cmd)
+as_event_executor_complete(as_event_executor* executor)
 {
-	as_event_executor* executor = cmd->udata;
 	pthread_mutex_lock(&executor->lock);
 	executor->count++;
 	uint32_t next = executor->count + executor->max_concurrent - 1;
@@ -1079,7 +1078,6 @@ as_event_executor_complete(as_event_command* cmd)
 			}
 		}
 	}
-	as_event_command_release(cmd);
 }
 
 void
@@ -1090,18 +1088,29 @@ as_event_query_complete(as_event_command* cmd)
 	as_event_executor* executor = cmd->udata;
 
 	if (executor->cluster_key) {
-		// Verify migrations did not occur during scan/query.
-		as_query_validate_end_async(cmd);
-		return;
+		// Verify migrations did not occur during query.
+		as_event_loop* event_loop = cmd->event_loop;
+		as_node* node = cmd->node;
+
+		// Reserve node again because the node will be released in as_event_command_release().
+		// Node must be available for as_query_validate_end_async().
+		as_node_reserve(node);
+		as_event_command_release(cmd);
+		as_query_validate_end_async(executor, node, event_loop);
 	}
-	as_event_executor_complete(cmd);
+	else {
+		as_event_command_release(cmd);
+		as_event_executor_complete(executor);
+	}
 }
 
 void
 as_event_batch_complete(as_event_command* cmd)
 {
+	as_event_executor* executor = cmd->udata;
 	as_event_response_complete(cmd);
-	as_event_executor_complete(cmd);
+	as_event_command_release(cmd);
+	as_event_executor_complete(executor);
 }
 
 bool
@@ -1111,7 +1120,9 @@ void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
 	if (cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION && as_partition_tracker_should_retry(err->code)) {
-		as_event_executor_complete(cmd);
+		as_event_executor* executor = cmd->udata;
+		as_event_command_release(cmd);
+		as_event_executor_complete(executor);
 		return;
 	}
 	as_event_notify_error(cmd, err);

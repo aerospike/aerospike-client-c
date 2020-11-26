@@ -108,7 +108,7 @@ gen_value(arguments* args, as_val** valpp)
 				// data and pad the rest with 0
 				buf = cf_calloc(len, 1);
 				int compressed_len = (int) (len * args->compression_ratio);
-				assert(((unsigned) compressed_len) <= len);
+				assert(compressed_len <= len);
 				as_random_get_bytes(buf, compressed_len);
 			}
 			else {
@@ -286,7 +286,7 @@ init_write_record(clientdata* cdata, threaddata* tdata)
 								  // data and pad the rest with 0
 								  int compressed_len = (int) (len * cdata->compression_ratio);
 								  // sanity check, bad things would happen if this were false
-								  assert(((unsigned) compressed_len) <= len);
+								  assert(compressed_len <= len);
 								  as_random_next_bytes(tdata->random, buf, compressed_len);
 								  memset(buf + compressed_len, 0, len - compressed_len);
 							  }

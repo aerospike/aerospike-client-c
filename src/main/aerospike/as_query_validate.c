@@ -141,12 +141,10 @@ as_validate_next_listener(as_error* err, char* response, void* udata, as_event_l
 static void
 as_validate_end_listener(as_error* err, char* response, void* udata, as_event_loop* event_loop)
 {
-	as_event_command* cmd = udata;
-	as_event_executor* executor = cmd->udata;
+	as_event_executor* executor = udata;
 
 	if (err) {
 		as_event_executor_error(executor, err, 1);
-		as_event_command_release(cmd);
 		return;
 	}
 
@@ -156,7 +154,6 @@ as_validate_end_listener(as_error* err, char* response, void* udata, as_event_lo
 		as_error e;
 		as_parse_error(&e, response);
 		as_event_executor_error(executor, &e, 1);
-		as_event_command_release(cmd);
 		return;
 	}
 
@@ -164,11 +161,10 @@ as_validate_end_listener(as_error* err, char* response, void* udata, as_event_lo
 		as_error e;
 		as_cluster_key_error(&e, executor->cluster_key, cluster_key);
 		as_event_executor_error(executor, &e, 1);
-		as_event_command_release(cmd);
 		return;
 	}
 
-	as_event_executor_complete(cmd);
+	as_event_executor_complete(executor);
 }
 
 /******************************************************************************
@@ -283,25 +279,21 @@ as_query_validate_next_async(as_event_executor* executor, uint32_t index)
 }
 
 void
-as_query_validate_end_async(as_event_command* cmd)
+as_query_validate_end_async(as_event_executor* executor, as_node* node, as_event_loop* event_loop)
 {
 	as_error err;
 	as_policy_info policy;
 	as_policy_info_init(&policy);
 
 	char info_cmd[256];
-	as_event_executor* executor = cmd->udata;
 	as_write_cluster_stable(info_cmd, sizeof(info_cmd), executor->ns);
 
-	// Reserve node again because the node will be released at end of async info processing.
-	// Node must be available for query completion.
-	as_node_reserve(cmd->node);
-
-	as_status status = as_info_command_node_async(NULL, &err, &policy, cmd->node, info_cmd,
-									  as_validate_end_listener, cmd, cmd->event_loop);
+	// node will be released at end of async info processing. This is okay because the
+	// node is not referenced after this async info command is complete.
+	as_status status = as_info_command_node_async(NULL, &err, &policy, node, info_cmd,
+									  as_validate_end_listener, executor, event_loop);
 
 	if (status != AEROSPIKE_OK) {
 		as_event_executor_error(executor, &err, 1);
-		as_event_command_release(cmd);
 	}
 }

@@ -277,7 +277,11 @@ as_socket_validate_fd(as_socket_fd fd)
 {
 #if !defined(_MSC_VER)
 	uint8_t buf[8];
+#if defined(__linux__) 
 	ssize_t rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT | MSG_NOSIGNAL);
+#else
+	ssize_t rv = recv(fd, (void*)buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+#endif
 
 	if (rv < 0) {
 		// Return zero if valid and no data available.

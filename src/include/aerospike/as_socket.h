@@ -39,7 +39,6 @@
 
 #if defined(__APPLE__)
 #define SOL_TCP IPPROTO_TCP
-#define MSG_NOSIGNAL 0
 #endif
 
 #else // _MSC_VER

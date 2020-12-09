@@ -261,6 +261,11 @@ typedef enum as_status_e {
 	AEROSPIKE_FILTERED_OUT = 27,
 
 	/**
+	 * Write command loses conflict to XDR.
+	 */
+	AEROSPIKE_LOST_CONFLICT = 28,
+
+	/**
 	 * There are no more records left for query.
 	 */
 	AEROSPIKE_QUERY_END = 50,

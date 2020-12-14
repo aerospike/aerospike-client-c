@@ -175,9 +175,6 @@ typedef struct as_scan_bins_s {
 } as_scan_bins;
 
 /**
- * This structure is deprecated and will eventually be removed.
- * Use as_policy_base filter_exp instead.
- *
  * Sequence of predicate expressions to be applied to a scan.
  *
  * Entries can either be initialized on the stack or on the heap.
@@ -185,6 +182,8 @@ typedef struct as_scan_bins_s {
  * Initialization should be performed via a scan object, using:
  * -	as_scan_predexp_init()
  * -	as_scan_predexp_inita()
+ *
+ * @deprecated Use as_policy_base filter_exp instead.
  */
 typedef struct as_scan_predexp_s {
 
@@ -370,9 +369,6 @@ typedef struct as_scan_s {
 	as_scan_bins select;
 
 	/**
-	 * This field is deprecated and will eventually be removed.
-	 * Use as_policy_base filter_exp instead.
-	 *
 	 * This field is mutually exclusive with as_policy_base predexp and filter_exp.
 	 * If all are defined, this field will be used and the others will be ignored.
 	 *
@@ -383,6 +379,8 @@ typedef struct as_scan_s {
 	 * - as_query_predexp_inita() -	To initialize on the stack.
 	 *
 	 * Use as_query_predexp() to populate.
+	 *
+	 * @deprecated Use as_policy_base filter_exp instead.
 	 */
 	as_scan_predexp predexp;
 
@@ -582,9 +580,6 @@ as_scan_select(as_scan* scan, const char * bin);
  *****************************************************************************/
 
 /** 
- * This function is deprecated and will eventually be removed.
- * Use as_policy_base filter_exp instead.
- *
  * Initializes `as_scan.predexp` with a capacity of `n` using `alloca`
  *
  * For heap allocation, use `as_scan_predexp_init()`.
@@ -595,7 +590,9 @@ as_scan_select(as_scan* scan, const char * bin);
  * as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
  * as_scan_predexp_add(&scan, as_predexp_integer_greatereq());
  * ~~~~~~~~~~
- * 
+ *
+ * @deprecated Use as_policy_base filter_exp instead.
+ *
  * @param __scan	The scan to initialize.
  * @param __n		The number of predicate expression slots to allocate.
  *
@@ -613,9 +610,6 @@ as_scan_select(as_scan* scan, const char * bin);
 	}
 
 /** 
- * This function is deprecated and will eventually be removed.
- * Use as_policy_base filter_exp instead.
- *
  * Initializes `as_scan.predexp` with a capacity of `n` using `malloc()`.
  *
  * For stack allocation, use `as_scan_predexp_inita()`.
@@ -626,6 +620,8 @@ as_scan_select(as_scan* scan, const char * bin);
  * as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
  * as_scan_predexp_add(&scan, as_predexp_integer_greatereq());
  * ~~~~~~~~~~
+ *
+ * @deprecated Use as_policy_base filter_exp instead.
  *
  * @param scan	    The scan to initialize.
  * @param n			The number of predicate expression slots to allocate.
@@ -639,9 +635,6 @@ AS_EXTERN bool
 as_scan_predexp_init(as_scan* scan, uint16_t n);
 
 /**
- * This function is deprecated and will eventually be removed.
- * Use as_policy_base filter_exp instead.
- *
  * Adds predicate expressions to a scan.
  *
  * You have to ensure as_scan.predexp has sufficient capacity, prior to 
@@ -653,6 +646,8 @@ as_scan_predexp_init(as_scan* scan, uint16_t n);
  * as_scan_predexp_add(&scan, as_predexp_integer_bin("bin1"));
  * as_scan_predexp_add(&scan, as_predexp_integer_greatereq());
  * ~~~~~~~~~~
+ *
+ * @deprecated Use as_policy_base filter_exp instead.
  *
  * @param scan 			The scan to modify.
  * @param predexp		Pointer to a constructed predicate expression.

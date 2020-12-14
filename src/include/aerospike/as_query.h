@@ -299,9 +299,6 @@ typedef struct as_query_predicates_s {
 } as_query_predicates;
 
 /**
- * This structure is deprecated and will eventually be removed.
- * Use as_policy_base filter_exp instead.
- *
  * Sequence of predicate expressions to be applied to a query.
  *
  * Entries can either be initialized on the stack or on the heap.
@@ -309,6 +306,8 @@ typedef struct as_query_predicates_s {
  * Initialization should be performed via a query object, using:
  * - as_query_predexp_init()
  * - as_query_predexp_inita()
+ *
+ * @deprecated Use as_policy_base filter_exp instead.
  */
 typedef struct as_query_predexp_s {
 
@@ -491,9 +490,6 @@ typedef struct as_query_s {
 	as_query_predicates where;
 
 	/**
-	 * This field is deprecated and will eventually be removed.
-	 * Use as_policy_base filter_exp instead.
-	 *
 	 * This field is mutually exclusive with as_policy_base predexp and filter_exp.
 	 * If all are defined, this field will be used and the others will be ignored.
 	 *
@@ -504,6 +500,8 @@ typedef struct as_query_s {
 	 * - as_query_predexp_inita() -	To initialize on the stack.
 	 *
 	 * Use as_query_predexp() to populate.
+	 *
+	 * @deprecated Use as_policy_base filter_exp instead.
 	 */
 	as_query_predexp predexp;
 
@@ -751,9 +749,6 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
  *****************************************************************************/
 
  /**
-  * This macro is deprecated and will eventually be removed.
-  * Use as_policy_base filter_exp instead.
-  *
   * Initializes `as_query.predexp` with a capacity of `n` using `alloca`
   *
   * For heap allocation, use `as_query_predexp_init()`.
@@ -764,6 +759,8 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
   * as_query_predexp_add(&query, as_predexp_string_bin("fruit"));
   * as_query_predexp_add(&query, as_predexp_string_equal());
   * ~~~~~~~~~~
+  *
+  * @deprecated Use as_policy_base filter_exp instead.
   *
   * @param __query	The query to initialize.
   * @param __n		The number of predicate expression slots to allocate.
@@ -782,9 +779,6 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
 	}
 
 /** 
- * This function is deprecated and will eventually be removed.
- * Use as_policy_base filter_exp instead.
- *
  * Initializes `as_query.predexp` with a capacity of `n` using `malloc()`.
  * 
  * For stack allocation, use `as_query_predexp_inita()`.
@@ -795,6 +789,8 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
  * as_query_predexp_add(&query, as_predexp_string_bin("fruit"));
  * as_query_predexp_add(&query, as_predexp_string_equal());
  * ~~~~~~~~~~
+ *
+ * @deprecated Use as_policy_base filter_exp instead.
  *
  * @param query	The query to initialize.
  * @param n		The number of predicate expression slots to allocate.
@@ -808,9 +804,6 @@ AS_EXTERN bool
 as_query_predexp_init(as_query* query, uint16_t n);
 
 /**
- * This function is deprecated and will eventually be removed.
- * Use as_policy_base filter_exp instead.
- *
  * Adds predicate expressions to a query.
  *
  * You have to ensure as_query.predexp has sufficient capacity, prior to 
@@ -822,6 +815,8 @@ as_query_predexp_init(as_query* query, uint16_t n);
  * as_query_predexp_add(&query, as_predexp_string_bin("fruit"));
  * as_query_predexp_add(&query, as_predexp_string_equal());
  * ~~~~~~~~~~
+ *
+ * @deprecated Use as_policy_base filter_exp instead.
  *
  * @param query 		The query to modify.
  * @param predexp		Pointer to a constructed predicate expression.

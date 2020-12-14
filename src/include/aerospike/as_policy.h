@@ -462,9 +462,6 @@ typedef struct as_policy_base_s {
 	uint32_t sleep_between_retries;
 
 	/**
-	 * This field is deprecated and will eventually be removed.
-	 * Use filter_exp instead.
-	 *
 	 * Optional predicate expression filter list in postfix notation. If the predicate
 	 * expression exists and evaluates to false on the server, the transaction is ignored.
 	 * This can be used to eliminate a client/server roundtrip in some cases.
@@ -479,6 +476,8 @@ typedef struct as_policy_base_s {
 	 * will be ignored.
 	 *
 	 * Default: NULL
+	 *
+	 * @deprecated Use filter_exp instead.
 	 */
 	struct as_predexp_list* predexp;
 
@@ -934,7 +933,7 @@ typedef struct as_policy_scan_s {
 	uint32_t records_per_second;
 
 	/**
-	 * This field is deprecated and will eventually be removed.
+	 * @deprecated This field is deprecated and will eventually be removed.
 	 */
 	bool fail_on_cluster_change;
 

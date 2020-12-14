@@ -414,6 +414,8 @@ as_operations_map_increment(
  * See `as_map_policy` and `as_map_write_mode`.
  *
  * This function takes ownership and frees heap memory associated with key/value parameters.
+ *
+ * @deprecated Use as_operations_map_increment() with negative value instead.
  * @ingroup map_operations
  */
 AS_EXTERN bool

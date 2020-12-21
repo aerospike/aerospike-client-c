@@ -130,6 +130,13 @@ as_partition_info_init(
 	const struct as_key_s* key
 	);
 
+/**
+ * @private
+ * Log all partition maps in the cluster.
+ */
+void
+as_partition_tables_dump(struct as_cluster_s* cluster);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

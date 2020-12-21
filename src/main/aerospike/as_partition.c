@@ -547,3 +547,25 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 	}
 	return true;
 }
+
+void
+as_partition_tables_dump(as_cluster* cluster)
+{
+	as_partition_tables* tables = &cluster->partition_tables;
+
+	for (uint32_t i = 0; i < tables->size; i++) {
+		as_partition_table* pt = tables->tables[i];
+
+		as_log_info("Partitions %s,%s", pt->ns, pt->sc_mode? "true" : "false");
+
+		for (uint32_t j = 0; j < pt->size; j++) {
+			as_partition* p = &pt->partitions[j];
+			as_node* master = (as_node*)as_load_ptr(&p->master);
+			as_node* prole = (as_node*)as_load_ptr(&p->prole);
+			const char* mstr = master ? as_node_get_address_string(master) : "null";
+			const char* pstr = prole ? as_node_get_address_string(prole) : "null";
+
+			as_log_info("%s[%u] %u,%s,%s", pt->ns, j, p->regime, mstr, pstr);
+		}
+	}
+}

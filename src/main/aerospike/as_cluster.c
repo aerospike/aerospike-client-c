@@ -568,6 +568,20 @@ as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
 	as_vector_clear(vector);
 }
 
+static void
+as_cluster_node_failure(as_cluster* cluster, as_node* node)
+{
+	// Reset all generations so quick server node restart forces
+	// all peers, partitions and racks to be refreshed.
+	node->peers_generation = 0xFFFFFFFF;
+	node->partition_generation = 0xFFFFFFFF;
+
+	if (cluster->rack_aware) {
+		node->rebalance_generation = 0xFFFFFFFF;
+	}
+	node->failures++;
+}
+
 /**
  * Check health of all nodes in the cluster.
  */
@@ -637,17 +651,8 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 					// Use info level so aql doesn't see message by default.
 					as_log_info("Node %s refresh failed: %s %s",
 						node->name, as_error_string(status), error_local.message);
-
 					peers.gen_changed = true;
-					node->peers_generation = 0xFFFFFFFF;
-					node->partition_changed = true;
-					node->partition_generation = 0xFFFFFFFF;
-
-					if (cluster->rack_aware) {
-						node->rebalance_changed = true;
-						node->rebalance_generation = 0xFFFFFFFF;
-					}
-					node->failures++;
+					as_cluster_node_failure(cluster, node);
 				}
 			}
 		}
@@ -667,9 +672,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 					if (status != AEROSPIKE_OK) {
 						as_log_warn("Node %s peers refresh failed: %s %s",
 							node->name, as_error_string(status), error_local.message);
-
-						node->peers_generation = 0xFFFFFFFF;
-						node->failures++;
+						as_cluster_node_failure(cluster, node);
 					}
 				}
 			}
@@ -690,8 +693,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 			if (status != AEROSPIKE_OK) {
 				as_log_warn("Node %s partition refresh failed: %s %s",
 							node->name, as_error_string(status), error_local.message);
-				node->partition_generation = 0xFFFFFFFF;
-				node->failures++;
+				as_cluster_node_failure(cluster, node);
 			}
 		}
 
@@ -706,8 +708,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 			else {
 				as_log_warn("Node %s rack refresh failed: %s %s",
 							node->name, as_error_string(status), error_local.message);
-				node->rebalance_generation = 0xFFFFFFFF;
-				node->failures++;
+				as_cluster_node_failure(cluster, node);
 			}
 		}
 	}

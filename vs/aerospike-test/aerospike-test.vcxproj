@@ -258,6 +258,7 @@
     <ClCompile Include="..\..\src\test\aerospike_map\map_basics.c" />
     <ClCompile Include="..\..\src\test\aerospike_map\map_basics_async.c" />
     <ClCompile Include="..\..\src\test\aerospike_map\map_index.c" />
+    <ClCompile Include="..\..\src\test\aerospike_map\map_sort.c" />
     <ClCompile Include="..\..\src\test\aerospike_map\map_udf.c" />
     <ClCompile Include="..\..\src\test\aerospike_query\query_async.c" />
     <ClCompile Include="..\..\src\test\aerospike_query\query_background.c" />

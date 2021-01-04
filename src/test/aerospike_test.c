@@ -394,6 +394,7 @@ PLAN(aerospike_test)
 	plan_add(map_basics);
 	plan_add(map_udf);
 	plan_add(map_index);
+	plan_add(map_sort);
 	plan_add(bit);
 	plan_add(hll);
 

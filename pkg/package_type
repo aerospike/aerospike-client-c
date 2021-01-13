@@ -127,6 +127,12 @@ ma)
   CreatePackage usr/local usr/local
   if [ "$signPackage" = "-sign" ]
   then
+    if [ "$pkgType" = "devel" ]
+    then
+      codesign --force --sign "Developer ID Application: Aerospike, Inc." $buildDir/usr/local/lib/libaerospike.a
+    else
+      codesign --force --sign "Developer ID Application: Aerospike, Inc." $buildDir/usr/local/lib/libaerospike.dylib
+    fi
     pkgbuild --identifier com.aerospike.client.c$eventId$idSuffix.$rev --root $buildDir $targetDir/unsigned.pkg
     productsign --sign "Developer ID Installer: Aerospike, Inc." $targetDir/unsigned.pkg $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.pkg
     rm $targetDir/unsigned.pkg

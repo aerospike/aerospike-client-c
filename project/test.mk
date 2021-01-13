@@ -35,6 +35,11 @@ TEST_LDFLAGS = -L/usr/local/lib $(EXT_LDFLAGS) -lssl -lcrypto $(LIB_LUA) -lpthre
 
 ifeq ($(OS),Darwin)
   TEST_LDFLAGS += -L/usr/local/opt/openssl/lib
+
+  ifeq ($(EVENT_LIB),libevent)
+    TEST_LDFLAGS += -L/usr/local/opt/libevent/lib
+  endif
+
   ifeq ($(USE_LUAJIT),1)
     TEST_LDFLAGS += -pagezero_size 10000 -image_base 100000000
   endif

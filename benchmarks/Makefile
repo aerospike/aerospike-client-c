@@ -42,6 +42,10 @@ LDFLAGS = -L/usr/local/lib
 
 ifeq ($(OS),Darwin)
   LDFLAGS += -L/usr/local/opt/openssl/lib
+  
+  ifeq ($(EVENT_LIB),libevent)
+    TEST_LDFLAGS += -L/usr/local/opt/libevent/lib
+  endif
 endif
 
 ifeq ($(EVENT_LIB),libev)

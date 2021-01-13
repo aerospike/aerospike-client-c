@@ -60,6 +60,13 @@ endif
 ifeq ($(OS),Darwin)
   CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT -I/usr/local/include
 
+  ifeq ($(EVENT_LIB),libevent)
+  	# homebrew libevent include path
+    ifneq ($(wildcard /usr/local/opt/libevent/include),)
+      CC_FLAGS += -I/usr/local/opt/libevent/include
+    endif
+  endif
+
   # homebrew openssl include path
   ifneq ($(wildcard /usr/local/opt/openssl/include),)
     CC_FLAGS += -I/usr/local/opt/openssl/include

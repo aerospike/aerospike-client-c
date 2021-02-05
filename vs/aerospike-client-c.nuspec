@@ -2,7 +2,7 @@
 <package>
   <metadata>
     <id>aerospike-client-c</id>
-    <version>5.0.3</version>
+    <version>5.1.0</version>
     <title>Aerospike C Client</title>
     <authors>Aerospike</authors>
     <owners>Aerospike</owners>

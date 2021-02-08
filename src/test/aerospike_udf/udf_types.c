@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -18,6 +18,7 @@
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_arraylist.h>
+#include <aerospike/as_boolean.h>
 #include <aerospike/as_double.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_hashmap.h>
@@ -315,7 +316,7 @@ TEST(udf_types_bytes, "udf_types.get_bytes() returns 'zyx' (as_bytes)") {
 	as_key_destroy(&key);
 }
 
-TEST(udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i: 123, s: 'abc', l: [1,2,3], b: 'zyx' (as_bytes)} (as_map)") {
+TEST(udf_types_rec_map, "udf_types.get_rec_map() returns {t: true, f: false, n: nil, i: 123, s: 'abc', l: [1,2,3], b: 'zyx' (as_bytes)} (as_map)") {
 
 	as_error err;
 
@@ -334,8 +335,16 @@ TEST(udf_types_rec_map, "udf_types.get_rec_map() returns {t:1, f: 0, n: nil, i: 
 	uint32_t non_nil_count = 0;
 	as_map_foreach(mval, udf_types_map_notnil_foreach, &non_nil_count);
 	assert_int_eq(non_nil_count, 6);
-	assert_int_eq(as_stringmap_get_int64(mval,"t"), 1);
-	assert_int_eq(as_stringmap_get_int64(mval,"f"), 0);
+
+	as_val* v = as_stringmap_get(mval, "t");
+	assert_int_eq(v->type, AS_BOOLEAN);
+	as_boolean* b = (as_boolean*)v;
+	assert_true(b->value);
+
+	v = as_stringmap_get(mval, "f");
+	assert_int_eq(v->type, AS_BOOLEAN);
+	b = (as_boolean*)v;
+	assert_false(b->value);
 
 	as_map_foreach(mval, udf_types_map_foreach, NULL);
 

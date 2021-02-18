@@ -206,7 +206,7 @@ as_partition_tracker_assign(
 
 				if (! node) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-										   "Node not found for partition %s", ps->part_id);
+										   "Node not found for partition %d", ps->part_id);
 				}
 
 				// Use node name to check for single node equality because
@@ -239,14 +239,14 @@ as_partition_tracker_assign(
 				// node index zero indicates unset.
 				if (master == 0) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-										   "Node not found for partition %s", ps->part_id);
+										   "Node not found for partition %d", ps->part_id);
 				}
 
 				as_node* node = (as_node*)as_load_ptr(&local_nodes[master-1]);
 
 				if (! node) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-										   "Node not found for partition %s", ps->part_id);
+										   "Node not found for partition %d", ps->part_id);
 				}
 
 				// Use node name to check for single node equality because

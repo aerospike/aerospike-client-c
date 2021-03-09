@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -758,7 +758,33 @@ TEST( key_basics_storekey , "store key" ) {
 	assert_int_eq( myresult, 0 );
 
 	as_scan_destroy(&scan);
+}
 
+TEST(key_basics_bool, "bool")
+{
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "pgb");
+
+	as_record rec;
+	as_record_init(&rec, 2);
+	as_record_set_int64(&rec, "c", 0);
+	as_record_set_int64(&rec, "d", 1);
+
+	as_status rc = aerospike_key_put(as, &err, NULL, &key, &rec);
+    assert_int_eq(rc, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* prec = NULL;
+	rc = aerospike_key_get(as, &err, NULL, &key, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_int_eq(as_record_get_int64(prec, "c", -1), 0);
+	assert_int_eq(as_record_get_int64(prec, "d", -1), 1);
+
+	as_key_destroy(&key);
+	as_record_destroy(prec);
 }
 
 /******************************************************************************
@@ -787,6 +813,7 @@ SUITE(key_basics, "aerospike_key basic tests") {
 	suite_add(key_basics_read_raw_list);
 	suite_add(key_basics_list_map_double);
 	suite_add(key_basics_storekey);
+	suite_add(key_basics_bool);
 
 	if (g_enterprise_server) {
 		suite_add(key_basics_compression);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1013,6 +1013,11 @@ as_command_parse_value(uint8_t* p, uint8_t type, uint32_t value_size, as_val** v
 			*value = (as_val*)&as_nil;
 			break;
 		}
+		case AS_BYTES_BOOL: {
+			int64_t v = *p;
+			*value = (as_val*)as_integer_new(v);
+			break;
+		}
 		case AS_BYTES_INTEGER: {
 			int64_t v = 0;
 			as_command_bytes_to_int(p, value_size, &v);
@@ -1222,6 +1227,12 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
 		switch (type) {
 			case AS_BYTES_UNDEF: {
 				bin->valuep = (as_bin_value*)&as_nil;
+				break;
+			}
+			case AS_BYTES_BOOL: {
+				int64_t value = *p;
+				as_integer_init((as_integer*)&bin->value, value);
+				bin->valuep = &bin->value;
 				break;
 			}
 			case AS_BYTES_INTEGER: {

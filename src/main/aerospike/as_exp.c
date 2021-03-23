@@ -463,7 +463,7 @@ as_exp_get_map_type(as_exp_type type, as_map_return_type rtype, bool is_multi)
 		expected_type = AS_EXP_TYPE_INT;
 		break;
 	case AS_MAP_RETURN_KEY:
-	case AS_LIST_RETURN_VALUE:
+	case AS_MAP_RETURN_VALUE:
 		if (is_multi) {
 			expected_type = AS_EXP_TYPE_LIST;
 		}

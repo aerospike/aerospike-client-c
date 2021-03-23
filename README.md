@@ -9,7 +9,7 @@ and benchmarks are also included.
 
 ### Debian and Ubuntu
 
-	$ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++
+	$ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++ zlib1g-dev
 
 	[Also do on Ubuntu:]
 	$ sudo apt-get install ncurses-dev

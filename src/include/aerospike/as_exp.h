@@ -1039,7 +1039,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 /**
  * Create expression that removes list items identified by value range
  * (begin inclusive, end exclusive). If begin is nil, the range is less than end.
- * If end is nil, the range is greater than equal to begin.
+ * If end is infinity, the range is greater than equal to begin.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
  * @param __begin		Begin value expression.
@@ -1519,7 +1519,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 /**
  * Create expression that removes map items identified by key range 
  * (begin inclusive, end exclusive). If begin is nil, the range is less than end.
- * If end is nil, the range is greater than equal to begin.
+ * If end is infinity, the range is greater than equal to begin.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
  * @param __begin		Begin value expression.
@@ -1600,7 +1600,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 /**
  * Create expression that removes map items identified by value range
  * (begin inclusive, end exclusive). If begin is nil, the range is less than end.
- * If end is nil, the range is greater than equal to begin.
+ * If end is infinity, the range is greater than equal to begin.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
  * @param __begin		Begin value expression.
@@ -1789,7 +1789,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 /**
  * Create expression that selects map items identified by key range
  * (begin inclusive, end exclusive). If begin is nil, the range is less than end.
- * If end is nil, the range is greater than equal to begin.
+ * If end is infinity, the range is greater than equal to begin.
  * Expression returns selected data specified by rtype.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
@@ -1885,7 +1885,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 /**
  * Create expression that selects map items identified by value range
  * (begin inclusive, end exclusive). If begin is nil, the range is less than end.
- * If end is nil, the range is greater than equal to begin.
+ * If end is infinity, the range is greater than equal to begin.
  * Expression returns selected data specified by rtype.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).

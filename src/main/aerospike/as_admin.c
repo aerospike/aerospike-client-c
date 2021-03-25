@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -365,38 +365,6 @@ as_admin_read_list(
 	return status;
 }
 
-static as_status
-as_authenticate_old(
-	as_error* err, as_socket* sock, const char* user, const char* credential, uint64_t deadline_ms
-	)
-{
-	uint8_t buffer[AS_STACK_BUF_SIZE];
-	uint8_t* p = buffer + 8;
-
-	p = as_admin_write_header(p, AUTHENTICATE, 2);
-	p = as_admin_write_field_string(p, USER, user);
-	p = as_admin_write_field_string(p, CREDENTIAL, credential);
-
-	as_status status = as_admin_send(err, sock, NULL, buffer, p, 0, deadline_ms);
-
-	if (status) {
-		return status;
-	}
-
-	status = as_socket_read_deadline(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms);
-
-	if (status) {
-		return status;
-	}
-
-	status = buffer[RESULT_CODE];
-
-	if (status) {
-		as_error_set_message(err, status, as_error_string(status));
-	}
-	return status;
-}
-
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -441,13 +409,6 @@ as_cluster_login(
 	status = buffer[RESULT_CODE];
 
 	if (status) {
-		if (status == AEROSPIKE_INVALID_COMMAND) {
-			// New login not supported.  Try old authentication.
-			return as_authenticate_old(err, sock, cluster->user, cluster->password_hash, deadline_ms);
-		}
-		if (status == AEROSPIKE_SECURITY_NOT_ENABLED) {
-			return AEROSPIKE_OK;
-		}
 		return as_error_set_message(err, status, as_error_string(status));
 	}
 
@@ -522,15 +483,7 @@ as_authenticate_set(as_cluster* cluster, as_node* node, uint8_t* buffer)
 	
 	p = as_admin_write_header(p, AUTHENTICATE, 2);
 	p = as_admin_write_field_string(p, USER, cluster->user);
-
-	if (node->session_token) {
-		// New authentication.
-		p = as_admin_write_field_bytes(p, SESSION_TOKEN, node->session_token, node->session_token_length);
-	}
-	else {
-		// Old authentication.
-		p = as_admin_write_field_string(p, CREDENTIAL, cluster->password_hash);
-	}
+	p = as_admin_write_field_bytes(p, SESSION_TOKEN, node->session_token, node->session_token_length);
 
 	uint64_t len = p - buffer;
 	uint64_t proto = (len - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_ADMIN_MESSAGE_TYPE << 48);

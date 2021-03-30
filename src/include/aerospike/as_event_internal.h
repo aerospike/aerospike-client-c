@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -648,11 +648,11 @@ as_event_assign(as_event_loop* event_loop)
 }
 
 static inline void
-as_event_set_auth_write(as_event_command* cmd)
+as_event_set_auth_write(as_event_command* cmd, as_session* session)
 {
 	// Authentication write buffer is always located after command write buffer.
 	uint8_t* buf = (uint8_t*)cmd + cmd->write_offset + cmd->write_len;
-	uint32_t len = as_authenticate_set(cmd->cluster, cmd->node, buf);
+	uint32_t len = as_authenticate_set(cmd->cluster, session, buf);
 	cmd->len = cmd->write_len + len;
 	cmd->pos = cmd->write_len;
 }

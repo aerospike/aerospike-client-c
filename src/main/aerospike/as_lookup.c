@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -79,8 +79,10 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 			status = as_socket_create_and_connect(&node_info->socket, &error_local, addr, NULL, NULL, deadline);
 
 			if (status == AEROSPIKE_OK) {
-				status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
-							node_info->session_token, node_info->session_token_length, 0, deadline);
+				if (node_info->session) {
+					status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
+											 node_info->session, 0, deadline);
+				}
 
 				if (status == AEROSPIKE_OK) {
 					node_info->host.name = (char*)hostname;
@@ -166,10 +168,9 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 												  tls_name, deadline);
 
 			if (status == AEROSPIKE_OK) {
-				if (cluster->user) {
+				if (node_info->session) {
 					status = as_authenticate(cluster, &error_local, &sock, NULL,
-											 node_info->session_token, node_info->session_token_length,
-											 0, deadline);
+											 node_info->session, 0, deadline);
 				}
 
 				if (status == AEROSPIKE_OK) {
@@ -279,9 +280,7 @@ as_lookup_node(
 
 	node_info->host = *host;
 	as_address_copy_storage(addr, &node_info->addr);
-	node_info->session_expiration = 0;
-	node_info->session_token = NULL;
-	node_info->session_token_length = 0;
+	node_info->session = NULL;
 
 	if (cluster->user) {
 		deadline = as_socket_deadline(cluster->login_timeout_ms);
@@ -300,7 +299,7 @@ as_lookup_node(
 			status = as_switch_to_clear_socket(cluster, err, node_info, deadline);
 
 			if (status) {
-				cf_free(node_info->session_token);
+				cf_free(node_info->session);
 				return status;
 			}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -477,18 +477,22 @@ as_event_command_auth_write(as_event_command* cmd)
 }
 
 static inline void
-as_event_command_auth_write_start(as_event_command* cmd)
-{
-	cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
-	as_event_set_auth_write(cmd);
-	as_event_command_auth_write(cmd);
-}
-
-static inline void
 as_event_command_start(as_event_command* cmd)
 {
 	if (cmd->cluster->user) {
-		as_event_command_auth_write_start(cmd);
+		as_session* session = (as_session*)as_load_ptr(&cmd->node->session);
+
+		if (session) {
+			as_incr_uint32(&session->ref_count);
+			as_event_set_auth_write(cmd, session);
+			as_session_release(session);
+
+			cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
+			as_event_command_auth_write(cmd);
+		}
+		else {
+			as_event_command_write_start(cmd);
+		}
 	}
 	else if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
 		as_event_connector_success(cmd);

@@ -375,9 +375,7 @@ as_cluster_login(
 	as_node_info* node_info
 )
 {
-	node_info->session_expiration = 0;
-	node_info->session_token = NULL;
-	node_info->session_token_length = 0;
+	node_info->session = NULL;
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
@@ -409,6 +407,10 @@ as_cluster_login(
 	status = buffer[RESULT_CODE];
 
 	if (status) {
+		if (status == AEROSPIKE_SECURITY_NOT_ENABLED) {
+			// Server does not require login.
+			return AEROSPIKE_OK;
+		}
 		return as_error_set_message(err, status, as_error_string(status));
 	}
 
@@ -435,6 +437,8 @@ as_cluster_login(
 		return status;
 	}
 
+	as_session* session = NULL;
+	uint64_t expiration = 0;
 	int len;
 	uint8_t id;
 	p = buffer;
@@ -445,11 +449,12 @@ as_cluster_login(
 		id = *p++;
 		len--;
 
-		if (id == SESSION_TOKEN) {
+		if (id == SESSION_TOKEN && !session) {
 			if (len > 0 && len < AS_STACK_BUF_SIZE) {
-				node_info->session_token = cf_malloc(len);
-				memcpy(node_info->session_token, p, len);
-				node_info->session_token_length = len;
+				session = cf_malloc(sizeof(as_session) + len);
+				session->ref_count = 1;
+				session->token_length = len;
+				memcpy(session->token, p, len);
 			}
 			else {
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
@@ -461,7 +466,7 @@ as_cluster_login(
 			int64_t seconds = (int64_t)cf_swap_from_be32(*(uint32_t*)p) - 60;
 
 			if (seconds > 0) {
-				node_info->session_expiration = cf_getns() + (seconds * 1000 * 1000 * 1000);
+				expiration = cf_getns() + (seconds * 1000 * 1000 * 1000);
 			}
 			else {
 				as_log_warn("Invalid session TTL: %" PRIi64, seconds);
@@ -470,20 +475,23 @@ as_cluster_login(
 		p += len;
 	}
 
-	if (node_info->session_token == NULL) {
+	if (session == NULL) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve session token");
 	}
+
+	session->expiration = expiration;
+	node_info->session = session;
 	return AEROSPIKE_OK;
 }
 
 uint32_t
-as_authenticate_set(as_cluster* cluster, as_node* node, uint8_t* buffer)
+as_authenticate_set(as_cluster* cluster, as_session* session, uint8_t* buffer)
 {
 	uint8_t* p = buffer + 8;
 	
 	p = as_admin_write_header(p, AUTHENTICATE, 2);
 	p = as_admin_write_field_string(p, USER, cluster->user);
-	p = as_admin_write_field_bytes(p, SESSION_TOKEN, node->session_token, node->session_token_length);
+	p = as_admin_write_field_bytes(p, SESSION_TOKEN, session->token, session->token_length);
 
 	uint64_t len = p - buffer;
 	uint64_t proto = (len - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_ADMIN_MESSAGE_TYPE << 48);
@@ -493,8 +501,8 @@ as_authenticate_set(as_cluster* cluster, as_node* node, uint8_t* buffer)
 
 as_status
 as_authenticate(
-	as_cluster* cluster, as_error* err, as_socket* sock, as_node* node, uint8_t* session_token,
-	uint32_t session_token_length, uint32_t socket_timeout, uint64_t deadline_ms
+	as_cluster* cluster, as_error* err, as_socket* sock, as_node* node, as_session* session,
+	uint32_t socket_timeout, uint64_t deadline_ms
 	)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -502,16 +510,8 @@ as_authenticate(
 
 	p = as_admin_write_header(p, AUTHENTICATE, 2);
 	p = as_admin_write_field_string(p, USER, cluster->user);
+	p = as_admin_write_field_bytes(p, SESSION_TOKEN, session->token, session->token_length);
 
-	if (session_token) {
-		// New authentication.
-		p = as_admin_write_field_bytes(p, SESSION_TOKEN, session_token, session_token_length);
-	}
-	else {
-		// Old authentication.
-		p = as_admin_write_field_string(p, CREDENTIAL, cluster->password_hash);
-	}
-	
 	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms);
 	
 	if (status) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1118,15 +1118,6 @@ as_uv_tls_auth_write_complete(as_event_command* cmd)
 }
 
 static void
-as_uv_tls_auth_write_start(as_event_command* cmd)
-{
-	as_event_set_auth_write(cmd);
-	cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
-	cmd->conn->tls->callback = as_uv_tls_auth_write_complete;
-	as_uv_tls_write(cmd);
-}
-
-static void
 as_uv_tls_handshake_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 {
 	if (uv_is_closing((uv_handle_t*)stream)) {
@@ -1149,7 +1140,20 @@ as_uv_tls_handshake_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf
 		uv_read_stop(stream);
 
 		if (cmd->cluster->user) {
-			as_uv_tls_auth_write_start(cmd);
+			as_session* session = (as_session*)as_load_ptr(&cmd->node->session);
+
+			if (session) {
+				as_incr_uint32(&session->ref_count);
+				as_event_set_auth_write(cmd, session);
+				as_session_release(session);
+
+				cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
+				cmd->conn->tls->callback = as_uv_tls_auth_write_complete;
+				as_uv_tls_write(cmd);
+			}
+			else {
+				as_uv_tls_command_start(cmd);
+			}
 		}
 		else {
 			as_uv_tls_command_start(cmd);
@@ -1293,9 +1297,9 @@ as_event_close_connection(as_event_connection* conn)
 }
 
 static void
-as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream)
+as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream, as_session* session)
 {
-	as_event_set_auth_write(cmd);
+	as_event_set_auth_write(cmd, session);
 	cmd->state = AS_ASYNC_STATE_AUTH_WRITE;
 
 	uv_write_t* write_req = &cmd->conn->req.write;
@@ -1351,7 +1355,16 @@ as_uv_connected(uv_connect_t* req, int status)
 
 		if (!ctx) {
 			if (cmd->cluster->user) {
-				as_uv_auth_write_start(cmd, req->handle);
+				as_session* session = (as_session*)as_load_ptr(&cmd->node->session);
+
+				if (session) {
+					as_incr_uint32(&session->ref_count);
+					as_uv_auth_write_start(cmd, req->handle, session);
+					as_session_release(session);
+				}
+				else {
+					as_uv_command_start(cmd, req->handle);
+				}
 			}
 			else {
 				as_uv_command_start(cmd, req->handle);

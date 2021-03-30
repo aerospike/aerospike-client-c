@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -334,6 +334,7 @@ as_roles_destroy(as_role** roles, int roles_size);
 
 struct as_cluster_s;
 struct as_node_info_s;
+struct as_session_s;
 
 /**
  * @private
@@ -353,8 +354,7 @@ as_cluster_login(
 as_status
 as_authenticate(
 	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, struct as_node_s* node,
-	uint8_t* session_token, uint32_t session_token_length, uint32_t socket_timeout,
-	uint64_t deadline_ms
+	struct as_session_s* session, uint32_t socket_timeout, uint64_t deadline_ms
 	);
 
 /**
@@ -362,7 +362,7 @@ as_authenticate(
  * Write authentication command to buffer.  Return buffer length.
  */
 uint32_t
-as_authenticate_set(struct as_cluster_s* cluster, struct as_node_s* node, uint8_t* buffer);
+as_authenticate_set(struct as_cluster_s* cluster, struct as_session_s* session, uint8_t* buffer);
 
 #ifdef __cplusplus
 } // end extern "C"

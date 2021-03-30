@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -100,9 +100,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->cluster = cluster;
 
 	strcpy(node->name, node_info->name);
-	node->session_expiration = node_info->session_expiration;
-	node->session_token = node_info->session_token;
-	node->session_token_length = node_info->session_token_length;
+	node->session = node_info->session;
 	node->features = node_info->features;
 	node->address_index = (node_info->addr.ss_family == AF_INET) ? 0 : AS_ADDRESS4_MAX;
 	node->address4_size = 0;
@@ -192,8 +190,10 @@ as_node_destroy(as_node* node)
 		cf_free(node->tls_name);
 	}
 
-	if (node->session_token) {
-		cf_free(node->session_token);
+	as_session* session = (as_session*)as_load_ptr(&node->session);
+
+	if (session) {
+		as_session_release(session);
 	}
 
 	as_racks* racks = (as_racks*)as_load_ptr(&node->racks);
@@ -435,13 +435,19 @@ as_node_create_connection(
 	as_cluster* cluster = node->cluster;
 
 	if (cluster->user) {
-		as_status status = as_authenticate(cluster, err, sock, node, node->session_token,
-										   node->session_token_length, socket_timeout, deadline_ms);
+		// Must reserve session because not called from cluster tend thread.
+		as_session* session = (as_session*)as_load_ptr(&node->session);
 
-		if (status) {
-			as_node_signal_login(node);
-			as_node_close_socket(node, sock);
-			return status;
+		if (session) {
+			as_incr_uint32(&session->ref_count);
+			status = as_authenticate(cluster, err, sock, node, session, socket_timeout, deadline_ms);
+			as_session_release(session);
+
+			if (status) {
+				as_node_signal_login(node);
+				as_node_close_socket(node, sock);
+				return status;
+			}
 		}
 	}
 	return AEROSPIKE_OK;
@@ -634,6 +640,16 @@ as_node_signal_login(as_node* node)
 	}
 }
 
+/**
+ * Use non-inline function for garbarge collector function pointer reference.
+ * Forward to inlined release.
+ */
+static void
+release_session(as_session* session)
+{
+	as_session_release(session);
+}
+
 static as_status
 as_node_login(as_error* err, as_node* node, as_socket* sock)
 {
@@ -647,18 +663,27 @@ as_node_login(as_error* err, as_node* node, as_socket* sock)
 		return status;
 	}
 
-	cf_free(node->session_token);
-	node->session_expiration = node_info.session_expiration;
-	node->session_token = node_info.session_token;
-	node->session_token_length = node_info.session_token_length;
+	as_session* old = node->session;
+
+	as_fence_store();
+	as_store_ptr(&node->session, node_info.session);
 	as_store_uint8(&node->perform_login, 0);
+
+	if (old) {
+		// Put old session on garbage collector stack.
+		as_gc_item item;
+		item.data = old;
+		item.release_fn = (as_release_fn)release_session;
+		as_vector_append(cluster->gc, &item);
+	}
 	return AEROSPIKE_OK;
 }
 
 as_status
 as_node_ensure_login_shm(as_error* err, as_node* node)
 {
-	if (as_load_uint8(&node->perform_login) || (node->session_expiration > 0 && cf_getns() >= node->session_expiration)) {
+	if (as_load_uint8(&node->perform_login) ||
+		(node->session && node->session->expiration > 0 && cf_getns() >= node->session->expiration)) {
 		as_socket sock;
 		uint64_t deadline_ms = as_socket_deadline(node->cluster->conn_timeout_ms);
 		as_status status = as_node_create_socket(err, node, NULL, &sock, deadline_ms);
@@ -684,7 +709,8 @@ as_node_ensure_login_shm(as_error* err, as_node* node)
 static as_status
 as_node_ensure_login(as_error* err, as_node* node, as_socket* sock, bool* auth)
 {
-	if (as_load_uint8(&node->perform_login) || (node->session_expiration > 0 && cf_getns() >= node->session_expiration)) {
+	if (as_load_uint8(&node->perform_login) ||
+		(node->session && node->session->expiration > 0 && cf_getns() >= node->session->expiration)) {
 		as_status status = as_node_login(err, node, sock);
 
 		if (status) {
@@ -761,8 +787,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 			deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
 
 			if (! auth) {
-				status = as_authenticate(cluster, err, &sock, node, node->session_token,
-										 node->session_token_length, 0, deadline_ms);
+				status = as_authenticate(cluster, err, &sock, node, node->session, 0, deadline_ms);
 
 				if (status) {
 					// Authentication failed.  Session token probably expired.

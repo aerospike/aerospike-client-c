@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -311,9 +311,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				node_info.host.tls_name = node_tmp.tls_name;
 				node_info.host.port = 0;
 				as_address_copy_storage((struct sockaddr*)&node_tmp.addr, &node_info.addr);
-				node_info.session_expiration = 0;
-				node_info.session_token = NULL;
-				node_info.session_token_length = 0;
+				node_info.session = NULL;
 				node = as_node_create(cluster, &node_info);
 				as_node_create_min_connections(node);
 				node->index = i;

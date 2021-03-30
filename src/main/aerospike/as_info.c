@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -325,23 +325,9 @@ as_info_create_socket(
 	const char* tls_name, as_socket* sock
 	)
 {
+	// This function can't authenticate because node and session token are not specified.
 	as_tls_context* ctx = as_socket_get_tls_context(cluster->tls_ctx);
-	as_status status = as_socket_create_and_connect(sock, err, addr, ctx, tls_name, deadline_ms);
-	
-	if (status) {
-		return status;
-	}
-	
-	if (cluster->user) {
-		status = as_authenticate(cluster, err, sock, NULL, NULL, 0, 0, deadline_ms);
-		
-		if (status) {
-			as_socket_error_append(err, addr);
-			as_socket_close(sock);
-			return status;
-		}
-	}
-	return AEROSPIKE_OK;
+	return as_socket_create_and_connect(sock, err, addr, ctx, tls_name, deadline_ms);	
 }
 
 as_status

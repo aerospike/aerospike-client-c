@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -70,6 +70,24 @@
  */
 as_bin*
 as_bin_init(as_bin* bin, const as_bin_name name, as_bin_value* value);
+
+/**
+ * Initialize a stack allocated `as_bin` to a bool value.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_bin bin;
+ * as_bin_init_bool(&key, "abc", true);
+ * ~~~~~~~~~~
+ *
+ * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
+ *
+ * @param name 	The name of the bin.
+ * @param value	The value of the value.
+ *
+ * @return The initialized `as_bin` on success. Otherwise NULL.
+ */
+as_bin*
+as_bin_init_bool(as_bin* bin, const as_bin_name name, bool value);
 
 /**
  * Initialize a stack allocated `as_bin` to a int64_t value.

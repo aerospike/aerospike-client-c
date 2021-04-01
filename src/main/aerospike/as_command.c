@@ -101,6 +101,10 @@ as_command_value_size(as_val* val, as_buffer* buffer)
 		case AS_NIL: {
 			return 0;
 		}
+		case AS_BOOLEAN: {
+			// TODO: Change this to 1 when server supports bool particle type.
+			return 8;
+		}
 		case AS_INTEGER: {
 			return 8;
 		}
@@ -344,6 +348,16 @@ as_command_write_bin(uint8_t* begin, uint8_t operation_type, const as_bin* bin, 
 		case AS_NIL: {
 			val_len = 0;
 			val_type = AS_BYTES_UNDEF;
+			break;
+		}
+		case AS_BOOLEAN: {
+			// TODO: Change this write bool particle type when server supports it.
+			as_boolean* v = as_boolean_fromval(val);
+			uint64_t val = v->value? 1 : 0;
+			*(uint64_t*)p = cf_swap_to_be64(val);
+			p += 8;
+			val_len = 8;
+			val_type = AS_BYTES_INTEGER;
 			break;
 		}
 		case AS_INTEGER: {
@@ -1014,8 +1028,8 @@ as_command_parse_value(uint8_t* p, uint8_t type, uint32_t value_size, as_val** v
 			break;
 		}
 		case AS_BYTES_BOOL: {
-			int64_t v = *p;
-			*value = (as_val*)as_integer_new(v);
+			bool v = *p;
+			*value = (as_val*)as_boolean_new(v);
 			break;
 		}
 		case AS_BYTES_INTEGER: {
@@ -1230,8 +1244,8 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
 				break;
 			}
 			case AS_BYTES_BOOL: {
-				int64_t value = *p;
-				as_integer_init((as_integer*)&bin->value, value);
+				bool value = *p;
+				as_boolean_init((as_boolean*)&bin->value, value);
 				bin->valuep = &bin->value;
 				break;
 			}

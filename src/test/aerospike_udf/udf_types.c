@@ -134,10 +134,7 @@ TEST(udf_types_true, "udf_types.get_true() returns 1 (as_integer)") {
 	aerospike_key_apply(as, &err, NULL, &key, "udf_types", "get_true", NULL, &val);
 
 	assert_int_eq(err.code, AEROSPIKE_OK);
-	assert_int_eq(as_val_type(val), AS_INTEGER);
-
-	as_integer * ival = as_integer_fromval(val);
-	assert_int_eq(as_integer_get(ival), 1);
+	assert_true(as_val_tobool(val));
 
 	as_val_destroy(val);
 	as_key_destroy(&key);
@@ -155,10 +152,7 @@ TEST(udf_types_false, "udf_types.get_false() returns 0 (as_integer)") {
 	aerospike_key_apply(as, &err, NULL, &key, "udf_types", "get_false", NULL, &val);
 
 	assert_int_eq(err.code, AEROSPIKE_OK);
-	assert_int_eq(as_val_type(val), AS_INTEGER);
-
-	as_integer * ival = as_integer_fromval(val);
-	assert_int_eq(as_integer_get(ival), 0);
+	assert_false(as_val_tobool(val));
 
 	as_val_destroy(val);
 	as_key_destroy(&key);

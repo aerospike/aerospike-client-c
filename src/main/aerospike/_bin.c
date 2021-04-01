@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -53,6 +53,14 @@ as_bin_init(as_bin* bin, const as_bin_name name, as_bin_value* value)
 	if ( !bin ) return bin;
 	((as_val *) &bin->value)->type = AS_UNKNOWN;
 	return as_bin_defaults(bin, name, value);
+}
+
+as_bin*
+as_bin_init_bool(as_bin* bin, const as_bin_name name, bool value)
+{
+	if ( !bin ) return bin;
+	as_boolean_init((as_boolean*) &bin->value, value);
+	return as_bin_defaults(bin, name, &bin->value);
 }
 
 as_bin*

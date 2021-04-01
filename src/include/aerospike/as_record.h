@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -338,6 +338,26 @@ as_record_numbins(const as_record* rec);
  */
 AS_EXTERN bool
 as_record_set(as_record* rec, const as_bin_name name, as_bin_value* value);
+
+/**
+ * Set specified bin's value to a bool.
+ * This bool will be sent to the server as an integer (1 or 0) until the server supports the
+ * bool particle type.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_record_set_bool(rec, "bin", true);
+ * ~~~~~~~~~~
+ *
+ * @param rec		The record containing the bin.
+ * @param name		The name of the bin.
+ * @param value		The value of the bin.
+ *
+ * @return true on success, false on failure.
+ *
+ * @relates as_record
+ */
+AS_EXTERN bool
+as_record_set_bool(as_record* rec, const as_bin_name name, bool value);
 
 /**
  * Set specified bin's value to an int64_t.
@@ -700,6 +720,23 @@ as_record_set_nil(as_record* rec, const as_bin_name name);
  */
 AS_EXTERN as_bin_value*
 as_record_get(const as_record* rec, const as_bin_name name);
+
+/**
+ * Get specified bin's value as a bool.
+ *
+ * ~~~~~~~~~~{.c}
+ * bool value = as_record_get_bool(rec, "bin");
+ * ~~~~~~~~~~
+ *
+ * @param rec		The record containing the bin.
+ * @param name		The name of the bin.
+ *
+ * @return the value if it exists, otherwise false.
+ *
+ * @relates as_record
+ */
+AS_EXTERN bool
+as_record_get_bool(const as_record* rec, const as_bin_name name);
 
 /**
  * Get specified bin's value as an int64_t.

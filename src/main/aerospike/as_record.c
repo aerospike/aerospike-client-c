@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -199,6 +199,15 @@ as_record_set(as_record* rec, const as_bin_name name, as_bin_value* value)
 }
 
 bool
+as_record_set_bool(as_record* rec, const as_bin_name name, bool value)
+{
+	as_bin* bin = as_record_bin_forupdate(rec, name);
+	if ( !bin ) return false;
+	as_bin_init_bool(bin, name, value);
+	return true;
+}
+
+bool
 as_record_set_int64(as_record* rec, const as_bin_name name, int64_t value)
 {
 	as_bin* bin = as_record_bin_forupdate(rec, name);
@@ -336,6 +345,28 @@ as_record_get(const as_record* rec, const as_bin_name name)
 		}
 	}
 	return NULL;
+}
+
+bool
+as_record_get_bool(const as_record* rec, const as_bin_name name)
+{
+	as_bin_value* bv = as_record_get(rec, name);
+
+	if (! bv) {
+		return false;
+	}
+
+	as_val_t type = bv->boolean._.type;
+
+	if (type == AS_BOOLEAN) {
+		return bv->boolean.value;
+	}
+
+	if (type == AS_INTEGER) {
+		int64_t v = bv->integer.value;
+		return (v == 0)? false : true;
+	}
+	return false;
 }
 
 int64_t

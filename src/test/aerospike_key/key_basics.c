@@ -769,7 +769,9 @@ TEST(key_basics_bool, "bool")
 	as_key_init(&key, NAMESPACE, SET, "pgb");
 
 	as_record rec;
-	as_record_init(&rec, 2);
+	as_record_init(&rec, 4);
+	as_record_set_bool(&rec, "a", false);
+	as_record_set_bool(&rec, "b", true);
 	as_record_set_int64(&rec, "c", 0);
 	as_record_set_int64(&rec, "d", 1);
 
@@ -780,8 +782,10 @@ TEST(key_basics_bool, "bool")
 	as_record* prec = NULL;
 	rc = aerospike_key_get(as, &err, NULL, &key, &prec);
 	assert_int_eq(rc, AEROSPIKE_OK);
-	assert_int_eq(as_record_get_int64(prec, "c", -1), 0);
-	assert_int_eq(as_record_get_int64(prec, "d", -1), 1);
+	assert_false(as_record_get_bool(prec, "a"));
+	assert_true(as_record_get_bool(prec, "b"));
+	assert_false(as_record_get_bool(prec, "c"));
+	assert_true(as_record_get_bool(prec, "d"));
 
 	as_key_destroy(&key);
 	as_record_destroy(prec);

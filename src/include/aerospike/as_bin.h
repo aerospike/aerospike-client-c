@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,7 @@
  */
 #pragma once 
 
+#include <aerospike/as_boolean.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_geojson.h>
@@ -56,6 +57,7 @@ typedef char as_bin_name[AS_BIN_NAME_MAX_SIZE];
  */
 typedef union as_bin_value_s {
 	as_val nil;
+	as_boolean boolean;
 	as_integer integer;
 	as_double dbl;
 	as_string string;

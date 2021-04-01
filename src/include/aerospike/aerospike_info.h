@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -146,7 +146,7 @@ aerospike_info_node_async(
  * }
  * ~~~~~~~~~~
  *
- * If TLS is enabled, this function will only work if the hostname is also the TLS certificate name.
+ * This function does not support TLS nor the new user authentication protocol.
  *
  * @deprecated			Use aerospike_info_node() or aerospike_info_any() instead.
  *
@@ -171,7 +171,6 @@ aerospike_info_host(
 
 /**
  * Send an info request to a specific socket address. The response must be freed by the caller on success.
- * This function does not support TLS connections nor IPv6.
  *
  * ~~~~~~~~~~{.c}
  * char* res = NULL;
@@ -184,6 +183,10 @@ aerospike_info_host(
  * 	   res = NULL;
  * }
  * ~~~~~~~~~~
+ *
+ * This function does not support TLS, IPv6 nor the new user authentication protocol.
+ *
+ * @deprecated			Use aerospike_info_node() or aerospike_info_any() instead.
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -594,7 +594,7 @@ as_scan_command_execute(as_scan_task* task)
 	as_status status;
 
 	if (task->cluster_key && ! task->first) {
-		status = as_query_validate(&err, task->node, task->scan->ns, task->cluster_key);
+		status = as_query_validate(&err, task->node, task->scan->ns, 10000, task->cluster_key);
 
 		if (status) {
 			// Set main error only once.
@@ -659,7 +659,7 @@ as_scan_command_execute(as_scan_task* task)
 	}
 
 	if (task->cluster_key) {
-		status = as_query_validate(&err, task->node, task->scan->ns, task->cluster_key);
+		status = as_query_validate(&err, task->node, task->scan->ns, 10000, task->cluster_key);
 
 		if (status) {
 			// Set main error only once.
@@ -730,7 +730,7 @@ as_scan_generic(
 	uint64_t cluster_key = 0;
 
 	if (policy->fail_on_cluster_change && callback) {
-		status = as_query_validate_begin(err, nodes->array[0], scan->ns, &cluster_key);
+		status = as_query_validate_begin(err, nodes->array[0], scan->ns, 10000, &cluster_key);
 
 		if (status != AEROSPIKE_OK) {
 			as_cluster_release_all_nodes(nodes);

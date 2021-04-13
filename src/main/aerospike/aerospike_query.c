@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -89,6 +89,7 @@ typedef struct as_query_complete_task_s {
 typedef struct as_async_query_executor {
 	as_event_executor executor;
 	as_async_query_record_listener listener;
+	uint32_t info_timeout;
 } as_async_query_executor;
 
 typedef struct as_async_query_command {
@@ -376,7 +377,8 @@ as_query_command_execute(as_query_task* task)
 	as_status status;
 
 	if (task->cluster_key && ! task->first) {
-		status = as_query_validate(&err, task->node, task->query->ns, task->cluster_key);
+		uint32_t timeout = task->query_policy? task->query_policy->info_timeout : 10000;
+		status = as_query_validate(&err, task->node, task->query->ns, timeout, task->cluster_key);
 
 		if (status) {
 			// Set main error only once.
@@ -429,7 +431,8 @@ as_query_command_execute(as_query_task* task)
 	}
 
 	if (task->cluster_key) {
-		status = as_query_validate(&err, task->node, task->query->ns, task->cluster_key);
+		uint32_t timeout = task->query_policy? task->query_policy->info_timeout : 10000;
+		status = as_query_validate(&err, task->node, task->query->ns, timeout, task->cluster_key);
 
 		if (status) {
 			// Set main error only once.
@@ -873,7 +876,8 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	as_status status = AEROSPIKE_OK;
 
 	if (task->query_policy && task->query_policy->fail_on_cluster_change) {
-		status = as_query_validate_begin(task->err, nodes->array[0], query->ns, &task->cluster_key);
+		status = as_query_validate_begin(task->err, nodes->array[0], query->ns,
+										 task->query_policy->info_timeout, &task->cluster_key);
 
 		if (status) {
 			return status;
@@ -1226,6 +1230,7 @@ aerospike_query_async(
 	exec->notify = true;
 	exec->valid = true;
 	executor->listener = listener;
+	executor->info_timeout = policy->info_timeout;
 
 	as_buffer argbuffer;
 	as_buffer* opsbuffers;
@@ -1353,4 +1358,10 @@ aerospike_query_background(
 
 	as_cluster_release_all_nodes(nodes);
 	return status;
+}
+
+uint32_t
+as_query_get_info_timeout(as_event_executor* executor)
+{
+	return ((as_async_query_executor*)executor)->info_timeout;
 }

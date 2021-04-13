@@ -2,7 +2,7 @@
 <package>
   <metadata>
     <id>aerospike-client-c-libevent</id>
-    <version>4.6.20</version>
+    <version>4.6.21</version>
     <title>Aerospike C Client with libevent</title>
     <authors>Aerospike</authors>
     <owners>Aerospike</owners>

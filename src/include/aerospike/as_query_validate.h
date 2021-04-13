@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -41,7 +41,8 @@ struct as_event_loop;
  */
 as_status
 as_query_validate_begin(
-	as_error* err, struct as_node_s* node, const as_namespace ns, uint64_t* cluster_key
+	as_error* err, struct as_node_s* node, const as_namespace ns, uint32_t timeout,
+	uint64_t* cluster_key
 	);
 
 /**
@@ -50,7 +51,8 @@ as_query_validate_begin(
  */
 as_status
 as_query_validate(
-	as_error* err, struct as_node_s* node, const as_namespace ns, uint64_t expected_key
+	as_error* err, struct as_node_s* node, const as_namespace ns, uint32_t timeout,
+	uint64_t expected_key
 	);
 
 /**

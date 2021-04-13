@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -20,6 +20,9 @@
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_node.h>
+
+uint32_t
+as_query_get_info_timeout(as_event_executor* executor);
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -172,7 +175,9 @@ as_validate_end_listener(as_error* err, char* response, void* udata, as_event_lo
  *****************************************************************************/
 
 as_status
-as_query_validate_begin(as_error* err, as_node* node, const as_namespace ns, uint64_t* cluster_key)
+as_query_validate_begin(
+	as_error* err, as_node* node, const as_namespace ns, uint32_t timeout, uint64_t* cluster_key
+	)
 {
 	if (!(node->features & AS_FEATURES_CLUSTER_STABLE)) {
 		*cluster_key = 0;
@@ -183,7 +188,7 @@ as_query_validate_begin(as_error* err, as_node* node, const as_namespace ns, uin
 	as_write_cluster_stable(cmd, sizeof(cmd), ns);
 
 	// Fail when cluster is in migration.
-	uint64_t deadline = as_socket_deadline(1000);
+	uint64_t deadline = as_socket_deadline(timeout);
 	char* response;
 	as_status status = as_info_command_node(err, node, cmd, true, deadline, &response);
 
@@ -201,7 +206,9 @@ as_query_validate_begin(as_error* err, as_node* node, const as_namespace ns, uin
 }
 
 as_status
-as_query_validate(as_error* err, as_node* node, const as_namespace ns, uint64_t expected_key)
+as_query_validate(
+	as_error* err, as_node* node, const as_namespace ns, uint32_t timeout, uint64_t expected_key
+	)
 {
 	if (expected_key == 0 || !(node->features & AS_FEATURES_CLUSTER_STABLE)) {
 		return AEROSPIKE_OK;
@@ -209,7 +216,7 @@ as_query_validate(as_error* err, as_node* node, const as_namespace ns, uint64_t 
 
 	// Fail when cluster is in migration.
 	uint64_t cluster_key;
-	as_status status = as_query_validate_begin(err, node, ns, &cluster_key);
+	as_status status = as_query_validate_begin(err, node, ns, timeout, &cluster_key);
 
 	if (status) {
 		return status;
@@ -226,6 +233,7 @@ as_query_validate_begin_async(as_event_executor* executor, const as_namespace ns
 {
 	as_policy_info policy;
 	as_policy_info_init(&policy);
+	policy.timeout = as_query_get_info_timeout(executor);
 
 	executor->ns = cf_strdup(ns);
 	executor->queued++;
@@ -255,6 +263,7 @@ as_query_validate_next_async(as_event_executor* executor, uint32_t index)
 	as_error err;
 	as_policy_info policy;
 	as_policy_info_init(&policy);
+	policy.timeout = as_query_get_info_timeout(executor);
 
 	executor->queued++;
 
@@ -284,6 +293,7 @@ as_query_validate_end_async(as_event_executor* executor, as_node* node, as_event
 	as_error err;
 	as_policy_info policy;
 	as_policy_info_init(&policy);
+	policy.timeout = as_query_get_info_timeout(executor);
 
 	char info_cmd[256];
 	as_write_cluster_stable(info_cmd, sizeof(info_cmd), executor->ns);

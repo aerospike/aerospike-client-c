@@ -455,7 +455,7 @@ typedef struct as_policy_base_s {
 	 * Immediate write retries on node failure have been shown to consistently
 	 * result in errors.  If max_retries is greater than zero on a write, then
 	 * sleep_between_retries should be set high enough to allow the cluster to
-	 * reform (>= 500ms).
+	 * reform (>= 3000ms).
 	 *
 	 * Default: 0 (do not sleep between retries).
 	 */

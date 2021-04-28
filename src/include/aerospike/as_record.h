@@ -341,8 +341,7 @@ as_record_set(as_record* rec, const as_bin_name name, as_bin_value* value);
 
 /**
  * Set specified bin's value to a bool.
- * This bool will be sent to the server as an integer (1 or 0) until the server supports the
- * bool particle type.
+ * Requires server version 5.6.0+.
  *
  * ~~~~~~~~~~{.c}
  * as_record_set_bool(rec, "bin", true);

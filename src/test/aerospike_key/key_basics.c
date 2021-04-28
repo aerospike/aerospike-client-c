@@ -789,6 +789,7 @@ TEST(key_basics_bool, "bool")
 
 	as_key_destroy(&key);
 	as_record_destroy(prec);
+
 }
 
 /******************************************************************************

@@ -49,6 +49,7 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define GRANT_PRIVILEGES 12
 #define REVOKE_PRIVILEGES 13
 #define SET_WHITELIST 14
+#define SET_QUOTAS 15
 #define QUERY_ROLES 16
 #define LOGIN 20
 
@@ -64,6 +65,11 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define ROLE 11
 #define PRIVILEGES 12
 #define WHITELIST 13
+#define READ_QUOTA 14
+#define WRITE_QUOTA 15
+#define READ_INFO 16
+#define WRITE_INFO 17
+#define CONNECTIONS 18
 
 // Misc
 #define FIELD_HEADER_SIZE 5
@@ -91,6 +97,15 @@ as_admin_write_field_header(uint8_t* p, uint8_t id, int size)
 	*(int*)p = cf_swap_to_be32(size+1);
 	p += 4;
 	*p++ = id;
+	return p;
+}
+
+static uint8_t*
+as_admin_write_field_int(uint8_t* p, uint8_t id, int val)
+{
+	p = as_admin_write_field_header(p, id, 4);
+	*(int*)p = cf_swap_to_be32(val);
+	p += 4;
 	return p;
 }
 
@@ -770,6 +785,64 @@ aerospike_create_role_whitelist(
 }
 
 as_status
+aerospike_create_role_quotas(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role,
+	as_privilege** privileges, int privileges_size, const char** whitelist, int whitelist_size,
+	int read_quota, int write_quota
+	)
+{
+	as_error_reset(err);
+
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+	int field_count = 1;
+
+	if (privileges_size > 0) {
+		field_count++;
+	}
+
+	if (whitelist_size > 0) {
+		field_count++;
+	}
+
+	if (read_quota > 0) {
+		field_count++;
+	}
+
+	if (write_quota > 0) {
+		field_count++;
+	}
+
+	p = as_admin_write_header(p, CREATE_ROLE, field_count);
+	p = as_admin_write_field_string(p, ROLE, role);
+
+	if (privileges_size > 0) {
+		as_status status = as_admin_write_privileges(&p, err, privileges, privileges_size);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
+	if (whitelist_size > 0) {
+		as_status status = as_admin_write_whitelist(&p, err, whitelist, whitelist_size);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
+	if (read_quota > 0) {
+		p = as_admin_write_field_int(p, READ_QUOTA, read_quota);
+	}
+
+	if (write_quota > 0) {
+		p = as_admin_write_field_int(p, WRITE_QUOTA, write_quota);
+	}
+	return as_admin_execute(as, err, policy, buffer, p);
+}
+
+as_status
 aerospike_drop_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role)
 {
 	as_error_reset(err);
@@ -849,6 +922,25 @@ aerospike_set_whitelist(
 	return as_admin_execute(as, err, policy, buffer, p);
 }
 
+as_status
+aerospike_set_quotas(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role,
+	int read_quota, int write_quota
+	)
+{
+	as_error_reset(err);
+
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+
+	p = as_admin_write_header(p, SET_QUOTAS, 3);
+	p = as_admin_write_field_string(p, ROLE, role);
+	p = as_admin_write_field_int(p, READ_QUOTA, read_quota);
+	p = as_admin_write_field_int(p, WRITE_QUOTA, write_quota);
+
+	return as_admin_execute(as, err, policy, buffer, p);
+}
+
 /******************************************************************************
  * QUERY USERS
  *****************************************************************************/
@@ -875,6 +967,28 @@ as_parse_users_roles(uint8_t* p, as_user** user_out)
 	return p;
 }
 
+static uint8_t*
+as_parse_info(uint8_t* p, int* info_size, uint32_t** info)
+{
+	uint8_t size = *p++;
+
+	if (size == 0) {
+		*info_size = 0;
+		*info = NULL;
+		return p;
+	}
+
+	uint32_t* array = cf_malloc(sizeof(uint32_t) * size);
+
+	for (uint8_t i = 0; i < size; i++) {
+		array[i] = cf_swap_from_be32(*(uint32_t*)p);
+		p += sizeof(uint32_t);
+	}
+	*info_size = size;
+	*info = array;
+	return p;
+}
+
 static as_status
 as_parse_users(as_error* err, uint8_t* buffer, size_t size, as_vector* /*<as_user*>*/ users)
 {
@@ -883,6 +997,11 @@ as_parse_users(as_error* err, uint8_t* buffer, size_t size, as_vector* /*<as_use
 	
 	as_user* user;
 	char user_name[AS_USER_SIZE];
+	uint32_t* read_info;
+	uint32_t* write_info;
+	int read_info_size;
+	int write_info_size;
+	int conns_in_use;
 	int len;
 	int sz;
 	uint8_t id;
@@ -901,24 +1020,46 @@ as_parse_users(as_error* err, uint8_t* buffer, size_t size, as_vector* /*<as_use
 		
 		user_name[0] = 0;
 		user = 0;
-		
+		conns_in_use = 0;
+		read_info = NULL;
+		read_info_size = 0;
+		write_info = NULL;
+		write_info_size = 0;
+
 		for (uint8_t b = 0; b < field_count; b++) {
 			len = cf_swap_from_be32(*(int*)p);
 			p += 4;
 			id = *p++;
 			len--;
-			
-			if (id == USER) {
+
+			switch (id) {
+			case USER:
 				sz = (len <= (AS_USER_SIZE-1))? len : (AS_USER_SIZE-1);
 				memcpy(user_name, p, sz);
 				user_name[sz] = 0;
 				p += len;
-			}
-			else if (id == ROLES) {
+				break;
+
+			case ROLES:
 				p = as_parse_users_roles(p, &user);
-			}
-			else {
+				break;
+
+			case READ_INFO:
+				p = as_parse_info(p, &read_info_size, &read_info);
+				break;
+
+			case WRITE_INFO:
+				p = as_parse_info(p, &write_info_size, &write_info);
+				break;
+
+			case CONNECTIONS:
+				conns_in_use = cf_swap_from_be32(*(int*)p);
 				p += len;
+				break;
+
+			default:
+				p += len;
+				break;
 			}
 		}
 		
@@ -931,6 +1072,11 @@ as_parse_users(as_error* err, uint8_t* buffer, size_t size, as_vector* /*<as_use
 			user->roles_size = 0;
 		}
 		strcpy(user->name, user_name);
+		user->read_info = read_info;
+		user->read_info_size = read_info_size;
+		user->write_info = write_info;
+		user->write_info_size = write_info_size;
+		user->conns_in_use = conns_in_use;
 		as_vector_append(users, &user);
 	}
 	return 0;
@@ -941,7 +1087,7 @@ as_free_users(as_vector* users, int offset)
 {
 	for (uint32_t i = offset; i < users->size; i++) {
 		as_user* user = as_vector_get_ptr(users, i);
-		cf_free(user);
+		as_user_destroy(user);
 	}
 	as_vector_destroy(users);
 }
@@ -995,6 +1141,12 @@ aerospike_query_user(
 void
 as_user_destroy(as_user* user)
 {
+	if (user->read_info_size > 0) {
+		cf_free(user->read_info);
+	}
+	if (user->write_info_size > 0) {
+		cf_free(user->write_info);
+	}
 	cf_free(user);
 }
 
@@ -1031,7 +1183,7 @@ void
 as_users_destroy(as_user** users, int users_size)
 {
 	for (int i = 0; i < users_size; i++) {
-		cf_free(users[i]);
+		as_user_destroy(users[i]);
 	}
 	cf_free(users);
 }
@@ -1141,6 +1293,8 @@ as_parse_roles(as_error* err, uint8_t* buffer, size_t size, as_vector* /*<as_rol
 	char role_name[AS_ROLE_SIZE];
 	char** whitelist;
 	int whitelist_size;
+	int read_quota;
+	int write_quota;
 	int len;
 	int sz;
 	uint8_t id;
@@ -1161,28 +1315,45 @@ as_parse_roles(as_error* err, uint8_t* buffer, size_t size, as_vector* /*<as_rol
 		role = NULL;
 		whitelist = NULL;
 		whitelist_size = 0;
+		read_quota = 0;
+		write_quota = 0;
 		
 		for (uint8_t b = 0; b < field_count; b++) {
 			len = cf_swap_from_be32(*(int*)p);
 			p += 4;
 			id = *p++;
 			len--;
-			
-			if (id == ROLE) {
+
+			switch (id) {
+			case ROLE:
 				sz = (len <= (AS_ROLE_SIZE-1))? len : (AS_ROLE_SIZE-1);
 				memcpy(role_name, p, sz);
 				role_name[sz] = 0;
 				p += len;
-			}
-			else if (id == PRIVILEGES) {
+				break;
+
+			case PRIVILEGES:
 				p = as_privileges_parse(p, &role);
-			}
-			else if (id == WHITELIST) {
+				break;
+
+			case WHITELIST:
 				as_whitelist_parse((char*)p, len, &whitelist, &whitelist_size);
 				p += len;
-			}
-			else {
+				break;
+
+			case READ_QUOTA:
+				read_quota = cf_swap_from_be32(*(int*)p);
 				p += len;
+				break;
+
+			case WRITE_QUOTA:
+				write_quota = cf_swap_from_be32(*(int*)p);
+				p += len;
+				break;
+
+			default:
+				p += len;
+				break;
 			}
 		}
 
@@ -1193,6 +1364,8 @@ as_parse_roles(as_error* err, uint8_t* buffer, size_t size, as_vector* /*<as_rol
 		strcpy(role->name, role_name);
 		role->whitelist = whitelist;
 		role->whitelist_size = whitelist_size;
+		role->read_quota = read_quota;
+		role->write_quota = write_quota;
 		as_vector_append(roles, &role);
 	}
 	return AEROSPIKE_OK;

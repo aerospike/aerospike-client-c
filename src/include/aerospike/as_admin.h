@@ -16,6 +16,13 @@
  */
 #pragma once 
 
+/**
+ * @defgroup admin_operations Admin Operations
+ * @ingroup client_operations
+ *
+ * User administration operations.
+ */
+
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
@@ -30,6 +37,7 @@ extern "C" {
 
 /**
  * Maximum size of role string including null byte.
+ * @ingroup admin_operations
  */
 #define AS_ROLE_SIZE 64
 
@@ -39,6 +47,7 @@ extern "C" {
 
 /**
  * Permission codes define the type of permission granted for a user's role.
+ * @ingroup admin_operations
  */
 typedef enum as_privilege_code_e {
 	/**
@@ -83,6 +92,7 @@ typedef enum as_privilege_code_e {
 
 /**
  * User privilege.
+ * @ingroup admin_operations
  */
 typedef struct as_privilege_s {
 	/**
@@ -105,12 +115,23 @@ typedef struct as_privilege_s {
 
 /**
  * Role definition.
+ * @ingroup admin_operations
  */
 typedef struct as_role_s {
 	/**
 	 * Role name.
 	 */
 	char name[AS_ROLE_SIZE];
+
+	/**
+	 * Maximum reads per second limit.
+	 */
+	int read_quota;
+
+	/**
+	 * Maximum writes per second limit.
+	 */
+	int write_quota;
 
 	/**
 	 * Array of allowable IP address strings.
@@ -135,13 +156,55 @@ typedef struct as_role_s {
 
 /**
  * User and assigned roles.
+ * @ingroup admin_operations
  */
 typedef struct as_user_s {
 	/**
 	 * User name.
 	 */
 	char name[AS_USER_SIZE];
-	
+
+	/**
+	 * Array of read statistics. Array may be null.
+	 * Current statistics by offset are:
+	 * <ul>
+	 * <li>0: read quota in records per second</li>
+	 * <li>1: single record read transaction rate (TPS)</li>
+	 * <li>2: read scan/query record per second rate (RPS)</li>
+	 * <li>3: number of limitless read scans/queries</li>
+	 * </ul>
+	 * Future server releases may add additional statistics.
+	 */
+	uint32_t* read_info;
+
+	/**
+	 * Array of write statistics. Array may be null.
+	 * Current statistics by offset are:
+	 * <ul>
+	 * <li>0: write quota in records per second</li>
+	 * <li>1: single record write transaction rate (TPS)</li>
+	 * <li>2: write scan/query record per second rate (RPS)</li>
+	 * <li>3: number of limitless write scans/queries</li>
+	 * </ul>
+	 * Future server releases may add additional statistics.
+	 */
+	uint32_t* write_info;
+
+	/**
+	 * Length of read info array.
+	 */
+	int read_info_size;
+
+	/**
+	 * Length of write info array.
+	 */
+	int write_info_size;
+
+	/**
+	 * Number of currently open connections.
+	 */
+	int conns_in_use;
+
 	/**
 	 * Length of roles array.
 	 */
@@ -163,6 +226,7 @@ struct as_socket_s;
 /**
  * Create user with password and roles.  Clear-text password will be hashed using bcrypt before 
  * sending to server.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_create_user(
@@ -172,6 +236,7 @@ aerospike_create_user(
 
 /**
  * Remove user from cluster.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_drop_user(
@@ -181,6 +246,7 @@ aerospike_drop_user(
 /**
  * Set user's password by user administrator.  Clear-text password will be hashed using bcrypt
  * before sending to server.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_set_password(
@@ -191,6 +257,7 @@ aerospike_set_password(
 /**
  * Change user's password by user.  Clear-text password will be hashed using bcrypt before
  * sending to server.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_change_password(
@@ -200,6 +267,7 @@ aerospike_change_password(
 
 /**
  * Add role to user's list of roles.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_grant_roles(
@@ -209,6 +277,7 @@ aerospike_grant_roles(
 
 /**
  * Remove role from user's list of roles.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_revoke_roles(
@@ -218,6 +287,7 @@ aerospike_revoke_roles(
 
 /**
  * Create user defined role.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_create_role(
@@ -228,6 +298,7 @@ aerospike_create_role(
 /**
  * Create user defined role with optional privileges and whitelist.
  * Whitelist IP addresses can contain wildcards (ie. 10.1.2.0/24).
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_create_role_whitelist(
@@ -236,13 +307,29 @@ aerospike_create_role_whitelist(
 	);
 
 /**
+ * Create user defined role with optional privileges, whitelist and quotas.
+ * Whitelist IP addresses can contain wildcards (ie. 10.1.2.0/24).
+ * Quotas are maximum reads/writes per second limit, pass in zero for no limit.
+ * Quotas require server security configuration "enable-quotas" to be set to true.
+ * @ingroup admin_operations
+ */
+AS_EXTERN as_status
+aerospike_create_role_quotas(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role,
+	as_privilege** privileges, int privileges_size, const char** whitelist, int whitelist_size,
+	int read_quota, int write_quota
+	);
+
+/**
  * Delete user defined role.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_drop_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role);
 
 /**
  * Add specified privileges to user.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_grant_privileges(
@@ -252,6 +339,7 @@ aerospike_grant_privileges(
 
 /**
  * Remove specified privileges from user.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_revoke_privileges(
@@ -263,6 +351,7 @@ aerospike_revoke_privileges(
  * Set IP address whitelist for a role.
  * If whitelist is NULL or empty, remove existing whitelist from role.
  * IP addresses can contain wildcards (ie. 10.1.2.0/24).
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_set_whitelist(
@@ -271,8 +360,19 @@ aerospike_set_whitelist(
 	);
 
 /**
+ * Set maximum reads/writes per second limits for a role. If a quota is zero, the limit is removed.
+ * @ingroup admin_operations
+ */
+AS_EXTERN as_status
+aerospike_set_quotas(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* role,
+	int read_quota, int write_quota
+	);
+
+/**
  * Retrieve roles for a given user.
  * When successful, as_user_destroy() must be called to free resources.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_query_user(
@@ -282,6 +382,7 @@ aerospike_query_user(
 
 /**
  * Release as_user_roles memory.
+ * @ingroup admin_operations
  */
 AS_EXTERN void
 as_user_destroy(as_user* user);
@@ -289,6 +390,7 @@ as_user_destroy(as_user* user);
 /**
  * Retrieve all users and their roles.
  * When successful, as_users_destroy() must be called to free resources.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_query_users(
@@ -297,6 +399,7 @@ aerospike_query_users(
 
 /**
  * Release memory for as_user_roles array.
+ * @ingroup admin_operations
  */
 AS_EXTERN void
 as_users_destroy(as_user** users, int users_size);
@@ -304,6 +407,7 @@ as_users_destroy(as_user** users, int users_size);
 /**
  * Retrieve role definition for a given role name.
  * When successful, as_role_destroy() must be called to free resources.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_query_role(
@@ -313,6 +417,7 @@ aerospike_query_role(
 
 /**
  * Release as_role memory.
+ * @ingroup admin_operations
  */
 AS_EXTERN void
 as_role_destroy(as_role* role);
@@ -320,6 +425,7 @@ as_role_destroy(as_role* role);
 /**
  * Retrieve all roles and their privileges.
  * When successful, as_roles_destroy() must be called to free resources.
+ * @ingroup admin_operations
  */
 AS_EXTERN as_status
 aerospike_query_roles(
@@ -328,6 +434,7 @@ aerospike_query_roles(
 
 /**
  * Release memory for as_role array.
+ * @ingroup admin_operations
  */
 AS_EXTERN void
 as_roles_destroy(as_role** roles, int roles_size);

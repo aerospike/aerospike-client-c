@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2020 by Aerospike.
+ * Copyright 2008-2021 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -922,6 +922,8 @@ operator_to_string(as_operator op)
 		OP_CASE_ASSIGN(AS_OPERATOR_READ);
 		OP_CASE_ASSIGN(AS_OPERATOR_WRITE);
 		OP_CASE_ASSIGN(AS_OPERATOR_INCR);
+		OP_CASE_ASSIGN(AS_OPERATOR_EXP_READ);
+		OP_CASE_ASSIGN(AS_OPERATOR_EXP_MODIFY);
 		OP_CASE_ASSIGN(AS_OPERATOR_APPEND);
 		OP_CASE_ASSIGN(AS_OPERATOR_PREPEND);
 		OP_CASE_ASSIGN(AS_OPERATOR_TOUCH);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -356,6 +356,16 @@ typedef enum as_status_e {
 	AEROSPIKE_INVALID_WHITELIST = 73,
 
 	/**
+	 * Quotas not enabled on server.
+	 */
+	AEROSPIKE_QUOTAS_NOT_ENABLED = 74,
+
+	/**
+	 * Invalid quota.
+	 */
+	AEROSPIKE_INVALID_QUOTA = 75,
+
+	/**
 	 * User must be authentication before performing database operations.
 	 */
 	AEROSPIKE_NOT_AUTHENTICATED = 80,
@@ -369,6 +379,11 @@ typedef enum as_status_e {
 	 * Command not allowed because sender IP not whitelisted.
 	 */
 	AEROSPIKE_NOT_WHITELISTED = 82,
+
+	/**
+	 * Quota exceeded.
+	 */
+	AEROSPIKE_QUOTA_EXCEEDED = 83,
 
 	/**
 	 * Generic UDF error.

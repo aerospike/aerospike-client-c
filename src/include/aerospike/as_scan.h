@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -30,16 +30,6 @@ extern "C" {
  *****************************************************************************/
 
 /**
- * Default value for as_scan.priority
- */
-#define AS_SCAN_PRIORITY_DEFAULT AS_SCAN_PRIORITY_AUTO
-
-/**
- * Default value for as_scan.percent
- */
-#define AS_SCAN_PERCENT_DEFAULT 100
-
-/**
  * Default value for as_scan.no_bins
  */
 #define AS_SCAN_NOBINS_DEFAULT false
@@ -59,34 +49,6 @@ extern "C" {
  *****************************************************************************/
 
 struct as_operations_s;
-
-/**
- * Priority levels for a scan operation.
- * This enum is obsolete and will eventually be removed.
- */
-typedef enum as_scan_priority_e { 
-
-	/**
-	 * The cluster will auto adjust the scan priority.
-	 */
-	AS_SCAN_PRIORITY_AUTO, 
-
-	/**
-	 * Low priority scan.
-	 */
-	AS_SCAN_PRIORITY_LOW,
-
-	/**
-	 * Medium priority scan.
-	 */ 
-	AS_SCAN_PRIORITY_MEDIUM,
-
-	/**
-	 * High priority scan.
-	 */ 
-	AS_SCAN_PRIORITY_HIGH
-	
-} as_scan_priority;
 
 /**
  * The status of a particular background scan.
@@ -331,14 +293,6 @@ typedef struct as_scan_predexp_s {
 typedef struct as_scan_s {
 
 	/**
-	 * Priority of scan. Only used when "as_scan.percent" is defined.
-	 * This field is obsolete and will eventually be removed.
-	 *
-	 * Default value is AS_SCAN_PRIORITY_DEFAULT.
-	 */
-	as_scan_priority priority;
-	
-	/**
 	 * @memberof as_scan
 	 * Namespace to be scanned.
 	 *
@@ -396,16 +350,6 @@ typedef struct as_scan_s {
 	 * If ops is set, ops will be destroyed when as_scan_destroy() is called.
 	 */
 	struct as_operations_s* ops;
-
-	/**
-	 * Percentage of the data to scan. Valid integer range is 1 to 100.
-	 *
-	 * Servers might allow scan percent, but not in conjunction with
-	 * "as_policy_scan.max_records". Scan percent is eventually slated for removal.
-	 *
-	 * Default value is AS_SCAN_PERCENT_DEFAULT.
-	 */
-	uint8_t percent;
 
 	/**
 	 * Set to true if the scan should return only the metadata of the record.
@@ -663,42 +607,6 @@ as_scan_predexp_add(as_scan* scan, as_predexp_base * predexp);
 /******************************************************************************
  * MODIFIER FUNCTIONS
  *****************************************************************************/
-
-/**
- * The percentage of data to scan.
- * 
- * ~~~~~~~~~~{.c}
- * as_scan_set_percent(&q, 100);
- * ~~~~~~~~~~
- *
- * @param scan 			The scan to set the priority on.
- * @param percent		The percent to scan.
- *
- * @return On success, true. Otherwise an error occurred.
- *
- * @relates as_scan
- * @ingroup as_scan_object
- */
-AS_EXTERN bool
-as_scan_set_percent(as_scan* scan, uint8_t percent);
-
-/**
- * Set the priority for the scan.
- * 
- * ~~~~~~~~~~{.c}
- * as_scan_set_priority(&q, AS_SCAN_PRIORITY_LOW);
- * ~~~~~~~~~~
- *
- * @param scan 			The scan to set the priority on.
- * @param priority		The priority for the scan.
- *
- * @return On success, true. Otherwise an error occurred.
- *
- * @relates as_scan
- * @ingroup as_scan_object
- */
-AS_EXTERN bool
-as_scan_set_priority(as_scan* scan, as_scan_priority priority);
 
 /**
  * Do not return bins. This will only return the metadata for the records.

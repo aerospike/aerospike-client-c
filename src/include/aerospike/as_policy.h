@@ -942,11 +942,6 @@ typedef struct as_policy_scan_s {
 	uint32_t records_per_second;
 
 	/**
-	 * @deprecated This field is deprecated and will eventually be removed.
-	 */
-	bool fail_on_cluster_change;
-
-	/**
 	 * If the transaction results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
@@ -1345,7 +1340,6 @@ as_policy_scan_init(as_policy_scan* p)
 	as_policy_base_query_init(&p->base);
 	p->max_records = 0;
 	p->records_per_second = 0;
-	p->fail_on_cluster_change = false;
 	p->durable_delete = false;
 	return p;
 }

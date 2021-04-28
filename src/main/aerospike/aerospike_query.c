@@ -621,10 +621,6 @@ as_query_command_size(
 		}
 	}
 	else {
-		// Estimate scan options size.
-		size += as_command_field_size(2);
-		n_fields++;
-
 		// Estimate scan timeout size.
 		size += as_command_field_size(sizeof(uint32_t));
 		n_fields++;
@@ -802,19 +798,6 @@ as_query_command_init(
 		}
 	}
 	else {
-		// Write scan options
-		p = as_command_write_field_header(p, AS_FIELD_SCAN_OPTIONS, 2);
-		*p++ = 0;
-		*p++ = 100;
-		// Priority and scan percent not available in query policy.  This should be added.
-		//uint8_t priority = query->priority << 4;
-		//
-		//if (policy->fail_on_cluster_change) {
-		//	priority |= 0x08;
-		//}
-		//*p++ = priority;
-		//*p++ = query->percent;
-
 		// Write socket timeout.
 		uint32_t timeout = (query_policy)? query_policy->base.socket_timeout : write_policy->base.socket_timeout;
 		p = as_command_write_field_header(p, AS_FIELD_SCAN_TIMEOUT, sizeof(uint32_t));

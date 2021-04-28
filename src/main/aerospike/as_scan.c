@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -56,8 +56,6 @@ as_scan_defaults(as_scan* scan, bool free, const as_namespace ns, const as_set s
 	scan->predexp.entries = NULL;
 
 	scan->ops = NULL;
-	scan->priority = AS_SCAN_PRIORITY_DEFAULT;
-	scan->percent = AS_SCAN_PERCENT_DEFAULT;
 	scan->no_bins = AS_SCAN_NOBINS_DEFAULT;
 	scan->concurrent = AS_SCAN_CONCURRENT_DEFAULT;
 	scan->deserialize_list_map = AS_SCAN_DESERIALIZE_DEFAULT;
@@ -204,22 +202,6 @@ as_scan_predexp_add(as_scan* scan, as_predexp_base * predexp)
 /******************************************************************************
  * MODIFIER FUNCTIONS
  *****************************************************************************/
-
-bool
-as_scan_set_percent(as_scan* scan, uint8_t percent)
-{
-	if ( !scan ) return false;
-	scan->percent = percent;
-	return true;
-}
-
-bool
-as_scan_set_priority(as_scan* scan, as_scan_priority priority)
-{
-	if ( !scan ) return false;
-	scan->priority = priority;
-	return true;
-}
 
 bool
 as_scan_set_nobins(as_scan* scan, bool nobins)

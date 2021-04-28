@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -45,7 +45,6 @@ extern "C" {
 #define AS_FIELD_KEY 2
 #define AS_FIELD_DIGEST 4
 #define AS_FIELD_TASK_ID 7
-#define AS_FIELD_SCAN_OPTIONS 8
 #define AS_FIELD_SCAN_TIMEOUT 9
 #define AS_FIELD_SCAN_RPS 10
 #define AS_FIELD_PID_ARRAY 11

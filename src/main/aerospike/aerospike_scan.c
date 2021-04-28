@@ -96,7 +96,6 @@ typedef struct as_scan_builder {
 	uint32_t cmd_size_pre;
 	uint32_t cmd_size_post;
 	uint16_t n_fields;
-	bool pscan;
 } as_scan_builder;
 
 /******************************************************************************
@@ -357,13 +356,6 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 		n_fields++;
 	}
 
-	// Only set scan options for server versions < 4.9 or if scan percent was modified.
-	if (!sb->pscan || scan->percent < 100) {
-		// Estimate scan options size.
-		size += as_command_field_size(2);
-		n_fields++;
-	}
-	
 	// Estimate scan timeout size.
 	size += as_command_field_size(sizeof(uint32_t));
 	n_fields++;
@@ -487,20 +479,6 @@ as_scan_command_init(
 		p = as_command_write_field_uint32(p, AS_FIELD_SCAN_RPS, policy->records_per_second);
 	}
 
-	// Only set scan options for server versions < 4.9 or if scan percent was modified.
-	if (!sb->pscan || scan->percent < 100) {
-		// Write scan options
-		p = as_command_write_field_header(p, AS_FIELD_SCAN_OPTIONS, 2);
-
-		uint8_t priority = scan->priority << 4;
-
-		if (policy->fail_on_cluster_change) {
-			priority |= 0x08;
-		}
-		*p++ = priority;
-		*p++ = scan->percent;
-	}
-
 	// Write socket timeout.
 	p = as_command_write_field_uint32(p, AS_FIELD_SCAN_TIMEOUT, policy->base.socket_timeout);
 
@@ -611,11 +589,9 @@ as_scan_command_execute(as_scan_task* task)
 
 	if (task->pt) {
 		sb.max_records = task->np->record_max;
-		sb.pscan = true;
 	}
 	else {
 		sb.max_records = 0;
-		sb.pscan = false;
 	}
 
 	size_t size = as_scan_command_size(task->policy, task->scan, &sb);
@@ -691,20 +667,10 @@ as_scan_worker(void* data)
 	cf_queue_push(task->complete_q, &complete_task);
 }
 
-static as_status
+static inline as_status
 as_scan_validate(as_error* err, const as_policy_scan* policy, const as_scan* scan)
 {
 	as_error_reset(err);
-
-	if (scan->percent <= 0 || scan->percent > 100) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid scan percent: %u", scan->percent);
-	}
-
-	if (scan->percent != 100 && policy->max_records != 0) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM, "scan percent(%u) and maxRecords(%"
-			PRIu64 ") are mutually exclusive",
-			scan->percent, policy->max_records);
-	}
 	return AEROSPIKE_OK;
 }
 
@@ -728,16 +694,6 @@ as_scan_generic(
 	}
 
 	uint64_t cluster_key = 0;
-
-	if (policy->fail_on_cluster_change && callback) {
-		status = as_query_validate_begin(err, nodes->array[0], scan->ns, 10000, &cluster_key);
-
-		if (status != AEROSPIKE_OK) {
-			as_cluster_release_all_nodes(nodes);
-			return status;
-		}
-	}
-
 	uint64_t task_id = as_task_id_resolve(task_id_ptr);
 
 	// Initialize task.
@@ -1149,7 +1105,6 @@ as_scan_partition_async(
 	sb.pt = NULL;
 	sb.np = NULL;
 	sb.max_records = 0;
-	sb.pscan = true;
 
 	size_t cmd_size = as_scan_command_size(policy, scan, &sb);
 	uint8_t* cmd_buf = cf_malloc(cmd_size);

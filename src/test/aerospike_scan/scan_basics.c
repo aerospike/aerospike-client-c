@@ -23,6 +23,7 @@
 #include <aerospike/as_status.h>
 
 #include <aerospike/as_exp.h>
+#include <aerospike/as_exp_operations.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_string.h>
@@ -1017,6 +1018,49 @@ TEST(scan_operate, "scan operate")
 	as_record_destroy(rec);
 }
 
+TEST(scan_operate_expop, "scan operate expop")
+{
+	as_error err;
+	as_string str;
+	as_string_init(&str, "bar", false);
+	const char* binname = "scan-expop";
+
+	as_exp_build(exp, as_exp_cond(
+			as_exp_bin_exists(binname), as_exp_add(as_exp_bin_int(binname), as_exp_int(4)),
+			as_exp_int(4)));
+	assert_not_null(exp);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_write(&ops, binname, exp, AS_EXP_WRITE_DEFAULT);
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	scan.ops = &ops;
+
+	uint64_t scanid = 0;
+	as_status status = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_scan_destroy(&scan);
+
+	aerospike_scan_wait(as, &err, NULL, scanid, 0);
+
+	as_key key;
+	as_key_init(&key, NS, SET2, "key-" SET2 "-5");
+	const char* bins[2] = {binname, NULL};
+
+	as_record* rec = NULL;
+
+	status = aerospike_key_select(as, &err, NULL, &key, bins, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	int64_t result = as_record_get_int64(rec, binname, 0);
+	assert_int_eq(result, 4);
+
+	as_record_destroy(rec);
+	as_exp_destroy(exp);
+}
+
 TEST(scan_filter_set_name, "scan filter set_name")
 {
 	scan_check check = {
@@ -1195,6 +1239,39 @@ TEST(scan_filter_bin_exists, "scan filter bin exists")
 	as_exp_destroy(filter);
 	as_scan_destroy(&scan);
 }
+
+TEST(scan_invalid_filter, "scan invalid filter")
+{
+	scan_check check = {
+		.failed = false,
+		.set = SET5,
+		.count = 0,
+		.nobindata = false,
+		.bins = { "bin1", "bin2", "bin3", NULL },
+	};
+	as_error err;
+	as_scan scan;
+
+	as_scan_init(&scan, NS, SET5);
+
+	as_exp_build(filter,
+		as_exp_add(as_exp_int(5), as_exp_int(5)));
+
+	as_policy_scan p;
+
+	as_policy_scan_init(&p);
+
+	p.base.filter_exp = filter;
+
+	as_status rc = aerospike_scan_foreach(as, &err, &p, &scan,
+			scan_check_callback, &check);
+
+	assert_int_eq(rc, AEROSPIKE_ERR_REQUEST_INVALID);
+
+	as_exp_destroy(filter);
+	as_scan_destroy(&scan);
+}
+
 
 /******************************************************************************
  * PREDEXP TESTS
@@ -1420,11 +1497,13 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 	suite_add( scan_basics_background_delete_records_md_filter );
 	suite_add( scan_basics_background_delete_records );
 	suite_add( scan_operate );
+	suite_add( scan_operate_expop );
 	suite_add( scan_filter_set_name );
 	suite_add( scan_filter_rec_ttl );
 	suite_add( scan_filter_rec_str_key );
 	suite_add( scan_filter_rec_int_key );
 	suite_add( scan_filter_bin_exists );
+	suite_add( scan_invalid_filter );
 
 	/*
 	These old predexp tests run fine individually, but rely on records

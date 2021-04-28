@@ -59,6 +59,8 @@
 		BF65C9C6252D299D0026D9E2 /* as_exp.h in Headers */ = {isa = PBXBuildFile; fileRef = BF65C9C5252D299D0026D9E2 /* as_exp.h */; };
 		BF65C9C8252D29CF0026D9E2 /* as_exp.c in Sources */ = {isa = PBXBuildFile; fileRef = BF65C9C7252D29CF0026D9E2 /* as_exp.c */; };
 		BF6FE4331BF2748E00175BF8 /* as_pipe.c in Sources */ = {isa = PBXBuildFile; fileRef = BF6FE4321BF2748E00175BF8 /* as_pipe.c */; };
+		BF7EBCC025D4B17000D5DFE9 /* as_exp_operations.c in Sources */ = {isa = PBXBuildFile; fileRef = BF7EBCBF25D4B17000D5DFE9 /* as_exp_operations.c */; };
+		BF7EBCC225D4B19300D5DFE9 /* as_exp_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BF7EBCC125D4B19300D5DFE9 /* as_exp_operations.h */; };
 		BF809CDB24327E9300C16F3D /* as_hll_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BF809CDA24327E9300C16F3D /* as_hll_operations.h */; };
 		BF809CDD2432836000C16F3D /* as_hll_operations.c in Sources */ = {isa = PBXBuildFile; fileRef = BF809CDC2432836000C16F3D /* as_hll_operations.c */; };
 		BF820B6D21151272006E6CD7 /* mod_lua_system.c in Sources */ = {isa = PBXBuildFile; fileRef = BF820B6C21151272006E6CD7 /* mod_lua_system.c */; };
@@ -243,6 +245,8 @@
 		BF65C9C5252D299D0026D9E2 /* as_exp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_exp.h; path = ../src/include/aerospike/as_exp.h; sourceTree = "<group>"; };
 		BF65C9C7252D29CF0026D9E2 /* as_exp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_exp.c; path = ../src/main/aerospike/as_exp.c; sourceTree = "<group>"; };
 		BF6FE4321BF2748E00175BF8 /* as_pipe.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_pipe.c; path = ../src/main/aerospike/as_pipe.c; sourceTree = "<group>"; };
+		BF7EBCBF25D4B17000D5DFE9 /* as_exp_operations.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_exp_operations.c; path = ../src/main/aerospike/as_exp_operations.c; sourceTree = "<group>"; };
+		BF7EBCC125D4B19300D5DFE9 /* as_exp_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_exp_operations.h; path = ../src/include/aerospike/as_exp_operations.h; sourceTree = "<group>"; };
 		BF809CDA24327E9300C16F3D /* as_hll_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_hll_operations.h; path = ../src/include/aerospike/as_hll_operations.h; sourceTree = "<group>"; };
 		BF809CDC2432836000C16F3D /* as_hll_operations.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_hll_operations.c; path = ../src/main/aerospike/as_hll_operations.c; sourceTree = "<group>"; };
 		BF820B6C21151272006E6CD7 /* mod_lua_system.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = mod_lua_system.c; path = "../modules/mod-lua/src/main/mod_lua_system.c"; sourceTree = "<group>"; };
@@ -443,6 +447,7 @@
 				BF8EABF71BF3C28F0027EF45 /* as_event_uv.c */,
 				BF25DA921BB0790F00AC7512 /* as_event.c */,
 				BF65C9C7252D29CF0026D9E2 /* as_exp.c */,
+				BF7EBCBF25D4B17000D5DFE9 /* as_exp_operations.c */,
 				BF809CDC2432836000C16F3D /* as_hll_operations.c */,
 				BF233666206574A4006ADF75 /* as_host.c */,
 				BFBDAFDF191B0C5C007EB07C /* as_info.c */,
@@ -644,6 +649,7 @@
 				BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */,
 				BFC65B4C1C921E9E0079DF5A /* as_event.h */,
 				BF65C9C5252D299D0026D9E2 /* as_exp.h */,
+				BF7EBCC125D4B19300D5DFE9 /* as_exp_operations.h */,
 				BF809CDA24327E9300C16F3D /* as_hll_operations.h */,
 				BF4E4E291D48213700BEEF94 /* as_host.h */,
 				BFC65B4D1C921E9E0079DF5A /* as_info.h */,
@@ -719,6 +725,7 @@
 				BFB8A5DA1D0F3F9E007B4E22 /* as_tls.h in Headers */,
 				BFC65B6F1C921E9E0079DF5A /* as_async.h in Headers */,
 				BFC65B6D1C921E9E0079DF5A /* as_admin.h in Headers */,
+				BF7EBCC225D4B19300D5DFE9 /* as_exp_operations.h in Headers */,
 				BFC65B851C921E9E0079DF5A /* as_record_iterator.h in Headers */,
 				BFEAF6322228638E00FB4248 /* as_conn_pool.h in Headers */,
 				BFC65B701C921E9E0079DF5A /* as_batch.h in Headers */,
@@ -813,6 +820,7 @@
 				BFCF26BF1AC1FBBF0062B75C /* as_string_builder.c in Sources */,
 				BFC0028A1901E08500CB9BC8 /* as_lookup.c in Sources */,
 				BFBD205218BC3436009ED931 /* mod_lua_bytes.c in Sources */,
+				BF7EBCC025D4B17000D5DFE9 /* as_exp_operations.c in Sources */,
 				BF5548ED19E36A7C007DDB9E /* as_log.c in Sources */,
 				BFBA105518B7D8B300A64E68 /* as_hashmap_iterator_hooks.c in Sources */,
 				BFC002881901BCB200CB9BC8 /* as_vector.c in Sources */,

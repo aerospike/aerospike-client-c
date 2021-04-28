@@ -15,6 +15,8 @@
  * the License.
  */
 #include <aerospike/aerospike.h>
+#include <aerospike/as_exp.h>
+#include <aerospike/as_exp_operations.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_query.h>
@@ -390,6 +392,49 @@ TEST(query_operate, "query operate")
 	as_query_destroy(&q);
 }
 
+TEST(query_operate_expop, "query operate expop")
+{
+	write_recs();
+
+	as_error err;
+	as_status status;
+	as_query q;
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	//const char* binname = "query-expop";
+
+	as_exp_build(exp, as_exp_val(&str));
+	assert_not_null(exp);
+
+	as_query_init(&q, NAMESPACE, SET);
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "qebin1", as_integer_range(3, 9));
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_write(&ops, "foo", exp, AS_EXP_WRITE_DEFAULT);
+	q.ops = &ops;
+
+	uint64_t query_id = 0;
+	status = aerospike_query_background(as, &err, NULL, &q, &query_id);
+
+	assert_ok(&err);
+	aerospike_query_wait(as, &err, NULL, &q, query_id, 0);
+	as_query_destroy(&q);
+
+	as_query_init(&q, NAMESPACE, SET);
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "qebin1", as_integer_range(3, 9));
+
+	uint32_t count = 0;
+	status = aerospike_query_foreach(as, &err, NULL, &q, query_operate_callback, &count);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(count, 7);
+	as_query_destroy(&q);
+	as_exp_destroy(exp);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -403,4 +448,5 @@ SUITE(query_background, "aerospike_query_background tests")
 	suite_add(query_validate1);
 	suite_add(query_aggregation_double);
 	suite_add(query_operate);
+	suite_add(query_operate_expop);
 }

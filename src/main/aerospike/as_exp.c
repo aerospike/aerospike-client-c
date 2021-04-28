@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Aerospike, Inc.
+ * Copyright 2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -229,8 +229,20 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 			}
 
 			break;
+		case _AS_EXP_CODE_COND:
+		case _AS_EXP_CODE_LET:
 		case _AS_EXP_CODE_AND:
 		case _AS_EXP_CODE_OR:
+		case _AS_EXP_CODE_EXCLUSIVE:
+		case _AS_EXP_CODE_ADD:
+		case _AS_EXP_CODE_SUB:
+		case _AS_EXP_CODE_MUL:
+		case _AS_EXP_CODE_DIV:
+		case _AS_EXP_CODE_INT_AND:
+		case _AS_EXP_CODE_INT_OR:
+		case _AS_EXP_CODE_INT_XOR:
+		case _AS_EXP_CODE_MIN:
+		case _AS_EXP_CODE_MAX:
 			entry->count = 0;
 			entry->prev_va_args = prev_va_args;
 			prev_va_args = i;

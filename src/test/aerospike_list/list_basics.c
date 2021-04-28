@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -22,6 +22,7 @@
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
+#include <aerospike/as_exp_operations.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_hashmap_iterator.h>
 #include <aerospike/as_integer.h>
@@ -2802,6 +2803,58 @@ TEST(list_exp_read, "List Read Expressions")
 	as_exp_destroy(filter);
 }
 
+TEST(exp_returns_list, "exp returns list")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 210);
+	const char* CString = "C";
+
+	as_arraylist list;
+	make_random_list(&list, 10);
+
+	as_exp_build(expr, as_exp_val(&list));
+	assert_not_null(expr);
+
+	as_error err;
+	as_record* rec;
+	as_status rc;
+	as_operations ops;
+	as_bin* results;
+
+	as_operations_inita(&ops, 3);
+	as_operations_exp_write(&ops, CString, expr, AS_EXP_WRITE_DEFAULT);
+	as_operations_add_read(&ops, CString);
+	as_operations_exp_read(&ops, "EV", expr, AS_EXP_READ_DEFAULT);
+	rec = NULL;
+	rc = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	results = rec->bins.entries;
+	assert_int_eq(as_bin_get_type(&results[1]), AS_LIST);
+	assert_int_eq(as_bin_get_type(&results[2]), AS_LIST);
+
+	as_record_destroy(rec);
+	as_operations_destroy(&ops);
+
+	as_operations_inita(&ops, 2);
+	as_operations_exp_read(&ops, "EV", expr, AS_EXP_READ_DEFAULT);
+	as_operations_add_read(&ops, CString);
+
+	rec = NULL;
+	rc = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	results = rec->bins.entries;
+	assert_int_eq(as_bin_get_type(&results[0]), AS_LIST);
+	assert(as_list_compare((as_list*)&list, &as_bin_get_value(&results[0])->list));
+
+	as_record_destroy(rec);
+	as_operations_destroy(&ops);
+	as_list_destroy((as_list*)&list);
+	as_exp_destroy(expr);
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -2832,4 +2885,7 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_create);
 	suite_add(list_exp_mod);
 	suite_add(list_exp_read);
+
+	// Requires Aerospike 5.6.
+	suite_add(exp_returns_list);
 }

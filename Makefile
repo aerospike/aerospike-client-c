@@ -168,6 +168,7 @@ AEROSPIKE += as_event_ev.o
 AEROSPIKE += as_event_uv.o
 AEROSPIKE += as_event_event.o
 AEROSPIKE += as_event_none.o
+AEROSPIKE += as_exp_operations.o
 AEROSPIKE += as_exp.o
 AEROSPIKE += as_hll_operations.o
 AEROSPIKE += as_host.o

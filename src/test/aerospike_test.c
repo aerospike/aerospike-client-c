@@ -400,6 +400,7 @@ PLAN(aerospike_test)
 
 	// filter expressions
 	plan_add(filter_exp);
+	plan_add(exp_operate);
 	plan_add(predexp);
 
 	// aerospike_info module

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -44,14 +44,21 @@ typedef enum as_operator_e {
 	AS_OPERATOR_CDT_READ   = 3,
 	AS_OPERATOR_CDT_MODIFY = 4,
 
-	AS_OPERATOR_MAP_READ   = 6, // eventually maps to AS_OPERATOR_CDT_READ
-	AS_OPERATOR_MAP_MODIFY = 7, // eventually maps to AS_OPERATOR_CDT_MODIFY
-
 	/**
 	 * Increment a bin containing an
 	 * integer value.
 	 */
 	AS_OPERATOR_INCR       = 5,
+
+	/**
+	 * Evaluate an expression and return the result of that expression.
+	 */
+	AS_OPERATOR_EXP_READ   = 7,
+
+	/**
+	 * Evaluate an expression and write the result of that expression.
+	 */
+	AS_OPERATOR_EXP_MODIFY = 8,
 
 	/**
 	 * Append bytes to the bin containing
@@ -74,8 +81,11 @@ typedef enum as_operator_e {
 	AS_OPERATOR_BIT_MODIFY = 13,
 	AS_OPERATOR_DELETE = 14,
 	AS_OPERATOR_HLL_READ = 15,
-	AS_OPERATOR_HLL_MODIFY = 16
+	AS_OPERATOR_HLL_MODIFY = 16,
 
+	/* Internal Ops */
+	AS_OPERATOR_MAP_READ   = 100, // eventually maps to AS_OPERATOR_CDT_READ
+	AS_OPERATOR_MAP_MODIFY = 101  // eventually maps to AS_OPERATOR_CDT_MODIFY
 } as_operator;
 
 /**

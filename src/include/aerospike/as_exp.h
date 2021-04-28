@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Aerospike, Inc.
+ * Copyright 2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -63,6 +63,8 @@ extern "C" {
  *****************************************************************************/
 
 typedef enum {
+	_AS_EXP_CODE_UNKNOWN = 0,
+
 	_AS_EXP_CODE_CMP_EQ = 1,
 	_AS_EXP_CODE_CMP_NE = 2,
 	_AS_EXP_CODE_CMP_GT = 3,
@@ -76,6 +78,35 @@ typedef enum {
 	_AS_EXP_CODE_AND = 16,
 	_AS_EXP_CODE_OR = 17,
 	_AS_EXP_CODE_NOT = 18,
+	_AS_EXP_CODE_EXCLUSIVE = 19,
+
+	_AS_EXP_CODE_ADD = 20,
+	_AS_EXP_CODE_SUB = 21,
+	_AS_EXP_CODE_MUL = 22,
+	_AS_EXP_CODE_DIV = 23,
+	_AS_EXP_CODE_POW = 24,
+	_AS_EXP_CODE_LOG = 25,
+	_AS_EXP_CODE_MOD = 26,
+	_AS_EXP_CODE_ABS = 27,
+	_AS_EXP_CODE_FLOOR = 28,
+	_AS_EXP_CODE_CEIL = 29,
+
+	_AS_EXP_CODE_TO_INT = 30,
+	_AS_EXP_CODE_TO_FLOAT = 31,
+
+	_AS_EXP_CODE_INT_AND = 32,
+	_AS_EXP_CODE_INT_OR = 33,
+	_AS_EXP_CODE_INT_XOR = 34,
+	_AS_EXP_CODE_INT_NOT = 35,
+	_AS_EXP_CODE_INT_LSHIFT = 36,
+	_AS_EXP_CODE_INT_RSHIFT = 37,
+	_AS_EXP_CODE_INT_ARSHIFT = 38,
+	_AS_EXP_CODE_INT_COUNT = 39,
+	_AS_EXP_CODE_INT_LSCAN = 40,
+	_AS_EXP_CODE_INT_RSCAN = 41,
+
+	_AS_EXP_CODE_MIN = 50,
+	_AS_EXP_CODE_MAX = 51,
 
 	_AS_EXP_CODE_DIGEST_MODULO = 64,
 	_AS_EXP_CODE_DEVICE_SIZE = 65,
@@ -92,6 +123,9 @@ typedef enum {
 	_AS_EXP_CODE_BIN = 81,
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
+	_AS_EXP_CODE_COND = 123,
+	_AS_EXP_CODE_VAR = 124,
+	_AS_EXP_CODE_LET = 125,
 	_AS_EXP_CODE_QUOTE = 126,
 	_AS_EXP_CODE_CALL = 127,
 
@@ -128,7 +162,7 @@ typedef enum {
 
 typedef enum {
 	AS_EXP_TYPE_NIL = 0,
-	AS_EXP_TYPE_TRILEAN = 1,
+	AS_EXP_TYPE_BOOL = 1,
 	AS_EXP_TYPE_INT = 2,
 	AS_EXP_TYPE_STR = 3,
 	AS_EXP_TYPE_LIST = 4,
@@ -180,6 +214,29 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 /*********************************************************************************
  * VALUE EXPRESSIONS
  *********************************************************************************/
+
+/**
+ * Create an 'unknown' value. Used to intentionally fail an expression.
+ * The failure can be ignored with AS_EXP_WRITE_EVAL_NO_FAIL or
+ * AS_EXP_READ_NO_FAIL.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // If var("v") (bin("balance") - 100.0) is greater that or equal to 0.0 then
+ * // return var("v") else fail operation.
+ * as_exp_build(expression,
+ *     as_exp_let(
+ *         as_exp_def("v", as_exp_sub(
+ *             as_exp_bin_float("balance"), as_exp_float(100.0))),
+ *         as_exp_cond(
+ *             as_exp_ge(as_exp_var("v"), as_exp_float(0)), as_exp_var("v"),
+ *             as_exp_unknown())));
+ * ~~~~~~~~~~
+ *
+ * @return (unknown value)
+ * @ingroup expression
+ */
+#define as_exp_unknown() {.op=_AS_EXP_CODE_UNKNOWN, .count=1}
 
 /**
  * Create boolean value.
@@ -325,6 +382,24 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  *********************************************************************************/
 
 #define _AS_EXP_VAL_RAWSTR(__val) {.op=_AS_EXP_CODE_VAL_RAWSTR, .v.str_val=__val}
+
+/**
+ * Create expression that returns a bin as a boolean value. Returns 'unknown'
+ * if the bin is not a boolean.
+ *
+ * ~~~~~~~~~~{.c}
+ * // Check if the value in bin "a" is true.
+ * as_exp_build(expression, as_exp_bin_bool("a"));
+ * ~~~~~~~~~~
+ *
+ * @param __bin_name			Bin name.
+ * @return (boolean bin)
+ * @ingroup expression
+ */
+#define as_exp_bin_bool(__bin_name) \
+		{.op=_AS_EXP_CODE_BIN, .count=3}, \
+		as_exp_int(AS_EXP_TYPE_BOOL), \
+		_AS_EXP_VAL_RAWSTR(__bin_name)
 
 /**
  * Create expression that returns a bin as a signed integer. Returns 'unknown'
@@ -638,7 +713,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * storage-engine is memory or data-in-memory is true, otherwise returns 0.
  * This expression usually evaluates quickly because record meta data is cached
  * in memory.
- * This method requires Aerospike Server version >= 5.3.0.
+ * Requires server version 5.3.0+.
  *
  * ~~~~~~~~~~{.c}
  * // Record memory size >= 100 KB
@@ -866,6 +941,606 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  */
 #define as_exp_or(...) {.op=_AS_EXP_CODE_OR}, __VA_ARGS__, \
 		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Create expression that returns true if only one of the expressions are true.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // exclusive(a == 0, b == 0)
+ * as_exp_build(expression,
+ *     as_exp_exclusive(
+ *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)),
+ *         as_exp_cmp_eq(as_exp_bin_int("b"), as_exp_int(0))));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of boolean expressions.
+ * @return (boolean value)
+ * @ingroup expression
+ */
+#define as_exp_exclusive(...) {.op=_AS_EXP_CODE_EXCLUSIVE}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/*********************************************************************************
+ * ARITHMETIC EXPRESSIONS
+ *********************************************************************************/
+
+/**
+ * Create "add" (+) operator that applies to a variable number of expressions.
+ * Return the sum of all arguments.
+ * All arguments must be the same type (integer or float).
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a + b + c == 10
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_add(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
+ *         as_exp_int(10)));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of integer or float expressions.
+ * @return (integer or float value)
+ * @ingroup expression
+ */
+#define as_exp_add(...) {.op=_AS_EXP_CODE_ADD}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Create "subtract" (-) operator that applies to a variable number of expressions.
+ * If only one argument is provided, return the negation of that argument.
+ * Otherwise, return the sum of the 2nd to Nth argument subtracted from the 1st
+ * argument. All arguments must resolve to the same type (integer or float).
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a - b - c > 10
+ * as_exp_build(expression,
+ *     as_exp_cmp_gt(
+ *         as_exp_sub(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
+ *         as_exp_int(10)));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of integer or float expressions.
+ * @return (integer or float value)
+ * @ingroup expression
+ */
+#define as_exp_sub(...) {.op=_AS_EXP_CODE_SUB}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Create "multiply" (*) operator that applies to a variable number of expressions.
+ * Return the product of all arguments. If only one argument is supplied, return
+ * that argument. All arguments must resolve to the same type (integer or float).
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a * b * c < 100
+ * as_exp_build(expression,
+ *     as_exp_cmp_lt(
+ *         as_exp_mul(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
+ *         as_exp_int(100)));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of integer or float expressions.
+ * @return (integer or float value)
+ * @ingroup expression
+ */
+#define as_exp_mul(...) {.op=_AS_EXP_CODE_MUL}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Create "divide" (/) operator that applies to a variable number of expressions.
+ * If there is only one argument, returns the reciprocal for that argument.
+ * Otherwise, return the first argument divided by the product of the rest.
+ * All arguments must resolve to the same type (integer or float).
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a / b / c == 1
+ * as_exp_build(expression,
+ *     as_exp_cmp_gt(
+ *         as_exp_div(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
+ *         as_exp_int(1)));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of integer or float expressions.
+ * @return (integer or float value)
+ * @ingroup expression
+ */
+#define as_exp_div(...) {.op=_AS_EXP_CODE_DIV}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Create "pow" operator that raises a "base" to the "exponent" power.
+ * All arguments must resolve to floats.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // pow(a, 2.0) == 4.0
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_pow(as_exp_bin_float("a"), as_exp_float(2.0)),
+ *         as_exp_float(4.0)));
+ * ~~~~~~~~~~
+ *
+ * @param __base		Base value.
+ * @param __exponent	Exponent value.
+ * @return (float value)
+ * @ingroup expression
+ */
+#define as_exp_pow(__base, __exponent) \
+		{.op=_AS_EXP_CODE_POW, .count=3}, __base, __exponent
+
+/**
+ * Create "log" operator for logarithm of "num" with base "base".
+ * All arguments must resolve to floats.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // log(a, 2) == 4.0
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_log(as_exp_bin_float("a"), as_exp_float(2.0)),
+ *         as_exp_float(4.0)));
+ * ~~~~~~~~~~
+ *
+ * @param __num			Number.
+ * @param __base		Base value.
+ * @return (float value)
+ * @ingroup expression
+ */
+#define as_exp_log(__num, __exponent) \
+		{.op=_AS_EXP_CODE_LOG, .count=3}, __num, __exponent
+
+/**
+ * Create "modulo" (%) operator that determines the remainder of "numerator"
+ * divided by "denominator". All arguments must resolve to integers.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a % 10 == 0
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_mod(as_exp_bin_int("a"), as_exp_int(10)),
+ *         as_exp_int(0)));
+ * ~~~~~~~~~~
+ *
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_mod(__numerator, __denominator) \
+		{.op=_AS_EXP_CODE_MOD, .count=3}, __numerator, __denominator
+
+/**
+ * Create operator that returns absolute value of a number.
+ * All arguments must resolve to integer or float.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // abs(a) == 1
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_abs(as_exp_bin_int("a")),
+ *         as_exp_int(1)));
+ * ~~~~~~~~~~
+ *
+ * @return (number value)
+ * @ingroup expression
+ */
+#define as_exp_abs(__value) \
+		{.op=_AS_EXP_CODE_ABS, .count=2}, __value
+
+/**
+ * Create expression that rounds a floating point number down to the closest integer value.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // floor(2.95) == 2.0
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_floor(as_exp_float(2.95)),
+ *         as_exp_float(2.0)));
+ * ~~~~~~~~~~
+ *
+ * @param __num			Floating point value to round down.
+ * @return (float-value)
+ * @ingroup expression
+ */
+#define as_exp_floor(__num) \
+		{.op=_AS_EXP_CODE_FLOOR, .count=2}, __num
+
+/**
+ * Create expression that rounds a floating point number up to the closest integer value.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // ceil(2.15) == 3.0
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_ceil(as_exp_float(2.15)),
+ *         as_exp_float(3.0)));
+ * ~~~~~~~~~~
+ *
+ * @param __num			Floating point value to round up.
+ * @return (integer-value)
+ * @ingroup expression
+ */
+#define as_exp_ceil(__num) \
+	{.op=_AS_EXP_CODE_CEIL, .count=2}, __num
+
+/**
+ * Create expression that converts a float to an integer.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // int(2.5) == 2
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_to_int(as_exp_float(2.5)),
+ *         as_exp_int(2)));
+ * ~~~~~~~~~~
+ *
+ * @param __num			Integer to convert to a float
+ * @return (float-value)
+ * @ingroup expression
+ */
+#define as_exp_to_int(__num) \
+	{.op=_AS_EXP_CODE_TO_INT, .count=2}, __num
+
+/**
+ * Create expression that converts an integer to a float.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // float(2) == 2.0
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_to_float(as_exp_int(2)),
+ *         as_exp_int(2.0)));
+ * ~~~~~~~~~~
+ *
+ * @param __num			Integer to convert to a float
+ * @return (float-value)
+ * @ingroup expression
+ */
+#define as_exp_to_float(__num) \
+	{.op=_AS_EXP_CODE_TO_FLOAT, .count=2}, __num
+
+/**
+ * Create integer "and" (&) operator that is applied to two or more integers.
+ * All arguments must resolve to integers.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a & 0xff == 0x11
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_int_and(as_exp_bin_int("a"), as_exp_int(0xff)),
+ *         as_exp_int(0x11)));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of integer expressions.
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_and(...) {.op=_AS_EXP_CODE_INT_AND}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Create integer "or" (|) operator that is applied to two or more integers.
+ * All arguments must resolve to integers.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a | 0x10 != 0
+ * as_exp_build(expression,
+ *     as_exp_cmp_ne(
+ *         as_exp_int_or(as_exp_bin_int("a"), as_exp_int(0x10)),
+ *         as_exp_int(0)));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of integer expressions.
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_or(...) {.op=_AS_EXP_CODE_INT_OR}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Create integer "xor" (^) operator that is applied to two or more integers.
+ * All arguments must resolve to integers.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a ^ b == 16
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_int_xor(as_exp_bin_int("a"), as_exp_bin_int("b")),
+ *         as_exp_int(16)));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of integer expressions.
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_xor(...) {.op=_AS_EXP_CODE_INT_XOR}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Create integer "not" (~) operator.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // ~a == 7
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_int_not(as_exp_bin_int("a")),
+ *         as_exp_int(7)));
+ * ~~~~~~~~~~
+ *
+ * @param __expr		Integer expression.
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_not(__expr) {.op=_AS_EXP_CODE_INT_NOT, .count=2}, \
+		__expr
+
+/**
+ * Create integer "left shift" (<<) operator.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a << 8 > 0xff
+ * as_exp_build(expression,
+ *     as_exp_cmp_gt(
+ *         as_exp_int_lshift(as_exp_bin_int("a"), as_exp_int(8)),
+ *         as_exp_int(0xff)));
+ * ~~~~~~~~~~
+ *
+ * @param __value		Integer expression.
+ * @param __shift		Number of bits to shift by.
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_lshift(__value, __shift) \
+		{.op=_AS_EXP_CODE_INT_LSHIFT, .count=3}, __value, __shift
+
+/**
+ * Create integer "logical right shift" (>>>) operator.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a >>> 8 > 0xff
+ * as_exp_build(expression,
+ *     as_exp_cmp_gt(
+ *         as_exp_int_rshift(as_exp_bin_int("a"), as_exp_int(8)),
+ *         as_exp_int(0xff)));
+ * ~~~~~~~~~~
+ *
+ * @param __value		Integer expression.
+ * @param __shift		Number of bits to shift by.
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_rshift(__value, __shift) \
+		{.op=_AS_EXP_CODE_INT_RSHIFT, .count=3}, __value, __shift
+
+/**
+ * Create integer "arithmetic right shift" (>>) operator.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // a >> 8 > 0xff
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_int_arshift(as_exp_bin_int("a"), as_exp_int(8)),
+ *         as_exp_int(0xff)));
+ * ~~~~~~~~~~
+ *
+ * @param __value		Integer expression.
+ * @param __shift		Number of bits to shift by.
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_arshift(__value, __shift) \
+		{.op=_AS_EXP_CODE_INT_ARSHIFT, .count=3}, __value, __shift
+
+/**
+ * Create expression that returns count of integer bits that are set to 1.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // count(a) == 4
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_int_count(as_exp_bin_int("a")),
+ *         as_exp_int(4)));
+ * ~~~~~~~~~~
+ *
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_count(__expr) \
+		{.op=_AS_EXP_CODE_INT_COUNT, .count=2}, __expr
+
+/**
+ * Create expression that scans integer bits from left (most significant bit) to
+ * right (least significant bit), looking for a search bit value. When the
+ * search value is found, the index of that bit (where the most significant bit is
+ * index 0) is returned. If "search" is true, the scan will search for the bit
+ * value 1. If "search" is false it will search for bit value 0.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // lscan(a, true) == 4
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_int_lscan(as_exp_bin_int("a"), as_exp_bool(true)),
+ *         as_exp_int(4)));
+ * ~~~~~~~~~~
+ *
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_lscan(__value, __search) \
+		{.op=_AS_EXP_CODE_INT_LSCAN, .count=3}, __value, __search
+
+/**
+ * Create expression that scans integer bits from right (least significant bit) to
+ * left (most significant bit), looking for a search bit value. When the
+ * search value is found, the index of that bit (where the most significant bit is
+ * index 0) is returned. If "search" is true, the scan will search for the bit
+ * value 1. If "search" is false it will search for bit value 0.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // rscan(a, true) == 4
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_int_rscan(as_exp_bin_int("a"), as_exp_bool(true)),
+ *         as_exp_int(4)));
+ * ~~~~~~~~~~
+ *
+ * @return (integer value)
+ * @ingroup expression
+ */
+#define as_exp_int_rscan(__value, __search) \
+		{.op=_AS_EXP_CODE_INT_RSCAN, .count=3}, __value, __search
+
+/**
+ * Create expression that returns the minimum value in a variable number of expressions.
+ * All arguments must be the same type (integer or float).
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // min(a, b, c) > 0
+ * as_exp_build(expression,
+ *     as_exp_cmp_gt(
+ *         as_exp_min(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
+ *         as_exp_int(0)));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of integer or float expressions.
+ * @return (integer or float value)
+ * @ingroup expression
+ */
+#define as_exp_min(...) {.op=_AS_EXP_CODE_MIN}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Create expression that returns the maximum value in a variable number of expressions.
+ * All arguments must be the same type (integer or float).
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // max(a, b, c) > 100
+ * as_exp_build(expression,
+ *     as_exp_cmp_eq(
+ *         as_exp_max(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
+ *         as_exp_int(100)));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of integer or float expressions.
+ * @return (integer or float value)
+ * @ingroup expression
+ */
+#define as_exp_max(...) {.op=_AS_EXP_CODE_MAX}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/*********************************************************************************
+ * FLOW CONTROL AND VARIABLE EXPRESSIONS
+ *********************************************************************************/
+
+/**
+ * Conditionally select an expression from a variable number of expression pairs
+ * followed by default expression action. Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * Args Format: bool exp1, action exp1, bool exp2, action exp2, ..., action-default
+ *
+ * // Apply operator based on type and test if greater than 100
+ * as_exp_build(expression,
+ *     as_exp_cmp_gt(
+ *         as_exp_cond(
+ *             as_exp_eq(as_exp_bin_int("type"), as_exp_int(0)), 
+ *                 as_exp_add(as_exp_bin_int("val1"), as_exp_bin_int("val2")),
+ *             as_exp_eq(as_exp_bin_int("type"), as_exp_int(1)),
+ *                 as_exp_sub(as_exp_bin_int("val1"), as_exp_bin_int("val2")),
+ *             as_exp_eq(as_exp_bin_int("type"), as_exp_int(2)),
+ *                 as_exp_mul(as_exp_bin_int("val1"), as_exp_bin_int("val2")),
+ *             as_exp_int(-1)),
+ *         as_exp_int(100)));
+ * ~~~~~~~~~~
+ *
+ * @return first action expression where bool expression is true or action-default.
+ * @ingroup expression
+ */
+#define as_exp_cond(...) {.op=_AS_EXP_CODE_COND}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Define variables and expressions in scope.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // 5 < a < 10
+ * as_exp_build(expression,
+ *     as_exp_let(as_exp_def("x", as_exp_bin_int("a")),
+ *         as_exp_and(
+ *             as_exp_lt(as_exp_int(5), as_exp_var("x")),
+ *             as_exp_lt(as_exp_var("x"), as_exp_int(10)))));
+ * ~~~~~~~~~~
+ *
+ * @param ...			Variable number of as_exp_def followed by a scoped
+ *  expression.
+ * @return result of scoped expression.
+ * @ingroup expression
+ */
+#define as_exp_let(...) \
+		{.op=_AS_EXP_CODE_LET}, __VA_ARGS__, \
+		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
+
+/**
+ * Assign variable to an expression that can be accessed later.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // 5 < a < 10
+ * as_exp_build(expression,
+ *     as_exp_let(as_exp_def("x", as_exp_bin_int("a")),
+ *         as_exp_and(
+ *             as_exp_lt(as_exp_int(5), as_exp_var("x")),
+ *             as_exp_lt(as_exp_var("x"), as_exp_int(10)))));
+ * ~~~~~~~~~~
+ *
+ * @param __var_name		Variable name.
+ * @param __expr			The variable is set to the result of __expr.
+ * @return A variable name expression pair.
+ * @ingroup expression
+ */
+#define as_exp_def(__var_name, __expr) \
+		_AS_EXP_VAL_RAWSTR(__var_name), __expr
+
+/**
+ * Retrieve expression value from a variable.
+ * Requires server version 5.6.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // 5 < a < 10
+ * as_exp_build(expression,
+ *     as_exp_let(as_exp_def("x", as_exp_bin_int("a")),
+ *         as_exp_and(
+ *             as_exp_lt(as_exp_int(5), as_exp_var("x")),
+ *             as_exp_lt(as_exp_var("x"), as_exp_int(10)))));
+ * ~~~~~~~~~~
+ *
+ * @param __var_name		Variable name.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_var(__var_name) \
+		{.op=_AS_EXP_CODE_VAR, .count=2}, _AS_EXP_VAL_RAWSTR(__var_name)
 
 /*********************************************************************************
  * LIST MODIFY EXPRESSIONS
@@ -2442,10 +3117,42 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 		as_exp_int(__op)
 
 /**
+ * Create expression that creates a new HLL or resets an existing HLL with minhash bits.
+ *
+ * @param __policy			An as_hll_policy value.
+ * @param __index_bit_count	Number of index bits. Must be between 4 and 16 inclusive.
+ * @param __mh_bit_count	Number of min hash bits. Must be between 4 and 51 inclusive.
+ * @param __bin				A bin expression to apply this function to.
+ * @return (hll bin) Returns the resulting hll bin.
+ * @ingroup expression
+ */
+#define as_exp_hll_init_mh(__policy, __index_bit_count, __mh_bit_count, __bin) \
+		_AS_EXP_HLL_MOD_START(AS_HLL_OP_INIT, 3), \
+		as_exp_int(__index_bit_count), \
+		as_exp_int(__mh_bit_count), \
+		as_exp_int(__policy == NULL ? 0 : ((as_hll_policy*)__policy)->flags), \
+		__bin
+
+/**
+ * Create expression that creates a new HLL or resets an existing HLL.
+ *
+ * @param __policy			An as_hll_policy value.
+ * @param __index_bit_count	Number of index bits. Must be between 4 and 16 inclusive.
+ * @param __bin				A bin expression to apply this function to.
+ * @return (hll bin) Returns the resulting hll bin.
+ * @ingroup expression
+ */
+#define as_exp_hll_init(__policy, __index_bit_count, __bin) \
+		_AS_EXP_HLL_MOD_START(AS_HLL_OP_INIT, 2), \
+		as_exp_int(__index_bit_count), \
+		as_exp_int(__policy == NULL ? 0 : ((as_hll_policy*)__policy)->flags), \
+		__bin
+
+/**
  * Create an expression that performs an as_operations_hll_add_mh.
  *
  * @param __policy			An as_hll_policy value.
- * @param __list			A list expression of element sto add to the HLL.
+ * @param __list			A list expression of elements to add to the HLL.
  * @param __index_bit_count	Number of index bits. Must be between 4 and 16 inclusive.
  * @param __mh_bit_count	Number of min hash bits. Must be between 4 and 51 inclusive.
  * @param __bin				A bin expression to apply this function to.
@@ -2464,7 +3171,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * Create an expression that performs an as_operations_hll_add.
  *
  * @param __policy			An as_hll_policy value.
- * @param __list			A list expression of element sto add to the HLL.
+ * @param __list			A list expression of elements to add to the HLL.
  * @param __index_bit_count	Number of index bits. Must be between 4 and 16 inclusive.
  * @param __bin				A bin expression to apply this function to.
  * @return (hll bin) Returns the resulting hll bin after adding elements from __list.
@@ -2482,7 +3189,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * Create an expression that performs an as_operations_hll_update.
  *
  * @param __policy		An as_hll_policy value.
- * @param __list		A list expression of element sto add to the HLL.
+ * @param __list		A list expression of elements to add to the HLL.
  * @param __bin			A bin expression to apply this function to.
  * @return (hll bin) Returns the resulting hll bin after adding elements from __list.
  * @ingroup expression

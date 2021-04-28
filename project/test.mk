@@ -17,6 +17,7 @@ TEST_AEROSPIKE += aerospike_udf/*.c
 TEST_AEROSPIKE += policy/*.c
 TEST_AEROSPIKE += util/*.c
 TEST_AEROSPIKE += filter_exp.c
+TEST_AEROSPIKE += exp_operate.c
 TEST_AEROSPIKE += predexp.c
 
 TEST_SOURCE = $(wildcard $(addprefix $(SOURCE_TEST)/, $(TEST_AEROSPIKE)))
@@ -76,6 +77,10 @@ test: $(TARGET_TEST)/aerospike_test
 .PHONY: test-valgrind
 test-valgrind: test-build
 	valgrind $(TEST_VALGRIND) $(TARGET_TEST)/aerospike_test $(AS_ARGS) 1>&2 2>client_test-valgrind
+
+.PHONY: test-gdb
+test-gdb: test-build
+	gdb -ex=r --args $(TARGET_TEST)/aerospike_test $(AS_ARGS)
 
 .PHONY: test-build
 test-build: $(TARGET_TEST)/aerospike_test

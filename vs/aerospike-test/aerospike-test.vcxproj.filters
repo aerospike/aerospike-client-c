@@ -176,6 +176,9 @@
     <ClCompile Include="..\..\src\test\aerospike_map\map_sort.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\exp_operate.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

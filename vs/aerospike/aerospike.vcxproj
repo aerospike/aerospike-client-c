@@ -360,6 +360,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_event.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_event_internal.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_exp.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_exp_operations.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_hll_operations.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_host.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_info.h" />
@@ -483,6 +484,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_event_none.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event_uv.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_exp.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_exp_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_hll_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_host.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_info.c" />

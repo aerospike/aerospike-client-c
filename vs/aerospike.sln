@@ -49,8 +49,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "async-query", "examples\asy
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "aerospike-test", "aerospike-test\aerospike-test.vcxproj", "{418744C6-6322-42CB-838B-09106E34E0C6}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "benchmarks", "benchmarks\benchmarks.vcxproj", "{D231D4C7-0017-4BE4-8838-2FBC158510C8}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "async-delay-queue", "examples\async-delay-queue\async-delay-queue.vcxproj", "{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "async-scan", "examples\async-scan\async-scan.vcxproj", "{A131974B-A17E-438B-827B-66789B99198C}"
@@ -471,24 +469,6 @@ Global
 		{418744C6-6322-42CB-838B-09106E34E0C6}.Release|x64.ActiveCfg = Release|x64
 		{418744C6-6322-42CB-838B-09106E34E0C6}.Release|x64.Build.0 = Release|x64
 		{418744C6-6322-42CB-838B-09106E34E0C6}.Release|x86.ActiveCfg = Release|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Debug libevent|x64.ActiveCfg = Debug libevent|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Debug libevent|x64.Build.0 = Debug libevent|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Debug libevent|x86.ActiveCfg = Debug libevent|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Debug libuv|x64.ActiveCfg = Debug libuv|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Debug libuv|x64.Build.0 = Debug libuv|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Debug libuv|x86.ActiveCfg = Debug libuv|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Debug|x64.ActiveCfg = Debug|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Debug|x64.Build.0 = Debug|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Debug|x86.ActiveCfg = Debug|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release libevent|x64.ActiveCfg = Release libevent|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release libevent|x64.Build.0 = Release libevent|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release libevent|x86.ActiveCfg = Release libevent|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release libuv|x64.ActiveCfg = Release libuv|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release libuv|x64.Build.0 = Release libuv|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release libuv|x86.ActiveCfg = Release libuv|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release|x64.ActiveCfg = Release|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release|x64.Build.0 = Release|x64
-		{D231D4C7-0017-4BE4-8838-2FBC158510C8}.Release|x86.ActiveCfg = Release|x64
 		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug libevent|x64.ActiveCfg = Debug libevent|x64
 		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug libevent|x64.Build.0 = Debug libevent|x64
 		{FBCC7572-5FE3-452D-85DB-7597F4BB42BB}.Debug libevent|x86.ActiveCfg = Debug libevent|x64

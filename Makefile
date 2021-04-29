@@ -329,7 +329,7 @@ package-clean:
 
 .PHONY: tags etags
 tags etags:
-	etags `find benchmarks examples modules src -name "*.[ch]" | egrep -v '(target/Linux|m4)'` `find /usr/include -name "*.h"`
+	etags `find examples modules src -name "*.[ch]" | egrep -v '(target/Linux|m4)'` `find /usr/include -name "*.h"`
 
 ###############################################################################
 ##  BUILD TARGETS                                                            ##

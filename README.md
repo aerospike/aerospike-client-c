@@ -2,8 +2,8 @@
 
 The Aerospike C client provides a C interface for interacting with the 
 [Aerospike](http://aerospike.com) Database.  The client can be built on
-64-bit distributions of Linux, MacOS or Windows. Unit tests, examples
-and benchmarks are also included.
+64-bit distributions of Linux, MacOS or Windows. Unit tests and examples
+are also included.
 
 ## Build Prerequisites
 
@@ -162,8 +162,8 @@ submodule or by the build environment.
 
 To enable [LuaJIT](http://luajit.org) 2.0.3, the build must be performed
 with the `USE_LUAJIT=1` option passed on all relevant `make` command
-lines (i.e., the C client itself, the benchmarks sample application, and
-the API examples.) [Note that on some platforms, [Valgrind](http://www.valgrind.org)
+lines (i.e., the C client itself and API examples). 
+[Note that on some platforms, [Valgrind](http://www.valgrind.org)
 may not function out-of-the-box on applications built with the C client
 when LuaJIT is enabled without using an unreleased version of LuaJIT
 built with additional options.]
@@ -178,9 +178,9 @@ on all relevant `make` command lines.
 ## Package
 
 Installer packages can be created for RedHat (rpm), Debian (deb), Mac OS X (pkg).
-These packages contain C client libraries, header files, online docs, examples and 
-benchmarks.  Package creation requires doxygen 1.8 or greater and its dependencies
-(including graphviz).  Doxygen is used to create online HTML documentation.
+These packages contain C client libraries and header files. Package creation 
+requires doxygen 1.8 or greater and its dependencies (including graphviz).
+Doxygen is used to create online HTML documentation.
 
 Build the client package on the current platform:
 

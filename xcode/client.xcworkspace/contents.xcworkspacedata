@@ -8,9 +8,6 @@
       location = "group:aerospike-test.xcodeproj">
    </FileRef>
    <FileRef
-      location = "group:benchmarks.xcodeproj">
-   </FileRef>
-   <FileRef
       location = "group:examples.xcodeproj">
    </FileRef>
 </Workspace>

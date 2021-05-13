@@ -209,6 +209,29 @@ typedef struct as_scan_predexp_s {
 } as_scan_predexp;
 
 /**
+ * @private
+ * Partition status.
+ */
+typedef struct as_partition_status_s {
+	uint16_t part_id;
+	as_digest digest;
+	bool done;
+} as_partition_status;
+
+/**
+ * @private
+ * Partitions status.
+ */
+typedef struct as_partitions_status_s {
+	uint32_t ref_count;
+	uint16_t part_begin;
+	uint16_t part_count;
+	bool done;
+	char pad[7];
+	as_partition_status parts[];
+} as_partitions_status;
+
+/**
  * In order to execute a scan using the Scan API, an as_scan object
  * must be initialized and populated.
  *
@@ -400,6 +423,17 @@ typedef struct as_scan_s {
 	 * Default value is AS_SCAN_PERCENT_DEFAULT.
 	 */
 	uint8_t percent;
+	 /* @private
+	 * Status of all partitions.
+	 */
+	as_partitions_status* parts_all;
+
+	/**
+	 * Set to true if as_policy_scan.max_records is set and you need to scan data in pages.
+	 *
+	 * Default: false
+	 */
+	bool paginate;
 
 	/**
 	 * Set to true if the scan should return only the metadata of the record.
@@ -747,6 +781,31 @@ as_scan_set_concurrent(as_scan* scan, bool concurrent);
  */
 AS_EXTERN bool
 as_scan_apply_each(as_scan* scan, const char* module, const char* function, as_list* arglist);
+
+/**
+ * Set to true if as_policy_scan.max_records is set and you need to scan data in pages.
+ * 
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+static inline void
+as_scan_set_paginate(as_scan* scan, bool paginate)
+{
+	scan->paginate = paginate;
+}
+
+/**
+ * If using scan pagination, did previous paginated scan with this scan instance 
+ * return all records?
+ *
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+static inline bool
+as_scan_is_done(as_scan* scan)
+{
+	return scan->parts_all && scan->parts_all->done;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

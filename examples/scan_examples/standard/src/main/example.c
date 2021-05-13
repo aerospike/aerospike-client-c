@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2020 by Aerospike.
+ * Copyright 2008-2021 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -51,6 +51,7 @@ bool scan_cb(const as_val* p_val, void* udata);
 void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
 as_status scan_partition(aerospike* p_as, as_error* err);
+as_status scan_pages(aerospike* p_as, as_error* err);
 
 //==========================================================
 // STANDARD SCAN Example
@@ -128,6 +129,13 @@ main(int argc, char* argv[])
 	// Run scan partition functionality.
 	if (scan_partition(&as, &err) != AEROSPIKE_OK) {
 		LOG("scan_partition() returned %d - %s", err.code, err.message);
+		cleanup(&as);
+		exit(-1);
+	}
+
+	// Run scan pages functionality.
+	if (scan_pages(&as, &err) != AEROSPIKE_OK) {
+		LOG("scan_pages() returned %d - %s", err.code, err.message);
 		cleanup(&as);
 		exit(-1);
 	}
@@ -369,6 +377,84 @@ scan_partition(aerospike* p_as, as_error* err)
 	}
 
 	LOG("records scanned: %u", c.count);
+	as_scan_destroy(&scan);
+	return AEROSPIKE_OK;
+}
+
+//==========================================================
+// Scan Pages
+//
+
+static as_status
+insert_records_for_scan_page(aerospike* p_as, as_error* err, const as_set set, uint32_t size)
+{
+	// Write records that belong to the specified partition.
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, "bin1", 55);
+
+	as_status status;
+
+	for (uint32_t i = 0; i < size; i++) {
+		as_key key;
+		as_key_init_int64(&key, g_namespace, set, (int64_t)i);
+
+		status = as_key_set_digest(err, &key);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
+		status = aerospike_key_put(p_as, err, NULL, &key, &rec);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+scan_pages(aerospike* p_as, as_error* err)
+{
+	const char* set = "scanpage";
+	uint32_t total_size = 190;
+	uint32_t page_size = 100;
+
+	LOG("write records for scan pagination");
+	as_status status = insert_records_for_scan_page(p_as, err, set, total_size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	LOG("records written: %u", total_size);
+
+	struct counter c;
+	c.count = 0;
+
+	as_scan scan;
+	as_scan_init(&scan, g_namespace, set);
+	as_scan_set_paginate(&scan, true);
+
+	as_policy_scan policy;
+	as_policy_scan_init(&policy);
+	policy.max_records = page_size;
+
+	// Scan 3 pages of records.
+	for (int i = 1; i <= 3 && ! as_scan_is_done(&scan); i++) {
+		c.count = 0;
+
+		LOG("scan page: %d", i);
+		status = aerospike_scan_foreach(p_as, err, &policy, &scan, pscan_cb2, &c);
+
+		if (status != AEROSPIKE_OK) {
+			as_scan_destroy(&scan);
+			return status;
+		}
+		LOG("records returned: %u", c.count);
+	}
+
 	as_scan_destroy(&scan);
 	return AEROSPIKE_OK;
 }

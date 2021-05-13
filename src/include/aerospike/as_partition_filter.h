@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -39,6 +39,19 @@ typedef struct as_partition_filter_s {
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
+
+/**
+ * Read all partitions.
+ *
+ * @param pf			Partition filter.
+ */
+static inline void
+as_partition_filter_set_all(as_partition_filter* pf)
+{
+	pf->begin = 0;
+	pf->count = 4096;
+	pf->digest.init = false;
+}
 
 /**
  * Filter by partition id.

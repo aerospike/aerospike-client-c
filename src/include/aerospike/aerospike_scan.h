@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -282,7 +282,7 @@ aerospike_scan_info(
  */
 AS_EXTERN as_status
 aerospike_scan_foreach(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	aerospike_scan_foreach_callback callback, void* udata
 	);
 
@@ -325,7 +325,7 @@ aerospike_scan_foreach(
  */
 AS_EXTERN as_status
 aerospike_scan_node(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	const char* node_name, aerospike_scan_foreach_callback callback, void* udata
 	);
 
@@ -365,7 +365,7 @@ aerospike_scan_node(
  */
 AS_EXTERN as_status
 aerospike_scan_partitions(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	as_partition_filter* pf, aerospike_scan_foreach_callback callback, void* udata
 	);
 
@@ -418,7 +418,7 @@ aerospike_scan_partitions(
  */
 AS_EXTERN as_status
 aerospike_scan_async(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
 	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	);
 	
@@ -478,7 +478,7 @@ aerospike_scan_async(
  */
 AS_EXTERN as_status
 aerospike_scan_node_async(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan, uint64_t* scan_id,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
 	const char* node_name, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	);
 
@@ -534,7 +534,7 @@ aerospike_scan_node_async(
  */
 AS_EXTERN as_status
 aerospike_scan_partitions_async(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	as_partition_filter* pf, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	);
 

@@ -1200,7 +1200,7 @@ aerospike_scan_info(
 
 as_status
 aerospike_scan_foreach(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	aerospike_scan_foreach_callback callback, void* udata
 	)
 {
@@ -1217,7 +1217,7 @@ aerospike_scan_foreach(
 	}
 
 	as_partition_tracker pt;
-	as_partition_tracker_init_nodes(&pt, cluster, policy, n_nodes);
+	as_partition_tracker_init_nodes(&pt, cluster, policy, scan, n_nodes);
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 	as_partition_tracker_destroy(&pt);
 	return status;
@@ -1225,7 +1225,7 @@ aerospike_scan_foreach(
 
 as_status
 aerospike_scan_node(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	const char* node_name, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
@@ -1249,7 +1249,7 @@ aerospike_scan_node(
 	}
 
 	as_partition_tracker pt;
-	as_partition_tracker_init_node(&pt, cluster, policy, node);
+	as_partition_tracker_init_node(&pt, cluster, policy, scan, node);
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 	as_partition_tracker_destroy(&pt);
 	as_node_release(node);
@@ -1258,7 +1258,7 @@ aerospike_scan_node(
 
 as_status
 aerospike_scan_partitions(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	as_partition_filter* pf, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
@@ -1276,7 +1276,7 @@ aerospike_scan_partitions(
 	}
 
 	as_partition_tracker pt;
-	status = as_partition_tracker_init_filter(&pt, cluster, policy, n_nodes, pf, err);
+	status = as_partition_tracker_init_filter(&pt, cluster, policy, scan, n_nodes, pf, err);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1289,7 +1289,7 @@ aerospike_scan_partitions(
 
 as_status
 aerospike_scan_async(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
@@ -1312,13 +1312,13 @@ aerospike_scan_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	as_partition_tracker_init_nodes(pt, cluster, policy, n_nodes);
+	as_partition_tracker_init_nodes(pt, cluster, policy, scan, n_nodes);
 	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
 }
 
 as_status
 aerospike_scan_node_async(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	uint64_t* scan_id, const char* node_name, as_async_scan_listener listener, void* udata,
 	as_event_loop* event_loop
 	)
@@ -1343,7 +1343,7 @@ aerospike_scan_node_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	as_partition_tracker_init_node(pt, cluster, policy, node);
+	as_partition_tracker_init_node(pt, cluster, policy, scan, node);
 	status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata,
 									 event_loop);
 	as_node_release(node);
@@ -1352,7 +1352,7 @@ aerospike_scan_node_async(
 
 as_status
 aerospike_scan_partitions_async(
-	aerospike* as, as_error* err, const as_policy_scan* policy, const as_scan* scan,
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	as_partition_filter* pf, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
@@ -1370,7 +1370,7 @@ aerospike_scan_partitions_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	status = as_partition_tracker_init_filter(pt, cluster, policy, n_nodes, pf, err);
+	status = as_partition_tracker_init_filter(pt, cluster, policy, scan, n_nodes, pf, err);
 
 	if (status != AEROSPIKE_OK) {
 		cf_free(pt);

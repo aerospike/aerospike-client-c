@@ -47,6 +47,9 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 static void
 as_node_create_connections(as_node* node, as_conn_pool* pool, uint32_t timeout_ms, int count);
 
+void
+as_event_node_balance_connections(as_cluster* cluster, as_node* node);
+
 extern uint32_t as_event_loop_capacity;
 
 /******************************************************************************
@@ -897,6 +900,22 @@ as_node_verify_name(as_error* err, as_node* node, const char* name)
 	return AEROSPIKE_OK;
 }
 
+static void
+as_node_restart(as_cluster* cluster, as_node* node)
+{
+	// TODO: Reset error count.
+	//if (cluster->max_error_rate > 0) {
+	//	as_node_reset_error_count(node);
+	//}
+
+	// Balance sync connections.
+	as_node_balance_connections(node);
+
+	if (as_event_loop_capacity > 0 && !as_event_single_thread) {
+		as_event_node_balance_connections(cluster, node);
+	}
+}
+
 static const char INFO_STR_CHECK_RACK[] = "node\npeers-generation\npartition-generation\nrebalance-generation\n";
 static const char INFO_STR_CHECK_PEERS[] = "node\npeers-generation\npartition-generation\n";
 
@@ -919,6 +938,13 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 			if (node->peers_generation != gen) {
 				as_log_debug("Node %s peers generation changed: %u", node->name, gen);
 				peers->gen_changed = true;
+
+				if (node->peers_generation > gen && node->peers_generation != 0xFFFFFFFF) {
+					as_log_info("Quick node restart detected: node=%s oldgen=%u newgen=%u",
+						as_node_get_address_string(node), node->peers_generation, gen);
+
+					as_node_restart(cluster, node);
+				}
 			}
 		}
 		else if (strcmp(nv->name, "partition-generation") == 0) {
@@ -995,8 +1021,18 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	as_vector_destroy(&values);
 
 	if (status == AEROSPIKE_OK) {
-		node->failures = 0;
 		peers->refresh_count++;
+
+		// Reload peers, partitions and racks if there were failures on previous tend.
+		if (node->failures > 0) {
+			peers->gen_changed = true;
+			node->partition_changed = true;
+
+			if (cluster->rack_aware) {
+				node->rebalance_changed = true;
+			}
+		}
+		node->failures = 0;
 	}
 	return status;
 }

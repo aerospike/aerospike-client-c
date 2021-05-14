@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1646,6 +1646,22 @@ close_idle_connections(as_async_conn_pool* pool, uint64_t max_socket_idle_ns, in
 }
 
 void
+as_event_balance_connections_node(as_event_loop* event_loop, as_cluster* cluster, as_node* node)
+{
+	as_async_conn_pool* pool = &node->async_conn_pools[event_loop->index];
+	int excess = pool->queue.total - pool->min_size;
+
+	if (excess > 0) {
+		close_idle_connections(pool, cluster->max_socket_idle_ns_trim, excess);
+		// Do not close idle pipeline connections because pipelines work better with a stable
+		// number of connections.
+	}
+	else if (excess < 0) {
+		create_connections(event_loop, node, pool, -excess);
+	}
+}
+
+void
 as_event_balance_connections_cluster(as_event_loop* event_loop, as_cluster* cluster)
 {
 	as_nodes* nodes = as_nodes_reserve(cluster);
@@ -1655,21 +1671,9 @@ as_event_balance_connections_cluster(as_event_loop* event_loop, as_cluster* clus
 		as_node_reserve(nodes->array[i]);
 	}
 
-	int index = event_loop->index;
-
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
-		as_async_conn_pool* pool = &node->async_conn_pools[index];
-		int excess = pool->queue.total - pool->min_size;
-
-		if (excess > 0) {
-			close_idle_connections(pool, cluster->max_socket_idle_ns_trim, excess);
-			// Do not close idle pipeline connections because pipelines work better with a stable
-			// number of connections.
-		}
-		else if (excess < 0) {
-			create_connections(event_loop, node, pool, -excess);
-		}
+		as_event_balance_connections_node(event_loop, cluster, node);
 	}
 
 	// Release each node.
@@ -1681,7 +1685,7 @@ as_event_balance_connections_cluster(as_event_loop* event_loop, as_cluster* clus
 }
 
 static void
-balancer_in_loop(as_event_loop* event_loop, balancer_shared* bs)
+balancer_in_loop_cluster(as_event_loop* event_loop, balancer_shared* bs)
 {
 	as_event_balance_connections_cluster(event_loop, bs->cluster);
 	balancer_release(bs);
@@ -1701,9 +1705,55 @@ as_event_balance_connections(as_cluster* cluster)
 	bs->loop_count = loop_max;
 
 	for (uint32_t i = 0; i < loop_max; i++) {
-		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop, bs)) {
+		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_cluster, bs)) {
 			as_log_error("Failed to queue connection balancer");
 			balancer_release(bs);
+		}
+	}
+}
+
+typedef struct {
+	as_cluster* cluster;
+	as_node* node;
+	uint32_t loop_count;
+} balancer_shared_node;
+
+static inline void
+balancer_release_node(balancer_shared_node* bs)
+{
+	if (as_aaf_uint32(&bs->loop_count, -1) == 0) {
+		as_node_release(bs->node);
+		cf_free(bs);
+	}
+}
+
+static void
+balancer_in_loop_node(as_event_loop* event_loop, balancer_shared_node* bs)
+{
+	as_event_balance_connections_node(event_loop, bs->cluster, bs->node);
+	balancer_release_node(bs);
+}
+
+void
+as_event_node_balance_connections(as_cluster* cluster, as_node* node)
+{
+	uint32_t loop_max = as_event_loop_size;
+
+	if (loop_max == 0) {
+		return;
+	}
+
+	balancer_shared_node* bs = cf_malloc(sizeof(balancer_shared_node));
+	bs->cluster = cluster;
+	bs->node = node;
+	bs->loop_count = loop_max;
+
+	as_node_reserve(node);
+
+	for (uint32_t i = 0; i < loop_max; i++) {
+		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_node, bs)) {
+			as_log_error("Failed to queue node connection balancer");
+			balancer_release_node(bs);
 		}
 	}
 }

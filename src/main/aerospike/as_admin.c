@@ -249,7 +249,7 @@ as_admin_execute(
 	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms);
 	
 	if (status) {
-		as_node_close_connection(node, &socket, socket.pool);
+		as_node_close_conn_error(node, &socket, socket.pool);
 		as_node_release(node);
 		return status;
 	}
@@ -257,7 +257,7 @@ as_admin_execute(
 	status = as_socket_read_deadline(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms);
 	
 	if (status) {
-		as_node_close_connection(node, &socket, socket.pool);
+		as_node_close_conn_error(node, &socket, socket.pool);
 		as_node_release(node);
 		return status;
 	}
@@ -362,7 +362,7 @@ as_admin_read_list(
 	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms);
 	
 	if (status) {
-		as_node_close_connection(node, &socket, socket.pool);
+		as_node_close_conn_error(node, &socket, socket.pool);
 		as_node_release(node);
 		return status;
 	}
@@ -370,7 +370,7 @@ as_admin_read_list(
 	status = as_admin_read_blocks(err, &socket, node, deadline_ms, parse_fn, list);
 	
 	if (status) {
-		as_node_close_connection(node, &socket, socket.pool);
+		as_node_close_conn_error(node, &socket, socket.pool);
 		as_node_release(node);
 		return status;
 	}

@@ -602,6 +602,21 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
+	if (! as_node_valid_error_count(cmd->node)) {
+		event_loop->errors++;
+
+		if (as_event_command_retry(cmd, true)) {
+			return;
+		}
+
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_MAX_ERROR_RATE, "Max error rate exceeded");
+
+		as_event_timer_stop(cmd);
+		as_event_error_callback(cmd, &err);
+		return;
+	}
+
 	if (cmd->pipe_listener) {
 		as_pipe_get_connection(cmd);
 		return;
@@ -612,19 +627,27 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 
 	// Find connection.
 	while (as_queue_pop(&pool->queue, &conn)) {
-		// Verify that socket is active and receive buffer is empty.
-		int len = as_event_validate_connection(&conn->base, cmd->cluster->max_socket_idle_ns_tran);
-
-		if (len == 0) {
-			conn->cmd = cmd;
-			cmd->conn = (as_event_connection*)conn;
-			event_loop->errors = 0;  // Reset errors on valid connection.
-			as_event_command_write_start(cmd);
-			return;
+		// Verify that socket is active.
+		if (! as_event_conn_current_tran(&conn->base, cmd->cluster->max_socket_idle_ns_tran)) {
+			as_event_release_connection(&conn->base, pool);
+			continue;
 		}
 
-		as_log_debug("Invalid async socket from pool: %d", len);
-		as_event_release_connection(&conn->base, pool);
+		// Verify that socket is active and receive buffer is empty.
+		int len = as_event_conn_validate(&conn->base);
+
+		if (len != 0) {
+			as_log_debug("Invalid async socket from pool: %d", len);
+			as_event_release_connection(&conn->base, pool);
+			as_node_incr_error_count(cmd->node);
+			continue;
+		}
+
+		conn->cmd = cmd;
+		cmd->conn = (as_event_connection*)conn;
+		event_loop->errors = 0;  // Reset errors on valid connection.
+		as_event_command_write_start(cmd);
+		return;
 	}
 
 	// Create connection only when connection count within limit.
@@ -1207,16 +1230,21 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 
 	// Close socket on errors that can leave unread data in socket.
 	switch (err->code) {
+		case AEROSPIKE_ERR_DEVICE_OVERLOAD:
+			as_event_put_connection(cmd, pool);
+			as_node_incr_error_count(cmd->node);
+			break;
+
 		case AEROSPIKE_ERR_QUERY_ABORTED:
 		case AEROSPIKE_ERR_SCAN_ABORTED:
 		case AEROSPIKE_ERR_ASYNC_CONNECTION:
 		case AEROSPIKE_ERR_TLS_ERROR:
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
-		case AEROSPIKE_NOT_AUTHENTICATED: {
+		case AEROSPIKE_NOT_AUTHENTICATED:
 			as_event_release_connection(cmd->conn, pool);
+			as_node_incr_error_count(cmd->node);
 			break;
-		}
 			
 		default:
 			as_event_put_connection(cmd, pool);
@@ -1634,7 +1662,7 @@ close_idle_connections(as_async_conn_pool* pool, uint64_t max_socket_idle_ns, in
 			break;
 		}
 
-		if (as_event_connection_current(conn, max_socket_idle_ns)) {
+		if (as_event_conn_current_trim(conn, max_socket_idle_ns)) {
 			if (! as_queue_push_limit(&pool->queue, &conn)) {
 				as_event_release_connection(conn, pool);
 			}
@@ -1656,7 +1684,7 @@ as_event_balance_connections_node(as_event_loop* event_loop, as_cluster* cluster
 		// Do not close idle pipeline connections because pipelines work better with a stable
 		// number of connections.
 	}
-	else if (excess < 0) {
+	else if (excess < 0 && as_node_valid_error_count(node)) {
 		create_connections(event_loop, node, pool, -excess);
 	}
 }

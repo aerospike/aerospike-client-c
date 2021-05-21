@@ -135,6 +135,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
 	node->sync_conns_opened = 1;
 	node->sync_conns_closed = 0;
+	node->error_count = 0;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
@@ -533,18 +534,24 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 
 	while (true) {
 		if (as_conn_pool_pop_head(pool, &s)) {
-			// Found socket.
-			// Verify that socket is active and receive buffer is empty.
-			int len = as_socket_validate(&s, cluster->max_socket_idle_ns_tran);
-
-			if (len == 0) {
-				*sock = s;
-				sock->pool = pool;
-				return AEROSPIKE_OK;
+			// Found socket. Verify that socket is active.
+			if (! as_socket_current_tran(s.last_used, cluster->max_socket_idle_ns_tran)) {
+				as_node_close_connection(node, &s, pool);
+				continue;
 			}
 
-			as_log_debug("Invalid socket %d from pool: %d", s.fd, len);
-			as_node_close_connection(node, &s, pool);
+			// Verify that socket receive buffer is empty.
+			int len = as_socket_validate_fd(s.fd);
+
+			if (len != 0) {
+				as_log_debug("Invalid socket %d from pool: %d", s.fd, len);
+				as_node_close_conn_error(node, &s, pool);
+				continue;
+			}
+
+			*sock = s;
+			sock->pool = pool;
+			return AEROSPIKE_OK;
 		}
 		else if (as_conn_pool_incr(pool)) {
 			// Socket not found and queue has available slot.
@@ -623,7 +630,7 @@ as_node_balance_connections(as_node* node)
 		if (excess > 0) {
 			as_node_close_idle_connections(node, pool, excess);
 		}
-		else if (excess < 0) {
+		else if (excess < 0 && as_node_valid_error_count(node)) {
 			as_node_create_connections(node, pool, timeout_ms, -excess);
 		}
 	}
@@ -903,10 +910,9 @@ as_node_verify_name(as_error* err, as_node* node, const char* name)
 static void
 as_node_restart(as_cluster* cluster, as_node* node)
 {
-	// TODO: Reset error count.
-	//if (cluster->max_error_rate > 0) {
-	//	as_node_reset_error_count(node);
-	//}
+	if (cluster->max_error_rate > 0) {
+		as_node_reset_error_count(node);
+	}
 
 	// Balance sync connections.
 	as_node_balance_connections(node);

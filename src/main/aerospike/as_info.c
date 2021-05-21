@@ -87,6 +87,23 @@ as_info_decode_error(char* begin)
 	}
 }
 
+static bool
+as_info_keep_connection(as_status status)
+{
+	switch (status) {
+		case AEROSPIKE_ERR_CONNECTION:
+		case AEROSPIKE_ERR_TIMEOUT:
+		case AEROSPIKE_ERR_CLIENT:
+		case AEROSPIKE_ERR_CLIENT_ABORT:
+		case AEROSPIKE_NOT_AUTHENTICATED:
+		case AEROSPIKE_ERR_TLS_ERROR:
+			return false;
+
+		default:
+			return true;
+	}
+}
+
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
@@ -100,21 +117,25 @@ as_info_command_node(
 	as_socket socket;
 	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &socket);
 	
-	if (status) {
+	if (status != AEROSPIKE_OK) {
 		return status;
 	}
 	
 	status = as_info_command(err, &socket, node, command, send_asis, deadline_ms, 0, response);
 
 	if (status != AEROSPIKE_OK) {
-		if (status == AEROSPIKE_ERR_TIMEOUT || status == AEROSPIKE_ERR_CLIENT) {
-			// Add node address to error message.
-			char str[512];
-			snprintf(str, sizeof(str), " from %s", as_node_get_address_string(node));
-			as_error_append(err, str);
-			as_node_close_connection(node, &socket, socket.pool);
-			return status;
+		if (as_info_keep_connection(status)) {
+			as_node_put_conn_error(node, &socket);
 		}
+		else {
+			as_node_close_conn_error(node, &socket, socket.pool);
+		}
+
+		// Add node address to error message.
+		char str[512];
+		snprintf(str, sizeof(str), " from %s", as_node_get_address_string(node));
+		as_error_append(err, str);
+		return status;
 	}
 
 	as_node_put_connection(node, &socket);

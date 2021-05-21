@@ -506,6 +506,13 @@ as_command_send(
 	return status;
 }
 
+static inline bool
+is_server_timeout(as_error* err)
+{
+	// Server timeouts have a message.  Client timeouts do not have a message.
+	return err->message[0];
+}
+
 as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
@@ -533,6 +540,11 @@ as_command_execute(as_command* cmd, as_error* err)
 			release_node = true;
 		}
 
+		if (! as_node_valid_error_count(node)) {
+			status = as_error_set_message(err, AEROSPIKE_MAX_ERROR_RATE, "Max error rate exceeded");
+			goto Retry;
+		}
+
 		as_socket socket;
 		status = as_node_get_connection(err, node, cmd->socket_timeout, cmd->deadline_ms, &socket);
 		
@@ -555,7 +567,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		if (status != AEROSPIKE_OK) {
 			// Socket errors are considered temporary anomalies.  Retry.
 			// Close socket to flush out possible garbage.	Do not put back in pool.
-			as_node_close_connection(node, &socket, socket.pool);
+			as_node_close_conn_error(node, &socket, socket.pool);
 			goto Retry;
 		}
 		command_sent_counter++;
@@ -579,9 +591,21 @@ as_command_execute(as_command* cmd, as_error* err)
 
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
+				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
+					as_node_put_conn_error(node, &socket);
+					goto Retry;
+
 				case AEROSPIKE_ERR_CONNECTION:
+					as_node_close_conn_error(node, &socket, socket.pool);
+					goto Retry;
+
 				case AEROSPIKE_ERR_TIMEOUT:
-					as_node_close_connection(node, &socket, socket.pool);
+					if (is_server_timeout(err)) {
+						as_node_put_conn_error(node, &socket);
+					}
+					else {
+						as_node_close_conn_error(node, &socket, socket.pool);
+					}
 					goto Retry;
 
 				case AEROSPIKE_NOT_AUTHENTICATED:
@@ -590,7 +614,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
-					as_node_close_connection(node, &socket, socket.pool);
+					as_node_close_conn_error(node, &socket, socket.pool);
 					if (release_node) {
 						as_node_release(node);
 					}
@@ -622,9 +646,11 @@ Retry:
 
 		// Alternate between master and prole on socket errors or database reads.
 		// Timeouts/NO_MORE_CONNECTIONS are not a good indicator of impending data migration.
-		if (cmd->replica != AS_POLICY_REPLICA_MASTER &&
-			((status != AEROSPIKE_ERR_TIMEOUT && status != AEROSPIKE_ERR_NO_MORE_CONNECTIONS) ||
-			((cmd->flags & AS_COMMAND_FLAGS_READ) && !(cmd->flags & AS_COMMAND_FLAGS_LINEARIZE)))) {
+		if (cmd->replica != AS_POLICY_REPLICA_MASTER && (
+			((cmd->flags & AS_COMMAND_FLAGS_READ) && !(cmd->flags & AS_COMMAND_FLAGS_LINEARIZE)) ||
+			(status != AEROSPIKE_ERR_TIMEOUT && status != AEROSPIKE_ERR_NO_MORE_CONNECTIONS &&
+			 status != AEROSPIKE_MAX_ERROR_RATE)
+			)) {
 			// Note: SC session read will ignore this setting because it uses master only.
 			cmd->master = !cmd->master;
 
@@ -676,7 +702,7 @@ Retry:
 	// Fill in timeout stats if timeout occurred.
 	if (err->code == AEROSPIKE_ERR_TIMEOUT) {
 		// Server timeouts have a message.  Client timeouts do not have a message.
-		const char* type = (err->message[0])? "Server" : "Client";
+		const char* type = is_server_timeout(err)? "Server" : "Client";
 		as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
 			"%s timeout: socket=%u total=%u iterations=%u lastNode=%s",
 			type, cmd->policy->socket_timeout, cmd->policy->total_timeout, cmd->iteration,

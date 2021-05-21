@@ -315,6 +315,11 @@ typedef struct as_node_s {
 	uint32_t sync_conns_closed;
 
 	/**
+	 * Error count for this node's error_rate_window.
+	 */
+	uint32_t error_count;
+
+	/**
 	 * Server's generation count for peers.
 	 */
 	uint32_t peers_generation;

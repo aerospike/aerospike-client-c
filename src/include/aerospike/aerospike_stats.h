@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -86,6 +86,11 @@ typedef struct as_node_stats_s {
 	 * Async pipeline connection statistics on this node.
 	 */
 	as_conn_stats pipeline;
+
+	/**
+	 * Node error count within current window.
+	 */
+	uint32_t error_count;
 
 } as_node_stats;
 
@@ -227,6 +232,15 @@ aerospike_event_loop_stats(as_event_loop* event_loop, as_event_loop_stats* stats
 	stats->process_size = as_event_loop_get_process_size(event_loop);
 	stats->queue_size = as_event_loop_get_queue_size(event_loop);
 }
+
+/**
+ * Return string representation of cluster statistics.
+ * The string should be freed when it's no longer needed.
+ *
+ * @ingroup cluster_stats
+ */
+AS_EXTERN char*
+aerospike_stats_to_string(as_cluster_stats* stats);
 
 #ifdef __cplusplus
 } // end extern "C"

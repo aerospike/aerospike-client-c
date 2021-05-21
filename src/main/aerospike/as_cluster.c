@@ -536,22 +536,43 @@ as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 	return status;
 }
 
-void
+static void
 as_cluster_balance_connections(as_cluster* cluster)
 {
+	as_nodes* nodes = cluster->nodes;
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node_balance_connections(nodes->array[i]);
+	}
+
+	if (as_event_loop_capacity > 0 && !as_event_single_thread) {
+		as_event_balance_connections(cluster);
+	}
+}
+
+static void
+as_cluster_reset_error_count(as_cluster* cluster)
+{
+	as_nodes* nodes = cluster->nodes;
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node_reset_error_count(nodes->array[i]);
+	}
+}
+
+void
+as_cluster_manage(as_cluster* cluster)
+{
+	cluster->tend_count++;
+
 	// Balance connections every 30 tend intervals.
-	if (++cluster->tend_count >= 30) {
-		cluster->tend_count = 0;
+	if (cluster->tend_count % 30 == 0) {
+		as_cluster_balance_connections(cluster);
+	}
 
-		as_nodes* nodes = cluster->nodes;
-
-		for (uint32_t i = 0; i < nodes->size; i++) {
-			as_node_balance_connections(nodes->array[i]);
-		}
-
-		if (as_event_loop_capacity > 0 && !as_event_single_thread) {
-			as_event_balance_connections(cluster);
-		}
+	// Reset connection error window for all nodes every error_rate_window tend iterations.
+	if (cluster->max_error_rate > 0 && cluster->tend_count % cluster->error_rate_window == 0) {
+		as_cluster_reset_error_count(cluster);
 	}
 }
 
@@ -738,8 +759,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 	as_vector_destroy(hosts);
 	as_vector_destroy(&peers.nodes);
 
-	as_cluster_balance_connections(cluster);
-
+	as_cluster_manage(cluster);
 	return AEROSPIKE_OK;
 }
 
@@ -1121,6 +1141,8 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->event_callback_udata = config->event_callback_udata;
 
 	// Initialize cluster tend and node parameters
+	cluster->max_error_rate = config->max_error_rate;
+	cluster->error_rate_window = config->error_rate_window;
 	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
 	cluster->min_conns_per_node = config->min_conns_per_node;
 	cluster->max_conns_per_node = config->max_conns_per_node;

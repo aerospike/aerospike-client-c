@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -154,6 +154,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool ret
 		conn->canceled = true;
 		as_async_conn_pool* pool = &node->pipe_conn_pools[loop->index];
 		as_event_release_connection((as_event_connection*)conn, pool);
+		as_node_incr_error_count(node);
 		as_node_release(node);
 		return;
 	}
@@ -335,19 +336,27 @@ as_pipe_get_connection(as_event_command* cmd)
 
 			conn->in_pool = false;
 
-			// Verify that socket is active.  Socket receive buffer may already have data.
-			int len = as_event_validate_connection(&conn->base, cmd->cluster->max_socket_idle_ns_tran);
-
-			if (len >= 0) {
-				as_log_trace("Validation OK");
-				cmd->conn = (as_event_connection*)conn;
-				write_start(cmd);
-				as_event_command_write_start(cmd);
-				return;
+			// Verify that socket is active.
+			if (! as_event_conn_current_tran(&conn->base, cmd->cluster->max_socket_idle_ns_tran)) {
+				release_connection(cmd, conn, pool);
+				continue;
 			}
 
-			as_log_debug("Invalid pipeline socket from pool: %d", len);
-			release_connection(cmd, conn, pool);
+			// Verify socket receive buffer.
+			int len = as_event_conn_validate(&conn->base);
+
+			if (len < 0) {
+				as_log_debug("Invalid pipeline socket from pool: %d", len);
+				release_connection(cmd, conn, pool);
+				as_node_incr_error_count(cmd->node);
+				continue;
+			}
+
+			as_log_trace("Validation OK");
+			cmd->conn = (as_event_connection*)conn;
+			write_start(cmd);
+			as_event_command_write_start(cmd);
+			return;
 		}
 	}
 	

@@ -69,7 +69,7 @@ void
 as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove);
 
 void
-as_cluster_balance_connections(as_cluster* cluster);
+as_cluster_manage(as_cluster* cluster);
 
 /******************************************************************************
  * FUNCTIONS
@@ -876,7 +876,7 @@ as_shm_tender(void* userdata)
 				}
 			}
 
-			as_cluster_balance_connections(cluster);
+			as_cluster_manage(cluster);
 		}
 
 		// Convert tend interval into absolute timeout.

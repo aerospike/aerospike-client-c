@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -213,6 +213,18 @@ typedef struct as_cluster_s {
 	 * Maximum socket idle to trim peak connections to min connections.
 	 */
 	uint64_t max_socket_idle_ns_trim;
+
+	/**
+	 * @private
+	 * Max errors per node per error_rate_window.
+	 */
+	uint32_t max_error_rate;
+
+	/**
+	 * @private
+	 * Number of tend iterations defining window for max_error_rate.
+	 */
+	uint32_t error_rate_window;
 
 	/**
 	 * @private
@@ -471,6 +483,71 @@ as_partition_get_node(
 		return as_partition_reg_get_node(cluster, ns, (as_partition*)partition, replica, master,
 										 is_retry);
 	}
+}
+
+/**
+ * @private
+ * Increment node's error count.
+ */
+static inline void
+as_node_incr_error_count(as_node* node)
+{
+	if (node->cluster->max_error_rate > 0) {
+		as_incr_uint32(&node->error_count);
+	}
+}
+
+/**
+ * @private
+ * Reset node's error count.
+ */
+static inline void
+as_node_reset_error_count(as_node* node)
+{
+	as_store_uint32(&node->error_count, 0);
+}
+
+/**
+ * @private
+ * Get node's error count.
+ */
+static inline uint32_t
+as_node_get_error_count(as_node* node)
+{
+	return as_load_uint32(&node->error_count);
+}
+
+/**
+ * @private
+ * Validate node's error count.
+ */
+static inline bool
+as_node_valid_error_count(as_node* node)
+{
+	uint32_t max = node->cluster->max_error_rate;
+	return max == 0 || max >= as_load_uint32(&node->error_count);
+}
+
+/**
+ * @private
+ * Close connection and increment node's error count.
+ */
+static inline void
+as_node_close_conn_error(as_node* node, as_socket* sock, as_conn_pool* pool)
+{
+	as_node_close_connection(node, sock, pool);
+	as_node_incr_error_count(node);
+}
+
+/**
+ * @private
+ * Put connection in pool and increment node's error count.
+ */
+static inline void
+as_node_put_conn_error(as_node* node, as_socket* sock)
+{
+	as_node_put_connection(node, sock);
+	as_node_incr_error_count(node);
 }
 
 #ifdef __cplusplus

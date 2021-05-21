@@ -302,15 +302,21 @@ void as_ev_timer_cb(struct ev_loop* loop, ev_timer* timer, int revents);
 void as_ev_repeat_cb(struct ev_loop* loop, ev_timer* timer, int revents);
 
 static inline bool
-as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
+as_event_conn_current_trim(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
 	return as_socket_current_trim(conn->socket.last_used, max_socket_idle_ns);
 }
 
-static inline int
-as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle_ns)
+static inline bool
+as_event_conn_current_tran(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
-	return as_socket_validate(&conn->socket, max_socket_idle_ns);
+	return as_socket_current_tran(conn->socket.last_used, max_socket_idle_ns);
+}
+
+static inline int
+as_event_conn_validate(as_event_connection* conn)
+{
+	return as_socket_validate_fd(conn->socket.fd);
 }
 
 static inline void
@@ -389,27 +395,29 @@ void as_uv_repeat_cb(uv_timer_t* timer);
 void as_event_close_connection(as_event_connection* conn);
 
 static inline bool
-as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
+as_event_conn_current_trim(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
 	return as_socket_current_trim(conn->last_used, max_socket_idle_ns);
 }
 
-static inline int
-as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle_ns)
+static inline bool
+as_event_conn_current_tran(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
-	if (! as_socket_current_tran(conn->last_used, max_socket_idle_ns)) {
-		return -1;
-	}
+	return as_socket_current_tran(conn->last_used, max_socket_idle_ns);
+}
 
+static inline int
+as_event_conn_validate(as_event_connection* conn)
+{
 	// Libuv does not have a peek function, so use fd directly.
 	uv_os_fd_t fd;
 	
 	if (uv_fileno((uv_handle_t*)&conn->socket, &fd) == 0) {
 		return as_socket_validate_fd((as_socket_fd)fd);
 	}
-	return false;
+	return -1;
 }
-	
+
 static inline void
 as_event_set_conn_last_used(as_event_connection* conn)
 {
@@ -492,15 +500,21 @@ void as_libevent_timer_cb(evutil_socket_t sock, short events, void* udata);
 void as_libevent_repeat_cb(evutil_socket_t sock, short events, void* udata);
 
 static inline bool
-as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
+as_event_conn_current_trim(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
 	return as_socket_current_trim(conn->socket.last_used, max_socket_idle_ns);
 }
 
-static inline int
-as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle_ns)
+static inline bool
+as_event_conn_current_tran(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
-	return as_socket_validate(&conn->socket, max_socket_idle_ns);
+	return as_socket_current_tran(conn->socket.last_used, max_socket_idle_ns);
+}
+
+static inline int
+as_event_conn_validate(as_event_connection* conn)
+{
+	return as_socket_validate_fd(conn->socket.fd);
 }
 
 static inline void
@@ -578,13 +592,19 @@ as_event_command_release(as_event_command* cmd)
 #else
 
 static inline bool
-as_event_connection_current(as_event_connection* conn, uint64_t max_socket_idle_ns)
+as_event_conn_current_trim(as_event_connection* conn, uint64_t max_socket_idle_ns)
+{
+	return false;
+}
+
+static inline bool
+as_event_conn_current_tran(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
 	return false;
 }
 
 static inline int
-as_event_validate_connection(as_event_connection* conn, uint64_t max_socket_idle_ns)
+as_event_conn_validate(as_event_connection* conn)
 {
 	return -1;
 }
@@ -740,6 +760,7 @@ as_event_release_async_connection(as_event_command* cmd)
 {
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	as_event_release_connection(cmd->conn, pool);
+	as_node_incr_error_count(cmd->node);
 }
 
 static inline void
@@ -761,6 +782,7 @@ as_event_connection_timeout(as_event_command* cmd, as_async_conn_pool* pool)
 		if (conn->watching > 0) {
 			as_event_stop_watcher(cmd, conn);
 			as_event_release_connection(conn, pool);
+			as_node_incr_error_count(cmd->node);
 		}
 		else {
 			cf_free(conn);

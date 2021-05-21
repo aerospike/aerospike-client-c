@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,10 +17,7 @@
 #include <aerospike/aerospike_stats.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_node.h>
-
-#if 0
 #include <aerospike/as_string_builder.h>
-#endif
 
 /******************************************************************************
  * GLOBALS
@@ -64,7 +61,6 @@ as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats)
 	stats->closed += pool->closed;
 }
 
-#if 0
 static void
 as_conn_stats_tostring(as_string_builder* sb, const char* title, as_conn_stats* cs)
 {
@@ -80,7 +76,6 @@ as_conn_stats_tostring(as_string_builder* sb, const char* title, as_conn_stats* 
 	as_string_builder_append_uint(sb, cs->closed);
 	as_string_builder_append_char(sb, ')');
 }
-#endif
 
 /******************************************************************************
  * FUNCTIONS
@@ -138,6 +133,7 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 {
 	as_node_reserve(node); // Released in aerospike_node_stats_destroy()
 	stats->node = node;
+	stats->error_count = as_node_get_error_count(node);
 
 	as_sum_init(&stats->sync);
 	as_sum_init(&stats->async);
@@ -172,7 +168,6 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 	}
 }
 
-#if 0
 char*
 aerospike_stats_to_string(as_cluster_stats* stats)
 {
@@ -187,6 +182,9 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		as_conn_stats_tostring(&sb, "sync", &node_stats->sync);
 		as_conn_stats_tostring(&sb, "async", &node_stats->async);
 		as_conn_stats_tostring(&sb, "pipeline", &node_stats->pipeline);
+		as_string_builder_append_newline(&sb);
+		as_string_builder_append(&sb, "error count: ");
+		as_string_builder_append_uint(&sb, node_stats->error_count);
 		as_string_builder_append_newline(&sb);
 	}
 
@@ -209,4 +207,3 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 	}
 	return sb.data;
 }
-#endif

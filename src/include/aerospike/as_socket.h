@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -220,23 +220,6 @@ as_socket_current_trim(uint64_t last_used, uint64_t max_socket_idle_ns)
  */
 int
 as_socket_validate_fd(as_socket_fd fd);
-
-/**
- * @private
- * Peek for socket connection status.
- *
- * @return   0 : socket is connected, but no data available.
- * 		> 0 : byte size of data available.
- * 		< 0 : socket is invalid.
- */
-static inline int
-as_socket_validate(as_socket* sock, uint64_t max_socket_idle_ns)
-{
-	if (! as_socket_current_tran(sock->last_used, max_socket_idle_ns)) {
-		return -1;
-	}
-	return as_socket_validate_fd(sock->fd);
-}
 
 /**
  * @private

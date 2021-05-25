@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -114,9 +114,9 @@ as_async_write_command_create(
 static inline as_event_command*
 as_async_record_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, const char* ns,
-	void* partition, bool deserialize, uint8_t flags, as_async_record_listener listener, void* udata,
-	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
-	as_event_parse_results_fn parse_results
+	void* partition, bool deserialize, bool heap_rec, uint8_t flags,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -147,6 +147,9 @@ as_async_record_command_create(
 	cmd->flags2 = 0;
 	if (deserialize) {
 		cmd->flags2 |= AS_ASYNC_FLAGS2_DESERIALIZE;
+	}
+	if (heap_rec) {
+		cmd->flags2 |= AS_ASYNC_FLAGS2_HEAP_REC;
 	}
 	rcmd->listener = listener;
 	return cmd;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -116,6 +116,56 @@ TEST(key_basics_async_get, "async get")
 		
 	as_error err;
 	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback1, __result__, 0, NULL);
+	as_key_destroy(&key);
+	as_record_destroy(&rec);
+	
+    assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
+}
+
+static void
+as_get_callback_heap(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+{
+	assert_success_async(&monitor, err, udata);
+	
+    assert_int_eq_async(&monitor, as_record_numbins(rec), 1);
+    assert_int_eq_async(&monitor, as_record_get_int64(rec, "a", 0), 777);
+
+	// async_heap_rec == true, so destroy record.
+	as_record_destroy(rec);
+	as_monitor_notify(&monitor);
+}
+
+static void
+as_put_callback_heap(as_error* err, void* udata, as_event_loop* event_loop)
+{
+	assert_success_async(&monitor, err, udata);
+	
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "paheap1");
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.async_heap_rec = true;
+
+	as_error e;
+	as_status status = aerospike_key_get_async(as, &e, &p, &key, as_get_callback_heap, __result__, event_loop, NULL);
+	assert_status_async(&monitor, status, &e);
+}
+
+TEST(key_basics_async_get_heap, "async get with record on heap")
+{
+	as_monitor_begin(&monitor);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "paheap1");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, "a", 777);
+		
+	as_error err;
+	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_callback_heap, __result__, 0, NULL);
 	as_key_destroy(&key);
 	as_record_destroy(&rec);
 	
@@ -337,6 +387,69 @@ TEST(key_basics_async_operate, "async operate")
 	as_monitor_wait(&monitor);
 }
 
+static void
+as_operate_callback_heap(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+{
+	assert_success_async(&monitor, err, udata);
+	
+    assert_async(&monitor, rec);
+    assert_int_eq_async(&monitor, as_record_numbins(rec), 2);
+    assert_int_eq_async(&monitor, as_record_get_int64(rec, "a", 0), 316);
+    assert_string_eq_async(&monitor, as_record_get_str(rec, "b"), "abcmiddef");
+
+	// async_heap_rec == true, so destroy record.
+	as_record_destroy(rec);
+	as_monitor_notify(&monitor);
+}
+
+static void
+as_put_operate_callback_heap(as_error* err, void* udata, as_event_loop* event_loop)
+{
+	assert_success_async(&monitor, err, udata);
+	
+	as_policy_operate p;
+	as_policy_operate_init(&p);
+	p.async_heap_rec = true;
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "paheap5");
+
+	as_operations ops;
+	as_operations_inita(&ops, 5);
+	as_operations_add_incr(&ops, "a", -5);
+	as_operations_add_append_str(&ops, "b", "def");
+	as_operations_add_prepend_str(&ops, "b", "abc");
+	as_operations_add_read(&ops, "a");
+	as_operations_add_read(&ops, "b");
+	
+	as_error e;
+	as_status status = aerospike_key_operate_async(as, &e, &p, &key, &ops, as_operate_callback_heap, __result__, event_loop, NULL);
+	assert_status_async(&monitor, status, &e);
+
+	as_key_destroy(&key);
+	as_operations_destroy(&ops);
+}
+
+TEST(key_basics_async_operate_heap, "async operate with record on heap")
+{
+	as_monitor_begin(&monitor);
+	
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "paheap5");
+	
+	as_record rec;
+	as_record_inita(&rec, 2);
+	as_record_set_int64(&rec, "a", 321);
+	as_record_set_strp(&rec, "b", "mid", false);
+
+	as_error err;
+	as_status status = aerospike_key_put_async(as, &err, NULL, &key, &rec, as_put_operate_callback_heap, __result__, 0, NULL);
+	as_key_destroy(&key);
+	
+    assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -347,8 +460,10 @@ SUITE(key_basics_async, "aerospike_key basic tests")
 	suite_after(after);
 
     suite_add(key_basics_async_get);
+    suite_add(key_basics_async_get_heap);
 	suite_add(key_basics_async_select);
 	suite_add(key_basics_async_exists);
 	suite_add(key_basics_async_remove);
 	suite_add(key_basics_async_operate);
+	suite_add(key_basics_async_operate_heap);
 }

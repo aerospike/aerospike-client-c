@@ -530,6 +530,15 @@ typedef struct as_policy_read_s {
 	 */
 	bool deserialize;
 
+	/**
+	 * Should as_record instance be allocated on the heap before user listener is called in
+	 * async commands. If true, the user is responsible for calling as_record_destroy() when done
+	 * with the record. If false, as_record_destroy() is automatically called by the client after
+	 * the user listener function completes. This field is ignored for sync commands.
+	 * Default: false
+	 */
+	bool async_heap_rec;
+
 } as_policy_read;
 	
 /**
@@ -716,6 +725,15 @@ typedef struct as_policy_operate_s {
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Should as_record instance be allocated on the heap before user listener is called in
+	 * async commands. If true, the user is responsible for calling as_record_destroy() when done
+	 * with the record. If false, as_record_destroy() is automatically called by the client after
+	 * the user listener function completes. This field is ignored for sync commands.
+	 * Default: false
+	 */
+	bool async_heap_rec;
 
 } as_policy_operate;
 
@@ -1114,6 +1132,7 @@ as_policy_read_init(as_policy_read* p)
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
 	p->deserialize = true;
+	p->async_heap_rec = false;
 	return p;
 }
 
@@ -1188,6 +1207,7 @@ as_policy_operate_init(as_policy_operate* p)
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->deserialize = true;
 	p->durable_delete = false;
+	p->async_heap_rec = false;
 	return p;
 }
 

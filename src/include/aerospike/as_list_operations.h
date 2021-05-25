@@ -181,7 +181,7 @@ typedef enum as_list_return_type_e {
 	AS_LIST_RETURN_RANK = 3,
 
 	/**
-	 * Return reserve value order.
+	 * Return reverse value order.
 	 */
 	AS_LIST_RETURN_REVERSE_RANK = 4,
 

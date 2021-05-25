@@ -212,7 +212,7 @@ typedef enum as_map_return_type_e {
 	AS_MAP_RETURN_RANK = 3,
 	
 	/**
-	 * Return reserve value order.
+	 * Return reverse value order.
 	 */
 	AS_MAP_RETURN_REVERSE_RANK = 4,
 	

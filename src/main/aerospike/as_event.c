@@ -1285,31 +1285,55 @@ as_event_command_parse_result(as_event_command* cmd)
 
 	switch (status) {
 		case AEROSPIKE_OK: {
-			as_record rec;
-			
-			if (msg->n_ops < 1000) {
-				as_record_inita(&rec, msg->n_ops);
-			}
-			else {
-				as_record_init(&rec, msg->n_ops);
-			}
-			
-			rec.gen = msg->generation;
-			rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-			
-			p = as_command_ignore_fields(p, msg->n_fields);
-			status = as_command_parse_bins(&p, &err, &rec, msg->n_ops,
-										   cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
+			if (cmd->flags2 & AS_ASYNC_FLAGS2_HEAP_REC) {
+				// Create record on heap and let user call as_record_destroy() on success.
+				as_record* rec = as_record_new(msg->n_ops);
 
-			if (status == AEROSPIKE_OK) {
-				as_event_response_complete(cmd);
-				((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
-				as_event_command_release(cmd);
+				rec->gen = msg->generation;
+				rec->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+
+				p = as_command_ignore_fields(p, msg->n_fields);
+				status = as_command_parse_bins(&p, &err, rec, msg->n_ops,
+											   cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
+
+				if (status == AEROSPIKE_OK) {
+					as_event_response_complete(cmd);
+					((as_async_record_command*)cmd)->listener(0, rec, cmd->udata, cmd->event_loop);
+					as_event_command_release(cmd);
+				}
+				else {
+					as_record_destroy(rec);
+					as_event_response_error(cmd, &err);
+				}
 			}
 			else {
-				as_event_response_error(cmd, &err);
+				// Create record on stack and call as_record_destroy() after listener completes.
+				as_record rec;
+
+				if (msg->n_ops < 1000) {
+					as_record_inita(&rec, msg->n_ops);
+				}
+				else {
+					as_record_init(&rec, msg->n_ops);
+				}
+
+				rec.gen = msg->generation;
+				rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+				
+				p = as_command_ignore_fields(p, msg->n_fields);
+				status = as_command_parse_bins(&p, &err, &rec, msg->n_ops,
+											   cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
+
+				if (status == AEROSPIKE_OK) {
+					as_event_response_complete(cmd);
+					((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
+					as_event_command_release(cmd);
+				}
+				else {
+					as_event_response_error(cmd, &err);
+				}
+				as_record_destroy(&rec);
 			}
-			as_record_destroy(&rec);
 			break;
 		}
 			

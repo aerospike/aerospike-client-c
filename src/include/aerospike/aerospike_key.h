@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -92,7 +92,9 @@ aerospike_key_get(
  *         return;
  * 	   }
  * 	   // Process record bins
- * 	   // Do not call as_record_destroy() because the calling function will do that for you.
+ * 	   // Only call as_record_destroy(record) when command is successful (err == NULL) and 
+ *     // "as_policy_read.async_heap_rec" is true. Otherwise, the calling function will destroy the
+ *     // record when the listener completes.
  * }
  *
  * as_key key;
@@ -112,7 +114,7 @@ aerospike_key_get(
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
  *
- * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ * @return AEROSPIKE_OK if async command successfully queued. Otherwise an error.
  *
  * @ingroup key_operations
  */
@@ -172,7 +174,9 @@ aerospike_key_select(
  * 	       return;
  * 	   }
  * 	   // Process record bins
- * 	   // Do not call as_record_destroy() because the calling function will do that for you.
+ * 	   // Only call as_record_destroy(record) when command is successful (err == NULL) and 
+ *     // "as_policy_read.async_heap_rec" is true. Otherwise, the calling function will destroy the
+ *     // record when the listener completes.
  * }
  *
  * char* select[] = {"bin1", "bin2", "bin3", NULL};
@@ -195,7 +199,7 @@ aerospike_key_select(
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
  *
- * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ * @return AEROSPIKE_OK if async command successfully queued. Otherwise an error.
  *
  * @ingroup key_operations
  */
@@ -256,11 +260,13 @@ aerospike_key_exists(
  * 	   if (err) {
  * 	       printf("Command failed: %d %s\n", err->code, err->message);
  * 	       return;
- * 	    }
- * 	    if (record) {
+ * 	   }
+ * 	   if (record) {
  * 	       printf("Record exists.");
- * 	       // Do not call as_record_destroy() because the calling function will do that for you.
- * 	    }
+ * 	       // Only call as_record_destroy(record) when the record exists, the command is successful 
+ *         // (err == NULL) and "as_policy_read.async_heap_rec" is true. Otherwise, the calling
+ *         // function will destroy the record when the listener completes.
+ * 	   }
  * 	   else {
  * 	       printf("Record doesn't exist.");
  * 	   }
@@ -283,7 +289,7 @@ aerospike_key_exists(
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
  *
- * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ * @return AEROSPIKE_OK if async command successfully queued. Otherwise an error.
  *
  * @ingroup key_operations
  */
@@ -364,7 +370,7 @@ aerospike_key_put(
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
  *
- * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ * @return AEROSPIKE_OK if async command successfully queued. Otherwise an error.
  *
  * @ingroup key_operations
  */
@@ -430,7 +436,7 @@ aerospike_key_remove(
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
  *
- * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ * @return AEROSPIKE_OK if async command successfully queued. Otherwise an error.
  *
  * @ingroup key_operations
  */
@@ -493,7 +499,9 @@ aerospike_key_operate(
  * 	      return;
  * 	   }
  * 	   // Process record bins
- * 	   // Do not call as_record_destroy() because the calling function will do that for you.
+ * 	   // Only call as_record_destroy(record) when command is successful (err == NULL) and
+ *     // "as_policy_operate.async_heap_rec" is true. Otherwise, the calling function will destroy
+ *     // the record when the listener completes.
  * }
  *
  * as_key key;
@@ -521,7 +529,7 @@ aerospike_key_operate(
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
  *
- * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ * @return AEROSPIKE_OK if async command successfully queued. Otherwise an error.
  *
  * @ingroup key_operations
  */
@@ -616,7 +624,7 @@ aerospike_key_apply(
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
  *
- * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ * @return AEROSPIKE_OK if async command successfully queued. Otherwise an error.
  *
  * @ingroup key_operations
  */

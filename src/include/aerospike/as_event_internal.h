@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -67,6 +67,7 @@ extern "C" {
 #define AS_ASYNC_FLAGS_MASTER_SC 128
 
 #define AS_ASYNC_FLAGS2_DESERIALIZE 1
+#define AS_ASYNC_FLAGS2_HEAP_REC 2
 
 #define AS_ASYNC_AUTH_RETURN_CODE 1
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -19,15 +19,20 @@
 #include <aerospike/as_std.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_host.h>
 #include <aerospike/as_vector.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
  * TYPES
  *****************************************************************************/
 
 typedef struct as_peers_s {
-	as_vector /* as_host */ hosts;
 	as_vector /* as_node* */ nodes;
+	as_vector /* as_host */ invalid_hosts;
 	uint32_t refresh_count;
 	bool gen_changed;
 } as_peers;
@@ -46,3 +51,23 @@ as_status
 as_peers_parse_peers(
 	as_peers* peers, as_error* err, struct as_cluster_s* cluster, struct as_node_s* node, char* buf
 	);
+
+bool
+as_peers_find_invalid_host(as_peers* peers, as_host* host);
+
+static inline void
+as_peers_add_invalid_host(as_peers* peers, as_host* host)
+{
+	as_host* trg = as_vector_reserve(&peers->invalid_hosts);
+	as_host_copy(host, trg);
+}
+
+static inline uint32_t
+as_peers_invalid_count(as_peers* peers)
+{
+	return peers->invalid_hosts.size;
+}
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

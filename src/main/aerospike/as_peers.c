@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -82,19 +82,19 @@ as_peers_find_node(as_peers* peers, as_cluster* cluster, const char* name)
 	return false;
 }
 
-static void
-as_peers_duplicate(as_host* host, bool is_alias, as_node* node, as_node_info* node_info)
+bool
+as_peers_find_invalid_host(as_peers* peers, as_host* host)
 {
-	as_log_info("Node %s %d already exists with nodeid %s and address %s",
-				host->name, host->port, node->name, as_node_get_address_string(node));
+	as_vector* invalid_hosts = &peers->invalid_hosts;
+	
+	for (uint32_t i = 0; i < invalid_hosts->size; i++) {
+		as_host* h = as_vector_get(invalid_hosts, i);
 
-	as_node_add_address(node, (struct sockaddr*)&node_info->addr);
-
-	if (is_alias) {
-		as_node_add_alias(node, host->name, host->port);
+		if (strcmp(h->name, host->name) == 0 && h->port == host->port) {
+			return true;
+		}
 	}
-
-	as_node_info_destroy(node_info);
+	return false;
 }
 
 static inline void
@@ -113,45 +113,14 @@ as_peers_create_node(
 }
 
 static bool
-as_peers_prepare_services_node(
-	as_peers* peers, as_cluster* cluster, as_host* host, bool is_alias, as_node_info* node_info
-	)
-{
-	// Copy host to local hosts.
-	as_host h;
-	as_host_copy(host, &h);
-	as_vector_append(&peers->hosts, &h);
-
-	// Check for duplicate nodes in nodes slated to be added.
-	as_node* node = as_peers_find_local_node(&peers->nodes, node_info->name);
-	
-	if (node) {
-		// Duplicate node name found.  This usually occurs when the server
-		// services list contains both internal and external IP addresses
-		// for the same node.
-		as_peers_duplicate(host, is_alias, node, node_info);
-		return true;
-	}
-	
-	// Check for duplicate nodes in cluster.
-	node = as_peers_find_cluster_node(cluster, node_info->name);
-	
-	if (node) {
-		as_peers_duplicate(host, is_alias, node, node_info);
-		node->friends++;
-		return true;
-	}
-	
-	// Create node.
-	as_peers_create_node(peers, cluster, host, is_alias, node_info);
-	return true;
-}
-
-static bool
 as_peers_validate_node(
-	as_peers* peers, as_cluster* cluster, as_host* host, const char* expected_name, bool is_peers_protocol
+	as_peers* peers, as_cluster* cluster, as_host* host, const char* expected_name
 	)
 {
+	if (as_peers_find_invalid_host(peers, host)) {
+		return false;
+	}
+
 	as_error err;
 	as_error_init(&err);
 
@@ -160,6 +129,7 @@ as_peers_validate_node(
 	
 	if (status != AEROSPIKE_OK) {
 		as_log_warn("%s %s", as_error_string(status), err.message);
+		as_peers_add_invalid_host(peers, host);
 		return false;
 	}
 	
@@ -172,12 +142,7 @@ as_peers_validate_node(
 		
 		if (status == AEROSPIKE_OK) {
 			if (expected_name == NULL || strcmp(node_info.name, expected_name) == 0) {
-				if (is_peers_protocol) {
-					as_peers_create_node(peers, cluster, host, iter.hostname_is_alias, &node_info);
-				}
-				else {
-					as_peers_prepare_services_node(peers, cluster, host, iter.hostname_is_alias, &node_info);
-				}
+				as_peers_create_node(peers, cluster, host, iter.hostname_is_alias, &node_info);
 				validated = true;
 				break;
 			}
@@ -193,6 +158,10 @@ as_peers_validate_node(
 		}
 	}
 	as_lookup_end(&iter);
+
+	if (! validated) {
+		as_peers_add_invalid_host(peers, host);
+	}
 	return validated;
 }
 
@@ -340,12 +309,12 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 			if (! p) {
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid peers host: %s", host.name);
 			}
-			
+
 			// Only add the first host that works for a node.
 			if (! node_validated) {
 				// Check global aliases for existing cluster.
 				host.name = (char*)as_cluster_get_alternate_host(cluster, host.name);
-				node_validated = as_peers_validate_node(peers, cluster, &host, node_name, true);
+				node_validated = as_peers_validate_node(peers, cluster, &host, node_name);
 			}
 			
 			if (last) {

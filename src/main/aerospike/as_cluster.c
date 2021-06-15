@@ -255,10 +255,16 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 		host.tls_name = seed->tls_name;
 		host.port = seed->port;
 
+		if (as_peers_find_invalid_host(peers, &host)) {
+			continue;
+		}
+
 		as_address_iterator iter;
 		as_status status = as_lookup_host(&iter, &error_local, host.name, host.port);
 		
 		if (status != AEROSPIKE_OK) {
+			as_peers_add_invalid_host(peers, &host);
+
 			if (enable_warnings) {
 				as_log_warn("Failed to lookup %s %d. %s %s", host.name, host.port, as_error_string(status), error_local.message);
 			}
@@ -290,20 +296,18 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 					continue;
 				}
 
-				if (peers->gen_changed) {
-					peers->refresh_count = 0;
-					status = as_node_refresh_peers(cluster, &error_local, node, peers);
-	
-					if (status != AEROSPIKE_OK) {
-						if (enable_warnings) {
-							as_log_warn("Failed to refresh seed node peers %s %d. %s %s",
-								host.name, host.port, as_error_string(status), error_local.message);
-						}
-						conn_status = status;
-						as_node_destroy(node);
-						node = NULL;
-						continue;
+				peers->refresh_count = 0;
+				status = as_node_refresh_peers(cluster, &error_local, node, peers);
+
+				if (status != AEROSPIKE_OK) {
+					if (enable_warnings) {
+						as_log_warn("Failed to refresh seed node peers %s %d. %s %s",
+							host.name, host.port, as_error_string(status), error_local.message);
 					}
+					conn_status = status;
+					as_node_destroy(node);
+					node = NULL;
+					continue;
 				}
 
 				if (node->peers_count == 0) {
@@ -334,6 +338,10 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 			}
 		}
 		as_lookup_end(&iter);
+
+		if (! node) {
+			as_peers_add_invalid_host(peers, &host);
+		}
 	}
 	pthread_mutex_unlock(&cluster->seed_lock);
 
@@ -611,8 +619,8 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 	// Initialize tend iteration node statistics.
 	as_error error_local;
 	as_peers peers;
-	as_vector_inita(&peers.hosts, sizeof(as_host), 16);
 	as_vector_inita(&peers.nodes, sizeof(as_node*), 16);
+	as_vector_inita(&peers.invalid_hosts, sizeof(as_host), 4);
 	peers.refresh_count = 0;
 	peers.gen_changed = false;
 
@@ -692,6 +700,29 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 		}
 	}
 
+	cluster->invalid_node_count = as_peers_invalid_count(&peers);
+
+	if (peers.gen_changed) {
+		// Handle nodes changes determined from refreshes.
+		as_vector nodes_to_remove;
+		as_vector_inita(&nodes_to_remove, sizeof(as_node*), nodes->size);
+
+		as_cluster_find_nodes_to_remove(cluster, peers.refresh_count, &nodes_to_remove);
+		
+		// Remove nodes in a batch.
+		if (nodes_to_remove.size > 0) {
+			as_cluster_remove_nodes(cluster, &nodes_to_remove);
+		}
+		as_vector_destroy(&nodes_to_remove);
+	}
+	
+	// Add nodes in a batch.
+	if (peers.nodes.size > 0) {
+		as_cluster_add_nodes(cluster, &peers.nodes);
+	}
+
+	nodes = cluster->nodes;
+
 	// Refresh partition map when necessary.
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
@@ -726,38 +757,20 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 		}
 	}
 
-	if (peers.gen_changed) {
-		// Handle nodes changes determined from refreshes.
-		as_vector nodes_to_remove;
-		as_vector_inita(&nodes_to_remove, sizeof(as_node*), nodes->size);
-
-		as_cluster_find_nodes_to_remove(cluster, peers.refresh_count, &nodes_to_remove);
-		
-		// Remove nodes in a batch.
-		if (nodes_to_remove.size > 0) {
-			as_cluster_remove_nodes(cluster, &nodes_to_remove);
-		}
-		as_vector_destroy(&nodes_to_remove);
-	}
-	
-	// Add nodes in a batch.
-	if (peers.nodes.size > 0) {
-		as_cluster_add_nodes(cluster, &peers.nodes);
-	}
-
 	if (rebalance && cluster->shm_info) {
 		// Update shared memory to notify prole tenders to rebalance (retrieve racks info).
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
 
-	as_vector* hosts = &peers.hosts;
+	as_vector_destroy(&peers.nodes);
+
+	as_vector* invalid_hosts = &peers.invalid_hosts;
 	
-	for (uint32_t i = 0; i < hosts->size; i++) {
-		as_host* host = as_vector_get(hosts, i);
+	for (uint32_t i = 0; i < invalid_hosts->size; i++) {
+		as_host* host = as_vector_get(invalid_hosts, i);
 		as_host_destroy(host);
 	}
-	as_vector_destroy(hosts);
-	as_vector_destroy(&peers.nodes);
+	as_vector_destroy(invalid_hosts);
 
 	as_cluster_manage(cluster);
 	return AEROSPIKE_OK;
@@ -767,38 +780,22 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
  * Tend the cluster until it has stabilized and return control.
  * This helps avoid initial database request timeout issues when
  * a large number of threads are initiated at client startup.
- *
- * At least two cluster tends are necessary. The first cluster
- * tend finds a seed node and obtains the seed's partition maps 
- * and peer nodes.  The second cluster tend requests partition 
- * maps from the peer nodes.
- *
- * A third cluster tend is allowed if some peers nodes can't
- * be contacted.  If peer nodes are still unreachable, an
- * error is returned.
  */
 static as_status
 as_wait_till_stabilized(as_cluster* cluster, as_error* err)
 {
-	uint32_t count = -1;
+	// Tend now requests partition maps in same iteration as the nodes
+	// are added, so there is no need to call tend twice anymore.
+	as_status status = as_cluster_tend(cluster, err, true);
 
-	for (int i = 0; i < 3; i++) {
-		as_status status = as_cluster_tend(cluster, err, true);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-
-		// Check to see if cluster has changed since the last tend.
-		// If not, assume cluster has stabilized and return.
-		as_nodes* nodes = cluster->nodes;
-
-		if (count == nodes->size) {
-			return AEROSPIKE_OK;
-		}
-		count = nodes->size;
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
-	return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster not stabilized after multiple tend attempts");
+
+	if (cluster->nodes->size == 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster seed(s) failed");
+	}
+	return AEROSPIKE_OK;
 }
 
 static void*
@@ -1276,13 +1273,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 void
 as_cluster_destroy(as_cluster* cluster)
 {
-	// Shutdown thread pool.
-	int rc = as_thread_pool_destroy(&cluster->thread_pool);
-	
-	if (rc) {
-		as_log_warn("Failed to destroy thread pool: %d", rc);
-	}
-
 	// Stop tend thread and wait till finished.
 	if (cluster->valid) {
 		cluster->valid = false;
@@ -1298,6 +1288,13 @@ as_cluster_destroy(as_cluster* cluster)
 		if (cluster->shm_info) {
 			as_shm_destroy(cluster);
 		}
+	}
+
+	// Shutdown thread pool.
+	int rc = as_thread_pool_destroy(&cluster->thread_pool);
+	
+	if (rc) {
+		as_log_warn("Failed to destroy thread pool: %d", rc);
 	}
 
 	// Release everything in garbage collector.

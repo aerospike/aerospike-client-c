@@ -128,8 +128,8 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->index = 0;
 	node->perform_login = 0;
 	node->active = true;
-	node->partition_changed = false;
-	node->rebalance_changed = false;
+	node->partition_changed = true;
+	node->rebalance_changed = true;
 
 	// Create sync connection pools.
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);

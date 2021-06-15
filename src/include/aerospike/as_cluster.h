@@ -294,6 +294,12 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Count of add node failures in the most recent cluster tend iteration.
+	 */
+	uint32_t invalid_node_count;
+
+	/**
+	 * @private
 	 * Assign tend thread to this specific CPU ID.
 	 */
 	int tend_thread_cpu;

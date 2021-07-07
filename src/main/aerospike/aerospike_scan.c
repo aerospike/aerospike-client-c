@@ -620,7 +620,7 @@ as_scan_command_execute(as_scan_task* task)
 	as_command_buffer_free(buf, size);
 
 	if (status) {
-		if (task->pt && as_partition_tracker_should_retry(status)) {
+		if (task->pt && as_partition_tracker_should_retry(task->pt, status)) {
 			return AEROSPIKE_OK;
 		}
 
@@ -1147,6 +1147,13 @@ as_scan_partition_async(
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
+bool
+as_async_scan_should_retry(void* udata, as_status status)
+{
+	as_async_scan_executor* ase = udata;
+	return as_partition_tracker_should_retry(ase->pt, status);
+}
 
 as_status
 aerospike_scan_background(

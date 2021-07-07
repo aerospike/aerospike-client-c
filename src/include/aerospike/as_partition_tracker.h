@@ -58,6 +58,7 @@ typedef struct as_partition_tracker_s {
 	uint32_t node_capacity;
 	struct as_node_s* node_filter;
 	as_vector node_parts;
+	as_vector* errors;
 	uint64_t max_records;
 	uint32_t parts_capacity;
 	uint32_t sleep_between_retries;
@@ -132,7 +133,7 @@ as_status
 as_partition_tracker_is_complete(as_partition_tracker* pt, struct as_error_s* err);
 
 bool
-as_partition_tracker_should_retry(as_status status);
+as_partition_tracker_should_retry(as_partition_tracker* pt, as_status status);
 
 void
 as_partition_tracker_destroy(as_partition_tracker* pt);

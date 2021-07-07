@@ -17,6 +17,7 @@
 #include <aerospike/as_partition_tracker.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_shm_cluster.h>
+#include <aerospike/as_string_builder.h>
 
 /******************************************************************************
  * Static Functions
@@ -91,6 +92,7 @@ tracker_init(
 	}
 
 	as_vector_init(&pt->node_parts, sizeof(as_node_partitions), pt->node_capacity);
+	pt->errors = NULL;
 	pt->max_records = policy->max_records;
 
 	const as_policy_base* pb = &policy->base;
@@ -371,8 +373,28 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
 
 	// Check if limits have been reached.
 	if (pt->iteration > pt->max_retries) {
-		return as_error_update(err, AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED, "Max retries exceeded: %u",
-							   pt->max_retries);
+		as_error_set_message(err, AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED, "");
+
+		as_string_builder sb;
+		as_string_builder_assign(&sb, sizeof(err->message), err->message);
+		as_string_builder_append(&sb, "Max retries exceeded: ");
+		as_string_builder_append_uint(&sb, pt->max_retries);
+
+		if (pt->errors) {
+			as_string_builder_append_newline(&sb);
+			as_string_builder_append(&sb, "sub-errors:");
+
+			uint32_t max = pt->errors->size;
+
+			for (uint32_t i = 0; i < max; i++) {
+				as_status st = *(as_status*)as_vector_get(pt->errors, i);
+				as_string_builder_append_newline(&sb);
+				as_string_builder_append_int(&sb, st);
+				as_string_builder_append_char(&sb, ' ');
+				as_string_builder_append(&sb, as_error_string(st));
+			}
+		}
+		return err->code;
 	}
 
 	if (pt->deadline > 0) {
@@ -404,13 +426,17 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
 }
 
 bool
-as_partition_tracker_should_retry(as_status status)
+as_partition_tracker_should_retry(as_partition_tracker* pt, as_status status)
 {
 	switch (status) {
 	case AEROSPIKE_ERR_CONNECTION:
 	case AEROSPIKE_ERR_ASYNC_CONNECTION:
 	case AEROSPIKE_ERR_TIMEOUT:
 	case AEROSPIKE_ERR_CLUSTER: // partition not available
+		if (!pt->errors) {
+			pt->errors = as_vector_create(sizeof(as_status), 10);
+		}
+		as_vector_append(pt->errors, &status);
 		return true;
 
 	default:
@@ -424,4 +450,9 @@ as_partition_tracker_destroy(as_partition_tracker* pt)
 	release_node_partitions(&pt->node_parts);
 	as_vector_destroy(&pt->node_parts);
 	parts_release(pt->parts_all);
+
+	if (pt->errors) {
+		as_vector_destroy(pt->errors);
+		pt->errors = NULL;
+	}
 }

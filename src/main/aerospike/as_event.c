@@ -1113,13 +1113,13 @@ as_event_batch_complete(as_event_command* cmd)
 	as_event_executor_complete(executor);
 }
 
-bool
-as_partition_tracker_should_retry(as_status status);
+bool as_async_scan_should_retry(void* udata, as_status status);
 
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
-	if (cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION && as_partition_tracker_should_retry(err->code)) {
+	if (cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION &&
+		as_async_scan_should_retry(cmd->udata, err->code)) {
 		as_event_executor* executor = cmd->udata;
 		as_event_command_release(cmd);
 		as_event_executor_complete(executor);

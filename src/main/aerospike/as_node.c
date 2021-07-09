@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -170,7 +170,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 
 	// Preallocate connections.
 	if (cluster->async_min_conns_per_node > 0) {
-		as_event_create_connections_wait(node, node->async_conn_pools);
+		as_event_create_connections(node, node->async_conn_pools);
 	}
 
 	return node;

@@ -262,7 +262,7 @@ void
 as_event_connector_success(as_event_command* cmd);
 
 void
-as_event_create_connections_wait(as_node* node, as_async_conn_pool* pools);
+as_event_create_connections(as_node* node, as_async_conn_pool* pools);
 
 void
 as_event_close_cluster(as_cluster* cluster);

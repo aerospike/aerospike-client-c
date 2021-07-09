@@ -1599,8 +1599,8 @@ connector_create_commands(as_event_loop* event_loop, connector_shared* cs)
 	}
 }
 
-void
-as_event_create_connections_wait(as_node* node, as_async_conn_pool* pools)
+static void
+create_connections_wait(as_node* node, as_async_conn_pool* pools)
 {
 	as_monitor monitor;
 	as_monitor_init(&monitor);
@@ -1640,6 +1640,67 @@ as_event_create_connections_wait(as_node* node, as_async_conn_pool* pools)
 	}
 	as_monitor_wait(&monitor);
 	as_monitor_destroy(&monitor);
+}
+
+static void
+create_connections_nowait(as_node* node, as_async_conn_pool* pools)
+{
+	uint32_t loop_max = as_event_loop_size;
+	uint32_t max_concurrent = 50 / loop_max + 1;
+	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
+
+	connector_shared* list = cf_malloc(sizeof(connector_shared) * loop_max);
+
+	for (uint32_t i = 0; i < loop_max; i++) {
+		as_async_conn_pool* pool = &pools[i];
+		uint32_t min_size = pool->min_size;
+
+		if (min_size > 0) {
+			connector_shared* cs = &list[i];
+			cs->monitor = NULL;
+			cs->loop_count = NULL;
+			cs->node = node;
+			cs->pool = pool;
+			cs->conn_count = 0;
+			cs->conn_max = min_size;
+			cs->concur_max = (min_size >= max_concurrent)? max_concurrent : min_size;
+			cs->timeout_ms = timeout_ms;
+			cs->error = false;
+
+			if (!as_event_execute(&as_event_loops[i],
+				(as_event_executable)connector_create_commands, cs)) {
+				as_log_error("Failed to queue connector");
+			}
+		}
+	}
+}
+
+static bool
+as_in_event_loops()
+{
+	// Determine if current thread is an event loop thread.
+	bool in_event_loop = false;
+
+	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+		as_event_loop* event_loop = &as_event_loops[i];
+
+		if (as_in_event_loop(event_loop->thread)) {
+			in_event_loop = true;
+			break;
+		}
+	}
+	return in_event_loop;
+}
+
+void
+as_event_create_connections(as_node* node, as_async_conn_pool* pools)
+{
+	if (as_in_event_loops()) {
+		create_connections_nowait(node, pools);
+	}
+	else {
+		create_connections_wait(node, pools);
+	}
 }
 
 static void
@@ -1864,21 +1925,9 @@ as_event_close_cluster(as_cluster* cluster)
 		return;
 	}
 
-	// Determine if current thread is an event loop thread.
-	bool in_event_loop = false;
-
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		as_event_loop* event_loop = &as_event_loops[i];
-
-		if (as_in_event_loop(event_loop->thread)) {
-			in_event_loop = true;
-			break;
-		}
-	}
-
 	as_monitor* monitor = NULL;
 
-	if (! in_event_loop) {
+	if (! as_in_event_loops()) {
 		monitor = cf_malloc(sizeof(as_monitor));
 		as_monitor_init(monitor);
 	}

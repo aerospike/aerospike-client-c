@@ -225,7 +225,7 @@ as_node_create_min_connections(as_node* node)
 	// Create async connections.
 	if (as_event_loop_capacity > 0 && as_event_loop_size > 0 && !as_event_single_thread &&
 		node->cluster->async_min_conns_per_node > 0) {
-		as_event_create_connections_wait(node, node->async_conn_pools);
+		as_event_create_connections(node, node->async_conn_pools);
 	}
 }
 

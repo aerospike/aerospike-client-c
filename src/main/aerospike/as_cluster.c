@@ -93,6 +93,12 @@ release_nodes(as_nodes* nodes)
 	as_nodes_release(nodes);
 }
 
+static inline void
+as_cluster_node_failure(as_node* node)
+{
+	node->failures++;
+}
+
 static void
 as_cluster_event_notify(as_cluster* cluster, as_node* node, as_cluster_event_type type)
 {
@@ -233,6 +239,26 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 	return alt;
 }
 
+static void
+as_cluster_refresh_peers(as_cluster* cluster, as_peers* peers)
+{
+	// Refresh peers of peers in order retrieve each peer's peers-generation
+	// and get a correct refresh_count.
+	as_error error_local;
+	as_vector* peer_nodes = &peers->nodes;
+
+	for (uint32_t i = 0; i < peer_nodes->size; i++) {
+		as_node* node = as_vector_get_ptr(peer_nodes, i);
+		as_status status = as_node_refresh_peers(cluster, &error_local, node, peers);
+
+		if (status != AEROSPIKE_OK) {
+			as_log_warn("Node %s peers refresh failed: %s %s",
+				node->name, as_error_string(status), error_local.message);
+			as_cluster_node_failure(node);
+		}
+	}
+}
+
 static as_status
 as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool enable_warnings)
 {
@@ -241,7 +267,6 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 	as_node_info node_info;
 	as_error error_local;
 	as_error_init(&error_local);
-	as_status status = AEROSPIKE_OK;
 	as_status conn_status = AEROSPIKE_ERR_CLIENT;
 	
 	pthread_mutex_lock(&cluster->seed_lock);
@@ -272,6 +297,7 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 		}
 
 		struct sockaddr* addr;
+		bool found_node = false;
 
 		while (as_lookup_next(&iter, &addr)) {
 			status = as_lookup_node(cluster, &error_local, &host, addr, true, &node_info);
@@ -281,19 +307,6 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 
 				if (iter.hostname_is_alias) {
 					as_node_add_alias(node, host.name, host.port);
-				}
-
-				status = as_node_refresh(cluster, &error_local, node, peers);
-
-				if (status != AEROSPIKE_OK) {
-					if (enable_warnings) {
-						as_log_warn("Failed to refresh seed node %s %d. %s %s",
-							host.name, host.port, as_error_string(status), error_local.message);
-					}
-					conn_status = status;
-					as_node_destroy(node);
-					node = NULL;
-					continue;
 				}
 
 				peers->refresh_count = 0;
@@ -309,6 +322,7 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 					node = NULL;
 					continue;
 				}
+				found_node = true;
 
 				if (node->peers_count == 0) {
 					// Node is suspect because it does not have any peers.
@@ -339,7 +353,7 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 		}
 		as_lookup_end(&iter);
 
-		if (! node) {
+		if (! found_node) {
 			as_peers_add_invalid_host(peers, &host);
 		}
 	}
@@ -347,22 +361,34 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 
 	if (! node && fallback) {
 		node = fallback;
+		// When a fallback is used, refresh_count is reset to zero.
+		// refresh_count should always be one at this point.
+		peers->refresh_count = 1;
 	}
 
-	if (node) {
-		as_node_create_min_connections(node);
+	if (! node) {
+		return as_error_set_message(err, conn_status, "Failed to connect");
+	}
 
-		as_vector nodes_to_add;
-		as_vector_inita(&nodes_to_add, sizeof(as_node*), 1);
-		as_vector_append(&nodes_to_add, &node);
-		as_cluster_add_nodes(cluster, &nodes_to_add);
-		as_vector_destroy(&nodes_to_add);
-		status = AEROSPIKE_OK;
+	as_node_create_min_connections(node);
+
+	// Add seed and peer nodes to cluster.
+	as_vector nodes_to_add;
+	as_vector_inita(&nodes_to_add, sizeof(as_node*), peers->nodes.size + 1);
+	as_vector_append(&nodes_to_add, &node);
+
+	as_vector* peer_nodes = &peers->nodes;
+
+	for (uint32_t i = 0; i < peer_nodes->size; i++) {
+		as_node* n = as_vector_get_ptr(peer_nodes, i);
+		as_vector_append(&nodes_to_add, &n);
 	}
-	else {
-		status = as_error_set_message(err, conn_status, "Failed to connect");
-	}
-	return status;
+
+	as_cluster_add_nodes(cluster, &nodes_to_add);
+	as_vector_destroy(&nodes_to_add);
+
+	as_cluster_refresh_peers(cluster, peers);
+	return AEROSPIKE_OK;
 }
 
 static void
@@ -597,10 +623,18 @@ as_cluster_gc(as_vector* /* <as_gc_item> */ vector)
 	as_vector_clear(vector);
 }
 
-static inline void
-as_cluster_node_failure(as_node* node)
+static void
+as_cluster_destroy_peers(as_peers* peers)
 {
-	node->failures++;
+	as_vector_destroy(&peers->nodes);
+
+	as_vector* invalid_hosts = &peers->invalid_hosts;
+	
+	for (uint32_t i = 0; i < invalid_hosts->size; i++) {
+		as_host* host = as_vector_get(invalid_hosts, i);
+		as_host_destroy(host);
+	}
+	as_vector_destroy(invalid_hosts);
 }
 
 /**
@@ -639,14 +673,18 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 		as_status status = as_cluster_seed_node(cluster, err, &peers, enable_seed_warnings);
 		
 		if (status != AEROSPIKE_OK) {
+			as_cluster_destroy_peers(&peers);
 			return status;
 		}
+
+		nodes = cluster->nodes;
 
 		// Retrieve fixed number of partitions only once from any node.
 		if (cluster->n_partitions == 0) {
 			as_status status = as_cluster_set_partition_size(cluster, err);
 			
 			if (status != AEROSPIKE_OK) {
+				as_cluster_destroy_peers(&peers);
 				return status;
 			}
 		}
@@ -657,6 +695,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 			as_status status = as_cluster_set_partition_size(cluster, err);
 			
 			if (status != AEROSPIKE_OK) {
+				as_cluster_destroy_peers(&peers);
 				return status;
 			}
 		}
@@ -697,31 +736,30 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 					}
 				}
 			}
+
+			// Remove nodes determined by refreshed peers.
+			as_vector nodes_to_remove;
+			as_vector_inita(&nodes_to_remove, sizeof(as_node*), nodes->size);
+
+			as_cluster_find_nodes_to_remove(cluster, peers.refresh_count, &nodes_to_remove);
+			
+			// Remove nodes in a batch.
+			if (nodes_to_remove.size > 0) {
+				as_cluster_remove_nodes(cluster, &nodes_to_remove);
+				nodes = cluster->nodes;
+			}
+			as_vector_destroy(&nodes_to_remove);
+		}
+
+		// Add nodes in a batch.
+		if (peers.nodes.size > 0) {
+			as_cluster_add_nodes(cluster, &peers.nodes);
+			nodes = cluster->nodes;
+			as_cluster_refresh_peers(cluster, &peers);
 		}
 	}
 
 	cluster->invalid_node_count = as_peers_invalid_count(&peers);
-
-	if (peers.gen_changed) {
-		// Handle nodes changes determined from refreshes.
-		as_vector nodes_to_remove;
-		as_vector_inita(&nodes_to_remove, sizeof(as_node*), nodes->size);
-
-		as_cluster_find_nodes_to_remove(cluster, peers.refresh_count, &nodes_to_remove);
-		
-		// Remove nodes in a batch.
-		if (nodes_to_remove.size > 0) {
-			as_cluster_remove_nodes(cluster, &nodes_to_remove);
-		}
-		as_vector_destroy(&nodes_to_remove);
-	}
-	
-	// Add nodes in a batch.
-	if (peers.nodes.size > 0) {
-		as_cluster_add_nodes(cluster, &peers.nodes);
-	}
-
-	nodes = cluster->nodes;
 
 	// Refresh partition map when necessary.
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -762,16 +800,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
 
-	as_vector_destroy(&peers.nodes);
-
-	as_vector* invalid_hosts = &peers.invalid_hosts;
-	
-	for (uint32_t i = 0; i < invalid_hosts->size; i++) {
-		as_host* host = as_vector_get(invalid_hosts, i);
-		as_host_destroy(host);
-	}
-	as_vector_destroy(invalid_hosts);
-
+	as_cluster_destroy_peers(&peers);
 	as_cluster_manage(cluster);
 	return AEROSPIKE_OK;
 }

@@ -3,7 +3,7 @@ name: aerospike-client-c
 container:
   - base:
       - docker.qe.aerospike.com/build/aerospike-client-c:centos-7
-      - docker.qe.aerospike.com/build/aerospike-client-c:centos-8
+      - docker.qe.aerospike.com/build/aerospike-client-c:rhel-8
       - docker.qe.aerospike.com/build/aerospike-client-c:debian-8
       - docker.qe.aerospike.com/build/aerospike-client-c:debian-9
       - docker.qe.aerospike.com/build/aerospike-client-c:debian-10

@@ -336,6 +336,12 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Is authentication enabled
+	 */
+	bool auth_enabled;
+
+	/**
+	 * @private
 	 * Should continue to tend cluster.
 	 */
 	volatile bool valid;

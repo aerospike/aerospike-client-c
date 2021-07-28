@@ -282,7 +282,7 @@ as_lookup_node(
 	as_address_copy_storage(addr, &node_info->addr);
 	node_info->session = NULL;
 
-	if (cluster->user) {
+	if (cluster->auth_enabled) {
 		deadline = as_socket_deadline(cluster->login_timeout_ms);
 		status = as_cluster_login(cluster, err, &node_info->socket, deadline, node_info);
 

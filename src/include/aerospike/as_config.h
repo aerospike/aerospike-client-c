@@ -84,31 +84,37 @@ typedef struct as_addr_map_s {
 } as_addr_map;
 
 /**
- * Authentication mode when user/password is defined.
+ * Authentication mode.
  *
  * @ingroup as_config_object
  */
 typedef enum as_auth_mode_e {
 	/**
-	 * Use internal authentication only.  Hashed password is stored on the server.
-	 * Do not send clear password. This is the default.
+	 * Use internal authentication when user/password defined. Hashed password is stored
+	 * on the server. Do not send clear password. This is the default.
 	 */
 	AS_AUTH_INTERNAL,
 
 	/**
-	 * Use external authentication (like LDAP).  Specific external authentication is
-	 * configured on server.  If TLS defined, send clear password on node login via TLS.
-	 * Throw exception if TLS is not defined.
+	 * Use external authentication (like LDAP) when user/password defined. Specific external
+	 * authentication is configured on server. If TLS defined, send clear password on node
+	 * login via TLS. Return error if TLS is not defined.
 	 */
 	AS_AUTH_EXTERNAL,
 
 	/**
-	 * Use external authentication (like LDAP).  Specific external authentication is
-	 * configured on server.  Send clear password on node login whether or not TLS is defined.
-	 * This mode should only be used for testing purposes because it is not secure
-	 * authentication.
+	 * Use external authentication (like LDAP) when user/password defined. Specific external
+	 * authentication is configured on server.  Send clear password on node login whether or
+	 * not TLS is defined. This mode should only be used for testing purposes because it is
+	 * not secure authentication.
 	 */
-	AS_AUTH_EXTERNAL_INSECURE
+	AS_AUTH_EXTERNAL_INSECURE,
+
+	/**
+	 * Authentication and authorization based on a certificate.  No user name or
+	 * password needs to be configured.  Requires TLS and a client certificate.
+	 */
+	AS_AUTH_PKI
 } as_auth_mode;
 
 /**
@@ -646,7 +652,7 @@ typedef struct as_config_s {
 	as_config_tls tls;
 
 	/**
-	 * Authentication mode used when user/password is defined.
+	 * Authentication mode.
 	 * Default: AS_AUTH_INTERNAL
 	 */
 	as_auth_mode auth_mode;

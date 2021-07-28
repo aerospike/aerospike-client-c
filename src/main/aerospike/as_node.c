@@ -438,7 +438,7 @@ as_node_create_connection(
 	// Authenticate connection.
 	as_cluster* cluster = node->cluster;
 
-	if (cluster->user) {
+	if (cluster->auth_enabled) {
 		// Must reserve session because not called from cluster tend thread.
 		as_session* session = (as_session*)as_load_ptr(&node->session);
 
@@ -784,7 +784,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 			return status;
 		}
 
-		if (cluster->user) {
+		if (cluster->auth_enabled) {
 			bool auth;
 			status = as_node_ensure_login(err, node, &sock, &auth);
 
@@ -814,7 +814,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 		node->info_socket = sock;
 	}
 	else {
-		if (cluster->user) {
+		if (cluster->auth_enabled) {
 			bool auth;
 			status = as_node_ensure_login(err, node, &node->info_socket, &auth);
 

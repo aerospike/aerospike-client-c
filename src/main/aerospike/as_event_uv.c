@@ -1139,7 +1139,7 @@ as_uv_tls_handshake_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf
 		// Handshake complete.
 		uv_read_stop(stream);
 
-		if (cmd->cluster->user) {
+		if (cmd->cluster->auth_enabled) {
 			as_session* session = (as_session*)as_load_ptr(&cmd->node->session);
 
 			if (session) {
@@ -1354,7 +1354,7 @@ as_uv_connected(uv_connect_t* req, int status)
 		as_tls_context* ctx = as_socket_get_tls_context(cmd->cluster->tls_ctx);
 
 		if (!ctx) {
-			if (cmd->cluster->user) {
+			if (cmd->cluster->auth_enabled) {
 				as_session* session = (as_session*)as_load_ptr(&cmd->node->session);
 
 				if (session) {

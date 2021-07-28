@@ -127,7 +127,7 @@ usage()
 	fprintf(stderr, "  --tlsLoginOnly\n");
 	fprintf(stderr, "  Use TLS sockets on node login only.\n\n");
 
-	fprintf(stderr, "  --auth {INTERNAL,EXTERNAL,EXTERNAL_SECURE} # Default: INTERNAL\n");
+	fprintf(stderr, "  --auth {INTERNAL,EXTERNAL,EXTERNAL_SECURE,PKI} # Default: INTERNAL\n");
 	fprintf(stderr, "  Set authentication mode when user/password is defined.\n\n");
 
 	fprintf(stderr, "  -u --usage         # Default: usage not printed.\n");

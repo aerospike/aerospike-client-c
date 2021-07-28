@@ -400,6 +400,9 @@ as_cluster_login(
 		p = as_admin_write_field_string(p, USER, cluster->user);
 		p = as_admin_write_field_string(p, CREDENTIAL, cluster->password_hash);
 	}
+	else if (cluster->auth_mode == AS_AUTH_PKI) {
+		p = as_admin_write_header(p, LOGIN, 0);
+	}
 	else {
 		p = as_admin_write_header(p, LOGIN, 3);
 		p = as_admin_write_field_string(p, USER, cluster->user);
@@ -504,8 +507,14 @@ as_authenticate_set(as_cluster* cluster, as_session* session, uint8_t* buffer)
 {
 	uint8_t* p = buffer + 8;
 	
-	p = as_admin_write_header(p, AUTHENTICATE, 2);
-	p = as_admin_write_field_string(p, USER, cluster->user);
+	if (cluster->auth_mode != AS_AUTH_PKI) {
+		p = as_admin_write_header(p, AUTHENTICATE, 2);
+		p = as_admin_write_field_string(p, USER, cluster->user);
+	}
+	else {
+		p = as_admin_write_header(p, AUTHENTICATE, 1);
+	}
+
 	p = as_admin_write_field_bytes(p, SESSION_TOKEN, session->token, session->token_length);
 
 	uint64_t len = p - buffer;
@@ -523,8 +532,14 @@ as_authenticate(
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 
-	p = as_admin_write_header(p, AUTHENTICATE, 2);
-	p = as_admin_write_field_string(p, USER, cluster->user);
+	if (cluster->auth_mode != AS_AUTH_PKI) {
+		p = as_admin_write_header(p, AUTHENTICATE, 2);
+		p = as_admin_write_field_string(p, USER, cluster->user);
+	}
+	else {
+		p = as_admin_write_header(p, AUTHENTICATE, 1);
+	}
+
 	p = as_admin_write_field_bytes(p, SESSION_TOKEN, session->token, session->token_length);
 
 	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms);

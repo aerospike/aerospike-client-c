@@ -1125,7 +1125,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 	char* pass_hash = NULL;
 
-	if (*(config->user)) {
+	if (*(config->user) && config->auth_mode != AS_AUTH_PKI) {
 		pass_hash = cf_malloc(AS_PASSWORD_HASH_SIZE);
 
 		if (! as_password_get_constant_hash(config->password, pass_hash)) {
@@ -1150,8 +1150,12 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	memset(cluster, 0, sizeof(as_cluster));
 	cluster->auth_mode = config->auth_mode;
 
-	// Initialize user/password.
-	if (*(config->user)) {
+	if (config->auth_mode == AS_AUTH_PKI) {
+		cluster->auth_enabled = true;
+	}
+	else if (*(config->user)) {
+		// Initialize user/password.
+		cluster->auth_enabled = true;
 		cluster->user = cf_strdup(config->user);
 		cluster->password_hash = pass_hash;
 

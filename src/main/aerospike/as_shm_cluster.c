@@ -316,7 +316,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				as_node_create_min_connections(node);
 				node->index = i;
 
-				if (cluster->user) {
+				if (cluster->auth_enabled) {
 					// Retrieve session token.
 					as_error err;
 					node->perform_login = 1;
@@ -814,7 +814,7 @@ as_shm_tender(void* userdata)
 			}
 		}
 		else {
-			if (cluster->user) {
+			if (cluster->auth_enabled) {
 				as_shm_ensure_login(cluster, &err);
 			}
 

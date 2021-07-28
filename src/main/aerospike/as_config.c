@@ -349,5 +349,11 @@ as_auth_mode_from_string(as_auth_mode* auth, const char* str)
 		*auth = AS_AUTH_EXTERNAL_INSECURE;
 		return true;
 	}
+
+	if (strcasecmp(str, "PKI") == 0) {
+		*auth = AS_AUTH_PKI;
+		return true;
+	}
+
 	return false;
 }

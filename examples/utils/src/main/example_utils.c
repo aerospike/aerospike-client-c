@@ -454,7 +454,7 @@ usage(const char* short_opts)
 	LOG("--tlsLoginOnly");
 	LOG("  Use TLS for node login only.");
 
-	LOG("--auth {INTERNAL,EXTERNAL,EXTERNAL_SECURE}");
+	LOG("--auth {INTERNAL,EXTERNAL,EXTERNAL_SECURE,PKI}");
 	LOG("  Set authentication mode when user/password is defined.");
 }
 

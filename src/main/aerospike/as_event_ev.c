@@ -399,7 +399,7 @@ as_ev_command_auth_write(as_event_command* cmd)
 static void
 as_ev_command_start(as_event_command* cmd)
 {
-	if (cmd->cluster->user) {
+	if (cmd->cluster->auth_enabled) {
 		as_session* session = (as_session*)as_load_ptr(&cmd->node->session);
 
 		if (session) {

@@ -129,7 +129,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->perform_login = 0;
 	node->active = true;
 	node->partition_changed = true;
-	node->rebalance_changed = true;
+	node->rebalance_changed = cluster->rack_aware;
 
 	// Create sync connection pools.
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
@@ -942,7 +942,6 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 		else if (strcmp(nv->name, "peers-generation") == 0) {
 			uint32_t gen = (uint32_t)strtoul(nv->value, NULL, 10);
 			if (node->peers_generation != gen) {
-				as_log_debug("Node %s peers generation changed: %u", node->name, gen);
 				peers->gen_changed = true;
 
 				if (node->peers_generation > gen && node->peers_generation != 0xFFFFFFFF) {
@@ -956,14 +955,12 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 		else if (strcmp(nv->name, "partition-generation") == 0) {
 			uint32_t gen = (uint32_t)strtoul(nv->value, NULL, 10);
 			if (node->partition_generation != gen) {
-				as_log_debug("Node %s partition generation changed: %u", node->name, gen);
 				node->partition_changed = true;
 			}
 		}
 		else if (strcmp(nv->name, "rebalance-generation") == 0) {
 			uint32_t gen = (uint32_t)strtoul(nv->value, NULL, 10);
 			if (node->rebalance_generation != gen) {
-				as_log_debug("Node %s partition generation changed: %u", node->name, gen);
 				node->rebalance_changed = true;
 			}
 		}
@@ -1033,10 +1030,7 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 		if (node->failures > 0) {
 			peers->gen_changed = true;
 			node->partition_changed = true;
-
-			if (cluster->rack_aware) {
-				node->rebalance_changed = true;
-			}
+			node->rebalance_changed = cluster->rack_aware;
 		}
 		node->failures = 0;
 	}
@@ -1075,6 +1069,8 @@ as_node_process_peers(as_cluster* cluster, as_error* err, as_node* node, as_vect
 as_status
 as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
 {
+	as_log_debug("Update peers for node %s", as_node_get_address_string(node));
+
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
 	const char* command;
 	size_t command_len;
@@ -1153,6 +1149,8 @@ as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 as_status
 as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
 {
+	as_log_debug("Update partition map for node %s", as_node_get_address_string(node));
+
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
 	const char* command = INFO_STR_GET_REPLICAS_REGIME;
 	size_t command_len = sizeof(INFO_STR_GET_REPLICAS_REGIME) - 1;
@@ -1329,6 +1327,8 @@ static const char INFO_STR_GET_RACKS[] = "rebalance-generation\nrack-ids\n";
 as_status
 as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node)
 {
+	as_log_debug("Update racks for node %s", as_node_get_address_string(node));
+
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
 
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];

@@ -242,21 +242,46 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 static void
 as_cluster_refresh_peers(as_cluster* cluster, as_peers* peers)
 {
-	// Refresh peers of peers in order retrieve each peer's peers-generation
-	// and get a correct refresh_count.
 	as_error error_local;
 	as_vector* peer_nodes = &peers->nodes;
 
-	for (uint32_t i = 0; i < peer_nodes->size; i++) {
-		as_node* node = as_vector_get_ptr(peer_nodes, i);
-		as_status status = as_node_refresh_peers(cluster, &error_local, node, peers);
+	as_vector nodes;
+	as_vector_inita(&nodes, sizeof(as_node*), peer_nodes->size);
 
-		if (status != AEROSPIKE_OK) {
-			as_log_warn("Node %s peers refresh failed: %s %s",
-				node->name, as_error_string(status), error_local.message);
-			as_cluster_node_failure(node);
+	// Iterate until peers have been refreshed and all new peers added.
+	while (true) {
+		// Copy peer node references.
+		for (uint32_t i = 0; i < peer_nodes->size; i++) {
+			as_node* node = as_vector_get_ptr(peer_nodes, i);
+			as_vector_append(&nodes, &node);
+		}
+
+		// Reset peer nodes.
+		as_vector_clear(peer_nodes);
+
+		// Refresh peers of peers in order retrieve the node's peers_count which is
+		// used in as_node_refresh_partitions(). This call might add even more peers.
+		for (uint32_t i = 0; i < nodes.size; i++) {
+			as_node* node = as_vector_get_ptr(&nodes, i);
+			as_status status = as_node_refresh_peers(cluster, &error_local, node, peers);
+
+			if (status != AEROSPIKE_OK) {
+				as_log_warn("Node %s peers refresh failed: %s %s",
+					node->name, as_error_string(status), error_local.message);
+				as_cluster_node_failure(node);
+			}
+		}
+
+		if (peer_nodes->size > 0) {
+			// Add new peer nodes to cluster.
+			as_cluster_add_nodes(cluster, peer_nodes);
+			as_vector_clear(&nodes);
+		}
+		else {
+			break;
 		}
 	}
+	as_vector_destroy(&nodes);
 }
 
 static as_status
@@ -387,7 +412,9 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 	as_cluster_add_nodes(cluster, &nodes_to_add);
 	as_vector_destroy(&nodes_to_add);
 
-	as_cluster_refresh_peers(cluster, peers);
+	if (peer_nodes->size > 0) {
+		as_cluster_refresh_peers(cluster, peers);
+	}
 	return AEROSPIKE_OK;
 }
 
@@ -751,11 +778,11 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 			as_vector_destroy(&nodes_to_remove);
 		}
 
-		// Add nodes in a batch.
+		// Add peer nodes to cluster.
 		if (peers.nodes.size > 0) {
 			as_cluster_add_nodes(cluster, &peers.nodes);
-			nodes = cluster->nodes;
 			as_cluster_refresh_peers(cluster, &peers);
+			nodes = cluster->nodes;
 		}
 	}
 

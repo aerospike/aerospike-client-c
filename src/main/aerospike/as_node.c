@@ -669,6 +669,8 @@ as_node_login(as_error* err, as_node* node, as_socket* sock)
 	as_status status = as_cluster_login(cluster, err, sock, deadline_ms, &node_info);
 
 	if (status) {
+		as_fence_store();
+		as_store_uint8(&node->perform_login, 1);
 		as_error_append(err, as_node_get_address_string(node));
 		return status;
 	}
@@ -716,22 +718,12 @@ as_node_ensure_login_shm(as_error* err, as_node* node)
 	return AEROSPIKE_OK;
 }
 
-static as_status
-as_node_ensure_login(as_error* err, as_node* node, as_socket* sock, bool* auth)
+static bool
+as_node_should_login(as_node* node)
 {
-	if (as_load_uint8(&node->perform_login) ||
-		(node->session && node->session->expiration > 0 && cf_getns() >= node->session->expiration)) {
-		as_status status = as_node_login(err, node, sock);
-
-		if (status) {
-			return status;
-		}
-		*auth = true;
-	}
-	else {
-		*auth = false;
-	}
-	return AEROSPIKE_OK;
+	// Return true if previous user authentication failed or session token expired.
+	return as_load_uint8(&node->perform_login) ||
+		(node->session && node->session->expiration > 0 && cf_getns() >= node->session->expiration);
 }
 
 bool
@@ -785,26 +777,23 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 		}
 
 		if (cluster->auth_enabled) {
-			bool auth;
-			status = as_node_ensure_login(err, node, &sock, &auth);
+			if (!node->session || as_node_should_login(node)) {
+				status = as_node_login(err, node, &sock);
 
-			if (status) {
-				as_node_close_socket(node, &sock);
-				return status;
+				if (status != AEROSPIKE_OK) {
+					as_node_close_socket(node, &sock);
+					return status;
+				}
 			}
-
-			// Reset deadline because previous login had a separate timeout and can take a long time.
-			deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
-
-			if (! auth) {
+			else {
 				status = as_authenticate(cluster, err, &sock, node, node->session, 0, deadline_ms);
 
-				if (status) {
-					// Authentication failed.  Session token probably expired.
+				if (status != AEROSPIKE_OK) {
+					// Authentication failed.
 					// Must login again to get new session token.
 					status = as_node_login(err, node, &sock);
 
-					if (status) {
+					if (status != AEROSPIKE_OK) {
 						as_node_close_socket(node, &sock);
 						return status;
 					}
@@ -814,11 +803,10 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 		node->info_socket = sock;
 	}
 	else {
-		if (cluster->auth_enabled) {
-			bool auth;
-			status = as_node_ensure_login(err, node, &node->info_socket, &auth);
+		if (cluster->auth_enabled && as_node_should_login(node)) {
+			status = as_node_login(err, node, &node->info_socket);
 
-			if (status) {
+			if (status != AEROSPIKE_OK) {
 				as_node_close_socket(node, &node->info_socket);
 				return status;
 			}

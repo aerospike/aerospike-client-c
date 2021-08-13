@@ -404,6 +404,9 @@ as_lookup_node(
 		if (strcmp(begin, "pscans") == 0) {
 			features |= AS_FEATURES_PARTITION_SCAN;
 		}
+		else if (strcmp(begin, "query-show") == 0) {
+			features |= AS_FEATURES_QUERY_SHOW;
+		}
 
 		begin = end;
 	}

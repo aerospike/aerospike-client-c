@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -692,16 +692,20 @@ TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the bac
 	as_status rc = AEROSPIKE_OK;
 	as_error cb_err;
 
-	debug("    This is a UDF Background Scan job-polling test .. ");  
+	debug("    This is a UDF Background Scan job-polling test .. ");
+	as_node* node = as_node_get_random(as->cluster);
+	assert_not_null(node);
+	char* cmd = (node->features & AS_FEATURES_QUERY_SHOW)? "scan-show" : "jobs:module=scan";
+	as_node_release(node);
+
 	for(int i = 0; i < 5; i++){
 		as_error_reset(&cb_err);
-		rc = aerospike_info_foreach(as, &cb_err, NULL, "jobs:module=scan", scan_udf_info_callback, NULL);
+		rc = aerospike_info_foreach(as, &cb_err, NULL, cmd, scan_udf_info_callback, NULL);
 		assert_int_eq( rc, AEROSPIKE_OK );
 		as_sleep(1 * 1000);
 	}
 
 	as_scan_destroy(&scan);
-
 }
 
 TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in SET1, conditional-delete of bin1, verify that bin1 is gone" ) {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -137,8 +137,10 @@ aerospike_job_info(
 		policy = &as->config.policies.info;
 	}
 
-	char command[128];
-	sprintf(command, "jobs:module=%s;cmd=get-job;trid=%" PRIu64 "\n", module, job_id);
+	char command1[128];
+	char command2[128];
+	sprintf(command1, "jobs:module=%s;cmd=get-job;trid=%" PRIu64 "\n", module, job_id);
+	sprintf(command2, "%s-show:trid=%" PRIu64 "\n", module, job_id);
 
 	info->status = AS_JOB_STATUS_UNDEF;
 	info->progress_pct = 0;
@@ -151,6 +153,7 @@ aerospike_job_info(
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
+		char* command = (node->features & AS_FEATURES_QUERY_SHOW)? command2 : command1;
 		char* response = 0;
 		
 		status = as_info_command_node(err, node, command, true, deadline, &response);

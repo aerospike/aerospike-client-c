@@ -53,6 +53,7 @@ extern "C" {
 #define AS_NODE_NAME_MAX_SIZE AS_NODE_NAME_SIZE
 
 #define AS_FEATURES_PARTITION_SCAN (1 << 0)
+#define AS_FEATURES_QUERY_SHOW (1 << 1)
 
 #define AS_ADDRESS4_MAX 4
 #define AS_ADDRESS6_MAX 8

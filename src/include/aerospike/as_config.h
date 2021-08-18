@@ -680,15 +680,15 @@ typedef struct as_config_s {
 	 * This serves to lower cloud provider costs when nodes are distributed across different
 	 * racks/data centers.
 	 *
-	 * rack_id, AS_POLICY_REPLICA_PREFER_RACK and server rack configuration must also be
-	 * set to enable this functionality.
+	 * rack_id or rack_ids, AS_POLICY_REPLICA_PREFER_RACK and server rack configuration must
+	 * also be set to enable this functionality.
 	 *
 	 * Default: false
 	 */
 	bool rack_aware;
 
 	/**
-	 * Rack where this client instance resides.
+	 * Rack where this client instance resides. If rack_ids is set, rack_id is ignored.
 	 *
 	 * rack_aware, AS_POLICY_REPLICA_PREFER_RACK and server rack configuration must also be
 	 * set to enable this functionality.
@@ -696,6 +696,17 @@ typedef struct as_config_s {
 	 * Default: 0
 	 */
 	int rack_id;
+
+	/**
+	 * List of preferred racks in order of preference. If rack_ids is set, rack_id is ignored.
+	 * Do not set directly. Use multiple as_config_add_rack_id() calls to add rack ids.
+	 *
+	 * rack_aware, AS_POLICY_REPLICA_PREFER_RACK and server rack configuration must also be
+	 * set to enable this functionality.
+	 *
+	 * Default: NULL
+	 */
+	 as_vector* rack_ids;
 
 	/**
 	 * Indicates if shared memory should be used for cluster tending.  Shared memory
@@ -970,6 +981,31 @@ as_config_tls_set_certfile(as_config* config, const char* certfile)
  */
 AS_EXTERN void
 as_config_tls_add_host(as_config* config, const char* address, const char* tls_name, uint16_t port);
+
+/**
+ * Add rack id to list of server racks in order of preference. Only add racks that
+ * are close to the client rack. Do not add racks that are far away from the client.
+ * The client will still direct commands to far away racks if nodes on closer racks are not
+ * available.
+ *
+ * rack_aware, AS_POLICY_REPLICA_PREFER_RACK and server rack configuration must also be
+ * set to enable this functionality.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_config config;
+ * as_config_init(&config);
+ * // Rack 4 is where the client machine is located.
+ * as_config_add_rack_id(&config, 4);
+ * // Rack 2 is located in same datacenter complex (maybe in a close by building).
+ * as_config_add_rack_id(&config, 2);
+ * // All other racks are far enough away that they are equally not preferred, so do not include
+ * // them here.
+ * ~~~~~~~~~~
+ *
+ * @relates as_config
+ */
+AS_EXTERN void
+as_config_add_rack_id(as_config* config, int rack_id);
 
 /**
  * Convert string into as_auth_mode enum.

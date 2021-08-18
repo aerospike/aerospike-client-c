@@ -516,7 +516,7 @@ is_server_timeout(as_error* err)
 as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
-	as_node* node;
+	as_node* node = NULL;
 	uint32_t command_sent_counter = 0;
 	as_status status;
 	bool release_node;
@@ -528,8 +528,11 @@ as_command_execute(as_command* cmd, as_error* err)
 			release_node = false;
 		}
 		else {
-			node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->replica,
-										 cmd->master, cmd->iteration > 0);
+			// node might already be destroyed on retry and is still set as the previous node.
+			// This works because the previous node is only used for pointer comparison
+			// and the previous node's contents are not examined during this call.
+			node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, node, cmd->replica,
+										 cmd->master);
 
 			if (! node) {
 				return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,

@@ -266,14 +266,15 @@ typedef enum as_policy_exists_e {
 /**
  * Replica Policy
  *
- * Specifies which partition replica to read from.
+ * Defines algorithm used to determine the target node for a command.
+ * Scan and query are not affected by this replica algorithm.
  *
  * @ingroup client_policies
  */
 typedef enum as_policy_replica_e {
 
 	/**
-	 * Read from the partition master replica node.
+	 * Use node containing key's master partition.
 	 */
 	AS_POLICY_REPLICA_MASTER,
 
@@ -284,18 +285,20 @@ typedef enum as_policy_replica_e {
 	AS_POLICY_REPLICA_ANY,
 
 	/**
-	 * Always try node containing master partition first. If connection fails and
-	 * `retry_on_timeout` is true, try node containing prole partition.
+	 * Try node containing master partition first.
+	 * If connection fails, all commands try nodes containing replicated partitions.
+	 * If socketTimeout is reached, reads also try nodes containing replicated partitions,
+	 * but writes remain on master node.
 	 * Currently restricted to master and one prole.
 	 */
 	AS_POLICY_REPLICA_SEQUENCE,
 
 	/**
-	 * Try node on the same rack as the client first.  If there are no nodes on the
-	 * same rack, use SEQUENCE instead.
+	 * For reads, try node on preferred racks first. If there are no nodes on preferred racks,
+	 * use SEQUENCE instead. Also use SEQUENCE for writes.
 	 *
-	 * as_config.rack_aware, as_config.rack_id, and server rack configuration must also
-	 * be set to enable this functionality.
+	 * as_config.rack_aware, as_config.rack_id or as_config.rack_ids, and server rack 
+	 * configuration must also be set to enable this functionality.
 	 */
 	AS_POLICY_REPLICA_PREFER_RACK
 
@@ -540,7 +543,7 @@ typedef struct as_policy_read_s {
 	as_policy_key key;
 
 	/**
-	 * Specifies the replica to be consulted for the read.
+	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
 
@@ -592,7 +595,7 @@ typedef struct as_policy_write_s {
 	as_policy_key key;
 
 	/**
-	 * Specifies the replica to be consulted.
+	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
 
@@ -646,7 +649,7 @@ typedef struct as_policy_apply_s {
 	as_policy_key key;
 
 	/**
-	 * Specifies the replica to be consulted for the read.
+	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
 
@@ -701,7 +704,7 @@ typedef struct as_policy_operate_s {
 	as_policy_key key;
 
 	/**
-	 * Specifies the replica to be consulted for the read.
+	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
 
@@ -778,7 +781,7 @@ typedef struct as_policy_remove_s {
 	as_policy_key key;
 
 	/**
-	 * Specifies the replica to be consulted for the read.
+	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
 
@@ -822,7 +825,7 @@ typedef struct as_policy_batch_s {
 	as_policy_base base;
 
 	/**
-	 * Specifies the replica to be consulted for the read.
+	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
 

@@ -604,7 +604,7 @@ as_node_signal_login(as_node* node);
  * Does node contain rack.
  */
 bool
-as_node_has_rack(struct as_cluster_s* cluster, as_node* node, const char* ns, int rack_id);
+as_node_has_rack(as_node* node, const char* ns, int rack_id);
 
 /**
  * @private

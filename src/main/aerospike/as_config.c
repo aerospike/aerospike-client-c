@@ -59,6 +59,7 @@ as_config_init(as_config* c)
 	c->use_services_alternate = false;
 	c->rack_aware = false;
 	c->rack_id = 0;
+	c->rack_ids = NULL;
 	c->use_shm = false;
 	c->shm_key = 0xA8000000;
 	c->shm_max_nodes = 16;
@@ -81,6 +82,10 @@ as_config_destroy(as_config* config) {
 			as_host_destroy(host);
 		}
 		as_vector_destroy(hosts);
+	}
+
+	if (config->rack_ids) {
+		as_vector_destroy(config->rack_ids);
 	}
 
 	if (config->cluster_name) {
@@ -320,6 +325,15 @@ as_config_set_user(as_config* config, const char* user, const char* password)
 	else {
 		return false;
 	}
+}
+
+void
+as_config_add_rack_id(as_config* config, int rack_id)
+{
+	if (! config->rack_ids) {
+		config->rack_ids = as_vector_create(sizeof(int), 8);
+	}
+	as_vector_append(config->rack_ids, &rack_id);
 }
 
 void

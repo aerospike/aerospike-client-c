@@ -1212,7 +1212,18 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->conn_pools_per_node = config->conn_pools_per_node;
 	cluster->use_services_alternate = config->use_services_alternate;
 	cluster->rack_aware = config->rack_aware;
-	cluster->rack_id = config->rack_id;
+
+	if (config->rack_ids) {
+		cluster->rack_ids_size = config->rack_ids->size;
+		size_t sz = sizeof(int) * config->rack_ids->size;
+		cluster->rack_ids = cf_malloc(sz);
+		memcpy(cluster->rack_ids, config->rack_ids->list, sz);
+	}
+	else {
+		cluster->rack_ids_size = 1;
+		cluster->rack_ids = cf_malloc(sizeof(int));
+		cluster->rack_ids[0] = config->rack_id;
+	}
 
 	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
 
@@ -1381,6 +1392,9 @@ as_cluster_destroy(as_cluster* cluster)
 		}
 		as_vector_destroy(ip_map);
 	}
+
+	// Destroy racks.
+	cf_free(cluster->rack_ids);
 
 	// Destroy seeds.
 	pthread_mutex_lock(&cluster->seed_lock);

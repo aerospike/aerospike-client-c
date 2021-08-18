@@ -216,6 +216,18 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Rack ids
+	 */
+	int* rack_ids;
+
+	/**
+	 * @private
+	 * Rack ids size
+	 */
+	uint32_t rack_ids_size;
+
+	/**
+	 * @private
 	 * Max errors per node per error_rate_window.
 	 */
 	uint32_t max_error_rate;
@@ -303,12 +315,6 @@ typedef struct as_cluster_s {
 	 * Assign tend thread to this specific CPU ID.
 	 */
 	int tend_thread_cpu;
-
-	/**
-	 * @private
-	 * Rack id.
-	 */
-	int rack_id;
 
 	/**
 	 * @private
@@ -459,8 +465,8 @@ as_node_get_by_name(as_cluster* cluster, const char* name);
  */
 as_node*
 as_partition_reg_get_node(
-	as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica,
-	bool use_master, bool is_retry
+	as_cluster* cluster, const char* ns, as_partition* p, as_node* prev_node,
+	as_policy_replica replica, bool use_master
 	);
 
 struct as_partition_shm_s;
@@ -473,7 +479,7 @@ struct as_partition_shm_s;
 as_node*
 as_partition_shm_get_node(
 	as_cluster* cluster, const char* ns, struct as_partition_shm_s* partition,
-	as_policy_replica replica, bool use_master, bool is_retry
+	as_node* prev_node, as_policy_replica replica, bool use_master
 	);
 
 /**
@@ -483,17 +489,17 @@ as_partition_shm_get_node(
  */
 static inline as_node*
 as_partition_get_node(
-	as_cluster* cluster, const char* ns, void* partition, as_policy_replica replica,
-	bool master, bool is_retry
+	as_cluster* cluster, const char* ns, void* partition, as_node* prev_node,
+	as_policy_replica replica, bool master
 	)
 {
 	if (cluster->shm_info) {
 		return as_partition_shm_get_node(cluster, ns, (struct as_partition_shm_s*)partition,
-										 replica, master, is_retry);
+										 prev_node, replica, master);
 	}
 	else {
-		return as_partition_reg_get_node(cluster, ns, (as_partition*)partition, replica, master,
-										 is_retry);
+		return as_partition_reg_get_node(cluster, ns, (as_partition*)partition,
+										 prev_node, replica, master);
 	}
 }
 

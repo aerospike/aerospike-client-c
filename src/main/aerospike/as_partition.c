@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -204,70 +204,74 @@ get_sequence_node(as_cluster* cluster, as_partition* p, bool use_master)
 	return try_node_alternate(cluster, prole, master);
 }
 
-static inline bool
-try_rack_node(as_cluster* cluster, const char* ns, as_node* node)
-{
-	if (node && as_load_uint8(&node->active) &&
-		as_node_has_rack(cluster, node, ns, cluster->rack_id)) {
-		return true;
-	}
-	return false;
-}
-
 static as_node*
-prefer_rack_node(as_cluster* cluster, const char* ns, as_partition* p, bool use_master)
+prefer_rack_node(
+	as_cluster* cluster, const char* ns, as_partition* p, as_node* prev_node, bool use_master
+	)
 {
-	as_node* master;
-	as_node* prole;
+	as_node* nodes[2];
 
 	if (use_master) {
-		master = (as_node*)as_load_ptr(&p->master);
-
-		if (try_rack_node(cluster, ns, master)) {
-			return master;
-		}
-
-		prole = (as_node*)as_load_ptr(&p->prole);
-
-		if (try_rack_node(cluster, ns, prole)) {
-			return prole;
-		}
+		nodes[0] = (as_node*)as_load_ptr(&p->master);
+		nodes[1] = (as_node*)as_load_ptr(&p->prole);
 	}
 	else {
-		prole = (as_node*)as_load_ptr(&p->prole);
+		nodes[0] = (as_node*)as_load_ptr(&p->prole);
+		nodes[1] = (as_node*)as_load_ptr(&p->master);
+	}
 
-		if (try_rack_node(cluster, ns, prole)) {
-			return prole;
+	as_node* fallback1 = NULL;
+	as_node* fallback2 = NULL;
+	uint32_t max = cluster->rack_ids_size;
+
+	for (uint32_t i = 0; i < max; i++) {
+		int rack_id = cluster->rack_ids[i];
+
+		for (uint32_t j = 0; j < 2; j++) {
+			as_node* node = nodes[j];
+
+			if (node) {
+				// Avoid retrying on node where command failed even if node is the
+				// only one on the same rack. The contents of prev_node may have
+				// already been destroyed, so just use pointer comparison and never
+				// examine the contents of prev_node!
+				if (node != prev_node) {
+					if (as_node_has_rack(node, ns, rack_id)) {
+						if (as_load_uint8(&node->active)) {
+							return node;
+						}
+					}
+					else if (!fallback1 && as_load_uint8(&node->active)) {
+						// Meets all criteria except not on same rack.
+						fallback1 = node;
+					}
+				}
+				else if (!fallback2 && as_load_uint8(&node->active)) {
+					// Previous node is the least desirable fallback.
+					fallback2 = node;
+				}
+			}
 		}
-
-		master = (as_node*)as_load_ptr(&p->master);
-
-		if (try_rack_node(cluster, ns, master)) {
-			return master;
-		}
 	}
 
-	// Default to sequence mode.
-	if (! prole) {
-		return try_node(cluster, master);
+	// Return node on a different rack if it exists.
+	if (fallback1) {
+		return fallback1;
 	}
 
-	if (! master) {
-		return try_node(cluster, prole);
+	// Return previous node if it still exists.
+	if (fallback2) {
+		return fallback2;
 	}
-
-	if (use_master) {
-		return try_node_alternate(cluster, master, prole);
-	}
-	return try_node_alternate(cluster, prole, master);
+	return NULL;
 }
 
 static uint32_t g_randomizer = 0;
 
 as_node*
 as_partition_reg_get_node(
-	as_cluster* cluster, const char* ns, as_partition* p, as_policy_replica replica,
-	bool use_master, bool is_retry
+	as_cluster* cluster, const char* ns, as_partition* p, as_node* prev_node,
+	as_policy_replica replica, bool use_master
 	)
 {
 	switch (replica) {
@@ -290,12 +294,7 @@ as_partition_reg_get_node(
 		}
 
 		case AS_POLICY_REPLICA_PREFER_RACK: {
-			if (!is_retry) {
-				return prefer_rack_node(cluster, ns, p, use_master);
-			}
-			else {
-				return get_sequence_node(cluster, p, use_master);
-			}
+			return prefer_rack_node(cluster, ns, p, prev_node, use_master);
 		}
 	}
 }

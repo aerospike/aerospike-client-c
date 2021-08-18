@@ -727,7 +727,7 @@ as_node_should_login(as_node* node)
 }
 
 bool
-as_node_has_rack(as_cluster* cluster, as_node* node, const char* ns, int rack_id)
+as_node_has_rack(as_node* node, const char* ns, int rack_id)
 {
 	as_racks* racks = (as_racks*)as_load_ptr(&node->racks);
 

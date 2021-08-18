@@ -586,112 +586,100 @@ shm_get_sequence_node(
 	return as_shm_try_node_alternate(cluster, local_nodes, prole, master);
 }
 
-static inline as_node*
-shm_try_rack_node(
-	as_cluster* cluster, as_node_shm* nodes_shm, as_node** local_nodes, const char* ns,
-	uint32_t node_index
-	)
-{
-	// node_index starts at one (zero indicates unset).
-	if (node_index == 0) {
-		return NULL;
-	}
-	node_index--;
-
-	as_node_shm* node_shm = &nodes_shm[node_index];
-	int rack_id;
-	uint8_t active;
-
-	as_swlock_read_lock(&node_shm->lock);
-	rack_id = node_shm->rack_id;
-	active = node_shm->active;
-	as_swlock_read_unlock(&node_shm->lock);
-
-	if (! active) {
-		return NULL;
-	}
-
-	// Check rack id on node's shared memory first.
-	if (rack_id == cluster->rack_id) {
-		return (as_node*)as_load_ptr(&local_nodes[node_index]);
-	}
-
-	if (rack_id != -1) {
-		return NULL;
-	}
-
-	// Rack ids are per namespace and are stored on local node because there is not
-	// enough node shared memory to cover this case.
-	as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index]);
-
-	if (as_node_has_rack(cluster, node, ns, cluster->rack_id)) {
-		return node;
-	}
-	return NULL;
-}
-
 static as_node*
 shm_prefer_rack_node(
-	as_cluster* cluster, as_node** local_nodes, const char* ns, as_partition_shm* p, bool use_master
+	as_cluster* cluster, as_node** local_nodes, const char* ns, as_partition_shm* p,
+	as_node* prev_node, bool use_master
 	)
 {
 	as_node_shm* nodes_shm = cluster->shm_info->cluster_shm->nodes;
-	as_node* node;
-	uint32_t master;
-	uint32_t prole;
+	uint32_t node_indexes[2];
 
 	if (use_master) {
-		master = as_load_uint32(&p->master);
-		node = shm_try_rack_node(cluster, nodes_shm, local_nodes, ns, master);
-
-		if (node) {
-			return node;
-		}
-
-		prole = as_load_uint32(&p->prole);
-		node = shm_try_rack_node(cluster, nodes_shm, local_nodes, ns, prole);
-
-		if (node) {
-			return node;
-		}
+		node_indexes[0] = as_load_uint32(&p->master);
+		node_indexes[1] = as_load_uint32(&p->prole);
 	}
 	else {
-		prole = as_load_uint32(&p->prole);
-		node = shm_try_rack_node(cluster, nodes_shm, local_nodes, ns, prole);
+		node_indexes[0] = as_load_uint32(&p->prole);
+		node_indexes[1] = as_load_uint32(&p->master);
+	}
 
-		if (node) {
-			return node;
+	as_node* fallback1 = NULL;
+	as_node* fallback2 = NULL;
+	uint32_t max = cluster->rack_ids_size;
+
+	for (uint32_t i = 0; i < max; i++) {
+		int search_id = cluster->rack_ids[i];
+
+		for (uint32_t j = 0; j < 2; j++) {
+			uint32_t node_index = node_indexes[j];
+
+			// node_index starts at one (zero indicates unset).
+			if (! node_index) {
+				continue;
+			}
+			node_index--;
+
+			as_node_shm* node_shm = &nodes_shm[node_index];
+			int rack_id;
+			uint8_t active;
+
+			as_swlock_read_lock(&node_shm->lock);
+			rack_id = node_shm->rack_id;
+			active = node_shm->active;
+			as_swlock_read_unlock(&node_shm->lock);
+
+			if (! active) {
+				continue;
+			}
+
+			as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index]);
+
+			// Avoid retrying on node where command failed even if node is the
+			// only one on the same rack. The contents of prev_node may have
+			// already been destroyed, so just use pointer comparison and never
+			// examine the contents of prev_node!
+			if (node == prev_node) {
+				// Previous node is the least desirable fallback.
+				if (! fallback2) {
+					fallback2 = node;
+				}
+				continue;
+			}
+
+			// Rack ids may be different per namespace. A rack id of -1 indicates all ids are
+			// stored on the local node because there is not enough node shared memory to cover
+			// this case. Check rack id on node's shared memory first.
+			if (rack_id == search_id || (rack_id == -1 && as_node_has_rack(node, ns, search_id))) {
+				// Found node on same rack.
+				return node;
+			}
+
+			// Node meets all criteria except not on same rack.
+			if (! fallback1) {
+				fallback1 = node;
+			}
 		}
-
-		master = as_load_uint32(&p->master);
-		node = shm_try_rack_node(cluster, nodes_shm, local_nodes, ns, master);
-
-		if (node) {
-			return node;
-		}
 	}
 
-	// Default to sequence mode.
-	if (! prole) {
-		return as_shm_try_node(cluster, local_nodes, master);
+	// Return node on a different rack if it exists.
+	if (fallback1) {
+		return fallback1;
 	}
 
-	if (! master) {
-		return as_shm_try_node(cluster, local_nodes, prole);
+	// Return previous node if it still exists.
+	if (fallback2) {
+		return fallback2;
 	}
-
-	if (use_master) {
-		return as_shm_try_node_alternate(cluster, local_nodes, master, prole);
-	}
-	return as_shm_try_node_alternate(cluster, local_nodes, prole, master);
+	return NULL;
 }
 
 static uint32_t g_shm_randomizer = 0;
 
 as_node*
 as_partition_shm_get_node(
-	as_cluster* cluster, const char* ns, as_partition_shm* p, as_policy_replica replica,
-	bool use_master, bool is_retry
+	as_cluster* cluster, const char* ns, as_partition_shm* p, as_node* prev_node,
+	as_policy_replica replica, bool use_master
 	)
 {
 	as_node** local_nodes = cluster->shm_info->local_nodes;
@@ -716,12 +704,7 @@ as_partition_shm_get_node(
 		}
 
 		case AS_POLICY_REPLICA_PREFER_RACK: {
-			if (!is_retry) {
-				return shm_prefer_rack_node(cluster, local_nodes, ns, p, use_master);
-			}
-			else {
-				return shm_get_sequence_node(cluster, local_nodes, p, use_master);
-			}
+			return shm_prefer_rack_node(cluster, local_nodes, ns, p, prev_node, use_master);
 		}
 	}
 }

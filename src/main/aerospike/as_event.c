@@ -585,8 +585,11 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 			as_node_release(cmd->node);
 		}
 
-		cmd->node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->replica,
-										  cmd->flags & AS_ASYNC_FLAGS_MASTER, cmd->iteration > 0);
+		// cmd->node might already be destroyed on retry and is still set as the previous node.
+		// This works because the previous node is only used for pointer comparison
+		// and the previous node's contents are not examined during this call.
+		cmd->node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->node,
+										  cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER);
 
 		if (! cmd->node) {
 			event_loop->errors++;

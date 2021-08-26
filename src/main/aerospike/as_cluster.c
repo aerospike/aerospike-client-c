@@ -1293,8 +1293,9 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		}
 	}
 	else {
-		if (cluster->auth_mode == AS_AUTH_EXTERNAL) {
-			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "TLS is required for external authentication");
+		if (cluster->auth_mode == AS_AUTH_EXTERNAL || cluster->auth_mode == AS_AUTH_PKI) {
+			as_status status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+				"TLS is required for external or PKI authentication");
 			as_cluster_destroy(cluster);
 			*cluster_out = 0;
 			return status;

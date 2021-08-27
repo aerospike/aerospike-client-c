@@ -542,7 +542,7 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 static size_t
 as_query_command_size(
 	const as_policy_base* policy_base, const as_query* query, uint16_t* fields, uint32_t* filter_sz,
-	uint32_t* predexp_sz, uint32_t* bin_name_sz, as_buffer* argbuffer, as_buffer** opsbuffers
+	uint32_t* predexp_sz, uint32_t* bin_name_sz, as_buffer* argbuffer, as_queue* opsbuffers
 	)
 {
 	size_t size = AS_HEADER_SIZE;
@@ -670,14 +670,10 @@ as_query_command_size(
 		// Estimate size for background operations.
 		as_operations* ops = query->ops;
 
-		as_buffer* buffers = cf_malloc(sizeof(as_buffer) * ops->binops.size);
-		memset(buffers, 0, sizeof(as_buffer) * ops->binops.size);
-
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
-			size += as_command_bin_size(&op->bin, &buffers[i]);
+			size += as_command_bin_size(&op->bin, opsbuffers);
 		}
-		*opsbuffers = buffers;
 	}
 	else {
 		// Estimate size for selected bin names on scan (query bin names already handled).
@@ -686,7 +682,6 @@ as_query_command_size(
 				size += as_command_string_operation_size(query->select.entries[i]);
 			}
 		}
-		*opsbuffers = NULL;
 	}
 
 	*fields = n_fields;
@@ -701,7 +696,7 @@ as_query_command_init(
 	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_base* base_policy,
 	const as_policy_query* query_policy, const as_policy_write* write_policy, uint64_t task_id,
 	uint16_t n_fields, uint32_t filter_size, uint32_t predexp_size, uint32_t bin_name_size,
-	as_buffer* argbuffer, as_buffer* opsbuffers
+	as_buffer* argbuffer, as_queue* opsbuffers
 	)
 {
 	// Write command buffer.
@@ -835,11 +830,9 @@ as_query_command_init(
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
-			as_operator o = (op->op == AS_OPERATOR_MAP_MODIFY)? AS_OPERATOR_CDT_MODIFY : op->op;
-			p = as_command_write_bin(p, o, &op->bin, &opsbuffers[i]);
+			p = as_command_write_bin(p, op->op, &op->bin, opsbuffers);
 		}
-		// We are done with opsbuffers, so we can free here.
-		cf_free(opsbuffers);
+		as_buffers_destroy(opsbuffers);
 	}
 	else {
 		// Estimate size for selected bin names on scan (query bin names already handled).
@@ -871,20 +864,26 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 	// If retries were allowed, the timeout field in the command would change on retry which
 	// would conflict with other threads.
 	as_buffer argbuffer;
-	as_buffer* opsbuffers;
 	uint32_t filter_size = 0;
 	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
+
+	as_queue opsbuffers;
+
+	if (query->ops) {
+		as_queue_inita(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
+	}
+
 	size_t size = as_query_command_size(base_policy, query, &n_fields, &filter_size, &predexp_size,
 			&bin_name_size, &argbuffer, &opsbuffers);
 	uint8_t* cmd = as_command_buffer_init(size);
 	size = as_query_command_init(cmd, query, query_type, base_policy, task->query_policy,
 			task->write_policy, task->task_id, n_fields, filter_size, predexp_size,
-			bin_name_size, &argbuffer, opsbuffers);
-	
+			bin_name_size, &argbuffer, &opsbuffers);
+
 	task->cmd = cmd;
 	task->cmd_size = size;
 	task->complete_q = cf_queue_create(sizeof(as_query_complete_task), true);
@@ -1216,18 +1215,23 @@ aerospike_query_async(
 	executor->info_timeout = policy->info_timeout;
 
 	as_buffer argbuffer;
-	as_buffer* opsbuffers;
 	uint32_t filter_size = 0;
 	uint32_t predexp_size = 0;
 	uint32_t bin_name_size = 0;
 	uint16_t n_fields = 0;
 	
+	as_queue opsbuffers;
+
+	if (query->ops) {
+		as_queue_inita(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
+	}
+
 	size_t size = as_query_command_size(&policy->base, query, &n_fields, &filter_size,
 			&predexp_size, &bin_name_size, &argbuffer, &opsbuffers);
 	uint8_t* cmd_buf = as_command_buffer_init(size);
 	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, &policy->base, policy, NULL,
-			task_id, n_fields, filter_size, predexp_size, bin_name_size, &argbuffer, opsbuffers);
-	
+			task_id, n_fields, filter_size, predexp_size, bin_name_size, &argbuffer, &opsbuffers);
+
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.
 	size_t s = (sizeof(as_async_query_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;

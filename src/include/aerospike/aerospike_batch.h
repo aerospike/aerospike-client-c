@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -58,7 +58,12 @@ typedef struct as_batch_read_record_s {
 	as_key key;
 	
 	/**
-	 * Bin names requested for this key.
+	 * Read operations for this key. ops are mutually exclusive with bin_names.
+	 */
+	as_operations* ops;
+
+	/**
+	 * Bin names requested for this key. bin_names are mutually exclusive with ops.
 	 */
 	char** bin_names;
 	
@@ -227,7 +232,7 @@ as_batch_read_reserve(as_batch_read_records* records)
 	
 /**
  * Destroy keys and records in record list.  It's the responsility of the caller to 
- * free `as_batch_read_record.bin_names` when necessary.
+ * free `as_batch_read_record.bin_names` and `as_batch_read_record.ops` when necessary.
  *
  * @param records	Batch record list.
  *
@@ -434,6 +439,47 @@ AS_EXTERN as_status
 aerospike_batch_get_bins(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
 	const char** bins, uint32_t n_bins, aerospike_batch_read_callback callback, void* udata
+	);
+
+/**
+ * Look up multiple records by key, then return results from specified read operations.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_batch batch;
+ * as_batch_inita(&batch, 3);
+ *
+ * as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
+ * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
+ * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
+ *
+ * as_operations ops;
+ * as_operations_inita(&ops, 1);
+ * as_operations_list_size(&ops, "list", NULL);
+ *
+ * if (aerospike_batch_get_ops(&as, &err, NULL, &batch, &ops, callback, NULL) != AEROSPIKE_OK ) {
+ * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ * }
+ *
+ * as_batch_destroy(&batch);
+ * as_operations_destroy(&ops);
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param batch			The batch of keys to read.
+ * @param ops			Read operations.
+ * @param callback 		The callback to invoke for each record read.
+ * @param udata			The user-data for the callback.
+ *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ * @ingroup batch_operations
+ */
+AS_EXTERN as_status
+aerospike_batch_get_ops(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_operations* ops, aerospike_batch_read_callback callback, void* udata
 	);
 
 /**

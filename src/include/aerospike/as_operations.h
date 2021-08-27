@@ -30,62 +30,23 @@ extern "C" {
  * Operation Identifiers
  */
 typedef enum as_operator_e {
-
-	/**
-	 * Return the bin from the cluster.
-	 */
-	AS_OPERATOR_READ       = 1,
-	
-	/**
-	 * Update the bin.
-	 */
-	AS_OPERATOR_WRITE      = 2,
-
-	AS_OPERATOR_CDT_READ   = 3,
-	AS_OPERATOR_CDT_MODIFY = 4,
-
-	/**
-	 * Increment a bin containing an
-	 * integer value.
-	 */
-	AS_OPERATOR_INCR       = 5,
-
-	/**
-	 * Evaluate an expression and return the result of that expression.
-	 */
-	AS_OPERATOR_EXP_READ   = 7,
-
-	/**
-	 * Evaluate an expression and write the result of that expression.
-	 */
-	AS_OPERATOR_EXP_MODIFY = 8,
-
-	/**
-	 * Append bytes to the bin containing
-	 * either a string or blob.
-	 */
-	AS_OPERATOR_APPEND     = 9,
-	
-	/**
-	 * Prepend bytes to the bin containing
-	 * either a string or blob.
-	 */
-	AS_OPERATOR_PREPEND    = 10,
-
-	/**
-	 * Touch the record's ttl.
-	 */
-	AS_OPERATOR_TOUCH      = 11,
-
-	AS_OPERATOR_BIT_READ   = 12,
-	AS_OPERATOR_BIT_MODIFY = 13,
-	AS_OPERATOR_DELETE = 14,
-	AS_OPERATOR_HLL_READ = 15,
-	AS_OPERATOR_HLL_MODIFY = 16,
-
-	/* Internal Ops */
-	AS_OPERATOR_MAP_READ   = 100, // eventually maps to AS_OPERATOR_CDT_READ
-	AS_OPERATOR_MAP_MODIFY = 101  // eventually maps to AS_OPERATOR_CDT_MODIFY
+	AS_OPERATOR_READ,
+	AS_OPERATOR_WRITE,
+	AS_OPERATOR_CDT_READ,
+	AS_OPERATOR_CDT_MODIFY,
+	AS_OPERATOR_MAP_READ,
+	AS_OPERATOR_MAP_MODIFY,
+	AS_OPERATOR_INCR,
+	AS_OPERATOR_EXP_READ,
+	AS_OPERATOR_EXP_MODIFY,
+	AS_OPERATOR_APPEND,
+	AS_OPERATOR_PREPEND,
+	AS_OPERATOR_TOUCH,
+	AS_OPERATOR_BIT_READ,
+	AS_OPERATOR_BIT_MODIFY,
+	AS_OPERATOR_DELETE,
+	AS_OPERATOR_HLL_READ,
+	AS_OPERATOR_HLL_MODIFY
 } as_operator;
 
 /**

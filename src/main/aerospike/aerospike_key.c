@@ -514,7 +514,7 @@ typedef struct as_put_s {
 	const as_policy_write* policy;
 	const as_key* key;
 	as_record* rec;
-	as_buffer* buffers;
+	as_queue* buffers;
 	uint32_t filter_size;
 	uint16_t n_fields;
 	uint16_t n_bins;
@@ -522,8 +522,7 @@ typedef struct as_put_s {
 
 static size_t
 as_put_init(
-	as_put* put, const as_policy_write* policy, const as_key* key, as_record* rec,
-	as_buffer* buffers
+	as_put* put, const as_policy_write* policy, const as_key* key, as_record* rec, as_queue* buffers
 	)
 {
 	put->policy = policy;
@@ -539,12 +538,10 @@ as_put_init(
 	put->filter_size = as_command_filter_size(&policy->base, &put->n_fields);
 	size += put->filter_size;
 
-	memset(put->buffers, 0, sizeof(as_buffer) * n_bins);
-
 	as_bin* bins = rec->bins.entries;
 
 	for (uint16_t i = 0; i < n_bins; i++) {
-		size += as_command_bin_size(&bins[i], &buffers[i]);
+		size += as_command_bin_size(&bins[i], buffers);
 	}
 	return size;
 }
@@ -565,11 +562,12 @@ as_put_write(void* udata, uint8_t* buf)
 
 	as_bin* bins = rec->bins.entries;
 	uint16_t n_bins = put->n_bins;
-	as_buffer* buffers = put->buffers;
+	as_queue* buffers = put->buffers;
 
 	for (uint16_t i = 0; i < n_bins; i++) {
-		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], &buffers[i]);
+		p = as_command_write_bin(p, AS_OPERATOR_WRITE, &bins[i], buffers);
 	}
+	as_buffers_destroy(buffers);
 	return as_command_write_end(buf, p);
 }
 
@@ -590,10 +588,11 @@ aerospike_key_put(
 		return status;
 	}
 
-	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * rec->bins.size);
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
-	size_t size = as_put_init(&put, policy, key, rec, buffers);
+	size_t size = as_put_init(&put, policy, key, rec, &buffers);
 
 	// Support new compress while still being compatible with old XDR compression_threshold.
 	uint32_t compression_threshold = policy->compression_threshold;
@@ -629,10 +628,11 @@ aerospike_key_put_async_ex(
 		return status;
 	}
 
-	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * rec->bins.size);
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
-	size_t size = as_put_init(&put, policy, key, rec, buffers);
+	size_t size = as_put_init(&put, policy, key, rec, &buffers);
 
 	// Support new compress while still being compatible with old XDR compression_threshold.
 	uint32_t compression_threshold = policy->compression_threshold;
@@ -813,7 +813,7 @@ typedef struct as_operate_s {
 	const as_policy_operate* policy;
 	const as_key* key;
 	const as_operations* ops;
-	as_buffer* buffers;
+	as_queue* buffers;
 	uint32_t filter_size;
 	uint16_t n_fields;
 	uint16_t n_operations;
@@ -823,7 +823,7 @@ typedef struct as_operate_s {
 } as_operate;
 
 static size_t
-as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr, uint8_t* wattr)
+as_operate_set_attr(const as_operations* ops, as_queue* buffers, uint8_t* rattr, uint8_t* wattr)
 {
 	size_t size = 0;
 	uint32_t n_operations = ops->binops.size;
@@ -836,7 +836,6 @@ as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr
 		
 		switch (op->op)	{
 			case AS_OPERATOR_MAP_READ:
-				op->op = AS_OPERATOR_CDT_READ;
 			case AS_OPERATOR_EXP_READ:
 			case AS_OPERATOR_BIT_READ:
 			case AS_OPERATOR_HLL_READ:
@@ -849,7 +848,6 @@ as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr
 				break;
 				
 			case AS_OPERATOR_MAP_MODIFY:
-				op->op = AS_OPERATOR_CDT_MODIFY;
 			case AS_OPERATOR_EXP_MODIFY:
 			case AS_OPERATOR_BIT_MODIFY:
 			case AS_OPERATOR_HLL_MODIFY:
@@ -860,7 +858,7 @@ as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr
 				write_attr |= AS_MSG_INFO2_WRITE;
 				break;
 		}
-		size += as_command_bin_size(&op->bin, &buffers[i]);
+		size += as_command_bin_size(&op->bin, buffers);
 	}
 	
 	if (respond_all_ops) {
@@ -874,11 +872,11 @@ as_operate_set_attr(const as_operations* ops, as_buffer* buffers, uint8_t* rattr
 static size_t
 as_operate_init(
 	as_operate* oper, aerospike* as, const as_policy_operate* policy,
-	as_policy_operate* policy_local, const as_key* key, const as_operations* ops, as_buffer* buffers
+	as_policy_operate* policy_local, const as_key* key, const as_operations* ops, as_queue* buffers
 	)
 {
 	oper->n_operations = ops->binops.size;
-	memset(buffers, 0, sizeof(as_buffer) * oper->n_operations);
+	oper->buffers = buffers;
 
 	size_t size = as_operate_set_attr(ops, buffers, &oper->read_attr, &oper->write_attr);
 	oper->info_attr = 0;
@@ -899,7 +897,6 @@ as_operate_init(
 	oper->policy = policy;
 	oper->key = key;
 	oper->ops = ops;
-	oper->buffers = buffers;
 
 	as_command_set_attr_read(policy->read_mode_ap, policy->read_mode_sc, policy->base.compress,
 							 &oper->read_attr, &oper->info_attr);
@@ -926,13 +923,13 @@ as_operate_write(void* udata, uint8_t* buf)
 	p = as_command_write_filter(&policy->base, oper->filter_size, p);
 
 	uint16_t n_operations = oper->n_operations;
-	as_buffer* buffers = oper->buffers;
+	as_queue* buffers = oper->buffers;
 
 	for (uint16_t i = 0; i < n_operations; i++) {
 		as_binop* op = &ops->binops.entries[i];
-		p = as_command_write_bin(p, op->op, &op->bin, &buffers[i]);
+		p = as_command_write_bin(p, op->op, &op->bin, buffers);
 	}
-
+	as_buffers_destroy(buffers);
 	return as_command_write_end(buf, p);
 }
 
@@ -957,11 +954,12 @@ aerospike_key_operate(
 		return status;
 	}
 
-	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_operations);
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
-	size_t size = as_operate_init(&oper, as, policy, &policy_local, key, ops, buffers);
+	size_t size = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers);
 	policy = oper.policy;
 
 	as_command_parse_result_data data;
@@ -1007,11 +1005,12 @@ aerospike_key_operate_async(
 		return status;
 	}
 
-	as_buffer* buffers = (as_buffer*)alloca(sizeof(as_buffer) * n_operations);
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
-	size_t size = as_operate_init(&oper, as, policy, &policy_local, key, ops, buffers);
+	size_t size = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers);
 	policy = oper.policy;
 
 	as_event_command* cmd;

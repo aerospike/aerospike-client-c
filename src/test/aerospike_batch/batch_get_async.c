@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,6 +17,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/as_arraylist.h>
 #include <aerospike/as_monitor.h>
 
 #include "../test.h"
@@ -31,24 +32,88 @@ static as_monitor monitor;
 /******************************************************************************
  * MACROS
  *****************************************************************************/
+
 #define NAMESPACE "test"
 #define SET "batchasync"
+#define LIST_BIN "listbin"
 #define N_KEYS 200
 
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
 
+static as_status
+insert_record(as_error* err, int i)
+{
+	// Do not write some records to test not found logic too.
+	if (i % 20 == 0) {
+		return AEROSPIKE_OK;
+	}
+		
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, i);
+
+	as_arraylist list;
+	as_arraylist_inita(&list, i);
+
+	for (int j = 0; j < i; j++) {
+		as_arraylist_append_int64(&list, j * i);
+	}
+
+	as_record rec;
+	
+	// Some records should be missing bins to test bin filters.
+	if (i % 25 == 0) {
+		as_record_inita(&rec, 2);
+		as_record_set_int64(&rec, "val", i);
+		as_record_set_list(&rec, LIST_BIN, (as_list*)&list);
+	}
+	else {
+		as_record_inita(&rec, 3);
+		as_record_set_int64(&rec, "val", i);
+		as_record_set_int64(&rec, "val2", i);
+		as_record_set_list(&rec, LIST_BIN, (as_list*)&list);
+	}
+
+	as_status status = aerospike_key_put(as, err, NULL, &key, &rec);
+	as_record_destroy(&rec);
+	return status;
+}
+
 static bool
 before(atf_suite* suite)
 {
 	as_monitor_init(&monitor);
+
+	as_error err;
+
+	for (int i = 0; i < N_KEYS; i++) {
+		as_status status = insert_record(&err, i);
+
+		if (status != AEROSPIKE_OK) {
+			info("error(%d): %s", err.code, err.message);
+			return false;
+		}
+	}
 	return true;
 }
 
 static bool
 after(atf_suite* suite)
 {
+	as_error err;
+	
+	for (int i = 1; i < N_KEYS; i++) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, i);
+		
+		as_status status = aerospike_key_remove(as, &err, NULL, &key);
+		
+		if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			info("error(%d): %s", err.code, err.message);
+			return false;
+		}
+	}
 	as_monitor_destroy(&monitor);
 	return true;
 }
@@ -57,46 +122,10 @@ after(atf_suite* suite)
  * TEST CASES
  *****************************************************************************/
 
-TEST(batch_async_pre , "Batch Async: Create Records")
-{
-    as_error err;
-
-    for (uint32_t i = 0; i < N_KEYS; i++) {
-
-		// Do not write some records to test not found logic too.
-		if (i % 20 == 0) {
-			continue;
-		}
-			
-        as_key key;
-        as_key_init_int64(&key, NAMESPACE, SET, (int64_t) i);
-
-		as_record rec;
-		
-		// Some records should be missing bins to test bin filters.
-		if (i % 25 == 0) {
-			as_record_inita(&rec, 1);
-			as_record_set_int64(&rec, "val", (int64_t) i);
-		}
-		else {
-			as_record_inita(&rec, 2);
-			as_record_set_int64(&rec, "val", (int64_t) i);
-			as_record_set_int64(&rec, "val2", (int64_t) i);
-		}
-
-		aerospike_key_put(as, &err, NULL, &key, &rec);
-
-        if ( err.code != AEROSPIKE_OK ) {
-            info("error(%d): %s", err.code, err.message);
-        }
-
-        assert_int_eq( err.code , AEROSPIKE_OK );
-		as_record_destroy(&rec);
-    }
-}
-
 static void
-batch_callback(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop)
+batch_callback(
+	as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop
+	)
 {
 	if (err) {
 		as_batch_read_destroy(records);
@@ -142,14 +171,15 @@ batch_callback(as_error* err, as_batch_read_records* records, void* udata, as_ev
 	}
 	as_batch_read_destroy(records);
 	
-    assert_int_eq_async(&monitor, found, 8);
-    assert_int_eq_async(&monitor, errors, 0);
+	assert_int_eq_async(&monitor, found, 8);
+	assert_int_eq_async(&monitor, errors, 0);
 	as_monitor_notify(&monitor);
 }
 
 TEST(batch_async_read_complex, "Batch Async Read Complex")
 {
-	// Batch allows multiple namespaces in one call, but example test environment may only have one namespace.
+	// Batch allows multiple namespaces in one call,
+	// but example test environment may only have one namespace.
 	as_batch_read_records* records = as_batch_read_create(9);
 	
 	char* bins[] = {"val"};
@@ -207,32 +237,88 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 	as_monitor_begin(&monitor);
 
 	as_error err;
-	as_status status = aerospike_batch_read_async(as, &err, NULL, records, batch_callback, __result__, NULL);
+	as_status status = aerospike_batch_read_async(as, &err, NULL, records, batch_callback,
+												  __result__, NULL);
 	
 	if (status != AEROSPIKE_OK) {
 		as_batch_read_destroy(records);
 	}
-    assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(status, AEROSPIKE_OK);
 	as_monitor_wait(&monitor);
 }
 
-TEST(batch_async_post, "Batch Async: Remove Records")
+static void
+batch_async_list_operate_cb(
+	as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop
+	)
 {
-    as_error err;
-	
-    for (uint32_t i = 1; i < N_KEYS+1; i++) {
-		
-        as_key key;
-        as_key_init_int64(&key, NAMESPACE, SET, (int64_t) i);
-		
-        aerospike_key_remove(as, &err, NULL, &key);
-		
-        if (err.code != AEROSPIKE_OK && err.code != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-            info("error(%d): %s", err.code, err.message);
-        }
-		
-		assert_true( err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND );
+	if (err) {
+		as_batch_read_destroy(records);
 	}
+	assert_success_async(&monitor, err, udata);
+
+	as_vector* list = &records->list;
+	uint32_t found = 0;
+	uint32_t errors = 0;
+	
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_batch_read_record* batch = as_vector_get(list, i);
+		as_key* key = &batch->key;
+		int k = (int)key->valuep->integer.value;
+		
+		if (batch->result == AEROSPIKE_OK) {
+			found++;
+			
+			as_bin* results = batch->record.bins.entries;
+			int v2 = (int)results[1].valuep->integer.value;
+			int expected = k * (k - 1);
+
+			if (v2 != expected) {
+				errors++;
+				warn("Result[%d]: v2(%d) != expected(%d)", k, v2, expected);
+			}
+		}
+		else if (batch->result != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			errors++;
+			error("Unexpected error(%u): %s", i, as_error_string(batch->result));
+		}
+	}
+	as_batch_read_destroy(records);
+	
+	assert_int_eq_async(&monitor, found, N_KEYS - N_KEYS/20);
+	assert_int_eq_async(&monitor, errors, 0);
+	as_monitor_notify(&monitor);
+}
+
+TEST(batch_async_list_operate, "Batch Async List Operate")
+{
+	as_batch_read_records* records = as_batch_read_create(N_KEYS);
+	
+	// Get size and last element of list bin for all records.
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_list_size(&ops, LIST_BIN, NULL);
+	as_operations_list_get_by_index(&ops, LIST_BIN, NULL, -1, AS_LIST_RETURN_VALUE);
+
+	for (uint32_t i = 0; i < N_KEYS; i++) {
+		as_batch_read_record* r = as_batch_read_reserve(records);
+		as_key_init_int64(&r->key, NAMESPACE, SET, i);
+		r->ops = &ops;
+	}
+
+	as_monitor_begin(&monitor);
+
+	as_error err;
+	as_status status = aerospike_batch_read_async(as, &err, NULL, records,
+												  batch_async_list_operate_cb, __result__, NULL);
+
+	as_operations_destroy(&ops);
+	
+	if (status != AEROSPIKE_OK) {
+		as_batch_read_destroy(records);
+	}
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
 }
 
 /******************************************************************************
@@ -243,8 +329,6 @@ SUITE(batch_async, "aerospike batch async tests")
 {
 	suite_before(before);
 	suite_after(after);
-
-    suite_add(batch_async_pre);
-    suite_add(batch_async_read_complex);
-    suite_add(batch_async_post);
+	suite_add(batch_async_read_complex);
+	suite_add(batch_async_list_operate);
 }

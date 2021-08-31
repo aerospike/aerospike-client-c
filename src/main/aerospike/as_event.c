@@ -1610,7 +1610,7 @@ create_connections_wait(as_node* node, as_async_conn_pool* pools)
 
 	uint32_t loop_max = as_event_loop_size;
 	uint32_t loop_count = loop_max;
-	uint32_t max_concurrent = 50 / loop_max + 1;
+	uint32_t max_concurrent = 20 / loop_max + 1;
 	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
 
 	connector_shared* list = alloca(sizeof(connector_shared) * loop_max);
@@ -1649,7 +1649,7 @@ static void
 create_connections_nowait(as_node* node, as_async_conn_pool* pools)
 {
 	uint32_t loop_max = as_event_loop_size;
-	uint32_t max_concurrent = 50 / loop_max + 1;
+	uint32_t max_concurrent = 20 / loop_max + 1;
 	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
 
 	connector_shared* list = cf_malloc(sizeof(connector_shared) * loop_max);

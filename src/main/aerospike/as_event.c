@@ -1716,7 +1716,7 @@ create_connections(as_event_loop* event_loop, as_node* node, as_async_conn_pool*
 	cs->pool = pool;
 	cs->conn_count = 0;
 	cs->conn_max = count;
-	cs->concur_max = (count >= 5)? 5 : count;
+	cs->concur_max = 1;
 	cs->timeout_ms = node->cluster->conn_timeout_ms;
 	cs->error = false;
 

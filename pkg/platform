@@ -22,12 +22,14 @@ then
   if [ "$ID" = "rhel" ] || [ "$ID" = "centos" ]
   then
     ID=el
+    ver=`echo $VERSION_ID | awk -F'.' '{print $1}'`
+    echo $ID$ver
+    exit 0
   elif [ "$ID" = "fedora" ]
   then
     ID=fc
   fi
-  ver=`echo $VERSION_ID | awk -F'.' '{print $1}'`
-  echo $ID$ver
+  echo $ID$VERSION_ID
   exit 0
 elif [ -f /etc/redhat-release ]
 then

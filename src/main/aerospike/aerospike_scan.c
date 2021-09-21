@@ -179,16 +179,16 @@ as_scan_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as_
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
 
-	if (sc->np) {
-		as_partition_tracker_set_digest(se->pt, sc->np, &rec.key.digest, sc->command.cluster->n_partitions);
-	}
-
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops,
 											 cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
 
 	if (status != AEROSPIKE_OK) {
 		as_record_destroy(&rec);
 		return status;
+	}
+
+	if (sc->np) {
+		as_partition_tracker_set_digest(se->pt, sc->np, &rec.key.digest, sc->command.cluster->n_partitions);
 	}
 
 	bool rv = se->listener(0, &rec, se->executor.udata, se->executor.event_loop);
@@ -262,15 +262,15 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
 
-	if (task->pt) {
-		as_partition_tracker_set_digest(task->pt, task->np, &rec.key.digest, task->cluster->n_partitions);
-	}
-
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->scan->deserialize_list_map);
 
 	if (status != AEROSPIKE_OK) {
 		as_record_destroy(&rec);
 		return status;
+	}
+
+	if (task->pt) {
+		as_partition_tracker_set_digest(task->pt, task->np, &rec.key.digest, task->cluster->n_partitions);
 	}
 
 	bool rv = true;

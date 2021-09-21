@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -317,6 +317,31 @@ TEST(key_operate_delete , "operate delete")
 	as_record_destroy(prec);
 }
 
+TEST(key_operate_bool , "operate bool")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "opboolkey");
+	
+	as_error err;
+	aerospike_key_remove(as, &err, NULL, &key);
+
+	// Write bool bin and then read the same bool bin.
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_add_write_bool(&ops, "b", true);
+	as_operations_add_read(&ops, "b");
+
+	as_record* prec = NULL;
+	aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_ok(&err);
+
+	bool val = as_record_get_bool(prec, "b");
+	assert_true(val);
+
+	as_operations_destroy(&ops);
+	as_record_destroy(prec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -328,4 +353,5 @@ SUITE(key_operate, "aerospike_key_operate tests")
 	suite_add(key_operate_gen_equal);
 	suite_add(key_operate_float);
 	suite_add(key_operate_delete);
+	suite_add(key_operate_bool);
 }

@@ -388,6 +388,21 @@ AS_EXTERN bool
 as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value* value);
 
 /**
+ * Add a `AS_OPERATOR_WRITE` bin operation with an bool value.
+ *
+ * @param ops			The `as_operations` to append the operation to.
+ * @param name 			The name of the bin to perform the operation on.
+ * @param value 		The value to be used in the operation.
+ *
+ * @return true on success. Otherwise an error occurred.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
+ */
+AS_EXTERN bool
+as_operations_add_write_bool(as_operations* ops, const as_bin_name name, bool value);
+
+/**
  * Add a `AS_OPERATOR_WRITE` bin operation with an int64_t value.
  *
  * @param ops			The `as_operations` to append the operation to.

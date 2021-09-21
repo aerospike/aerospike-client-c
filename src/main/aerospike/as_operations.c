@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -125,6 +125,15 @@ as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
 	as_bin_init(&binop->bin, name, value);
+	return true;
+}
+
+bool
+as_operations_add_write_bool(as_operations* ops, const as_bin_name name, bool value)
+{
+	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
+	if ( !binop ) return false;
+	as_bin_init_bool(&binop->bin, name, value);
 	return true;
 }
 

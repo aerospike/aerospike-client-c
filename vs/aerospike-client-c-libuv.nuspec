@@ -2,7 +2,7 @@
 <package>
   <metadata>
     <id>aerospike-client-c-libuv</id>
-    <version>5.2.3</version>
+    <version>5.2.4</version>
     <title>Aerospike C Client with libuv</title>
     <authors>Aerospike</authors>
     <owners>Aerospike</owners>

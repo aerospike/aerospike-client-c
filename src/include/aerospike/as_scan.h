@@ -18,6 +18,7 @@
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_partition_filter.h>
 #include <aerospike/as_predexp.h>
 #include <aerospike/as_udf.h>
 
@@ -171,29 +172,6 @@ typedef struct as_scan_predexp_s {
 	bool _free;
 
 } as_scan_predexp;
-
-/**
- * @private
- * Partition status.
- */
-typedef struct as_partition_status_s {
-	uint16_t part_id;
-	as_digest digest;
-	bool done;
-} as_partition_status;
-
-/**
- * @private
- * Partitions status.
- */
-typedef struct as_partitions_status_s {
-	uint32_t ref_count;
-	uint16_t part_begin;
-	uint16_t part_count;
-	bool done;
-	char pad[7];
-	as_partition_status parts[];
-} as_partitions_status;
 
 /**
  * In order to execute a scan using the Scan API, an as_scan object
@@ -375,7 +353,6 @@ typedef struct as_scan_s {
 	struct as_operations_s* ops;
 
 	/**
-	 * @private
 	 * Status of all partitions.
 	 */
 	as_partitions_status* parts_all;

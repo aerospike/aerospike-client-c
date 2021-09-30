@@ -47,43 +47,25 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 	return parts_all;
 }
 
-static inline as_partitions_status*
-parts_reserve(as_partitions_status* parts_all)
-{
-	as_partitions_status* pa = (as_partitions_status*)as_load_ptr(&parts_all);
-	//as_fence_acquire();
-	as_incr_uint32(&pa->ref_count);
-	return pa;
-}
-
-static inline void
-parts_release(as_partitions_status* parts_all)
-{
-	//as_fence_release();
-	if (as_aaf_uint32(&parts_all->ref_count, -1) == 0) {
-		cf_free(parts_all);
-	}
-}
-
 static void
 tracker_init(
 	as_partition_tracker* pt, const as_policy_scan* policy, as_scan* scan, uint16_t part_begin,
 	uint16_t part_count, const as_digest* digest
 	)
 {
-	if (! (scan->paginate && scan->parts_all)) {
+	if (! scan->parts_all) {
 		// Initial scan.
 		pt->parts_all = parts_create(part_begin, part_count, digest);
 
 		if (scan->paginate) {
 			// Save parts_all in as_scan, so it can be reused in next scan page.
-			scan->parts_all = parts_reserve(pt->parts_all);
+			scan->parts_all = as_partitions_status_reserve(pt->parts_all);
 		}
 	}
 	else {
 		// Scan instance contains partitions from previous scan.
 		// Reset partition status.
-		as_partitions_status* parts_all = parts_reserve(scan->parts_all);
+		as_partitions_status* parts_all = as_partitions_status_reserve(scan->parts_all);
 
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
 			parts_all->parts[i].done = false;
@@ -224,6 +206,10 @@ as_partition_tracker_init_filter(
 	if (pf->begin + pf->count > cluster->n_partitions) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid partition range (%u,%u)",
 			pf->begin, pf->count);
+	}
+
+	if (pf->parts_all && ! scan->parts_all) {
+		scan->parts_all = pf->parts_all;
 	}
 
 	pt->node_filter = NULL;
@@ -449,7 +435,7 @@ as_partition_tracker_destroy(as_partition_tracker* pt)
 {
 	release_node_partitions(&pt->node_parts);
 	as_vector_destroy(&pt->node_parts);
-	parts_release(pt->parts_all);
+	as_partitions_status_release(pt->parts_all);
 
 	if (pt->errors) {
 		as_vector_destroy(pt->errors);

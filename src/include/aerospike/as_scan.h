@@ -694,6 +694,19 @@ as_scan_set_paginate(as_scan* scan, bool paginate)
 }
 
 /**
+ * Set completion status of all partitions from a previous scan that ended early.
+ * The scan will resume from this point.
+ *
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+static inline void
+as_scan_set_partitions(as_scan* scan, as_partitions_status* parts_all)
+{
+	scan->parts_all = as_partitions_status_reserve(parts_all);
+}
+
+/**
  * If using scan pagination, did previous paginated scan with this scan instance 
  * return all records?
  *

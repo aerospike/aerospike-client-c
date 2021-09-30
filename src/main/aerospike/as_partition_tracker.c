@@ -209,7 +209,7 @@ as_partition_tracker_init_filter(
 	}
 
 	if (pf->parts_all && ! scan->parts_all) {
-		scan->parts_all = pf->parts_all;
+		as_scan_set_partitions(scan, pf->parts_all);
 	}
 
 	pt->node_filter = NULL;

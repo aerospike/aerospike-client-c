@@ -546,8 +546,9 @@ scan_terminate_resume(aerospike* p_as, as_error* err)
 	as_scan_init(&scan_resume, g_namespace, set);
 
 	// Use partition filter to set parts_all.
-	// Setting parts_all in as_scan works too (scan_resume.parts_all = parts_all).
-	// as_partition_filter_set_partitions() is just a wrapper for setting parts_all in as_scan.
+	// Calling as_scan_set_partitions(&scan_resume, parts_all) works too.
+	// as_partition_filter_set_partitions() is just a wrapper for eventually calling
+	// as_scan_set_partitions().
 	as_partition_filter pf;
 	as_partition_filter_set_partitions(&pf, parts_all);
 

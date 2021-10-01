@@ -673,7 +673,7 @@ as_command_execute(as_command* cmd, as_error* err)
 
 Retry:
 		// Check if max retries reached.
-		if (++cmd->iteration > cmd->policy->max_retries) {
+		if (++cmd->iteration > cmd->max_retries) {
 			break;
 		}
 

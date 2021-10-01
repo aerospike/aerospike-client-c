@@ -653,6 +653,7 @@ as_batch_command_init(
 		cmd->master = parent->master;
 		cmd->socket_timeout = parent->socket_timeout;
 		cmd->total_timeout = parent->total_timeout;
+		cmd->max_retries = parent->max_retries;
 		cmd->deadline_ms = parent->deadline_ms;
 	}
 }

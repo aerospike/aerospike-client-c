@@ -614,6 +614,10 @@ as_scan_command_execute(as_scan_task* task)
 
 	as_command_start_timer(&cmd);
 
+	// Individual scan node commands must not retry. Scan retries are performed in
+	// the caller, as_scan_partitions().
+	cmd.max_retries = 0;
+
 	status = as_command_execute(&cmd, &err);
 
 	// Free command memory.

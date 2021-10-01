@@ -417,6 +417,9 @@ as_query_command_execute(as_query_task* task)
 
 	as_command_start_timer(&cmd);
 
+	// Individual query node commands must not retry.
+	cmd.max_retries = 0;
+
 	status = as_command_execute(&cmd, &err);
 
 	if (status) {
@@ -1241,7 +1244,7 @@ aerospike_query_async(
 		as_event_command* cmd = cf_malloc(s);
 		cmd->total_deadline = policy->base.total_timeout;
 		cmd->socket_timeout = policy->base.socket_timeout;
-		cmd->max_retries = policy->base.max_retries;
+		cmd->max_retries = 0;
 		cmd->iteration = 0;
 		cmd->replica = AS_POLICY_REPLICA_MASTER;
 		cmd->event_loop = exec->event_loop;

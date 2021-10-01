@@ -347,7 +347,7 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
 	}
 
 	if (parts_received >= parts_requested) {
-		if (record_count == 0) {
+		if (pt->max_records == 0 || record_count == 0) {
 			pt->parts_all->done = true;
 		}
 		return AEROSPIKE_OK;

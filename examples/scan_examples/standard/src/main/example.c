@@ -52,6 +52,7 @@ void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
 as_status scan_partition(aerospike* p_as, as_error* err);
 as_status scan_pages(aerospike* p_as, as_error* err);
+as_status scan_terminate_resume(aerospike* p_as, as_error* err);
 
 //==========================================================
 // STANDARD SCAN Example
@@ -133,9 +134,16 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	// Run scan pages functionality.
+	// Run scan pages.
 	if (scan_pages(&as, &err) != AEROSPIKE_OK) {
 		LOG("scan_pages() returned %d - %s", err.code, err.message);
+		cleanup(&as);
+		exit(-1);
+	}
+
+	// Run scan terminate/resume.
+	if (scan_terminate_resume(&as, &err) != AEROSPIKE_OK) {
+		LOG("scan_terminate_resume() returned %d - %s", err.code, err.message);
 		cleanup(&as);
 		exit(-1);
 	}
@@ -146,7 +154,6 @@ main(int argc, char* argv[])
 	LOG("standard scan examples successfully completed");
 	return 0;
 }
-
 
 //==========================================================
 // Scan Callback
@@ -457,4 +464,102 @@ scan_pages(aerospike* p_as, as_error* err)
 
 	as_scan_destroy(&scan);
 	return AEROSPIKE_OK;
+}
+
+//==========================================================
+// Scan Terminate and Resume
+//
+
+static bool
+scan_terminate_cb(const as_val* val, void* udata)
+{
+	if (! val) {
+		// Scan complete.
+		return true;
+	}
+
+	struct counter* c = udata;
+
+	if (as_aaf_uint32(&c->count, 1) == c->max) {
+		return false;
+	}
+	return true;
+}
+
+static bool
+scan_resume_cb(const as_val* val, void* udata)
+{
+	if (! val) {
+		// Scan complete.
+		return true;
+	}
+
+	struct counter* c = udata;
+	as_incr_uint32(&c->count);
+	return true;
+}
+
+
+as_status
+scan_terminate_resume(aerospike* p_as, as_error* err)
+{
+	const char* set = "scanresume";
+	uint32_t total_size = 200;
+
+	LOG("write records for scan terminate/resume");
+	as_status status = insert_records_for_scan_page(p_as, err, set, total_size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	LOG("records written: %u", total_size);
+	LOG("start scan terminate");
+
+	struct counter c;
+	c.count = 0;
+	c.max = 50;
+
+	as_scan scan;
+	as_scan_init(&scan, g_namespace, set);
+	as_scan_set_paginate(&scan, true);
+
+	// Start scan. Scan will be terminated early in callback.
+	status = aerospike_scan_foreach(p_as, err, NULL, &scan, scan_terminate_cb, &c);
+
+	if (status != AEROSPIKE_OK) {
+		as_scan_destroy(&scan);
+		return status;
+	}
+
+	LOG("terminate records returned: %u", c.count);
+	LOG("start scan resume");
+
+	// Store completion status of all partitions.
+	as_partitions_status* parts_all = as_partitions_status_reserve(scan.parts_all);
+
+	// Destroy scan
+	as_scan_destroy(&scan);
+
+	// Resume scan using new scan instance.
+	as_scan scan_resume;
+	as_scan_init(&scan_resume, g_namespace, set);
+
+	// Use partition filter to set parts_all.
+	// Calling as_scan_set_partitions(&scan_resume, parts_all) works too.
+	// as_partition_filter_set_partitions() is just a wrapper for eventually calling
+	// as_scan_set_partitions().
+	as_partition_filter pf;
+	as_partition_filter_set_partitions(&pf, parts_all);
+
+	c.count = 0;
+	c.max = 0;
+
+	status = aerospike_scan_partitions(p_as, err, NULL, &scan_resume, &pf, scan_resume_cb, &c);
+
+	LOG("resume records returned: %u", c.count);
+
+	as_partitions_status_release(parts_all);
+	as_scan_destroy(&scan_resume);
+	return status;
 }

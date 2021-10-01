@@ -86,15 +86,6 @@ as_scan_init(as_scan* scan, const as_namespace ns, const as_set set)
 	return as_scan_defaults(scan, false, ns, set);
 }
 
-static inline void
-as_parts_release(as_partitions_status* parts)
-{
-	//as_fence_release();
-	if (as_aaf_uint32(&parts->ref_count, -1) == 0) {
-		cf_free(parts);
-	}
-}
-
 void
 as_scan_destroy(as_scan* scan)
 {
@@ -134,7 +125,7 @@ as_scan_destroy(as_scan* scan)
 	}
 
 	if (scan->parts_all) {
-		as_parts_release(scan->parts_all);
+		as_partitions_status_release(scan->parts_all);
 	}
 
 	// If the whole structure should be freed

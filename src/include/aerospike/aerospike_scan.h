@@ -256,8 +256,7 @@ aerospike_scan_info(
  * Call the callback function for each record scanned. When all records have 
  * been scanned, then callback will be called with a NULL value for the record.
  *
- * Multiple threads will likely be calling the callback in parallel.  Therefore,
- * your callback implementation should be thread safe.
+ * If "scan.concurrent" is true (default false), the callback code must be thread-safe.
  *
  * ~~~~~~~~~~{.c}
  * as_scan scan;
@@ -335,8 +334,7 @@ aerospike_scan_node(
  * Call the callback function for each record scanned. When all records have 
  * been scanned, then callback will be called with a NULL value for the record.
  *
- * Multiple threads will likely be calling the callback in parallel.  Therefore,
- * your callback implementation should be thread safe.
+ * If "scan.concurrent" is true (default false), the callback code must be thread-safe.
  *
  * ~~~~~~~~~~{.c}
  * as_scan scan;

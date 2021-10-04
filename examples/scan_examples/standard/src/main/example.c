@@ -480,9 +480,15 @@ scan_terminate_cb(const as_val* val, void* udata)
 
 	struct counter* c = udata;
 
-	if (as_aaf_uint32(&c->count, 1) == c->max) {
+	// scan.concurrent is false, so atomics are not necessary.
+	if (c->count >= c->max) {
+		// Since we are terminating the scan here, the scan last digest
+		// will not be set and the current record will be returned again
+		// if the scan resumes at a later time.
 		return false;
 	}
+
+	c->count++;
 	return true;
 }
 
@@ -495,7 +501,7 @@ scan_resume_cb(const as_val* val, void* udata)
 	}
 
 	struct counter* c = udata;
-	as_incr_uint32(&c->count);
+	c->count++;
 	return true;
 }
 

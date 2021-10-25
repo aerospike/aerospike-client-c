@@ -178,6 +178,7 @@ as_scan_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as_
 	if (sc->np) {
 		if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
 			as_partition_tracker_part_done(cmd->cluster, se->pt, sc->np, &rec.key.digest);
+			as_record_destroy(&rec);
 			return AEROSPIKE_OK;
 		}
 	}
@@ -260,6 +261,7 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 	if (task->pt) {
 		if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
 			as_partition_tracker_part_done(task->cluster, task->pt, task->np, &rec.key.digest);
+			as_record_destroy(&rec);
 			return AEROSPIKE_OK;
 		}
 	}
@@ -269,12 +271,20 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 		return status;
 	}
 
-	uint32_t part_id = 0;
 	bool rv = true;
 
-	part_id = as_partition_tracker_set_digest(task->pt, task->np, &rec.key.digest, task->cluster->n_partitions);
-	if (rec.key.digest.init && task->callback) {
-		rv = task->callback(part_id, (as_val*)&rec, task->udata);
+	if (task->pt) {
+		as_partition_tracker_set_digest(task->pt, task->np, &rec.key.digest, task->cluster->n_partitions);
+	}
+
+	if (task->callback) {
+		if (rec.key.digest.init) {
+			uint32_t part_id = 0;
+			part_id = as_partition_getid(rec.key.digest.value, task->cluster->n_partitions);
+			rv = task->callback(part_id, (as_val*)&rec, task->udata);
+		} else {
+			as_log_error("Uninitialized digest, callback needs part_id to track the status");
+		}
 	}
 	as_record_destroy(&rec);
 	return rv ? AEROSPIKE_OK : AEROSPIKE_ERR_CLIENT_ABORT;

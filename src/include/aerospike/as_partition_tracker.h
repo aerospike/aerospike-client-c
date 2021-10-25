@@ -112,7 +112,7 @@ as_partition_tracker_part_done(as_cluster* cluster, as_partition_tracker* pt, as
 	np->parts_received++;
 }
 
-static inline uint32_t
+static inline void
 as_partition_tracker_set_digest(
 	as_partition_tracker* pt, as_node_partitions* np, as_digest* digest, uint32_t n_partitions
 	)
@@ -133,7 +133,6 @@ as_partition_tracker_set_digest(
 	} else {
 		as_log_error("as_partition_tracker_set_digest: digest is not initialized.\n");
 	}
-	return part_id;
 }
 
 static inline uint16_t

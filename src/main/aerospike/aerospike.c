@@ -240,11 +240,16 @@ aerospike_close(aerospike* as, as_error* err)
 	as_cluster* cluster = as->cluster;
 	
 	if (cluster) {
+		// async supported only for get/put and 
+	  	// its user responsiblity not to close while other operations are in progress
+#if 0 		
 		if (as_event_loop_capacity > 0 && !as_event_single_thread) {
 			// Async configurations will attempt to wait till pending async commands have completed.
 			as_event_close_cluster(cluster);
 		}
-		else {
+		else 
+#endif
+		{
 			// Close sync only configurations immediately.
 			as_cluster_destroy(cluster);
 		}

@@ -1905,13 +1905,16 @@ as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state
 	int pending = state->cluster->pending[event_loop->index];
 
 	if (pending < 0) {
-		// Cluster's event loop connections are already closed.
+		as_log_error("Cluster's event loop connections are already closed.\n");
+		if (state->monitor) {
+			as_log_error("Cluster's event loop connections are already closed, notifying monitor...\n");
+			as_monitor_notify(state->monitor);
+		}
 		return;
 	}
 
 	if (pending > 0) {
-		// Cluster has pending commands.
-		// Check again after all other commands run.
+		as_log_error("Cluster has pending commands, re-issue cluster close again.\n");
 		if (as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
 			return;
 		}
@@ -1925,6 +1928,7 @@ void
 as_event_close_cluster(as_cluster* cluster)
 {
 	if (as_event_loop_size == 0) {
+		as_log_error("Event loop size is zero to queue cluster close command");
 		return;
 	}
 
@@ -1940,7 +1944,7 @@ as_event_close_cluster(as_cluster* cluster)
 	state->cluster = cluster;
 	state->event_loop_count = as_event_loop_size;
 
-	// Send cluster close notification to async event loops.
+	as_log_info("Send cluster close notification to async event loops.\n");
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
 

@@ -1047,11 +1047,28 @@ convert_query_to_scan(
  * FUNCTIONS
  *****************************************************************************/
 
+// Struct for Python User-Data for the Callback
+typedef struct {
+	aerospike_query_foreach_callback callback;
+	void* udata;
+} LocalData;
+
+bool scan_foreach_callback(uint32_t part_id, const as_val* val, void* udata)
+{
+	LocalData *scb_udata = (LocalData *) udata;
+	return scb_udata->callback(val, scb_udata->udata);
+}
+
 as_status
 aerospike_query_foreach(
 	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
 	aerospike_query_foreach_callback callback, void* udata)
 {
+	LocalData scb_udata;
+	
+	scb_udata.callback = callback;
+	scb_udata.udata = udata;
+
 	if (! policy) {
 		policy = &as->config.policies.query;
 	}
@@ -1065,7 +1082,7 @@ aerospike_query_foreach(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return aerospike_scan_foreach(as, err, &scan_policy, &scan, callback, udata);
+		return aerospike_scan_foreach(as, err, &scan_policy, &scan, scan_foreach_callback, &scb_udata);
 	}
 
 	as_error_reset(err);

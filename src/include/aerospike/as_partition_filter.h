@@ -139,6 +139,28 @@ as_partition_filter_set_partitions(as_partition_filter* pf, as_partitions_status
 	pf->count = parts_all->part_count;
 	pf->digest.init = false;
 	pf->parts_all = parts_all;
+#if DBG
+	printf("as_partition_filter_set_partitions: begin\n");
+	if (pf->digest.init) {
+		printf("begin:%d count:%d init:%d digest:", pf->begin, pf->count, pf->digest.init);
+		for (int j = 0; j < AS_DIGEST_VALUE_SIZE; j++) {
+			printf("%02hhX", pf->digest.value[j]);
+		} 
+		printf("\n");
+	}
+	for (uint16_t i = 0; i < pf->parts_all->part_count; i++) {
+		as_partition_status *ps = &pf->parts_all->parts[i];
+		if(ps->digest.init || ps->done) {
+			printf("part_id:%d i:%d init: %d done:%d digest:", ps->part_id, i, ps->digest.init, ps->done);
+			for (int j = 0; j < AS_DIGEST_VALUE_SIZE; j++) {
+				printf("%02hhX", ps->digest.value[j]);
+			} 
+			printf("\n");
+		}
+	}
+
+	printf("as_partition_filter_set_partitions: end\n");
+#endif
 }
 
 /**

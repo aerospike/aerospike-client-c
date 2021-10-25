@@ -22,6 +22,8 @@
 #include <aerospike/as_partition_filter.h>
 #include <aerospike/as_scan.h>
 #include <aerospike/as_vector.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_log_macros.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -97,22 +99,41 @@ as_partition_tracker_assign(
 	);
 
 static inline void
-as_partition_tracker_part_done(as_partition_tracker* pt, as_node_partitions* np, uint32_t part_id)
+as_partition_tracker_part_done(as_cluster* cluster, as_partition_tracker* pt, as_node_partitions* np, as_digest* digest)
 {
 	as_partitions_status* ps = pt->parts_all;
-	ps->parts[part_id - ps->part_begin].done = true;
+	uint32_t part_id = 0;
+
+	if (digest->init) {
+		part_id = as_partition_getid(digest->value, cluster->n_partitions);
+		ps->parts[part_id].digest = *digest;
+	}
+	np->record_count++;
 	np->parts_received++;
 }
 
-static inline void
+static inline uint32_t
 as_partition_tracker_set_digest(
 	as_partition_tracker* pt, as_node_partitions* np, as_digest* digest, uint32_t n_partitions
 	)
 {
-	uint32_t part_id = as_partition_getid(digest->value, n_partitions);
-	as_partitions_status* ps = pt->parts_all;
-	ps->parts[part_id - ps->part_begin].digest = *digest;
-	np->record_count++;
+	uint32_t part_id = 0;
+	
+	if (digest->init) {
+		as_partitions_status* ps = pt->parts_all;
+
+		part_id = as_partition_getid(digest->value, n_partitions);
+		if (part_id < ps->part_begin || part_id > (ps->part_begin + ps->part_count)) {
+			as_log_error("as_partition_tracker_set_digest: invalid part_id:%d begin:%d count:%d.\n",
+						part_id, ps->part_begin, ps->part_count);
+		} else {
+			ps->parts[part_id - ps->part_begin].digest = *digest;
+			np->record_count++;
+		}
+	} else {
+		as_log_error("as_partition_tracker_set_digest: digest is not initialized.\n");
+	}
+	return part_id;
 }
 
 static inline uint16_t

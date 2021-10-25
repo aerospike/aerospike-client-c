@@ -133,7 +133,7 @@ extern "C" {
  *
  * @ingroup scan_operations
  */
-typedef bool (*aerospike_scan_foreach_callback)(const as_val* val, void* udata);
+typedef bool (*aerospike_scan_foreach_callback)(uint32_t part_id, const as_val* val, void* udata);
 
 /**
  * Asynchronous scan user callback.  This function is called for each record returned.

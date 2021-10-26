@@ -1944,7 +1944,7 @@ as_event_close_cluster(as_cluster* cluster)
 	state->cluster = cluster;
 	state->event_loop_count = as_event_loop_size;
 
-	as_log_info("Send cluster close notification to async event loops.\n");
+	//as_log_info("Send cluster close notification to async event loops.\n");
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
 

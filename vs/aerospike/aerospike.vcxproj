@@ -329,7 +329,6 @@
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_hash_math.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_ll.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_queue.h" />
-    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_queue_priority.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_random.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_rchash.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike.h" />
@@ -444,7 +443,6 @@
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_digest.c" />
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_ll.c" />
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_queue.c" />
-    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_queue_priority.c" />
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_random.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\internal.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua.c" />

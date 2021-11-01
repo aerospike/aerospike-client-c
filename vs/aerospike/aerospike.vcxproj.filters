@@ -348,9 +348,6 @@
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_queue.h">
       <Filter>Header Files\common\citrusleaf</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_queue_priority.h">
-      <Filter>Header Files\common\citrusleaf</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_random.h">
       <Filter>Header Files\common\citrusleaf</Filter>
     </ClInclude>
@@ -678,9 +675,6 @@
       <Filter>Source Files\common\citrusleaf</Filter>
     </ClCompile>
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_queue.c">
-      <Filter>Source Files\common\citrusleaf</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_queue_priority.c">
       <Filter>Source Files\common\citrusleaf</Filter>
     </ClCompile>
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_random.c">

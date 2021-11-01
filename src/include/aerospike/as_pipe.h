@@ -59,7 +59,7 @@ extern void
 as_pipe_get_connection(as_event_command* cmd);
 
 extern bool
-as_pipe_modify_fd(as_socket_fd fd);
+as_pipe_modify_fd(as_event *asevent, as_socket_fd fd);
 
 extern void
 as_pipe_socket_error(as_event_command* cmd, as_error* err, bool retry);

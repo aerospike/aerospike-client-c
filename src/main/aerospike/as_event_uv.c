@@ -33,11 +33,6 @@
  * GLOBALS
  *****************************************************************************/
 
-extern uint32_t as_event_loop_capacity;
-extern int as_event_send_buffer_size;
-extern int as_event_recv_buffer_size;
-extern bool as_event_threads_created;
-
 /******************************************************************************
  * LIBUV FUNCTIONS
  *****************************************************************************/
@@ -61,7 +56,7 @@ typedef struct as_uv_tls {
 } as_uv_tls;
 
 typedef struct {
-	as_event_loop* event_loop;
+	as_event* asevent;
 	as_monitor monitor;
 } as_uv_thread_data;
 
@@ -95,12 +90,12 @@ as_uv_connection_closed(uv_handle_t* socket)
 }
 
 void
-as_event_close_loop(as_event_loop* event_loop)
+as_event_close_loop(as_event *asevent, as_event_loop* event_loop)
 {
 	uv_close((uv_handle_t*)event_loop->wakeup, as_uv_wakeup_closed);
 	
 	// Only stop event loop if client created event loop.
-	if (as_event_threads_created) {
+	if (asevent->threads_created) {
 		uv_stop(event_loop->loop);
 	}
 	
@@ -112,30 +107,30 @@ static void
 as_uv_wakeup(uv_async_t* wakeup)
 {
 	// Read command pointers from queue.
-	as_event_loop* event_loop = wakeup->data;
+	as_event* asevent = wakeup->data;
 	as_event_commander cmd;
 	uint32_t i = 0;
 
 	// Only process original size of queue.  Recursive pre-registration errors can
 	// result in new commands being added while the loop is in process.  If we process
 	// them, we could end up in an infinite loop.
-	pthread_mutex_lock(&event_loop->lock);
-	uint32_t size = as_queue_size(&event_loop->queue);
-	bool status = as_queue_pop(&event_loop->queue, &cmd);
-	pthread_mutex_unlock(&event_loop->lock);
+	pthread_mutex_lock(&asevent->loops->lock);
+	uint32_t size = as_queue_size(&asevent->loops->queue);
+	bool status = as_queue_pop(&asevent->loops->queue, &cmd);
+	pthread_mutex_unlock(&asevent->loops->lock);
 
 	while (status) {
 		if (! cmd.executable) {
 			// Received stop signal.
-			as_event_close_loop(event_loop);
+			as_event_close_loop(asevent, asevent->loops);
 			return;
 		}
-		cmd.executable(event_loop, cmd.udata);
+		cmd.executable(asevent->loops, cmd.udata);
 
 		if (++i < size) {
-			pthread_mutex_lock(&event_loop->lock);
-			status = as_queue_pop(&event_loop->queue, &cmd);
-			pthread_mutex_unlock(&event_loop->lock);
+			pthread_mutex_lock(&asevent->loops->lock);
+			status = as_queue_pop(&asevent->loops->queue, &cmd);
+			pthread_mutex_unlock(&asevent->loops->lock);
 		}
 		else {
 			break;
@@ -164,7 +159,8 @@ static void*
 as_uv_worker(void* udata)
 {
 	as_uv_thread_data* data = udata;
-	as_event_loop* event_loop = data->event_loop;
+	as_event* asevent = data->asevent;
+	as_event_loop* event_loop = asevent->loops;
 	
 	event_loop->loop = cf_malloc(sizeof(uv_loop_t));
 	
@@ -180,7 +176,7 @@ as_uv_worker(void* udata)
 		return 0;
 	}
 
-	event_loop->wakeup->data = event_loop;
+	event_loop->wakeup->data = asevent;
 
 	uv_loop_init(event_loop->loop);
 	uv_async_init(event_loop->loop, event_loop->wakeup, as_uv_wakeup);
@@ -201,12 +197,12 @@ as_uv_worker(void* udata)
 }
 
 bool
-as_event_create_loop(as_event_loop* event_loop)
+as_event_create_loop(as_event* asevent, as_event_loop* event_loop)
 {
 	event_loop->wakeup = 0;
 	
 	as_uv_thread_data thread_data;
-	thread_data.event_loop = event_loop;
+	thread_data.asevent = asevent;
 	as_monitor_init(&thread_data.monitor);
 	
 	if (pthread_create(&event_loop->thread, NULL, as_uv_worker, &thread_data) != 0) {
@@ -220,18 +216,18 @@ as_event_create_loop(as_event_loop* event_loop)
 }
 
 void
-as_event_register_external_loop(as_event_loop* event_loop)
+as_event_register_external_loop(as_event *asevent, as_event_loop* event_loop)
 {
 	// This method is only called when user sets an external event loop.
 	event_loop->wakeup = cf_malloc(sizeof(uv_async_t));
-	event_loop->wakeup->data = event_loop;
+	event_loop->wakeup->data = asevent;
 
 	// Assume uv_async_init is called on the same thread as the event loop.
 	uv_async_init(event_loop->loop, event_loop->wakeup, as_uv_wakeup);
 }
 
 bool
-as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata)
+as_event_execute(as_event *asevent, as_event_loop* event_loop, as_event_executable executable, void* udata)
 {
 	// Send command through queue so it can be executed in event loop thread.
 	pthread_mutex_lock(&event_loop->lock);
@@ -1386,6 +1382,7 @@ as_uv_connected(uv_connect_t* req, int status)
 void
 as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 {
+	as_event *asevent = cmd->cluster->as->event;
 	// Create a non-blocking socket.
 	as_address* address = as_node_get_address(cmd->node);
 	as_socket_fd fd;
@@ -1399,7 +1396,7 @@ as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 		return;
 	}
 
-	if (cmd->pipe_listener && ! as_pipe_modify_fd(fd)) {
+	if (cmd->pipe_listener && ! as_pipe_modify_fd(asevent, fd)) {
 		// as_pipe_modify_fd() will close fd on error.
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_ASYNC_CONNECTION,
@@ -1501,9 +1498,10 @@ as_uv_queue_close_connections(as_node* node, as_async_conn_pool* pool, as_queue*
 void
 as_event_node_destroy(as_node* node)
 {
+	as_event *asevent = node->cluster->as->event;
 	// Send close connection commands to event loops.
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		as_event_loop* event_loop = &as_event_loops[i];
+	for (uint32_t i = 0; i < asevent->loop_size; i++) {
+		as_event_loop* event_loop = &asevent->loops[i];
 		
 		pthread_mutex_lock(&event_loop->lock);
 		as_uv_queue_close_connections(node, &node->async_conn_pools[i], &event_loop->queue);
@@ -1514,7 +1512,7 @@ as_event_node_destroy(as_node* node)
 	}
 		
 	// Destroy all queues.
-	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
+	for (uint32_t i = 0; i < asevent->loop_capacity; i++) {
 		as_queue_destroy(&node->async_conn_pools[i].queue);
 		as_queue_destroy(&node->pipe_conn_pools[i].queue);
 	}

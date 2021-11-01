@@ -22,6 +22,7 @@
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_thread_pool.h>
+#include <aerospike/aerospike.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -351,6 +352,8 @@ typedef struct as_cluster_s {
 	 * Should continue to tend cluster.
 	 */
 	volatile bool valid;
+
+	struct aerospike_s *as;
 } as_cluster;
 
 /******************************************************************************
@@ -361,7 +364,7 @@ typedef struct as_cluster_s {
  * Create and initialize cluster.
  */
 as_status
-as_cluster_create(as_config* config, as_error* err, as_cluster** cluster);
+as_cluster_create(aerospike* as, as_config* config, as_error* err, as_cluster** cluster);
 
 /**
  * Close all connections and release memory associated with cluster.

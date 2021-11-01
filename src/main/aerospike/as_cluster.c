@@ -29,6 +29,7 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_tls.h>
 #include <aerospike/as_vector.h>
+#include <aerospike/aerospike.h>
 
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -38,7 +39,6 @@
  * Globals
  *****************************************************************************/
 
-extern uint32_t as_event_loop_capacity;
 extern bool as_event_single_thread;
 uint32_t as_cluster_count = 0;
 
@@ -606,7 +606,7 @@ as_cluster_balance_connections(as_cluster* cluster)
 		as_node_balance_connections(nodes->array[i]);
 	}
 
-	if (as_event_loop_capacity > 0 && !as_event_single_thread) {
+	if (cluster->as->event->loop_capacity > 0 && !as_event_single_thread) {
 		as_event_balance_connections(cluster);
 	}
 }
@@ -1138,7 +1138,7 @@ as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec
 }
 
 as_status
-as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
+as_cluster_create(aerospike* as, as_config* config, as_error* err, as_cluster** cluster_out)
 {
 	if (config->min_conns_per_node > config->max_conns_per_node) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid connection range: %u - %u",
@@ -1175,6 +1175,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	
 	as_cluster* cluster = cf_malloc(sizeof(as_cluster));
 	memset(cluster, 0, sizeof(as_cluster));
+	cluster->as = as;
 	cluster->auth_mode = config->auth_mode;
 
 	if (config->auth_mode == AS_AUTH_PKI) {
@@ -1251,9 +1252,9 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		}
 	}
 
-	if (as_event_loop_capacity > 0) {
+	if (as->event->loop_capacity > 0) {
 		// Create one pending integer for each event loop.
-		cluster->pending = cf_calloc(as_event_loop_capacity, sizeof(int));
+		cluster->pending = cf_calloc(as->event->loop_capacity, sizeof(int));
 	}
 
 	// Initialize tend lock and condition.

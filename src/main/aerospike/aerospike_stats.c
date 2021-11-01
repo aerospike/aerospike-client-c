@@ -23,10 +23,6 @@
  * GLOBALS
  *****************************************************************************/
 
-extern as_event_loop* as_event_loops;
-extern uint32_t as_event_loop_capacity;
-extern uint32_t as_event_loop_size;
-
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
@@ -95,12 +91,12 @@ aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
 	as_nodes_release(nodes);
 
 	// Event loop stats.
-	if (as_event_loop_capacity > 0) {
-		stats->event_loops_size = as_event_loop_size;
+	if (cluster->as->event->loop_capacity > 0) {
+		stats->event_loops_size = cluster->as->event->loop_size;
 		stats->event_loops = cf_malloc(sizeof(as_event_loop_stats) * stats->event_loops_size);
 
 		for (uint32_t i = 0; i < stats->event_loops_size; i++) {
-			aerospike_event_loop_stats(&as_event_loops[i], &stats->event_loops[i]);
+			aerospike_event_loop_stats(&cluster->as->event->loops[i], &stats->event_loops[i]);
 		}
 	}
 	else {
@@ -157,8 +153,8 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 	stats->sync.closed = node->sync_conns_closed;
 
 	// Async connection summary.
-	if (as_event_loop_capacity > 0) {
-		for (uint32_t i = 0; i < as_event_loop_size; i++) {
+	if (node->cluster->as->event->loop_capacity > 0) {
+		for (uint32_t i = 0; i < node->cluster->as->event->loop_size; i++) {
 			// Regular async.
 			as_sum_no_lock(&node->async_conn_pools[i], &stats->async);
 

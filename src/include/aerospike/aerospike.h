@@ -73,6 +73,7 @@
 #include <aerospike/as_config.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_event.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -189,6 +190,7 @@ typedef struct aerospike_s {
 	*/
 	bool _free;
 
+	struct as_event *event;
 } aerospike;
 
 /******************************************************************************

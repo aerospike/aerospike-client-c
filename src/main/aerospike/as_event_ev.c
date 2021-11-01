@@ -29,26 +29,18 @@
 #include <citrusleaf/cf_byte_order.h>
 
 /******************************************************************************
- * GLOBALS
- *****************************************************************************/
-
-extern int as_event_send_buffer_size;
-extern int as_event_recv_buffer_size;
-extern bool as_event_threads_created;
-
-/******************************************************************************
  * LIBEV FUNCTIONS
  *****************************************************************************/
 
 #if defined(AS_USE_LIBEV)
 
 void
-as_event_close_loop(as_event_loop* event_loop)
+as_event_close_loop(as_event *asevent, as_event_loop* event_loop)
 {
 	ev_async_stop(event_loop->loop, &event_loop->wakeup);
 	
 	// Only stop event loop if client created event loop.
-	if (as_event_threads_created) {
+	if (asevent->threads_created) {
 		ev_unloop(event_loop->loop, EVUNLOOP_ALL);
 	}
 	
@@ -60,30 +52,30 @@ static void
 as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 {
 	// Read command pointers from queue.
-	as_event_loop* event_loop = wakeup->data;
+	as_event* asevent = wakeup->data;
 	as_event_commander cmd;
 	uint32_t i = 0;
 
 	// Only process original size of queue.  Recursive pre-registration errors can
 	// result in new commands being added while the loop is in process.  If we process
 	// them, we could end up in an infinite loop.
-	pthread_mutex_lock(&event_loop->lock);
-	uint32_t size = as_queue_size(&event_loop->queue);
-	bool status = as_queue_pop(&event_loop->queue, &cmd);
-	pthread_mutex_unlock(&event_loop->lock);
+	pthread_mutex_lock(&asevent->loops->lock);
+	uint32_t size = as_queue_size(&asevent->loops->queue);
+	bool status = as_queue_pop(&asevent->loops->queue, &cmd);
+	pthread_mutex_unlock(&asevent->loops->lock);
 
 	while (status) {
 		if (! cmd.executable) {
 			// Received stop signal.
-			as_event_close_loop(event_loop);
+			as_event_close_loop(asevent, asevent->loops);
 			return;
 		}
-		cmd.executable(event_loop, cmd.udata);
+		cmd.executable(asevent->loops, cmd.udata);
 
 		if (++i < size) {
-			pthread_mutex_lock(&event_loop->lock);
-			status = as_queue_pop(&event_loop->queue, &cmd);
-			pthread_mutex_unlock(&event_loop->lock);
+			pthread_mutex_lock(&asevent->loops->lock);
+			status = as_queue_pop(&asevent->loops->queue, &cmd);
+			pthread_mutex_unlock(&asevent->loops->lock);
 		}
 		else {
 			break;
@@ -102,35 +94,35 @@ as_ev_worker(void* udata)
 }
 
 static inline void
-as_ev_init_loop(as_event_loop* event_loop)
+as_ev_init_loop(as_event* asevent, as_event_loop* event_loop)
 {
 	ev_async_init(&event_loop->wakeup, as_ev_wakeup);
-	event_loop->wakeup.data = event_loop;
+	event_loop->wakeup.data = asevent;
 	ev_async_start(event_loop->loop, &event_loop->wakeup);	
 }
 
 bool
-as_event_create_loop(as_event_loop* event_loop)
+as_event_create_loop(as_event* asevent, as_event_loop* event_loop)
 {
 	event_loop->loop = ev_loop_new(EVFLAG_AUTO);
 	
 	if (! event_loop->loop) {
 		return false;
 	}
-	as_ev_init_loop(event_loop);
+	as_ev_init_loop(asevent, event_loop);
 	
 	return pthread_create(&event_loop->thread, NULL, as_ev_worker, event_loop->loop) == 0;
 }
 
 void
-as_event_register_external_loop(as_event_loop* event_loop)
+as_event_register_external_loop(as_event* asevent, as_event_loop* event_loop)
 {
 	// This method is only called when user sets an external event loop.
-	as_ev_init_loop(event_loop);
+	as_ev_init_loop(asevent, event_loop);
 }
 
 bool
-as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata)
+as_event_execute(as_event *asevent, as_event_loop* event_loop, as_event_executable executable, void* udata)
 {
 	// Send command through queue so it can be executed in event loop thread.
 	pthread_mutex_lock(&event_loop->lock);
@@ -787,13 +779,15 @@ as_ev_try_family_connections(as_event_command* cmd, int family, int begin, int e
 {
 	// Create a non-blocking socket.
 	as_socket_fd fd;
+	as_event *asevent = cmd->cluster->as->event;
+
 	int rv = as_socket_create_fd(family, &fd);
 
 	if (rv < 0) {
 		return rv;
 	}
 
-	if (cmd->pipe_listener && ! as_pipe_modify_fd(fd)) {
+	if (cmd->pipe_listener && ! as_pipe_modify_fd(asevent, fd)) {
 		return -1000;
 	}
 
@@ -930,8 +924,9 @@ as_ev_close_connections(as_node* node, as_async_conn_pool* pool)
 void
 as_event_node_destroy(as_node* node)
 {
+	as_event *asevent = node->cluster->as->event;
 	// Close connections.
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+	for (uint32_t i = 0; i < asevent->loop_size; i++) {
 		as_ev_close_connections(node, &node->async_conn_pools[i]);
 		as_ev_close_connections(node, &node->pipe_conn_pools[i]);
 	}

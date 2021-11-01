@@ -29,10 +29,6 @@
 #define PIPE_READ_BUFFER_SIZE  (4 * 1024 * 1024)
 #endif
 
-extern uint32_t as_event_loop_capacity;
-extern int as_event_send_buffer_size;
-extern int as_event_recv_buffer_size;
-
 static void
 write_start(as_event_command* cmd)
 {
@@ -402,31 +398,31 @@ as_pipe_get_connection(as_event_command* cmd)
 }
 
 bool
-as_pipe_modify_fd(as_socket_fd fd)
+as_pipe_modify_fd(as_event *asevent, as_socket_fd fd)
 {
-	if (as_event_send_buffer_size) {
-		if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char*)&as_event_send_buffer_size, sizeof(as_event_send_buffer_size)) < 0) {
+	if (asevent->loop_capacity) {
+		if (setsockopt(fd, SOL_SOCKET, SO_SNDBUF, (const char*)&asevent->loop_capacity, sizeof(asevent->loop_capacity)) < 0) {
 			int e = as_last_error();
 			as_log_debug("Failed to configure pipeline send buffer. size %d error %d",
-						 as_event_send_buffer_size, e);
+						 asevent->loop_capacity, e);
 			as_close(fd);
 			return false;
 		}
 	}
 	
-	if (as_event_recv_buffer_size) {
-		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*)&as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
+	if (asevent->recv_buffer_size) {
+		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*)&asevent->recv_buffer_size, sizeof(asevent->recv_buffer_size)) < 0) {
 			int e = as_last_error();
 			as_log_debug("Failed to configure pipeline receive buffer. size %d error %d",
-						 as_event_recv_buffer_size, e);
+						 asevent->recv_buffer_size, e);
 			as_close(fd);
 			return false;
 		}
 	}
 	
 #if defined(__linux__)
-	if (as_event_recv_buffer_size) {
-		if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
+	if (asevent->recv_buffer_size) {
+		if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &asevent->recv_buffer_size, sizeof(asevent->recv_buffer_size)) < 0) {
 			as_log_debug("Failed to configure pipeline TCP window.");
 			as_close(fd);
 			return false;

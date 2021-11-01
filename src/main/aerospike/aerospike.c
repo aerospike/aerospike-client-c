@@ -35,7 +35,6 @@
 
 pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
 
-extern uint32_t as_event_loop_capacity;
 extern bool as_event_single_thread;
 static bool lua_initialized = false;
 
@@ -179,6 +178,7 @@ aerospike_connect(aerospike* as, as_error* err)
 	// This is not 100% bulletproof against, say, simultaneously calling
 	// aerospike_connect() from two different threads with the same as object...
 	if (as->cluster) {
+		as_log_info("This connect has already setup cluster:%p, so using the same", as->cluster);
 		return AEROSPIKE_OK;
 	}
 
@@ -223,7 +223,13 @@ aerospike_connect(aerospike* as, as_error* err)
 #endif
 
 	// Create the cluster object.
-	return as_cluster_create(&as->config, err, &as->cluster);
+	status = as_cluster_create(as, &as->config, err, &as->cluster);
+	if (status == AEROSPIKE_OK) {
+		as_log_info("Connection established for instance:%p cluster:%p ", as, as->cluster);
+	} else {
+		as_log_error("Failed to establish connectioninstance:%p status:dp ", as, status);
+	}
+	return status;
 }
 
 void as_event_close_cluster(as_cluster* cluster);
@@ -239,11 +245,13 @@ aerospike_close(aerospike* as, as_error* err)
 	as_error_reset(err);
 	as_cluster* cluster = as->cluster;
 	
+	//as_log_info("Connection getting closed for instance:%p cluster:%p ", as, as->cluster);
+
 	if (cluster) {
 		// async supported only for get/put and 
 	  	// its user responsiblity not to close while other operations are in progress
-#if 0 		
-		if (as_event_loop_capacity > 0 && !as_event_single_thread) {
+#if 1 		
+		if (as->event->loop_capacity > 0 && !as_event_single_thread) {
 			// Async configurations will attempt to wait till pending async commands have completed.
 			as_event_close_cluster(cluster);
 		}

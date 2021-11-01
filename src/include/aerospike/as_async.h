@@ -92,7 +92,7 @@ as_async_write_command_create(
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
 	cmd->replica = replica;
-	cmd->event_loop = as_event_assign(event_loop);
+	cmd->event_loop = as_event_assign(cluster->as->event);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
 	cmd->ns = ns;
@@ -130,7 +130,7 @@ as_async_record_command_create(
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
 	cmd->replica = replica;
-	cmd->event_loop = as_event_assign(event_loop);
+	cmd->event_loop = as_event_assign(cluster->as->event);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
 	cmd->ns = ns;
@@ -174,7 +174,7 @@ as_async_value_command_create(
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
 	cmd->replica = replica;
-	cmd->event_loop = as_event_assign(event_loop);
+	cmd->event_loop = as_event_assign(cluster->as->event);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
 	cmd->ns = ns;
@@ -209,7 +209,7 @@ as_async_info_command_create(
 	cmd->max_retries = 1;
 	cmd->iteration = 0;
 	cmd->replica = AS_POLICY_REPLICA_MASTER;
-	cmd->event_loop = as_event_assign(event_loop);
+	cmd->event_loop = as_event_assign(node->cluster->as->event);
 	cmd->cluster = node->cluster;
 	cmd->node = node;
 	cmd->ns = NULL;

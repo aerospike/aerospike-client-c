@@ -37,11 +37,7 @@
  * GLOBALS
  *****************************************************************************/
 
-extern int as_event_send_buffer_size;
-extern int as_event_recv_buffer_size;
-extern bool as_event_threads_created;
-
-static struct timeval as_immediate_tv;
+static struct timeval as_immediate_tv = {0, 0};
 
 static void
 as_event_callback(evutil_socket_t sock, short revents, void* udata);
@@ -51,7 +47,7 @@ as_event_callback(evutil_socket_t sock, short revents, void* udata);
  *****************************************************************************/
 
 void
-as_event_close_loop(as_event_loop* event_loop)
+as_event_close_loop(as_event *asevent, as_event_loop* event_loop)
 {
 	event_del(&event_loop->wakeup);
 
@@ -61,7 +57,7 @@ as_event_close_loop(as_event_loop* event_loop)
 	}
 
 	// Only stop event loop if client created event loop.
-	if (as_event_threads_created) {
+	if (asevent->threads_created) {
 		event_base_loopbreak(event_loop->loop);
 	}
 	
@@ -73,35 +69,51 @@ static void
 as_event_wakeup(evutil_socket_t socket, short revents, void* udata)
 {
 	// Read command pointers from queue.
-	as_event_loop* event_loop = udata;
+	as_event* event = udata;
 	as_event_commander cmd;
 	uint32_t i = 0;
+
+   	as_log_info("Event loop - event_wakeup call");
 
 	// Only process original size of queue.  Recursive pre-registration errors can
 	// result in new commands being added while the loop is in process.  If we process
 	// them, we could end up in an infinite loop.
-	pthread_mutex_lock(&event_loop->lock);
-	uint32_t size = as_queue_size(&event_loop->queue);
-	bool status = as_queue_pop(&event_loop->queue, &cmd);
-	pthread_mutex_unlock(&event_loop->lock);
+	pthread_mutex_lock(&event->loops->lock);
+	uint32_t size = as_queue_size(&event->loops->queue);
+	bool status = as_queue_pop(&event->loops->queue, &cmd);
+	pthread_mutex_unlock(&event->loops->lock);
 
 	while (status) {
 		if (! cmd.executable) {
 			// Received stop signal.
-			as_event_close_loop(event_loop);
+			as_event_close_loop(event, event->loops);
 			return;
 		}
-		cmd.executable(event_loop, cmd.udata);
-
+       	as_log_info("Event loop - event call:%p, udata:%p", cmd.executable, cmd.udata);
+ 		cmd.executable(event->loops, cmd.udata);
 		if (++i < size) {
-			pthread_mutex_lock(&event_loop->lock);
-			status = as_queue_pop(&event_loop->queue, &cmd);
-			pthread_mutex_unlock(&event_loop->lock);
+			pthread_mutex_lock(&event->loops->lock);
+			status = as_queue_pop(&event->loops->queue, &cmd);
+			pthread_mutex_unlock(&event->loops->lock);
 		}
 		else {
 			break;
 		}
 	}
+	as_log_info("Event loop - event_wakeup call exiting");
+}
+
+as_status
+as_reinitialize_event_loop(as_event *asevent, as_event_loop* event_loop)
+{
+	as_log_info("eventloop - reinitializing");
+
+	event_del(&event_loop->wakeup);
+	//event_reinit(event_loop->loop);
+	evtimer_assign(&event_loop->wakeup, event_loop->loop, as_event_wakeup, asevent);
+	evtimer_add(&event_loop->wakeup, &as_immediate_tv);
+	
+	return AEROSPIKE_OK;
 }
 
 static void*
@@ -119,16 +131,20 @@ as_event_worker(void* udata)
 #endif
 
 	struct event_base* loop = udata;
+	int status;
 
 #if LIBEVENT_VERSION_NUMBER < 0x02010000
-	int status = event_base_dispatch(loop);
+	status = event_base_dispatch(loop);
 #else
-	int status = event_base_loop(loop, EVLOOP_NO_EXIT_ON_EMPTY);
+	status = event_base_loop(loop, EVLOOP_NO_EXIT_ON_EMPTY);
 #endif
 
-	if (status) {
+ 	if(status) {
 		as_log_error("event_base_dispatch failed: %d", status);
-	}
+    } else {
+        as_log_info("Event loop - exit normally\n");
+    }
+
 	event_base_free(loop);
 	as_tls_thread_cleanup();
 
@@ -165,7 +181,7 @@ void event_base_add_virtual(struct event_base*);
 #endif
 
 bool
-as_event_create_loop(as_event_loop* event_loop)
+as_event_create_loop(as_event* asevent, as_event_loop* event_loop)
 {
 #if !defined(_MSC_VER)
 	event_loop->loop = event_base_new();
@@ -191,14 +207,14 @@ as_event_create_loop(as_event_loop* event_loop)
 }
 
 void
-as_event_register_external_loop(as_event_loop* event_loop)
+as_event_register_external_loop(as_event* asevent, as_event_loop* event_loop)
 {
 	// This method is only called when user sets an external event loop.
 	as_event_init_loop(event_loop);
 }
 
 bool
-as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata)
+as_event_execute(as_event *asevent, as_event_loop* event_loop, as_event_executable executable, void* udata)
 {
 	// Cross thread command queueing is not allowed in libevent single thread mode.
 	if (as_event_single_thread) {
@@ -213,11 +229,13 @@ as_event_execute(as_event_loop* event_loop, as_event_executable executable, void
 	pthread_mutex_unlock(&event_loop->lock);
 
 	if (queued) {
+		as_log_info("eventloop - queue_push work item call:%p udata:%p", qcmd.executable, qcmd.udata);
 		if (! evtimer_pending(&event_loop->wakeup, NULL)) {
-			event_del(&event_loop->wakeup);
-			evtimer_add(&event_loop->wakeup, &as_immediate_tv);
+			as_reinitialize_event_loop(asevent, event_loop);
 		}
 		//event_active(&event_loop->wakeup, 0, 0);
+	} else {
+		as_log_info("Event - failed to queue work item call:%p udata:%p", qcmd.executable, qcmd.udata);
 	}
 	return queued;
 }
@@ -865,6 +883,7 @@ static int
 as_event_try_family_connections(as_event_command* cmd, int family, int begin, int end, int index, as_address* primary, as_socket* sock)
 {
 	// Create a non-blocking socket.
+	as_event *asevent = cmd->cluster->as->event;
 	as_socket_fd fd;
 	int rv = as_socket_create_fd(family, &fd);
 
@@ -872,7 +891,7 @@ as_event_try_family_connections(as_event_command* cmd, int family, int begin, in
 		return rv;
 	}
 
-	if (cmd->pipe_listener && ! as_pipe_modify_fd(fd)) {
+	if (cmd->pipe_listener && ! as_pipe_modify_fd(asevent, fd)) {
 		return -1000;
 	}
 
@@ -1010,7 +1029,7 @@ void
 as_event_node_destroy(as_node* node)
 {
 	// Close connections.
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+	for (uint32_t i = 0; i < node->cluster->as->event->loop_size; i++) {
 		as_event_close_connections(node, &node->async_conn_pools[i]);
 		as_event_close_connections(node, &node->pipe_conn_pools[i]);
 	}

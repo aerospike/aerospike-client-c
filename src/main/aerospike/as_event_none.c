@@ -24,7 +24,7 @@
 #if ! AS_EVENT_LIB_DEFINED
 
 bool
-as_event_create_loop(as_event_loop* event_loop)
+as_event_create_loop(as_event* asevent, as_event_loop* event_loop)
 {
 	return false;
 }
@@ -35,7 +35,7 @@ as_event_register_external_loop(as_event_loop* event_loop)
 }
 
 bool
-as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata)
+as_event_execute(as_event *asevent, as_event_loop* event_loop, as_event_executable executable, void* udata)
 {
 	return false;
 }

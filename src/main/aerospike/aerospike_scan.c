@@ -1148,7 +1148,7 @@ as_scan_partition_async(
 	ee->max = n_nodes;
 	ee->max_concurrent = scan->concurrent ? n_nodes : 1;
 	ee->commands = cf_malloc(sizeof(as_event_command*) * n_nodes);
-	ee->event_loop = as_event_assign(event_loop);
+	ee->event_loop = as_event_assign(cluster->as->event);
 	ee->complete_fn = as_scan_partition_complete_async;
 	ee->udata = udata;
 	ee->err = NULL;

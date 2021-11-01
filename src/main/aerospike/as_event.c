@@ -44,15 +44,8 @@
  * GLOBALS
  *****************************************************************************/
 
-as_event_loop* as_event_loops = 0;
-as_event_loop* as_event_loop_current = 0;
-uint32_t as_event_loop_capacity = 0;
-uint32_t as_event_loop_size = 0;
-int as_event_send_buffer_size = 0;
-int as_event_recv_buffer_size = 0;
-bool as_event_threads_created = false;
+as_event* g_asevent;
 bool as_event_single_thread = false;
-static pthread_mutex_t as_event_lock = PTHREAD_MUTEX_INITIALIZER;
 
 as_status aerospike_library_init(as_error* err);
 int as_batch_retry_async(as_event_command* cmd, bool timeout);
@@ -96,8 +89,9 @@ as_event_initialize_loop(as_policy_event* policy, as_event_loop* event_loop, uin
 #if AS_EVENT_LIB_DEFINED
 
 static as_status
-as_event_initialize_loops(as_error* err, uint32_t capacity)
+as_event_initialize_loops(as_event **event, as_error* err, uint32_t capacity)
 {
+	as_event *asevent = NULL;
 	as_status status = aerospike_library_init(err);
 
 	if (status != AEROSPIKE_OK) {
@@ -117,40 +111,47 @@ as_event_initialize_loops(as_error* err, uint32_t capacity)
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid capacity: %u", capacity);
 	}
 	
-	as_event_send_buffer_size = as_pipe_get_send_buffer_size();
-	as_event_recv_buffer_size = as_pipe_get_recv_buffer_size();
 
-	as_event_loops = cf_calloc(capacity, sizeof(as_event_loop));
-	
-	if (! as_event_loops) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "as_event_loops calloc() failed");
+	asevent = cf_calloc(1, sizeof(as_event));
+	if (! asevent) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "asevent calloc() failed");
 	}
 
-	as_event_loop_capacity = capacity;
-	as_event_loop_current = as_event_loops;
+	*event = asevent;
+	asevent->loops = cf_calloc(capacity, sizeof(as_event_loop));
+	
+	if (! asevent->loops) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "asevent->loops calloc() failed");
+	}
+
+	asevent->send_buffer_size = as_pipe_get_send_buffer_size();
+	asevent->recv_buffer_size = as_pipe_get_recv_buffer_size();
+	asevent->loop_capacity = capacity;
+	asevent->loop_current = asevent->loops;
+	//asevent->lock = PTHREAD_MUTEX_INITIALIZER;
 	
 	// Initialize first loop to circular linked list for efficient round-robin
 	// event loop distribution.
-	as_event_loops->next = as_event_loops;
+	asevent->loops->next = asevent->loops;
 	return AEROSPIKE_OK;
 }
 
-as_event_loop*
-as_event_create_loops(uint32_t capacity)
+bool
+as_event_create_loops(as_event **event, uint32_t capacity)
 {
 	as_error err;
-	as_event_loop* event_loops = NULL;
 
-	if (as_create_event_loops(&err, NULL, capacity, &event_loops) != AEROSPIKE_OK) {
+	if (as_create_event_loops(&err, NULL, capacity, event) != AEROSPIKE_OK) {
 		as_log_error(err.message);
-		return NULL;
+		return false;
 	}
-	return event_loops;
+	return true;
 }
 
 as_status
-as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity, as_event_loop** event_loops)
+as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity, as_event** event)
 {
+	as_event* asevent = NULL;
 	as_error_reset(err);
 
 	as_status status;
@@ -168,16 +169,16 @@ as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity,
 		as_policy_event_init(policy);
 	}
 
-	status = as_event_initialize_loops(err, capacity);
+	status = as_event_initialize_loops(event, err, capacity);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-
-	as_event_threads_created = true;
+	asevent = *event;
+	asevent->threads_created = true;
 	
 	for (uint32_t i = 0; i < capacity; i++) {
-		as_event_loop* event_loop = &as_event_loops[i];
+		as_event_loop* event_loop = &asevent->loops[i];
 		as_event_initialize_loop(policy, event_loop, i);
 		event_loop->loop = NULL;
 
@@ -187,51 +188,51 @@ as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity,
 		memset(&event_loop->thread, 0, sizeof(pthread_t));
 #endif
 
-		if (! as_event_create_loop(event_loop)) {
-			as_event_close_loops();
+		if (! as_event_create_loop(*event, event_loop)) {
+			as_event_close_loops(asevent);
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create event_loop: %u", i);
 		}
 		
 		if (i > 0) {
 			// This loop points to first loop to create circular round-robin linked list.
-			event_loop->next = as_event_loops;
+			event_loop->next = asevent->loops;
 			
 			// Adjust previous loop to point to this loop.
-			as_event_loops[i - 1].next = event_loop;
+			asevent->loops[i - 1].next = event_loop;
 		}
-		as_event_loop_size++;
+		asevent->loop_size++;
 	}
 
-	if (event_loops) {
-		*event_loops = as_event_loops;
-	}
 	return AEROSPIKE_OK;
 }
 
 bool
-as_event_set_external_loop_capacity(uint32_t capacity)
+as_event_set_external_loop_capacity(as_event **event, uint32_t capacity)
 {
 	as_error err;
-	as_status status = as_event_initialize_loops(&err, capacity);
+	as_status status;
+	
+	//todo: close the loops first
+	status = as_event_initialize_loops(event, &err, capacity);
 
 	if (status != AEROSPIKE_OK) {
 		as_log_error(err.message);
 		return false;
 	}
 
-	as_event_threads_created = false;
+	(*event)->threads_created = false;
 	return true;
 }
 
 #endif
 
 as_event_loop*
-as_event_set_external_loop(void* loop)
+as_event_set_external_loop(aerospike *as, void* loop)
 {
 	as_error err;
 	as_event_loop* event_loop = NULL;
 
-	if (as_set_external_event_loop(&err, NULL, loop, &event_loop) != AEROSPIKE_OK) {
+	if (as_set_external_event_loop(as, &err, NULL, loop, &event_loop) != AEROSPIKE_OK) {
 		as_log_error(err.message);
 		return NULL;
 	}
@@ -239,7 +240,7 @@ as_event_set_external_loop(void* loop)
 }
 
 as_status
-as_set_external_event_loop(as_error* err, as_policy_event* policy, void* loop, as_event_loop** event_loop_out)
+as_set_external_event_loop(struct aerospike_s *as, as_error* err, as_policy_event* policy, void* loop, as_event_loop** event_loop_out)
 {
 	as_error_reset(err);
 
@@ -259,45 +260,45 @@ as_set_external_event_loop(as_error* err, as_policy_event* policy, void* loop, a
 
 	// Synchronize event loop registration calls that are coming from separate
 	// event loop threads.
-	pthread_mutex_lock(&as_event_lock);
+	pthread_mutex_lock(&as->event->lock);
 
-	uint32_t current = as_event_loop_size;
+	uint32_t current = as->event->loop_size;
 
-	if (current >= as_event_loop_capacity) {
-		pthread_mutex_unlock(&as_event_lock);
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to add external loop. Capacity is %u", as_event_loop_capacity);
+	if (current >= as->event->loop_capacity) {
+		pthread_mutex_unlock(&as->event->lock);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to add external loop. Capacity is %u", as->event->loop_capacity);
 	}
 	
-	as_event_loop* event_loop = &as_event_loops[current];
+	as_event_loop* event_loop = &as->event->loops[current];
 	as_event_initialize_loop(policy, event_loop, current);
 	event_loop->loop = loop;
 	event_loop->thread = pthread_self();  // Current thread must be same as event loop thread!
 
-	as_event_register_external_loop(event_loop);
+	as_event_register_external_loop(as->event, event_loop);
 
 	if (current > 0) {
 		// This loop points to first loop to create circular round-robin linked list.
-		event_loop->next = as_event_loops;
+		event_loop->next = as->event->loops;
 		
 		// Adjust previous loop to point to this loop.
 		// Warning: not synchronized with as_event_loop_get()
-		as_event_loops[current - 1].next = event_loop;
+		as->event->loops[current - 1].next = event_loop;
 	}
 
-	// Set as_event_loop_size now that event loop has been fully initialized.
-	as_event_loop_size = current + 1;
+	// Set asevent->loop_size now that event loop has been fully initialized.
+	as->event->loop_size = current + 1;
 
-	pthread_mutex_unlock(&as_event_lock);
+	pthread_mutex_unlock(&as->event->lock);
 
 	*event_loop_out = event_loop;
 	return AEROSPIKE_OK;
 }
 
 as_event_loop*
-as_event_loop_find(void* loop)
+as_event_loop_find(aerospike *as, void* loop)
 {
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		as_event_loop* event_loop = &as_event_loops[i];
+	for (uint32_t i = 0; i < as->event->loop_size; i++) {
+		as_event_loop* event_loop = &as->event->loops[i];
 		
 		if (event_loop->loop == loop) {
 			return event_loop;
@@ -307,9 +308,11 @@ as_event_loop_find(void* loop)
 }
 
 bool
-as_event_close_loops()
+as_event_close_loops(as_event *asevent)
 {
-	if (! as_event_loops) {
+	as_log_info("Closing event loops");
+
+	if (! asevent->loops) {
 		return false;
 	}
 	
@@ -317,12 +320,12 @@ as_event_close_loops()
 	
 	// Close or send close signal to all event loops.
 	// This will eventually release resources associated with each event loop.
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		as_event_loop* event_loop = &as_event_loops[i];
+	for (uint32_t i = 0; i < asevent->loop_size; i++) {
+		as_event_loop* event_loop = &asevent->loops[i];
 	
 		// Calling close directly can cause previously queued commands to be dropped.
 		// Therefore, always queue close command to event loop.
-		if (! as_event_execute(event_loop, NULL, NULL)) {
+		if (! as_event_execute(asevent, event_loop, NULL, NULL)) {
 			as_log_error("Failed to send stop command to event loop");
 			status = false;
 		}
@@ -330,28 +333,30 @@ as_event_close_loops()
 
 	// Only join threads if event loops were created internally.
 	// It is not possible to join on externally created event loop threads.
-	if (as_event_threads_created && status) {
-		for (uint32_t i = 0; i < as_event_loop_size; i++) {
-			as_event_loop* event_loop = &as_event_loops[i];
+	if (asevent->threads_created && status) {
+		for (uint32_t i = 0; i < asevent->loop_size; i++) {
+			as_event_loop* event_loop = &asevent->loops[i];
 			pthread_join(event_loop->thread, NULL);
 		}
-		as_event_destroy_loops();
+		as_event_destroy_loops(asevent);
 	}
 	return status;
 }
 
 void
-as_event_destroy_loops()
+as_event_destroy_loops(as_event *asevent)
 {
 #if defined(_MSC_VER)
 	// Call WSACleanup() on event loops destroy on windows.
 	WSACleanup();
 #endif
 
-	if (as_event_loops) {
-		cf_free(as_event_loops);
-		as_event_loops = NULL;
-		as_event_loop_size = 0;
+	if (asevent) {
+		if (asevent->loops) {
+			cf_free(asevent->loops);
+		}
+		cf_free(asevent);
+		asevent = NULL;
 	}
 }
 
@@ -389,7 +394,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 		}
 		cmd->state = AS_ASYNC_STATE_REGISTERED;
 
-		if (! as_event_execute(cmd->event_loop,
+		if (! as_event_execute(cmd->cluster->as->event, cmd->event_loop,
 			(as_event_executable)as_event_command_execute_in_loop, cmd)) {
 
 			cmd->event_loop->errors++;  // May not be in event loop thread, so not exactly accurate.
@@ -496,6 +501,8 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 								event_loop->max_commands_in_queue);
 				as_event_prequeue_error(event_loop, cmd, &err);
 				return;
+			} else {
+				as_log_info("eventloop - queue_push work item");
 			}
 
 			cmd->state = AS_ASYNC_STATE_DELAY_QUEUE;
@@ -1608,7 +1615,8 @@ create_connections_wait(as_node* node, as_async_conn_pool* pools)
 	as_monitor monitor;
 	as_monitor_init(&monitor);
 
-	uint32_t loop_max = as_event_loop_size;
+	as_event *asevent = node->cluster->as->event;
+	uint32_t loop_max = asevent->loop_size;
 	uint32_t loop_count = loop_max;
 	uint32_t max_concurrent = 20 / loop_max + 1;
 	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
@@ -1631,7 +1639,7 @@ create_connections_wait(as_node* node, as_async_conn_pool* pools)
 			cs->timeout_ms = timeout_ms;
 			cs->error = false;
 
-			if (!as_event_execute(&as_event_loops[i],
+			if (!as_event_execute(asevent, &asevent->loops[i],
 				(as_event_executable)connector_create_commands, cs)) {
 				as_log_error("Failed to queue connector");
 				connector_release(&monitor, &loop_count);
@@ -1648,7 +1656,8 @@ create_connections_wait(as_node* node, as_async_conn_pool* pools)
 static void
 create_connections_nowait(as_node* node, as_async_conn_pool* pools)
 {
-	uint32_t loop_max = as_event_loop_size;
+	as_event *asevent = node->cluster->as->event;
+	uint32_t loop_max = asevent->loop_size;
 	uint32_t max_concurrent = 20 / loop_max + 1;
 	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
 
@@ -1670,7 +1679,7 @@ create_connections_nowait(as_node* node, as_async_conn_pool* pools)
 			cs->timeout_ms = timeout_ms;
 			cs->error = false;
 
-			if (!as_event_execute(&as_event_loops[i],
+			if (!as_event_execute(asevent, &asevent->loops[i],
 				(as_event_executable)connector_create_commands, cs)) {
 				as_log_error("Failed to queue connector");
 			}
@@ -1679,13 +1688,13 @@ create_connections_nowait(as_node* node, as_async_conn_pool* pools)
 }
 
 static bool
-as_in_event_loops()
+as_in_event_loops(as_event *asevent)
 {
 	// Determine if current thread is an event loop thread.
 	bool in_event_loop = false;
 
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		as_event_loop* event_loop = &as_event_loops[i];
+	for (uint32_t i = 0; i < asevent->loop_size; i++) {
+		as_event_loop* event_loop = &asevent->loops[i];
 
 		if (as_in_event_loop(event_loop->thread)) {
 			in_event_loop = true;
@@ -1698,7 +1707,7 @@ as_in_event_loops()
 void
 as_event_create_connections(as_node* node, as_async_conn_pool* pools)
 {
-	if (as_in_event_loops()) {
+	if (as_in_event_loops(node->cluster->as->event)) {
 		create_connections_nowait(node, pools);
 	}
 	else {
@@ -1810,7 +1819,7 @@ balancer_in_loop_cluster(as_event_loop* event_loop, balancer_shared* bs)
 void
 as_event_balance_connections(as_cluster* cluster)
 {
-	uint32_t loop_max = as_event_loop_size;
+	uint32_t loop_max = cluster->as->event->loop_size;
 
 	if (loop_max == 0) {
 		return;
@@ -1821,7 +1830,7 @@ as_event_balance_connections(as_cluster* cluster)
 	bs->loop_count = loop_max;
 
 	for (uint32_t i = 0; i < loop_max; i++) {
-		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_cluster, bs)) {
+		if (! as_event_execute(cluster->as->event, &cluster->as->event->loops[i], (as_event_executable)balancer_in_loop_cluster, bs)) {
 			as_log_error("Failed to queue connection balancer");
 			balancer_release(bs);
 		}
@@ -1853,7 +1862,8 @@ balancer_in_loop_node(as_event_loop* event_loop, balancer_shared_node* bs)
 void
 as_event_node_balance_connections(as_cluster* cluster, as_node* node)
 {
-	uint32_t loop_max = as_event_loop_size;
+	as_event *asevent = cluster->as->event;
+	uint32_t loop_max = asevent->loop_size;
 
 	if (loop_max == 0) {
 		return;
@@ -1867,7 +1877,7 @@ as_event_node_balance_connections(as_cluster* cluster, as_node* node)
 	as_node_reserve(node);
 
 	for (uint32_t i = 0; i < loop_max; i++) {
-		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_node, bs)) {
+		if (! as_event_execute(asevent, &asevent->loops[i], (as_event_executable)balancer_in_loop_node, bs)) {
 			as_log_error("Failed to queue node connection balancer");
 			balancer_release_node(bs);
 		}
@@ -1899,10 +1909,13 @@ as_event_close_cluster_event_loop(as_event_loop* event_loop, as_event_close_stat
 	}
 }
 
-static void
-as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state)
+void
+as_event_close_cluster_cb(as_event_loop* event_loop, void *udata)
 {
+	as_event_close_state *state = (as_event_close_state*) udata;
 	int pending = state->cluster->pending[event_loop->index];
+
+	as_log_info("Close cluster-cb %p.\n", state->cluster);
 
 	if (pending < 0) {
 		as_log_error("Cluster's event loop connections are already closed.\n");
@@ -1915,7 +1928,7 @@ as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state
 
 	if (pending > 0) {
 		as_log_error("Cluster has pending commands, re-issue cluster close again.\n");
-		if (as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
+		if (as_event_execute(state->cluster->as->event, event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
 			return;
 		}
 		as_log_error("Failed to queue cluster close command");
@@ -1927,14 +1940,16 @@ as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state
 void
 as_event_close_cluster(as_cluster* cluster)
 {
-	if (as_event_loop_size == 0) {
+	//as_log_info("Closing cluster %p...", cluster);
+
+	if (cluster->as->event->loop_size == 0) {
 		as_log_error("Event loop size is zero to queue cluster close command");
 		return;
 	}
 
 	as_monitor* monitor = NULL;
 
-	if (! as_in_event_loops()) {
+	if (! as_in_event_loops(cluster->as->event)) {
 		monitor = cf_malloc(sizeof(as_monitor));
 		as_monitor_init(monitor);
 	}
@@ -1942,13 +1957,14 @@ as_event_close_cluster(as_cluster* cluster)
 	as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
 	state->monitor = monitor;
 	state->cluster = cluster;
-	state->event_loop_count = as_event_loop_size;
+	state->event_loop_count = cluster->as->event->loop_size;
 
 	//as_log_info("Send cluster close notification to async event loops.\n");
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		as_event_loop* event_loop = &as_event_loops[i];
+	for (uint32_t i = 0; i < cluster->as->event->loop_size; i++) {
+		as_event_loop* event_loop = &cluster->as->event->loops[i];
 
-		if (! as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
+		as_log_info("execute close cluster call:%p udata:%p...", as_event_close_cluster_cb, state);
+		if (! as_event_execute(cluster->as->event, event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
 			as_log_error("Failed to queue cluster close command");
 			as_event_close_cluster_event_loop(event_loop, state);
 		}

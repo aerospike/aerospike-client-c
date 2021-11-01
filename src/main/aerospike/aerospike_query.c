@@ -1202,7 +1202,7 @@ aerospike_query_async(
 	as_event_executor* exec = &executor->executor;
 	pthread_mutex_init(&exec->lock, NULL);
 	exec->commands = cf_malloc(sizeof(as_event_command*) * nodes->size);
-	exec->event_loop = as_event_assign(event_loop);
+	exec->event_loop = as_event_assign(as->event);
 	exec->complete_fn = as_query_complete_async;
 	exec->udata = udata;
 	exec->err = NULL;

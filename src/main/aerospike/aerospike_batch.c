@@ -2047,7 +2047,7 @@ aerospike_batch_read_async(
 	as_event_executor* exec = &executor->executor;
 	pthread_mutex_init(&exec->lock, NULL);
 	exec->commands = 0;
-	exec->event_loop = as_event_assign(event_loop);
+	exec->event_loop = as_event_assign(as->event);
 	exec->complete_fn = as_batch_complete_async;
 	exec->udata = udata;
 	exec->err = NULL;

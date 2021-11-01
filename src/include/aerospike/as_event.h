@@ -18,6 +18,7 @@
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_queue.h>
+#include <aerospike/aerospike.h>
 #include <pthread.h>
 
 /**
@@ -48,6 +49,12 @@ extern "C" {
  * TYPES
  *****************************************************************************/
 	
+/**
+ * @private
+ * Forward declaration of a cluster object.
+ */
+struct aerospike_s;
+
 /**
  * Asynchronous event loop configuration.
  *
@@ -141,9 +148,18 @@ typedef struct as_event_loop {
  * GLOBAL VARIABLES
  *****************************************************************************/
 
-AS_EXTERN extern as_event_loop* as_event_loops;
-AS_EXTERN extern as_event_loop* as_event_loop_current;
-AS_EXTERN extern uint32_t as_event_loop_size;
+typedef struct as_event {
+	as_event_loop* loops;
+	as_event_loop* loop_current;
+	uint32_t loop_capacity;
+	uint32_t loop_size;
+	int send_buffer_size;
+	int recv_buffer_size;
+	bool threads_created;
+	pthread_mutex_t lock;
+}as_event;
+
+AS_EXTERN extern as_event* g_asevent;
 AS_EXTERN extern bool as_event_single_thread;
 
 /******************************************************************************
@@ -174,8 +190,8 @@ as_policy_event_init(as_policy_event* policy)
  *
  * @ingroup async_events
  */
-AS_EXTERN as_event_loop*
-as_event_create_loops(uint32_t capacity);
+AS_EXTERN bool
+as_event_create_loops(as_event **event, uint32_t capacity);
 
 /**
  * Create new event loops with specified event policy. 
@@ -192,7 +208,7 @@ as_event_create_loops(uint32_t capacity);
  * @ingroup async_events
  */
 AS_EXTERN as_status
-as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity, as_event_loop** event_loops);
+as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity, as_event** event);
 
 /**
  * Set the number of externally created event loops.  This method should be called when the
@@ -235,7 +251,7 @@ as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity,
  * @ingroup async_events
  */
 AS_EXTERN bool
-as_event_set_external_loop_capacity(uint32_t capacity);
+as_event_set_external_loop_capacity(as_event **event, uint32_t capacity);
 
 /**
  * Register an external event loop with the client with default event policy.
@@ -282,7 +298,7 @@ as_event_set_external_loop_capacity(uint32_t capacity);
  * @ingroup async_events
  */
 AS_EXTERN as_event_loop*
-as_event_set_external_loop(void* loop);
+as_event_set_external_loop(struct aerospike_s *as, void* loop);
 
 /**
  * Register an external event loop with the client with specified event policy.
@@ -341,7 +357,7 @@ as_event_set_external_loop(void* loop);
  * @ingroup async_events
  */
 AS_EXTERN as_status
-as_set_external_event_loop(as_error* err, as_policy_event* policy, void* loop, as_event_loop** event_loop);
+as_set_external_event_loop(struct aerospike_s *as, as_error* err, as_policy_event* policy, void* loop, as_event_loop** event_loop);
 
 /**
  * Find client's event loop abstraction given the external event loop.
@@ -353,7 +369,7 @@ as_set_external_event_loop(as_error* err, as_policy_event* policy, void* loop, a
  * @ingroup async_events
  */
 AS_EXTERN as_event_loop*
-as_event_loop_find(void* loop);
+as_event_loop_find(struct aerospike_s *as, void* loop);
 
 /**
  * Retrieve event loop by array index.
@@ -364,9 +380,9 @@ as_event_loop_find(void* loop);
  * @ingroup async_events
  */
 static inline as_event_loop*
-as_event_loop_get_by_index(uint32_t index)
+as_event_loop_get_by_index(as_event *asevent, uint32_t index)
 {
-	return index < as_event_loop_size ? &as_event_loops[index] : NULL;
+	return index < asevent->loop_size ? &asevent->loops[index] : NULL;
 }
 
 /**
@@ -377,12 +393,12 @@ as_event_loop_get_by_index(uint32_t index)
  * @ingroup async_events
  */
 static inline as_event_loop*
-as_event_loop_get()
+as_event_loop_get(as_event *asevent)
 {
 	// The last event loop points to the first event loop to create a circular linked list.
 	// Not atomic because doesn't need to be exactly accurate.
-	as_event_loop* event_loop = as_event_loop_current;
-	as_event_loop_current = event_loop->next;
+	as_event_loop* event_loop = asevent->loop_current;
+	asevent->loop_current = event_loop->next;
 	return event_loop;
 }
 	
@@ -441,7 +457,7 @@ as_event_loop_get_queue_size(as_event_loop* event_loop)
  * @ingroup async_events
  */
 AS_EXTERN bool
-as_event_close_loops();
+as_event_close_loops(as_event *asevent);
 
 /**
  * Close internal event loop and release internal/external event loop watchers.
@@ -449,7 +465,7 @@ as_event_close_loops();
  * If used, must be called from event loop's thread.
  */
 AS_EXTERN void
-as_event_close_loop(as_event_loop* event_loop);
+as_event_close_loop(as_event *asevent, as_event_loop* event_loop);
 
 /**
  * Destroy global event loop array.  This function only needs to be called for external
@@ -458,7 +474,7 @@ as_event_close_loop(as_event_loop* event_loop);
  * @ingroup async_events
  */
 AS_EXTERN void
-as_event_destroy_loops();
+as_event_destroy_loops(as_event *asevent);
 
 /******************************************************************************
  * LIBEVENT SINGLE THREAD MODE FUNCTIONS

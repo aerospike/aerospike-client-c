@@ -21,8 +21,6 @@
  *****************************************************************************/
 
 extern uint32_t as_cluster_count;
-extern uint32_t as_event_loop_capacity;
-extern uint32_t as_event_loop_size;
 
 /******************************************************************************
  * FUNCTIONS
@@ -45,7 +43,7 @@ as_async_get_pending(as_cluster* cluster)
 	// in a non-atomic way.
 	int sum = 0;
 
-	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+	for (uint32_t i = 0; i < cluster->as->event->loop_size; i++) {
 		int pending = cluster->pending[i];
 
 		if (pending > 0) {
@@ -69,7 +67,7 @@ as_async_get_connections(as_cluster* cluster)
 	for (uint32_t i = 0; i < size; i++) {
 		as_node* node = nodes->array[i];
 
-		for (uint32_t j = 0; j < as_event_loop_size; j++) {
+		for (uint32_t j = 0; j < cluster->as->event->loop_size; j++) {
 			sum += node->async_conn_pools[j].queue.total + node->pipe_conn_pools[j].queue.total;
 		}
 	}
@@ -86,8 +84,8 @@ as_async_update_max_idle(as_cluster* cluster, uint32_t max_idle)
 void
 as_async_update_max_conns(as_cluster* cluster, bool pipe, uint32_t max_conns)
 {
-	uint32_t max = max_conns / as_event_loop_capacity;
-	uint32_t rem = max_conns - max * as_event_loop_capacity;
+	uint32_t max = max_conns / cluster->as->event->loop_capacity;
+	uint32_t rem = max_conns - max * cluster->as->event->loop_capacity;
 
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t size = nodes->size;
@@ -95,7 +93,7 @@ as_async_update_max_conns(as_cluster* cluster, bool pipe, uint32_t max_conns)
 	for (uint32_t i = 0; i < size; i++) {
 		as_node* node = nodes->array[i];
 
-		for (uint32_t j = 0; j < as_event_loop_capacity; j++) {
+		for (uint32_t j = 0; j < cluster->as->event->loop_capacity; j++) {
 			uint32_t limit = j < rem ? max + 1 : max;
 
 			if (pipe) {

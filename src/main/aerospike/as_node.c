@@ -50,8 +50,6 @@ as_node_create_connections(as_node* node, as_conn_pool* pool, uint32_t timeout_m
 void
 as_event_node_balance_connections(as_cluster* cluster, as_node* node);
 
-extern uint32_t as_event_loop_capacity;
-
 /******************************************************************************
  * Functions.
  *****************************************************************************/
@@ -66,18 +64,18 @@ as_racks_release(as_racks* racks)
 }
 
 static as_async_conn_pool*
-as_node_create_async_pools(uint32_t min_conns_per_node, uint32_t max_conns_per_node)
+as_node_create_async_pools(as_event *asevent, uint32_t min_conns_per_node, uint32_t max_conns_per_node)
 {
 	// Create one queue per event manager.
-	as_async_conn_pool* pools = cf_malloc(sizeof(as_async_conn_pool) * as_event_loop_capacity);
+	as_async_conn_pool* pools = cf_malloc(sizeof(as_async_conn_pool) * asevent->loop_capacity);
 	
 	// Distribute connections over event loops taking remainder into account.
-	uint32_t min = min_conns_per_node / as_event_loop_capacity;
-	uint32_t rem_min = min_conns_per_node - (min * as_event_loop_capacity);
-	uint32_t max = max_conns_per_node / as_event_loop_capacity;
-	uint32_t rem_max = max_conns_per_node - (max * as_event_loop_capacity);
+	uint32_t min = min_conns_per_node / asevent->loop_capacity;
+	uint32_t rem_min = min_conns_per_node - (min * asevent->loop_capacity);
+	uint32_t max = max_conns_per_node / asevent->loop_capacity;
+	uint32_t rem_max = max_conns_per_node - (max * asevent->loop_capacity);
 
-	for (uint32_t i = 0; i < as_event_loop_capacity; i++) {
+	for (uint32_t i = 0; i < asevent->loop_capacity; i++) {
 		as_async_conn_pool* pool = &pools[i];
 		uint32_t min_size = i < rem_min ? min + 1 : min;
 		uint32_t max_size = i < rem_max ? max + 1 : max;
@@ -89,8 +87,8 @@ as_node_create_async_pools(uint32_t min_conns_per_node, uint32_t max_conns_per_n
 as_node*
 as_node_create(as_cluster* cluster, as_node_info* node_info)
 {
+	as_event *asevent = cluster->as->event;
 	as_node* node = cf_malloc(sizeof(as_node));
-
 	if (!node) {
 		return NULL;
 	}
@@ -150,23 +148,24 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 		as_conn_pool_init(pool, sizeof(as_socket), min_size, max_size);
 	}
 
-	if (as_event_loop_capacity == 0) {
+	if (asevent->loop_capacity == 0) {
 		node->async_conn_pools = NULL;
 		node->pipe_conn_pools = NULL;
 		return node;
 	}
 
 	// Create async connection pools.
-	node->async_conn_pools = as_node_create_async_pools(cluster->async_min_conns_per_node,
+	node->async_conn_pools = as_node_create_async_pools(cluster->as->event, cluster->async_min_conns_per_node,
 		cluster->async_max_conns_per_node);
 
-	node->pipe_conn_pools = as_node_create_async_pools(0, cluster->pipe_max_conns_per_node);
+	node->pipe_conn_pools = as_node_create_async_pools(cluster->as->event, 0, cluster->pipe_max_conns_per_node);
 	return node;
 }
 
 void
 as_node_destroy(as_node* node)
 {
+	as_event *asevent = node->cluster->as->event;
 	// Close tend connection.
 	if (node->info_socket.fd >= 0) {
 		as_socket_close(&node->info_socket);
@@ -181,7 +180,7 @@ as_node_destroy(as_node* node)
 	cf_free(node->sync_conn_pools);
 
 	// Drain async connection pools.
-	if (as_event_loop_capacity > 0) {
+	if (asevent->loop_capacity > 0) {
 		// Close async and pipeline connections.
 		as_event_node_destroy(node);
 	}
@@ -212,6 +211,7 @@ void
 as_node_create_min_connections(as_node* node)
 {
 	// Create sync connections.
+	as_event *asevent = node->cluster->as->event;
 	uint32_t max = node->cluster->conn_pools_per_node;
 
 	for (uint32_t i = 0; i < max; i++) {
@@ -223,7 +223,7 @@ as_node_create_min_connections(as_node* node)
 	}
 
 	// Create async connections.
-	if (as_event_loop_capacity > 0 && as_event_loop_size > 0 && !as_event_single_thread &&
+	if (asevent->loop_capacity > 0 && asevent->loop_size > 0 && !as_event_single_thread &&
 		node->cluster->async_min_conns_per_node > 0) {
 		as_event_create_connections(node, node->async_conn_pools);
 	}
@@ -898,6 +898,8 @@ as_node_verify_name(as_error* err, as_node* node, const char* name)
 static void
 as_node_restart(as_cluster* cluster, as_node* node)
 {
+	as_event *asevent = cluster->as->event;
+
 	if (cluster->max_error_rate > 0) {
 		as_node_reset_error_count(node);
 	}
@@ -905,7 +907,7 @@ as_node_restart(as_cluster* cluster, as_node* node)
 	// Balance sync connections.
 	as_node_balance_connections(node);
 
-	if (as_event_loop_capacity > 0 && !as_event_single_thread) {
+	if (asevent->loop_capacity > 0 && !as_event_single_thread) {
 		as_event_node_balance_connections(cluster, node);
 	}
 }

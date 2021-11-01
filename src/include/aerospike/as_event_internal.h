@@ -272,17 +272,17 @@ as_event_close_cluster(as_cluster* cluster);
  *****************************************************************************/
 
 bool
-as_event_create_loop(as_event_loop* event_loop);
+as_event_create_loop(as_event* asevent, as_event_loop* event_loop);
 
 void
-as_event_register_external_loop(as_event_loop* event_loop);
+as_event_register_external_loop(as_event* asevent, as_event_loop* event_loop);
 
 /**
  * Schedule execution of function on specified event loop.
  * Command is placed on event loop queue and is never executed directly.
  */
 bool
-as_event_execute(as_event_loop* event_loop, as_event_executable executable, void* udata);
+as_event_execute(as_event *asevent, as_event_loop* event_loop, as_event_executable executable, void* udata);
 
 void
 as_event_command_write_start(as_event_command* cmd);
@@ -662,10 +662,10 @@ as_event_command_release(as_event_command* cmd)
  *****************************************************************************/
 
 static inline as_event_loop*
-as_event_assign(as_event_loop* event_loop)
+as_event_assign(as_event *asevent)
 {
 	// Assign event loop using round robin distribution if not specified.
-	return event_loop ? event_loop : as_event_loop_get();
+	return as_event_loop_get(asevent);
 }
 
 static inline void

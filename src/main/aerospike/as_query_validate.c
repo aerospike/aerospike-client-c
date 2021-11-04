@@ -69,7 +69,7 @@ as_parse_cluster_key(char* response, uint64_t* cluster_key)
 }
 
 static void
-as_validate_begin_listener(as_error* err, char* response, void* udata, as_event_loop* event_loop)
+as_validate_begin_listener(as_error* err, char* response, void* udata)
 {
 	as_event_command* cmd = udata;
 	as_event_executor* executor = cmd->udata;
@@ -106,7 +106,7 @@ as_validate_begin_listener(as_error* err, char* response, void* udata, as_event_
 }
 
 static void
-as_validate_next_listener(as_error* err, char* response, void* udata, as_event_loop* event_loop)
+as_validate_next_listener(as_error* err, char* response, void* udata)
 {
 	as_event_command* cmd = udata;
 	as_event_executor* executor = cmd->udata;
@@ -143,7 +143,7 @@ as_validate_next_listener(as_error* err, char* response, void* udata, as_event_l
 }
 
 static void
-as_validate_end_listener(as_error* err, char* response, void* udata, as_event_loop* event_loop)
+as_validate_end_listener(as_error* err, char* response, void* udata)
 {
 	as_event_executor* executor = udata;
 
@@ -244,7 +244,7 @@ as_query_validate_begin_async(as_event_executor* executor, const as_namespace ns
 	as_node_reserve(cmd->node);
 
 	as_status status = as_info_command_node_async(NULL, err, &policy, cmd->node, info_cmd,
-												  as_validate_begin_listener, cmd, cmd->event_loop);
+												  as_validate_begin_listener, cmd);
 
 	if (status != AEROSPIKE_OK) {
 		as_event_command_destroy(cmd);
@@ -273,7 +273,7 @@ as_query_validate_next_async(as_event_executor* executor, uint32_t index)
 	as_node_reserve(cmd->node);
 
 	as_status status = as_info_command_node_async(NULL, &err, &policy, cmd->node, info_cmd,
-									  as_validate_next_listener, cmd, cmd->event_loop);
+									  as_validate_next_listener, cmd);
 
 	if (status != AEROSPIKE_OK) {
 		as_event_command_destroy(cmd);
@@ -284,7 +284,7 @@ as_query_validate_next_async(as_event_executor* executor, uint32_t index)
 }
 
 void
-as_query_validate_end_async(as_event_executor* executor, as_node* node, as_event_loop* event_loop)
+as_query_validate_end_async(as_event_executor* executor, as_node* node)
 {
 	as_error err;
 	as_policy_info policy;
@@ -297,7 +297,7 @@ as_query_validate_end_async(as_event_executor* executor, as_node* node, as_event
 	// node will be released at end of async info processing. This is okay because the
 	// node is not referenced after this async info command is complete.
 	as_status status = as_info_command_node_async(NULL, &err, &policy, node, info_cmd,
-									  as_validate_end_listener, executor, event_loop);
+									  as_validate_end_listener, executor);
 
 	if (status != AEROSPIKE_OK) {
 		as_event_executor_error(executor, &err, 1);

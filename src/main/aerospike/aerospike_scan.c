@@ -117,7 +117,7 @@ static void
 as_scan_partition_notify(as_async_scan_executor* se, as_error* err)
 {
 	as_scan_partition_executor_destroy(se);
-	se->listener(err, NULL, se->executor.udata, se->executor.event_loop);
+	se->listener(err, NULL, se->executor.udata);
 }
 
 static void
@@ -188,7 +188,7 @@ as_scan_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as_
 		return status;
 	}
 
-	bool rv = se->listener(0, &rec, se->executor.udata, se->executor.event_loop);
+	bool rv = se->listener(0, &rec, se->executor.udata);
 
 	if (! rv) {
 		as_record_destroy(&rec);
@@ -1096,8 +1096,7 @@ as_scan_partition_retry_async(as_async_scan_executor* se_old, as_error* err)
 static as_status
 as_scan_partition_async(
 	as_cluster* cluster, as_error* err, const as_policy_scan* policy, const as_scan* scan,
-	as_partition_tracker* pt, as_async_scan_listener listener, void* udata,
-	as_event_loop* event_loop
+	as_partition_tracker* pt, as_async_scan_listener listener, void* udata
 	)
 {
 	pt->sleep_between_retries = 0;
@@ -1315,7 +1314,7 @@ aerospike_scan_partitions(
 as_status
 aerospike_scan_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
-	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	uint64_t* scan_id, as_async_scan_listener listener, void* udata
 	)
 {
 	if (! policy) {
@@ -1338,14 +1337,13 @@ aerospike_scan_async(
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
 	as_partition_tracker_init_nodes(pt, cluster, policy, scan, n_nodes);
-	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
+	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata);
 }
 
 as_status
 aerospike_scan_node_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
-	uint64_t* scan_id, const char* node_name, as_async_scan_listener listener, void* udata,
-	as_event_loop* event_loop
+	uint64_t* scan_id, const char* node_name, as_async_scan_listener listener, void* udata
 	)
 {
 	if (! policy) {
@@ -1369,8 +1367,7 @@ aerospike_scan_node_async(
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
 	as_partition_tracker_init_node(pt, cluster, policy, scan, node);
-	status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata,
-									 event_loop);
+	status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata);
 	as_node_release(node);
 	return status;
 }
@@ -1378,7 +1375,7 @@ aerospike_scan_node_async(
 as_status
 aerospike_scan_partitions_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
-	as_partition_filter* pf, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	as_partition_filter* pf, as_async_scan_listener listener, void* udata
 	)
 {
 	as_cluster* cluster = as->cluster;
@@ -1401,5 +1398,5 @@ aerospike_scan_partitions_async(
 		cf_free(pt);
 		return status;
 	}
-	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
+	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata);
 }

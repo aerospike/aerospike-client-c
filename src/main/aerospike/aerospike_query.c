@@ -195,7 +195,7 @@ static const as_stream_hooks output_stream_hooks = {
 static void
 as_query_complete_async(as_event_executor* executor)
 {
-	((as_async_query_executor*)executor)->listener(executor->err, 0, executor->udata, executor->event_loop);
+	((as_async_query_executor*)executor)->listener(executor->err, 0, executor->udata);
 }
 
 static as_status
@@ -217,7 +217,7 @@ as_query_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as
 	}
 
 	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
-	bool rv = ((as_async_query_executor*)executor)->listener(0, &rec, executor->udata, executor->event_loop);
+	bool rv = ((as_async_query_executor*)executor)->listener(0, &rec, executor->udata);
 	as_record_destroy(&rec);
 
 	if (! rv) {
@@ -1164,7 +1164,7 @@ aerospike_query_foreach(
 as_status
 aerospike_query_async(
 	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
-	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop)
+	as_async_query_record_listener listener, void* udata)
 {
 	if (! policy) {
 		policy = &as->config.policies.query;
@@ -1182,7 +1182,7 @@ aerospike_query_async(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return aerospike_scan_async(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
+		return aerospike_scan_async(as, err, &scan_policy, &scan, NULL, listener, udata);
 	}
 
 	as_error_reset(err);

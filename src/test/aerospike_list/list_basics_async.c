@@ -72,7 +72,7 @@ after(atf_suite* suite)
  *****************************************************************************/
 
 static void
-pop_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+pop_callback(as_error* err, as_record* rec, void* udata)
 {
 	assert_success_async(&monitor, err, udata);
 	
@@ -87,7 +87,7 @@ pop_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_lo
 }
 
 static void
-write_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+write_callback(as_error* err, as_record* rec, void* udata)
 {
 	assert_success_async(&monitor, err, udata);
 	
@@ -99,7 +99,7 @@ write_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_
 	as_operations_add_list_pop_range(&ops, "list", -2, 1);
 	
 	as_error e;
-	as_status status = aerospike_key_operate_async(as, &e, NULL, &key, &ops, pop_callback, __result__, event_loop, NULL);
+	as_status status = aerospike_key_operate_async(as, &e, NULL, &key, &ops, pop_callback, __result__, NULL);
 	as_operations_destroy(&ops);
 	assert_status_async(&monitor, status, &e);
 }

@@ -152,13 +152,10 @@ typedef bool (*as_batch_callback_xdr)(as_key* key, as_record* record, void* udat
  * @param err			This error structure is only populated when the command fails. Null on success.
  * @param records 		Returned records.  Records must be destroyed with as_batch_read_destroy() when done.
  * @param udata 		User data that is forwarded from asynchronous command function.
- * @param event_loop 	Event loop that this command was executed on.  Use this event loop when running
- * 						nested asynchronous commands when single threaded behavior is desired for the
- * 						group of commands.
  *
  * @ingroup batch_operations
  */
-typedef void (*as_async_batch_listener)(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop);
+typedef void (*as_async_batch_listener)(as_error* err, as_batch_read_records* records, void* udata);
 
 /******************************************************************************
  * FUNCTIONS
@@ -294,7 +291,7 @@ aerospike_batch_read(
  * This method requires Aerospike Server version >= 3.6.0.
  *
  * ~~~~~~~~~~{.c}
- * void my_listener(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop)
+ * void my_listener(as_error* err, as_batch_read_records* records, void* udata)
  * {
  * 	   if (err) {
  * 	       fprintf(stderr, "Command failed: %d %s\n", err->code, err->message);
@@ -344,7 +341,6 @@ aerospike_batch_read(
  * 						async method will return immediately after queueing command.
  * @param listener 		User function to be called with command results.
  * @param udata 		User data to be forwarded to user callback.
- * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *
  * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
  *
@@ -353,7 +349,7 @@ aerospike_batch_read(
 AS_EXTERN as_status
 aerospike_batch_read_async(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records,
-	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
+	as_async_batch_listener listener, void* udata
 	);
 
 /**

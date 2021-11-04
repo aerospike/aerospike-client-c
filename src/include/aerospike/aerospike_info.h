@@ -95,7 +95,7 @@ aerospike_info_node(
  * Asynchronously send an info request to a specific server node.
  *
  * ~~~~~~~~~~{.c}
- * void my_listener(as_error* err, char* response, void* udata, as_event_loop* event_loop)
+ * void my_listener(as_error* err, char* response, void* udata)
  * {
  *     if (err) {
  *         printf("Command failed: %d %s\n", err->code, err->message);
@@ -115,8 +115,6 @@ aerospike_info_node(
  * @param req			The info request to send.
  * @param listener		User function to be called with command results.
  * @param udata			User data to be forwarded to user callback.
- * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be
- *						choosen by round-robin.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error.
  *
@@ -125,10 +123,10 @@ aerospike_info_node(
 static inline as_status
 aerospike_info_node_async(
 	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, const char* req,
-	as_async_info_listener listener, void* udata, as_event_loop* event_loop
+	as_async_info_listener listener, void* udata
 	)
 {
-	return as_info_command_node_async(as, err, policy, node, req, listener, udata, event_loop);
+	return as_info_command_node_async(as, err, policy, node, req, listener, udata);
 }
 
 /**

@@ -47,8 +47,8 @@ static as_monitor monitor;
 
 bool create_event_loop_with_delay_queue();
 void insert_records(uint32_t* counter);
-bool insert_record(as_event_loop* event_loop, void* udata, uint32_t index);
-void insert_listener(as_error* err, void* udata, as_event_loop* event_loop);
+bool insert_record(void* udata, uint32_t index);
+void insert_listener(as_error* err, void* udata);
 
 //==========================================================
 // Async Delay Queue Example
@@ -88,7 +88,6 @@ main(int argc, char* argv[])
 	// Cleanup and shutdown.
 	example_remove_test_records(&as);
 	example_cleanup(&as);
-	as_event_close_loops();
 	return 0;
 }
 
@@ -129,17 +128,16 @@ insert_records(uint32_t* counter)
 	// The delay queue is good for managing socket usage for short bursts of transactions.
 	// A sustained imbalance of commands placed on the queue over the command processing rate
 	// will result in the delay queue becoming excessively large.
-	as_event_loop* event_loop = as_event_loop_get();
 		
 	for (uint32_t i = 0; i < g_n_keys; i++) {
-		if (! insert_record(event_loop, counter, i)) {
+		if (! insert_record(counter, i)) {
 			break;
 		}
 	}
 }
 
 bool
-insert_record(as_event_loop* event_loop, void* udata, uint32_t index)
+insert_record(void* udata, uint32_t index)
 {
 	// No need to destroy a stack as_key object, if we only use as_key_init_int64().
 	as_key key;
@@ -157,15 +155,15 @@ insert_record(as_event_loop* event_loop, void* udata, uint32_t index)
 
 	// Write a record to the database.
 	as_error err;
-	if (aerospike_key_put_async(&as, &err, NULL, &key, &rec, insert_listener, udata, event_loop, NULL) != AEROSPIKE_OK) {
-		insert_listener(&err, udata, event_loop);
+	if (aerospike_key_put_async(&as, &err, NULL, &key, &rec, insert_listener, udata, NULL) != AEROSPIKE_OK) {
+		insert_listener(&err, udata);
 		return false;
 	}
 	return true;
 }
 
 void
-insert_listener(as_error* err, void* udata, as_event_loop* event_loop)
+insert_listener(as_error* err, void* udata)
 {
 	uint32_t* counter = udata;
 

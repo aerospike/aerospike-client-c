@@ -65,7 +65,7 @@ typedef struct scan_check_s {
  *****************************************************************************/
 
 static void
-put_listener(as_error* err, void* udata, as_event_loop* event_loop)
+put_listener(as_error* err, void* udata)
 {
 	// Exactly one event loop was initialized, so we know we are single threaded here.
 	put_counter* c = udata;
@@ -286,7 +286,7 @@ check_bin4(as_record * rec, scan_check * check)
 }
 
 static bool
-scan_listener(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+scan_listener(as_error* err, as_record* rec, void* udata)
 {
 	scan_check* check = (scan_check*)udata;
 

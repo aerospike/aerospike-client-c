@@ -79,8 +79,7 @@ as_query_validate_next_async(struct as_event_executor* executor, uint32_t index)
  */
 void
 as_query_validate_end_async(
-	struct as_event_executor* executor, struct as_node_s* node, struct as_event_loop* event_loop
-	);
+	struct as_event_executor* executor, struct as_node_s* node);
 
 #ifdef __cplusplus
 } // end extern "C"

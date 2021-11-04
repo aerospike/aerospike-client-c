@@ -89,7 +89,7 @@ after(atf_suite* suite)
  *****************************************************************************/
 
 static void
-as_apply_callback(as_error* err, as_val* val, void* udata, as_event_loop* event_loop)
+as_apply_callback(as_error* err, as_val* val, void* udata)
 {
 	assert_success_async(&monitor, err, udata);
     assert_async(&monitor, val);
@@ -112,7 +112,7 @@ TEST(key_apply_async1, "async key apply")
 	as_arraylist_append_int64(&arglist, 2);
 
 	as_error err;
-	as_status status = aerospike_key_apply_async(as, &err, NULL, &key, UDF_FILE, "add", (as_list *) &arglist, as_apply_callback, __result__, 0, NULL);
+	as_status status = aerospike_key_apply_async(as, &err, NULL, &key, UDF_FILE, "add", (as_list *) &arglist, as_apply_callback, __result__, NULL);
 	as_key_destroy(&key);
     as_val_destroy(&arglist);
     assert_int_eq(status, AEROSPIKE_OK);

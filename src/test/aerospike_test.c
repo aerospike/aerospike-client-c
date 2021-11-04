@@ -304,7 +304,6 @@ static bool before(atf_plan* plan)
 
 	if (! as_config_add_hosts(&config, g_host, g_port)) {
 		error("Invalid host(s) %s", g_host);
-		as_event_close_loops();
 		return false;
 	}
 
@@ -322,7 +321,6 @@ static bool before(atf_plan* plan)
 	if (aerospike_connect(as, &err) != AEROSPIKE_OK) {
 		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
 		aerospike_destroy(as);
-		as_event_close_loops();
 		return false;
 	}
 
@@ -331,7 +329,6 @@ static bool before(atf_plan* plan)
 		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
 		aerospike_close(as, &err);
 		aerospike_destroy(as);
-		as_event_close_loops();
 		return false;
 	}
 
@@ -355,10 +352,6 @@ static bool after(atf_plan* plan)
 
 	as_status status = aerospike_close(as, &err);
 	aerospike_destroy(as);
-
-#if AS_EVENT_LIB_DEFINED
-	as_event_close_loops();
-#endif
 
 	if (status == AEROSPIKE_OK) {
 		return true;

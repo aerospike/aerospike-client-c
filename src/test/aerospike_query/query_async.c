@@ -75,7 +75,7 @@ after(atf_suite* suite)
  *****************************************************************************/
 
 static bool
-query_handler(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+query_handler(as_error* err, as_record* record, void* udata)
 {
 	query_data* qdata = udata;
 	atf_test_result* __result__ = qdata->result;
@@ -131,7 +131,7 @@ TEST(query_async_foreach_1, "count(*) where a == 'abc'")
 }
 
 static bool
-query_quit_early_handler(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+query_quit_early_handler(as_error* err, as_record* record, void* udata)
 {
 	if (! qdata.valid) {
 		error("Query callback called after returning false. Exit test framework.");

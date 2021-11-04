@@ -113,12 +113,12 @@ set_error(as_error* err, atf_test_result* result)
 }
 
 static void
-pipeline_noop(void* udata, as_event_loop* event_loop)
+pipeline_noop(void* udata)
 {
 }
 
 static void
-get_listener(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+get_listener(as_error* err, as_record* rec, void* udata)
 {
 	counter* ctr = udata;
 	ctr->completed++;
@@ -159,7 +159,7 @@ get_listener(as_error* err, as_record* rec, void* udata, as_event_loop* event_lo
 }
 
 static void
-read_all(as_event_loop* event_loop, counter* ctr)
+read_all(counter* ctr)
 {
 	// Read and verify all records with pipeline.
 	ctr->started = 0;
@@ -180,17 +180,17 @@ read_all(as_event_loop* event_loop, counter* ctr)
 		sprintf(key_buf, "pipe%d", i);
 		as_key_init(&key, NAMESPACE, SET, key_buf);
 
-		if (aerospike_key_get_async(as, &e, &p, &key, get_listener, ctr, event_loop, pipeline_noop) != AEROSPIKE_OK) {
-			get_listener(&e, NULL, ctr, event_loop);
+		if (aerospike_key_get_async(as, &e, &p, &key, get_listener, ctr, pipeline_noop) != AEROSPIKE_OK) {
+			get_listener(&e, NULL, ctr);
 		}
 	}
 }
 
 static bool
-write_record(as_event_loop* event_loop, counter* ctr);
+write_record(counter* ctr);
 
 static void
-write_listener(as_error* err, void* udata, as_event_loop* event_loop)
+write_listener(as_error* err, void* udata)
 {
 	counter* ctr = udata;
 	ctr->completed++;
@@ -209,13 +209,13 @@ write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	if (ctr->completed == ctr->max) {
 		// We have written all records.
 		// Read those records back.
-		read_all(event_loop, ctr);
+		read_all(ctr);
 		return;
 	}
 
 	// Check if need to write another record.
 	if (ctr->started < ctr->max) {
-		write_record(event_loop, ctr);
+		write_record(ctr);
 	}
 	else {
 		// There's one fewer command in the pipeline.
@@ -224,7 +224,7 @@ write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 }
 
 static void
-pipeline_listener(void* udata, as_event_loop* event_loop)
+pipeline_listener(void* udata)
 {
 	counter* ctr = udata;
 
@@ -232,12 +232,12 @@ pipeline_listener(void* udata, as_event_loop* event_loop)
 	if (ctr->pipe_count < ctr->queue_size && ctr->started < ctr->max) {
 		// Issue another write.
 		ctr->pipe_count++;
-		write_record(event_loop, ctr);
+		write_record(ctr);
 	}
 }
 
 static bool
-write_record(as_event_loop* event_loop, counter* ctr)
+write_record(counter* ctr)
 {
 	uint32_t id = ctr->started++;
 	char key_buf[64];
@@ -252,8 +252,8 @@ write_record(as_event_loop* event_loop, counter* ctr)
 
 	as_error err;
 
-	if (aerospike_key_put_async(as, &err, NULL, &key, &rec, write_listener, ctr, event_loop, pipeline_listener) != AEROSPIKE_OK) {
-		write_listener(&err, ctr, event_loop);
+	if (aerospike_key_put_async(as, &err, NULL, &key, &rec, write_listener, ctr, pipeline_listener) != AEROSPIKE_OK) {
+		write_listener(&err, ctr);
 		return false;
 	}
 	return true;

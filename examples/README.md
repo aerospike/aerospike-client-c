@@ -246,8 +246,6 @@ of the database, where a callback is made for each record found.
 
 These examples demonstrate particular asynchronous API calls.
 
-	as_event_create_loops()
-	as_event_close_loops()
 	aerospike_key_get_async()
 	aerospike_key_put_async()
 	aerospike_batch_read_async()

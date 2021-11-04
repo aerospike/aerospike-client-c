@@ -473,24 +473,6 @@ example_log_callback(as_log_level level, const char * func, const char * file, u
 }
 
 //==========================================================
-// Initialize asynchronous event loop
-//
-bool
-example_create_event_loop()
-{
-#if AS_EVENT_LIB_DEFINED
-	// Initialize logging.
-	as_log_set_callback(example_log_callback);
-
-	if (as_event_create_loops(1)) {
-		return true;
-	}
-#endif
-	LOG("Event library not defined. Skip async example.");
-	return false;
-}
-
-//==========================================================
 // Connect/Disconnect
 //
 
@@ -531,7 +513,6 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	
 	if (! as_config_add_hosts(&config, g_host, g_port)) {
 		printf("Invalid host(s) %s\n", g_host);
-		as_event_close_loops();
 		exit(-1);
 	}
 	
@@ -549,7 +530,6 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	// done after calling example_get_opts(), so it's ok to exit on failure.
 	if (aerospike_connect(p_as, &err) != AEROSPIKE_OK) {
 		LOG("aerospike_connect() returned %d - %s", err.code, err.message);
-		as_event_close_loops();
 		aerospike_destroy(p_as);
 		exit(-1);
 	}

@@ -143,15 +143,12 @@ typedef bool (*aerospike_scan_foreach_callback)(const as_val* val, void* udata);
  * @param record 		Returned record.  Use as_val_reserve() on record to prevent calling function from destroying.
  * 						The record will be null on final scan completion or scan error.
  * @param udata 		User data that is forwarded from asynchronous command function.
- * @param event_loop 	Event loop that this command was executed on.  Use this event loop when running
- * 						nested asynchronous commands when single threaded behavior is desired for the
- * 						group of commands.
  *
  * @return `true` to continue to the next value. Otherwise, the scan will end.
  *
  * @ingroup scan_operations
  */
-typedef bool (*as_async_scan_listener)(as_error* err, as_record* record, void* udata, as_event_loop* event_loop);
+typedef bool (*as_async_scan_listener)(as_error* err, as_record* record, void* udata);
 
 /******************************************************************************
  * FUNCTIONS
@@ -377,7 +374,7 @@ aerospike_scan_partitions(
  * not need to be thread safe.
  *
  * ~~~~~~~~~~{.c}
- * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * bool my_listener(as_error* err, as_record* record, void* udata)
  * {
  * 	   if (err) {
  * 	       printf("Scan failed: %d %s\n", err->code, err->message);
@@ -408,7 +405,6 @@ aerospike_scan_partitions(
  * @param scan_id		The id for the scan job.  Use NULL if the scan_id will not be used.
  * @param listener		The function to be called for each record scanned.
  * @param udata			User-data to be passed to the callback.
- * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *
  * @return AEROSPIKE_OK if async scan succesfully queued. Otherwise an error.
  *
@@ -417,7 +413,7 @@ aerospike_scan_partitions(
 AS_EXTERN as_status
 aerospike_scan_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
-	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	as_async_scan_listener listener, void* udata
 	);
 	
 /**
@@ -427,7 +423,7 @@ aerospike_scan_async(
  * been scanned, then callback will be called with a NULL value for the record.
  *
  * ~~~~~~~~~~{.c}
- * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * bool my_listener(as_error* err, as_record* record, void* udata)
  * {
  * 	   if (err) {
  * 	       printf("Scan failed: %d %s\n", err->code, err->message);
@@ -468,7 +464,6 @@ aerospike_scan_async(
  * @param node_name		The node name to scan.
  * @param listener		The function to be called for each record scanned.
  * @param udata			User-data to be passed to the callback.
- * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *
  * @return AEROSPIKE_OK if async scan succesfully queued. Otherwise an error.
  *
@@ -477,7 +472,7 @@ aerospike_scan_async(
 AS_EXTERN as_status
 aerospike_scan_node_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
-	const char* node_name, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	const char* node_name, as_async_scan_listener listener, void* udata
 	);
 
 /**
@@ -490,7 +485,7 @@ aerospike_scan_node_async(
  * not need to be thread safe.
  *
  * ~~~~~~~~~~{.c}
- * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * bool my_listener(as_error* err, as_record* record, void* udata)
  * {
  * 	   if (err) {
  * 	       printf("Scan failed: %d %s\n", err->code, err->message);
@@ -524,7 +519,6 @@ aerospike_scan_node_async(
  * @param pf			Partition filter.
  * @param listener		The function to be called for each record scanned.
  * @param udata			User-data to be passed to the callback.
- * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *
  * @return AEROSPIKE_OK if async scan succesfully queued. Otherwise an error.
  *
@@ -533,7 +527,7 @@ aerospike_scan_node_async(
 AS_EXTERN as_status
 aerospike_scan_partitions_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
-	as_partition_filter* pf, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	as_partition_filter* pf, as_async_scan_listener listener, void* udata
 	);
 
 #ifdef __cplusplus

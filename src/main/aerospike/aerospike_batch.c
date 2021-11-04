@@ -149,7 +149,7 @@ static void
 as_batch_complete_async(as_event_executor* executor)
 {
 	as_async_batch_executor* e = (as_async_batch_executor*)executor;
-	e->listener(executor->err, e->records, executor->udata, executor->event_loop);
+	e->listener(executor->err, e->records, executor->udata);
 }
 
 static inline bool
@@ -2030,14 +2030,14 @@ aerospike_batch_read(
 as_status
 aerospike_batch_read_async(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records,
-	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
+	as_async_batch_listener listener, void* udata
 	)
 {
 	as_error_reset(err);
 	
 	// Check for empty batch.
 	if (records->list.size == 0) {
-		listener(0, records, udata, event_loop);
+		listener(0, records, udata);
 		return AEROSPIKE_OK;
 	}
 	

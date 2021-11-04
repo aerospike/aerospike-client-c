@@ -135,15 +135,12 @@ typedef bool (*aerospike_query_foreach_callback)(const as_val* val, void* udata)
  * @param record 		Returned record.  Use as_val_reserve() on record to prevent calling function from destroying.
  * 						The record will be null on final query completion or query error.
  * @param udata 		User data that is forwarded from asynchronous command function.
- * @param event_loop 	Event loop that this command was executed on.  Use this event loop when running
- * 						nested asynchronous commands when single threaded behavior is desired for the
- * 						group of commands.
  *
  * @return `true` to continue to the next value. Otherwise, the query will end.
  *
  * @ingroup query_operations
  */
-typedef bool (*as_async_query_record_listener)(as_error* err, as_record* record, void* udata, as_event_loop* event_loop);
+typedef bool (*as_async_query_record_listener)(as_error* err, as_record* record, void* udata);
 
 /******************************************************************************
  * FUNCTIONS
@@ -190,7 +187,7 @@ aerospike_query_foreach(
  * in async mode.
  *
  * ~~~~~~~~~~{.c}
- * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * bool my_listener(as_error* err, as_record* record, void* udata)
  * {
  * 	   if (err) {
  * 	       printf("Query failed: %d %s\n", err->code, err->message);
@@ -224,7 +221,6 @@ aerospike_query_foreach(
  * @param query			The query to execute against the cluster.
  * @param listener		The function to be called for each returned value.
  * @param udata			User-data to be passed to the callback.
- * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  *
  * @return AEROSPIKE_OK if async query succesfully queued. Otherwise an error.
  *
@@ -233,7 +229,7 @@ aerospike_query_foreach(
 AS_EXTERN as_status
 aerospike_query_async(
 	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
-	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop
+	as_async_query_record_listener listener, void* udata
 	);
 	
 /**

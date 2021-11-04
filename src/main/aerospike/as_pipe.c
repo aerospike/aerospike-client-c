@@ -520,7 +520,7 @@ as_pipe_read_start(as_event_command* cmd)
 	as_queued_pipe_cb cb;
 
 	while (as_queue_pop(q, &cb)) {
-		cb.listener(cb.udata, loop);
+		cb.listener(cb.udata);
 	}
 
 	loop->pipe_cb_calling = false;

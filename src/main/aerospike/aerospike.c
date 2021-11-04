@@ -61,6 +61,12 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 	else {
 		as_config_init(&as->config);
 	}
+
+#if AS_EVENT_LIB_DEFINED
+	//todo: use capacity from config
+	as_event_create_loops(&as->event, 1);
+#endif
+
 	return as;
 }
 
@@ -227,7 +233,7 @@ aerospike_connect(aerospike* as, as_error* err)
 	if (status == AEROSPIKE_OK) {
 		as_log_info("Connection established for instance:%p cluster:%p ", as, as->cluster);
 	} else {
-		as_log_error("Failed to establish connectioninstance:%p status:dp ", as, status);
+		as_log_error("Failed to establish connection instance:%p status:%d", as, status);
 	}
 	return status;
 }

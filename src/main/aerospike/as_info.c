@@ -145,7 +145,7 @@ as_info_command_node(
 as_status
 as_info_command_node_async(
 	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, const char* command,
-	as_async_info_listener listener, void* udata, as_event_loop* event_loop
+	as_async_info_listener listener, void* udata
 	)
 {
 	as_error_reset(err);
@@ -155,7 +155,7 @@ as_info_command_node_async(
 	}
 
 	size_t size = strlen(command);
-	as_event_command* cmd = as_async_info_command_create(node, policy, listener, udata, event_loop, size);
+	as_event_command* cmd = as_async_info_command_create(node, policy, listener, udata, size);
 	uint8_t* p = cmd->buf + sizeof(uint64_t);
 
 	memcpy(p, command, size);

@@ -74,7 +74,7 @@ after(atf_suite* suite)
  *****************************************************************************/
 
 static void
-top_score_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+top_score_callback(as_error* err, as_record* rec, void* udata)
 {
 	assert_success_async(&monitor, err, udata);
     assert_async(&monitor, rec);
@@ -96,7 +96,7 @@ top_score_callback(as_error* err, as_record* rec, void* udata, as_event_loop* ev
 }
 
 static void
-write_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+write_callback(as_error* err, as_record* rec, void* udata)
 {
 	assert_success_async(&monitor, err, udata);
 	
@@ -108,7 +108,7 @@ write_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_
 	as_operations_add_map_get_by_rank_range(&ops, BIN_NAME, -1, 1, AS_MAP_RETURN_KEY_VALUE);
 		
 	as_error e;
-	as_status status = aerospike_key_operate_async(as, &e, NULL, &key, &ops, top_score_callback, __result__, event_loop, NULL);
+	as_status status = aerospike_key_operate_async(as, &e, NULL, &key, &ops, top_score_callback, __result__, NULL);
 	as_operations_destroy(&ops);
 	assert_status_async(&monitor, status, &e);
 }

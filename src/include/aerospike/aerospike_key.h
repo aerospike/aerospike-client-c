@@ -85,7 +85,7 @@ aerospike_key_get(
  * Asynchronously look up a record by key and return all bins.
  *
  * ~~~~~~~~~~{.c}
- * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * void my_listener(as_error* err, as_record* record, void* udata)
  * {
  *     if (err) {
  *         printf("Command failed: %d %s\n", err->code, err->message);
@@ -109,7 +109,6 @@ aerospike_key_get(
  * @param key				The key of the record.
  * @param listener			User function to be called with command results.
  * @param udata 			User data to be forwarded to user callback.
- * @param event_loop 		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -121,7 +120,7 @@ aerospike_key_get(
 AS_EXTERN as_status
 aerospike_key_get_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_async_record_listener listener, void* udata,
 	as_pipe_listener pipe_listener
 	);
 
@@ -167,7 +166,7 @@ aerospike_key_select(
  * Asynchronously lookup a record by key, then return specified bins.
  *
  * ~~~~~~~~~~{.c}
- * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * void my_listener(as_error* err, as_record* record, void* udata)
  * {
  *     if (err) {
  * 	       printf("Command failed: %d %s\n", err->code, err->message);
@@ -194,7 +193,6 @@ aerospike_key_select(
  * @param bins				The bins to select. A NULL terminated array of NULL terminated strings.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -206,7 +204,7 @@ aerospike_key_select(
 AS_EXTERN as_status
 aerospike_key_select_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
+	as_async_record_listener listener, void* udata, as_pipe_listener pipe_listener
 	);
 
 /**
@@ -255,7 +253,7 @@ aerospike_key_exists(
  * will be populated if the record exists.
  *
  * ~~~~~~~~~~{.c}
- * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * void my_listener(as_error* err, as_record* record, void* udata)
  * {
  * 	   if (err) {
  * 	       printf("Command failed: %d %s\n", err->code, err->message);
@@ -284,7 +282,6 @@ aerospike_key_exists(
  * @param key				The key of the record.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -296,7 +293,7 @@ aerospike_key_exists(
 AS_EXTERN as_status
 aerospike_key_exists_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_async_record_listener listener, void* udata,
 	as_pipe_listener pipe_listener
 	);
 
@@ -337,7 +334,7 @@ aerospike_key_put(
  * Asynchronously store a record in the cluster.
  *
  * ~~~~~~~~~~{.c}
- * void my_listener(as_error* err, void* udata, as_event_loop* event_loop)
+ * void my_listener(as_error* err, void* udata)
  * {
  * 	   if (err) {
  * 	       printf("Command failed: %d %s\n", err->code, err->message);
@@ -365,7 +362,6 @@ aerospike_key_put(
  * @param rec				The record containing the data to be written.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -377,7 +373,7 @@ aerospike_key_put(
 AS_EXTERN as_status
 aerospike_key_put_async(
 	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
+	as_async_write_listener listener, void* udata, as_pipe_listener pipe_listener
 	);
 
 /**
@@ -410,7 +406,7 @@ aerospike_key_remove(
  * Asynchronously remove a record from the cluster.
  *
  * ~~~~~~~~~~{.c}
- * void my_listener(as_error* err, void* udata, as_event_loop* event_loop)
+ * void my_listener(as_error* err, void* udata)
  * {
  * 	   if (err) {
  * 	       printf("Command failed: %d %s\n", err->code, err->message);
@@ -431,7 +427,6 @@ aerospike_key_remove(
  * @param key				The key of the record.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -443,7 +438,7 @@ aerospike_key_remove(
 AS_EXTERN as_status
 aerospike_key_remove_async(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_async_write_listener listener, void* udata,
 	as_pipe_listener pipe_listener
 	);
 
@@ -492,7 +487,7 @@ aerospike_key_operate(
  * Asynchronously lookup a record by key, then perform specified operations.
  *
  * ~~~~~~~~~~{.c}
- * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * void my_listener(as_error* err, as_record* record, void* udata)
  * {
  * 	   if (err) {
  *        printf("Command failed: %d %s\n", err->code, err->message);
@@ -524,7 +519,6 @@ aerospike_key_operate(
  * @param ops				The operations to perform on the record.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -536,7 +530,7 @@ aerospike_key_operate(
 AS_EXTERN as_status
 aerospike_key_operate_async(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
+	as_async_record_listener listener, void* udata, as_pipe_listener pipe_listener
 	);
 
 /**
@@ -587,7 +581,7 @@ aerospike_key_apply(
  * Asynchronously lookup a record by key, then apply the UDF.
  *
  * ~~~~~~~~~~{.c}
- * void my_listener(as_error* err, as_val* val, void* udata, as_event_loop* event_loop)
+ * void my_listener(as_error* err, as_val* val, void* udata)
  * {
  * 	   if (err) {
  * 	       printf("Command failed: %d %s\n", err->code, err->message);
@@ -619,7 +613,6 @@ aerospike_key_apply(
  * @param arglist			The arguments for the function.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -632,7 +625,7 @@ AS_EXTERN as_status
 aerospike_key_apply_async(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
-	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+	as_async_value_listener listener, void* udata,
 	as_pipe_listener pipe_listener
 	);
 
@@ -643,14 +636,14 @@ aerospike_key_apply_async(
 AS_EXTERN as_status
 aerospike_key_put_async_ex(
 	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener,
+	as_async_write_listener listener, void* udata, as_pipe_listener pipe_listener,
 	size_t* length, size_t* comp_length
 	);
 
 AS_EXTERN as_status
 aerospike_key_remove_async_ex(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
-	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_async_write_listener listener, void* udata,
 	as_pipe_listener pipe_listener, size_t* length
 	);
 /**

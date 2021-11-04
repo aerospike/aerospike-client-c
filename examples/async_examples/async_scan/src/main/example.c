@@ -48,10 +48,10 @@ static uint32_t max_commands = 100;
 //
 
 void insert_records(uint32_t* counter);
-bool insert_record(as_event_loop* event_loop, void* udata, uint32_t index);
-void insert_listener(as_error* err, void* udata, as_event_loop* event_loop);
-void run_scan(as_event_loop* event_loop);
-bool scan_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop);
+bool insert_record(void* udata, uint32_t index);
+void insert_listener(as_error* err, void* udata);
+void run_scan();
+bool scan_listener(as_error* err, as_record* record, void* udata);
 
 int
 main(int argc, char* argv[])
@@ -64,11 +64,6 @@ main(int argc, char* argv[])
 	// Initialize monitor.
 	as_monitor_init(&monitor);
 	as_monitor_begin(&monitor);
-
-	// Create an asynchronous event loop.
-	if (! example_create_event_loop()) {
-		return 0;
-	}
 
 	// Connect to the aerospike database cluster.
 	example_connect_to_aerospike(&as);
@@ -88,28 +83,24 @@ main(int argc, char* argv[])
 	// Cleanup and shutdown.
 	example_remove_test_records(&as);
 	example_cleanup(&as);
-	as_event_close_loops();
 	return 0;
 }
 
 void
 insert_records(uint32_t* counter)
 {
-	// Insert all records on same event loop.
-	as_event_loop* event_loop = as_event_loop_get();	
-		
 	// Put up to max_commands on the async queue at a time.
 	uint32_t block_size = g_n_keys >= max_commands ? max_commands : g_n_keys;
 
 	for (uint32_t i = 0; i < block_size; i++) {
-		if (! insert_record(event_loop, counter, i)) {
+		if (! insert_record(counter, i)) {
 			break;
 		}
 	}
 }
 
 bool
-insert_record(as_event_loop* event_loop, void* udata, uint32_t index)
+insert_record(void* udata, uint32_t index)
 {
 	// No need to destroy a stack as_key object, if we only use as_key_init_int64().
 	as_key key;
@@ -127,15 +118,15 @@ insert_record(as_event_loop* event_loop, void* udata, uint32_t index)
 
 	// Write a record to the database.
 	as_error err;
-	if (aerospike_key_put_async(&as, &err, NULL, &key, &rec, insert_listener, udata, event_loop, NULL) != AEROSPIKE_OK) {
-		insert_listener(&err, udata, event_loop);
+	if (aerospike_key_put_async(&as, &err, NULL, &key, &rec, insert_listener, udata, NULL) != AEROSPIKE_OK) {
+		insert_listener(&err, udata);
 		return false;
 	}
 	return true;
 }
 
 void
-insert_listener(as_error* err, void* udata, as_event_loop* event_loop)
+insert_listener(as_error* err, void* udata)
 {
 	uint32_t* counter = udata;
 
@@ -149,7 +140,7 @@ insert_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	if (++(*counter) == g_n_keys) {
 		// We have reached max number of records.
 		LOG("inserted %u keys", *counter);
-		run_scan(event_loop);
+		run_scan();
 		return;
 	}
 
@@ -157,12 +148,12 @@ insert_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	uint32_t next = *counter + max_commands - 1;
 
 	if (next < g_n_keys) {
-		insert_record(event_loop, udata, next);
+		insert_record(udata, next);
 	}
 }
 
 void
-run_scan(as_event_loop* event_loop)
+run_scan()
 {
 	// Create an as_scan object.
 	as_scan scan;
@@ -176,16 +167,16 @@ run_scan(as_event_loop* event_loop)
 
 	// Execute the scan.
 	as_error err;
-	if (aerospike_scan_async(&as, &err, &p, &scan, NULL, scan_listener, NULL, event_loop)
+	if (aerospike_scan_async(&as, &err, &p, &scan, NULL, scan_listener, NULL)
 		!= AEROSPIKE_OK) {
-		scan_listener(&err, NULL, NULL, event_loop);
+		scan_listener(&err, NULL, NULL);
 	}
 
 	as_scan_destroy(&scan);
 }
 
 bool
-scan_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+scan_listener(as_error* err, as_record* record, void* udata)
 {
 	if (err) {
 		LOG("aerospike_scan_async() returned %d - %s", err->code, err->message);

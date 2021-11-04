@@ -58,7 +58,7 @@ as_info_command_node(
 AS_EXTERN as_status
 as_info_command_node_async(
 	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, const char* command,
-	as_async_info_listener listener, void* udata, as_event_loop* event_loop
+	as_async_info_listener listener, void* udata
 	);
 
 /**

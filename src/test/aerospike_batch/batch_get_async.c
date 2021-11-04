@@ -124,7 +124,7 @@ after(atf_suite* suite)
 
 static void
 batch_callback(
-	as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop
+	as_error* err, as_batch_read_records* records, void* udata
 	)
 {
 	if (err) {
@@ -249,7 +249,7 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 
 static void
 batch_async_list_operate_cb(
-	as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop
+	as_error* err, as_batch_read_records* records, void* udata
 	)
 {
 	if (err) {

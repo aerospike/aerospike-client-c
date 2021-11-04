@@ -1122,14 +1122,13 @@ as_event_query_complete(as_event_command* cmd)
 
 	if (executor->cluster_key) {
 		// Verify migrations did not occur during query.
-		as_event_loop* event_loop = cmd->event_loop;
 		as_node* node = cmd->node;
 
 		// Reserve node again because the node will be released in as_event_command_release().
 		// Node must be available for as_query_validate_end_async().
 		as_node_reserve(node);
 		as_event_command_release(cmd);
-		as_query_validate_end_async(executor, node, event_loop);
+		as_query_validate_end_async(executor, node);
 	}
 	else {
 		as_event_command_release(cmd);
@@ -1169,16 +1168,16 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 
 	switch (cmd->type) {
 		case AS_ASYNC_TYPE_WRITE:
-			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);
+			((as_async_write_command*)cmd)->listener(err, cmd->udata);
 			break;
 		case AS_ASYNC_TYPE_RECORD:
-			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata);
 			break;
 		case AS_ASYNC_TYPE_VALUE:
-			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata);
 			break;
 		case AS_ASYNC_TYPE_INFO:
-			((as_async_info_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			((as_async_info_command*)cmd)->listener(err, 0, cmd->udata);
 			break;
 		case AS_ASYNC_TYPE_CONNECTOR:
 			connector_error(cmd, err);
@@ -1271,7 +1270,7 @@ as_event_command_parse_header(as_event_command* cmd)
 	
 	if (msg->result_code == AEROSPIKE_OK) {
 		as_event_response_complete(cmd);
-		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
+		((as_async_write_command*)cmd)->listener(0, cmd->udata);
 		as_event_command_release(cmd);
 	}
 	else {
@@ -1308,7 +1307,7 @@ as_event_command_parse_result(as_event_command* cmd)
 
 				if (status == AEROSPIKE_OK) {
 					as_event_response_complete(cmd);
-					((as_async_record_command*)cmd)->listener(0, rec, cmd->udata, cmd->event_loop);
+					((as_async_record_command*)cmd)->listener(0, rec, cmd->udata);
 					as_event_command_release(cmd);
 				}
 				else {
@@ -1336,7 +1335,7 @@ as_event_command_parse_result(as_event_command* cmd)
 
 				if (status == AEROSPIKE_OK) {
 					as_event_response_complete(cmd);
-					((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata, cmd->event_loop);
+					((as_async_record_command*)cmd)->listener(0, &rec, cmd->udata);
 					as_event_command_release(cmd);
 				}
 				else {
@@ -1380,7 +1379,7 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 			
 			if (status == AEROSPIKE_OK) {
 				as_event_response_complete(cmd);
-				((as_async_value_command*)cmd)->listener(0, val, cmd->udata, cmd->event_loop);
+				((as_async_value_command*)cmd)->listener(0, val, cmd->udata);
 				as_event_command_release(cmd);
 				as_val_destroy(val);
 			}
@@ -1419,7 +1418,7 @@ as_event_command_parse_info(as_event_command* cmd)
 
 	if (status == AEROSPIKE_OK) {
 		as_event_response_complete(cmd);
-		((as_async_info_command*)cmd)->listener(NULL, response, cmd->udata, cmd->event_loop);
+		((as_async_info_command*)cmd)->listener(NULL, response, cmd->udata);
 		as_event_command_release(cmd);
 	}
 	else {

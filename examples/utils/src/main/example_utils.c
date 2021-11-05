@@ -482,31 +482,6 @@ example_log_callback(as_log_level level, const char * func, const char * file, u
 void
 example_connect_to_aerospike(aerospike* p_as)
 {
-	example_connect_to_aerospike_with_udf_config(p_as, NULL);
-}
-
-//------------------------------------------------
-// Connect to database cluster, setting UDF
-// configuration.
-//
-void
-example_connect_to_aerospike_with_udf_config(aerospike* p_as,
-		const char* lua_user_path)
-{
-	// Initialize logging.
-	as_log_set_callback(example_log_callback);
-
-	// Initialize default lua configuration.
-	as_config_lua lua;
-	as_config_lua_init(&lua);
-	
-	if (lua_user_path) {
-		strcpy(lua.user_path, lua_user_path);
-	}
-	
-	// Initialize global lua configuration.
-	aerospike_init_lua(&lua);
-		
 	// Initialize cluster configuration.
 	as_config config;
 	as_config_init(&config);
@@ -533,6 +508,31 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 		aerospike_destroy(p_as);
 		exit(-1);
 	}
+}
+
+//------------------------------------------------
+// Connect to database cluster, setting UDF
+// configuration.
+//
+void
+example_connect_to_aerospike_with_udf_config(aerospike* p_as,
+		const char* lua_user_path)
+{
+	// Initialize logging.
+	as_log_set_callback(example_log_callback);
+
+	// Initialize default lua configuration.
+	as_config_lua lua;
+	as_config_lua_init(&lua);
+	
+	if (lua_user_path) {
+		strcpy(lua.user_path, lua_user_path);
+	}
+	
+	// Initialize global lua configuration.
+	aerospike_init_lua(&lua);
+	
+	return example_connect_to_aerospike(p_as);
 }
 
 //------------------------------------------------

@@ -35,6 +35,7 @@ as_policies_init(as_policies* p)
 	as_policy_query_init(&p->query);
 	as_policy_info_init(&p->info);
 	as_policy_admin_init(&p->admin);
+	as_policy_event_init(&p->event);
 	return p;
 }
 

@@ -1012,6 +1012,56 @@ typedef struct as_policy_admin_s {
 } as_policy_admin;
 
 /**
+ * Asynchronous event loop configuration.
+ *
+ * @ingroup async_events
+ */
+typedef struct as_policy_event {
+	/**
+	 * Maximum number of async commands that can be processed in each event loop at any point in
+	 * time. Each executing non-pipeline async command requires a socket connection.  Consuming too
+	 * many sockets can negatively affect application reliability and performance.  If the user does
+	 * not limit async command count in their application, this field should be used to enforce a
+	 * limit internally in the client.
+	 *
+	 * If this limit is reached, the next async command will be placed on the event loop's delay
+	 * queue for later execution.  If this limit is zero, all async commands will be executed
+	 * immediately and the delay queue will not be used.
+	 *
+	 * If defined, a reasonable value is 40.  The optimal value will depend on cpu count, cpu speed,
+	 * network bandwitdh and the number of event loops employed.
+	 *
+	 * Default: 0 (execute all async commands immediately)
+	 */
+	int max_commands_in_process;
+
+	/**
+	 * Maximum number of async commands that can be stored in each event loop's delay queue for
+	 * later execution.  Queued commands consume memory, but they do not consume sockets. This
+	 * limit should be defined when it's possible that the application executes so many async
+	 * commands that memory could be exhausted.
+	 *
+	 * If this limit is reached, the next async command will be rejected with error code
+	 * AEROSPIKE_ERR_ASYNC_QUEUE_FULL.  If this limit is zero, all async commands will be accepted
+	 * into the delay queue.
+	 *
+	 * The optimal value will depend on your application's magnitude of command bursts and the
+	 * amount of memory available to store commands.
+	 *
+	 * Default: 0 (no delay queue limit)
+	 */
+	uint32_t max_commands_in_queue;
+
+	/**
+	 * Initial capacity of each event loop's delay queue.  The delay queue can resize beyond this
+	 * initial capacity.
+	 *
+	 * Default: 256 (if delay queue is used)
+	 */
+	uint32_t queue_initial_capacity;
+} as_policy_event;
+
+/**
  * Struct of all policy values and operation policies. 
  * 
  * This is utilized by as_config to define default values for policies.
@@ -1070,6 +1120,10 @@ typedef struct as_policies_s {
 	 */
 	as_policy_admin admin;
 
+	/**
+	 * The default async eventloop policy.
+	 */
+	as_policy_event event;
 } as_policies;
 
 /******************************************************************************
@@ -1457,6 +1511,19 @@ as_policy_admin_init(as_policy_admin* p)
 {
 	p->timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
 	return p;
+}
+
+/**
+ * Initialize event loop configuration variables.
+ *
+ * @ingroup async_events
+ */
+static inline void
+as_policy_event_init(as_policy_event* policy)
+{
+	policy->max_commands_in_process = 0;
+	policy->max_commands_in_queue = 0;
+	policy->queue_initial_capacity = 256;
 }
 
 /**

@@ -29,8 +29,8 @@
 #include <pthread.h>
 
 #if defined(_MSC_VER)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+	#define WIN32_LEAN_AND_MEAN
+	#include <windows.h>
 #endif
 
 pthread_mutex_t init_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -42,15 +42,14 @@ static bool lua_initialized = false;
 static bool library_initialized = false;
 #endif
 
-void
-as_config_destroy(as_config* config);
+void as_config_destroy(as_config *config);
 
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static aerospike*
-aerospike_defaults(aerospike* as, bool free, as_config* config)
+static aerospike *aerospike_defaults(aerospike *as, bool free,
+									 as_config *config)
 {
 	as->_free = free;
 	as->cluster = NULL;
@@ -74,37 +73,40 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
  * FUNCTIONS
  *****************************************************************************/
 
-as_status
-aerospike_library_init(as_error* err)
+as_status aerospike_library_init(as_error *err)
 {
 #if defined(_MSC_VER) || defined(AS_USE_LIBEVENT)
 	pthread_mutex_lock(&init_lock);
 
 	if (!library_initialized) {
-#if defined(_MSC_VER)
+	#if defined(_MSC_VER)
 		if (!cf_clock_init()) {
 			pthread_mutex_unlock(&init_lock);
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "cf_clock_init() failed");
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+										"cf_clock_init() failed");
 		}
-#endif
+	#endif
 
-#if defined(AS_USE_LIBEVENT)
-		if (! as_event_single_thread) {
-#if defined(_MSC_VER)
+	#if defined(AS_USE_LIBEVENT)
+		if (!as_event_single_thread) {
+		#if defined(_MSC_VER)
 			int evthread_use_windows_threads();
 			if (evthread_use_windows_threads() == -1) {
 				pthread_mutex_unlock(&init_lock);
-				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "evthread_use_windows_threads() failed");
+				return as_error_set_message(
+					err, AEROSPIKE_ERR_CLIENT,
+					"evthread_use_windows_threads() failed");
 			}
-#else
+		#else
 			int evthread_use_pthreads();
 			if (evthread_use_pthreads() == -1) {
 				pthread_mutex_unlock(&init_lock);
-				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "evthread_use_pthreads() failed");
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+											"evthread_use_pthreads() failed");
 			}
-#endif
+		#endif
 		}
-#endif
+	#endif
 		library_initialized = true;
 	}
 	pthread_mutex_unlock(&init_lock);
@@ -116,8 +118,7 @@ aerospike_library_init(as_error* err)
  * Initialize the aerospike object on the stack
  * @returns the initialized aerospike object
  */
-aerospike*
-aerospike_init(aerospike* as, as_config* config)
+aerospike *aerospike_init(aerospike *as, as_config *config)
 {
 	return aerospike_defaults(as, false, config);
 }
@@ -126,10 +127,9 @@ aerospike_init(aerospike* as, as_config* config)
  * Creates a new aerospike object on the heap
  * @returns a new aerospike object
  */
-aerospike*
-aerospike_new(as_config* config)
+aerospike *aerospike_new(as_config *config)
 {
-	aerospike* as = cf_malloc(sizeof(aerospike));
+	aerospike *as = cf_malloc(sizeof(aerospike));
 
 	if (!as) {
 		as_config_destroy(config);
@@ -141,24 +141,21 @@ aerospike_new(as_config* config)
 /**
  * Initialize global lua configuration.
  */
-void
-aerospike_init_lua(as_config_lua* config)
+void aerospike_init_lua(as_config_lua *config)
 {
-    mod_lua_config lua = {
-        .server_mode    = false,
-        .cache_enabled  = config->cache_enabled,
-        .user_path      = {0}
-    };
-    as_strncpy(lua.user_path, config->user_path, sizeof(lua.user_path));
-    
-    as_module_configure(&mod_lua, &lua);
+	mod_lua_config lua = {.server_mode = false,
+						  .cache_enabled = config->cache_enabled,
+						  .user_path = {0}};
+	as_strncpy(lua.user_path, config->user_path, sizeof(lua.user_path));
+
+	as_module_configure(&mod_lua, &lua);
 	lua_initialized = true;
 }
 
 /**
  * Destroy the aerospike instance
  */
-void aerospike_destroy(aerospike* as)
+void aerospike_destroy(aerospike *as)
 {
 	as_config_destroy(&as->config);
 
@@ -170,8 +167,7 @@ void aerospike_destroy(aerospike* as)
 /**
  * Connect to the cluster
  */
-as_status
-aerospike_connect(aerospike* as, as_error* err)
+as_status aerospike_connect(aerospike *as, as_error *err)
 {
 	as_error_reset(err);
 
@@ -184,33 +180,38 @@ aerospike_connect(aerospike* as, as_error* err)
 	// This is not 100% bulletproof against, say, simultaneously calling
 	// aerospike_connect() from two different threads with the same as object...
 	if (as->cluster) {
-		as_log_info("This connect has already setup cluster:%p, so using the same", as->cluster);
+		as_log_info(
+			"This connect has already setup cluster:%p, so using the same",
+			as->cluster);
 		return AEROSPIKE_OK;
 	}
 
-	as_config* config = &as->config;
-	as_vector* hosts = config->hosts;
-	
+	as_config *config = &as->config;
+	as_vector *hosts = config->hosts;
+
 	// Verify seed hosts are specified.
 	if (hosts == NULL || hosts->size == 0) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No hosts provided");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+									"No hosts provided");
 	}
 
 	// Verify max_socket_idle.
 	if (config->max_socket_idle <= 0 || config->max_socket_idle > 86400) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "max_socket_idle must be > 0 and <= 86400");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+									"max_socket_idle must be > 0 and <= 86400");
 	}
 
 	// Set TLS names to default when enabled.
 	if (config->tls.enable) {
 		for (uint32_t i = 0; i < hosts->size; i++) {
-			as_host* host = as_vector_get(hosts, i);
-			
-			if (! host->name) {
-				return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Seed host is null");
+			as_host *host = as_vector_get(hosts, i);
+
+			if (!host->name) {
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+											"Seed host is null");
 			}
-			
-			if (! host->tls_name) {
+
+			if (!host->tls_name) {
 				if (config->cluster_name) {
 					host->tls_name = cf_strdup(config->cluster_name);
 				}
@@ -220,7 +221,7 @@ aerospike_connect(aerospike* as, as_error* err)
 			}
 		}
 	}
-	
+
 #if !defined USE_XDR
 	// Only change global lua configuration once.
 	if (!lua_initialized) {
@@ -231,37 +232,39 @@ aerospike_connect(aerospike* as, as_error* err)
 	// Create the cluster object.
 	status = as_cluster_create(as, &as->config, err, &as->cluster);
 	if (status == AEROSPIKE_OK) {
-		as_log_info("Connection established for instance:%p cluster:%p ", as, as->cluster);
-	} else {
-		as_log_error("Failed to establish connection instance:%p status:%d", as, status);
+		as_log_info("Connection established for instance:%p cluster:%p ", as,
+					as->cluster);
+	}
+	else {
+		as_log_error("Failed to establish connection instance:%p status:%d", as,
+					 status);
 	}
 	return status;
 }
 
-void as_event_close_cluster(as_cluster* cluster);
+void as_event_close_cluster(as_cluster *cluster);
 
 /**
  * Close connections to the cluster
  */
-as_status
-aerospike_close(aerospike* as, as_error* err)
+as_status aerospike_close(aerospike *as, as_error *err)
 {
 	// This is not 100% bulletproof against simultaneous aerospike_close() calls
 	// from different threads.
 	as_error_reset(err);
-	as_cluster* cluster = as->cluster;
-	
+	as_cluster *cluster = as->cluster;
+
 	//as_log_info("Connection getting closed for instance:%p cluster:%p ", as, as->cluster);
 
 	if (cluster) {
-		// async supported only for get/put and 
-	  	// its user responsiblity not to close while other operations are in progress
-#if 1 		
+		// async supported only for get/put and
+		// its user responsiblity not to close while other operations are in progress
+#if 1
 		if (as->event->loop_capacity > 0 && !as_event_single_thread) {
 			// Async configurations will attempt to wait till pending async commands have completed.
 			as_event_close_cluster(cluster);
 		}
-		else 
+		else
 #endif
 		{
 			// Close sync only configurations immediately.
@@ -272,37 +275,34 @@ aerospike_close(aerospike* as, as_error* err)
 	return err->code;
 }
 
-bool
-aerospike_cluster_is_connected(aerospike* as)
+bool aerospike_cluster_is_connected(aerospike *as)
 {
 	return as_cluster_is_connected(as->cluster);
 }
 
 extern bool as_socket_stop_on_interrupt;
 
-void
-aerospike_stop_on_interrupt(bool stop)
+void aerospike_stop_on_interrupt(bool stop)
 {
 	as_socket_stop_on_interrupt = stop;
 }
 
-as_status
-aerospike_truncate(
-	aerospike* as, as_error* err, as_policy_info* policy, const char* ns, const char* set,
-	uint64_t before_nanos
-	)
+as_status aerospike_truncate(aerospike *as, as_error *err,
+							 as_policy_info *policy, const char *ns,
+							 const char *set, uint64_t before_nanos)
 {
 	as_error_reset(err);
 
-	if (! policy) {
+	if (!policy) {
 		policy = &as->config.policies.info;
 	}
 
 	// Send truncate command to one node. That node will distribute the command to other nodes.
-	as_node* node = as_node_get_random(as->cluster);
+	as_node *node = as_node_get_random(as->cluster);
 
-	if (! node) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
+	if (!node) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+									"Failed to find server node.");
 	}
 
 	as_string_builder sb;
@@ -329,9 +329,10 @@ aerospike_truncate(
 	as_string_builder_append_char(&sb, '\n');
 
 	uint64_t deadline = as_socket_deadline(policy->timeout);
-	char* response;
+	char *response;
 
-	as_status status = as_info_command_node(err, node, sb.data, true, deadline, &response);
+	as_status status =
+		as_info_command_node(err, node, sb.data, true, deadline, &response);
 
 	if (status == AEROSPIKE_OK) {
 		cf_free(response);
@@ -341,29 +342,28 @@ aerospike_truncate(
 	return status;
 }
 
-as_status
-aerospike_reload_tls_config(aerospike* as, as_error* err)
+as_status aerospike_reload_tls_config(aerospike *as, as_error *err)
 {
 	as_error_reset(err);
 	return as_tls_config_reload(&as->config.tls, as->cluster->tls_ctx, err);
 }
 
-as_status
-aerospike_set_xdr_filter(
-	aerospike* as, as_error* err, as_policy_info* policy, const char* dc, const char* ns,
-	const char* filter_b64)
+as_status aerospike_set_xdr_filter(aerospike *as, as_error *err,
+								   as_policy_info *policy, const char *dc,
+								   const char *ns, const char *filter_b64)
 {
 	as_error_reset(err);
 
-	if (! policy) {
+	if (!policy) {
 		policy = &as->config.policies.info;
 	}
 
 	// Send truncate command to one node. That node will distribute the command to other nodes.
-	as_node* node = as_node_get_random(as->cluster);
+	as_node *node = as_node_get_random(as->cluster);
 
-	if (! node) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
+	if (!node) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+									"Failed to find server node.");
 	}
 
 	as_string_builder sb;
@@ -377,9 +377,10 @@ aerospike_set_xdr_filter(
 	as_string_builder_append_char(&sb, '\n');
 
 	uint64_t deadline = as_socket_deadline(policy->timeout);
-	char* response;
+	char *response;
 
-	as_status status = as_info_command_node(err, node, sb.data, true, deadline, &response);
+	as_status status =
+		as_info_command_node(err, node, sb.data, true, deadline, &response);
 
 	if (status == AEROSPIKE_OK) {
 		cf_free(response);
@@ -389,4 +390,3 @@ aerospike_set_xdr_filter(
 	as_node_release(node);
 	return status;
 }
-

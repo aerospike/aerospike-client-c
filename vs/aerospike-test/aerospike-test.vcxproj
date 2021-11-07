@@ -271,7 +271,6 @@
     <ClCompile Include="..\..\src\test\aerospike_udf\udf_types.c" />
     <ClCompile Include="..\..\src\test\exp_operate.c" />
     <ClCompile Include="..\..\src\test\filter_exp.c" />
-    <ClCompile Include="..\..\src\test\predexp.c" />
     <ClCompile Include="..\..\src\test\test.c" />
     <ClCompile Include="..\..\src\test\util\consumer_stream.c" />
     <ClCompile Include="..\..\src\test\util\index_util.c" />

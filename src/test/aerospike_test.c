@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -401,7 +401,6 @@ PLAN(aerospike_test)
 	// filter expressions
 	plan_add(filter_exp);
 	plan_add(exp_operate);
-	plan_add(predexp);
 
 	// aerospike_info module
 	plan_add(info_basics);

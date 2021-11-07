@@ -126,8 +126,7 @@ as_partition_filter_set_range(as_partition_filter* pf, uint32_t begin, uint32_t 
 }
 
 /**
- * Filter by status of all partitions obtained from a previous scan that was terminated
- * before reading all records.
+ * Set partitions status from a app/user input before reading all records.
  *
  * @param pf			Partition filter.
  * @param parts_all		Completion status of all partitions.

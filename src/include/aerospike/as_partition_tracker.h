@@ -106,9 +106,10 @@ as_partition_tracker_part_done(as_cluster* cluster, as_partition_tracker* pt, as
 
 	if (digest->init) {
 		part_id = as_partition_getid(digest->value, cluster->n_partitions);
-		ps->parts[part_id].digest = *digest;
+		ps->parts[part_id - ps->part_begin].digest = *digest;
+		ps->parts[part_id - ps->part_begin].done = true;
+		np->record_count++;
 	}
-	np->record_count++;
 	np->parts_received++;
 }
 

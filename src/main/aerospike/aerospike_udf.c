@@ -26,7 +26,6 @@
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_crypto.h>
 #include <stdio.h>
-#include <openssl/sha.h>
 
 /******************************************************************************
  * TYPES

@@ -752,6 +752,48 @@ TEST(exp_returns_hll, "exp returns hll")
 	as_exp_destroy(expr);
 }
 
+TEST(exp_merge, "exp merge")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	as_exp_build(e, as_exp_cmp_eq(as_exp_bin_int(AString), as_exp_int(0)));
+
+	as_exp_build(eand,
+ 		as_exp_and(
+ 			as_exp_expr(e),
+			as_exp_cmp_eq(as_exp_bin_int(DString), as_exp_int(2))));
+
+	as_exp_build(eor,
+ 		as_exp_or(
+ 			as_exp_expr(e),
+			as_exp_cmp_eq(as_exp_bin_int(DString), as_exp_int(2))));
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_exp_read(&ops, "res1", eand, AS_EXP_READ_DEFAULT);
+	as_operations_exp_read(&ops, "res2", eor, AS_EXP_READ_DEFAULT);
+
+	as_error err;
+	as_record* rec = NULL;
+	as_status rc = aerospike_key_operate(as, &err, NULL, &keyA, &ops, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_bin* results = rec->bins.entries;
+	bool res1 = as_bin_get_value(&results[0])->boolean.value;
+	assert_false(res1);
+	bool res2 = as_bin_get_value(&results[1])->boolean.value;
+	assert_true(res2);
+
+	as_record_destroy(rec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(e);
+	as_exp_destroy(eand);
+	as_exp_destroy(eor);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -761,7 +803,6 @@ SUITE(exp_operate, "filter expression tests")
 	suite_before(before);
 	suite_after(after);
 
-	// Requires Aerospike 5.6.
 	suite_add(exp_read_eval_errors);
 	suite_add(exp_read_on_write_eval_errors);
 	suite_add(exp_write_eval_errors);
@@ -774,4 +815,5 @@ SUITE(exp_operate, "filter expression tests")
 	suite_add(exp_returns_blob);
 	suite_add(exp_returns_bool);
 	suite_add(exp_returns_hll);
+	suite_add(exp_merge);
 }

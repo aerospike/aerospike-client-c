@@ -148,6 +148,7 @@ typedef enum {
 	_AS_EXP_CODE_CDT_MAP_CRMOD,
 	_AS_EXP_CODE_CDT_MAP_CR,
 	_AS_EXP_CODE_CDT_MAP_MOD,
+	_AS_EXP_CODE_MERGE,
 
 	_AS_EXP_CODE_END_OF_VA_ARGS
 } as_exp_ops;
@@ -176,6 +177,11 @@ typedef enum {
 	AS_EXP_TYPE_ERROR
 } as_exp_type;
 
+typedef struct as_exp {
+	uint32_t packed_sz;
+	uint8_t packed[];
+} as_exp;
+
 typedef struct {
 	as_exp_ops op;
 	uint32_t count;
@@ -194,13 +200,9 @@ typedef struct {
 		as_cdt_ctx* ctx; // for CALL
 		as_list_policy* list_pol; // for LIST_POL_*
 		as_map_policy* map_pol;
+		as_exp* expr;
 	} v;
 } as_exp_entry;
-
-typedef struct as_exp {
-	uint32_t packed_sz;
-	uint8_t packed[];
-} as_exp;
 
 AS_EXTERN as_exp* as_exp_compile(as_exp_entry* table, uint32_t n);
 AS_EXTERN char* as_exp_compile_b64(as_exp* exp);
@@ -3303,6 +3305,30 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 		_AS_EXP_HLL_READ_START(AS_EXP_TYPE_INT, AS_HLL_OP_MAY_CONTAIN, 1), \
 		__list, \
 		__bin
+
+/*********************************************************************************
+ * EXPRESSION MERGE
+ *********************************************************************************/
+
+/**
+ * Merge precompiled expression into a new expression tree.
+ * Useful for storing common precompiled expressions and then reusing
+ * these expressions as part of a greater expression.
+ *
+ * ~~~~~~~~~~{.c}
+ * // Merge precompiled expression into new expression.
+ * as_exp_build(expr, as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(200)));
+ * as_exp_build(merged,
+ *		as_exp_and(
+ *			as_exp_expr(expr), 
+ *			as_exp_cmp_eq(as_exp_bin_int("b"), as_exp_int(100))));
+ * ~~~~~~~~~~
+ *
+ * @param __e	Pre-compiled expression.
+ * @ingroup expression
+ */
+#define as_exp_expr(__e) \
+	{.op=_AS_EXP_CODE_MERGE, .v.expr=__e}
 
 /*********************************************************************************
  * EXPRESSION BUILDERS

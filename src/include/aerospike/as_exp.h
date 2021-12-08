@@ -1092,8 +1092,8 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * @return (float value)
  * @ingroup expression
  */
-#define as_exp_log(__num, __exponent) \
-		{.op=_AS_EXP_CODE_LOG, .count=3}, __num, __exponent
+#define as_exp_log(__num, __base) \
+		{.op=_AS_EXP_CODE_LOG, .count=3}, __num, __base
 
 /**
  * Create "modulo" (%) operator that determines the remainder of "numerator"

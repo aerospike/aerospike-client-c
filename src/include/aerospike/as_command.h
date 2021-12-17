@@ -61,14 +61,13 @@ extern "C" {
 #define AS_FIELD_UDF_OP 33
 #define AS_FIELD_QUERY_BINS 40
 #define AS_FIELD_BATCH_INDEX 41
-#define AS_FIELD_BATCH_INDEX_WITH_SET 42
 #define AS_FIELD_FILTER 43
 
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
 #define AS_MSG_INFO1_GET_ALL			(1 << 1) // get all bins, period
 // (Note:  Bit 2 is unused.)
-#define AS_MSG_INFO1_BATCH_INDEX		(1 << 3) // batch read
+#define AS_MSG_INFO1_BATCH_INDEX		(1 << 3) // batch
 #define AS_MSG_INFO1_XDR				(1 << 4) // operation is being performed by XDR
 #define AS_MSG_INFO1_GET_NOBINDATA		(1 << 5) // do not get information about bins and its data
 #define AS_MSG_INFO1_READ_MODE_AP_ALL	(1 << 6) // read mode all for AP namespaces.
@@ -214,6 +213,13 @@ as_buffers_destroy(as_queue* buffers)
 	}
 	as_queue_destroy(buffers);
 }
+
+/**
+ * @private
+ * Calculate size of user key.
+ */
+size_t
+as_command_user_key_size(const as_key* key);
 
 /**
  * @private
@@ -454,6 +460,13 @@ as_command_write_field_digest(uint8_t* p, const as_digest* val)
 	memcpy(p, val->value, AS_DIGEST_VALUE_SIZE);
 	return p + AS_DIGEST_VALUE_SIZE;
 }
+
+/**
+ * @private
+ * Write user key.
+ */
+uint8_t*
+as_command_write_user_key(uint8_t* begin, const as_key* key);
 
 /**
  * @private

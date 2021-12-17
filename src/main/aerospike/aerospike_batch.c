@@ -23,6 +23,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_predexp.h>
@@ -35,8 +36,38 @@
 #include <citrusleaf/cf_digest.h>
 
 /************************************************************************
- * 	TYPES
+ * CONSTANTS
  ************************************************************************/
+
+ #define BATCH_MSG_READ 0x0
+ #define BATCH_MSG_REPEAT 0x1
+ #define BATCH_MSG_INFO 0x2
+ #define BATCH_MSG_WRITE 0xe
+
+/************************************************************************
+ * TYPES
+ ************************************************************************/
+
+typedef struct {
+	size_t size;
+	as_queue* buffers;
+	uint8_t* filter_field;
+	as_serializer ser;
+	as_buffer args;
+	uint32_t filter_size;
+	uint16_t field_count_header;
+	bool batch_any;
+} as_batch_builder;
+
+typedef struct {
+	int ttl;
+	uint16_t gen;
+	uint8_t read_attr;
+	uint8_t write_attr;
+	uint8_t info_attr;
+	bool has_write;
+	bool send_key;
+} as_batch_attr;
 
 typedef struct as_batch_node_s {
 	as_node* node;
@@ -52,7 +83,7 @@ typedef struct as_batch_task_s {
 	uint32_t* error_mutex;
 	cf_queue* complete_q;
 	uint32_t n_keys;
-	as_policy_replica replica_sc;
+	as_policy_replica replica_sc;  // TODO: TAKE OUT!
 	bool use_batch_records;
 } as_batch_task;
 
@@ -75,6 +106,17 @@ typedef struct as_batch_task_keys_s {
 	uint32_t n_bins;
 	uint8_t read_attr;
 } as_batch_task_keys;
+
+typedef struct {
+	as_batch_task base;
+	const char* ns;
+	as_key* keys;
+	const as_batch* batch;
+	as_batch_result* results;
+	aerospike_batch_callback callback;
+	void* udata;
+	as_batch_attr attr;
+} as_batch_task_remove;
 
 typedef struct as_batch_complete_task_s {
 	as_node* node;
@@ -123,6 +165,224 @@ static const char cluster_empty_error[] = "Batch command failed because cluster 
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
+
+static void
+as_batch_attr_read_header(as_batch_attr* attr, const as_policy_batch* p)
+{
+	attr->read_attr = AS_MSG_INFO1_READ;
+
+	if (p->read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
+		attr->read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
+	}
+
+	attr->write_attr = 0;
+
+	switch (p->read_mode_sc) {
+	default:
+	case AS_POLICY_READ_MODE_SC_SESSION:
+		attr->info_attr = 0;
+		break;
+	case AS_POLICY_READ_MODE_SC_LINEARIZE:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE;
+		break;
+	case AS_POLICY_READ_MODE_SC_ALLOW_REPLICA:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_RELAX;
+		break;
+	case AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
+		break;
+	}
+	attr->ttl = 0;
+	attr->gen = 0;
+	attr->has_write = false;
+	attr->send_key = false;
+}
+
+static void
+as_batch_attr_read_row(as_batch_attr* attr, const as_policy_batch_read* p)
+{
+	attr->read_attr = AS_MSG_INFO1_READ;
+
+	if (p->read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
+		attr->read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
+	}
+
+	attr->write_attr = 0;
+
+	switch (p->read_mode_sc) {
+	default:
+	case AS_POLICY_READ_MODE_SC_SESSION:
+		attr->info_attr = 0;
+		break;
+	case AS_POLICY_READ_MODE_SC_LINEARIZE:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE;
+		break;
+	case AS_POLICY_READ_MODE_SC_ALLOW_REPLICA:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_RELAX;
+		break;
+	case AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
+		break;
+	}
+	attr->ttl = 0;
+	attr->gen = 0;
+	attr->has_write = false;
+	attr->send_key = false;
+}
+
+static inline void
+as_batch_attr_read_adjust(as_batch_attr* attr, bool read_all_bins)
+{
+	if (read_all_bins) {
+		attr->read_attr |= AS_MSG_INFO1_GET_ALL;
+	}
+	else {
+		attr->read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
+	}
+}
+
+static void
+as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
+{
+	// TODO: Ask andy if it's ok to set read bit instead of checking all ops to see if there is a read.
+	attr->read_attr = AS_MSG_INFO1_READ;
+	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS;
+	attr->info_attr = 0;
+	attr->ttl = ops->ttl;
+	attr->gen = 0;
+	attr->has_write = true;
+	attr->send_key = false;
+}
+
+static void
+as_batch_attr_write_row(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
+{
+	// TODO: Ask andy if it's ok to set read bit instead of checking all ops to see if there is a read.
+	attr->read_attr = AS_MSG_INFO1_READ;
+	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS;
+	attr->info_attr = 0;
+	attr->ttl = ops->ttl;
+	attr->has_write = true;
+	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
+
+	switch (p->gen) {
+	default:
+	case AS_POLICY_GEN_IGNORE:
+		attr->gen = 0;
+		break;
+	case AS_POLICY_GEN_EQ:
+		attr->gen = ops->gen;
+		attr->write_attr |= AS_MSG_INFO2_GENERATION;
+		break;
+	case AS_POLICY_GEN_GT:
+		attr->gen = ops->gen;
+		attr->write_attr |= AS_MSG_INFO2_GENERATION_GT;
+		break;
+	}
+
+	switch (p->exists) {
+	case AS_POLICY_EXISTS_IGNORE:
+		break;
+	case AS_POLICY_EXISTS_UPDATE:
+		attr->info_attr |= AS_MSG_INFO3_UPDATE_ONLY;
+		break;
+	case AS_POLICY_EXISTS_CREATE_OR_REPLACE:
+		attr->info_attr |= AS_MSG_INFO3_CREATE_OR_REPLACE;
+		break;
+	case AS_POLICY_EXISTS_REPLACE:
+		attr->info_attr |= AS_MSG_INFO3_REPLACE_ONLY;
+		break;
+	case AS_POLICY_EXISTS_CREATE:
+		attr->write_attr |= AS_MSG_INFO2_CREATE_ONLY;
+		break;
+	}
+
+	if (p->durable_delete) {
+		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
+	}
+
+	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
+		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
+	}
+}
+
+static void
+as_batch_attr_apply_header(as_batch_attr* attr)
+{
+	attr->read_attr = 0;
+	attr->write_attr = AS_MSG_INFO2_WRITE;
+	attr->info_attr = 0;
+	attr->ttl = 0;
+	attr->gen = 0;
+	attr->has_write = true;
+	attr->send_key = false;
+}
+
+static void
+as_batch_attr_apply_row(as_batch_attr* attr, const as_policy_batch_apply* p)
+{
+	attr->read_attr = 0;
+	attr->write_attr = AS_MSG_INFO2_WRITE;
+	attr->info_attr = 0;
+	attr->ttl = p->ttl;
+	attr->gen = 0;
+	attr->has_write = true;
+	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
+
+	if (p->durable_delete) {
+		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
+	}
+
+	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
+		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
+	}
+}
+
+static void
+as_batch_attr_remove_header(as_batch_attr* attr)
+{
+	attr->read_attr = 0;
+	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS | AS_MSG_INFO2_DELETE;
+	attr->info_attr = 0;
+	attr->ttl = 0;
+	attr->gen = 0;
+	attr->has_write = true;
+	attr->send_key = false;
+}
+
+static void
+as_batch_attr_remove_row(as_batch_attr* attr, const as_policy_batch_remove* p)
+{
+	attr->read_attr = 0;
+	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS | AS_MSG_INFO2_DELETE;
+	attr->info_attr = 0;
+	attr->ttl = 0;
+	attr->has_write = true;
+	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
+
+	switch (p->gen) {
+	default:
+	case AS_POLICY_GEN_IGNORE:
+		attr->gen = 0;
+		break;
+	case AS_POLICY_GEN_EQ:
+		attr->gen = p->generation;
+		attr->write_attr |= AS_MSG_INFO2_GENERATION;
+		break;
+	case AS_POLICY_GEN_GT:
+		attr->gen = p->generation;
+		attr->write_attr |= AS_MSG_INFO2_GENERATION_GT;
+		break;
+	}
+
+	if (p->durable_delete) {
+		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
+	}
+
+	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
+		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
+	}
+}
 
 static uint8_t*
 as_batch_parse_fields(uint8_t* p, uint32_t n_fields)
@@ -328,32 +588,10 @@ as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 	return AEROSPIKE_OK;
 }
 
-typedef struct {
-	size_t size;
-	as_queue* buffers;
-	uint8_t* filter_field;
-	uint32_t filter_size;
-	uint16_t field_count_header;
-} as_batch_builder;
-
-static inline void
-as_batch_builder_init(
-	as_batch_builder* bb, as_queue* buffers, uint8_t* filter_field, uint32_t filter_size
-	)
-{
-	bb->buffers = buffers;
-	bb->filter_field = filter_field;
-	bb->filter_size = filter_size;
-}
-
-static inline void
-as_batch_builder_destroy(as_batch_builder* bb)
-{
-	as_buffers_destroy(bb->buffers);
-}
-
 static as_status
-as_batch_estimate_ops(const as_operations* ops, as_error* err, as_queue* buffers, size_t* sp)
+as_batch_estimate_ops(
+	const as_operations* ops, as_error* err, as_queue* buffers, size_t* sp, bool allow_write
+	)
 {
 	size_t size = 0;
 	uint32_t n_operations = ops->binops.size;
@@ -366,8 +604,11 @@ as_batch_estimate_ops(const as_operations* ops, as_error* err, as_queue* buffers
 		as_binop* op = &ops->binops.entries[i];
 
 		if (as_op_is_write[op->op]) {
-			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-										"Write operations not allowed in batch read");
+			if (! allow_write) {
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+											"Write operations not allowed in batch read");
+			}
+			size += 6; // Extra write specific fields.
 		}
 		size += as_command_bin_size(&op->bin, buffers);
 	}
@@ -375,28 +616,281 @@ as_batch_estimate_ops(const as_operations* ops, as_error* err, as_queue* buffers
 	return AEROSPIKE_OK;
 }
 
+static inline bool
+as_batch_equals_read(as_batch_read_record* prev, as_batch_read_record* rec)
+{
+	return prev->bin_names == rec->bin_names && prev->ops == rec->ops &&
+		   prev->policy == rec->policy && prev->read_all_bins == rec->read_all_bins;
+}
+
+static inline bool
+as_batch_equals_write(as_batch_write_record* prev, as_batch_write_record* rec)
+{
+	return prev->ops == rec->ops && prev->policy == rec->policy;
+}
+
+static inline bool
+as_batch_equals_apply(as_batch_apply_record* prev, as_batch_apply_record* rec)
+{
+	return prev->function == rec->function && prev->arglist == rec->arglist &&
+		   prev->module == rec->module && prev->policy == rec->policy;
+}
+
+static inline bool
+as_batch_equals_remove(as_batch_remove_record* prev, as_batch_remove_record* rec)
+{
+	return prev->policy == rec->policy;
+}
+
+static bool
+as_batch_equals(as_batch_base_record* prev, as_batch_base_record* rec, as_batch_builder* bb)
+{
+	if (! (prev && prev->type == rec->type && strcmp(prev->key.ns, rec->key.ns) == 0 &&
+		strcmp(prev->key.set, rec->key.set) == 0)) {
+		return false;
+	}
+
+	switch (rec->type) {
+	case AS_BATCH_READ:
+		return as_batch_equals_read((as_batch_read_record*)prev, (as_batch_read_record*)rec);
+
+	case AS_BATCH_WRITE:
+		return as_batch_equals_write((as_batch_write_record*)prev, (as_batch_write_record*)rec);
+
+	case AS_BATCH_APPLY:
+		return as_batch_equals_apply((as_batch_apply_record*)prev, (as_batch_apply_record*)rec);
+
+	case AS_BATCH_REMOVE:
+		return as_batch_equals_remove((as_batch_remove_record*)prev, (as_batch_remove_record*)rec);
+
+	default:
+		return false;
+	}
+}
+
 static as_status
-as_batch_size_records(
+as_batch_read_record_size(as_batch_read_record* rec, as_batch_builder* bb, as_error* err)
+{
+	if (rec->policy) {
+		if (rec->policy->filter_exp) {
+			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
+		}
+	}
+
+	if (rec->bin_names) {
+		for (uint32_t j = 0; j < rec->n_bin_names; j++) {
+			bb->size += as_command_string_operation_size(rec->bin_names[j]);
+		}
+	}
+	else if (rec->ops) {
+		size_t s = 0;
+		as_status status = as_batch_estimate_ops(rec->ops, err, bb->buffers, &s, false);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+		bb->size += s;
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_batch_write_record_size(as_batch_write_record* rec, as_batch_builder* bb, as_error* err)
+{
+	if (rec->policy) {
+		if (rec->policy->filter_exp) {
+			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
+		}
+
+		if (rec->policy->key == AS_POLICY_KEY_SEND) {
+			bb->size += as_command_user_key_size(&rec->key);
+		}
+	}
+
+	bool has_write = false;
+
+	as_operations* ops = rec->ops;
+	uint32_t n_operations = ops->binops.size;
+
+	for (uint32_t i = 0; i < n_operations; i++) {
+		as_binop* op = &ops->binops.entries[i];
+
+		if (as_op_is_write[op->op]) {
+			has_write = true;
+		}
+		bb->size += as_command_bin_size(&op->bin, bb->buffers);
+	}
+
+	if (! has_write) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+									"Batch write operations do not contain a write");
+	}
+	return AEROSPIKE_OK;
+}
+
+static void
+as_batch_apply_record_size(as_batch_apply_record* rec, as_batch_builder* bb)
+{
+	if (rec->policy) {
+		if (rec->policy->filter_exp) {
+			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
+		}
+
+		if (rec->policy->key == AS_POLICY_KEY_SEND) {
+			bb->size += as_command_user_key_size(&rec->key);
+		}
+	}
+
+	bb->size += as_command_string_field_size(rec->module);
+	bb->size += as_command_string_field_size(rec->function);
+	
+	as_msgpack_init(&bb->ser);
+	as_buffer_init(&bb->args);
+	as_serializer_serialize(&bb->ser, (as_val*)rec->arglist, &bb->args);
+	bb->size += as_command_field_size(bb->args.size);
+}
+
+static void
+as_batch_remove_record_size(as_batch_remove_record* rec, as_batch_builder* bb)
+{
+	if (rec->policy) {
+		if (rec->policy->filter_exp) {
+			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
+		}
+
+		if (rec->policy->key == AS_POLICY_KEY_SEND) {
+			bb->size += as_command_user_key_size(&rec->key);
+		}
+	}
+}
+
+static as_status
+as_batch_records_size_new(
+	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
+	as_error* err
+	)
+{
+	as_batch_base_record* prev = 0;
+	as_status status;
+	uint32_t n_offsets = offsets->size;
+
+	for (uint32_t i = 0; i < n_offsets; i++) {
+		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
+		as_batch_base_record* rec = as_vector_get(records, offset);
+		
+		bb->size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
+
+		if (as_batch_equals(prev, rec, bb)) {
+			// Can set repeat flag to save space.
+			bb->size++;
+		}
+		else {
+			// Size full message.
+			bb->size += 8;
+			bb->size += as_command_string_field_size(rec->key.ns);
+			bb->size += as_command_string_field_size(rec->key.set);
+
+			switch (rec->type) {
+			case AS_BATCH_READ:
+				status = as_batch_read_record_size((as_batch_read_record*)rec, bb, err);
+				break;
+			case AS_BATCH_WRITE:
+				status = as_batch_write_record_size((as_batch_write_record*)rec, bb, err);
+				break;
+			case AS_BATCH_APPLY:
+				as_batch_apply_record_size((as_batch_apply_record*)rec, bb);
+				status = AEROSPIKE_OK;
+				break;
+			case AS_BATCH_REMOVE:
+				as_batch_remove_record_size((as_batch_remove_record*)rec, bb);
+				status = AEROSPIKE_OK;
+				break;
+			}
+
+			if (status != AEROSPIKE_OK) {
+				return status;
+			}
+			prev = rec;
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_batch_records_size_old(
+	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
+	as_error* err
+	)
+{
+	as_batch_read_record* prev = 0;
+	uint32_t n_offsets = offsets->size;
+
+	for (uint32_t i = 0; i < n_offsets; i++) {
+		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
+		as_batch_read_record* rec = as_vector_get(records, offset);
+		
+		if (rec->type != AS_BATCH_READ) {
+			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+										"Batch write operations not supported on older servers");
+		}
+
+		bb->size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
+
+		if (prev && strcmp(prev->key.ns, rec->key.ns) == 0 &&
+			strcmp(prev->key.set, rec->key.set) == 0 &&
+			prev->bin_names == rec->bin_names && prev->read_all_bins == rec->read_all_bins &&
+			prev->ops == rec->ops) {
+			// Can set repeat flag to save space.
+			bb->size++;
+		}
+		else {
+			// Size full message.
+			bb->size += 6;
+			bb->size += as_command_string_field_size(rec->key.ns);
+			bb->size += as_command_string_field_size(rec->key.set);
+
+			if (rec->bin_names) {
+				for (uint32_t j = 0; j < rec->n_bin_names; j++) {
+					bb->size += as_command_string_operation_size(rec->bin_names[j]);
+				}
+			}
+			else if (rec->ops) {
+				size_t s = 0;
+				as_status status = as_batch_estimate_ops(rec->ops, err, bb->buffers, &s, false);
+
+				if (status != AEROSPIKE_OK) {
+					return status;
+				}
+				bb->size += s;
+			}
+			prev = rec;
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_batch_records_size(
 	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
 	as_error* err
 	)
 {
 	// Estimate buffer size.
-	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t) + 1;
+	bb->size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t) + 1;
 
 	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		bb->filter_size = (uint32_t)size;
+		bb->size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
+		bb->filter_size = (uint32_t)bb->size;
 		bb->field_count_header = 2;
 	}
 	else if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &bb->filter_size);
+		bb->size += as_predexp_list_size(policy->base.predexp, &bb->filter_size);
 		bb->field_count_header = 2;
 	}
 	else if (bb->filter_field) {
 		// filter_field is only set on async batch retry with a filter expression.
 		// filter_size is already set in this case.
-		size += bb->filter_size;
+		bb->size += bb->filter_size;
 		bb->field_count_header = 2;
 	}
 	else {
@@ -404,65 +898,126 @@ as_batch_size_records(
 		bb->field_count_header = 1;
 	}
 
-	as_batch_read_record* prev = 0;
-	uint32_t n_offsets = offsets->size;
-	bool send_set_name = policy->send_set_name;
-	
-	for (uint32_t i = 0; i < n_offsets; i++) {
-		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
-		as_batch_read_record* record = as_vector_get(records, offset);
-		
-		size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
-		
-		if (prev && strcmp(prev->key.ns, record->key.ns) == 0 &&
-			(! send_set_name || strcmp(prev->key.set, record->key.set) == 0) &&
-			prev->bin_names == record->bin_names && prev->read_all_bins == record->read_all_bins &&
-			prev->ops == record->ops) {
-			// Can set repeat previous namespace/bin names to save space.
-			size++;
-		}
-		else {
-			// Estimate full header, namespace and bin names.
-			size += as_command_string_field_size(record->key.ns) + 6;
-			
-			if (send_set_name) {
-				size += as_command_string_field_size(record->key.set);
-			}
-			
-			if (record->bin_names) {
-				for (uint32_t j = 0; j < record->n_bin_names; j++) {
-					size += as_command_string_operation_size(record->bin_names[j]);
-				}
-			}
-			else if (record->ops) {
-				size_t s = 0;
-				as_status status = as_batch_estimate_ops(record->ops, err, bb->buffers, &s);
-
-				if (status != AEROSPIKE_OK) {
-					return status;
-				}
-				size += s;
-			}
-			prev = record;
-		}
+	if (bb->batch_any) {
+		return as_batch_records_size_new(policy, records, offsets, bb, err);
 	}
-	bb->size = size;
-	return AEROSPIKE_OK;
+	else {
+		return as_batch_records_size_old(policy, records, offsets, bb, err);
+	}
+}
+
+static inline uint8_t
+as_batch_get_flags(const as_policy_batch* policy) {
+	uint8_t flags = (policy->allow_inline)? 1 : 0;
+
+	if (policy->allow_inline_ssd) {
+		flags |= 0x2;
+	}
+
+	if (policy->respond_all_keys) {
+		flags |= 0x4;
+	}
+	return flags;
+}
+
+static uint8_t*
+as_batch_write_header(
+	uint8_t* cmd, const as_policy_base* policy, uint32_t timeout, uint16_t n_fields
+	)
+{
+	uint8_t read_attr = AS_MSG_INFO1_BATCH_INDEX;
+
+	if (policy->compress) {
+		read_attr |= AS_MSG_INFO1_COMPRESS_RESPONSE;
+	}
+
+	cmd[8] = 22;
+	cmd[9] = read_attr;
+	memset(&cmd[10], 0, 12);
+	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
+	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
+	*(uint16_t*)&cmd[28] = 0;
+	return cmd + AS_HEADER_SIZE;
 }
 
 static inline uint8_t*
 as_batch_write_fields(
-	uint8_t* p, const as_policy_batch* policy, as_key* key, uint16_t field_count, uint16_t op_count
+	uint8_t* p, as_key* key, uint16_t n_fields, uint16_t n_ops
 	)
 {
-	*(uint16_t*)p = cf_swap_to_be16(field_count);
+	n_fields += 2;
+	*(uint16_t*)p = cf_swap_to_be16(n_fields);
 	p += sizeof(uint16_t);
-	*(uint16_t*)p = cf_swap_to_be16(op_count);
+	*(uint16_t*)p = cf_swap_to_be16(n_ops);
 	p += sizeof(uint16_t);
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
+	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
+	return p;
+}
 
-	if (policy->send_set_name) {
-		p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
+static uint8_t*
+as_batch_write_fields_filter(
+	uint8_t* p, as_key* key, as_exp* filter, uint16_t n_fields, uint16_t n_ops
+	)
+{
+	if (filter) {
+		n_fields++;
+		p = as_batch_write_fields(p, key, n_fields, n_ops);
+		p = as_exp_write(filter, p);
+	}
+	else {
+		p = as_batch_write_fields(p, key, n_fields, n_ops);
+	}
+	return p;
+}
+
+static uint8_t*
+as_batch_write_read(
+	uint8_t* p, as_key* key, as_batch_attr* attr, as_exp* filter, uint16_t n_ops
+	)
+{
+	*p++ = BATCH_MSG_INFO;
+	*p++ = attr->read_attr;
+	*p++ = attr->write_attr;
+	*p++ = attr->info_attr;
+	p = as_batch_write_fields_filter(p, key, filter, 0, n_ops);
+	return p;
+}
+
+static uint8_t*
+as_batch_write_write(
+	uint8_t* p, as_key* key, as_batch_attr* attr, as_exp* filter, uint16_t n_fields, uint16_t n_ops
+	)
+{
+	*p++ = BATCH_MSG_WRITE;
+	*p++ = attr->read_attr;
+	*p++ = attr->write_attr;
+	*p++ = attr->info_attr;
+	*(uint16_t*)p = cf_swap_to_be16(attr->gen);
+	p += sizeof(uint16_t);
+	*(uint32_t*)p = cf_swap_to_be32(attr->ttl);
+	p += sizeof(uint32_t);
+
+	if (attr->send_key) {
+		n_fields++;
+		p = as_batch_write_fields_filter(p, key, filter, n_fields, n_ops);
+		p = as_command_write_user_key(p, key);
+	}
+	else {
+		p = as_batch_write_fields_filter(p, key, filter, n_fields, n_ops);
+	}
+	return p;
+}
+
+static uint8_t*
+as_batch_write_bin_names(
+	uint8_t* p, as_key* key, as_batch_attr* attr, as_exp* filter, const char** bins, uint16_t n_bins
+	)
+{
+	p = as_batch_write_read(p, key, attr, filter, n_bins);
+
+	for (uint32_t j = 0; j < n_bins; j++) {
+		p = as_command_write_bin_name(p, bins[j]);
 	}
 	return p;
 }
@@ -479,8 +1034,195 @@ as_batch_write_ops(uint8_t* p, const as_operations* ops, as_queue* buffers)
 	return p;
 }
 
+static uint8_t*
+as_batch_write_operations(
+	uint8_t* p, as_key* key, as_batch_attr* attr, as_exp* filter, const as_operations* ops,
+	as_queue* buffers
+	)
+{
+	uint16_t n_ops = (uint16_t)ops->binops.size;
+
+	if (attr->has_write) {
+		p = as_batch_write_write(p, key, attr, filter, 0, n_ops);
+	}
+	else {
+		p = as_batch_write_read(p, key, attr, filter, n_ops);
+	}
+	p = as_batch_write_ops(p, ops, buffers);
+	return p;
+}
+
+static uint8_t*
+as_batch_read_record_write(
+	uint8_t* p, const as_policy_batch* policy, as_batch_read_record* rec, as_batch_builder* bb
+	)
+{
+	as_exp* filter;
+	as_batch_attr attr;
+
+	if (rec->policy) {
+		filter = rec->policy->filter_exp;
+		as_batch_attr_read_row(&attr, rec->policy);
+	}
+	else {
+		filter = NULL;
+		as_batch_attr_read_header(&attr, policy);
+	}
+
+	if (rec->bin_names) {
+		p = as_batch_write_bin_names(p, &rec->key, &attr, filter, (const char**)rec->bin_names,
+			rec->n_bin_names);
+	}
+	else if (rec->ops) {
+		p = as_batch_write_operations(p, &rec->key, &attr, filter, rec->ops, bb->buffers);
+	}
+	else {
+		as_batch_attr_read_adjust(&attr, rec->read_all_bins);
+		p = as_batch_write_read(p, &rec->key, &attr, filter, 0);
+	}
+	return p;
+}
+
+static uint8_t*
+as_batch_write_record_write(
+	uint8_t* p, const as_policy_batch* policy, as_batch_write_record* rec, as_batch_builder* bb
+	)
+{
+	as_exp* filter;
+	as_batch_attr attr;
+
+	if (rec->policy) {
+		filter = rec->policy->filter_exp;
+		as_batch_attr_write_row(&attr, rec->policy, rec->ops);
+	}
+	else {
+		filter = NULL;
+		as_batch_attr_write_header(&attr, rec->ops);
+	}
+
+	p = as_batch_write_operations(p, &rec->key, &attr, filter, rec->ops, bb->buffers);
+	return p;
+}
+
+static uint8_t*
+as_batch_apply_record_write(
+	uint8_t* p, const as_policy_batch* policy, as_batch_apply_record* rec, as_batch_builder* bb
+	)
+{
+	as_exp* filter;
+	as_batch_attr attr;
+
+	if (rec->policy) {
+		filter = rec->policy->filter_exp;
+		as_batch_attr_apply_row(&attr, rec->policy);
+	}
+	else {
+		filter = NULL;
+		as_batch_attr_apply_header(&attr);
+	}
+
+	p = as_batch_write_write(p, &rec->key, &attr, filter, 3, 0);
+	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, rec->module);
+	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, rec->function);
+	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &bb->args);
+	as_buffer_destroy(&bb->args);
+	as_serializer_destroy(&bb->ser);
+	return p;
+}
+
+static uint8_t*
+as_batch_remove_record_write(
+	uint8_t* p, const as_policy_batch* policy, as_batch_remove_record* rec, as_batch_builder* bb
+	)
+{
+	as_exp* filter;
+	as_batch_attr attr;
+
+	if (rec->policy) {
+		filter = rec->policy->filter_exp;
+		as_batch_attr_remove_row(&attr, rec->policy);
+	}
+	else {
+		filter = NULL;
+		as_batch_attr_remove_header(&attr);
+	}
+
+	p = as_batch_write_write(p, &rec->key, &attr, filter, 0, 0);
+	return p;
+}
+
 static size_t
-as_batch_index_records_write(
+as_batch_records_write_new(
+	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
+	uint8_t* cmd
+	)
+{
+	uint8_t* p = as_batch_write_header(cmd, &policy->base, policy->base.total_timeout,
+		bb->field_count_header);
+
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
+	}
+	else if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, bb->filter_size, p);
+	}
+	else if (bb->filter_field) {
+		// filter_field is only set on async batch retry with filter expression.
+		memcpy(p, bb->filter_field, bb->filter_size);
+		p += bb->filter_size;
+	}
+
+	uint8_t* field_size_ptr = p;
+	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
+
+	uint32_t n_offsets = offsets->size;
+	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
+	p += sizeof(uint32_t);
+	*p++ = as_batch_get_flags(policy);
+
+	as_batch_base_record* prev = 0;
+
+	for (uint32_t i = 0; i < n_offsets; i++) {
+		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
+		*(uint32_t*)p = cf_swap_to_be32(offset);
+		p += sizeof(uint32_t);
+		
+		as_batch_base_record* rec = as_vector_get(records, offset);
+		memcpy(p, rec->key.digest.value, AS_DIGEST_VALUE_SIZE);
+		p += AS_DIGEST_VALUE_SIZE;
+		
+		if (as_batch_equals(prev, rec, bb)) {
+			// Can set repeat flag to save space.
+			*p++ = BATCH_MSG_REPEAT;
+		}
+		else {
+			// Write full message.
+			switch (rec->type) {
+			case AS_BATCH_READ:
+				p = as_batch_read_record_write(p, policy, (as_batch_read_record*)rec, bb);
+				break;
+			case AS_BATCH_WRITE:
+				p = as_batch_write_record_write(p, policy, (as_batch_write_record*)rec, bb);
+				break;
+			case AS_BATCH_APPLY:
+				p = as_batch_apply_record_write(p, policy, (as_batch_apply_record*)rec, bb);
+				break;
+			case AS_BATCH_REMOVE:
+				p = as_batch_remove_record_write(p, policy, (as_batch_remove_record*)rec, bb);
+				break;
+			}
+			prev = rec;
+		}
+	}
+	// Write real field size.
+	size_t size = p - field_size_ptr - 4;
+	*(uint32_t*)field_size_ptr = cf_swap_to_be32((uint32_t)size);
+
+	return as_command_write_end(cmd, p);
+}
+
+static size_t
+as_batch_records_write_old(
 	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
 	uint8_t* cmd
 	)
@@ -510,16 +1252,14 @@ as_batch_index_records_write(
 
 	uint8_t* field_size_ptr = p;
 
-	p = as_command_write_field_header(p,
-			policy->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET : AS_FIELD_BATCH_INDEX, 0);
+	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
 
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
 	p += sizeof(uint32_t);
 	*p++ = policy->allow_inline? 1 : 0;
 	
 	as_batch_read_record* prev = 0;
-	uint16_t field_count = policy->send_set_name ? 2 : 1;
-	
+
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
 		*(uint32_t*)p = cf_swap_to_be32(offset);
@@ -530,20 +1270,19 @@ as_batch_index_records_write(
 		p += AS_DIGEST_VALUE_SIZE;
 		
 		if (prev && strcmp(prev->key.ns, record->key.ns) == 0 &&
-			(! policy->send_set_name || strcmp(prev->key.set, record->key.set) == 0) &&
+			strcmp(prev->key.set, record->key.set) == 0 &&
 			prev->bin_names == record->bin_names && prev->read_all_bins == record->read_all_bins &&
 			prev->ops == record->ops) {
 			// Can set repeat previous namespace/bin names to save space.
-			*p++ = 1;  // repeat
+			*p++ = BATCH_MSG_REPEAT;
 		}
 		else {
 			// Write full header, namespace and bin names.
-			*p++ = 0;  // do not repeat
+			*p++ = BATCH_MSG_READ;
 			
 			if (record->bin_names) {
 				*p++ = read_attr;
-				p = as_batch_write_fields(p, policy, &record->key, field_count,
-					(uint16_t)record->n_bin_names);
+				p = as_batch_write_fields(p, &record->key, 0, (uint16_t)record->n_bin_names);
 
 				for (uint32_t j = 0; j < record->n_bin_names; j++) {
 					p = as_command_write_bin_name(p, record->bin_names[j]);
@@ -551,16 +1290,14 @@ as_batch_index_records_write(
 			}
 			else if (record->ops) {
 				*p++ = read_attr;
-				p = as_batch_write_fields(p, policy, &record->key, field_count,
-					record->ops->binops.size);
-
+				p = as_batch_write_fields(p, &record->key, 0, record->ops->binops.size);
 				p = as_batch_write_ops(p, record->ops, bb->buffers);
 			}
 			else {
 				*p++ = (read_attr | (record->read_all_bins? AS_MSG_INFO1_GET_ALL :
 															AS_MSG_INFO1_GET_NOBINDATA));
 
-				p = as_batch_write_fields(p, policy, &record->key, field_count, 0);
+				p = as_batch_write_fields(p, &record->key, 0, 0);
 			}
 			prev = record;
 		}
@@ -570,6 +1307,20 @@ as_batch_index_records_write(
 	*(uint32_t*)field_size_ptr = cf_swap_to_be32((uint32_t)size);
 
 	return as_command_write_end(cmd, p);
+}
+
+static inline size_t
+as_batch_records_write(
+	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
+	uint8_t* cmd
+	)
+{
+	if (bb->batch_any) {
+		return as_batch_records_write_new(policy, records, offsets, bb, cmd);
+	}
+	else {
+		return as_batch_records_write_old(policy, records, offsets, bb, cmd);
+	}
 }
 
 static inline as_policy_replica
@@ -582,6 +1333,23 @@ as_batch_get_replica_sc(const as_policy_batch* policy)
 		case AS_POLICY_READ_MODE_SC_LINEARIZE:
 			return (policy->replica != AS_POLICY_REPLICA_PREFER_RACK) ?
 					policy->replica : AS_POLICY_REPLICA_SEQUENCE;
+
+		default:
+			return policy->replica;
+	}
+}
+
+static inline as_policy_replica
+as_batch_get_replica_write(const as_policy_batch* policy)
+{
+	switch (policy->replica) {
+		case AS_POLICY_REPLICA_PREFER_RACK:
+			// Writes must always go to master node via sequence algorithm.
+			return AS_POLICY_REPLICA_SEQUENCE;
+
+		case AS_POLICY_REPLICA_ANY:
+			// Writes must always go to master node.
+			return AS_POLICY_REPLICA_MASTER;
 
 		default:
 			return policy->replica;
@@ -604,6 +1372,31 @@ as_batch_get_node(
 	if (pi.sc_mode) {
 		replica = replica_sc;
 		master = master_sc;
+	}
+
+	as_node* node = as_partition_get_node(cluster, pi.ns, pi.partition, prev_node, replica, master);
+
+	if (! node) {
+		*node_pp = NULL;
+		return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE, "Node not found for partition %s:%u",
+							   pi.ns, pi.partition_id);
+	}
+
+	*node_pp = node;
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_batch_get_node_write(
+	as_cluster* cluster, as_error* err, const as_key* key, as_policy_replica replica,
+	bool master, as_node* prev_node, as_node** node_pp
+	)
+{
+	as_partition_info pi;
+	as_status status = as_partition_info_init(&pi, cluster, err, key);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
 	as_node* node = as_partition_get_node(cluster, pi.ns, pi.partition, prev_node, replica, master);
@@ -658,6 +1451,28 @@ as_batch_command_init(
 	}
 }
 
+static inline void
+as_batch_builder_init(
+	as_batch_builder* bb, as_queue* buffers, uint8_t* filter_field, uint32_t filter_size
+	)
+{
+	bb->buffers = buffers;
+	bb->filter_field = filter_field;
+	bb->filter_size = filter_size;
+}
+
+static inline void
+as_batch_builder_set_node(as_batch_builder* bb, as_node* node)
+{
+	bb->batch_any = (node->features & AS_FEATURES_BATCH_ANY);
+}
+
+static inline void
+as_batch_builder_destroy(as_batch_builder* bb)
+{
+	as_buffers_destroy(bb->buffers);
+}
+
 static as_status
 as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* parent)
 {
@@ -671,9 +1486,9 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 
 	as_batch_builder bb;
 	as_batch_builder_init(&bb, &buffers, NULL, 0);
+	as_batch_builder_set_node(&bb, task->node);
 
-	// Estimate buffer size.
-	as_status status = as_batch_size_records(policy, btr->records, &task->offsets, &bb, err);
+	as_status status = as_batch_records_size(policy, btr->records, &task->offsets, &bb, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_batch_builder_destroy(&bb);
@@ -683,7 +1498,7 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	// Write command
 	size_t capacity = bb.size;
 	uint8_t* buf = as_command_buffer_init(capacity);
-	size_t size = as_batch_index_records_write(policy, btr->records, &task->offsets, &bb, buf);
+	size_t size = as_batch_records_write(policy, btr->records, &task->offsets, &bb, buf);
 	as_batch_builder_destroy(&bb);
 
 	if (policy->base.compress && size > AS_COMPRESS_THRESHOLD) {
@@ -712,7 +1527,7 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 }
 
 static as_status
-as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent)
+as_batch_read_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent)
 {
 	as_error_reset(err);
 
@@ -736,7 +1551,6 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 		field_count_header++;
 	}
 
-	uint16_t field_count = policy->send_set_name ? 2 : 1;
 	as_key* prev = 0;
 	uint32_t n_offsets = task->offsets.size;
 	
@@ -746,18 +1560,14 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 		
 		size += 24;  // digest + int count.
 
-		if (prev && strcmp(prev->ns, key->ns) == 0 &&
-			(! policy->send_set_name || strcmp(prev->set, key->set) == 0)) {
+		if (prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
 			// Can set repeat previous namespace/bin names to save space.
 			size++;
 		}
 		else {
-			// Estimate full header, namespace and bin names.
+			// Estimate full message.
 			size += as_command_string_field_size(key->ns) + 6;
-			
-			if (policy->send_set_name) {
-				size += as_command_string_field_size(key->set);
-			}
+			size += as_command_string_field_size(key->set);
 
 			if (btk->n_bins) {
 				for (uint32_t j = 0; j < btk->n_bins; j++) {
@@ -766,7 +1576,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 			}
 			else if (btk->ops) {
 				size_t s = 0;
-				as_status status = as_batch_estimate_ops(btk->ops, err, &buffers, &s);
+				as_status status = as_batch_estimate_ops(btk->ops, err, &buffers, &s, false);
 
 				if (status != AEROSPIKE_OK) {
 					as_buffers_destroy(&buffers);
@@ -798,8 +1608,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	}
 
 	uint8_t* field_size_ptr = p;
-	p = as_command_write_field_header(p, policy->send_set_name ? AS_FIELD_BATCH_INDEX_WITH_SET :
-																 AS_FIELD_BATCH_INDEX, 0);
+	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
 
 	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
 	p += sizeof(uint32_t);
@@ -816,29 +1625,28 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 		memcpy(p, key->digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 		
-		if (prev && strcmp(prev->ns, key->ns) == 0 &&
-			(! policy->send_set_name || strcmp(prev->set, key->set) == 0)) {
+		if (prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
 			// Can set repeat previous namespace/bin names to save space.
-			*p++ = 1;  // repeat
+			*p++ = BATCH_MSG_REPEAT;
 		}
 		else {
 			// Write full header, namespace and bin names.
-			*p++ = 0;  // do not repeat
+			*p++ = BATCH_MSG_READ;
 			*p++ = btk->read_attr;
 
 			if (btk->n_bins) {
-				p = as_batch_write_fields(p, policy, key, field_count, (uint16_t)btk->n_bins);
+				p = as_batch_write_fields(p, key, 0, (uint16_t)btk->n_bins);
 
 				for (uint32_t j = 0; j < btk->n_bins; j++) {
 					p = as_command_write_bin_name(p, btk->bins[j]);
 				}
 			}
 			else if (btk->ops) {
-				p = as_batch_write_fields(p, policy, key, field_count, btk->ops->binops.size);
+				p = as_batch_write_fields(p, key, 0, btk->ops->binops.size);
 				p = as_batch_write_ops(p, btk->ops, &buffers);
 			}
 			else {
-				p = as_batch_write_fields(p, policy, key, field_count, 0);
+				p = as_batch_write_fields(p, key, 0, 0);
 			}
 			prev = key;
 		}
@@ -876,6 +1684,179 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	status = as_command_execute(&cmd, err);
 	as_command_buffer_free(buf, capacity);
 	return status;
+}
+
+static as_status
+as_batch_op_execute_keys(
+	as_batch_task_keys* btk, as_error* err, as_command* parent, as_batch_attr* attr
+	)
+{
+	as_error_reset(err);
+
+	as_batch_task* task = &btk->base;
+	const as_policy_batch* policy = task->policy;
+
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), 8);
+
+	// Estimate buffer size.
+	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 5;
+	uint32_t pred_size = 0;
+	uint16_t field_count_header = 1;
+
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
+		field_count_header++;
+	}
+	else if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		field_count_header++;
+	}
+
+	as_key* prev = 0;
+	uint32_t n_offsets = task->offsets.size;
+	
+	for (uint32_t i = 0; i < n_offsets; i++) {
+		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
+		as_key* key = &btk->keys[offset];
+		
+		size += 24;  // digest + int count.
+
+		if (prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
+			// Can set repeat previous namespace/bin names to save space.
+			size++;
+		}
+		else {
+			// Estimate full message.
+			size += 8; // header(4) + fielCount(2) + opCount(2) = 8
+			size += as_command_string_field_size(key->ns);
+			size += as_command_string_field_size(key->set);
+
+			if (attr->send_key) {
+				size += as_command_user_key_size(key);
+			}
+
+			if (btk->n_bins) {
+				for (uint32_t j = 0; j < btk->n_bins; j++) {
+					size += as_command_string_operation_size(btk->bins[j]);
+				}
+			}
+			else if (btk->ops) {
+				size_t s = 0;
+				as_status status = as_batch_estimate_ops(btk->ops, err, &buffers, &s, attr->has_write);
+
+				if (status != AEROSPIKE_OK) {
+					as_buffers_destroy(&buffers);
+					return status;
+				}
+				size += s;
+			}
+			else if (attr->write_attr & AS_MSG_INFO2_DELETE) {
+				size += 6; // Extra write specific fields.
+			}
+			prev = key;
+		}
+	}
+
+	// Write command
+	size_t capacity = size;
+	uint8_t* buf = as_command_buffer_init(capacity);
+
+	uint8_t* p = as_batch_write_header(buf, &policy->base, policy->base.total_timeout,
+		field_count_header);
+
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
+	}
+	else if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
+	uint8_t* field_size_ptr = p;
+	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
+
+	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
+	p += sizeof(uint32_t);
+	*p++ = as_batch_get_flags(policy);
+	prev = 0;
+	
+	for (uint32_t i = 0; i < n_offsets; i++) {
+		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
+		*(uint32_t*)p = cf_swap_to_be32(offset);
+		p += sizeof(uint32_t);
+		
+		as_key* key = &btk->keys[offset];
+		memcpy(p, key->digest.value, AS_DIGEST_VALUE_SIZE);
+		p += AS_DIGEST_VALUE_SIZE;
+		
+		if (prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
+			// Can set repeat previous namespace/bin names to save space.
+			*p++ = BATCH_MSG_REPEAT;
+		}
+		else {
+			// Write full message.
+			if (btk->n_bins) {
+				p = as_batch_write_bin_names(p, key, attr, NULL, btk->bins, (uint16_t)btk->n_bins);
+			}
+			else if (btk->ops) {
+				p = as_batch_write_operations(p, key, attr, NULL, btk->ops, &buffers);
+			}
+			else if (attr->write_attr & AS_MSG_INFO2_DELETE) {
+				p = as_batch_write_write(p, key, attr, NULL, 0, 0);
+			}
+			else {
+				p = as_batch_write_read(p, key, attr, NULL, 0);
+			}
+			prev = key;
+		}
+	}
+	as_buffers_destroy(&buffers);
+
+	// Write real field size.
+	size = p - field_size_ptr - 4;
+	*(uint32_t*)field_size_ptr = cf_swap_to_be32((uint32_t)size);
+	
+	size = as_command_write_end(buf, p);
+	
+	as_status status;
+
+	if (policy->base.compress && size > AS_COMPRESS_THRESHOLD) {
+		// Compress command.
+		size_t comp_capacity = as_command_compress_max_size(size);
+		size_t comp_size = comp_capacity;
+		uint8_t* comp_buf = as_command_buffer_init(comp_capacity);
+		status = as_command_compress(err, buf, size, comp_buf, &comp_size);
+		as_command_buffer_free(buf, capacity);
+
+		if (status != AEROSPIKE_OK) {
+			as_command_buffer_free(comp_buf, comp_capacity);
+			return status;
+		}
+		capacity = comp_capacity;
+		buf = comp_buf;
+		size = comp_size;
+	}
+
+	as_command cmd;
+
+	as_batch_command_init(&cmd, task, policy, buf, size, parent);
+	status = as_command_execute(&cmd, err);
+	as_command_buffer_free(buf, capacity);
+	return status;
+}
+
+static inline as_status
+as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent)
+{
+	if (btk->base.node->features & AS_FEATURES_BATCH_ANY) {
+		as_batch_attr attr;
+		as_batch_attr_read_header(&attr, btk->base.policy);
+		attr.read_attr |= btk->read_attr;
+		return as_batch_op_execute_keys(btk, err, parent, &attr);
+	}
+	else {
+		return as_batch_read_execute_keys(btk, err, parent);
+	}
 }
 
 static void
@@ -1302,9 +2283,10 @@ as_batch_read_execute_async(
 
 	for (uint32_t i = 0; i < n_batch_nodes; i++) {
 		as_batch_node* batch_node = as_vector_get(batch_nodes, i);
-		
+		as_batch_builder_set_node(&bb, batch_node->node);
+
 		// Estimate buffer size.
-		status = as_batch_size_records(policy, records, &batch_node->offsets, &bb, err);
+		status = as_batch_records_size(policy, records, &batch_node->offsets, &bb, err);
 
 		if (status != AEROSPIKE_OK) {
 			as_event_executor_cancel(exec, i);
@@ -1317,8 +2299,8 @@ as_batch_read_execute_async(
 			as_event_command* cmd = as_batch_read_command_create(cluster, policy, batch_node->node,
 				executor, bb.size, flags);
 
-			cmd->write_len = (uint32_t)as_batch_index_records_write(policy, records,
-				&batch_node->offsets, &bb, cmd->buf);
+			cmd->write_len = (uint32_t)as_batch_records_write(policy, records, &batch_node->offsets,
+				&bb, cmd->buf);
 
 			status = as_event_command_execute(cmd, err);
 		}
@@ -1327,8 +2309,7 @@ as_batch_read_execute_async(
 			// First write uncompressed buffer.
 			size_t capacity = bb.size;
 			uint8_t* buf = as_command_buffer_init(capacity);
-			size_t size = as_batch_index_records_write(policy, records, &batch_node->offsets, &bb,
-				buf);
+			size_t size = as_batch_records_write(policy, records, &batch_node->offsets, &bb, buf);
 
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);
@@ -1467,7 +2448,7 @@ as_batch_records_execute(
 		as_vector_append(&batch_node->offsets, &i);
 	}
 	as_nodes_release(nodes);
-	
+
 	if (async_executor) {
 		return as_batch_read_execute_async(cluster, err, policy, replica_sc, list,
 										   &batch_nodes, async_executor);
@@ -1812,11 +2793,13 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		filter_size = 0;
 	}
 
-	policy.send_set_name = (*p++ == AS_FIELD_BATCH_INDEX_WITH_SET);
-
 	uint32_t offsets_size = cf_swap_from_be32(*(uint32_t*)p);
 	p += sizeof(uint32_t);
-	policy.allow_inline = (bool)*p++;
+
+	uint8_t attr = *p++;
+	policy.allow_inline = (attr & 0x1);
+	policy.allow_inline_ssd = (attr & 0x2);
+	policy.respond_all_keys = (attr & 0x4);
 
 	// Create initial key capacity for each node as average + 25%.
 	uint32_t offsets_capacity = offsets_size / n_nodes;
@@ -1949,9 +2932,10 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 	for (uint32_t i = 0; i < batch_nodes.size; i++) {
 		as_batch_node* batch_node = as_vector_get(&batch_nodes, i);
+		as_batch_builder_set_node(&bb, batch_node->node);
 
 		// Estimate buffer size.
-		status = as_batch_size_records(&policy, records, &batch_node->offsets, &bb, &err);
+		status = as_batch_records_size(&policy, records, &batch_node->offsets, &bb, &err);
 
 		if (status != AEROSPIKE_OK) {
 			as_event_executor_error(e, &err, batch_nodes.size - i);
@@ -1963,7 +2947,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			as_event_command* cmd = as_batch_retry_command_create(parent, batch_node->node, bb.size,
 									deadline, flags);
 
-			cmd->write_len = (uint32_t)as_batch_index_records_write(&policy, records,
+			cmd->write_len = (uint32_t)as_batch_records_write(&policy, records,
 				&batch_node->offsets, &bb, cmd->buf);
 
 			// Retry command at the end of the queue so other commands have a chance to run first.
@@ -1974,7 +2958,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			// First write uncompressed buffer.
 			size_t capacity = bb.size;
 			uint8_t* buf = as_command_buffer_init(capacity);
-			size_t size = as_batch_index_records_write(&policy, records, &batch_node->offsets, &bb, buf);
+			size_t size = as_batch_records_write(&policy, records, &batch_node->offsets, &bb, buf);
 
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);
@@ -2066,7 +3050,7 @@ aerospike_batch_read_async(
 }
 
 void
-as_batch_read_destroy(as_batch_read_records* records)
+as_batch_records_destroy(as_batch_records* records)
 {
 	as_vector* list = &records->list;
 	
@@ -2084,9 +3068,6 @@ as_batch_read_destroy(as_batch_read_records* records)
 	as_vector_destroy(list);
 }
 
-/**
- * Look up multiple records by key, then return all bins.
- */
 as_status
 aerospike_batch_get(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
@@ -2097,11 +3078,6 @@ aerospike_batch_get(
 								 NULL, 0, NULL, callback, NULL, udata);
 }
 
-/**
- * @private
- * Perform batch reads for XDR.  The callback will be called for each record as soon as it's
- * received in no particular order.
- */
 as_status
 aerospike_batch_get_xdr(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
@@ -2112,9 +3088,6 @@ aerospike_batch_get_xdr(
 								 NULL, 0, NULL, NULL, callback, udata);
 }
 
-/**
- * Look up multiple records by key, then return specified bins.
- */
 as_status
 aerospike_batch_get_bins(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
@@ -2135,9 +3108,6 @@ aerospike_batch_get_ops(
 								 callback, NULL, udata);
 }
 
-/**
- * Test whether multiple records exist in the cluster.
- */
 as_status
 aerospike_batch_exists(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
@@ -2147,4 +3117,340 @@ aerospike_batch_exists(
 	return as_batch_keys_execute(as, err, policy, batch,
 								 AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA, NULL, 0, NULL,
 								 callback, NULL, udata);
+}
+
+static as_status
+as_batch_execute_remove(as_batch_task_remove* bt, as_error* err, as_command* parent)
+{
+	as_error_reset(err);
+
+	as_batch_task* task = &bt->base;
+	const as_policy_batch* policy = task->policy;
+
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), 8);
+
+	// Estimate buffer size.
+	size_t size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + 5;
+	uint32_t pred_size = 0;
+	uint16_t field_count_header = 1;
+
+	if (policy->base.filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
+		field_count_header++;
+	}
+	else if (policy->base.predexp) {
+		size += as_predexp_list_size(policy->base.predexp, &pred_size);
+		field_count_header++;
+	}
+
+	as_key* prev = 0;
+	uint32_t n_offsets = task->offsets.size;
+	
+	for (uint32_t i = 0; i < n_offsets; i++) {
+		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
+		as_key* key = &bt->keys[offset];
+		
+		size += 24;  // digest + int count.
+
+		if (prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
+			// Can set repeat previous namespace/bin names to save space.
+			size++;
+		}
+		else {
+			// Estimate full header, namespace and bin names.
+			size += 8; // header(4) + fielCount(2) + opCount(2) = 8
+			size += as_command_string_field_size(key->ns);
+			size += as_command_string_field_size(key->set);
+
+			if (bt->attr.send_key) {
+				size += as_command_user_key_size(key);
+			}
+
+			size += 6; // Extra write specific fields.
+
+			// TODO: Add other ops here
+			prev = key;
+		}
+	}
+
+	// Write command
+	size_t capacity = size;
+	uint8_t* buf = as_command_buffer_init(capacity);
+
+	uint8_t* p = as_batch_write_header(buf, &policy->base, policy->base.total_timeout,
+		field_count_header);
+
+	if (policy->base.filter_exp) {
+		p = as_exp_write(policy->base.filter_exp, p);
+	}
+	else if (policy->base.predexp) {
+		p = as_predexp_list_write(policy->base.predexp, pred_size, p);
+	}
+
+	uint8_t* field_size_ptr = p;
+	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
+
+	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
+	p += sizeof(uint32_t);
+	*p++ = as_batch_get_flags(policy);
+	prev = 0;
+	
+	for (uint32_t i = 0; i < n_offsets; i++) {
+		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
+		*(uint32_t*)p = cf_swap_to_be32(offset);
+		p += sizeof(uint32_t);
+		
+		as_key* key = &bt->keys[offset];
+		memcpy(p, key->digest.value, AS_DIGEST_VALUE_SIZE);
+		p += AS_DIGEST_VALUE_SIZE;
+		
+		if (prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
+			// Can set repeat previous namespace/bin names to save space.
+			*p++ = BATCH_MSG_REPEAT;
+		}
+		else {
+			// Write full message.
+			// TODO: HANDLE OTHER TYPES.
+			p = as_batch_write_write(p, key, &bt->attr, NULL, 0, 0);
+			prev = key;
+		}
+	}
+	as_buffers_destroy(&buffers);
+
+	// Write real field size.
+	size = p - field_size_ptr - 4;
+	*(uint32_t*)field_size_ptr = cf_swap_to_be32((uint32_t)size);
+	
+	size = as_command_write_end(buf, p);
+	
+	as_status status;
+
+	if (policy->base.compress && size > AS_COMPRESS_THRESHOLD) {
+		// Compress command.
+		size_t comp_capacity = as_command_compress_max_size(size);
+		size_t comp_size = comp_capacity;
+		uint8_t* comp_buf = as_command_buffer_init(comp_capacity);
+		status = as_command_compress(err, buf, size, comp_buf, &comp_size);
+		as_command_buffer_free(buf, capacity);
+
+		if (status != AEROSPIKE_OK) {
+			as_command_buffer_free(comp_buf, comp_capacity);
+			return status;
+		}
+		capacity = comp_capacity;
+		buf = comp_buf;
+		size = comp_size;
+	}
+
+	as_command cmd;
+
+	as_batch_command_init(&cmd, task, policy, buf, size, parent);
+	status = as_command_execute(&cmd, err);
+	as_command_buffer_free(buf, capacity);
+	return status;
+}
+
+as_status
+aerospike_batch_remove(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_remove* policy_remove, const as_batch* batch,
+	aerospike_batch_callback callback, void* udata
+	)
+{
+	as_error_reset(err);
+	
+	uint32_t n_keys = batch->keys.size;
+	
+	if (n_keys == 0) {
+		callback(0, 0, udata);
+		return AEROSPIKE_OK;
+	}
+
+	if (! policy) {
+		policy = &as->config.policies.batch;
+	}
+	
+	if (! policy_remove) {
+		policy_remove = &as->config.policies.batch_remove;
+	}
+
+	as_cluster* cluster = as->cluster;
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	uint32_t n_nodes = nodes->size;
+	
+	if (n_nodes == 0) {
+		as_nodes_release(nodes);
+		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, cluster_empty_error);
+	}
+
+	as_batch_result* results = NULL;
+
+	if (callback) {
+		if (n_keys <= 5000) {
+			// Stack allocate
+			results = alloca(sizeof(as_batch_result) * n_keys);
+		}
+		else {
+			// Heap allocate
+			results = cf_malloc(sizeof(as_batch_result) * n_keys);
+		}
+	}
+
+	uint32_t error_mutex = 0;
+
+	// Initialize task.
+	as_batch_task_remove btr;
+	memset(&btr, 0, sizeof(as_batch_task_remove));
+	btr.base.cluster = cluster;
+	btr.base.policy = policy;
+	btr.base.err = err;
+	btr.base.error_mutex = &error_mutex;
+	btr.base.n_keys = n_keys;
+	btr.base.use_batch_records = false;  // TODO: replace with type.
+	btr.ns = batch->keys.entries[0].ns;
+	btr.keys = batch->keys.entries;
+	btr.batch = batch;
+	btr.results = results;
+	btr.callback = callback;
+	btr.udata = udata;
+	as_batch_attr_remove_row(&btr.attr, policy_remove);
+
+	as_vector batch_nodes;
+	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
+
+	as_status status = AEROSPIKE_OK;
+	
+	// Create initial key capacity for each node as average + 25%.
+	uint32_t offsets_capacity = n_keys / n_nodes;
+	offsets_capacity += offsets_capacity >> 2;
+
+	// The minimum key capacity is 10.
+	if (offsets_capacity < 10) {
+		offsets_capacity = 10;
+	}
+
+	as_policy_replica replica = as_batch_get_replica_write(policy);
+
+	// Map keys to server nodes.
+	for (uint32_t i = 0; i < n_keys; i++) {
+		as_key* key = &batch->keys.entries[i];
+		
+		if (callback) {
+			as_batch_result* result = &results[i];
+			result->key = key;
+			result->result = AEROSPIKE_ERR_RECORD_NOT_FOUND;
+			as_record_init(&result->record, 0);
+		}
+		
+		status = as_key_set_digest(err, key);
+		
+		if (status != AEROSPIKE_OK) {
+			as_batch_release_nodes(&batch_nodes);
+			as_nodes_release(nodes);
+			return status;
+		}
+
+		as_node* node;
+		status = as_batch_get_node_write(cluster, err, key, replica, true, NULL, &node);
+
+		if (status != AEROSPIKE_OK) {
+			as_batch_release_nodes(&batch_nodes);
+			as_nodes_release(nodes);
+			return status;
+		}
+
+		as_batch_node* batch_node = as_batch_node_find(&batch_nodes, node);
+		
+		if (! batch_node) {
+			// Add batch node.
+			as_node_reserve(node);
+			batch_node = as_vector_reserve(&batch_nodes);
+			batch_node->node = node;  // Transfer node
+
+			if (n_keys <= 5000) {
+				// All keys and offsets should fit on stack.
+				as_vector_inita(&batch_node->offsets, sizeof(uint32_t), offsets_capacity);
+			}
+			else {
+				// Allocate vector on heap to avoid stack overflow.
+				as_vector_init(&batch_node->offsets, sizeof(uint32_t), offsets_capacity);
+			}
+		}
+		as_vector_append(&batch_node->offsets, &i);
+	}
+	as_nodes_release(nodes);
+
+	if (policy->concurrent && batch_nodes.size > 1) {
+		// Run batch requests in parallel in separate threads.
+		btr.base.complete_q = cf_queue_create(sizeof(as_batch_complete_task), true);
+		
+		uint32_t n_wait_nodes = batch_nodes.size;
+		
+		// Run task for each node.
+		for (uint32_t i = 0; i < batch_nodes.size; i++) {
+			// Stack allocate task for each node.  It should be fine since the task
+			// only needs to be valid within this function.
+			as_batch_task_keys* btr_node = alloca(sizeof(as_batch_task_keys));
+			memcpy(btr_node, &btr, sizeof(as_batch_task_keys));
+			
+			as_batch_node* batch_node = as_vector_get(&batch_nodes, i);
+			btr_node->base.node = batch_node->node;
+			memcpy(&btr_node->base.offsets, &batch_node->offsets, sizeof(as_vector));
+
+			int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_batch_worker, btr_node);
+			
+			if (rc) {
+				// Thread could not be added. Abort entire batch.
+				if (as_fas_uint32(btr.base.error_mutex, 1) == 0) {
+					status = as_error_update(btr.base.err, AEROSPIKE_ERR_CLIENT,
+											 "Failed to add batch thread: %d", rc);
+				}
+				
+				// Reset node count to threads that were run.
+				n_wait_nodes = i;
+				break;
+			}
+		}
+		
+		// Wait for tasks to complete.
+		for (uint32_t i = 0; i < n_wait_nodes; i++) {
+			as_batch_complete_task complete;
+			cf_queue_pop(btr.base.complete_q, &complete, CF_QUEUE_FOREVER);
+			
+			if (complete.result != AEROSPIKE_OK && status == AEROSPIKE_OK) {
+				status = complete.result;
+			}
+		}
+		
+		// Release temporary queue.
+		cf_queue_destroy(btr.base.complete_q);
+	}
+	else {
+		// Run batch requests sequentially in same thread.
+		for (uint32_t i = 0; status == AEROSPIKE_OK && i < batch_nodes.size; i++) {
+			as_batch_node* batch_node = as_vector_get(&batch_nodes, i);
+			
+			btr.base.node = batch_node->node;
+			memcpy(&btr.base.offsets, &batch_node->offsets, sizeof(as_vector));
+			status = as_batch_execute_remove(&btr, err, NULL);
+		}
+	}
+
+	// Release each node.
+	as_batch_release_nodes(&batch_nodes);
+
+	// Call user defined function with results.
+	if (callback) {
+		callback(btr.results, n_keys, udata);
+		
+		// Destroy records. User is responsible for destroying keys with as_batch_destroy().
+		for (uint32_t i = 0; i < n_keys; i++) {
+			as_batch_read* br = &btr.results[i];
+			if (br->result == AEROSPIKE_OK) {
+				as_record_destroy(&br->record);
+			}
+		}
+	}
+	return status;
 }

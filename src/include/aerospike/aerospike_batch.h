@@ -20,10 +20,8 @@
  * @defgroup batch_operations Batch Operations
  * @ingroup client_operations
  *
- * Aerospike provides a batch API to access data in the cluster. 
- *
- * The Batch API is a collection of APIs that use as_keyset as for looking up
- * records for accessing in the cluster. 
+ * The Batch API is a collection of APIs that use multiple keys for looking up
+ * records in one call.
  */
 
 #include <aerospike/aerospike.h>
@@ -47,16 +45,70 @@ extern "C" {
  * TYPES
  *****************************************************************************/
 
+#define AS_BATCH_READ 0
+#define AS_BATCH_WRITE 1
+#define AS_BATCH_APPLY 2
+#define AS_BATCH_REMOVE 3
+
 /**
- * Key and bin names used in batch commands where variables bins are needed for each key.
- * The returned records are located in the same batch record.
+ * Batch record type. Values: AS_BATCH_READ, AS_BATCH_WRITE, AS_BATCH_APPLY or AS_BATCH_REMOVE
+ * @ingroup batch_operations
  */
-typedef struct as_batch_read_record_s {
+typedef uint8_t as_batch_type;
+
+/**
+ * Batch base request/response record. Used in batch commands where different command types are
+ * needed for different keys. All batch record types contain these base fields.
+ * @ingroup batch_operations
+ */
+typedef struct as_batch_base_record_s {
 	/**
-	 * The key requested.
+	 * Requested key.
 	 */
 	as_key key;
 	
+	/**
+	 * Record for the requested key. This record will only be populated when the result is
+	 * AEROSPIKE_OK or AEROSPIKE_ERR_UDF. If AEROSPIKE_ERR_UDF, use as_record_get_udf_error()
+	 * to obtain the error message.
+	 */
+	as_record record;
+
+	/**
+	 * Result code.
+	 */
+	as_status result;
+
+	/**
+	 * Type of batch record.
+	 */
+	as_batch_type type;
+
+	/**
+	 * Is it possible that the write transaction completed even though this error was generated.
+	 * This may be the case when a client error occurs (like timeout) after the command was sent
+	 * to the server.
+	 */
+	bool in_doubt;
+} as_batch_base_record;
+
+/**
+ * Batch key and read only operations with read policy. 
+ * @relates as_batch_base_record
+ * @ingroup batch_operations
+ */
+typedef struct as_batch_read_record_s {
+	as_key key;
+	as_record record;
+	as_status result;
+	as_batch_type type;
+	bool in_doubt; // Will always be false for reads.
+
+	/**
+	 * Optional read policy.
+	 */
+	as_policy_batch_read* policy;
+
 	/**
 	 * Read operations for this key. ops are mutually exclusive with bin_names.
 	 */
@@ -78,52 +130,118 @@ typedef struct as_batch_read_record_s {
 	 * If false and bin_names are not set, read record header (generation, expiration) only.
 	 */
 	bool read_all_bins;
-	
-	/**
-	 * The result of the read transaction.
-	 *
-	 * Values:
-	 * <ul>
-	 * <li>
-	 * AEROSPIKE_OK: record found
-	 * </li>
-	 * <li>
-	 * AEROSPIKE_ERR_RECORD_NOT_FOUND: record not found
-	 * </li>
-	 * <li>
-	 * Other: transaction error code
-	 * </li>
-	 * </ul>
-	 */
-	as_status result;
-	
-	/**
-	 * The record for the key requested.  For "exists" calls, the record will never contain bins
-	 * but will contain metadata (generation and expiration) when the record exists.
-	 */
-	as_record record;
 } as_batch_read_record;
-	
-/**
- * List of as_batch_read_record(s).
- */
-typedef struct as_batch_read_records_s {
-	/**
-	 * List of as_batch_read_record(s).
-	 */
-	as_vector list;
-} as_batch_read_records;
 
 /**
- * This callback will be called with the results of aerospike_batch_get(),
- * or aerospike_batch_exists() functions.
+ * Batch key and read/write operations with write policy.
+ * @relates as_batch_base_record
+ * @ingroup batch_operations
+ */
+typedef struct as_batch_write_record_s {
+	as_key key;
+	as_record record;
+	as_status result;
+	as_batch_type type;
+	bool in_doubt;
+
+	/**
+	 * Optional write policy.
+	 */
+	as_policy_batch_write* policy;
+
+	/**
+	 * Required read/write operations for this key.
+	 */
+	as_operations* ops;
+} as_batch_write_record;
+
+/**
+ * Batch UDF (user defined function) apply.
+ * @relates as_batch_base_record
+ * @ingroup batch_operations
+ */
+typedef struct as_batch_apply_record_s {
+	as_key key;
+	as_record record;
+	as_status result;
+	as_batch_type type;
+	bool in_doubt;
+
+	/**
+	 * Optional apply policy.
+	 */
+	as_policy_batch_apply* policy;
+
+	/**
+	 * Package or lua module name.
+	 */
+	const char* module;
+
+	/**
+	 * Lua function name.
+	 */
+	const char* function;
+
+	/**
+	 * Optional arguments to lua function.
+	 */
+	as_list* arglist;
+} as_batch_apply_record;
+
+/**
+ * Batch delete operation.
+ * @relates as_batch_base_record
+ * @ingroup batch_operations
+ */
+typedef struct as_batch_remove_record_s {
+	as_key key;
+	as_record record;
+	as_status result;
+	as_batch_type type;
+	bool in_doubt;
+
+	/**
+	 * Optional remove policy.
+	 */
+	as_policy_batch_remove* policy;
+} as_batch_remove_record;
+
+/**
+ * Batch request/response record union.
+ * @ingroup batch_operations
+ */
+typedef union {
+	as_batch_base_record base;
+	as_batch_read_record read;
+	as_batch_write_record write;
+	as_batch_apply_record apply;
+	as_batch_remove_record remove;
+} as_batch_record;
+
+/**
+ * List of batch request/response (as_batch_base_record) records. The record types can be
+ * as_batch_read_record, as_batch_write_record, as_batch_apply_record or as_batch_remove_record.
+ */
+typedef struct as_batch_records_s {
+	as_vector list;
+} as_batch_records;
+
+/**
+ * List of batch request/response (as_batch_base_record) records. The record types can be
+ * as_batch_read_record, as_batch_write_record, as_batch_apply_record or as_batch_remove_record.
+ * @deprecated Use as_batch_records instead.
+ */
+typedef as_batch_records as_batch_read_records;
+
+/**
+ * This callback will be called with the results of batch commands for all keys.
  *
- * 	The `results` argument will be an array of `n` as_batch_read entries. The
+ * 	The `results` argument will be an array of `n` as_batch_result entries. The
  * 	`results` argument is on the stack and is only available within the context
  * 	of the callback. To use the data outside of the callback, copy the data.
  *
  * ~~~~~~~~~~{.c}
- * bool my_callback(const as_batch_read * results, uint32_t n, void* udata) {
+ * bool my_callback(const as_batch_result* results, uint32_t n, void* udata) {
  *     return true;
  * }
  * ~~~~~~~~~~
@@ -136,8 +254,17 @@ typedef struct as_batch_read_records_s {
  *
  * @ingroup batch_operations
  */
+typedef bool (*aerospike_batch_callback)(const as_batch_result* results, uint32_t n, void* udata);
+
+/**
+ * This callback will be called with the results of aerospike_batch_get(),
+ * or aerospike_batch_exists() functions.
+ *
+ * @deprecated Use aerospike_batch_callback instead.
+ * @ingroup batch_operations
+ */
 typedef bool (*aerospike_batch_read_callback)(const as_batch_read* results, uint32_t n, void* udata);
-	
+
 /**
  * @private
  * This callback is used by aerospike_batch_get_xdr() to send one batch record at a time
@@ -165,82 +292,175 @@ typedef void (*as_async_batch_listener)(as_error* err, as_batch_read_records* re
  *****************************************************************************/
 
 /**
- * Initialize `as_batch_read_records` with specified capacity on the stack using alloca().
+ * Initialize batch records with specified capacity on the stack using alloca().
  *
- * When the batch is no longer needed, then use as_batch_read_destroy() to
+ * When the batch is no longer needed, then use as_batch_records_destroy() to
  * release the batch and associated resources.
  *
  * @param __records		Batch record list.
  * @param __capacity	Initial capacity of batch record list. List will resize when necessary.
  *
- * @relates as_batch_read_record
+ * @relates as_batch_records
+ * @ingroup batch_operations
+ */
+#define as_batch_records_inita(__records, __capacity) \
+	as_vector_inita(&((__records)->list), sizeof(as_batch_record), __capacity);
+
+/**
+ * Initialize batch records with specified capacity on the stack using alloca().
+ *
+ * @deprecated Use as_batch_records_inita() instead.
+ * @relates as_batch_records
  * @ingroup batch_operations
  */
 #define as_batch_read_inita(__records, __capacity) \
-	as_vector_inita(&((__records)->list), sizeof(as_batch_read_record), __capacity);
+	as_vector_inita(&((__records)->list), sizeof(as_batch_record), __capacity);
 
 /**
- * Initialize `as_batch_read_records` with specified capacity on the heap.
+ * Initialize batch records with specified capacity on the heap.
  *
- * When the batch is no longer needed, then use as_batch_read_destroy() to
+ * When the batch is no longer needed, then use as_batch_records_destroy() to
  * release the batch and associated resources.
  *
  * @param records	Batch record list.
  * @param capacity	Initial capacity of batch record list. List will resize when necessary.
  *
- * @relates as_batch_read_record
+ * @relates as_batch_records
  * @ingroup batch_operations
  */
 static inline void
-as_batch_read_init(as_batch_read_records* records, uint32_t capacity)
+as_batch_records_init(as_batch_records* records, uint32_t capacity)
 {
-	as_vector_init(&records->list, sizeof(as_batch_read_record), capacity);
+	as_vector_init(&records->list, sizeof(as_batch_record), capacity);
 }
 
 /**
- * Create `as_batch_read_records` on heap with specified list capacity on the heap.
+ * Initialize batch records with specified capacity on the heap.
  *
- * When the batch is no longer needed, then use as_batch_read_destroy() to
+ * @deprecated Use as_batch_records_init() instead.
+ * @relates as_batch_records
+ * @ingroup batch_operations
+ */
+static inline void
+as_batch_read_init(as_batch_records* records, uint32_t capacity)
+{
+	as_vector_init(&records->list, sizeof(as_batch_record), capacity);
+}
+
+/**
+ * Create batch records on heap with specified list capacity on the heap.
+ *
+ * When the batch is no longer needed, then use as_batch_records_destroy() to
  * release the batch and associated resources.
  *
  * @param capacity	Initial capacity of batch record list. List will resize when necessary.
  * @return			Batch record list.
  *
- * @relates as_batch_read_record
+ * @relates as_batch_records
  * @ingroup batch_operations
  */
-static inline as_batch_read_records*
+static inline as_batch_records*
+as_batch_records_create(uint32_t capacity)
+{
+	return (as_batch_records*)as_vector_create(sizeof(as_batch_record), capacity);
+}
+
+/**
+ * Create batch records on heap with specified list capacity on the heap.
+ *
+ * @deprecated Use as_batch_records_create() instead.
+ * @relates as_batch_records
+ * @ingroup batch_operations
+ */
+static inline as_batch_records*
 as_batch_read_create(uint32_t capacity)
 {
-	return (as_batch_read_records*) as_vector_create(sizeof(as_batch_read_record), capacity);
+	return (as_batch_records*)as_vector_create(sizeof(as_batch_record), capacity);
 }
 
 /**
  * Reserve a new `as_batch_read_record` slot.  Capacity will be increased when necessary.
  * Return reference to record.  The record is already initialized to zeroes.
  *
- * @param records	Batch record list.
- *
- * @relates as_batch_read_record
+ * @relates as_batch_records
  * @ingroup batch_operations
  */
 static inline as_batch_read_record*
-as_batch_read_reserve(as_batch_read_records* records)
+as_batch_read_reserve(as_batch_records* records)
 {
-	return (as_batch_read_record*)as_vector_reserve(&records->list);
+	as_batch_read_record* r = (as_batch_read_record*)as_vector_reserve(&records->list);
+	r->type = AS_BATCH_READ;
+	return r;
 }
-	
+
+/**
+ * Reserve a new `as_batch_write_record` slot.  Capacity will be increased when necessary.
+ * Return reference to record.  The record is already initialized to zeroes.
+ *
+ * @relates as_batch_records
+ * @ingroup batch_operations
+ */
+static inline as_batch_write_record*
+as_batch_write_reserve(as_batch_records* records)
+{
+	as_batch_write_record* r = (as_batch_write_record*)as_vector_reserve(&records->list);
+	r->type = AS_BATCH_WRITE;
+	return r;
+}
+
+/**
+ * Reserve a new `as_batch_apply_record` slot.  Capacity will be increased when necessary.
+ * Return reference to record.  The record is already initialized to zeroes.
+ *
+ * @relates as_batch_records
+ * @ingroup batch_operations
+ */
+static inline as_batch_apply_record*
+as_batch_apply_reserve(as_batch_records* records)
+{
+	as_batch_apply_record* r = (as_batch_apply_record*)as_vector_reserve(&records->list);
+	r->type = AS_BATCH_APPLY;
+	return r;
+}
+
+/**
+ * Reserve a new `as_batch_remove_record` slot.  Capacity will be increased when necessary.
+ * Return reference to record.  The record is already initialized to zeroes.
+ *
+ * @relates as_batch_records
+ * @ingroup batch_operations
+ */
+static inline as_batch_remove_record*
+as_batch_remove_reserve(as_batch_records* records)
+{
+	as_batch_remove_record* r = (as_batch_remove_record*)as_vector_reserve(&records->list);
+	r->type = AS_BATCH_REMOVE;
+	return r;
+}
+
 /**
  * Destroy keys and records in record list.  It's the responsility of the caller to 
  * free `as_batch_read_record.bin_names` and `as_batch_read_record.ops` when necessary.
  *
- * @param records	Batch record list.
- *
- * @relates as_batch_read_record
+ * @relates as_batch_records
  * @ingroup batch_operations
  */
 AS_EXTERN void
-as_batch_read_destroy(as_batch_read_records* records);
+as_batch_records_destroy(as_batch_records* records);
+
+/**
+ * Destroy keys and records in record list.  It's the responsility of the caller to 
+ * free `as_batch_read_record.bin_names` and `as_batch_read_record.ops` when necessary.
+ *
+ * @deprecated Use as_batch_records_destroy() instead.
+ * @relates as_batch_records
+ * @ingroup batch_operations
+ */
+static inline void
+as_batch_read_destroy(as_batch_read_records* records)
+{
+	as_batch_records_destroy(records);
+}
 
 /**
  * Read multiple records for specified batch keys in one batch call.
@@ -515,6 +735,14 @@ AS_EXTERN as_status
 aerospike_batch_exists(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
 	aerospike_batch_read_callback callback, void* udata
+	);
+
+// TODO: DOC
+AS_EXTERN as_status
+aerospike_batch_remove(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_remove* policy_remove, const as_batch* batch,
+	aerospike_batch_callback callback, void* udata
 	);
 
 #ifdef __cplusplus

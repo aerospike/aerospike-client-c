@@ -926,6 +926,24 @@ as_record_get_list(const as_record* rec, const as_bin_name name);
 AS_EXTERN as_map*
 as_record_get_map(const as_record* rec, const as_bin_name name);
 
+/**
+ * Get the value returned by a UDF apply in a batch.
+ * The result may be null.
+ *
+ * @relates as_record
+ */
+AS_EXTERN as_val*
+as_record_get_udf_result(const as_record* rec);
+
+/**
+ * Get the error string returned by a UDF apply in a batch.
+ * Return null if an error did not occur.
+ *
+ * @relates as_record
+ */
+AS_EXTERN char*
+as_record_get_udf_error(const as_record* rec);
+
 /******************************************************************************
  * ITERATION FUNCTIONS
  ******************************************************************************/

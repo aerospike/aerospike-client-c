@@ -51,7 +51,7 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 as_status
 as_batch_retry(as_command* cmd, as_error* err);
 
-static size_t
+size_t
 as_command_user_key_size(const as_key* key)
 {
 	size_t size = AS_FIELD_HEADER_SIZE + 1;  // Add 1 for key's value type.
@@ -267,7 +267,7 @@ as_command_write_header_read_header(
 	return cmd + AS_HEADER_SIZE;
 }
 
-static uint8_t*
+uint8_t*
 as_command_write_user_key(uint8_t* begin, const as_key* key)
 {
 	uint8_t* p = begin + AS_FIELD_HEADER_SIZE;

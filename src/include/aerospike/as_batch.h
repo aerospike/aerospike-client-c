@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -66,33 +66,38 @@ typedef struct as_batch_s {
 } as_batch;
 
 /**
- * The (key, result, record) for an entry in a batch read.
- * The result is AEROSPIKE_OK if the record is found,
- * AEROSPIKE_ERR_RECORD_NOT_FOUND if the transaction succeeds but the record is
- * not found, or another error code if the transaction fails.
- * The record is NULL if either the transaction failed or the record does not
- * exist. For aerospike_batch_exists() calls the record will never contain bins
- * but will contain metadata (generation and expiration).
+ * Batch key and record result.
  */
-typedef struct as_batch_read_s {
-
+typedef struct as_batch_result_s {
 	/**
-	 * The key requested.
+	 * The requested key.
 	 */
 	const as_key* key;
 
 	/**
-	 * The result of the transaction to read this key.
+	 * Record result after batch command has completed.  Will be null if record was not found
+	 * or an error occurred.
+	 */
+	as_record record;
+
+	/**
+	 * Result code for this returned record. If not AEROSPIKE_OK, the record will be null.
 	 */
 	as_status result;
 
 	/**
-	 * The record for the key requested, NULL if the key was not found.
+	 * Is it possible that the write transaction may have completed even though an error
+	 * occurred for this record. This may be the case when a client error occurs (like timeout)
+	 * after the command was sent to the server.
 	 */
-	as_record record;
+	bool in_doubt;
+} as_batch_result;
 
-} as_batch_read;
-
+/**
+ * The (key, result, record) for an entry in a batch read.
+ * @deprecated Use as_batch_result instead.
+ */
+typedef as_batch_result as_batch_read;
 
 /*********************************************************************************
  * INSTANCE MACROS

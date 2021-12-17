@@ -33,6 +33,16 @@ typedef enum as_status_e {
 	 * Client Errors
 	 **************************************************************************/
 	/**
+	 * One or more keys failed in a batch.
+	 */
+	AEROSPIKE_BATCH_FAILED = -16,
+
+	/**
+	 * No response received from server.
+	 */
+	AEROSPIKE_NO_RESPONSE = -15,
+
+	/**
 	 * Max errors limit reached.
 	 */
 	AEROSPIKE_MAX_ERROR_RATE = -14,

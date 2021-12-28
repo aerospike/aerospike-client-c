@@ -167,10 +167,18 @@ as_scan_partition_complete_async(as_event_executor* ee)
 }
 
 static as_status
-as_scan_parse_record_async(
-	as_async_scan_executor* se, as_async_scan_command* sc, uint8_t** pp, as_msg* msg, as_error* err
-	)
+as_scan_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as_error* err)
 {
+	as_async_scan_command* sc = (as_async_scan_command*)cmd;
+	as_async_scan_executor* se = cmd->udata;  // udata is overloaded to contain executor.
+
+	if (sc->np) {
+		if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
+			as_partition_tracker_part_done(se->pt, sc->np, msg->generation);
+			return AEROSPIKE_OK;
+		}
+	}
+
 	as_record rec;
 	as_record_inita(&rec, msg->n_ops);
 	
@@ -183,7 +191,7 @@ as_scan_parse_record_async(
 	}
 
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops,
-											 sc->command.flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
+											 cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
 
 	if (status != AEROSPIKE_OK) {
 		as_record_destroy(&rec);
@@ -204,44 +212,18 @@ static bool
 as_scan_parse_records_async(as_event_command* cmd)
 {
 	as_error err;
-	as_async_scan_command* sc = (as_async_scan_command*)cmd;
-	as_async_scan_executor* se = cmd->udata;  // udata is overloaded to contain executor.
+	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
 	uint8_t* p = cmd->buf + cmd->pos;
 	uint8_t* end = cmd->buf + cmd->len;
 
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
-		p += sizeof(as_msg);
 		
-		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			if (msg->result_code != AEROSPIKE_OK) {
-				// The server returned a fatal error.
-				as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
-				as_event_response_error(cmd, &err);
-				return true;
-			}
-			as_event_query_complete(cmd);
-			return true;
-		}
-
-		if (sc->np) {
-			if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
-				// Only mark partition done when result_code is AEROSPIKE_OK.
-				// The server may return PARTITION_UNAVAILABLE (AEROSPIKE_ERR_CLUSTER) which
-				// means the specified partition will need to be requested on the scan retry.
-				if (msg->result_code == AEROSPIKE_OK) {
-					as_partition_tracker_part_done(se->pt, sc->np, msg->generation);
-				}
-				continue;
-			}
-		}
-
-		if (msg->result_code != AEROSPIKE_OK) {
-			// Background scans return AEROSPIKE_ERR_RECORD_NOT_FOUND
-			// when the set does not exist on the target node.
+		if (msg->result_code) {
+			// Special case - if we scan a set name that doesn't exist on a
+			// node, it will return "not found".
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-				// Non-fatal error.
 				as_event_query_complete(cmd);
 				return true;
 			}
@@ -249,14 +231,20 @@ as_scan_parse_records_async(as_event_command* cmd)
 			as_event_response_error(cmd, &err);
 			return true;
 		}
-
-		if (! se->executor.valid) {
+		p += sizeof(as_msg);
+		
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			as_event_query_complete(cmd);
+			return true;
+		}
+		
+		if (! executor->valid) {
 			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
 			as_event_response_error(cmd, &err);
 			return true;
 		}
 
-		if (as_scan_parse_record_async(se, sc, &p, msg, &err) != AEROSPIKE_OK) {
+		if (as_scan_parse_record_async(cmd, &p, msg, &err) != AEROSPIKE_OK) {
 			as_event_response_error(cmd, &err);
 			return true;
 		}
@@ -267,6 +255,13 @@ as_scan_parse_records_async(as_event_command* cmd)
 static as_status
 as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* err)
 {
+	if (task->pt) {
+		if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
+			as_partition_tracker_part_done(task->pt, task->np, msg->generation);
+			return AEROSPIKE_OK;
+		}
+	}
+
 	as_record rec;
 	as_record_inita(&rec, msg->n_ops);
 	
@@ -305,38 +300,24 @@ as_scan_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, v
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
-		p += sizeof(as_msg);
 		
-		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			if (msg->result_code != AEROSPIKE_OK) {
-				// The server returned a fatal error.
-				return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
-			}
-			return AEROSPIKE_NO_MORE_RECORDS;
-		}
-
-		if (task->pt) {
-			if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
-				// Only mark partition done when result_code is AEROSPIKE_OK.
-				// The server may return PARTITION_UNAVAILABLE (AEROSPIKE_ERR_CLUSTER) which
-				// means the specified partition will need to be requested on the scan retry.
-				if (msg->result_code == AEROSPIKE_OK) {
-					as_partition_tracker_part_done(task->pt, task->np, msg->generation);
-				}
-				continue;
-			}
-		}
-
-		if (msg->result_code != AEROSPIKE_OK) {
-			// Background scans return AEROSPIKE_ERR_RECORD_NOT_FOUND
-			// when the set does not exist on the target node.
+		if (msg->result_code) {
+			// Special case - if we scan a set name that doesn't exist on a
+			// node, it will return "not found" - we unify this with the
+			// case where OK is returned and no callbacks were made. [AKG]
+			// We are sending "no more records back" to the caller which will
+			// send OK to the main worker thread.
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-				// Non-fatal error.
 				return AEROSPIKE_NO_MORE_RECORDS;
 			}
 			return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
 		}
-
+		p += sizeof(as_msg);
+		
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			return AEROSPIKE_NO_MORE_RECORDS;
+		}
+		
 		status = as_scan_parse_record(&p, msg, task, err);
 		
 		if (status != AEROSPIKE_OK) {

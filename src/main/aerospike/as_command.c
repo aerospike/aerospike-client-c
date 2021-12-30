@@ -49,7 +49,7 @@ static as_status
 as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node);
 
 as_status
-as_batch_retry(as_command* cmd, as_error* err);
+as_batch_retry(as_command* cmd, as_error* err, uint32_t sent_counter);
 
 size_t
 as_command_user_key_size(const as_key* key)
@@ -725,7 +725,7 @@ Retry:
 		}
 
 		if (cmd->flags & AS_COMMAND_FLAGS_BATCH) {
-			status = as_batch_retry(cmd, err);
+			status = as_batch_retry(cmd, err, command_sent_counter);
 
 			if (status != AEROSPIKE_USE_NORMAL_RETRY) {
 				return status;

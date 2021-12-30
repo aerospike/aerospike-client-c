@@ -85,6 +85,11 @@ typedef struct as_batch_base_record_s {
 	as_batch_type type;
 
 	/**
+	 * Does batch sub-transaction contain a write operation.
+	 */
+	bool has_write;
+
+	/**
 	 * Is it possible that the write transaction completed even though this error was generated.
 	 * This may be the case when a client error occurs (like timeout) after the command was sent
 	 * to the server.
@@ -102,6 +107,7 @@ typedef struct as_batch_read_record_s {
 	as_record record;
 	as_status result;
 	as_batch_type type;
+	bool has_write;
 	bool in_doubt; // Will always be false for reads.
 
 	/**
@@ -142,6 +148,7 @@ typedef struct as_batch_write_record_s {
 	as_record record;
 	as_status result;
 	as_batch_type type;
+	bool has_write;
 	bool in_doubt;
 
 	/**
@@ -165,6 +172,7 @@ typedef struct as_batch_apply_record_s {
 	as_record record;
 	as_status result;
 	as_batch_type type;
+	bool has_write;
 	bool in_doubt;
 
 	/**
@@ -198,6 +206,7 @@ typedef struct as_batch_remove_record_s {
 	as_record record;
 	as_status result;
 	as_batch_type type;
+	bool has_write;
 	bool in_doubt;
 
 	/**

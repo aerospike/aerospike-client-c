@@ -83,6 +83,7 @@ typedef struct as_batch_task_s {
 	uint32_t* error_mutex;
 	cf_queue* complete_q;
 	uint32_t n_keys;
+	uint32_t command_sent_counter;
 	as_policy_replica replica_sc;  // TODO: TAKE OUT!
 	bool use_batch_records;
 } as_batch_task;
@@ -97,7 +98,7 @@ typedef struct as_batch_task_keys_s {
 	const char* ns;
 	as_key* keys;
 	const as_batch* batch;
-	as_batch_read* results;
+	as_batch_result* results;
 	aerospike_batch_read_callback callback;
 	as_batch_callback_xdr callback_xdr;
 	void* udata;
@@ -105,6 +106,7 @@ typedef struct as_batch_task_keys_s {
 	const char** bins;
 	uint32_t n_bins;
 	uint8_t read_attr;
+	bool has_write;
 } as_batch_task_keys;
 
 typedef struct {
@@ -489,8 +491,9 @@ as_batch_async_parse_records(as_event_command* cmd)
 		
 		as_batch_read_record* record = as_vector_get(records, offset);
 		record->result = msg->result_code;
-		
-		if (msg->result_code == AEROSPIKE_OK) {
+
+		if (msg->result_code == AEROSPIKE_OK || msg->result_code == AEROSPIKE_ERR_UDF) {
+			// AEROSPIKE_ERR_UDF results in "FAILURE" bin that contains an error message.
 			as_status status = as_batch_parse_record(&p, &err, msg, &record->record,
 													 cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
 
@@ -538,8 +541,9 @@ as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 			as_batch_task_records* btr = (as_batch_task_records*)task;
 			as_batch_read_record* record = as_vector_get(btr->records, offset);
 			record->result = msg->result_code;
-			
-			if (msg->result_code == AEROSPIKE_OK) {
+
+			if (msg->result_code == AEROSPIKE_OK || msg->result_code == AEROSPIKE_ERR_UDF) {
+				// AEROSPIKE_ERR_UDF results in a "FAILURE" bin that contains an error message.
 				as_status status = as_batch_parse_record(&p, err, msg, &record->record,
 														 deserialize);
 
@@ -571,10 +575,11 @@ as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 				}
 			}
 			else {
-				as_batch_read* result = &btk->results[offset];
+				as_batch_result* result = &btk->results[offset];
 				result->result = msg->result_code;
-				
-				if (msg->result_code == AEROSPIKE_OK) {
+
+				if (msg->result_code == AEROSPIKE_OK || msg->result_code == AEROSPIKE_ERR_UDF) {
+					// AEROSPIKE_ERR_UDF results in a "FAILURE" bin that contains an error message.
 					as_status status = as_batch_parse_record(&p, err, msg, &result->record,
 															 deserialize);
 
@@ -1974,7 +1979,7 @@ as_batch_keys_execute(
 	}
 	
 	// Allocate results array on stack.  May be an issue for huge batch.
-	as_batch_read* results = (callback)? (as_batch_read*)alloca(sizeof(as_batch_read) * n_keys) : 0;
+	as_batch_result* results = (callback)? (as_batch_result*)alloca(sizeof(as_batch_read) * n_keys) : 0;
 
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
@@ -1998,9 +2003,10 @@ as_batch_keys_execute(
 		as_key* key = &batch->keys.entries[i];
 		
 		if (callback) {
-			as_batch_read* result = &results[i];
+			as_batch_result* result = &results[i];
 			result->key = key;
-			result->result = AEROSPIKE_ERR_RECORD_NOT_FOUND;
+			result->result = AEROSPIKE_NO_RESPONSE;
+			result->in_doubt = false;
 			as_record_init(&result->record, 0);
 		}
 		
@@ -2132,8 +2138,8 @@ as_batch_keys_execute(
 		
 		// Destroy records. User is responsible for destroying keys with as_batch_destroy().
 		for (uint32_t i = 0; i < n_keys; i++) {
-			as_batch_read* br = &btk.results[i];
-			if (br->result == AEROSPIKE_OK) {
+			as_batch_result* br = &btk.results[i];
+			if (br->result == AEROSPIKE_OK || br->result == AEROSPIKE_ERR_UDF) {
 				as_record_destroy(&br->record);
 			}
 		}
@@ -2463,7 +2469,9 @@ as_batch_records_execute(
  *****************************************************************************/
 
 static as_status
-as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error* err)
+as_batch_retry_records(
+	as_batch_task_records* btr, as_command* parent, as_error* err, uint32_t sent_counter
+	)
 {
 	as_batch_task* task = &btr->base;
 	as_vector* list = btr->records;
@@ -2496,6 +2504,10 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
 		as_batch_read_record* record = as_vector_get(btr->records, offset);
 		as_key* key = &record->key;
+
+		if (sent_counter > 0 && record->has_write && !record->in_doubt) {
+			record->in_doubt = true;
+		}
 
 		as_node* node;
 		status = as_batch_get_node(cluster, err, key, task->policy->replica, task->replica_sc,
@@ -2537,7 +2549,9 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 }
 
 static as_status
-as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
+as_batch_retry_keys(
+	as_batch_task_keys* btk, as_command* parent, as_error* err, uint32_t sent_counter
+	)
 {
 	as_batch_task* task = &btk->base;
 	as_cluster* cluster = task->cluster;
@@ -2568,6 +2582,14 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
 		as_key* key = &btk->batch->keys.entries[offset];
+
+		if (sent_counter > 0 && btk->has_write && btk->callback) {
+			as_batch_result* result = &btk->results[offset];
+
+			if (!result->in_doubt) {
+				result->in_doubt = true;
+			}
+		}
 
 		as_node* node;
 		status = as_batch_get_node(cluster, err, key, task->policy->replica, task->replica_sc,
@@ -2618,8 +2640,50 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 	return status;
 }
 
+static void
+as_batch_set_in_doubt(as_batch_task* task, uint32_t sent_counter)
+{
+	if (sent_counter == 0) {
+		return;
+	}
+
+	if (task->use_batch_records) {
+		as_batch_task_records* btr = (as_batch_task_records*)task;
+		uint32_t offsets_size = task->offsets.size;
+
+		// Map keys to server nodes.
+		for (uint32_t i = 0; i < offsets_size; i++) {
+			uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
+			as_batch_base_record* rec = as_vector_get(btr->records, offset);
+
+			if (rec->has_write && !rec->in_doubt) {
+				rec->in_doubt = true;
+			}
+		}
+	}
+	else {
+		as_batch_task_keys* btk = (as_batch_task_keys*)task;
+
+		if (!(btk->has_write && btk->callback)) {
+			return;
+		}
+
+		uint32_t offsets_size = task->offsets.size;
+
+		// Map keys to server nodes.
+		for (uint32_t i = 0; i < offsets_size; i++) {
+			uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
+			as_batch_result* result = &btk->results[offset];
+
+			if (!result->in_doubt) {
+				result->in_doubt = true;
+			}
+		}
+	}
+}
+
 as_status
-as_batch_retry(as_command* parent, as_error* err)
+as_batch_retry(as_command* parent, as_error* err, uint32_t sent_counter)
 {
 	// Retry requires keys for this node to be split among other nodes.
 	// This is both recursive and exponential.
@@ -2627,6 +2691,7 @@ as_batch_retry(as_command* parent, as_error* err)
 
 	if (as_load_uint32(task->error_mutex)) {
 		// No reason to retry when entire batch will fail.
+		as_batch_set_in_doubt(task, sent_counter);
 		return err->code;
 	}
 
@@ -2635,6 +2700,7 @@ as_batch_retry(as_command* parent, as_error* err)
 
 	if (!(replica == AS_POLICY_REPLICA_SEQUENCE || replica == AS_POLICY_REPLICA_PREFER_RACK)) {
 		// Node assignment will not change.
+		as_batch_set_in_doubt(task, sent_counter);
 		return AEROSPIKE_USE_NORMAL_RETRY;
 	}
 
@@ -2644,10 +2710,10 @@ as_batch_retry(as_command* parent, as_error* err)
 	}
 
 	if (task->use_batch_records) {
-		return as_batch_retry_records((as_batch_task_records*)task, parent, err);
+		return as_batch_retry_records((as_batch_task_records*)task, parent, err, sent_counter);
 	}
 	else {
-		return as_batch_retry_keys((as_batch_task_keys*)task, parent, err);
+		return as_batch_retry_keys((as_batch_task_keys*)task, parent, err, sent_counter);
 	}
 }
 
@@ -3446,8 +3512,8 @@ aerospike_batch_remove(
 		
 		// Destroy records. User is responsible for destroying keys with as_batch_destroy().
 		for (uint32_t i = 0; i < n_keys; i++) {
-			as_batch_read* br = &btr.results[i];
-			if (br->result == AEROSPIKE_OK) {
+			as_batch_result* br = &btr.results[i];
+			if (br->result == AEROSPIKE_OK || br->result == AEROSPIKE_ERR_UDF) {
 				as_record_destroy(&br->record);
 			}
 		}

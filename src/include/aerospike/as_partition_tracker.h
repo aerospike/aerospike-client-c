@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -20,6 +20,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_partition_filter.h>
+#include <aerospike/as_scan.h>
 #include <aerospike/as_vector.h>
 
 #ifdef __cplusplus
@@ -33,16 +34,6 @@ struct as_node_s;
 struct as_cluster_s;
 struct as_policy_scan_s;
 struct as_error_s;
-
-/**
- * @private
- * Partition status.
- */
-typedef struct as_partition_status_s {
-	uint16_t part_id;
-	bool done;
-	as_digest digest;
-} as_partition_status;
 
 /**
  * @private
@@ -63,12 +54,11 @@ typedef struct as_node_partitions_s {
  * Scan partition tracker.
  */
 typedef struct as_partition_tracker_s {
-	as_partition_status* parts_all;
-	uint16_t part_begin;
-	uint16_t part_count;
+	as_partitions_status* parts_all;
 	uint32_t node_capacity;
 	struct as_node_s* node_filter;
 	as_vector node_parts;
+	as_vector* errors;
 	uint64_t max_records;
 	uint32_t parts_capacity;
 	uint32_t sleep_between_retries;
@@ -86,19 +76,19 @@ typedef struct as_partition_tracker_s {
 void
 as_partition_tracker_init_nodes(
 	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
-	uint32_t cluster_size
+	as_scan* scan, uint32_t cluster_size
 	);
 
 void
 as_partition_tracker_init_node(
 	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
-	struct as_node_s* node
+	as_scan* scan, struct as_node_s* node
 	);
 
 as_status
 as_partition_tracker_init_filter(
 	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
-	uint32_t cluster_size, as_partition_filter* pf, struct as_error_s* err
+	as_scan* scan, uint32_t cluster_size, as_partition_filter* pf, struct as_error_s* err
 	);
 
 as_status
@@ -109,7 +99,8 @@ as_partition_tracker_assign(
 static inline void
 as_partition_tracker_part_done(as_partition_tracker* pt, as_node_partitions* np, uint32_t part_id)
 {
-	pt->parts_all[part_id - pt->part_begin].done = true;
+	as_partitions_status* ps = pt->parts_all;
+	ps->parts[part_id - ps->part_begin].done = true;
 	np->parts_received++;
 }
 
@@ -119,7 +110,8 @@ as_partition_tracker_set_digest(
 	)
 {
 	uint32_t part_id = as_partition_getid(digest->value, n_partitions);
-	pt->parts_all[part_id - pt->part_begin].digest = *digest;
+	as_partitions_status* ps = pt->parts_all;
+	ps->parts[part_id - ps->part_begin].digest = *digest;
 	np->record_count++;
 }
 
@@ -133,14 +125,15 @@ static inline as_partition_status*
 as_partition_tracker_get_status(as_partition_tracker* pt, as_vector* list, uint32_t index)
 {
 	uint16_t part_id = *(uint16_t*)as_vector_get(list, index);
-	return &pt->parts_all[part_id - pt->part_begin];
+	as_partitions_status* ps = pt->parts_all;
+	return &ps->parts[part_id - ps->part_begin];
 }
 
 as_status
 as_partition_tracker_is_complete(as_partition_tracker* pt, struct as_error_s* err);
 
 bool
-as_partition_tracker_should_retry(as_status status);
+as_partition_tracker_should_retry(as_partition_tracker* pt, as_status status);
 
 void
 as_partition_tracker_destroy(as_partition_tracker* pt);

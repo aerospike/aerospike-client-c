@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2021 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,28 +17,64 @@
 #include <aerospike/as_partition_tracker.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_shm_cluster.h>
+#include <aerospike/as_string_builder.h>
 
 /******************************************************************************
  * Static Functions
  *****************************************************************************/
 
-static void
-tracker_init(as_partition_tracker* pt, const as_policy_scan* policy, const as_digest* digest)
+static as_partitions_status*
+parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 {
-	pt->parts_all = cf_malloc(sizeof(as_partition_status) * pt->part_count);
+	as_partitions_status* parts_all = cf_malloc(sizeof(as_partitions_status) +
+											   (sizeof(as_partition_status) * part_count));
 
-	for (uint32_t i = 0; i < pt->part_count; i++) {
-		as_partition_status* ps = &pt->parts_all[i];
-		ps->part_id = pt->part_begin + i;
+	parts_all->ref_count = 1;
+	parts_all->part_begin = part_begin;
+	parts_all->part_count = part_count;
+	parts_all->done = false;
+
+	for (uint16_t i = 0; i < part_count; i++) {
+		as_partition_status* ps = &parts_all->parts[i];
+		ps->part_id = part_begin + i;
 		ps->done = false;
 		ps->digest.init = false;
 	}
 
 	if (digest && digest->init) {
-		pt->parts_all[0].digest = *digest;
+		parts_all->parts[0].digest = *digest;
+	}
+	return parts_all;
+}
+
+static void
+tracker_init(
+	as_partition_tracker* pt, const as_policy_scan* policy, as_scan* scan, uint16_t part_begin,
+	uint16_t part_count, const as_digest* digest
+	)
+{
+	if (! scan->parts_all) {
+		// Initial scan.
+		pt->parts_all = parts_create(part_begin, part_count, digest);
+
+		if (scan->paginate) {
+			// Save parts_all in as_scan, so it can be reused in next scan page.
+			scan->parts_all = as_partitions_status_reserve(pt->parts_all);
+		}
+	}
+	else {
+		// Scan instance contains partitions from previous scan.
+		// Reset partition status.
+		as_partitions_status* parts_all = as_partitions_status_reserve(scan->parts_all);
+
+		for (uint16_t i = 0; i < parts_all->part_count; i++) {
+			parts_all->parts[i].done = false;
+		}
+		pt->parts_all = parts_all;
 	}
 
 	as_vector_init(&pt->node_parts, sizeof(as_node_partitions), pt->node_capacity);
+	pt->errors = NULL;
 	pt->max_records = policy->max_records;
 
 	const as_policy_base* pb = &policy->base;
@@ -122,38 +158,35 @@ release_node_partitions(as_vector* list)
 
 void
 as_partition_tracker_init_nodes(
-	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy,
+	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy, as_scan* scan,
 	uint32_t cluster_size
 	)
 {
-	pt->part_begin = 0;
-	pt->part_count = cluster->n_partitions;
 	pt->node_filter = NULL;
 	pt->node_capacity = cluster_size;
 
 	// Create initial partition capacity for each node as average + 25%.
-	uint32_t ppn = pt->part_count / cluster_size;
+	uint32_t ppn = cluster->n_partitions / cluster_size;
 	ppn += ppn >> 2;
 	pt->parts_capacity = ppn;
-	tracker_init(pt, policy, NULL);
+	tracker_init(pt, policy, scan, 0, cluster->n_partitions, NULL);
 }
 
 void
 as_partition_tracker_init_node(
-	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy, as_node* node
+	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy, as_scan* scan,
+	as_node* node
 	)
 {
-	pt->part_begin = 0;
-	pt->part_count = cluster->n_partitions;
 	pt->node_filter = node;
 	pt->node_capacity = 1;
-	pt->parts_capacity = pt->part_count;
-	tracker_init(pt, policy, NULL);
+	pt->parts_capacity = cluster->n_partitions;
+	tracker_init(pt, policy, scan, 0, cluster->n_partitions, NULL);
 }
 
 as_status
 as_partition_tracker_init_filter(
-	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy,
+	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy, as_scan* scan,
 	uint32_t cluster_size, as_partition_filter* pf, as_error* err
 	)
 {
@@ -175,12 +208,14 @@ as_partition_tracker_init_filter(
 			pf->begin, pf->count);
 	}
 
-	pt->part_begin = pf->begin;
-	pt->part_count = pf->count;
+	if (pf->parts_all && ! scan->parts_all) {
+		as_scan_set_partitions(scan, pf->parts_all);
+	}
+
 	pt->node_filter = NULL;
 	pt->node_capacity = cluster_size;
-	pt->parts_capacity = pt->part_count;
-	tracker_init(pt, policy, &pf->digest);
+	pt->parts_capacity = pf->count;
+	tracker_init(pt, policy, scan, pf->begin, pf->count, &pf->digest);
 	return AEROSPIKE_OK;
 }
 
@@ -198,8 +233,10 @@ as_partition_tracker_assign(
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
 		}
 
-		for (uint32_t i = 0; i < pt->part_count; i++) {
-			as_partition_status* ps = &pt->parts_all[i];
+		as_partitions_status* parts_all = pt->parts_all;
+
+		for (uint16_t i = 0; i < parts_all->part_count; i++) {
+			as_partition_status* ps = &parts_all->parts[i];
 
 			if (!ps->done) {
 				as_node* node = table->partitions[ps->part_id].master;
@@ -229,9 +266,10 @@ as_partition_tracker_assign(
 		}
 
 		as_node** local_nodes = cluster->shm_info->local_nodes;
+		as_partitions_status* parts_all = pt->parts_all;
 
-		for (uint32_t i = 0; i < pt->part_count; i++) {
-			as_partition_status* ps = &pt->parts_all[i];
+		for (uint16_t i = 0; i < parts_all->part_count; i++) {
+			as_partition_status* ps = &parts_all->parts[i];
 
 			if (!ps->done) {
 				uint32_t master = as_load_uint32(&table->partitions[ps->part_id].master);
@@ -308,14 +346,41 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
 		//	np->parts_received, np->record_max, np->record_count);
 	}
 
-	if (parts_received >= parts_requested || (pt->max_records > 0 && record_count >= pt->max_records)) {
+	if (parts_received >= parts_requested) {
+		if (record_count == 0) {
+			pt->parts_all->done = true;
+		}
+		return AEROSPIKE_OK;
+	}
+
+	if (pt->max_records > 0 && record_count >= pt->max_records) {
 		return AEROSPIKE_OK;
 	}
 
 	// Check if limits have been reached.
 	if (pt->iteration > pt->max_retries) {
-		return as_error_update(err, AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED, "Max retries exceeded: %u",
-							   pt->max_retries);
+		as_error_set_message(err, AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED, "");
+
+		as_string_builder sb;
+		as_string_builder_assign(&sb, sizeof(err->message), err->message);
+		as_string_builder_append(&sb, "Max retries exceeded: ");
+		as_string_builder_append_uint(&sb, pt->max_retries);
+
+		if (pt->errors) {
+			as_string_builder_append_newline(&sb);
+			as_string_builder_append(&sb, "sub-errors:");
+
+			uint32_t max = pt->errors->size;
+
+			for (uint32_t i = 0; i < max; i++) {
+				as_status st = *(as_status*)as_vector_get(pt->errors, i);
+				as_string_builder_append_newline(&sb);
+				as_string_builder_append_int(&sb, st);
+				as_string_builder_append_char(&sb, ' ');
+				as_string_builder_append(&sb, as_error_string(st));
+			}
+		}
+		return err->code;
 	}
 
 	if (pt->deadline > 0) {
@@ -347,13 +412,17 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
 }
 
 bool
-as_partition_tracker_should_retry(as_status status)
+as_partition_tracker_should_retry(as_partition_tracker* pt, as_status status)
 {
 	switch (status) {
 	case AEROSPIKE_ERR_CONNECTION:
 	case AEROSPIKE_ERR_ASYNC_CONNECTION:
 	case AEROSPIKE_ERR_TIMEOUT:
 	case AEROSPIKE_ERR_CLUSTER: // partition not available
+		if (!pt->errors) {
+			pt->errors = as_vector_create(sizeof(as_status), 10);
+		}
+		as_vector_append(pt->errors, &status);
 		return true;
 
 	default:
@@ -366,5 +435,10 @@ as_partition_tracker_destroy(as_partition_tracker* pt)
 {
 	release_node_partitions(&pt->node_parts);
 	as_vector_destroy(&pt->node_parts);
-	cf_free(pt->parts_all);
+	as_partitions_status_release(pt->parts_all);
+
+	if (pt->errors) {
+		as_vector_destroy(pt->errors);
+		pt->errors = NULL;
+	}
 }

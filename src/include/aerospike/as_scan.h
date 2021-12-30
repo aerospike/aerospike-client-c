@@ -18,6 +18,7 @@
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_partition_filter.h>
 #include <aerospike/as_predexp.h>
 #include <aerospike/as_udf.h>
 
@@ -400,6 +401,17 @@ typedef struct as_scan_s {
 	 * Default value is AS_SCAN_PERCENT_DEFAULT.
 	 */
 	uint8_t percent;
+	 /* @private
+	 * Status of all partitions.
+	 */
+	as_partitions_status* parts_all;
+
+	/**
+	 * Set to true if as_policy_scan.max_records is set and you need to scan data in pages.
+	 *
+	 * Default: false
+	 */
+	bool paginate;
 
 	/**
 	 * Set to true if the scan should return only the metadata of the record.
@@ -747,6 +759,44 @@ as_scan_set_concurrent(as_scan* scan, bool concurrent);
  */
 AS_EXTERN bool
 as_scan_apply_each(as_scan* scan, const char* module, const char* function, as_list* arglist);
+
+/**
+ * Set to true if as_policy_scan.max_records is set and you need to scan data in pages.
+ * 
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+static inline void
+as_scan_set_paginate(as_scan* scan, bool paginate)
+{
+	scan->paginate = paginate;
+}
+
+/**
+ * Set completion status of all partitions from a previous scan that ended early.
+ * The scan will resume from this point.
+ *
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+static inline void
+as_scan_set_partitions(as_scan* scan, as_partitions_status* parts_all)
+{
+	scan->parts_all = as_partitions_status_reserve(parts_all);
+}
+
+/**
+ * If using scan pagination, did previous paginated scan with this scan instance 
+ * return all records?
+ *
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+static inline bool
+as_scan_is_done(as_scan* scan)
+{
+	return scan->parts_all && scan->parts_all->done;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

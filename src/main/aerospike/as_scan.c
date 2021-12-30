@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_scan.h>
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_operations.h>
 
 #include <citrusleaf/alloc.h>
@@ -63,6 +64,9 @@ as_scan_defaults(as_scan* scan, bool free, const as_namespace ns, const as_set s
 	scan->deserialize_list_map = AS_SCAN_DESERIALIZE_DEFAULT;
 	
 	as_udf_call_init(&scan->apply_each, NULL, NULL, NULL);
+
+	scan->parts_all = NULL;
+	scan->paginate = false;
 
 	return scan;
 }
@@ -118,6 +122,10 @@ as_scan_destroy(as_scan* scan)
 
 	if (scan->ops) {
 		as_operations_destroy(scan->ops);
+	}
+
+	if (scan->parts_all) {
+		as_partitions_status_release(scan->parts_all);
 	}
 
 	// If the whole structure should be freed

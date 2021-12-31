@@ -6,4 +6,3 @@
 #define AEROSPIKE_CLIENT_VERSION 406240000L
 
 extern char* aerospike_client_version;
-

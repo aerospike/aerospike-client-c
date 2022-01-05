@@ -386,6 +386,13 @@ as_batch_attr_remove_row(as_batch_attr* attr, const as_policy_batch_remove* p)
 	}
 }
 
+static inline void
+as_batch_record_set_error(as_batch_base_record* r, as_status result, bool in_doubt)
+{
+	r->result = result;
+	r->in_doubt = in_doubt;
+}
+
 static uint8_t*
 as_batch_parse_fields(uint8_t* p, uint32_t n_fields)
 {
@@ -2351,7 +2358,7 @@ as_batch_read_execute_async(
 }
 
 static void
-as_batch_read_cleanup(
+as_batch_records_cleanup(
 	as_async_batch_executor* async_executor, as_nodes* nodes, as_vector* batch_nodes
 	)
 {
@@ -2370,14 +2377,10 @@ as_batch_read_cleanup(
 
 static as_status
 as_batch_records_execute(
-	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records,
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
 	as_async_batch_executor* async_executor
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.batch;
-	}
-
 	as_vector* list = &records->list;
 	uint32_t n_keys = records->list.size;
 	
@@ -2390,7 +2393,7 @@ as_batch_records_execute(
 	uint32_t n_nodes = nodes->size;
 	
 	if (n_nodes == 0) {
-		as_batch_read_cleanup(async_executor, nodes, NULL);
+		as_batch_records_cleanup(async_executor, nodes, NULL);
 		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, cluster_empty_error);
 	}
 	
@@ -2409,10 +2412,11 @@ as_batch_records_execute(
 	}
 	
 	as_policy_replica replica_sc = as_batch_get_replica_sc(policy);
+	as_status error = AEROSPIKE_OK;
 
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < n_keys; i++) {
-		as_batch_read_record* record = as_vector_get(list, i);
+		as_batch_base_record* record = as_vector_get(list, i);
 		as_key* key = &record->key;
 		
 		record->result = AEROSPIKE_ERR_RECORD_NOT_FOUND;
@@ -2421,17 +2425,33 @@ as_batch_records_execute(
 		status = as_key_set_digest(err, key);
 		
 		if (status != AEROSPIKE_OK) {
-			as_batch_read_cleanup(async_executor, nodes, &batch_nodes);
+			as_batch_records_cleanup(async_executor, nodes, &batch_nodes);
 			return status;
 		}
 		
 		as_node* node;
-		status = as_batch_get_node(cluster, err, key, policy->replica, replica_sc, true, true,
-								   NULL, &node);
+
+		if (record->has_write) {
+			status = as_batch_get_node_write(cluster, err, key, policy->replica, true, NULL, &node);
+		}
+		else {
+			status = as_batch_get_node(cluster, err, key, policy->replica, replica_sc, true, true,
+									   NULL, &node);
+		}
 
 		if (status != AEROSPIKE_OK) {
-			as_batch_read_cleanup(async_executor, nodes, &batch_nodes);
-			return status;
+			as_batch_record_set_error(record, status, false);
+
+			if (policy->respond_all_keys) {
+				if (error == AEROSPIKE_OK) {
+					error = status;
+				}
+				continue;
+			}
+			else {
+				as_batch_records_cleanup(async_executor, nodes, &batch_nodes);
+				return status;
+			}
 		}
 
 		as_batch_node* batch_node = as_batch_node_find(&batch_nodes, node);
@@ -2453,15 +2473,35 @@ as_batch_records_execute(
 		}
 		as_vector_append(&batch_node->offsets, &i);
 	}
+
+	if (error != AEROSPIKE_OK) {
+		// Fatal if no key requests were generated on initialization.
+		if (batch_nodes.size == 0) {
+			as_batch_records_cleanup(async_executor, nodes, &batch_nodes);
+			return status;
+		}
+	}
+
 	as_nodes_release(nodes);
 
 	if (async_executor) {
-		return as_batch_read_execute_async(cluster, err, policy, replica_sc, list,
-										   &batch_nodes, async_executor);
+		status = as_batch_read_execute_async(cluster, err, policy, replica_sc, list,
+										     &batch_nodes, async_executor);
 	}
-	
-	return as_batch_read_execute_sync(cluster, err, policy, replica_sc, list, n_keys,
-									  &batch_nodes, NULL);
+	else {
+		status = as_batch_read_execute_sync(cluster, err, policy, replica_sc, list, n_keys,
+										    &batch_nodes, NULL);
+	}
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	if (error != AEROSPIKE_OK) {
+		return AEROSPIKE_BATCH_FAILED;
+	}
+
+	return AEROSPIKE_OK;
 }
 
 /******************************************************************************
@@ -3074,6 +3114,11 @@ aerospike_batch_read(
 	)
 {
 	as_error_reset(err);
+
+	if (! policy) {
+		policy = &as->config.policies.batch;
+	}
+
 	return as_batch_records_execute(as, err, policy, records, 0);
 }
 
@@ -3085,6 +3130,10 @@ aerospike_batch_read_async(
 {
 	as_error_reset(err);
 	
+	if (! policy) {
+		policy = &as->config.policies.batch;
+	}
+
 	// Check for empty batch.
 	if (records->list.size == 0) {
 		listener(0, records, udata, event_loop);
@@ -3183,6 +3232,20 @@ aerospike_batch_exists(
 	return as_batch_keys_execute(as, err, policy, batch,
 								 AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA, NULL, 0, NULL,
 								 callback, NULL, udata);
+}
+
+as_status
+aerospike_batch_operate(
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
+	)
+{
+	as_error_reset(err);
+
+	if (! policy) {
+		policy = &as->config.policies.batch_parent_write;
+	}
+
+	return as_batch_records_execute(as, err, policy, records, 0);
 }
 
 static as_status

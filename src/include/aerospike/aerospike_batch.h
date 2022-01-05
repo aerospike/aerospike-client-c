@@ -414,6 +414,7 @@ as_batch_write_reserve(as_batch_records* records)
 {
 	as_batch_write_record* r = (as_batch_write_record*)as_vector_reserve(&records->list);
 	r->type = AS_BATCH_WRITE;
+	r->has_write = true;
 	return r;
 }
 
@@ -429,6 +430,7 @@ as_batch_apply_reserve(as_batch_records* records)
 {
 	as_batch_apply_record* r = (as_batch_apply_record*)as_vector_reserve(&records->list);
 	r->type = AS_BATCH_APPLY;
+	r->has_write = true;
 	return r;
 }
 
@@ -444,6 +446,7 @@ as_batch_remove_reserve(as_batch_records* records)
 {
 	as_batch_remove_record* r = (as_batch_remove_record*)as_vector_reserve(&records->list);
 	r->type = AS_BATCH_REMOVE;
+	r->has_write = true;
 	return r;
 }
 

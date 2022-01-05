@@ -270,6 +270,7 @@ as_shm_ensure_login(as_cluster* cluster, as_error* err)
 
 		if (active) {
 			as_node* node = shm_info->local_nodes[i];
+			as_log_info("as_shm_ensure_login: ensure login for %u,%p", i, node);
 			as_shm_ensure_login_node(err, node);
 		}
 	}
@@ -320,6 +321,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 					// Retrieve session token.
 					as_error err;
 					node->perform_login = 1;
+					as_log_info("as_shm_reset_nodes: ensure login for %u,%p", i, node);
 					as_shm_ensure_login_node(&err, node);
 				}
 				as_vector_append(&nodes_to_add, &node);

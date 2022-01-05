@@ -694,22 +694,33 @@ as_node_login(as_error* err, as_node* node, as_socket* sock)
 as_status
 as_node_ensure_login_shm(as_error* err, as_node* node)
 {
+	if (! node) {
+		as_log_info("Node is null. Crash expected.");
+	}
+
 	if (as_load_uint8(&node->perform_login) ||
 		(node->session && node->session->expiration > 0 && cf_getns() >= node->session->expiration)) {
+
+		as_log_info("Attempt login: %s", as_node_get_address_string(node));
+
 		as_socket sock;
 		uint64_t deadline_ms = as_socket_deadline(node->cluster->conn_timeout_ms);
 		as_status status = as_node_create_socket(err, node, NULL, &sock, deadline_ms);
 
 		if (status != AEROSPIKE_OK) {
+			as_log_info("as_node_create_socket failed: %s,%d", as_node_get_address_string(node), status);
 			return status;
 		}
 
 		status = as_node_login(err, node, &sock);
 
 		if (status != AEROSPIKE_OK) {
+			as_log_info("as_node_login failed: %s,%d", as_node_get_address_string(node), status);
 			as_node_close_socket(node, &sock);
 			return status;
 		}
+
+		as_log_info("Login success %s", as_node_get_address_string(node));
 
 		// Shared memory prole tender only needs updated session token and not the socket.
 		// Close socket immediately.

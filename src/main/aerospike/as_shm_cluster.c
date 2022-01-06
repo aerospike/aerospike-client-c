@@ -180,6 +180,8 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 			node_shm->active = true;
 			as_swlock_write_unlock(&node_shm->lock);
 			
+			as_log_info("as_shm_add_nodes Node %u active set to %d", node_index, (int)node_shm->active);
+
 			// Set shared memory node array index.
 			// Only referenced by shared memory tending thread, so volatile write not necessary.
 			node_to_add->index = node_index;
@@ -216,6 +218,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 					node_to_add->name, address->name, cluster_shm->nodes_capacity);
 			}
 		}
+		as_log_info("as_shm_add_nodes Node %u set local node to %p", node_to_add->index, node_to_add);
 		as_store_ptr(&shm_info->local_nodes[node_to_add->index], node_to_add);
 	}
 	as_incr_uint32(&cluster_shm->nodes_gen);
@@ -237,6 +240,11 @@ as_shm_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_re
 		node_shm->active = false;
 		as_swlock_write_unlock(&node_shm->lock);
 
+		as_log_info("Node %u active set to %d", node_to_remove->index, (int)node_shm->active);
+
+		// Set local node pointer to null, but do not decrement cluster_shm->nodes_size
+		// because nodes are stored in a fixed array.
+		// TODO: Could decrement nodes_size when index is the last node in the array.
 		as_store_ptr(&shm_info->local_nodes[node_to_remove->index], 0);
 	}
 	as_incr_uint32(&cluster_shm->nodes_gen);
@@ -267,11 +275,15 @@ as_shm_ensure_login(as_cluster* cluster, as_error* err)
 		as_swlock_read_lock(&node_shm->lock);
 		uint8_t active = node_shm->active;
 		as_swlock_read_unlock(&node_shm->lock);
+		as_log_info("Node %u active is %d", i, active);
 
 		if (active) {
 			as_node* node = shm_info->local_nodes[i];
-			as_log_info("as_shm_ensure_login: ensure login for %u,%p", i, node);
-			as_shm_ensure_login_node(err, node);
+
+			if (node) {
+				as_log_info("as_shm_ensure_login: ensure login for %u,%p", i, node);
+				as_shm_ensure_login_node(err, node);
+			}
 		}
 	}
 }
@@ -394,11 +406,14 @@ as_shm_reset_racks(as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* c
 		// Retrieve racks only when different rack ids per namespace (rack_id == -1).
 		if (rack_id == -1 && active) {
 			as_node* node = shm_info->local_nodes[i];
-			as_status status = as_shm_reset_racks_node(cluster, err, node);
 
-			if (status != AEROSPIKE_OK) {
-				as_log_error("Node %s shm rack refresh failed: %s %s",
-							node->name, as_error_string(status), err->message);
+			if (node) {
+				as_status status = as_shm_reset_racks_node(cluster, err, node);
+
+				if (status != AEROSPIKE_OK) {
+					as_log_error("Node %s shm rack refresh failed: %s %s",
+								node->name, as_error_string(status), err->message);
+				}
 			}
 		}
 	}
@@ -726,7 +741,11 @@ as_shm_reset_rebalance_gen(as_shm_info* shm_info, as_cluster_shm* cluster_shm)
 		gen = node_shm->rebalance_generation;
 		as_swlock_read_unlock(&node_shm->lock);
 
-		shm_info->local_nodes[i]->rebalance_generation = gen;
+		as_node* node = shm_info->local_nodes[i];
+
+		if (node) {
+			node->rebalance_generation = gen;
+		}
 	}
 }
 
@@ -799,10 +818,6 @@ as_shm_tender(void* userdata)
 			}
 		}
 		else {
-			if (cluster->auth_enabled) {
-				as_shm_ensure_login(cluster, &err);
-			}
-
 			// Follow shared memory cluster.
 			// Check if tend owner has released lock.
 			if (as_cas_uint8(&cluster_shm->lock, 0, 1)) {
@@ -859,6 +874,10 @@ as_shm_tender(void* userdata)
 					as_shm_reset_racks(cluster, shm_info, cluster_shm, &err);
 					rebalance_gen = gen;
 				}
+			}
+
+			if (cluster->auth_enabled) {
+				as_shm_ensure_login(cluster, &err);
 			}
 
 			as_cluster_manage(cluster);

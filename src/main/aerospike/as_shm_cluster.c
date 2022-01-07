@@ -915,10 +915,10 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	// before cluster init.  This would require every client process to query for n_partitions
 	// even before seeds have been validated.
 	// Hard code value for now.
-	uint32_t n_partitions = 4096;
+	cluster->n_partitions = 4096;
 	
 	uint32_t size = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes) +
-		((sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * n_partitions)) * config->shm_max_namespaces);
+		((sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions)) * config->shm_max_namespaces);
 	
 	uint32_t pid = getpid();
 
@@ -1022,11 +1022,11 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	if (shm_info->is_tend_master) {
 		as_log_info("Take over shared memory cluster: %d", pid);
 		as_fence_lock();
-		cluster_shm->n_partitions = n_partitions;
+		cluster_shm->n_partitions = cluster->n_partitions;
 		cluster_shm->nodes_capacity = config->shm_max_nodes;
 		cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
 		cluster_shm->partition_tables_offset = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes);
-		cluster_shm->partition_table_byte_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * n_partitions);
+		cluster_shm->partition_table_byte_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions);
 		cluster_shm->timestamp = cf_getms();
 
 		as_store_uint32(&cluster_shm->owner_pid, pid);

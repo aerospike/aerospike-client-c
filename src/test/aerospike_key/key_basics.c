@@ -751,7 +751,7 @@ TEST( key_basics_storekey , "store key" ) {
 	as_scan scan;
 	as_scan_init(&scan, NAMESPACE, "store_key_set");
 
-	uint64_t myresult;
+	uint64_t myresult = 9;
 	rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb, &myresult);
 
 	assert_int_eq( rc, AEROSPIKE_OK );

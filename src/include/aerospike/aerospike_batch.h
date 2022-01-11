@@ -749,6 +749,30 @@ aerospike_batch_exists(
 	aerospike_batch_read_callback callback, void* udata
 	);
 
+/**
+ * Read/Write multiple records for specified batch keys in one batch call.
+ * This method allows different sub-commands for each key in the batch.
+ * The returned records are located in the same list.
+ *
+ * Requires server version 5.8+
+ *
+ * ~~~~~~~~~~{.c}
+ * TODO: Provide code sample here from examples.
+ * ~~~~~~~~~~
+ *
+ * @param as		Aerospike cluster instance.
+ * @param err		Populated if an error occurs.
+ * @param policy	Batch configuration parameters, pass in null for defaults.
+ * @param records	List of batch sub-commands to perform.
+ * 					The returned records are located in the same list.
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
+ * @ingroup batch_operations
+ */
+AS_EXTERN as_status
+aerospike_batch_operate(
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
+	);
+
 // TODO: DOC
 AS_EXTERN as_status
 aerospike_batch_remove(

@@ -83,8 +83,7 @@ typedef struct as_batch_task_s {
 	uint32_t* error_mutex;
 	cf_queue* complete_q;
 	uint32_t n_keys;
-	uint32_t command_sent_counter;
-	as_policy_replica replica_sc;  // TODO: TAKE OUT!
+	as_policy_replica replica_sc;
 	bool use_batch_records;
 } as_batch_task;
 
@@ -386,13 +385,6 @@ as_batch_attr_remove_row(as_batch_attr* attr, const as_policy_batch_remove* p)
 	}
 }
 
-static inline void
-as_batch_record_set_error(as_batch_base_record* r, as_status result, bool in_doubt)
-{
-	r->result = result;
-	r->in_doubt = in_doubt;
-}
-
 static uint8_t*
 as_batch_parse_fields(uint8_t* p, uint32_t n_fields)
 {
@@ -521,7 +513,7 @@ as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 
 	uint8_t* p = buf;
 	uint8_t* end = buf + size;
-	
+
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
@@ -2084,7 +2076,7 @@ as_batch_keys_execute(
 		// Run batch requests in parallel in separate threads.
 		btk.base.complete_q = cf_queue_create(sizeof(as_batch_complete_task), true);
 		
-		uint32_t n_wait_nodes = batch_nodes.size;
+		uint32_t n_wait_nodes = 0;
 		
 		// Run task for each node.
 		for (uint32_t i = 0; i < batch_nodes.size; i++) {
@@ -2099,16 +2091,15 @@ as_batch_keys_execute(
 
 			int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_batch_worker, btk_node);
 			
-			if (rc) {
-				// Thread could not be added. Abort entire batch.
+			if (rc == 0) {
+				n_wait_nodes++;
+			}
+			else {
+				// Thread could not be added.
 				if (as_fas_uint32(btk.base.error_mutex, 1) == 0) {
 					status = as_error_update(btk.base.err, AEROSPIKE_ERR_CLIENT,
 											 "Failed to add batch thread: %d", rc);
 				}
-				
-				// Reset node count to threads that were run.
-				n_wait_nodes = i;
-				break;
 			}
 		}
 		
@@ -2155,7 +2146,7 @@ as_batch_keys_execute(
 }
 
 static as_status
-as_batch_read_execute_sync(
+as_batch_execute_sync(
 	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policy_replica replica_sc,
 	as_vector* records, uint32_t n_keys, as_vector* batch_nodes, as_command* parent
 	)
@@ -2180,7 +2171,7 @@ as_batch_read_execute_sync(
 		// Run batch requests in parallel in separate threads.
 		btr.base.complete_q = cf_queue_create(sizeof(as_batch_complete_task), true);
 		
-		uint32_t n_wait_nodes = n_batch_nodes;
+		uint32_t n_wait_nodes = 0;
 		
 		// Run task for each node.
 		for (uint32_t i = 0; i < n_batch_nodes; i++) {
@@ -2194,17 +2185,16 @@ as_batch_read_execute_sync(
 			memcpy(&btr_node->base.offsets, &batch_node->offsets, sizeof(as_vector));
 
 			int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_batch_worker, btr_node);
-			
-			if (rc) {
-				// Thread could not be added. Abort entire batch.
+
+			if (rc == 0) {
+				n_wait_nodes++;
+			}
+			else {
+				// Thread could not be added.
 				if (as_fas_uint32(btr.base.error_mutex, 1) == 0) {
 					status = as_error_update(btr.base.err, AEROSPIKE_ERR_CLIENT,
 											 "Failed to add batch thread: %d", rc);
 				}
-				
-				// Reset node count to threads that were run.
-				n_wait_nodes = i;
-				break;
 			}
 		}
 		
@@ -2223,12 +2213,23 @@ as_batch_read_execute_sync(
 	}
 	else {
 		// Run batch requests sequentially in same thread.
-		for (uint32_t i = 0; status == AEROSPIKE_OK && i < n_batch_nodes; i++) {
+		for (uint32_t i = 0; i < n_batch_nodes; i++) {
 			as_batch_node* batch_node = as_vector_get(batch_nodes, i);
-			
+
 			btr.base.node = batch_node->node;
 			memcpy(&btr.base.offsets, &batch_node->offsets, sizeof(as_vector));
-			status = as_batch_execute_records(&btr, err, parent);
+			as_status s = as_batch_execute_records(&btr, err, parent);
+
+			if (s != AEROSPIKE_OK) {
+				if (policy->respond_all_keys) {
+					if (status == AEROSPIKE_OK) {
+						status = s;
+					}
+				}
+				else {
+					break;
+				}
+			}
 		}
 	}
 	
@@ -2271,7 +2272,7 @@ as_batch_read_command_create(
 }
 
 static as_status
-as_batch_read_execute_async(
+as_batch_execute_async(
 	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policy_replica replica_sc,
 	as_vector* records, as_vector* batch_nodes, as_async_batch_executor* executor
 	)
@@ -2412,14 +2413,14 @@ as_batch_records_execute(
 	}
 	
 	as_policy_replica replica_sc = as_batch_get_replica_sc(policy);
-	as_status error = AEROSPIKE_OK;
+	as_status assign_status = AEROSPIKE_OK;
 
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_base_record* record = as_vector_get(list, i);
 		as_key* key = &record->key;
 		
-		record->result = AEROSPIKE_ERR_RECORD_NOT_FOUND;
+		record->result = AEROSPIKE_NO_RESPONSE;
 		as_record_init(&record->record, 0);
 		
 		status = as_key_set_digest(err, key);
@@ -2440,11 +2441,11 @@ as_batch_records_execute(
 		}
 
 		if (status != AEROSPIKE_OK) {
-			as_batch_record_set_error(record, status, false);
+			record->result = status;
 
 			if (policy->respond_all_keys) {
-				if (error == AEROSPIKE_OK) {
-					error = status;
+				if (assign_status == AEROSPIKE_OK) {
+					assign_status = status;
 				}
 				continue;
 			}
@@ -2474,34 +2475,29 @@ as_batch_records_execute(
 		as_vector_append(&batch_node->offsets, &i);
 	}
 
-	if (error != AEROSPIKE_OK) {
+	if (assign_status != AEROSPIKE_OK) {
 		// Fatal if no key requests were generated on initialization.
 		if (batch_nodes.size == 0) {
 			as_batch_records_cleanup(async_executor, nodes, &batch_nodes);
-			return status;
+			return assign_status;
 		}
 	}
 
 	as_nodes_release(nodes);
 
 	if (async_executor) {
-		status = as_batch_read_execute_async(cluster, err, policy, replica_sc, list,
+		status = as_batch_execute_async(cluster, err, policy, replica_sc, list,
 										     &batch_nodes, async_executor);
 	}
 	else {
-		status = as_batch_read_execute_sync(cluster, err, policy, replica_sc, list, n_keys,
+		status = as_batch_execute_sync(cluster, err, policy, replica_sc, list, n_keys,
 										    &batch_nodes, NULL);
 	}
 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-
-	if (error != AEROSPIKE_OK) {
-		return AEROSPIKE_BATCH_FAILED;
-	}
-
-	return AEROSPIKE_OK;
+	return assign_status;
 }
 
 /******************************************************************************
@@ -2584,7 +2580,7 @@ as_batch_retry_records(
 		}
 	}
 
-	return as_batch_read_execute_sync(cluster, err, task->policy, task->replica_sc, list,
+	return as_batch_execute_sync(cluster, err, task->policy, task->replica_sc, list,
 									  task->n_keys, &batch_nodes, parent);
 }
 
@@ -2728,13 +2724,6 @@ as_batch_retry(as_command* parent, as_error* err, uint32_t sent_counter)
 	// Retry requires keys for this node to be split among other nodes.
 	// This is both recursive and exponential.
 	as_batch_task* task = parent->udata;
-
-	if (as_load_uint32(task->error_mutex)) {
-		// No reason to retry when entire batch will fail.
-		as_batch_set_in_doubt(task, sent_counter);
-		return err->code;
-	}
-
 	const as_policy_batch* policy = task->policy;
 	as_policy_replica replica = policy->replica;
 
@@ -3514,7 +3503,7 @@ aerospike_batch_remove(
 		// Run batch requests in parallel in separate threads.
 		btr.base.complete_q = cf_queue_create(sizeof(as_batch_complete_task), true);
 		
-		uint32_t n_wait_nodes = batch_nodes.size;
+		uint32_t n_wait_nodes = 0;
 		
 		// Run task for each node.
 		for (uint32_t i = 0; i < batch_nodes.size; i++) {
@@ -3529,16 +3518,15 @@ aerospike_batch_remove(
 
 			int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_batch_worker, btr_node);
 			
-			if (rc) {
-				// Thread could not be added. Abort entire batch.
+			if (rc == 0) {
+				n_wait_nodes++;
+			}
+			else {
+				// Thread could not be added.
 				if (as_fas_uint32(btr.base.error_mutex, 1) == 0) {
 					status = as_error_update(btr.base.err, AEROSPIKE_ERR_CLIENT,
 											 "Failed to add batch thread: %d", rc);
 				}
-				
-				// Reset node count to threads that were run.
-				n_wait_nodes = i;
-				break;
 			}
 		}
 		

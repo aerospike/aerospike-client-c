@@ -863,7 +863,7 @@ typedef struct as_policy_batch_s {
 
 	/**
 	 * Allow batch to be processed immediately in the server's receiving thread for in-memory
-	 * namespaces. If false, the batch will always be processed in separate transaction threads.
+	 * namespaces. If false, the batch will always be processed in separate service threads.
 	 *
 	 * For batch transactions with smaller sized records (&lt;= 1K per record), inline
 	 * processing will be significantly faster on in-memory namespaces.
@@ -876,7 +876,7 @@ typedef struct as_policy_batch_s {
 
 	/**
 	 * Allow batch to be processed immediately in the server's receiving thread for SSD
-	 * namespaces. If false, the batch will always be processed in separate transaction threads.
+	 * namespaces. If false, the batch will always be processed in separate service threads.
 	 * Server versions &lt; 5.8 ignore this field.
 	 *
 	 * Inline processing can introduce the possibility of unfairness because the server

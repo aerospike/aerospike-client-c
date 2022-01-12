@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -286,7 +286,7 @@ typedef bool (*as_batch_callback_xdr)(as_key* key, as_record* record, void* udat
  * error has occurred.
  *
  * @param err			This error structure is only populated when the command fails. Null on success.
- * @param records 		Returned records.  Records must be destroyed with as_batch_read_destroy() when done.
+ * @param records 		Returned records.  Records must be destroyed with as_batch_records_destroy() when done.
  * @param udata 		User data that is forwarded from asynchronous command function.
  * @param event_loop 	Event loop that this command was executed on.  Use this event loop when running
  * 						nested asynchronous commands when single threaded behavior is desired for the
@@ -757,7 +757,31 @@ aerospike_batch_exists(
  * Requires server version 5.8+
  *
  * ~~~~~~~~~~{.c}
- * TODO: Provide code sample here from examples.
+ * as_operations ops1;
+ * as_operations_inita(&ops1, 1);
+ * as_operations_add_write_int64(&ops1, "bin1", 100);
+ *
+ * as_operations ops2;
+ * as_operations_inita(&ops2, 1);
+ * as_operations_add_write_int64(&ops2, "bin2", 200);
+ *
+ * as_batch_records recs;
+ * as_batch_read_inita(&recs, 2);
+ *
+ * as_batch_write_record* r = as_batch_write_reserve(&recs);
+ * as_key_init_int64(&r->key, "test", "set", 1);
+ * r->ops = &ops1;
+ *
+ * r = as_batch_write_reserve(&recs);
+ * as_key_init_int64(&r->key, "test", "set", 2);
+ * r->ops = &ops2;
+ * 
+ * as_status status = aerospike_batch_operate(p_as, err, NULL, &recs);
+ * // Process results. Overall status contains first error, if any.
+ *
+ * as_operations_destroy(&ops1);
+ * as_operations_destroy(&ops2);
+ * as_batch_records_destroy(&recs);
  * ~~~~~~~~~~
  *
  * @param as		Aerospike cluster instance.
@@ -771,6 +795,37 @@ aerospike_batch_exists(
 AS_EXTERN as_status
 aerospike_batch_operate(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
+	);
+
+/**
+ * Asynchronously read/write multiple records for specified batch keys in one batch call.
+ * This method allows different sub-commands for each key in the batch.
+ * The returned records are located in the same list.
+ *
+ * Requires server version 5.8+
+ *
+ * ~~~~~~~~~~{.c}
+ * TODO: CODE EXAMPLE
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param records		List of keys and bins to retrieve.  The returned records are located in the same array.
+ * 						Must create using as_batch_read_create() (which allocates memory on heap) because 
+ * 						async method will return immediately after queueing command.
+ * @param listener 		User function to be called with command results.
+ * @param udata 		User data to be forwarded to user callback.
+ * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ *
+ * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ *
+ * @ingroup batch_operations
+ */
+AS_EXTERN as_status
+aerospike_batch_operate_async(
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
+	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	);
 
 // TODO: DOC

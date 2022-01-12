@@ -290,6 +290,13 @@ void atf_assert_err(atf_test_result* result, as_error* err, const char* file, in
 		return;\
 	}
 
+#define assert_null_async(_mon_, EXP) \
+    if ((EXP) != NULL) {\
+		atf_assert_null(__result__, #EXP, __FILE__, __LINE__);\
+		as_monitor_notify(_mon_);\
+		return;\
+	}
+
 #define assert_int_eq_async(_mon_, ACTUAL, EXPECTED) \
 	if ((ACTUAL) != (EXPECTED)) {\
 		atf_assert_int_eq(__result__, #ACTUAL, ACTUAL, EXPECTED, __FILE__, __LINE__);\

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -18,9 +18,11 @@
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_arraylist.h>
+#include <aerospike/as_exp_operations.h>
 #include <aerospike/as_monitor.h>
 
 #include "../test.h"
+#include "../util/log_helper.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -37,6 +39,10 @@ static as_monitor monitor;
 #define SET "batchasync"
 #define LIST_BIN "listbin"
 #define N_KEYS 200
+
+static char bin1[] = "bin1";
+static char bin2[] = "bin2";
+static char bin3[] = "bin3";
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -65,13 +71,13 @@ insert_record(as_error* err, int i)
 	// Some records should be missing bins to test bin filters.
 	if (i % 25 == 0) {
 		as_record_inita(&rec, 2);
-		as_record_set_int64(&rec, "val", i);
+		as_record_set_int64(&rec, bin1, i);
 		as_record_set_list(&rec, LIST_BIN, (as_list*)&list);
 	}
 	else {
 		as_record_inita(&rec, 3);
-		as_record_set_int64(&rec, "val", i);
-		as_record_set_int64(&rec, "val2", i);
+		as_record_set_int64(&rec, bin1, i);
+		as_record_set_int64(&rec, bin2, i);
 		as_record_set_list(&rec, LIST_BIN, (as_list*)&list);
 	}
 
@@ -144,7 +150,7 @@ batch_callback(
 			found++;
 			
 			if (batch->read_all_bins || batch->n_bin_names > 0) {
-				int64_t val = as_record_get_int64(&batch->record, "val", -1);
+				int64_t val = as_record_get_int64(&batch->record, bin1, -1);
 				
 				if (val != -1) {
 					info("Record: ns=%s set=%s key=%d bin=%d",
@@ -182,7 +188,7 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 	// but example test environment may only have one namespace.
 	as_batch_read_records* records = as_batch_read_create(9);
 	
-	char* bins[] = {"val"};
+	char* bins[] = {bin1};
 	uint32_t n_bins = 1;
 	
 	// get specified bins
@@ -321,6 +327,78 @@ TEST(batch_async_list_operate, "Batch Async List Operate")
 	as_monitor_wait(&monitor);
 }
 
+static void
+batch_write_callback(
+	as_error* err, as_batch_records* recs, void* udata, as_event_loop* event_loop
+	)
+{
+	if (err) {
+		as_batch_records_destroy(recs);
+	}
+	assert_success_async(&monitor, err, udata);
+
+	as_vector* list = &recs->list;
+	assert_int_eq_async(&monitor, list->size, 2);
+
+	as_batch_write_record* r = as_vector_get(list, 0);
+	assert_int_eq_async(&monitor, r->result, AEROSPIKE_OK);
+	//dump_record(&r->record);
+	assert_int_eq_async(&monitor, r->record.bins.size, 2);
+	as_bin* bins = r->record.bins.entries;
+	assert_int_eq_async(&monitor, bins[0].valuep->nil.type, AS_NIL);
+	int64_t i = bins[1].valuep->integer.value;
+	assert_int_eq_async(&monitor, i, 100);
+
+	r = as_vector_get(list, 1);
+	assert_int_eq_async(&monitor, r->result, AEROSPIKE_OK);
+	assert_int_eq_async(&monitor, r->record.bins.size, 2);
+	bins = r->record.bins.entries;
+	assert_int_eq_async(&monitor, bins[0].valuep->nil.type, AS_NIL);
+	i = bins[1].valuep->integer.value;
+	assert_int_eq_async(&monitor, i, 1006);
+
+	as_batch_records_destroy(recs);
+	as_monitor_notify(&monitor);
+}
+
+TEST(batch_async_write_complex, "Batch Async Write Complex")
+{
+	as_exp_build(wexp1, as_exp_add(as_exp_bin_int(bin1), as_exp_int(1000)));
+
+	as_operations ops1;
+	as_operations_inita(&ops1, 2);
+	as_operations_add_write_int64(&ops1, bin2, 100);
+	as_operations_add_read(&ops1, bin2);
+
+	as_operations ops2;
+	as_operations_inita(&ops2, 2);
+	as_operations_exp_write(&ops2, bin3, wexp1, AS_EXP_WRITE_DEFAULT);
+	as_operations_add_read(&ops2, bin3);
+
+	as_batch_read_records* recs = as_batch_read_create(2);
+	as_batch_write_record* wr;
+
+	wr = as_batch_write_reserve(recs);
+	as_key_init_int64(&wr->key, NAMESPACE, SET, 1);
+	wr->ops = &ops1;
+
+	wr = as_batch_write_reserve(recs);
+	as_key_init_int64(&wr->key, NAMESPACE, SET, 6);
+	wr->ops = &ops2;
+
+	as_monitor_begin(&monitor);
+
+	as_error err;
+	as_status status = aerospike_batch_operate_async(as, &err, NULL, recs, batch_write_callback,
+													 __result__, NULL);
+	
+	if (status != AEROSPIKE_OK) {
+		as_batch_records_destroy(recs);
+	}
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -331,4 +409,5 @@ SUITE(batch_async, "aerospike batch async tests")
 	suite_after(after);
 	suite_add(batch_async_read_complex);
 	suite_add(batch_async_list_operate);
+	suite_add(batch_async_write_complex);
 }

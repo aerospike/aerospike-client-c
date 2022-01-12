@@ -126,7 +126,7 @@ typedef struct as_batch_complete_task_s {
 
 typedef struct {
 	as_event_executor executor;
-	as_batch_read_records* records;
+	as_batch_records* records;
 	as_async_batch_listener listener;
 	as_policy_replica replica_sc;
 } as_async_batch_executor;
@@ -2239,7 +2239,7 @@ as_batch_execute_sync(
 }
 
 static inline as_event_command*
-as_batch_read_command_create(
+as_batch_command_create(
 	as_cluster* cluster, const as_policy_batch* policy, as_node* node,
 	as_async_batch_executor* executor, size_t size, uint8_t flags
 	)
@@ -2310,7 +2310,7 @@ as_batch_execute_async(
 
 		if (! (policy->base.compress && bb.size > AS_COMPRESS_THRESHOLD)) {
 			// Send uncompressed command.
-			as_event_command* cmd = as_batch_read_command_create(cluster, policy, batch_node->node,
+			as_event_command* cmd = as_batch_command_create(cluster, policy, batch_node->node,
 				executor, bb.size, flags);
 
 			cmd->write_len = (uint32_t)as_batch_records_write(policy, records, &batch_node->offsets,
@@ -2328,7 +2328,7 @@ as_batch_execute_async(
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);
 
-			as_event_command* cmd = as_batch_read_command_create(cluster, policy, batch_node->node,
+			as_event_command* cmd = as_batch_command_create(cluster, policy, batch_node->node,
 				executor, comp_size, flags);
 
 			// Compress buffer and execute.
@@ -2498,6 +2498,42 @@ as_batch_records_execute(
 		return status;
 	}
 	return assign_status;
+}
+
+static as_status
+as_batch_records_execute_async(
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
+	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	// Check for empty batch.
+	if (records->list.size == 0) {
+		listener(0, records, udata, event_loop);
+		return AEROSPIKE_OK;
+	}
+	
+	// Batch will be split up into a command for each node.
+	// Allocate batch data shared by each command.
+	as_async_batch_executor* executor = cf_malloc(sizeof(as_async_batch_executor));
+	as_event_executor* exec = &executor->executor;
+	pthread_mutex_init(&exec->lock, NULL);
+	exec->commands = 0;
+	exec->event_loop = as_event_assign(event_loop);
+	exec->complete_fn = as_batch_complete_async;
+	exec->udata = udata;
+	exec->err = NULL;
+	exec->ns = NULL;
+	exec->cluster_key = 0;
+	exec->max_concurrent = 0;
+	exec->max = 0;
+	exec->count = 0;
+	exec->queued = 0;
+	exec->notify = true;
+	exec->valid = true;
+	executor->records = records;
+	executor->listener = listener;
+
+	return as_batch_records_execute(as, err, policy, records, executor);
 }
 
 /******************************************************************************
@@ -3123,34 +3159,7 @@ aerospike_batch_read_async(
 		policy = &as->config.policies.batch;
 	}
 
-	// Check for empty batch.
-	if (records->list.size == 0) {
-		listener(0, records, udata, event_loop);
-		return AEROSPIKE_OK;
-	}
-	
-	// Batch will be split up into a command for each node.
-	// Allocate batch data shared by each command.
-	as_async_batch_executor* executor = cf_malloc(sizeof(as_async_batch_executor));
-	as_event_executor* exec = &executor->executor;
-	pthread_mutex_init(&exec->lock, NULL);
-	exec->commands = 0;
-	exec->event_loop = as_event_assign(event_loop);
-	exec->complete_fn = as_batch_complete_async;
-	exec->udata = udata;
-	exec->err = NULL;
-	exec->ns = NULL;
-	exec->cluster_key = 0;
-	exec->max_concurrent = 0;
-	exec->max = 0;
-	exec->count = 0;
-	exec->queued = 0;
-	exec->notify = true;
-	exec->valid = true;
-	executor->records = records;
-	executor->listener = listener;
-
-	return as_batch_records_execute(as, err, policy, records, executor);
+	return as_batch_records_execute_async(as, err, policy, records, listener, udata, event_loop);
 }
 
 void
@@ -3235,6 +3244,21 @@ aerospike_batch_operate(
 	}
 
 	return as_batch_records_execute(as, err, policy, records, 0);
+}
+
+as_status
+aerospike_batch_operate_async(
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
+	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_error_reset(err);
+	
+	if (! policy) {
+		policy = &as->config.policies.batch_parent_write;
+	}
+
+	return as_batch_records_execute_async(as, err, policy, records, listener, udata, event_loop);
 }
 
 static as_status

@@ -21,6 +21,7 @@
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_batch.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_exp_operations.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_list.h>
@@ -51,6 +52,10 @@ pthread_rwlock_t rwlock;
 #define SET "test_batch"
 #define LIST_BIN "listbin"
 #define N_KEYS 200
+
+static char bin1[] = "bin1";
+static char bin2[] = "bin2";
+static char bin3[] = "bin3";
 
 /******************************************************************************
  * TYPES
@@ -91,13 +96,13 @@ insert_record(as_error* err, int i)
 	// Some records should be missing bins to test bin filters.
 	if (i % 25 == 0) {
 		as_record_inita(&rec, 2);
-		as_record_set_int64(&rec, "val", i);
+		as_record_set_int64(&rec, bin1, i);
 		as_record_set_list(&rec, LIST_BIN, (as_list*)&list);
 	}
 	else {
 		as_record_inita(&rec, 3);
-		as_record_set_int64(&rec, "val", i);
-		as_record_set_int64(&rec, "val2", i);
+		as_record_set_int64(&rec, bin1, i);
+		as_record_set_int64(&rec, bin2, i);
 		as_record_set_list(&rec, LIST_BIN, (as_list*)&list);
 	}
 
@@ -154,7 +159,7 @@ batch_get_1_callback(const as_batch_read* results, uint32_t n, void* udata)
 			data->found++;
 
 			int64_t key = as_integer_getorelse((as_integer *) results[i].key->valuep, -1);
-			int64_t val = as_record_get_int64(&results[i].record, "val", -1);
+			int64_t val = as_record_get_int64(&results[i].record, bin1, -1);
 			if (key != val) {
 				warn("key(%d) != val(%d)",key,val);
 				data->errors++;
@@ -182,7 +187,7 @@ batch_sequence_callback(as_key* key, as_record* record, void* udata)
 	data->found++;
 
 	int64_t k = as_integer_getorelse((as_integer *)key->valuep, -1);
-	int64_t v = as_record_get_int64(record, "val", -1);
+	int64_t v = as_record_get_int64(record, bin1, -1);
 	if (k != v) {
 		warn("key(%d) != val(%d)", k, v);
 		data->errors++;
@@ -311,7 +316,7 @@ batch_get_bins_callback(const as_batch_read* results, uint32_t n, void* udata)
 		if (results[i].result == AEROSPIKE_OK) {
 			data->found++;
 			
-			int64_t val = as_record_get_int64(&results[i].record, "val", -1);
+			int64_t val = as_record_get_int64(&results[i].record, bin1, -1);
 			if (val != -1) {
 				warn("val(%d) should not have been returned!", val);
 				data->errors++;
@@ -319,7 +324,7 @@ batch_get_bins_callback(const as_batch_read* results, uint32_t n, void* udata)
 			}
 			
 			int64_t key = as_integer_getorelse((as_integer *) results[i].key->valuep, -1);
-			int64_t val2 = as_record_get_int64(&results[i].record, "val2", -1);
+			int64_t val2 = as_record_get_int64(&results[i].record, bin2, -1);
 
 			if (i % 25 == 0) {
 				if (val2 != -1) {
@@ -359,7 +364,7 @@ TEST(batch_get_bins, "Batch Get - with bin name filters")
 	}
 	
 	batch_read_data data = {0};
-	const char* bins[] = {"val2"};
+	const char* bins[] = {bin2};
 	
 	aerospike_batch_get_bins(as, &err, NULL, &batch, bins, 1, batch_get_bins_callback, &data);
 	if (err.code != AEROSPIKE_OK) {
@@ -376,7 +381,7 @@ TEST(batch_read_complex, "Batch read complex")
 	as_batch_read_records records;
 	as_batch_read_inita(&records, 9);
 	
-	char* bins[] = {"val"};
+	char* bins[] = {bin1};
 	uint32_t n_bins = 1;
 	
 	// get specified bins
@@ -445,7 +450,7 @@ TEST(batch_read_complex, "Batch read complex")
 				found++;
 				
 				if (batch->read_all_bins || batch->n_bin_names > 0) {
-					int64_t val = as_record_get_int64(&batch->record, "val", -1);
+					int64_t val = as_record_get_int64(&batch->record, bin1, -1);
 					
 					if (val != -1) {
 						info("Record: ns=%s set=%s key=%d bin=%d",
@@ -517,7 +522,7 @@ batch_list_operate_cb(const as_batch_read* results, uint32_t n, void* udata)
 	return true;
 }
 
-TEST(batch_list_operate, "Batch list operate")
+TEST(batch_read_list_operate, "Batch read list operate")
 {
 	as_batch batch;
 	as_batch_inita(&batch, N_KEYS);
@@ -543,6 +548,92 @@ TEST(batch_list_operate, "Batch list operate")
 	assert_int_eq(data.errors, 0);
 }
 
+TEST(batch_write_complex, "Batch write complex")
+{
+	as_exp_build(wexp1, as_exp_add(as_exp_bin_int(bin1), as_exp_int(1000)));
+
+	as_operations wops1;
+	as_operations_inita(&wops1, 1);
+	as_operations_add_write_int64(&wops1, bin2, 100);
+
+	as_operations wops2;
+	as_operations_inita(&wops2, 1);
+	as_operations_exp_write(&wops2, bin3, wexp1, AS_EXP_WRITE_DEFAULT);
+
+	as_policy_batch_write wp;
+	as_policy_batch_write_init(&wp);
+	wp.key = AS_POLICY_KEY_SEND;
+
+	as_batch_records recs;
+	as_batch_records_inita(&recs, 3);
+
+	as_batch_write_record* wr1 = as_batch_write_reserve(&recs);
+	as_key_init_int64(&wr1->key, NAMESPACE, SET, 1);
+	wr1->ops = &wops1;
+
+	as_batch_write_record* wr2 = as_batch_write_reserve(&recs);
+	as_key_init_int64(&wr2->key, NAMESPACE, SET, 6);
+	wr2->policy = &wp;
+	wr2->ops = &wops2;
+
+	as_batch_remove_record* rm = as_batch_remove_reserve(&recs);
+	as_key_init_int64(&rm->key, NAMESPACE, SET, 10002);
+
+	as_error err;
+	as_status status = aerospike_batch_operate(as, &err, NULL, &recs);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	assert_int_eq(wr1->result, AEROSPIKE_OK);
+	int64_t v = as_record_get_int64(&wr1->record, bin2, -1);
+	assert_int_eq(v, 0);
+
+	assert_int_eq(wr2->result, AEROSPIKE_OK);
+	v = as_record_get_int64(&wr1->record, bin3, -1);
+	assert_int_eq(v, 0);
+
+	assert_int_eq(rm->result, AEROSPIKE_OK);
+
+	as_operations_destroy(&wops1);
+	as_operations_destroy(&wops2);
+	as_exp_destroy(wexp1);
+
+	as_batch_records_clear(&recs);
+
+	as_batch_read_record* rr1 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&rr1->key, NAMESPACE, SET, 1);
+	char* bins2[] = {bin2};
+	rr1->bin_names = bins2;
+	rr1->n_bin_names = 1;
+
+	as_batch_read_record* rr2 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&rr2->key, NAMESPACE, SET, 6);
+	char* bins3[] = {bin3};
+	rr2->bin_names = bins3;
+	rr2->n_bin_names = 1;
+
+	as_batch_read_record* rr3 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&rr3->key, NAMESPACE, SET, 10002);
+	rr3->read_all_bins = true;
+
+	// TODO: POPULATE ERROR WHEN SET?
+	status = aerospike_batch_operate(as, &err, NULL, &recs);
+
+	// Read of deleted record causes error status.
+	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	assert_int_eq(rr1->result, AEROSPIKE_OK);
+	v = as_record_get_int64(&rr1->record, bin2, -1);
+	assert_int_eq(v, 100);
+
+	assert_int_eq(rr2->result, AEROSPIKE_OK);
+	v = as_record_get_int64(&rr2->record, bin3, -1);
+	assert_int_eq(v, 1006);
+
+	assert_int_eq(rr3->result, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_batch_records_destroy(&recs);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -556,5 +647,6 @@ SUITE(batch_get, "aerospike_batch_get tests")
 	suite_add(multithreaded_batch_get);
 	suite_add(batch_get_bins);
 	suite_add(batch_read_complex);
-	suite_add(batch_list_operate);
+	suite_add(batch_read_list_operate);
+	suite_add(batch_write_complex);
 }

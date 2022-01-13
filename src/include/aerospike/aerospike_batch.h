@@ -451,6 +451,18 @@ as_batch_remove_reserve(as_batch_records* records)
 }
 
 /**
+ * Clear batch records.
+ *
+ * @relates as_batch_records
+ * @ingroup batch_operations
+ */
+static inline void
+as_batch_records_clear(as_batch_records* records)
+{
+	as_vector_clear(&records->list);
+}
+
+/**
  * Destroy keys and records in record list.  It's the responsility of the caller to 
  * free `as_batch_read_record.bin_names` and `as_batch_read_record.ops` when necessary.
  *

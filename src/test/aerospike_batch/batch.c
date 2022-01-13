@@ -613,8 +613,9 @@ TEST(batch_write_complex, "Batch write complex")
 	as_operations_destroy(&wops1);
 	as_operations_destroy(&wops2);
 	as_exp_destroy(wexp1);
+	as_batch_records_destroy(&recs);
 
-	as_batch_records_clear(&recs);
+	as_batch_records_inita(&recs, 3);
 
 	as_batch_read_record* rr1 = as_batch_read_reserve(&recs);
 	as_key_init_int64(&rr1->key, NAMESPACE, SET, 1);

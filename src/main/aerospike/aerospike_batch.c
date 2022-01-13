@@ -2158,9 +2158,7 @@ as_batch_keys_execute(
 		// Destroy records. User is responsible for destroying keys with as_batch_destroy().
 		for (uint32_t i = 0; i < n_keys; i++) {
 			as_batch_result* br = &btk.results[i];
-			if (br->result == AEROSPIKE_OK || br->result == AEROSPIKE_ERR_UDF) {
-				as_record_destroy(&br->record);
-			}
+			as_record_destroy(&br->record);
 		}
 	}
 	return status;
@@ -3218,13 +3216,8 @@ as_batch_records_destroy(as_batch_records* records)
 	for (uint32_t i = 0; i < list->size; i++) {
 		as_batch_base_record* record = as_vector_get(list, i);
 		
-		// Destroy key.
 		as_key_destroy(&record->key);
-		
-		// Destroy record if exists.
-		if (record->result == AEROSPIKE_OK) {
-			as_record_destroy(&record->record);
-		}
+		as_record_destroy(&record->record);
 	}
 	as_vector_destroy(list);
 }

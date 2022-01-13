@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -35,6 +35,7 @@
 #include <pthread.h>
 
 #include "../test.h"
+#include "../util/log_helper.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -115,15 +116,32 @@ static bool
 before(atf_suite* suite)
 {
 	as_error err;
+	as_status status;
 
 	for (int i = 0; i < N_KEYS; i++) {
-		as_status status = insert_record(&err, i);
+		status = insert_record(&err, i);
 
 		if (status != AEROSPIKE_OK) {
 			info("error(%d): %s", err.code, err.message);
 			return false;
 		}
 	}
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 10002);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, bin1, 10002);
+
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+
+	if (status != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+		as_record_destroy(&rec);
+		return false;
+	}
+	as_record_destroy(&rec);
 	return true;
 }
 
@@ -581,15 +599,14 @@ TEST(batch_write_complex, "Batch write complex")
 
 	as_error err;
 	as_status status = aerospike_batch_operate(as, &err, NULL, &recs);
+
 	assert_int_eq(status, AEROSPIKE_OK);
 
 	assert_int_eq(wr1->result, AEROSPIKE_OK);
-	int64_t v = as_record_get_int64(&wr1->record, bin2, -1);
-	assert_int_eq(v, 0);
+	assert_int_eq(wr1->record.bins.entries[0].valuep->nil.type, AS_NIL);
 
 	assert_int_eq(wr2->result, AEROSPIKE_OK);
-	v = as_record_get_int64(&wr1->record, bin3, -1);
-	assert_int_eq(v, 0);
+	assert_int_eq(wr2->record.bins.entries[0].valuep->nil.type, AS_NIL);
 
 	assert_int_eq(rm->result, AEROSPIKE_OK);
 
@@ -615,20 +632,19 @@ TEST(batch_write_complex, "Batch write complex")
 	as_key_init_int64(&rr3->key, NAMESPACE, SET, 10002);
 	rr3->read_all_bins = true;
 
-	// TODO: POPULATE ERROR WHEN SET?
 	status = aerospike_batch_operate(as, &err, NULL, &recs);
 
-	// Read of deleted record causes error status.
-	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	assert_int_eq(status, AEROSPIKE_OK);
 
 	assert_int_eq(rr1->result, AEROSPIKE_OK);
-	v = as_record_get_int64(&rr1->record, bin2, -1);
+	int64_t v = as_record_get_int64(&rr1->record, bin2, -1);
 	assert_int_eq(v, 100);
 
 	assert_int_eq(rr2->result, AEROSPIKE_OK);
 	v = as_record_get_int64(&rr2->record, bin3, -1);
 	assert_int_eq(v, 1006);
 
+	// Read of deleted record causes error.
 	assert_int_eq(rr3->result, AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
 	as_batch_records_destroy(&recs);
@@ -638,7 +654,7 @@ TEST(batch_write_complex, "Batch write complex")
  * TEST SUITE
  *****************************************************************************/
 
-SUITE(batch_get, "aerospike_batch_get tests")
+SUITE(batch, "aerospike batch tests")
 {
 	suite_before(before);
 	suite_after(after);

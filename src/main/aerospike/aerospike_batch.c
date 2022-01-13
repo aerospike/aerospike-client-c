@@ -448,6 +448,12 @@ as_batch_async_skip_records(as_event_command* cmd, uint8_t* p, uint8_t* end)
 	return false;
 }
 
+static inline bool
+as_batch_set_error_row(uint8_t res)
+{
+	return res != AEROSPIKE_ERR_RECORD_NOT_FOUND && res != AEROSPIKE_FILTERED_OUT;
+}
+
 static bool
 as_batch_async_parse_records(as_event_command* cmd)
 {
@@ -514,7 +520,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 				return true;
 			}
 		}
-		else {
+		else if (as_batch_set_error_row(msg->result_code)) {
 			executor->error_row = true;
 		}
 	}
@@ -575,7 +581,7 @@ as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 					return status;
 				}
 			}
-			else {
+			else if (as_batch_set_error_row(msg->result_code)) {
 				*task->error_row = true;
 			}
 		}
@@ -1371,23 +1377,6 @@ as_batch_get_replica_sc(const as_policy_batch* policy)
 	}
 }
 
-static inline as_policy_replica
-as_batch_get_replica_write(const as_policy_batch* policy)
-{
-	switch (policy->replica) {
-		case AS_POLICY_REPLICA_PREFER_RACK:
-			// Writes must always go to master node via sequence algorithm.
-			return AS_POLICY_REPLICA_SEQUENCE;
-
-		case AS_POLICY_REPLICA_ANY:
-			// Writes must always go to master node.
-			return AS_POLICY_REPLICA_MASTER;
-
-		default:
-			return policy->replica;
-	}
-}
-
 static as_status
 as_batch_read_get_node(
 	as_cluster* cluster, const as_key* key, as_policy_replica replica, as_policy_replica replica_sc,
@@ -2023,6 +2012,7 @@ as_batch_keys_execute(
 		offsets_capacity = 10;
 	}
 
+	as_policy_replica replica = policy->replica;
 	as_policy_replica replica_sc = as_batch_get_replica_sc(policy);
 
 	// Map keys to server nodes.
@@ -2046,8 +2036,8 @@ as_batch_keys_execute(
 		}
 
 		as_node* node;
-		status = as_batch_read_get_node(cluster, key, policy->replica, replica_sc, true, true,
-								   NULL, &node);
+		status = as_batch_read_get_node(cluster, key, replica, replica_sc, true, true,
+										NULL, &node);
 
 		// TODO: continue!
 		if (status != AEROSPIKE_OK) {
@@ -2449,6 +2439,7 @@ as_batch_records_execute(
 		offsets_capacity = 10;
 	}
 	
+	as_policy_replica replica = policy->replica;
 	as_policy_replica replica_sc = as_batch_get_replica_sc(policy);
 	bool error_row = false;
 
@@ -2470,10 +2461,10 @@ as_batch_records_execute(
 		as_node* node;
 
 		if (record->has_write) {
-			status = as_batch_write_get_node(cluster, key, policy->replica, true, NULL, &node);
+			status = as_batch_write_get_node(cluster, key, replica, true, NULL, &node);
 		}
 		else {
-			status = as_batch_read_get_node(cluster, key, policy->replica, replica_sc, true, true,
+			status = as_batch_read_get_node(cluster, key, replica, replica_sc, true, true,
 									   NULL, &node);
 		}
 
@@ -2502,14 +2493,16 @@ as_batch_records_execute(
 		}
 		as_vector_append(&batch_node->offsets, &i);
 	}
+	as_nodes_release(nodes);
 
 	// Fatal if no key requests were generated on initialization.
 	if (batch_nodes.size == 0) {
-		as_batch_records_cleanup(async_executor, nodes, &batch_nodes);
+		if (async_executor) {
+			// Destroy batch async resources.
+			cf_free(async_executor);
+		}
 		return as_error_set_message(err, AEROSPIKE_BATCH_FAILED, "Nodes not found");
 	}
-
-	as_nodes_release(nodes);
 
 	if (async_executor) {
 		async_executor->error_row = error_row;
@@ -2602,6 +2595,9 @@ as_batch_retry_records(
 		offsets_capacity = 10;
 	}
 
+	as_policy_replica replica = task->policy->replica;
+	as_policy_replica replica_sc = task->replica_sc;
+
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
@@ -2616,12 +2612,12 @@ as_batch_retry_records(
 		as_status status;
 
 		if (record->has_write) {
-			status = as_batch_write_get_node(cluster, key, task->policy->replica,
-				parent->master, parent->node, &node);
+			status = as_batch_write_get_node(cluster, key, replica, parent->master, parent->node,
+				&node);
 		}
 		else {
-			status = as_batch_read_get_node(cluster, key, task->policy->replica, task->replica_sc,
-				parent->master, parent->master_sc, parent->node, &node);
+			status = as_batch_read_get_node(cluster, key, replica, replica_sc, parent->master,
+				parent->master_sc, parent->node, &node);
 		}
 
 		if (status != AEROSPIKE_OK) {
@@ -2992,33 +2988,33 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
 
+	as_policy_replica replica = policy.replica;
+	as_policy_replica replica_sc = executor->replica_sc;
+
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = cf_swap_from_be32(*(uint32_t*)p);
 		p += sizeof(uint32_t);
 
-		as_batch_read_record* record = as_vector_get(records, offset);
+		as_batch_base_record* record = as_vector_get(records, offset);
 		as_key* key = &record->key;
 
 		as_node* node;
-		status = as_batch_read_get_node(cluster, key, policy.replica, executor->replica_sc,
-								   parent->flags & AS_ASYNC_FLAGS_MASTER,
-								   parent->flags & AS_ASYNC_FLAGS_MASTER_SC,
-								   parent->node, &node);
 
-		// TODO: continue!
+		if (record->has_write) {
+			status = as_batch_write_get_node(cluster, key, replica,
+				parent->flags & AS_ASYNC_FLAGS_MASTER, parent->node, &node);
+		}
+		else {
+			status = as_batch_read_get_node(cluster, key, replica, replica_sc,
+				parent->flags & AS_ASYNC_FLAGS_MASTER, parent->flags & AS_ASYNC_FLAGS_MASTER_SC,
+				parent->node, &node);
+		}
+
 		if (status != AEROSPIKE_OK) {
-			as_batch_release_nodes(&batch_nodes);
-			as_nodes_release(nodes);
-
-			// Close parent command with error.
-			as_event_timer_stop(parent);
-			as_event_error_callback(parent, &err);
-
-			if (ubuf) {
-				cf_free(ubuf);
-			}
-			return -1;  // Abort all retries.
+			record->result = status;
+			executor->error_row = true;
+			continue;
 		}
 
 		as_batch_node* batch_node = as_batch_node_find(&batch_nodes, node);
@@ -3055,6 +3051,13 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 	}
 	as_nodes_release(nodes);
+
+	if (batch_nodes.size == 0) {
+		if (ubuf) {
+			cf_free(ubuf);
+		}
+		return 1;  // Go through normal retry.
+	}
 
 	if (batch_nodes.size == 1) {
 		as_batch_node* batch_node = as_vector_get(&batch_nodes, 0);
@@ -3213,7 +3216,7 @@ as_batch_records_destroy(as_batch_records* records)
 	as_vector* list = &records->list;
 	
 	for (uint32_t i = 0; i < list->size; i++) {
-		as_batch_read_record* record = as_vector_get(list, i);
+		as_batch_base_record* record = as_vector_get(list, i);
 		
 		// Destroy key.
 		as_key_destroy(&record->key);

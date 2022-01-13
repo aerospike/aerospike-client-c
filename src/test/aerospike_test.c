@@ -375,7 +375,6 @@ static bool after(atf_plan* plan)
 
 PLAN(aerospike_test)
 {
-	// This needs to be done before we add the tests.
 	if (! parse_opts(g_argc, g_argv)) {
 		return;
 	}
@@ -383,13 +382,10 @@ PLAN(aerospike_test)
 	plan_before(before);
 	plan_after(after);
 
-	// aerospike_key module
 	plan_add(key_basics);
 	plan_add(key_apply);
 	plan_add(key_apply2);
 	plan_add(key_operate);
-
-	// cdt
 	plan_add(list_basics);
 	plan_add(map_basics);
 	plan_add(map_udf);
@@ -397,32 +393,18 @@ PLAN(aerospike_test)
 	plan_add(map_sort);
 	plan_add(bit);
 	plan_add(hll);
-
-	// filter expressions
 	plan_add(filter_exp);
 	plan_add(exp_operate);
-
-	// aerospike_info module
 	plan_add(info_basics);
-
-	// aerospike_info module
 	plan_add(udf_basics);
 	plan_add(udf_types);
 	plan_add(udf_record);
-
-	// aerospike_sindex module
 	plan_add(index_basics);
-
-	// aerospike_query module
 	plan_add(query_foreach);
 	plan_add(query_background);
 	plan_add(query_geospatial);
-
-	// aerospike_scan module
 	plan_add(scan_basics);
-
-	// aerospike_scan module
-	plan_add(batch_get);
+	plan_add(batch);
 
 #if AS_EVENT_LIB_DEFINED
 	plan_add(key_basics_async);

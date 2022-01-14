@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -20,6 +20,7 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_partition_filter.h>
 #include <aerospike/as_predexp.h>
 #include <aerospike/as_udf.h>
 
@@ -335,7 +336,7 @@ typedef struct as_query_predexp_s {
 } as_query_predexp;
 
 /**
- * The as_query object is used define a query to be executed in the datasbase.
+ * The as_query object is used define a query to be executed in the database.
  *
  * ## Initialization
  * 
@@ -517,6 +518,18 @@ typedef struct as_query_s {
 	 * If ops is set, ops will be destroyed when as_query_destroy() is called.
 	 */
 	struct as_operations_s* ops;
+
+	/**
+	 * Status of all partitions.
+	 */
+	as_partitions_status* parts_all;
+
+	/**
+	 * Should records be read in pages in conjunction with max_records policy.
+	 *
+	 * Default: false
+	 */
+	bool paginate;
 
 	/**
 	 * Set to true if query should only return keys and no bin data.
@@ -851,6 +864,48 @@ as_query_predexp_add(as_query* query, as_predexp_base * predexp);
  */
 AS_EXTERN bool
 as_query_apply(as_query* query, const char* module, const char* function, const as_list* arglist);
+
+/******************************************************************************
+ * QUERY PAGINATE
+ *****************************************************************************/
+
+/**
+ * Set if records should be read in pages in conjunction with max_records policy.
+ * 
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+static inline void
+as_query_set_paginate(as_query* query, bool paginate)
+{
+	query->paginate = paginate;
+}
+
+/**
+ * Set completion status of all partitions from a previous query that ended early.
+ * The query will resume from this point.
+ *
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+static inline void
+as_scan_set_partitions(as_query* query, as_partitions_status* parts_all)
+{
+	query->parts_all = as_partitions_status_reserve(parts_all);
+}
+
+/**
+ * If using query pagination, did the previous paginated query with this query instance
+ * return all records?
+ *
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+static inline bool
+as_scan_is_done(as_query* query)
+{
+	return query->parts_all && query->parts_all->done;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

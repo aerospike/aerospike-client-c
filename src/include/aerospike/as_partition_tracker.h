@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,7 +32,7 @@ extern "C" {
  *****************************************************************************/
 struct as_node_s;
 struct as_cluster_s;
-struct as_policy_scan_s;
+struct as_policy_base_s;
 struct as_error_s;
 
 /**
@@ -75,20 +75,21 @@ typedef struct as_partition_tracker_s {
 
 void
 as_partition_tracker_init_nodes(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
-	as_scan* scan, uint32_t cluster_size
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
+	uint64_t max_records, as_partitions_status** parts_all, bool paginate, uint32_t cluster_size
 	);
 
 void
 as_partition_tracker_init_node(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
-	as_scan* scan, struct as_node_s* node
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
+	uint64_t max_records, as_partitions_status** parts_all, bool paginate, struct as_node_s* node
 	);
 
 as_status
 as_partition_tracker_init_filter(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
-	as_scan* scan, uint32_t cluster_size, as_partition_filter* pf, struct as_error_s* err
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
+	uint64_t max_records, as_partitions_status** parts_all, bool paginate, uint32_t cluster_size,
+	as_partition_filter* pf, struct as_error_s* err
 	);
 
 as_status

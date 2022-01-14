@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -49,23 +49,26 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 
 static void
 tracker_init(
-	as_partition_tracker* pt, const as_policy_scan* policy, as_scan* scan, uint16_t part_begin,
-	uint16_t part_count, const as_digest* digest
+	as_partition_tracker* pt, const as_policy_base* policy, as_partitions_status** pp_resume,
+	uint64_t max_records, bool paginate, uint16_t part_begin, uint16_t part_count,
+	const as_digest* digest
 	)
 {
-	if (! scan->parts_all) {
+	as_partitions_status* resume = *pp_resume;
+
+	if (! resume) {
 		// Initial scan.
 		pt->parts_all = parts_create(part_begin, part_count, digest);
 
-		if (scan->paginate) {
-			// Save parts_all in as_scan, so it can be reused in next scan page.
-			scan->parts_all = as_partitions_status_reserve(pt->parts_all);
+		if (paginate) {
+			// Save parts_all, so it can be reused in next page.
+			*pp_resume = as_partitions_status_reserve(pt->parts_all);
 		}
 	}
 	else {
-		// Scan instance contains partitions from previous scan.
+		// Instance contains partitions from previous scan/query.
 		// Reset partition status.
-		as_partitions_status* parts_all = as_partitions_status_reserve(scan->parts_all);
+		as_partitions_status* parts_all = as_partitions_status_reserve(resume);
 
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
 			parts_all->parts[i].done = false;
@@ -75,13 +78,12 @@ tracker_init(
 
 	as_vector_init(&pt->node_parts, sizeof(as_node_partitions), pt->node_capacity);
 	pt->errors = NULL;
-	pt->max_records = policy->max_records;
+	pt->max_records = max_records;
 
-	const as_policy_base* pb = &policy->base;
-	pt->sleep_between_retries = pb->sleep_between_retries;
-	pt->socket_timeout = pb->socket_timeout;
-	pt->total_timeout = pb->total_timeout;
-	pt->max_retries = pb->max_retries;
+	pt->sleep_between_retries = policy->sleep_between_retries;
+	pt->socket_timeout = policy->socket_timeout;
+	pt->total_timeout = policy->total_timeout;
+	pt->max_retries = policy->max_retries;
 
 	if (pt->total_timeout > 0) {
 		pt->deadline = cf_getms() + pt->total_timeout;
@@ -158,8 +160,8 @@ release_node_partitions(as_vector* list)
 
 void
 as_partition_tracker_init_nodes(
-	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy, as_scan* scan,
-	uint32_t cluster_size
+	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
+	uint64_t max_records, as_partitions_status** parts_all, bool paginate, uint32_t cluster_size
 	)
 {
 	pt->node_filter = NULL;
@@ -169,24 +171,25 @@ as_partition_tracker_init_nodes(
 	uint32_t ppn = cluster->n_partitions / cluster_size;
 	ppn += ppn >> 2;
 	pt->parts_capacity = ppn;
-	tracker_init(pt, policy, scan, 0, cluster->n_partitions, NULL);
+	tracker_init(pt, policy, parts_all, max_records, paginate, 0, cluster->n_partitions, NULL);
 }
 
 void
 as_partition_tracker_init_node(
-	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy, as_scan* scan,
-	as_node* node
+	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
+	uint64_t max_records, as_partitions_status** parts_all, bool paginate, as_node* node
 	)
 {
 	pt->node_filter = node;
 	pt->node_capacity = 1;
 	pt->parts_capacity = cluster->n_partitions;
-	tracker_init(pt, policy, scan, 0, cluster->n_partitions, NULL);
+	tracker_init(pt, policy, parts_all, max_records, paginate, 0, cluster->n_partitions, NULL);
 }
 
 as_status
 as_partition_tracker_init_filter(
-	as_partition_tracker* pt, as_cluster* cluster, const as_policy_scan* policy, as_scan* scan,
+	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
+	uint64_t max_records, as_partitions_status** parts_all, bool paginate,
 	uint32_t cluster_size, as_partition_filter* pf, as_error* err
 	)
 {
@@ -208,14 +211,10 @@ as_partition_tracker_init_filter(
 			pf->begin, pf->count);
 	}
 
-	if (pf->parts_all && ! scan->parts_all) {
-		as_scan_set_partitions(scan, pf->parts_all);
-	}
-
 	pt->node_filter = NULL;
 	pt->node_capacity = cluster_size;
 	pt->parts_capacity = pf->count;
-	tracker_init(pt, policy, scan, pf->begin, pf->count, &pf->digest);
+	tracker_init(pt, policy, parts_all, max_records, paginate, pf->begin, pf->count, &pf->digest);
 	return AEROSPIKE_OK;
 }
 

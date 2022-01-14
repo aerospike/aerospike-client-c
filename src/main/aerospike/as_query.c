@@ -57,6 +57,9 @@ as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_se
 
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
 
+	query->parts_all = NULL;
+	query->paginate = false;
+
 	return query;
 }
 
@@ -125,6 +128,10 @@ as_query_destroy(as_query* query)
 
 	if (query->ops) {
 		as_operations_destroy(query->ops);
+	}
+
+	if (query->parts_all) {
+		as_partitions_status_release(query->parts_all);
 	}
 
 	if ( query->_free ) {

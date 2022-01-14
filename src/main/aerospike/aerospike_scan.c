@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1259,7 +1259,9 @@ aerospike_scan_foreach(
 	}
 
 	as_partition_tracker pt;
-	as_partition_tracker_init_nodes(&pt, cluster, policy, scan, n_nodes);
+	as_partition_tracker_init_nodes(&pt, cluster, &policy->base, policy->max_records,
+		&scan->parts_all, scan->paginate, n_nodes);
+
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 	as_partition_tracker_destroy(&pt);
 	return status;
@@ -1291,7 +1293,9 @@ aerospike_scan_node(
 	}
 
 	as_partition_tracker pt;
-	as_partition_tracker_init_node(&pt, cluster, policy, scan, node);
+	as_partition_tracker_init_node(&pt, cluster, &policy->base, policy->max_records,
+		&scan->parts_all, scan->paginate, node);
+
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 	as_partition_tracker_destroy(&pt);
 	as_node_release(node);
@@ -1317,8 +1321,13 @@ aerospike_scan_partitions(
 		return status;
 	}
 
+	if (pf->parts_all && ! scan->parts_all) {
+		as_scan_set_partitions(scan, pf->parts_all);
+	}
+
 	as_partition_tracker pt;
-	status = as_partition_tracker_init_filter(&pt, cluster, policy, scan, n_nodes, pf, err);
+	status = as_partition_tracker_init_filter(&pt, cluster, &policy->base, policy->max_records,
+		&scan->parts_all, scan->paginate, n_nodes, pf, err);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1354,7 +1363,9 @@ aerospike_scan_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	as_partition_tracker_init_nodes(pt, cluster, policy, scan, n_nodes);
+	as_partition_tracker_init_nodes(pt, cluster, &policy->base, policy->max_records,
+		&scan->parts_all, scan->paginate, n_nodes);
+
 	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
 }
 
@@ -1385,7 +1396,9 @@ aerospike_scan_node_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	as_partition_tracker_init_node(pt, cluster, policy, scan, node);
+	as_partition_tracker_init_node(pt, cluster, &policy->base, policy->max_records,
+		&scan->parts_all, scan->paginate, node);
+
 	status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata,
 									 event_loop);
 	as_node_release(node);
@@ -1411,8 +1424,13 @@ aerospike_scan_partitions_async(
 		return status;
 	}
 
+	if (pf->parts_all && ! scan->parts_all) {
+		as_scan_set_partitions(scan, pf->parts_all);
+	}
+
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	status = as_partition_tracker_init_filter(pt, cluster, policy, scan, n_nodes, pf, err);
+	status = as_partition_tracker_init_filter(pt, cluster, &policy->base, policy->max_records,
+		&scan->parts_all, scan->paginate, n_nodes, pf, err);
 
 	if (status != AEROSPIKE_OK) {
 		cf_free(pt);

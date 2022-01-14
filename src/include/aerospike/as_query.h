@@ -584,13 +584,8 @@ as_query_new(const as_namespace ns, const as_set set);
 /**
  * Destroy the query and associated resources.
  * 
- * ~~~~~~~~~~{.c}
- * as_query_destroy(scan);
- * ~~~~~~~~~~
- *
- * @param query 	The query to destroy.
- *
  * @relates as_query
+ * @ingroup query_object
  */
 AS_EXTERN void
 as_query_destroy(as_query* query);
@@ -889,7 +884,7 @@ as_query_set_paginate(as_query* query, bool paginate)
  * @ingroup as_query_object
  */
 static inline void
-as_scan_set_partitions(as_query* query, as_partitions_status* parts_all)
+as_query_set_partitions(as_query* query, as_partitions_status* parts_all)
 {
 	query->parts_all = as_partitions_status_reserve(parts_all);
 }
@@ -902,7 +897,7 @@ as_scan_set_partitions(as_query* query, as_partitions_status* parts_all)
  * @ingroup as_query_object
  */
 static inline bool
-as_scan_is_done(as_query* query)
+as_query_is_done(as_query* query)
 {
 	return query->parts_all && query->parts_all->done;
 }

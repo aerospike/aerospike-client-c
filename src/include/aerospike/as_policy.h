@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -906,6 +906,24 @@ typedef struct as_policy_query_s {
 	as_policy_base base;
 
 	/**
+	 * Approximate number of records to return to client. This number is divided by the
+	 * number of nodes involved in the query.  The actual number of records returned
+	 * may be less than max_records if node record counts are small and unbalanced across
+	 * nodes.
+	 *
+	 * Default: 0 (do not limit record count)
+	 */
+	uint64_t max_records;
+
+	/**
+	 * Limit returned records per second (rps) rate for each server.
+	 * Do not apply rps limit if records_per_second is zero.
+	 *
+	 * Default: 0
+	 */
+	uint32_t records_per_second;
+
+	/**
 	 * Timeout used when info command is used that checks for cluster changes before and 
 	 * after the query.  This timeout is only used when fail_on_cluster_change is true and
 	 * the query where clause is defined.
@@ -1393,6 +1411,8 @@ static inline as_policy_query*
 as_policy_query_init(as_policy_query* p)
 {
 	as_policy_base_query_init(&p->base);
+	p->max_records = 0;
+	p->records_per_second = 0;
 	p->info_timeout = 10000;
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;

@@ -17,10 +17,8 @@
 #pragma once
 
 #include <aerospike/as_std.h>
-#include <aerospike/as_key.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_partition_filter.h>
-#include <aerospike/as_scan.h>
 #include <aerospike/as_vector.h>
 
 #ifdef __cplusplus

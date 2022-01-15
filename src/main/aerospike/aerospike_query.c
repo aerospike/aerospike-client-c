@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -26,6 +26,7 @@
 #include <aerospike/as_module.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
+#include <aerospike/as_partition_tracker.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_query_validate.h>
@@ -1057,6 +1058,8 @@ aerospike_query_foreach(
 	}
 
 	as_cluster* cluster = as->cluster;
+
+	// TODO: Must check if full cluster supports partition queries here...
 
 	// Convert to a scan when filter doesn't exist and not aggregation query and
 	// partition scans are supported.

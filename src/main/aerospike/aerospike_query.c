@@ -1060,6 +1060,10 @@ aerospike_query_foreach(
 	as_cluster* cluster = as->cluster;
 
 	// TODO: Must check if full cluster supports partition queries here...
+	if (cluster->has_partition_query) {
+	}
+	else {
+	}
 
 	// Convert to a scan when filter doesn't exist and not aggregation query and
 	// partition scans are supported.

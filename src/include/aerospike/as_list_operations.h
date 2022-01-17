@@ -196,6 +196,11 @@ typedef enum as_list_return_type_e {
 	AS_LIST_RETURN_VALUE = 7,
 
 	/**
+	 * Return true if count != 0/.
+	 */
+	AS_LIST_RETURN_TYPE_EXISTS = 13,
+
+	/**
 	 * Invert meaning of list command and return values.  For example:
 	 *
 	 * ~~~~~~~~~~{.c}

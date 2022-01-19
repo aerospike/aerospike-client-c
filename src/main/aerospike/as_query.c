@@ -58,6 +58,8 @@ as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_se
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
 
 	query->parts_all = NULL;
+	query->records_per_second = 0;
+	query->max_records = 0;
 	query->paginate = false;
 
 	return query;

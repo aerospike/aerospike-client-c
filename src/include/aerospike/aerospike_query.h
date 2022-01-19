@@ -180,7 +180,7 @@ typedef bool (*as_async_query_record_listener)(as_error* err, as_record* record,
  */
 AS_EXTERN as_status
 aerospike_query_foreach(
-	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	aerospike_query_foreach_callback callback, void* udata
 	);
 

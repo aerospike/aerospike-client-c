@@ -169,7 +169,7 @@ as_scan_parse_record_async(
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
+	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, NULL);
 
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops,
 											 sc->command.flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
@@ -267,7 +267,7 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
+	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, NULL);
 
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->scan->deserialize_list_map);
 
@@ -495,11 +495,11 @@ as_scan_command_init(
 	}
 
 	if (policy->records_per_second > 0) {
-		p = as_command_write_field_uint32(p, AS_FIELD_SCAN_RPS, policy->records_per_second);
+		p = as_command_write_field_uint32(p, AS_FIELD_RPS, policy->records_per_second);
 	}
 
 	// Write socket timeout.
-	p = as_command_write_field_uint32(p, AS_FIELD_SCAN_TIMEOUT, policy->base.socket_timeout);
+	p = as_command_write_field_uint32(p, AS_FIELD_SOCKET_TIMEOUT, policy->base.socket_timeout);
 
 	// Write task_id field.
 	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
@@ -558,7 +558,7 @@ as_scan_command_init(
 	}
 
 	if (sb->max_records > 0) {
-		p = as_command_write_field_uint64(p, AS_FIELD_SCAN_MAX_RECORDS, sb->max_records);
+		p = as_command_write_field_uint64(p, AS_FIELD_MAX_RECORDS, sb->max_records);
 	}
 
 	if (scan->ops) {
@@ -1006,7 +1006,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 
 		// Write record limit.
 		if (np->record_max > 0) {
-			p = as_command_write_field_uint64(p, AS_FIELD_SCAN_MAX_RECORDS, np->record_max);
+			p = as_command_write_field_uint64(p, AS_FIELD_MAX_RECORDS, np->record_max);
 		}
 
 		memcpy(p, se->cmd_buf + se->cmd_size_pre, se->cmd_size_post);

@@ -32,6 +32,7 @@
 #include <aerospike/as_query_validate.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_serializer.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_stream.h>
@@ -45,6 +46,7 @@
 
 #define QUERY_FOREGROUND 1
 #define QUERY_BACKGROUND 2
+#define BVAL_SIZE 8
 
 typedef struct as_query_user_callback_s {
 	aerospike_query_foreach_callback callback;
@@ -53,15 +55,17 @@ typedef struct as_query_user_callback_s {
 
 typedef struct as_query_task_s {
 	as_node* node;
-	
+	as_node_partitions* np;
+
+	as_partition_tracker* pt;
 	as_cluster* cluster;
 	const as_policy_query* query_policy;
 	const as_policy_write* write_policy;
 	const as_query* query;
 	aerospike_query_foreach_callback callback;
 	void* udata;
-	uint32_t* error_mutex;
 	as_error* err;
+	uint32_t* error_mutex;
 	cf_queue* input_queue;
 	cf_queue* complete_q;
 	uint64_t task_id;
@@ -69,6 +73,7 @@ typedef struct as_query_task_s {
 
 	uint8_t* cmd;
 	size_t cmd_size;
+	uint8_t query_type;
 	bool first;
 } as_query_task;
 
@@ -90,13 +95,34 @@ typedef struct as_query_complete_task_s {
 typedef struct as_async_query_executor {
 	as_event_executor executor;
 	as_async_query_record_listener listener;
+	as_partition_tracker* pt;
 	uint32_t info_timeout;
 } as_async_query_executor;
 
 typedef struct as_async_query_command {
 	as_event_command command;
+	as_node_partitions* np;
 	uint8_t space[];
 } as_async_query_command;
+
+typedef struct as_query_builder {
+	as_partition_tracker* pt;
+	as_node_partitions* np;
+	as_buffer argbuffer;
+	as_queue* opsbuffers;
+	uint64_t max_records;
+	uint32_t filter_size;
+	uint32_t predexp_size;
+	uint32_t task_id_offset;
+	uint32_t parts_full_size;
+	uint32_t parts_partial_digest_size;
+	uint32_t parts_partial_bval_size;
+	uint32_t bin_name_size;
+	uint32_t cmd_size_pre;
+	uint32_t cmd_size_post;
+	uint16_t n_fields;
+	bool is_new;
+} as_query_builder;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -200,31 +226,42 @@ as_query_complete_async(as_event_executor* executor)
 }
 
 static as_status
-as_query_parse_record_async(as_event_command* cmd, uint8_t** pp, as_msg* msg, as_error* err)
+as_query_parse_record_async(
+	as_async_query_executor* qe, as_async_query_command* qc, uint8_t** pp, as_msg* msg,
+	as_error* err
+	)
 {
 	as_record rec;
 	as_record_inita(&rec, msg->n_ops);
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
+
+	as_bval bval = {.is_set = false};
+	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
 
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops,
-											 cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
+		qc->command.flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
 
 	if (status != AEROSPIKE_OK) {
 		as_record_destroy(&rec);
 		return status;
 	}
 
-	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
-	bool rv = ((as_async_query_executor*)executor)->listener(0, &rec, executor->udata, executor->event_loop);
-	as_record_destroy(&rec);
+	bool rv = qe->listener(NULL, &rec, qe->executor.udata, qe->executor.event_loop);
 
 	if (! rv) {
-		executor->notify = false;
+		as_record_destroy(&rec);
+		qe->executor.notify = false;
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT_ABORT, "");
 	}
+
+	if (qc->np) {
+		as_partition_tracker_set_last(qe->pt, qc->np, &rec.key.digest, &bval,
+			qc->command.cluster->n_partitions);
+	}
+
+	as_record_destroy(&rec);
 	return AEROSPIKE_OK;
 }
 
@@ -232,18 +269,44 @@ static bool
 as_query_parse_records_async(as_event_command* cmd)
 {
 	as_error err;
-	as_event_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
+	as_async_query_command* qc = (as_async_query_command*)cmd;
+	as_async_query_executor* qe = cmd->udata;  // udata is overloaded to contain executor.
 	uint8_t* p = cmd->buf + cmd->pos;
 	uint8_t* end = cmd->buf + cmd->len;
 
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
-		
-		if (msg->result_code) {
-			// Special case - if we scan a set name that doesn't exist on a
-			// node, it will return "not found".
+		p += sizeof(as_msg);
+
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			if (msg->result_code != AEROSPIKE_OK) {
+				// The server returned a fatal error.
+				as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+				as_event_response_error(cmd, &err);
+				return true;
+			}
+			as_event_query_complete(cmd);
+			return true;
+		}
+
+		if (qc->np) {
+			if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
+				// Only mark partition done when result_code is AEROSPIKE_OK.
+				// The server may return PARTITION_UNAVAILABLE (AEROSPIKE_ERR_CLUSTER) which
+				// means the specified partition will need to be requested on retry.
+				if (msg->result_code == AEROSPIKE_OK) {
+					as_partition_tracker_part_done(qe->pt, qc->np, msg->generation);
+				}
+				continue;
+			}
+		}
+
+		if (msg->result_code != AEROSPIKE_OK) {
+			// Background scans return AEROSPIKE_ERR_RECORD_NOT_FOUND
+			// when the set does not exist on the target node.
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+				// Non-fatal error.
 				as_event_query_complete(cmd);
 				return true;
 			}
@@ -251,20 +314,14 @@ as_query_parse_records_async(as_event_command* cmd)
 			as_event_response_error(cmd, &err);
 			return true;
 		}
-		p += sizeof(as_msg);
-		
-		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			as_event_query_complete(cmd);
-			return true;
-		}
-		
-		if (! executor->valid) {
+
+		if (! qe->executor.valid) {
 			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "");
 			as_event_response_error(cmd, &err);
 			return true;
 		}
 
-		if (as_query_parse_record_async(cmd, &p, msg, &err) != AEROSPIKE_OK) {
+		if (as_query_parse_record_async(qe, qc, &p, msg, &err) != AEROSPIKE_OK) {
 			as_event_response_error(cmd, &err);
 			return true;
 		}
@@ -275,8 +332,6 @@ as_query_parse_records_async(as_event_command* cmd)
 static as_status
 as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* err)
 {
-	bool rv = true;
-	
 	if (task->input_queue) {
 		// Parse aggregate return values.
 		as_val* val = 0;
@@ -287,7 +342,11 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		}
 		
 		if (task->callback) {
-			rv = task->callback(val, task->udata);
+			bool rv = task->callback(val, task->udata);
+
+			if (! rv) {
+				return AEROSPIKE_ERR_CLIENT_ABORT;
+			}
 		}
 		else {
 			as_val_destroy(val);
@@ -308,7 +367,9 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		
 		rec.gen = msg->generation;
 		rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-		*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key);
+
+		as_bval bval = {.is_set = false};
+		*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
 
 		as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->query_policy->deserialize);
 
@@ -318,11 +379,21 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		}
 
 		if (task->callback) {
-			rv = task->callback((as_val*)&rec, task->udata);
+			bool rv = task->callback((as_val*)&rec, task->udata);
+
+			if (! rv) {
+				as_record_destroy(&rec);
+				return AEROSPIKE_ERR_CLIENT_ABORT;
+			}
+		}
+
+		if (task->pt) {
+			as_partition_tracker_set_last(task->pt, task->np, &rec.key.digest, &bval,
+				task->cluster->n_partitions);
 		}
 		as_record_destroy(&rec);
 	}
-	return rv ? AEROSPIKE_OK : AEROSPIKE_ERR_CLIENT_ABORT;
+	return AEROSPIKE_OK;
 }
 
 static as_status
@@ -336,25 +407,38 @@ as_query_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
-		
-		if (msg->result_code) {
-			// Special case - if we query a set name that doesn't exist on a
-			// node, it will return "not found" - we unify this with the
-			// case where OK is returned and no callbacks were made.
-			// We are sending "no more records back" to the caller which will
-			// send OK to the main worker thread.
-			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-				return AEROSPIKE_NO_MORE_RECORDS;
-			}
-			status = as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
-			return status;
-		}
 		p += sizeof(as_msg);
-		
+
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			if (msg->result_code != AEROSPIKE_OK) {
+				// The server returned a fatal error.
+				return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+			}
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
-		
+
+		if (task->pt) {
+			if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
+				// Only mark partition done when result_code is AEROSPIKE_OK.
+				// The server may return PARTITION_UNAVAILABLE (AEROSPIKE_ERR_CLUSTER) which
+				// means the specified partition will need to be requested on retry.
+				if (msg->result_code == AEROSPIKE_OK) {
+					as_partition_tracker_part_done(task->pt, task->np, msg->generation);
+				}
+				continue;
+			}
+		}
+
+		if (msg->result_code != AEROSPIKE_OK) {
+			// Background scans return AEROSPIKE_ERR_RECORD_NOT_FOUND
+			// when the set does not exist on the target node.
+			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+				// Non-fatal error.
+				return AEROSPIKE_NO_MORE_RECORDS;
+			}
+			return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+		}
+
 		status = as_query_parse_record(&p, msg, task, err);
 		
 		if (status != AEROSPIKE_OK) {
@@ -367,105 +451,6 @@ as_query_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 		}
 	}
 	return AEROSPIKE_OK;
-}
-
-static as_status
-as_query_command_execute(as_query_task* task)
-{
-	as_error err;
-	as_error_init(&err);
-
-	as_status status;
-
-	if (task->cluster_key && ! task->first) {
-		uint32_t timeout = task->query_policy? task->query_policy->info_timeout : 10000;
-		status = as_query_validate(&err, task->node, task->query->ns, timeout, task->cluster_key);
-
-		if (status) {
-			// Set main error only once.
-			if (as_fas_uint32(task->error_mutex, 1) == 0) {
-				as_error_copy(task->err, &err);
-			}
-			return status;
-		}
-	}
-
-	const as_policy_base* policy;
-	uint8_t flags;
-
-	if (task->query_policy) {
-		policy = &task->query_policy->base;
-		flags = AS_COMMAND_FLAGS_READ;
-	}
-	else {
-		policy = &task->write_policy->base;
-		flags = 0;
-	}
-
-	as_command cmd;
-	cmd.cluster = task->cluster;
-	cmd.policy = policy;
-	cmd.node = task->node;
-	cmd.ns = NULL;        // Not referenced when node set.
-	cmd.partition = NULL; // Not referenced when node set.
-	cmd.parse_results_fn = as_query_parse_records;
-	cmd.udata = task;
-	cmd.buf = task->cmd;
-	cmd.buf_size = task->cmd_size;
-	cmd.partition_id = 0; // Not referenced when node set.
-	cmd.replica = AS_POLICY_REPLICA_MASTER;
-	cmd.flags = flags;
-
-	as_command_start_timer(&cmd);
-
-	// Individual query node commands must not retry.
-	cmd.max_retries = 0;
-
-	status = as_command_execute(&cmd, &err);
-
-	if (status) {
-		// Set main error only once.
-		if (as_fas_uint32(task->error_mutex, 1) == 0) {
-			// Don't set error when user aborts query,
-			if (status != AEROSPIKE_ERR_CLIENT_ABORT) {
-				as_error_copy(task->err, &err);
-			}
-		}
-		return status;
-	}
-
-	if (task->cluster_key) {
-		uint32_t timeout = task->query_policy? task->query_policy->info_timeout : 10000;
-		status = as_query_validate(&err, task->node, task->query->ns, timeout, task->cluster_key);
-
-		if (status) {
-			// Set main error only once.
-			if (as_fas_uint32(task->error_mutex, 1) == 0) {
-				as_error_copy(task->err, &err);
-			}
-			return status;
-		}
-	}
-	return status;
-}
-
-static void
-as_query_worker(void* data)
-{
-	as_query_task* task = (as_query_task*)data;
-		
-	as_query_complete_task complete_task;
-	complete_task.node = task->node;
-	complete_task.task_id = task->task_id;
-
-	if (as_load_uint32(task->error_mutex) == 0) {
-		complete_task.result = as_query_command_execute(task);
-	}
-	else {
-		complete_task.result = AEROSPIKE_ERR_QUERY_ABORTED;
-	}
-
-	cf_queue_push(task->complete_q, &complete_task);
 }
 
 static uint8_t*
@@ -545,45 +530,67 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 
 static size_t
 as_query_command_size(
-	const as_policy_base* policy_base, const as_query* query, uint16_t* fields, uint32_t* filter_sz,
-	uint32_t* predexp_sz, uint32_t* bin_name_sz, as_buffer* argbuffer, as_queue* opsbuffers
+	const as_policy_base* base_policy, const as_query* query, as_query_builder* qb
 	)
 {
 	size_t size = AS_HEADER_SIZE;
-	uint32_t filter_size = 0;
 	uint32_t predexp_size = 0;
-	uint32_t bin_name_size = 0;
+	uint32_t filter_size = 0;
 	uint16_t n_fields = 0;
-	
-	// Estimate namespace size.
+
+	if (qb->np) {
+		qb->parts_full_size = qb->np->parts_full.size * 2;
+		qb->parts_partial_digest_size = qb->np->parts_partial.size * AS_DIGEST_VALUE_SIZE;
+		qb->parts_partial_bval_size = (query->where.size == 0)?
+			0 : qb->np->parts_partial.size * BVAL_SIZE;
+	}
+	else {
+		qb->parts_full_size = 0;
+		qb->parts_partial_digest_size = 0;
+		qb->parts_partial_bval_size = 0;
+	}
+
 	if (query->ns[0]) {
 		size += as_command_string_field_size(query->ns);
 		n_fields++;
 	}
 	
-	// Estimate set size.  Do not send empty sets.
 	if (query->set[0]) {
 		size += as_command_string_field_size(query->set);
 		n_fields++;
 	}
-	
-	// Estimate indextype size.
-	// For single where clause queries
-	if (query->where.size == 1) {
-		size += as_command_field_size(1);
+
+	// RPS field used in new servers and not used (but harmless to add) in old servers.
+	if (query->records_per_second > 0) {
+		size += as_command_field_size(sizeof(uint32_t));
 		n_fields++;
 	}
-	
+
+	// Max records field used in new servers and not used (but harmless to add) in old servers.
+	if (qb->max_records > 0) {
+		size += as_command_field_size(8);
+		n_fields++;
+	}
+
+	// Socket timeout field used in new servers and not used (but harmless to add) in old servers.
+	size += as_command_field_size(sizeof(uint32_t));
+	n_fields++;
+
 	// Estimate taskId size.
 	size += as_command_field_size(8);
 	n_fields++;
-	
-	// Estimate size of query filters.
+
+	// Estimate size of query filter.
 	if (query->where.size > 0) {
+		// Estimate AS_FIELD_INDEX_TYPE
+		size += as_command_field_size(1);
+		n_fields++;
+
+		// Estimate AS_FIELD_INDEX_RANGE
 		size += AS_FIELD_HEADER_SIZE;
 		filter_size++;  // Add byte for num filters.
 		
-		for (uint16_t i = 0; i < query->where.size; i++ ) {
+		for (uint16_t i = 0; i < query->where.size; i++) {
 			as_predicate* pred = &query->where.entries[i];
 			
 			// bin name size(1) + particle type size(1) + begin particle size(4) + end particle size(4) = 10
@@ -610,24 +617,43 @@ as_query_command_size(
 		}
 		size += filter_size;
 		n_fields++;
-		
-		// Query bin names are specified as a field (Scan bin names are specified later as operations)
-		// Estimate size for selected bin names.
-		if (query->select.size > 0) {
-			size += AS_FIELD_HEADER_SIZE;
-			bin_name_size++;  // Add byte for num bin names.
-			
-			for (uint16_t i = 0; i < query->select.size; i++) {
-				bin_name_size += (uint32_t)strlen(query->select.entries[i]) + 1;
+		qb->filter_size = filter_size;
+
+		if (! qb->is_new) {
+			// Query bin names are specified as a field (Scan bin names are specified later as
+			// operations) in old servers. Estimate size for selected bin names.
+			qb->bin_name_size = 0;
+
+			if (query->select.size > 0) {
+				size += AS_FIELD_HEADER_SIZE;
+				qb->bin_name_size++;  // Add byte for num bin names.
+				
+				for (uint16_t i = 0; i < query->select.size; i++) {
+					qb->bin_name_size += (uint32_t)strlen(query->select.entries[i]) + 1;
+				}
+				size += qb->bin_name_size;
+				n_fields++;
 			}
-			size += bin_name_size;
-			n_fields++;
 		}
 	}
-	else {
-		// Estimate scan timeout size.
-		size += as_command_field_size(sizeof(uint32_t));
-		n_fields++;
+
+	// Estimate background function size.
+	as_buffer_init(&qb->argbuffer);
+
+	if (query->apply.function[0]) {
+		size += as_command_field_size(1);
+		size += as_command_string_field_size(query->apply.module);
+		size += as_command_string_field_size(query->apply.function);
+
+		if (query->apply.arglist) {
+			// If the query has a udf w/ arglist, then serialize it.
+			as_serializer ser;
+			as_msgpack_init(&ser);
+			as_serializer_serialize(&ser, (as_val*)query->apply.arglist, &qb->argbuffer);
+			as_serializer_destroy(&ser);
+		}
+		size += as_command_field_size(qb->argbuffer.size);
+		n_fields += 4;
 	}
 
 	// Estimate predexp size.
@@ -639,34 +665,35 @@ as_query_command_size(
 		}
 		size += predexp_size;
 		n_fields++;
+		qb->predexp_size = predexp_size;
 	}
-	else if (policy_base->filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy_base->filter_exp->packed_sz;
+	else if (base_policy->filter_exp) {
+		size += AS_FIELD_HEADER_SIZE + base_policy->filter_exp->packed_sz;
+		n_fields++;
+		qb->predexp_size = 0;
+	}
+	else if (base_policy->predexp) {
+		size += as_predexp_list_size(base_policy->predexp, &predexp_size);
+		n_fields++;
+		qb->predexp_size = predexp_size;
+	}
+
+	if (qb->parts_full_size > 0) {
+		size += as_command_field_size(qb->parts_full_size);
 		n_fields++;
 	}
-	else if (policy_base->predexp) {
-		size += as_predexp_list_size(policy_base->predexp, &predexp_size);
+
+	if (qb->parts_partial_digest_size > 0) {
+		size += as_command_field_size(qb->parts_partial_digest_size);
 		n_fields++;
 	}
 
-	// Estimate background function size.
-	as_buffer_init(argbuffer);
-
-	if (query->apply.function[0]) {
-		size += as_command_field_size(1);
-		size += as_command_string_field_size(query->apply.module);
-		size += as_command_string_field_size(query->apply.function);
-
-		if (query->apply.arglist) {
-			// If the query has a udf w/ arglist, then serialize it.
-			as_serializer ser;
-			as_msgpack_init(&ser);
-			as_serializer_serialize(&ser, (as_val*)query->apply.arglist, argbuffer);
-			as_serializer_destroy(&ser);
-		}
-		size += as_command_field_size(argbuffer->size);
-		n_fields += 4;
+	if (qb->parts_partial_bval_size > 0) {
+		size += as_command_field_size(qb->parts_partial_bval_size);
+		n_fields++;
 	}
+
+	qb->n_fields = n_fields;
 
 	// Operations (used in background query) and bin names (used in foreground query)
 	// are mutually exclusive.
@@ -676,36 +703,31 @@ as_query_command_size(
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
-			size += as_command_bin_size(&op->bin, opsbuffers);
+			size += as_command_bin_size(&op->bin, qb->opsbuffers);
 		}
 	}
 	else {
-		// Estimate size for selected bin names on scan (query bin names already handled).
-		if (query->where.size == 0) {
+		// Estimate size for selected bin names (query bin names already handled for old servers).
+		if (qb->is_new || query->where.size == 0) {
 			for (uint16_t i = 0; i < query->select.size; i++) {
 				size += as_command_string_operation_size(query->select.entries[i]);
 			}
 		}
 	}
-
-	*fields = n_fields;
-	*filter_sz = filter_size;
-	*predexp_sz = predexp_size;
-	*bin_name_sz = bin_name_size;
 	return size;
 }
 
 static size_t
 as_query_command_init(
-	uint8_t* cmd, const as_query* query, uint8_t query_type, const as_policy_base* base_policy,
-	const as_policy_query* query_policy, const as_policy_write* write_policy, uint64_t task_id,
-	uint16_t n_fields, uint32_t filter_size, uint32_t predexp_size, uint32_t bin_name_size,
-	as_buffer* argbuffer, as_queue* opsbuffers
+	uint8_t* cmd, const as_policy_base* base_policy, const as_policy_query* query_policy,
+	const as_policy_write* write_policy, const as_query* query, uint8_t query_type,
+	uint64_t task_id, as_query_builder* qb
 	)
 {
 	// Write command buffer.
 	uint16_t n_ops = (query->ops)? query->ops->binops.size :
-								   (query->where.size == 0)? query->select.size : 0;
+		(qb->is_new || query->where.size == 0)? query->select.size : 0;
+
 	uint8_t* p;
 	
 	if (query_policy) {
@@ -713,14 +735,15 @@ as_query_command_init(
 											  AS_MSG_INFO1_READ;
 
 		p = as_command_write_header_read(cmd, base_policy, AS_POLICY_READ_MODE_AP_ONE,
-				AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, n_fields, n_ops, read_attr);
+			AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, qb->n_fields, n_ops,
+			read_attr);
 	}
 	else {
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
-				write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0, n_fields, n_ops,
-				write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0, qb->n_fields, n_ops,
+			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
-	
+
 	// Write namespace.
 	if (query->ns[0]) {
 		p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, query->ns);
@@ -731,19 +754,30 @@ as_query_command_init(
 		p = as_command_write_field_string(p, AS_FIELD_SETNAME, query->set);
 	}
 	
-	// Write indextype.
-	if (query->where.size == 1) {
+	if (query->records_per_second > 0) {
+		p = as_command_write_field_uint32(p, AS_FIELD_RPS, query->records_per_second);
+	}
+
+	if (qb->max_records > 0) {
+		p = as_command_write_field_uint64(p, AS_FIELD_MAX_RECORDS, qb->max_records);
+	}
+
+	// Write socket timeout.
+	p = as_command_write_field_uint32(p, AS_FIELD_SOCKET_TIMEOUT, base_policy->socket_timeout);
+
+	// Write taskId field
+	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
+
+	qb->task_id_offset = ((uint32_t)(p - cmd)) - sizeof(uint64_t);
+
+	// Write query filters.
+	if (query->where.size > 0) {
+		// Write indextype.
 		as_predicate* pred = &query->where.entries[0];
 		p = as_command_write_field_header(p, AS_FIELD_INDEX_TYPE, 1);
 		*p++ = pred->itype;
-	}
-	
-	// Write taskId field
-	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);
-	
-	// Write query filters.
-	if (query->where.size > 0) {
-		p = as_command_write_field_header(p, AS_FIELD_INDEX_RANGE, filter_size);
+
+		p = as_command_write_field_header(p, AS_FIELD_INDEX_RANGE, qb->filter_size);
 		*p++ = (uint8_t)query->where.size;
 		
 		for (uint16_t i = 0; i < query->where.size; i++ ) {
@@ -776,37 +810,42 @@ as_query_command_init(
 					}
 					break;
 			}
-		}
-		
-		// Query bin names are specified as a field (Scan bin names are specified later as operations)
-		// Write selected bin names.
-		if (query->select.size > 0) {
-			p = as_command_write_field_header(p, AS_FIELD_QUERY_BINS, bin_name_size);
-			*p++ = (uint8_t)query->select.size;
-			
-			for (uint16_t i = 0; i < query->select.size; i++) {
-				// Write bin name, but do not transfer null byte.
-				uint8_t* len_ptr = p++;
-				uint8_t* name = (uint8_t*)query->select.entries[i];
-				uint8_t* n = (uint8_t*)name;
-				while (*n) {
-					*p++ = *n++;
+
+			if (! qb->is_new) {
+				// Query bin names are specified as a field (Scan bin names are specified later as
+				// operations) for old servers. Write selected bin names.
+				if (query->select.size > 0) {
+					p = as_command_write_field_header(p, AS_FIELD_QUERY_BINS, qb->bin_name_size);
+					*p++ = (uint8_t)query->select.size;
+					
+					for (uint16_t i = 0; i < query->select.size; i++) {
+						// Write bin name, but do not transfer null byte.
+						uint8_t* len_ptr = p++;
+						uint8_t* name = (uint8_t*)query->select.entries[i];
+						uint8_t* n = (uint8_t*)name;
+						while (*n) {
+							*p++ = *n++;
+						}
+						*len_ptr = (uint8_t)(n - name);
+					}
 				}
-				*len_ptr = (uint8_t)(n - name);
 			}
 		}
 	}
-	else {
-		// Write socket timeout.
-		uint32_t timeout = (query_policy)? query_policy->base.socket_timeout : write_policy->base.socket_timeout;
-		p = as_command_write_field_header(p, AS_FIELD_SCAN_TIMEOUT, sizeof(uint32_t));
-		*(uint32_t*)p = cf_swap_to_be32(timeout);
-		p += sizeof(uint32_t);
+
+	// Write aggregation/background function
+	if (query->apply.function[0]) {
+		p = as_command_write_field_header(p, AS_FIELD_UDF_OP, 1);
+		*p++ = query_type;
+		p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, query->apply.module);
+		p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, query->apply.function);
+		p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &qb->argbuffer);
 	}
+	as_buffer_destroy(&qb->argbuffer);
 
 	// Write predicate expressions.
 	if (query->predexp.size > 0) {
-		p = as_command_write_field_header(p, AS_FIELD_FILTER, predexp_size);
+		p = as_command_write_field_header(p, AS_FIELD_FILTER, qb->predexp_size);
 		for (uint16_t ii = 0; ii < query->predexp.size; ++ii) {
 			as_predexp_base * bp = query->predexp.entries[ii];
 			p = (*bp->write_fn)(bp, p);
@@ -816,42 +855,277 @@ as_query_command_init(
 		p = as_exp_write(base_policy->filter_exp, p);
 	}
 	else if (base_policy->predexp) {
-		p = as_predexp_list_write(base_policy->predexp, predexp_size, p);
+		p = as_predexp_list_write(base_policy->predexp, qb->predexp_size, p);
 	}
 
-	// Write aggregation function
-	if (query->apply.function[0]) {
-		p = as_command_write_field_header(p, AS_FIELD_UDF_OP, 1);
-		*p++ = query_type;
-		p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, query->apply.module);
-		p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, query->apply.function);
-		p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, argbuffer);
+	qb->cmd_size_pre = (uint32_t)(p - cmd);
+
+	if (qb->parts_full_size > 0) {
+		p = as_command_write_field_header(p, AS_FIELD_PID_ARRAY, qb->parts_full_size);
+
+		as_vector* list = &qb->np->parts_full;
+
+		for (uint32_t i = 0; i < list->size; i++) {
+			uint16_t part_id = as_partition_tracker_get_id(list, i);
+			*(uint16_t*)p = cf_swap_to_le16(part_id);
+			p += sizeof(uint16_t);
+		}
 	}
-	as_buffer_destroy(argbuffer);
-	
+
+	if (qb->parts_partial_digest_size > 0) {
+		p = as_command_write_field_header(p, AS_FIELD_DIGEST_ARRAY, qb->parts_partial_digest_size);
+
+		as_partition_tracker* pt = qb->pt;
+		as_vector* list = &qb->np->parts_partial;
+
+		for (uint32_t i = 0; i < list->size; i++) {
+			as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
+			memcpy(p, ps->digest.value, AS_DIGEST_VALUE_SIZE);
+			p += AS_DIGEST_VALUE_SIZE;
+		}
+	}
+
+	if (qb->parts_partial_bval_size > 0) {
+		p = as_command_write_field_header(p, AS_FIELD_BVAL_ARRAY, qb->parts_partial_bval_size);
+
+		as_partition_tracker* pt = qb->pt;
+		as_vector* list = &qb->np->parts_partial;
+
+		for (uint32_t i = 0; i < list->size; i++) {
+			as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
+			memcpy(p, &ps->bval, BVAL_SIZE);
+			p += BVAL_SIZE;
+		}
+	}
+
 	if (query->ops) {
 		as_operations* ops = query->ops;
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
-			p = as_command_write_bin(p, op->op, &op->bin, opsbuffers);
+			p = as_command_write_bin(p, op->op, &op->bin, qb->opsbuffers);
 		}
-		as_buffers_destroy(opsbuffers);
+		as_buffers_destroy(qb->opsbuffers);
 	}
 	else {
-		// Estimate size for selected bin names on scan (query bin names already handled).
-		if (query->where.size == 0) {
+		if (qb->is_new || query->where.size == 0) {
 			for (uint16_t i = 0; i < query->select.size; i++) {
 				p = as_command_write_bin_name(p, query->select.entries[i]);
 			}
 		}
 	}
 
+	qb->cmd_size_post = ((uint32_t)(p - cmd)) - qb->cmd_size_pre;
 	return as_command_write_end(cmd, p);
 }
 
 static as_status
-as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, uint8_t query_type)
+as_query_command_execute_old(as_query_task* task)
+{
+	as_error err;
+	as_error_init(&err);
+
+	as_status status;
+
+	if (task->cluster_key && ! task->first) {
+		uint32_t timeout = task->query_policy? task->query_policy->info_timeout : 10000;
+		status = as_query_validate(&err, task->node, task->query->ns, timeout, task->cluster_key);
+
+		if (status) {
+			// Set main error only once.
+			if (as_fas_uint32(task->error_mutex, 1) == 0) {
+				as_error_copy(task->err, &err);
+			}
+			return status;
+		}
+	}
+
+	const as_policy_base* policy;
+	uint8_t flags;
+
+	if (task->query_policy) {
+		policy = &task->query_policy->base;
+		flags = AS_COMMAND_FLAGS_READ;
+	}
+	else {
+		policy = &task->write_policy->base;
+		flags = 0;
+	}
+
+	as_command cmd;
+	cmd.cluster = task->cluster;
+	cmd.policy = policy;
+	cmd.node = task->node;
+	cmd.ns = NULL;        // Not referenced when node set.
+	cmd.partition = NULL; // Not referenced when node set.
+	cmd.parse_results_fn = as_query_parse_records;
+	cmd.udata = task;
+	cmd.buf = task->cmd;
+	cmd.buf_size = task->cmd_size;
+	cmd.partition_id = 0; // Not referenced when node set.
+	cmd.replica = AS_POLICY_REPLICA_MASTER;
+	cmd.flags = flags;
+
+	as_command_start_timer(&cmd);
+
+	// Individual query node commands must not retry.
+	cmd.max_retries = 0;
+
+	status = as_command_execute(&cmd, &err);
+
+	if (status) {
+		// Set main error only once.
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
+			// Don't set error when user aborts query,
+			if (status != AEROSPIKE_ERR_CLIENT_ABORT) {
+				as_error_copy(task->err, &err);
+			}
+		}
+		return status;
+	}
+
+	if (task->cluster_key) {
+		uint32_t timeout = task->query_policy? task->query_policy->info_timeout : 10000;
+		status = as_query_validate(&err, task->node, task->query->ns, timeout, task->cluster_key);
+
+		if (status) {
+			// Set main error only once.
+			if (as_fas_uint32(task->error_mutex, 1) == 0) {
+				as_error_copy(task->err, &err);
+			}
+			return status;
+		}
+	}
+	return status;
+}
+
+static inline void
+as_query_builder_init(
+	as_query_builder* qb, as_cluster* cluster, as_queue* opsbuffers, as_partition_tracker* pt,
+	as_node_partitions* np
+	)
+{
+	qb->pt = pt;
+	qb->np = np;
+	qb->opsbuffers = opsbuffers;
+	qb->max_records = (np)? np->record_max : 0;
+	qb->is_new = cluster->has_partition_query;
+}
+
+static as_status
+as_query_command_execute_new(as_query_task* task)
+{
+	as_error err;
+	as_error_init(&err);
+
+	as_queue opsbuffers;
+
+	if (task->query->ops) {
+		as_queue_inita(&opsbuffers, sizeof(as_buffer), task->query->ops->binops.size);
+	}
+
+	as_query_builder qb;
+	as_query_builder_init(&qb, task->cluster, &opsbuffers, task->pt, task->np);
+
+	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
+															  &task->write_policy->base;
+
+	size_t size = as_query_command_size(base_policy, task->query, &qb);
+	uint8_t* buf = as_command_buffer_init(size);
+	size = as_query_command_init(buf, base_policy, task->query_policy, task->write_policy,
+		task->query, task->query_type, task->task_id, &qb);
+
+	const as_policy_base* policy = &task->query_policy->base;
+	uint8_t flags = AS_COMMAND_FLAGS_READ;
+
+	as_command cmd;
+	cmd.cluster = task->cluster;
+	cmd.policy = policy;
+	cmd.node = task->node;
+	cmd.ns = NULL;        // Not referenced when node set.
+	cmd.partition = NULL; // Not referenced when node set.
+	cmd.parse_results_fn = as_query_parse_records;
+	cmd.udata = task;
+	cmd.buf = task->cmd;
+	cmd.buf_size = task->cmd_size;
+	cmd.partition_id = 0; // Not referenced when node set.
+	cmd.replica = AS_POLICY_REPLICA_MASTER;
+	cmd.flags = flags;
+
+	as_command_start_timer(&cmd);
+
+	// Individual query node commands must not retry.
+	cmd.max_retries = 0;
+
+	as_status status;
+	status = as_command_execute(&cmd, &err);
+
+	if (status) {
+		// Set main error only once.
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
+			// Don't set error when user aborts query,
+			if (status != AEROSPIKE_ERR_CLIENT_ABORT) {
+				as_error_copy(task->err, &err);
+			}
+		}
+		return status;
+	}
+
+	if (task->cluster_key) {
+		uint32_t timeout = task->query_policy? task->query_policy->info_timeout : 10000;
+		status = as_query_validate(&err, task->node, task->query->ns, timeout, task->cluster_key);
+
+		if (status) {
+			// Set main error only once.
+			if (as_fas_uint32(task->error_mutex, 1) == 0) {
+				as_error_copy(task->err, &err);
+			}
+			return status;
+		}
+	}
+	return status;
+}
+
+static void
+as_query_worker_old(void* data)
+{
+	as_query_task* task = (as_query_task*)data;
+		
+	as_query_complete_task complete_task;
+	complete_task.node = task->node;
+	complete_task.task_id = task->task_id;
+
+	if (as_load_uint32(task->error_mutex) == 0) {
+		complete_task.result = as_query_command_execute_old(task);
+	}
+	else {
+		complete_task.result = AEROSPIKE_ERR_QUERY_ABORTED;
+	}
+
+	cf_queue_push(task->complete_q, &complete_task);
+}
+
+static void
+as_query_worker_new(void* data)
+{
+	as_query_task* task = (as_query_task*)data;
+		
+	as_query_complete_task complete_task;
+	complete_task.node = task->node;
+	complete_task.task_id = task->task_id;
+
+	if (as_load_uint32(task->error_mutex) == 0) {
+		complete_task.result = as_query_command_execute_new(task);
+	}
+	else {
+		complete_task.result = AEROSPIKE_ERR_QUERY_ABORTED;
+	}
+
+	cf_queue_push(task->complete_q, &complete_task);
+}
+
+static as_status
+as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 {
 	as_status status = AEROSPIKE_OK;
 
@@ -864,29 +1138,25 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 		}
 	}
 
-	// Build Command.  It's okay to share command across threads because query does not have retries.
-	// If retries were allowed, the timeout field in the command would change on retry which
-	// would conflict with other threads.
-	as_buffer argbuffer;
-	uint32_t filter_size = 0;
-	uint32_t predexp_size = 0;
-	uint32_t bin_name_size = 0;
-	uint16_t n_fields = 0;
-	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
-															  &task->write_policy->base;
-
 	as_queue opsbuffers;
 
 	if (query->ops) {
 		as_queue_inita(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
 	}
 
-	size_t size = as_query_command_size(base_policy, query, &n_fields, &filter_size, &predexp_size,
-			&bin_name_size, &argbuffer, &opsbuffers);
+	as_query_builder qb;
+	as_query_builder_init(&qb, task->cluster, &opsbuffers, NULL, NULL);
+
+	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
+															  &task->write_policy->base;
+
+	// Build Command. It's okay to share command across threads because old query protocol does
+	// not have retries. If retries were allowed, the timeout field in the command would change on
+	// retry which would conflict with other threads.
+	size_t size = as_query_command_size(base_policy, task->query, &qb);
 	uint8_t* cmd = as_command_buffer_init(size);
-	size = as_query_command_init(cmd, query, query_type, base_policy, task->query_policy,
-			task->write_policy, task->task_id, n_fields, filter_size, predexp_size,
-			bin_name_size, &argbuffer, &opsbuffers);
+	size = as_query_command_init(cmd, base_policy, task->query_policy, task->write_policy,
+		task->query, task->query_type, task->task_id, &qb);
 
 	task->cmd = cmd;
 	task->cmd_size = size;
@@ -905,7 +1175,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 		
 		// If the thread pool size is > 0 farm out the tasks to the pool, otherwise run in current thread.
 		if (thread_pool_size > 0) {
-			int rc = as_thread_pool_queue_task(&task->cluster->thread_pool, as_query_worker, task_node);
+			int rc = as_thread_pool_queue_task(&task->cluster->thread_pool, as_query_worker_old, task_node);
 			
 			if (rc) {
 				// Thread could not be added. Abort entire query.
@@ -918,7 +1188,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes, ui
 				break;
 			}
 		} else {
-			if ((status = as_query_command_execute(task_node)) != AEROSPIKE_OK) {
+			if ((status = as_query_command_execute_old(task_node)) != AEROSPIKE_OK) {
 				break;
 			}
 		}
@@ -1012,6 +1282,129 @@ as_query_aggregate(void* data)
 	cf_queue_push(task->complete_q, &status);
 }
 
+static as_status
+as_query_partitions(
+	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
+	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata)
+{
+	as_status status;
+
+	while (true) {
+		uint64_t task_id = as_random_get_uint64();
+		status = as_partition_tracker_assign(pt, cluster, query->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
+		uint32_t n_nodes = pt->node_parts.size;
+
+		// Initialize task.
+		uint32_t error_mutex = 0;
+
+		as_query_task task = {
+			.node = NULL,
+			.np = NULL,
+			.pt = pt,
+			.cluster = cluster,
+			.query_policy = policy,
+			.write_policy = NULL,
+			.query = query,
+			.callback = callback,
+			.udata = udata,
+			.err = err,
+			.error_mutex = &error_mutex,
+			.input_queue = NULL,
+			.complete_q = NULL,
+			.task_id = task_id,
+			.cluster_key = 0,
+			.cmd = NULL,
+			.cmd_size = 0,
+			.query_type = QUERY_FOREGROUND,
+			.first = true
+		};
+
+		if (n_nodes > 1) {
+			uint32_t n_wait_nodes = n_nodes;
+			task.complete_q = cf_queue_create(sizeof(as_query_complete_task), true);
+
+			// Run node queries in parallel.
+			for (uint32_t i = 0; i < n_nodes; i++) {
+				// Stack allocate task for each node.  It should be fine since the task
+				// only needs to be valid within this function.
+				as_query_task* task_node = alloca(sizeof(as_query_task));
+				memcpy(task_node, &task, sizeof(as_query_task));
+
+				task_node->np = as_vector_get(&pt->node_parts, i);
+				task_node->node = task_node->np->node;
+
+				int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_query_worker_new, task_node);
+				
+				if (rc) {
+					// Thread could not be added. Abort entire query.
+					if (as_fas_uint32(task.error_mutex, 1) == 0) {
+						status = as_error_update(task.err, AEROSPIKE_ERR_CLIENT, "Failed to add query thread: %d", rc);
+					}
+					
+					// Reset node count to threads that were run.
+					n_wait_nodes = i;
+					break;
+				}
+			}
+
+			// Wait for tasks to complete.
+			for (uint32_t i = 0; i < n_wait_nodes; i++) {
+				as_query_complete_task complete;
+				cf_queue_pop(task.complete_q, &complete, CF_QUEUE_FOREVER);
+				
+				if (complete.result != AEROSPIKE_OK && status == AEROSPIKE_OK) {
+					status = complete.result;
+				}
+			}
+			
+			// Release temporary queue.
+			cf_queue_destroy(task.complete_q);
+		}
+		else {
+			task.complete_q = 0;
+			
+			// Run node queries in series.
+			for (uint32_t i = 0; i < n_nodes && status == AEROSPIKE_OK; i++) {
+				task.np = as_vector_get(&pt->node_parts, i);
+				task.node = task.np->node;
+				status = as_query_command_execute_new(&task);
+			}
+		}
+
+		// If user aborts query, command is considered successful.
+		if (status == AEROSPIKE_ERR_CLIENT_ABORT) {
+			status = AEROSPIKE_OK;
+			break;
+		}
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
+		status = as_partition_tracker_is_complete(pt, err);
+
+		// Stop on ok and all errors except AEROSPIKE_ERR_CLIENT.
+		if (status != AEROSPIKE_ERR_CLIENT) {
+			break;
+		}
+
+		if (pt->sleep_between_retries > 0) {
+			// Sleep before trying again.
+			as_sleep(pt->sleep_between_retries);
+		}
+	}
+
+	if (status == AEROSPIKE_OK) {
+		callback(NULL, udata);
+	}
+	return status;
+}
+
 static void
 convert_query_to_scan(
 	const as_policy_query* query_policy, const as_query* query, as_policy_scan* scan_policy,
@@ -1020,6 +1413,8 @@ convert_query_to_scan(
 {
 	as_policy_scan_init(scan_policy);
 	memcpy(&scan_policy->base, &query_policy->base, sizeof(as_policy_base));
+	scan_policy->max_records = query->max_records;
+	scan_policy->records_per_second = query->records_per_second;
 
 	as_scan_init(scan, query->ns, query->set);
 	scan->select.entries = query->select.entries;
@@ -1038,6 +1433,7 @@ convert_query_to_scan(
 	scan->apply_each._free = query->apply._free;
 
 	scan->ops = query->ops;
+	scan->paginate = query->paginate;
 	scan->no_bins = query->no_bins;
 	scan->concurrent = true;
 	scan->deserialize_list_map = query_policy->deserialize;
@@ -1050,122 +1446,141 @@ convert_query_to_scan(
 
 as_status
 aerospike_query_foreach(
-	aerospike* as, as_error* err, const as_policy_query* policy, const as_query* query,
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	aerospike_query_foreach_callback callback, void* udata)
 {
+	as_error_reset(err);
+
 	if (! policy) {
 		policy = &as->config.policies.query;
 	}
 
 	as_cluster* cluster = as->cluster;
+	as_status status;
 
-	// TODO: Must check if full cluster supports partition queries here...
-	if (cluster->has_partition_query) {
-	}
-	else {
-	}
+	if (cluster->has_partition_query && ! query->apply.function[0]) {
+		// Partition query.
+		uint32_t n_nodes;
+		status = as_cluster_validate_size(cluster, err, &n_nodes);
 
-	// Convert to a scan when filter doesn't exist and not aggregation query and
-	// partition scans are supported.
-	if (query->where.size == 0 && ! query->apply.function[0]) {
-		as_policy_scan scan_policy;
-		as_scan scan;
-		convert_query_to_scan(policy, query, &scan_policy, &scan);
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 
-		return aerospike_scan_foreach(as, err, &scan_policy, &scan, callback, udata);
-	}
+		as_partition_tracker pt;
+		as_partition_tracker_init_nodes(&pt, cluster, &policy->base, query->max_records,
+			&query->parts_all, query->paginate, n_nodes);
 
-	as_error_reset(err);
-
-	as_nodes* nodes;
-	as_status status = as_cluster_reserve_all_nodes(cluster, err, &nodes);
-
-	if (status != AEROSPIKE_OK) {
+		status = as_query_partitions(cluster, err, policy, query, &pt, callback, udata);
+		as_partition_tracker_destroy(&pt);
 		return status;
 	}
+	else {
+		// Aggregation query, background query and old foreground query.
+		// Convert to a scan when filter doesn't exist and not aggregation query and
+		// partition scans are supported.
+		if (query->where.size == 0 && ! query->apply.function[0]) {
+			as_policy_scan scan_policy;
+			as_scan scan;
+			convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-	uint32_t error_mutex = 0;
-	
-	// Initialize task.
-	as_query_task task = {
-		.node = 0,
-		.cluster = cluster,
-		.query_policy = policy,
-		.write_policy = 0,
-		.query = query,
-		.callback = 0,
-		.udata = 0,
-		.error_mutex = &error_mutex,
-		.err = err,
-		.input_queue = 0,
-		.complete_q = 0,
-		.task_id = as_random_get_uint64(),
-		.cluster_key = 0,
-		.cmd = 0,
-		.cmd_size = 0,
-		.first = true
-	};
-	
-	if (query->apply.function[0]) {
-		// Query with aggregation.
-		task.input_queue = cf_queue_create(sizeof(void*), true);
-		
-        // Stream for results from each node
-        as_stream input_stream;
-        as_stream_init(&input_stream, task.input_queue, &input_stream_hooks);
-		
-		task.callback = as_query_aggregate_callback;
-		task.udata = &input_stream;
-		
-		as_query_user_callback callback_data;
-		callback_data.callback = callback;
-		callback_data.udata = udata;
+			return aerospike_scan_foreach(as, err, &scan_policy, &scan, callback, udata);
+		}
 
-		as_query_task_aggr task_aggr;
-		task_aggr.query = query;
-		task_aggr.input_stream = &input_stream;
-		task_aggr.callback_data = &callback_data;
-		task_aggr.error_mutex = &error_mutex;
-		task_aggr.err = err;
-		task_aggr.complete_q = cf_queue_create(sizeof(as_status), true);
+		as_nodes* nodes;
+		status = as_cluster_reserve_all_nodes(cluster, err, &nodes);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
+		uint32_t error_mutex = 0;
+		uint64_t task_id = as_random_get_uint64();
 		
-		// Run lua aggregation in separate thread.
-		int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_query_aggregate, &task_aggr);
+		// Initialize task.
+		as_query_task task = {
+			.node = NULL,
+			.np = NULL,
+			.pt = NULL,
+			.cluster = cluster,
+			.query_policy = policy,
+			.write_policy = NULL,
+			.query = query,
+			.callback = NULL,
+			.udata = NULL,
+			.err = err,
+			.error_mutex = &error_mutex,
+			.input_queue = NULL,
+			.complete_q = NULL,
+			.task_id = task_id,
+			.cluster_key = 0,
+			.cmd = NULL,
+			.cmd_size = 0,
+			.query_type = QUERY_FOREGROUND,
+			.first = true
+		};
 		
-		if (rc == 0) {
-			status = as_query_execute(&task, query, nodes, QUERY_FOREGROUND);
+		if (query->apply.function[0]) {
+			// Query with aggregation.
+			task.input_queue = cf_queue_create(sizeof(void*), true);
 			
-			// Wait for aggregation thread to finish.
-			as_status complete_status = AEROSPIKE_OK;
-			cf_queue_pop(task_aggr.complete_q, &complete_status, CF_QUEUE_FOREVER);
+			// Stream for results from each node
+			as_stream input_stream;
+			as_stream_init(&input_stream, task.input_queue, &input_stream_hooks);
 			
-			if (complete_status != AEROSPIKE_OK && status == AEROSPIKE_OK) {
-				status = complete_status;
+			task.callback = as_query_aggregate_callback;
+			task.udata = &input_stream;
+			
+			as_query_user_callback callback_data;
+			callback_data.callback = callback;
+			callback_data.udata = udata;
+
+			as_query_task_aggr task_aggr;
+			task_aggr.query = query;
+			task_aggr.input_stream = &input_stream;
+			task_aggr.callback_data = &callback_data;
+			task_aggr.error_mutex = &error_mutex;
+			task_aggr.err = err;
+			task_aggr.complete_q = cf_queue_create(sizeof(as_status), true);
+			
+			// Run lua aggregation in separate thread.
+			int rc = as_thread_pool_queue_task(&cluster->thread_pool, as_query_aggregate, &task_aggr);
+			
+			if (rc == 0) {
+				status = as_query_execute(&task, query, nodes);
+				
+				// Wait for aggregation thread to finish.
+				as_status complete_status = AEROSPIKE_OK;
+				cf_queue_pop(task_aggr.complete_q, &complete_status, CF_QUEUE_FOREVER);
+				
+				if (complete_status != AEROSPIKE_OK && status == AEROSPIKE_OK) {
+					status = complete_status;
+				}
 			}
+			else {
+				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to add aggregate thread: %d", rc);
+			}
+			
+			cf_queue_destroy(task_aggr.complete_q);
+			
+			// Empty input queue.
+			as_val* val = NULL;
+			while (cf_queue_pop(task.input_queue, &val, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
+				as_val_destroy(val);
+			}
+			cf_queue_destroy(task.input_queue);
 		}
 		else {
-			status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to add aggregate thread: %d", rc);
+			// Normal query without aggregation.
+			task.callback = callback;
+			task.udata = udata;
+			task.input_queue = 0;
+			status = as_query_execute(&task, query, nodes);
 		}
-		
-		cf_queue_destroy(task_aggr.complete_q);
-		
-		// Empty input queue.
-        as_val* val = NULL;
-        while (cf_queue_pop(task.input_queue, &val, CF_QUEUE_NOWAIT) == CF_QUEUE_OK) {
-            as_val_destroy(val);
-        }
-        cf_queue_destroy(task.input_queue);
-	}
-	else {
-		// Normal query without aggregation.
-		task.callback = callback;
-		task.udata = udata;
-		task.input_queue = 0;
-		status = as_query_execute(&task, query, nodes, QUERY_FOREGROUND);
-	}
 
-	as_cluster_release_all_nodes(nodes);
-	return status;
+		as_cluster_release_all_nodes(nodes);
+		return status;
+	}
 }
 
 as_status
@@ -1178,7 +1593,8 @@ aerospike_query_async(
 	}
 	
 	if (query->apply.function[0]) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Async aggregate queries are not supported.");
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Async aggregate or background queries are not supported.");
 	}
 
 	as_cluster* cluster = as->cluster;
@@ -1224,23 +1640,19 @@ aerospike_query_async(
 	executor->listener = listener;
 	executor->info_timeout = policy->info_timeout;
 
-	as_buffer argbuffer;
-	uint32_t filter_size = 0;
-	uint32_t predexp_size = 0;
-	uint32_t bin_name_size = 0;
-	uint16_t n_fields = 0;
-	
 	as_queue opsbuffers;
 
 	if (query->ops) {
 		as_queue_inita(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
 	}
 
-	size_t size = as_query_command_size(&policy->base, query, &n_fields, &filter_size,
-			&predexp_size, &bin_name_size, &argbuffer, &opsbuffers);
+	as_query_builder qb;
+	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
+
+	size_t size = as_query_command_size(&policy->base, query, &qb);
 	uint8_t* cmd_buf = as_command_buffer_init(size);
-	size = as_query_command_init(cmd_buf, query, QUERY_FOREGROUND, &policy->base, policy, NULL,
-			task_id, n_fields, filter_size, predexp_size, bin_name_size, &argbuffer, &opsbuffers);
+	size = as_query_command_init(cmd_buf, &policy->base, policy, NULL, query, QUERY_FOREGROUND,
+		task_id, &qb);
 
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.
@@ -1333,25 +1745,28 @@ aerospike_query_background(
 
 	// Initialize task.
 	as_query_task task = {
-		.node = 0,
+		.node = NULL,
+		.np = NULL,
+		.pt = NULL,
 		.cluster = cluster,
 		.query_policy = NULL,
 		.write_policy = policy,
 		.query = query,
-		.callback = 0,
-		.udata = 0,
-		.error_mutex = &error_mutex,
+		.callback = NULL,
+		.udata = NULL,
 		.err = err,
-		.input_queue = 0,
-		.complete_q = 0,
+		.error_mutex = &error_mutex,
+		.input_queue = NULL,
+		.complete_q = NULL,
 		.task_id = task_id,
 		.cluster_key = 0,
-		.cmd = 0,
+		.cmd = NULL,
 		.cmd_size = 0,
-		.first = false
+		.query_type = QUERY_BACKGROUND,
+		.first = true
 	};
-	
-	status = as_query_execute(&task, query, nodes, QUERY_BACKGROUND);
+
+	status = as_query_execute(&task, query, nodes);
 
 	as_cluster_release_all_nodes(nodes);
 	return status;

@@ -525,6 +525,24 @@ typedef struct as_query_s {
 	as_partitions_status* parts_all;
 
 	/**
+	 * Approximate number of records to return to client. This number is divided by the
+	 * number of nodes involved in the query.  The actual number of records returned
+	 * may be less than max_records if node record counts are small and unbalanced across
+	 * nodes.
+	 *
+	 * Default: 0 (do not limit record count)
+	 */
+	uint64_t max_records;
+
+	/**
+	 * Limit returned records per second (rps) rate for each server.
+	 * Do not apply rps limit if records_per_second is zero.
+	 *
+	 * Default: 0
+	 */
+	uint32_t records_per_second;
+
+	/**
 	 * Should records be read in pages in conjunction with max_records policy.
 	 *
 	 * Default: false
@@ -534,7 +552,7 @@ typedef struct as_query_s {
 	/**
 	 * Set to true if query should only return keys and no bin data.
 	 *
-	 * Default value is false.
+	 * Default: false.
 	 */
 	bool no_bins;
 

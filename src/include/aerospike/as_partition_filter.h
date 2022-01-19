@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -34,8 +34,9 @@ extern "C" {
  */
 typedef struct as_partition_status_s {
 	uint16_t part_id;
-	as_digest digest;
 	bool done;
+	as_digest digest;
+	int64_t bval;
 } as_partition_status;
 
 /**

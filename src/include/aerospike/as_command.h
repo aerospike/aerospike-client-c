@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -45,11 +45,12 @@ extern "C" {
 #define AS_FIELD_KEY 2
 #define AS_FIELD_DIGEST 4
 #define AS_FIELD_TASK_ID 7
-#define AS_FIELD_SCAN_TIMEOUT 9
-#define AS_FIELD_SCAN_RPS 10
+#define AS_FIELD_SOCKET_TIMEOUT 9
+#define AS_FIELD_RPS 10
 #define AS_FIELD_PID_ARRAY 11
 #define AS_FIELD_DIGEST_ARRAY 12
-#define AS_FIELD_SCAN_MAX_RECORDS 13
+#define AS_FIELD_MAX_RECORDS 13
+#define AS_FIELD_BVAL_ARRAY 15
 #define AS_FIELD_INDEX_RANGE 22
 #define AS_FIELD_INDEX_FILTER 23
 #define AS_FIELD_INDEX_LIMIT 24
@@ -195,6 +196,8 @@ typedef struct as_command_parse_result_data_s {
 	as_record** record;
 	bool deserialize;
 } as_command_parse_result_data;
+
+struct as_bval_s;
 
 /******************************************************************************
  * FUNCTIONS
@@ -635,7 +638,7 @@ as_command_ignore_bins(uint8_t* p, uint32_t n_bins);
  * Parse key fields received from server.  Used for reads.
  */
 uint8_t*
-as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key);
+as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key, struct as_bval_s* bval);
 
 /**
  * @private

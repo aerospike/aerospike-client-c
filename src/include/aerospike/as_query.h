@@ -507,7 +507,7 @@ typedef struct as_query_s {
 	as_query_predexp predexp;
 
 	/**
-	 * UDF to apply to results of the query
+	 * UDF to apply on aggregation or background query.
 	 *
 	 * Should be set via `as_query_apply()`.
 	 */

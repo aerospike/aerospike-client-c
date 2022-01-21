@@ -36,7 +36,7 @@ typedef struct as_partition_status_s {
 	uint16_t part_id;
 	bool done;
 	as_digest digest;
-	int64_t bval;
+	uint64_t bval;
 } as_partition_status;
 
 /**

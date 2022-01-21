@@ -1072,7 +1072,7 @@ as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key, as_bval* bval)
 				break;
 
 			case AS_FIELD_BVAL_ARRAY:
-				memcpy(&bval->val, p, sizeof(int64_t));
+				bval->val = cf_swap_from_le64(*(uint64_t*)p);
 				bval->is_set = true;
 				break;
 		}

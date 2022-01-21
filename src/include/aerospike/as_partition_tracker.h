@@ -72,7 +72,7 @@ typedef struct as_partition_tracker_s {
  * Used in query resume.
  */
 typedef struct as_bval_s {
-	int64_t val;
+	uint64_t val;
 	bool is_set;
 } as_bval;
 

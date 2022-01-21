@@ -229,6 +229,9 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 			}
 
 			break;
+		case _AS_EXP_CODE_MERGE:
+			total_sz += entry->v.expr->packed_sz;
+			break;
 		case _AS_EXP_CODE_COND:
 		case _AS_EXP_CODE_LET:
 		case _AS_EXP_CODE_AND:
@@ -369,6 +372,11 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 
 			as_pack_list_header(&pk, entry->count);
 			break;
+		case _AS_EXP_CODE_MERGE: {
+			as_exp* e = entry->v.expr;
+			as_pack_append(&pk, e->packed, e->packed_sz);
+			break;
+		}
 		default:
 			as_pack_int64(&pk, (int64_t)entry->op);
 			break;

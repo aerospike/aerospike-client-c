@@ -2064,7 +2064,10 @@ aerospike_query_async(
 
 	// Create all query commands.
 	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_event_command* cmd = cf_malloc(s);
+		as_async_query_command* qcmd = cf_malloc(s);
+		qcmd->np = NULL;
+
+		as_event_command* cmd = &qcmd->command;
 		cmd->total_deadline = policy->base.total_timeout;
 		cmd->socket_timeout = policy->base.socket_timeout;
 		cmd->max_retries = 0;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -26,7 +26,6 @@
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_crypto.h>
 #include <stdio.h>
-#include <openssl/sha.h>
 
 /******************************************************************************
  * TYPES
@@ -221,7 +220,7 @@ aerospike_udf_get(
 	cf_b64_validate_and_decode_in_place((uint8_t*)content, len, &size);
 
 	// Update file hash
-	unsigned char hash[SHA_DIGEST_LENGTH];
+	unsigned char hash[CF_SHA_DIGEST_LENGTH];
 #ifdef __APPLE__
 	// Openssl is deprecated on mac, but the library is still included.
 	// Save old settings and disable deprecated warnings.

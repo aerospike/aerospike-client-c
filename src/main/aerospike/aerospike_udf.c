@@ -228,12 +228,16 @@ aerospike_udf_get(
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
-	SHA1((uint8_t*)content, size, hash);
+	cf_SHA1((uint8_t*)content, size, hash);
 #ifdef __APPLE__
 	// Restore old settings.
 #pragma GCC diagnostic pop
 #endif
-	cf_convert_sha1_to_hex(hash, file->hash);
+	char* at = (char*)file->hash;
+
+	for (uint32_t i = 0; i < CF_SHA_DIGEST_LENGTH; i++) {
+		at += sprintf(at, "%02x", hash[i]);
+	}
 
 	file->content._free = true;
 	file->content.size = size;

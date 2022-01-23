@@ -239,7 +239,7 @@ typedef enum as_map_return_type_e {
 	/**
 	 * Return true if count != 0/.
 	 */
-	AS_MAP_RETURN_TYPE_EXISTS = 13,
+	AS_MAP_RETURN_EXISTS = 13,
 
 	/**
 	 * Invert meaning of map command and return values.  For example:

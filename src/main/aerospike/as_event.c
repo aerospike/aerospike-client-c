@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1140,12 +1140,15 @@ as_event_batch_complete(as_event_command* cmd)
 }
 
 bool as_async_scan_should_retry(void* udata, as_status status);
+bool as_async_query_should_retry(void* udata, as_status status);
 
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
-	if (cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION &&
-		as_async_scan_should_retry(cmd->udata, err->code)) {
+	if ((cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION &&
+		as_async_scan_should_retry(cmd->udata, err->code)) ||
+	    (cmd->type == AS_ASYNC_TYPE_QUERY_PARTITION &&
+		as_async_query_should_retry(cmd->udata, err->code))) {
 		as_event_executor* executor = cmd->udata;
 		as_event_command_release(cmd);
 		as_event_executor_complete(executor);

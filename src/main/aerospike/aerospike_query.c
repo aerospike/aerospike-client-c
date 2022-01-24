@@ -1111,8 +1111,8 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;
-	cmd.buf = task->cmd;
-	cmd.buf_size = task->cmd_size;
+	cmd.buf = buf;
+	cmd.buf_size = size;
 	cmd.partition_id = 0; // Not referenced when node set.
 	cmd.replica = AS_POLICY_REPLICA_MASTER;
 	cmd.flags = flags;
@@ -1122,30 +1122,22 @@ as_query_command_execute_new(as_query_task* task)
 	// Individual query node commands must not retry.
 	cmd.max_retries = 0;
 
-	as_status status;
-	status = as_command_execute(&cmd, &err);
+	as_status status = as_command_execute(&cmd, &err);
 
-	if (status) {
+	// Free command memory.
+	as_command_buffer_free(buf, size);
+
+	if (status != AEROSPIKE_OK) {
+		if (task->pt && as_partition_tracker_should_retry(task->pt, status)) {
+			return AEROSPIKE_OK;
+		}
+
 		// Set main error only once.
 		if (as_fas_uint32(task->error_mutex, 1) == 0) {
 			// Don't set error when user aborts query,
 			if (status != AEROSPIKE_ERR_CLIENT_ABORT) {
 				as_error_copy(task->err, &err);
 			}
-		}
-		return status;
-	}
-
-	if (task->cluster_key) {
-		uint32_t timeout = task->query_policy? task->query_policy->info_timeout : 10000;
-		status = as_query_validate(&err, task->node, task->query->ns, timeout, task->cluster_key);
-
-		if (status) {
-			// Set main error only once.
-			if (as_fas_uint32(task->error_mutex, 1) == 0) {
-				as_error_copy(task->err, &err);
-			}
-			return status;
 		}
 	}
 	return status;
@@ -1593,7 +1585,7 @@ as_query_partition_execute_async(
 		cmd->pipe_listener = NULL;
 		cmd->write_len = (uint32_t)size;
 		cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_query_command));
-		cmd->type = AS_ASYNC_TYPE_SCAN_PARTITION;
+		cmd->type = AS_ASYNC_TYPE_QUERY_PARTITION;
 		cmd->proto_type = AS_MESSAGE_TYPE;
 		cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 		cmd->flags = AS_ASYNC_FLAGS_MASTER;
@@ -1780,6 +1772,13 @@ convert_query_to_scan(
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
+bool
+as_async_query_should_retry(void* udata, as_status status)
+{
+	as_async_query_executor* qe = udata;
+	return as_partition_tracker_should_retry(qe->pt, status);
+}
 
 as_status
 aerospike_query_foreach(

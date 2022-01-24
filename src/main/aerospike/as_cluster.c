@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1346,11 +1346,12 @@ void
 as_cluster_destroy(as_cluster* cluster)
 {
 	// Stop tend thread and wait till finished.
+	pthread_mutex_lock(&cluster->tend_lock);
+
 	if (cluster->valid) {
 		cluster->valid = false;
 		
 		// Signal tend thread to wake up from sleep and stop.
-		pthread_mutex_lock(&cluster->tend_lock);
 		pthread_cond_signal(&cluster->tend_cond);
 		pthread_mutex_unlock(&cluster->tend_lock);
 		
@@ -1360,6 +1361,9 @@ as_cluster_destroy(as_cluster* cluster)
 		if (cluster->shm_info) {
 			as_shm_destroy(cluster);
 		}
+	}
+	else {
+		pthread_mutex_unlock(&cluster->tend_lock);
 	}
 
 	// Shutdown thread pool.

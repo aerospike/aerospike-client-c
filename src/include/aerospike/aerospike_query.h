@@ -176,6 +176,7 @@ aerospike_query_foreach(
 /**
  * Query records with a partition filter. Multiple threads will likely be calling the callback
  * in parallel. Therefore, your callback implementation should be thread safe.
+ * Requires server version 6.0+.
  *
  * ~~~~~~~~~~{.c}
  * as_query query;
@@ -263,6 +264,7 @@ aerospike_query_async(
 /**
  * Asynchronously query records with a partition filter. Standard queries are supported, but 
  * aggregation queries are not supported in async mode.
+ * Requires server version 6.0+.
  *
  * ~~~~~~~~~~{.c}
  * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)

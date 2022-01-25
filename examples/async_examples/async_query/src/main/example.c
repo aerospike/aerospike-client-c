@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2022 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -52,6 +52,7 @@ void insert_records(uint32_t* counter);
 bool insert_record(as_event_loop* event_loop, void* udata, uint32_t index);
 void insert_listener(as_error* err, void* udata, as_event_loop* event_loop);
 void run_query(as_event_loop* event_loop);
+void run_partition_query(as_event_loop* event_loop);
 bool query_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop);
 
 //==========================================================
@@ -202,13 +203,33 @@ bool
 query_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
 {
 	if (err) {
-		LOG("aerospike_query_async() returned %d - %s", err->code, err->message);
+		LOG("run_query() returned %d - %s", err->code, err->message);
 		as_monitor_notify(&monitor);
 		return false;	
 	}
 
 	if (! record) {
-		LOG("query is complete");
+		LOG("run_query() is complete");
+		run_partition_query(event_loop);
+		return false;
+	}
+
+	LOG("query callback returned record:");
+	example_dump_record(record);
+	return true;
+}
+
+static bool
+partition_query_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	if (err) {
+		LOG("run_partition_query() returned %d - %s", err->code, err->message);
+		as_monitor_notify(&monitor);
+		return false;	
+	}
+
+	if (! record) {
+		LOG("run_partition_query() is complete");
 		as_monitor_notify(&monitor);
 		return false;
 	}
@@ -216,4 +237,27 @@ query_listener(as_error* err, as_record* record, void* udata, as_event_loop* eve
 	LOG("query callback returned record:");
 	example_dump_record(record);
 	return true;
+}
+
+void
+run_partition_query(as_event_loop* event_loop)
+{
+	as_query query;
+	as_query_init(&query, g_namespace, g_set);
+
+	as_query_where_inita(&query, 1);
+	as_query_where(&query, "test-bin", as_integer_range(3, 10));
+
+	LOG("executing query: where test-bin >= 2 and <= 12 in half of partitions");
+
+	as_partition_filter pf;
+	as_partition_filter_set_range(&pf, 0, 2048);
+
+	// Execute the query.
+	as_error err;
+	if (aerospike_query_partitions_async(&as, &err, NULL, &query, &pf, partition_query_listener, NULL, event_loop) != AEROSPIKE_OK) {
+		query_listener(&err, NULL, NULL, event_loop);
+	}
+
+	as_query_destroy(&query);
 }

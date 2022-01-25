@@ -49,7 +49,7 @@ typedef struct as_node_partitions_s {
 
 /**
  * @private
- * Scan partition tracker.
+ * Scan/Query partition tracker.
  */
 typedef struct as_partition_tracker_s {
 	as_partitions_status* parts_all;

@@ -1022,19 +1022,15 @@ as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t com
 
 	if (complete) {
 		// All commands have completed.
-		// If scan or query user callback already returned false,
-		// do not re-notify user that an error occurred.
-		if (executor->notify) {
-			if (first_error) {
-				// Original error can be used directly.
-				executor->err = err;
-				executor->complete_fn(executor);
-				executor->err = NULL;
-			}
-			else {
-				// Use saved error.
-				executor->complete_fn(executor);
-			}
+		if (first_error) {
+			// Original error can be used directly.
+			executor->err = err;
+			executor->complete_fn(executor);
+			executor->err = NULL;
+		}
+		else {
+			// Use saved error.
+			executor->complete_fn(executor);
 		}
 		as_event_executor_destroy(executor);
 	}
@@ -1081,11 +1077,7 @@ as_event_executor_complete(as_event_executor* executor)
 
 	if (complete) {
 		// All commands completed.
-		// If scan or query user callback already returned false,
-		// do not re-notify user that an error occurred.
-		if (executor->notify) {
-			executor->complete_fn(executor);
-		}
+		executor->complete_fn(executor);
 		as_event_executor_destroy(executor);
 	}
 	else {

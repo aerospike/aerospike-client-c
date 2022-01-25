@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -148,8 +148,10 @@ as_batch_parse_record(uint8_t** pp, as_error* err, as_msg* msg, as_record* rec, 
 static void
 as_batch_complete_async(as_event_executor* executor)
 {
-	as_async_batch_executor* e = (as_async_batch_executor*)executor;
-	e->listener(executor->err, e->records, executor->udata, executor->event_loop);
+	if (executor->notify) {
+		as_async_batch_executor* e = (as_async_batch_executor*)executor;
+		e->listener(executor->err, e->records, executor->udata, executor->event_loop);
+	}
 }
 
 static inline bool

@@ -248,7 +248,11 @@ static void
 as_query_partition_notify(as_async_query_executor* qe, as_error* err)
 {
 	as_query_partition_executor_destroy(qe);
-	qe->listener(err, NULL, qe->executor.udata, qe->executor.event_loop);
+
+	// If query callback already returned false, do not re-notify user.
+	if (qe->executor.notify) {
+		qe->listener(err, NULL, qe->executor.udata, qe->executor.event_loop);
+	}
 }
 
 static void

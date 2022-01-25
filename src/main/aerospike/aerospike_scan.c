@@ -117,7 +117,11 @@ static void
 as_scan_partition_notify(as_async_scan_executor* se, as_error* err)
 {
 	as_scan_partition_executor_destroy(se);
-	se->listener(err, NULL, se->executor.udata, se->executor.event_loop);
+
+	// If scan callback already returned false, do not re-notify user.
+	if (se->executor.notify) {
+		se->listener(err, NULL, se->executor.udata, se->executor.event_loop);
+	}
 }
 
 static void

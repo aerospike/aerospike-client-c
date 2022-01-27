@@ -129,6 +129,7 @@ typedef struct as_query_builder {
 	uint32_t cmd_size_pre;
 	uint32_t cmd_size_post;
 	uint16_t n_fields;
+	uint16_t n_ops;
 	bool is_new;
 } as_query_builder;
 
@@ -645,38 +646,39 @@ as_query_command_size(
 
 	// Estimate size of query filter.
 	if (query->where.size > 0) {
+		// Only one filter is allowed by the server.
+		as_predicate* pred = &query->where.entries[0];
+
 		// Estimate AS_FIELD_INDEX_TYPE
-		size += as_command_field_size(1);
-		n_fields++;
+		if (pred->itype != AS_INDEX_TYPE_DEFAULT) {
+			size += as_command_field_size(1);
+			n_fields++;
+		}
 
 		// Estimate AS_FIELD_INDEX_RANGE
 		size += AS_FIELD_HEADER_SIZE;
 		filter_size++;  // Add byte for num filters.
+
+		// bin name size(1) + particle type size(1) + begin particle size(4) + end particle size(4) = 10
+		filter_size += (uint32_t)strlen(pred->bin) + 10;
 		
-		for (uint16_t i = 0; i < query->where.size; i++) {
-			as_predicate* pred = &query->where.entries[i];
-			
-			// bin name size(1) + particle type size(1) + begin particle size(4) + end particle size(4) = 10
-			filter_size += (uint32_t)strlen(pred->bin) + 10;
-			
-			switch(pred->type) {
-				case AS_PREDICATE_EQUAL:
-					if (pred->dtype == AS_INDEX_STRING) {
-						filter_size += (uint32_t)strlen(pred->value.string) * 2;
-					}
-					else if (pred->dtype == AS_INDEX_NUMERIC) {
-						filter_size += sizeof(int64_t) * 2;
-					}
-					break;
-				case AS_PREDICATE_RANGE:
-					if (pred->dtype == AS_INDEX_NUMERIC) {
-						filter_size += sizeof(int64_t) * 2;
-					}
-					else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
-						filter_size += (uint32_t)strlen(pred->value.string) * 2;
-					}
-					break;
-			}
+		switch(pred->type) {
+			case AS_PREDICATE_EQUAL:
+				if (pred->dtype == AS_INDEX_STRING) {
+					filter_size += (uint32_t)strlen(pred->value.string) * 2;
+				}
+				else if (pred->dtype == AS_INDEX_NUMERIC) {
+					filter_size += sizeof(int64_t) * 2;
+				}
+				break;
+			case AS_PREDICATE_RANGE:
+				if (pred->dtype == AS_INDEX_NUMERIC) {
+					filter_size += sizeof(int64_t) * 2;
+				}
+				else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
+					filter_size += (uint32_t)strlen(pred->value.string) * 2;
+				}
+				break;
 		}
 		size += filter_size;
 		n_fields++;
@@ -763,6 +765,7 @@ as_query_command_size(
 	}
 
 	qb->n_fields = n_fields;
+	qb->n_ops = 0;
 
 	// Operations (used in background query) and bin names (used in foreground query)
 	// are mutually exclusive.
@@ -774,14 +777,14 @@ as_query_command_size(
 			as_binop* op = &ops->binops.entries[i];
 			size += as_command_bin_size(&op->bin, qb->opsbuffers);
 		}
+		qb->n_ops = ops->binops.size;
 	}
-	else {
+	else if (qb->is_new || query->where.size == 0) {
 		// Estimate size for selected bin names (query bin names already handled for old servers).
-		if (qb->is_new || query->where.size == 0) {
-			for (uint16_t i = 0; i < query->select.size; i++) {
-				size += as_command_string_operation_size(query->select.entries[i]);
-			}
+		for (uint16_t i = 0; i < query->select.size; i++) {
+			size += as_command_string_operation_size(query->select.entries[i]);
 		}
+		qb->n_ops = query->select.size;
 	}
 	return size;
 }
@@ -794,9 +797,6 @@ as_query_command_init(
 	)
 {
 	// Write command buffer.
-	uint16_t n_ops = (query->ops)? query->ops->binops.size :
-		(qb->is_new || query->where.size == 0)? query->select.size : 0;
-
 	uint8_t* p;
 	
 	if (query_policy) {
@@ -804,12 +804,12 @@ as_query_command_init(
 											  AS_MSG_INFO1_READ;
 
 		p = as_command_write_header_read(cmd, base_policy, AS_POLICY_READ_MODE_AP_ONE,
-			AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, qb->n_fields, n_ops,
+			AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, qb->n_fields, qb->n_ops,
 			read_attr);
 	}
 	else {
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
-			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0, qb->n_fields, n_ops,
+			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0, qb->n_fields, qb->n_ops,
 			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 
@@ -837,62 +837,62 @@ as_query_command_init(
 
 	// Write query filters.
 	if (query->where.size > 0) {
-		// Write indextype.
+		// Only one filter is allowed by the server.
 		as_predicate* pred = &query->where.entries[0];
-		p = as_command_write_field_header(p, AS_FIELD_INDEX_TYPE, 1);
-		*p++ = pred->itype;
+
+		// Write indextype.
+		if (pred->itype != AS_INDEX_TYPE_DEFAULT) {
+			p = as_command_write_field_header(p, AS_FIELD_INDEX_TYPE, 1);
+			*p++ = pred->itype;
+		}
 
 		p = as_command_write_field_header(p, AS_FIELD_INDEX_RANGE, qb->filter_size);
-		*p++ = (uint8_t)query->where.size;
-		
-		for (uint16_t i = 0; i < query->where.size; i++ ) {
-			as_predicate* pred = &query->where.entries[i];
-			
-			// Write bin name, but do not transfer null byte.
-			uint8_t* len_ptr = p++;
-			uint8_t* s = (uint8_t*)pred->bin;
-			while (*s) {
-				*p++ = *s++;
-			}
-			*len_ptr = (uint8_t)(s - (uint8_t*)pred->bin);
-			
-			// Write particle type and range values.
-			switch(pred->type) {
-				case AS_PREDICATE_EQUAL:
-					if (pred->dtype == AS_INDEX_STRING) {
-						p = as_query_write_range_string(p, pred->value.string, pred->value.string);
-					}
-					else if (pred->dtype == AS_INDEX_NUMERIC) {
-						p = as_query_write_range_integer(p, pred->value.integer, pred->value.integer);
-					}
-					break;
-				case AS_PREDICATE_RANGE:
-					if (pred->dtype == AS_INDEX_NUMERIC) {
-						p = as_query_write_range_integer(p, pred->value.integer_range.min, pred->value.integer_range.max);
-					}
-					else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
-						p = as_query_write_range_geojson(p, pred->value.string, pred->value.string);
-					}
-					break;
-			}
+		*p++ = (uint8_t)1;  // Only one filter is allowed by the server.
 
-			if (! qb->is_new) {
-				// Query bin names are specified as a field (Scan bin names are specified later as
-				// operations) for old servers. Write selected bin names.
-				if (query->select.size > 0) {
-					p = as_command_write_field_header(p, AS_FIELD_QUERY_BINS, qb->bin_name_size);
-					*p++ = (uint8_t)query->select.size;
-					
-					for (uint16_t i = 0; i < query->select.size; i++) {
-						// Write bin name, but do not transfer null byte.
-						uint8_t* len_ptr = p++;
-						uint8_t* name = (uint8_t*)query->select.entries[i];
-						uint8_t* n = (uint8_t*)name;
-						while (*n) {
-							*p++ = *n++;
-						}
-						*len_ptr = (uint8_t)(n - name);
+		// Write bin name, but do not transfer null byte.
+		uint8_t* len_ptr = p++;
+		uint8_t* s = (uint8_t*)pred->bin;
+		while (*s) {
+			*p++ = *s++;
+		}
+		*len_ptr = (uint8_t)(s - (uint8_t*)pred->bin);
+		
+		// Write particle type and range values.
+		switch(pred->type) {
+			case AS_PREDICATE_EQUAL:
+				if (pred->dtype == AS_INDEX_STRING) {
+					p = as_query_write_range_string(p, pred->value.string, pred->value.string);
+				}
+				else if (pred->dtype == AS_INDEX_NUMERIC) {
+					p = as_query_write_range_integer(p, pred->value.integer, pred->value.integer);
+				}
+				break;
+			case AS_PREDICATE_RANGE:
+				if (pred->dtype == AS_INDEX_NUMERIC) {
+					p = as_query_write_range_integer(p, pred->value.integer_range.min, pred->value.integer_range.max);
+				}
+				else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
+					p = as_query_write_range_geojson(p, pred->value.string, pred->value.string);
+				}
+				break;
+		}
+
+		if (! qb->is_new) {
+			// Query bin names are specified as a field (Scan bin names are specified later as
+			// operations) for old servers. Write selected bin names.
+			if (query->select.size > 0) {
+				p = as_command_write_field_header(p, AS_FIELD_QUERY_BINS, qb->bin_name_size);
+				*p++ = (uint8_t)query->select.size;
+				
+				for (uint16_t i = 0; i < query->select.size; i++) {
+					// Write bin name, but do not transfer null byte.
+					uint8_t* len_ptr = p++;
+					uint8_t* name = (uint8_t*)query->select.entries[i];
+					uint8_t* n = (uint8_t*)name;
+					while (*n) {
+						*p++ = *n++;
 					}
+					*len_ptr = (uint8_t)(n - name);
 				}
 			}
 		}
@@ -976,11 +976,9 @@ as_query_command_init(
 		}
 		as_buffers_destroy(qb->opsbuffers);
 	}
-	else {
-		if (qb->is_new || query->where.size == 0) {
-			for (uint16_t i = 0; i < query->select.size; i++) {
-				p = as_command_write_bin_name(p, query->select.entries[i]);
-			}
+	else if (qb->is_new || query->where.size == 0) {
+		for (uint16_t i = 0; i < query->select.size; i++) {
+			p = as_command_write_bin_name(p, query->select.entries[i]);
 		}
 	}
 

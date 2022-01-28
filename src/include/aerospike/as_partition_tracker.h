@@ -67,15 +67,6 @@ typedef struct as_partition_tracker_s {
 	uint64_t deadline;
 } as_partition_tracker;
 
-/**
- * @private
- * Used in query resume.
- */
-typedef struct as_bval_s {
-	uint64_t val;
-	bool is_set;
-} as_bval;
-
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
@@ -125,7 +116,7 @@ as_partition_tracker_set_digest(
 
 static inline void
 as_partition_tracker_set_last(
-	as_partition_tracker* pt, as_node_partitions* np, as_digest* digest, as_bval* bval,
+	as_partition_tracker* pt, as_node_partitions* np, as_digest* digest, uint64_t bval,
 	uint32_t n_partitions
 	)
 {
@@ -133,10 +124,7 @@ as_partition_tracker_set_last(
 	as_partitions_status* ps = pt->parts_all;
 	as_partition_status* p = &ps->parts[part_id - ps->part_begin];
 	p->digest = *digest;
-
-	if (bval->is_set) {
-		p->bval = bval->val;
-	}
+	p->bval = bval;
 	np->record_count++;
 }
 

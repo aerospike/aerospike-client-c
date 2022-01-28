@@ -173,7 +173,9 @@ as_scan_parse_record_async(
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, NULL);
+
+	uint64_t bval = 0;
+	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
 
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops,
 											 sc->command.flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
@@ -271,7 +273,9 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, NULL);
+
+	uint64_t bval = 0;
+	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
 
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->scan->deserialize_list_map);
 

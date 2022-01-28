@@ -307,7 +307,7 @@ as_query_parse_record_async(
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 
-	as_bval bval = {.is_set = false};
+	uint64_t bval = 0;
 	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
 
 	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops,
@@ -327,7 +327,7 @@ as_query_parse_record_async(
 	}
 
 	if (qc->np) {
-		as_partition_tracker_set_last(qe->pt, qc->np, &rec.key.digest, &bval,
+		as_partition_tracker_set_last(qe->pt, qc->np, &rec.key.digest, bval,
 			qc->command.cluster->n_partitions);
 	}
 
@@ -438,7 +438,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		rec.gen = msg->generation;
 		rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 
-		as_bval bval = {.is_set = false};
+		uint64_t bval = 0;
 		*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
 
 		as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, task->query_policy->deserialize);
@@ -458,7 +458,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		}
 
 		if (task->pt) {
-			as_partition_tracker_set_last(task->pt, task->np, &rec.key.digest, &bval,
+			as_partition_tracker_set_last(task->pt, task->np, &rec.key.digest, bval,
 				task->cluster->n_partitions);
 		}
 		as_record_destroy(&rec);

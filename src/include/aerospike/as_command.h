@@ -197,8 +197,6 @@ typedef struct as_command_parse_result_data_s {
 	bool deserialize;
 } as_command_parse_result_data;
 
-struct as_bval_s;
-
 /******************************************************************************
  * FUNCTIONS
  ******************************************************************************/
@@ -638,7 +636,7 @@ as_command_ignore_bins(uint8_t* p, uint32_t n_bins);
  * Parse key fields received from server.  Used for reads.
  */
 uint8_t*
-as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key, struct as_bval_s* bval);
+as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key, uint64_t* bval);
 
 /**
  * @private

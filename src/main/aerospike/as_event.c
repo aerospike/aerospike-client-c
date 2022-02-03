@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1022,19 +1022,15 @@ as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t com
 
 	if (complete) {
 		// All commands have completed.
-		// If scan or query user callback already returned false,
-		// do not re-notify user that an error occurred.
-		if (executor->notify) {
-			if (first_error) {
-				// Original error can be used directly.
-				executor->err = err;
-				executor->complete_fn(executor);
-				executor->err = NULL;
-			}
-			else {
-				// Use saved error.
-				executor->complete_fn(executor);
-			}
+		if (first_error) {
+			// Original error can be used directly.
+			executor->err = err;
+			executor->complete_fn(executor);
+			executor->err = NULL;
+		}
+		else {
+			// Use saved error.
+			executor->complete_fn(executor);
 		}
 		as_event_executor_destroy(executor);
 	}
@@ -1081,11 +1077,7 @@ as_event_executor_complete(as_event_executor* executor)
 
 	if (complete) {
 		// All commands completed.
-		// If scan or query user callback already returned false,
-		// do not re-notify user that an error occurred.
-		if (executor->notify) {
-			executor->complete_fn(executor);
-		}
+		executor->complete_fn(executor);
 		as_event_executor_destroy(executor);
 	}
 	else {
@@ -1140,12 +1132,15 @@ as_event_batch_complete(as_event_command* cmd)
 }
 
 bool as_async_scan_should_retry(void* udata, as_status status);
+bool as_async_query_should_retry(void* udata, as_status status);
 
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
-	if (cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION &&
-		as_async_scan_should_retry(cmd->udata, err->code)) {
+	if ((cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION &&
+		as_async_scan_should_retry(cmd->udata, err->code)) ||
+	    (cmd->type == AS_ASYNC_TYPE_QUERY_PARTITION &&
+		as_async_query_should_retry(cmd->udata, err->code))) {
 		as_event_executor* executor = cmd->udata;
 		as_event_command_release(cmd);
 		as_event_executor_complete(executor);

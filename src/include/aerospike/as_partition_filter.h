@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -34,12 +34,13 @@ extern "C" {
  */
 typedef struct as_partition_status_s {
 	uint16_t part_id;
-	as_digest digest;
 	bool done;
+	as_digest digest;
+	uint64_t bval;
 } as_partition_status;
 
 /**
- * Status of all partitions after scan has ended.
+ * Status of all partitions after scan/query has ended.
  */
 typedef struct as_partitions_status_s {
 	uint32_t ref_count;
@@ -95,7 +96,8 @@ as_partition_filter_set_id(as_partition_filter* pf, uint32_t part_id)
 
 /**
  * Return records after key's digest in a single partition containing the digest.
- * Note that digest order is not the same as user key order.
+ * Note that digest order is not the same as user key order. This function only
+ * works for scan or query without a where clause.
  *
  * @param pf			Partition filter.
  * @param digest		Return records after this key's digest.
@@ -126,7 +128,7 @@ as_partition_filter_set_range(as_partition_filter* pf, uint32_t begin, uint32_t 
 }
 
 /**
- * Filter by status of all partitions obtained from a previous scan that was terminated
+ * Filter by status of all partitions obtained from a previous scan/query that was terminated
  * before reading all records.
  *
  * @param pf			Partition filter.

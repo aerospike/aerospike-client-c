@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -55,6 +55,7 @@ extern "C" {
 #define AS_FEATURES_PARTITION_SCAN (1 << 0)
 #define AS_FEATURES_QUERY_SHOW (1 << 1)
 #define AS_FEATURES_BATCH_ANY (1 << 2)
+#define AS_FEATURES_PARTITION_QUERY (1 << 3)
 
 #define AS_ADDRESS4_MAX 4
 #define AS_ADDRESS6_MAX 8

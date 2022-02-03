@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1121,16 +1121,15 @@ typedef struct as_policy_query_s {
 
 	/**
 	 * Timeout used when info command is used that checks for cluster changes before and 
-	 * after the query.  This timeout is only used when fail_on_cluster_change is true and
-	 * the query where clause is defined.
+	 * after the query.  This timeout is only used when fail_on_cluster_change is enabled.
 	 *
 	 * Default: 10000 ms
 	 */
 	uint32_t info_timeout;
 
 	/**
-	 * Terminate query if cluster is in migration state. If query where clause not 
-	 * defined (scan), this field is ignored.
+	 * Terminate query if cluster is in migration state. If the server supports partition
+	 * queries or the query filter is null (scan), this field is ignored.
 	 *
 	 * Default: false
 	 */

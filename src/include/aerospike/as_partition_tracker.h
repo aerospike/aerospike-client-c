@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,10 +17,8 @@
 #pragma once
 
 #include <aerospike/as_std.h>
-#include <aerospike/as_key.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_partition_filter.h>
-#include <aerospike/as_scan.h>
 #include <aerospike/as_vector.h>
 
 #ifdef __cplusplus
@@ -32,7 +30,7 @@ extern "C" {
  *****************************************************************************/
 struct as_node_s;
 struct as_cluster_s;
-struct as_policy_scan_s;
+struct as_policy_base_s;
 struct as_error_s;
 
 /**
@@ -51,7 +49,7 @@ typedef struct as_node_partitions_s {
 
 /**
  * @private
- * Scan partition tracker.
+ * Scan/Query partition tracker.
  */
 typedef struct as_partition_tracker_s {
 	as_partitions_status* parts_all;
@@ -75,20 +73,21 @@ typedef struct as_partition_tracker_s {
 
 void
 as_partition_tracker_init_nodes(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
-	as_scan* scan, uint32_t cluster_size
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
+	uint64_t max_records, as_partitions_status** parts_all, bool paginate, uint32_t cluster_size
 	);
 
 void
 as_partition_tracker_init_node(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
-	as_scan* scan, struct as_node_s* node
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
+	uint64_t max_records, as_partitions_status** parts_all, bool paginate, struct as_node_s* node
 	);
 
 as_status
 as_partition_tracker_init_filter(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_scan_s* policy,
-	as_scan* scan, uint32_t cluster_size, as_partition_filter* pf, struct as_error_s* err
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
+	uint64_t max_records, as_partitions_status** parts_all, bool paginate, uint32_t cluster_size,
+	as_partition_filter* pf, struct as_error_s* err
 	);
 
 as_status
@@ -112,6 +111,20 @@ as_partition_tracker_set_digest(
 	uint32_t part_id = as_partition_getid(digest->value, n_partitions);
 	as_partitions_status* ps = pt->parts_all;
 	ps->parts[part_id - ps->part_begin].digest = *digest;
+	np->record_count++;
+}
+
+static inline void
+as_partition_tracker_set_last(
+	as_partition_tracker* pt, as_node_partitions* np, as_digest* digest, uint64_t bval,
+	uint32_t n_partitions
+	)
+{
+	uint32_t part_id = as_partition_getid(digest->value, n_partitions);
+	as_partitions_status* ps = pt->parts_all;
+	as_partition_status* p = &ps->parts[part_id - ps->part_begin];
+	p->digest = *digest;
+	p->bval = bval;
 	np->record_count++;
 }
 

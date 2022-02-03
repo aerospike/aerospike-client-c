@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -20,6 +20,7 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_partition_filter.h>
 #include <aerospike/as_predexp.h>
 #include <aerospike/as_udf.h>
 
@@ -335,7 +336,7 @@ typedef struct as_query_predexp_s {
 } as_query_predexp;
 
 /**
- * The as_query object is used define a query to be executed in the datasbase.
+ * The as_query object is used define a query to be executed in the database.
  *
  * ## Initialization
  * 
@@ -506,7 +507,7 @@ typedef struct as_query_s {
 	as_query_predexp predexp;
 
 	/**
-	 * UDF to apply to results of the query
+	 * UDF to apply on aggregation or background query.
 	 *
 	 * Should be set via `as_query_apply()`.
 	 */
@@ -519,9 +520,39 @@ typedef struct as_query_s {
 	struct as_operations_s* ops;
 
 	/**
+	 * Status of all partitions.
+	 */
+	as_partitions_status* parts_all;
+
+	/**
+	 * Approximate number of records to return to client. This number is divided by the
+	 * number of nodes involved in the query.  The actual number of records returned
+	 * may be less than max_records if node record counts are small and unbalanced across
+	 * nodes.
+	 *
+	 * Default: 0 (do not limit record count)
+	 */
+	uint64_t max_records;
+
+	/**
+	 * Limit returned records per second (rps) rate for each server.
+	 * Do not apply rps limit if records_per_second is zero.
+	 *
+	 * Default: 0
+	 */
+	uint32_t records_per_second;
+
+	/**
+	 * Should records be read in pages in conjunction with max_records policy.
+	 *
+	 * Default: false
+	 */
+	bool paginate;
+
+	/**
 	 * Set to true if query should only return keys and no bin data.
 	 *
-	 * Default value is false.
+	 * Default: false.
 	 */
 	bool no_bins;
 
@@ -571,13 +602,8 @@ as_query_new(const as_namespace ns, const as_set set);
 /**
  * Destroy the query and associated resources.
  * 
- * ~~~~~~~~~~{.c}
- * as_query_destroy(scan);
- * ~~~~~~~~~~
- *
- * @param query 	The query to destroy.
- *
  * @relates as_query
+ * @ingroup query_object
  */
 AS_EXTERN void
 as_query_destroy(as_query* query);
@@ -851,6 +877,48 @@ as_query_predexp_add(as_query* query, as_predexp_base * predexp);
  */
 AS_EXTERN bool
 as_query_apply(as_query* query, const char* module, const char* function, const as_list* arglist);
+
+/******************************************************************************
+ * QUERY PAGINATE
+ *****************************************************************************/
+
+/**
+ * Set if records should be read in pages in conjunction with max_records policy.
+ * 
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+static inline void
+as_query_set_paginate(as_query* query, bool paginate)
+{
+	query->paginate = paginate;
+}
+
+/**
+ * Set completion status of all partitions from a previous query that ended early.
+ * The query will resume from this point.
+ *
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+static inline void
+as_query_set_partitions(as_query* query, as_partitions_status* parts_all)
+{
+	query->parts_all = as_partitions_status_reserve(parts_all);
+}
+
+/**
+ * If using query pagination, did the previous paginated query with this query instance
+ * return all records?
+ *
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+static inline bool
+as_query_is_done(as_query* query)
+{
+	return query->parts_all && query->parts_all->done;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

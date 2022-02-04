@@ -877,7 +877,7 @@ typedef struct as_policy_batch_s {
 	/**
 	 * Allow batch to be processed immediately in the server's receiving thread for SSD
 	 * namespaces. If false, the batch will always be processed in separate service threads.
-	 * Server versions &lt; 5.8 ignore this field.
+	 * Server versions &lt; 6.0 ignore this field.
 	 *
 	 * Inline processing can introduce the possibility of unfairness because the server
 	 * can process the entire batch before moving onto the next command.
@@ -896,7 +896,7 @@ typedef struct as_policy_batch_s {
 	 * AEROSPIKE_ERR_RECORD_NOT_FOUND and AEROSPIKE_FILTERED_OUT which never stop the batch.
 	 *
 	 * This field is used on both the client and server. The client handles node specific
-	 * errors and the server handles key specific errors. Server versions &lt; 5.8
+	 * errors and the server handles key specific errors. Server versions &lt; 6.0
 	 * do not support respond_all_keys and treat this value as false.
 	 * Default: true
 	 */

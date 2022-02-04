@@ -754,7 +754,7 @@ aerospike_batch_exists(
  * This method allows different sub-commands for each key in the batch.
  * The returned records are located in the same list.
  *
- * Requires server version 5.8+
+ * Requires server version 6.0+
  *
  * ~~~~~~~~~~{.c}
  * as_operations ops1;
@@ -802,7 +802,7 @@ aerospike_batch_operate(
  * This method allows different sub-commands for each key in the batch.
  * The returned records are located in the same list.
  *
- * Requires server version 5.8+
+ * Requires server version 6.0+
  *
  * ~~~~~~~~~~{.c}
  * TODO: CODE EXAMPLE

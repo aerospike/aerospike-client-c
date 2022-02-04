@@ -824,25 +824,20 @@ as_batch_remove_record_size(as_key* key, as_batch_remove_record* rec, as_batch_b
 static as_status
 as_batch_record_size(as_key* key, as_batch_base_record* rec, as_batch_builder* bb, as_error* err)
 {
-	as_status status;
-
 	switch (rec->type) {
 	case AS_BATCH_READ:
-		status = as_batch_read_record_size(key, (as_batch_read_record*)rec, bb, err);
-		break;
+		return as_batch_read_record_size(key, (as_batch_read_record*)rec, bb, err);
 	case AS_BATCH_WRITE:
-		status = as_batch_write_record_size(key, (as_batch_write_record*)rec, bb, err);
-		break;
+		return as_batch_write_record_size(key, (as_batch_write_record*)rec, bb, err);
 	case AS_BATCH_APPLY:
 		as_batch_apply_record_size(key, (as_batch_apply_record*)rec, bb);
-		status = AEROSPIKE_OK;
-		break;
+		return AEROSPIKE_OK;
 	case AS_BATCH_REMOVE:
 		as_batch_remove_record_size(key, (as_batch_remove_record*)rec, bb);
-		status = AEROSPIKE_OK;
-		break;
+		return AEROSPIKE_OK;
+	default:
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", rec->type);
 	}
-	return status;
 }
 
 static as_status

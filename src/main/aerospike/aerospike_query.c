@@ -231,7 +231,11 @@ static const as_stream_hooks output_stream_hooks = {
 static void
 as_query_complete_async(as_event_executor* executor)
 {
-	((as_async_query_executor*)executor)->listener(executor->err, 0, executor->udata, executor->event_loop);
+	// If query callback already returned false, do not re-notify user.
+	if (executor->notify) {
+		((as_async_query_executor*)executor)->listener(executor->err, 0, executor->udata,
+			executor->event_loop);
+	}
 }
 
 static as_status

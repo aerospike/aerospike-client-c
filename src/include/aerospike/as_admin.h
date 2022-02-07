@@ -63,11 +63,23 @@ typedef enum as_privilege_code_e {
 	AS_PRIVILEGE_SYS_ADMIN = 1,
 	
 	/**
-	 * User can perform data administration functions on a database that do not involve user
-	 * administration.  Examples include create/drop index and user defined functions. 
-	 * Global scope only.
+	 * User can perform UDF and SINDEX administration actions. Global scope only.
 	 */
 	AS_PRIVILEGE_DATA_ADMIN = 2,
+
+	/**
+	 * User can perform user defined function(UDF) administration actions.
+	 * Examples include create/drop UDF. Global scope only.
+	 * Requires server version 5.8+
+	 */
+	AS_PRIVILEGE_UDF_ADMIN = 3,
+
+	/**
+	 * User can perform secondary index administration actions.
+	 * Examples include create/drop index. Global scope only.
+	 * Requires server version 5.8+
+	 */
+	AS_PRIVILEGE_SINDEX_ADMIN = 4,
 
 	/**
 	 * User can read data only.
@@ -87,7 +99,13 @@ typedef enum as_privilege_code_e {
 	/**
 	 * User can write data only.
 	 */
-	AS_PRIVILEGE_WRITE = 13
+	AS_PRIVILEGE_WRITE = 13,
+
+	/**
+	 * User can truncate data only.
+	 * Requires server version 5.8+
+	 */
+	AS_PRIVILEGE_TRUNCATE = 14
 } as_privilege_code;
 
 /**

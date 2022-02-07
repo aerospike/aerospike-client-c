@@ -782,7 +782,7 @@ batch_write_operate_complex(aerospike* p_as, as_error* err)
 	as_operations_exp_read(&ops5, result2, rexp3, AS_EXP_READ_DEFAULT);
 
 	as_batch_records recs;
-	as_batch_read_inita(&recs, 6);
+	as_batch_records_inita(&recs, 6);
 
 	as_batch_read_record* rr;
 	as_batch_write_record* wr;

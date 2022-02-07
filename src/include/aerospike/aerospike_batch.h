@@ -766,7 +766,7 @@ aerospike_batch_exists(
  * as_operations_add_write_int64(&ops2, "bin2", 200);
  *
  * as_batch_records recs;
- * as_batch_read_inita(&recs, 2);
+ * as_batch_records_inita(&recs, 2);
  *
  * as_batch_write_record* r = as_batch_write_reserve(&recs);
  * as_key_init_int64(&r->key, "test", "set", 1);

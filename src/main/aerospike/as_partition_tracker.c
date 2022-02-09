@@ -37,7 +37,7 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 	for (uint16_t i = 0; i < part_count; i++) {
 		as_partition_status* ps = &parts_all->parts[i];
 		ps->part_id = part_begin + i;
-		ps->done = false;
+		ps->retry = false;
 		ps->digest.init = false;
 	}
 
@@ -67,13 +67,7 @@ tracker_init(
 	}
 	else {
 		// Instance contains partitions from previous scan/query.
-		// Reset partition status.
-		as_partitions_status* parts_all = as_partitions_status_reserve(resume);
-
-		for (uint16_t i = 0; i < parts_all->part_count; i++) {
-			parts_all->parts[i].done = false;
-		}
-		pt->parts_all = parts_all;
+		pt->parts_all = as_partitions_status_reserve(resume);
 	}
 
 	as_vector_init(&pt->node_parts, sizeof(as_node_partitions), pt->node_capacity);
@@ -134,7 +128,6 @@ assign_partition(as_partition_tracker* pt, as_partition_status* ps, as_node* nod
 	else {
 		as_vector_append(&np->parts_full, &ps->part_id);
 	}
-	np->parts_requested++;
 }
 
 static void
@@ -237,13 +230,17 @@ as_partition_tracker_assign(
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
 			as_partition_status* ps = &parts_all->parts[i];
 
-			if (!ps->done) {
+			// On first iteration, request all partitions.
+			// On subsequent iterations, only request partitions marked for retry.
+			if (pt->iteration == 1 || ps->retry) {
 				as_node* node = table->partitions[ps->part_id].master;
 
 				if (! node) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 										   "Node not found for partition %u", ps->part_id);
 				}
+
+				ps->retry = false;
 
 				// Use node name to check for single node equality because
 				// partition map may be in transitional state between
@@ -270,7 +267,9 @@ as_partition_tracker_assign(
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
 			as_partition_status* ps = &parts_all->parts[i];
 
-			if (!ps->done) {
+			// On first iteration, request all partitions.
+			// On subsequent iterations, only request partitions marked for retry.
+			if (pt->iteration == 1 || ps->retry) {
 				uint32_t master = as_load_uint32(&table->partitions[ps->part_id].master);
 
 				// node index zero indicates unset.
@@ -285,6 +284,8 @@ as_partition_tracker_assign(
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 										   "Node not found for partition %u", ps->part_id);
 				}
+
+				ps->retry = false;
 
 				// Use node name to check for single node equality because
 				// partition map may be in transitional state between
@@ -331,21 +332,19 @@ as_status
 as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
 {
 	uint64_t record_count = 0;
-	uint32_t parts_requested = 0;
-	uint32_t parts_received = 0;
+	uint32_t parts_unavailable = 0;
 	as_vector* list = &pt->node_parts;
 
 	for (uint32_t i = 0; i < list->size; i++) {
 		as_node_partitions* np = as_vector_get(list, i);
 		record_count += np->record_count;
-		parts_requested += np->parts_requested;
-		parts_received += np->parts_received;
-		//printf("Node %s partsFull=%u partsPartial=%u partsReceived=%u recordsRequested=%llu recordsReceived=%llu\n",
+		parts_unavailable += np->parts_unavailable;
+		//printf("Node %s partsFull=%u partsPartial=%u partsUnavailable=%u recordsRequested=%llu recordsReceived=%llu\n",
 		//	as_node_get_address_string(np->node), np->parts_full.size, np->parts_partial.size,
-		//	np->parts_received, np->record_max, np->record_count);
+		//	np->parts_unavailable, np->record_max, np->record_count);
 	}
 
-	if (parts_received >= parts_requested) {
+	if (parts_unavailable == 0) {
 		if (pt->max_records == 0 || record_count == 0) {
 			pt->parts_all->done = true;
 		}
@@ -411,17 +410,34 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
 }
 
 bool
-as_partition_tracker_should_retry(as_partition_tracker* pt, as_status status)
+as_partition_tracker_should_retry(
+	as_partition_tracker* pt, as_node_partitions* np, as_status status
+	)
 {
 	switch (status) {
 	case AEROSPIKE_ERR_CONNECTION:
 	case AEROSPIKE_ERR_ASYNC_CONNECTION:
 	case AEROSPIKE_ERR_TIMEOUT:
-	case AEROSPIKE_ERR_CLUSTER: // partition not available
 		if (!pt->errors) {
 			pt->errors = as_vector_create(sizeof(as_status), 10);
 		}
 		as_vector_append(pt->errors, &status);
+
+		as_vector* list = &np->parts_full;
+
+		for (uint32_t i = 0; i < list->size; i++) {
+			as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
+			ps->retry = true;
+		}
+
+		list = &np->parts_partial;
+
+		for (uint32_t i = 0; i < list->size; i++) {
+			as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
+			ps->retry = true;
+		}
+
+		np->parts_unavailable = np->parts_full.size + np->parts_partial.size;
 		return true;
 
 	default:

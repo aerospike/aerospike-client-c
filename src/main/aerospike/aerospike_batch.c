@@ -818,7 +818,7 @@ as_batch_header_write_old(
 
 	p = as_command_write_header_read(p, &policy->base, policy->read_mode_ap,
 		policy->read_mode_sc, policy->base.total_timeout, bb->field_count_header, 0,
-		bb->read_attr | AS_MSG_INFO1_BATCH_INDEX);
+		bb->read_attr | AS_MSG_INFO1_BATCH_INDEX, 0);
 
 	if (policy->base.filter_exp) {
 		p = as_exp_write(policy->base.filter_exp, p);

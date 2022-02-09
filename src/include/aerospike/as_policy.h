@@ -1143,6 +1143,16 @@ typedef struct as_policy_query_s {
 	 */
 	bool deserialize;
 
+	/**
+	 * Is query expected to return less than 100 records.
+	 * If true, the server will optimize the query for a small record set.
+	 * This field is ignored for aggregation queries, background queries
+	 * and server versions &lt; 6.0.
+	 *
+	 * Default: false
+	 */
+	bool short_query;
+
 } as_policy_query;
 
 /**
@@ -1707,6 +1717,7 @@ as_policy_query_init(as_policy_query* p)
 	p->info_timeout = 10000;
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;
+	p->short_query = false;
 	return p;
 }
 

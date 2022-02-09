@@ -366,11 +366,11 @@ as_query_parse_records_async(as_event_command* cmd)
 
 		if (qc->np) {
 			if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
-				// Only mark partition done when result_code is AEROSPIKE_OK.
-				// The server may return PARTITION_UNAVAILABLE (AEROSPIKE_ERR_CLUSTER) which
-				// means the specified partition will need to be requested on retry.
-				if (msg->result_code == AEROSPIKE_OK) {
-					as_partition_tracker_part_done(qe->pt, qc->np, msg->generation);
+				// When an error code is received, mark partition as unavailable
+				// for the current round. Unavailable partitions will be retried
+				// in the next round. Generation is overloaded as partition id.
+				if (msg->result_code != AEROSPIKE_OK) {
+					as_partition_tracker_part_unavailable(qe->pt, qc->np, msg->generation);
 				}
 				continue;
 			}
@@ -493,11 +493,11 @@ as_query_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 
 		if (task->pt) {
 			if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
-				// Only mark partition done when result_code is AEROSPIKE_OK.
-				// The server may return PARTITION_UNAVAILABLE (AEROSPIKE_ERR_CLUSTER) which
-				// means the specified partition will need to be requested on retry.
-				if (msg->result_code == AEROSPIKE_OK) {
-					as_partition_tracker_part_done(task->pt, task->np, msg->generation);
+				// When an error code is received, mark partition as unavailable
+				// for the current round. Unavailable partitions will be retried
+				// in the next round. Generation is overloaded as partition id.
+				if (msg->result_code != AEROSPIKE_OK) {
+					as_partition_tracker_part_unavailable(task->pt, task->np, msg->generation);
 				}
 				continue;
 			}
@@ -804,12 +804,21 @@ as_query_command_init(
 	uint8_t* p;
 	
 	if (query_policy) {
-		uint8_t read_attr = (query->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA :
-											  AS_MSG_INFO1_READ;
+		uint8_t read_attr = AS_MSG_INFO1_READ;
+
+		if (query->no_bins) {
+			read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
+		}
+
+		if (query_policy->short_query) {
+			read_attr |= AS_MSG_INFO1_SHORT_QUERY;
+		}
+
+		uint8_t info_attr = qb->is_new ? AS_MSG_INFO3_PARTITION_DONE : 0;
 
 		p = as_command_write_header_read(cmd, base_policy, AS_POLICY_READ_MODE_AP_ONE,
 			AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, qb->n_fields, qb->n_ops,
-			read_attr);
+			read_attr, info_attr);
 	}
 	else {
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
@@ -1134,7 +1143,7 @@ as_query_command_execute_new(as_query_task* task)
 	as_command_buffer_free(buf, size);
 
 	if (status != AEROSPIKE_OK) {
-		if (task->pt && as_partition_tracker_should_retry(task->pt, status)) {
+		if (task->pt && as_partition_tracker_should_retry(task->pt, task->np, status)) {
 			return AEROSPIKE_OK;
 		}
 
@@ -1780,10 +1789,11 @@ convert_query_to_scan(
  *****************************************************************************/
 
 bool
-as_async_query_should_retry(void* udata, as_status status)
+as_async_query_should_retry(as_event_command* cmd, as_status status)
 {
-	as_async_query_executor* qe = udata;
-	return as_partition_tracker_should_retry(qe->pt, status);
+	as_async_query_command* qc = (as_async_query_command*)cmd;
+	as_async_query_executor* qe = cmd->udata;
+	return as_partition_tracker_should_retry(qe->pt, qc->np, status);
 }
 
 as_status

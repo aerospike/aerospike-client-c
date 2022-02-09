@@ -229,10 +229,9 @@ uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, uint32_t timeout, uint16_t n_fields, uint16_t n_bins,
-	uint8_t read_attr
+	uint8_t read_attr, uint8_t info_attr
 	)
 {
-	uint8_t info_attr = 0;
 	as_command_set_attr_read(read_mode_ap, read_mode_sc, policy->compress, &read_attr,
 							 &info_attr);
 

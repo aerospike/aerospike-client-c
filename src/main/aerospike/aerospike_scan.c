@@ -228,11 +228,11 @@ as_scan_parse_records_async(as_event_command* cmd)
 
 		if (sc->np) {
 			if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
-				// Only mark partition done when result_code is AEROSPIKE_OK.
-				// The server may return PARTITION_UNAVAILABLE (AEROSPIKE_ERR_CLUSTER) which
-				// means the specified partition will need to be requested on the scan retry.
-				if (msg->result_code == AEROSPIKE_OK) {
-					as_partition_tracker_part_done(se->pt, sc->np, msg->generation);
+				// When an error code is received, mark partition as unavailable
+				// for the current round. Unavailable partitions will be retried
+				// in the next round. Generation is overloaded as partition id.
+				if (msg->result_code != AEROSPIKE_OK) {
+					as_partition_tracker_part_unavailable(se->pt, sc->np, msg->generation);
 				}
 				continue;
 			}
@@ -323,11 +323,11 @@ as_scan_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, v
 
 		if (task->pt) {
 			if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
-				// Only mark partition done when result_code is AEROSPIKE_OK.
-				// The server may return PARTITION_UNAVAILABLE (AEROSPIKE_ERR_CLUSTER) which
-				// means the specified partition will need to be requested on the scan retry.
-				if (msg->result_code == AEROSPIKE_OK) {
-					as_partition_tracker_part_done(task->pt, task->np, msg->generation);
+				// When an error code is received, mark partition as unavailable
+				// for the current round. Unavailable partitions will be retried
+				// in the next round. Generation is overloaded as partition id.
+				if (msg->result_code != AEROSPIKE_OK) {
+					as_partition_tracker_part_unavailable(task->pt, task->np, msg->generation);
 				}
 				continue;
 			}
@@ -475,8 +475,8 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 
 static size_t
 as_scan_command_init(
-	uint8_t* cmd, const as_policy_scan* policy, const as_scan* scan, uint64_t task_id,
-	as_scan_builder* sb
+	uint8_t* cmd, as_cluster* cluster, const as_policy_scan* policy, const as_scan* scan,
+	uint64_t task_id, as_scan_builder* sb
 	)
 {
 	uint16_t n_ops = (scan->ops) ? scan->ops->binops.size : scan->select.size;
@@ -488,10 +488,18 @@ as_scan_command_init(
 				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {
-		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
+		uint8_t read_attr = AS_MSG_INFO1_READ;
+
+		if (scan->no_bins) {
+			read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
+		}
+
+		// Clusters that support partition queries also support not sending partition done messages.
+		int info_attr = cluster->has_partition_query? AS_MSG_INFO3_PARTITION_DONE : 0;
+
 		p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
 				AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, sb->n_fields, n_ops,
-				read_attr);
+				read_attr, info_attr);
 	}
 	
 	if (scan->ns[0]) {
@@ -628,7 +636,7 @@ as_scan_command_execute(as_scan_task* task)
 
 	size_t size = as_scan_command_size(task->policy, task->scan, &sb);
 	uint8_t* buf = as_command_buffer_init(size);
-	size = as_scan_command_init(buf, task->policy, task->scan, task->task_id, &sb);
+	size = as_scan_command_init(buf, task->cluster, task->policy, task->scan, task->task_id, &sb);
 
 	as_command cmd;
 	cmd.cluster = task->cluster;
@@ -656,7 +664,7 @@ as_scan_command_execute(as_scan_task* task)
 	as_command_buffer_free(buf, size);
 
 	if (status) {
-		if (task->pt && as_partition_tracker_should_retry(task->pt, status)) {
+		if (task->pt && as_partition_tracker_should_retry(task->pt, task->np, status)) {
 			return AEROSPIKE_OK;
 		}
 
@@ -1151,7 +1159,7 @@ as_scan_partition_async(
 
 	size_t cmd_size = as_scan_command_size(policy, scan, &sb);
 	uint8_t* cmd_buf = cf_malloc(cmd_size);
-	cmd_size = as_scan_command_init(cmd_buf, policy, scan, task_id, &sb);
+	cmd_size = as_scan_command_init(cmd_buf, cluster, policy, scan, task_id, &sb);
 
 	as_async_scan_executor* se = cf_malloc(sizeof(as_async_scan_executor));
 	se->listener = listener;
@@ -1192,10 +1200,11 @@ as_scan_partition_async(
  *****************************************************************************/
 
 bool
-as_async_scan_should_retry(void* udata, as_status status)
+as_async_scan_should_retry(as_event_command* cmd, as_status status)
 {
-	as_async_scan_executor* ase = udata;
-	return as_partition_tracker_should_retry(ase->pt, status);
+	as_async_scan_command* sc = (as_async_scan_command*)cmd;
+	as_async_scan_executor* se = cmd->udata;
+	return as_partition_tracker_should_retry(se->pt, sc->np, status);
 }
 
 as_status

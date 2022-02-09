@@ -496,7 +496,7 @@ as_batch_index_records_write(
 	uint32_t n_offsets = offsets->size;
 	uint8_t* p = as_command_write_header_read(cmd, &policy->base, policy->read_mode_ap,
 		policy->read_mode_sc, policy->base.total_timeout, bb->field_count_header, 0,
-		read_attr | AS_MSG_INFO1_BATCH_INDEX);
+		read_attr | AS_MSG_INFO1_BATCH_INDEX, 0);
 
 	if (policy->base.filter_exp) {
 		p = as_exp_write(policy->base.filter_exp, p);
@@ -790,7 +790,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
 		policy->read_mode_sc, policy->base.total_timeout, field_count_header, 0,
-		btk->read_attr | AS_MSG_INFO1_BATCH_INDEX);
+		btk->read_attr | AS_MSG_INFO1_BATCH_INDEX, 0);
 
 	if (policy->base.filter_exp) {
 		p = as_exp_write(policy->base.filter_exp, p);

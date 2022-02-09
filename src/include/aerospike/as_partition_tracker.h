@@ -43,8 +43,7 @@ typedef struct as_node_partitions_s {
 	as_vector parts_partial;
 	uint64_t record_count;
 	uint64_t record_max;
-	uint32_t parts_requested;
-	uint32_t parts_received;
+	uint32_t parts_unavailable;
 } as_node_partitions;
 
 /**
@@ -96,11 +95,13 @@ as_partition_tracker_assign(
 	);
 
 static inline void
-as_partition_tracker_part_done(as_partition_tracker* pt, as_node_partitions* np, uint32_t part_id)
+as_partition_tracker_part_unavailable(
+	as_partition_tracker* pt, as_node_partitions* np, uint32_t part_id
+	)
 {
 	as_partitions_status* ps = pt->parts_all;
-	ps->parts[part_id - ps->part_begin].done = true;
-	np->parts_received++;
+	ps->parts[part_id - ps->part_begin].retry = true;
+	np->parts_unavailable++;
 }
 
 static inline void
@@ -146,7 +147,9 @@ as_status
 as_partition_tracker_is_complete(as_partition_tracker* pt, struct as_error_s* err);
 
 bool
-as_partition_tracker_should_retry(as_partition_tracker* pt, as_status status);
+as_partition_tracker_should_retry(
+	as_partition_tracker* pt, as_node_partitions* np, as_status status
+	);
 
 void
 as_partition_tracker_destroy(as_partition_tracker* pt);

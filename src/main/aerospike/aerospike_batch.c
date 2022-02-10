@@ -246,8 +246,17 @@ as_batch_attr_read_adjust(as_batch_attr* attr, bool read_all_bins)
 static void
 as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
 {
-	// TODO: Ask andy if it's ok to set read bit instead of checking all ops to see if there is a read.
-	attr->read_attr = AS_MSG_INFO1_READ;
+	attr->read_attr = 0;
+
+	for (uint16_t i = 0; i < ops->binops.size; i++) {
+		as_binop* op = &ops->binops.entries[i];
+
+		if (! as_op_is_write[op->op]) {
+			attr->read_attr = AS_MSG_INFO1_READ;
+			break;
+		}
+	}
+
 	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS;
 	attr->info_attr = 0;
 	attr->ttl = ops->ttl;
@@ -259,18 +268,12 @@ as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
 static void
 as_batch_attr_write_row(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
 {
-	// TODO: Ask andy if it's ok to set read bit instead of checking all ops to see if there is a read.
-	attr->read_attr = AS_MSG_INFO1_READ;
-	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS;
-	attr->info_attr = 0;
-	attr->ttl = ops->ttl;
-	attr->has_write = true;
+	as_batch_attr_write_header(attr, ops);
 	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
 
 	switch (p->gen) {
 	default:
 	case AS_POLICY_GEN_IGNORE:
-		attr->gen = 0;
 		break;
 	case AS_POLICY_GEN_EQ:
 		attr->gen = ops->gen;
@@ -359,13 +362,13 @@ as_batch_attr_remove_row(as_batch_attr* attr, const as_policy_batch_remove* p)
 	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS | AS_MSG_INFO2_DELETE;
 	attr->info_attr = 0;
 	attr->ttl = 0;
+	attr->gen = 0;
 	attr->has_write = true;
 	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
 
 	switch (p->gen) {
 	default:
 	case AS_POLICY_GEN_IGNORE:
-		attr->gen = 0;
 		break;
 	case AS_POLICY_GEN_EQ:
 		attr->gen = p->generation;
@@ -1409,7 +1412,6 @@ as_batch_records_write_new(
 						filter = NULL;
 						as_batch_attr_apply_header(&attr);
 					}
-
 					p = as_batch_write_write(p, &ba->key, &attr, filter, 3, 0);
 					p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, ba->module);
 					p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, ba->function);
@@ -1430,7 +1432,6 @@ as_batch_records_write_new(
 						filter = NULL;
 						as_batch_attr_remove_header(&attr);
 					}
-
 					p = as_batch_write_write(p, &brm->key, &attr, filter, 0, 0);
 					break;
 				}

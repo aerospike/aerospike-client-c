@@ -52,7 +52,6 @@ typedef struct {
 	size_t size;
 	as_queue* buffers;
 	uint8_t* filter_field;
-	uint8_t* batch_field;
 	as_serializer ser;
 	as_buffer args;
 	uint32_t filter_size;
@@ -700,11 +699,11 @@ as_batch_write_ops(uint8_t* p, const as_operations* ops, as_queue* buffers)
 }
 
 static size_t
-as_batch_trailer_write(uint8_t* cmd, uint8_t* p, as_batch_builder* bb)
+as_batch_trailer_write(uint8_t* cmd, uint8_t* p, uint8_t* batch_field)
 {
 	// Write batch field size.
-	size_t size = p - bb->batch_field - 4;
-	*(uint32_t*)bb->batch_field = cf_swap_to_be32((uint32_t)size);
+	size_t size = p - batch_field - 4;
+	*(uint32_t*)batch_field = cf_swap_to_be32((uint32_t)size);
 	return as_command_write_end(cmd, p);
 }
 
@@ -834,12 +833,6 @@ as_batch_header_write_old(
 		memcpy(p, bb->filter_field, bb->filter_size);
 		p += bb->filter_size;
 	}
-
-	bb->batch_field = p;
-	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
-	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
-	p += sizeof(uint32_t);
-	*p++ = policy->allow_inline? 1 : 0;
 	return p;
 }
 
@@ -851,6 +844,13 @@ as_batch_records_write_old(
 {
 	uint32_t n_offsets = offsets->size;
 	uint8_t* p = as_batch_header_write_old(cmd, policy, n_offsets, bb);
+
+	uint8_t* batch_field = p;
+	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
+	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
+	p += sizeof(uint32_t);
+	*p++ = policy->allow_inline? 1 : 0;
+
 	as_batch_read_record* prev = 0;
 
 	for (uint32_t i = 0; i < n_offsets; i++) {
@@ -895,7 +895,7 @@ as_batch_records_write_old(
 			prev = rec;
 		}
 	}
-	return as_batch_trailer_write(cmd, p, bb);
+	return as_batch_trailer_write(cmd, p, batch_field);
 }
 
 static size_t
@@ -906,6 +906,13 @@ as_batch_keys_write_old(
 {
 	uint32_t n_offsets = offsets->size;
 	uint8_t* p = as_batch_header_write_old(cmd, policy, n_offsets, bb);
+
+	uint8_t* batch_field = p;
+	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
+	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
+	p += sizeof(uint32_t);
+	*p++ = policy->allow_inline? 1 : 0;
+
 	as_key* prev = 0;
 
 	for (uint32_t i = 0; i < n_offsets; i++) {
@@ -945,7 +952,7 @@ as_batch_keys_write_old(
 			prev = key;
 		}
 	}
-	return as_batch_trailer_write(cmd, p, bb);
+	return as_batch_trailer_write(cmd, p, batch_field);
 }
 
 //-----------------------------
@@ -986,12 +993,6 @@ as_batch_header_write_new(
 		memcpy(p, bb->filter_field, bb->filter_size);
 		p += bb->filter_size;
 	}
-
-	bb->batch_field = p;
-	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
-	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
-	p += sizeof(uint32_t);
-	*p++ = as_batch_get_flags(policy);
 	return p;
 }
 
@@ -1339,6 +1340,13 @@ as_batch_records_write_new(
 {
 	uint32_t n_offsets = offsets->size;
 	uint8_t* p = as_batch_header_write_new(cmd, policy, n_offsets, bb);
+
+	uint8_t* batch_field = p;
+	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
+	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
+	p += sizeof(uint32_t);
+	*p++ = as_batch_get_flags(policy);
+
 	as_batch_base_record* prev = 0;
 	as_exp* filter;
 	as_batch_attr attr;
@@ -1439,7 +1447,7 @@ as_batch_records_write_new(
 			prev = rec;
 		}
 	}
-	return as_batch_trailer_write(cmd, p, bb);
+	return as_batch_trailer_write(cmd, p, batch_field);
 }
 
 static inline size_t
@@ -1676,6 +1684,13 @@ as_batch_keys_write_new(
 {
 	uint32_t n_offsets = offsets->size;
 	uint8_t* p = as_batch_header_write_new(cmd, policy, n_offsets, bb);
+
+	uint8_t* batch_field = p;
+	p = as_command_write_field_header(p, AS_FIELD_BATCH_INDEX, 0);
+	*(uint32_t*)p = cf_swap_to_be32(n_offsets);
+	p += sizeof(uint32_t);
+	*p++ = as_batch_get_flags(policy);
+
 	as_key* prev = 0;
 
 	for (uint32_t i = 0; i < n_offsets; i++) {
@@ -1736,7 +1751,7 @@ as_batch_keys_write_new(
 			prev = key;
 		}
 	}
-	return as_batch_trailer_write(cmd, p, bb);
+	return as_batch_trailer_write(cmd, p, batch_field);
 }
 
 static inline size_t

@@ -127,21 +127,24 @@ before(atf_suite* suite)
 		}
 	}
 
-	as_key key;
-	as_key_init_int64(&key, NAMESPACE, SET, 10002);
+	// Add records that will be removed.
+	for (int i = 10000; i <= 10002; i++) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, i);
 
-	as_record rec;
-	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, bin1, 10002);
+		as_record rec;
+		as_record_init(&rec, 1);
+		as_record_set_int64(&rec, bin1, i);
 
-	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+		status = aerospike_key_put(as, &err, NULL, &key, &rec);
 
-	if (status != AEROSPIKE_OK) {
-		info("error(%d): %s", err.code, err.message);
+		if (status != AEROSPIKE_OK) {
+			info("error(%d): %s", err.code, err.message);
+			as_record_destroy(&rec);
+			return false;
+		}
 		as_record_destroy(&rec);
-		return false;
 	}
-	as_record_destroy(&rec);
 	return true;
 }
 
@@ -651,6 +654,63 @@ TEST(batch_write_complex, "Batch write complex")
 	as_batch_records_destroy(&recs);
 }
 
+static bool
+result_cb(const as_batch_result* results, uint32_t n, void* udata)
+{
+	uint32_t* errors = udata;
+
+	for (uint32_t i = 0; i < n; i++) {
+		if (results[i].result != AEROSPIKE_OK) {
+			(*errors)++;
+		}
+	}
+	return true;
+}
+
+static bool
+not_exists_cb(const as_batch_result* results, uint32_t n, void* udata)
+{
+	uint32_t* errors = udata;
+
+	for (uint32_t i = 0; i < n; i++) {
+		if (results[i].result != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			(*errors)++;
+		}
+	}
+	return true;
+}
+
+TEST(batch_remove, "Batch remove")
+{
+	as_error err;
+	as_status status;
+	uint32_t errors;
+
+	// Define keys
+	as_batch batch;
+	as_batch_inita(&batch, 2);
+	as_key_init_int64(as_batch_keyat(&batch, 0), NAMESPACE, SET, 10000);
+	as_key_init_int64(as_batch_keyat(&batch, 1), NAMESPACE, SET, 10001);
+
+	// Ensure keys exists
+	errors = 0;
+	status = aerospike_batch_exists(as, &err, NULL, &batch, result_cb, &errors);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(errors, 0);
+
+	// Delete keys
+	errors = 0;
+	status = aerospike_batch_remove(as, &err, NULL, NULL, &batch, result_cb, &errors);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(errors, 0);
+
+	// Ensure keys do not exist
+	errors = 0;
+	status = aerospike_batch_exists(as, &err, NULL, &batch, not_exists_cb, &errors);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(errors, 0);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -666,4 +726,5 @@ SUITE(batch, "aerospike batch tests")
 	suite_add(batch_read_complex);
 	suite_add(batch_read_list_operate);
 	suite_add(batch_write_complex);
+	suite_add(batch_remove);
 }

@@ -245,9 +245,9 @@ typedef as_batch_records as_batch_read_records;
 /**
  * This callback will be called with the results of batch commands for all keys.
  *
- * 	The `results` argument will be an array of `n` as_batch_result entries. The
- * 	`results` argument is on the stack and is only available within the context
- * 	of the callback. To use the data outside of the callback, copy the data.
+ * The `results` argument will be an array of `n` as_batch_result entries. The
+ * `results` argument is on the stack and is only available within the context
+ * of the callback. To use the data outside of the callback, copy the data.
  *
  * ~~~~~~~~~~{.c}
  * bool my_callback(const as_batch_result* results, uint32_t n, void* udata) {
@@ -272,7 +272,7 @@ typedef bool (*aerospike_batch_callback)(const as_batch_result* results, uint32_
  * @deprecated Use aerospike_batch_callback instead.
  * @ingroup batch_operations
  */
-typedef bool (*aerospike_batch_read_callback)(const as_batch_read* results, uint32_t n, void* udata);
+typedef aerospike_batch_callback aerospike_batch_read_callback;
 
 /**
  * @private
@@ -589,167 +589,6 @@ aerospike_batch_read_async(
 	);
 
 /**
- * Look up multiple records by key, then return all bins.
- *
- * ~~~~~~~~~~{.c}
- * as_batch batch;
- * as_batch_inita(&batch, 3);
- * 
- * as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
- * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
- * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
- * 
- * if (aerospike_batch_get(&as, &err, NULL, &batch, callback, NULL) != AEROSPIKE_OK) {
- * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- * }
- *
- * as_batch_destroy(&batch);
- * ~~~~~~~~~~
- *
- * @param as			The aerospike instance to use for this operation.
- * @param err			The as_error to be populated if an error occurs.
- * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- * @param batch			The batch of keys to read.
- * @param callback 		The callback to invoke for each record read.
- * @param udata			The user-data for the callback.
- *
- * @return AEROSPIKE_OK if successful. Otherwise an error.
- *
- * @ingroup batch_operations
- */
-AS_EXTERN as_status
-aerospike_batch_get(
-	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	aerospike_batch_read_callback callback, void* udata
-	);
-
-/**
- * @private
- * Perform batch reads for XDR.  The callback will be called for each record as soon as it's
- * received in no particular order.
- */
-AS_EXTERN as_status
-aerospike_batch_get_xdr(
-	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	as_batch_callback_xdr callback, void* udata
-	);
-
-/**
- * Look up multiple records by key, then return specified bins.
- *
- * ~~~~~~~~~~{.c}
- * as_batch batch;
- * as_batch_inita(&batch, 3);
- *
- * as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
- * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
- * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
- *
- * const char* bin_filters[] = {"bin1", "bin2"};
- *
- * if (aerospike_batch_get_bins(&as, &err, NULL, &batch, bin_filters, 2, callback, NULL) != AEROSPIKE_OK ) {
- * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- * }
- *
- * as_batch_destroy(&batch);
- * ~~~~~~~~~~
- *
- * @param as			The aerospike instance to use for this operation.
- * @param err			The as_error to be populated if an error occurs.
- * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- * @param batch			The batch of keys to read.
- * @param bins			Bin filters.  Only return these bins.
- * @param n_bins		The number of bin filters.
- * @param callback 		The callback to invoke for each record read.
- * @param udata			The user-data for the callback.
- *
- * @return AEROSPIKE_OK if successful. Otherwise an error.
- *
- * @ingroup batch_operations
- */
-AS_EXTERN as_status
-aerospike_batch_get_bins(
-	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	const char** bins, uint32_t n_bins, aerospike_batch_read_callback callback, void* udata
-	);
-
-/**
- * Look up multiple records by key, then return results from specified read operations.
- *
- * ~~~~~~~~~~{.c}
- * as_batch batch;
- * as_batch_inita(&batch, 3);
- *
- * as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
- * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
- * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
- *
- * as_operations ops;
- * as_operations_inita(&ops, 1);
- * as_operations_list_size(&ops, "list", NULL);
- *
- * if (aerospike_batch_get_ops(&as, &err, NULL, &batch, &ops, callback, NULL) != AEROSPIKE_OK ) {
- * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- * }
- *
- * as_batch_destroy(&batch);
- * as_operations_destroy(&ops);
- * ~~~~~~~~~~
- *
- * @param as			The aerospike instance to use for this operation.
- * @param err			The as_error to be populated if an error occurs.
- * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- * @param batch			The batch of keys to read.
- * @param ops			Read operations.
- * @param callback 		The callback to invoke for each record read.
- * @param udata			The user-data for the callback.
- *
- * @return AEROSPIKE_OK if successful. Otherwise an error.
- *
- * @ingroup batch_operations
- */
-AS_EXTERN as_status
-aerospike_batch_get_ops(
-	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	as_operations* ops, aerospike_batch_read_callback callback, void* udata
-	);
-
-/**
- * Test whether multiple records exist in the cluster.
- *
- * ~~~~~~~~~~{.c}
- * as_batch batch;
- * as_batch_inita(&batch, 3);
- * 
- * as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
- * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
- * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
- * 
- * if (aerospike_batch_exists(&as, &err, NULL, &batch, callback, NULL) != AEROSPIKE_OK) {
- * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
- * }
- *
- * as_batch_destroy(&batch);
- * ~~~~~~~~~~
- *
- * @param as			The aerospike instance to use for this operation.
- * @param err			The as_error to be populated if an error occurs.
- * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
- * @param batch			The batch of keys to read.
- * @param callback 		The callback to invoke for each record read.
- * @param udata			The user-data for the callback.
- *
- * @return AEROSPIKE_OK if successful. Otherwise an error.
- *
- * @ingroup batch_operations
- */
-AS_EXTERN as_status
-aerospike_batch_exists(
-	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	aerospike_batch_read_callback callback, void* udata
-	);
-
-/**
  * Read/Write multiple records for specified batch keys in one batch call.
  * This method allows different sub-commands for each key in the batch.
  * The returned records are located in the same list.
@@ -826,6 +665,167 @@ AS_EXTERN as_status
 aerospike_batch_operate_async(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
+	);
+
+/**
+ * Look up multiple records by key, then return all bins.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_batch batch;
+ * as_batch_inita(&batch, 3);
+ * 
+ * as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
+ * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
+ * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
+ * 
+ * if (aerospike_batch_get(&as, &err, NULL, &batch, callback, NULL) != AEROSPIKE_OK) {
+ * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ * }
+ *
+ * as_batch_destroy(&batch);
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param batch			The batch of keys to read.
+ * @param callback 		The callback to invoke for each record read.
+ * @param udata			The user-data for the callback.
+ *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ * @ingroup batch_operations
+ */
+AS_EXTERN as_status
+aerospike_batch_get(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	aerospike_batch_callback callback, void* udata
+	);
+
+/**
+ * @private
+ * Perform batch reads for XDR.  The callback will be called for each record as soon as it's
+ * received in no particular order.
+ */
+AS_EXTERN as_status
+aerospike_batch_get_xdr(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_batch_callback_xdr callback, void* udata
+	);
+
+/**
+ * Look up multiple records by key, then return specified bins.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_batch batch;
+ * as_batch_inita(&batch, 3);
+ *
+ * as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
+ * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
+ * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
+ *
+ * const char* bin_filters[] = {"bin1", "bin2"};
+ *
+ * if (aerospike_batch_get_bins(&as, &err, NULL, &batch, bin_filters, 2, callback, NULL) != AEROSPIKE_OK ) {
+ * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ * }
+ *
+ * as_batch_destroy(&batch);
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param batch			The batch of keys to read.
+ * @param bins			Bin filters.  Only return these bins.
+ * @param n_bins		The number of bin filters.
+ * @param callback 		The callback to invoke for each record read.
+ * @param udata			The user-data for the callback.
+ *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ * @ingroup batch_operations
+ */
+AS_EXTERN as_status
+aerospike_batch_get_bins(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	const char** bins, uint32_t n_bins, aerospike_batch_callback callback, void* udata
+	);
+
+/**
+ * Look up multiple records by key, then return results from specified read operations.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_batch batch;
+ * as_batch_inita(&batch, 3);
+ *
+ * as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
+ * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
+ * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
+ *
+ * as_operations ops;
+ * as_operations_inita(&ops, 1);
+ * as_operations_list_size(&ops, "list", NULL);
+ *
+ * if (aerospike_batch_get_ops(&as, &err, NULL, &batch, &ops, callback, NULL) != AEROSPIKE_OK ) {
+ * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ * }
+ *
+ * as_batch_destroy(&batch);
+ * as_operations_destroy(&ops);
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param batch			The batch of keys to read.
+ * @param ops			Read operations.
+ * @param callback 		The callback to invoke for each record read.
+ * @param udata			The user-data for the callback.
+ *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ * @ingroup batch_operations
+ */
+AS_EXTERN as_status
+aerospike_batch_get_ops(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_operations* ops, aerospike_batch_callback callback, void* udata
+	);
+
+/**
+ * Test whether multiple records exist in the cluster.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_batch batch;
+ * as_batch_inita(&batch, 3);
+ * 
+ * as_key_init(as_batch_keyat(&batch,0), "ns", "set", "key1");
+ * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
+ * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
+ * 
+ * if (aerospike_batch_exists(&as, &err, NULL, &batch, callback, NULL) != AEROSPIKE_OK) {
+ * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ * }
+ *
+ * as_batch_destroy(&batch);
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param batch			The batch of keys to read.
+ * @param callback 		The callback to invoke for each record read.
+ * @param udata			The user-data for the callback.
+ *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ * @ingroup batch_operations
+ */
+AS_EXTERN as_status
+aerospike_batch_exists(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	aerospike_batch_callback callback, void* udata
 	);
 
 // TODO: DOC

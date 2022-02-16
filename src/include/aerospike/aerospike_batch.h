@@ -830,6 +830,15 @@ aerospike_batch_exists(
 
 // TODO: DOC
 AS_EXTERN as_status
+aerospike_batch_apply(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_apply* policy_apply, const as_batch* batch,
+	const char* module, const char* function, as_list* arglist,
+	aerospike_batch_callback callback, void* udata
+	);
+
+// TODO: DOC
+AS_EXTERN as_status
 aerospike_batch_remove(
 	aerospike* as, as_error* err, const as_policy_batch* policy,
 	const as_policy_batch_remove* policy_remove, const as_batch* batch,

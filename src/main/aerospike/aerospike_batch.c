@@ -618,19 +618,21 @@ as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 				// Either that or remove this functionality entirely.
 				as_batch_task_keys* btk = (as_batch_task_keys*)task;
 				as_key* key = &btk->keys[offset];
-				as_record rec;
 
-				status = as_batch_process_record(&p, err, msg, &rec, deserialize, task->error_row);
+				if (msg->result_code == AEROSPIKE_OK) {
+					as_record rec;
+					status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
 
-				if (status != AEROSPIKE_OK) {
-					return status;
-				}
+					if (status != AEROSPIKE_OK) {
+						return status;
+					}
 
-				bool rv = btk->callback_xdr(key, &rec, btk->udata);
-				as_record_destroy(&rec);
+					bool rv = btk->callback_xdr(key, &rec, btk->udata);
+					as_record_destroy(&rec);
 
-				if (!rv) {
-					return AEROSPIKE_ERR_CLIENT_ABORT;
+					if (!rv) {
+						return AEROSPIKE_ERR_CLIENT_ABORT;
+					}
 				}
 				break;
 			}

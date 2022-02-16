@@ -54,6 +54,7 @@ extern aerospike* as;
 #define LUA_FILE AS_START_DIR "src/test/lua/udf_record.lua"
 #define UDF_FILE "udf_record"
 
+static char module[] = "udf_record";
 static char bin1[] = "bin1";
 
 /******************************************************************************
@@ -134,7 +135,7 @@ TEST(udf_record_update_map, "udf_record.update_map()")
 
 	as_val* val = NULL;
 
-	aerospike_key_apply(as, &err, NULL, &key, "udf_record", "update_map", (as_list*) &args, &val);
+	aerospike_key_apply(as, &err, NULL, &key, module, "update_map", (as_list*) &args, &val);
 
 	assert_int_eq(err.code, AEROSPIKE_OK);
 	assert_int_eq(as_val_type(val), AS_STRING);
@@ -191,7 +192,7 @@ TEST(batch_udf, "Batch UDF Apply")
 	as_arraylist_append_str(&args, "B5");
 	as_arraylist_append_str(&args, "value5");
 
-	status = aerospike_batch_apply(as, &err, NULL, NULL, &batch, "udf_record", "write_bin",
+	status = aerospike_batch_apply(as, &err, NULL, NULL, &batch, module, "write_bin",
 		(as_list*)&args, NULL, NULL);
 
 	as_arraylist_destroy(&args);
@@ -264,12 +265,92 @@ TEST(batch_udf_error, "Batch UDF Error")
 	as_arraylist_append_int64(&args, 999);
 
 	uint32_t errors = 0;
-	status = aerospike_batch_apply(as, &err, NULL, NULL, &batch, "udf_record", "write_bin_validate",
+	status = aerospike_batch_apply(as, &err, NULL, NULL, &batch, module, "write_bin_validate",
 		(as_list*)&args, invalid_cb, &errors);
 
 	as_arraylist_destroy(&args);
 	assert_int_eq(status, AEROSPIKE_BATCH_FAILED);
 	assert_int_eq(errors, 0);
+}
+
+TEST(batch_udf_complex, "Batch UDF Complex")
+{
+	char* bin = "B5";
+
+	as_batch_records recs;
+	as_batch_records_inita(&recs, 3);
+
+	as_batch_apply_record* r1 = as_batch_apply_reserve(&recs);
+	as_key_init_int64(&r1->key, NAMESPACE, SET, 20004);
+	r1->module = module;
+	r1->function = "write_bin";
+	as_arraylist args1;
+	as_arraylist_init(&args1, 2, 0);
+	as_arraylist_append_str(&args1, bin);
+	as_arraylist_append_str(&args1, "value1");
+	r1->arglist = (as_list*)&args1;
+
+	as_batch_apply_record* r2 = as_batch_apply_reserve(&recs);
+	as_key_init_int64(&r2->key, NAMESPACE, SET, 20005);
+	r2->module = module;
+	r2->function = "write_bin_validate";
+	as_arraylist args2;
+	as_arraylist_init(&args2, 2, 0);
+	as_arraylist_append_str(&args2, bin);
+	as_arraylist_append_int64(&args2, 5);
+	r2->arglist = (as_list*)&args2;
+
+	as_batch_apply_record* r3 = as_batch_apply_reserve(&recs);
+	as_key_init_int64(&r3->key, NAMESPACE, SET, 20005);
+	r3->module = module;
+	r3->function = "write_bin_validate";
+	as_arraylist args3;
+	as_arraylist_init(&args3, 2, 0);
+	as_arraylist_append_str(&args3, bin);
+	as_arraylist_append_int64(&args3, 999);
+	r3->arglist = (as_list*)&args3;
+
+	as_error err;
+	as_status status = aerospike_batch_operate(as, &err, NULL, &recs);
+
+	// r3 results in an overall error.
+	assert_int_eq(status, AEROSPIKE_BATCH_FAILED);
+
+	assert_int_eq(r1->result, AEROSPIKE_OK);
+	assert_int_eq(r1->record.bins.entries[0].valuep->nil.type, AS_NIL);
+
+	assert_int_eq(r2->result, AEROSPIKE_OK);
+	assert_int_eq(r2->record.bins.entries[0].valuep->nil.type, AS_NIL);
+
+	assert_int_eq(r3->result, AEROSPIKE_ERR_UDF);
+
+	as_arraylist_destroy(&args1);
+	as_arraylist_destroy(&args2);
+	as_arraylist_destroy(&args3);
+	as_batch_records_destroy(&recs);
+
+	// Read records that were written.
+	as_batch_records_inita(&recs, 3);
+
+	as_batch_read_record* r4 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&r4->key, NAMESPACE, SET, 20004);
+	r4->read_all_bins = true;
+
+	as_batch_read_record* r5 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&r5->key, NAMESPACE, SET, 20005);
+	r5->read_all_bins = true;
+
+	status = aerospike_batch_read(as, &err, NULL, &recs);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	assert_int_eq(r4->result, AEROSPIKE_OK);
+	assert_string_eq(r4->record.bins.entries[0].valuep->string.value, "value1");
+
+	assert_int_eq(r5->result, AEROSPIKE_OK);
+	assert_int_eq(r5->record.bins.entries[0].valuep->integer.value, 5);
+
+	as_batch_read_destroy(&recs);
 }
 
 /******************************************************************************
@@ -283,4 +364,5 @@ SUITE(udf_record, "aerospike udf record tests")
 	suite_add(udf_record_update_map);
 	suite_add(batch_udf);
 	suite_add(batch_udf_error);
+	suite_add(batch_udf_complex);
 }

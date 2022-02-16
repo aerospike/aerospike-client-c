@@ -57,8 +57,6 @@ typedef struct {
 	size_t size;
 	as_queue* buffers;
 	uint8_t* filter_field;
-	as_serializer ser;
-	as_buffer args;
 	uint32_t filter_size;
 	uint16_t field_count_header;
 	uint8_t read_attr; // old batch only
@@ -1150,11 +1148,14 @@ as_batch_apply_record_size(as_key* key, as_batch_apply_record* rec, as_batch_bui
 
 	bb->size += as_command_string_field_size(rec->module);
 	bb->size += as_command_string_field_size(rec->function);
-	
-	as_msgpack_init(&bb->ser);
-	as_buffer_init(&bb->args);
-	as_serializer_serialize(&bb->ser, (as_val*)rec->arglist, &bb->args);
-	bb->size += as_command_field_size(bb->args.size);
+
+	as_buffer buffer;
+	as_serializer ser;
+	as_msgpack_init(&ser);
+	as_serializer_serialize(&ser, (as_val*)rec->arglist, &buffer);
+	as_serializer_destroy(&ser);
+	as_queue_push(bb->buffers, &buffer);
+	bb->size += as_command_field_size(buffer.size);
 }
 
 static void
@@ -1355,6 +1356,23 @@ as_batch_write_operations(
 	return p;
 }
 
+static uint8_t*
+as_batch_write_udf(
+	uint8_t* p, as_key* key, as_batch_apply_record* rec, as_batch_attr* attr, as_exp* filter,
+	as_queue* buffers
+	)
+{
+	p = as_batch_write_write(p, key, attr, filter, 3, 0);
+	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, rec->module);
+	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, rec->function);
+
+	as_buffer buffer;
+	as_queue_pop(buffers, &buffer);
+	p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &buffer);
+	as_buffer_destroy(&buffer);
+	return p;
+}
+
 static size_t
 as_batch_records_write_new(
 	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
@@ -1443,12 +1461,7 @@ as_batch_records_write_new(
 						filter = NULL;
 						as_batch_attr_apply_header(&attr);
 					}
-					p = as_batch_write_write(p, &ba->key, &attr, filter, 3, 0);
-					p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, ba->module);
-					p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, ba->function);
-					p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &bb->args);
-					as_buffer_destroy(&bb->args);
-					as_serializer_destroy(&bb->ser);
+					p = as_batch_write_udf(p, &ba->key, ba, &attr, filter, bb->buffers);
 					break;
 				}
 
@@ -1757,12 +1770,7 @@ as_batch_keys_write_new(
 
 				case AS_BATCH_APPLY: {
 					as_batch_apply_record* ba = (as_batch_apply_record*)rec;
-					p = as_batch_write_write(p, key, attr, NULL, 3, 0);
-					p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, ba->module);
-					p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, ba->function);
-					p = as_command_write_field_buffer(p, AS_FIELD_UDF_ARGLIST, &bb->args);
-					as_buffer_destroy(&bb->args);
-					as_serializer_destroy(&bb->ser);
+					p = as_batch_write_udf(p, key, ba, attr, NULL, bb->buffers);
 					break;
 				}
 

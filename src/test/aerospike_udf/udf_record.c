@@ -204,6 +204,74 @@ TEST(batch_udf, "Batch UDF Apply")
 	assert_int_eq(errors, 0);
 }
 
+static bool
+invalid_cb(const as_batch_result* results, uint32_t n, void* udata)
+{
+	uint32_t* errors = udata;
+
+	for (uint32_t i = 0; i < n; i++) {
+		const as_batch_result* r = &results[i];
+
+		if (r->result == AEROSPIKE_ERR_UDF) {
+			char* v = as_record_get_udf_error(&r->record);
+
+			if (!v) {
+				(*errors)++;
+				continue;
+			}
+
+			size_t len = strlen(v);
+			char e[] = "Invalid value";
+			size_t s = sizeof(e);
+
+			if (s >= len) {
+				(*errors)++;
+				continue;
+			}
+
+			char* p = v + len - s + 1;
+
+			if (strcmp(p, e) != 0) {
+				(*errors)++;
+			}
+		}
+		else {
+			(*errors)++;
+		}
+	}
+	return true;
+}
+
+TEST(batch_udf_error, "Batch UDF Error")
+{
+	as_error err;
+	as_status status;
+
+	// Define keys
+	as_batch batch;
+	as_batch_inita(&batch, 2);
+	as_key_init_int64(as_batch_keyat(&batch, 0), NAMESPACE, SET, 20002);
+	as_key_init_int64(as_batch_keyat(&batch, 1), NAMESPACE, SET, 20003);
+
+	// Delete keys
+	status = aerospike_batch_remove(as, &err, NULL, NULL, &batch, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Apply UDF
+	as_arraylist args;
+	as_arraylist_init(&args, 2, 0);
+	as_arraylist_append_str(&args, "B5");
+	as_arraylist_append_int64(&args, 999);
+
+	uint32_t errors = 0;
+	status = aerospike_batch_apply(as, &err, NULL, NULL, &batch, "udf_record", "write_bin_validate",
+		(as_list*)&args, invalid_cb, &errors);
+
+	as_arraylist_destroy(&args);
+	assert_int_eq(status, AEROSPIKE_BATCH_FAILED);
+	assert_int_eq(errors, 0);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -214,4 +282,5 @@ SUITE(udf_record, "aerospike udf record tests")
 	suite_after(after);
 	suite_add(udf_record_update_map);
 	suite_add(batch_udf);
+	suite_add(batch_udf_error);
 }

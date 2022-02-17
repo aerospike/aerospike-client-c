@@ -41,9 +41,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 #define AS_BATCH_READ 0
 #define AS_BATCH_WRITE 1
@@ -296,9 +296,9 @@ typedef bool (*as_batch_callback_xdr)(as_key* key, as_record* record, void* udat
  */
 typedef void (*as_async_batch_listener)(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop);
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Initialize batch records with specified capacity on the stack using alloca().
@@ -826,6 +826,14 @@ AS_EXTERN as_status
 aerospike_batch_exists(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
 	aerospike_batch_callback callback, void* udata
+	);
+
+// TODO: DOC
+AS_EXTERN as_status
+aerospike_batch_write(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_write* policy_write, const as_batch* batch,
+	as_operations* ops, aerospike_batch_callback callback, void* udata
 	);
 
 // TODO: DOC

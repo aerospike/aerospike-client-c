@@ -33,57 +33,56 @@
 #include <aerospike/as_tls.h>
 #include <aerospike/as_val.h>
 #include <pthread.h>
-
 #include "../test.h"
 #include "../util/log_helper.h"
 
-/******************************************************************************
- * GLOBAL VARS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
+
+#define NAMESPACE "test"
+#define SET "test_batch"
+#define LIST_BIN "listbin"
+#define N_KEYS 200
 
 extern aerospike* as;
 
 uint32_t num_threads = 0;
 pthread_rwlock_t rwlock;
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
-#define NAMESPACE "test"
-#define SET "test_batch"
-#define LIST_BIN "listbin"
-#define N_KEYS 200
-
 static char bin1[] = "bin1";
 static char bin2[] = "bin2";
 static char bin3[] = "bin3";
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
-typedef struct batch_read_data_s {
+typedef struct batch_stats_s {
 	uint32_t thread_id;
 	uint32_t total;
 	uint32_t found;
 	uint32_t errors;
 	uint32_t last_error;
-} batch_read_data;
+} batch_stats;
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static as_status
 insert_record(as_error* err, int i)
 {
-	// Do not write some records to test not found logic too.
-	if (i % 20 == 0) {
-		return AEROSPIKE_OK;
-	}
-		
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, i);
+
+	as_status status;
+
+	// Do not write some records to test not found logic too.
+	if (i % 20 == 0) {
+		status = aerospike_key_remove(as, err, NULL, &key);
+		return status == AEROSPIKE_ERR_RECORD_NOT_FOUND? AEROSPIKE_OK : status;
+	}
 
 	as_arraylist list;
 	as_arraylist_inita(&list, i);
@@ -107,7 +106,7 @@ insert_record(as_error* err, int i)
 		as_record_set_list(&rec, LIST_BIN, (as_list*)&list);
 	}
 
-	as_status status = aerospike_key_put(as, err, NULL, &key, &rec);
+	status = aerospike_key_put(as, err, NULL, &key, &rec);
 	as_record_destroy(&rec);
 	return status;
 }
@@ -122,7 +121,7 @@ before(atf_suite* suite)
 		status = insert_record(&err, i);
 
 		if (status != AEROSPIKE_OK) {
-			info("error(%d): %s", err.code, err.message);
+			info("command[%d]: error(%d): %s", i, err.code, err.message);
 			return false;
 		}
 	}
@@ -170,7 +169,7 @@ after(atf_suite* suite)
 static bool
 batch_get_1_callback(const as_batch_read* results, uint32_t n, void* udata)
 {
-	batch_read_data* data = (batch_read_data *) udata;
+	batch_stats* data = (batch_stats *) udata;
 	
 	data->total = n;
 
@@ -202,7 +201,7 @@ batch_get_1_callback(const as_batch_read* results, uint32_t n, void* udata)
 static bool
 batch_sequence_callback(as_key* key, as_record* record, void* udata)
 {
-	batch_read_data* data = (batch_read_data*)udata;
+	batch_stats* data = (batch_stats*)udata;
 
 	data->total++;
 	data->found++;
@@ -217,9 +216,9 @@ batch_sequence_callback(as_key* key, as_record* record, void* udata)
 	return true;
 }
 
-/******************************************************************************
- * TEST CASES
- *****************************************************************************/
+//---------------------------------
+// Tests
+//---------------------------------
 
 TEST(batch_get_1, "Simple")
 {
@@ -232,7 +231,7 @@ TEST(batch_get_1, "Simple")
 		as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i+1);
 	}
 
-	batch_read_data data = {0};
+	batch_stats data = {0};
 
 	aerospike_batch_get(as, &err, NULL, &batch, batch_get_1_callback, &data);
 	if (err.code != AEROSPIKE_OK) {
@@ -255,7 +254,7 @@ TEST(batch_get_sequence, "Batch get in sequence")
 		as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i+1);
 	}
 	
-	batch_read_data data = {0};
+	batch_stats data = {0};
 	
 	aerospike_batch_get_xdr(as, &err, NULL, &batch, batch_sequence_callback, &data);
 	if (err.code != AEROSPIKE_OK) {
@@ -284,7 +283,7 @@ batch_get_function(void* thread_id)
 		as_key_init_int64(as_batch_keyat(&batch,j++), NAMESPACE, SET, i+1);
 	}
 	
-	batch_read_data data = {thread_num, 0, 0, 0, 0};
+	batch_stats data = {thread_num, 0, 0, 0, 0};
 	
 	as_incr_uint32(&num_threads);
 	pthread_rwlock_rdlock(&rwlock);
@@ -328,7 +327,7 @@ TEST(multithreaded_batch_get, "Batch Get - with multiple threads ")
 static bool
 batch_get_bins_callback(const as_batch_read* results, uint32_t n, void* udata)
 {
-	batch_read_data* data = udata;
+	batch_stats* data = udata;
 
 	data->total = n;
 	
@@ -384,7 +383,7 @@ TEST(batch_get_bins, "Batch Get - with bin name filters")
 		as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i);
 	}
 	
-	batch_read_data data = {0};
+	batch_stats data = {0};
 	const char* bins[] = {bin2};
 	
 	aerospike_batch_get_bins(as, &err, NULL, &batch, bins, 1, batch_get_bins_callback, &data);
@@ -513,9 +512,9 @@ TEST(batch_read_complex, "Batch read complex")
 }
 
 static bool
-batch_list_operate_cb(const as_batch_read* results, uint32_t n, void* udata)
+batch_read_operate_cb(const as_batch_read* results, uint32_t n, void* udata)
 {
-	batch_read_data* data = udata;
+	batch_stats* data = udata;
 	data->total = n;
 
 	for (uint32_t i = 0; i < n; i++) {
@@ -558,14 +557,80 @@ TEST(batch_read_list_operate, "Batch read list operate")
 	as_operations_list_size(&ops, LIST_BIN, NULL);
 	as_operations_list_get_by_index(&ops, LIST_BIN, NULL, -1, AS_LIST_RETURN_VALUE);
 
-	batch_read_data data = {0};
+	batch_stats data = {0};
 	as_error err;
-	as_status status = aerospike_batch_get_ops(as, &err, NULL, &batch, &ops, batch_list_operate_cb,
+	as_status status = aerospike_batch_get_ops(as, &err, NULL, &batch, &ops, batch_read_operate_cb,
 											   &data);
 
 	as_operations_destroy(&ops);
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(data.found, N_KEYS - N_KEYS/20);
+	assert_int_eq(data.errors, 0);
+}
+
+void example_dump_record(const as_record* p_rec);
+
+static bool
+batch_write_operate_cb(const as_batch_result* results, uint32_t n, void* udata)
+{
+	batch_stats* data = udata;
+
+	for (uint32_t i = 0; i < n; i++) {
+		const as_batch_result* r = &results[i];
+		int k = (int)r->key->valuep->integer.value;
+
+		if (r->result == AEROSPIKE_OK) {
+			data->found++;
+			//example_dump_record(&r->record);
+			as_bin* bins = r->record.bins.entries;
+			int sz = (int)bins[1].valuep->integer.value;
+			int sz_expect = (i % 20 == 0)? 1 : i + 1;
+
+			if (sz != sz_expect) {
+				warn("Result[%d]: size(%d) != expected(%d) %d", k, sz, sz_expect, i);
+				data->errors++;
+				continue;
+			}
+
+			int val = (int)bins[2].valuep->integer.value;
+			int val_expect = (i % 20 == 0)? 1000 : k * (k - 1);
+
+			if (val != val_expect) {
+				warn("Result[%d]: last(%d) != expected(%d)", k, val, val_expect);
+				data->errors++;
+			}
+		}
+	}
+	return true;
+}
+
+TEST(batch_write_list_operate, "Batch write list operate")
+{
+	as_batch batch;
+	as_batch_inita(&batch, N_KEYS);
+	
+	for (uint32_t i = 0; i < N_KEYS; i++) {
+		as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i);
+	}
+
+	// Add integer to list and get size and last element of list bin for all records.
+	as_integer val;
+	as_integer_init(&val, 1000);
+
+	as_operations ops;
+	as_operations_inita(&ops, 3);
+	as_operations_list_insert(&ops, LIST_BIN, NULL, NULL, 0, (as_val*)&val);
+	as_operations_list_size(&ops, LIST_BIN, NULL);
+	as_operations_list_get_by_index(&ops, LIST_BIN, NULL, -1, AS_LIST_RETURN_VALUE);
+
+	batch_stats data = {0};
+	as_error err;
+	as_status status = aerospike_batch_write(as, &err, NULL, NULL, &batch, &ops,
+		batch_write_operate_cb, &data);
+
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(data.found, N_KEYS);
 	assert_int_eq(data.errors, 0);
 }
 
@@ -711,9 +776,9 @@ TEST(batch_remove, "Batch remove")
 	assert_int_eq(errors, 0);
 }
 
-/******************************************************************************
- * TEST SUITE
- *****************************************************************************/
+//---------------------------------
+// Test Suite
+//---------------------------------
 
 SUITE(batch, "aerospike batch tests")
 {
@@ -725,6 +790,7 @@ SUITE(batch, "aerospike batch tests")
 	suite_add(batch_get_bins);
 	suite_add(batch_read_complex);
 	suite_add(batch_read_list_operate);
+	suite_add(batch_write_list_operate);
 	suite_add(batch_write_complex);
 	suite_add(batch_remove);
 }

@@ -35,9 +35,9 @@
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_digest.h>
 
-/************************************************************************
- * CONSTANTS
- ************************************************************************/
+//---------------------------------
+// Constants
+//---------------------------------
 
  #define BATCH_MSG_READ 0x0
  #define BATCH_MSG_REPEAT 0x1
@@ -49,9 +49,9 @@
  #define BATCH_TYPE_KEYS_SEQUENCE 2
  #define BATCH_TYPE_KEYS_NO_CALLBACK 3
 
-/************************************************************************
- * TYPES
- ************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 typedef struct {
 	size_t size;
@@ -128,9 +128,9 @@ typedef struct as_async_batch_command {
 	uint8_t space[];
 } as_async_batch_command;
 
-/******************************************************************************
- * STATIC VARIABLES
- *****************************************************************************/
+//---------------------------------
+// Static Variables
+//---------------------------------
 
 // These values must line up with as_operator enum.
 static bool as_op_is_write[] = {
@@ -155,9 +155,9 @@ static bool as_op_is_write[] = {
 
 static const char cluster_empty_error[] = "Batch command failed because cluster is empty.";
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static void
 as_batch_attr_read_header(as_batch_attr* attr, const as_policy_batch* p)
@@ -729,7 +729,7 @@ as_batch_trailer_write(uint8_t* cmd, uint8_t* p, uint8_t* batch_field)
 }
 
 //-----------------------------
-// OLD BATCH PROTOCOL FUNCTIONS
+// Old Batch Protocol Functions
 //-----------------------------
 
 static as_status
@@ -977,7 +977,7 @@ as_batch_keys_write_old(
 }
 
 //-----------------------------
-// NEW BATCH PROTOCOL FUNCTIONS
+// New Batch Protocol Functions
 //-----------------------------
 
 static uint8_t*
@@ -2542,9 +2542,9 @@ as_batch_records_execute_async(
 	return as_batch_records_execute(as, err, policy, records, executor);
 }
 
-/******************************************************************************
- * RETRY FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Retry Functions
+//---------------------------------
 
 static as_status
 as_batch_retry_records(
@@ -3142,9 +3142,9 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	return 0;  // Split retry was initiated.
 }
 
-/******************************************************************************
- * PUBLIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Public Functions
+//---------------------------------
 
 as_status
 aerospike_batch_read(
@@ -3343,6 +3343,36 @@ aerospike_batch_exists(
 }
 
 as_status
+aerospike_batch_write(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_write* policy_write, const as_batch* batch,
+	as_operations* ops, aerospike_batch_callback callback, void* udata
+	)
+{
+	as_error_reset(err);
+	
+	if (! policy) {
+		policy = &as->config.policies.batch;
+	}
+	
+	if (! policy_write) {
+		policy_write = &as->config.policies.batch_write;
+	}
+
+	as_batch_write_record rec = {
+		.type = AS_BATCH_WRITE,
+		.has_write = true,
+		.ops = ops
+	};
+
+	as_batch_attr attr;
+	as_batch_attr_write_row(&attr, policy_write, ops);
+
+	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
+		callback, NULL, udata);
+}
+
+as_status
 aerospike_batch_apply(
 	aerospike* as, as_error* err, const as_policy_batch* policy,
 	const as_policy_batch_apply* policy_apply, const as_batch* batch,
@@ -3403,4 +3433,3 @@ aerospike_batch_remove(
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
 		callback, NULL, udata);
 }
-

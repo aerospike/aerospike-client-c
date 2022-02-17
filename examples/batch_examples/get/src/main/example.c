@@ -1,34 +1,22 @@
-/*******************************************************************************
- * Copyright 2008-2021 by Aerospike.
+/*
+ * Copyright 2008-2022 Aerospike, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- ******************************************************************************/
-
-
-//==========================================================
-// Includes
-//
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <stddef.h>
 #include <stdlib.h>
 #include <inttypes.h>
-
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
@@ -42,13 +30,11 @@
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
-
 #include "example_utils.h"
 
-
-//==========================================================
+//------------------------------------
 // Forward Declarations
-//
+//------------------------------------
 
 bool batch_read_cb(const as_batch_read* results, uint32_t n, void* udata);
 void cleanup(aerospike* p_as);
@@ -57,11 +43,12 @@ as_status batch_read_complex(aerospike* p_as, as_error* err);
 as_status batch_read_operate(aerospike* p_as, as_error* err);
 as_status batch_read_operate_complex(aerospike* p_as, as_error* err);
 as_status batch_read_list_operate(aerospike* p_as, as_error* err);
+as_status batch_write_list_operate(aerospike* p_as, as_error* err);
 as_status batch_write_operate_complex(aerospike* p_as, as_error* err);
 
-//==========================================================
-// BATCH GET Example
-//
+//------------------------------------
+// Constants
+//------------------------------------
 
 static char bin1[] = "bin1";
 static char bin2[] = "bin2";
@@ -196,6 +183,12 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
+	if (batch_write_list_operate(&as, &err) != AEROSPIKE_OK) {
+		LOG("batch_write_list_operate() returned %d - %s", err.code, err.message);
+		cleanup(&as);
+		exit(-1);
+	}
+
 	if (batch_write_operate_complex(&as, &err) != AEROSPIKE_OK) {
 		LOG("batch_write_operate_complex() returned %d - %s", err.code, err.message);
 		cleanup(&as);
@@ -210,10 +203,9 @@ main(int argc, char* argv[])
 	return 0;
 }
 
-
-//==========================================================
-// Batch Callback
-//
+//------------------------------------
+// Batch Read Callback
+//------------------------------------
 
 bool
 batch_read_cb(const as_batch_read* results, uint32_t n, void* udata)
@@ -248,10 +240,9 @@ batch_read_cb(const as_batch_read* results, uint32_t n, void* udata)
 	return true;
 }
 
-
-//==========================================================
+//------------------------------------
 // Helpers
-//
+//------------------------------------
 
 void
 cleanup(aerospike* p_as)
@@ -295,9 +286,10 @@ insert_records(aerospike* p_as)
 	return true;
 }
 
-//==========================================================
+//------------------------------------
 // Batch Read Complex Example
-//
+//------------------------------------
+
 static as_status
 insert_string_records(aerospike* p_as, as_error* err)
 {
@@ -475,9 +467,10 @@ batch_read_complex(aerospike* p_as, as_error* err)
 	return AEROSPIKE_OK;
 }
 
-//==========================================================
+//------------------------------------
 // Batch Read Operate Example
-//
+//------------------------------------
+
 static as_status
 op_insert_record(aerospike* p_as, as_error* err, int val)
 {
@@ -576,9 +569,10 @@ batch_read_operate(aerospike* p_as, as_error* err)
 	return AEROSPIKE_OK;
 }
 
-//==========================================================
+//------------------------------------
 // Batch Read Operate Complex Example
-//
+//------------------------------------
+
 as_status
 batch_read_operate_complex(aerospike* p_as, as_error* err)
 {
@@ -686,9 +680,10 @@ batch_read_operate_complex(aerospike* p_as, as_error* err)
 	return AEROSPIKE_OK;
 }
 
-//==========================================================
-// Batch List Operate Example
-//
+//------------------------------------
+// Batch Read List Operate Example
+//------------------------------------
+
 static bool
 batch_list_operate_cb(const as_batch_read* results, uint32_t n, void* udata)
 {
@@ -745,9 +740,74 @@ batch_read_list_operate(aerospike* p_as, as_error* err)
 	return AEROSPIKE_OK;
 }
 
-//==========================================================
+//------------------------------------
+// Batch Write List Operate Example
+//------------------------------------
+
+static bool
+batch_list_write_cb(const as_batch_read* results, uint32_t n, void* udata)
+{
+	for (uint32_t i = 0; i < n; i++) {
+		const as_batch_read* r = &results[i];
+		int k = (int)r->key->valuep->integer.value;
+
+		if (r->result == AEROSPIKE_OK) {
+			as_bin* results = r->record.bins.entries;
+			uint32_t j = 1;
+			int v1 = (int)results[j++].valuep->integer.value;
+			int v2 = (int)results[j++].valuep->integer.value;
+			LOG("Result[%d]: %d, %d", k, v1, v2);
+		}
+		else if (r->result == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			LOG("Result[%d]: not found", k);
+		}
+		else {
+			LOG("Result[%d]: error %d", k, r->result);
+		}
+	}
+	return true;
+}
+
+as_status
+batch_write_list_operate(aerospike* p_as, as_error* err)
+{
+	LOG("batch_write_list_operate begin");
+	int size = 8;
+
+	as_batch batch;
+	as_batch_inita(&batch, size);
+
+	for (int i = 0; i < size; i++) {
+		as_key_init_int64(as_batch_keyat(&batch, i), g_namespace, g_set, i + 1);
+	}
+
+	// Add integer to list and get size and last element of list bin for all records.
+	as_integer val;
+	as_integer_init(&val, 999);
+
+	as_operations ops;
+	as_operations_inita(&ops, 3);
+	as_operations_list_append(&ops, bin3, NULL, NULL, (as_val*)&val);
+	as_operations_list_size(&ops, bin3, NULL);
+	as_operations_list_get_by_index(&ops, bin3, NULL, -1, AS_LIST_RETURN_VALUE);
+
+	as_status status = aerospike_batch_write(p_as, err, NULL, NULL, &batch, &ops,
+		batch_list_write_cb, NULL);
+
+	as_operations_destroy(&ops);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	LOG("batch_write_list_operate end");
+	return AEROSPIKE_OK;
+}
+
+//------------------------------------
 // Batch Write Operate Complex Example
-//
+//------------------------------------
+
 as_status
 batch_write_operate_complex(aerospike* p_as, as_error* err)
 {

@@ -365,8 +365,8 @@ batch_read_complex(aerospike* p_as, as_error* err)
 	char* bin_names[] = {bin1};
 
 	// Create mix of different stack-based read requests.
-	as_batch_read_records records;
-	as_batch_read_inita(&records, 9);
+	as_batch_records records;
+	as_batch_records_inita(&records, 9);
 
 	as_batch_read_record* r;
 
@@ -425,7 +425,7 @@ batch_read_complex(aerospike* p_as, as_error* err)
 	status = aerospike_batch_read(p_as, err, NULL, &records);
 
 	if (status != AEROSPIKE_OK) {
-		as_batch_read_destroy(&records);
+		as_batch_records_destroy(&records);
 		return status;
 	}
 
@@ -456,7 +456,7 @@ batch_read_complex(aerospike* p_as, as_error* err)
 		}
 	}
 
-	as_batch_read_destroy(&records);
+	as_batch_records_destroy(&records);
 	status = delete_string_records(p_as, err);
 
 	if (status != AEROSPIKE_OK) {
@@ -599,8 +599,8 @@ batch_read_operate_complex(aerospike* p_as, as_error* err)
 	as_operations_exp_read(&ops4, "result1", exp2, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops4, "result2", exp3, AS_EXP_READ_DEFAULT);
 
-	as_batch_read_records records;
-	as_batch_read_inita(&records, 5);
+	as_batch_records records;
+	as_batch_records_inita(&records, 5);
 
 	as_batch_read_record* r;
 
@@ -635,7 +635,7 @@ batch_read_operate_complex(aerospike* p_as, as_error* err)
 	as_exp_destroy(exp3);
 
 	if (status != AEROSPIKE_OK) {
-		as_batch_read_destroy(&records);
+		as_batch_records_destroy(&records);
 		return status;
 	}
 
@@ -675,7 +675,7 @@ batch_read_operate_complex(aerospike* p_as, as_error* err)
 		}
 	}
 
-	as_batch_read_destroy(&records);
+	as_batch_records_destroy(&records);
 	LOG("batch_read_operate_complex end");
 	return AEROSPIKE_OK;
 }

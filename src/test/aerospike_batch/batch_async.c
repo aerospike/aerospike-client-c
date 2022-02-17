@@ -130,11 +130,11 @@ after(atf_suite* suite)
 
 static void
 batch_callback(
-	as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop
+	as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop
 	)
 {
 	if (err) {
-		as_batch_read_destroy(records);
+		as_batch_records_destroy(records);
 	}
 	assert_success_async(&monitor, err, udata);
 
@@ -175,7 +175,7 @@ batch_callback(
 			error("Unexpected error(%u): %s", i, as_error_string(batch->result));
 		}
 	}
-	as_batch_read_destroy(records);
+	as_batch_records_destroy(records);
 	
 	assert_int_eq_async(&monitor, found, 8);
 	assert_int_eq_async(&monitor, errors, 0);
@@ -186,7 +186,7 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 {
 	// Batch allows multiple namespaces in one call,
 	// but example test environment may only have one namespace.
-	as_batch_read_records* records = as_batch_read_create(9);
+	as_batch_records* records = as_batch_records_create(9);
 	
 	char* bins[] = {bin1};
 	uint32_t n_bins = 1;
@@ -247,7 +247,7 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 												  __result__, NULL);
 	
 	if (status != AEROSPIKE_OK) {
-		as_batch_read_destroy(records);
+		as_batch_records_destroy(records);
 	}
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_monitor_wait(&monitor);
@@ -255,11 +255,11 @@ TEST(batch_async_read_complex, "Batch Async Read Complex")
 
 static void
 batch_async_list_operate_cb(
-	as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop
+	as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop
 	)
 {
 	if (err) {
-		as_batch_read_destroy(records);
+		as_batch_records_destroy(records);
 	}
 	assert_success_async(&monitor, err, udata);
 
@@ -289,7 +289,7 @@ batch_async_list_operate_cb(
 			error("Unexpected error(%u): %s", i, as_error_string(batch->result));
 		}
 	}
-	as_batch_read_destroy(records);
+	as_batch_records_destroy(records);
 	
 	assert_int_eq_async(&monitor, found, N_KEYS - N_KEYS/20);
 	assert_int_eq_async(&monitor, errors, 0);
@@ -298,7 +298,7 @@ batch_async_list_operate_cb(
 
 TEST(batch_async_list_operate, "Batch Async List Operate")
 {
-	as_batch_read_records* records = as_batch_read_create(N_KEYS);
+	as_batch_records* records = as_batch_records_create(N_KEYS);
 	
 	// Get size and last element of list bin for all records.
 	as_operations ops;
@@ -321,7 +321,7 @@ TEST(batch_async_list_operate, "Batch Async List Operate")
 	as_operations_destroy(&ops);
 	
 	if (status != AEROSPIKE_OK) {
-		as_batch_read_destroy(records);
+		as_batch_records_destroy(records);
 	}
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_monitor_wait(&monitor);
@@ -375,7 +375,7 @@ TEST(batch_async_write_complex, "Batch Async Write Complex")
 	as_operations_exp_write(&ops2, bin3, wexp1, AS_EXP_WRITE_DEFAULT);
 	as_operations_add_read(&ops2, bin3);
 
-	as_batch_read_records* recs = as_batch_read_create(2);
+	as_batch_records* recs = as_batch_records_create(2);
 	as_batch_write_record* wr;
 
 	wr = as_batch_write_reserve(recs);

@@ -350,7 +350,7 @@ TEST(batch_udf_complex, "Batch UDF Complex")
 	assert_int_eq(r5->result, AEROSPIKE_OK);
 	assert_int_eq(r5->record.bins.entries[0].valuep->integer.value, 5);
 
-	as_batch_read_destroy(&recs);
+	as_batch_records_destroy(&recs);
 }
 
 /******************************************************************************

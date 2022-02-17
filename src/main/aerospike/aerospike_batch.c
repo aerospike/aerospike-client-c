@@ -103,7 +103,7 @@ typedef struct as_batch_task_keys_s {
 	as_key* keys;
 	const as_batch* batch;
 	as_batch_result* results;
-	aerospike_batch_callback callback;
+	as_batch_listener listener;
 	as_batch_callback_xdr callback_xdr;
 	void* udata;
 	as_batch_base_record* rec;
@@ -1941,15 +1941,15 @@ as_batch_release_nodes_after_async(as_vector* batch_nodes)
 static as_status
 as_batch_keys_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	as_batch_base_record* rec, as_batch_attr* attr, aerospike_batch_callback callback,
+	as_batch_base_record* rec, as_batch_attr* attr, as_batch_listener listener,
 	as_batch_callback_xdr callback_xdr, void* udata
 	)
 {
 	uint32_t n_keys = batch->keys.size;
 	
 	if (n_keys == 0) {
-		if (callback) {
-			callback(0, 0, udata);
+		if (listener) {
+			listener(0, 0, udata);
 		}
 		return AEROSPIKE_OK;
 	}
@@ -1964,7 +1964,7 @@ as_batch_keys_execute(
 	}
 	
 	// Allocate results array on stack.  May be an issue for huge batch.
-	as_batch_result* results = (callback)? (as_batch_result*)alloca(sizeof(as_batch_read) * n_keys) : 0;
+	as_batch_result* results = (listener)? (as_batch_result*)alloca(sizeof(as_batch_read) * n_keys) : 0;
 
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
@@ -1989,7 +1989,7 @@ as_batch_keys_execute(
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_key* key = &batch->keys.entries[i];
 		
-		if (callback) {
+		if (listener) {
 			as_batch_result* result = &results[i];
 			result->key = key;
 			result->result = AEROSPIKE_NO_RESPONSE;
@@ -2043,7 +2043,7 @@ as_batch_keys_execute(
 
 	uint8_t type;
 
-	if (callback) {
+	if (listener) {
 		type = BATCH_TYPE_KEYS;
 	}
 	else if (callback_xdr) {
@@ -2070,7 +2070,7 @@ as_batch_keys_execute(
 	btk.keys = batch->keys.entries;
 	btk.batch = batch;
 	btk.results = results;
-	btk.callback = callback;
+	btk.listener = listener;
 	btk.callback_xdr = callback_xdr;
 	btk.udata = udata;
 	btk.rec = rec;
@@ -2135,8 +2135,8 @@ as_batch_keys_execute(
 	as_batch_release_nodes(&batch_nodes);
 
 	// Call user defined function with results.
-	if (callback) {
-		callback(btk.results, n_keys, udata);
+	if (listener) {
+		listener(btk.results, n_keys, udata);
 		
 		// Destroy records. User is responsible for destroying keys with as_batch_destroy().
 		for (uint32_t i = 0; i < n_keys; i++) {
@@ -2668,7 +2668,7 @@ as_batch_retry_keys(
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
 		as_key* key = &btk->batch->keys.entries[offset];
 
-		if (sent_counter > 0 && rec->has_write && btk->callback) {
+		if (sent_counter > 0 && rec->has_write && btk->listener) {
 			as_batch_result* result = &btk->results[offset];
 
 			if (!result->in_doubt) {
@@ -2748,7 +2748,7 @@ as_batch_set_in_doubt(as_batch_task* task, uint32_t sent_counter)
 	else {
 		as_batch_task_keys* btk = (as_batch_task_keys*)task;
 
-		if (!(btk->rec->has_write && btk->callback)) {
+		if (!(btk->rec->has_write && btk->listener)) {
 			return;
 		}
 
@@ -3148,7 +3148,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 as_status
 aerospike_batch_read(
-	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
 	)
 {
 	as_error_reset(err);
@@ -3162,7 +3162,7 @@ aerospike_batch_read(
 
 as_status
 aerospike_batch_read_async(
-	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_read_records* records,
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
@@ -3221,7 +3221,7 @@ as_batch_records_destroy(as_batch_records* records)
 as_status
 aerospike_batch_get(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	aerospike_batch_callback callback, void* udata
+	as_batch_listener listener, void* udata
 	)
 {
 	as_error_reset(err);
@@ -3240,7 +3240,7 @@ aerospike_batch_get(
 	attr.read_attr |= AS_MSG_INFO1_GET_ALL;
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		callback, NULL, udata);
+		listener, NULL, udata);
 }
 
 as_status
@@ -3271,7 +3271,7 @@ aerospike_batch_get_xdr(
 as_status
 aerospike_batch_get_bins(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	const char** bins, uint32_t n_bins, aerospike_batch_callback callback, void* udata
+	const char** bins, uint32_t n_bins, as_batch_listener listener, void* udata
 	)
 {
 	as_error_reset(err);
@@ -3291,13 +3291,13 @@ aerospike_batch_get_bins(
 	as_batch_attr_read_header(&attr, policy);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		callback, NULL, udata);
+		listener, NULL, udata);
 }
 
 as_status
 aerospike_batch_get_ops(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	as_operations* ops, aerospike_batch_callback callback, void* udata
+	as_operations* ops, as_batch_listener listener, void* udata
 	)
 {
 	as_error_reset(err);
@@ -3315,13 +3315,13 @@ aerospike_batch_get_ops(
 	as_batch_attr_read_header(&attr, policy);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		callback, NULL, udata);
+		listener, NULL, udata);
 }
 
 as_status
 aerospike_batch_exists(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	aerospike_batch_callback callback, void* udata
+	as_batch_listener listener, void* udata
 	)
 {
 	as_error_reset(err);
@@ -3339,14 +3339,14 @@ aerospike_batch_exists(
 	attr.read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		callback, NULL, udata);
+		listener, NULL, udata);
 }
 
 as_status
 aerospike_batch_write(
 	aerospike* as, as_error* err, const as_policy_batch* policy,
 	const as_policy_batch_write* policy_write, const as_batch* batch,
-	as_operations* ops, aerospike_batch_callback callback, void* udata
+	as_operations* ops, as_batch_listener listener, void* udata
 	)
 {
 	as_error_reset(err);
@@ -3369,7 +3369,7 @@ aerospike_batch_write(
 	as_batch_attr_write_row(&attr, policy_write, ops);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		callback, NULL, udata);
+		listener, NULL, udata);
 }
 
 as_status
@@ -3377,7 +3377,7 @@ aerospike_batch_apply(
 	aerospike* as, as_error* err, const as_policy_batch* policy,
 	const as_policy_batch_apply* policy_apply, const as_batch* batch,
 	const char* module, const char* function, as_list* arglist,
-	aerospike_batch_callback callback, void* udata
+	as_batch_listener listener, void* udata
 	)
 {
 	as_error_reset(err);
@@ -3402,14 +3402,14 @@ aerospike_batch_apply(
 	as_batch_attr_apply_row(&attr, policy_apply);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		callback, NULL, udata);
+		listener, NULL, udata);
 }
 
 as_status
 aerospike_batch_remove(
 	aerospike* as, as_error* err, const as_policy_batch* policy,
 	const as_policy_batch_remove* policy_remove, const as_batch* batch,
-	aerospike_batch_callback callback, void* udata
+	as_batch_listener listener, void* udata
 	)
 {
 	as_error_reset(err);
@@ -3431,5 +3431,5 @@ aerospike_batch_remove(
 	as_batch_attr_remove_row(&attr, policy_remove);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		callback, NULL, udata);
+		listener, NULL, udata);
 }

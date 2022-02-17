@@ -398,8 +398,8 @@ TEST(batch_get_bins, "Batch Get - with bin name filters")
 TEST(batch_read_complex, "Batch read complex")
 {
 	// Batch allows multiple namespaces in one call, but example test environment may only have one namespace.
-	as_batch_read_records records;
-	as_batch_read_inita(&records, 9);
+	as_batch_records records;
+	as_batch_records_inita(&records, 9);
 	
 	char* bins[] = {bin1};
 	uint32_t n_bins = 1;
@@ -496,7 +496,7 @@ TEST(batch_read_complex, "Batch read complex")
 			}
 		}
 	}
-	as_batch_read_destroy(&records);
+	as_batch_records_destroy(&records);
 	
 	if (status != AEROSPIKE_OK) {
 		if (status == AEROSPIKE_ERR_UNSUPPORTED_FEATURE) {

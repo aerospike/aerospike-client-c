@@ -241,8 +241,8 @@ TEST(filter_batch, "filter batch")
 	as_policy_batch_init(&p);
 	p.base.filter_exp = filter;
 
-	as_batch_read_records records;
-	as_batch_read_inita(&records, 2);
+	as_batch_records records;
+	as_batch_records_inita(&records, 2);
 
 	as_batch_read_record* recA = as_batch_read_reserve(&records);
 	recA->read_all_bins = true;
@@ -263,7 +263,7 @@ TEST(filter_batch, "filter batch")
 
 	assert_int_eq(recB->result, AEROSPIKE_FILTERED_OUT);
 
-	as_batch_read_destroy(&records);
+	as_batch_records_destroy(&records);
 	as_exp_destroy(filter);
 }
 

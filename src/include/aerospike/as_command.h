@@ -186,7 +186,8 @@ typedef struct as_command_s {
 	uint32_t iteration;
 	uint8_t flags;
 	bool master;
-	bool master_sc; // Used in batch only.
+	bool master_sc;   // Used in batch only.
+	bool split_retry; // Used in batch only.
 } as_command;
 
 /**

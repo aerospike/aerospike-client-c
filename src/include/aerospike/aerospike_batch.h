@@ -626,7 +626,7 @@ aerospike_batch_read_async(
  * as_key_init_int64(&r->key, "test", "set", 2);
  * r->ops = &ops2;
  * 
- * as_status status = aerospike_batch_operate(as, err, NULL, &recs);
+ * as_status status = aerospike_batch_write(as, err, NULL, &recs);
  *
  * // Process results. Overall status contains first error, if any.
  * as_operations_destroy(&ops1);
@@ -644,7 +644,7 @@ aerospike_batch_read_async(
  * @ingroup batch_operations
  */
 AS_EXTERN as_status
-aerospike_batch_operate(
+aerospike_batch_write(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
 	);
 
@@ -693,7 +693,7 @@ aerospike_batch_operate(
  * as_key_init_int64(&wr->key, NAMESPACE, SET, 6);
  * wr->ops = &ops2;
  *
- * as_status status = aerospike_batch_operate_async(as, &err, NULL, recs, my_listener, NULL, NULL);
+ * as_status status = aerospike_batch_write_async(as, &err, NULL, recs, my_listener, NULL, NULL);
  *
  * as_operations_destroy(&ops1);
  * as_operations_destroy(&ops2);
@@ -719,7 +719,7 @@ aerospike_batch_operate(
  * @ingroup batch_operations
  */
 AS_EXTERN as_status
-aerospike_batch_operate_async(
+aerospike_batch_write_async(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	);
@@ -894,7 +894,7 @@ aerospike_batch_exists(
  * as_key_init(as_batch_keyat(&batch,1), "ns", "set", "key2");
  * as_key_init(as_batch_keyat(&batch,2), "ns", "set", "key3");
  *
- * as_status status = aerospike_batch_write(as, &err, NULL, NULL, &batch, &ops, listener, NULL);
+ * as_status status = aerospike_batch_operate(as, &err, NULL, NULL, &batch, &ops, listener, NULL);
  * // process results
  * as_operations_destroy(&ops);
  * as_batch_destroy(&batch);
@@ -913,7 +913,7 @@ aerospike_batch_exists(
  * @ingroup batch_operations
  */
 AS_EXTERN as_status
-aerospike_batch_write(
+aerospike_batch_operate(
 	aerospike* as, as_error* err, const as_policy_batch* policy,
 	const as_policy_batch_write* policy_write, const as_batch* batch,
 	as_operations* ops, as_batch_listener listener, void* udata

@@ -311,7 +311,7 @@ TEST(batch_udf_complex, "Batch UDF Complex")
 	r3->arglist = (as_list*)&args3;
 
 	as_error err;
-	as_status status = aerospike_batch_operate(as, &err, NULL, &recs);
+	as_status status = aerospike_batch_write(as, &err, NULL, &recs);
 
 	// r3 results in an overall error.
 	assert_int_eq(status, AEROSPIKE_BATCH_FAILED);

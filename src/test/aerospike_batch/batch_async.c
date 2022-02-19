@@ -389,8 +389,8 @@ TEST(batch_async_write_complex, "Batch Async Write Complex")
 	as_monitor_begin(&monitor);
 
 	as_error err;
-	as_status status = aerospike_batch_operate_async(as, &err, NULL, recs, batch_write_callback,
-													 __result__, NULL);
+	as_status status = aerospike_batch_write_async(as, &err, NULL, recs, batch_write_callback,
+												   __result__, NULL);
 
 	if (status != AEROSPIKE_OK) {
 		as_batch_records_destroy(recs);

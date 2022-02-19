@@ -791,7 +791,7 @@ batch_write_list_operate(aerospike* p_as, as_error* err)
 	as_operations_list_size(&ops, bin3, NULL);
 	as_operations_list_get_by_index(&ops, bin3, NULL, -1, AS_LIST_RETURN_VALUE);
 
-	as_status status = aerospike_batch_write(p_as, err, NULL, NULL, &batch, &ops,
+	as_status status = aerospike_batch_operate(p_as, err, NULL, NULL, &batch, &ops,
 		batch_list_write_cb, NULL);
 
 	as_operations_destroy(&ops);
@@ -872,7 +872,7 @@ batch_write_operate_complex(aerospike* p_as, as_error* err)
 	as_key_init_int64(&rm->key, g_namespace, g_set, 6);
 
 	// Execute batch.
-	as_status status = aerospike_batch_operate(p_as, err, NULL, &recs);
+	as_status status = aerospike_batch_write(p_as, err, NULL, &recs);
 
 	as_operations_destroy(&ops1);
 	as_operations_destroy(&ops2);

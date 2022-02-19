@@ -625,7 +625,7 @@ TEST(batch_write_list_operate, "Batch write list operate")
 
 	batch_stats data = {0};
 	as_error err;
-	as_status status = aerospike_batch_write(as, &err, NULL, NULL, &batch, &ops,
+	as_status status = aerospike_batch_operate(as, &err, NULL, NULL, &batch, &ops,
 		batch_write_operate_cb, &data);
 
 	as_operations_destroy(&ops);
@@ -666,7 +666,7 @@ TEST(batch_write_complex, "Batch write complex")
 	as_key_init_int64(&rm->key, NAMESPACE, SET, 10002);
 
 	as_error err;
-	as_status status = aerospike_batch_operate(as, &err, NULL, &recs);
+	as_status status = aerospike_batch_write(as, &err, NULL, &recs);
 
 	assert_int_eq(status, AEROSPIKE_OK);
 
@@ -701,7 +701,7 @@ TEST(batch_write_complex, "Batch write complex")
 	as_key_init_int64(&rr3->key, NAMESPACE, SET, 10002);
 	rr3->read_all_bins = true;
 
-	status = aerospike_batch_operate(as, &err, NULL, &recs);
+	status = aerospike_batch_write(as, &err, NULL, &recs);
 
 	assert_int_eq(status, AEROSPIKE_OK);
 

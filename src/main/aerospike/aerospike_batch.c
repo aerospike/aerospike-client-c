@@ -3215,7 +3215,7 @@ aerospike_batch_read_async(
 }
 
 as_status
-aerospike_batch_operate(
+aerospike_batch_write(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
 	)
 {
@@ -3229,7 +3229,7 @@ aerospike_batch_operate(
 }
 
 as_status
-aerospike_batch_operate_async(
+aerospike_batch_write_async(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	)
@@ -3383,7 +3383,7 @@ aerospike_batch_exists(
 }
 
 as_status
-aerospike_batch_write(
+aerospike_batch_operate(
 	aerospike* as, as_error* err, const as_policy_batch* policy,
 	const as_policy_batch_write* policy_write, const as_batch* batch,
 	as_operations* ops, as_batch_listener listener, void* udata

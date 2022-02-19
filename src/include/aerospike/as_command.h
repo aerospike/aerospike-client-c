@@ -184,6 +184,7 @@ typedef struct as_command_s {
 	uint32_t total_timeout;
 	uint32_t max_retries;
 	uint32_t iteration;
+	uint32_t sent;
 	uint8_t flags;
 	bool master;
 	bool master_sc;   // Used in batch only.
@@ -558,6 +559,7 @@ as_command_start_timer(as_command* cmd)
 
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
+	cmd->sent = 0;
 	cmd->master = true;
 
 	if (policy->total_timeout > 0) {

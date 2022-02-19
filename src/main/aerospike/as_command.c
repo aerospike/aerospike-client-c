@@ -50,7 +50,7 @@ static as_status
 as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node);
 
 as_status
-as_batch_retry(as_command* cmd, as_error* err, uint32_t sent_counter);
+as_batch_retry(as_command* cmd, as_error* err);
 
 size_t
 as_command_user_key_size(const as_key* key)
@@ -549,7 +549,6 @@ as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
 	as_node* node = NULL;
-	uint32_t command_sent_counter = 0;
 	as_status status;
 	bool release_node;
 
@@ -589,7 +588,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				if (release_node) {
 					as_node_release(node);
 				}
-				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
+				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 				return status;
 			}
 			goto Retry;
@@ -605,7 +604,7 @@ as_command_execute(as_command* cmd, as_error* err)
 			as_node_close_conn_error(node, &socket, socket.pool);
 			goto Retry;
 		}
-		command_sent_counter++;
+		cmd->sent++;
 
 		// Parse results returned by server.
 		if (cmd->node) {
@@ -653,11 +652,11 @@ as_command_execute(as_command* cmd, as_error* err)
 					if (release_node) {
 						as_node_release(node);
 					}
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
+					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 					return status;
 				
 				default:
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
+					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 					break;
 			}
 		}
@@ -725,7 +724,7 @@ Retry:
 		}
 
 		if (cmd->flags & AS_COMMAND_FLAGS_BATCH) {
-			status = as_batch_retry(cmd, err, command_sent_counter);
+			status = as_batch_retry(cmd, err);
 
 			if (status != AEROSPIKE_USE_NORMAL_RETRY) {
 				return status;
@@ -747,7 +746,7 @@ Retry:
 	if (release_node) {
 		as_node_release(node);
 	}
-	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
+	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 	return err->code;
 }
 

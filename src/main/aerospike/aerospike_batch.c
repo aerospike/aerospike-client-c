@@ -1590,6 +1590,7 @@ as_batch_command_init(
 		cmd->total_timeout = parent->total_timeout;
 		cmd->max_retries = parent->max_retries;
 		cmd->deadline_ms = parent->deadline_ms;
+		cmd->sent = parent->sent;
 	}
 }
 
@@ -2623,10 +2624,7 @@ as_batch_records_execute_async(
 //---------------------------------
 
 static as_status
-as_batch_retry_records(
-	// TODO: put sent_counter in as_command.
-	as_batch_task_records* btr, as_command* parent, as_error* err, uint32_t sent_counter
-	)
+as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error* err)
 {
 	as_batch_task* task = &btr->base;
 	as_vector* list = btr->records;
@@ -2660,11 +2658,6 @@ as_batch_retry_records(
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
 		as_batch_read_record* rec = as_vector_get(btr->records, offset);
 		as_key* key = &rec->key;
-
-		if (sent_counter > 0 && rec->has_write && !rec->in_doubt) {
-			// TODO: Need to set here?
-			rec->in_doubt = true;
-		}
 
 		as_node* node;
 		as_status status = as_batch_get_node(cluster, key, replica, replica_sc, parent->master,
@@ -2711,9 +2704,7 @@ as_batch_retry_records(
 }
 
 static as_status
-as_batch_retry_keys(
-	as_batch_task_keys* btk, as_command* parent, as_error* err, uint32_t sent_counter
-	)
+as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 {
 	as_batch_task* task = &btk->base;
 	as_cluster* cluster = task->cluster;
@@ -2746,15 +2737,6 @@ as_batch_retry_keys(
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
 		as_key* key = &btk->batch->keys.entries[offset];
-
-		if (sent_counter > 0 && rec->has_write && btk->listener) {
-			as_batch_result* result = &btk->results[offset];
-
-			// TODO: Remove?
-			if (!result->in_doubt) {
-				result->in_doubt = true;
-			}
-		}
 
 		as_node* node;
 		status = as_batch_get_node(cluster, key, task->policy->replica, task->replica_sc,
@@ -2806,7 +2788,7 @@ as_batch_retry_keys(
 }
 
 as_status
-as_batch_retry(as_command* parent, as_error* err, uint32_t sent_counter)
+as_batch_retry(as_command* parent, as_error* err)
 {
 	// Retry requires keys for this node to be split among other nodes.
 	// This is both recursive and exponential.
@@ -2825,10 +2807,10 @@ as_batch_retry(as_command* parent, as_error* err, uint32_t sent_counter)
 	}
 
 	if (task->type == BATCH_TYPE_RECORDS) {
-		return as_batch_retry_records((as_batch_task_records*)task, parent, err, sent_counter);
+		return as_batch_retry_records((as_batch_task_records*)task, parent, err);
 	}
 	else {
-		return as_batch_retry_keys((as_batch_task_keys*)task, parent, err, sent_counter);
+		return as_batch_retry_keys((as_batch_task_keys*)task, parent, err);
 	}
 }
 

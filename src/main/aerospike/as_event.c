@@ -367,6 +367,8 @@ static void connector_error(as_event_command* cmd, as_error* err);
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
 {
+	cmd->command_sent_counter = 0;
+
 	as_event_loop* event_loop = cmd->event_loop;
 
 	if (as_in_event_loop(event_loop->thread)) {
@@ -433,7 +435,6 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	// Initialize read buffer (buf) to be located after write buffer.
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
-	cmd->command_sent_counter = 0;
 	cmd->conn = NULL;
 	cmd->proto_type_rcv = 0;
 

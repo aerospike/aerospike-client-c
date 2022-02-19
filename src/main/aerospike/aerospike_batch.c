@@ -2837,6 +2837,7 @@ as_batch_retry_command_create(
 	cmd->parse_results = parent->parse_results;
 	cmd->pipe_listener = parent->pipe_listener;
 	cmd->buf = ((as_async_batch_command*)cmd)->space;
+	cmd->command_sent_counter = parent->command_sent_counter;
 	cmd->write_len = (uint32_t)size;
 	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_batch_command));
 	cmd->type = AS_ASYNC_TYPE_BATCH;

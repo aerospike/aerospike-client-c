@@ -3084,7 +3084,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 	as_vector* records = &be->records->list;
 
-	as_batch_retry_offset full;
+	as_batch_retry_offset full = {};
 	as_batch_retry_offset off;
 	bool can_repeat = false;
 

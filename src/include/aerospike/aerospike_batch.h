@@ -202,7 +202,7 @@ typedef struct as_batch_apply_record_s {
 
 	/**
 	 * Optional arguments to lua function.
-	 * If defined, the user must call as_operations_destroy() when done with the batch.
+	 * If defined, the user must call as_arraylist_destroy() when done with the batch.
 	 */
 	as_list* arglist;
 } as_batch_apply_record;

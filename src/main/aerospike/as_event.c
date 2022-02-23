@@ -1151,6 +1151,8 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 	as_event_command_release(cmd);
 }
 
+void as_async_batch_error(as_event_command* cmd, as_error* err);
+
 void
 as_event_notify_error(as_event_command* cmd, as_error* err)
 {
@@ -1172,9 +1174,12 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 		case AS_ASYNC_TYPE_CONNECTOR:
 			connector_error(cmd, err);
 			break;
-
+		case AS_ASYNC_TYPE_BATCH:
+			as_async_batch_error(cmd, err);
+			as_event_executor_error(cmd->udata, err, 1);
+			break;
 		default:
-			// Handle command that is part of a group (batch, scan, query).
+			// Handle command that is part of a group (scan, query).
 			as_event_executor_error(cmd->udata, err, 1);
 			break;
 	}

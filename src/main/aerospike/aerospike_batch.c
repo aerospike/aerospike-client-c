@@ -3074,7 +3074,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			as_node_reserve(node);
 			bnode = as_vector_reserve(&bnodes);
 			bnode->node = node;  // Transfer node
-			bnode->size = header_size;
+			bnode->size = header_size + 5;  // Add n_offsets(4) + flags(1) to header.
 			as_vector_init(&bnode->offsets, sizeof(as_batch_retry_offset), n_offsets);
 		}
 

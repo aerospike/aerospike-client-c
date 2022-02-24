@@ -494,6 +494,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 	as_async_batch_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
 
 	if (! executor->executor.valid) {
+		// TODO: Should be stopping like this??? NO!
 		// An error has already been returned to the user and records have been deleted.
 		// Skip over remaining socket data so it's fully read and can be reused.
 		return as_batch_async_skip_records(cmd, p, end);
@@ -2914,12 +2915,18 @@ as_batch_retry_node_find(as_vector* bnodes, as_node* node)
 
 static size_t
 as_batch_retry_write(
-	uint8_t* buf, uint8_t* header, uint32_t header_size, uint8_t* batch_field, as_vector* offsets
+	uint8_t* buf, uint8_t* header, uint32_t header_size, uint8_t header_flags, uint8_t* batch_field,
+	as_vector* offsets
 	)
 {
 	uint8_t* p = buf;
 	memcpy(p, header, header_size);
 	p += header_size;
+
+	*(uint32_t*)p = cf_swap_to_be32(offsets->size);
+	p += sizeof(uint32_t);
+
+	*p++ = header_flags;
 
 	for (uint32_t i = 0; i < offsets->size; i++) {
 		as_batch_retry_offset* off = as_vector_get(offsets, i);
@@ -3078,10 +3085,11 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	uint8_t* batch_field = p;
 	p += AS_FIELD_HEADER_SIZE;
 
-	uint32_t n_offsets = cf_swap_from_be32(*(uint32_t*)p);
-	p += sizeof(uint32_t) + 1; // Skip over n_offsets and header flags.
-
 	uint32_t header_size = (uint32_t)(p - header);
+	uint32_t n_offsets = cf_swap_from_be32(*(uint32_t*)p);
+	p += sizeof(uint32_t);
+
+	uint8_t header_flags = *p++;
 
 	as_vector bnodes;
 	as_vector_inita(&bnodes, sizeof(as_batch_retry_node), n_nodes);
@@ -3206,8 +3214,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 			as_event_command* cmd = &bc->command;
 
-			cmd->write_len = (uint32_t)as_batch_retry_write(cmd->buf, header,
-				header_size, batch_field, &bnode->offsets);
+			cmd->write_len = (uint32_t)as_batch_retry_write(cmd->buf, header, header_size,
+				header_flags, batch_field, &bnode->offsets);
 
 			// Retry command at the end of the queue so other commands have a chance to run first.
 			as_event_command_schedule(cmd);
@@ -3217,7 +3225,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			// First write uncompressed buffer.
 			size_t capacity = bnode->size;
 			uint8_t* ubuf = cf_malloc(capacity);
-			size_t size = as_batch_retry_write(ubuf, header, header_size, batch_field, &bnode->offsets);
+			size_t size = as_batch_retry_write(ubuf, header, header_size, header_flags, batch_field,
+				&bnode->offsets);
 
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(bnode->size);

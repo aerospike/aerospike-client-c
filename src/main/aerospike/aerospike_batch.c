@@ -1599,12 +1599,12 @@ as_batch_set_error_records(as_batch_task* task, as_error* err)
 
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
-		as_batch_base_record* rec = as_vector_get(btr->records, offset);
 
+		as_batch_base_record* rec = as_vector_get(btr->records, offset);
 		rec->result = err->code;
 
-		if (rec->has_write && !rec->in_doubt && err->in_doubt) {
-			rec->in_doubt = true;
+		if (rec->has_write) {
+			rec->in_doubt = err->in_doubt;
 		}
 	}
 }
@@ -1614,20 +1614,17 @@ as_batch_set_error_keys(as_batch_task* task, as_error* err)
 {
 	as_batch_task_keys* btk = (as_batch_task_keys*)task;
 	bool has_write = btk->rec->has_write;
-	if (!(btk->rec->has_write && btk->listener)) {
-		return;
-	}
 
 	uint32_t offsets_size = task->offsets.size;
 
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
-		as_batch_result* res = &btk->results[offset];
 
+		as_batch_result* res = &btk->results[offset];
 		res->result = err->code;
 
-		if (has_write && !res->in_doubt && err->in_doubt) {
-			res->in_doubt = true;
+		if (has_write) {
+			res->in_doubt = err->in_doubt;
 		}
 	}
 }
@@ -1683,11 +1680,11 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	err->in_doubt = false;
 	status = as_command_execute(&cmd, err);
 
-	// Set error/in_doubt for keys associated this batch write command when
+	// Set error/in_doubt for keys associated this batch command when
 	// the command was not retried and split. If a split retry occurred,
 	// those new subcommands have already set error/in_doubt on the affected
 	// subset of keys.
-	if (status != AEROSPIKE_OK && task->has_write && !cmd.split_retry) {
+	if (status != AEROSPIKE_OK && !cmd.split_retry) {
 		as_batch_set_error_records(task, err);
 	}
 
@@ -1885,11 +1882,11 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	err->in_doubt = false;
 	status = as_command_execute(&cmd, err);
 
-	// Set error/in_doubt for keys associated this batch write command when
+	// Set error/in_doubt for keys associated this batch command when
 	// the command was not retried and split. If a split retry occurred,
 	// those new subcommands have already set error/in_doubt on the affected
 	// subset of keys.
-	if (btk->listener && status != AEROSPIKE_OK && task->has_write && !cmd.split_retry) {
+	if (btk->listener && status != AEROSPIKE_OK && !cmd.split_retry) {
 		as_batch_set_error_keys(task, err);
 	}
 
@@ -3211,13 +3208,6 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 
 	be->error_row = true;
 
-	if (!be->has_write) {
-		// No need to set in_doubt for all keys since read in_doubt is always false.
-		// Free uncompressed send buffer if compression was enabled.
-		as_batch_destroy_ubuf(bc);
-		return;
-	}
-
 	// Set error/in_doubt in each key contained in the command.
 	// Batch offsets are out of scope, so they must be parsed
 	// from the parent command's send buffer.
@@ -3247,10 +3237,9 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 		uint32_t offset = cf_swap_from_be32(*(uint32_t*)p);
 
 		as_batch_base_record* rec = as_vector_get(records, offset);
+		rec->result = err->code;
 
-		// Only set error/in_doubt for writes.
 		if (rec->has_write) {
-			rec->result = err->code;
 			rec->in_doubt = err->in_doubt;
 		}
 

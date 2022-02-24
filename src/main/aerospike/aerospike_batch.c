@@ -2913,7 +2913,9 @@ as_batch_retry_node_find(as_vector* bnodes, as_node* node)
 }
 
 static size_t
-as_batch_retry_write(uint8_t* buf, uint8_t* header, uint32_t header_size, as_vector* offsets)
+as_batch_retry_write(
+	uint8_t* buf, uint8_t* header, uint32_t header_size, uint8_t* batch_field, as_vector* offsets
+	)
 {
 	uint8_t* p = buf;
 	memcpy(p, header, header_size);
@@ -2935,7 +2937,21 @@ as_batch_retry_write(uint8_t* buf, uint8_t* header, uint32_t header_size, as_vec
 			p += off->size;
 		}
 	}
-	return p - buf;
+	return as_batch_trailer_write(buf, p, batch_field);
+}
+
+static void
+as_batch_retry_release_nodes(as_vector* bnodes)
+{
+	as_batch_retry_node* bnode = bnodes->list;
+	uint32_t n_bnodes = bnodes->size;
+	
+	for (uint32_t i = 0; i < n_bnodes; i++) {
+		as_node_release(bnode->node);
+		as_vector_destroy(&bnode->offsets);
+		bnode++;
+	}
+	as_vector_destroy(bnodes);
 }
 
 static inline void
@@ -2950,12 +2966,12 @@ as_batch_retry_release_nodes_cancel_async(as_vector* bnodes, uint32_t start)
 	}
 }
 
-static inline void
+static void
 as_batch_retry_release_nodes_after_async(as_vector* bnodes)
 {
 	// Do not release each node here because those nodes are released
 	// after each async command completes.
-	as_batch_node* bnode = bnodes->list;
+	as_batch_retry_node* bnode = bnodes->list;
 	uint32_t n_bnodes = bnodes->size;
 
 	for (uint32_t i = 0; i < n_bnodes; i++) {
@@ -2971,28 +2987,6 @@ as_batch_retry_get_ubuf(as_async_batch_command* bc)
 	// Return saved uncompressed buffer when compression is enabled.
 	// Return command buffer when compression is not enabled.
 	return bc->ubuf ? bc->ubuf : (uint8_t*)bc + bc->command.write_offset;
-}
-
-static uint8_t*
-as_batch_retry_parse_header(uint8_t* p, uint32_t* n_offsets)
-{
-	p += AS_HEADER_SIZE;
-
-	// Field ID is located after field size.
-	if (*(p + sizeof(uint32_t)) == AS_FIELD_FILTER) {
-		p += cf_swap_from_be32(*(uint32_t*)p) + sizeof(uint32_t);
-	}
-
-	// Field ID must be AS_FIELD_BATCH_INDEX at this point.
-	if (*(p + sizeof(uint32_t)) != AS_FIELD_BATCH_INDEX) {
-		as_log_error("Batch retry buffer is corrupt");
-		return NULL;
-	}
-
-	p += AS_FIELD_HEADER_SIZE;
-	*n_offsets = cf_swap_from_be32(*(uint32_t*)p);
-	p += sizeof(uint32_t) + 1; // Skip over n_offsets and header flags.
-	return p;
 }
 
 static uint8_t*
@@ -3065,14 +3059,27 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	// Batch offsets, read/write operations and other arguments are out of scope in async batch
 	// retry, so they must be parsed from the parent command's send buffer.
 	uint8_t* header = as_batch_retry_get_ubuf(parent_bc);
+	uint8_t* p = header;
 
-	uint32_t n_offsets;
-	uint8_t* p = as_batch_retry_parse_header(header, &n_offsets);
+	p += AS_HEADER_SIZE;
 
-	if (!p) {
+	// Field ID is located after field size.
+	if (*(p + sizeof(uint32_t)) == AS_FIELD_FILTER) {
+		p += cf_swap_from_be32(*(uint32_t*)p) + sizeof(uint32_t);
+	}
+
+	// Field ID must be AS_FIELD_BATCH_INDEX at this point.
+	if (*(p + sizeof(uint32_t)) != AS_FIELD_BATCH_INDEX) {
+		as_log_error("Batch retry buffer is corrupt");
 		as_nodes_release(nodes);
 		return -2;  // Defer to original error.
 	}
+
+	uint8_t* batch_field = p;
+	p += AS_FIELD_HEADER_SIZE;
+
+	uint32_t n_offsets = cf_swap_from_be32(*(uint32_t*)p);
+	p += sizeof(uint32_t) + 1; // Skip over n_offsets and header flags.
 
 	uint32_t header_size = (uint32_t)(p - header);
 
@@ -3155,11 +3162,11 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	}
 
 	if (bnodes.size == 1) {
-		as_batch_node* bnode = as_vector_get(&bnodes, 0);
+		as_batch_retry_node* bnode = as_vector_get(&bnodes, 0);
 
 		if (bnode->node == parent->node) {
 			// Batch node is the same.  Go through normal retry.
-			as_batch_release_nodes(&bnodes);
+			as_batch_retry_release_nodes(&bnodes);
 			return 1;  // Go through normal retry.
 		}
 	}
@@ -3175,7 +3182,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 		else {
 			// Timeout occurred.
-			as_batch_release_nodes(&bnodes);
+			as_batch_retry_release_nodes(&bnodes);
 			return -2;  // Timeout occurred, defer to original error.
 		}
 	}
@@ -3200,7 +3207,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			as_event_command* cmd = &bc->command;
 
 			cmd->write_len = (uint32_t)as_batch_retry_write(cmd->buf, header,
-				header_size, &bnode->offsets);
+				header_size, batch_field, &bnode->offsets);
 
 			// Retry command at the end of the queue so other commands have a chance to run first.
 			as_event_command_schedule(cmd);
@@ -3210,7 +3217,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			// First write uncompressed buffer.
 			size_t capacity = bnode->size;
 			uint8_t* ubuf = cf_malloc(capacity);
-			size_t size = as_batch_retry_write(ubuf, header, header_size, &bnode->offsets);
+			size_t size = as_batch_retry_write(ubuf, header, header_size, batch_field, &bnode->offsets);
 
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(bnode->size);
@@ -3238,6 +3245,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 	}
 	as_batch_retry_release_nodes_after_async(&bnodes);
+	as_batch_destroy_ubuf(parent_bc);
 
 	// Close parent command.
 	as_event_timer_stop(parent);
@@ -3265,13 +3273,23 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 	// from the parent command's send buffer.
 	uint8_t* p = as_batch_retry_get_ubuf(bc);
 
-	uint32_t n_offsets;
-	p = as_batch_retry_parse_header(p, &n_offsets);
+	p += AS_HEADER_SIZE;
 
-	if (!p) {
+	// Field ID is located after field size.
+	if (*(p + sizeof(uint32_t)) == AS_FIELD_FILTER) {
+		p += cf_swap_from_be32(*(uint32_t*)p) + sizeof(uint32_t);
+	}
+
+	// Field ID must be AS_FIELD_BATCH_INDEX at this point.
+	if (*(p + sizeof(uint32_t)) != AS_FIELD_BATCH_INDEX) {
+		as_log_error("Batch retry buffer is corrupt");
 		as_batch_destroy_ubuf(bc);
 		return;
 	}
+	p += AS_FIELD_HEADER_SIZE;
+
+	uint32_t n_offsets = cf_swap_from_be32(*(uint32_t*)p);
+	p += sizeof(uint32_t) + 1; // Skip over n_offsets and header flags.
 
 	as_vector* records = &be->records->list;
 

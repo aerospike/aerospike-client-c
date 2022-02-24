@@ -41,7 +41,9 @@ CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O$(O)
 CC_FLAGS += -fno-common -fno-strict-aliasing 
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
-ifneq ($(ARCH),$(filter $(ARCH),ppc64 ppc64le))
+ifeq ($(ARCH),aarch64)
+  CC_FLAGS += -march=armv8-a
+else ifneq ($(ARCH),$(filter $(ARCH),ppc64 ppc64le))
   CC_FLAGS += -march=nocona
 endif
 

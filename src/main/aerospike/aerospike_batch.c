@@ -454,32 +454,6 @@ as_batch_destroy_ubuf(as_async_batch_command* bc)
 	}
 }
 
-static bool
-as_batch_async_skip_records(as_event_command* cmd, uint8_t* p, uint8_t* end)
-{
-	while (p < end) {
-		as_msg* msg = (as_msg*)p;
-		as_msg_swap_header_from_be(msg);
-		p += sizeof(as_msg);
-		
-		if (msg->info3 & AS_MSG_INFO3_LAST) {
-			if (msg->result_code != AEROSPIKE_OK) {
-				as_error err;
-				as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
-				as_event_response_error(cmd, &err);
-				return true;
-			}
-			as_batch_destroy_ubuf((as_async_batch_command*)cmd);
-			as_event_batch_complete(cmd);
-			return true;
-		}
-		
-		p = as_command_ignore_fields(p, msg->n_fields);
-		p = as_command_ignore_bins(p, msg->n_ops);
-	}
-	return false;
-}
-
 static inline bool
 as_batch_set_error_row(uint8_t res)
 {
@@ -489,18 +463,10 @@ as_batch_set_error_row(uint8_t res)
 static bool
 as_batch_async_parse_records(as_event_command* cmd)
 {
+	as_error err;
 	uint8_t* p = cmd->buf + cmd->pos;
 	uint8_t* end = cmd->buf + cmd->len;
 	as_async_batch_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
-
-	if (! executor->executor.valid) {
-		// TODO: Should be stopping like this??? NO!
-		// An error has already been returned to the user and records have been deleted.
-		// Skip over remaining socket data so it's fully read and can be reused.
-		return as_batch_async_skip_records(cmd, p, end);
-	}
-	
-	as_error err;
 	as_vector* records = &executor->records->list;
 
 	while (p < end) {
@@ -3040,10 +3006,6 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	as_error err;
 	as_async_batch_command* parent_bc = (as_async_batch_command*)parent;
 	as_async_batch_executor* be = parent->udata; // udata is overloaded to contain executor.
-
-	if (! be->executor.valid) {
-		return -2;  // Defer to original error.
-	}
 
 	if (!(parent->replica == AS_POLICY_REPLICA_SEQUENCE ||
 		  parent->replica == AS_POLICY_REPLICA_PREFER_RACK)) {

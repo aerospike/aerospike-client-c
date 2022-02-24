@@ -56,8 +56,7 @@
 typedef struct {
 	size_t size;
 	as_queue* buffers;
-	uint8_t* filter_field;
-	uint32_t filter_size;
+	uint32_t filter_size; // TODO: remove when old predexp removed
 	uint16_t field_count_header;
 	uint8_t read_attr; // old batch only
 	bool batch_any;
@@ -847,11 +846,6 @@ as_batch_header_write_old(
 	else if (policy->base.predexp) {
 		p = as_predexp_list_write(policy->base.predexp, bb->filter_size, p);
 	}
-	else if (bb->filter_field) {
-		// filter_field is only set on async batch retry with filter expression.
-		memcpy(p, bb->filter_field, bb->filter_size);
-		p += bb->filter_size;
-	}
 	return p;
 }
 
@@ -1006,11 +1000,6 @@ as_batch_header_write_new(
 	}
 	else if (policy->base.predexp) {
 		p = as_predexp_list_write(policy->base.predexp, bb->filter_size, p);
-	}
-	else if (bb->filter_field) {
-		// filter_field is only set on async batch retry with filter expression.
-		memcpy(p, bb->filter_field, bb->filter_size);
-		p += bb->filter_size;
 	}
 	return p;
 }
@@ -1239,12 +1228,6 @@ as_batch_init_size(const as_policy_batch* policy, as_batch_builder* bb)
 	}
 	else if (policy->base.predexp) {
 		bb->size += as_predexp_list_size(policy->base.predexp, &bb->filter_size);
-		bb->field_count_header = 2;
-	}
-	else if (bb->filter_field) {
-		// filter_field is only set on async batch retry with a filter expression.
-		// filter_size is already set in this case.
-		bb->size += bb->filter_size;
 		bb->field_count_header = 2;
 	}
 	else {
@@ -1591,13 +1574,9 @@ as_batch_command_init(
 }
 
 static inline void
-as_batch_builder_init(
-	as_batch_builder* bb, as_queue* buffers, uint8_t* filter_field, uint32_t filter_size
-	)
+as_batch_builder_init(as_batch_builder* bb, as_queue* buffers)
 {
 	bb->buffers = buffers;
-	bb->filter_field = filter_field;
-	bb->filter_size = filter_size;
 }
 
 static inline void
@@ -1665,7 +1644,7 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
 	as_batch_builder bb;
-	as_batch_builder_init(&bb, &buffers, NULL, 0);
+	as_batch_builder_init(&bb, &buffers);
 	as_batch_builder_set_node(&bb, task->node);
 
 	as_status status = as_batch_records_size(policy, btr->records, &task->offsets, &bb, err);
@@ -1867,7 +1846,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
 	as_batch_builder bb;
-	as_batch_builder_init(&bb, &buffers, NULL, 0);
+	as_batch_builder_init(&bb, &buffers);
 	as_batch_builder_set_node(&bb, task->node);
 
 	as_status status = as_batch_keys_size(policy, btk->keys, &task->offsets, btk->rec, &bb, err);
@@ -2381,7 +2360,7 @@ as_batch_execute_async(
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
 	as_batch_builder bb;
-	as_batch_builder_init(&bb, &buffers, NULL, 0);
+	as_batch_builder_init(&bb, &buffers);
 
 	as_status status = AEROSPIKE_OK;
 

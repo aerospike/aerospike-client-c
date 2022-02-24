@@ -813,7 +813,7 @@ as_event_socket_timeout(as_event_command* cmd)
 
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
-						cmd->iteration + 1, as_node_get_address_string(cmd->node));
+						cmd->iteration, as_node_get_address_string(cmd->node));
 
 		as_event_error_callback(cmd, &err);
 	}

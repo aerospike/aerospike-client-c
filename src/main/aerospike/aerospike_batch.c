@@ -610,7 +610,6 @@ as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, 
 
 			case BATCH_TYPE_KEYS_SEQUENCE: {
 				// TODO: return as_batch_result, not just as_record.
-				// Either that or remove this functionality entirely.
 				as_batch_task_keys* btk = (as_batch_task_keys*)task;
 				as_key* key = &btk->keys[offset];
 

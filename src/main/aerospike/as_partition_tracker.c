@@ -329,23 +329,36 @@ as_partition_tracker_assign(
 }
 
 as_status
-as_partition_tracker_is_complete(as_partition_tracker* pt, as_error* err)
+as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, as_error* err)
 {
+	as_vector* list = &pt->node_parts;
 	uint64_t record_count = 0;
 	uint32_t parts_unavailable = 0;
-	as_vector* list = &pt->node_parts;
+	bool is_done = true;
 
 	for (uint32_t i = 0; i < list->size; i++) {
 		as_node_partitions* np = as_vector_get(list, i);
 		record_count += np->record_count;
 		parts_unavailable += np->parts_unavailable;
+
 		//printf("Node %s partsFull=%u partsPartial=%u partsUnavailable=%u recordsRequested=%llu recordsReceived=%llu\n",
 		//	as_node_get_address_string(np->node), np->parts_full.size, np->parts_partial.size,
 		//	np->parts_unavailable, np->record_max, np->record_count);
+
+		if (np->record_max > 0 && np->record_count >= np->record_max) {
+			is_done = false;
+		}
 	}
 
 	if (parts_unavailable == 0) {
-		if (pt->max_records == 0 || record_count == 0) {
+		// Server version >= 6.0 (denoted by has_partition_query) will return all records for
+		// each node up to that node's max (np->record_max).
+		if (cluster->has_partition_query) {
+			pt->parts_all->done = is_done;
+		}
+		// Servers version < 6.0 can return less records than max and still have more records
+		// for each node. When max_records specified, only mark done when record_count is zero.
+		else if (pt->max_records == 0 || record_count == 0) {
 			pt->parts_all->done = true;
 		}
 		return AEROSPIKE_OK;

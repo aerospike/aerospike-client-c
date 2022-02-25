@@ -137,7 +137,7 @@ as_scan_partition_complete_async(as_event_executor* ee)
 
 	// Check if all partitions received.
 	as_error err;
-	as_status status = as_partition_tracker_is_complete(se->pt, &err);
+	as_status status = as_partition_tracker_is_complete(se->pt, se->cluster, &err);
 
 	if (status == AEROSPIKE_OK) {
 		// Scan complete.
@@ -929,7 +929,7 @@ as_scan_partitions(
 			return status;
 		}
 
-		status = as_partition_tracker_is_complete(pt, err);
+		status = as_partition_tracker_is_complete(pt, cluster, err);
 
 		// Stop on ok and all errors except AEROSPIKE_ERR_CLIENT.
 		if (status != AEROSPIKE_ERR_CLIENT) {

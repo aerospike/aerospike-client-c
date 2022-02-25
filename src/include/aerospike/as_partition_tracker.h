@@ -144,7 +144,9 @@ as_partition_tracker_get_status(as_partition_tracker* pt, as_vector* list, uint3
 }
 
 as_status
-as_partition_tracker_is_complete(as_partition_tracker* pt, struct as_error_s* err);
+as_partition_tracker_is_complete(
+	as_partition_tracker* pt, struct as_cluster_s* cluster, struct as_error_s* err
+	);
 
 bool
 as_partition_tracker_should_retry(

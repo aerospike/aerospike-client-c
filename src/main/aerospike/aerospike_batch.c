@@ -178,227 +178,6 @@ static const char cluster_empty_error[] = "Batch command failed because cluster 
 // Static Functions
 //---------------------------------
 
-static void
-as_batch_attr_read_header(as_batch_attr* attr, const as_policy_batch* p)
-{
-	attr->read_attr = AS_MSG_INFO1_READ;
-
-	if (p->read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
-		attr->read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
-	}
-
-	attr->write_attr = 0;
-
-	switch (p->read_mode_sc) {
-	default:
-	case AS_POLICY_READ_MODE_SC_SESSION:
-		attr->info_attr = 0;
-		break;
-	case AS_POLICY_READ_MODE_SC_LINEARIZE:
-		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE;
-		break;
-	case AS_POLICY_READ_MODE_SC_ALLOW_REPLICA:
-		attr->info_attr = AS_MSG_INFO3_SC_READ_RELAX;
-		break;
-	case AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE:
-		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
-		break;
-	}
-	attr->ttl = 0;
-	attr->gen = 0;
-	attr->has_write = false;
-	attr->send_key = false;
-}
-
-static void
-as_batch_attr_read_row(as_batch_attr* attr, const as_policy_batch_read* p)
-{
-	attr->read_attr = AS_MSG_INFO1_READ;
-
-	if (p->read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
-		attr->read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
-	}
-
-	attr->write_attr = 0;
-
-	switch (p->read_mode_sc) {
-	default:
-	case AS_POLICY_READ_MODE_SC_SESSION:
-		attr->info_attr = 0;
-		break;
-	case AS_POLICY_READ_MODE_SC_LINEARIZE:
-		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE;
-		break;
-	case AS_POLICY_READ_MODE_SC_ALLOW_REPLICA:
-		attr->info_attr = AS_MSG_INFO3_SC_READ_RELAX;
-		break;
-	case AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE:
-		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
-		break;
-	}
-	attr->ttl = 0;
-	attr->gen = 0;
-	attr->has_write = false;
-	attr->send_key = false;
-}
-
-static inline void
-as_batch_attr_read_adjust(as_batch_attr* attr, bool read_all_bins)
-{
-	if (read_all_bins) {
-		attr->read_attr |= AS_MSG_INFO1_GET_ALL;
-	}
-	else {
-		attr->read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
-	}
-}
-
-static void
-as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
-{
-	attr->read_attr = 0;
-
-	for (uint16_t i = 0; i < ops->binops.size; i++) {
-		as_binop* op = &ops->binops.entries[i];
-
-		if (! as_op_is_write[op->op]) {
-			attr->read_attr = AS_MSG_INFO1_READ;
-			break;
-		}
-	}
-
-	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS;
-	attr->info_attr = 0;
-	attr->ttl = ops->ttl;
-	attr->gen = 0;
-	attr->has_write = true;
-	attr->send_key = false;
-}
-
-static void
-as_batch_attr_write_row(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
-{
-	as_batch_attr_write_header(attr, ops);
-	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
-
-	switch (p->gen) {
-	default:
-	case AS_POLICY_GEN_IGNORE:
-		break;
-	case AS_POLICY_GEN_EQ:
-		attr->gen = ops->gen;
-		attr->write_attr |= AS_MSG_INFO2_GENERATION;
-		break;
-	case AS_POLICY_GEN_GT:
-		attr->gen = ops->gen;
-		attr->write_attr |= AS_MSG_INFO2_GENERATION_GT;
-		break;
-	}
-
-	switch (p->exists) {
-	case AS_POLICY_EXISTS_IGNORE:
-		break;
-	case AS_POLICY_EXISTS_UPDATE:
-		attr->info_attr |= AS_MSG_INFO3_UPDATE_ONLY;
-		break;
-	case AS_POLICY_EXISTS_CREATE_OR_REPLACE:
-		attr->info_attr |= AS_MSG_INFO3_CREATE_OR_REPLACE;
-		break;
-	case AS_POLICY_EXISTS_REPLACE:
-		attr->info_attr |= AS_MSG_INFO3_REPLACE_ONLY;
-		break;
-	case AS_POLICY_EXISTS_CREATE:
-		attr->write_attr |= AS_MSG_INFO2_CREATE_ONLY;
-		break;
-	}
-
-	if (p->durable_delete) {
-		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
-	}
-
-	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
-		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
-	}
-}
-
-static void
-as_batch_attr_apply_header(as_batch_attr* attr)
-{
-	attr->read_attr = 0;
-	attr->write_attr = AS_MSG_INFO2_WRITE;
-	attr->info_attr = 0;
-	attr->ttl = 0;
-	attr->gen = 0;
-	attr->has_write = true;
-	attr->send_key = false;
-}
-
-static void
-as_batch_attr_apply_row(as_batch_attr* attr, const as_policy_batch_apply* p)
-{
-	attr->read_attr = 0;
-	attr->write_attr = AS_MSG_INFO2_WRITE;
-	attr->info_attr = 0;
-	attr->ttl = p->ttl;
-	attr->gen = 0;
-	attr->has_write = true;
-	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
-
-	if (p->durable_delete) {
-		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
-	}
-
-	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
-		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
-	}
-}
-
-static void
-as_batch_attr_remove_header(as_batch_attr* attr)
-{
-	attr->read_attr = 0;
-	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS | AS_MSG_INFO2_DELETE;
-	attr->info_attr = 0;
-	attr->ttl = 0;
-	attr->gen = 0;
-	attr->has_write = true;
-	attr->send_key = false;
-}
-
-static void
-as_batch_attr_remove_row(as_batch_attr* attr, const as_policy_batch_remove* p)
-{
-	attr->read_attr = 0;
-	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS | AS_MSG_INFO2_DELETE;
-	attr->info_attr = 0;
-	attr->ttl = 0;
-	attr->gen = 0;
-	attr->has_write = true;
-	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
-
-	switch (p->gen) {
-	default:
-	case AS_POLICY_GEN_IGNORE:
-		break;
-	case AS_POLICY_GEN_EQ:
-		attr->gen = p->generation;
-		attr->write_attr |= AS_MSG_INFO2_GENERATION;
-		break;
-	case AS_POLICY_GEN_GT:
-		attr->gen = p->generation;
-		attr->write_attr |= AS_MSG_INFO2_GENERATION_GT;
-		break;
-	}
-
-	if (p->durable_delete) {
-		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
-	}
-
-	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
-		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
-	}
-}
-
 static uint8_t*
 as_batch_parse_fields(uint8_t* p, uint32_t n_fields)
 {
@@ -444,6 +223,12 @@ as_batch_complete_async(as_event_executor* executor)
 	}
 }
 
+static inline bool
+as_batch_set_error_row(uint8_t res)
+{
+	return res != AEROSPIKE_ERR_RECORD_NOT_FOUND && res != AEROSPIKE_FILTERED_OUT;
+}
+
 static inline void
 as_batch_destroy_ubuf(as_async_batch_command* bc)
 {
@@ -451,12 +236,6 @@ as_batch_destroy_ubuf(as_async_batch_command* bc)
 		cf_free(bc->ubuf);
 		bc->ubuf = NULL;
 	}
-}
-
-static inline bool
-as_batch_set_error_row(uint8_t res)
-{
-	return res != AEROSPIKE_ERR_RECORD_NOT_FOUND && res != AEROSPIKE_FILTERED_OUT;
 }
 
 static bool
@@ -1248,6 +1027,227 @@ as_batch_records_size(
 	}
 	else {
 		return as_batch_records_size_old(records, offsets, bb, err);
+	}
+}
+
+static void
+as_batch_attr_read_header(as_batch_attr* attr, const as_policy_batch* p)
+{
+	attr->read_attr = AS_MSG_INFO1_READ;
+
+	if (p->read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
+		attr->read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
+	}
+
+	attr->write_attr = 0;
+
+	switch (p->read_mode_sc) {
+	default:
+	case AS_POLICY_READ_MODE_SC_SESSION:
+		attr->info_attr = 0;
+		break;
+	case AS_POLICY_READ_MODE_SC_LINEARIZE:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE;
+		break;
+	case AS_POLICY_READ_MODE_SC_ALLOW_REPLICA:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_RELAX;
+		break;
+	case AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
+		break;
+	}
+	attr->ttl = 0;
+	attr->gen = 0;
+	attr->has_write = false;
+	attr->send_key = false;
+}
+
+static void
+as_batch_attr_read_row(as_batch_attr* attr, const as_policy_batch_read* p)
+{
+	attr->read_attr = AS_MSG_INFO1_READ;
+
+	if (p->read_mode_ap == AS_POLICY_READ_MODE_AP_ALL) {
+		attr->read_attr |= AS_MSG_INFO1_READ_MODE_AP_ALL;
+	}
+
+	attr->write_attr = 0;
+
+	switch (p->read_mode_sc) {
+	default:
+	case AS_POLICY_READ_MODE_SC_SESSION:
+		attr->info_attr = 0;
+		break;
+	case AS_POLICY_READ_MODE_SC_LINEARIZE:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE;
+		break;
+	case AS_POLICY_READ_MODE_SC_ALLOW_REPLICA:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_RELAX;
+		break;
+	case AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE:
+		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
+		break;
+	}
+	attr->ttl = 0;
+	attr->gen = 0;
+	attr->has_write = false;
+	attr->send_key = false;
+}
+
+static inline void
+as_batch_attr_read_adjust(as_batch_attr* attr, bool read_all_bins)
+{
+	if (read_all_bins) {
+		attr->read_attr |= AS_MSG_INFO1_GET_ALL;
+	}
+	else {
+		attr->read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
+	}
+}
+
+static void
+as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
+{
+	attr->read_attr = 0;
+
+	for (uint16_t i = 0; i < ops->binops.size; i++) {
+		as_binop* op = &ops->binops.entries[i];
+
+		if (! as_op_is_write[op->op]) {
+			attr->read_attr = AS_MSG_INFO1_READ;
+			break;
+		}
+	}
+
+	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS;
+	attr->info_attr = 0;
+	attr->ttl = ops->ttl;
+	attr->gen = 0;
+	attr->has_write = true;
+	attr->send_key = false;
+}
+
+static void
+as_batch_attr_write_row(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
+{
+	as_batch_attr_write_header(attr, ops);
+	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
+
+	switch (p->gen) {
+	default:
+	case AS_POLICY_GEN_IGNORE:
+		break;
+	case AS_POLICY_GEN_EQ:
+		attr->gen = ops->gen;
+		attr->write_attr |= AS_MSG_INFO2_GENERATION;
+		break;
+	case AS_POLICY_GEN_GT:
+		attr->gen = ops->gen;
+		attr->write_attr |= AS_MSG_INFO2_GENERATION_GT;
+		break;
+	}
+
+	switch (p->exists) {
+	case AS_POLICY_EXISTS_IGNORE:
+		break;
+	case AS_POLICY_EXISTS_UPDATE:
+		attr->info_attr |= AS_MSG_INFO3_UPDATE_ONLY;
+		break;
+	case AS_POLICY_EXISTS_CREATE_OR_REPLACE:
+		attr->info_attr |= AS_MSG_INFO3_CREATE_OR_REPLACE;
+		break;
+	case AS_POLICY_EXISTS_REPLACE:
+		attr->info_attr |= AS_MSG_INFO3_REPLACE_ONLY;
+		break;
+	case AS_POLICY_EXISTS_CREATE:
+		attr->write_attr |= AS_MSG_INFO2_CREATE_ONLY;
+		break;
+	}
+
+	if (p->durable_delete) {
+		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
+	}
+
+	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
+		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
+	}
+}
+
+static void
+as_batch_attr_apply_header(as_batch_attr* attr)
+{
+	attr->read_attr = 0;
+	attr->write_attr = AS_MSG_INFO2_WRITE;
+	attr->info_attr = 0;
+	attr->ttl = 0;
+	attr->gen = 0;
+	attr->has_write = true;
+	attr->send_key = false;
+}
+
+static void
+as_batch_attr_apply_row(as_batch_attr* attr, const as_policy_batch_apply* p)
+{
+	attr->read_attr = 0;
+	attr->write_attr = AS_MSG_INFO2_WRITE;
+	attr->info_attr = 0;
+	attr->ttl = p->ttl;
+	attr->gen = 0;
+	attr->has_write = true;
+	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
+
+	if (p->durable_delete) {
+		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
+	}
+
+	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
+		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
+	}
+}
+
+static void
+as_batch_attr_remove_header(as_batch_attr* attr)
+{
+	attr->read_attr = 0;
+	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS | AS_MSG_INFO2_DELETE;
+	attr->info_attr = 0;
+	attr->ttl = 0;
+	attr->gen = 0;
+	attr->has_write = true;
+	attr->send_key = false;
+}
+
+static void
+as_batch_attr_remove_row(as_batch_attr* attr, const as_policy_batch_remove* p)
+{
+	attr->read_attr = 0;
+	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS | AS_MSG_INFO2_DELETE;
+	attr->info_attr = 0;
+	attr->ttl = 0;
+	attr->gen = 0;
+	attr->has_write = true;
+	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
+
+	switch (p->gen) {
+	default:
+	case AS_POLICY_GEN_IGNORE:
+		break;
+	case AS_POLICY_GEN_EQ:
+		attr->gen = p->generation;
+		attr->write_attr |= AS_MSG_INFO2_GENERATION;
+		break;
+	case AS_POLICY_GEN_GT:
+		attr->gen = p->generation;
+		attr->write_attr |= AS_MSG_INFO2_GENERATION_GT;
+		break;
+	}
+
+	if (p->durable_delete) {
+		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
+	}
+
+	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
+		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 }
 

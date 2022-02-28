@@ -155,12 +155,14 @@ local_free(void* memory)
  */
 typedef size_t (*as_write_fn) (void* udata, uint8_t* buf);
 
+struct as_command_s;
+
 /**
  * @private
  * Parse results callback used in as_command_execute().
  */
 typedef as_status (*as_parse_results_fn) (
-	as_error* err, as_node* node, uint8_t* buf, size_t size, void* user_data
+	as_error* err, struct as_command_s* cmd, as_node* node, uint8_t* buf, size_t size
 	);
 
 /**
@@ -598,21 +600,21 @@ as_command_execute(as_command* cmd, as_error* err);
  * Parse header of server response.
  */
 as_status
-as_command_parse_header(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata);
+as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
 
 /**
  * @private
  * Parse server record.  Used for reads.
  */
 as_status
-as_command_parse_result(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata);
+as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
 
 /**
  * @private
  * Parse server success or failure result.
  */
 as_status
-as_command_parse_success_failure(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata);
+as_command_parse_success_failure(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
 
 /**
  * @private

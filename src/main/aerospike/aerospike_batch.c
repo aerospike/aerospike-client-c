@@ -327,9 +327,9 @@ as_batch_process_record(
 }
 
 static as_status
-as_batch_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata)
+as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
-	as_batch_task* task = udata;
+	as_batch_task* task = cmd->udata;
 	bool deserialize = task->policy->deserialize;
 
 	uint8_t* p = buf;

@@ -1591,39 +1591,40 @@ as_batch_builder_destroy(as_batch_builder* bb)
 }
 
 static void
-as_batch_set_error_records(as_batch_task* task, as_error* err)
+as_batch_set_error_records(as_batch_task_records* btr, as_error* err)
 {
-	as_batch_task_records* btr = (as_batch_task_records*)task;
-	uint32_t offsets_size = task->offsets.size;
+	uint32_t offsets_size = btr->base.offsets.size;
 
 	for (uint32_t i = 0; i < offsets_size; i++) {
-		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
-
+		uint32_t offset = *(uint32_t*)as_vector_get(&btr->base.offsets, i);
 		as_batch_base_record* rec = as_vector_get(btr->records, offset);
-		rec->result = err->code;
 
-		if (rec->has_write) {
-			rec->in_doubt = err->in_doubt;
+		if (rec->result == AEROSPIKE_NO_RESPONSE) {
+			rec->result = err->code;
+
+			if (rec->has_write) {
+				rec->in_doubt = err->in_doubt;
+			}
 		}
 	}
 }
 
 static void
-as_batch_set_error_keys(as_batch_task* task, as_error* err)
+as_batch_set_error_keys(as_batch_task_keys* btk, as_error* err)
 {
-	as_batch_task_keys* btk = (as_batch_task_keys*)task;
+	uint32_t offsets_size = btk->base.offsets.size;
 	bool has_write = btk->rec->has_write;
 
-	uint32_t offsets_size = task->offsets.size;
-
 	for (uint32_t i = 0; i < offsets_size; i++) {
-		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
-
+		uint32_t offset = *(uint32_t*)as_vector_get(&btk->base.offsets, i);
 		as_batch_result* res = &btk->results[offset];
-		res->result = err->code;
 
-		if (has_write) {
-			res->in_doubt = err->in_doubt;
+		if (res->result == AEROSPIKE_NO_RESPONSE) {
+			res->result = err->code;
+
+			if (has_write) {
+				res->in_doubt = err->in_doubt;
+			}
 		}
 	}
 }
@@ -1631,8 +1632,6 @@ as_batch_set_error_keys(as_batch_task* task, as_error* err)
 static as_status
 as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* parent)
 {
-	as_error_reset(err);
-
 	as_batch_task* task = &btr->base;
 	const as_policy_batch* policy = task->policy;
 
@@ -1676,7 +1675,6 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	as_command cmd;
 	as_batch_command_init(&cmd, task, policy, buf, size, parent);
 
-	err->in_doubt = false;
 	status = as_command_execute(&cmd, err);
 
 	// Set error/in_doubt for keys associated this batch command when
@@ -1684,7 +1682,7 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	// those new subcommands have already set error/in_doubt on the affected
 	// subset of keys.
 	if (status != AEROSPIKE_OK && !cmd.split_retry) {
-		as_batch_set_error_records(task, err);
+		as_batch_set_error_records(btr, err);
 	}
 
 	as_command_buffer_free(buf, capacity);
@@ -1833,8 +1831,6 @@ as_batch_keys_write(
 static as_status
 as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent)
 {
-	as_error_reset(err);
-
 	as_batch_task* task = &btk->base;
 	const as_policy_batch* policy = task->policy;
 
@@ -1878,7 +1874,6 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	as_command cmd;
 	as_batch_command_init(&cmd, task, policy, buf, size, parent);
 
-	err->in_doubt = false;
 	status = as_command_execute(&cmd, err);
 
 	// Set error/in_doubt for keys associated this batch command when
@@ -1886,7 +1881,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	// those new subcommands have already set error/in_doubt on the affected
 	// subset of keys.
 	if (btk->listener && status != AEROSPIKE_OK && !cmd.split_retry) {
-		as_batch_set_error_keys(task, err);
+		as_batch_set_error_keys(btk, err);
 	}
 
 	as_command_buffer_free(buf, capacity);
@@ -1902,6 +1897,7 @@ as_batch_worker(void* data)
 	complete_task.node = task->node;
 
 	as_error err;
+	as_error_init(&err);
 
 	if (task->type == BATCH_TYPE_RECORDS) {
 		// Execute batch referenced in aerospike_batch_read().
@@ -2163,12 +2159,29 @@ as_batch_keys_execute(
 	}
 	else {
 		// Run batch requests sequentially in same thread.
+		as_error e;
+		as_error_init(&e);
+
 		for (uint32_t i = 0; status == AEROSPIKE_OK && i < batch_nodes.size; i++) {
 			as_batch_node* batch_node = as_vector_get(&batch_nodes, i);
 			
 			btk.base.node = batch_node->node;
 			memcpy(&btk.base.offsets, &batch_node->offsets, sizeof(as_vector));
-			status = as_batch_execute_keys(&btk, err, NULL);
+			as_status s = as_batch_execute_keys(&btk, err, NULL);
+
+			if (s != AEROSPIKE_OK) {
+				if (policy->respond_all_keys) {
+					if (status == AEROSPIKE_OK) {
+						as_error_copy(err, &e);
+						status = s;
+					}
+				}
+				else {
+					as_error_copy(err, &e);
+					status = s;
+					break;
+				}
+			}
 		}
 	}
 
@@ -2265,6 +2278,7 @@ as_batch_execute_sync(
 	else {
 		// Run batch requests sequentially in same thread.
 		as_error e;
+		as_error_init(&e);
 
 		for (uint32_t i = 0; i < n_batch_nodes; i++) {
 			as_batch_node* batch_node = as_vector_get(batch_nodes, i);
@@ -3234,12 +3248,14 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = cf_swap_from_be32(*(uint32_t*)p);
-
 		as_batch_base_record* rec = as_vector_get(records, offset);
-		rec->result = err->code;
 
-		if (rec->has_write) {
-			rec->in_doubt = err->in_doubt;
+		if (rec->result == AEROSPIKE_NO_RESPONSE) {
+			rec->result = err->code;
+
+			if (rec->has_write) {
+				rec->in_doubt = err->in_doubt;
+			}
 		}
 
 		uint8_t type;

@@ -330,7 +330,7 @@ TEST(batch_udf_complex, "Batch UDF Complex")
 	as_batch_records_destroy(&recs);
 
 	// Read records that were written.
-	as_batch_records_inita(&recs, 3);
+	as_batch_records_inita(&recs, 2);
 
 	as_batch_read_record* r4 = as_batch_read_reserve(&recs);
 	as_key_init_int64(&r4->key, NAMESPACE, SET, 20004);

@@ -2182,13 +2182,14 @@ as_batch_keys_execute(
 	else {
 		// Run batch requests sequentially in same thread.
 		as_error e;
-		as_error_init(&e);
 
 		for (uint32_t i = 0; status == AEROSPIKE_OK && i < batch_nodes.size; i++) {
 			as_batch_node* batch_node = as_vector_get(&batch_nodes, i);
 			
 			btk.base.node = batch_node->node;
 			memcpy(&btk.base.offsets, &batch_node->offsets, sizeof(as_vector));
+			as_error_init(&e);
+
 			as_status s = as_batch_execute_keys(&btk, err, NULL);
 
 			if (s != AEROSPIKE_OK) {
@@ -2300,13 +2301,14 @@ as_batch_execute_sync(
 	else {
 		// Run batch requests sequentially in same thread.
 		as_error e;
-		as_error_init(&e);
 
 		for (uint32_t i = 0; i < n_batch_nodes; i++) {
 			as_batch_node* batch_node = as_vector_get(batch_nodes, i);
 
 			btr.base.node = batch_node->node;
 			memcpy(&btr.base.offsets, &batch_node->offsets, sizeof(as_vector));
+			as_error_init(&e);
+
 			as_status s = as_batch_execute_records(&btr, &e, parent);
 
 			if (s != AEROSPIKE_OK) {

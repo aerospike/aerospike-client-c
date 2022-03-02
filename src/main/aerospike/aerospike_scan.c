@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -473,13 +473,22 @@ as_scan_command_init(
 {
 	uint16_t n_ops = (scan->ops) ? scan->ops->binops.size : scan->select.size;
 	uint8_t* p;
-	
-	if (scan->apply_each.function[0] || scan->ops) {
+
+	if (scan->ops) {
+		// Background scan with operations.
+		uint32_t ttl = (scan->ttl)? scan->ttl : scan->ops->ttl;
 		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
-				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0, sb->n_fields, n_ops,
+				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
+				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+	}
+	else if (scan->apply_each.function[0]) {
+		// Background scan with UDF.
+		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
+				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, scan->ttl, sb->n_fields, n_ops,
 				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {
+		// Foreground scan.
 		uint8_t read_attr = (scan->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA : AS_MSG_INFO1_READ;
 		p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
 				AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, sb->n_fields, n_ops,

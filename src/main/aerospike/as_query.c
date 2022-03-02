@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -53,6 +53,7 @@ as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_se
 	query->predexp.entries = NULL;
 
 	query->ops = NULL;
+	query->ttl = 0;
 	query->no_bins = false;
 
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);

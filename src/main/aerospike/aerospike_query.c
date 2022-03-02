@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -708,18 +708,27 @@ as_query_command_init(
 	uint8_t* p;
 	
 	if (query_policy) {
+		// Foreground query.
 		uint8_t read_attr = (query->no_bins)? AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA :
 											  AS_MSG_INFO1_READ;
 
 		p = as_command_write_header_read(cmd, base_policy, AS_POLICY_READ_MODE_AP_ONE,
 				AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, n_fields, n_ops, read_attr);
 	}
-	else {
+	else if (query->ops) {
+		// Background query with operations.
+		uint32_t ttl = (query->ttl)? query->ttl : query->ops->ttl;
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
-				write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0, n_fields, n_ops,
+				write_policy->exists, AS_POLICY_GEN_IGNORE, 0, ttl, n_fields, n_ops,
 				write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
-	
+	else {
+		// Background query with UDF.
+		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
+				write_policy->exists, AS_POLICY_GEN_IGNORE, 0, query->ttl, n_fields, n_ops,
+				write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+	}
+
 	// Write namespace.
 	if (query->ns[0]) {
 		p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, query->ns);

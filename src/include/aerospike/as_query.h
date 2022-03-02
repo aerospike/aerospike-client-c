@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -506,7 +506,7 @@ typedef struct as_query_s {
 	as_query_predexp predexp;
 
 	/**
-	 * UDF to apply to results of the query
+	 * UDF to apply to results of the background query.
 	 *
 	 * Should be set via `as_query_apply()`.
 	 */
@@ -517,6 +517,22 @@ typedef struct as_query_s {
 	 * If ops is set, ops will be destroyed when as_query_destroy() is called.
 	 */
 	struct as_operations_s* ops;
+
+	/**
+	 * The time-to-live (expiration) of the record in seconds.
+	 * There are also special values that can be set in the record TTL:
+	 * (*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
+	 *    record will adopt the default TTL value from the namespace.
+	 * (*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
+	 *    (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
+	 *    will get an internal "void_time" of zero, and thus will never expire.
+	 * (*) 0xFFFFFFFE (also, -2 in a signed 32 bit int)
+	 *    (defined as AS_RECORD_NO_CHANGE_TTL), which means that the record
+	 *    ttl will not change when the record is updated.
+	 *
+	 * Note that the TTL value will be employed ONLY on background query writes.
+	 */
+	uint32_t ttl;
 
 	/**
 	 * Set to true if query should only return keys and no bin data.

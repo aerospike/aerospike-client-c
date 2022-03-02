@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -435,6 +435,51 @@ TEST(query_operate_expop, "query operate expop")
 	as_exp_destroy(exp);
 }
 
+TEST(query_operate_ttl, "query operate ttl")
+{
+	write_recs();
+	
+	as_error err;
+	as_status status;
+	as_query q;
+
+	as_query_init(&q, NAMESPACE, SET);
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "qebin1", as_integer_range(3, 9));
+
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	uint32_t ttl = 123456;
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	ops.ttl = ttl;
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+	q.ops = &ops;
+
+	uint64_t query_id = 0;
+	status = aerospike_query_background(as, &err, NULL, &q, &query_id);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	aerospike_query_wait(as, &err, NULL, &q, query_id, 0);
+	as_query_destroy(&q);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "qekey5");
+
+	as_record* rec = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &rec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Current ttl should be within 2 seconds of original ttl.
+	if (! (rec->ttl >= ttl - 2 && rec->ttl <= ttl)) {
+		assert_int_eq(rec->ttl, ttl);
+	}
+	as_record_destroy(rec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -449,4 +494,5 @@ SUITE(query_background, "aerospike_query_background tests")
 	suite_add(query_aggregation_double);
 	suite_add(query_operate);
 	suite_add(query_operate_expop);
+	suite_add(query_operate_ttl);
 }

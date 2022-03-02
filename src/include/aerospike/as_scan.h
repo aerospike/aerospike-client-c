@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -340,7 +340,7 @@ typedef struct as_scan_s {
 	as_scan_predexp predexp;
 
 	/**
-	 * Apply the UDF for each record scanned on the server.
+	 * UDF to apply to results of the background scan.
 	 *
 	 * Should be set via `as_scan_apply_each()`.
 	 */
@@ -356,6 +356,22 @@ typedef struct as_scan_s {
 	 * Status of all partitions.
 	 */
 	as_partitions_status* parts_all;
+
+	/**
+	 * The time-to-live (expiration) of the record in seconds.
+	 * There are also special values that can be set in the record TTL:
+	 * (*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
+	 *    record will adopt the default TTL value from the namespace.
+	 * (*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
+	 *    (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
+	 *    will get an internal "void_time" of zero, and thus will never expire.
+	 * (*) 0xFFFFFFFE (also, -2 in a signed 32 bit int)
+	 *    (defined as AS_RECORD_NO_CHANGE_TTL), which means that the record
+	 *    ttl will not change when the record is updated.
+	 *
+	 * Note that the TTL value will be employed ONLY on background scan writes.
+	 */
+	uint32_t ttl;
 
 	/**
 	 * Set to true if as_policy_scan.max_records is set and you need to scan data in pages.

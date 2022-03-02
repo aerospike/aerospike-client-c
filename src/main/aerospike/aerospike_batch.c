@@ -889,6 +889,8 @@ as_batch_write_record_size(
 	as_key* key, as_batch_write_record* rec, as_batch_builder* bb, as_error* err
 	)
 {
+	bb->size += 6; // gen(2) + ttl(4) = 6
+
 	if (rec->policy) {
 		if (rec->policy->filter_exp) {
 			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
@@ -923,6 +925,8 @@ as_batch_write_record_size(
 static void
 as_batch_apply_record_size(as_key* key, as_batch_apply_record* rec, as_batch_builder* bb)
 {
+	bb->size += 6; // gen(2) + ttl(4) = 6
+
 	if (rec->policy) {
 		if (rec->policy->filter_exp) {
 			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
@@ -948,6 +952,8 @@ as_batch_apply_record_size(as_key* key, as_batch_apply_record* rec, as_batch_bui
 static void
 as_batch_remove_record_size(as_key* key, as_batch_remove_record* rec, as_batch_builder* bb)
 {
+	bb->size += 6; // gen(2) + ttl(4) = 6
+
 	if (rec->policy) {
 		if (rec->policy->filter_exp) {
 			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
@@ -3510,6 +3516,7 @@ aerospike_batch_operate(
 	as_batch_write_record rec = {
 		.type = AS_BATCH_WRITE,
 		.has_write = true,
+		.policy = policy_write,
 		.ops = ops
 	};
 
@@ -3541,6 +3548,7 @@ aerospike_batch_apply(
 	as_batch_apply_record rec = {
 		.type = AS_BATCH_APPLY,
 		.has_write = true,
+		.policy = policy_apply,
 		.module = module,
 		.function = function,
 		.arglist = arglist
@@ -3572,7 +3580,8 @@ aerospike_batch_remove(
 
 	as_batch_remove_record rec = {
 		.type = AS_BATCH_REMOVE,
-		.has_write = true
+		.has_write = true,
+		.policy = policy_remove
 	};
 
 	as_batch_attr attr;

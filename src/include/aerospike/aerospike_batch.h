@@ -116,7 +116,7 @@ typedef struct as_batch_read_record_s {
 	/**
 	 * Optional read policy.
 	 */
-	as_policy_batch_read* policy;
+	const as_policy_batch_read* policy;
 
 	/**
 	 * Read operations for this key. ops are mutually exclusive with bin_names.
@@ -160,7 +160,7 @@ typedef struct as_batch_write_record_s {
 	/**
 	 * Optional write policy.
 	 */
-	as_policy_batch_write* policy;
+	const as_policy_batch_write* policy;
 
 	/**
 	 * Required read/write operations for this key.
@@ -186,7 +186,7 @@ typedef struct as_batch_apply_record_s {
 	/**
 	 * Optional apply policy.
 	 */
-	as_policy_batch_apply* policy;
+	const as_policy_batch_apply* policy;
 
 	/**
 	 * Package or lua module name.
@@ -224,7 +224,7 @@ typedef struct as_batch_remove_record_s {
 	/**
 	 * Optional remove policy.
 	 */
-	as_policy_batch_remove* policy;
+	const as_policy_batch_remove* policy;
 } as_batch_remove_record;
 
 /**

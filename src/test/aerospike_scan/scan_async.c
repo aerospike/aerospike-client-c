@@ -433,6 +433,33 @@ TEST(scan_async_set1, "async scan "SET1"")
 
 TEST(scan_async_set1_concurrent, "async scan "SET1" concurrently")
 {
+	scan_check check = {
+			.failed = false,
+			.set = SET1,
+			.count = 0,
+			.nobindata = false,
+			.bins = { "bin1", "bin2", "bin3", NULL },
+	};
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET1);
+	as_scan_set_concurrent(&scan, true);
+
+	as_monitor_begin(&monitor);
+
+	as_error err;
+	as_status status = aerospike_scan_async(as, &err, NULL, &scan, 0, scan_listener, &check, 0);
+	as_scan_destroy(&scan);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
+	assert_false(check.failed);
+	assert_int_eq( check.count, NUM_RECS_SET1);
+	info("Got %d records in the concurrent scan. Expected %d", check.count, NUM_RECS_SET1);
+}
+
+TEST(scan_async_set1_concurrent_loop, "async scan "SET1" concurrently in loop")
+{
 	as_scan scan;
 	as_policy_scan policy_scan;
 	as_error err;
@@ -564,6 +591,7 @@ SUITE(scan_async, "Scan Async Tests")
 	suite_add(scan_async_null_set);
 	suite_add(scan_async_set1);
 	suite_add(scan_async_set1_concurrent);
+	suite_add(scan_async_set1_concurrent_loop);
 	suite_add(scan_async_set1_select);
 	suite_add(scan_async_set1_nodata);
 	suite_add(scan_async_single_node);

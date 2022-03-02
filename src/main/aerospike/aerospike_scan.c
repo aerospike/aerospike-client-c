@@ -476,7 +476,9 @@ as_scan_command_init(
 	
 	if (scan->apply_each.function[0] || scan->ops) {
 		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
-				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0, sb->n_fields, n_ops,
+				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 
+				(scan->ops ? scan->ops->ttl : 0), 
+				sb->n_fields, n_ops,
 				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {

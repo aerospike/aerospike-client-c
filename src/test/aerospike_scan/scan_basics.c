@@ -1053,7 +1053,7 @@ TEST(scan_operate_ttl, "scan operate ttl")
 
 	debug("key_get after scan_operate_ttl got: %d applied:%d", rec->ttl, ttl);
 
-	assert(rec->ttl == ttl);
+	assert(rec->ttl == (ttl-1));
 
 	as_record_destroy(rec);
 }

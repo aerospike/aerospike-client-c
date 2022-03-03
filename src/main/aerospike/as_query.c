@@ -53,6 +53,7 @@ as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_se
 	query->predexp.entries = NULL;
 
 	query->ops = NULL;
+	query->ttl = 0;
 	query->no_bins = false;
 
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);

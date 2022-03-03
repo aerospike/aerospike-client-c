@@ -804,6 +804,7 @@ as_query_command_init(
 	uint8_t* p;
 	
 	if (query_policy) {
+		// Foreground query.
 		uint8_t read_attr = AS_MSG_INFO1_READ;
 
 		if (query->no_bins) {
@@ -820,9 +821,17 @@ as_query_command_init(
 			AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, qb->n_fields, qb->n_ops,
 			read_attr, info_attr);
 	}
-	else {
+	else if (query->ops) {
+		// Background query with operations.
+		uint32_t ttl = (query->ttl)? query->ttl : query->ops->ttl;
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
-			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, 0, qb->n_fields, qb->n_ops,
+			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, ttl, qb->n_fields, qb->n_ops,
+			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+	}
+	else {
+		// Background query with UDF.
+		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
+			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, query->ttl, qb->n_fields, qb->n_ops,
 			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 

@@ -1035,6 +1035,42 @@ TEST(scan_operate, "scan operate")
 	as_record_destroy(rec);
 }
 
+TEST(scan_operate_ttl, "scan operate ttl")
+{
+	as_error err;
+	as_string str;
+	as_string_init(&str, "bar", false);
+	uint32_t ttl = 123456;
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	ops.ttl = ttl;
+	as_operations_add_touch(&ops);
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	scan.ops = &ops;
+
+	uint64_t scanid = 0;
+	as_status status = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_scan_destroy(&scan);
+
+	aerospike_scan_wait(as, &err, NULL, scanid, 0);
+
+	as_key key;
+	as_key_init(&key, NS, SET2, "key-" SET2 "-5");
+
+	as_record* rec = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &rec);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Current ttl should be within 2 seconds of original ttl.
+	if (! (rec->ttl >= ttl - 2 && rec->ttl <= ttl)) {
+		assert_int_eq(rec->ttl, ttl);
+	}
+	as_record_destroy(rec);
+}
+
 TEST(scan_operate_expop, "scan operate expop")
 {
 	as_error err;
@@ -1355,6 +1391,7 @@ SUITE( scan_basics, "aerospike_scan basic tests" ) {
 	suite_add( scan_basics_background_delete_records_md_filter );
 	suite_add( scan_basics_background_delete_records );
 	suite_add( scan_operate );
+	suite_add( scan_operate_ttl);
 	suite_add( scan_operate_expop );
 	suite_add( scan_filter_set_name );
 	suite_add( scan_filter_rec_ttl );

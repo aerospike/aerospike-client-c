@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -64,6 +64,7 @@ as_scan_defaults(as_scan* scan, bool free, const as_namespace ns, const as_set s
 	as_udf_call_init(&scan->apply_each, NULL, NULL, NULL);
 
 	scan->parts_all = NULL;
+	scan->ttl = 0;
 	scan->paginate = false;
 
 	return scan;

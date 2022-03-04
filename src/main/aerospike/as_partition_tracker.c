@@ -37,7 +37,7 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 	for (uint16_t i = 0; i < part_count; i++) {
 		as_partition_status* ps = &parts_all->parts[i];
 		ps->part_id = part_begin + i;
-		ps->retry = false;
+		ps->retry = true;
 		ps->digest.init = false;
 	}
 
@@ -68,6 +68,16 @@ tracker_init(
 	else {
 		// Instance contains partitions from previous scan/query.
 		pt->parts_all = as_partitions_status_reserve(resume);
+
+		// Retry all partitions when max_records not specified.
+		if (max_records == 0) {
+			as_partitions_status* parts_all = pt->parts_all;
+
+			for (uint16_t i = 0; i < parts_all->part_count; i++) {
+				as_partition_status* ps = &parts_all->parts[i];
+				ps->retry = true;
+			}
+		}
 	}
 
 	as_vector_init(&pt->node_parts, sizeof(as_node_partitions), pt->node_capacity);
@@ -127,6 +137,24 @@ assign_partition(as_partition_tracker* pt, as_partition_status* ps, as_node* nod
 	}
 	else {
 		as_vector_append(&np->parts_full, &ps->part_id);
+	}
+}
+
+static void
+mark_retry(as_partition_tracker* pt, as_node_partitions* np)
+{
+	as_vector* list = &np->parts_full;
+
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
+		ps->retry = true;
+	}
+
+	list = &np->parts_partial;
+
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
+		ps->retry = true;
 	}
 }
 
@@ -230,9 +258,7 @@ as_partition_tracker_assign(
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
 			as_partition_status* ps = &parts_all->parts[i];
 
-			// On first iteration, request all partitions.
-			// On subsequent iterations, only request partitions marked for retry.
-			if (pt->iteration == 1 || ps->retry) {
+			if (ps->retry) {
 				as_node* node = table->partitions[ps->part_id].master;
 
 				if (! node) {
@@ -267,9 +293,7 @@ as_partition_tracker_assign(
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
 			as_partition_status* ps = &parts_all->parts[i];
 
-			// On first iteration, request all partitions.
-			// On subsequent iterations, only request partitions marked for retry.
-			if (pt->iteration == 1 || ps->retry) {
+			if (ps->retry) {
 				uint32_t master = as_load_uint32(&table->partitions[ps->part_id].master);
 
 				// node index zero indicates unset.
@@ -334,7 +358,6 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 	as_vector* list = &pt->node_parts;
 	uint64_t record_count = 0;
 	uint32_t parts_unavailable = 0;
-	bool is_done = true;
 
 	for (uint32_t i = 0; i < list->size; i++) {
 		as_node_partitions* np = as_vector_get(list, i);
@@ -344,22 +367,36 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 		//printf("Node %s partsFull=%u partsPartial=%u partsUnavailable=%u recordsRequested=%llu recordsReceived=%llu\n",
 		//	as_node_get_address_string(np->node), np->parts_full.size, np->parts_partial.size,
 		//	np->parts_unavailable, np->record_max, np->record_count);
-
-		if (np->record_max > 0 && np->record_count >= np->record_max) {
-			is_done = false;
-		}
 	}
 
 	if (parts_unavailable == 0) {
-		// Server version >= 6.0 (denoted by has_partition_query) will return all records for
-		// each node up to that node's max (np->record_max).
-		if (cluster->has_partition_query) {
-			pt->parts_all->done = is_done;
-		}
-		// Servers version < 6.0 can return less records than max and still have more records
-		// for each node. When max_records specified, only mark done when record_count is zero.
-		else if (pt->max_records == 0 || record_count == 0) {
+		if (pt->max_records == 0) {
 			pt->parts_all->done = true;
+		}
+		else {
+			bool is_done = true;
+
+			// Check if all nodes are done.
+			for (uint32_t i = 0; i < list->size; i++) {
+				as_node_partitions* np = as_vector_get(list, i);
+
+				if (np->record_count >= np->record_max) {
+					mark_retry(pt, np);
+					is_done = false;
+				}
+			}
+
+			if (cluster->has_partition_query) {
+				// Server version >= 6.0 (denoted by has_partition_query) will return
+				// all records for each node up to that node's max (np->record_max).
+				pt->parts_all->done = is_done;
+			}
+			else {
+				// Servers version < 6.0 can return less records than max and still
+				// have more records for each node. When max_records specified,
+				// only mark done when record_count is zero.
+				pt->parts_all->done = record_count == 0;
+			}
 		}
 		return AEROSPIKE_OK;
 	}
@@ -435,21 +472,7 @@ as_partition_tracker_should_retry(
 			pt->errors = as_vector_create(sizeof(as_status), 10);
 		}
 		as_vector_append(pt->errors, &status);
-
-		as_vector* list = &np->parts_full;
-
-		for (uint32_t i = 0; i < list->size; i++) {
-			as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
-			ps->retry = true;
-		}
-
-		list = &np->parts_partial;
-
-		for (uint32_t i = 0; i < list->size; i++) {
-			as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
-			ps->retry = true;
-		}
-
+		mark_retry(pt, np);
 		np->parts_unavailable = np->parts_full.size + np->parts_partial.size;
 		return true;
 

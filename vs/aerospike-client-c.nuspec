@@ -2,7 +2,7 @@
 <package>
   <metadata>
     <id>aerospike-client-c</id>
-    <version>5.2.7</version>
+    <version>5.2.8</version>
     <title>Aerospike C Client</title>
     <authors>Aerospike</authors>
     <owners>Aerospike</owners>
@@ -11,7 +11,7 @@
     <icon>icon.png</icon>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Aerospike C client library for synchronous database commands.</description>
-    <copyright>Copyright 2008-2020 Aerospike, Inc.</copyright>
+    <copyright>Copyright 2008-2022 Aerospike, Inc.</copyright>
     <tags>Aerospike database C client native</tags>
   </metadata>
   <files>

@@ -562,6 +562,7 @@ typedef struct as_policy_read_s {
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
+	 *
 	 * Default: true
 	 */
 	bool deserialize;
@@ -571,6 +572,7 @@ typedef struct as_policy_read_s {
 	 * async commands. If true, the user is responsible for calling as_record_destroy() when done
 	 * with the record. If false, as_record_destroy() is automatically called by the client after
 	 * the user listener function completes. This field is ignored for sync commands.
+	 *
 	 * Default: false
 	 */
 	bool async_heap_rec;
@@ -739,6 +741,7 @@ typedef struct as_policy_operate_s {
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
+	 *
 	 * Default: true
 	 */
 	bool deserialize;
@@ -757,6 +760,7 @@ typedef struct as_policy_operate_s {
 	 * async commands. If true, the user is responsible for calling as_record_destroy() when done
 	 * with the record. If false, as_record_destroy() is automatically called by the client after
 	 * the user listener function completes. This field is ignored for sync commands.
+	 *
 	 * Default: false
 	 */
 	bool async_heap_rec;
@@ -870,6 +874,7 @@ typedef struct as_policy_batch_s {
 	 *
 	 * Inline processing can introduce the possibility of unfairness because the server
 	 * can process the entire batch before moving onto the next command.
+	 *
 	 * Default: true
 	 */
 	bool allow_inline;
@@ -881,23 +886,29 @@ typedef struct as_policy_batch_s {
 	 *
 	 * Inline processing can introduce the possibility of unfairness because the server
 	 * can process the entire batch before moving onto the next command.
+	 *
 	 * Default: false
 	 */
 	bool allow_inline_ssd;
 
 	/**
-	 * Should all batch keys be attempted regardless of errors.
+	 * Should all batch keys be attempted regardless of errors. This field is used on both
+	 * the client and server. The client handles node specific errors and the server handles
+	 * key specific errors.
 	 *
 	 * If true, every batch key is attempted regardless of previous key specific errors.
 	 * Node specific errors such as timeouts stop keys to that node, but keys directed at
 	 * other nodes will continue to be processed.
 	 *
-	 * If false, most key and node specific errors stop the batch. The exceptions are
-	 * AEROSPIKE_ERR_RECORD_NOT_FOUND and AEROSPIKE_FILTERED_OUT which never stop the batch.
+	 * If false, the server will stop the batch to its node on most key specific errors.
+	 * The exceptions are AEROSPIKE_ERR_RECORD_NOT_FOUND and AEROSPIKE_FILTERED_OUT
+	 * which never stop the batch. The client will stop the entire batch on node specific
+	 * errors for sync commands that are run in sequence (concurrent == false). The client
+	 * will not stop the entire batch for async commands or sync commands run in parallel.
 	 *
-	 * This field is used on both the client and server. The client handles node specific
-	 * errors and the server handles key specific errors. Server versions &lt; 6.0
-	 * do not support respond_all_keys and treat this value as false.
+	 * Server versions &lt; 6.0 do not support this field and treat this value as false
+	 * for key specific errors.
+	 *
 	 * Default: true
 	 */
 	bool respond_all_keys;
@@ -917,6 +928,7 @@ typedef struct as_policy_batch_s {
 	/**
 	 * Should raw bytes be deserialized to as_list or as_map. Set to false for backup programs that
 	 * just need access to raw bytes.
+	 *
 	 * Default: true
 	 */
 	bool deserialize;
@@ -936,6 +948,7 @@ typedef struct as_policy_batch_read_s {
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary transaction policies.
+	 *
 	 * Default: NULL
 	 */
 	struct as_exp* filter_exp;
@@ -967,6 +980,7 @@ typedef struct as_policy_batch_write_s {
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary transaction policies.
+	 *
 	 * Default: NULL
 	 */
 	struct as_exp* filter_exp;
@@ -1016,6 +1030,7 @@ typedef struct as_policy_batch_apply_s {
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary transaction policies.
+	 *
 	 * Default: NULL
 	 */
 	struct as_exp* filter_exp;
@@ -1071,6 +1086,7 @@ typedef struct as_policy_batch_remove_s {
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary transaction policies.
+	 *
 	 * Default: NULL
 	 */
 	struct as_exp* filter_exp;

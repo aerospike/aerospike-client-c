@@ -374,27 +374,33 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 			pt->parts_all->done = true;
 		}
 		else {
-			bool is_done = true;
-
-			// Check if all nodes are done.
-			for (uint32_t i = 0; i < list->size; i++) {
-				as_node_partitions* np = as_vector_get(list, i);
-
-				if (np->record_count >= np->record_max) {
-					mark_retry(pt, np);
-					is_done = false;
-				}
-			}
-
 			if (cluster->has_partition_query) {
-				// Server version >= 6.0 (denoted by has_partition_query) will return
-				// all records for each node up to that node's max (np->record_max).
+				// Server version >= 6.0 will return all records for each node up to
+				// that node's max. If node's record count reached max, there still
+				// may be records available for that node.
+				bool is_done = true;
+
+				for (uint32_t i = 0; i < list->size; i++) {
+					as_node_partitions* np = as_vector_get(list, i);
+
+					if (np->record_count >= np->record_max) {
+						mark_retry(pt, np);
+						is_done = false;
+					}
+				}
 				pt->parts_all->done = is_done;
 			}
 			else {
 				// Servers version < 6.0 can return less records than max and still
-				// have more records for each node. When max_records specified,
-				// only mark done when record_count is zero.
+				// have more records for each node, so the node is only done if no
+				// records were retrieved for that node.
+				for (uint32_t i = 0; i < list->size; i++) {
+					as_node_partitions* np = as_vector_get(list, i);
+
+					if (np->record_count > 0) {
+						mark_retry(pt, np);
+					}
+				}
 				pt->parts_all->done = record_count == 0;
 			}
 		}

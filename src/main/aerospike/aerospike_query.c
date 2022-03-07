@@ -1630,13 +1630,13 @@ as_query_partition_execute_async(
 			// as_event_executor_destroy() will release nodes that were not queued.
 			// as_event_executor_cancel() or as_event_executor_error() will eventually
 			// call as_event_executor_destroy().
-			if (pt->iteration == 0) {
-				// On first scan attempt, cleanup and do not call listener.
+			if (pt->iteration == 1) {
+				// On first iteration, cleanup and do not call listener.
 				as_query_partition_executor_destroy(qe);
 				as_event_executor_cancel(ee, i);
 			}
 			else {
-				// On scan retry, caller will cleanup and call listener.
+				// On retry, caller will cleanup and call listener.
 				as_event_executor_error(ee, err, n_nodes - i);
 			}
 			return status;

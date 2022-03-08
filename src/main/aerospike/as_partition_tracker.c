@@ -474,6 +474,7 @@ as_partition_tracker_should_retry(
 	case AEROSPIKE_ERR_CONNECTION:
 	case AEROSPIKE_ERR_ASYNC_CONNECTION:
 	case AEROSPIKE_ERR_TIMEOUT:
+	case AEROSPIKE_ERR_INDEX_NOT_FOUND:
 		if (!pt->errors) {
 			pt->errors = as_vector_create(sizeof(as_status), 10);
 		}

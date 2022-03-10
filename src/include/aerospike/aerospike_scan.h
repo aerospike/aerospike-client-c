@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -408,7 +408,7 @@ aerospike_scan_partitions(
  * @param scan_id		The id for the scan job.  Use NULL if the scan_id will not be used.
  * @param listener		The function to be called for each record scanned.
  * @param udata			User-data to be passed to the callback.
- * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  *
  * @return AEROSPIKE_OK if async scan succesfully queued. Otherwise an error.
  *
@@ -468,7 +468,7 @@ aerospike_scan_async(
  * @param node_name		The node name to scan.
  * @param listener		The function to be called for each record scanned.
  * @param udata			User-data to be passed to the callback.
- * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  *
  * @return AEROSPIKE_OK if async scan succesfully queued. Otherwise an error.
  *
@@ -524,7 +524,7 @@ aerospike_scan_node_async(
  * @param pf			Partition filter.
  * @param listener		The function to be called for each record scanned.
  * @param udata			User-data to be passed to the callback.
- * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  *
  * @return AEROSPIKE_OK if async scan succesfully queued. Otherwise an error.
  *

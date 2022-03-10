@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -109,7 +109,7 @@ aerospike_key_get(
  * @param key				The key of the record.
  * @param listener			User function to be called with command results.
  * @param udata 			User data to be forwarded to user callback.
- * @param event_loop 		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop 		Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -194,7 +194,7 @@ aerospike_key_select(
  * @param bins				The bins to select. A NULL terminated array of NULL terminated strings.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -284,7 +284,7 @@ aerospike_key_exists(
  * @param key				The key of the record.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -365,7 +365,7 @@ aerospike_key_put(
  * @param rec				The record containing the data to be written.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -431,7 +431,7 @@ aerospike_key_remove(
  * @param key				The key of the record.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -524,7 +524,7 @@ aerospike_key_operate(
  * @param ops				The operations to perform on the record.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.
@@ -619,7 +619,7 @@ aerospike_key_apply(
  * @param arglist			The arguments for the function.
  * @param listener			User function to be called with command results.
  * @param udata				User data to be forwarded to user callback.
- * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be choosen by round-robin.
+ * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
  * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
  * 							has been sent to the server. This allows for issuing the next command even before receiving a
  * 							result for the current command.

@@ -137,7 +137,6 @@ extern "C" {
  * TYPES
  *****************************************************************************/
 
-struct as_predexp_list;
 struct as_exp;
 
 /**
@@ -465,26 +464,6 @@ typedef struct as_policy_base_s {
 	uint32_t sleep_between_retries;
 
 	/**
-	 * Optional predicate expression filter list in postfix notation. If the predicate
-	 * expression exists and evaluates to false on the server, the transaction is ignored.
-	 * This can be used to eliminate a client/server roundtrip in some cases.
-	 *
-	 * aerospike_destroy() automatically calls as_predexp_list_destroy() on all global 
-	 * default policy predexp list instances.
-	 * 
-	 * The user is responsible for calling as_predexp_list_destroy() on predexp list when
-	 * setting temporary transaction policies.
-	 *
-	 * predexp and filter_exp are mutually exclusive.  If both are defined, predexp
-	 * will be ignored.
-	 *
-	 * Default: NULL
-	 *
-	 * @deprecated Use filter_exp instead.
-	 */
-	struct as_predexp_list* predexp;
-
-	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
 	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
@@ -492,9 +471,6 @@ typedef struct as_policy_base_s {
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary transaction policies.
-	 *
-	 * predexp and filter_exp are mutually exclusive.  If both are defined, predexp
-	 * will be ignored.
 	 *
 	 * ~~~~~~~~~~{.c}
 	 * as_exp_build(filter,
@@ -1345,7 +1321,6 @@ as_policy_base_read_init(as_policy_base* p)
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
 	p->max_retries = 2;
 	p->sleep_between_retries = 0;
-	p->predexp = NULL;
 	p->filter_exp = NULL;
 	p->compress = false;
 }
@@ -1360,7 +1335,6 @@ as_policy_base_write_init(as_policy_base* p)
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
 	p->max_retries = 0;
 	p->sleep_between_retries = 0;
-	p->predexp = NULL;
 	p->filter_exp = NULL;
 	p->compress = false;
 }
@@ -1388,7 +1362,6 @@ as_policy_base_query_init(as_policy_base* p)
 	p->total_timeout = 0;
 	p->max_retries = 5;
 	p->sleep_between_retries = 0;
-	p->predexp = NULL;
 	p->filter_exp = NULL;
 	p->compress = false;
 }

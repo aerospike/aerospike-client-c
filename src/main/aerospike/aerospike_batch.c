@@ -26,7 +26,6 @@
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
-#include <aerospike/as_predexp.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
@@ -56,7 +55,6 @@
 typedef struct {
 	size_t size;
 	as_queue* buffers;
-	uint32_t filter_size; // TODO: remove when old predexp removed
 	uint16_t field_count_header;
 	uint8_t read_attr; // old batch only
 	bool batch_any;
@@ -643,9 +641,6 @@ as_batch_header_write_old(
 	if (policy->base.filter_exp) {
 		p = as_exp_write(policy->base.filter_exp, p);
 	}
-	else if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, bb->filter_size, p);
-	}
 	return p;
 }
 
@@ -797,9 +792,6 @@ as_batch_header_write_new(
 
 	if (policy->base.filter_exp) {
 		p = as_exp_write(policy->base.filter_exp, p);
-	}
-	else if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, bb->filter_size, p);
 	}
 	return p;
 }
@@ -1029,15 +1021,9 @@ as_batch_init_size(const as_policy_batch* policy, as_batch_builder* bb)
 
 	if (policy->base.filter_exp) {
 		bb->size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
-		bb->filter_size = (uint32_t)bb->size;
-		bb->field_count_header = 2;
-	}
-	else if (policy->base.predexp) {
-		bb->size += as_predexp_list_size(policy->base.predexp, &bb->filter_size);
 		bb->field_count_header = 2;
 	}
 	else {
-		bb->filter_size = 0;
 		bb->field_count_header = 1;
 	}
 }

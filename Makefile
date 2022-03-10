@@ -185,7 +185,6 @@ AEROSPIKE += as_partition_tracker.o
 AEROSPIKE += as_peers.o
 AEROSPIKE += as_pipe.o
 AEROSPIKE += as_policy.o
-AEROSPIKE += as_predexp.o
 AEROSPIKE += as_proto.o
 AEROSPIKE += as_query.o
 AEROSPIKE += as_query_validate.o

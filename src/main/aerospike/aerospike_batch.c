@@ -321,7 +321,6 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 
 	uint8_t* p = buf;
 	uint8_t* end = buf + size;
-	as_status status;
 
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
@@ -351,24 +350,27 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				as_batch_base_record* rec = as_vector_get(btr->records, offset);
 				rec->result = msg->result_code;
 
-
 				if (msg->result_code == AEROSPIKE_OK) {
-					status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
+					as_status status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
+
+					if (status != AEROSPIKE_OK) {
+						return status;
+					}
 				}
 				else if (msg->result_code == AEROSPIKE_ERR_UDF) {
 					rec->in_doubt = as_batch_in_doubt(rec->has_write, cmd->sent);
 					*task->error_row = true;
+
 					// AEROSPIKE_ERR_UDF results in "FAILURE" bin that contains an error message.
-					status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
+					as_status status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
+
+					if (status != AEROSPIKE_OK) {
+						return status;
+					}
 				}
 				else if (as_batch_set_error_row(msg->result_code)) {
 					rec->in_doubt = as_batch_in_doubt(rec->has_write, cmd->sent);
 					*task->error_row = true;
-					status = AEROSPIKE_OK;
-				}
-
-				if (status != AEROSPIKE_OK) {
-					return status;
 				}
 				break;
 			}
@@ -379,21 +381,24 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				res->result = msg->result_code;
 
 				if (msg->result_code == AEROSPIKE_OK) {
-					status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
+					as_status status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
+
+					if (status != AEROSPIKE_OK) {
+						return status;
+					}
 				}
 				else if (msg->result_code == AEROSPIKE_ERR_UDF) {
 					res->in_doubt = as_batch_in_doubt(task->has_write, cmd->sent);
 					*task->error_row = true;
-					status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
+					as_status status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
+
+					if (status != AEROSPIKE_OK) {
+						return status;
+					}
 				}
 				else if (as_batch_set_error_row(msg->result_code)) {
 					res->in_doubt = as_batch_in_doubt(task->has_write, cmd->sent);
 					*task->error_row = true;
-					status = AEROSPIKE_OK;
-				}
-
-				if (status != AEROSPIKE_OK) {
-					return status;
 				}
 				break;
 			}
@@ -405,7 +410,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 
 				if (msg->result_code == AEROSPIKE_OK) {
 					as_record rec;
-					status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
+					as_status status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -425,19 +430,22 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				as_record rec;
 
 				if (msg->result_code == AEROSPIKE_OK) {
-					status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
+					as_status status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
+
+					if (status != AEROSPIKE_OK) {
+						return status;
+					}
 				}
 				else if (msg->result_code == AEROSPIKE_ERR_UDF) {
 					*task->error_row = true;
-					status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
+					as_status status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
+
+					if (status != AEROSPIKE_OK) {
+						return status;
+					}
 				}
 				else if (as_batch_set_error_row(msg->result_code)) {
 					*task->error_row = true;
-					status = AEROSPIKE_OK;
-				}
-
-				if (status != AEROSPIKE_OK) {
-					return status;
 				}
 				as_record_destroy(&rec);
 				break;

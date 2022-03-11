@@ -198,24 +198,6 @@ batch_get_1_callback(const as_batch_read* results, uint32_t n, void* udata)
 	return true;
 }
 
-static bool
-batch_sequence_callback(as_key* key, as_record* record, void* udata)
-{
-	batch_stats* data = (batch_stats*)udata;
-
-	data->total++;
-	data->found++;
-
-	int64_t k = as_integer_getorelse((as_integer *)key->valuep, -1);
-	int64_t v = as_record_get_int64(record, bin1, -1);
-	if (k != v) {
-		warn("key(%d) != val(%d)", k, v);
-		data->errors++;
-		data->last_error = -2;
-	}
-	return true;
-}
-
 //---------------------------------
 // Tests
 //---------------------------------
@@ -239,29 +221,6 @@ TEST(batch_get_1, "Simple")
 	}
 	assert_int_eq(err.code, AEROSPIKE_OK);
 
-	assert_int_eq(data.found, N_KEYS - N_KEYS/20);
-	assert_int_eq(data.errors, 0);
-}
-
-TEST(batch_get_sequence, "Batch get in sequence")
-{
-	as_error err;
-	
-	as_batch batch;
-	as_batch_inita(&batch, N_KEYS);
-	
-	for (uint32_t i = 0; i < N_KEYS; i++) {
-		as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i+1);
-	}
-	
-	batch_stats data = {0};
-	
-	aerospike_batch_get_xdr(as, &err, NULL, &batch, batch_sequence_callback, &data);
-	if (err.code != AEROSPIKE_OK) {
-		info("error(%d): %s", err.code, err.message);
-	}
-	assert_int_eq(err.code, AEROSPIKE_OK);
-	
 	assert_int_eq(data.found, N_KEYS - N_KEYS/20);
 	assert_int_eq(data.errors, 0);
 }
@@ -785,7 +744,6 @@ SUITE(batch, "aerospike batch tests")
 	suite_before(before);
 	suite_after(after);
 	suite_add(batch_get_1);
-	suite_add(batch_get_sequence);
 	suite_add(multithreaded_batch_get);
 	suite_add(batch_get_bins);
 	suite_add(batch_read_complex);

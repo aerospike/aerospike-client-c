@@ -46,8 +46,7 @@
 
  #define BATCH_TYPE_RECORDS 0
  #define BATCH_TYPE_KEYS 1
- #define BATCH_TYPE_KEYS_SEQUENCE 2
- #define BATCH_TYPE_KEYS_NO_CALLBACK 3
+ #define BATCH_TYPE_KEYS_NO_CALLBACK 2
 
 //---------------------------------
 // Types
@@ -104,7 +103,6 @@ typedef struct as_batch_task_keys_s {
 	const as_batch* batch;
 	as_batch_result* results;
 	as_batch_listener listener;
-	as_batch_callback_xdr callback_xdr;
 	void* udata;
 	as_batch_base_record* rec;
 	as_batch_attr* attr;
@@ -399,29 +397,6 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				else if (as_batch_set_error_row(msg->result_code)) {
 					res->in_doubt = as_batch_in_doubt(task->has_write, cmd->sent);
 					*task->error_row = true;
-				}
-				break;
-			}
-
-			case BATCH_TYPE_KEYS_SEQUENCE: {
-				// TODO: return as_batch_result, not just as_record.
-				as_batch_task_keys* btk = (as_batch_task_keys*)task;
-				as_key* key = &btk->keys[offset];
-
-				if (msg->result_code == AEROSPIKE_OK) {
-					as_record rec;
-					as_status status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
-
-					if (status != AEROSPIKE_OK) {
-						return status;
-					}
-
-					bool rv = btk->callback_xdr(key, &rec, btk->udata);
-					as_record_destroy(&rec);
-
-					if (!rv) {
-						return AEROSPIKE_ERR_CLIENT_ABORT;
-					}
 				}
 				break;
 			}
@@ -2013,8 +1988,7 @@ as_batch_release_nodes_after_async(as_vector* batch_nodes)
 static as_status
 as_batch_keys_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	as_batch_base_record* rec, as_batch_attr* attr, as_batch_listener listener,
-	as_batch_callback_xdr callback_xdr, void* udata
+	as_batch_base_record* rec, as_batch_attr* attr, as_batch_listener listener, void* udata
 	)
 {
 	uint32_t n_keys = batch->keys.size;
@@ -2118,9 +2092,6 @@ as_batch_keys_execute(
 	if (listener) {
 		type = BATCH_TYPE_KEYS;
 	}
-	else if (callback_xdr) {
-		type = BATCH_TYPE_KEYS_SEQUENCE;
-	}
 	else {
 		type = BATCH_TYPE_KEYS_NO_CALLBACK;
 	}
@@ -2144,7 +2115,6 @@ as_batch_keys_execute(
 	btk.batch = batch;
 	btk.results = results;
 	btk.listener = listener;
-	btk.callback_xdr = callback_xdr;
 	btk.udata = udata;
 	btk.rec = rec;
 	btk.attr = attr;
@@ -3402,32 +3372,7 @@ aerospike_batch_get(
 	attr.read_attr |= AS_MSG_INFO1_GET_ALL;
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, NULL, udata);
-}
-
-as_status
-aerospike_batch_get_xdr(
-	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	as_batch_callback_xdr callback, void* udata
-	)
-{
-	as_error_reset(err);
-	
-	if (! policy) {
-		policy = &as->config.policies.batch;
-	}
-	
-	as_batch_read_record rec = {
-		.type = AS_BATCH_READ,
-		.read_all_bins = true
-	};
-
-	as_batch_attr attr;
-	as_batch_attr_read_header(&attr, policy);
-	attr.read_attr |= AS_MSG_INFO1_GET_ALL;
-
-	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr, NULL,
-		callback, udata);
+		listener, udata);
 }
 
 as_status
@@ -3453,7 +3398,7 @@ aerospike_batch_get_bins(
 	as_batch_attr_read_header(&attr, policy);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, NULL, udata);
+		listener, udata);
 }
 
 as_status
@@ -3477,7 +3422,7 @@ aerospike_batch_get_ops(
 	as_batch_attr_read_header(&attr, policy);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, NULL, udata);
+		listener, udata);
 }
 
 as_status
@@ -3501,7 +3446,7 @@ aerospike_batch_exists(
 	attr.read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, NULL, udata);
+		listener, udata);
 }
 
 as_status
@@ -3532,7 +3477,7 @@ aerospike_batch_operate(
 	as_batch_attr_write_row(&attr, policy_write, ops);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, NULL, udata);
+		listener, udata);
 }
 
 as_status
@@ -3566,7 +3511,7 @@ aerospike_batch_apply(
 	as_batch_attr_apply_row(&attr, policy_apply);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, NULL, udata);
+		listener, udata);
 }
 
 as_status
@@ -3596,5 +3541,5 @@ aerospike_batch_remove(
 	as_batch_attr_remove_row(&attr, policy_remove);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, NULL, udata);
+		listener, udata);
 }

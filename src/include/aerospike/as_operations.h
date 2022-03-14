@@ -235,7 +235,7 @@ typedef struct as_binops_s {
  * The following reads the value of "bin1"
  *
  * ~~~~~~~~~~{.c}
- * as_operations_add_read(ops, "bin1", "xyz");
+ * as_operations_add_read(ops, "bin1");
  * ~~~~~~~~~~
  *
  * ### Touch a Record

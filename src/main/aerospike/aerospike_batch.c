@@ -54,6 +54,8 @@
 
 typedef struct {
 	size_t size;
+	as_exp* filter_exp;
+	as_predexp_list* predexp; // TODO: remove when old predexp removed
 	as_queue* buffers;
 	uint32_t filter_size; // TODO: remove when old predexp removed
 	uint16_t field_count_header;
@@ -106,6 +108,7 @@ typedef struct as_batch_task_keys_s {
 	void* udata;
 	as_batch_base_record* rec;
 	as_batch_attr* attr;
+	as_exp* filter_exp;
 } as_batch_task_keys;
 
 typedef struct as_batch_complete_task_s {
@@ -623,11 +626,11 @@ as_batch_header_write_old(
 		policy->read_mode_sc, policy->base.total_timeout, bb->field_count_header, 0,
 		bb->read_attr | AS_MSG_INFO1_BATCH_INDEX, 0);
 
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
+	if (bb->filter_exp) {
+		p = as_exp_write(bb->filter_exp, p);
 	}
-	else if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, bb->filter_size, p);
+	else if (bb->predexp) {
+		p = as_predexp_list_write(bb->predexp, bb->filter_size, p);
 	}
 	return p;
 }
@@ -778,11 +781,11 @@ as_batch_header_write_new(
 	*(uint16_t*)p = 0;
 	p += sizeof(uint16_t);
 
-	if (policy->base.filter_exp) {
-		p = as_exp_write(policy->base.filter_exp, p);
+	if (bb->filter_exp) {
+		p = as_exp_write(bb->filter_exp, p);
 	}
-	else if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, bb->filter_size, p);
+	else if (bb->predexp) {
+		p = as_predexp_list_write(bb->predexp, bb->filter_size, p);
 	}
 	return p;
 }
@@ -1006,17 +1009,17 @@ as_batch_records_size_new(
 }
 
 static void
-as_batch_init_size(const as_policy_batch* policy, as_batch_builder* bb)
+as_batch_init_size(as_batch_builder* bb)
 {
 	bb->size = AS_HEADER_SIZE + AS_FIELD_HEADER_SIZE + sizeof(uint32_t) + 1;
 
-	if (policy->base.filter_exp) {
-		bb->size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
+	if (bb->filter_exp) {
+		bb->size += AS_FIELD_HEADER_SIZE + bb->filter_exp->packed_sz;
 		bb->filter_size = (uint32_t)bb->size;
 		bb->field_count_header = 2;
 	}
-	else if (policy->base.predexp) {
-		bb->size += as_predexp_list_size(policy->base.predexp, &bb->filter_size);
+	else if (bb->predexp) {
+		bb->size += as_predexp_list_size(bb->predexp, &bb->filter_size);
 		bb->field_count_header = 2;
 	}
 	else {
@@ -1026,12 +1029,9 @@ as_batch_init_size(const as_policy_batch* policy, as_batch_builder* bb)
 }
 
 static as_status
-as_batch_records_size(
-	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
-	as_error* err
-	)
+as_batch_records_size(as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err)
 {
-	as_batch_init_size(policy, bb);
+	as_batch_init_size(bb);
 
 	if (bb->batch_any) {
 		return as_batch_records_size_new(records, offsets, bb, err);
@@ -1584,12 +1584,6 @@ as_batch_command_init(
 }
 
 static inline void
-as_batch_builder_init(as_batch_builder* bb, as_queue* buffers)
-{
-	bb->buffers = buffers;
-}
-
-static inline void
 as_batch_builder_set_node(as_batch_builder* bb, as_node* node)
 {
 	bb->batch_any = (node->features & AS_FEATURES_BATCH_ANY);
@@ -1649,11 +1643,15 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	as_queue buffers;
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
-	as_batch_builder bb;
-	as_batch_builder_init(&bb, &buffers);
+	as_batch_builder bb = {
+		.filter_exp = policy->base.filter_exp,
+		.predexp = policy->base.predexp,
+		.buffers = &buffers
+	};
+
 	as_batch_builder_set_node(&bb, task->node);
 
-	as_status status = as_batch_records_size(policy, btr->records, &task->offsets, &bb, err);
+	as_status status = as_batch_records_size(btr->records, &task->offsets, &bb, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_batch_builder_destroy(&bb);
@@ -1733,11 +1731,11 @@ as_batch_keys_size_new(
 
 static as_status
 as_batch_keys_size(
-	const as_policy_batch* policy, as_key* keys, as_vector* offsets, as_batch_base_record* rec,
-	as_batch_builder* bb, as_error* err
+	as_key* keys, as_vector* offsets, as_batch_base_record* rec, as_batch_builder* bb,
+	as_error* err
 	)
 {
-	as_batch_init_size(policy, bb);
+	as_batch_init_size(bb);
 
 	if (bb->batch_any) {
 		return as_batch_keys_size_new(keys, offsets, rec, bb, err);
@@ -1848,11 +1846,23 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	as_queue buffers;
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
-	as_batch_builder bb;
-	as_batch_builder_init(&bb, &buffers);
+	as_batch_builder bb = {
+		.buffers = &buffers
+	};
+
+	if (btk->filter_exp) {
+		bb.filter_exp = btk->filter_exp;
+	}
+	else if (policy->base.filter_exp) {
+		bb.filter_exp = policy->base.filter_exp;
+	}
+	else if (policy->base.predexp) {
+		bb.predexp = policy->base.predexp;
+	}
+
 	as_batch_builder_set_node(&bb, task->node);
 
-	as_status status = as_batch_keys_size(policy, btk->keys, &task->offsets, btk->rec, &bb, err);
+	as_status status = as_batch_keys_size(btk->keys, &task->offsets, btk->rec, &bb, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_batch_builder_destroy(&bb);
@@ -1988,7 +1998,8 @@ as_batch_release_nodes_after_async(as_vector* batch_nodes)
 static as_status
 as_batch_keys_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	as_batch_base_record* rec, as_batch_attr* attr, as_batch_listener listener, void* udata
+	as_batch_base_record* rec, as_batch_attr* attr, as_exp* filter_exp, as_batch_listener listener,
+	void* udata
 	)
 {
 	uint32_t n_keys = batch->keys.size;
@@ -2118,6 +2129,7 @@ as_batch_keys_execute(
 	btk.udata = udata;
 	btk.rec = rec;
 	btk.attr = attr;
+	btk.filter_exp = filter_exp;
 
 	if (policy->concurrent && batch_nodes.size > 1) {
 		// Run batch requests in parallel in separate threads.
@@ -2377,8 +2389,11 @@ as_batch_execute_async(
 	as_queue buffers;
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
-	as_batch_builder bb;
-	as_batch_builder_init(&bb, &buffers);
+	as_batch_builder bb = {
+		.filter_exp = policy->base.filter_exp,
+		.predexp = policy->base.predexp,
+		.buffers = &buffers
+	};
 
 	as_status status = AEROSPIKE_OK;
 
@@ -2387,7 +2402,7 @@ as_batch_execute_async(
 		as_batch_builder_set_node(&bb, batch_node->node);
 
 		// Estimate buffer size.
-		status = as_batch_records_size(policy, records, &batch_node->offsets, &bb, err);
+		status = as_batch_records_size(records, &batch_node->offsets, &bb, err);
 
 		if (status != AEROSPIKE_OK) {
 			as_event_executor_cancel(exec, i);
@@ -3372,7 +3387,7 @@ aerospike_batch_get(
 	attr.read_attr |= AS_MSG_INFO1_GET_ALL;
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, udata);
+		NULL, listener, udata);
 }
 
 as_status
@@ -3398,7 +3413,7 @@ aerospike_batch_get_bins(
 	as_batch_attr_read_header(&attr, policy);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, udata);
+		NULL, listener, udata);
 }
 
 as_status
@@ -3422,7 +3437,7 @@ aerospike_batch_get_ops(
 	as_batch_attr_read_header(&attr, policy);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, udata);
+		NULL, listener, udata);
 }
 
 as_status
@@ -3446,7 +3461,7 @@ aerospike_batch_exists(
 	attr.read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, udata);
+		NULL, listener, udata);
 }
 
 as_status
@@ -3477,7 +3492,7 @@ aerospike_batch_operate(
 	as_batch_attr_write_row(&attr, policy_write, ops);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, udata);
+		policy_write->filter_exp, listener, udata);
 }
 
 as_status
@@ -3511,7 +3526,7 @@ aerospike_batch_apply(
 	as_batch_attr_apply_row(&attr, policy_apply);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, udata);
+		policy_apply->filter_exp, listener, udata);
 }
 
 as_status
@@ -3541,5 +3556,5 @@ aerospike_batch_remove(
 	as_batch_attr_remove_row(&attr, policy_remove);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, udata);
+		policy_remove->filter_exp, listener, udata);
 }

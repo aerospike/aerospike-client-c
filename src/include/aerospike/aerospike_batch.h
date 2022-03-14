@@ -290,14 +290,6 @@ typedef bool (*as_batch_listener)(const as_batch_result* results, uint32_t n, vo
 typedef as_batch_listener aerospike_batch_read_callback;
 
 /**
- * @private
- * This callback is used by aerospike_batch_get_xdr() to send one batch record at a time
- * as soon as they are received in no particular order.
- * @deprecated Do not use.
- */
-typedef bool (*as_batch_callback_xdr)(as_key* key, as_record* record, void* udata);
-	
-/**
  * Asynchronous batch user listener.  This function is called once when the batch completes or an
  * error has occurred.
  *
@@ -754,17 +746,6 @@ AS_EXTERN as_status
 aerospike_batch_get(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
 	as_batch_listener listener, void* udata
-	);
-
-/**
- * @private
- * Perform batch reads for XDR. The listener will be called for each record as soon as it's
- * received in no particular order.
- */
-AS_EXTERN as_status
-aerospike_batch_get_xdr(
-	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
-	as_batch_callback_xdr callback, void* udata
 	);
 
 /**

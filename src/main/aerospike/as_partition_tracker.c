@@ -33,6 +33,7 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 	parts_all->part_begin = part_begin;
 	parts_all->part_count = part_count;
 	parts_all->done = false;
+	parts_all->retry = true;
 
 	for (uint16_t i = 0; i < part_count; i++) {
 		as_partition_status* ps = &parts_all->parts[i];
@@ -71,12 +72,7 @@ tracker_init(
 
 		// Retry all partitions when max_records not specified.
 		if (max_records == 0) {
-			as_partitions_status* parts_all = pt->parts_all;
-
-			for (uint16_t i = 0; i < parts_all->part_count; i++) {
-				as_partition_status* ps = &parts_all->parts[i];
-				ps->retry = true;
-			}
+			pt->parts_all->retry = true;
 		}
 	}
 
@@ -246,6 +242,9 @@ as_partition_tracker_assign(
 {
     //printf("Round %u\n", pt->iteration);
 
+	as_partitions_status* parts_all = pt->parts_all;
+	bool retry = parts_all->retry && pt->iteration == 1;
+
 	if (!cluster->shm_info) {
 		as_partition_table* table = as_partition_tables_get(&cluster->partition_tables, ns);
 
@@ -253,12 +252,10 @@ as_partition_tracker_assign(
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
 		}
 
-		as_partitions_status* parts_all = pt->parts_all;
-
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
 			as_partition_status* ps = &parts_all->parts[i];
 
-			if (ps->retry) {
+			if (retry || ps->retry) {
 				as_node* node = table->partitions[ps->part_id].master;
 
 				if (! node) {
@@ -288,12 +285,11 @@ as_partition_tracker_assign(
 		}
 
 		as_node** local_nodes = cluster->shm_info->local_nodes;
-		as_partitions_status* parts_all = pt->parts_all;
 
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
 			as_partition_status* ps = &parts_all->parts[i];
 
-			if (ps->retry) {
+			if (retry || ps->retry) {
 				uint32_t master = as_load_uint32(&table->partitions[ps->part_id].master);
 
 				// node index zero indicates unset.
@@ -323,10 +319,14 @@ as_partition_tracker_assign(
 		}
 	}
 
+	uint32_t node_size = pt->node_parts.size;
+
+	if (node_size == 0) {
+		return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE, "No nodes were assigned");
+	}
+
 	if (pt->max_records > 0) {
 		// Distribute max_records across nodes.
-		uint32_t node_size = pt->node_parts.size;
-
 		if (pt->max_records < node_size) {
 			// Only include nodes that have at least 1 record requested.
 			node_size = (uint32_t)pt->max_records;
@@ -374,6 +374,10 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 			pt->parts_all->done = true;
 		}
 		else {
+			// Set global retry to false because only specific node partitions
+			// should be retried.
+			pt->parts_all->retry = false;
+
 			if (cluster->has_partition_query) {
 				// Server version >= 6.0 will return all records for each node up to
 				// that node's max. If node's record count reached max, there still
@@ -474,6 +478,7 @@ as_partition_tracker_should_retry(
 	case AEROSPIKE_ERR_CONNECTION:
 	case AEROSPIKE_ERR_ASYNC_CONNECTION:
 	case AEROSPIKE_ERR_TIMEOUT:
+	case AEROSPIKE_ERR_INDEX_NOT_FOUND:
 		if (!pt->errors) {
 			pt->errors = as_vector_create(sizeof(as_status), 10);
 		}

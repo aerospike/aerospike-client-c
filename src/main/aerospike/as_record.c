@@ -439,6 +439,18 @@ as_record_get_map(const as_record* rec, const as_bin_name name)
 	return as_map_fromval((as_val *) as_record_get(rec, name));
 }
 
+as_val*
+as_record_get_udf_result(const as_record* rec)
+{
+	return (as_val*)as_record_get(rec, "SUCCESS");
+}
+
+char*
+as_record_get_udf_error(const as_record* rec)
+{
+	return as_record_get_str(rec, "FAILURE");
+}
+
 /******************************************************************************
  * ITERATION FUNCTIONS
  *****************************************************************************/

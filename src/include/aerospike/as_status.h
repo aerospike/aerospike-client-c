@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,6 +32,16 @@ typedef enum as_status_e {
 	/***************************************************************************
 	 * Client Errors
 	 **************************************************************************/
+	/**
+	 * One or more keys failed in a batch.
+	 */
+	AEROSPIKE_BATCH_FAILED = -16,
+
+	/**
+	 * No response received from server.
+	 */
+	AEROSPIKE_NO_RESPONSE = -15,
+
 	/**
 	 * Max errors limit reached.
 	 */

@@ -83,12 +83,6 @@
     <ClCompile Include="..\..\src\test\util\map_rec.c">
       <Filter>Source Files\util</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\test\aerospike_batch\batch_get.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\test\aerospike_batch\batch_get_async.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\test\aerospike_geo\query_geospatial.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -174,6 +168,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\test\exp_operate.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\test\aerospike_batch\batch.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\test\aerospike_batch\batch_async.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

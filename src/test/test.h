@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -286,6 +286,13 @@ void atf_assert_err(atf_test_result* result, as_error* err, const char* file, in
 #define assert_async(_mon_, EXP) \
 	if (!(EXP)) {\
 		atf_assert(__result__, #EXP, __FILE__, __LINE__);\
+		as_monitor_notify(_mon_);\
+		return;\
+	}
+
+#define assert_null_async(_mon_, EXP) \
+    if ((EXP) != NULL) {\
+		atf_assert_null(__result__, #EXP, __FILE__, __LINE__);\
 		as_monitor_notify(_mon_);\
 		return;\
 	}

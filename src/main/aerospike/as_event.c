@@ -367,6 +367,8 @@ static void connector_error(as_event_command* cmd, as_error* err);
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
 {
+	cmd->command_sent_counter = 0;
+
 	as_event_loop* event_loop = cmd->event_loop;
 
 	if (as_in_event_loop(event_loop->thread)) {
@@ -433,7 +435,6 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	// Initialize read buffer (buf) to be located after write buffer.
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
-	cmd->command_sent_counter = 0;
 	cmd->conn = NULL;
 	cmd->proto_type_rcv = 0;
 
@@ -812,7 +813,7 @@ as_event_socket_timeout(as_event_command* cmd)
 
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
-						cmd->iteration + 1, as_node_get_address_string(cmd->node));
+						cmd->iteration, as_node_get_address_string(cmd->node));
 
 		as_event_error_callback(cmd, &err);
 	}
@@ -1150,6 +1151,8 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 	as_event_command_release(cmd);
 }
 
+void as_async_batch_error(as_event_command* cmd, as_error* err);
+
 void
 as_event_notify_error(as_event_command* cmd, as_error* err)
 {
@@ -1171,9 +1174,12 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 		case AS_ASYNC_TYPE_CONNECTOR:
 			connector_error(cmd, err);
 			break;
-
+		case AS_ASYNC_TYPE_BATCH:
+			as_async_batch_error(cmd, err);
+			as_event_executor_error(cmd->udata, err, 1);
+			break;
 		default:
-			// Handle command that is part of a group (batch, scan, query).
+			// Handle command that is part of a group (scan, query).
 			as_event_executor_error(cmd->udata, err, 1);
 			break;
 	}

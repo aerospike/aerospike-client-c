@@ -301,9 +301,9 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 }
 
 static as_status
-as_scan_parse_records(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata)
+as_scan_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
-	as_scan_task* task = udata;
+	as_scan_task* task = cmd->udata;
 	uint8_t* p = buf;
 	uint8_t* end = buf + size;
 	as_status status;

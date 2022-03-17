@@ -62,14 +62,13 @@ extern "C" {
 #define AS_FIELD_UDF_OP 33
 #define AS_FIELD_QUERY_BINS 40
 #define AS_FIELD_BATCH_INDEX 41
-#define AS_FIELD_BATCH_INDEX_WITH_SET 42
 #define AS_FIELD_FILTER 43
 
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
 #define AS_MSG_INFO1_GET_ALL			(1 << 1) // get all bins, period
 #define AS_MSG_INFO1_SHORT_QUERY		(1 << 2) // short query
-#define AS_MSG_INFO1_BATCH_INDEX		(1 << 3) // batch read
+#define AS_MSG_INFO1_BATCH_INDEX		(1 << 3) // batch
 #define AS_MSG_INFO1_XDR				(1 << 4) // operation is being performed by XDR
 #define AS_MSG_INFO1_GET_NOBINDATA		(1 << 5) // do not get information about bins and its data
 #define AS_MSG_INFO1_READ_MODE_AP_ALL	(1 << 6) // read mode all for AP namespaces.
@@ -156,12 +155,14 @@ local_free(void* memory)
  */
 typedef size_t (*as_write_fn) (void* udata, uint8_t* buf);
 
+struct as_command_s;
+
 /**
  * @private
  * Parse results callback used in as_command_execute().
  */
 typedef as_status (*as_parse_results_fn) (
-	as_error* err, as_node* node, uint8_t* buf, size_t size, void* user_data
+	as_error* err, struct as_command_s* cmd, as_node* node, uint8_t* buf, size_t size
 	);
 
 /**
@@ -185,9 +186,11 @@ typedef struct as_command_s {
 	uint32_t total_timeout;
 	uint32_t max_retries;
 	uint32_t iteration;
+	uint32_t sent;
 	uint8_t flags;
 	bool master;
-	bool master_sc; // Used in batch only.
+	bool master_sc;   // Used in batch only.
+	bool split_retry; // Used in batch only.
 } as_command;
 
 /**
@@ -217,6 +220,13 @@ as_buffers_destroy(as_queue* buffers)
 	}
 	as_queue_destroy(buffers);
 }
+
+/**
+ * @private
+ * Calculate size of user key.
+ */
+size_t
+as_command_user_key_size(const as_key* key);
 
 /**
  * @private
@@ -460,6 +470,13 @@ as_command_write_field_digest(uint8_t* p, const as_digest* val)
 
 /**
  * @private
+ * Write user key.
+ */
+uint8_t*
+as_command_write_user_key(uint8_t* begin, const as_key* key);
+
+/**
+ * @private
  * Write key structure.
  */
 uint8_t*
@@ -544,6 +561,7 @@ as_command_start_timer(as_command* cmd)
 
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
+	cmd->sent = 0;
 	cmd->master = true;
 
 	if (policy->total_timeout > 0) {
@@ -582,21 +600,21 @@ as_command_execute(as_command* cmd, as_error* err);
  * Parse header of server response.
  */
 as_status
-as_command_parse_header(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata);
+as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
 
 /**
  * @private
  * Parse server record.  Used for reads.
  */
 as_status
-as_command_parse_result(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata);
+as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
 
 /**
  * @private
  * Parse server success or failure result.
  */
 as_status
-as_command_parse_success_failure(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata);
+as_command_parse_success_failure(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
 
 /**
  * @private

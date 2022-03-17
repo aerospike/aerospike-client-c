@@ -250,7 +250,7 @@ aerospike_query_partitions(
  * @param listener		The function to be called for each returned value.
  * @param udata			User-data to be passed to the callback.
  * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be
- *						choosen by round-robin.
+ *						chosen by round-robin.
  *
  * @return AEROSPIKE_OK if async query succesfully queued. Otherwise an error.
  * @ingroup query_operations
@@ -307,7 +307,7 @@ aerospike_query_async(
  * @param listener		The function to be called for each returned value.
  * @param udata			User-data to be passed to the callback.
  * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be
- *						choosen by round-robin.
+ *						chosen by round-robin.
  *
  * @return AEROSPIKE_OK if async query succesfully queued. Otherwise an error.
  * @ingroup query_operations

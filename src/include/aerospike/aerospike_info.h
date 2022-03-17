@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -116,7 +116,7 @@ aerospike_info_node(
  * @param listener		User function to be called with command results.
  * @param udata			User data to be forwarded to user callback.
  * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be
- *						choosen by round-robin.
+ *						chosen by round-robin.
  *
  * @return AEROSPIKE_OK on success. Otherwise an error.
  *

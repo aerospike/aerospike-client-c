@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -235,7 +235,7 @@ typedef struct as_binops_s {
  * The following reads the value of "bin1"
  *
  * ~~~~~~~~~~{.c}
- * as_operations_add_read(ops, "bin1", "xyz");
+ * as_operations_add_read(ops, "bin1");
  * ~~~~~~~~~~
  *
  * ### Touch a Record

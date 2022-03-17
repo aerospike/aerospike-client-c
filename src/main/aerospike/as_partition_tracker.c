@@ -325,6 +325,12 @@ as_partition_tracker_assign(
 		return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE, "No nodes were assigned");
 	}
 
+	// Set global retry to true because scan/query may terminate early and all partitions
+	// will need to be retried if the as_partitions_status instance is reused in a new query.
+	// Global retry will be set to false if the scan/query completes normally and max_records
+	// is specified.
+	parts_all->retry = true;
+
 	if (pt->max_records > 0) {
 		// Distribute max_records across nodes.
 		if (pt->max_records < node_size) {

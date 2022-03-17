@@ -120,7 +120,6 @@ typedef struct as_query_builder {
 	as_queue* opsbuffers;
 	uint64_t max_records;
 	uint32_t filter_size;
-	uint32_t predexp_size;
 	uint32_t task_id_offset;
 	uint32_t parts_full_size;
 	uint32_t parts_partial_digest_size;
@@ -608,7 +607,6 @@ as_query_command_size(
 	)
 {
 	size_t size = AS_HEADER_SIZE;
-	uint32_t predexp_size = 0;
 	uint32_t filter_size = 0;
 	uint16_t n_fields = 0;
 
@@ -725,26 +723,10 @@ as_query_command_size(
 		n_fields += 4;
 	}
 
-	// Estimate predexp size.
-	if (query->predexp.size > 0) {
-		size += AS_FIELD_HEADER_SIZE;
-		for (uint16_t ii = 0; ii < query->predexp.size; ++ii) {
-			as_predexp_base * bp = query->predexp.entries[ii];
-			predexp_size += (uint32_t)(*bp->size_fn)(bp);
-		}
-		size += predexp_size;
-		n_fields++;
-		qb->predexp_size = predexp_size;
-	}
-	else if (base_policy->filter_exp) {
+	// Estimate filter expression size.
+	if (base_policy->filter_exp) {
 		size += AS_FIELD_HEADER_SIZE + base_policy->filter_exp->packed_sz;
 		n_fields++;
-		qb->predexp_size = 0;
-	}
-	else if (base_policy->predexp) {
-		size += as_predexp_list_size(base_policy->predexp, &predexp_size);
-		n_fields++;
-		qb->predexp_size = predexp_size;
 	}
 
 	if (qb->parts_full_size > 0) {
@@ -930,19 +912,9 @@ as_query_command_init(
 	}
 	as_buffer_destroy(&qb->argbuffer);
 
-	// Write predicate expressions.
-	if (query->predexp.size > 0) {
-		p = as_command_write_field_header(p, AS_FIELD_FILTER, qb->predexp_size);
-		for (uint16_t ii = 0; ii < query->predexp.size; ++ii) {
-			as_predexp_base * bp = query->predexp.entries[ii];
-			p = (*bp->write_fn)(bp, p);
-		}
-	}
-	else if (base_policy->filter_exp) {
+	// Write filter expression.
+	if (base_policy->filter_exp) {
 		p = as_exp_write(base_policy->filter_exp, p);
-	}
-	else if (base_policy->predexp) {
-		p = as_predexp_list_write(base_policy->predexp, qb->predexp_size, p);
 	}
 
 	qb->cmd_size_pre = (uint32_t)(p - cmd);
@@ -1774,11 +1746,6 @@ convert_query_to_scan(
 	scan->select.capacity = query->select.capacity;
 	scan->select.size = query->select.size;
 	scan->select._free = query->select._free;
-
-	scan->predexp.entries = query->predexp.entries;
-	scan->predexp.capacity = query->predexp.capacity;
-	scan->predexp.size = query->predexp.size;
-	scan->predexp._free = query->predexp._free;
 
 	strcpy(scan->apply_each.module, query->apply.module);
 	strcpy(scan->apply_each.function, query->apply.function);

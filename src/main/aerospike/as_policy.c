@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,7 +16,6 @@
  */
 #include <aerospike/as_policy.h>
 #include <aerospike/as_exp.h>
-#include <aerospike/as_predexp.h>
 
 /******************************************************************************
  * FUNCTIONS
@@ -57,13 +56,4 @@ as_policies_destroy(as_policies* p)
 	as_exp_destroy(p->batch_remove.filter_exp);
 	as_exp_destroy(p->scan.base.filter_exp);
 	as_exp_destroy(p->query.base.filter_exp);
-
-	as_predexp_list_destroy(p->read.base.predexp);
-	as_predexp_list_destroy(p->write.base.predexp);
-	as_predexp_list_destroy(p->operate.base.predexp);
-	as_predexp_list_destroy(p->remove.base.predexp);
-	as_predexp_list_destroy(p->apply.base.predexp);
-	as_predexp_list_destroy(p->batch.base.predexp);
-	as_predexp_list_destroy(p->scan.base.predexp);
-	as_predexp_list_destroy(p->query.base.predexp);
 }

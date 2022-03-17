@@ -89,7 +89,6 @@ typedef struct as_scan_builder {
 	as_buffer argbuffer;
 	as_queue* opsbuffers;
 	uint64_t max_records;
-	uint32_t predexp_size;
 	uint32_t task_id_offset;
 	uint32_t parts_full_size;
 	uint32_t parts_partial_size;
@@ -361,7 +360,6 @@ static size_t
 as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_builder* sb)
 {
 	size_t size = AS_HEADER_SIZE;
-	uint32_t predexp_size = 0;
 	uint16_t n_fields = 0;
 
 	if (sb->np) {
@@ -415,25 +413,9 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 		n_fields += 4;
 	}
 	
-	if (scan->predexp.size > 0) {
-		size += AS_FIELD_HEADER_SIZE;
-		for (uint16_t ii = 0; ii < scan->predexp.size; ++ii) {
-			as_predexp_base * bp = scan->predexp.entries[ii];
-			predexp_size += (uint32_t)((*bp->size_fn)(bp));
-		}
-		size += predexp_size;
-		n_fields++;
-		sb->predexp_size = predexp_size;
-	}
-	else if (policy->base.filter_exp) {
+	if (policy->base.filter_exp) {
 		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
-		sb->predexp_size = 0;
-	}
-	else if (policy->base.predexp) {
-		size += as_predexp_list_size(policy->base.predexp, &predexp_size);
-		n_fields++;
-		sb->predexp_size = predexp_size;
 	}
 
 	if (sb->parts_full_size > 0) {
@@ -540,19 +522,9 @@ as_scan_command_init(
 	}
 	as_buffer_destroy(&sb->argbuffer);
 	
-	// Write predicate expressions.
-	if (scan->predexp.size > 0) {
-		p = as_command_write_field_header(p, AS_FIELD_FILTER, sb->predexp_size);
-		for (uint16_t ii = 0; ii < scan->predexp.size; ++ii) {
-			as_predexp_base * bp = scan->predexp.entries[ii];
-			p = (*bp->write_fn)(bp, p);
-		}
-	}
-	else if (policy->base.filter_exp) {
+	// Write filter expression.
+	if (policy->base.filter_exp) {
 		p = as_exp_write(policy->base.filter_exp, p);
-	}
-	else if (policy->base.predexp) {
-		p = as_predexp_list_write(policy->base.predexp, sb->predexp_size, p);
 	}
 
 	sb->cmd_size_pre = (uint32_t)(p - cmd);

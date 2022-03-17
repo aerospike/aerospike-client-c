@@ -26,7 +26,6 @@
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_policy.h>
-#include <aerospike/as_predexp.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
@@ -55,9 +54,7 @@
 typedef struct {
 	size_t size;
 	as_exp* filter_exp;
-	as_predexp_list* predexp; // TODO: remove when old predexp removed
 	as_queue* buffers;
-	uint32_t filter_size; // TODO: remove when old predexp removed
 	uint16_t field_count_header;
 	uint8_t read_attr; // old batch only
 	bool batch_any;
@@ -629,9 +626,6 @@ as_batch_header_write_old(
 	if (bb->filter_exp) {
 		p = as_exp_write(bb->filter_exp, p);
 	}
-	else if (bb->predexp) {
-		p = as_predexp_list_write(bb->predexp, bb->filter_size, p);
-	}
 	return p;
 }
 
@@ -783,9 +777,6 @@ as_batch_header_write_new(
 
 	if (bb->filter_exp) {
 		p = as_exp_write(bb->filter_exp, p);
-	}
-	else if (bb->predexp) {
-		p = as_predexp_list_write(bb->predexp, bb->filter_size, p);
 	}
 	return p;
 }
@@ -1015,15 +1006,9 @@ as_batch_init_size(as_batch_builder* bb)
 
 	if (bb->filter_exp) {
 		bb->size += AS_FIELD_HEADER_SIZE + bb->filter_exp->packed_sz;
-		bb->filter_size = (uint32_t)bb->size;
-		bb->field_count_header = 2;
-	}
-	else if (bb->predexp) {
-		bb->size += as_predexp_list_size(bb->predexp, &bb->filter_size);
 		bb->field_count_header = 2;
 	}
 	else {
-		bb->filter_size = 0;
 		bb->field_count_header = 1;
 	}
 }
@@ -1645,7 +1630,6 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 
 	as_batch_builder bb = {
 		.filter_exp = policy->base.filter_exp,
-		.predexp = policy->base.predexp,
 		.buffers = &buffers
 	};
 
@@ -1847,18 +1831,9 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
 	as_batch_builder bb = {
+		.filter_exp = btk->attr->filter_exp ? btk->attr->filter_exp : policy->base.filter_exp,
 		.buffers = &buffers
 	};
-
-	if (btk->attr->filter_exp) {
-		bb.filter_exp = btk->attr->filter_exp;
-	}
-	else if (policy->base.filter_exp) {
-		bb.filter_exp = policy->base.filter_exp;
-	}
-	else if (policy->base.predexp) {
-		bb.predexp = policy->base.predexp;
-	}
 
 	as_batch_builder_set_node(&bb, task->node);
 
@@ -2389,7 +2364,6 @@ as_batch_execute_async(
 
 	as_batch_builder bb = {
 		.filter_exp = policy->base.filter_exp,
-		.predexp = policy->base.predexp,
 		.buffers = &buffers
 	};
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -31,7 +31,7 @@
  * If the filter exists and evaluates to false on a scan/query record, that record is not
  * returned.
  *
- * Predexp filters can now be defined on all transactions through the transaction policy
+ * Expression filters can now be defined on all transactions through the transaction policy
  * (as_policy_base contained in as_policy_read, as_policy_write, ...).
  *
  * Example:

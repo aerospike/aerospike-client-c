@@ -47,7 +47,8 @@ typedef struct as_partitions_status_s {
 	uint16_t part_begin;
 	uint16_t part_count;
 	bool done;
-	char pad[7];
+	bool retry;
+	char pad[6];
 	as_partition_status parts[];
 } as_partitions_status;
 

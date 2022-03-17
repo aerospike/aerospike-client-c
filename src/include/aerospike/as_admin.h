@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -70,14 +70,14 @@ typedef enum as_privilege_code_e {
 	/**
 	 * User can perform user defined function(UDF) administration actions.
 	 * Examples include create/drop UDF. Global scope only.
-	 * Requires server version 5.8+
+	 * Requires server version 6.0+
 	 */
 	AS_PRIVILEGE_UDF_ADMIN = 3,
 
 	/**
 	 * User can perform secondary index administration actions.
 	 * Examples include create/drop index. Global scope only.
-	 * Requires server version 5.8+
+	 * Requires server version 6.0+
 	 */
 	AS_PRIVILEGE_SINDEX_ADMIN = 4,
 
@@ -103,7 +103,7 @@ typedef enum as_privilege_code_e {
 
 	/**
 	 * User can truncate data only.
-	 * Requires server version 5.8+
+	 * Requires server version 6.0+
 	 */
 	AS_PRIVILEGE_TRUNCATE = 14
 } as_privilege_code;

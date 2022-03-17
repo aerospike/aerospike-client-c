@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -45,11 +45,12 @@ extern "C" {
 #define AS_FIELD_KEY 2
 #define AS_FIELD_DIGEST 4
 #define AS_FIELD_TASK_ID 7
-#define AS_FIELD_SCAN_TIMEOUT 9
-#define AS_FIELD_SCAN_RPS 10
+#define AS_FIELD_SOCKET_TIMEOUT 9
+#define AS_FIELD_RPS 10
 #define AS_FIELD_PID_ARRAY 11
 #define AS_FIELD_DIGEST_ARRAY 12
-#define AS_FIELD_SCAN_MAX_RECORDS 13
+#define AS_FIELD_MAX_RECORDS 13
+#define AS_FIELD_BVAL_ARRAY 15
 #define AS_FIELD_INDEX_RANGE 22
 #define AS_FIELD_INDEX_FILTER 23
 #define AS_FIELD_INDEX_LIMIT 24
@@ -67,7 +68,7 @@ extern "C" {
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
 #define AS_MSG_INFO1_GET_ALL			(1 << 1) // get all bins, period
-// (Note:  Bit 2 is unused.)
+#define AS_MSG_INFO1_SHORT_QUERY		(1 << 2) // short query
 #define AS_MSG_INFO1_BATCH_INDEX		(1 << 3) // batch read
 #define AS_MSG_INFO1_XDR				(1 << 4) // operation is being performed by XDR
 #define AS_MSG_INFO1_GET_NOBINDATA		(1 << 5) // do not get information about bins and its data
@@ -87,7 +88,9 @@ extern "C" {
 // Message info3 bits
 #define AS_MSG_INFO3_LAST				(1 << 0) // this is the last of a multi-part message
 #define AS_MSG_INFO3_COMMIT_MASTER  	(1 << 1) // write commit level - bit 0
-#define AS_MSG_INFO3_PARTITION_DONE  	(1 << 2) // Partition is complete response in scan.
+// On send: Do not return partition done in scan/query.
+// On receive: Specified partition is done in scan/query.
+#define AS_MSG_INFO3_PARTITION_DONE  	(1 << 2)
 #define AS_MSG_INFO3_UPDATE_ONLY		(1 << 3) // update existing record only, do not create new record
 #define AS_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4) // completely replace existing record, or create new record
 #define AS_MSG_INFO3_REPLACE_ONLY		(1 << 5) // completely replace existing record, do not create new record
@@ -364,7 +367,7 @@ uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, uint32_t timeout, uint16_t n_fields, uint16_t n_bins,
-	uint8_t read_attr
+	uint8_t read_attr, uint8_t info_attr
 	);
 
 /**
@@ -635,7 +638,7 @@ as_command_ignore_bins(uint8_t* p, uint32_t n_bins);
  * Parse key fields received from server.  Used for reads.
  */
 uint8_t*
-as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key);
+as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key, uint64_t* bval);
 
 /**
  * @private

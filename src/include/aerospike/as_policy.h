@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -907,16 +907,15 @@ typedef struct as_policy_query_s {
 
 	/**
 	 * Timeout used when info command is used that checks for cluster changes before and 
-	 * after the query.  This timeout is only used when fail_on_cluster_change is true and
-	 * the query where clause is defined.
+	 * after the query.  This timeout is only used when fail_on_cluster_change is enabled.
 	 *
 	 * Default: 10000 ms
 	 */
 	uint32_t info_timeout;
 
 	/**
-	 * Terminate query if cluster is in migration state. If query where clause not 
-	 * defined (scan), this field is ignored.
+	 * Terminate query if cluster is in migration state. If the server supports partition
+	 * queries or the query filter is null (scan), this field is ignored.
 	 *
 	 * Default: false
 	 */
@@ -929,6 +928,16 @@ typedef struct as_policy_query_s {
 	 * Default: true
 	 */
 	bool deserialize;
+
+	/**
+	 * Is query expected to return less than 100 records.
+	 * If true, the server will optimize the query for a small record set.
+	 * This field is ignored for aggregation queries, background queries
+	 * and server versions &lt; 6.0.
+	 *
+	 * Default: false
+	 */
+	bool short_query;
 
 } as_policy_query;
 
@@ -1396,6 +1405,7 @@ as_policy_query_init(as_policy_query* p)
 	p->info_timeout = 10000;
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;
+	p->short_query = false;
 	return p;
 }
 

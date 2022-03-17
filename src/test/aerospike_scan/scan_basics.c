@@ -695,7 +695,20 @@ TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the bac
 	debug("    This is a UDF Background Scan job-polling test .. ");
 	as_node* node = as_node_get_random(as->cluster);
 	assert_not_null(node);
-	char* cmd = (node->features & AS_FEATURES_QUERY_SHOW)? "scan-show" : "jobs:module=scan";
+	char* cmd;
+
+	if (as->cluster->has_partition_query) {
+		// query-show works for both scan and query.
+		cmd = "query-show";
+	}
+	else if (node->features & AS_FEATURES_QUERY_SHOW) {
+		// scan-show and query-show are separate.
+		cmd = "scan-show";
+	}
+	else {
+		// old job monitor syntax.
+		cmd = "jobs:module=scan";
+	}
 	as_node_release(node);
 
 	for(int i = 0; i < 5; i++){

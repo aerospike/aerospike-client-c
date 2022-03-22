@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -46,7 +46,7 @@ as_async_get_pending(as_cluster* cluster)
 	int sum = 0;
 
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
-		int pending = cluster->pending[i];
+		int pending = cluster->event_state[i].pending;
 
 		if (pending > 0) {
 			sum += pending;

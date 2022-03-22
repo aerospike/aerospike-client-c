@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1097,9 +1097,16 @@ static void
 as_event_loop_close_aerospike_cb(evutil_socket_t sock, short events, void* udata)
 {
 	as_close_state* state = udata;
-	int pending = state->as->cluster->pending[state->event_loop->index];
+	as_event_state* event_state = &state->as->cluster->event_state[state->event_loop->index];
 
-	if (pending <= 0) {
+	if (event_state->closed) {
+		state->listener(state->udata);
+		cf_free(state);
+		return;
+	}
+
+	if (event_state->pending <= 0) {
+		event_state->closed = true;
 		state->listener(state->udata);
 		cf_free(state);
 		return;
@@ -1125,9 +1132,15 @@ as_event_loop_close_aerospike(
 		as_vector_remove(clusters, index);
 	}
 
-	int pending = as->cluster->pending[event_loop->index];
+	as_event_state* event_state = &as->cluster->event_state[event_loop->index];
 
-	if (pending <= 0) {
+	if (event_state->closed) {
+		listener(udata);
+		return;
+	}
+
+	if (event_state->pending <= 0) {
+		event_state->closed = true;
 		listener(udata);
 		return;
 	}
@@ -1143,7 +1156,7 @@ as_event_loop_close_aerospike(
 	// If only one pending command, this function was probably called from last listener
 	// callback which has not decremented pending yet. In this case, set timer
 	// to next event loop iteration.  Otherwise, wait 1 second before checking again.
-	struct timeval tv = {(pending == 1)? 0 : 1, 0};
+	struct timeval tv = {(event_state->pending == 1)? 0 : 1, 0};
 	evtimer_add(&state->timer, &tv);
 }
 

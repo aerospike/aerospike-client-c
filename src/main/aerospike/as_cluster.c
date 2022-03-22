@@ -1273,8 +1273,8 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	}
 
 	if (as_event_loop_capacity > 0) {
-		// Create one pending integer for each event loop.
-		cluster->pending = cf_calloc(as_event_loop_capacity, sizeof(int));
+		// Create one event_state for each event loop.
+		cluster->event_state = cf_calloc(as_event_loop_capacity, sizeof(as_event_state));
 	}
 
 	// Initialize tend lock and condition.
@@ -1437,7 +1437,7 @@ as_cluster_destroy(as_cluster* cluster)
 	pthread_mutex_destroy(&cluster->tend_lock);
 	pthread_cond_destroy(&cluster->tend_cond);
 
-	cf_free(cluster->pending);
+	cf_free(cluster->event_state);
 	cf_free(cluster->user);
 	cf_free(cluster->password);
 	cf_free(cluster->password_hash);

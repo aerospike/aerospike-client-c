@@ -437,8 +437,9 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	cmd->buf += cmd->write_len;
 	cmd->conn = NULL;
 	cmd->proto_type_rcv = 0;
+	cmd->event_state = &cmd->cluster->event_state[event_loop->index];
 
-	if (cmd->cluster->pending[event_loop->index]++ == -1) {
+	if (cmd->event_state->closed) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster has been closed");
 		as_event_prequeue_error(event_loop, cmd, &err);
@@ -525,6 +526,8 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 
 	// Start processing.
 	event_loop->pending++;
+	cmd->event_state->pending++;
+
 	as_event_command_begin(event_loop, cmd);
 }
 
@@ -559,6 +562,8 @@ as_event_execute_from_delay_queue(as_event_loop* event_loop)
 		}
 
 		event_loop->pending++;
+		cmd->event_state->pending++;
+
 		as_event_command_begin(event_loop, cmd);
 	}
 	event_loop->using_delay_queue = false;
@@ -1431,8 +1436,8 @@ as_event_command_free(as_event_command* cmd)
 
 	if (cmd->state != AS_ASYNC_STATE_QUEUE_ERROR) {
 		event_loop->pending--;
+		cmd->event_state->pending--;
 	}
-	cmd->cluster->pending[event_loop->index]--;
 
 	if (cmd->node) {
 		as_node_release(cmd->node);
@@ -1556,8 +1561,8 @@ connector_execute_command(as_event_loop* event_loop, connector_shared* cs)
 
 	as_cluster* cluster = node->cluster;
 
-	cluster->pending[event_loop->index]++;
 	event_loop->pending++;
+	cluster->event_state[event_loop->index].pending++;
 
 	size_t s = (sizeof(connector_command) + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
@@ -1886,9 +1891,11 @@ typedef struct {
 } as_event_close_state;
 
 static void
-as_event_close_cluster_event_loop(as_event_loop* event_loop, as_event_close_state* state)
+as_event_close_cluster_event_loop(
+	as_event_loop* event_loop, as_event_close_state* state, as_event_state* event_state
+	)
 {
-	state->cluster->pending[event_loop->index] = -1;
+	event_state->closed = true;
 
 	if (as_aaf_uint32(&state->event_loop_count, -1) == 0) {
 		as_cluster_destroy(state->cluster);
@@ -1903,14 +1910,14 @@ as_event_close_cluster_event_loop(as_event_loop* event_loop, as_event_close_stat
 static void
 as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state)
 {
-	int pending = state->cluster->pending[event_loop->index];
+	as_event_state* event_state = &state->cluster->event_state[event_loop->index];
 
-	if (pending < 0) {
+	if (event_state->closed) {
 		// Cluster's event loop connections are already closed.
 		return;
 	}
 
-	if (pending > 0) {
+	if (event_state->pending > 0) {
 		// Cluster has pending commands.
 		// Check again after all other commands run.
 		if (as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
@@ -1919,7 +1926,7 @@ as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state
 		as_log_error("Failed to queue cluster close command");
 	}
 
-	as_event_close_cluster_event_loop(event_loop, state);
+	as_event_close_cluster_event_loop(event_loop, state, event_state);
 }
 
 void
@@ -1947,7 +1954,8 @@ as_event_close_cluster(as_cluster* cluster)
 
 		if (! as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
 			as_log_error("Failed to queue cluster close command");
-			as_event_close_cluster_event_loop(event_loop, state);
+			as_event_close_cluster_event_loop(event_loop, state,
+				&state->cluster->event_state[event_loop->index]);
 		}
 	}
 

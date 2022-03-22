@@ -57,6 +57,22 @@ typedef struct as_nodes_s {
 
 /**
  * @private
+ * Cluster state for an event loop.
+ */
+typedef struct as_event_state_s {
+	/**
+	 * Cluster's pending command count for this event loop.
+	 */
+	int pending;
+	
+	/**
+	 * Is cluster closed for this event loop.
+	 */
+	bool closed;
+} as_event_state;
+
+/**
+ * @private
  * Reference counted release function definition.
  */
 typedef void (*as_release_fn) (void* value);
@@ -142,9 +158,9 @@ typedef struct as_cluster_s {
 	void* event_callback_udata;
 
 	/**
-	 * Pending async commands counter array for all event loops.
+	 * Cluster state for all event loops.
 	 */
-	int* pending;
+	as_event_state* event_state;
 
 	/**
 	 * @private

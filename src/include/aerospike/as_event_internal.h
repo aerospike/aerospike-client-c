@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -131,6 +131,7 @@ typedef struct as_event_command {
 	uint32_t iteration;
 	as_policy_replica replica;
 	as_event_loop* event_loop;
+	as_event_state* event_state;
 	as_event_connection* conn;
 	as_cluster* cluster;
 	as_node* node;

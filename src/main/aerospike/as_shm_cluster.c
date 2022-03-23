@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -23,6 +23,7 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_thread.h>
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
@@ -773,6 +774,8 @@ static void*
 as_shm_tender(void* userdata)
 {
 	// Shared memory cluster tender.
+	as_thread_set_name("shmtend");
+
 	as_cluster* cluster = userdata;
 
 	if (cluster->tend_thread_cpu >= 0) {

@@ -24,6 +24,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_thread.h>
 #include <aerospike/as_tls.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -118,7 +119,11 @@ as_event_worker(void* udata)
 	}
 #endif
 
-	struct event_base* loop = udata;
+	as_event_loop* event_loop = udata;
+
+	as_thread_set_name_index("event", event_loop->index);
+
+	struct event_base* loop = event_loop->loop;
 
 #if LIBEVENT_VERSION_NUMBER < 0x02010000
 	int status = event_base_dispatch(loop);
@@ -187,7 +192,7 @@ as_event_create_loop(as_event_loop* event_loop)
 
 	as_event_init_loop(event_loop);
 
-	return pthread_create(&event_loop->thread, NULL, as_event_worker, event_loop->loop) == 0;
+	return pthread_create(&event_loop->thread, NULL, as_event_worker, event_loop) == 0;
 }
 
 void

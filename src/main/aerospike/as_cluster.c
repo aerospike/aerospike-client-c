@@ -27,6 +27,7 @@
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_thread.h>
 #include <aerospike/as_tls.h>
 #include <aerospike/as_vector.h>
 
@@ -878,6 +879,8 @@ as_wait_till_stabilized(as_cluster* cluster, as_error* err)
 static void*
 as_cluster_tender(void* data)
 {
+	as_thread_set_name("tend");
+
 	as_cluster* cluster = (as_cluster*)data;
 
 	if (cluster->tend_thread_cpu >= 0) {

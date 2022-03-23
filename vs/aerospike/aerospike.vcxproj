@@ -311,6 +311,7 @@
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_string.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_stringmap.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_string_builder.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_thread.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_thread_pool.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_timer.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_types.h" />

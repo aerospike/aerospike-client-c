@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1217,13 +1217,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 void
 as_cluster_destroy(as_cluster* cluster)
 {
-	// Shutdown thread pool.
-	int rc = as_thread_pool_destroy(&cluster->thread_pool);
-	
-	if (rc) {
-		as_log_warn("Failed to destroy thread pool: %d", rc);
-	}
-
 	// Stop tend thread and wait till finished.
 	if (cluster->valid) {
 		cluster->valid = false;
@@ -1239,6 +1232,13 @@ as_cluster_destroy(as_cluster* cluster)
 		if (cluster->shm_info) {
 			as_shm_destroy(cluster);
 		}
+	}
+
+	// Shutdown thread pool.
+	int rc = as_thread_pool_destroy(&cluster->thread_pool);
+	
+	if (rc) {
+		as_log_warn("Failed to destroy thread pool: %d", rc);
 	}
 
 	// Release everything in garbage collector.

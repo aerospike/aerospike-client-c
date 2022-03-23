@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1703,6 +1703,7 @@ create_connections(as_event_loop* event_loop, as_node* node, as_async_conn_pool*
 
 typedef struct {
 	as_cluster* cluster;
+	as_monitor monitor;
 	uint32_t loop_count;
 } balancer_shared;
 
@@ -1710,7 +1711,7 @@ static inline void
 balancer_release(balancer_shared* bs)
 {
 	if (as_aaf_uint32(&bs->loop_count, -1) == 0) {
-		cf_free(bs);
+		as_monitor_notify(&bs->monitor);
 	}
 }
 
@@ -1786,16 +1787,25 @@ as_event_balance_connections(as_cluster* cluster)
 		return;
 	}
 
-	balancer_shared* bs = cf_malloc(sizeof(balancer_shared));
-	bs->cluster = cluster;
-	bs->loop_count = loop_max;
+	balancer_shared bs;
+	bs.cluster = cluster;
+	as_monitor_init(&bs.monitor);
+	bs.loop_count = loop_max;
 
 	for (uint32_t i = 0; i < loop_max; i++) {
-		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop, bs)) {
+		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop, &bs)) {
 			as_log_error("Failed to queue connection balancer");
-			balancer_release(bs);
+			balancer_release(&bs);
 		}
 	}
+
+	// Wait for all eventloops to finish balancing connections in the cluster tend.
+	// This avoids the scenario where the cluster tend thread is shutdown and the
+	// cluster is destroyed before the balancer’s eventloop callbacks are processed.
+	// The cluster tend thread can't be shutdown until this cluster tend function
+	// completes.
+	as_monitor_wait(&bs.monitor);
+	as_monitor_destroy(&bs.monitor);
 }
 
 /******************************************************************************

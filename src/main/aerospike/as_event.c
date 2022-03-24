@@ -1735,6 +1735,7 @@ create_connections(as_event_loop* event_loop, as_node* node, as_async_conn_pool*
 
 typedef struct {
 	as_cluster* cluster;
+	as_monitor monitor;
 	uint32_t loop_count;
 } balancer_shared;
 
@@ -1742,7 +1743,7 @@ static inline void
 balancer_release(balancer_shared* bs)
 {
 	if (as_aaf_uint32(&bs->loop_count, -1) == 0) {
-		cf_free(bs);
+		as_monitor_notify(&bs->monitor);
 	}
 }
 
@@ -1822,21 +1823,31 @@ as_event_balance_connections(as_cluster* cluster)
 		return;
 	}
 
-	balancer_shared* bs = cf_malloc(sizeof(balancer_shared));
-	bs->cluster = cluster;
-	bs->loop_count = loop_max;
+	balancer_shared bs;
+	bs.cluster = cluster;
+	as_monitor_init(&bs.monitor);
+	bs.loop_count = loop_max;
 
 	for (uint32_t i = 0; i < loop_max; i++) {
-		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_cluster, bs)) {
+		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_cluster, &bs)) {
 			as_log_error("Failed to queue connection balancer");
-			balancer_release(bs);
+			balancer_release(&bs);
 		}
 	}
+
+	// Wait for all eventloops to finish balancing connections in the cluster tend.
+	// This avoids the scenario where the cluster tend thread is shutdown and the
+	// cluster is destroyed before the balancer’s eventloop callbacks are processed.
+	// The cluster tend thread can't be shutdown until this cluster tend function
+	// completes.
+	as_monitor_wait(&bs.monitor);
+	as_monitor_destroy(&bs.monitor);
 }
 
 typedef struct {
 	as_cluster* cluster;
 	as_node* node;
+	as_monitor monitor;
 	uint32_t loop_count;
 } balancer_shared_node;
 
@@ -1845,7 +1856,7 @@ balancer_release_node(balancer_shared_node* bs)
 {
 	if (as_aaf_uint32(&bs->loop_count, -1) == 0) {
 		as_node_release(bs->node);
-		cf_free(bs);
+		as_monitor_notify(&bs->monitor);
 	}
 }
 
@@ -1865,19 +1876,28 @@ as_event_node_balance_connections(as_cluster* cluster, as_node* node)
 		return;
 	}
 
-	balancer_shared_node* bs = cf_malloc(sizeof(balancer_shared_node));
-	bs->cluster = cluster;
-	bs->node = node;
-	bs->loop_count = loop_max;
+	balancer_shared_node bs;
+	bs.cluster = cluster;
+	bs.node = node;
+	as_monitor_init(&bs.monitor);
+	bs.loop_count = loop_max;
 
 	as_node_reserve(node);
 
 	for (uint32_t i = 0; i < loop_max; i++) {
-		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_node, bs)) {
+		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_node, &bs)) {
 			as_log_error("Failed to queue node connection balancer");
-			balancer_release_node(bs);
+			balancer_release_node(&bs);
 		}
 	}
+
+	// Wait for all eventloops to finish balancing connections in the cluster tend.
+	// This avoids the scenario where the cluster tend thread is shutdown and the
+	// cluster is destroyed before the balancer’s eventloop callbacks are processed.
+	// The cluster tend thread can't be shutdown until this cluster tend function
+	// completes.
+	as_monitor_wait(&bs.monitor);
+	as_monitor_destroy(&bs.monitor);
 }
 
 /******************************************************************************

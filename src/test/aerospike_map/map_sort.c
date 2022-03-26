@@ -685,6 +685,66 @@ TEST(map_sort_kv, "sort map of mixed type keys and order by key and value")
 	as_record_destroy(rec);
 }
 
+TEST(map_sort_on_put, "sort map on put")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "k8");
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+    as_hashmap map;
+    as_hashmap_init(&map, 4);
+	as_hashmap_set_order(&map, AS_MAP_KEY_ORDERED);
+
+    as_integer k11,k12,k13,k14;
+    as_integer v11,v12,v13,v14;
+    as_integer_init(&k11, 2000);
+    as_integer_init(&v11, 1);
+    as_integer_init(&k12, 1050);
+    as_integer_init(&v12, 2);
+    as_integer_init(&k13, 2500);
+    as_integer_init(&v13, 3);
+    as_integer_init(&k14, 1000);
+    as_integer_init(&v14, 4);
+    as_hashmap_set(&map, (as_val*)&k11, (as_val*)&v11);
+    as_hashmap_set(&map, (as_val*)&k12, (as_val*)&v12);
+    as_hashmap_set(&map, (as_val*)&k13, (as_val*)&v13);
+    as_hashmap_set(&map, (as_val*)&k14, (as_val*)&v14);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_map(&rec, BIN, (as_map*)&map);
+
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* prec = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	example_dump_record(prec);
+
+	// Sorted maps are returned as a list with 2 items per map entry (key & value).
+	as_list* list = as_record_get_list(prec, BIN);
+    assert_not_null(list);
+	uint32_t size = as_list_size(list);
+	assert_int_eq(size, 8);
+	assert_int_eq(as_list_get_int64(list, 0), 1000);
+	assert_int_eq(as_list_get_int64(list, 1), 4);
+	assert_int_eq(as_list_get_int64(list, 2), 1050);
+	assert_int_eq(as_list_get_int64(list, 3), 2);
+	assert_int_eq(as_list_get_int64(list, 4), 2000);
+	assert_int_eq(as_list_get_int64(list, 5), 1);
+	assert_int_eq(as_list_get_int64(list, 6), 2500);
+	assert_int_eq(as_list_get_int64(list, 7), 3);
+
+	as_record_destroy(prec);
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -698,4 +758,5 @@ SUITE(map_sort, "map sort tests")
 	suite_add(map_sort_bytes);
 	suite_add(map_sort_mixed);
 	suite_add(map_sort_kv);
+	suite_add(map_sort_on_put);
 }

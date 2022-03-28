@@ -1988,9 +1988,9 @@ as_batch_keys_execute(
 	as_cluster* cluster = as->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
-	
+	as_nodes_release(nodes);
+
 	if (n_nodes == 0) {
-		as_nodes_release(nodes);
 		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, cluster_empty_error);
 	}
 	
@@ -2032,7 +2032,6 @@ as_batch_keys_execute(
 		
 		if (status != AEROSPIKE_OK) {
 			as_batch_release_nodes(&batch_nodes);
-			as_nodes_release(nodes);
 			return status;
 		}
 
@@ -2065,7 +2064,6 @@ as_batch_keys_execute(
 		}
 		as_vector_append(&batch_node->offsets, &i);
 	}
-	as_nodes_release(nodes);
 
 	// Fatal if no key requests were generated on initialization.
 	if (batch_nodes.size == 0) {
@@ -2438,15 +2436,13 @@ as_batch_execute_async(
 
 static void
 as_batch_records_cleanup(
-	as_async_batch_executor* async_executor, as_nodes* nodes, as_vector* batch_nodes
+	as_async_batch_executor* async_executor, as_vector* batch_nodes
 	)
 {
 	if (batch_nodes) {
 		as_batch_release_nodes(batch_nodes);
 	}
 
-	as_nodes_release(nodes);
-	
 	if (async_executor) {
 		// Destroy batch async resources.
 		// Assume no async commands have been queued.
@@ -2470,9 +2466,10 @@ as_batch_records_execute(
 	as_cluster* cluster = as->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
+	as_nodes_release(nodes);
 	
 	if (n_nodes == 0) {
-		as_batch_records_cleanup(async_executor, nodes, NULL);
+		as_batch_records_cleanup(async_executor, NULL);
 		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, cluster_empty_error);
 	}
 	
@@ -2505,7 +2502,7 @@ as_batch_records_execute(
 		status = as_key_set_digest(err, key);
 		
 		if (status != AEROSPIKE_OK) {
-			as_batch_records_cleanup(async_executor, nodes, &batch_nodes);
+			as_batch_records_cleanup(async_executor, &batch_nodes);
 			return status;
 		}
 		
@@ -2538,7 +2535,6 @@ as_batch_records_execute(
 		}
 		as_vector_append(&batch_node->offsets, &i);
 	}
-	as_nodes_release(nodes);
 
 	// Fatal if no key requests were generated on initialization.
 	if (batch_nodes.size == 0) {
@@ -2625,9 +2621,9 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	as_cluster* cluster = task->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
+	as_nodes_release(nodes);
 
 	if (n_nodes == 0) {
-		as_nodes_release(nodes);
 		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, cluster_empty_error);
 	}
 
@@ -2676,7 +2672,6 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 		}
 		as_vector_append(&batch_node->offsets, &offset);
 	}
-	as_nodes_release(nodes);
 
 	if (batch_nodes.size == 0) {
 		return AEROSPIKE_USE_NORMAL_RETRY;
@@ -2704,9 +2699,9 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 	as_cluster* cluster = task->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
+	as_nodes_release(nodes);
 
 	if (n_nodes == 0) {
-		as_nodes_release(nodes);
 		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, cluster_empty_error);
 	}
 
@@ -2754,7 +2749,6 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 		}
 		as_vector_append(&batch_node->offsets, &offset);
 	}
-	as_nodes_release(nodes);
 
 	if (batch_nodes.size == 1) {
 		as_batch_node* batch_node = as_vector_get(&batch_nodes, 0);
@@ -2987,7 +2981,6 @@ as_batch_retry_parse_row(uint8_t* p, uint8_t* type)
 int
 as_batch_retry_async(as_event_command* parent, bool timeout)
 {
-	as_error err;
 	as_async_batch_command* parent_bc = (as_async_batch_command*)parent;
 	as_async_batch_executor* be = parent->udata; // udata is overloaded to contain executor.
 
@@ -2999,9 +2992,9 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	as_cluster* cluster = parent->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
+	as_nodes_release(nodes);
 
 	if (n_nodes == 0) {
-		as_nodes_release(nodes);
 		return 1;  // Go through normal retry.
 	}
 
@@ -3024,7 +3017,6 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	// Field ID must be AS_FIELD_BATCH_INDEX at this point.
 	if (*(p + sizeof(uint32_t)) != AS_FIELD_BATCH_INDEX) {
 		as_log_error("Batch retry buffer is corrupt");
-		as_nodes_release(nodes);
 		return -2;  // Defer to original error.
 	}
 
@@ -3047,7 +3039,6 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 	as_batch_retry_offset full = {0};
 	as_batch_retry_offset off;
-	bool can_repeat = false;
 
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < n_offsets; i++) {
@@ -3086,30 +3077,34 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			as_vector_init(&bnode->offsets, sizeof(as_batch_retry_offset), n_offsets);
 		}
 
-		if (type == BATCH_MSG_REPEAT) {
-			if (!can_repeat || !bnode->can_repeat) {
-				// Use last full message.
-				off.copy = full.begin;
-				off.size = full.size;
-				can_repeat = true;
-
-				// Reset can_repeat on each node.
-				for (uint32_t j = 0; j < bnodes.size; j++) {
-					as_batch_retry_node* bn = as_vector_get(&bnodes, i);
-					bn->can_repeat = false;
-				}
-				bnode->can_repeat = true;
-			}
-		}
-		else {
+		if (type != BATCH_MSG_REPEAT) {
+			// Full message.
 			full.size = off.size;
 			full.begin = off.begin;
-			can_repeat = false;
+
+			// Disallow repeat on new nodes.
+			for (uint32_t j = 0; j < bnodes.size; j++) {
+				as_batch_retry_node* bn = as_vector_get(&bnodes, j);
+				bn->can_repeat = false;
+			}
+
+			// Allow repeat on assigned node.
+			bnode->can_repeat = true;
+		}
+		else {
+			// Repeat message.
+			if (!bnode->can_repeat) {
+				// Copy last full message.
+				off.copy = full.begin;
+				off.size = full.size;
+
+				// Allow repeat on assigned node.
+				bnode->can_repeat = true;
+			}
 		}
 		bnode->size += off.size;
 		as_vector_append(&bnode->offsets, &off);
 	}
-	as_nodes_release(nodes);
 
 	if (bnodes.size == 0) {
 		return 1;  // Go through normal retry.
@@ -3183,6 +3178,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			as_event_command* cmd = &bc->command;
 
 			// Compress buffer and execute.
+			as_error err;
 			as_status status = as_command_compress(&err, ubuf, size, cmd->buf, &comp_size);
 
 			if (status != AEROSPIKE_OK) {

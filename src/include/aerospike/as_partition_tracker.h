@@ -20,6 +20,7 @@
 #include <aerospike/as_partition.h>
 #include <aerospike/as_partition_filter.h>
 #include <aerospike/as_vector.h>
+#include <pthread.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,6 +52,7 @@ typedef struct as_node_partitions_s {
  * Scan/Query partition tracker.
  */
 typedef struct as_partition_tracker_s {
+	pthread_mutex_t lock;
 	as_partitions_status* parts_all;
 	uint32_t node_capacity;
 	struct as_node_s* node_filter;

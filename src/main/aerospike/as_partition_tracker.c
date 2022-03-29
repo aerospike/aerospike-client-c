@@ -76,6 +76,8 @@ tracker_init(
 		}
 	}
 
+	pthread_mutex_init(&pt->lock, NULL);
+
 	as_vector_init(&pt->node_parts, sizeof(as_node_partitions), pt->node_capacity);
 	pt->errors = NULL;
 	pt->max_records = max_records;
@@ -485,10 +487,15 @@ as_partition_tracker_should_retry(
 	case AEROSPIKE_ERR_ASYNC_CONNECTION:
 	case AEROSPIKE_ERR_TIMEOUT:
 	case AEROSPIKE_ERR_INDEX_NOT_FOUND:
+		// Multiple scan/query threads may call this function, so error
+		// list must be modified under lock.
+		pthread_mutex_lock(&pt->lock);
 		if (!pt->errors) {
 			pt->errors = as_vector_create(sizeof(as_status), 10);
 		}
 		as_vector_append(pt->errors, &status);
+		pthread_mutex_unlock(&pt->lock);
+
 		mark_retry(pt, np);
 		np->parts_unavailable = np->parts_full.size + np->parts_partial.size;
 		return true;
@@ -509,4 +516,5 @@ as_partition_tracker_destroy(as_partition_tracker* pt)
 		as_vector_destroy(pt->errors);
 		pt->errors = NULL;
 	}
+	pthread_mutex_destroy(&pt->lock);
 }

@@ -2638,6 +2638,13 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
 		as_batch_read_record* rec = as_vector_get(btr->records, offset);
+
+		if (rec->result != AEROSPIKE_NO_RESPONSE && rec->result != AEROSPIKE_ERR_INVALID_NODE) {
+			// Do not retry keys that already have a response
+			// that is not a node assignment error.
+			continue;
+		}
+
 		as_key* key = &rec->key;
 
 		as_node* node;
@@ -2717,13 +2724,21 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
 		as_key* key = &btk->batch->keys.entries[offset];
+		as_batch_result* res = &btk->results[offset];
+
+		if (res->result != AEROSPIKE_NO_RESPONSE && res->result != AEROSPIKE_ERR_INVALID_NODE) {
+			// Do not retry keys that already have a response
+			// that is not a node assignment error.
+			continue;
+		}
 
 		as_node* node;
 		status = as_batch_get_node(cluster, key, task->policy->replica, task->replica_sc,
 			parent->master, parent->master_sc, rec->has_write, parent->node, &node);
 
 		if (status != AEROSPIKE_OK) {
-			rec->result = status;
+			res->result = status;
+			*task->error_row = true;
 			continue;
 		}
 
@@ -3044,6 +3059,25 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		off.size = (uint32_t)(p - off.begin);
 
 		as_batch_base_record* rec = as_vector_get(records, offset);
+
+		if (type != BATCH_MSG_REPEAT) {
+			// Full message.
+			full.size = off.size;
+			full.begin = off.begin;
+
+			// Disallow repeat on new nodes.
+			for (uint32_t j = 0; j < bnodes.size; j++) {
+				as_batch_retry_node* bn = as_vector_get(&bnodes, j);
+				bn->can_repeat = false;
+			}
+		}
+
+		if (rec->result != AEROSPIKE_NO_RESPONSE && rec->result != AEROSPIKE_ERR_INVALID_NODE) {
+			// Do not retry keys that already have a response
+			// that is not a node assignment error.
+			continue;
+		}
+
 		as_key* key = &rec->key;
 		as_node* node;
 
@@ -3069,17 +3103,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 
 		if (type != BATCH_MSG_REPEAT) {
-			// Full message.
-			full.size = off.size;
-			full.begin = off.begin;
-
-			// Disallow repeat on new nodes.
-			for (uint32_t j = 0; j < bnodes.size; j++) {
-				as_batch_retry_node* bn = as_vector_get(&bnodes, j);
-				bn->can_repeat = false;
-			}
-
-			// Allow repeat on assigned node.
+			// Full message. Allow repeat on assigned node.
+			// full size/begin has already been set.
 			bnode->can_repeat = true;
 		}
 		else {

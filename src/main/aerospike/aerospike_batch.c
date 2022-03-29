@@ -1581,7 +1581,7 @@ as_batch_builder_destroy(as_batch_builder* bb)
 }
 
 static void
-as_batch_set_error_records(as_batch_task_records* btr, as_error* err)
+as_batch_set_doubt_records(as_batch_task_records* btr, as_error* err)
 {
 	uint32_t offsets_size = btr->base.offsets.size;
 
@@ -1589,32 +1589,23 @@ as_batch_set_error_records(as_batch_task_records* btr, as_error* err)
 		uint32_t offset = *(uint32_t*)as_vector_get(&btr->base.offsets, i);
 		as_batch_base_record* rec = as_vector_get(btr->records, offset);
 
-		if (rec->result == AEROSPIKE_NO_RESPONSE) {
-			rec->result = err->code;
-
-			if (rec->has_write) {
-				rec->in_doubt = err->in_doubt;
-			}
+		if (rec->result == AEROSPIKE_NO_RESPONSE && rec->has_write) {
+			rec->in_doubt = err->in_doubt;
 		}
 	}
 }
 
 static void
-as_batch_set_error_keys(as_batch_task_keys* btk, as_error* err)
+as_batch_set_doubt_keys(as_batch_task_keys* btk, as_error* err)
 {
 	uint32_t offsets_size = btk->base.offsets.size;
-	bool has_write = btk->rec->has_write;
 
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&btk->base.offsets, i);
 		as_batch_result* res = &btk->results[offset];
 
 		if (res->result == AEROSPIKE_NO_RESPONSE) {
-			res->result = err->code;
-
-			if (has_write) {
-				res->in_doubt = err->in_doubt;
-			}
+			res->in_doubt = err->in_doubt;
 		}
 	}
 }
@@ -1670,12 +1661,12 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 
 	status = as_command_execute(&cmd, err);
 
-	// Set error/in_doubt for keys associated this batch command when
+	// Set in_doubt for keys associated this batch command when
 	// the command was not retried and split. If a split retry occurred,
-	// those new subcommands have already set error/in_doubt on the affected
+	// those new subcommands have already set in_doubt on the affected
 	// subset of keys.
 	if (status != AEROSPIKE_OK && !cmd.split_retry) {
-		as_batch_set_error_records(btr, err);
+		as_batch_set_doubt_records(btr, err);
 	}
 
 	as_command_buffer_free(buf, capacity);
@@ -1872,12 +1863,12 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 
 	status = as_command_execute(&cmd, err);
 
-	// Set error/in_doubt for keys associated this batch command when
+	// Set in_doubt for keys associated this batch command when
 	// the command was not retried and split. If a split retry occurred,
-	// those new subcommands have already set error/in_doubt on the affected
+	// those new subcommands have already set in_doubt on the affected
 	// subset of keys.
-	if (btk->listener && status != AEROSPIKE_OK && !cmd.split_retry) {
-		as_batch_set_error_keys(btk, err);
+	if (btk->listener && status != AEROSPIKE_OK && !cmd.split_retry && btk->rec->has_write) {
+		as_batch_set_doubt_keys(btk, err);
 	}
 
 	as_command_buffer_free(buf, capacity);
@@ -3241,12 +3232,8 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 		uint32_t offset = cf_swap_from_be32(*(uint32_t*)p);
 		as_batch_base_record* rec = as_vector_get(records, offset);
 
-		if (rec->result == AEROSPIKE_NO_RESPONSE) {
-			rec->result = err->code;
-
-			if (rec->has_write) {
-				rec->in_doubt = err->in_doubt;
-			}
+		if (rec->result == AEROSPIKE_NO_RESPONSE && rec->has_write) {
+			rec->in_doubt = err->in_doubt;
 		}
 
 		uint8_t type;

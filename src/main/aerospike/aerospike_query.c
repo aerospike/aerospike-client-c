@@ -251,6 +251,10 @@ as_query_partition_executor_destroy(as_async_query_executor* qe)
 static void
 as_query_partition_notify(as_async_query_executor* qe, as_error* err)
 {
+	if (err) {
+		as_partition_error(qe->pt->parts_all);
+	}
+
 	as_query_partition_executor_destroy(qe);
 
 	// If query callback already returned false, do not re-notify user.
@@ -1805,6 +1809,10 @@ aerospike_query_foreach(
 			&query->parts_all, query->paginate, n_nodes);
 
 		status = as_query_partitions(cluster, err, policy, query, &pt, callback, udata);
+
+		if (status != AEROSPIKE_OK) {
+			as_partition_error(query->parts_all);
+		}
 		as_partition_tracker_destroy(&pt);
 		return status;
 	}
@@ -1958,6 +1966,10 @@ aerospike_query_partitions(
 	}
 
 	status = as_query_partitions(cluster, err, policy, query, &pt, callback, udata);
+
+	if (status != AEROSPIKE_OK) {
+		as_partition_error(query->parts_all);
+	}
 	as_partition_tracker_destroy(&pt);
 	return status;
 }

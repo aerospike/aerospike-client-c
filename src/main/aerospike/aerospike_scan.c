@@ -107,6 +107,11 @@ as_scan_partition_retry_async(as_async_scan_executor* se, as_error* err);
 static inline void
 as_scan_partition_executor_destroy(as_async_scan_executor* se)
 {
+	// Only async needs to release node_filter, so release here
+	// instead of as_partition_tracker_destroy().
+	if (se->pt->node_filter) {
+		as_node_release(se->pt->node_filter);
+	}
 	as_partition_tracker_destroy(se->pt);
 	cf_free(se->pt);
 	cf_free(se->cmd_buf);
@@ -115,6 +120,10 @@ as_scan_partition_executor_destroy(as_async_scan_executor* se)
 static void
 as_scan_partition_notify(as_async_scan_executor* se, as_error* err)
 {
+	if (err) {
+		as_partition_error(se->pt->parts_all);
+	}
+
 	as_scan_partition_executor_destroy(se);
 
 	// If scan callback already returned false, do not re-notify user.
@@ -1261,6 +1270,10 @@ aerospike_scan_foreach(
 		&scan->parts_all, scan->paginate, n_nodes);
 
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
+
+	if (status != AEROSPIKE_OK) {
+		as_partition_error(scan->parts_all);
+	}
 	as_partition_tracker_destroy(&pt);
 	return status;
 }
@@ -1287,6 +1300,7 @@ aerospike_scan_node(
 	as_status status = as_scan_validate(err, policy, scan);
 
 	if (status != AEROSPIKE_OK) {
+		as_node_release(node);
 		return status;
 	}
 
@@ -1295,6 +1309,10 @@ aerospike_scan_node(
 		&scan->parts_all, scan->paginate, node);
 
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
+
+	if (status != AEROSPIKE_OK) {
+		as_partition_error(scan->parts_all);
+	}
 	as_partition_tracker_destroy(&pt);
 	as_node_release(node);
 	return status;
@@ -1332,6 +1350,10 @@ aerospike_scan_partitions(
 	}
 
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
+
+	if (status != AEROSPIKE_OK) {
+		as_partition_error(scan->parts_all);
+	}
 	as_partition_tracker_destroy(&pt);
 	return status;
 }
@@ -1399,7 +1421,10 @@ aerospike_scan_node_async(
 
 	status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata,
 									 event_loop);
-	as_node_release(node);
+
+	if (status != AEROSPIKE_OK) {
+		as_node_release(node);
+	}
 	return status;
 }
 

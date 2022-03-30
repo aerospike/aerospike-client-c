@@ -487,6 +487,7 @@ as_partition_tracker_should_retry(
 	case AEROSPIKE_ERR_ASYNC_CONNECTION:
 	case AEROSPIKE_ERR_TIMEOUT:
 	case AEROSPIKE_ERR_INDEX_NOT_FOUND:
+	case AEROSPIKE_ERR_INDEX_NOT_READABLE:
 		// Multiple scan/query threads may call this function, so error
 		// list must be modified under lock.
 		pthread_mutex_lock(&pt->lock);

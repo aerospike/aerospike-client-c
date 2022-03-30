@@ -2639,9 +2639,8 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 		uint32_t offset = *(uint32_t*)as_vector_get(&task->offsets, i);
 		as_batch_read_record* rec = as_vector_get(btr->records, offset);
 
-		if (rec->result != AEROSPIKE_NO_RESPONSE && rec->result != AEROSPIKE_ERR_INVALID_NODE) {
-			// Do not retry keys that already have a response
-			// that is not a node assignment error.
+		if (rec->result != AEROSPIKE_NO_RESPONSE) {
+			// Do not retry keys that already have a response.
 			continue;
 		}
 
@@ -2726,9 +2725,8 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 		as_key* key = &btk->batch->keys.entries[offset];
 		as_batch_result* res = &btk->results[offset];
 
-		if (res->result != AEROSPIKE_NO_RESPONSE && res->result != AEROSPIKE_ERR_INVALID_NODE) {
-			// Do not retry keys that already have a response
-			// that is not a node assignment error.
+		if (res->result != AEROSPIKE_NO_RESPONSE) {
+			// Do not retry keys that already have a response.
 			continue;
 		}
 
@@ -3072,9 +3070,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			}
 		}
 
-		if (rec->result != AEROSPIKE_NO_RESPONSE && rec->result != AEROSPIKE_ERR_INVALID_NODE) {
-			// Do not retry keys that already have a response
-			// that is not a node assignment error.
+		if (rec->result != AEROSPIKE_NO_RESPONSE) {
+			// Do not retry keys that already have a response.
 			continue;
 		}
 

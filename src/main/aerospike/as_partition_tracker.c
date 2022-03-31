@@ -382,7 +382,7 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 			pt->parts_all->done = true;
 		}
 		else if (pt->iteration > 1) {
-			// If errors occured on a node, only that node's partitions are retried in the
+			// If errors occurred on a node, only that node's partitions are retried in the
 			// next iteration. If that node finally succeeds, the other original nodes still
 			// need to be retried if parts_all is reused in the next scan/query command.
 			// Force retry on all node partitions.

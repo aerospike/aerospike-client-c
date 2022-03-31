@@ -381,6 +381,14 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 		if (pt->max_records == 0) {
 			pt->parts_all->done = true;
 		}
+		else if (pt->iteration > 1) {
+			// If errors occurred on a node, only that node's partitions are retried in the
+			// next iteration. If that node finally succeeds, the other original nodes still
+			// need to be retried if parts_all is reused in the next scan/query command.
+			// Force retry on all node partitions.
+			pt->parts_all->retry = true;
+			pt->parts_all->done = false;
+		}
 		else {
 			// Set global retry to false because only specific node partitions
 			// should be retried.
@@ -487,6 +495,7 @@ as_partition_tracker_should_retry(
 	case AEROSPIKE_ERR_ASYNC_CONNECTION:
 	case AEROSPIKE_ERR_TIMEOUT:
 	case AEROSPIKE_ERR_INDEX_NOT_FOUND:
+	case AEROSPIKE_ERR_INDEX_NOT_READABLE:
 		// Multiple scan/query threads may call this function, so error
 		// list must be modified under lock.
 		pthread_mutex_lock(&pt->lock);

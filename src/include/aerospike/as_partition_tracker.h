@@ -158,6 +158,15 @@ as_partition_tracker_should_retry(
 void
 as_partition_tracker_destroy(as_partition_tracker* pt);
 
+static inline void
+as_partition_error(as_partitions_status* parts_all)
+{
+	// Mark all partitions for retry on fatal errors.
+	if (parts_all) {
+		parts_all->retry = true;
+	}
+}
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

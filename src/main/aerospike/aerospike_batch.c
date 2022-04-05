@@ -1962,6 +1962,40 @@ as_batch_release_nodes_after_async(as_vector* batch_nodes)
 }
 
 static as_status
+as_batch_keys_execute_seq(
+	as_error* err, as_batch_task_keys* btk, as_vector* batch_nodes, as_command* parent
+	)
+{
+	as_status status = AEROSPIKE_OK;
+	as_error e;
+
+	for (uint32_t i = 0; i < batch_nodes->size; i++) {
+		as_batch_node* batch_node = as_vector_get(batch_nodes, i);
+		
+		btk->base.node = batch_node->node;
+		memcpy(&btk->base.offsets, &batch_node->offsets, sizeof(as_vector));
+		as_error_init(&e);
+
+		as_status s = as_batch_execute_keys(btk, &e, parent);
+
+		if (s != AEROSPIKE_OK) {
+			if (btk->base.policy->respond_all_keys) {
+				if (status == AEROSPIKE_OK) {
+					as_error_copy(err, &e);
+					status = s;
+				}
+			}
+			else {
+				as_error_copy(err, &e);
+				status = s;
+				break;
+			}
+		}
+	}
+	return status;
+}
+
+static as_status
 as_batch_keys_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
 	as_batch_base_record* rec, as_batch_attr* attr, as_batch_listener listener, void* udata
@@ -2139,31 +2173,7 @@ as_batch_keys_execute(
 	}
 	else {
 		// Run batch requests sequentially in same thread.
-		as_error e;
-
-		for (uint32_t i = 0; status == AEROSPIKE_OK && i < batch_nodes.size; i++) {
-			as_batch_node* batch_node = as_vector_get(&batch_nodes, i);
-			
-			btk.base.node = batch_node->node;
-			memcpy(&btk.base.offsets, &batch_node->offsets, sizeof(as_vector));
-			as_error_init(&e);
-
-			as_status s = as_batch_execute_keys(&btk, err, NULL);
-
-			if (s != AEROSPIKE_OK) {
-				if (policy->respond_all_keys) {
-					if (status == AEROSPIKE_OK) {
-						as_error_copy(err, &e);
-						status = s;
-					}
-				}
-				else {
-					as_error_copy(err, &e);
-					status = s;
-					break;
-				}
-			}
-		}
+		status = as_batch_keys_execute_seq(err, &btk, &batch_nodes, NULL);
 	}
 
 	// Release each node.
@@ -2766,13 +2776,7 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 	parent->split_retry = true;
 
 	// Run batch retries sequentially in same thread.
-	for (uint32_t i = 0; status == AEROSPIKE_OK && i < batch_nodes.size; i++) {
-		as_batch_node* batch_node = as_vector_get(&batch_nodes, i);
-
-		task->node = batch_node->node;
-		memcpy(&task->offsets, &batch_node->offsets, sizeof(as_vector));
-		status = as_batch_execute_keys(btk, err, parent);
-	}
+	status = as_batch_keys_execute_seq(err, btk, &batch_nodes, parent);
 
 	// Release each node.
 	as_batch_release_nodes(&batch_nodes);

@@ -799,6 +799,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 		}
 		
 		if (proto.type == AS_MESSAGE_TYPE) {
+			as_log_warn("Call parse_results_fn with buf[5]=%u", buf[5]);
 			status = cmd->parse_results_fn(err, cmd, node, buf, size);
 		}
 		else if (proto.type == AS_COMPRESSED_MESSAGE_TYPE) {

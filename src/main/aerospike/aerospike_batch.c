@@ -311,6 +311,8 @@ as_batch_async_parse_records(as_event_command* cmd)
 	return false;
 }
 
+#include <aerospike/as_log_macros.h>
+
 static as_status
 as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
@@ -324,15 +326,19 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		p += sizeof(as_msg);
-		
+
+		uint32_t offset = msg->transaction_ttl;  // overloaded to contain batch index
+
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			as_log_warn("Batch terminated %u", msg->result_code);
 			if (msg->result_code != AEROSPIKE_OK) {
 				return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
 			}
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
-
-		uint32_t offset = msg->transaction_ttl;  // overloaded to contain batch index
+		else {
+			as_log_warn("Batch record %u status %u", offset, msg->result_code);
+		}
 
 		if (offset >= task->n_keys) {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Batch index %u >= batch size: %u",
@@ -347,6 +353,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				as_batch_task_records* btr = (as_batch_task_records*)task;
 				as_batch_base_record* rec = as_vector_get(btr->records, offset);
 				rec->result = msg->result_code;
+				as_log_warn("Batch record %u rec->result %d", offset, rec->result);
 
 				if (msg->result_code == AEROSPIKE_OK) {
 					as_status status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);

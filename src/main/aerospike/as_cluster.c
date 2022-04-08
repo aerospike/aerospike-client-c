@@ -27,6 +27,7 @@
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_string_builder.h>
 #include <aerospike/as_thread.h>
 #include <aerospike/as_tls.h>
 #include <aerospike/as_vector.h>
@@ -686,11 +687,34 @@ as_cluster_destroy_peers(as_peers* peers)
 	as_vector_destroy(invalid_hosts);
 }
 
+static as_status
+as_cluster_init_error(as_vector* invalid_hosts, as_error* err)
+{
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 512, true);
+
+	as_string_builder_append(&sb, "Peers not reachable: ");
+
+	for (uint32_t i = 0; i < invalid_hosts->size; i++) {
+		as_host* h = as_vector_get(invalid_hosts, i);
+
+		if (i > 0) {
+			as_string_builder_append(&sb, ", ");
+		}
+		as_string_builder_append(&sb, h->name);
+		as_string_builder_append_char(&sb, ':');
+		as_string_builder_append_uint(&sb, h->port);
+	}
+	as_error_update(err, AEROSPIKE_ERR_CLIENT, sb.data);
+	as_string_builder_destroy(&sb);
+	return err->code;
+}
+
 /**
  * Check health of all nodes in the cluster.
  */
 as_status
-as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
+as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 {
 	// All node additions/deletions are performed in tend thread.
 	// Garbage collect data structures released in previous tend.
@@ -719,9 +743,16 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings)
 	
 	// If active nodes don't exist, seed cluster.
 	if (nodes->size == 0) {
-		as_status status = as_cluster_seed_node(cluster, err, &peers, enable_seed_warnings);
+		as_status status = as_cluster_seed_node(cluster, err, &peers, is_init);
 		
 		if (status != AEROSPIKE_OK) {
+			as_cluster_destroy_peers(&peers);
+			return status;
+		}
+
+		// All peers must be reachable on cluster init if fail_if_not_connected is true.
+		if (is_init && peers.invalid_hosts.size > 0 && cluster->fail_if_not_connected) {
+			status = as_cluster_init_error(&peers.invalid_hosts, err);
 			as_cluster_destroy_peers(&peers);
 			return status;
 		}
@@ -1003,13 +1034,13 @@ as_cluster_add_seeds(as_cluster* cluster)
 }
 
 as_status
-as_cluster_init(as_cluster* cluster, as_error* err, bool fail_if_not_connected)
+as_cluster_init(as_cluster* cluster, as_error* err)
 {
 	// Tend cluster until all nodes identified.
 	as_status status = as_wait_till_stabilized(cluster, err);
 	
 	if (status != AEROSPIKE_OK) {
-		if (fail_if_not_connected) {
+		if (cluster->fail_if_not_connected) {
 			return status;
 		}
 		else {
@@ -1236,6 +1267,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->conn_pools_per_node = config->conn_pools_per_node;
 	cluster->use_services_alternate = config->use_services_alternate;
 	cluster->rack_aware = config->rack_aware;
+	cluster->fail_if_not_connected = config->fail_if_not_connected;
 
 	if (config->rack_ids) {
 		cluster->rack_ids_size = config->rack_ids->size;
@@ -1338,7 +1370,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	}
 	else {
 		// Initialize normal cluster.
-		as_status status = as_cluster_init(cluster, err, config->fail_if_not_connected);
+		as_status status = as_cluster_init(cluster, err);
 		
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);

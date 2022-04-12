@@ -370,6 +370,12 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Fail on cluster init if seed node and all peers are not reachable.
+	 */
+	bool fail_if_not_connected;
+
+	/**
+	 * @private
 	 * Should continue to tend cluster.
 	 */
 	volatile bool valid;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -168,6 +168,13 @@ void aerospike_destroy(aerospike* as)
 as_status
 aerospike_connect(aerospike* as, as_error* err)
 {
+	if (! g_as_log.callback_set) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"as_log_set_callback() must be called. "
+			"See https://developer.aerospike.com/client/c/usage/logging for details."
+			);
+	}
+
 	as_error_reset(err);
 
 	as_status status = aerospike_library_init(err);

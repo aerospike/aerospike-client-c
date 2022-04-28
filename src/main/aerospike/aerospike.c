@@ -168,12 +168,16 @@ void aerospike_destroy(aerospike* as)
 as_status
 aerospike_connect(aerospike* as, as_error* err)
 {
+	// Disable log subscribe requirement to avoid a breaking change in a minor release.
+	// TODO: Reintroduce requirement in the next major client release.
+	/*
 	if (! g_as_log.callback_set) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"as_log_set_callback() must be called. "
 			"See https://developer.aerospike.com/client/c/usage/logging for details."
 			);
 	}
+	*/
 
 	as_error_reset(err);
 

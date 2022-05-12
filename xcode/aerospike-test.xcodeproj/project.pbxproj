@@ -22,8 +22,8 @@
 		BFC25E551E4E80D600FD7756 /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC25E541E4E80D600FD7756 /* libcrypto.dylib */; };
 		BFC65C041C92250B0079DF5A /* aerospike_test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65BFC1C92250B0079DF5A /* aerospike_test.c */; };
 		BFC65C051C92250B0079DF5A /* test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C011C92250B0079DF5A /* test.c */; };
-		BFC65C091C92256A0079DF5A /* batch_get_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C071C92256A0079DF5A /* batch_get_async.c */; };
-		BFC65C0A1C92256A0079DF5A /* batch_get.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C081C92256A0079DF5A /* batch_get.c */; };
+		BFC65C091C92256A0079DF5A /* batch_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C071C92256A0079DF5A /* batch_async.c */; };
+		BFC65C0A1C92256A0079DF5A /* batch.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C081C92256A0079DF5A /* batch.c */; };
 		BFC65C181C9225AB0079DF5A /* consumer_stream.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C0C1C9225AB0079DF5A /* consumer_stream.c */; };
 		BFC65C191C9225AB0079DF5A /* log_helper.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C0E1C9225AB0079DF5A /* log_helper.c */; };
 		BFC65C1A1C9225AB0079DF5A /* map_rec.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C101C9225AB0079DF5A /* map_rec.c */; };
@@ -107,8 +107,8 @@
 		BFC65BFD1C92250B0079DF5A /* aerospike_test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_test.h; path = ../src/test/aerospike_test.h; sourceTree = "<group>"; };
 		BFC65C011C92250B0079DF5A /* test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = test.c; path = ../src/test/test.c; sourceTree = "<group>"; };
 		BFC65C021C92250B0079DF5A /* test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = test.h; path = ../src/test/test.h; sourceTree = "<group>"; };
-		BFC65C071C92256A0079DF5A /* batch_get_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = batch_get_async.c; path = ../src/test/aerospike_batch/batch_get_async.c; sourceTree = "<group>"; };
-		BFC65C081C92256A0079DF5A /* batch_get.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = batch_get.c; path = ../src/test/aerospike_batch/batch_get.c; sourceTree = "<group>"; };
+		BFC65C071C92256A0079DF5A /* batch_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = batch_async.c; path = ../src/test/aerospike_batch/batch_async.c; sourceTree = "<group>"; };
+		BFC65C081C92256A0079DF5A /* batch.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = batch.c; path = ../src/test/aerospike_batch/batch.c; sourceTree = "<group>"; };
 		BFC65C0C1C9225AB0079DF5A /* consumer_stream.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = consumer_stream.c; path = ../src/test/util/consumer_stream.c; sourceTree = "<group>"; };
 		BFC65C0D1C9225AB0079DF5A /* consumer_stream.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = consumer_stream.h; path = ../src/test/util/consumer_stream.h; sourceTree = "<group>"; };
 		BFC65C0E1C9225AB0079DF5A /* log_helper.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = log_helper.c; path = ../src/test/util/log_helper.c; sourceTree = "<group>"; };
@@ -253,8 +253,8 @@
 		BFC65C061C9225470079DF5A /* aerospike_batch */ = {
 			isa = PBXGroup;
 			children = (
-				BFC65C071C92256A0079DF5A /* batch_get_async.c */,
-				BFC65C081C92256A0079DF5A /* batch_get.c */,
+				BFC65C071C92256A0079DF5A /* batch_async.c */,
+				BFC65C081C92256A0079DF5A /* batch.c */,
 			);
 			name = aerospike_batch;
 			sourceTree = "<group>";
@@ -484,12 +484,12 @@
 				BF3F7D47259BDD2B0092D808 /* map_sort.c in Sources */,
 				BFC65C1D1C9225AB0079DF5A /* udf.c in Sources */,
 				BFF344C81CEA8FD200FD1976 /* map_basics.c in Sources */,
-				BFC65C0A1C92256A0079DF5A /* batch_get.c in Sources */,
+				BFC65C0A1C92256A0079DF5A /* batch.c in Sources */,
 				BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */,
 				BFC65C611C9227860079DF5A /* query_geospatial.c in Sources */,
 				BFC65C1C1C9225AB0079DF5A /* test_aerospike.c in Sources */,
 				BFC65C051C92250B0079DF5A /* test.c in Sources */,
-				BFC65C091C92256A0079DF5A /* batch_get_async.c in Sources */,
+				BFC65C091C92256A0079DF5A /* batch_async.c in Sources */,
 				BFD74AE11CFE699800D79E15 /* map_basics_async.c in Sources */,
 				BFC65C181C9225AB0079DF5A /* consumer_stream.c in Sources */,
 				BF7EBCC725D4B20800D5DFE9 /* exp_operate.c in Sources */,

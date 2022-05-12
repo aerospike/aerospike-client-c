@@ -399,11 +399,11 @@
     <ClInclude Include="..\..\src\include\aerospike\as_exp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\include\aerospike\as_predexp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\include\aerospike\as_exp_operations.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_thread.h">
+      <Filter>Header Files\common\aerospike</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -756,9 +756,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_exp.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\main\aerospike\as_predexp.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_exp_operations.c">

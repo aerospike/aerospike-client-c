@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Label="Packages" Condition="'$(PackagesPath)' == ''">
     <PackagesPath>..\packages</PackagesPath>
   </PropertyGroup>
@@ -42,51 +42,51 @@
     <ProjectGuid>{FDF0C655-6233-4C54-AF71-8AB68C1D3888}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>aerospike</RootNamespace>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libevent|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libuv|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug nodejs|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libevent|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libuv|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release nodejs|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v140</PlatformToolset>
+    <PlatformToolset>v141</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
@@ -311,6 +311,7 @@
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_string.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_stringmap.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_string_builder.h" />
+    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_thread.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_thread_pool.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_timer.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_types.h" />
@@ -378,7 +379,6 @@
     <ClInclude Include="..\..\src\include\aerospike\as_pipe.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_policy.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_poll.h" />
-    <ClInclude Include="..\..\src\include\aerospike\as_predexp.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_proto.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_query.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_query_validate.h" />
@@ -498,7 +498,6 @@
     <ClCompile Include="..\..\src\main\aerospike\as_peers.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_pipe.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_policy.c" />
-    <ClCompile Include="..\..\src\main\aerospike\as_predexp.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_proto.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_query.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_query_validate.c" />

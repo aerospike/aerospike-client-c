@@ -286,7 +286,11 @@ as_tls_cleanup(void)
 
 	// https://wiki.openssl.org/index.php/Library_Initialization#Cleanup
 	//
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
 	FIPS_mode_set(0);
+#elif OPENSSL_VERSION_NUMBER == 0x10100000L
+	FIPS_module_mode_set(0);
+#endif
 	ENGINE_cleanup();
 	CONF_modules_unload(1);
 	EVP_cleanup();
@@ -683,8 +687,13 @@ as_tls_config_reload(as_config_tls* tlscfg, as_tls_context* ctx,
 	}
 
 	if (tlscfg->keyfile &&
-			SSL_CTX_use_RSAPrivateKey_file(ctx->ssl_ctx, tlscfg->keyfile,
-					SSL_FILETYPE_PEM) != 1) {
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+		SSL_CTX_use_RSAPrivateKey_file(ctx->ssl_ctx, tlscfg->keyfile,
+									   SSL_FILETYPE_PEM) != 1) {
+#else
+		SSL_CTX_use_PrivateKey_file(ctx->ssl_ctx, tlscfg->keyfile,
+									   SSL_FILETYPE_PEM) != 1) {
+#endif
 		pthread_mutex_unlock(&ctx->lock);
 
 		char buff[1000];

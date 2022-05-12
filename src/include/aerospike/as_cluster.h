@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -54,6 +54,22 @@ typedef struct as_nodes_s {
 	 */
 	as_node* array[];
 } as_nodes;
+
+/**
+ * @private
+ * Cluster state for an event loop.
+ */
+typedef struct as_event_state_s {
+	/**
+	 * Cluster's pending command count for this event loop.
+	 */
+	int pending;
+	
+	/**
+	 * Is cluster closed for this event loop.
+	 */
+	bool closed;
+} as_event_state;
 
 /**
  * @private
@@ -142,9 +158,9 @@ typedef struct as_cluster_s {
 	void* event_callback_udata;
 
 	/**
-	 * Pending async commands counter array for all event loops.
+	 * Cluster state for all event loops.
 	 */
-	int* pending;
+	as_event_state* event_state;
 
 	/**
 	 * @private
@@ -345,6 +361,18 @@ typedef struct as_cluster_s {
 	 * Is authentication enabled
 	 */
 	bool auth_enabled;
+
+	/**
+	 * @private
+	 * Does cluster support partition queries.
+	 */
+	bool has_partition_query;
+
+	/**
+	 * @private
+	 * Fail on cluster init if seed node and all peers are not reachable.
+	 */
+	bool fail_if_not_connected;
 
 	/**
 	 * @private

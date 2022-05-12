@@ -1,24 +1,19 @@
-/*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+/*
+ * Copyright 2008-2022 Aerospike, Inc.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
 #include <stddef.h>
 #include <stdlib.h>
 
@@ -52,7 +47,7 @@ void insert_records(uint32_t* counter);
 bool insert_record(as_event_loop* event_loop, void* udata, uint32_t index);
 void insert_listener(as_error* err, void* udata, as_event_loop* event_loop);
 void batch_read(as_event_loop* event_loop);
-void batch_listener(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop);
+void batch_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop);
 
 //==========================================================
 // BATCH GET Example
@@ -170,7 +165,7 @@ void
 batch_read(as_event_loop* event_loop)
 {
 	// Make a batch of all the keys we inserted.
-	as_batch_read_records* records = as_batch_read_create(g_n_keys);
+	as_batch_records* records = as_batch_records_create(g_n_keys);
 
 	for (uint32_t i = 0; i < g_n_keys; i++) {
 		as_batch_read_record* record = as_batch_read_reserve(records);
@@ -186,11 +181,11 @@ batch_read(as_event_loop* event_loop)
 }
 
 void
-batch_listener(as_error* err, as_batch_read_records* records, void* udata, as_event_loop* event_loop)
+batch_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop)
 {
 	if (err) {
 		LOG("aerospike_batch_read_async() returned %d - %s", err->code, err->message);
-		as_batch_read_destroy(records);
+		as_batch_records_destroy(records);
 		as_monitor_notify(&monitor);
 		return;	
 	}
@@ -221,6 +216,6 @@ batch_listener(as_error* err, as_batch_read_records* records, void* udata, as_ev
 	}
 
 	LOG("... found %u/%u records", n_found, list->size);
-	as_batch_read_destroy(records);
+	as_batch_records_destroy(records);
 	as_monitor_notify(&monitor);	
 }

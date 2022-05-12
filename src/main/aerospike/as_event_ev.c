@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -24,6 +24,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_thread.h>
 #include <aerospike/as_tls.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -94,7 +95,11 @@ as_ev_wakeup(struct ev_loop* loop, ev_async* wakeup, int revents)
 static void*
 as_ev_worker(void* udata)
 {
-	struct ev_loop* loop = udata;
+	as_event_loop* event_loop = udata;
+
+	as_thread_set_name_index("ev", event_loop->index);
+
+	struct ev_loop* loop = event_loop->loop;
 	ev_loop(loop, 0);
 	ev_loop_destroy(loop);
 	as_tls_thread_cleanup();
@@ -119,7 +124,7 @@ as_event_create_loop(as_event_loop* event_loop)
 	}
 	as_ev_init_loop(event_loop);
 	
-	return pthread_create(&event_loop->thread, NULL, as_ev_worker, event_loop->loop) == 0;
+	return pthread_create(&event_loop->thread, NULL, as_ev_worker, event_loop) == 0;
 }
 
 void

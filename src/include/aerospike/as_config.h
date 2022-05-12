@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -658,13 +658,14 @@ typedef struct as_config_s {
 	as_auth_mode auth_mode;
 
 	/**
-	 * Action to perform if client fails to connect to seed hosts.
+	 * Should cluster instantiation fail if the client fails to connect to a seed or
+	 * all the seed's peers.
 	 *
-	 * If fail_if_not_connected is true (default), the cluster creation will fail
-	 * when all seed hosts are not reachable.
+	 * If true, return an error if all seed connections fail or a seed is valid,
+	 * but all peers from that seed are not reachable.
 	 *
-	 * If fail_if_not_connected is false, an empty cluster will be created and the 
-	 * client will automatically connect when Aerospike server becomes available.
+	 * If false, a partial cluster will be created and the client will automatically connect
+	 * to the remaining nodes when they become available.
 	 */
 	bool fail_if_not_connected;
 	

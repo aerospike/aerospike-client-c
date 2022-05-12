@@ -12,9 +12,9 @@ PLATFORM = $(OS)-$(ARCH)
 
 CFLAGS = -std=gnu99 -g -Wall -fPIC -O3
 CFLAGS += -fno-common -fno-strict-aliasing
-CFLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE
+CFLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
-ifneq ($(ARCH),$(filter $(ARCH),ppc64 ppc64le))
+ifneq ($(ARCH),$(filter $(ARCH),ppc64 ppc64le arm64))
   CFLAGS += -march=nocona
 endif
 

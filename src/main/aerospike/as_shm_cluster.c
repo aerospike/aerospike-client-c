@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -23,6 +23,7 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_thread.h>
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
@@ -48,13 +49,13 @@
  ******************************************************************************/
 
 as_status
-as_cluster_init(as_cluster* cluster, as_error* err, bool fail_if_not_connected);
+as_cluster_init(as_cluster* cluster, as_error* err);
 
 void
 as_cluster_add_seeds(as_cluster* cluster);
 
 as_status
-as_cluster_tend(as_cluster* cluster, as_error* err, bool enable_seed_warnings);
+as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init);
 
 as_status
 as_node_ensure_login_shm(as_error* err, as_node* node);
@@ -773,6 +774,8 @@ static void*
 as_shm_tender(void* userdata)
 {
 	// Shared memory cluster tender.
+	as_thread_set_name("shmtend");
+
 	as_cluster* cluster = userdata;
 
 	if (cluster->tend_thread_cpu >= 0) {
@@ -1040,7 +1043,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		}
 		else {
 			as_log_info("Initialize cluster: %d", pid);
-			as_status status = as_cluster_init(cluster, err, true);
+			as_status status = as_cluster_init(cluster, err);
 			
 			if (status != AEROSPIKE_OK) {
 				as_store_uint8(&cluster_shm->lock, 0);

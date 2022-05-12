@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -137,10 +137,12 @@ aerospike_job_info(
 		policy = &as->config.policies.info;
 	}
 
-	char command1[128];
-	char command2[128];
-	sprintf(command1, "jobs:module=%s;cmd=get-job;trid=%" PRIu64 "\n", module, job_id);
-	sprintf(command2, "%s-show:trid=%" PRIu64 "\n", module, job_id);
+	char cmd1[128];
+	char cmd2[128];
+	char cmd3[128];
+	sprintf(cmd1, "query-show:trid=%" PRIu64 "\n", job_id);
+	sprintf(cmd2, "%s-show:trid=%" PRIu64 "\n", module, job_id);
+	sprintf(cmd3, "jobs:module=%s;cmd=get-job;trid=%" PRIu64 "\n", module, job_id);
 
 	info->status = AS_JOB_STATUS_UNDEF;
 	info->progress_pct = 0;
@@ -153,7 +155,21 @@ aerospike_job_info(
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
-		char* command = (node->features & AS_FEATURES_QUERY_SHOW)? command2 : command1;
+		char* command;
+
+		if (node->features & AS_FEATURES_PARTITION_QUERY) {
+			// query-show works for both scan and query.
+			command = cmd1;
+		}
+		else if (node->features & AS_FEATURES_QUERY_SHOW) {
+			// scan-show and query-show are separate.
+			command = cmd2;
+		}
+		else {
+			// old job monitor syntax.
+			command = cmd3;
+		}
+
 		char* response = 0;
 		
 		status = as_info_command_node(err, node, command, true, deadline, &response);

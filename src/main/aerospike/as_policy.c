@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,7 +16,6 @@
  */
 #include <aerospike/as_policy.h>
 #include <aerospike/as_exp.h>
-#include <aerospike/as_predexp.h>
 
 /******************************************************************************
  * FUNCTIONS
@@ -31,6 +30,10 @@ as_policies_init(as_policies* p)
 	as_policy_remove_init(&p->remove);
 	as_policy_apply_init(&p->apply);
 	as_policy_batch_init(&p->batch);
+	as_policy_batch_parent_write_init(&p->batch_parent_write);
+	as_policy_batch_write_init(&p->batch_write);
+	as_policy_batch_apply_init(&p->batch_apply);
+	as_policy_batch_remove_init(&p->batch_remove);
 	as_policy_scan_init(&p->scan);
 	as_policy_query_init(&p->query);
 	as_policy_info_init(&p->info);
@@ -47,15 +50,10 @@ as_policies_destroy(as_policies* p)
 	as_exp_destroy(p->remove.base.filter_exp);
 	as_exp_destroy(p->apply.base.filter_exp);
 	as_exp_destroy(p->batch.base.filter_exp);
+	as_exp_destroy(p->batch_parent_write.base.filter_exp);
+	as_exp_destroy(p->batch_write.filter_exp);
+	as_exp_destroy(p->batch_apply.filter_exp);
+	as_exp_destroy(p->batch_remove.filter_exp);
 	as_exp_destroy(p->scan.base.filter_exp);
 	as_exp_destroy(p->query.base.filter_exp);
-
-	as_predexp_list_destroy(p->read.base.predexp);
-	as_predexp_list_destroy(p->write.base.predexp);
-	as_predexp_list_destroy(p->operate.base.predexp);
-	as_predexp_list_destroy(p->remove.base.predexp);
-	as_predexp_list_destroy(p->apply.base.predexp);
-	as_predexp_list_destroy(p->batch.base.predexp);
-	as_predexp_list_destroy(p->scan.base.predexp);
-	as_predexp_list_destroy(p->query.base.predexp);
 }

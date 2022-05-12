@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -21,6 +21,7 @@
 #include <aerospike/as_monitor.h>
 #include <aerospike/as_pipe.h>
 #include <aerospike/as_socket.h>
+#include <aerospike/as_thread.h>
 #include <aerospike/as_tls.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
@@ -165,6 +166,8 @@ as_uv_worker(void* udata)
 {
 	as_uv_thread_data* data = udata;
 	as_event_loop* event_loop = data->event_loop;
+
+	as_thread_set_name_index("uv", event_loop->index);
 	
 	event_loop->loop = cf_malloc(sizeof(uv_loop_t));
 	

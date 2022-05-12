@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -137,7 +137,6 @@ extern "C" {
  * TYPES
  *****************************************************************************/
 
-struct as_predexp_list;
 struct as_exp;
 
 /**
@@ -465,26 +464,6 @@ typedef struct as_policy_base_s {
 	uint32_t sleep_between_retries;
 
 	/**
-	 * Optional predicate expression filter list in postfix notation. If the predicate
-	 * expression exists and evaluates to false on the server, the transaction is ignored.
-	 * This can be used to eliminate a client/server roundtrip in some cases.
-	 *
-	 * aerospike_destroy() automatically calls as_predexp_list_destroy() on all global 
-	 * default policy predexp list instances.
-	 * 
-	 * The user is responsible for calling as_predexp_list_destroy() on predexp list when
-	 * setting temporary transaction policies.
-	 *
-	 * predexp and filter_exp are mutually exclusive.  If both are defined, predexp
-	 * will be ignored.
-	 *
-	 * Default: NULL
-	 *
-	 * @deprecated Use filter_exp instead.
-	 */
-	struct as_predexp_list* predexp;
-
-	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
 	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
@@ -492,9 +471,6 @@ typedef struct as_policy_base_s {
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary transaction policies.
-	 *
-	 * predexp and filter_exp are mutually exclusive.  If both are defined, predexp
-	 * will be ignored.
 	 *
 	 * ~~~~~~~~~~{.c}
 	 * as_exp_build(filter,
@@ -562,6 +538,7 @@ typedef struct as_policy_read_s {
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
+	 *
 	 * Default: true
 	 */
 	bool deserialize;
@@ -571,6 +548,7 @@ typedef struct as_policy_read_s {
 	 * async commands. If true, the user is responsible for calling as_record_destroy() when done
 	 * with the record. If false, as_record_destroy() is automatically called by the client after
 	 * the user listener function completes. This field is ignored for sync commands.
+	 *
 	 * Default: false
 	 */
 	bool async_heap_rec;
@@ -739,6 +717,7 @@ typedef struct as_policy_operate_s {
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
+	 *
 	 * Default: true
 	 */
 	bool deserialize;
@@ -757,6 +736,7 @@ typedef struct as_policy_operate_s {
 	 * async commands. If true, the user is responsible for calling as_record_destroy() when done
 	 * with the record. If false, as_record_destroy() is automatically called by the client after
 	 * the user listener function completes. This field is ignored for sync commands.
+	 *
 	 * Default: false
 	 */
 	bool async_heap_rec;
@@ -813,7 +793,7 @@ typedef struct as_policy_remove_s {
 } as_policy_remove;
 
 /**
- * Batch Policy
+ * Batch parent policy.
  *
  * @ingroup client_policies
  */
@@ -862,37 +842,263 @@ typedef struct as_policy_batch_s {
 	bool concurrent;
 
 	/**
-	 * Allow batch to be processed immediately in the server's receiving thread when the server
-	 * deems it to be appropriate.  If false, the batch will always be processed in separate
-	 * transaction threads.  This field is only relevant for the new batch index protocol.
+	 * Allow batch to be processed immediately in the server's receiving thread for in-memory
+	 * namespaces. If false, the batch will always be processed in separate service threads.
 	 *
-	 * For batch exists or batch reads of smaller sized records (<= 1K per record), inline
-	 * processing will be significantly faster on "in memory" namespaces.  The server disables
-	 * inline processing on disk based namespaces regardless of this policy field.
+	 * For batch transactions with smaller sized records (&lt;= 1K per record), inline
+	 * processing will be significantly faster on in-memory namespaces.
 	 *
 	 * Inline processing can introduce the possibility of unfairness because the server
 	 * can process the entire batch before moving onto the next command.
+	 *
 	 * Default: true
 	 */
 	bool allow_inline;
 
 	/**
-	 * Send set name field to server for every key in the batch for batch index protocol.
-	 * This is only necessary when authentication is enabled and security roles are defined
-	 * on a per set basis.
+	 * Allow batch to be processed immediately in the server's receiving thread for SSD
+	 * namespaces. If false, the batch will always be processed in separate service threads.
+	 * Server versions &lt; 6.0 ignore this field.
+	 *
+	 * Inline processing can introduce the possibility of unfairness because the server
+	 * can process the entire batch before moving onto the next command.
+	 *
 	 * Default: false
+	 */
+	bool allow_inline_ssd;
+
+	/**
+	 * Should all batch keys be attempted regardless of errors. This field is used on both
+	 * the client and server. The client handles node specific errors and the server handles
+	 * key specific errors.
+	 *
+	 * If true, every batch key is attempted regardless of previous key specific errors.
+	 * Node specific errors such as timeouts stop keys to that node, but keys directed at
+	 * other nodes will continue to be processed.
+	 *
+	 * If false, the server will stop the batch to its node on most key specific errors.
+	 * The exceptions are AEROSPIKE_ERR_RECORD_NOT_FOUND and AEROSPIKE_FILTERED_OUT
+	 * which never stop the batch. The client will stop the entire batch on node specific
+	 * errors for sync commands that are run in sequence (concurrent == false). The client
+	 * will not stop the entire batch for async commands or sync commands run in parallel.
+	 *
+	 * Server versions &lt; 6.0 do not support this field and treat this value as false
+	 * for key specific errors.
+	 *
+	 * Default: true
+	 */
+	bool respond_all_keys;
+
+	/**
+	 * This method is deprecated and will eventually be removed.
+	 * The set name is now always sent for every distinct namespace/set in the batch.
+	 *
+	 * Send set name field to server for every key in the batch for batch index protocol.
+	 * This is necessary for batch writes and batch reads when authentication is enabled and
+	 * security roles are defined on a per set basis.
+	 *
+	 * @deprecated Set name always sent.
 	 */
 	bool send_set_name;
 
 	/**
 	 * Should raw bytes be deserialized to as_list or as_map. Set to false for backup programs that
 	 * just need access to raw bytes.
+	 *
 	 * Default: true
 	 */
 	bool deserialize;
 
 } as_policy_batch;
-	
+
+/**
+ * Policy attributes used in batch read commands.
+ * @ingroup client_policies
+ */
+typedef struct as_policy_batch_read_s {
+	/**
+	 * Optional expression filter. If filter_exp exists and evaluates to false, the
+	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * in some cases.
+	 *
+	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
+	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
+	 * on filter expressions when setting temporary transaction policies.
+	 *
+	 * Default: NULL
+	 */
+	struct as_exp* filter_exp;
+
+	/**
+	 * Read policy for AP (availability) namespaces.
+	 * Default: AS_POLICY_READ_MODE_AP_ONE
+	 */
+	as_policy_read_mode_ap read_mode_ap;
+
+	/**
+	 * Read policy for SC (strong consistency) namespaces.
+	 * Default: AS_POLICY_READ_MODE_SC_SESSION
+	 */
+	as_policy_read_mode_sc read_mode_sc;
+
+} as_policy_batch_read;
+
+/**
+ * Policy attributes used in batch write commands.
+ * @ingroup client_policies
+ */
+typedef struct as_policy_batch_write_s {
+	/**
+	 * Optional expression filter. If filter_exp exists and evaluates to false, the
+	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * in some cases.
+	 *
+	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
+	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
+	 * on filter expressions when setting temporary transaction policies.
+	 *
+	 * Default: NULL
+	 */
+	struct as_exp* filter_exp;
+
+	/**
+	 * Specifies the behavior for the key.
+	 */
+	as_policy_key key;
+
+	/**
+	 * Specifies the number of replicas required to be committed successfully when writing
+	 * before returning transaction succeeded.
+	 */
+	as_policy_commit_level commit_level;
+
+	/**
+	 * Specifies the behavior for the generation value.
+	 */
+	as_policy_gen gen;
+
+	/**
+	 * Specifies the behavior for the existence of the record.
+	 */
+	as_policy_exists exists;
+
+	/**
+	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * This prevents deleted records from reappearing after node failures.
+	 * Valid for Aerospike Server Enterprise Edition only.
+	 *
+	 * Default: false (do not tombstone deleted records).
+	 */
+	bool durable_delete;
+
+} as_policy_batch_write;
+
+/**
+ * Policy attributes used in batch UDF apply commands.
+ * @ingroup client_policies
+ */
+typedef struct as_policy_batch_apply_s {
+	/**
+	 * Optional expression filter. If filter_exp exists and evaluates to false, the
+	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * in some cases.
+	 *
+	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
+	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
+	 * on filter expressions when setting temporary transaction policies.
+	 *
+	 * Default: NULL
+	 */
+	struct as_exp* filter_exp;
+
+	/**
+	 * Specifies the behavior for the key.
+	 */
+	as_policy_key key;
+
+	/**
+	 * Specifies the number of replicas required to be committed successfully when writing
+	 * before returning transaction succeeded.
+	 */
+	as_policy_commit_level commit_level;
+
+	/**
+	 * The time-to-live (expiration) of the record in seconds.
+	 * There are also special values that can be set in the record TTL:
+	 * (*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
+	 *    record will adopt the default TTL value from the namespace.
+	 * (*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
+	 *    (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
+	 *    will get an internal "void_time" of zero, and thus will never expire.
+	 * (*) 0xFFFFFFFE (also, -2 in a signed 32 bit int)
+	 *    (defined as AS_RECORD_NO_CHANGE_TTL), which means that the record
+	 *    ttl will not change when the record is updated.
+	 *
+	 * Note that the TTL value will be employed ONLY on write/update calls.
+	 */
+	uint32_t ttl;
+
+	/**
+	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * This prevents deleted records from reappearing after node failures.
+	 * Valid for Aerospike Server Enterprise Edition only.
+	 *
+	 * Default: false (do not tombstone deleted records).
+	 */
+	bool durable_delete;
+
+} as_policy_batch_apply;
+
+/**
+ * Policy attributes used in batch remove commands.
+ * @ingroup client_policies
+ */
+typedef struct as_policy_batch_remove_s {
+	/**
+	 * Optional expression filter. If filter_exp exists and evaluates to false, the
+	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * in some cases.
+	 *
+	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
+	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
+	 * on filter expressions when setting temporary transaction policies.
+	 *
+	 * Default: NULL
+	 */
+	struct as_exp* filter_exp;
+
+	/**
+	 * Specifies the behavior for the key.
+	 */
+	as_policy_key key;
+
+	/**
+	 * Specifies the number of replicas required to be committed successfully when writing
+	 * before returning transaction succeeded.
+	 */
+	as_policy_commit_level commit_level;
+
+	/**
+	 * Specifies the behavior for the generation value.
+	 */
+	as_policy_gen gen;
+
+	/**
+	 * The generation of the record.
+	 */
+	uint16_t generation;
+
+	/**
+	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * This prevents deleted records from reappearing after node failures.
+	 * Valid for Aerospike Server Enterprise Edition only.
+	 *
+	 * Default: false (do not tombstone deleted records).
+	 */
+	bool durable_delete;
+
+} as_policy_batch_remove;
+
 /**
  * Query Policy
  *
@@ -907,16 +1113,15 @@ typedef struct as_policy_query_s {
 
 	/**
 	 * Timeout used when info command is used that checks for cluster changes before and 
-	 * after the query.  This timeout is only used when fail_on_cluster_change is true and
-	 * the query where clause is defined.
+	 * after the query.  This timeout is only used when fail_on_cluster_change is enabled.
 	 *
 	 * Default: 10000 ms
 	 */
 	uint32_t info_timeout;
 
 	/**
-	 * Terminate query if cluster is in migration state. If query where clause not 
-	 * defined (scan), this field is ignored.
+	 * Terminate query if cluster is in migration state. If the server supports partition
+	 * queries or the query filter is null (scan), this field is ignored.
 	 *
 	 * Default: false
 	 */
@@ -929,6 +1134,16 @@ typedef struct as_policy_query_s {
 	 * Default: true
 	 */
 	bool deserialize;
+
+	/**
+	 * Is query expected to return less than 100 records.
+	 * If true, the server will optimize the query for a small record set.
+	 * This field is ignored for aggregation queries, background queries
+	 * and server versions &lt; 6.0.
+	 *
+	 * Default: false
+	 */
+	bool short_query;
 
 } as_policy_query;
 
@@ -1046,9 +1261,29 @@ typedef struct as_policies_s {
 	as_policy_apply apply;
 
 	/**
-	 * The default batch policy.
+	 * Default parent policy used in batch read commands.
 	 */
 	as_policy_batch batch;
+
+	/**
+	 * Default parent policy used in batch write commands.
+	 */
+	as_policy_batch batch_parent_write;
+
+	/**
+	 * Default write policy used in batch operate commands.
+	 */
+	as_policy_batch_write batch_write;
+
+	/**
+	 * Default user defined function policy used in batch UDF apply commands.
+	 */
+	as_policy_batch_apply batch_apply;
+
+	/**
+	 * Default delete policy used in batch remove commands.
+	 */
+	as_policy_batch_remove batch_remove;
 
 	/**
 	 * The default scan policy.
@@ -1086,7 +1321,6 @@ as_policy_base_read_init(as_policy_base* p)
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
 	p->max_retries = 2;
 	p->sleep_between_retries = 0;
-	p->predexp = NULL;
 	p->filter_exp = NULL;
 	p->compress = false;
 }
@@ -1101,7 +1335,6 @@ as_policy_base_write_init(as_policy_base* p)
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
 	p->max_retries = 0;
 	p->sleep_between_retries = 0;
-	p->predexp = NULL;
 	p->filter_exp = NULL;
 	p->compress = false;
 }
@@ -1129,7 +1362,6 @@ as_policy_base_query_init(as_policy_base* p)
 	p->total_timeout = 0;
 	p->max_retries = 5;
 	p->sleep_between_retries = 0;
-	p->predexp = NULL;
 	p->filter_exp = NULL;
 	p->compress = false;
 }
@@ -1330,8 +1562,26 @@ as_policy_batch_init(as_policy_batch* p)
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
 	p->concurrent = false;
 	p->allow_inline = true;
-	p->send_set_name = false;
+	p->allow_inline_ssd = false;
+	p->respond_all_keys = true;
+	p->send_set_name = true;
 	p->deserialize = true;
+	return p;
+}
+
+/**
+ * Initialize as_policy_batch to default values when writes may occur.
+ *
+ * @param p	The policy to initialize.
+ * @return	The initialized policy.
+ *
+ * @relates as_policy_batch
+ */
+static inline as_policy_batch*
+as_policy_batch_parent_write_init(as_policy_batch* p)
+{
+	as_policy_batch_init(p);
+	p->base.max_retries = 0;
 	return p;
 }
 
@@ -1347,6 +1597,66 @@ static inline void
 as_policy_batch_copy(const as_policy_batch* src, as_policy_batch* trg)
 {
 	*trg = *src;
+}
+
+/**
+ * Initialize as_policy_batch_read to default values.
+ * @relates as_policy_batch_read
+ */
+static inline as_policy_batch_read*
+as_policy_batch_read_init(as_policy_batch_read* p)
+{
+	p->filter_exp = NULL;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	return p;
+}
+
+/**
+ * Initialize as_policy_batch_write to default values.
+ * @relates as_policy_batch_write
+ */
+static inline as_policy_batch_write*
+as_policy_batch_write_init(as_policy_batch_write* p)
+{
+	p->filter_exp = NULL;
+	p->key = AS_POLICY_KEY_DEFAULT;
+	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->gen = AS_POLICY_GEN_DEFAULT;
+	p->exists = AS_POLICY_EXISTS_DEFAULT;
+	p->durable_delete = false;
+	return p;
+}
+
+/**
+ * Initialize as_policy_batch_apply to default values.
+ * @relates as_policy_batch_apply
+ */
+static inline as_policy_batch_apply*
+as_policy_batch_apply_init(as_policy_batch_apply* p)
+{
+	p->filter_exp = NULL;
+	p->key = AS_POLICY_KEY_DEFAULT;
+	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->ttl = 0;
+	p->durable_delete = false;
+	return p;
+}
+
+/**
+ * Initialize as_policy_batch_remove to default values.
+ * @relates as_policy_batch_remove
+ */
+static inline as_policy_batch_remove*
+as_policy_batch_remove_init(as_policy_batch_remove* p)
+{
+	p->filter_exp = NULL;
+	p->key = AS_POLICY_KEY_DEFAULT;
+	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	p->gen = AS_POLICY_GEN_DEFAULT;
+	p->generation = 0;
+	p->durable_delete = false;
+	return p;
 }
 
 /**
@@ -1396,6 +1706,7 @@ as_policy_query_init(as_policy_query* p)
 	p->info_timeout = 10000;
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;
+	p->short_query = false;
 	return p;
 }
 

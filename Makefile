@@ -41,7 +41,7 @@ CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O$(O)
 CC_FLAGS += -fno-common -fno-strict-aliasing 
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
-ifneq ($(ARCH),$(filter $(ARCH),ppc64 ppc64le))
+ifneq ($(ARCH),$(filter $(ARCH),ppc64 ppc64le arm64))
   CC_FLAGS += -march=nocona
 endif
 
@@ -185,7 +185,6 @@ AEROSPIKE += as_partition_tracker.o
 AEROSPIKE += as_peers.o
 AEROSPIKE += as_pipe.o
 AEROSPIKE += as_policy.o
-AEROSPIKE += as_predexp.o
 AEROSPIKE += as_proto.o
 AEROSPIKE += as_query.o
 AEROSPIKE += as_query_validate.o
@@ -255,6 +254,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stream.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string_builder.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_thread.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_thread_pool.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h

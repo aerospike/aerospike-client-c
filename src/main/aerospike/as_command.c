@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -20,6 +20,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_msgpack.h>
+#include <aerospike/as_partition_tracker.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_sleep.h>
@@ -51,7 +52,7 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 as_status
 as_batch_retry(as_command* cmd, as_error* err);
 
-static size_t
+size_t
 as_command_user_key_size(const as_key* key)
 {
 	size_t size = AS_FIELD_HEADER_SIZE + 1;  // Add 1 for key's value type.
@@ -228,10 +229,9 @@ uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, uint32_t timeout, uint16_t n_fields, uint16_t n_bins,
-	uint8_t read_attr
+	uint8_t read_attr, uint8_t info_attr
 	)
 {
-	uint8_t info_attr = 0;
 	as_command_set_attr_read(read_mode_ap, read_mode_sc, policy->compress, &read_attr,
 							 &info_attr);
 
@@ -267,7 +267,7 @@ as_command_write_header_read_header(
 	return cmd + AS_HEADER_SIZE;
 }
 
-static uint8_t*
+uint8_t*
 as_command_write_user_key(uint8_t* begin, const as_key* key)
 {
 	uint8_t* p = begin + AS_FIELD_HEADER_SIZE;
@@ -549,7 +549,6 @@ as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
 	as_node* node = NULL;
-	uint32_t command_sent_counter = 0;
 	as_status status;
 	bool release_node;
 
@@ -589,7 +588,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				if (release_node) {
 					as_node_release(node);
 				}
-				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
+				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 				return status;
 			}
 			goto Retry;
@@ -605,7 +604,7 @@ as_command_execute(as_command* cmd, as_error* err)
 			as_node_close_conn_error(node, &socket, socket.pool);
 			goto Retry;
 		}
-		command_sent_counter++;
+		cmd->sent++;
 
 		// Parse results returned by server.
 		if (cmd->node) {
@@ -653,11 +652,11 @@ as_command_execute(as_command* cmd, as_error* err)
 					if (release_node) {
 						as_node_release(node);
 					}
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
+					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 					return status;
 				
 				default:
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
+					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 					break;
 			}
 		}
@@ -747,7 +746,7 @@ Retry:
 	if (release_node) {
 		as_node_release(node);
 	}
-	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, command_sent_counter);
+	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 	return err->code;
 }
 
@@ -800,7 +799,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 		}
 		
 		if (proto.type == AS_MESSAGE_TYPE) {
-			status = cmd->parse_results_fn(err, node, buf, size, cmd->udata);
+			status = cmd->parse_results_fn(err, cmd, node, buf, size);
 		}
 		else if (proto.type == AS_COMPRESSED_MESSAGE_TYPE) {
 			status = as_compressed_size_parse(err, buf, &size2);
@@ -821,8 +820,8 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 				break;
 			}
 
-			status = cmd->parse_results_fn(err, node, buf2 + sizeof(as_proto),
-										   size2 - sizeof(as_proto), cmd->udata);
+			status = cmd->parse_results_fn(err, cmd, node, buf2 + sizeof(as_proto),
+										   size2 - sizeof(as_proto));
 		}
 		else {
 			status = as_proto_type_error(err, &proto, AS_MESSAGE_TYPE);
@@ -873,7 +872,7 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 	}
 
 	if (proto.type == AS_MESSAGE_TYPE) {
-		status = cmd->parse_results_fn(err, node, buf, size, cmd->udata);
+		status = cmd->parse_results_fn(err, cmd, node, buf, size);
 		as_command_buffer_free(buf, size);
 		return status;
 	}
@@ -894,8 +893,8 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 			as_command_buffer_free(buf2, size2);
 			return status;
 		}
-		status = cmd->parse_results_fn(err, node, buf2 + sizeof(as_proto), size2 - sizeof(as_proto),
-									   cmd->udata);
+		status = cmd->parse_results_fn(err, cmd, node, buf2 + sizeof(as_proto),
+									   size2 - sizeof(as_proto));
 		as_command_buffer_free(buf2, size2);
 		return status;
 	}
@@ -906,7 +905,7 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 }
 
 as_status
-as_command_parse_header(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata)
+as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
 	as_msg* msg = (as_msg*)buf;
 	as_status status = as_msg_parse(err, msg, size);
@@ -919,7 +918,7 @@ as_command_parse_header(as_error* err, as_node* node, uint8_t* buf, size_t size,
 		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
 	}
 
-	as_record** rec = udata;
+	as_record** rec = cmd->udata;
 
 	if (rec) {
 		as_record* r = *rec;
@@ -1001,7 +1000,7 @@ as_command_ignore_bins(uint8_t* p, uint32_t n_bins)
 }
 
 uint8_t*
-as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key)
+as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key, uint64_t* bval)
 {
 	uint32_t len;
 	uint32_t size;
@@ -1068,6 +1067,10 @@ as_command_parse_key(uint8_t* p, uint32_t n_fields, as_key* key)
 						break;
 					}
 				}
+				break;
+
+			case AS_FIELD_BVAL_ARRAY:
+				*bval = cf_swap_from_le64(*(uint64_t*)p);
 				break;
 		}
 		p += len;
@@ -1412,9 +1415,9 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
 }
 
 as_status
-as_command_parse_result(as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata)
+as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
-	as_command_parse_result_data* data = udata;
+	as_command_parse_result_data* data = cmd->udata;
 	as_msg* msg = (as_msg*)buf;
 	as_status status = as_msg_parse(err, msg, size);
 
@@ -1483,10 +1486,10 @@ as_command_parse_result(as_error* err, as_node* node, uint8_t* buf, size_t size,
 
 as_status
 as_command_parse_success_failure(
-	as_error* err, as_node* node, uint8_t* buf, size_t size, void* udata
+	as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size
 	)
 {
-	as_val** val = udata;
+	as_val** val = cmd->udata;
 	as_msg* msg = (as_msg*)buf;
 	as_status status = as_msg_parse(err, msg, size);
 

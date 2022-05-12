@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -30,7 +30,6 @@
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
-#include <aerospike/as_predexp.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
@@ -193,12 +192,6 @@ as_command_filter_size(const as_policy_base* policy, uint16_t* n_fields)
 		(*n_fields)++;
 		return AS_FIELD_HEADER_SIZE + policy->filter_exp->packed_sz;
 	}
-
-	if (policy->predexp) {
-		(*n_fields)++;
-		uint32_t tmp = 0;
-		return (uint32_t)as_predexp_list_size(policy->predexp, &tmp);
-	}
 	return 0;
 }
 
@@ -207,11 +200,6 @@ as_command_write_filter(const as_policy_base* policy, uint32_t filter_size, uint
 {
 	if (policy->filter_exp) {
 		return as_exp_write(policy->filter_exp, p);
-	}
-
-	if (policy->predexp) {
-		// filter_size includes header size, so subtract that out.
-		return as_predexp_list_write(policy->predexp, filter_size - AS_FIELD_HEADER_SIZE, p);
 	}
 	return p;
 }
@@ -245,7 +233,7 @@ aerospike_key_get(
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL);
+		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -296,7 +284,7 @@ aerospike_key_get_async(
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL);
+		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -344,7 +332,7 @@ aerospike_key_select(
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-				policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ);
+				policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -408,7 +396,7 @@ aerospike_key_select_async(
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-					policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ);
+					policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);

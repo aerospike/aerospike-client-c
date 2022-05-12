@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -367,6 +367,8 @@ static void connector_error(as_event_command* cmd, as_error* err);
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
 {
+	cmd->command_sent_counter = 0;
+
 	as_event_loop* event_loop = cmd->event_loop;
 
 	if (as_in_event_loop(event_loop->thread)) {
@@ -433,11 +435,11 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	// Initialize read buffer (buf) to be located after write buffer.
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
-	cmd->command_sent_counter = 0;
 	cmd->conn = NULL;
 	cmd->proto_type_rcv = 0;
+	cmd->event_state = &cmd->cluster->event_state[event_loop->index];
 
-	if (cmd->cluster->pending[event_loop->index]++ == -1) {
+	if (cmd->event_state->closed) {
 		as_error err;
 		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Cluster has been closed");
 		as_event_prequeue_error(event_loop, cmd, &err);
@@ -524,6 +526,8 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 
 	// Start processing.
 	event_loop->pending++;
+	cmd->event_state->pending++;
+
 	as_event_command_begin(event_loop, cmd);
 }
 
@@ -558,6 +562,8 @@ as_event_execute_from_delay_queue(as_event_loop* event_loop)
 		}
 
 		event_loop->pending++;
+		cmd->event_state->pending++;
+
 		as_event_command_begin(event_loop, cmd);
 	}
 	event_loop->using_delay_queue = false;
@@ -812,7 +818,7 @@ as_event_socket_timeout(as_event_command* cmd)
 
 		as_error err;
 		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
-						cmd->iteration + 1, as_node_get_address_string(cmd->node));
+						cmd->iteration, as_node_get_address_string(cmd->node));
 
 		as_event_error_callback(cmd, &err);
 	}
@@ -1022,19 +1028,15 @@ as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t com
 
 	if (complete) {
 		// All commands have completed.
-		// If scan or query user callback already returned false,
-		// do not re-notify user that an error occurred.
-		if (executor->notify) {
-			if (first_error) {
-				// Original error can be used directly.
-				executor->err = err;
-				executor->complete_fn(executor);
-				executor->err = NULL;
-			}
-			else {
-				// Use saved error.
-				executor->complete_fn(executor);
-			}
+		if (first_error) {
+			// Original error can be used directly.
+			executor->err = err;
+			executor->complete_fn(executor);
+			executor->err = NULL;
+		}
+		else {
+			// Use saved error.
+			executor->complete_fn(executor);
 		}
 		as_event_executor_destroy(executor);
 	}
@@ -1081,11 +1083,7 @@ as_event_executor_complete(as_event_executor* executor)
 
 	if (complete) {
 		// All commands completed.
-		// If scan or query user callback already returned false,
-		// do not re-notify user that an error occurred.
-		if (executor->notify) {
-			executor->complete_fn(executor);
-		}
+		executor->complete_fn(executor);
 		as_event_executor_destroy(executor);
 	}
 	else {
@@ -1139,13 +1137,16 @@ as_event_batch_complete(as_event_command* cmd)
 	as_event_executor_complete(executor);
 }
 
-bool as_async_scan_should_retry(void* udata, as_status status);
+bool as_async_scan_should_retry(as_event_command* cmd, as_status status);
+bool as_async_query_should_retry(as_event_command* cmd, as_status status);
 
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
-	if (cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION &&
-		as_async_scan_should_retry(cmd->udata, err->code)) {
+	if ((cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION &&
+		as_async_scan_should_retry(cmd, err->code)) ||
+	    (cmd->type == AS_ASYNC_TYPE_QUERY_PARTITION &&
+		as_async_query_should_retry(cmd, err->code))) {
 		as_event_executor* executor = cmd->udata;
 		as_event_command_release(cmd);
 		as_event_executor_complete(executor);
@@ -1154,6 +1155,8 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 	as_event_notify_error(cmd, err);
 	as_event_command_release(cmd);
 }
+
+void as_async_batch_error(as_event_command* cmd, as_error* err);
 
 void
 as_event_notify_error(as_event_command* cmd, as_error* err)
@@ -1176,9 +1179,12 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 		case AS_ASYNC_TYPE_CONNECTOR:
 			connector_error(cmd, err);
 			break;
-
+		case AS_ASYNC_TYPE_BATCH:
+			as_async_batch_error(cmd, err);
+			as_event_executor_error(cmd->udata, err, 1);
+			break;
 		default:
-			// Handle command that is part of a group (batch, scan, query).
+			// Handle command that is part of a group (scan, query).
 			as_event_executor_error(cmd->udata, err, 1);
 			break;
 	}
@@ -1430,8 +1436,8 @@ as_event_command_free(as_event_command* cmd)
 
 	if (cmd->state != AS_ASYNC_STATE_QUEUE_ERROR) {
 		event_loop->pending--;
+		cmd->event_state->pending--;
 	}
-	cmd->cluster->pending[event_loop->index]--;
 
 	if (cmd->node) {
 		as_node_release(cmd->node);
@@ -1555,8 +1561,8 @@ connector_execute_command(as_event_loop* event_loop, connector_shared* cs)
 
 	as_cluster* cluster = node->cluster;
 
-	cluster->pending[event_loop->index]++;
 	event_loop->pending++;
+	cluster->event_state[event_loop->index].pending++;
 
 	size_t s = (sizeof(connector_command) + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
@@ -1729,6 +1735,7 @@ create_connections(as_event_loop* event_loop, as_node* node, as_async_conn_pool*
 
 typedef struct {
 	as_cluster* cluster;
+	as_monitor monitor;
 	uint32_t loop_count;
 } balancer_shared;
 
@@ -1736,7 +1743,7 @@ static inline void
 balancer_release(balancer_shared* bs)
 {
 	if (as_aaf_uint32(&bs->loop_count, -1) == 0) {
-		cf_free(bs);
+		as_monitor_notify(&bs->monitor);
 	}
 }
 
@@ -1816,21 +1823,31 @@ as_event_balance_connections(as_cluster* cluster)
 		return;
 	}
 
-	balancer_shared* bs = cf_malloc(sizeof(balancer_shared));
-	bs->cluster = cluster;
-	bs->loop_count = loop_max;
+	balancer_shared bs;
+	bs.cluster = cluster;
+	as_monitor_init(&bs.monitor);
+	bs.loop_count = loop_max;
 
 	for (uint32_t i = 0; i < loop_max; i++) {
-		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_cluster, bs)) {
+		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_cluster, &bs)) {
 			as_log_error("Failed to queue connection balancer");
-			balancer_release(bs);
+			balancer_release(&bs);
 		}
 	}
+
+	// Wait for all eventloops to finish balancing connections in the cluster tend.
+	// This avoids the scenario where the cluster tend thread is shutdown and the
+	// cluster is destroyed before the balancer’s eventloop callbacks are processed.
+	// The cluster tend thread can't be shutdown until this cluster tend function
+	// completes.
+	as_monitor_wait(&bs.monitor);
+	as_monitor_destroy(&bs.monitor);
 }
 
 typedef struct {
 	as_cluster* cluster;
 	as_node* node;
+	as_monitor monitor;
 	uint32_t loop_count;
 } balancer_shared_node;
 
@@ -1839,7 +1856,7 @@ balancer_release_node(balancer_shared_node* bs)
 {
 	if (as_aaf_uint32(&bs->loop_count, -1) == 0) {
 		as_node_release(bs->node);
-		cf_free(bs);
+		as_monitor_notify(&bs->monitor);
 	}
 }
 
@@ -1859,19 +1876,28 @@ as_event_node_balance_connections(as_cluster* cluster, as_node* node)
 		return;
 	}
 
-	balancer_shared_node* bs = cf_malloc(sizeof(balancer_shared_node));
-	bs->cluster = cluster;
-	bs->node = node;
-	bs->loop_count = loop_max;
+	balancer_shared_node bs;
+	bs.cluster = cluster;
+	bs.node = node;
+	as_monitor_init(&bs.monitor);
+	bs.loop_count = loop_max;
 
 	as_node_reserve(node);
 
 	for (uint32_t i = 0; i < loop_max; i++) {
-		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_node, bs)) {
+		if (! as_event_execute(&as_event_loops[i], (as_event_executable)balancer_in_loop_node, &bs)) {
 			as_log_error("Failed to queue node connection balancer");
-			balancer_release_node(bs);
+			balancer_release_node(&bs);
 		}
 	}
+
+	// Wait for all eventloops to finish balancing connections in the cluster tend.
+	// This avoids the scenario where the cluster tend thread is shutdown and the
+	// cluster is destroyed before the balancer’s eventloop callbacks are processed.
+	// The cluster tend thread can't be shutdown until this cluster tend function
+	// completes.
+	as_monitor_wait(&bs.monitor);
+	as_monitor_destroy(&bs.monitor);
 }
 
 /******************************************************************************
@@ -1885,9 +1911,11 @@ typedef struct {
 } as_event_close_state;
 
 static void
-as_event_close_cluster_event_loop(as_event_loop* event_loop, as_event_close_state* state)
+as_event_close_cluster_event_loop(
+	as_event_loop* event_loop, as_event_close_state* state, as_event_state* event_state
+	)
 {
-	state->cluster->pending[event_loop->index] = -1;
+	event_state->closed = true;
 
 	if (as_aaf_uint32(&state->event_loop_count, -1) == 0) {
 		as_cluster_destroy(state->cluster);
@@ -1902,14 +1930,14 @@ as_event_close_cluster_event_loop(as_event_loop* event_loop, as_event_close_stat
 static void
 as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state)
 {
-	int pending = state->cluster->pending[event_loop->index];
+	as_event_state* event_state = &state->cluster->event_state[event_loop->index];
 
-	if (pending < 0) {
+	if (event_state->closed) {
 		// Cluster's event loop connections are already closed.
 		return;
 	}
 
-	if (pending > 0) {
+	if (event_state->pending > 0) {
 		// Cluster has pending commands.
 		// Check again after all other commands run.
 		if (as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
@@ -1918,7 +1946,7 @@ as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state
 		as_log_error("Failed to queue cluster close command");
 	}
 
-	as_event_close_cluster_event_loop(event_loop, state);
+	as_event_close_cluster_event_loop(event_loop, state, event_state);
 }
 
 void
@@ -1946,7 +1974,8 @@ as_event_close_cluster(as_cluster* cluster)
 
 		if (! as_event_execute(event_loop, (as_event_executable)as_event_close_cluster_cb, state)) {
 			as_log_error("Failed to queue cluster close command");
-			as_event_close_cluster_event_loop(event_loop, state);
+			as_event_close_cluster_event_loop(event_loop, state,
+				&state->cluster->event_state[event_loop->index]);
 		}
 	}
 

@@ -432,7 +432,11 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 
 static inline uint8_t
 as_batch_get_flags(const as_policy_batch* policy) {
-	uint8_t flags = (policy->allow_inline)? 1 : 0;
+	uint8_t flags = 0x8;
+
+	if (policy->allow_inline) {
+		flags |= 0x1;
+	}
 
 	if (policy->allow_inline_ssd) {
 		flags |= 0x2;

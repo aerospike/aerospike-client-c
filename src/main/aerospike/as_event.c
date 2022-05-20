@@ -1561,36 +1561,26 @@ connector_execute_command(as_event_loop* event_loop, connector_shared* cs)
 
 	as_cluster* cluster = node->cluster;
 
-	event_loop->pending++;
-	cluster->event_state[event_loop->index].pending++;
-
 	size_t s = (sizeof(connector_command) + AS_AUTHENTICATION_MAX_SIZE + 1023) & ~1023;
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	connector_command* cc = (connector_command*)cmd;
 
-	cmd->socket_timeout = 0;
-	cmd->iteration = 0;
-	cmd->max_retries = 0;
-	cmd->replica = AS_POLICY_REPLICA_MASTER;
+	memset(cc, 0, sizeof(connector_command));
 	cmd->event_loop = event_loop;
+	cmd->event_state = &cluster->event_state[event_loop->index];
 	cmd->cluster = cluster;
 	cmd->node = node;
-	cmd->ns = NULL;
-	cmd->partition = NULL;
 	cmd->udata = cs;
-	cmd->parse_results = NULL;
-	cmd->pipe_listener = NULL;
 	cmd->buf = cc->space;
-	cmd->command_sent_counter = 0;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
-	cmd->write_len = 0;
 	cmd->read_capacity = (uint32_t)(s - sizeof(connector_command));
 	cmd->type = AS_ASYNC_TYPE_CONNECTOR;
 	cmd->proto_type = AS_MESSAGE_TYPE;
-	cmd->proto_type_rcv = 0;
 	cmd->state = AS_ASYNC_STATE_CONNECT;
 	cmd->flags = AS_ASYNC_FLAGS_MASTER;
-	cmd->flags2 = 0;
+
+	event_loop->pending++;
+	cmd->event_state->pending++;
 
 	cmd->total_deadline = cf_getms() + cs->timeout_ms;
 	as_event_timer_once(cmd, cs->timeout_ms);

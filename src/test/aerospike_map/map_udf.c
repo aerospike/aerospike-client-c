@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -98,7 +98,7 @@ TEST( map_udf_update_map, "udf_record.update_map()" )
 	aerospike_key_remove(as, &err, NULL, &key);
 	assert_true(err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
-	// Test udf call on unordered map.
+	// Create map in a UDF.
 	as_arraylist args;
 	as_arraylist_init(&args, 2, 0);
 	as_arraylist_append_str(&args, "a");
@@ -115,7 +115,9 @@ TEST( map_udf_update_map, "udf_record.update_map()" )
 	aerospike_key_get(as, &err, NULL, &key, &rec);
 	//example_dump_record(rec);
 	as_map *map = as_record_get_map(rec, "m");
-	assert_int_eq( map->flags, 0 );
+	// As of server 6.1, maps created in UDF will default to being sorted maps.
+	// Disable this unsorted map assertion to support new reality.
+	// assert_int_eq( map->flags, 0 );
 	as_record_destroy(rec);
 
 	as_val_destroy(val);

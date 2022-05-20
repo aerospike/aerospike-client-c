@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -621,10 +621,11 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 	// [50, 51, 52, 53, 54] *
 	// [51, 52, 53, 54, 55]
 	//
-	// The middle 4 are found twice. We currently return duplicates
-	
+	// The middle 4 are found twice in the secondary index. We might return
+	// duplicates, so may see any count between 6 and 10.
+
 	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( count, 10 );
+	assert( count >= 6 && count <= 10 );
 
 	as_query_destroy(&q);
 }

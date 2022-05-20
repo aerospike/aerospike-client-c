@@ -70,7 +70,7 @@ typedef struct as_batch_base_record_s {
 	as_key key;
 	
 	/**
-	 * Record for the requested key. This record will only be populated when the result is
+	 * Record result for the requested key. This record will only be populated when the result is
 	 * AEROSPIKE_OK or AEROSPIKE_ERR_UDF. If AEROSPIKE_ERR_UDF, use as_record_get_udf_error()
 	 * to obtain the error message.
 	 */
@@ -151,7 +151,7 @@ typedef struct as_batch_read_record_s {
  */
 typedef struct as_batch_write_record_s {
 	as_key key;
-	as_record record;
+	as_record record;  // Contains results of operations from ops field.
 	as_status result;
 	as_batch_type type;
 	bool has_write;
@@ -163,8 +163,8 @@ typedef struct as_batch_write_record_s {
 	const as_policy_batch_write* policy;
 
 	/**
-	 * Required read/write operations for this key.
-	 * If defined, the user must call as_operations_destroy() when done with the batch.
+	 * Required read/write operations for this key. The user must call as_operations_destroy()
+	 * when done with the batch.
 	 */
 	as_operations* ops;
 } as_batch_write_record;

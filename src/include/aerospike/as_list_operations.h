@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -194,6 +194,11 @@ typedef enum as_list_return_type_e {
 	 * Return value for single key read and value list for range read.
 	 */
 	AS_LIST_RETURN_VALUE = 7,
+
+	/**
+	 * Return true if count > 0.
+	 */
+	AS_LIST_RETURN_EXISTS = 13,
 
 	/**
 	 * Invert meaning of list command and return values.  For example:

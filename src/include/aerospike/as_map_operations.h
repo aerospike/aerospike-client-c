@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -235,6 +235,11 @@ typedef enum as_map_return_type_e {
 	 * Return key/value items.
 	 */
 	AS_MAP_RETURN_KEY_VALUE	= 8,
+
+	/**
+	 * Return true if count > 0.
+	 */
+	AS_MAP_RETURN_EXISTS = 13,
 
 	/**
 	 * Invert meaning of map command and return values.  For example:

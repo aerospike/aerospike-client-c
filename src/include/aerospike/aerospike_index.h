@@ -42,6 +42,7 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/as_bin.h>
+#include <aerospike/as_cdt_ctx.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_policy.h>
@@ -148,6 +149,13 @@ aerospike_index_create_complex(
 	const as_namespace ns, const as_set set, const as_index_position position, const char* name,
 	as_index_type itype, as_index_datatype dtype
 	);
+
+AS_EXTERN as_status
+aerospike_index_create_ctx(aerospike* as, as_error* err,
+		as_index_task* task, const as_policy_info* policy,
+		const as_namespace ns, const as_set set,
+		const as_index_position position, const char* name,
+		as_index_datatype dtype, as_cdt_ctx* ctx);
 
 /**
  * Create secondary index given data type.

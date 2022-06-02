@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -14,13 +14,20 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+
 #include <aerospike/aerospike_index.h>
+
+#include <stdlib.h>
+
+#include <citrusleaf/alloc.h>
+#include <citrusleaf/cf_b64.h>
+
 #include <aerospike/aerospike_info.h>
+#include <aerospike/as_cdt_ctx.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_sleep.h>
-#include <citrusleaf/alloc.h>
-#include <stdlib.h>
+
 
 /******************************************************************************
  * FUNCTIONS
@@ -112,6 +119,87 @@ aerospike_index_create_complex(
 	cf_free(response);
 	return status;
 }
+
+as_status
+aerospike_index_create_ctx(aerospike* as, as_error* err,
+		as_index_task* task, const as_policy_info* policy,
+		const as_namespace ns, const as_set set,
+		const as_index_position position, const char* name,
+		as_index_datatype dtype, as_cdt_ctx* ctx)
+{
+	as_error_reset(err);
+
+	const char* dtype_string;
+
+	switch (dtype) {
+		case AS_INDEX_NUMERIC:
+			dtype_string = "NUMERIC";
+			break;
+		case AS_INDEX_GEO2DSPHERE:
+			dtype_string = "GEO2DSPHERE";
+			break;
+		default:
+		case AS_INDEX_STRING:
+			dtype_string = "STRING";
+			break;
+	}
+
+	as_packer pk = {
+			.buffer = NULL,
+			.capacity = UINT32_MAX
+	};
+
+	if (as_cdt_ctx_pack(ctx, &pk) == 0) {
+		return AEROSPIKE_ERR_PARAM;
+	}
+
+	char* context = (char*)cf_malloc(pk.offset);
+	uint32_t b64_sz = cf_b64_encoded_len(pk.offset);
+	char* b64 = cf_malloc(b64_sz + 1);
+
+	pk.buffer = (uint8_t*)context;
+	pk.offset = 0;
+	as_cdt_ctx_pack(ctx, &pk);
+
+	cf_b64_encode(pk.buffer, pk.offset, b64);
+	b64[b64_sz] = 0;
+
+	cf_free(context);
+
+	char command[1024];
+	int count = snprintf(command, sizeof(command),
+			"sindex-create:ns=%s%s%s;indexname=%s;"
+			"numbins=1;context=%s;indexdata=%s,%s;priority=normal\n",
+			ns, set ? ";set=" : "", set ? set : "",
+			name, b64, position, dtype_string);
+
+	cf_free(b64);
+
+	if (++count >= sizeof(command)) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index create buffer overflow: %d", count);
+	}
+
+	char* response = NULL;
+	as_status status = aerospike_info_any(as, err, policy, command, &response);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	// Return task that could optionally be polled for completion.
+	if (task) {
+		task->as = as;
+		as_strncpy(task->ns, ns, sizeof(task->ns));
+		as_strncpy(task->name, name, sizeof(task->name));
+		task->done = false;
+	}
+
+	cf_free(response);
+
+	return status;
+}
+
+
 
 static bool
 aerospike_index_create_is_done(aerospike* as, as_error* err, as_policy_info* policy, char* command)

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_cdt_order.h>
+#include <aerospike/as_msgpack.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
 
@@ -125,6 +126,9 @@ as_cdt_ctx_create(uint32_t capacity)
 {
 	return (as_cdt_ctx*)as_vector_create(sizeof(as_cdt_ctx_item), capacity);
 }
+
+AS_EXTERN uint32_t
+as_cdt_ctx_pack(as_cdt_ctx* ctx, as_packer* pk);
 
 /**
  * Destroy nested CDT context list and as_val based context items that were allocated on the heap.

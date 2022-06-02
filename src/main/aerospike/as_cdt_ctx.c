@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -14,8 +14,41 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+
 #include <aerospike/as_cdt_ctx.h>
+
+#include <citrusleaf/cf_b64.h>
+
 #include <aerospike/as_val.h>
+
+uint32_t
+as_cdt_ctx_pack(as_cdt_ctx* ctx, as_packer* pk)
+{
+	uint32_t start = pk->offset;
+
+	if (as_pack_list_header(pk, ctx->list.size * 2) != 0) {
+		return 0;
+	}
+
+	for (uint32_t j = 0; j < ctx->list.size; j++) {
+		as_cdt_ctx_item* item = as_vector_get(&ctx->list, j);
+
+		if (as_pack_uint64(pk, item->type) != 0) {
+			return 0;
+		}
+
+		if (item->type & AS_CDT_CTX_VALUE) {
+			if (as_pack_val(pk, item->val.pval) != 0) {
+				return 0;
+			}
+		}
+		else if (as_pack_int64(pk, item->val.ival) != 0) {
+			return 0;
+		}
+	}
+
+	return pk->offset - start;
+}
 
 void
 as_cdt_ctx_destroy(as_cdt_ctx* ctx)

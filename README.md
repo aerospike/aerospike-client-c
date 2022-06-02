@@ -52,7 +52,7 @@ An event library is required when C client asynchronous functionality is used.
 On Linux and MacOS, the event library must be installed independently of the C client.
 Install one of the supported event libraries:
 
-#### [libuv 1.8.0+](http://docs.libuv.org) 
+#### [libuv 1.15.0+](http://docs.libuv.org) 
 
 libuv has excellent performance and supports all platforms.  If using libuv and TLS (SSL),
 OpenSSL 1.1.0 or greater is required.  Use `install_libuv` to install on Linux/MacOS.
@@ -65,7 +65,7 @@ is suboptimal.  Therefore, the C client supports libev on Linux/MacOS only.
 The client does support async TLS (SSL) sockets when using libev.  Use 
 `install_libev` to install.
 
-#### [libevent 2.0.22+](http://libevent.org)
+#### [libevent 2.1.8+](http://libevent.org)
 
 libevent is less performant than the other two options, but it does support all
 platforms.  The client also supports async TLS (SSL) sockets when using libevent.

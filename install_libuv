@@ -1,8 +1,8 @@
 #!/bin/bash -e
-ver=1.8.0
+ver=1.15.0
 dir=libuv-v$ver
 fn=$dir.tar.gz
-url=http://dist.libuv.org/dist/v1.8.0/$fn
+url=http://dist.libuv.org/dist/v$ver/$fn
 
 rm -rf $fn $dir
 

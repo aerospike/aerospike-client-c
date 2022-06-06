@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_index.h>
+#include <aerospike/aerospike_key.h>
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
@@ -73,7 +74,9 @@ TEST( index_basics_create , "Create index on bin" ) {
 	}
 
 	// LIST type index
-	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "new_bin[0]", "idx_test_listbin", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE,
+			SET, "new_bin[0]", "idx_test_listbin", AS_INDEX_TYPE_LIST,
+			AS_INDEX_STRING);
 
 	if (! index_process_return_code(status, &err, &task)) {
 		assert_int_eq(status , AEROSPIKE_OK);
@@ -100,12 +103,62 @@ TEST( index_basics_drop , "Drop index" ) {
 	assert_int_eq( err.code, AEROSPIKE_OK );
 }
 
+TEST( index_ctx_test , "Create ctx index on bin" )
+{
+	as_error err;
+	as_error_reset(&err);
+
+	as_index_task task;
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index(&ctx, 0);
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_ctx");
+
+	if (err.code != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	as_status status = aerospike_index_create_ctx(as, &err, &task, NULL,
+			NAMESPACE, SET, "new_bin", "idx_test_ctx", AS_INDEX_NUMERIC,
+			&ctx);
+
+	if (! index_process_return_code(status, &err, &task)) {
+		assert_int_eq(status , AEROSPIKE_OK);
+	}
+
+	as_arraylist list;
+	as_key rkey;
+	as_record rec;
+
+	for (uint32_t i = 0; i < 100; i++) {
+		as_key_init_int64(&rkey, NAMESPACE, SET, i + 2000);
+
+		as_arraylist_init(&list, 1, 1);
+		as_arraylist_append_int64(&list, i);
+
+		as_record_init(&rec, 1);
+		as_record_set_list(&rec, "new_bin", (as_list*)&list);
+
+		status = aerospike_key_put(as, &err, NULL, &rkey, &rec);
+		assert_int_eq(status, AEROSPIKE_OK);
+		as_record_destroy(&rec);
+	}
+
+	as_cdt_ctx_destroy(&ctx);
+}
+
 
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( index_basics, "aerospike_sindex basic tests" ) {
+SUITE( index_basics, "aerospike_sindex basic tests" )
+{
 	suite_add( index_basics_create );
 	suite_add( index_basics_drop );
+	suite_add( index_ctx_test );
 }

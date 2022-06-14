@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -101,7 +101,14 @@ typedef struct as_index_task_s {
 	 * The name of the index.
 	 */
 	char name[64];
-	
+
+	/**
+	 * Maximum time in milliseconds to wait for task completion. Defaults to 
+	 * "as_policy_info.timeout" that is passed to the original create/drop 
+	 * index function.
+	 */
+	uint32_t timeout;
+
 	/**
 	 * Has operation completed
 	 */

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2021 by Aerospike.
+ * Copyright 2008-2022 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -802,7 +802,12 @@ example_create_integer_index(aerospike* p_as, const char* bin, const char* index
 	switch (status) {
 		case AEROSPIKE_OK:
 			// Wait for the system metadata to spread to all nodes.
-			aerospike_index_create_wait(&err, &task, 0);
+			status = aerospike_index_create_wait(&err, &task, 0);
+
+			if (status != AEROSPIKE_OK) {
+				LOG("aerospike_index_create_wait() returned %d - %s", err.code, err.message);
+				return false;
+			}
 			break;
 
 		case AEROSPIKE_ERR_INDEX_FOUND:

@@ -111,7 +111,8 @@ aerospike_index_create_complex(
 		task->as = as;
 		as_strncpy(task->ns, ns, sizeof(task->ns));
 		as_strncpy(task->name, name, sizeof(task->name));
-		task->timeout = policy->timeout;
+		task->socket_timeout = policy->timeout;
+		task->total_timeout = 30000;
 		task->done = false;
 	}
 	cf_free(response);
@@ -181,7 +182,7 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 	}
 	
 	as_policy_info policy;
-	policy.timeout = task->timeout ? task->timeout : 1000;
+	policy.timeout = task->socket_timeout;
 	policy.send_as_is = false;
 	policy.check_bounds = true;
 	
@@ -192,7 +193,7 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 		interval_ms = 1000;
 	}
 
-	uint64_t deadline = as_socket_deadline(task->timeout);
+	uint64_t deadline = as_socket_deadline(task->total_timeout);
 
 	do {
 		// Sleep first to give task a chance to complete.
@@ -207,7 +208,7 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 		// Check for timeout.
 		if (deadline && cf_getms() + interval_ms > deadline) {
 			// Timeout has been reached or will be reached after next sleep.
-			return as_error_update(err, AEROSPIKE_ERR_TIMEOUT, "Timeout: %u", task->timeout);
+			return as_error_update(err, AEROSPIKE_ERR_TIMEOUT, "Timeout: %u", task->total_timeout);
 		}
 	} while (true);
 }

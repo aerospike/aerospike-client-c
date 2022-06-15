@@ -706,6 +706,11 @@ as_query_command_size(
 				n_fields++;
 			}
 		}
+
+		if (pred->ctx != NULL) {
+			size += AS_FIELD_HEADER_SIZE + pred->ctx_size;
+			n_fields++;
+		}
 	}
 
 	// Estimate aggregation/background function size.
@@ -903,6 +908,17 @@ as_query_command_init(
 					*len_ptr = (uint8_t)(n - name);
 				}
 			}
+		}
+
+		if (pred->ctx != NULL) {
+			p = as_command_write_field_header(p, AS_FIELD_INDEX_CONTEXT, pred->ctx_size);
+
+			as_packer pk = {
+					.buffer = p,
+					.capacity = pred->ctx_size
+			};
+
+			p += as_cdt_ctx_pack(pred->ctx, &pk);
 		}
 	}
 

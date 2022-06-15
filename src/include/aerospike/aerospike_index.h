@@ -155,7 +155,7 @@ aerospike_index_create_ctx(aerospike* as, as_error* err,
 		as_index_task* task, const as_policy_info* policy,
 		const as_namespace ns, const as_set set,
 		const as_index_position position, const char* name,
-		as_index_datatype dtype, as_cdt_ctx* ctx);
+		as_index_type itype, as_index_datatype dtype, as_cdt_ctx* ctx);
 
 /**
  * Create secondary index given data type.

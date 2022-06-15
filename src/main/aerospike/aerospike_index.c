@@ -125,7 +125,7 @@ aerospike_index_create_ctx(aerospike* as, as_error* err,
 		as_index_task* task, const as_policy_info* policy,
 		const as_namespace ns, const as_set set,
 		const as_index_position position, const char* name,
-		as_index_datatype dtype, as_cdt_ctx* ctx)
+		as_index_type itype, as_index_datatype dtype, as_cdt_ctx* ctx)
 {
 	as_error_reset(err);
 
@@ -142,6 +142,27 @@ aerospike_index_create_ctx(aerospike* as, as_error* err,
 		case AS_INDEX_STRING:
 			dtype_string = "STRING";
 			break;
+	}
+
+	const char* itype_string;
+	switch (itype) {
+		default:
+		case AS_INDEX_TYPE_DEFAULT: {
+			itype_string = "DEFAULT";
+			break;
+		}
+		case AS_INDEX_TYPE_LIST: {
+			itype_string = "LIST";
+			break;
+		}
+		case AS_INDEX_TYPE_MAPKEYS: {
+			itype_string = "MAPKEYS";
+			break;
+		}
+		case AS_INDEX_TYPE_MAPVALUES: {
+			itype_string = "MAPVALUES";
+			break;
+		}
 	}
 
 	as_packer pk = {
@@ -169,9 +190,9 @@ aerospike_index_create_ctx(aerospike* as, as_error* err,
 	char command[1024];
 	int count = snprintf(command, sizeof(command),
 			"sindex-create:ns=%s%s%s;indexname=%s;"
-			"numbins=1;context=%s;indexdata=%s,%s;priority=normal\n",
+			"numbins=1;context=%s;indextype=%s;indexdata=%s,%s;priority=normal\n",
 			ns, set ? ";set=" : "", set ? set : "",
-			name, b64, position, dtype_string);
+			name, b64, itype_string, position, dtype_string);
 
 	cf_free(b64);
 

@@ -135,7 +135,8 @@ TEST(index_ctx_test , "Create ctx index on bin")
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	as_status status = aerospike_index_create_ctx(as, &err, &task, NULL,
-			NAMESPACE, SET, "new_bin", "idx_test_ctx", AS_INDEX_NUMERIC, &ctx);
+			NAMESPACE, SET, "new_bin", "idx_test_ctx", AS_INDEX_TYPE_DEFAULT,
+			AS_INDEX_NUMERIC, &ctx);
 
 	if (! index_process_return_code(status, &err, &task)) {
 		assert_int_eq(status , AEROSPIKE_OK);

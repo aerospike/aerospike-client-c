@@ -174,30 +174,46 @@ as_query_where_init(as_query* query, uint16_t n)
 }
 
 bool
-as_query_where(as_query* query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ... )
+as_query_where_with_ctx(as_query* query, const char* bin, as_cdt_ctx* ctx,
+		as_predicate_type type, as_index_type itype, as_index_datatype dtype,
+		... )
 {
 	// test preconditions
-	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
+	if (! query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE) {
 		return false;
 	}
 
 	// insufficient capacity
-	if ( query->where.size >= query->where.capacity ) return false;
+	if (query->where.size >= query->where.capacity) {
+		return false;
+	}
 
-	as_predicate * p = &query->where.entries[query->where.size++];
+	as_predicate* p = &query->where.entries[query->where.size++];
 	bool status = true;
 
+	as_packer pk = {
+			.buffer = NULL,
+			.capacity = UINT32_MAX,
+	};
+
 	strcpy(p->bin, bin);
-	p->type  = type;
+	p->ctx = ctx;
+	p->ctx_size = ctx == NULL ? 0 : as_cdt_ctx_pack(ctx, &pk);
+	p->type = type;
 	p->dtype = dtype;
 	p->itype = itype;
+
+	if (ctx != NULL && p->ctx_size == 0) {
+		return false;
+	}
+
 	va_list ap;
 	va_start(ap, dtype);
 
 	switch(type) {
 	case AS_PREDICATE_EQUAL:
 		if (dtype == AS_INDEX_STRING) {
-			p->value.string = va_arg(ap, char *);
+			p->value.string = va_arg(ap, char*);
 		}
 		else if (dtype == AS_INDEX_NUMERIC) {
 			p->value.integer = va_arg(ap, int64_t);
@@ -212,7 +228,7 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
 			p->value.integer_range.max = va_arg(ap, int64_t);
 		}
 		else if (dtype == AS_INDEX_GEO2DSPHERE) {
-			p->value.string = va_arg(ap, char *);
+			p->value.string = va_arg(ap, char*);
 		}
 		else {
 			status = false;
@@ -222,6 +238,19 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
 
 	va_end(ap);
 	return status;
+}
+
+bool
+as_query_where(as_query* query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ... )
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_with_ctx(query, bin, NULL, type, itype, dtype, ap);
+
+	va_end(ap);
+
+	return rv;
 }
 
 /******************************************************************************

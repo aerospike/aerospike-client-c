@@ -174,6 +174,12 @@ typedef struct as_predicate_s {
 	as_bin_name bin;
 
 	/**
+	 * The CDT context to query
+	 */
+	as_cdt_ctx* ctx;
+	uint32_t ctx_size;
+
+	/**
 	 * The predicate type, dictates which values to use from the union
 	 */
 	as_predicate_type type;

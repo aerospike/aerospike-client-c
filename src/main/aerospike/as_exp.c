@@ -208,7 +208,7 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 						.capacity = UINT32_MAX
 				};
 
-				uint32_t ctx_sz = as_cdt_ctx_pack(entry->v.ctx, &pk);
+				sz = as_cdt_ctx_pack(entry->v.ctx, &pk);
 
 				if (sz == 0) {
 					return NULL;

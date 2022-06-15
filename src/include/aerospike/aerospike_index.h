@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -101,9 +101,21 @@ typedef struct as_index_task_s {
 	 * The name of the index.
 	 */
 	char name[64];
-	
+
 	/**
-	 * Has operation completed
+	 * Maximum time in milliseconds to wait for info command to return create index status.
+	 * Defaults to "as_policy_info.timeout" that is passed to the original create index function.
+	 */
+	uint32_t socket_timeout;
+
+	/**
+	 * Maximum time in milliseconds to wait for create index to complete.
+	 * Default: 30000 ms (30 seconds)
+	 */
+	uint32_t total_timeout;
+
+	/**
+	 * Has operation completed.
 	 */
 	bool done;
 } as_index_task;

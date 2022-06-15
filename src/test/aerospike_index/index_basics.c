@@ -14,6 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_key.h>
@@ -37,7 +38,7 @@
  * GLOBAL VARS
  *****************************************************************************/
 
-extern aerospike * as;
+extern aerospike* as;
 
 /******************************************************************************
  * MACROS
@@ -59,8 +60,8 @@ extern aerospike * as;
  * TEST CASES
  *****************************************************************************/
 
-TEST( index_basics_create , "Create index on bin" ) {
-
+TEST(index_basics_create, "Create index on bin")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -83,8 +84,8 @@ TEST( index_basics_create , "Create index on bin" ) {
 	}
 }
 
-TEST( index_basics_drop , "Drop index" ) {
-
+TEST(index_basics_drop , "Drop index")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -103,10 +104,21 @@ TEST( index_basics_drop , "Drop index" ) {
 	assert_int_eq( err.code, AEROSPIKE_OK );
 }
 
-TEST( index_ctx_test , "Create ctx index on bin" )
+TEST(index_ctx_test , "Create ctx index on bin")
 {
 	as_error err;
 	as_error_reset(&err);
+
+	char* res = NULL;
+
+	aerospike_info_any(as, &err, NULL, "sindex/test/idx_test_ctx", &res);
+
+	if (res != NULL) {
+		assert_not_null(res);
+		info("sindex-info: %s", res);
+		free(res);
+		res = NULL;
+	}
 
 	as_index_task task;
 
@@ -123,8 +135,7 @@ TEST( index_ctx_test , "Create ctx index on bin" )
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	as_status status = aerospike_index_create_ctx(as, &err, &task, NULL,
-			NAMESPACE, SET, "new_bin", "idx_test_ctx", AS_INDEX_NUMERIC,
-			&ctx);
+			NAMESPACE, SET, "new_bin", "idx_test_ctx", AS_INDEX_NUMERIC, &ctx);
 
 	if (! index_process_return_code(status, &err, &task)) {
 		assert_int_eq(status , AEROSPIKE_OK);
@@ -149,6 +160,14 @@ TEST( index_ctx_test , "Create ctx index on bin" )
 	}
 
 	as_cdt_ctx_destroy(&ctx);
+
+	sleep(5);
+
+	aerospike_info_any(as, &err, NULL, "sindex/test/idx_test_ctx", &res);
+	assert_not_null(res);
+	info("sindex-info: %s", res);
+	free(res);
+	res = NULL;
 }
 
 
@@ -156,9 +175,9 @@ TEST( index_ctx_test , "Create ctx index on bin" )
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( index_basics, "aerospike_sindex basic tests" )
+SUITE(index_basics, "aerospike_sindex basic tests")
 {
-	suite_add( index_basics_create );
-	suite_add( index_basics_drop );
-	suite_add( index_ctx_test );
+	suite_add(index_basics_create);
+	suite_add(index_basics_drop);
+	suite_add(index_ctx_test);
 }

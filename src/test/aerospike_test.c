@@ -165,7 +165,7 @@ static bool parse_opts(int argc, char* argv[])
 	int option_index = 0;
 	int c;
 
-	strcpy(g_host, "174.22.0.1"); //127.0.0.1");
+	strcpy(g_host, "127.0.0.1");
 
 	while ((c = getopt_long(argc, argv, short_options, long_options, &option_index)) != -1) {
 		switch (c) {

@@ -41,6 +41,10 @@ aerospike_index_create_complex(
 {
 	as_error_reset(err);
 	
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
+
 	const char* dtype_string;
     switch (dtype) {
 		case AS_INDEX_NUMERIC:
@@ -114,6 +118,8 @@ aerospike_index_create_complex(
 		task->as = as;
 		as_strncpy(task->ns, ns, sizeof(task->ns));
 		as_strncpy(task->name, name, sizeof(task->name));
+		task->socket_timeout = policy->timeout;
+		task->total_timeout = 30000;
 		task->done = false;
 	}
 	cf_free(response);
@@ -220,53 +226,59 @@ aerospike_index_create_ctx(aerospike* as, as_error* err,
 	return status;
 }
 
-
-
-static bool
-aerospike_index_create_is_done(aerospike* as, as_error* err, as_policy_info* policy, char* command)
+static as_status
+aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* policy, char* command)
 {
 	// Index is not done if any node reports percent completed < 100.
-	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	as_nodes* nodes = as_nodes_reserve(task->as->cluster);
 
 	if (nodes->size == 0) {
 		as_nodes_release(nodes);
-		return false;
+		return AEROSPIKE_OK;
 	}
 	
-	bool done = true;
-
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		
-		char* response = 0;
-		as_status status = aerospike_info_node(as, err, policy, node, command, &response);
-		
-		if (status == AEROSPIKE_OK) {
-			char* find = "load_pct=";
-			char* p = strstr(response, find);
-			
-			if (p) {
-				p += strlen(find);
-				char* q = strchr(p, ';');
-				
-				if (q) {
-					*q = 0;
-				}
-				
-				int pct = atoi(p);
-				
-				if (pct == 100) {
-					cf_free(response);
-					continue;
-				}
-			}
-			cf_free(response);
+		char* response = NULL;
+		as_status status = aerospike_info_node(task->as, err, policy, node, command, &response);
+
+		if (status != AEROSPIKE_OK) {
+			as_nodes_release(nodes);
+			return status;
 		}
-		done = false;
-		break;
+
+		char* find = "load_pct=";
+		char* p = strstr(response, find);
+
+		if (!p) {
+			as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"Create index error: %s", response);
+			cf_free(response);
+			as_nodes_release(nodes);
+			return err->code;
+		}
+
+		p += strlen(find);
+		char* q = strchr(p, ';');
+		
+		if (q) {
+			*q = 0;
+		}
+		
+		int pct = atoi(p);
+		cf_free(response);
+
+		if (pct < 100) {
+			// Create index not complete. Stop checking other nodes.
+			as_nodes_release(nodes);
+			return status;
+		}
 	}
+
+	task->done = true;
 	as_nodes_release(nodes);
-	return done;
+	return AEROSPIKE_OK;
 }
 
 as_status
@@ -277,7 +289,7 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 	}
 	
 	as_policy_info policy;
-	policy.timeout = 1000;
+	policy.timeout = task->socket_timeout;
 	policy.send_as_is = false;
 	policy.check_bounds = true;
 	
@@ -287,12 +299,25 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 	if (! interval_ms) {
 		interval_ms = 1000;
 	}
-	
-	while (! task->done) {
+
+	uint64_t deadline = as_socket_deadline(task->total_timeout);
+
+	do {
+		// Sleep first to give task a chance to complete.
 		as_sleep(interval_ms);
-		task->done = aerospike_index_create_is_done(task->as, err, &policy, command);
-	}
-	return AEROSPIKE_OK;
+
+		as_status status = aerospike_index_get_status(task, err, &policy, command);
+
+		if (status != AEROSPIKE_OK || task->done) {
+			return status;
+		}
+
+		// Check for timeout.
+		if (deadline && cf_getms() + interval_ms > deadline) {
+			// Timeout has been reached or will be reached after next sleep.
+			return as_error_update(err, AEROSPIKE_ERR_TIMEOUT, "Timeout: %u", task->total_timeout);
+		}
+	} while (true);
 }
 
 as_status

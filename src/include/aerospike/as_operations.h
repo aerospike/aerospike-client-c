@@ -551,6 +551,19 @@ AS_EXTERN bool
 as_operations_add_read(as_operations* ops, const as_bin_name name);
 
 /**
+ * Create read all record bins database operation.
+ *
+ * @param ops			The `as_operations` to append the operation to.
+ *
+ * @return true on success. Otherwise an error occurred.
+ *
+ * @relates as_operations
+ * @ingroup as_operations_object
+ */
+AS_EXTERN bool
+as_operations_add_read_all(as_operations* ops);
+
+/**
  * Add a `AS_OPERATOR_INCR` bin operation with (required) int64_t value.
  *
  * @param ops			The `as_operations` to append the operation to.

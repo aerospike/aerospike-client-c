@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -73,6 +73,19 @@ as_binop_forappend(as_operations* ops, as_operator operator, const as_bin_name n
 
 	return binop;
 }
+
+as_binop*
+as_binop_append(as_operations* ops, as_operator operator)
+{
+	if (! (ops && ops->binops.size < ops->binops.capacity)) {
+		return NULL;
+	}
+
+	as_binop * binop = &ops->binops.entries[ops->binops.size++];
+	binop->op = operator;
+	return binop;
+}
+
 
 /******************************************************************************
  * FUNCTIONS
@@ -188,6 +201,19 @@ as_operations_add_read(as_operations* ops, const as_bin_name name)
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_READ, name);
 	if ( !binop ) return false;
 	as_bin_init_nil(&binop->bin, name);
+	return true;
+}
+
+bool
+as_operations_add_read_all(as_operations* ops)
+{
+	as_binop* binop = as_binop_append(ops, AS_OPERATOR_READ);
+
+	if (!binop) {
+		return false;
+	}
+	binop->bin.name[0] = 0;
+	binop->bin.valuep = NULL;
 	return true;
 }
 

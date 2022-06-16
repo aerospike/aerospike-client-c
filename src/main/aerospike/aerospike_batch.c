@@ -1096,6 +1096,19 @@ as_batch_attr_read_row(as_batch_attr* attr, const as_policy_batch_read* p)
 	attr->send_key = false;
 }
 
+static void
+as_batch_attr_read_adjust_ops(as_batch_attr* attr, as_operations* ops)
+{
+	for (uint16_t i = 0; i < ops->binops.size; i++) {
+		as_binop* op = &ops->binops.entries[i];
+
+		if (op->op == AS_OPERATOR_READ && op->bin.name[0] == 0) {
+			attr->read_attr |= AS_MSG_INFO1_GET_ALL;
+			return;
+		}
+	}
+}
+
 static inline void
 as_batch_attr_read_adjust(as_batch_attr* attr, bool read_all_bins)
 {
@@ -1117,7 +1130,11 @@ as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
 		as_binop* op = &ops->binops.entries[i];
 
 		if (! as_op_is_write[op->op]) {
-			attr->read_attr = AS_MSG_INFO1_READ;
+			attr->read_attr |= AS_MSG_INFO1_READ;
+		}
+
+		if (op->op == AS_OPERATOR_READ && op->bin.name[0] == 0) {
+			attr->read_attr |= AS_MSG_INFO1_GET_ALL;
 			break;
 		}
 	}
@@ -1410,6 +1427,7 @@ as_batch_records_write_new(
 							(const char**)br->bin_names, br->n_bin_names);
 					}
 					else if (br->ops) {
+						as_batch_attr_read_adjust_ops(&attr, br->ops);
 						p = as_batch_write_operations(p, &br->key, &attr, attr.filter_exp, br->ops,
 							bb->buffers);
 					}
@@ -3420,6 +3438,7 @@ aerospike_batch_get_ops(
 
 	as_batch_attr attr;
 	as_batch_attr_read_header(&attr, policy);
+	as_batch_attr_read_adjust_ops(&attr, ops);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
 		listener, udata);

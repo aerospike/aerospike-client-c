@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Aerospike, Inc.
+ * Copyright 2021-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -14,11 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
 #include <aerospike/as_exp.h>
-
-#include <citrusleaf/cf_b64.h>
-
 #include <aerospike/aerospike_index.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_cdt_internal.h>
@@ -26,6 +22,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_msgpack.h>
+#include <citrusleaf/cf_b64.h>
 
 typedef enum {
 	CALL_CDT = 0,

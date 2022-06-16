@@ -14,12 +14,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
 #include <aerospike/as_cdt_ctx.h>
-
-#include <citrusleaf/cf_b64.h>
-
 #include <aerospike/as_val.h>
+#include <citrusleaf/cf_b64.h>
 
 uint32_t
 as_cdt_ctx_pack(as_cdt_ctx* ctx, as_packer* pk)

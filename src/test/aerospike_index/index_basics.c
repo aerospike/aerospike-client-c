@@ -14,9 +14,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_index.h>
+#include <aerospike/aerospike_info.h>
 #include <aerospike/aerospike_key.h>
 
 #include <aerospike/as_error.h>
@@ -30,6 +30,7 @@
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_val.h>
+#include <unistd.h>
 
 #include "../test.h"
 #include "../util/index_util.h"

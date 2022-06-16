@@ -14,117 +14,19 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
 #include <aerospike/aerospike_index.h>
-
-#include <stdlib.h>
-
-#include <citrusleaf/alloc.h>
-#include <citrusleaf/cf_b64.h>
-
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_cdt_ctx.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_sleep.h>
-
+#include <citrusleaf/alloc.h>
+#include <citrusleaf/cf_b64.h>
+#include <stdlib.h>
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
-
-as_status
-aerospike_index_create_complex(
-	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy,
-	const as_namespace ns, const as_set set, const as_index_position position, const char* name,
-	as_index_type itype, as_index_datatype dtype)
-{
-	as_error_reset(err);
-	
-	if (! policy) {
-		policy = &as->config.policies.info;
-	}
-
-	const char* dtype_string;
-    switch (dtype) {
-		case AS_INDEX_NUMERIC:
-			dtype_string = "NUMERIC";
-			break;
-		case AS_INDEX_GEO2DSPHERE:
-			dtype_string = "GEO2DSPHERE";
-			break;
-		default:
-		case AS_INDEX_STRING:
-			dtype_string = "STRING";
-			break;
-    }
-	
-	const char* itype_string;
-	switch (itype) {
-		default:
-		case AS_INDEX_TYPE_DEFAULT: {
-			itype_string = "DEFAULT";
-			break;
-		}
-		case AS_INDEX_TYPE_LIST: {
-			itype_string = "LIST";
-			break;
-		}
-		case AS_INDEX_TYPE_MAPKEYS: {
-			itype_string = "MAPKEYS";
-			break;
-		}
-		case AS_INDEX_TYPE_MAPVALUES: {
-			itype_string = "MAPVALUES";
-			break;
-		}
-	}
-	
-    char command[1024];
-	int count;
-    
-	if (itype == AS_INDEX_TYPE_DEFAULT) {
-		// Use old format, so command can work with older servers.
-		count = snprintf(command, sizeof(command),
-						 "sindex-create:ns=%s%s%s;indexname=%s;"
-						 "numbins=1;indexdata=%s,%s;priority=normal\n",
-						 ns, set ? ";set=" : "", set ? set : "",
-						 name, position, dtype_string
-						 );
-	}
-	else {
-		// Use new format.
-		count = snprintf(command, sizeof(command),
-						 "sindex-create:ns=%s%s%s;indexname=%s;"
-						 "numbins=1;indextype=%s;indexdata=%s,%s;priority=normal\n",
-						 ns, set ? ";set=" : "", set ? set : "",
-						 name, itype_string, position, dtype_string
-						 );
-	}
-	
-	if (++count >= sizeof(command)) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index create buffer overflow: %d", count);
-	}
-	
-	char* response = NULL;
-	as_status status = aerospike_info_any(as, err, policy, command, &response);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
-	// Return task that could optionally be polled for completion.
-	if (task) {
-		task->as = as;
-		as_strncpy(task->ns, ns, sizeof(task->ns));
-		as_strncpy(task->name, name, sizeof(task->name));
-		task->socket_timeout = policy->timeout;
-		task->total_timeout = 30000;
-		task->done = false;
-	}
-	cf_free(response);
-	return status;
-}
 
 as_status
 aerospike_index_create_ctx(aerospike* as, as_error* err,
@@ -134,6 +36,10 @@ aerospike_index_create_ctx(aerospike* as, as_error* err,
 		as_index_type itype, as_index_datatype dtype, as_cdt_ctx* ctx)
 {
 	as_error_reset(err);
+
+	if (! policy) {
+		policy = &as->config.policies.info;
+	}
 
 	const char* dtype_string;
 
@@ -176,29 +82,33 @@ aerospike_index_create_ctx(aerospike* as, as_error* err,
 			.capacity = UINT32_MAX
 	};
 
-	if (as_cdt_ctx_pack(ctx, &pk) == 0) {
+	if (ctx != NULL && as_cdt_ctx_pack(ctx, &pk) == 0) {
 		return AEROSPIKE_ERR_PARAM;
 	}
 
 	char* context = (char*)cf_malloc(pk.offset);
 	uint32_t b64_sz = cf_b64_encoded_len(pk.offset);
-	char* b64 = cf_malloc(b64_sz + 1);
+	char* b64 = NULL;
 
-	pk.buffer = (uint8_t*)context;
-	pk.offset = 0;
-	as_cdt_ctx_pack(ctx, &pk);
+	if (ctx != NULL) {
+		b64 = cf_malloc(b64_sz + 1);
+		pk.buffer = (uint8_t*)context;
+		pk.offset = 0;
+		as_cdt_ctx_pack(ctx, &pk);
 
-	cf_b64_encode(pk.buffer, pk.offset, b64);
-	b64[b64_sz] = 0;
+		cf_b64_encode(pk.buffer, pk.offset, b64);
+		b64[b64_sz] = 0;
+	}
 
 	cf_free(context);
 
 	char command[1024];
 	int count = snprintf(command, sizeof(command),
 			"sindex-create:ns=%s%s%s;indexname=%s;"
-			"numbins=1;context=%s;indextype=%s;indexdata=%s,%s;priority=normal\n",
+			"numbins=1;%s%s;indextype=%s;indexdata=%s,%s;priority=normal\n",
 			ns, set ? ";set=" : "", set ? set : "",
-			name, b64, itype_string, position, dtype_string);
+			name, (b64 == NULL ? "" : "context="), (b64 == NULL ? "" : b64),
+			itype_string, position, dtype_string);
 
 	cf_free(b64);
 
@@ -218,6 +128,8 @@ aerospike_index_create_ctx(aerospike* as, as_error* err,
 		task->as = as;
 		as_strncpy(task->ns, ns, sizeof(task->ns));
 		as_strncpy(task->name, name, sizeof(task->name));
+		task->socket_timeout = policy->timeout;
+		task->total_timeout = 30000;
 		task->done = false;
 	}
 

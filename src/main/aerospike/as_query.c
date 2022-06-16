@@ -240,19 +240,6 @@ as_query_where_with_ctx(as_query* query, const char* bin, as_cdt_ctx* ctx,
 	return status;
 }
 
-bool
-as_query_where(as_query* query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ... )
-{
-	va_list ap;
-	va_start(ap, dtype);
-
-	bool rv = as_query_where_with_ctx(query, bin, NULL, type, itype, dtype, ap);
-
-	va_end(ap);
-
-	return rv;
-}
-
 /******************************************************************************
  * QUERY MODIFIER FUNCTIONS
  *****************************************************************************/

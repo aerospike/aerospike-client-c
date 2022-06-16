@@ -177,6 +177,11 @@ typedef struct as_predicate_s {
 	 * The CDT context to query
 	 */
 	as_cdt_ctx* ctx;
+
+	/**
+	 * The size of the CDT context. Not neccesary to initialize; the
+	 *  as_query_where_with_ctx() call will overwrite this field.
+	 */
 	uint32_t ctx_size;
 
 	/**
@@ -709,6 +714,41 @@ AS_EXTERN bool
 as_query_where_init(as_query* query, uint16_t n);
 
 /**
+ * Add a predicate and context to the query.
+ *
+ * You have to ensure as_query.where has sufficient capacity, prior to
+ * adding a predicate. If capacity is insufficient then false is returned.
+ *
+ * String predicates are not owned by as_query.  If the string is allocated
+ * on the heap, the caller is responsible for freeing the string after the query
+ * has been executed.  as_query_destroy() will not free this string predicate.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_cdt_ctx ctx;
+ * as_cdt_ctx_init(&ctx, 1);
+ * as_cdt_ctx_add_list_rank(&ctx, -1);
+ * as_query_where_init(&query, 3);
+ * as_query_where_with_ctx(&query, "bin1", ctx, as_string_equals("abc"));
+ * as_query_where_with_ctx(&query, "bin1", ctx, as_integer_equals(123));
+ * as_query_where_with_ctx(&query, "bin1", ctx, as_integer_range(0,123));
+ * ~~~~~~~~~~
+ *
+ * @param query		The query add the predicate to.
+ * @param bin		The name of the bin the predicate will apply to.
+ * @param ctx		The CDT context describing the path to locate the data to be indexed.
+ * @param type		The type of predicate.
+ * @param itype		The type of index.
+ * @param dtype		The underlying data type that the index is based on.
+ * @param ... 		The values for the predicate.
+ *
+ * @return On success, true. Otherwise an error occurred.
+ *
+ * @relates as_query
+ */
+AS_EXTERN bool
+as_query_where_with_ctx(as_query* query, const char* bin, as_cdt_ctx* ctx, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ...);
+
+/**
  * Add a predicate to the query.
  *
  * You have to ensure as_query.where has sufficient capacity, prior to
@@ -736,8 +776,19 @@ as_query_where_init(as_query* query, uint16_t n);
  *
  * @relates as_query
  */
-AS_EXTERN bool
-as_query_where(as_query* query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ...);
+static inline bool
+as_query_where(as_query* query, const char * bin, as_predicate_type type,
+		as_index_type itype, as_index_datatype dtype, ... )
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_with_ctx(query, bin, NULL, type, itype, dtype, ap);
+
+	va_end(ap);
+
+	return rv;
+}
 
 /******************************************************************************
  * QUERY MODIFIER FUNCTIONS

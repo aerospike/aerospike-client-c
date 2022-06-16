@@ -551,7 +551,9 @@ AS_EXTERN bool
 as_operations_add_read(as_operations* ops, const as_bin_name name);
 
 /**
- * Create read all record bins database operation.
+ * Create read all record bins database operation. This operation can be used alone as a
+ * single operation or in combination with other operations in this file or list operations. 
+ * This operation can't be used in combination with map/bit/hll/exp operations.
  *
  * @param ops			The `as_operations` to append the operation to.
  *

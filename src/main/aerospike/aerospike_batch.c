@@ -170,6 +170,27 @@ static bool as_op_is_write[] = {
 	true
 };
 
+// These values must line up with as_operator enum.
+static bool as_op_respond_all[] = {
+	false,
+	false,
+	false,
+	false,
+	true,
+	true,
+	false,
+	true,
+	true,
+	false,
+	false,
+	false,
+	true,
+	true,
+	false,
+	true,
+	true
+};
+
 static const char cluster_empty_error[] = "Batch command failed because cluster is empty.";
 
 //---------------------------------
@@ -1125,6 +1146,7 @@ as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
 {
 	attr->filter_exp = NULL;
 	attr->read_attr = 0;
+	attr->write_attr = AS_MSG_INFO2_WRITE;
 
 	for (uint16_t i = 0; i < ops->binops.size; i++) {
 		as_binop* op = &ops->binops.entries[i];
@@ -1135,11 +1157,13 @@ as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
 
 		if (op->op == AS_OPERATOR_READ && op->bin.name[0] == 0) {
 			attr->read_attr |= AS_MSG_INFO1_GET_ALL;
-			break;
+		}
+
+		if (as_op_respond_all[op->op]) {
+			attr->write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
 		}
 	}
 
-	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS;
 	attr->info_attr = 0;
 	attr->ttl = ops->ttl;
 	attr->gen = 0;

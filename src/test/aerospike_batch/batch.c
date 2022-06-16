@@ -630,10 +630,8 @@ TEST(batch_write_complex, "Batch write complex")
 	assert_int_eq(status, AEROSPIKE_OK);
 
 	assert_int_eq(wr1->result, AEROSPIKE_OK);
-	assert_int_eq(wr1->record.bins.entries[0].valuep->nil.type, AS_NIL);
 
 	assert_int_eq(wr2->result, AEROSPIKE_OK);
-	assert_int_eq(wr2->record.bins.entries[0].valuep->nil.type, AS_NIL);
 
 	assert_int_eq(rm->result, AEROSPIKE_OK);
 
@@ -676,6 +674,59 @@ TEST(batch_write_complex, "Batch write complex")
 	assert_int_eq(rr3->result, AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
 	as_batch_records_destroy(&recs);
+}
+
+static bool
+batch_write_read_all_cb(const as_batch_result* results, uint32_t n, void* udata)
+{
+	batch_stats* data = udata;
+
+	for (uint32_t i = 0; i < n; i++) {
+		const as_batch_result* r = &results[i];
+		int k = (int)r->key->valuep->integer.value;
+
+		if (r->result == AEROSPIKE_OK) {
+			data->found++;
+			//example_dump_record(&r->record);
+			int64_t val = as_record_get_int64(&r->record, bin1, -1);
+			int64_t val_expect = (i % 20 == 0)? 1 : k + 1;
+
+			if (val != val_expect) {
+				warn("Result[%d]: val(%d) != expected(%d)", k, val, val_expect);
+				data->errors++;
+				continue;
+			}
+		}
+		else {
+			warn("Result[%d] failed: %d", k, r->result);
+		}
+	}
+	return true;
+}
+
+TEST(batch_write_read_all_bins, "Batch write/read all bins")
+{
+	as_batch batch;
+	as_batch_inita(&batch, N_KEYS);
+	
+	for (uint32_t i = 0; i < N_KEYS; i++) {
+		as_key_init_int64(as_batch_keyat(&batch,i), NAMESPACE, SET, i);
+	}
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_add_incr(&ops, bin1, 1);
+	as_operations_add_read_all(&ops);
+
+	batch_stats data = {0};
+	as_error err;
+	as_status status = aerospike_batch_operate(as, &err, NULL, NULL, &batch, &ops,
+		batch_write_read_all_cb, &data);
+
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(data.found, N_KEYS);
+	assert_int_eq(data.errors, 0);
 }
 
 static bool
@@ -750,5 +801,6 @@ SUITE(batch, "aerospike batch tests")
 	suite_add(batch_read_list_operate);
 	suite_add(batch_write_list_operate);
 	suite_add(batch_write_complex);
+	suite_add(batch_write_read_all_bins);
 	suite_add(batch_remove);
 }

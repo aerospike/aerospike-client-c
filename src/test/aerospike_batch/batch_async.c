@@ -343,16 +343,15 @@ batch_write_callback(
 	as_batch_write_record* r = as_vector_get(list, 0);
 	assert_int_eq_async(&monitor, r->result, AEROSPIKE_OK);
 	//dump_record(&r->record);
-	assert_int_eq_async(&monitor, r->record.bins.size, 2);
-	as_bin* bins = r->record.bins.entries;
-	assert_int_eq_async(&monitor, bins[0].valuep->nil.type, AS_NIL);
-	int64_t i = bins[1].valuep->integer.value;
+	// as_operations_add_write_int64() does not force respond_all_ops.
+	int64_t i = as_record_get_int64(&r->record, bin2, -1);
 	assert_int_eq_async(&monitor, i, 100);
 
 	r = as_vector_get(list, 1);
 	assert_int_eq_async(&monitor, r->result, AEROSPIKE_OK);
+	// as_operations_exp_write() does force respond_all_ops, so expect two results.
 	assert_int_eq_async(&monitor, r->record.bins.size, 2);
-	bins = r->record.bins.entries;
+	as_bin* bins = r->record.bins.entries;
 	assert_int_eq_async(&monitor, bins[0].valuep->nil.type, AS_NIL);
 	i = bins[1].valuep->integer.value;
 	assert_int_eq_async(&monitor, i, 1006);

@@ -833,6 +833,10 @@ as_operate_set_attr(const as_operations* ops, as_queue* buffers, uint8_t* rattr,
 			case AS_OPERATOR_CDT_READ:
 			case AS_OPERATOR_READ:
 				read_attr |= AS_MSG_INFO1_READ;
+
+				if (op->bin.name[0] == 0) {
+					read_attr |= AS_MSG_INFO1_GET_ALL;
+				}
 				break;
 				
 			case AS_OPERATOR_MAP_MODIFY:
@@ -848,8 +852,9 @@ as_operate_set_attr(const as_operations* ops, as_queue* buffers, uint8_t* rattr,
 		}
 		size += as_command_bin_size(&op->bin, buffers);
 	}
-	
-	if (respond_all_ops) {
+
+	// When GET_ALL is specified, RESPOND_ALL_OPS must be disabled.
+	if (respond_all_ops && !(read_attr & AS_MSG_INFO1_GET_ALL)) {
 		write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
 	}
 	*rattr = read_attr;

@@ -174,9 +174,9 @@ as_query_where_init(as_query* query, uint16_t n)
 }
 
 bool
-as_query_where_with_ctx(as_query* query, const char* bin, as_cdt_ctx* ctx,
+as_query_where_internal(as_query* query, const char* bin, as_cdt_ctx* ctx,
 		as_predicate_type type, as_index_type itype, as_index_datatype dtype,
-		... )
+		va_list ap)
 {
 	// test preconditions
 	if (! query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE) {
@@ -207,9 +207,6 @@ as_query_where_with_ctx(as_query* query, const char* bin, as_cdt_ctx* ctx,
 		return false;
 	}
 
-	va_list ap;
-	va_start(ap, dtype);
-
 	switch(type) {
 	case AS_PREDICATE_EQUAL:
 		if (dtype == AS_INDEX_STRING) {
@@ -236,7 +233,6 @@ as_query_where_with_ctx(as_query* query, const char* bin, as_cdt_ctx* ctx,
 		break;
 	}
 
-	va_end(ap);
 	return status;
 }
 

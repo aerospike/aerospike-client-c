@@ -164,7 +164,7 @@ aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* p
 		char* p = strstr(response, find);
 
 		if (!p) {
-			as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			as_error_update(err, AEROSPIKE_ERR_REQUEST_INVALID,
 				"Create index error: %s", response);
 			cf_free(response);
 			as_nodes_release(nodes);

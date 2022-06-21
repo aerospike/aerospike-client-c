@@ -342,6 +342,42 @@ TEST(key_operate_bool , "operate bool")
 	as_record_destroy(prec);
 }
 
+TEST(key_operate_read_all_bins , "operate read all bins")
+{
+	// Write initial record.
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "oprabkey");
+
+	as_record rec;
+	as_record_inita(&rec, 2);
+	as_record_set_int64(&rec, "intbin", 7);
+	as_record_set_str(&rec, "stringbin", "string value");
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Add integer, write new string and read record.
+	as_operations ops;
+	as_operations_inita(&ops, 3);
+	as_operations_add_incr(&ops, "intbin", 4);
+	as_operations_add_write_str(&ops, "stringbin", "new string");
+	as_operations_add_read_all(&ops);
+
+	as_record* prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(prec, "intbin", 0);
+	assert_int_eq(val, 11);
+
+	char* s = as_record_get_str(prec, "stringbin");
+	assert_string_eq(s, "new string");
+
+	as_operations_destroy(&ops);
+	as_record_destroy(prec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -354,4 +390,5 @@ SUITE(key_operate, "aerospike_key_operate tests")
 	suite_add(key_operate_float);
 	suite_add(key_operate_delete);
 	suite_add(key_operate_bool);
+	suite_add(key_operate_read_all_bins);
 }

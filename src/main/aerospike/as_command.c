@@ -358,8 +358,19 @@ as_command_write_bin_name(uint8_t* cmd, const char* name)
 uint8_t*
 as_command_write_bin(uint8_t* begin, as_operator op_type, const as_bin* bin, as_queue* buffers)
 {
-	uint8_t* p = begin + AS_OPERATION_HEADER_SIZE;
 	const char* name = bin->name;
+
+	if (name[0] == 0) {
+		*(uint32_t*)begin = cf_swap_to_be32(4);
+		begin += 4;
+		*begin++ = as_protocol_types[op_type];
+		*begin++ = AS_BYTES_UNDEF;
+		*begin++ = 0;
+		*begin++ = 0;
+		return begin;
+	}
+
+	uint8_t* p = begin + AS_OPERATION_HEADER_SIZE;
 
 	// Copy string, but do not transfer null byte.
 	while (*name) {

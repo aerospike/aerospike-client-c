@@ -653,12 +653,13 @@ TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'e' is betw
 	as_query_init(&q, NAMESPACE, SET);
 
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "e", as_range(LIST, NUMERIC, (int64_t)51, (int64_t)54));
+	as_query_where_with_ctx(&q, "e", &ctx, as_range(LIST, NUMERIC, (int64_t)51,
+			(int64_t)54));
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
 	if ( err.code != AEROSPIKE_OK ) {
-		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
 	// The following records should be found:

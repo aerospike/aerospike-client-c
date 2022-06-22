@@ -120,7 +120,7 @@ bool query_foreach_create()
 	as_cdt_ctx_init(&ctx, 1);
 	as_cdt_ctx_add_list_rank(&ctx, -1);
 
-	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "e", "idx_test_e", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, &ctx);
+	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_ctx_test_z", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, &ctx);
 	index_process_return_code(status, &err, &task);
 
 	// create complex index on "x"
@@ -638,7 +638,7 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 	as_query_destroy(&q);
 }
 
-TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'e' is between 51 and 54" ) {
+TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'z' is between 51 and 54" ) {
 
 	as_error err;
 	as_error_reset(&err);
@@ -653,7 +653,7 @@ TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'e' is betw
 	as_query_init(&q, NAMESPACE, SET);
 
 	as_query_where_inita(&q, 1);
-	as_query_where_with_ctx(&q, "e", &ctx, as_range(DEFAULT, NUMERIC, (int64_t)51,
+	as_query_where_with_ctx(&q, "z", &ctx, as_range(DEFAULT, NUMERIC, (int64_t)51,
 			(int64_t)54));
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);

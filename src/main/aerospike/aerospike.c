@@ -202,8 +202,8 @@ aerospike_connect(aerospike* as, as_error* err)
 	}
 
 	// Verify max_socket_idle.
-	if (config->max_socket_idle <= 0 || config->max_socket_idle > 86400) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "max_socket_idle must be > 0 and <= 86400");
+	if (config->max_socket_idle > 86400) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "max_socket_idle must be <= 86400");
 	}
 
 	// Set TLS names to default when enabled.

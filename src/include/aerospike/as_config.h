@@ -483,7 +483,7 @@ typedef struct as_config_s {
 	 * database commands plus sub-threads used for parallel multi-node commands (batch, scan,
 	 * and query). One connection will be used for each thread.
 	 *
-	 * Default: 300
+	 * Default: 100
 	 */
 	uint32_t max_conns_per_node;
 	
@@ -507,7 +507,7 @@ typedef struct as_config_s {
 	 * will have a limit of 50. Async transactions will be rejected if the limit would be exceeded.
 	 * This variable is ignored if asynchronous event loops are not created.
 	 *
-	 * Default: 300
+	 * Default: 100
 	 */
 	uint32_t async_max_conns_per_node;
 
@@ -564,7 +564,7 @@ typedef struct as_config_s {
 	 * connections to min connections (min_conns_per_node and async_min_conns_per_node) using a
 	 * hard-coded 55 second limit in the cluster tend thread.
 	 *
-	 * Default: 55 seconds
+	 * Default: 0 seconds
 	 */
 	uint32_t max_socket_idle;
 
@@ -579,7 +579,7 @@ typedef struct as_config_s {
 	 * The application should backoff or reduce the transaction load until AEROSPIKE_MAX_ERROR_RATE
 	 * stops being returned.
 	 *
-	 * Default: 0
+	 * Default: 100
 	 */
 	uint32_t max_error_rate;
 

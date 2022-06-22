@@ -653,7 +653,7 @@ TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'e' is betw
 	as_query_init(&q, NAMESPACE, SET);
 
 	as_query_where_inita(&q, 1);
-	as_query_where_with_ctx(&q, "e", &ctx, as_range(LIST, NUMERIC, (int64_t)51,
+	as_query_where_with_ctx(&q, "e", &ctx, as_range(DEFAULT, NUMERIC, (int64_t)51,
 			(int64_t)54));
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
@@ -672,7 +672,7 @@ TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'e' is betw
 	// [51, 52, 53, 54, 55]
 
 	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert( count == 4);
+	assert_int_eq(count, 4);
 
 	as_query_destroy(&q);
 }

@@ -242,7 +242,7 @@ pquery_cb2(const as_val* val, void* udata)
 }
 
 static as_status
-insert_records_for_query_page(aerospike* p_as, as_error* err, const as_set set, uint32_t size)
+insert_records_for_query_page(aerospike* p_as, as_error* err, const char* set, uint32_t size)
 {
 	// Write records that belong to the specified partition.
 	as_record rec;

@@ -337,7 +337,7 @@ as_record_numbins(const as_record* rec);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set(as_record* rec, const as_bin_name name, as_bin_value* value);
+as_record_set(as_record* rec, const char* name, as_bin_value* value);
 
 /**
  * Set specified bin's value to a bool.
@@ -356,7 +356,7 @@ as_record_set(as_record* rec, const as_bin_name name, as_bin_value* value);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_bool(as_record* rec, const as_bin_name name, bool value);
+as_record_set_bool(as_record* rec, const char* name, bool value);
 
 /**
  * Set specified bin's value to an int64_t.
@@ -374,7 +374,7 @@ as_record_set_bool(as_record* rec, const as_bin_name name, bool value);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_int64(as_record* rec, const as_bin_name name, int64_t value);
+as_record_set_int64(as_record* rec, const char* name, int64_t value);
 
 /**
  * Set specified bin's value to a double.
@@ -392,7 +392,7 @@ as_record_set_int64(as_record* rec, const as_bin_name name, int64_t value);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_double(as_record* rec, const as_bin_name name, double value);
+as_record_set_double(as_record* rec, const char* name, double value);
 
 /**
  * Set specified bin's value to an NULL terminated string.
@@ -411,7 +411,7 @@ as_record_set_double(as_record* rec, const as_bin_name name, double value);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_strp(as_record* rec, const as_bin_name name, const char* value, bool free);
+as_record_set_strp(as_record* rec, const char* name, const char* value, bool free);
 
 /**
  * Set specified bin's value to an NULL terminated string.
@@ -429,7 +429,7 @@ as_record_set_strp(as_record* rec, const as_bin_name name, const char* value, bo
  * @relates as_record
  */
 static inline bool
-as_record_set_str(as_record* rec, const as_bin_name name, const char* value)
+as_record_set_str(as_record* rec, const char* name, const char* value)
 {
 	return as_record_set_strp(rec, name, value, false);
 }
@@ -451,7 +451,7 @@ as_record_set_str(as_record* rec, const as_bin_name name, const char* value)
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_geojson_strp(as_record* rec, const as_bin_name name, const char* value, bool free);
+as_record_set_geojson_strp(as_record* rec, const char* name, const char* value, bool free);
 
 /**
  * Set specified bin's value to an NULL terminated GeoJSON string.
@@ -469,7 +469,7 @@ as_record_set_geojson_strp(as_record* rec, const as_bin_name name, const char* v
  * @relates as_record
  */
 static inline bool
-as_record_set_geojson_str(as_record* rec, const as_bin_name name, const char* value)
+as_record_set_geojson_str(as_record* rec, const char* name, const char* value)
 {
 	return as_record_set_geojson_strp(rec, name, value, false);
 }
@@ -497,7 +497,7 @@ as_record_set_geojson_str(as_record* rec, const as_bin_name name, const char* va
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_rawp(as_record* rec, const as_bin_name name, const uint8_t* value, uint32_t size, bool free);
+as_record_set_rawp(as_record* rec, const char* name, const uint8_t* value, uint32_t size, bool free);
 
 /**
  * Set specified bin's value to an as_bytes value of a specified type.
@@ -523,7 +523,7 @@ as_record_set_rawp(as_record* rec, const as_bin_name name, const uint8_t* value,
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_raw_typep(as_record* rec, const as_bin_name name, const uint8_t* value, uint32_t size, as_bytes_type type, bool free);
+as_record_set_raw_typep(as_record* rec, const char* name, const uint8_t* value, uint32_t size, as_bytes_type type, bool free);
 
 /**
  * Set specified bin's value to an NULL terminated string.
@@ -543,7 +543,7 @@ as_record_set_raw_typep(as_record* rec, const as_bin_name name, const uint8_t* v
  * @relates as_record
  */
 static inline bool
-as_record_set_raw(as_record* rec, const as_bin_name name, const uint8_t* value, uint32_t size)
+as_record_set_raw(as_record* rec, const char* name, const uint8_t* value, uint32_t size)
 {
 	return as_record_set_rawp(rec, name, value, size, false);
 }
@@ -564,7 +564,7 @@ as_record_set_raw(as_record* rec, const as_bin_name name, const uint8_t* value, 
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_integer(as_record* rec, const as_bin_name name, as_integer * value);
+as_record_set_integer(as_record* rec, const char* name, as_integer * value);
 
 /**
  * Set specified bin's value to an as_double.
@@ -582,7 +582,7 @@ as_record_set_integer(as_record* rec, const as_bin_name name, as_integer * value
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_as_double(as_record* rec, const as_bin_name name, as_double * value);
+as_record_set_as_double(as_record* rec, const char* name, as_double * value);
 
 /**
  * Set specified bin's value to an as_string.
@@ -600,7 +600,7 @@ as_record_set_as_double(as_record* rec, const as_bin_name name, as_double * valu
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_string(as_record* rec, const as_bin_name name, as_string * value);
+as_record_set_string(as_record* rec, const char* name, as_string * value);
 
 /**
  * Set specified bin's value to an as_geojson.
@@ -618,7 +618,7 @@ as_record_set_string(as_record* rec, const as_bin_name name, as_string * value);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_geojson(as_record* rec, const as_bin_name name, as_geojson * value);
+as_record_set_geojson(as_record* rec, const char* name, as_geojson * value);
 
 /**
  * Set specified bin's value to an as_bytes.
@@ -636,7 +636,7 @@ as_record_set_geojson(as_record* rec, const as_bin_name name, as_geojson * value
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_bytes(as_record* rec, const as_bin_name name, as_bytes * value);
+as_record_set_bytes(as_record* rec, const char* name, as_bytes * value);
 
 /**
  * Set specified bin's value to an as_list.
@@ -660,7 +660,7 @@ as_record_set_bytes(as_record* rec, const as_bin_name name, as_bytes * value);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_list(as_record* rec, const as_bin_name name, as_list * value);
+as_record_set_list(as_record* rec, const char* name, as_list * value);
 
 /**
  * Set specified bin's value to an as_map.
@@ -684,7 +684,7 @@ as_record_set_list(as_record* rec, const as_bin_name name, as_list * value);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_map(as_record* rec, const as_bin_name name, as_map * value);
+as_record_set_map(as_record* rec, const char* name, as_map * value);
 
 /**
  * Set specified bin's value to as_nil.
@@ -701,7 +701,7 @@ as_record_set_map(as_record* rec, const as_bin_name name, as_map * value);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_set_nil(as_record* rec, const as_bin_name name);
+as_record_set_nil(as_record* rec, const char* name);
 
 /**
  * Get specified bin's value.
@@ -718,7 +718,7 @@ as_record_set_nil(as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN as_bin_value*
-as_record_get(const as_record* rec, const as_bin_name name);
+as_record_get(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as a bool.
@@ -735,7 +735,7 @@ as_record_get(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN bool
-as_record_get_bool(const as_record* rec, const as_bin_name name);
+as_record_get_bool(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an int64_t.
@@ -753,7 +753,7 @@ as_record_get_bool(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN int64_t
-as_record_get_int64(const as_record* rec, const as_bin_name name, int64_t fallback);
+as_record_get_int64(const as_record* rec, const char* name, int64_t fallback);
 
 /**
  * Get specified bin's value as a double.
@@ -771,7 +771,7 @@ as_record_get_int64(const as_record* rec, const as_bin_name name, int64_t fallba
  * @relates as_record
  */
 AS_EXTERN double
-as_record_get_double(const as_record* rec, const as_bin_name name, double fallback);
+as_record_get_double(const as_record* rec, const char* name, double fallback);
 
 /**
  * Get specified bin's value as an NULL terminated string.
@@ -788,7 +788,7 @@ as_record_get_double(const as_record* rec, const as_bin_name name, double fallba
  * @relates as_record
  */
 AS_EXTERN char*
-as_record_get_str(const as_record* rec, const as_bin_name name);
+as_record_get_str(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an NULL terminated GeoJSON string.
@@ -805,7 +805,7 @@ as_record_get_str(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN char*
-as_record_get_geojson_str(const as_record* rec, const as_bin_name name);
+as_record_get_geojson_str(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an as_integer.
@@ -822,7 +822,7 @@ as_record_get_geojson_str(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN as_integer*
-as_record_get_integer(const as_record* rec, const as_bin_name name);
+as_record_get_integer(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an as_double.
@@ -839,7 +839,7 @@ as_record_get_integer(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN as_double*
-as_record_get_as_double(const as_record* rec, const as_bin_name name);
+as_record_get_as_double(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an as_string.
@@ -856,7 +856,7 @@ as_record_get_as_double(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN as_string*
-as_record_get_string(const as_record* rec, const as_bin_name name);
+as_record_get_string(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an as_geojson.
@@ -873,7 +873,7 @@ as_record_get_string(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN as_geojson*
-as_record_get_geojson(const as_record* rec, const as_bin_name name);
+as_record_get_geojson(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an as_bytes.
@@ -890,7 +890,7 @@ as_record_get_geojson(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN as_bytes*
-as_record_get_bytes(const as_record* rec, const as_bin_name name);
+as_record_get_bytes(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an as_list.
@@ -907,7 +907,7 @@ as_record_get_bytes(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN as_list*
-as_record_get_list(const as_record* rec, const as_bin_name name);
+as_record_get_list(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an as_map.
@@ -924,7 +924,7 @@ as_record_get_list(const as_record* rec, const as_bin_name name);
  * @relates as_record
  */
 AS_EXTERN as_map*
-as_record_get_map(const as_record* rec, const as_bin_name name);
+as_record_get_map(const as_record* rec, const char* name);
 
 /**
  * Get the value returned by a UDF apply in a batch.

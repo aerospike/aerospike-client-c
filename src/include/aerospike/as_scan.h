@@ -382,7 +382,7 @@ typedef struct as_scan_s {
  * @ingroup as_scan_object
  */
 AS_EXTERN as_scan*
-as_scan_init(as_scan* scan, const as_namespace ns, const as_set set);
+as_scan_init(as_scan* scan, const char* ns, const char* set);
 
 /**
  * Create and initializes a new scan on the heap.
@@ -403,7 +403,7 @@ as_scan_init(as_scan* scan, const as_namespace ns, const as_set set);
  * @ingroup as_scan_object
  */
 AS_EXTERN as_scan*
-as_scan_new(const as_namespace ns, const as_set set);
+as_scan_new(const char* ns, const char* set);
 
 /**
  * Releases all resources allocated to the scan.

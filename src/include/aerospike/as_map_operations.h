@@ -343,7 +343,7 @@ as_map_policy_set_flags(as_map_policy* policy, as_map_order order, uint32_t flag
  */
 AS_EXTERN bool
 as_operations_map_create(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_map_order order
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_order order
 	);
 
 /**
@@ -354,7 +354,7 @@ as_operations_map_create(
  */
 AS_EXTERN bool
 as_operations_map_set_policy(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_map_policy* policy
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_policy* policy
 	);
 
 /**
@@ -370,7 +370,7 @@ as_operations_map_set_policy(
  */
 AS_EXTERN bool
 as_operations_map_put(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_map_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_policy* policy,
 	as_val* key, as_val* value
 	);
 
@@ -387,7 +387,7 @@ as_operations_map_put(
  */
 AS_EXTERN bool
 as_operations_map_put_items(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_map_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_policy* policy,
 	as_map* items
 	);
 
@@ -405,7 +405,7 @@ as_operations_map_put_items(
  */
 AS_EXTERN bool
 as_operations_map_increment(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_map_policy* policy, as_val* key,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_policy* policy, as_val* key,
 	as_val* value
 	);
 
@@ -425,7 +425,7 @@ as_operations_map_increment(
  */
 AS_EXTERN bool
 as_operations_map_decrement(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_map_policy* policy, as_val* key,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_policy* policy, as_val* key,
 	as_val* value
 	);
 
@@ -436,7 +436,7 @@ as_operations_map_decrement(
  * @ingroup map_operations
  */
 AS_EXTERN bool
-as_operations_map_clear(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx);
+as_operations_map_clear(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
 /**
  * Create map remove operation.
@@ -447,7 +447,7 @@ as_operations_map_clear(as_operations* ops, const as_bin_name name, as_cdt_ctx* 
  */
 AS_EXTERN bool
 as_operations_map_remove_by_key(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* key,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* key,
 	as_map_return_type return_type
 	);
 
@@ -460,7 +460,7 @@ as_operations_map_remove_by_key(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_key_list(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* keys,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* keys,
 	as_map_return_type return_type
 	);
 
@@ -477,7 +477,7 @@ as_operations_map_remove_by_key_list(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_key_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
 	as_map_return_type return_type
 	);
 
@@ -501,7 +501,7 @@ as_operations_map_remove_by_key_range(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_key_rel_index_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* key, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* key, int64_t index,
 	as_map_return_type return_type
 	);
 
@@ -525,7 +525,7 @@ as_operations_map_remove_by_key_rel_index_range_to_end(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_key_rel_index_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* key, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* key, int64_t index,
 	uint64_t count, as_map_return_type return_type
 	);
 
@@ -538,7 +538,7 @@ as_operations_map_remove_by_key_rel_index_range(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_value(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value,
 	as_map_return_type return_type
 	);
 
@@ -551,7 +551,7 @@ as_operations_map_remove_by_value(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_value_list(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* values,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* values,
 	as_map_return_type return_type
 	);
 
@@ -568,7 +568,7 @@ as_operations_map_remove_by_value_list(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_value_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
 	as_map_return_type return_type
 	);
 
@@ -589,7 +589,7 @@ as_operations_map_remove_by_value_range(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_value_rel_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
 	as_map_return_type return_type
 	);
 
@@ -610,7 +610,7 @@ as_operations_map_remove_by_value_rel_rank_range_to_end(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_value_rel_rank_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
 	uint64_t count, as_map_return_type return_type
 	);
 
@@ -622,7 +622,7 @@ as_operations_map_remove_by_value_rel_rank_range(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_index(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index,
 	as_map_return_type return_type
 	);
 
@@ -635,7 +635,7 @@ as_operations_map_remove_by_index(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_index_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index,
 	as_map_return_type return_type
 	);
 
@@ -648,7 +648,7 @@ as_operations_map_remove_by_index_range_to_end(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_index_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
 	as_map_return_type return_type
 	);
 
@@ -660,7 +660,7 @@ as_operations_map_remove_by_index_range(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_rank(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank,
 	as_map_return_type return_type
 	);
 
@@ -673,7 +673,7 @@ as_operations_map_remove_by_rank(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank,
 	as_map_return_type return_type
 	);
 
@@ -686,7 +686,7 @@ as_operations_map_remove_by_rank_range_to_end(
  */
 AS_EXTERN bool
 as_operations_map_remove_by_rank_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
 	as_map_return_type return_type
 	);
 
@@ -697,7 +697,7 @@ as_operations_map_remove_by_rank_range(
  * @ingroup map_operations
  */
 AS_EXTERN bool
-as_operations_map_size(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx);
+as_operations_map_size(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
 /**
  * Create map get by key operation.
@@ -708,7 +708,7 @@ as_operations_map_size(as_operations* ops, const as_bin_name name, as_cdt_ctx* c
  */
 AS_EXTERN bool
 as_operations_map_get_by_key(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* key,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* key,
 	as_map_return_type return_type
 	);
 
@@ -725,7 +725,7 @@ as_operations_map_get_by_key(
  */
 AS_EXTERN bool
 as_operations_map_get_by_key_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
 	as_map_return_type return_type
 	);
 
@@ -738,7 +738,7 @@ as_operations_map_get_by_key_range(
  */
 AS_EXTERN bool
 as_operations_map_get_by_key_list(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* keys,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* keys,
 	as_map_return_type return_type
 	);
 
@@ -762,7 +762,7 @@ as_operations_map_get_by_key_list(
  */
 AS_EXTERN bool
 as_operations_map_get_by_key_rel_index_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* key, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* key, int64_t index,
 	as_map_return_type return_type
 	);
 
@@ -786,7 +786,7 @@ as_operations_map_get_by_key_rel_index_range_to_end(
  */
 AS_EXTERN bool
 as_operations_map_get_by_key_rel_index_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* key, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* key, int64_t index,
 	uint64_t count, as_map_return_type return_type
 	);
 
@@ -799,7 +799,7 @@ as_operations_map_get_by_key_rel_index_range(
  */
 AS_EXTERN bool
 as_operations_map_get_by_value(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value,
 	as_map_return_type return_type
 	);
 
@@ -816,7 +816,7 @@ as_operations_map_get_by_value(
  */
 AS_EXTERN bool
 as_operations_map_get_by_value_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
 	as_map_return_type return_type
 	);
 
@@ -829,7 +829,7 @@ as_operations_map_get_by_value_range(
  */
 AS_EXTERN bool
 as_operations_map_get_by_value_list(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* values,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* values,
 	as_map_return_type return_type
 	);
 
@@ -850,7 +850,7 @@ as_operations_map_get_by_value_list(
  */
 AS_EXTERN bool
 as_operations_map_get_by_value_rel_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
 	as_map_return_type return_type
 	);
 
@@ -871,7 +871,7 @@ as_operations_map_get_by_value_rel_rank_range_to_end(
  */
 AS_EXTERN bool
 as_operations_map_get_by_value_rel_rank_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
 	uint64_t count, as_map_return_type return_type
 	);
 
@@ -883,7 +883,7 @@ as_operations_map_get_by_value_rel_rank_range(
  */
 AS_EXTERN bool
 as_operations_map_get_by_index(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index,
 	as_map_return_type return_type
 	);
 
@@ -896,7 +896,7 @@ as_operations_map_get_by_index(
  */
 AS_EXTERN bool
 as_operations_map_get_by_index_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index,
 	as_map_return_type return_type
 	);
 
@@ -909,7 +909,7 @@ as_operations_map_get_by_index_range_to_end(
  */
 AS_EXTERN bool
 as_operations_map_get_by_index_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
 	as_map_return_type return_type
 	);
 
@@ -921,7 +921,7 @@ as_operations_map_get_by_index_range(
  */
 AS_EXTERN bool
 as_operations_map_get_by_rank(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank,
 	as_map_return_type return_type
 	);
 
@@ -934,7 +934,7 @@ as_operations_map_get_by_rank(
  */
 AS_EXTERN bool
 as_operations_map_get_by_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank,
 	as_map_return_type return_type
 	);
 
@@ -947,7 +947,7 @@ as_operations_map_get_by_rank_range_to_end(
  */
 AS_EXTERN bool
 as_operations_map_get_by_rank_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
 	as_map_return_type return_type
 	);
 
@@ -962,7 +962,7 @@ as_operations_map_get_by_rank_range(
  * @ingroup map_operations
  */
 static inline bool
-as_operations_add_map_set_policy(as_operations* ops, const as_bin_name name, as_map_policy* policy)
+as_operations_add_map_set_policy(as_operations* ops, const char* name, as_map_policy* policy)
 {
 	return as_operations_map_set_policy(ops, name, NULL, policy);
 }
@@ -979,7 +979,7 @@ as_operations_add_map_set_policy(as_operations* ops, const as_bin_name name, as_
  */
 static inline bool
 as_operations_add_map_put(
-	as_operations* ops, const as_bin_name name, as_map_policy* policy, as_val* key, as_val* value
+	as_operations* ops, const char* name, as_map_policy* policy, as_val* key, as_val* value
 	)
 {
 	return as_operations_map_put(ops, name, NULL, policy, key, value);
@@ -997,7 +997,7 @@ as_operations_add_map_put(
  */
 static inline bool
 as_operations_add_map_put_items(
-	as_operations* ops, const as_bin_name name, as_map_policy* policy, as_map* items
+	as_operations* ops, const char* name, as_map_policy* policy, as_map* items
 	)
 {
 	return as_operations_map_put_items(ops, name, NULL, policy, items);
@@ -1016,7 +1016,7 @@ as_operations_add_map_put_items(
  */
 static inline bool
 as_operations_add_map_increment(
-	as_operations* ops, const as_bin_name name, as_map_policy* policy, as_val* key, as_val* value
+	as_operations* ops, const char* name, as_map_policy* policy, as_val* key, as_val* value
 	)
 {
 	return as_operations_map_increment(ops, name, NULL, policy, key, value);
@@ -1035,7 +1035,7 @@ as_operations_add_map_increment(
  */
 static inline bool
 as_operations_add_map_decrement(
-	as_operations* ops, const as_bin_name name, as_map_policy* policy, as_val* key, as_val* value
+	as_operations* ops, const char* name, as_map_policy* policy, as_val* key, as_val* value
 	)
 {
 	return as_operations_map_decrement(ops, name, NULL, policy, key, value);
@@ -1048,7 +1048,7 @@ as_operations_add_map_decrement(
  * @ingroup map_operations
  */
 static inline bool
-as_operations_add_map_clear(as_operations* ops, const as_bin_name name)
+as_operations_add_map_clear(as_operations* ops, const char* name)
 {
 	return as_operations_map_clear(ops, name, NULL);
 }
@@ -1061,7 +1061,7 @@ as_operations_add_map_clear(as_operations* ops, const as_bin_name name)
  */
 static inline bool
 as_operations_add_map_remove_by_key(
-	as_operations* ops, const as_bin_name name, as_val* key, as_map_return_type return_type
+	as_operations* ops, const char* name, as_val* key, as_map_return_type return_type
 	)
 {
 	return as_operations_map_remove_by_key(ops, name, NULL, key, return_type);
@@ -1075,7 +1075,7 @@ as_operations_add_map_remove_by_key(
  */
 static inline bool
 as_operations_add_map_remove_by_key_list(
-	as_operations* ops, const as_bin_name name, as_list* keys, as_map_return_type return_type
+	as_operations* ops, const char* name, as_list* keys, as_map_return_type return_type
 	)
 {
 	return as_operations_map_remove_by_key_list(ops, name, NULL, keys, return_type);
@@ -1093,7 +1093,7 @@ as_operations_add_map_remove_by_key_list(
  */
 static inline bool
 as_operations_add_map_remove_by_key_range(
-	as_operations* ops, const as_bin_name name, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_val* begin, as_val* end,
 	as_map_return_type return_type
 	)
 {
@@ -1119,7 +1119,7 @@ as_operations_add_map_remove_by_key_range(
  */
 static inline bool
 as_operations_add_map_remove_by_key_rel_index_range_to_end(
-	as_operations* ops, const as_bin_name name, as_val* key, int64_t index,
+	as_operations* ops, const char* name, as_val* key, int64_t index,
 	as_map_return_type return_type
 	)
 {
@@ -1145,7 +1145,7 @@ as_operations_add_map_remove_by_key_rel_index_range_to_end(
  */
 static inline bool
 as_operations_add_map_remove_by_key_rel_index_range(
-	as_operations* ops, const as_bin_name name, as_val* key, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, as_val* key, int64_t index, uint64_t count,
 	as_map_return_type return_type
 	)
 {
@@ -1161,7 +1161,7 @@ as_operations_add_map_remove_by_key_rel_index_range(
  */
 static inline bool
 as_operations_add_map_remove_by_value(
-	as_operations* ops, const as_bin_name name, as_val* value, as_map_return_type return_type
+	as_operations* ops, const char* name, as_val* value, as_map_return_type return_type
 	)
 {
 	return as_operations_map_remove_by_value(ops, name, NULL, value, return_type);
@@ -1175,7 +1175,7 @@ as_operations_add_map_remove_by_value(
  */
 static inline bool
 as_operations_add_map_remove_by_value_list(
-	as_operations* ops, const as_bin_name name, as_list* values, as_map_return_type return_type
+	as_operations* ops, const char* name, as_list* values, as_map_return_type return_type
 	)
 {
 	return as_operations_map_remove_by_value_list(ops, name, NULL, values, return_type);
@@ -1193,7 +1193,7 @@ as_operations_add_map_remove_by_value_list(
  */
 static inline bool
 as_operations_add_map_remove_by_value_range(
-	as_operations* ops, const as_bin_name name, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_val* begin, as_val* end,
 	as_map_return_type return_type
 	)
 {
@@ -1216,7 +1216,7 @@ as_operations_add_map_remove_by_value_range(
  */
 static inline bool
 as_operations_add_map_remove_by_value_rel_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_val* value, int64_t rank,
 	as_map_return_type return_type
 	)
 {
@@ -1240,7 +1240,7 @@ as_operations_add_map_remove_by_value_rel_rank_range_to_end(
  */
 static inline bool
 as_operations_add_map_remove_by_value_rel_rank_range(
-	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, as_val* value, int64_t rank, uint64_t count,
 	as_map_return_type return_type
 	)
 {
@@ -1256,7 +1256,7 @@ as_operations_add_map_remove_by_value_rel_rank_range(
  */
 static inline bool
 as_operations_add_map_remove_by_index(
-	as_operations* ops, const as_bin_name name, int64_t index, as_map_return_type return_type
+	as_operations* ops, const char* name, int64_t index, as_map_return_type return_type
 	)
 {
 	return as_operations_map_remove_by_index(ops, name, NULL, index, return_type);
@@ -1271,7 +1271,7 @@ as_operations_add_map_remove_by_index(
  */
 static inline bool
 as_operations_add_map_remove_by_index_range_to_end(
-	as_operations* ops, const as_bin_name name, int64_t index, as_map_return_type return_type
+	as_operations* ops, const char* name, int64_t index, as_map_return_type return_type
 	)
 {
 	return as_operations_map_remove_by_index_range_to_end(ops, name, NULL, index, return_type);
@@ -1286,7 +1286,7 @@ as_operations_add_map_remove_by_index_range_to_end(
  */
 static inline bool
 as_operations_add_map_remove_by_index_range(
-	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, int64_t index, uint64_t count,
 	as_map_return_type return_type
 	)
 {
@@ -1301,7 +1301,7 @@ as_operations_add_map_remove_by_index_range(
  */
 static inline bool
 as_operations_add_map_remove_by_rank(
-	as_operations* ops, const as_bin_name name, int64_t rank, as_map_return_type return_type
+	as_operations* ops, const char* name, int64_t rank, as_map_return_type return_type
 	)
 {
 	return as_operations_map_remove_by_rank(ops, name, NULL, rank, return_type);
@@ -1316,7 +1316,7 @@ as_operations_add_map_remove_by_rank(
  */
 static inline bool
 as_operations_add_map_remove_by_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, int64_t rank, as_map_return_type return_type
+	as_operations* ops, const char* name, int64_t rank, as_map_return_type return_type
 	)
 {
 	return as_operations_map_remove_by_rank_range_to_end(ops, name, NULL, rank, return_type);
@@ -1331,7 +1331,7 @@ as_operations_add_map_remove_by_rank_range_to_end(
  */
 static inline bool
 as_operations_add_map_remove_by_rank_range(
-	as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, int64_t rank, uint64_t count,
 	as_map_return_type return_type
 	)
 {
@@ -1345,7 +1345,7 @@ as_operations_add_map_remove_by_rank_range(
  * @ingroup map_operations
  */
 static inline bool
-as_operations_add_map_size(as_operations* ops, const as_bin_name name)
+as_operations_add_map_size(as_operations* ops, const char* name)
 {
 	return as_operations_map_size(ops, name, NULL);
 }
@@ -1358,7 +1358,7 @@ as_operations_add_map_size(as_operations* ops, const as_bin_name name)
  */
 static inline bool
 as_operations_add_map_get_by_key(
-	as_operations* ops, const as_bin_name name, as_val* key, as_map_return_type return_type
+	as_operations* ops, const char* name, as_val* key, as_map_return_type return_type
 	)
 {
 	return as_operations_map_get_by_key(ops, name, NULL, key, return_type);
@@ -1376,7 +1376,7 @@ as_operations_add_map_get_by_key(
  */
 static inline bool
 as_operations_add_map_get_by_key_range(
-	as_operations* ops, const as_bin_name name, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_val* begin, as_val* end,
 	as_map_return_type return_type
 	)
 {
@@ -1391,7 +1391,7 @@ as_operations_add_map_get_by_key_range(
  */
 static inline bool
 as_operations_add_map_get_by_key_list(
-	as_operations* ops, const as_bin_name name, as_list* keys, as_map_return_type return_type
+	as_operations* ops, const char* name, as_list* keys, as_map_return_type return_type
 	)
 {
 	return as_operations_map_get_by_key_list(ops, name, NULL, keys, return_type);
@@ -1416,7 +1416,7 @@ as_operations_add_map_get_by_key_list(
  */
 static inline bool
 as_operations_add_map_get_by_key_rel_index_range_to_end(
-	as_operations* ops, const as_bin_name name, as_val* key, int64_t index,
+	as_operations* ops, const char* name, as_val* key, int64_t index,
 	as_map_return_type return_type
 	)
 {
@@ -1443,7 +1443,7 @@ as_operations_add_map_get_by_key_rel_index_range_to_end(
  */
 static inline bool
 as_operations_add_map_get_by_key_rel_index_range(
-	as_operations* ops, const as_bin_name name, as_val* key, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, as_val* key, int64_t index, uint64_t count,
 	as_map_return_type return_type
 	)
 {
@@ -1459,7 +1459,7 @@ as_operations_add_map_get_by_key_rel_index_range(
  */
 static inline bool
 as_operations_add_map_get_by_value(
-	as_operations* ops, const as_bin_name name, as_val* value, as_map_return_type return_type
+	as_operations* ops, const char* name, as_val* value, as_map_return_type return_type
 	)
 {
 	return as_operations_map_get_by_value(ops, name, NULL, value, return_type);
@@ -1477,7 +1477,7 @@ as_operations_add_map_get_by_value(
  */
 static inline bool
 as_operations_add_map_get_by_value_range(
-	as_operations* ops, const as_bin_name name, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_val* begin, as_val* end,
 	as_map_return_type return_type
 	)
 {
@@ -1492,7 +1492,7 @@ as_operations_add_map_get_by_value_range(
  */
 static inline bool
 as_operations_add_map_get_by_value_list(
-	as_operations* ops, const as_bin_name name, as_list* values, as_map_return_type return_type
+	as_operations* ops, const char* name, as_list* values, as_map_return_type return_type
 	)
 {
 	return as_operations_map_get_by_value_list(ops, name, NULL, values, return_type);
@@ -1514,7 +1514,7 @@ as_operations_add_map_get_by_value_list(
  */
 static inline bool
 as_operations_add_map_get_by_value_rel_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_val* value, int64_t rank,
 	as_map_return_type return_type
 	)
 {
@@ -1538,7 +1538,7 @@ as_operations_add_map_get_by_value_rel_rank_range_to_end(
  */
 static inline bool
 as_operations_add_map_get_by_value_rel_rank_range(
-	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, as_val* value, int64_t rank, uint64_t count,
 	as_map_return_type return_type
 	)
 {
@@ -1554,7 +1554,7 @@ as_operations_add_map_get_by_value_rel_rank_range(
  */
 static inline bool
 as_operations_add_map_get_by_index(
-	as_operations* ops, const as_bin_name name, int64_t index, as_map_return_type return_type
+	as_operations* ops, const char* name, int64_t index, as_map_return_type return_type
 	)
 {
 	return as_operations_map_get_by_index(ops, name, NULL, index, return_type);
@@ -1569,7 +1569,7 @@ as_operations_add_map_get_by_index(
  */
 static inline bool
 as_operations_add_map_get_by_index_range_to_end(
-	as_operations* ops, const as_bin_name name, int64_t index, as_map_return_type return_type
+	as_operations* ops, const char* name, int64_t index, as_map_return_type return_type
 	)
 {
 	return as_operations_map_get_by_index_range_to_end(ops, name, NULL, index, return_type);
@@ -1584,7 +1584,7 @@ as_operations_add_map_get_by_index_range_to_end(
  */
 static inline bool
 as_operations_add_map_get_by_index_range(
-	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, int64_t index, uint64_t count,
 	as_map_return_type return_type
 	)
 {
@@ -1599,7 +1599,7 @@ as_operations_add_map_get_by_index_range(
  */
 static inline bool
 as_operations_add_map_get_by_rank(
-	as_operations* ops, const as_bin_name name, int64_t rank, as_map_return_type return_type
+	as_operations* ops, const char* name, int64_t rank, as_map_return_type return_type
 	)
 {
 	return as_operations_map_get_by_rank(ops, name, NULL, rank, return_type);
@@ -1614,7 +1614,7 @@ as_operations_add_map_get_by_rank(
  */
 static inline bool
 as_operations_add_map_get_by_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, int64_t rank, as_map_return_type return_type
+	as_operations* ops, const char* name, int64_t rank, as_map_return_type return_type
 	)
 {
 	return as_operations_map_get_by_rank_range_to_end(ops, name, NULL, rank, return_type);
@@ -1629,7 +1629,7 @@ as_operations_add_map_get_by_rank_range_to_end(
  */
 static inline bool
 as_operations_add_map_get_by_rank_range(
-	as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, int64_t rank, uint64_t count,
 	as_map_return_type return_type
 	)
 {

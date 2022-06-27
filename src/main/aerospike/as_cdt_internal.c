@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -19,7 +19,7 @@
 #include "_bin.h"
 
 as_binop*
-as_binop_forappend(as_operations* ops, as_operator operator, const as_bin_name name);
+as_binop_forappend(as_operations* ops, as_operator operator, const char* name);
 
 void
 as_cdt_pack_header(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32_t count)
@@ -97,7 +97,7 @@ as_cdt_pack_ctx(as_packer* pk, as_cdt_ctx* ctx)
 }
 
 bool
-as_cdt_add_packed(as_packer* pk, as_operations* ops, const as_bin_name name, as_operator op_type)
+as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operator op_type)
 {
 	as_bytes* bytes = as_bytes_new_wrap(pk->buffer, pk->offset, true);
 	as_binop* binop = as_binop_forappend(ops, op_type, name);

@@ -385,7 +385,7 @@ as_operations_destroy(as_operations* ops);
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value* value);
+as_operations_add_write(as_operations* ops, const char* name, as_bin_value* value);
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with an bool value.
@@ -400,7 +400,7 @@ as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_write_bool(as_operations* ops, const as_bin_name name, bool value);
+as_operations_add_write_bool(as_operations* ops, const char* name, bool value);
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with an int64_t value.
@@ -415,7 +415,7 @@ as_operations_add_write_bool(as_operations* ops, const as_bin_name name, bool va
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_write_int64(as_operations* ops, const as_bin_name name, int64_t value);
+as_operations_add_write_int64(as_operations* ops, const char* name, int64_t value);
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with a double value.
@@ -430,7 +430,7 @@ as_operations_add_write_int64(as_operations* ops, const as_bin_name name, int64_
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_write_double(as_operations* ops, const as_bin_name name, double value);
+as_operations_add_write_double(as_operations* ops, const char* name, double value);
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with a NULL-terminated string value.
@@ -446,7 +446,7 @@ as_operations_add_write_double(as_operations* ops, const as_bin_name name, doubl
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_write_strp(as_operations* ops, const as_bin_name name, const char* value, bool free);
+as_operations_add_write_strp(as_operations* ops, const char* name, const char* value, bool free);
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with a NULL-terminated string value.
@@ -461,7 +461,7 @@ as_operations_add_write_strp(as_operations* ops, const as_bin_name name, const c
  * @ingroup as_operations_object
  */
 static inline bool
-as_operations_add_write_str(as_operations* ops, const as_bin_name name, const char* value)
+as_operations_add_write_str(as_operations* ops, const char* name, const char* value)
 {
 	return as_operations_add_write_strp(ops, name, value, false);
 }
@@ -480,7 +480,7 @@ as_operations_add_write_str(as_operations* ops, const as_bin_name name, const ch
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_write_geojson_strp(as_operations* ops, const as_bin_name name, const char* value, bool free);
+as_operations_add_write_geojson_strp(as_operations* ops, const char* name, const char* value, bool free);
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with a NULL-terminated GeoJSON string value.
@@ -495,7 +495,7 @@ as_operations_add_write_geojson_strp(as_operations* ops, const as_bin_name name,
  * @ingroup as_operations_object
  */
 static inline bool
-as_operations_add_write_geojson_str(as_operations* ops, const as_bin_name name, const char* value)
+as_operations_add_write_geojson_str(as_operations* ops, const char* name, const char* value)
 {
 	return as_operations_add_write_geojson_strp(ops, name, value, false);
 }
@@ -515,7 +515,7 @@ as_operations_add_write_geojson_str(as_operations* ops, const as_bin_name name, 
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_write_rawp(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size, bool free);
+as_operations_add_write_rawp(as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free);
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with a raw bytes value.
@@ -531,7 +531,7 @@ as_operations_add_write_rawp(as_operations* ops, const as_bin_name name, const u
  * @ingroup as_operations_object
  */
 static inline bool
-as_operations_add_write_raw(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size)
+as_operations_add_write_raw(as_operations* ops, const char* name, const uint8_t* value, uint32_t size)
 {
 	return as_operations_add_write_rawp(ops, name, value, size, false);
 }
@@ -548,7 +548,7 @@ as_operations_add_write_raw(as_operations* ops, const as_bin_name name, const ui
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_read(as_operations* ops, const as_bin_name name);
+as_operations_add_read(as_operations* ops, const char* name);
 
 /**
  * Create read all bins database operation.
@@ -576,7 +576,7 @@ as_operations_add_read_all(as_operations* ops);
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_incr(as_operations* ops, const as_bin_name name, int64_t value);
+as_operations_add_incr(as_operations* ops, const char* name, int64_t value);
 
 /**
  * Add a `AS_OPERATOR_INCR` bin operation with double value.
@@ -591,7 +591,7 @@ as_operations_add_incr(as_operations* ops, const as_bin_name name, int64_t value
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_incr_double(as_operations* ops, const as_bin_name name, double value);
+as_operations_add_incr_double(as_operations* ops, const char* name, double value);
 
 /**
  * Add a `AS_OPERATOR_PREPEND` bin operation with a NULL-terminated string value.
@@ -607,7 +607,7 @@ as_operations_add_incr_double(as_operations* ops, const as_bin_name name, double
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_prepend_strp(as_operations* ops, const as_bin_name name, const char* value, bool free);
+as_operations_add_prepend_strp(as_operations* ops, const char* name, const char* value, bool free);
 
 /**
  * Add a `AS_OPERATOR_PREPEND` bin operation with a NULL-terminated string value.
@@ -622,7 +622,7 @@ as_operations_add_prepend_strp(as_operations* ops, const as_bin_name name, const
  * @ingroup as_operations_object
  */
 static inline bool
-as_operations_add_prepend_str(as_operations* ops, const as_bin_name name, const char* value)
+as_operations_add_prepend_str(as_operations* ops, const char* name, const char* value)
 {
 	return as_operations_add_prepend_strp(ops, name, value, false);
 }
@@ -642,7 +642,7 @@ as_operations_add_prepend_str(as_operations* ops, const as_bin_name name, const 
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_prepend_rawp(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size, bool free);
+as_operations_add_prepend_rawp(as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free);
 
 /**
  * Add a `AS_OPERATOR_PREPEND` bin operation with a raw bytes value.
@@ -658,7 +658,7 @@ as_operations_add_prepend_rawp(as_operations* ops, const as_bin_name name, const
  * @ingroup as_operations_object
  */
 static inline bool
-as_operations_add_prepend_raw(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size)
+as_operations_add_prepend_raw(as_operations* ops, const char* name, const uint8_t* value, uint32_t size)
 {
 	return as_operations_add_prepend_rawp(ops, name, value, size, false);
 }
@@ -677,7 +677,7 @@ as_operations_add_prepend_raw(as_operations* ops, const as_bin_name name, const 
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_append_strp(as_operations* ops, const as_bin_name name, const char* value, bool free);
+as_operations_add_append_strp(as_operations* ops, const char* name, const char* value, bool free);
 
 /**
  * Add a `AS_OPERATOR_APPEND` bin operation with a NULL-terminated string value.
@@ -692,7 +692,7 @@ as_operations_add_append_strp(as_operations* ops, const as_bin_name name, const 
  * @ingroup as_operations_object
  */
 static inline bool
-as_operations_add_append_str(as_operations* ops, const as_bin_name name, const char* value)
+as_operations_add_append_str(as_operations* ops, const char* name, const char* value)
 {
 	return as_operations_add_append_strp(ops, name, value, false);
 }
@@ -712,7 +712,7 @@ as_operations_add_append_str(as_operations* ops, const as_bin_name name, const c
  * @ingroup as_operations_object
  */
 AS_EXTERN bool
-as_operations_add_append_rawp(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size, bool free);
+as_operations_add_append_rawp(as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free);
 
 /**
  * Add a `AS_OPERATOR_APPEND` bin operation with a raw bytes value.
@@ -728,7 +728,7 @@ as_operations_add_append_rawp(as_operations* ops, const as_bin_name name, const 
  * @ingroup as_operations_object
  */
 static inline bool
-as_operations_add_append_raw(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size)
+as_operations_add_append_raw(as_operations* ops, const char* name, const uint8_t* value, uint32_t size)
 {
 	return as_operations_add_append_rawp(ops, name, value, size, false);
 }

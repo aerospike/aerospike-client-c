@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2021 by Aerospike.
+ * Copyright 2008-2022 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -393,7 +393,7 @@ scan_partition(aerospike* p_as, as_error* err)
 //
 
 static as_status
-insert_records_for_scan_page(aerospike* p_as, as_error* err, const as_set set, uint32_t size)
+insert_records_for_scan_page(aerospike* p_as, as_error* err, const char* set, uint32_t size)
 {
 	// Write records that belong to the specified partition.
 	as_record rec;

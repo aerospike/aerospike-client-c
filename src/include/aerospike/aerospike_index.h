@@ -157,7 +157,7 @@ typedef struct as_index_task_s {
 AS_EXTERN as_status
 aerospike_index_create_complex(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy,
-	const as_namespace ns, const as_set set, const as_index_position position, const char* name,
+	const char* ns, const char* set, const as_index_position position, const char* name,
 	as_index_type itype, as_index_datatype dtype
 	);
 
@@ -192,7 +192,7 @@ aerospike_index_create_complex(
 static inline as_status
 aerospike_index_create(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy,
-	const as_namespace ns, const as_set set, const as_bin_name bin, const char* name,
+	const char* ns, const char* set, const char* bin, const char* name,
 	as_index_datatype dtype
 	)
 {
@@ -235,7 +235,7 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 AS_EXTERN as_status
 aerospike_index_remove(
 	aerospike* as, as_error* err, const as_policy_info* policy,
-	const as_namespace ns, const char* name
+	const char* ns, const char* name
 	);
 
 /******************************************************************************
@@ -252,7 +252,7 @@ aerospike_index_remove(
 static inline as_status
 aerospike_index_integer_create(
 	aerospike* as, as_error* err, const as_policy_info* policy, 
-	const as_namespace ns, const as_set set, const as_bin_name bin, const char* name
+	const char* ns, const char* set, const char* bin, const char* name
 	)
 {
 	return aerospike_index_create_complex(as, err, 0, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC);
@@ -268,7 +268,7 @@ aerospike_index_integer_create(
 static inline as_status
 aerospike_index_string_create(
 	aerospike* as, as_error* err, const as_policy_info* policy, 
-	const as_namespace ns, const as_set set, const as_bin_name bin, const char* name
+	const char* ns, const char* set, const char* bin, const char* name
 	)
 {
 	return aerospike_index_create_complex(as, err, 0, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING);

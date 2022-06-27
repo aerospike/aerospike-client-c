@@ -299,7 +299,7 @@ as_list_policy_set(as_list_policy* policy, as_list_order order, as_list_write_fl
  */
 AS_EXTERN bool
 as_operations_list_create(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_order order, bool pad
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_order order, bool pad
 	);
 
 /**
@@ -310,7 +310,7 @@ as_operations_list_create(
  */
 AS_EXTERN bool
 as_operations_list_set_order(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_order order
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_order order
 	);
 
 /**
@@ -322,7 +322,7 @@ as_operations_list_set_order(
  */
 AS_EXTERN bool
 as_operations_list_sort(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_sort_flags flags
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_sort_flags flags
 	);
 
 /**
@@ -335,7 +335,7 @@ as_operations_list_sort(
  */
 AS_EXTERN bool
 as_operations_list_append(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_policy* policy,
 	as_val* val
 	);
 
@@ -349,7 +349,7 @@ as_operations_list_append(
  */
 AS_EXTERN bool
 as_operations_list_append_items(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_policy* policy,
 	as_list* list
 	);
 
@@ -363,7 +363,7 @@ as_operations_list_append_items(
  */
 AS_EXTERN bool
 as_operations_list_insert(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_policy* policy,
 	int64_t index, as_val* val
 	);
 
@@ -377,7 +377,7 @@ as_operations_list_insert(
  */
 AS_EXTERN bool
 as_operations_list_insert_items(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_policy* policy,
 	int64_t index, as_list* list
 	);
 
@@ -391,7 +391,7 @@ as_operations_list_insert_items(
  */
 AS_EXTERN bool
 as_operations_list_increment(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_policy* policy,
 	int64_t index, as_val* incr
 	);
 
@@ -405,7 +405,7 @@ as_operations_list_increment(
  */
 AS_EXTERN bool
 as_operations_list_set(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_policy* policy,
 	int64_t index, as_val* val
 	);
 
@@ -416,7 +416,7 @@ as_operations_list_set(
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_list_pop(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index);
+as_operations_list_pop(as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index);
 
 /**
  * Create list pop range operation.
@@ -425,7 +425,7 @@ as_operations_list_pop(as_operations* ops, const as_bin_name name, as_cdt_ctx* c
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_list_pop_range(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx,
+as_operations_list_pop_range(as_operations* ops, const char* name, as_cdt_ctx* ctx,
 	int64_t index, uint64_t count
 	);
 
@@ -438,7 +438,7 @@ as_operations_list_pop_range(as_operations* ops, const as_bin_name name, as_cdt_
  */
 AS_EXTERN bool
 as_operations_list_pop_range_from(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index
 	);
 
 /**
@@ -450,7 +450,7 @@ as_operations_list_pop_range_from(
  */
 AS_EXTERN bool
 as_operations_list_remove(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index
 	);
 
 /**
@@ -462,7 +462,7 @@ as_operations_list_remove(
  */
 AS_EXTERN bool
 as_operations_list_remove_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index, uint64_t count
 	);
 
 /**
@@ -474,7 +474,7 @@ as_operations_list_remove_range(
  */
 AS_EXTERN bool
 as_operations_list_remove_range_from(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index
 	);
 
 /**
@@ -486,7 +486,7 @@ as_operations_list_remove_range_from(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_value(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value,
 	as_list_return_type return_type
 	);
 
@@ -499,7 +499,7 @@ as_operations_list_remove_by_value(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_value_list(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* values,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* values,
 	as_list_return_type return_type
 	);
 
@@ -516,7 +516,7 @@ as_operations_list_remove_by_value_list(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_value_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
 	as_list_return_type return_type
 	);
 
@@ -541,7 +541,7 @@ as_operations_list_remove_by_value_range(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_value_rel_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
 	as_list_return_type return_type
 	);
 
@@ -566,7 +566,7 @@ as_operations_list_remove_by_value_rel_rank_range_to_end(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_value_rel_rank_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
 	uint64_t count, as_list_return_type return_type
 	);
 
@@ -578,7 +578,7 @@ as_operations_list_remove_by_value_rel_rank_range(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_index(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index,
 	as_list_return_type return_type
 	);
 
@@ -591,7 +591,7 @@ as_operations_list_remove_by_index(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_index_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index,
 	as_list_return_type return_type
 	);
 
@@ -604,7 +604,7 @@ as_operations_list_remove_by_index_range_to_end(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_index_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
 	as_list_return_type return_type
 	);
 
@@ -616,7 +616,7 @@ as_operations_list_remove_by_index_range(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_rank(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank,
 	as_list_return_type return_type
 	);
 
@@ -629,7 +629,7 @@ as_operations_list_remove_by_rank(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank,
 	as_list_return_type return_type
 	);
 
@@ -642,7 +642,7 @@ as_operations_list_remove_by_rank_range_to_end(
  */
 AS_EXTERN bool
 as_operations_list_remove_by_rank_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
 	as_list_return_type return_type
 	);
 
@@ -656,7 +656,7 @@ as_operations_list_remove_by_rank_range(
  */
 AS_EXTERN bool
 as_operations_list_trim(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index, uint64_t count
 	);
 
 /**
@@ -667,7 +667,7 @@ as_operations_list_trim(
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_list_clear(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx);
+as_operations_list_clear(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 	
 //-----------------------------------------------------------------------------
 // Read operations
@@ -679,7 +679,7 @@ as_operations_list_clear(as_operations* ops, const as_bin_name name, as_cdt_ctx*
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_list_size(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx);
+as_operations_list_size(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 	
 /**
  * Create list get operation.
@@ -688,7 +688,7 @@ as_operations_list_size(as_operations* ops, const as_bin_name name, as_cdt_ctx* 
  * @ingroup list_operations
  */
 AS_EXTERN bool
-as_operations_list_get(as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index);
+as_operations_list_get(as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index);
 
 /**
  * Create list get range operation.
@@ -698,7 +698,7 @@ as_operations_list_get(as_operations* ops, const as_bin_name name, as_cdt_ctx* c
  */
 AS_EXTERN bool
 as_operations_list_get_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index, uint64_t count
 	);
 
 /**
@@ -709,7 +709,7 @@ as_operations_list_get_range(
  */
 AS_EXTERN bool
 as_operations_list_get_range_from(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index
 	);
 
 /**
@@ -721,7 +721,7 @@ as_operations_list_get_range_from(
  */
 AS_EXTERN bool
 as_operations_list_get_by_value(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value,
 	as_list_return_type return_type
 	);
 
@@ -738,7 +738,7 @@ as_operations_list_get_by_value(
  */
 AS_EXTERN bool
 as_operations_list_get_by_value_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* begin, as_val* end,
 	as_list_return_type return_type
 	);
 
@@ -751,7 +751,7 @@ as_operations_list_get_by_value_range(
  */
 AS_EXTERN bool
 as_operations_list_get_by_value_list(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* values,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* values,
 	as_list_return_type return_type
 	);
 
@@ -776,7 +776,7 @@ as_operations_list_get_by_value_list(
  */
 AS_EXTERN bool
 as_operations_list_get_by_value_rel_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
 	as_list_return_type return_type
 	);
 
@@ -801,7 +801,7 @@ as_operations_list_get_by_value_rel_rank_range_to_end(
  */
 AS_EXTERN bool
 as_operations_list_get_by_value_rel_rank_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_val* value, int64_t rank,
 	uint64_t count, as_list_return_type return_type
 	);
 
@@ -813,7 +813,7 @@ as_operations_list_get_by_value_rel_rank_range(
  */
 AS_EXTERN bool
 as_operations_list_get_by_index(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index,
 	as_list_return_type return_type
 	);
 
@@ -826,7 +826,7 @@ as_operations_list_get_by_index(
  */
 AS_EXTERN bool
 as_operations_list_get_by_index_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index,
 	as_list_return_type return_type
 	);
 
@@ -839,7 +839,7 @@ as_operations_list_get_by_index_range_to_end(
  */
 AS_EXTERN bool
 as_operations_list_get_by_index_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index, uint64_t count,
 	as_list_return_type return_type
 	);
 
@@ -851,7 +851,7 @@ as_operations_list_get_by_index_range(
  */
 AS_EXTERN bool
 as_operations_list_get_by_rank(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank,
 	as_list_return_type return_type
 	);
 
@@ -864,7 +864,7 @@ as_operations_list_get_by_rank(
  */
 AS_EXTERN bool
 as_operations_list_get_by_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank,
 	as_list_return_type return_type
 	);
 
@@ -876,7 +876,7 @@ as_operations_list_get_by_rank_range_to_end(
  */
 AS_EXTERN bool
 as_operations_list_get_by_rank_range(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t rank, uint64_t count,
 	as_list_return_type return_type
 	);
 
@@ -891,7 +891,7 @@ as_operations_list_get_by_rank_range(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_set_order(as_operations* ops, const as_bin_name name, as_list_order order)
+as_operations_add_list_set_order(as_operations* ops, const char* name, as_list_order order)
 {
 	return as_operations_list_set_order(ops, name, NULL, order);
 }
@@ -905,7 +905,7 @@ as_operations_add_list_set_order(as_operations* ops, const as_bin_name name, as_
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_sort(as_operations* ops, const as_bin_name name, as_list_sort_flags flags)
+as_operations_add_list_sort(as_operations* ops, const char* name, as_list_sort_flags flags)
 {
 	return as_operations_list_sort(ops, name, NULL, flags);
 }
@@ -918,7 +918,7 @@ as_operations_add_list_sort(as_operations* ops, const as_bin_name name, as_list_
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_append(as_operations* ops, const as_bin_name name, as_val* val)
+as_operations_add_list_append(as_operations* ops, const char* name, as_val* val)
 {
 	return as_operations_list_append(ops, name, NULL, NULL, val);
 }
@@ -932,7 +932,7 @@ as_operations_add_list_append(as_operations* ops, const as_bin_name name, as_val
  */
 static inline bool
 as_operations_add_list_append_with_policy(
-	as_operations* ops, const as_bin_name name, as_list_policy* policy, as_val* val
+	as_operations* ops, const char* name, as_list_policy* policy, as_val* val
 	)
 {
 	return as_operations_list_append(ops, name, NULL, policy, val);
@@ -946,7 +946,7 @@ as_operations_add_list_append_with_policy(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_append_int64(as_operations* ops, const as_bin_name name, int64_t value)
+as_operations_add_list_append_int64(as_operations* ops, const char* name, int64_t value)
 {
 	as_integer v;
 	as_integer_init(&v, value);
@@ -961,7 +961,7 @@ as_operations_add_list_append_int64(as_operations* ops, const as_bin_name name, 
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_append_double(as_operations* ops, const as_bin_name name, double value)
+as_operations_add_list_append_double(as_operations* ops, const char* name, double value)
 {
 	as_double v;
 	as_double_init(&v, value);
@@ -979,7 +979,7 @@ as_operations_add_list_append_double(as_operations* ops, const as_bin_name name,
  */
 static inline bool
 as_operations_add_list_append_strp(
-	as_operations* ops, const as_bin_name name, const char* value, bool free
+	as_operations* ops, const char* name, const char* value, bool free
 	)
 {
 	as_string v;
@@ -997,7 +997,7 @@ as_operations_add_list_append_strp(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_append_str(as_operations* ops, const as_bin_name name, const char* value)
+as_operations_add_list_append_str(as_operations* ops, const char* name, const char* value)
 {
 	return as_operations_add_list_append_strp(ops, name, value, false);
 }
@@ -1013,7 +1013,7 @@ as_operations_add_list_append_str(as_operations* ops, const as_bin_name name, co
  */
 static inline bool
 as_operations_add_list_append_rawp(
-	as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size, bool free
+	as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free
 	)
 {
 	as_bytes v;
@@ -1032,7 +1032,7 @@ as_operations_add_list_append_rawp(
  */
 static inline bool
 as_operations_add_list_append_raw(
-	as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size
+	as_operations* ops, const char* name, const uint8_t* value, uint32_t size
 	)
 {
 	return as_operations_add_list_append_rawp(ops, name, value, size, false);
@@ -1046,7 +1046,7 @@ as_operations_add_list_append_raw(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_append_items(as_operations* ops, const as_bin_name name, as_list* list)
+as_operations_add_list_append_items(as_operations* ops, const char* name, as_list* list)
 {
 	return as_operations_list_append_items(ops, name, NULL, NULL, list);
 }
@@ -1060,7 +1060,7 @@ as_operations_add_list_append_items(as_operations* ops, const as_bin_name name, 
  */
 static inline bool
 as_operations_add_list_append_items_with_policy(
-	as_operations* ops, const as_bin_name name, as_list_policy* policy, as_list* list
+	as_operations* ops, const char* name, as_list_policy* policy, as_list* list
 	)
 {
 	return as_operations_list_append_items(ops, name, NULL, policy, list);
@@ -1075,7 +1075,7 @@ as_operations_add_list_append_items_with_policy(
  */
 static inline bool
 as_operations_add_list_insert(
-	as_operations* ops, const as_bin_name name, int64_t index, as_val* val
+	as_operations* ops, const char* name, int64_t index, as_val* val
 	)
 {
 	return as_operations_list_insert(ops, name, NULL, NULL, index, val);
@@ -1090,7 +1090,7 @@ as_operations_add_list_insert(
  */
 static inline bool
 as_operations_add_list_insert_with_policy(
-	as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* val
+	as_operations* ops, const char* name, as_list_policy* policy, int64_t index, as_val* val
 	)
 {
 	return as_operations_list_insert(ops, name, NULL, policy, index, val);
@@ -1105,7 +1105,7 @@ as_operations_add_list_insert_with_policy(
  */
 static inline bool
 as_operations_add_list_insert_int64(
-	as_operations* ops, const as_bin_name name, int64_t index, int64_t value
+	as_operations* ops, const char* name, int64_t index, int64_t value
 	)
 {
 	as_integer v;
@@ -1122,7 +1122,7 @@ as_operations_add_list_insert_int64(
  */
 static inline bool
 as_operations_add_list_insert_double(
-	as_operations* ops, const as_bin_name name, int64_t index, double value
+	as_operations* ops, const char* name, int64_t index, double value
 	)
 {
 	as_double v;
@@ -1141,7 +1141,7 @@ as_operations_add_list_insert_double(
  */
 static inline bool
 as_operations_add_list_insert_strp(
-	as_operations* ops, const as_bin_name name, int64_t index, const char* value, bool free
+	as_operations* ops, const char* name, int64_t index, const char* value, bool free
 	)
 {
 	as_string v;
@@ -1160,7 +1160,7 @@ as_operations_add_list_insert_strp(
  */
 static inline bool
 as_operations_add_list_insert_str(
-	as_operations* ops, const as_bin_name name, int64_t index, const char* value
+	as_operations* ops, const char* name, int64_t index, const char* value
 	)
 {
 	return as_operations_add_list_insert_strp(ops, name, index, value, false);
@@ -1177,7 +1177,7 @@ as_operations_add_list_insert_str(
  */
 static inline bool
 as_operations_add_list_insert_rawp(
-	as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size,
+	as_operations* ops, const char* name, int64_t index, const uint8_t* value, uint32_t size,
 	bool free
 	)
 {
@@ -1197,7 +1197,7 @@ as_operations_add_list_insert_rawp(
  */
 static inline bool
 as_operations_add_list_insert_raw(
-	as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size
+	as_operations* ops, const char* name, int64_t index, const uint8_t* value, uint32_t size
 	)
 {
 	return as_operations_add_list_insert_rawp(ops, name, index, value, size, false);
@@ -1212,7 +1212,7 @@ as_operations_add_list_insert_raw(
  */
 static inline bool
 as_operations_add_list_insert_items(
-	as_operations* ops, const as_bin_name name, int64_t index, as_list* list
+	as_operations* ops, const char* name, int64_t index, as_list* list
 	)
 {
 	return as_operations_list_insert_items(ops, name, NULL, NULL, index, list);
@@ -1227,7 +1227,7 @@ as_operations_add_list_insert_items(
  */
 static inline bool
 as_operations_add_list_insert_items_with_policy(
-	as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index,
+	as_operations* ops, const char* name, as_list_policy* policy, int64_t index,
 	as_list* list
 	)
 {
@@ -1243,7 +1243,7 @@ as_operations_add_list_insert_items_with_policy(
  */
 static inline bool
 as_operations_add_list_increment(
-	as_operations* ops, const as_bin_name name, int64_t index, as_val* incr
+	as_operations* ops, const char* name, int64_t index, as_val* incr
 	)
 {
 	return as_operations_list_increment(ops, name, NULL, NULL, index, incr);
@@ -1258,7 +1258,7 @@ as_operations_add_list_increment(
  */
 static inline bool
 as_operations_add_list_increment_with_policy(
-	as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* incr
+	as_operations* ops, const char* name, as_list_policy* policy, int64_t index, as_val* incr
 	)
 {
 	return as_operations_list_increment(ops, name, NULL, policy, index, incr);
@@ -1272,7 +1272,7 @@ as_operations_add_list_increment_with_policy(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_set(as_operations* ops, const as_bin_name name, int64_t index, as_val* val)
+as_operations_add_list_set(as_operations* ops, const char* name, int64_t index, as_val* val)
 {
 	return as_operations_list_set(ops, name, NULL, NULL, index, val);
 }
@@ -1286,7 +1286,7 @@ as_operations_add_list_set(as_operations* ops, const as_bin_name name, int64_t i
  */
 static inline bool
 as_operations_add_list_set_with_policy(
-	as_operations* ops, const as_bin_name name, as_list_policy* policy, int64_t index, as_val* val
+	as_operations* ops, const char* name, as_list_policy* policy, int64_t index, as_val* val
 	)
 {
 	return as_operations_list_set(ops, name, NULL, policy, index, val);
@@ -1301,7 +1301,7 @@ as_operations_add_list_set_with_policy(
  */
 static inline bool
 as_operations_add_list_set_int64(
-	as_operations* ops, const as_bin_name name, int64_t index, int64_t value
+	as_operations* ops, const char* name, int64_t index, int64_t value
 	)
 {
 	as_integer v;
@@ -1318,7 +1318,7 @@ as_operations_add_list_set_int64(
  */
 static inline bool
 as_operations_add_list_set_double(
-	as_operations* ops, const as_bin_name name, int64_t index, double value
+	as_operations* ops, const char* name, int64_t index, double value
 	)
 {
 	as_double v;
@@ -1337,7 +1337,7 @@ as_operations_add_list_set_double(
  */
 static inline bool
 as_operations_add_list_set_strp(
-	as_operations* ops, const as_bin_name name, int64_t index, const char* value, bool free
+	as_operations* ops, const char* name, int64_t index, const char* value, bool free
 	)
 {
 	as_string v;
@@ -1356,7 +1356,7 @@ as_operations_add_list_set_strp(
  */
 static inline bool
 as_operations_add_list_set_str(
-	as_operations* ops, const as_bin_name name, int64_t index, const char* value
+	as_operations* ops, const char* name, int64_t index, const char* value
 	)
 {
 	return as_operations_add_list_set_strp(ops, name, index, value, false);
@@ -1373,7 +1373,7 @@ as_operations_add_list_set_str(
  */
 static inline bool
 as_operations_add_list_set_rawp(
-	as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size,
+	as_operations* ops, const char* name, int64_t index, const uint8_t* value, uint32_t size,
 	bool free
 	)
 {
@@ -1393,7 +1393,7 @@ as_operations_add_list_set_rawp(
  */
 static inline bool
 as_operations_add_list_set_raw(
-	as_operations* ops, const as_bin_name name, int64_t index, const uint8_t* value, uint32_t size
+	as_operations* ops, const char* name, int64_t index, const uint8_t* value, uint32_t size
 	)
 {
 	return as_operations_add_list_set_rawp(ops, name, index, value, size, false);
@@ -1406,7 +1406,7 @@ as_operations_add_list_set_raw(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_pop(as_operations* ops, const as_bin_name name, int64_t index)
+as_operations_add_list_pop(as_operations* ops, const char* name, int64_t index)
 {
 	return as_operations_list_pop(ops, name, NULL, index);
 }
@@ -1419,7 +1419,7 @@ as_operations_add_list_pop(as_operations* ops, const as_bin_name name, int64_t i
  */
 static inline bool
 as_operations_add_list_pop_range(
-	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count
+	as_operations* ops, const char* name, int64_t index, uint64_t count
 	)
 {
 	return as_operations_list_pop_range(ops, name, NULL, index, count);
@@ -1433,7 +1433,7 @@ as_operations_add_list_pop_range(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_pop_range_from(as_operations* ops, const as_bin_name name, int64_t index)
+as_operations_add_list_pop_range_from(as_operations* ops, const char* name, int64_t index)
 {
 	return as_operations_list_pop_range_from(ops, name, NULL, index);
 }
@@ -1446,7 +1446,7 @@ as_operations_add_list_pop_range_from(as_operations* ops, const as_bin_name name
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_remove(as_operations* ops, const as_bin_name name, int64_t index)
+as_operations_add_list_remove(as_operations* ops, const char* name, int64_t index)
 {
 	return as_operations_list_remove(ops, name, NULL, index);
 }
@@ -1460,7 +1460,7 @@ as_operations_add_list_remove(as_operations* ops, const as_bin_name name, int64_
  */
 static inline bool
 as_operations_add_list_remove_range(
-	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count
+	as_operations* ops, const char* name, int64_t index, uint64_t count
 	)
 {
 	return as_operations_list_remove_range(ops, name, NULL, index, count);
@@ -1474,7 +1474,7 @@ as_operations_add_list_remove_range(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_remove_range_from(as_operations* ops, const as_bin_name name, int64_t index)
+as_operations_add_list_remove_range_from(as_operations* ops, const char* name, int64_t index)
 {
 	return as_operations_list_remove_range_from(ops, name, NULL, index);
 }
@@ -1487,7 +1487,7 @@ as_operations_add_list_remove_range_from(as_operations* ops, const as_bin_name n
  */
 static inline bool
 as_operations_add_list_remove_by_value(
-	as_operations* ops, const as_bin_name name, as_val* value, as_list_return_type return_type
+	as_operations* ops, const char* name, as_val* value, as_list_return_type return_type
 	)
 {
 	return as_operations_list_remove_by_value(ops, name, NULL, value, return_type);
@@ -1501,7 +1501,7 @@ as_operations_add_list_remove_by_value(
  */
 static inline bool
 as_operations_add_list_remove_by_value_list(
-	as_operations* ops, const as_bin_name name, as_list* values, as_list_return_type return_type
+	as_operations* ops, const char* name, as_list* values, as_list_return_type return_type
 	)
 {
 	return as_operations_list_remove_by_value_list(ops, name, NULL, values, return_type);
@@ -1519,7 +1519,7 @@ as_operations_add_list_remove_by_value_list(
  */
 static inline bool
 as_operations_add_list_remove_by_value_range(
-	as_operations* ops, const as_bin_name name, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_val* begin, as_val* end,
 	as_list_return_type return_type
 	)
 {
@@ -1546,7 +1546,7 @@ as_operations_add_list_remove_by_value_range(
  */
 static inline bool
 as_operations_add_list_remove_by_value_rel_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_val* value, int64_t rank,
 	as_list_return_type return_type
 	)
 {
@@ -1574,7 +1574,7 @@ as_operations_add_list_remove_by_value_rel_rank_range_to_end(
  */
 static inline bool
 as_operations_add_list_remove_by_value_rel_rank_range(
-	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, as_val* value, int64_t rank, uint64_t count,
 	as_list_return_type return_type
 	)
 {
@@ -1590,7 +1590,7 @@ as_operations_add_list_remove_by_value_rel_rank_range(
  */
 static inline bool
 as_operations_add_list_remove_by_index(
-	as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type
+	as_operations* ops, const char* name, int64_t index, as_list_return_type return_type
 	)
 {
 	return as_operations_list_remove_by_index(ops, name, NULL, index, return_type);
@@ -1605,7 +1605,7 @@ as_operations_add_list_remove_by_index(
  */
 static inline bool
 as_operations_add_list_remove_by_index_range_to_end(
-	as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type
+	as_operations* ops, const char* name, int64_t index, as_list_return_type return_type
 	)
 {
 	return as_operations_list_remove_by_index_range_to_end(ops, name, NULL, index, return_type);
@@ -1619,7 +1619,7 @@ as_operations_add_list_remove_by_index_range_to_end(
  */
 static inline bool
 as_operations_add_list_remove_by_index_range(
-	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, int64_t index, uint64_t count,
 	as_list_return_type return_type
 	)
 {
@@ -1634,7 +1634,7 @@ as_operations_add_list_remove_by_index_range(
  */
 static inline bool
 as_operations_add_list_remove_by_rank(
-	as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type
+	as_operations* ops, const char* name, int64_t rank, as_list_return_type return_type
 	)
 {
 	return as_operations_list_remove_by_rank(ops, name, NULL, rank, return_type);
@@ -1649,7 +1649,7 @@ as_operations_add_list_remove_by_rank(
  */
 static inline bool
 as_operations_add_list_remove_by_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type
+	as_operations* ops, const char* name, int64_t rank, as_list_return_type return_type
 	)
 {
 	return as_operations_list_remove_by_rank_range_to_end(ops, name, NULL, rank, return_type);
@@ -1663,7 +1663,7 @@ as_operations_add_list_remove_by_rank_range_to_end(
  */
 static inline bool
 as_operations_add_list_remove_by_rank_range(
-	as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, int64_t rank, uint64_t count,
 	as_list_return_type return_type
 	)
 {
@@ -1680,7 +1680,7 @@ as_operations_add_list_remove_by_rank_range(
  */
 static inline bool
 as_operations_add_list_trim(
-	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count
+	as_operations* ops, const char* name, int64_t index, uint64_t count
 	)
 {
 	return as_operations_list_trim(ops, name, NULL, index, count);
@@ -1694,7 +1694,7 @@ as_operations_add_list_trim(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_clear(as_operations* ops, const as_bin_name name)
+as_operations_add_list_clear(as_operations* ops, const char* name)
 {
 	return as_operations_list_clear(ops, name, NULL);
 }
@@ -1709,7 +1709,7 @@ as_operations_add_list_clear(as_operations* ops, const as_bin_name name)
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_size(as_operations* ops, const as_bin_name name)
+as_operations_add_list_size(as_operations* ops, const char* name)
 {
 	return as_operations_list_size(ops, name, NULL);
 }
@@ -1721,7 +1721,7 @@ as_operations_add_list_size(as_operations* ops, const as_bin_name name)
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_get(as_operations* ops, const as_bin_name name, int64_t index)
+as_operations_add_list_get(as_operations* ops, const char* name, int64_t index)
 {
 	return as_operations_list_get(ops, name, NULL, index);
 }
@@ -1734,7 +1734,7 @@ as_operations_add_list_get(as_operations* ops, const as_bin_name name, int64_t i
  */
 static inline bool
 as_operations_add_list_get_range(
-	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count
+	as_operations* ops, const char* name, int64_t index, uint64_t count
 	)
 {
 	return as_operations_list_get_range(ops, name, NULL, index, count);
@@ -1747,7 +1747,7 @@ as_operations_add_list_get_range(
  * @ingroup list_operations
  */
 static inline bool
-as_operations_add_list_get_range_from(as_operations* ops, const as_bin_name name, int64_t index)
+as_operations_add_list_get_range_from(as_operations* ops, const char* name, int64_t index)
 {
 	return as_operations_list_get_range_from(ops, name, NULL, index);
 }
@@ -1760,7 +1760,7 @@ as_operations_add_list_get_range_from(as_operations* ops, const as_bin_name name
  */
 static inline bool
 as_operations_add_list_get_by_value(
-	as_operations* ops, const as_bin_name name, as_val* value, as_list_return_type return_type
+	as_operations* ops, const char* name, as_val* value, as_list_return_type return_type
 	)
 {
 	return as_operations_list_get_by_value(ops, name, NULL, value, return_type);
@@ -1778,7 +1778,7 @@ as_operations_add_list_get_by_value(
  */
 static inline bool
 as_operations_add_list_get_by_value_range(
-	as_operations* ops, const as_bin_name name, as_val* begin, as_val* end,
+	as_operations* ops, const char* name, as_val* begin, as_val* end,
 	as_list_return_type return_type
 	)
 {
@@ -1793,7 +1793,7 @@ as_operations_add_list_get_by_value_range(
  */
 static inline bool
 as_operations_add_list_get_by_value_list(
-	as_operations* ops, const as_bin_name name, as_list* values, as_list_return_type return_type
+	as_operations* ops, const char* name, as_list* values, as_list_return_type return_type
 	)
 {
 	return as_operations_list_get_by_value_list(ops, name, NULL, values, return_type);
@@ -1819,7 +1819,7 @@ as_operations_add_list_get_by_value_list(
  */
 static inline bool
 as_operations_add_list_get_by_value_rel_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank,
+	as_operations* ops, const char* name, as_val* value, int64_t rank,
 	as_list_return_type return_type
 	)
 {
@@ -1847,7 +1847,7 @@ as_operations_add_list_get_by_value_rel_rank_range_to_end(
  */
 static inline bool
 as_operations_add_list_get_by_value_rel_rank_range(
-	as_operations* ops, const as_bin_name name, as_val* value, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, as_val* value, int64_t rank, uint64_t count,
 	as_list_return_type return_type
 	)
 {
@@ -1863,7 +1863,7 @@ as_operations_add_list_get_by_value_rel_rank_range(
  */
 static inline bool
 as_operations_add_list_get_by_index(
-	as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type
+	as_operations* ops, const char* name, int64_t index, as_list_return_type return_type
 	)
 {
 	return as_operations_list_get_by_index(ops, name, NULL, index, return_type);
@@ -1878,7 +1878,7 @@ as_operations_add_list_get_by_index(
  */
 static inline bool
 as_operations_add_list_get_by_index_range_to_end(
-	as_operations* ops, const as_bin_name name, int64_t index, as_list_return_type return_type
+	as_operations* ops, const char* name, int64_t index, as_list_return_type return_type
 	)
 {
 	return as_operations_list_get_by_index_range_to_end(ops, name, NULL, index, return_type);
@@ -1893,7 +1893,7 @@ as_operations_add_list_get_by_index_range_to_end(
  */
 static inline bool
 as_operations_add_list_get_by_index_range(
-	as_operations* ops, const as_bin_name name, int64_t index, uint64_t count,
+	as_operations* ops, const char* name, int64_t index, uint64_t count,
 	as_list_return_type return_type
 	)
 {
@@ -1908,7 +1908,7 @@ as_operations_add_list_get_by_index_range(
  */
 static inline bool
 as_operations_add_list_get_by_rank(
-	as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type
+	as_operations* ops, const char* name, int64_t rank, as_list_return_type return_type
 	)
 {
 	return as_operations_list_get_by_rank(ops, name, NULL, rank, return_type);
@@ -1923,7 +1923,7 @@ as_operations_add_list_get_by_rank(
  */
 static inline bool
 as_operations_add_list_get_by_rank_range_to_end(
-	as_operations* ops, const as_bin_name name, int64_t rank, as_list_return_type return_type
+	as_operations* ops, const char* name, int64_t rank, as_list_return_type return_type
 	)
 {
 	return as_operations_list_get_by_rank_range_to_end(ops, name, NULL, rank, return_type);
@@ -1938,7 +1938,7 @@ as_operations_add_list_get_by_rank_range_to_end(
  */
 static inline bool
 as_operations_add_list_get_by_rank_range(
-	as_operations* ops, const as_bin_name name, int64_t rank, uint64_t count,
+	as_operations* ops, const char* name, int64_t rank, uint64_t count,
 	as_list_return_type return_type
 	)
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -256,7 +256,7 @@ typedef struct as_key_s {
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_init(as_key* key, const as_namespace ns, const as_set set, const char* value);
+as_key_init(as_key* key, const char* ns, const char* set, const char* value);
 
 /**
  * Initialize a stack allocated as_key to a int64_t value.
@@ -279,7 +279,7 @@ as_key_init(as_key* key, const as_namespace ns, const as_set set, const char* va
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_init_int64(as_key* key, const as_namespace ns, const as_set set, int64_t value);
+as_key_init_int64(as_key* key, const char* ns, const char* set, int64_t value);
 
 /**
  * Initialize a stack allocated as_key to a NULL-terminated string value.
@@ -303,7 +303,7 @@ as_key_init_int64(as_key* key, const as_namespace ns, const as_set set, int64_t 
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_init_strp(as_key* key, const as_namespace ns, const as_set set, const char* value, bool free);
+as_key_init_strp(as_key* key, const char* ns, const char* set, const char* value, bool free);
 
 /**
  * Initialize a stack allocated as_key to a NULL-terminated string value.
@@ -326,7 +326,7 @@ as_key_init_strp(as_key* key, const as_namespace ns, const as_set set, const cha
  * @ingroup as_key_object
  */
 static inline as_key*
-as_key_init_str(as_key* key, const as_namespace ns, const as_set set, const char* value)
+as_key_init_str(as_key* key, const char* ns, const char* set, const char* value)
 {
 	return as_key_init_strp(key, ns, set, value, false);
 }
@@ -359,7 +359,7 @@ as_key_init_str(as_key* key, const as_namespace ns, const as_set set, const char
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_init_rawp(as_key* key, const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool free);
+as_key_init_rawp(as_key* key, const char* ns, const char* set, const uint8_t* value, uint32_t size, bool free);
 
 /**
  * Initialize a stack allocated as_key to bytes array.
@@ -385,7 +385,7 @@ as_key_init_rawp(as_key* key, const as_namespace ns, const as_set set, const uin
  * @ingroup as_key_object
  */
 static inline as_key*
-as_key_init_raw(as_key* key, const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size)
+as_key_init_raw(as_key* key, const char* ns, const char* set, const uint8_t* value, uint32_t size)
 {
 	return as_key_init_rawp(key, ns, set, value, size, false);
 }
@@ -413,7 +413,7 @@ as_key_init_raw(as_key* key, const as_namespace ns, const as_set set, const uint
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_init_digest(as_key* key, const as_namespace ns, const as_set set, const as_digest_value digest);
+as_key_init_digest(as_key* key, const char* ns, const char* set, const as_digest_value digest);
 
 /**
  * Initialize a stack allocated as_key to an as_key_value.
@@ -439,7 +439,7 @@ as_key_init_digest(as_key* key, const as_namespace ns, const as_set set, const a
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_init_value(as_key* key, const as_namespace ns, const as_set set, const as_key_value* value);
+as_key_init_value(as_key* key, const char* ns, const char* set, const as_key_value* value);
 
 /**
  * Creates and initializes a heap allocated as_key to a NULL-terminated string value.
@@ -461,7 +461,7 @@ as_key_init_value(as_key* key, const as_namespace ns, const as_set set, const as
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_new(const as_namespace ns, const as_set set, const char* value);
+as_key_new(const char* ns, const char* set, const char* value);
 
 /**
  * Creates and initializes a heap allocated as_key to a int64_t value.
@@ -483,7 +483,7 @@ as_key_new(const as_namespace ns, const as_set set, const char* value);
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_new_int64(const as_namespace ns, const as_set set, int64_t value);
+as_key_new_int64(const char* ns, const char* set, int64_t value);
 
 /**
  * Creates and initializes a heap allocated as_key to a NULL-terminated string value.
@@ -506,7 +506,7 @@ as_key_new_int64(const as_namespace ns, const as_set set, int64_t value);
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool free);
+as_key_new_strp(const char* ns, const char* set, const char* value, bool free);
 
 /**
  * Creates and initializes a heap allocated as_key to a NULL-terminated string value.
@@ -528,7 +528,7 @@ as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool
  * @ingroup as_key_object
  */
 static inline as_key*
-as_key_new_str(const as_namespace ns, const as_set set, const char* value)
+as_key_new_str(const char* ns, const char* set, const char* value)
 {
 	return as_key_new_strp(ns, set, value, false);
 }
@@ -560,7 +560,7 @@ as_key_new_str(const as_namespace ns, const as_set set, const char* value)
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool free);
+as_key_new_rawp(const char* ns, const char* set, const uint8_t* value, uint32_t size, bool free);
 
 /**
  * Creates and initializes a heap allocated as_key to a byte array.
@@ -585,7 +585,7 @@ as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t* value, u
  * @ingroup as_key_object
  */
 static inline as_key*
-as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size)
+as_key_new_raw(const char* ns, const char* set, const uint8_t* value, uint32_t size)
 {
 	return as_key_new_rawp(ns, set, value, size, false);
 }
@@ -612,7 +612,7 @@ as_key_new_raw(const as_namespace ns, const as_set set, const uint8_t* value, ui
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest);
+as_key_new_digest(const char* ns, const char* set, const as_digest_value digest);
 
 /**
  * Creates and initializes a heap allocated as_key to a an as_key_value.
@@ -637,7 +637,7 @@ as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value
  * @ingroup as_key_object
  */
 AS_EXTERN as_key*
-as_key_new_value(const as_namespace ns, const as_set set, const as_key_value* value);
+as_key_new_value(const char* ns, const char* set, const as_key_value* value);
 
 /**
  * Destory the as_key, releasing resources.

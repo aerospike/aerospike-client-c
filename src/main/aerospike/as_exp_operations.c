@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -36,7 +36,7 @@ pack_exp(as_packer* pk, const as_exp* exp)
 
 static inline bool
 as_operations_exp_op(
-	as_operator command, as_operations* ops, const as_bin_name name, const as_exp* exp,
+	as_operator command, as_operations* ops, const char* name, const as_exp* exp,
 	uint64_t flags
 	)
 {
@@ -55,7 +55,7 @@ as_operations_exp_op(
 
 bool
 as_operations_exp_write(
-	as_operations* ops, const as_bin_name name, const as_exp* exp, as_exp_write_flags flags
+	as_operations* ops, const char* name, const as_exp* exp, as_exp_write_flags flags
 	)
 {
 	return as_operations_exp_op(AS_OPERATOR_EXP_MODIFY, ops, name, exp, flags);
@@ -63,7 +63,7 @@ as_operations_exp_write(
 
 bool
 as_operations_exp_read(
-	as_operations* ops, const as_bin_name name, const as_exp* exp, as_exp_read_flags flags
+	as_operations* ops, const char* name, const as_exp* exp, as_exp_read_flags flags
 	)
 {
 	return as_operations_exp_op(AS_OPERATOR_EXP_READ, ops, name, exp, flags);

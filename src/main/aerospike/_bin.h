@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -69,7 +69,7 @@
  * @return The initialized `as_bin` on success. Otherwsie NULL.
  */
 as_bin*
-as_bin_init(as_bin* bin, const as_bin_name name, as_bin_value* value);
+as_bin_init(as_bin* bin, const char* name, as_bin_value* value);
 
 /**
  * Initialize a stack allocated `as_bin` to a bool value.
@@ -87,7 +87,7 @@ as_bin_init(as_bin* bin, const as_bin_name name, as_bin_value* value);
  * @return The initialized `as_bin` on success. Otherwise NULL.
  */
 as_bin*
-as_bin_init_bool(as_bin* bin, const as_bin_name name, bool value);
+as_bin_init_bool(as_bin* bin, const char* name, bool value);
 
 /**
  * Initialize a stack allocated `as_bin` to a int64_t value.
@@ -105,7 +105,7 @@ as_bin_init_bool(as_bin* bin, const as_bin_name name, bool value);
  * @return The initialized `as_bin` on success. Otherwise NULL.
  */
 as_bin*
-as_bin_init_int64(as_bin* bin, const as_bin_name name, int64_t value);
+as_bin_init_int64(as_bin* bin, const char* name, int64_t value);
 
 /**
  * Initialize a stack allocated `as_bin` to a double value.
@@ -123,7 +123,7 @@ as_bin_init_int64(as_bin* bin, const as_bin_name name, int64_t value);
  * @return The initialized `as_bin` on success. Otherwise NULL.
  */
 as_bin*
-as_bin_init_double(as_bin* bin, const as_bin_name name, double value);
+as_bin_init_double(as_bin* bin, const char* name, double value);
 
 /**
  * Initialize a stack allocated `as_bin` to a NULL-terminated string value.
@@ -142,7 +142,7 @@ as_bin_init_double(as_bin* bin, const as_bin_name name, double value);
  * @return The initialized `as_bin` on success. Otherwise NULL.
  */
 as_bin*
-as_bin_init_str(as_bin* bin, const as_bin_name name, const char* value, bool free);
+as_bin_init_str(as_bin* bin, const char* name, const char* value, bool free);
 
 /**
  * Initialize a stack allocated `as_bin` to a NULL-terminated GeoJSON string value.
@@ -161,7 +161,7 @@ as_bin_init_str(as_bin* bin, const as_bin_name name, const char* value, bool fre
  * @return The initialized `as_bin` on success. Otherwise NULL.
  */
 as_bin*
-as_bin_init_geojson(as_bin* bin, const as_bin_name name, const char* value, bool free);
+as_bin_init_geojson(as_bin* bin, const char* name, const char* value, bool free);
 
 /**
  * Initialize a stack allocated `as_key` to a raw bytes value.
@@ -182,7 +182,7 @@ as_bin_init_geojson(as_bin* bin, const as_bin_name name, const char* value, bool
  * @return The initialized `as_bin` on success. Otherwise NULL.
  */
 as_bin*
-as_bin_init_raw(as_bin* bin, const as_bin_name name, const uint8_t* value, uint32_t size, bool free);
+as_bin_init_raw(as_bin* bin, const char* name, const uint8_t* value, uint32_t size, bool free);
 
 /**
  * Initialize a stack allocated `as_key` to a an `as_key_value`.
@@ -200,7 +200,7 @@ as_bin_init_raw(as_bin* bin, const as_bin_name name, const uint8_t* value, uint3
  * @return The initialized `as_bin` on success. Otherwise NULL.
  */
 as_bin*
-as_bin_init_nil(as_bin* bin, const as_bin_name name);
+as_bin_init_nil(as_bin* bin, const char* name);
 
 /**
  * Destroy the given `as_bin` and associated resources.
@@ -261,4 +261,4 @@ as_bins_destroy(as_bins* bins);
  * @return true on success. Otherswise an error occurred.
  */
 bool
-as_bins_append(as_bins* bins, as_bin_name name, as_bin_value* value);
+as_bins_append(as_bins* bins, const char* name, as_bin_value* value);

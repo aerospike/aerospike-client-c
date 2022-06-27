@@ -25,7 +25,7 @@
  *****************************************************************************/
 
 static as_scan*
-as_scan_defaults(as_scan* scan, bool free, const as_namespace ns, const as_set set)
+as_scan_defaults(as_scan* scan, bool free, const char* ns, const char* set)
 {
 	if (scan == NULL) return scan;
 
@@ -66,7 +66,7 @@ as_scan_defaults(as_scan* scan, bool free, const as_namespace ns, const as_set s
 }
 
 as_scan*
-as_scan_new(const as_namespace ns, const as_set set)
+as_scan_new(const char* ns, const char* set)
 {
 	as_scan* scan = (as_scan *) cf_malloc(sizeof(as_scan));
 	if ( ! scan ) return NULL;
@@ -74,7 +74,7 @@ as_scan_new(const as_namespace ns, const as_set set)
 }
 
 as_scan*
-as_scan_init(as_scan* scan, const as_namespace ns, const as_set set)
+as_scan_init(as_scan* scan, const char* ns, const char* set)
 {
 	if ( !scan ) return scan;
 	return as_scan_defaults(scan, false, ns, set);

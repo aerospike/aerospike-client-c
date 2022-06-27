@@ -29,7 +29,7 @@
 as_status
 aerospike_index_create_complex(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy,
-	const char* ns, const char* set, const as_index_position position, const char* name,
+	const char* ns, const char* set, const char* position, const char* name,
 	as_index_type itype, as_index_datatype dtype)
 {
 	as_error_reset(err);

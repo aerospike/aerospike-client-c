@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -36,7 +36,7 @@
  *****************************************************************************/
 
 static as_bin*
-as_bin_defaults(as_bin* bin, const as_bin_name name, as_bin_value* valuep)
+as_bin_defaults(as_bin* bin, const char* name, as_bin_value* valuep)
 {
 	strcpy(bin->name, name);
 	bin->valuep = valuep;
@@ -48,7 +48,7 @@ as_bin_defaults(as_bin* bin, const as_bin_name name, as_bin_value* valuep)
  *****************************************************************************/
 
 as_bin*
-as_bin_init(as_bin* bin, const as_bin_name name, as_bin_value* value)
+as_bin_init(as_bin* bin, const char* name, as_bin_value* value)
 {
 	if ( !bin ) return bin;
 	((as_val *) &bin->value)->type = AS_UNKNOWN;
@@ -56,7 +56,7 @@ as_bin_init(as_bin* bin, const as_bin_name name, as_bin_value* value)
 }
 
 as_bin*
-as_bin_init_bool(as_bin* bin, const as_bin_name name, bool value)
+as_bin_init_bool(as_bin* bin, const char* name, bool value)
 {
 	if ( !bin ) return bin;
 	as_boolean_init((as_boolean*) &bin->value, value);
@@ -64,7 +64,7 @@ as_bin_init_bool(as_bin* bin, const as_bin_name name, bool value)
 }
 
 as_bin*
-as_bin_init_int64(as_bin* bin, const as_bin_name name, int64_t value)
+as_bin_init_int64(as_bin* bin, const char* name, int64_t value)
 {
 	if ( !bin ) return bin;
 	as_integer_init((as_integer *) &bin->value, value);
@@ -72,7 +72,7 @@ as_bin_init_int64(as_bin* bin, const as_bin_name name, int64_t value)
 }
 
 as_bin*
-as_bin_init_double(as_bin* bin, const as_bin_name name, double value)
+as_bin_init_double(as_bin* bin, const char* name, double value)
 {
 	if ( !bin ) return bin;
 	as_double_init((as_double *) &bin->value, value);
@@ -80,7 +80,7 @@ as_bin_init_double(as_bin* bin, const as_bin_name name, double value)
 }
 
 as_bin*
-as_bin_init_str(as_bin* bin, const as_bin_name name, const char* value, bool free)
+as_bin_init_str(as_bin* bin, const char* name, const char* value, bool free)
 {
 	if ( !bin ) return bin;
 	as_string_init((as_string *) &bin->value, (char *) value, free);
@@ -88,7 +88,7 @@ as_bin_init_str(as_bin* bin, const as_bin_name name, const char* value, bool fre
 }
 
 as_bin*
-as_bin_init_geojson(as_bin* bin, const as_bin_name name, const char* value, bool free)
+as_bin_init_geojson(as_bin* bin, const char* name, const char* value, bool free)
 {
 	if ( !bin ) return bin;
 	as_geojson_init((as_geojson *) &bin->value, (char *) value, free);
@@ -96,7 +96,7 @@ as_bin_init_geojson(as_bin* bin, const as_bin_name name, const char* value, bool
 }
 
 as_bin*
-as_bin_init_raw(as_bin* bin, const as_bin_name name, const uint8_t* value, uint32_t size, bool free)
+as_bin_init_raw(as_bin* bin, const char* name, const uint8_t* value, uint32_t size, bool free)
 {
 	if ( !bin ) return bin;
 	as_bytes_init_wrap((as_bytes *) &bin->value, (uint8_t *) value, size, free);
@@ -104,7 +104,7 @@ as_bin_init_raw(as_bin* bin, const as_bin_name name, const uint8_t* value, uint3
 }
 
 as_bin*
-as_bin_init_nil(as_bin* bin, const as_bin_name name)
+as_bin_init_nil(as_bin* bin, const char* name)
 {
 	if ( !bin ) return bin;
 	as_val * nil = (as_val *) &bin->value;
@@ -168,7 +168,7 @@ as_bins_destroy(as_bins* bins)
 }
 
 bool
-as_bins_append(as_bins* bins, as_bin_name name, as_bin_value* value)
+as_bins_append(as_bins* bins, const char* name, as_bin_value* value)
 {
 	if ( !bins ) return false;
 	if ( bins->size >= bins->capacity ) return false;

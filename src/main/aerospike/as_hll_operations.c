@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -47,7 +47,7 @@ as_hll_pack_policy(as_packer* pk, as_hll_policy* policy)
 
 bool
 as_operations_hll_init_mh(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_hll_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_hll_policy* policy,
 	int index_bit_count, int mh_bit_count
 	)
 {
@@ -62,7 +62,7 @@ as_operations_hll_init_mh(
 
 bool
 as_operations_hll_add_mh(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_hll_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_hll_policy* policy,
 	as_list* list, int index_bit_count, int mh_bit_count
 	)
 {
@@ -78,7 +78,7 @@ as_operations_hll_add_mh(
 
 bool
 as_operations_hll_set_union(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_hll_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_hll_policy* policy,
 	as_list* list
 	)
 {
@@ -92,7 +92,7 @@ as_operations_hll_set_union(
 
 bool
 as_operations_hll_refresh_count(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx
+	as_operations* ops, const char* name, as_cdt_ctx* ctx
 	)
 {
 	as_packer pk = as_cdt_begin();
@@ -103,7 +103,7 @@ as_operations_hll_refresh_count(
 
 bool
 as_operations_hll_fold(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int index_bit_count
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int index_bit_count
 	)
 {
 	as_packer pk = as_cdt_begin();
@@ -115,7 +115,7 @@ as_operations_hll_fold(
 
 bool
 as_operations_hll_read(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, uint16_t command
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, uint16_t command
 	)
 {
 	as_packer pk = as_cdt_begin();
@@ -126,7 +126,7 @@ as_operations_hll_read(
 
 bool
 as_operations_hll_read_list(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, uint16_t command, as_list* list
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, uint16_t command, as_list* list
 	)
 {
 	as_packer pk = as_cdt_begin();

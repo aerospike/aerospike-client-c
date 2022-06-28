@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -38,15 +38,15 @@ as_config_init(as_config* c)
 	c->ip_map = NULL;
 	c->ip_map_size = 0;
 	c->min_conns_per_node = 0;
-	c->max_conns_per_node = 300;
+	c->max_conns_per_node = 100;
 	c->async_min_conns_per_node = 0;
-	c->async_max_conns_per_node = 300;
+	c->async_max_conns_per_node = 100;
 	c->pipe_max_conns_per_node = 64;
 	c->conn_pools_per_node = 1;
 	c->conn_timeout_ms = 1000;
 	c->login_timeout_ms = 5000;
-	c->max_socket_idle = 55;
-	c->max_error_rate = 0;
+	c->max_socket_idle = 0;
+	c->max_error_rate = 100;
 	c->error_rate_window = 1;
 	c->tender_interval = 1000;
 	c->thread_pool_size = 16;

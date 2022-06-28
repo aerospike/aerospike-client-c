@@ -553,7 +553,7 @@ typedef struct as_query_s {
  * @relates as_query
  */
 AS_EXTERN as_query*
-as_query_init(as_query* query, const as_namespace ns, const as_set set);
+as_query_init(as_query* query, const char* ns, const char* set);
 
 /**
  * Create and initialize a new heap allocated as_query.
@@ -571,7 +571,7 @@ as_query_init(as_query* query, const as_namespace ns, const as_set set);
  * @ingroup query_object
  */
 AS_EXTERN as_query*
-as_query_new(const as_namespace ns, const as_set set);
+as_query_new(const char* ns, const char* set);
 
 /**
  * Destroy the query and associated resources.

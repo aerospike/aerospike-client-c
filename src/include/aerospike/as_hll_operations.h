@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -107,12 +107,12 @@ typedef enum {
 
 AS_EXTERN bool
 as_operations_hll_read(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, uint16_t command
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, uint16_t command
 	);
 
 AS_EXTERN bool
 as_operations_hll_read_list(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, uint16_t command, as_list* list
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, uint16_t command, as_list* list
 	);
 
 /******************************************************************************
@@ -156,7 +156,7 @@ as_hll_policy_set_write_flags(as_hll_policy* policy, as_hll_write_flags flags)
  */
 AS_EXTERN bool
 as_operations_hll_init_mh(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_hll_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_hll_policy* policy,
 	int index_bit_count, int mh_bit_count
 	);
 
@@ -174,7 +174,7 @@ as_operations_hll_init_mh(
  */
 static inline bool
 as_operations_hll_init(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_hll_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_hll_policy* policy,
 	int index_bit_count
 	)
 {
@@ -197,7 +197,7 @@ as_operations_hll_init(
  */
 AS_EXTERN bool
 as_operations_hll_add_mh(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_hll_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_hll_policy* policy,
 	as_list* list, int index_bit_count, int mh_bit_count
 	);
 
@@ -216,7 +216,7 @@ as_operations_hll_add_mh(
  */
 static inline bool
 as_operations_hll_add(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_hll_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_hll_policy* policy,
 	as_list* list, int index_bit_count
 	)
 {
@@ -237,7 +237,7 @@ as_operations_hll_add(
  */
 static inline bool
 as_operations_hll_update(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_hll_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_hll_policy* policy,
 	as_list* list
 	)
 {
@@ -258,7 +258,7 @@ as_operations_hll_update(
  */
 AS_EXTERN bool
 as_operations_hll_set_union(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_hll_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_hll_policy* policy,
 	as_list* list
 	);
 
@@ -273,7 +273,7 @@ as_operations_hll_set_union(
  */
 AS_EXTERN bool
 as_operations_hll_refresh_count(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx
+	as_operations* ops, const char* name, as_cdt_ctx* ctx
 	);
 
 /**
@@ -290,7 +290,7 @@ as_operations_hll_refresh_count(
  */
 AS_EXTERN bool
 as_operations_hll_fold(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int index_bit_count
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int index_bit_count
 	);
 
 /**
@@ -304,7 +304,7 @@ as_operations_hll_fold(
  */
 static inline bool
 as_operations_hll_get_count(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx
+	as_operations* ops, const char* name, as_cdt_ctx* ctx
 	)
 {
 	return as_operations_hll_read(ops, name, ctx, AS_HLL_OP_COUNT);
@@ -323,7 +323,7 @@ as_operations_hll_get_count(
  */
 static inline bool
 as_operations_hll_get_union(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* list
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* list
 	)
 {
 	return as_operations_hll_read_list(ops, name, ctx, AS_HLL_OP_GET_UNION, list);
@@ -342,7 +342,7 @@ as_operations_hll_get_union(
  */
 static inline bool
 as_operations_hll_get_union_count(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* list
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* list
 	)
 {
 	return as_operations_hll_read_list(ops, name, ctx, AS_HLL_OP_UNION_COUNT, list);
@@ -361,7 +361,7 @@ as_operations_hll_get_union_count(
  */
 static inline bool
 as_operations_hll_get_intersect_count(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* list
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* list
 	)
 {
 	return as_operations_hll_read_list(ops, name, ctx, AS_HLL_OP_INTERSECT_COUNT, list);
@@ -379,7 +379,7 @@ as_operations_hll_get_intersect_count(
  */
 static inline bool
 as_operations_hll_get_similarity(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_list* list
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list* list
 	)
 {
 	return as_operations_hll_read_list(ops, name, ctx, AS_HLL_OP_SIMILARITY, list);
@@ -397,7 +397,7 @@ as_operations_hll_get_similarity(
  */
 static inline bool
 as_operations_hll_describe(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx
+	as_operations* ops, const char* name, as_cdt_ctx* ctx
 	)
 {
 	return as_operations_hll_read(ops, name, ctx, AS_HLL_OP_DESCRIBE);

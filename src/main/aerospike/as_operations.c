@@ -60,7 +60,7 @@ as_operations_default(as_operations* ops, bool free, uint16_t nops)
  * If no more entries available or precondition failed, then returns NULL.
  */
 as_binop*
-as_binop_forappend(as_operations* ops, as_operator operator, const as_bin_name name)
+as_binop_forappend(as_operations* ops, as_operator operator, const char* name)
 {
 	if ( ! (ops && ops->binops.size < ops->binops.capacity &&
 			name && strlen(name) < AS_BIN_NAME_MAX_SIZE) ) {
@@ -74,16 +74,19 @@ as_binop_forappend(as_operations* ops, as_operator operator, const as_bin_name n
 	return binop;
 }
 
-as_binop*
+bool
 as_binop_append(as_operations* ops, as_operator operator)
 {
 	if (! (ops && ops->binops.size < ops->binops.capacity)) {
-		return NULL;
+		return false;
 	}
 
 	as_binop * binop = &ops->binops.entries[ops->binops.size++];
 	binop->op = operator;
-	return binop;
+	binop->bin.name[0] = 0;
+	binop->bin.valuep = NULL;
+
+	return true;
 }
 
 
@@ -133,7 +136,7 @@ as_operations_destroy(as_operations* ops)
 }
 
 bool
-as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value* value)
+as_operations_add_write(as_operations* ops, const char* name, as_bin_value* value)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
@@ -142,7 +145,7 @@ as_operations_add_write(as_operations* ops, const as_bin_name name, as_bin_value
 }
 
 bool
-as_operations_add_write_bool(as_operations* ops, const as_bin_name name, bool value)
+as_operations_add_write_bool(as_operations* ops, const char* name, bool value)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
@@ -151,7 +154,7 @@ as_operations_add_write_bool(as_operations* ops, const as_bin_name name, bool va
 }
 
 bool
-as_operations_add_write_int64(as_operations* ops, const as_bin_name name, int64_t value)
+as_operations_add_write_int64(as_operations* ops, const char* name, int64_t value)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
@@ -160,7 +163,7 @@ as_operations_add_write_int64(as_operations* ops, const as_bin_name name, int64_
 }
 
 bool
-as_operations_add_write_double(as_operations* ops, const as_bin_name name, double value)
+as_operations_add_write_double(as_operations* ops, const char* name, double value)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
@@ -169,7 +172,7 @@ as_operations_add_write_double(as_operations* ops, const as_bin_name name, doubl
 }
 
 bool
-as_operations_add_write_strp(as_operations* ops, const as_bin_name name, const char* value, bool free)
+as_operations_add_write_strp(as_operations* ops, const char* name, const char* value, bool free)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
@@ -178,7 +181,7 @@ as_operations_add_write_strp(as_operations* ops, const as_bin_name name, const c
 }
 
 bool
-as_operations_add_write_geojson_strp(as_operations* ops, const as_bin_name name, const char* value, bool free)
+as_operations_add_write_geojson_strp(as_operations* ops, const char* name, const char* value, bool free)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
@@ -187,7 +190,7 @@ as_operations_add_write_geojson_strp(as_operations* ops, const as_bin_name name,
 }
 
 bool
-as_operations_add_write_rawp(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size, bool free)
+as_operations_add_write_rawp(as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
 	if ( !binop ) return false;
@@ -196,7 +199,7 @@ as_operations_add_write_rawp(as_operations* ops, const as_bin_name name, const u
 }
 
 bool
-as_operations_add_read(as_operations* ops, const as_bin_name name)
+as_operations_add_read(as_operations* ops, const char* name)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_READ, name);
 	if ( !binop ) return false;
@@ -207,18 +210,11 @@ as_operations_add_read(as_operations* ops, const as_bin_name name)
 bool
 as_operations_add_read_all(as_operations* ops)
 {
-	as_binop* binop = as_binop_append(ops, AS_OPERATOR_READ);
-
-	if (!binop) {
-		return false;
-	}
-	binop->bin.name[0] = 0;
-	binop->bin.valuep = NULL;
-	return true;
+	return as_binop_append(ops, AS_OPERATOR_READ);
 }
 
 bool
-as_operations_add_incr(as_operations* ops, const as_bin_name name, int64_t value)
+as_operations_add_incr(as_operations* ops, const char* name, int64_t value)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_INCR, name);
 	if ( !binop ) return false;
@@ -227,7 +223,7 @@ as_operations_add_incr(as_operations* ops, const as_bin_name name, int64_t value
 }
 
 bool
-as_operations_add_incr_double(as_operations* ops, const as_bin_name name, double value)
+as_operations_add_incr_double(as_operations* ops, const char* name, double value)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_INCR, name);
 	if ( !binop ) return false;
@@ -236,7 +232,7 @@ as_operations_add_incr_double(as_operations* ops, const as_bin_name name, double
 }
 
 bool
-as_operations_add_prepend_strp(as_operations* ops, const as_bin_name name, const char* value, bool free)
+as_operations_add_prepend_strp(as_operations* ops, const char* name, const char* value, bool free)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_PREPEND, name);
 	if ( !binop ) return false;
@@ -245,7 +241,7 @@ as_operations_add_prepend_strp(as_operations* ops, const as_bin_name name, const
 }
 
 bool
-as_operations_add_prepend_rawp(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size, bool free)
+as_operations_add_prepend_rawp(as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_PREPEND, name);
 	if ( !binop ) return false;
@@ -254,7 +250,7 @@ as_operations_add_prepend_rawp(as_operations* ops, const as_bin_name name, const
 }
 
 bool
-as_operations_add_append_strp(as_operations* ops, const as_bin_name name, const char* value, bool free)
+as_operations_add_append_strp(as_operations* ops, const char* name, const char* value, bool free)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_APPEND, name);
 	if ( !binop ) return false;
@@ -263,7 +259,7 @@ as_operations_add_append_strp(as_operations* ops, const as_bin_name name, const 
 }
 
 bool
-as_operations_add_append_rawp(as_operations* ops, const as_bin_name name, const uint8_t* value, uint32_t size, bool free)
+as_operations_add_append_rawp(as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_APPEND, name);
 	if ( !binop ) return false;
@@ -274,18 +270,11 @@ as_operations_add_append_rawp(as_operations* ops, const as_bin_name name, const 
 bool
 as_operations_add_touch(as_operations* ops)
 {
-	// TODO - what happens with null or empty bin name?
-	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_TOUCH, "");
-	if ( !binop ) return false;
-	as_bin_init_nil(&binop->bin, "");
-	return true;
+	return as_binop_append(ops, AS_OPERATOR_TOUCH);
 }
 
 bool
 as_operations_add_delete(as_operations* ops)
 {
-	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_DELETE, "");
-	if ( !binop ) return false;
-	as_bin_init_nil(&binop->bin, "");
-	return true;
+	return as_binop_append(ops, AS_OPERATOR_DELETE);
 }

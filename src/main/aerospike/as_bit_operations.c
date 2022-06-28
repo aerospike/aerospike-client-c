@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -53,7 +53,7 @@ as_bit_pack_policy(as_packer* pk, as_bit_policy* policy)
 
 bool
 as_bit_write(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint16_t command, int offset, uint32_t size
 	)
 {
@@ -68,7 +68,7 @@ as_bit_write(
 
 bool
 as_bit_shift(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint16_t command, int bit_offset, uint32_t bit_size, uint32_t shift
 	)
 {
@@ -84,7 +84,7 @@ as_bit_shift(
 
 bool
 as_bit_math(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint16_t command, int bit_offset, uint32_t bit_size, int64_t value, bool sign,
 	as_bit_overflow_action action
 	)
@@ -109,7 +109,7 @@ as_bit_math(
 
 bool
 as_bit_byte_math(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint16_t command, int bit_offset, uint32_t bit_size, uint32_t value_size, uint8_t* value
 	)
 {
@@ -125,7 +125,7 @@ as_bit_byte_math(
 
 bool
 as_operations_bit_resize(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint32_t byte_size, as_bit_resize_flags flags
 	)
 {
@@ -140,7 +140,7 @@ as_operations_bit_resize(
 
 bool
 as_operations_bit_insert(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int byte_offset, uint32_t value_byte_size, uint8_t* value
 	)
 {
@@ -155,7 +155,7 @@ as_operations_bit_insert(
 
 bool
 as_operations_bit_set_int(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, int64_t value
 	)
 {
@@ -171,7 +171,7 @@ as_operations_bit_set_int(
 
 bool
 as_bit_read(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, uint16_t command, int bit_offset,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, uint16_t command, int bit_offset,
 	uint32_t bit_size
 	)
 {
@@ -185,7 +185,7 @@ as_bit_read(
 
 bool
 as_bit_scan(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, uint16_t command, int bit_offset,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, uint16_t command, int bit_offset,
 	uint32_t bit_size, bool value
 	)
 {
@@ -200,7 +200,7 @@ as_bit_scan(
 
 bool
 as_operations_bit_get_int(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size,
 	bool sign
 	)
 {

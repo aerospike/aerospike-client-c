@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -182,38 +182,38 @@ typedef enum {
 
 AS_EXTERN bool
 as_bit_write(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint16_t command, int offset, uint32_t size
 	);
 
 AS_EXTERN bool
 as_bit_shift(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint16_t command, int bit_offset, uint32_t bit_size, uint32_t shift
 	);
 
 AS_EXTERN bool
 as_bit_math(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint16_t command, int bit_offset, uint32_t bit_size, int64_t value, bool sign,
 	as_bit_overflow_action action
 	);
 
 AS_EXTERN bool
 as_bit_byte_math(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint16_t command, int bit_offset, uint32_t bit_size, uint32_t value_size, uint8_t* value
 	);
 
 AS_EXTERN bool
 as_bit_read(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, uint16_t command, int bit_offset,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, uint16_t command, int bit_offset,
 	uint32_t bit_size
 	);
 
 AS_EXTERN bool
 as_bit_scan(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, uint16_t command, int bit_offset,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, uint16_t command, int bit_offset,
 	uint32_t bit_size, bool value
 	);
 
@@ -259,7 +259,7 @@ as_bit_policy_set_write_flags(as_bit_policy* policy, as_bit_write_flags flags)
  */
 AS_EXTERN bool
 as_operations_bit_resize(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	uint32_t byte_size, as_bit_resize_flags flags
 	);
 
@@ -280,7 +280,7 @@ as_operations_bit_resize(
  */
 AS_EXTERN bool
 as_operations_bit_insert(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int byte_offset, uint32_t value_byte_size, uint8_t* value
 	);
 
@@ -300,7 +300,7 @@ as_operations_bit_insert(
  */
 static inline bool
 as_operations_bit_remove(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int byte_offset, uint32_t byte_size
 	)
 {
@@ -325,7 +325,7 @@ as_operations_bit_remove(
  */
 static inline bool
 as_operations_bit_set(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, uint32_t value_byte_size, uint8_t* value
 	)
 {
@@ -350,7 +350,7 @@ as_operations_bit_set(
  */
 static inline bool
 as_operations_bit_or(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, uint32_t value_byte_size, uint8_t* value
 	)
 {
@@ -375,7 +375,7 @@ as_operations_bit_or(
  */
 static inline bool
 as_operations_bit_xor(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, uint32_t value_byte_size, uint8_t* value
 	)
 {
@@ -400,7 +400,7 @@ as_operations_bit_xor(
  */
 static inline bool
 as_operations_bit_and(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, uint32_t value_byte_size, uint8_t* value
 	)
 {
@@ -423,7 +423,7 @@ as_operations_bit_and(
  */
 static inline bool
 as_operations_bit_not(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size
 	)
 {
@@ -447,7 +447,7 @@ as_operations_bit_not(
  */
 static inline bool
 as_operations_bit_lshift(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, uint32_t shift
 	)
 {
@@ -471,7 +471,7 @@ as_operations_bit_lshift(
  */
 static inline bool
 as_operations_bit_rshift(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, uint32_t shift
 	)
 {
@@ -498,7 +498,7 @@ as_operations_bit_rshift(
  */
 static inline bool
 as_operations_bit_add(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, int64_t value, bool sign, as_bit_overflow_action action
 	)
 {
@@ -525,7 +525,7 @@ as_operations_bit_add(
  */
 static inline bool
 as_operations_bit_subtract(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, int64_t value, bool sign, as_bit_overflow_action action
 	)
 {
@@ -549,7 +549,7 @@ as_operations_bit_subtract(
  */
 AS_EXTERN bool
 as_operations_bit_set_int(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, as_bit_policy* policy,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
 	int bit_offset, uint32_t bit_size, int64_t value
 	);
 
@@ -568,7 +568,7 @@ as_operations_bit_set_int(
  */
 static inline bool
 as_operations_bit_get(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size
 	)
 {
 	return as_bit_read(ops, name, ctx, AS_BIT_OP_GET, bit_offset, bit_size);
@@ -589,7 +589,7 @@ as_operations_bit_get(
  */
 static inline bool
 as_operations_bit_count(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size
 	)
 {
 	return as_bit_read(ops, name, ctx, AS_BIT_OP_COUNT, bit_offset, bit_size);
@@ -612,7 +612,7 @@ as_operations_bit_count(
  */
 static inline bool
 as_operations_bit_lscan(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size,
 	bool value
 	)
 {
@@ -636,7 +636,7 @@ as_operations_bit_lscan(
  */
 static inline bool
 as_operations_bit_rscan(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size,
 	bool value
 	)
 {
@@ -660,7 +660,7 @@ as_operations_bit_rscan(
  */
 AS_EXTERN bool
 as_operations_bit_get_int(
-	as_operations* ops, const as_bin_name name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size,
 	bool sign
 	);
 

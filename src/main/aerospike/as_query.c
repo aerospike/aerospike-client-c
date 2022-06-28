@@ -29,7 +29,7 @@
  *****************************************************************************/
 
 static as_query*
-as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_set set)
+as_query_defaults(as_query* query, bool free, const char* ns, const char* set)
 {
 	query->_free = free;
 
@@ -61,14 +61,14 @@ as_query_defaults(as_query* query, bool free, const as_namespace ns, const as_se
 }
 
 as_query*
-as_query_init(as_query* query, const as_namespace ns, const as_set set)
+as_query_init(as_query* query, const char* ns, const char* set)
 {
 	if ( !query ) return query;
 	return as_query_defaults(query, false, ns, set);
 }
 
 as_query*
-as_query_new(const as_namespace ns, const as_set set)
+as_query_new(const char* ns, const char* set)
 {
 	as_query* query = (as_query *) cf_malloc(sizeof(as_query));
 	if ( !query ) return query;

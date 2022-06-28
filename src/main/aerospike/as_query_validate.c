@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -177,7 +177,7 @@ as_validate_end_listener(as_error* err, char* response, void* udata, as_event_lo
 
 as_status
 as_query_validate_begin(
-	as_error* err, as_node* node, const as_namespace ns, uint32_t timeout, uint64_t* cluster_key
+	as_error* err, as_node* node, const char* ns, uint32_t timeout, uint64_t* cluster_key
 	)
 {
 	char cmd[256];
@@ -203,7 +203,7 @@ as_query_validate_begin(
 
 as_status
 as_query_validate(
-	as_error* err, as_node* node, const as_namespace ns, uint32_t timeout, uint64_t expected_key
+	as_error* err, as_node* node, const char* ns, uint32_t timeout, uint64_t expected_key
 	)
 {
 	if (expected_key == 0) {
@@ -225,7 +225,7 @@ as_query_validate(
 }
 
 as_status
-as_query_validate_begin_async(as_event_executor* executor, const as_namespace ns, as_error* err)
+as_query_validate_begin_async(as_event_executor* executor, const char* ns, as_error* err)
 {
 	as_policy_info policy;
 	as_policy_info_init(&policy);

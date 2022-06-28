@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -111,7 +111,7 @@ typedef enum as_exp_read_flags_e {
  */
 AS_EXTERN bool
 as_operations_exp_write(
-	as_operations* ops, const as_bin_name name, const as_exp* exp, as_exp_write_flags flags
+	as_operations* ops, const char* name, const as_exp* exp, as_exp_write_flags flags
 	);
 
 /**
@@ -127,7 +127,7 @@ as_operations_exp_write(
  */
 AS_EXTERN bool
 as_operations_exp_read(
-	as_operations* ops, const as_bin_name name, const as_exp* exp, as_exp_read_flags flags
+	as_operations* ops, const char* name, const as_exp* exp, as_exp_read_flags flags
 	);
 
 #ifdef __cplusplus

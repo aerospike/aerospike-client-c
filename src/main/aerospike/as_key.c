@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -30,7 +30,7 @@
 
 static as_key*
 as_key_cons(
-	as_key* key, bool free, const as_namespace ns, const char* set, const as_key_value* valuep,
+	as_key* key, bool free, const char* ns, const char* set, const as_key_value* valuep,
 	const as_digest_value digest
 	)
 {
@@ -63,13 +63,13 @@ as_key_cons(
  *****************************************************************************/
 
 as_key*
-as_key_init(as_key* key, const as_namespace ns, const as_set set, const char* value)
+as_key_init(as_key* key, const char* ns, const char* set, const char* value)
 {
 	return as_key_init_str(key, ns, set, value);
 }
 
 as_key*
-as_key_init_int64(as_key* key, const as_namespace ns, const as_set set, int64_t value)
+as_key_init_int64(as_key* key, const char* ns, const char* set, int64_t value)
 {
 	if (! key) {
 		return key;
@@ -79,7 +79,7 @@ as_key_init_int64(as_key* key, const as_namespace ns, const as_set set, int64_t 
 }
 
 as_key*
-as_key_init_strp(as_key* key, const as_namespace ns, const as_set set, const char* value, bool free)
+as_key_init_strp(as_key* key, const char* ns, const char* set, const char* value, bool free)
 {
 	if (! key) {
 		return key;
@@ -89,7 +89,7 @@ as_key_init_strp(as_key* key, const as_namespace ns, const as_set set, const cha
 }
 
 as_key*
-as_key_init_rawp(as_key* key, const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool free)
+as_key_init_rawp(as_key* key, const char* ns, const char* set, const uint8_t* value, uint32_t size, bool free)
 {
 	if (! key) {
 		return key;
@@ -99,7 +99,7 @@ as_key_init_rawp(as_key* key, const as_namespace ns, const as_set set, const uin
 }
 
 as_key*
-as_key_init_digest(as_key* key, const as_namespace ns, const as_set set, const as_digest_value digest)
+as_key_init_digest(as_key* key, const char* ns, const char* set, const as_digest_value digest)
 {
 	if (! key) {
 		return key;
@@ -108,7 +108,7 @@ as_key_init_digest(as_key* key, const as_namespace ns, const as_set set, const a
 }
 
 as_key*
-as_key_init_value(as_key* key, const as_namespace ns, const as_set set, const as_key_value* value)
+as_key_init_value(as_key* key, const char* ns, const char* set, const as_key_value* value)
 {
 	if (! key) {
 		return key;
@@ -117,13 +117,13 @@ as_key_init_value(as_key* key, const as_namespace ns, const as_set set, const as
 }
 
 as_key*
-as_key_new(const as_namespace ns, const as_set set, const char* value)
+as_key_new(const char* ns, const char* set, const char* value)
 {
 	return as_key_new_str(ns, set, value);
 }
 
 as_key*
-as_key_new_int64(const as_namespace ns, const as_set set, int64_t value)
+as_key_new_int64(const char* ns, const char* set, int64_t value)
 {
 	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 
@@ -141,7 +141,7 @@ as_key_new_int64(const as_namespace ns, const as_set set, int64_t value)
 }
 
 as_key*
-as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool do_free)
+as_key_new_strp(const char* ns, const char* set, const char* value, bool do_free)
 {
 	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 
@@ -159,7 +159,7 @@ as_key_new_strp(const as_namespace ns, const as_set set, const char* value, bool
 }
 
 as_key*
-as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t* value, uint32_t size, bool do_free)
+as_key_new_rawp(const char* ns, const char* set, const uint8_t* value, uint32_t size, bool do_free)
 {
 	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 
@@ -177,7 +177,7 @@ as_key_new_rawp(const as_namespace ns, const as_set set, const uint8_t* value, u
 }
 
 as_key*
-as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value digest)
+as_key_new_digest(const char* ns, const char* set, const as_digest_value digest)
 {
 	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 
@@ -193,7 +193,7 @@ as_key_new_digest(const as_namespace ns, const as_set set, const as_digest_value
 }
 
 as_key*
-as_key_new_value(const as_namespace ns, const as_set set, const as_key_value* value)
+as_key_new_value(const char* ns, const char* set, const as_key_value* value)
 {
 	as_key* key = (as_key*)cf_malloc(sizeof(as_key));
 

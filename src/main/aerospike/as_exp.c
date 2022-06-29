@@ -200,10 +200,7 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 				total_sz += as_pack_list_header_get_size(3);
 				total_sz += as_pack_int64_size(AS_CDT_OP_CONTEXT_EVAL);
 
-				as_packer pk = {
-						.buffer = NULL,
-						.capacity = UINT32_MAX
-				};
+				as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
 
 				sz = as_cdt_ctx_pack(entry->v.ctx, &pk);
 

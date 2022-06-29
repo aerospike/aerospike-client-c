@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_query.h>
 #include <aerospike/as_bin.h>
+#include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_operations.h>
@@ -173,10 +174,11 @@ as_query_where_init(as_query* query, uint16_t n)
 	return true;
 }
 
-bool
-as_query_where_internal(as_query* query, const char* bin, as_cdt_ctx* ctx,
-		as_predicate_type type, as_index_type itype, as_index_datatype dtype,
-		va_list ap)
+static bool
+as_query_where_internal(
+	as_query* query, const char* bin, as_cdt_ctx* ctx, as_predicate_type type, as_index_type itype,
+	as_index_datatype dtype, va_list ap
+	)
 {
 	// test preconditions
 	if (! query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE) {
@@ -191,20 +193,22 @@ as_query_where_internal(as_query* query, const char* bin, as_cdt_ctx* ctx,
 	as_predicate* p = &query->where.entries[query->where.size++];
 	bool status = true;
 
-	as_packer pk = {
-			.buffer = NULL,
-			.capacity = UINT32_MAX,
-	};
-
 	strcpy(p->bin, bin);
-	p->ctx = ctx;
-	p->ctx_size = ctx == NULL ? 0 : as_cdt_ctx_pack(ctx, &pk);
 	p->type = type;
 	p->dtype = dtype;
 	p->itype = itype;
+	p->ctx = ctx;
 
-	if (ctx != NULL && p->ctx_size == 0) {
-		return false;
+	if (ctx) {
+		as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
+		p->ctx_size = as_cdt_ctx_pack(ctx, &pk);
+
+		if (p->ctx_size == 0) {
+			return false;
+		}
+	}
+	else {
+		p->ctx_size = 0;
 	}
 
 	switch(type) {
@@ -234,6 +238,36 @@ as_query_where_internal(as_query* query, const char* bin, as_cdt_ctx* ctx,
 	}
 
 	return status;
+}
+
+bool
+as_query_where(
+	as_query* query, const char * bin, as_predicate_type type, as_index_type itype,
+	as_index_datatype dtype, ...
+	)
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_internal(query, bin, NULL, type, itype, dtype, ap);
+
+	va_end(ap);
+	return rv;
+}
+
+bool
+as_query_where_with_ctx(
+	as_query* query, const char* bin, struct as_cdt_ctx* ctx, as_predicate_type type,
+	as_index_type itype, as_index_datatype dtype, ...
+	)
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_internal(query, bin, ctx, type, itype, dtype, ap);
+
+	va_end(ap);
+	return rv;
 }
 
 /******************************************************************************

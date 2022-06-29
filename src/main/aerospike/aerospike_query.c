@@ -18,6 +18,7 @@
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_aerospike.h>
 #include <aerospike/as_async.h>
+#include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
@@ -707,7 +708,7 @@ as_query_command_size(
 			}
 		}
 
-		if (pred->ctx != NULL) {
+		if (pred->ctx) {
 			size += AS_FIELD_HEADER_SIZE + pred->ctx_size;
 			n_fields++;
 		}
@@ -910,13 +911,10 @@ as_query_command_init(
 			}
 		}
 
-		if (pred->ctx != NULL) {
+		if (pred->ctx) {
 			p = as_command_write_field_header(p, AS_FIELD_INDEX_CONTEXT, pred->ctx_size);
 
-			as_packer pk = {
-					.buffer = p,
-					.capacity = pred->ctx_size
-			};
+			as_packer pk = {.buffer = p, .capacity = pred->ctx_size};
 
 			p += as_cdt_ctx_pack(pred->ctx, &pk);
 		}

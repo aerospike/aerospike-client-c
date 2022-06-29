@@ -120,8 +120,7 @@ aerospike_index_create_ctx(
 	as_string_builder_append(&sb, position);
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append(&sb, dtype_string);
-
-	as_string_builder_append(&sb, ";priority=normal\n");
+	as_string_builder_append_newline(&sb);
 
 	if (sb.length + 1 >= sb.capacity) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index create buffer overflow: %d",

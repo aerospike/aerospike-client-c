@@ -30,7 +30,6 @@
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_val.h>
-#include <unistd.h>
 
 #include "../test.h"
 #include "../util/index_util.h"

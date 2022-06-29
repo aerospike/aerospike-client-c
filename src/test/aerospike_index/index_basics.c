@@ -162,8 +162,6 @@ TEST(index_ctx_test , "Create ctx index on bin")
 
 	as_cdt_ctx_destroy(&ctx);
 
-	sleep(5);
-
 	aerospike_info_any(as, &err, NULL, "sindex/test/idx_test_ctx", &res);
 	assert_not_null(res);
 	info("sindex-info: %s", res);

@@ -120,10 +120,51 @@ typedef struct as_index_task_s {
 	bool done;
 } as_index_task;
 
+struct as_cdt_ctx;
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
+/**
+ * Create secondary index given collection type, data type and context.
+ *
+ * This asynchronous server call will return before the command is complete.
+ * The user can optionally wait for command completion by using a task instance.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_cdt_ctx ctx;
+ * as_cdt_ctx_init(&ctx, 1);
+ * as_cdt_ctx_add_list_rank(&ctx, -1);
+ * as_index_task task;
+ * if (aerospike_index_create_ctx(&as, &err, &task, NULL, "test", "demo", "bin1",
+ *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, &ctx) == AEROSPIKE_OK) {
+ *     aerospike_index_create_wait(&err, &task, 0);
+ * }
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param task			The optional task data used to poll for completion.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace to be indexed.
+ * @param set			The set to be indexed.
+ * @param position		The bin or complex position name to be indexed.
+ * @param name			The name of the index.
+ * @param itype			The type of index, default or complex type.
+ * @param dtype			The data type of index, string or integer.
+ * @param ctx			Optional CDT context describing the path to locate the data to be indexed.
+ *
+ * @return AEROSPIKE_OK if successful. Return AEROSPIKE_ERR_INDEX_FOUND if index exists. Otherwise an error.
+ *
+ * @ingroup index_operations
+ */
+AS_EXTERN as_status
+aerospike_index_create_ctx(
+	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
+	const char* set, const char* position, const char* name, as_index_type itype,
+	as_index_datatype dtype, struct as_cdt_ctx* ctx
+	);
 
 /**
  * Create secondary index given collection type and data type.
@@ -133,7 +174,7 @@ typedef struct as_index_task_s {
  *
  * ~~~~~~~~~~{.c}
  * as_index_task task;
- * if (aerospike_index_create_complex(&as, &err, &task, NULL, "test", "demo", "bin1", 
+ * if (aerospike_index_create_complex(&as, &err, &task, NULL, "test", "demo", "bin1",
  *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }
@@ -154,12 +195,17 @@ typedef struct as_index_task_s {
  *
  * @ingroup index_operations
  */
-AS_EXTERN as_status
+static inline as_status
 aerospike_index_create_complex(
-	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy,
-	const char* ns, const char* set, const char* position, const char* name,
-	as_index_type itype, as_index_datatype dtype
-	);
+	aerospike* as, as_error* err, as_index_task* task,
+	const as_policy_info* policy, const char* ns, const char* set,
+	const char* position, const char* name, as_index_type itype,
+	as_index_datatype dtype
+	)
+{
+	return aerospike_index_create_ctx(as, err, task, policy, ns, set, position,
+			name, itype, dtype, NULL);
+}
 
 /**
  * Create secondary index given data type.
@@ -196,7 +242,7 @@ aerospike_index_create(
 	as_index_datatype dtype
 	)
 {
-	return aerospike_index_create_complex(as, err, task, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, dtype);
+	return aerospike_index_create_ctx(as, err, task, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, dtype, NULL);
 }
 
 /**

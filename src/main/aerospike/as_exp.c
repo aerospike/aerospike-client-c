@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Aerospike, Inc.
+ * Copyright 2021-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -14,11 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
 #include <aerospike/as_exp.h>
-
-#include <citrusleaf/cf_b64.h>
-
 #include <aerospike/aerospike_index.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_cdt_internal.h>
@@ -26,6 +22,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_msgpack.h>
+#include <citrusleaf/cf_b64.h>
 
 typedef enum {
 	CALL_CDT = 0,
@@ -202,30 +199,16 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 
 				total_sz += as_pack_list_header_get_size(3);
 				total_sz += as_pack_int64_size(AS_CDT_OP_CONTEXT_EVAL);
-				total_sz +=
-						as_pack_list_header_get_size(entry->v.ctx->list.size * 2);
 
-				for (uint32_t j = 0; j < entry->v.ctx->list.size; j++) {
-					as_cdt_ctx_item* item = as_vector_get(&entry->v.ctx->list, j);
+				as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
 
-					total_sz += as_pack_uint64_size(item->type);
+				sz = as_cdt_ctx_pack(entry->v.ctx, &pk);
 
-					if (item->type & AS_CDT_CTX_VALUE) {
-						as_packer pk = {
-								.buffer = NULL,
-								.capacity = UINT32_MAX
-						};
-
-						if (as_pack_val(&pk, item->val.pval) != 0) {
-							return NULL;
-						}
-
-						total_sz += pk.offset;
-					}
-					else {
-						total_sz += as_pack_int64_size(item->val.ival);
-					}
+				if (sz == 0) {
+					return NULL;
 				}
+
+				total_sz += sz;
 			}
 
 			break;
@@ -353,21 +336,7 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 			if (entry->v.ctx != NULL) {
 				as_pack_list_header(&pk, 3);
 				as_pack_int64(&pk, AS_CDT_OP_CONTEXT_EVAL);
-
-				as_pack_list_header(&pk, entry->v.ctx->list.size * 2);
-
-				for (uint32_t j = 0; j < entry->v.ctx->list.size; j++) {
-					as_cdt_ctx_item* item = as_vector_get(&entry->v.ctx->list, j);
-
-					as_pack_uint64(&pk, item->type);
-
-					if (item->type & AS_CDT_CTX_VALUE) {
-						as_pack_val(&pk, item->val.pval);
-					}
-					else {
-						as_pack_int64(&pk, item->val.ival);
-					}
-				}
+				as_cdt_ctx_pack(entry->v.ctx, &pk);
 			}
 
 			as_pack_list_header(&pk, entry->count);

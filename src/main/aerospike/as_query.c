@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_query.h>
 #include <aerospike/as_bin.h>
+#include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_operations.h>
@@ -173,31 +174,47 @@ as_query_where_init(as_query* query, uint16_t n)
 	return true;
 }
 
-bool
-as_query_where(as_query* query, const char * bin, as_predicate_type type, as_index_type itype, as_index_datatype dtype, ... )
+static bool
+as_query_where_internal(
+	as_query* query, const char* bin, as_cdt_ctx* ctx, as_predicate_type type, as_index_type itype,
+	as_index_datatype dtype, va_list ap
+	)
 {
 	// test preconditions
-	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
+	if (! query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE) {
 		return false;
 	}
 
 	// insufficient capacity
-	if ( query->where.size >= query->where.capacity ) return false;
+	if (query->where.size >= query->where.capacity) {
+		return false;
+	}
 
-	as_predicate * p = &query->where.entries[query->where.size++];
+	as_predicate* p = &query->where.entries[query->where.size++];
 	bool status = true;
 
 	strcpy(p->bin, bin);
-	p->type  = type;
+	p->type = type;
 	p->dtype = dtype;
 	p->itype = itype;
-	va_list ap;
-	va_start(ap, dtype);
+	p->ctx = ctx;
+
+	if (ctx) {
+		as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
+		p->ctx_size = as_cdt_ctx_pack(ctx, &pk);
+
+		if (p->ctx_size == 0) {
+			return false;
+		}
+	}
+	else {
+		p->ctx_size = 0;
+	}
 
 	switch(type) {
 	case AS_PREDICATE_EQUAL:
 		if (dtype == AS_INDEX_STRING) {
-			p->value.string = va_arg(ap, char *);
+			p->value.string = va_arg(ap, char*);
 		}
 		else if (dtype == AS_INDEX_NUMERIC) {
 			p->value.integer = va_arg(ap, int64_t);
@@ -212,7 +229,7 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
 			p->value.integer_range.max = va_arg(ap, int64_t);
 		}
 		else if (dtype == AS_INDEX_GEO2DSPHERE) {
-			p->value.string = va_arg(ap, char *);
+			p->value.string = va_arg(ap, char*);
 		}
 		else {
 			status = false;
@@ -220,8 +237,37 @@ as_query_where(as_query* query, const char * bin, as_predicate_type type, as_ind
 		break;
 	}
 
-	va_end(ap);
 	return status;
+}
+
+bool
+as_query_where(
+	as_query* query, const char * bin, as_predicate_type type, as_index_type itype,
+	as_index_datatype dtype, ...
+	)
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_internal(query, bin, NULL, type, itype, dtype, ap);
+
+	va_end(ap);
+	return rv;
+}
+
+bool
+as_query_where_with_ctx(
+	as_query* query, const char* bin, struct as_cdt_ctx* ctx, as_predicate_type type,
+	as_index_type itype, as_index_datatype dtype, ...
+	)
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_internal(query, bin, ctx, type, itype, dtype, ap);
+
+	va_end(ap);
+	return rv;
 }
 
 /******************************************************************************

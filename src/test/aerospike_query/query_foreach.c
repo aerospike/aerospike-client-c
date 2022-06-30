@@ -115,6 +115,16 @@ bool query_foreach_create()
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_NUMERIC);
 	index_process_return_code(status, &err, &task);
 
+	// create complex index on "e"
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_rank(&ctx, -1);
+
+	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_ctx_test_z", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, &ctx);
+	index_process_return_code(status, &err, &task);
+
+	as_cdt_ctx_destroy(&ctx);
+
 	// create complex index on "x"
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
 	index_process_return_code(status, &err, &task);
@@ -628,6 +638,46 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 	assert( count >= 6 && count <= 10 );
 
 	as_query_destroy(&q);
+}
+
+TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'z' is between 51 and 54" ) {
+
+	as_error err;
+	as_error_reset(&err);
+
+	uint32_t count = 0;
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_rank(&ctx, -1);
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where_with_ctx(&q, "z", &ctx, as_range(DEFAULT, NUMERIC, (int64_t)51,
+			(int64_t)54));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if ( err.code != AEROSPIKE_OK ) {
+		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	// The following records should be found:
+	//
+	// [46, 47, 48, 49, 50]
+	// [47, 48, 49, 50, 51] *
+	// [48, 49, 50, 51, 52] *
+	// [49, 50, 51, 52, 53] *
+	// [50, 51, 52, 53, 54] *
+	// [51, 52, 53, 54, 55]
+
+	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq(count, 4);
+
+	as_query_destroy(&q);
+	as_cdt_ctx_destroy(&ctx);
 }
 
 TEST( query_with_range_filter, "query_with_range_filter" ) {
@@ -1566,6 +1616,7 @@ SUITE( query_foreach, "aerospike_query_foreach tests" ) {
 	suite_add( query_foreach_6 );
 	suite_add( query_foreach_7 );
 	suite_add( query_foreach_8 );
+	suite_add( query_foreach_9 );
 	suite_add( query_with_range_filter );
 	suite_add( query_with_equality_filter );
 	suite_add( query_with_rec_device_size_filter );

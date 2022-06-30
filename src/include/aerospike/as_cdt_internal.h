@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -56,6 +56,9 @@ as_cdt_pack_header_flag(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32
 
 void
 as_cdt_pack_ctx(as_packer* pk, as_cdt_ctx* ctx);
+
+uint32_t
+as_cdt_ctx_pack(as_cdt_ctx* ctx, as_packer* pk);
 
 bool
 as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operator op_type);

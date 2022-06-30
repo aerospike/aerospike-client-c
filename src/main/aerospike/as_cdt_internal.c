@@ -96,6 +96,35 @@ as_cdt_pack_ctx(as_packer* pk, as_cdt_ctx* ctx)
 	}
 }
 
+uint32_t
+as_cdt_ctx_pack(as_cdt_ctx* ctx, as_packer* pk)
+{
+	uint32_t start = pk->offset;
+
+	if (as_pack_list_header(pk, ctx->list.size * 2) != 0) {
+		return 0;
+	}
+
+	for (uint32_t j = 0; j < ctx->list.size; j++) {
+		as_cdt_ctx_item* item = as_vector_get(&ctx->list, j);
+
+		if (as_pack_uint64(pk, item->type) != 0) {
+			return 0;
+		}
+
+		if (item->type & AS_CDT_CTX_VALUE) {
+			if (as_pack_val(pk, item->val.pval) != 0) {
+				return 0;
+			}
+		}
+		else if (as_pack_int64(pk, item->val.ival) != 0) {
+			return 0;
+		}
+	}
+
+	return pk->offset - start;
+}
+
 bool
 as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operator op_type)
 {

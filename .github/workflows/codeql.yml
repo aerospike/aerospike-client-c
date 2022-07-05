@@ -56,7 +56,7 @@ jobs:
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
     - name: Build for ubuntu
-    - run: |
+      run: |
        echo "Run, Build Application using script"
        sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++ zlib1g-dev
        sudo apt-get install ncurses-dev

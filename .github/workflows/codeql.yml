@@ -64,7 +64,8 @@ jobs:
     - name: Build for ubuntu
       run: |
        echo "Run, Build Application using script"
-       make [EVENT_LIB=libuv|libev|libevent]
+       alias make="make EVENT_LIB=libuv"
+       target/{target}/lib/libaerospike.a
 
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun

@@ -51,16 +51,18 @@ jobs:
         
         # Details on CodeQL's query packs refer to : https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
         # queries: security-extended,security-and-quality
-
+    - name: Install dependencies
+      run: |
+       sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++ zlib1g-dev
+       sudo apt-get install ncurses-dev
+       sudo apt-get install liblua5.1-dev  
         
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
     - name: Build for ubuntu
       run: |
        echo "Run, Build Application using script"
-       sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++ zlib1g-dev
-       sudo apt-get install ncurses-dev
-       sudo apt-get install liblua5.1-dev  
+       make [EVENT_LIB=libuv|libev|libevent] 
 
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun

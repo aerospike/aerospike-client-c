@@ -39,6 +39,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
+    - name: Checkout submodule
+      run: git submodule update --init
 
     # Initializes the CodeQL tools for scanning.
     - name: Initialize CodeQL
@@ -62,7 +64,7 @@ jobs:
     - name: Build for ubuntu
       run: |
        echo "Run, Build Application using script"
-       make [EVENT_LIB=libuv|libev|libevent] 
+       alias make="make EVENT_LIB=libuv"
 
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun

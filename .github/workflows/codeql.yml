@@ -62,10 +62,9 @@ jobs:
     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
     # If this step fails, then you should remove it and run the build manually (see below)
     - name: Build for ubuntu
-      run: |
-       echo "Run, Build Application using script"
-       alias make="make EVENT_LIB=libuv"
-       target/{target}/lib/libaerospike.a
+      uses: skx/github-action-build@master
+      with:
+        builder: .github/build.yml
 
     # ℹ️ Command-line programs to run using the OS shell.
     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun

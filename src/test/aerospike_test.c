@@ -49,6 +49,8 @@ static char g_password[AS_PASSWORD_SIZE];
 as_config_tls g_tls = {0};
 as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
 bool g_enterprise_server = false;
+int g_loop = 1;
+int g_delay = 1;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -130,6 +132,9 @@ usage()
 	fprintf(stderr, "  --auth {INTERNAL,EXTERNAL,EXTERNAL_SECURE,PKI} # Default: INTERNAL\n");
 	fprintf(stderr, "  Set authentication mode when user/password is defined.\n\n");
 
+	fprintf(stderr, "  --loop {integer value} # Default: 1\n");
+	fprintf(stderr, "  --delay {integer msec} # Default: 1 msec\n");
+
 	fprintf(stderr, "  -u --usage         # Default: usage not printed.\n");
 	fprintf(stderr, "  Display program usage.\n\n");
 }
@@ -155,6 +160,9 @@ static struct option long_options[] = {
 	{"tlsKeyFile",           required_argument, 0, 'Z'},
 	{"tlsCertFile",          required_argument, 0, 'y'},
 	{"tlsLoginOnly",         no_argument,       0, 'Y'},
+	{"auth",                 required_argument, 0, 'e'},
+	{"loop",                 required_argument, 0, 'L'},
+	{"delay",                required_argument, 0, 'D'},
 	{"auth",                 required_argument, 0, 'e'},
 	{"usage",                no_argument,       0, 'u'},
 	{0, 0, 0, 0}
@@ -260,6 +268,13 @@ static bool parse_opts(int argc, char* argv[])
 			}
 			break;
 
+		case 'L':
+			g_loop = atoi(optarg);
+			break;
+		case 'D':
+			g_delay = atoi(optarg);
+			break;
+
 		case 'u':
 			usage();
 			return false;
@@ -343,6 +358,75 @@ static bool before(atf_plan* plan)
 	return true;
 }
 
+
+static aerospike* connect_as()
+{
+	aerospike *as = NULL;
+
+	// Initialize cluster configuration.
+	as_config config;
+	as_config_init(&config);
+
+	if (! as_config_add_hosts(&config, g_host, g_port)) {
+		error("Invalid host(s) %s", g_host);
+		return NULL;
+	}
+
+	as_config_set_user(&config, g_user, g_password);
+
+	// Transfer ownership of all heap allocated TLS fields via shallow copy.
+	memcpy(&config.tls, &g_tls, sizeof(as_config_tls));
+	config.auth_mode = g_auth_mode;
+
+	as_error err;
+	as_error_reset(&err);
+
+	as = aerospike_new(&config);
+
+	if (aerospike_connect(as, &err) != AEROSPIKE_OK) {
+		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
+		aerospike_destroy(as);
+		return NULL;
+	}
+
+	char* result;
+	if (aerospike_info_any(as, &err, NULL, "edition", &result) != AEROSPIKE_OK) {
+		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
+		aerospike_close(as, &err);
+		aerospike_destroy(as);
+		return NULL;
+	}
+
+	if (strstr(result, "Aerospike Enterprise Edition") != NULL) {
+		g_enterprise_server = true;
+	}
+
+	cf_free(result);
+	return as;
+}
+
+static bool close_as(aerospike *as)
+{
+	if ( ! as ) {
+		error("aerospike was not initialized");
+		return false;
+	}
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_status status = aerospike_close(as, &err);
+	aerospike_destroy(as);
+
+	if (status == AEROSPIKE_OK) {
+		return true;
+	}
+	else {
+		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
+		return false;
+	}
+}
+
 static bool after(atf_plan* plan)
 {
 	if ( ! as ) {
@@ -366,6 +450,19 @@ static bool after(atf_plan* plan)
 	else {
 		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
 		return false;
+	}
+}
+
+TEST( loop_connect , "loop_connect: (loop_count,delay)" ) {
+
+	int loop = g_loop;
+
+	info("loop_connect loop:%d, delay:%d", g_loop, g_delay)
+	while(loop) {
+		aerospike *as = connect_as();
+		sleep(g_delay);
+		close_as(as);
+		loop--;
 	}
 }
 
@@ -405,6 +502,7 @@ PLAN(aerospike_test)
 	plan_add(query_geospatial);
 	plan_add(scan_basics);
 	plan_add(batch);
+	plan_add(loop_tests);
 
 #if AS_EVENT_LIB_DEFINED
 	plan_add(key_basics_async);
@@ -418,3 +516,11 @@ PLAN(aerospike_test)
 #endif
 }
 
+/******************************************************************************
+ * TEST SUITE
+ *****************************************************************************/
+
+SUITE(loop_tests, "aerospike basic loop tests") {
+	// Remove at beginning to clear out record.
+    suite_add(loop_connect);
+}

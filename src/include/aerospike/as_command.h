@@ -267,9 +267,6 @@ as_command_value_size(as_val* val, as_queue* buffers);
 static inline size_t
 as_command_bin_size(const as_bin* bin, as_queue* buffers)
 {
-	if (bin->name[0] == 0) {
-		return 8;
-	}
 	return strlen(bin->name) + as_command_value_size((as_val*)bin->valuep, buffers) + 8;
 }
 

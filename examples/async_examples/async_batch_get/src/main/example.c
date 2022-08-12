@@ -47,7 +47,9 @@ void insert_records(uint32_t* counter);
 bool insert_record(as_event_loop* event_loop, void* udata, uint32_t index);
 void insert_listener(as_error* err, void* udata, as_event_loop* event_loop);
 void batch_read(as_event_loop* event_loop);
-void batch_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop);
+void batch_read_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop);
+void batch_exists(as_event_loop* event_loop);
+void batch_exists_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop);
 
 //==========================================================
 // BATCH GET Example
@@ -79,7 +81,7 @@ main(int argc, char* argv[])
 	// Counter can be placed on stack because main() will not end until batch read is finished.
 	uint32_t counter = 0;
 	
-	// Start inserting records.  Batch read will be made when insertions are complete.
+	// Start inserting records. Batch read/exists calls will be made when insertions are complete.
 	insert_records(&counter);
 
 	// Wait till commands have completed before shutting down.
@@ -127,7 +129,8 @@ insert_record(as_event_loop* event_loop, void* udata, uint32_t index)
 
 	// Write a record to the database.
 	as_error err;
-	if (aerospike_key_put_async(&as, &err, NULL, &key, &rec, insert_listener, udata, event_loop, NULL) != AEROSPIKE_OK) {
+	if (aerospike_key_put_async(&as, &err, NULL, &key, &rec, insert_listener, udata, event_loop, NULL)
+		!= AEROSPIKE_OK) {
 		insert_listener(&err, udata, event_loop);
 		return false;
 	}
@@ -175,13 +178,14 @@ batch_read(as_event_loop* event_loop)
 
 	// Read these keys.
 	as_error err;
-	if (aerospike_batch_read_async(&as, &err, NULL, records, batch_listener, NULL, event_loop) != AEROSPIKE_OK) {
-		batch_listener(&err, records, NULL, event_loop);
+	if (aerospike_batch_read_async(&as, &err, NULL, records, batch_read_listener, NULL, event_loop)
+		!= AEROSPIKE_OK) {
+		batch_read_listener(&err, records, NULL, event_loop);
 	}
 }
 
 void
-batch_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop)
+batch_read_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop)
 {
 	if (err) {
 		LOG("aerospike_batch_read_async() returned %d - %s", err->code, err->message);
@@ -216,6 +220,62 @@ batch_listener(as_error* err, as_batch_records* records, void* udata, as_event_l
 	}
 
 	LOG("... found %u/%u records", n_found, list->size);
+	as_batch_records_destroy(records);
+
+	// Call batch exists example.
+	batch_exists(event_loop);
+}
+
+void
+batch_exists(as_event_loop* event_loop)
+{
+	// Add 5 keys that will be not found.
+	uint32_t max = g_n_keys + 5;
+
+	as_batch_records* records = as_batch_records_create(max);
+
+	for (uint32_t i = 0; i < max; i++) {
+		// as_batch_read_reserve() reserves a slot in the batch and initializes all
+		// as_batch_read_record fields to zero/false, including n_bin_names and read_all_bins.
+		// This default indicates an exists operation should be performed.
+		as_batch_read_record* record = as_batch_read_reserve(records);
+		as_key_init_int64(&record->key, g_namespace, g_set, i);
+	}
+
+	as_error err;
+
+	if (aerospike_batch_read_async(&as, &err, NULL, records, batch_exists_listener, NULL, event_loop)
+		!= AEROSPIKE_OK) {
+		batch_exists_listener(&err, records, NULL, event_loop);
+	}
+}
+
+void
+batch_exists_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop)
+{
+	if (err) {
+		LOG("batch_exists() error %d - %s", err->code, err->message);
+		as_batch_records_destroy(records);
+		as_monitor_notify(&monitor);
+		return;
+	}
+
+	as_vector* list = &records->list;
+	LOG("batch_exists() returned %u results", list->size);
+
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_batch_read_record* record = as_vector_get(list, i);
+
+		if (record->result == AEROSPIKE_OK) {
+			LOG("exists[%u]=true", i);
+		}
+		else if (record->result == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			LOG("exists[%u]=false", i);
+		}
+		else {
+			LOG("exists[%u]=error %d", i, record->result);
+		}
+	}
 	as_batch_records_destroy(records);
 	as_monitor_notify(&monitor);	
 }

@@ -3124,6 +3124,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * @param __policy			An as_hll_policy value.
  * @param __index_bit_count	Number of index bits. Must be between 4 and 16 inclusive.
  * @param __mh_bit_count	Number of min hash bits. Must be between 4 and 51 inclusive.
+ *							Also, __index_bit_count + __mh_bit_count must be <= 64.
  * @param __bin				A bin expression to apply this function to.
  * @return (hll bin) Returns the resulting hll bin.
  * @ingroup expression
@@ -3157,6 +3158,7 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * @param __list			A list expression of elements to add to the HLL.
  * @param __index_bit_count	Number of index bits. Must be between 4 and 16 inclusive.
  * @param __mh_bit_count	Number of min hash bits. Must be between 4 and 51 inclusive.
+ *							Also, __index_bit_count + __mh_bit_count must be <= 64.
  * @param __bin				A bin expression to apply this function to.
  * @return (hll bin) Returns the resulting hll bin after adding elements from __list.
  * @ingroup expression

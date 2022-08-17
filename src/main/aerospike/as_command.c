@@ -105,6 +105,10 @@ as_command_key_size(as_policy_key policy, const as_key* key, uint16_t* n_fields)
 size_t
 as_command_value_size(as_val* val, as_queue* buffers)
 {
+	if (!val) {
+		return 0;
+	}
+
 	switch (val->type) {
 		case AS_NIL: {
 			return 0;
@@ -358,19 +362,8 @@ as_command_write_bin_name(uint8_t* cmd, const char* name)
 uint8_t*
 as_command_write_bin(uint8_t* begin, as_operator op_type, const as_bin* bin, as_queue* buffers)
 {
-	const char* name = bin->name;
-
-	if (name[0] == 0) {
-		*(uint32_t*)begin = cf_swap_to_be32(4);
-		begin += 4;
-		*begin++ = as_protocol_types[op_type];
-		*begin++ = AS_BYTES_UNDEF;
-		*begin++ = 0;
-		*begin++ = 0;
-		return begin;
-	}
-
 	uint8_t* p = begin + AS_OPERATION_HEADER_SIZE;
+	const char* name = bin->name;
 
 	// Copy string, but do not transfer null byte.
 	while (*name) {
@@ -380,7 +373,13 @@ as_command_write_bin(uint8_t* begin, as_operator op_type, const as_bin* bin, as_
 	as_val* val = (as_val*)bin->valuep;
 	uint32_t val_len;
 	uint8_t val_type;
-	
+
+	if (!val) {
+		val_len = 0;
+		val_type = AS_BYTES_UNDEF;
+		goto WriteFieldHeader;
+	}
+
 	switch (val->type) {
 		default:
 		case AS_NIL: {
@@ -481,6 +480,8 @@ as_command_write_bin(uint8_t* begin, as_operator op_type, const as_bin* bin, as_
 			break;
 		}
 	}
+
+WriteFieldHeader:
 	*(uint32_t*)begin = cf_swap_to_be32(name_len + val_len + 4);
 	begin += 4;
 	*begin++ = as_protocol_types[op_type];

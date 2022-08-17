@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -789,7 +789,35 @@ TEST(key_basics_bool, "bool")
 
 	as_key_destroy(&key);
 	as_record_destroy(prec);
+}
 
+TEST(key_basics_write_empty_bin_name, "write empty bin name")
+{
+	// It's not recommended to write bins with an empty bin name in multi-bin mode.
+	// The server allows it, so test that backwards compatibility is preserved.
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "webn");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, "", 19);
+
+	as_status rc = aerospike_key_put(as, &err, NULL, &key, &rec);
+    assert_int_eq(rc, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* prec = NULL;
+	rc = aerospike_key_get(as, &err, NULL, &key, &prec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	int64_t v = as_record_get_int64(prec, "", -1);
+	assert_int_eq(v, 19);
+
+	as_key_destroy(&key);
+	as_record_destroy(prec);
 }
 
 /******************************************************************************
@@ -819,6 +847,7 @@ SUITE(key_basics, "aerospike_key basic tests") {
 	suite_add(key_basics_list_map_double);
 	suite_add(key_basics_storekey);
 	suite_add(key_basics_bool);
+	suite_add(key_basics_write_empty_bin_name);
 
 	if (g_enterprise_server) {
 		suite_add(key_basics_compression);

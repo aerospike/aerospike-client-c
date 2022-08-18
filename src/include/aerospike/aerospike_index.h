@@ -54,9 +54,6 @@ extern "C" {
 /******************************************************************************
  * TYPES
  *****************************************************************************/
-#define AS_INDEX_POSITION_MAX_SZ 256
-
-typedef char as_index_position[AS_INDEX_POSITION_MAX_SZ];
 
 /**
  * Index Type
@@ -149,8 +146,8 @@ struct as_cdt_ctx;
  * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  * @param ns			The namespace to be indexed.
  * @param set			The set to be indexed.
- * @param position		The bin or complex position name to be indexed.
- * @param name			The name of the index.
+ * @param bin_name		The bin name to be indexed.
+ * @param index_name	The name of the index.
  * @param itype			The type of index, default or complex type.
  * @param dtype			The data type of index, string or integer.
  * @param ctx			Optional CDT context describing the path to locate the data to be indexed.
@@ -162,7 +159,7 @@ struct as_cdt_ctx;
 AS_EXTERN as_status
 aerospike_index_create_ctx(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
-	const char* set, const char* position, const char* name, as_index_type itype,
+	const char* set, const char* bin_name, const char* index_name, as_index_type itype,
 	as_index_datatype dtype, struct as_cdt_ctx* ctx
 	);
 
@@ -186,8 +183,8 @@ aerospike_index_create_ctx(
  * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  * @param ns			The namespace to be indexed.
  * @param set			The set to be indexed.
- * @param position		The bin or complex position name to be indexed.
- * @param name			The name of the index.
+ * @param bin_name		The bin name to be indexed.
+ * @param index_name	The name of the index.
  * @param itype			The type of index, default or complex type.
  * @param dtype			The data type of index, string or integer.
  *
@@ -199,12 +196,12 @@ static inline as_status
 aerospike_index_create_complex(
 	aerospike* as, as_error* err, as_index_task* task,
 	const as_policy_info* policy, const char* ns, const char* set,
-	const char* position, const char* name, as_index_type itype,
+	const char* bin_name, const char* index_name, as_index_type itype,
 	as_index_datatype dtype
 	)
 {
-	return aerospike_index_create_ctx(as, err, task, policy, ns, set, position,
-			name, itype, dtype, NULL);
+	return aerospike_index_create_ctx(as, err, task, policy, ns, set, bin_name,
+			index_name, itype, dtype, NULL);
 }
 
 /**
@@ -227,8 +224,8 @@ aerospike_index_create_complex(
  * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  * @param ns			The namespace to be indexed.
  * @param set			The set to be indexed.
- * @param bin			The bin to be indexed.
- * @param name			The name of the index.
+ * @param bin_name		The bin name to be indexed.
+ * @param index_name	The name of the index.
  * @param dtype			The data type of index, string or integer.
  *
  * @return AEROSPIKE_OK if successful. Return AEROSPIKE_ERR_INDEX_FOUND if index exists. Otherwise an error.
@@ -238,11 +235,12 @@ aerospike_index_create_complex(
 static inline as_status
 aerospike_index_create(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy,
-	const char* ns, const char* set, const char* bin, const char* name,
+	const char* ns, const char* set, const char* bin_name, const char* index_name,
 	as_index_datatype dtype
 	)
 {
-	return aerospike_index_create_ctx(as, err, task, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, dtype, NULL);
+	return aerospike_index_create_ctx(as, err, task, policy, ns, set, bin_name, index_name,
+			AS_INDEX_TYPE_DEFAULT, dtype, NULL);
 }
 
 /**
@@ -272,7 +270,7 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
  * @param err			The as_error to be populated if an error occurs.
  * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
  * @param ns			The namespace containing the index to be removed.
- * @param name			The name of the index to be removed.
+ * @param index_name	The name of the index to be removed.
  *
  * @return AEROSPIKE_OK if successful or index does not exist. Otherwise an error.
  *
@@ -281,7 +279,7 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 AS_EXTERN as_status
 aerospike_index_remove(
 	aerospike* as, as_error* err, const as_policy_info* policy,
-	const char* ns, const char* name
+	const char* ns, const char* index_name
 	);
 
 /******************************************************************************

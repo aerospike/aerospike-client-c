@@ -32,7 +32,7 @@
 as_status
 aerospike_index_create_ctx(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
-	const char* set, const char* position, const char* name, as_index_type itype,
+	const char* set, const char* bin_name, const char* index_name, as_index_type itype,
 	as_index_datatype dtype, as_cdt_ctx* ctx
 	)
 {
@@ -88,7 +88,7 @@ aerospike_index_create_ctx(
 	}
 
 	as_string_builder_append(&sb, ";indexname=");
-	as_string_builder_append(&sb, name);
+	as_string_builder_append(&sb, index_name);
 
 	if (ctx) {
 		as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
@@ -117,7 +117,7 @@ aerospike_index_create_ctx(
 	as_string_builder_append(&sb, itype_string);
 
 	as_string_builder_append(&sb, ";indexdata=");
-	as_string_builder_append(&sb, position);
+	as_string_builder_append(&sb, bin_name);
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append(&sb, dtype_string);
 	as_string_builder_append_newline(&sb);
@@ -138,7 +138,7 @@ aerospike_index_create_ctx(
 	if (task) {
 		task->as = as;
 		as_strncpy(task->ns, ns, sizeof(task->ns));
-		as_strncpy(task->name, name, sizeof(task->name));
+		as_strncpy(task->name, index_name, sizeof(task->name));
 		task->socket_timeout = policy->timeout;
 		task->total_timeout = 30000;
 		task->done = false;
@@ -243,12 +243,14 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 
 as_status
 aerospike_index_remove(
-	aerospike* as, as_error* err, const as_policy_info* policy, const char* ns, const char* name)
+	aerospike* as, as_error* err, const as_policy_info* policy, const char* ns,
+	const char* index_name
+	)
 {
 	as_error_reset(err);
 	
 	char command[1024];
-	int count = snprintf(command, sizeof(command), "sindex-delete:ns=%s;indexname=%s", ns, name);
+	int count = snprintf(command, sizeof(command), "sindex-delete:ns=%s;indexname=%s", ns, index_name);
 	
 	if (++count >= sizeof(command)) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index remove buffer overflow: %d", count);

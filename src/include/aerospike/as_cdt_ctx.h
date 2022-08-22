@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -298,6 +298,64 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
 	item.val.pval = val;
 	as_vector_append(&ctx->list, &item);
 }
+
+/**
+ * Return exact serialized size of ctx. Return zero on error.
+ */
+AS_EXTERN uint32_t
+as_cdt_ctx_byte_capacity(const as_cdt_ctx* ctx);
+
+/**
+ * Serialize ctx to bytes. Use as_cdt_ctx_byte_capacity() to determine required bytes capacity.
+ *
+ * @param ctx		Source CDT context.
+ * @param bytes		Target bytes array which must be allocated before calling this function.
+ * @param capacity	Max size of bytes array.
+ * @return			Length of serialized bytes on success or zero on error.
+ */
+AS_EXTERN uint32_t
+as_cdt_ctx_to_bytes(const as_cdt_ctx* ctx, uint8_t* bytes, uint32_t capacity);
+
+/**
+ * Deserialize bytes to ctx.
+ *
+ * @param ctx		Target CDT context.
+ * @param bytes		Source byte array.
+ * @param size		Length of source byte array.
+ * @return			true on success, false on error.
+ */
+AS_EXTERN bool
+as_cdt_ctx_from_bytes(as_cdt_ctx* ctx, const uint8_t* bytes, uint32_t size);
+
+/**
+ * Return estimated base64 encoded size of ctx. Return zero on error.
+ */
+AS_EXTERN uint32_t
+as_cdt_ctx_base64_capacity(const as_cdt_ctx* ctx);
+
+/**
+ * Serialize ctx to base64 encoded string. Use as_cdt_ctx_base64_capacity() to determine
+ * required string capacity.
+ *
+ * @param ctx		Source CDT context.
+ * @param base64	Target base64 encoded null terminated string which must be allocated before
+ *					calling this function.
+ * @param capacity	Max size of base64 encoded string.
+ * @return			true on success, false on error.
+ */
+AS_EXTERN bool
+as_cdt_ctx_to_base64(const as_cdt_ctx* ctx, char* base64, uint32_t capacity);
+
+/**
+ * Deserialize base64 encoded string to ctx.
+ *
+ * @param ctx		Target CDT context.
+ * @param base64	Source base64 encoded string.
+ * @param size		Length of source base64 encoded string.
+ * @return			true on success, false on error.
+ */
+AS_EXTERN bool
+as_cdt_ctx_from_base64(as_cdt_ctx* ctx, const char* base64);
 
 #ifdef __cplusplus
 } // end extern "C"

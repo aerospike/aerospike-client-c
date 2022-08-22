@@ -97,7 +97,7 @@ as_cdt_pack_ctx(as_packer* pk, as_cdt_ctx* ctx)
 }
 
 uint32_t
-as_cdt_ctx_pack(as_cdt_ctx* ctx, as_packer* pk)
+as_cdt_ctx_pack(const as_cdt_ctx* ctx, as_packer* pk)
 {
 	uint32_t start = pk->offset;
 
@@ -105,8 +105,10 @@ as_cdt_ctx_pack(as_cdt_ctx* ctx, as_packer* pk)
 		return 0;
 	}
 
+	as_vector* list = (as_vector*)&ctx->list;
+
 	for (uint32_t j = 0; j < ctx->list.size; j++) {
-		as_cdt_ctx_item* item = as_vector_get(&ctx->list, j);
+		as_cdt_ctx_item* item = as_vector_get(list, j);
 
 		if (as_pack_uint64(pk, item->type) != 0) {
 			return 0;

@@ -83,7 +83,7 @@ as_cdt_ctx_from_bytes(as_cdt_ctx* ctx, const uint8_t* bytes, uint32_t size)
 	as_cdt_ctx_init(ctx, max / 2);
 
 	as_cdt_ctx_item item;
-	int i = 0;
+	uint32_t i = 0;
 
 	while (i < max) {
 		as_val* vtype = as_list_get(list, i);

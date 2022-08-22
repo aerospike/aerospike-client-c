@@ -169,6 +169,51 @@ TEST(index_ctx_test , "Create ctx index on bin")
 	res = NULL;
 }
 
+TEST(ctx_restore_test , "backup/restore ctx")
+{
+	as_cdt_ctx ctx1;
+	as_cdt_ctx_init(&ctx1, 3);
+	as_cdt_ctx_add_list_index(&ctx1, -1);
+	as_cdt_ctx_add_map_key(&ctx1, (as_val*)as_string_new("key1", false));
+	as_cdt_ctx_add_list_value(&ctx1, (as_val*)as_integer_new(937));
+	assert_int_eq(ctx1.list.size, 3);
+
+	uint32_t capacity = as_cdt_ctx_base64_capacity(&ctx1);
+	char* base64 = cf_malloc(capacity);
+	bool rv = as_cdt_ctx_to_base64(&ctx1, base64, capacity);
+	assert_true(rv);
+
+	as_cdt_ctx ctx2;
+	rv = as_cdt_ctx_from_base64(&ctx2, base64);
+	cf_free(base64);
+	assert_true(rv);
+	assert_int_eq(ctx2.list.size, 3);
+
+	as_cdt_ctx_item* item1 = as_vector_get(&ctx1.list, 0);
+	as_cdt_ctx_item* item2 = as_vector_get(&ctx2.list, 0);
+
+	assert_int_eq(item2->type, item1->type);
+	assert_int_eq(item2->val.ival, item1->val.ival);
+
+	item1 = as_vector_get(&ctx1.list, 1);
+	item2 = as_vector_get(&ctx2.list, 1);
+	as_string* s1 = (as_string*)item1->val.pval;
+	as_string* s2 = (as_string*)item2->val.pval;
+
+	assert_int_eq(item2->type, item1->type);
+	assert_string_eq(s2->value, s1->value);
+
+	item1 = as_vector_get(&ctx1.list, 2);
+	item2 = as_vector_get(&ctx2.list, 2);
+	as_integer* i1 = (as_integer*)item1->val.pval;
+	as_integer* i2 = (as_integer*)item2->val.pval;
+
+	assert_int_eq(item2->type, item1->type);
+	assert_int_eq(i2->value, i1->value);
+
+	as_cdt_ctx_destroy(&ctx1);
+	as_cdt_ctx_destroy(&ctx2);
+}
 
 /******************************************************************************
  * TEST SUITE
@@ -179,4 +224,5 @@ SUITE(index_basics, "aerospike_sindex basic tests")
 	suite_add(index_basics_create);
 	suite_add(index_basics_drop);
 	suite_add(index_ctx_test);
+	suite_add(ctx_restore_test);
 }

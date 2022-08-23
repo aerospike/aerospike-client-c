@@ -89,6 +89,7 @@ typedef struct as_scan_builder {
 	as_buffer argbuffer;
 	as_queue* opsbuffers;
 	uint64_t max_records;
+	size_t size;
 	uint32_t task_id_offset;
 	uint32_t parts_full_size;
 	uint32_t parts_partial_size;
@@ -365,10 +366,12 @@ as_scan_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* bu
 	return AEROSPIKE_OK;
 }
 
-static size_t
-as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_builder* sb)
+static as_status
+as_scan_command_size(
+	const as_policy_scan* policy, const as_scan* scan, as_scan_builder* sb, as_error* err
+	)
 {
-	size_t size = AS_HEADER_SIZE;
+	sb->size = AS_HEADER_SIZE;
 	uint16_t n_fields = 0;
 
 	if (sb->np) {
@@ -381,35 +384,35 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 	}
 
 	if (scan->ns[0]) {
-		size += as_command_string_field_size(scan->ns);
+		sb->size += as_command_string_field_size(scan->ns);
 		n_fields++;
 	}
 	
 	if (scan->set[0]) {
-		size += as_command_string_field_size(scan->set);
+		sb->size += as_command_string_field_size(scan->set);
 		n_fields++;
 	}
 	
 	if (policy->records_per_second > 0) {
-		size += as_command_field_size(sizeof(uint32_t));
+		sb->size += as_command_field_size(sizeof(uint32_t));
 		n_fields++;
 	}
 
 	// Estimate scan timeout size.
-	size += as_command_field_size(sizeof(uint32_t));
+	sb->size += as_command_field_size(sizeof(uint32_t));
 	n_fields++;
 
 	// Estimate taskId size.
-	size += as_command_field_size(8);
+	sb->size += as_command_field_size(8);
 	n_fields++;
 	
 	// Estimate background function size.
 	as_buffer_init(&sb->argbuffer);
 	
 	if (scan->apply_each.function[0]) {
-		size += as_command_field_size(1);
-		size += as_command_string_field_size(scan->apply_each.module);
-		size += as_command_string_field_size(scan->apply_each.function);
+		sb->size += as_command_field_size(1);
+		sb->size += as_command_string_field_size(scan->apply_each.module);
+		sb->size += as_command_string_field_size(scan->apply_each.function);
 		
 		if (scan->apply_each.arglist) {
 			// If the query has a udf w/ arglist, then serialize it.
@@ -418,27 +421,27 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 			as_serializer_serialize(&ser, (as_val*)scan->apply_each.arglist, &sb->argbuffer);
 			as_serializer_destroy(&ser);
 		}
-		size += as_command_field_size(sb->argbuffer.size);
+		sb->size += as_command_field_size(sb->argbuffer.size);
 		n_fields += 4;
 	}
 	
 	if (policy->base.filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
+		sb->size += AS_FIELD_HEADER_SIZE + policy->base.filter_exp->packed_sz;
 		n_fields++;
 	}
 
 	if (sb->parts_full_size > 0) {
-		size += as_command_field_size(sb->parts_full_size);
+		sb->size += as_command_field_size(sb->parts_full_size);
 		n_fields++;
 	}
 
 	if (sb->parts_partial_size > 0) {
-		size += as_command_field_size(sb->parts_partial_size);
+		sb->size += as_command_field_size(sb->parts_partial_size);
 		n_fields++;
 	}
 
 	if (sb->max_records > 0) {
-		size += as_command_field_size(8);
+		sb->size += as_command_field_size(8);
 		n_fields++;
 	}
 
@@ -452,16 +455,20 @@ as_scan_command_size(const as_policy_scan* policy, const as_scan* scan, as_scan_
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
-			size += as_command_bin_size(&op->bin, sb->opsbuffers);
+			as_status status = as_command_bin_size(&op->bin, sb->opsbuffers, &sb->size, err);
+
+			if (status != AEROSPIKE_OK) {
+				return status;
+			}
 		}
 	}
 	else {
 		// Estimate size for selected bin names.
 		for (uint16_t i = 0; i < scan->select.size; i++) {
-			size += as_command_string_operation_size(scan->select.entries[i]);
+			sb->size += as_command_string_operation_size(scan->select.entries[i]);
 		}
 	}
-	return size;
+	return AEROSPIKE_OK;
 }
 
 static size_t
@@ -624,9 +631,22 @@ as_scan_command_execute(as_scan_task* task)
 		sb.max_records = 0;
 	}
 
-	size_t size = as_scan_command_size(task->policy, task->scan, &sb);
-	uint8_t* buf = as_command_buffer_init(size);
-	size = as_scan_command_init(buf, task->cluster, task->policy, task->scan, task->task_id, &sb);
+	status = as_scan_command_size(task->policy, task->scan, &sb, &err);
+
+	if (status != AEROSPIKE_OK) {
+		if (task->scan->ops) {
+			as_buffers_destroy(&opsbuffers);
+		}
+
+		// Set main error only once.
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
+			as_error_copy(task->err, &err);
+		}
+		return status;
+	}
+
+	uint8_t* buf = as_command_buffer_init(sb.size);
+	size_t size = as_scan_command_init(buf, task->cluster, task->policy, task->scan, task->task_id, &sb);
 
 	as_command cmd;
 	cmd.cluster = task->cluster;
@@ -651,7 +671,7 @@ as_scan_command_execute(as_scan_task* task)
 	status = as_command_execute(&cmd, &err);
 
 	// Free command memory.
-	as_command_buffer_free(buf, size);
+	as_command_buffer_free(buf, sb.size);
 
 	if (status) {
 		if (task->pt && as_partition_tracker_should_retry(task->pt, task->np, status)) {
@@ -1147,9 +1167,19 @@ as_scan_partition_async(
 	sb.opsbuffers = &opsbuffers;
 	sb.max_records = 0;
 
-	size_t cmd_size = as_scan_command_size(policy, scan, &sb);
-	uint8_t* cmd_buf = cf_malloc(cmd_size);
-	cmd_size = as_scan_command_init(cmd_buf, cluster, policy, scan, task_id, &sb);
+	status = as_scan_command_size(policy, scan, &sb, err);
+
+	if (status != AEROSPIKE_OK) {
+		if (scan->ops) {
+			as_buffers_destroy(&opsbuffers);
+		}
+		as_partition_tracker_destroy(pt);
+		cf_free(pt);
+		return status;
+	}
+
+	uint8_t* cmd_buf = cf_malloc(sb.size);
+	size_t cmd_size = as_scan_command_init(cmd_buf, cluster, policy, scan, task_id, &sb);
 
 	as_async_scan_executor* se = cf_malloc(sizeof(as_async_scan_executor));
 	se->listener = listener;

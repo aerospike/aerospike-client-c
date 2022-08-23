@@ -120,6 +120,7 @@ typedef struct as_query_builder {
 	as_buffer argbuffer;
 	as_queue* opsbuffers;
 	uint64_t max_records;
+	size_t size;
 	uint32_t filter_size;
 	uint32_t task_id_offset;
 	uint32_t parts_full_size;
@@ -606,12 +607,12 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 	return p;
 }
 
-static size_t
+static as_status
 as_query_command_size(
-	const as_policy_base* base_policy, const as_query* query, as_query_builder* qb
+	const as_policy_base* base_policy, const as_query* query, as_query_builder* qb, as_error* err
 	)
 {
-	size_t size = AS_HEADER_SIZE;
+	qb->size = AS_HEADER_SIZE;
 	uint32_t filter_size = 0;
 	uint16_t n_fields = 0;
 
@@ -628,27 +629,27 @@ as_query_command_size(
 	}
 
 	if (query->ns[0]) {
-		size += as_command_string_field_size(query->ns);
+		qb->size += as_command_string_field_size(query->ns);
 		n_fields++;
 	}
 	
 	if (query->set[0]) {
-		size += as_command_string_field_size(query->set);
+		qb->size += as_command_string_field_size(query->set);
 		n_fields++;
 	}
 
 	// RPS field used in new servers and not used (but harmless to add) in old servers.
 	if (query->records_per_second > 0) {
-		size += as_command_field_size(sizeof(uint32_t));
+		qb->size += as_command_field_size(sizeof(uint32_t));
 		n_fields++;
 	}
 
 	// Socket timeout field used in new servers and not used (but harmless to add) in old servers.
-	size += as_command_field_size(sizeof(uint32_t));
+	qb->size += as_command_field_size(sizeof(uint32_t));
 	n_fields++;
 
 	// Estimate taskId size.
-	size += as_command_field_size(8);
+	qb->size += as_command_field_size(8);
 	n_fields++;
 
 	// Estimate size of query filter.
@@ -658,12 +659,12 @@ as_query_command_size(
 
 		// Estimate AS_FIELD_INDEX_TYPE
 		if (pred->itype != AS_INDEX_TYPE_DEFAULT) {
-			size += as_command_field_size(1);
+			qb->size += as_command_field_size(1);
 			n_fields++;
 		}
 
 		// Estimate AS_FIELD_INDEX_RANGE
-		size += AS_FIELD_HEADER_SIZE;
+		qb->size += AS_FIELD_HEADER_SIZE;
 		filter_size++;  // Add byte for num filters.
 
 		// bin name size(1) + particle type size(1) + begin particle size(4) + end particle size(4) = 10
@@ -687,7 +688,7 @@ as_query_command_size(
 				}
 				break;
 		}
-		size += filter_size;
+		qb->size += filter_size;
 		n_fields++;
 		qb->filter_size = filter_size;
 
@@ -697,19 +698,19 @@ as_query_command_size(
 			qb->bin_name_size = 0;
 
 			if (query->select.size > 0) {
-				size += AS_FIELD_HEADER_SIZE;
+				qb->size += AS_FIELD_HEADER_SIZE;
 				qb->bin_name_size++;  // Add byte for num bin names.
 				
 				for (uint16_t i = 0; i < query->select.size; i++) {
 					qb->bin_name_size += (uint32_t)strlen(query->select.entries[i]) + 1;
 				}
-				size += qb->bin_name_size;
+				qb->size += qb->bin_name_size;
 				n_fields++;
 			}
 		}
 
 		if (pred->ctx) {
-			size += AS_FIELD_HEADER_SIZE + pred->ctx_size;
+			qb->size += AS_FIELD_HEADER_SIZE + pred->ctx_size;
 			n_fields++;
 		}
 	}
@@ -718,9 +719,9 @@ as_query_command_size(
 	as_buffer_init(&qb->argbuffer);
 
 	if (query->apply.function[0]) {
-		size += as_command_field_size(1);
-		size += as_command_string_field_size(query->apply.module);
-		size += as_command_string_field_size(query->apply.function);
+		qb->size += as_command_field_size(1);
+		qb->size += as_command_string_field_size(query->apply.module);
+		qb->size += as_command_string_field_size(query->apply.function);
 
 		if (query->apply.arglist) {
 			// If the query has a udf w/ arglist, then serialize it.
@@ -729,34 +730,34 @@ as_query_command_size(
 			as_serializer_serialize(&ser, (as_val*)query->apply.arglist, &qb->argbuffer);
 			as_serializer_destroy(&ser);
 		}
-		size += as_command_field_size(qb->argbuffer.size);
+		qb->size += as_command_field_size(qb->argbuffer.size);
 		n_fields += 4;
 	}
 
 	// Estimate filter expression size.
 	if (base_policy->filter_exp) {
-		size += AS_FIELD_HEADER_SIZE + base_policy->filter_exp->packed_sz;
+		qb->size += AS_FIELD_HEADER_SIZE + base_policy->filter_exp->packed_sz;
 		n_fields++;
 	}
 
 	if (qb->parts_full_size > 0) {
-		size += as_command_field_size(qb->parts_full_size);
+		qb->size += as_command_field_size(qb->parts_full_size);
 		n_fields++;
 	}
 
 	if (qb->parts_partial_digest_size > 0) {
-		size += as_command_field_size(qb->parts_partial_digest_size);
+		qb->size += as_command_field_size(qb->parts_partial_digest_size);
 		n_fields++;
 	}
 
 	if (qb->parts_partial_bval_size > 0) {
-		size += as_command_field_size(qb->parts_partial_bval_size);
+		qb->size += as_command_field_size(qb->parts_partial_bval_size);
 		n_fields++;
 	}
 
 	// Max records field used in new servers and not used (but harmless to add) in old servers.
 	if (qb->max_records > 0) {
-		size += as_command_field_size(8);
+		qb->size += as_command_field_size(8);
 		n_fields++;
 	}
 
@@ -771,18 +772,22 @@ as_query_command_size(
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
-			size += as_command_bin_size(&op->bin, qb->opsbuffers);
+			as_status status = as_command_bin_size(&op->bin, qb->opsbuffers, &qb->size, err);
+
+			if (status != AEROSPIKE_OK) {
+				return status;
+			}
 		}
 		qb->n_ops = ops->binops.size;
 	}
 	else if (qb->is_new || query->where.size == 0) {
 		// Estimate size for selected bin names (query bin names already handled for old servers).
 		for (uint16_t i = 0; i < query->select.size; i++) {
-			size += as_command_string_operation_size(query->select.entries[i]);
+			qb->size += as_command_string_operation_size(query->select.entries[i]);
 		}
 		qb->n_ops = query->select.size;
 	}
-	return size;
+	return AEROSPIKE_OK;
 }
 
 static size_t
@@ -1109,9 +1114,22 @@ as_query_command_execute_new(as_query_task* task)
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
 
-	size_t size = as_query_command_size(base_policy, task->query, &qb);
-	uint8_t* buf = as_command_buffer_init(size);
-	size = as_query_command_init(buf, base_policy, task->query_policy, task->write_policy,
+	as_status status = as_query_command_size(base_policy, task->query, &qb, &err);
+
+	if (status != AEROSPIKE_OK) {
+		if (task->query->ops) {
+			as_buffers_destroy(&opsbuffers);
+		}
+
+		// Set main error only once.
+		if (as_fas_uint32(task->error_mutex, 1) == 0) {
+			as_error_copy(task->err, &err);
+		}
+		return status;
+	}
+
+	uint8_t* buf = as_command_buffer_init(qb.size);
+	size_t size = as_query_command_init(buf, base_policy, task->query_policy, task->write_policy,
 		task->query, task->query_type, task->task_id, &qb);
 
 	const as_policy_base* policy = &task->query_policy->base;
@@ -1136,10 +1154,10 @@ as_query_command_execute_new(as_query_task* task)
 	// Individual query node commands must not retry.
 	cmd.max_retries = 0;
 
-	as_status status = as_command_execute(&cmd, &err);
+	status = as_command_execute(&cmd, &err);
 
 	// Free command memory.
-	as_command_buffer_free(buf, size);
+	as_command_buffer_free(buf, qb.size);
 
 	if (status != AEROSPIKE_OK) {
 		if (task->pt && as_partition_tracker_should_retry(task->pt, task->np, status)) {
@@ -1224,9 +1242,17 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 	// Build Command. It's okay to share command across threads because old query protocol does
 	// not have retries. If retries were allowed, the timeout field in the command would change on
 	// retry which would conflict with other threads.
-	size_t size = as_query_command_size(base_policy, task->query, &qb);
-	uint8_t* cmd = as_command_buffer_init(size);
-	size = as_query_command_init(cmd, base_policy, task->query_policy, task->write_policy,
+	status = as_query_command_size(base_policy, task->query, &qb, task->err);
+
+	if (status != AEROSPIKE_OK) {
+		if (query->ops) {
+			as_buffers_destroy(&opsbuffers);
+		}
+		return status;
+	}
+
+	uint8_t* cmd = as_command_buffer_init(qb.size);
+	size_t size = as_query_command_init(cmd, base_policy, task->query_policy, task->write_policy,
 		task->query, task->query_type, task->task_id, &qb);
 
 	task->cmd = cmd;
@@ -1292,7 +1318,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 	cf_queue_destroy(task->complete_q);
 	
 	// Free command memory.
-	as_command_buffer_free(cmd, size);
+	as_command_buffer_free(cmd, qb.size);
 	
 	return status;
 }
@@ -1664,10 +1690,20 @@ as_query_partition_async(
 	as_query_builder qb;
 	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
 
-	size_t cmd_size = as_query_command_size(&policy->base, query, &qb);
-	uint8_t* cmd_buf = cf_malloc(cmd_size);
-	cmd_size = as_query_command_init(cmd_buf, &policy->base, policy, NULL, query, QUERY_FOREGROUND,
-		task_id, &qb);
+	status = as_query_command_size(&policy->base, query, &qb, err);
+
+	if (status != AEROSPIKE_OK) {
+		if (query->ops) {
+			as_buffers_destroy(&opsbuffers);
+		}
+		as_partition_tracker_destroy(pt);
+		cf_free(pt);
+		return status;
+	}
+
+	uint8_t* cmd_buf = cf_malloc(qb.size);
+	size_t cmd_size = as_query_command_init(cmd_buf, &policy->base, policy, NULL, query,
+		QUERY_FOREGROUND, task_id, &qb);
 
 	as_async_query_executor* qe = cf_malloc(sizeof(as_async_query_executor));
 	qe->listener = listener;
@@ -2032,11 +2068,36 @@ aerospike_query_async(
 	}
 
 	uint64_t task_id = as_random_get_uint64();
+	as_queue opsbuffers;
+
+	if (query->ops) {
+		as_queue_inita(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
+	}
+
+	as_query_builder qb;
+	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
+
+	status = as_query_command_size(&policy->base, query, &qb, err);
+
+	if (status != AEROSPIKE_OK) {
+		if (query->ops) {
+			as_buffers_destroy(&opsbuffers);
+		}
+		return status;
+	}
+
+	uint8_t* cmd_buf = as_command_buffer_init(qb.size);
+	size_t size = as_query_command_init(cmd_buf, &policy->base, policy, NULL, query,
+		QUERY_FOREGROUND, task_id, &qb);
 
 	as_nodes* nodes;
 	status = as_cluster_reserve_all_nodes(cluster, err, &nodes);
 
 	if (status != AEROSPIKE_OK) {
+		if (query->ops) {
+			as_buffers_destroy(&opsbuffers);
+		}
+		as_command_buffer_free(cmd_buf, qb.size);
 		return status;
 	}
 
@@ -2060,20 +2121,6 @@ aerospike_query_async(
 	exec->valid = true;
 	executor->listener = listener;
 	executor->info_timeout = policy->info_timeout;
-
-	as_queue opsbuffers;
-
-	if (query->ops) {
-		as_queue_inita(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
-	}
-
-	as_query_builder qb;
-	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
-
-	size_t size = as_query_command_size(&policy->base, query, &qb);
-	uint8_t* cmd_buf = as_command_buffer_init(size);
-	size = as_query_command_init(cmd_buf, &policy->base, policy, NULL, query, QUERY_FOREGROUND,
-		task_id, &qb);
 
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.
@@ -2111,7 +2158,7 @@ aerospike_query_async(
 	}
 	
 	// Free command buffer.
-	as_command_buffer_free(cmd_buf, size);
+	as_command_buffer_free(cmd_buf, qb.size);
 	
 	if (policy->fail_on_cluster_change) {
 		// Verify migrations are not in progress.

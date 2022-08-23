@@ -503,35 +503,37 @@ typedef struct as_put_s {
 	const as_key* key;
 	as_record* rec;
 	as_queue* buffers;
+	size_t size;
 	uint32_t filter_size;
 	uint16_t n_fields;
 	uint16_t n_bins;
 } as_put;
 
-static size_t
+static as_status
 as_put_init(
-	as_put* put, const as_policy_write* policy, const as_key* key, as_record* rec, as_queue* buffers
+	as_put* put, const as_policy_write* policy, const as_key* key, as_record* rec,
+	as_queue* buffers, as_error* err
 	)
 {
 	put->policy = policy;
 	put->key = key;
 	put->rec = rec;
 	put->buffers = buffers;
-
-	size_t size = as_command_key_size(policy->key, key, &put->n_fields);
-
-	uint16_t n_bins = rec->bins.size;
-	put->n_bins = n_bins;
-
+	put->size = as_command_key_size(policy->key, key, &put->n_fields);
 	put->filter_size = as_command_filter_size(&policy->base, &put->n_fields);
-	size += put->filter_size;
+	put->size += put->filter_size;
+	put->n_bins = rec->bins.size;
 
 	as_bin* bins = rec->bins.entries;
 
-	for (uint16_t i = 0; i < n_bins; i++) {
-		size += as_command_bin_size(&bins[i], buffers);
+	for (uint16_t i = 0; i < put->n_bins; i++) {
+		as_status status = as_command_bin_size(&bins[i], buffers, &put->size, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 	}
-	return size;
+	return AEROSPIKE_OK;
 }
 
 static size_t
@@ -580,7 +582,12 @@ aerospike_key_put(
 	as_queue_inita(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
-	size_t size = as_put_init(&put, policy, key, rec, &buffers);
+	status = as_put_init(&put, policy, key, rec, &buffers, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		return status;
+	}
 
 	// Support new compress while still being compatible with old XDR compression_threshold.
 	uint32_t compression_threshold = policy->compression_threshold;
@@ -590,7 +597,7 @@ aerospike_key_put(
 	}
 
 	as_command cmd;
-	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, size, &pi,
+	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, put.size, &pi,
 						  as_command_parse_header, NULL);
 
 	status = as_command_send(&cmd, err, compression_threshold, as_put_write, &put);
@@ -620,7 +627,12 @@ aerospike_key_put_async_ex(
 	as_queue_inita(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
-	size_t size = as_put_init(&put, policy, key, rec, &buffers);
+	status = as_put_init(&put, policy, key, rec, &buffers, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		return status;
+	}
 
 	// Support new compress while still being compatible with old XDR compression_threshold.
 	uint32_t compression_threshold = policy->compression_threshold;
@@ -629,20 +641,20 @@ aerospike_key_put_async_ex(
 		compression_threshold = AS_COMPRESS_THRESHOLD;
 	}
 
-	if (compression_threshold == 0 || (size <= compression_threshold)) {
+	if (compression_threshold == 0 || (put.size <= compression_threshold)) {
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_write_command_create(
 				cluster, &policy->base, policy->replica, pi.ns, pi.partition, AS_ASYNC_FLAGS_MASTER,
-				listener, udata, event_loop, pipe_listener, size, as_event_command_parse_header);
+				listener, udata, event_loop, pipe_listener, put.size, as_event_command_parse_header);
 
 		cmd->write_len = (uint32_t)as_put_write(&put, cmd->buf);
 
 		if (length != NULL) {
-			*length = size;
+			*length = cmd->write_len;
 		}
 
 		if (comp_length != NULL) {
-			*comp_length = size;
+			*comp_length = cmd->write_len;
 		}
 
 		return as_event_command_execute(cmd, err);
@@ -650,9 +662,9 @@ aerospike_key_put_async_ex(
 	else {
 		// Send compressed command.
 		// First write uncompressed buffer.
-		size_t capacity = size;
+		size_t capacity = put.size;
 		uint8_t* buf = as_command_buffer_init(capacity);
-		size = as_put_write(&put, buf);
+		size_t size = as_put_write(&put, buf);
 
 		// Allocate command with compressed upper bound.
 		size_t comp_size = as_command_compress_max_size(size);
@@ -802,6 +814,7 @@ typedef struct as_operate_s {
 	const as_key* key;
 	const as_operations* ops;
 	as_queue* buffers;
+	size_t size;
 	uint32_t filter_size;
 	uint16_t n_fields;
 	uint16_t n_operations;
@@ -810,17 +823,17 @@ typedef struct as_operate_s {
 	uint8_t info_attr;
 } as_operate;
 
-static size_t
-as_operate_set_attr(const as_operations* ops, as_queue* buffers, uint8_t* rattr, uint8_t* wattr)
+static as_status
+as_operate_set_attr(as_operate* oper, as_error* err)
 {
-	size_t size = 0;
-	uint32_t n_operations = ops->binops.size;
-	uint8_t read_attr = 0;
-	uint8_t write_attr = 0;
 	bool respond_all_ops = false;
-	
-	for (uint32_t i = 0; i < n_operations; i++) {
-		as_binop* op = &ops->binops.entries[i];
+
+	oper->read_attr = 0;
+	oper->write_attr = 0;
+	oper->info_attr = 0;
+
+	for (uint32_t i = 0; i < oper->n_operations; i++) {
+		as_binop* op = &oper->ops->binops.entries[i];
 		
 		switch (op->op)	{
 			case AS_OPERATOR_MAP_READ:
@@ -832,10 +845,10 @@ as_operate_set_attr(const as_operations* ops, as_queue* buffers, uint8_t* rattr,
 				// Fall through to read.
 			case AS_OPERATOR_CDT_READ:
 			case AS_OPERATOR_READ:
-				read_attr |= AS_MSG_INFO1_READ;
+				oper->read_attr |= AS_MSG_INFO1_READ;
 
 				if (op->bin.name[0] == 0) {
-					read_attr |= AS_MSG_INFO1_GET_ALL;
+					oper->read_attr |= AS_MSG_INFO1_GET_ALL;
 				}
 				break;
 				
@@ -847,32 +860,42 @@ as_operate_set_attr(const as_operations* ops, as_queue* buffers, uint8_t* rattr,
 				respond_all_ops = true;
 				// Fall through to write.
 			default:
-				write_attr |= AS_MSG_INFO2_WRITE;
+				oper->write_attr |= AS_MSG_INFO2_WRITE;
 				break;
 		}
-		size += as_command_bin_size(&op->bin, buffers);
+
+		as_status status = as_command_bin_size(&op->bin, oper->buffers, &oper->size, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 	}
 
 	// When GET_ALL is specified, RESPOND_ALL_OPS must be disabled.
-	if (respond_all_ops && !(read_attr & AS_MSG_INFO1_GET_ALL)) {
-		write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
+	if (respond_all_ops && !(oper->read_attr & AS_MSG_INFO1_GET_ALL)) {
+		oper->write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
 	}
-	*rattr = read_attr;
-	*wattr = write_attr;
-	return size;
+	return AEROSPIKE_OK;
 }
 
-static size_t
+static as_status
 as_operate_init(
 	as_operate* oper, aerospike* as, const as_policy_operate* policy,
-	as_policy_operate* policy_local, const as_key* key, const as_operations* ops, as_queue* buffers
+	as_policy_operate* policy_local, const as_key* key, const as_operations* ops, as_queue* buffers,
+	as_error* err
 	)
 {
-	oper->n_operations = ops->binops.size;
+	oper->key = key;
+	oper->ops = ops;
 	oper->buffers = buffers;
+	oper->size = 0;
+	oper->n_operations = ops->binops.size;
 
-	size_t size = as_operate_set_attr(ops, buffers, &oper->read_attr, &oper->write_attr);
-	oper->info_attr = 0;
+	as_status status = as_operate_set_attr(oper, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
 
 	if (! policy) {
 		if (oper->write_attr & AS_MSG_INFO2_WRITE) {
@@ -886,18 +909,15 @@ as_operate_init(
 			policy = policy_local;
 		}
 	}
-
 	oper->policy = policy;
-	oper->key = key;
-	oper->ops = ops;
 
 	as_command_set_attr_read(policy->read_mode_ap, policy->read_mode_sc, policy->base.compress,
 							 &oper->read_attr, &oper->info_attr);
 
-	size += as_command_key_size(policy->key, key, &oper->n_fields);
+	oper->size += as_command_key_size(policy->key, key, &oper->n_fields);
 	oper->filter_size = as_command_filter_size(&policy->base, &oper->n_fields);
-	size += oper->filter_size;
-	return size;
+	oper->size += oper->filter_size;
+	return AEROSPIKE_OK;
 }
 
 static size_t
@@ -952,7 +972,14 @@ aerospike_key_operate(
 
 	as_policy_operate policy_local;
 	as_operate oper;
-	size_t size = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers);
+
+	status = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		return status;
+	}
+
 	policy = oper.policy;
 
 	as_command_parse_result_data data;
@@ -962,12 +989,12 @@ aerospike_key_operate(
 	as_command cmd;
 
 	if (oper.write_attr & AS_MSG_INFO2_WRITE) {
-		as_command_init_write(&cmd, cluster, &policy->base, policy->replica, size, &pi,
+		as_command_init_write(&cmd, cluster, &policy->base, policy->replica, oper.size, &pi,
 							  as_command_parse_result, &data);
 	}
 	else {
 		as_command_init_read(&cmd, cluster, &policy->base, policy->replica, policy->read_mode_sc,
-							 size, &pi, as_command_parse_result, &data);
+							 oper.size, &pi, as_command_parse_result, &data);
 	}
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
@@ -1003,18 +1030,25 @@ aerospike_key_operate_async(
 
 	as_policy_operate policy_local;
 	as_operate oper;
-	size_t size = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers);
+
+	status = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		return status;
+	}
+
 	policy = oper.policy;
 
 	as_event_command* cmd;
 
-	if (! (policy->base.compress && size > AS_COMPRESS_THRESHOLD)) {
+	if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {
 		// Send uncompressed command.
 		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, policy->replica, pi.ns, pi.partition, policy->deserialize,
 				policy->async_heap_rec, AS_ASYNC_FLAGS_MASTER, listener, udata, event_loop,
-				pipe_listener, size, as_event_command_parse_result);
+				pipe_listener, oper.size, as_event_command_parse_result);
 		}
 		else {
 			as_read_info ri;
@@ -1022,8 +1056,8 @@ aerospike_key_operate_async(
 
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, ri.replica, pi.ns, pi.partition, policy->deserialize,
-				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-				as_event_command_parse_result);
+				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
+				oper.size, as_event_command_parse_result);
 		}
 
 		cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
@@ -1031,9 +1065,9 @@ aerospike_key_operate_async(
 	else {
 		// Send compressed command.
 		// First write uncompressed buffer.
-		size_t capacity = size;
+		size_t capacity = oper.size;
 		uint8_t* buf = as_command_buffer_init(capacity);
-		size = as_operate_write(&oper, buf);
+		size_t size = as_operate_write(&oper, buf);
 
 		// Allocate command with compressed upper bound.
 		size_t comp_size = as_command_compress_max_size(size);

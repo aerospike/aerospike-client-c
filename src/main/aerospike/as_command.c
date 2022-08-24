@@ -102,56 +102,74 @@ as_command_key_size(as_policy_key policy, const as_key* key, uint16_t* n_fields)
 	return size;
 }
 
-size_t
-as_command_value_size(as_val* val, as_queue* buffers)
+as_status
+as_command_bin_size(const as_bin* bin, as_queue* buffers, size_t* sizep, as_error* err)
 {
+	size_t size = *sizep + strlen(bin->name) + 8;
+	as_val* val = (as_val*)bin->valuep;
+
 	if (!val) {
-		return 0;
+		*sizep = size;
+		return AEROSPIKE_OK;
 	}
 
 	switch (val->type) {
 		case AS_NIL: {
-			return 0;
+			break;
 		}
 		case AS_BOOLEAN: {
-			return 1;
+			size += 1;
+			break;
 		}
 		case AS_INTEGER: {
-			return 8;
+			size += 8;
+			break;
 		}
 		case AS_DOUBLE: {
-			return 8;
+			size += 8;
+			break;
 		}
 		case AS_STRING: {
 			as_string* v = as_string_fromval(val);
-			return as_string_len(v);
+			size += as_string_len(v);
+			break;
 		}
 		case AS_GEOJSON: {
 			as_geojson* v = as_geojson_fromval(val);
-			return 
+			size +=
 				1 +					// as_particle_geojson_mem::flags
 				2 +					// as_particle_geojson_mem::ncells
 				(0 * 8) +			// <placeholder-cellids> EMPTY!
 				as_geojson_len(v);
+			break;
 		}
 		case AS_BYTES: {
 			as_bytes* v = as_bytes_fromval(val);
-			return v->size;
+			size += v->size;
+			break;
 		}
 		case AS_LIST:
 		case AS_MAP: {
 			as_buffer buffer;
 			as_serializer ser;
 			as_msgpack_init(&ser);
-			as_serializer_serialize(&ser, val, &buffer);
+			int rv = as_serializer_serialize(&ser, val, &buffer);
 			as_serializer_destroy(&ser);
+
+			if (rv != 0) {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+					"map/list serialization failed: %d", rv);
+			}
 			as_queue_push(buffers, &buffer);
-			return buffer.size;
+			size += buffer.size;
+			break;
 		}
 		default: {
-			return 0;
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid value type: %u", val->type);
 		}
 	}
+	*sizep = size;
+	return AEROSPIKE_OK;
 }
 
 uint8_t*

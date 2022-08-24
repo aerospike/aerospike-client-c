@@ -470,7 +470,12 @@ as_batch_estimate_ops(
 			}
 			size += 6; // Extra write specific fields.
 		}
-		size += as_command_bin_size(&op->bin, buffers);
+
+		as_status status = as_command_bin_size(&op->bin, buffers, &size, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 	}
 	*sp = size;
 	return AEROSPIKE_OK;
@@ -893,7 +898,12 @@ as_batch_write_record_size(
 		if (as_op_is_write[op->op]) {
 			has_write = true;
 		}
-		bb->size += as_command_bin_size(&op->bin, bb->buffers);
+
+		as_status status = as_command_bin_size(&op->bin, bb->buffers, &bb->size, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 	}
 
 	if (! has_write) {

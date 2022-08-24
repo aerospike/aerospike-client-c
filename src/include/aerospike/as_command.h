@@ -255,20 +255,10 @@ as_command_field_size(size_t size)
 
 /**
  * @private
- * Calculate size of as_val field.
+ * Increment size by bin size.
  */
-size_t
-as_command_value_size(as_val* val, as_queue* buffers);
-
-/**
- * @private
- * Calculate size of bin name and value combined.
- */
-static inline size_t
-as_command_bin_size(const as_bin* bin, as_queue* buffers)
-{
-	return strlen(bin->name) + as_command_value_size((as_val*)bin->valuep, buffers) + 8;
-}
+as_status
+as_command_bin_size(const as_bin* bin, as_queue* buffers, size_t* size, as_error* err);
 
 /**
  * @private

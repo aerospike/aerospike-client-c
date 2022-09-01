@@ -221,6 +221,7 @@ endif
 ###############################################################################
 
 COMMON-HEADERS :=
+COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arch.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arraylist.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arraylist_iterator.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_atomic.h

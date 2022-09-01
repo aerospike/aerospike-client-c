@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -136,6 +136,22 @@ as_partition_info_init(
  */
 void
 as_partition_tables_dump(struct as_cluster_s* cluster);
+
+/**
+ * @private
+ * Replica round robin iterator.
+ */
+extern uint32_t g_replica_rr;
+
+/**
+ * @private
+ * Return replica bool using round robin iterator. Master is true and prole is false.
+ */
+static inline bool
+as_replica_round_robin()
+{
+	return as_faa_uint32(&g_replica_rr, 1) & 1;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

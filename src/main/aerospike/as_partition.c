@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,6 +25,8 @@
 #include <aerospike/as_string.h>
 #include <citrusleaf/cf_b64.h>
 #include <stdlib.h>
+
+uint32_t g_replica_rr = 0;
 
 /******************************************************************************
  * Functions
@@ -266,8 +268,6 @@ prefer_rack_node(
 	return NULL;
 }
 
-static uint32_t g_randomizer = 0;
-
 as_node*
 as_partition_reg_get_node(
 	as_cluster* cluster, const char* ns, as_partition* p, as_node* prev_node,
@@ -283,8 +283,7 @@ as_partition_reg_get_node(
 
 		case AS_POLICY_REPLICA_ANY: {
 			// Alternate between master and prole for reads with global iterator.
-			uint32_t r = as_faa_uint32(&g_randomizer, 1);
-			use_master = (r & 1);
+			use_master = as_replica_round_robin();
 			return get_sequence_node(cluster, p, use_master);
 		}
 

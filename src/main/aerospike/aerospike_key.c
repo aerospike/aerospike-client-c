@@ -103,6 +103,7 @@ as_command_init_read(
 		cmd->replica = replica;
 		cmd->flags = AS_COMMAND_FLAGS_READ;
 	}
+	cmd->master = as_command_target_master(cmd->replica);
 }
 
 static inline as_status
@@ -137,6 +138,7 @@ as_command_init_write(
 	cmd->buf_size = size;
 	cmd->partition_id = pi->partition_id;
 	cmd->flags = 0;
+	cmd->master = true;
 
 	switch (replica) {
 		case AS_POLICY_REPLICA_PREFER_RACK:
@@ -164,24 +166,28 @@ as_event_command_init_read(
 		switch (read_mode_sc) {
 			case AS_POLICY_READ_MODE_SC_SESSION:
 				ri->replica = AS_POLICY_REPLICA_MASTER;
-				ri->flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
+				ri->flags = AS_ASYNC_FLAGS_READ;
 				break;
 
 			case AS_POLICY_READ_MODE_SC_LINEARIZE:
 				ri->replica = (replica != AS_POLICY_REPLICA_PREFER_RACK) ?
 							   replica : AS_POLICY_REPLICA_SEQUENCE;
-				ri->flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ | AS_ASYNC_FLAGS_LINEARIZE;
+				ri->flags = AS_ASYNC_FLAGS_READ | AS_ASYNC_FLAGS_LINEARIZE;
 				break;
 
 			default:
 				ri->replica = replica;
-				ri->flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
+				ri->flags = AS_ASYNC_FLAGS_READ;
 				break;
 		}
 	}
 	else {
 		ri->replica = replica;
-		ri->flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
+		ri->flags =  AS_ASYNC_FLAGS_READ;
+	}
+
+	if (as_command_target_master(ri->replica)) {
+		ri->flags |= AS_ASYNC_FLAGS_MASTER;
 	}
 }
 

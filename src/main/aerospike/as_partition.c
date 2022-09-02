@@ -26,8 +26,6 @@
 #include <citrusleaf/cf_b64.h>
 #include <stdlib.h>
 
-uint32_t g_replica_rr = 0;
-
 /******************************************************************************
  * Functions
  *****************************************************************************/
@@ -281,13 +279,8 @@ as_partition_reg_get_node(
 			return try_master(cluster, master);
 		}
 
-		case AS_POLICY_REPLICA_ANY: {
-			// Alternate between master and prole for reads with global iterator.
-			use_master = as_replica_round_robin();
-			return get_sequence_node(cluster, p, use_master);
-		}
-
 		default:
+		case AS_POLICY_REPLICA_ANY:
 		case AS_POLICY_REPLICA_SEQUENCE: {
 			return get_sequence_node(cluster, p, use_master);
 		}

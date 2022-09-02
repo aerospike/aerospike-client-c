@@ -1539,8 +1539,8 @@ as_batch_replica_init(as_batch_replica* rep, const as_policy_batch* policy)
 {
 	rep->replica = policy->replica;
 	rep->replica_sc = as_batch_get_replica_sc(policy);
-	rep->master = (policy->replica != AS_POLICY_REPLICA_ANY || as_replica_round_robin());
-	// TODO:? bool master_sc = (replica_sc != AS_POLICY_REPLICA_ANY || as_replica_round_robin());
+	rep->master = as_command_target_master(policy->replica);
+	rep->master_sc = rep->master;
 }
 
 static as_status
@@ -1610,10 +1610,9 @@ as_batch_command_init(
 
 	if (! parent) {
 		// Normal batch.
+		cmd->master = task->master;
 		cmd->master_sc = task->master_sc;
 		as_command_start_timer(cmd);
-		// master is set to true in as_command_start_timer(). Reset.
-		cmd->master = task->master;
 	}
 	else {
 		// Split retry mode.  Do not reset timer.
@@ -2412,7 +2411,7 @@ as_batch_execute_async(
 	// Note: Do not set flags to AS_ASYNC_FLAGS_LINEARIZE because AP and SC replicas
 	// are tracked separately for batch (AS_ASYNC_FLAGS_MASTER and AS_ASYNC_FLAGS_MASTER_SC).
 	// SC master/replica switch is done in as_batch_retry_async().
-	uint8_t flags = (policy->replica != AS_POLICY_REPLICA_ANY || as_replica_round_robin())?
+	uint8_t flags = as_command_target_master(policy->replica)?
 		AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_MASTER_SC : 0;
 
 	if (! executor->has_write) {
@@ -2860,7 +2859,7 @@ as_batch_retry(as_command* parent, as_error* err)
 	const as_policy_batch* policy = task->policy;
 	as_policy_replica replica = policy->replica;
 
-	if (!(replica == AS_POLICY_REPLICA_SEQUENCE || replica == AS_POLICY_REPLICA_PREFER_RACK)) {
+	if (replica == AS_POLICY_REPLICA_MASTER) {
 		// Node assignment will not change.
 		return AEROSPIKE_USE_NORMAL_RETRY;
 	}
@@ -3061,7 +3060,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	as_async_batch_executor* be = parent->udata; // udata is overloaded to contain executor.
 
 	if (parent->replica == AS_POLICY_REPLICA_MASTER) {
-		return 1;  // Go through normal retry.
+		// Node assignment will not change. Go through normal retry.
+		return 1;
 	}
 
 	as_cluster* cluster = parent->cluster;

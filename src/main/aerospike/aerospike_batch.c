@@ -2177,6 +2177,8 @@ as_batch_keys_execute(
 	btk.base.replica_sc = rep.replica_sc;
 	btk.base.type = type;
 	btk.base.has_write = rec->has_write;
+	btk.base.master = (rec->has_write || rep.master);
+	btk.base.master_sc = (rec->has_write || rep.master_sc);
 	btk.ns = ns;
 	btk.keys = batch->keys.entries;
 	btk.batch = batch;
@@ -2259,7 +2261,7 @@ as_batch_keys_execute(
 static as_status
 as_batch_execute_sync(
 	as_cluster* cluster, as_error* err, const as_policy_batch* policy, bool has_write,
-	as_policy_replica replica_sc, as_vector* records, uint32_t n_keys, as_vector* batch_nodes,
+	as_batch_replica* rep, as_vector* records, uint32_t n_keys, as_vector* batch_nodes,
 	as_command* parent, bool* error_row
 	)
 {
@@ -2276,9 +2278,11 @@ as_batch_execute_sync(
 	btr.base.error_mutex = &error_mutex;
 	btr.base.error_row = error_row;
 	btr.base.n_keys = n_keys;
-	btr.base.replica_sc = replica_sc;
+	btr.base.replica_sc = rep->replica_sc;
 	btr.base.type = BATCH_TYPE_RECORDS;
 	btr.base.has_write = has_write;
+	btr.base.master = (has_write || rep->master);
+	btr.base.master_sc = (has_write || rep->master_sc);
 	btr.records = records;
 
 	if (policy->concurrent && n_batch_nodes > 1 && parent == NULL) {
@@ -2399,20 +2403,29 @@ as_batch_command_create(
 
 static as_status
 as_batch_execute_async(
-	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policy_replica replica_sc,
+	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_batch_replica* rep,
 	as_vector* records, as_vector* batch_nodes, as_async_batch_executor* executor
 	)
 {
 	uint32_t n_batch_nodes = batch_nodes->size;
 	as_event_executor* exec = &executor->executor;
 	exec->max_concurrent = exec->max = exec->queued = n_batch_nodes;
-	executor->replica_sc = replica_sc;
+	executor->replica_sc = rep->replica_sc;
 
 	// Note: Do not set flags to AS_ASYNC_FLAGS_LINEARIZE because AP and SC replicas
 	// are tracked separately for batch (AS_ASYNC_FLAGS_MASTER and AS_ASYNC_FLAGS_MASTER_SC).
 	// SC master/replica switch is done in as_batch_retry_async().
-	uint8_t flags = as_command_target_master(policy->replica)?
-		AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_MASTER_SC : 0;
+	uint8_t flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_MASTER_SC;
+
+	if (! executor->has_write) {
+		if (! rep->master) {
+			flags &= ~AS_ASYNC_FLAGS_MASTER;
+		}
+
+		if (! rep->master_sc) {
+			flags &= ~AS_ASYNC_FLAGS_MASTER_SC;
+		}
+	}
 
 	if (! executor->has_write) {
 		flags |= AS_ASYNC_FLAGS_READ;
@@ -2608,11 +2621,11 @@ as_batch_records_execute(
 
 	if (async_executor) {
 		async_executor->error_row = error_row;
-		return as_batch_execute_async(cluster, err, policy, rep.replica_sc, list, &batch_nodes,
+		return as_batch_execute_async(cluster, err, policy, &rep, list, &batch_nodes,
 			async_executor);
 	}
 	else {
-		status = as_batch_execute_sync(cluster, err, policy, has_write, rep.replica_sc, list, n_keys,
+		status = as_batch_execute_sync(cluster, err, policy, has_write, &rep, list, n_keys,
 			&batch_nodes, NULL, &error_row);
 
 		if (status != AEROSPIKE_OK) {
@@ -2645,8 +2658,7 @@ as_batch_records_execute_async(
 	be->records = records;
 	be->listener = listener;
 	be->replica = policy->replica;
-	// replica_sc is set later in as_batch_execute_async().
-	// be->replica_sc = as_batch_get_replica_sc(policy);
+	// replica_sc/master/master_sc are set later in as_batch_execute_async().
 	be->read_mode_sc = policy->read_mode_sc;
 	be->has_write = has_write;
 	be->error_row = false;
@@ -2757,7 +2769,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	}
 	parent->split_retry = true;
 
-	return as_batch_execute_sync(cluster, err, task->policy, task->has_write, task->replica_sc,
+	return as_batch_execute_sync(cluster, err, task->policy, task->has_write, &rep,
 		list, task->n_keys, &batch_nodes, parent, task->error_row);
 }
 

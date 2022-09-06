@@ -684,8 +684,6 @@ shm_prefer_rack_node(
 	return NULL;
 }
 
-static uint32_t g_shm_randomizer = 0;
-
 as_node*
 as_partition_shm_get_node(
 	as_cluster* cluster, const char* ns, as_partition_shm* p, as_node* prev_node,
@@ -701,14 +699,8 @@ as_partition_shm_get_node(
 			return as_shm_try_master(cluster, local_nodes, master);
 		}
 
-		case AS_POLICY_REPLICA_ANY: {
-			// Alternate between master and prole for reads with global iterator.
-			uint32_t r = as_faa_uint32(&g_shm_randomizer, 1);
-			use_master = (r & 1);
-			return shm_get_sequence_node(cluster, local_nodes, p, use_master);
-		}
-
 		default:
+		case AS_POLICY_REPLICA_ANY:
 		case AS_POLICY_REPLICA_SEQUENCE: {
 			return shm_get_sequence_node(cluster, local_nodes, p, use_master);
 		}

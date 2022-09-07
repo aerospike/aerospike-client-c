@@ -1518,29 +1518,42 @@ as_batch_records_write(
 	}
 }
 
-static inline as_policy_replica
-as_batch_get_replica_sc(const as_policy_batch* policy)
+static void
+as_batch_replica_init(as_batch_replica* rep, const as_policy_batch* policy, bool has_write)
 {
+	if (has_write) {
+		rep->replica = as_command_write_replica(policy->replica);
+		rep->replica_sc = rep->replica;
+		rep->master = true;
+		rep->master_sc = true;
+		return;
+	}
+
+	rep->replica = policy->replica;
+	rep->master = as_command_target_master(rep->replica);
+
 	switch (policy->read_mode_sc) {
 		case AS_POLICY_READ_MODE_SC_SESSION:
-			return AS_POLICY_REPLICA_MASTER;
+			rep->replica_sc = AS_POLICY_REPLICA_MASTER;
+			rep->master_sc = true;
+			break;
 
 		case AS_POLICY_READ_MODE_SC_LINEARIZE:
-			return (policy->replica != AS_POLICY_REPLICA_PREFER_RACK) ?
-					policy->replica : AS_POLICY_REPLICA_SEQUENCE;
+			if  (rep->replica == AS_POLICY_REPLICA_PREFER_RACK) {
+				rep->replica_sc = AS_POLICY_REPLICA_SEQUENCE;
+				rep->master_sc = true;
+			}
+			else {
+				rep->replica_sc = rep->replica;
+				rep->master_sc = rep->master;
+			}
+			break;
 
 		default:
-			return policy->replica;
+			rep->replica_sc = rep->replica;
+			rep->master_sc = rep->master;
+			break;
 	}
-}
-
-static void
-as_batch_replica_init(as_batch_replica* rep, const as_policy_batch* policy)
-{
-	rep->replica = policy->replica;
-	rep->replica_sc = as_batch_get_replica_sc(policy);
-	rep->master = as_command_target_master(policy->replica);
-	rep->master_sc = rep->master;
 }
 
 static as_status
@@ -2097,7 +2110,7 @@ as_batch_keys_execute(
 	}
 
 	as_batch_replica rep;
-	as_batch_replica_init(&rep, policy);
+	as_batch_replica_init(&rep, policy, rec->has_write);
 
 	bool error_row = false;
 
@@ -2177,8 +2190,8 @@ as_batch_keys_execute(
 	btk.base.replica_sc = rep.replica_sc;
 	btk.base.type = type;
 	btk.base.has_write = rec->has_write;
-	btk.base.master = (rec->has_write || rep.master);
-	btk.base.master_sc = (rec->has_write || rep.master_sc);
+	btk.base.master = rep.master;
+	btk.base.master_sc = rep.master_sc;
 	btk.ns = ns;
 	btk.keys = batch->keys.entries;
 	btk.batch = batch;
@@ -2281,8 +2294,8 @@ as_batch_execute_sync(
 	btr.base.replica_sc = rep->replica_sc;
 	btr.base.type = BATCH_TYPE_RECORDS;
 	btr.base.has_write = has_write;
-	btr.base.master = (has_write || rep->master);
-	btr.base.master_sc = (has_write || rep->master_sc);
+	btr.base.master = rep->master;
+	btr.base.master_sc = rep->master_sc;
 	btr.records = records;
 
 	if (policy->concurrent && n_batch_nodes > 1 && parent == NULL) {
@@ -2562,7 +2575,7 @@ as_batch_records_execute(
 	}
 	
 	as_batch_replica rep;
-	as_batch_replica_init(&rep, policy);
+	as_batch_replica_init(&rep, policy, has_write);
 
 	bool error_row = false;
 

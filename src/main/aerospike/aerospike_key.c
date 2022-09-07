@@ -138,23 +138,8 @@ as_command_init_write(
 	cmd->buf_size = size;
 	cmd->partition_id = pi->partition_id;
 	cmd->flags = 0;
+	cmd->replica = as_command_write_replica(cmd->replica);
 	cmd->master = true;
-
-	switch (replica) {
-		case AS_POLICY_REPLICA_PREFER_RACK:
-			// Writes must always go to master node via sequence algorithm.
-			cmd->replica = AS_POLICY_REPLICA_SEQUENCE;
-			break;
-
-		case AS_POLICY_REPLICA_ANY:
-			// Writes must always go to master node.
-			cmd->replica = AS_POLICY_REPLICA_MASTER;
-			break;
-
-		default:
-			cmd->replica = replica;
-			break;
-	}
 }
 
 static inline void

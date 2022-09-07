@@ -138,7 +138,7 @@ as_command_init_write(
 	cmd->buf_size = size;
 	cmd->partition_id = pi->partition_id;
 	cmd->flags = 0;
-	cmd->replica = as_command_write_replica(cmd->replica);
+	cmd->replica = as_command_write_replica(replica);
 	cmd->master = true;
 }
 

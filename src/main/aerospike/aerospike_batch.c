@@ -2431,6 +2431,8 @@ as_batch_execute_async(
 	uint8_t flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_MASTER_SC;
 
 	if (! executor->has_write) {
+		flags |= AS_ASYNC_FLAGS_READ;
+
 		if (! rep->master) {
 			flags &= ~AS_ASYNC_FLAGS_MASTER;
 		}
@@ -2438,10 +2440,6 @@ as_batch_execute_async(
 		if (! rep->master_sc) {
 			flags &= ~AS_ASYNC_FLAGS_MASTER_SC;
 		}
-	}
-
-	if (! executor->has_write) {
-		flags |= AS_ASYNC_FLAGS_READ;
 	}
 
 	as_queue buffers;

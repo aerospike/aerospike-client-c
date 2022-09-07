@@ -685,18 +685,9 @@ as_command_target_master(as_policy_replica replica)
 static inline as_policy_replica
 as_command_write_replica(as_policy_replica replica)
 {
-	switch (replica) {
-		case AS_POLICY_REPLICA_PREFER_RACK:
-			// Writes must always go to master node via sequence algorithm.
-			return AS_POLICY_REPLICA_SEQUENCE;
-
-		case AS_POLICY_REPLICA_ANY:
-			// Writes must always go to master node.
-			return AS_POLICY_REPLICA_MASTER;
-
-		default:
-			return replica;
-	}
+	// Writes should always go to master node on first attempt.
+	// Allow prole on retry when possible.
+	return (replica == AS_POLICY_REPLICA_MASTER)? replica : AS_POLICY_REPLICA_SEQUENCE;
 }
 
 #ifdef __cplusplus

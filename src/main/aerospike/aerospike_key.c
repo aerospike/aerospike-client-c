@@ -103,6 +103,7 @@ as_command_init_read(
 		cmd->replica = replica;
 		cmd->flags = AS_COMMAND_FLAGS_READ;
 	}
+	cmd->master = as_command_target_master(cmd->replica);
 }
 
 static inline as_status
@@ -137,22 +138,8 @@ as_command_init_write(
 	cmd->buf_size = size;
 	cmd->partition_id = pi->partition_id;
 	cmd->flags = 0;
-
-	switch (replica) {
-		case AS_POLICY_REPLICA_PREFER_RACK:
-			// Writes must always go to master node via sequence algorithm.
-			cmd->replica = AS_POLICY_REPLICA_SEQUENCE;
-			break;
-
-		case AS_POLICY_REPLICA_ANY:
-			// Writes must always go to master node.
-			cmd->replica = AS_POLICY_REPLICA_MASTER;
-			break;
-
-		default:
-			cmd->replica = replica;
-			break;
-	}
+	cmd->replica = as_command_write_replica(replica);
+	cmd->master = true;
 }
 
 static inline void
@@ -164,24 +151,28 @@ as_event_command_init_read(
 		switch (read_mode_sc) {
 			case AS_POLICY_READ_MODE_SC_SESSION:
 				ri->replica = AS_POLICY_REPLICA_MASTER;
-				ri->flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
+				ri->flags = AS_ASYNC_FLAGS_READ;
 				break;
 
 			case AS_POLICY_READ_MODE_SC_LINEARIZE:
 				ri->replica = (replica != AS_POLICY_REPLICA_PREFER_RACK) ?
 							   replica : AS_POLICY_REPLICA_SEQUENCE;
-				ri->flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ | AS_ASYNC_FLAGS_LINEARIZE;
+				ri->flags = AS_ASYNC_FLAGS_READ | AS_ASYNC_FLAGS_LINEARIZE;
 				break;
 
 			default:
 				ri->replica = replica;
-				ri->flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
+				ri->flags = AS_ASYNC_FLAGS_READ;
 				break;
 		}
 	}
 	else {
 		ri->replica = replica;
-		ri->flags = AS_ASYNC_FLAGS_MASTER | AS_ASYNC_FLAGS_READ;
+		ri->flags =  AS_ASYNC_FLAGS_READ;
+	}
+
+	if (as_command_target_master(ri->replica)) {
+		ri->flags |= AS_ASYNC_FLAGS_MASTER;
 	}
 }
 
@@ -644,8 +635,8 @@ aerospike_key_put_async_ex(
 	if (compression_threshold == 0 || (put.size <= compression_threshold)) {
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_write_command_create(
-				cluster, &policy->base, policy->replica, pi.ns, pi.partition, AS_ASYNC_FLAGS_MASTER,
-				listener, udata, event_loop, pipe_listener, put.size, as_event_command_parse_header);
+			cluster, &policy->base, policy->replica, pi.ns, pi.partition, listener, udata, event_loop,
+			pipe_listener, put.size, as_event_command_parse_header);
 
 		cmd->write_len = (uint32_t)as_put_write(&put, cmd->buf);
 
@@ -669,8 +660,8 @@ aerospike_key_put_async_ex(
 		// Allocate command with compressed upper bound.
 		size_t comp_size = as_command_compress_max_size(size);
 		as_event_command* cmd = as_async_write_command_create(
-				cluster, &policy->base, policy->replica, pi.ns, pi.partition, AS_ASYNC_FLAGS_MASTER,
-				listener, udata, event_loop, pipe_listener, comp_size, as_event_command_parse_header);
+			cluster, &policy->base, policy->replica, pi.ns, pi.partition, listener, udata, event_loop,
+			pipe_listener, comp_size, as_event_command_parse_header);
 
 		// Compress buffer and execute.
 		status = as_command_compress(err, buf, size, cmd->buf, &comp_size);
@@ -777,8 +768,8 @@ aerospike_key_remove_async_ex(
 	size += filter_size;
 
 	as_event_command* cmd = as_async_write_command_create(
-		cluster, &policy->base, policy->replica, pi.ns, pi.partition, AS_ASYNC_FLAGS_MASTER,
-		listener, udata, event_loop, pipe_listener, size, as_event_command_parse_header);
+		cluster, &policy->base, policy->replica, pi.ns, pi.partition, listener, udata, event_loop,
+		pipe_listener, size, as_event_command_parse_header);
 
 	uint8_t* p = as_command_write_header_write(cmd->buf, &policy->base, policy->commit_level,
 					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, n_fields, 0,
@@ -1226,8 +1217,8 @@ aerospike_key_apply_async(
 	if (! (policy->base.compress && size > AS_COMPRESS_THRESHOLD)) {
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base,
-			policy->replica, pi.ns, pi.partition, AS_ASYNC_FLAGS_MASTER, listener, udata,
-			event_loop, pipe_listener, size, as_event_command_parse_success_failure);
+			policy->replica, pi.ns, pi.partition, listener, udata, event_loop, pipe_listener, size,
+			as_event_command_parse_success_failure);
 
 		cmd->write_len = (uint32_t)as_apply_write(&ap, cmd->buf);
 
@@ -1249,8 +1240,8 @@ aerospike_key_apply_async(
 		size_t comp_size = as_command_compress_max_size(size);
 
 		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base,
-			policy->replica, pi.ns, pi.partition, AS_ASYNC_FLAGS_MASTER, listener, udata,
-			event_loop, pipe_listener, comp_size, as_event_command_parse_success_failure);
+			policy->replica, pi.ns, pi.partition, listener, udata, event_loop, pipe_listener,
+			comp_size, as_event_command_parse_success_failure);
 
 		// Compress buffer and execute.
 		status = as_command_compress(err, buf, size, cmd->buf, &comp_size);

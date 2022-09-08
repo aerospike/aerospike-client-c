@@ -71,6 +71,13 @@ typedef struct {
 	bool send_key;
 } as_batch_attr;
 
+typedef struct {
+	as_policy_replica replica;
+	as_policy_replica replica_sc;
+	bool master;
+	bool master_sc;
+} as_batch_replica;
+
 typedef struct as_batch_node_s {
 	as_node* node;
 	as_vector offsets;
@@ -86,9 +93,12 @@ typedef struct as_batch_task_s {
 	bool* error_row;
 	cf_queue* complete_q;
 	uint32_t n_keys;
+	as_policy_replica replica;
 	as_policy_replica replica_sc;
 	uint8_t type;
 	bool has_write;
+	bool master;
+	bool master_sc;
 } as_batch_task;
 
 typedef struct as_batch_task_records_s {
@@ -1509,26 +1519,48 @@ as_batch_records_write(
 	}
 }
 
-static inline as_policy_replica
-as_batch_get_replica_sc(const as_policy_batch* policy)
+static void
+as_batch_replica_init(as_batch_replica* rep, const as_policy_batch* policy, bool has_write)
 {
+	if (has_write) {
+		rep->replica = as_command_write_replica(policy->replica);
+		rep->replica_sc = rep->replica;
+		rep->master = true;
+		rep->master_sc = true;
+		return;
+	}
+
+	rep->replica = policy->replica;
+	rep->master = as_command_target_master(rep->replica);
+
 	switch (policy->read_mode_sc) {
 		case AS_POLICY_READ_MODE_SC_SESSION:
-			return AS_POLICY_REPLICA_MASTER;
+			rep->replica_sc = AS_POLICY_REPLICA_MASTER;
+			rep->master_sc = true;
+			break;
 
 		case AS_POLICY_READ_MODE_SC_LINEARIZE:
-			return (policy->replica != AS_POLICY_REPLICA_PREFER_RACK) ?
-					policy->replica : AS_POLICY_REPLICA_SEQUENCE;
+			if  (rep->replica == AS_POLICY_REPLICA_PREFER_RACK) {
+				rep->replica_sc = AS_POLICY_REPLICA_SEQUENCE;
+				rep->master_sc = true;
+			}
+			else {
+				rep->replica_sc = rep->replica;
+				rep->master_sc = rep->master;
+			}
+			break;
 
 		default:
-			return policy->replica;
+			rep->replica_sc = rep->replica;
+			rep->master_sc = rep->master;
+			break;
 	}
 }
 
 static as_status
 as_batch_get_node(
-	as_cluster* cluster, const as_key* key, as_policy_replica replica, as_policy_replica replica_sc,
-	bool master, bool master_sc, bool has_write, as_node* prev_node, as_node** node_pp
+	as_cluster* cluster, const as_key* key, const as_batch_replica* rep, bool has_write,
+	as_node* prev_node, as_node** node_pp
 	)
 {
 	as_error err;
@@ -1539,9 +1571,16 @@ as_batch_get_node(
 		return status;
 	}
 
-	if (!has_write && pi.sc_mode) {
-		replica = replica_sc;
-		master = master_sc;
+	as_policy_replica replica;
+	bool master;
+
+	if (has_write || !pi.sc_mode) {
+		replica = rep->replica;
+		master = rep->master;
+	}
+	else {
+		replica = rep->replica_sc;
+		master = rep->master_sc;
 	}
 
 	as_node* node = as_partition_get_node(cluster, pi.ns, pi.partition, prev_node, replica, master);
@@ -1571,7 +1610,7 @@ as_batch_command_init(
 	cmd->buf = buf;
 	cmd->buf_size = size;
 	cmd->partition_id = 0; // Not referenced when node set.
-	cmd->replica = policy->replica;
+	cmd->replica = task->replica;
 	cmd->split_retry = false;
 
 	// Note: Do not set flags to AS_COMMAND_FLAGS_LINEARIZE because AP and SC replicas
@@ -1585,14 +1624,15 @@ as_batch_command_init(
 
 	if (! parent) {
 		// Normal batch.
-		cmd->master_sc = true;
+		cmd->master = task->master;
+		cmd->master_sc = task->master_sc;
 		as_command_start_timer(cmd);
 	}
 	else {
 		// Split retry mode.  Do not reset timer.
+		cmd->master = parent->master;
 		cmd->master_sc = parent->master_sc;
 		cmd->iteration = parent->iteration;
-		cmd->master = parent->master;
 		cmd->socket_timeout = parent->socket_timeout;
 		cmd->total_timeout = parent->total_timeout;
 		cmd->max_retries = parent->max_retries;
@@ -2070,8 +2110,9 @@ as_batch_keys_execute(
 		offsets_capacity = 10;
 	}
 
-	as_policy_replica replica = policy->replica;
-	as_policy_replica replica_sc = as_batch_get_replica_sc(policy);
+	as_batch_replica rep;
+	as_batch_replica_init(&rep, policy, rec->has_write);
+
 	bool error_row = false;
 
 	// Map keys to server nodes.
@@ -2094,8 +2135,7 @@ as_batch_keys_execute(
 		}
 
 		as_node* node;
-		status = as_batch_get_node(cluster, key, replica, replica_sc, true, true, rec->has_write,
-			NULL, &node);
+		status = as_batch_get_node(cluster, key, &rep, rec->has_write, NULL, &node);
 
 		if (status != AEROSPIKE_OK) {
 			rec->result = status;
@@ -2148,9 +2188,12 @@ as_batch_keys_execute(
 	btk.base.error_mutex = &error_mutex;
 	btk.base.error_row = &error_row;
 	btk.base.n_keys = n_keys;
-	btk.base.replica_sc = replica_sc;
+	btk.base.replica = rep.replica;
+	btk.base.replica_sc = rep.replica_sc;
 	btk.base.type = type;
 	btk.base.has_write = rec->has_write;
+	btk.base.master = rep.master;
+	btk.base.master_sc = rep.master_sc;
 	btk.ns = ns;
 	btk.keys = batch->keys.entries;
 	btk.batch = batch;
@@ -2233,7 +2276,7 @@ as_batch_keys_execute(
 static as_status
 as_batch_execute_sync(
 	as_cluster* cluster, as_error* err, const as_policy_batch* policy, bool has_write,
-	as_policy_replica replica_sc, as_vector* records, uint32_t n_keys, as_vector* batch_nodes,
+	as_batch_replica* rep, as_vector* records, uint32_t n_keys, as_vector* batch_nodes,
 	as_command* parent, bool* error_row
 	)
 {
@@ -2250,9 +2293,12 @@ as_batch_execute_sync(
 	btr.base.error_mutex = &error_mutex;
 	btr.base.error_row = error_row;
 	btr.base.n_keys = n_keys;
-	btr.base.replica_sc = replica_sc;
+	btr.base.replica = rep->replica;
+	btr.base.replica_sc = rep->replica_sc;
 	btr.base.type = BATCH_TYPE_RECORDS;
 	btr.base.has_write = has_write;
+	btr.base.master = rep->master;
+	btr.base.master_sc = rep->master_sc;
 	btr.records = records;
 
 	if (policy->concurrent && n_batch_nodes > 1 && parent == NULL) {
@@ -2335,7 +2381,7 @@ as_batch_execute_sync(
 
 static inline as_async_batch_command*
 as_batch_command_create(
-	as_cluster* cluster, const as_policy_batch* policy, as_node* node,
+	as_cluster* cluster, const as_policy_batch* policy, as_batch_replica* rep, as_node* node,
 	as_async_batch_executor* executor, size_t size, uint8_t flags, uint8_t* ubuf, uint32_t ubuf_size
 	)
 {
@@ -2352,7 +2398,7 @@ as_batch_command_create(
 	cmd->socket_timeout = policy->base.socket_timeout;
 	cmd->max_retries = policy->base.max_retries;
 	cmd->iteration = 0;
-	cmd->replica = policy->replica;
+	cmd->replica = rep->replica;
 	cmd->event_loop = executor->executor.event_loop;
 	cmd->cluster = cluster;
 	cmd->node = node;
@@ -2373,14 +2419,15 @@ as_batch_command_create(
 
 static as_status
 as_batch_execute_async(
-	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policy_replica replica_sc,
+	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_batch_replica* rep,
 	as_vector* records, as_vector* batch_nodes, as_async_batch_executor* executor
 	)
 {
 	uint32_t n_batch_nodes = batch_nodes->size;
 	as_event_executor* exec = &executor->executor;
 	exec->max_concurrent = exec->max = exec->queued = n_batch_nodes;
-	executor->replica_sc = replica_sc;
+	executor->replica = rep->replica;
+	executor->replica_sc = rep->replica_sc;
 
 	// Note: Do not set flags to AS_ASYNC_FLAGS_LINEARIZE because AP and SC replicas
 	// are tracked separately for batch (AS_ASYNC_FLAGS_MASTER and AS_ASYNC_FLAGS_MASTER_SC).
@@ -2389,6 +2436,14 @@ as_batch_execute_async(
 
 	if (! executor->has_write) {
 		flags |= AS_ASYNC_FLAGS_READ;
+
+		if (! rep->master) {
+			flags &= ~AS_ASYNC_FLAGS_MASTER;
+		}
+
+		if (! rep->master_sc) {
+			flags &= ~AS_ASYNC_FLAGS_MASTER_SC;
+		}
 	}
 
 	as_queue buffers;
@@ -2416,8 +2471,8 @@ as_batch_execute_async(
 
 		if (! (policy->base.compress && bb.size > AS_COMPRESS_THRESHOLD)) {
 			// Send uncompressed command.
-			as_async_batch_command* bc = as_batch_command_create(cluster, policy, batch_node->node,
-				executor, bb.size, flags, NULL, 0);
+			as_async_batch_command* bc = as_batch_command_create(cluster, policy, rep,
+				batch_node->node, executor, bb.size, flags, NULL, 0);
 
 			as_event_command* cmd = &bc->command;
 
@@ -2436,8 +2491,8 @@ as_batch_execute_async(
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);
 
-			as_async_batch_command* bc = as_batch_command_create(cluster, policy, batch_node->node,
-				executor, comp_size, flags, ubuf, (uint32_t)size);
+			as_async_batch_command* bc = as_batch_command_create(cluster, policy, rep,
+				batch_node->node, executor, comp_size, flags, ubuf, (uint32_t)size);
 
 			as_event_command* cmd = &bc->command;
 
@@ -2521,8 +2576,9 @@ as_batch_records_execute(
 		offsets_capacity = 10;
 	}
 	
-	as_policy_replica replica = policy->replica;
-	as_policy_replica replica_sc = as_batch_get_replica_sc(policy);
+	as_batch_replica rep;
+	as_batch_replica_init(&rep, policy, has_write);
+
 	bool error_row = false;
 
 	// Map keys to server nodes.
@@ -2541,8 +2597,7 @@ as_batch_records_execute(
 		}
 		
 		as_node* node;
-		status = as_batch_get_node(cluster, key, replica, replica_sc, true, true, rec->has_write,
-			NULL, &node);
+		status = as_batch_get_node(cluster, key, &rep, rec->has_write, NULL, &node);
 
 		if (status != AEROSPIKE_OK) {
 			rec->result = status;
@@ -2581,11 +2636,11 @@ as_batch_records_execute(
 
 	if (async_executor) {
 		async_executor->error_row = error_row;
-		return as_batch_execute_async(cluster, err, policy, replica_sc, list, &batch_nodes,
+		return as_batch_execute_async(cluster, err, policy, &rep, list, &batch_nodes,
 			async_executor);
 	}
 	else {
-		status = as_batch_execute_sync(cluster, err, policy, has_write, replica_sc, list, n_keys,
+		status = as_batch_execute_sync(cluster, err, policy, has_write, &rep, list, n_keys,
 			&batch_nodes, NULL, &error_row);
 
 		if (status != AEROSPIKE_OK) {
@@ -2617,9 +2672,7 @@ as_batch_records_execute_async(
 	as_async_batch_executor* be = cf_malloc(sizeof(as_async_batch_executor));
 	be->records = records;
 	be->listener = listener;
-	be->replica = policy->replica;
-	// replica_sc is set later in as_batch_execute_async().
-	// be->replica_sc = as_batch_get_replica_sc(policy);
+	// replica/replica_sc are set later in as_batch_execute_async().
 	be->read_mode_sc = policy->read_mode_sc;
 	be->has_write = has_write;
 	be->error_row = false;
@@ -2674,8 +2727,11 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 		offsets_capacity = 10;
 	}
 
-	as_policy_replica replica = task->policy->replica;
-	as_policy_replica replica_sc = task->replica_sc;
+	as_batch_replica rep;
+	rep.replica = task->replica;
+	rep.replica_sc = task->replica_sc;
+	rep.master = parent->master;
+	rep.master_sc = parent->master_sc;
 
 	// Map keys to server nodes.
 	for (uint32_t i = 0; i < offsets_size; i++) {
@@ -2690,8 +2746,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 		as_key* key = &rec->key;
 
 		as_node* node;
-		as_status status = as_batch_get_node(cluster, key, replica, replica_sc, parent->master,
-			parent->master_sc, rec->has_write, parent->node, &node);
+		as_status status = as_batch_get_node(cluster, key, &rep, rec->has_write, parent->node, &node);
 
 		if (status != AEROSPIKE_OK) {
 			rec->result = status;
@@ -2728,7 +2783,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	}
 	parent->split_retry = true;
 
-	return as_batch_execute_sync(cluster, err, task->policy, task->has_write, task->replica_sc,
+	return as_batch_execute_sync(cluster, err, task->policy, task->has_write, &rep,
 		list, task->n_keys, &batch_nodes, parent, task->error_row);
 }
 
@@ -2760,6 +2815,12 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 		offsets_capacity = 10;
 	}
 
+	as_batch_replica rep;
+	rep.replica = task->replica;
+	rep.replica_sc = task->replica_sc;
+	rep.master = parent->master;
+	rep.master_sc = parent->master_sc;
+
 	as_batch_base_record* rec = btk->rec;
 
 	// Map keys to server nodes.
@@ -2774,8 +2835,7 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 		}
 
 		as_node* node;
-		status = as_batch_get_node(cluster, key, task->policy->replica, task->replica_sc,
-			parent->master, parent->master_sc, rec->has_write, parent->node, &node);
+		status = as_batch_get_node(cluster, key, &rep, rec->has_write, parent->node, &node);
 
 		if (status != AEROSPIKE_OK) {
 			res->result = status;
@@ -2822,16 +2882,14 @@ as_batch_retry(as_command* parent, as_error* err)
 	// Retry requires keys for this node to be split among other nodes.
 	// This is both recursive and exponential.
 	as_batch_task* task = parent->udata;
-	const as_policy_batch* policy = task->policy;
-	as_policy_replica replica = policy->replica;
 
-	if (!(replica == AS_POLICY_REPLICA_SEQUENCE || replica == AS_POLICY_REPLICA_PREFER_RACK)) {
+	if (task->replica == AS_POLICY_REPLICA_MASTER) {
 		// Node assignment will not change.
 		return AEROSPIKE_USE_NORMAL_RETRY;
 	}
 
 	if (err->code != AEROSPIKE_ERR_TIMEOUT ||
-		policy->read_mode_sc != AS_POLICY_READ_MODE_SC_LINEARIZE) {
+		task->policy->read_mode_sc != AS_POLICY_READ_MODE_SC_LINEARIZE) {
 		parent->master_sc = ! parent->master_sc;
 	}
 
@@ -3025,9 +3083,9 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	as_async_batch_command* parent_bc = (as_async_batch_command*)parent;
 	as_async_batch_executor* be = parent->udata; // udata is overloaded to contain executor.
 
-	if (!(parent->replica == AS_POLICY_REPLICA_SEQUENCE ||
-		  parent->replica == AS_POLICY_REPLICA_PREFER_RACK)) {
-		return 1;  // Go through normal retry.
+	if (parent->replica == AS_POLICY_REPLICA_MASTER) {
+		// Node assignment will not change. Go through normal retry.
+		return 1;
 	}
 
 	as_cluster* cluster = parent->cluster;
@@ -3073,8 +3131,11 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	as_vector bnodes;
 	as_vector_inita(&bnodes, sizeof(as_batch_retry_node), n_nodes);
 
-	as_policy_replica replica = be->replica;
-	as_policy_replica replica_sc = be->replica_sc;
+	as_batch_replica rep;
+	rep.replica = be->replica;
+	rep.replica_sc = be->replica_sc;
+	rep.master = parent->flags & AS_ASYNC_FLAGS_MASTER;
+	rep.master_sc = parent->flags & AS_ASYNC_FLAGS_MASTER_SC;
 
 	as_vector* records = &be->records->list;
 
@@ -3115,9 +3176,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		as_key* key = &rec->key;
 		as_node* node;
 
-		as_status status = as_batch_get_node(cluster, key, replica, replica_sc,
-			parent->flags & AS_ASYNC_FLAGS_MASTER, parent->flags & AS_ASYNC_FLAGS_MASTER_SC,
-			rec->has_write, parent->node, &node);
+		as_status status = as_batch_get_node(cluster, key, &rep, rec->has_write, parent->node, &node);
 
 		if (status != AEROSPIKE_OK) {
 			rec->result = status;

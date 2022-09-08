@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_async_proto.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_listener.h>
@@ -78,7 +79,7 @@ typedef struct as_async_info_command {
 static inline as_event_command*
 as_async_write_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, const char* ns,
-	void* partition, uint8_t flags, as_async_write_listener listener, void* udata,
+	void* partition, as_async_write_listener listener, void* udata,
 	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
 	as_event_parse_results_fn parse_results
 	)
@@ -92,7 +93,7 @@ as_async_write_command_create(
 	cmd->socket_timeout = policy->socket_timeout;
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
-	cmd->replica = replica;
+	cmd->replica = as_command_write_replica(replica);
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
@@ -106,7 +107,7 @@ as_async_write_command_create(
 	cmd->type = AS_ASYNC_TYPE_WRITE;
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = flags;
+	cmd->flags = AS_ASYNC_FLAGS_MASTER;
 	cmd->flags2 = 0;
 	wcmd->listener = listener;
 	return cmd;
@@ -159,7 +160,7 @@ as_async_record_command_create(
 static inline as_event_command*
 as_async_value_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, const char* ns,
-	void* partition, uint8_t flags, as_async_value_listener listener, void* udata,
+	void* partition, as_async_value_listener listener, void* udata,
 	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
 	as_event_parse_results_fn parse_results
 	)
@@ -174,7 +175,7 @@ as_async_value_command_create(
 	cmd->socket_timeout = policy->socket_timeout;
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
-	cmd->replica = replica;
+	cmd->replica = as_command_write_replica(replica);
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
@@ -188,7 +189,7 @@ as_async_value_command_create(
 	cmd->type = AS_ASYNC_TYPE_VALUE;
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = flags;
+	cmd->flags = AS_ASYNC_FLAGS_MASTER;
 	cmd->flags2 = 0;
 	vcmd->listener = listener;
 	return cmd;

@@ -1049,6 +1049,7 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.partition_id = 0; // Not referenced when node set.
 	cmd.replica = AS_POLICY_REPLICA_MASTER;
 	cmd.flags = flags;
+	cmd.master = true;
 
 	as_command_start_timer(&cmd);
 
@@ -1148,6 +1149,7 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.partition_id = 0; // Not referenced when node set.
 	cmd.replica = AS_POLICY_REPLICA_MASTER;
 	cmd.flags = flags;
+	cmd.master = true;
 
 	as_command_start_timer(&cmd);
 

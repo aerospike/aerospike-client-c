@@ -550,7 +550,6 @@ as_command_start_timer(as_command* cmd)
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
 	cmd->sent = 0;
-	cmd->master = true;
 
 	if (policy->total_timeout > 0) {
 		cmd->socket_timeout = (policy->socket_timeout == 0 ||
@@ -661,6 +660,34 @@ as_task_id_resolve(uint64_t* task_id_ptr)
 		*task_id_ptr = as_random_get_uint64();
 	}
 	return *task_id_ptr;
+}
+
+/**
+ * @private
+ * Replica round robin iterator.
+ */
+extern uint32_t g_replica_rr;
+
+/**
+ * @private
+ * Should command target master on first iteration.
+ */
+static inline bool
+as_command_target_master(as_policy_replica replica)
+{
+	return (replica != AS_POLICY_REPLICA_ANY || (as_faa_uint32(&g_replica_rr, 1) & 1));
+}
+
+/**
+ * @private
+ * Convert replica target for write commands.
+ */
+static inline as_policy_replica
+as_command_write_replica(as_policy_replica replica)
+{
+	// Writes should always go to master node on first attempt.
+	// Allow prole on retry when possible.
+	return (replica == AS_POLICY_REPLICA_MASTER)? replica : AS_POLICY_REPLICA_SEQUENCE;
 }
 
 #ifdef __cplusplus

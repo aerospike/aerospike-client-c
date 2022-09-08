@@ -93,6 +93,7 @@ typedef struct as_batch_task_s {
 	bool* error_row;
 	cf_queue* complete_q;
 	uint32_t n_keys;
+	as_policy_replica replica;
 	as_policy_replica replica_sc;
 	uint8_t type;
 	bool has_write;
@@ -1609,7 +1610,7 @@ as_batch_command_init(
 	cmd->buf = buf;
 	cmd->buf_size = size;
 	cmd->partition_id = 0; // Not referenced when node set.
-	cmd->replica = policy->replica;
+	cmd->replica = task->replica;
 	cmd->split_retry = false;
 
 	// Note: Do not set flags to AS_COMMAND_FLAGS_LINEARIZE because AP and SC replicas
@@ -2187,6 +2188,7 @@ as_batch_keys_execute(
 	btk.base.error_mutex = &error_mutex;
 	btk.base.error_row = &error_row;
 	btk.base.n_keys = n_keys;
+	btk.base.replica = rep.replica;
 	btk.base.replica_sc = rep.replica_sc;
 	btk.base.type = type;
 	btk.base.has_write = rec->has_write;
@@ -2291,6 +2293,7 @@ as_batch_execute_sync(
 	btr.base.error_mutex = &error_mutex;
 	btr.base.error_row = error_row;
 	btr.base.n_keys = n_keys;
+	btr.base.replica = rep->replica;
 	btr.base.replica_sc = rep->replica_sc;
 	btr.base.type = BATCH_TYPE_RECORDS;
 	btr.base.has_write = has_write;
@@ -2378,7 +2381,7 @@ as_batch_execute_sync(
 
 static inline as_async_batch_command*
 as_batch_command_create(
-	as_cluster* cluster, const as_policy_batch* policy, as_node* node,
+	as_cluster* cluster, const as_policy_batch* policy, as_batch_replica* rep, as_node* node,
 	as_async_batch_executor* executor, size_t size, uint8_t flags, uint8_t* ubuf, uint32_t ubuf_size
 	)
 {
@@ -2395,7 +2398,7 @@ as_batch_command_create(
 	cmd->socket_timeout = policy->base.socket_timeout;
 	cmd->max_retries = policy->base.max_retries;
 	cmd->iteration = 0;
-	cmd->replica = policy->replica;
+	cmd->replica = rep->replica;
 	cmd->event_loop = executor->executor.event_loop;
 	cmd->cluster = cluster;
 	cmd->node = node;
@@ -2423,6 +2426,7 @@ as_batch_execute_async(
 	uint32_t n_batch_nodes = batch_nodes->size;
 	as_event_executor* exec = &executor->executor;
 	exec->max_concurrent = exec->max = exec->queued = n_batch_nodes;
+	executor->replica = rep->replica;
 	executor->replica_sc = rep->replica_sc;
 
 	// Note: Do not set flags to AS_ASYNC_FLAGS_LINEARIZE because AP and SC replicas
@@ -2467,8 +2471,8 @@ as_batch_execute_async(
 
 		if (! (policy->base.compress && bb.size > AS_COMPRESS_THRESHOLD)) {
 			// Send uncompressed command.
-			as_async_batch_command* bc = as_batch_command_create(cluster, policy, batch_node->node,
-				executor, bb.size, flags, NULL, 0);
+			as_async_batch_command* bc = as_batch_command_create(cluster, policy, rep,
+				batch_node->node, executor, bb.size, flags, NULL, 0);
 
 			as_event_command* cmd = &bc->command;
 
@@ -2487,8 +2491,8 @@ as_batch_execute_async(
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);
 
-			as_async_batch_command* bc = as_batch_command_create(cluster, policy, batch_node->node,
-				executor, comp_size, flags, ubuf, (uint32_t)size);
+			as_async_batch_command* bc = as_batch_command_create(cluster, policy, rep,
+				batch_node->node, executor, comp_size, flags, ubuf, (uint32_t)size);
 
 			as_event_command* cmd = &bc->command;
 
@@ -2668,8 +2672,7 @@ as_batch_records_execute_async(
 	as_async_batch_executor* be = cf_malloc(sizeof(as_async_batch_executor));
 	be->records = records;
 	be->listener = listener;
-	be->replica = policy->replica;
-	// replica_sc/master/master_sc are set later in as_batch_execute_async().
+	// replica/replica_sc are set later in as_batch_execute_async().
 	be->read_mode_sc = policy->read_mode_sc;
 	be->has_write = has_write;
 	be->error_row = false;
@@ -2725,7 +2728,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	}
 
 	as_batch_replica rep;
-	rep.replica = task->policy->replica;
+	rep.replica = task->replica;
 	rep.replica_sc = task->replica_sc;
 	rep.master = parent->master;
 	rep.master_sc = parent->master_sc;
@@ -2813,7 +2816,7 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 	}
 
 	as_batch_replica rep;
-	rep.replica = task->policy->replica;
+	rep.replica = task->replica;
 	rep.replica_sc = task->replica_sc;
 	rep.master = parent->master;
 	rep.master_sc = parent->master_sc;
@@ -2879,16 +2882,14 @@ as_batch_retry(as_command* parent, as_error* err)
 	// Retry requires keys for this node to be split among other nodes.
 	// This is both recursive and exponential.
 	as_batch_task* task = parent->udata;
-	const as_policy_batch* policy = task->policy;
-	as_policy_replica replica = policy->replica;
 
-	if (replica == AS_POLICY_REPLICA_MASTER) {
+	if (task->replica == AS_POLICY_REPLICA_MASTER) {
 		// Node assignment will not change.
 		return AEROSPIKE_USE_NORMAL_RETRY;
 	}
 
 	if (err->code != AEROSPIKE_ERR_TIMEOUT ||
-		policy->read_mode_sc != AS_POLICY_READ_MODE_SC_LINEARIZE) {
+		task->policy->read_mode_sc != AS_POLICY_READ_MODE_SC_LINEARIZE) {
 		parent->master_sc = ! parent->master_sc;
 	}
 

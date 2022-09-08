@@ -351,7 +351,6 @@ as_cdt_ctx_to_base64(const as_cdt_ctx* ctx, char* base64, uint32_t capacity);
  *
  * @param ctx		Target CDT context.
  * @param base64	Source base64 encoded string.
- * @param size		Length of source base64 encoded string.
  * @return			true on success, false on error.
  */
 AS_EXTERN bool

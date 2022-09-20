@@ -416,7 +416,7 @@ static inline as_nodes*
 as_nodes_reserve(as_cluster* cluster)
 {
 	as_nodes* nodes = (as_nodes*)as_load_ptr((void* const*)&cluster->nodes);
-    // TODO review atomics
+	// TODO review atomics
 	// as_fence_acquire();
 	as_incr_uint32(&nodes->ref_count);
 	return nodes;

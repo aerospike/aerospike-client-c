@@ -110,15 +110,15 @@ as_partition_release_node_now(as_node* node)
 static inline as_node*
 load_node(as_node** node)
 {
-    // TODO review atomics
-    return (as_node*)as_load_ptr((void* const*)node);
+	// TODO review atomics
+	return (as_node*)as_load_ptr((void* const*)node);
 }
 
 static inline void
 set_node(as_node** trg, as_node* src)
 {
-    // TODO review atomics
-    // as_fence_store();
+	// TODO review atomics
+	// as_fence_store();
 	as_store_ptr((void**)trg, src);
 }
 
@@ -532,7 +532,7 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 
 						if (create) {
 							tables->tables[tables->size] = table;
-                            // TODO review atomics
+							// TODO review atomics
 							// as_fence_store();
 							tables->size++;
 						}

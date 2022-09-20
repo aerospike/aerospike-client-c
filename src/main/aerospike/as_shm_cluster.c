@@ -141,15 +141,15 @@ as_shm_get_max_size()
 static inline as_node*
 as_shm_load_node(as_node** node)
 {
-    // TODO review atomics
-    return (as_node*)as_load_ptr((void* const*)node);
+	// TODO review atomics
+	return (as_node*)as_load_ptr((void* const*)node);
 }
 
 static inline void
 as_shm_store_node(as_node** trg, as_node* src)
 {
-    // TODO review atomics
-    as_store_ptr((void**)trg, src);
+	// TODO review atomics
+	as_store_ptr((void**)trg, src);
 }
 
 static int
@@ -231,7 +231,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 					node_to_add->name, address->name, cluster_shm->nodes_capacity);
 			}
 		}
-        as_shm_store_node(&shm_info->local_nodes[node_to_add->index], node_to_add);
+		as_shm_store_node(&shm_info->local_nodes[node_to_add->index], node_to_add);
 	}
 	as_incr_uint32(&cluster_shm->nodes_gen);
 }
@@ -255,7 +255,7 @@ as_shm_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_re
 		// Set local node pointer to null, but do not decrement cluster_shm->nodes_size
 		// because nodes are stored in a fixed array.
 		// TODO: Could decrement nodes_size when index is the last node in the array.
-        as_shm_store_node(&shm_info->local_nodes[node_to_remove->index], 0);
+		as_shm_store_node(&shm_info->local_nodes[node_to_remove->index], 0);
 	}
 	as_incr_uint32(&cluster_shm->nodes_gen);
 }
@@ -344,7 +344,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 					as_shm_ensure_login_node(&err, node);
 				}
 				as_vector_append(&nodes_to_add, &node);
-                as_shm_store_node(&shm_info->local_nodes[i], node);
+				as_shm_store_node(&shm_info->local_nodes[i], node);
 			}
 			node->rebalance_generation = node_tmp.rebalance_generation;
 		}
@@ -352,7 +352,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 			if (node) {
 				as_node_deactivate(node);
 				as_vector_append(&nodes_to_remove, &node);
-                as_shm_store_node(&shm_info->local_nodes[i], 0);
+				as_shm_store_node(&shm_info->local_nodes[i], 0);
 			}
 		}
 	}
@@ -1030,8 +1030,8 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 
 	if (shm_info->is_tend_master) {
 		as_log_info("Take over shared memory cluster: %d", pid);
-        // TODO review atomics
-        // as_fence_lock();
+		// TODO review atomics
+		// as_fence_lock();
 		cluster_shm->n_partitions = cluster->n_partitions;
 		cluster_shm->nodes_capacity = config->shm_max_nodes;
 		cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
@@ -1059,19 +1059,19 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 			}
 			as_store_uint8(&cluster_shm->ready, 1);
 		}
-        // TODO review atomics
+		// TODO review atomics
 		// as_fence_unlock();
 	}
 	else {
 		as_log_info("Follow shared memory cluster: %d", pid);
-        // TODO review atomics
+		// TODO review atomics
 		// as_fence_lock();
 
 		// Prole should wait until master has fully initialized shared memory.
 		if (! as_load_uint8(&cluster_shm->ready)) {
 			as_shm_wait_till_ready(cluster, cluster_shm, pid);
 		}
-        // TODO review atomics
+		// TODO review atomics
 		// as_fence_unlock();
 
 		// Copy shared memory nodes to local nodes.

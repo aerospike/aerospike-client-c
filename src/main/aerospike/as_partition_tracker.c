@@ -242,7 +242,7 @@ as_partition_tracker_assign(
 	as_partition_tracker* pt, as_cluster* cluster, const char* ns, as_error* err
 	)
 {
-    //printf("Round %u\n", pt->iteration);
+	//printf("Round %u\n", pt->iteration);
 
 	as_partitions_status* parts_all = pt->parts_all;
 	bool retry = parts_all->retry && pt->iteration == 1;
@@ -300,7 +300,7 @@ as_partition_tracker_assign(
 										   "Node not found for partition %u", ps->part_id);
 				}
 
-                // TODO review atomics
+				// TODO review atomics
 				as_node* node = (as_node*)as_load_ptr((void* const*)&local_nodes[master-1]);
 
 				if (! node) {

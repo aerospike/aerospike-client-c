@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -257,7 +257,7 @@ as_udf_file_init(as_udf_file * file);
  * @returns The newly allocated udf file on success. Otherwise NULL.
  */
 AS_EXTERN as_udf_file*
-as_udf_file_new();
+as_udf_file_new(void);
 
 /**
  * Destroy an as_udf_file.

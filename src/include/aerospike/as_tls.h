@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -26,11 +26,11 @@
 extern "C" {
 #endif
 
-void as_tls_check_init();
+void as_tls_check_init(void);
 
 void as_tls_cleanup(void);
 
-AS_EXTERN void as_tls_thread_cleanup();
+AS_EXTERN void as_tls_thread_cleanup(void);
 
 as_status as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* err);
 

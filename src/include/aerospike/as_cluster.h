@@ -415,8 +415,9 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names);
 static inline as_nodes*
 as_nodes_reserve(as_cluster* cluster)
 {
-	as_nodes* nodes = (as_nodes *)as_load_ptr(&cluster->nodes);
-	//as_fence_acquire();
+	as_nodes* nodes = (as_nodes*)as_load_ptr((void* const*)&cluster->nodes);
+    // TODO review atomics
+	// as_fence_acquire();
 	as_incr_uint32(&nodes->ref_count);
 	return nodes;
 }

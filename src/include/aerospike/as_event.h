@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -441,7 +441,7 @@ as_event_loop_get_queue_size(as_event_loop* event_loop)
  * @ingroup async_events
  */
 AS_EXTERN bool
-as_event_close_loops();
+as_event_close_loops(void);
 
 /**
  * Close internal event loop and release internal/external event loop watchers.
@@ -458,7 +458,7 @@ as_event_close_loop(as_event_loop* event_loop);
  * @ingroup async_events
  */
 AS_EXTERN void
-as_event_destroy_loops();
+as_event_destroy_loops(void);
 
 /******************************************************************************
  * LIBEVENT SINGLE THREAD MODE FUNCTIONS

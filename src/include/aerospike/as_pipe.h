@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -50,10 +50,10 @@ typedef struct as_pipe_connection {
 } as_pipe_connection;
 
 extern int
-as_pipe_get_send_buffer_size();
+as_pipe_get_send_buffer_size(void);
 
 extern int
-as_pipe_get_recv_buffer_size();
+as_pipe_get_recv_buffer_size(void);
 
 extern void
 as_pipe_get_connection(as_event_command* cmd);

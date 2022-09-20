@@ -107,11 +107,19 @@ as_partition_release_node_now(as_node* node)
 	}
 }
 
+static inline as_node*
+load_node(as_node** node)
+{
+    // TODO review atomics
+    return (as_node*)as_load_ptr((void* const*)node);
+}
+
 static inline void
 set_node(as_node** trg, as_node* src)
 {
-	as_fence_store();
-	as_store_ptr(trg, src);
+    // TODO review atomics
+    // as_fence_store();
+	as_store_ptr((void**)trg, src);
 }
 
 static as_partition_table*
@@ -187,8 +195,8 @@ try_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 static as_node*
 get_sequence_node(as_cluster* cluster, as_partition* p, bool use_master)
 {
-	as_node* master = (as_node*)as_load_ptr(&p->master);
-	as_node* prole = (as_node*)as_load_ptr(&p->prole);
+	as_node* master = load_node(&p->master);
+	as_node* prole = load_node(&p->prole);
 
 	if (! prole) {
 		return try_node(cluster, master);
@@ -212,12 +220,12 @@ prefer_rack_node(
 	as_node* nodes[2];
 
 	if (use_master) {
-		nodes[0] = (as_node*)as_load_ptr(&p->master);
-		nodes[1] = (as_node*)as_load_ptr(&p->prole);
+		nodes[0] = load_node(&p->master);
+		nodes[1] = load_node(&p->prole);
 	}
 	else {
-		nodes[0] = (as_node*)as_load_ptr(&p->prole);
-		nodes[1] = (as_node*)as_load_ptr(&p->master);
+		nodes[0] = load_node(&p->prole);
+		nodes[1] = load_node(&p->master);
 	}
 
 	as_node* fallback1 = NULL;
@@ -275,7 +283,7 @@ as_partition_reg_get_node(
 	switch (replica) {
 		case AS_POLICY_REPLICA_MASTER: {
 			// Make volatile reference so changes to tend thread will be reflected in this thread.
-			as_node* master = (as_node*)as_load_ptr(&p->master);
+			as_node* master = load_node(&p->master);
 			return try_master(cluster, master);
 		}
 
@@ -524,7 +532,8 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 
 						if (create) {
 							tables->tables[tables->size] = table;
-							as_fence_store();
+                            // TODO review atomics
+							// as_fence_store();
 							tables->size++;
 						}
 					}
@@ -551,8 +560,8 @@ as_partition_tables_dump(as_cluster* cluster)
 
 		for (uint32_t j = 0; j < pt->size; j++) {
 			as_partition* p = &pt->partitions[j];
-			as_node* master = (as_node*)as_load_ptr(&p->master);
-			as_node* prole = (as_node*)as_load_ptr(&p->prole);
+			as_node* master = load_node(&p->master);
+			as_node* prole = load_node(&p->prole);
 			const char* mstr = master ? as_node_get_address_string(master) : "null";
 			const char* pstr = prole ? as_node_get_address_string(prole) : "null";
 

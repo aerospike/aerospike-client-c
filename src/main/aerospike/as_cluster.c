@@ -70,8 +70,9 @@ as_event_balance_connections(as_cluster* cluster);
 static inline void
 set_nodes(as_cluster* cluster, as_nodes* nodes)
 {
-	as_fence_store();
-	as_store_ptr(&cluster->nodes, nodes);
+    // TODO review atomics
+	// as_fence_store();
+	as_store_ptr((void**)&cluster->nodes, nodes);
 }
 
 static as_nodes*

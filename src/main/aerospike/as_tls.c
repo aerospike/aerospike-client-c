@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -35,7 +35,7 @@ static bool cert_blacklist_check(void* cert_blacklist,
 								 const char* issuer_name);
 static void cert_blacklist_destroy(void* cert_blacklist);
 
-static void manage_sigpipe();
+static void manage_sigpipe(void);
 
 static bool s_tls_inited = false;
 static pthread_mutex_t s_tls_init_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -260,7 +260,8 @@ as_tls_check_init()
 		s_ex_name_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 		s_ex_ctxt_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 		
-		as_fence_memory();
+        // TODO review atomics
+		// as_fence_memory();
 		
 		s_tls_inited = true;
 	}

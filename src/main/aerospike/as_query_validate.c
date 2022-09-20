@@ -20,6 +20,7 @@
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_node.h>
+#include <limits.h>
 
 uint32_t
 as_query_get_info_timeout(as_event_executor* executor);

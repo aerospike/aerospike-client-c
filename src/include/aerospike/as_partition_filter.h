@@ -150,8 +150,9 @@ as_partition_filter_set_partitions(as_partition_filter* pf, as_partitions_status
 static inline as_partitions_status*
 as_partitions_status_reserve(as_partitions_status* parts_all)
 {
-	as_partitions_status* pa = (as_partitions_status*)as_load_ptr(&parts_all);
-	//as_fence_acquire();
+	as_partitions_status* pa = (as_partitions_status*)as_load_ptr((void* const*)&parts_all);
+    // TODO review atomics
+	// as_fence_acquire();
 	as_incr_uint32(&pa->ref_count);
 	return pa;
 }

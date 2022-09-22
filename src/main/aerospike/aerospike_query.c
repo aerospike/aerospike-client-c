@@ -1337,8 +1337,7 @@ as_query_aggregate(void* data)
 	
 	as_udf_context ctx = {
 		.as = &as,
-		.timer = NULL,
-		.memtracker = NULL
+		.timer = NULL
 	};
 
 	// The callback stream provides the ability to write to a user callback function

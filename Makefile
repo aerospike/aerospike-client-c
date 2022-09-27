@@ -262,7 +262,6 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_vector.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/alloc.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_atomic.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_b64.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_byte_order.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h

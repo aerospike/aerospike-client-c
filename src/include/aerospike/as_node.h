@@ -610,6 +610,16 @@ as_node_has_rack(as_node* node, const char* ns, int rack_id);
 
 /**
  * @private
+ * Volatile read session pointer.
+ */
+static inline as_session*
+as_session_load(as_session** session)
+{
+	return (as_session*)as_load_ptr((void* const*)session);
+}
+
+/**
+ * @private
  * Release existing session.
  */
 static inline void

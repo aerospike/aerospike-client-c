@@ -57,13 +57,6 @@ extern uint32_t as_event_loop_capacity;
  *****************************************************************************/
 
 // TODO review atomics
-static inline as_session*
-as_session_load(as_session** session)
-{
-	return (as_session*)as_load_ptr((void* const*)session);
-}
-
-// TODO review atomics
 static inline as_racks*
 as_racks_load(as_racks** racks)
 {

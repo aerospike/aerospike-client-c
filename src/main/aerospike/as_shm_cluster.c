@@ -1031,7 +1031,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	if (shm_info->is_tend_master) {
 		as_log_info("Take over shared memory cluster: %d", pid);
 		// TODO review atomics
-		// as_fence_lock();
+		as_fence_acq();
 		cluster_shm->n_partitions = cluster->n_partitions;
 		cluster_shm->nodes_capacity = config->shm_max_nodes;
 		cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
@@ -1060,19 +1060,19 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 			as_store_uint8(&cluster_shm->ready, 1);
 		}
 		// TODO review atomics
-		// as_fence_unlock();
+		as_fence_rls();
 	}
 	else {
 		as_log_info("Follow shared memory cluster: %d", pid);
 		// TODO review atomics
-		// as_fence_lock();
+		as_fence_acq();
 
 		// Prole should wait until master has fully initialized shared memory.
 		if (! as_load_uint8(&cluster_shm->ready)) {
 			as_shm_wait_till_ready(cluster, cluster_shm, pid);
 		}
 		// TODO review atomics
-		// as_fence_unlock();
+		as_fence_rls();
 
 		// Copy shared memory nodes to local nodes.
 		as_shm_reset_nodes(cluster);

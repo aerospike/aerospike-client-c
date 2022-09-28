@@ -67,13 +67,14 @@ ifeq ($(OS),Darwin)
     endif
   endif
 
-  # homebrew openssl include path
-  ifneq ($(wildcard /usr/local/opt/openssl/include),)
+  ifneq ($(wildcard /opt/homebrew/opt/openssl/include),)
+    # Mac new homebrew openssl include path
+    CC_FLAGS += -I/opt/homebrew/opt/openssl/include
+  else ifneq ($(wildcard /usr/local/opt/openssl/include),)
+    # Mac old homebrew openssl include path
     CC_FLAGS += -I/usr/local/opt/openssl/include
-  endif
-
-  # macports openssl include path
-  ifneq ($(wildcard /opt/local/include/openssl),)
+  else ifneq ($(wildcard /opt/local/include/openssl),)
+    # macports openssl include path
     CC_FLAGS += -I/opt/local/include
   endif
 
@@ -267,7 +268,6 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_byte_order.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_ll.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
-COMMON-HEADERS += $(shell find $(COMMON)/$(SOURCE_INCL)/aerospike/ck -type f)
 
 EXCLUDE-HEADERS = 
 

@@ -41,6 +41,8 @@
 #include <aerospike/as_udf_context.h>
 #include <aerospike/mod_lua.h>
 
+extern bool as_op_is_write[];
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -772,6 +774,12 @@ as_query_command_size(
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
+
+			if (!as_op_is_write[op->op]) {
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+					"Read operations not allowed in background query");
+			}
+
 			as_status status = as_command_bin_size(&op->bin, qb->opsbuffers, &qb->size, err);
 
 			if (status != AEROSPIKE_OK) {

@@ -9,12 +9,12 @@
 /* Begin PBXBuildFile section */
 		BE9280C61E4AC2F0007F7DA7 /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280C51E4AC2F0007F7DA7 /* liblua.a */; };
 		BE9280C81E4AC521007F7DA7 /* libz.1.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280C71E4AC521007F7DA7 /* libz.1.dylib */; };
+		BF1881E028E5093F003DCB7B /* libssl.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF1881DF28E5093F003DCB7B /* libssl.a */; };
 		BF3F7D47259BDD2B0092D808 /* map_sort.c in Sources */ = {isa = PBXBuildFile; fileRef = BF3F7D46259BDD2B0092D808 /* map_sort.c */; };
 		BF5D22741E69096800724AE3 /* info_helper.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5D22721E69096800724AE3 /* info_helper.c */; };
 		BF65C9CA252D33400026D9E2 /* filter_exp.c in Sources */ = {isa = PBXBuildFile; fileRef = BF65C9C9252D33400026D9E2 /* filter_exp.c */; };
 		BF7EBCC725D4B20800D5DFE9 /* exp_operate.c in Sources */ = {isa = PBXBuildFile; fileRef = BF7EBCC625D4B20800D5DFE9 /* exp_operate.c */; };
 		BF809CE52432B38300C16F3D /* hll_operate.c in Sources */ = {isa = PBXBuildFile; fileRef = BF809CE42432B38300C16F3D /* hll_operate.c */; };
-		BF8A328B1E4E73FD00DE2F4D /* libssl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BF8A328A1E4E73FD00DE2F4D /* libssl.dylib */; };
 		BF9750111E4EC8C900B737CF /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750101E4EC8C900B737CF /* libev.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750121E4ECA1C00B737CF /* libuv.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BFB5EBE522BC26B400CE6E43 /* bit.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB5EBE422BC26B400CE6E43 /* bit.c */; };
@@ -89,6 +89,7 @@
 /* Begin PBXFileReference section */
 		BE9280C51E4AC2F0007F7DA7 /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = ../modules/lua/src/liblua.a; sourceTree = "<group>"; };
 		BE9280C71E4AC521007F7DA7 /* libz.1.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.1.dylib; path = ../../../../../usr/lib/libz.1.dylib; sourceTree = "<group>"; };
+		BF1881DF28E5093F003DCB7B /* libssl.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libssl.a; path = "../../../../opt/homebrew/Cellar/openssl@3/3.0.5/lib/libssl.a"; sourceTree = "<group>"; };
 		BF3F7D46259BDD2B0092D808 /* map_sort.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_sort.c; path = ../src/test/aerospike_map/map_sort.c; sourceTree = "<group>"; };
 		BF5D22721E69096800724AE3 /* info_helper.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = info_helper.c; path = ../src/test/util/info_helper.c; sourceTree = "<group>"; };
 		BF5D22731E69096800724AE3 /* info_helper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = info_helper.h; path = ../src/test/util/info_helper.h; sourceTree = "<group>"; };
@@ -168,7 +169,7 @@
 				BE9280C61E4AC2F0007F7DA7 /* liblua.a in Frameworks */,
 				BF9750111E4EC8C900B737CF /* libev.a in Frameworks */,
 				BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */,
-				BF8A328B1E4E73FD00DE2F4D /* libssl.dylib in Frameworks */,
+				BF1881E028E5093F003DCB7B /* libssl.a in Frameworks */,
 				BFC25E551E4E80D600FD7756 /* libcrypto.dylib in Frameworks */,
 				BE9280C81E4AC521007F7DA7 /* libz.1.dylib in Frameworks */,
 			);
@@ -180,6 +181,7 @@
 		BE9280BA1E4ABCD7007F7DA7 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				BF1881DF28E5093F003DCB7B /* libssl.a */,
 				BF9750121E4ECA1C00B737CF /* libuv.a */,
 				BF9750101E4EC8C900B737CF /* libev.a */,
 			);
@@ -569,12 +571,13 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
-					/usr/local/opt/openssl/include,
 					/usr/local/include,
+					"$(OpenSSL)/include",
 				);
 				LIBRARY_SEARCH_PATHS = (
 					../modules/lua/src,
 					"$(ExternalLib)",
+					"$(OpenSSL)/lib",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				ONLY_ACTIVE_ARCH = YES;
@@ -625,12 +628,13 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				HEADER_SEARCH_PATHS = (
-					/usr/local/opt/openssl/include,
 					/usr/local/include,
+					"$(OpenSSL)/include",
 				);
 				LIBRARY_SEARCH_PATHS = (
 					../modules/lua/src,
 					"$(ExternalLib)",
+					"$(OpenSSL)/lib",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
@@ -653,8 +657,9 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					/usr/local/opt/openssl/lib,
 					../modules/lua/src,
+					"$(OpenSSL)/lib",
+					"$(ExternalLib)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
@@ -679,8 +684,9 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
-					/usr/local/opt/openssl/lib,
 					../modules/lua/src,
+					"$(OpenSSL)/lib",
+					"$(ExternalLib)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";

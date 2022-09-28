@@ -1500,6 +1500,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					../modules/lua/src,
+					"$(OpenSSL)/lib",
 					"$(ExternalLib)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
@@ -1548,6 +1549,7 @@
 				);
 				LIBRARY_SEARCH_PATHS = (
 					../modules/lua/src,
+					"$(OpenSSL)/lib",
 					"$(ExternalLib)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
@@ -1746,7 +1748,10 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(OpenSSL)/lib",
+				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
@@ -1783,7 +1788,10 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(OpenSSL)/lib",
+				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = append;
@@ -1824,7 +1832,11 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(OpenSSL)/lib",
+					"$(ExternalLib)",
+				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				ONLY_ACTIVE_ARCH = YES;
@@ -1861,7 +1873,11 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				LIBRARY_SEARCH_PATHS = "$(inherited)";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(OpenSSL)/lib",
+					"$(ExternalLib)",
+				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
 				PRODUCT_NAME = expire;

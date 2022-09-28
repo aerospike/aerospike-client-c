@@ -89,7 +89,7 @@ bool namespace_in_memory = false;
  *      d = c % 10
  *      e = b + (c + 1) * (d + 1) / 2
  */
-bool query_foreach_create()
+bool query_foreach_create(void)
 {
 	as_error err;
 	as_error_reset(&err);
@@ -273,7 +273,7 @@ bool query_foreach_create()
 /**
  * Destroy 9 indexes.
  */
-bool query_foreach_destroy()
+bool query_foreach_destroy(void)
 {
 	as_error err;
 	as_error_reset(&err);

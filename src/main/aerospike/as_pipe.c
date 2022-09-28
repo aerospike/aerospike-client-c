@@ -16,6 +16,7 @@
  */
 
 #include <aerospike/as_pipe.h>
+#include <limits.h>
 #include <stdlib.h>
 
 #if defined(__linux__)

@@ -160,7 +160,7 @@ typedef struct {
 //---------------------------------
 
 // These values must line up with as_operator enum.
-static bool as_op_is_write[] = {
+bool as_op_is_write[] = {
 	false,
 	true,
 	false,

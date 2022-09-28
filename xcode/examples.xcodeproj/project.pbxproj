@@ -1499,16 +1499,13 @@
 					/usr/local/include,
 				);
 				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/openssl/lib,
-					/usr/local/lib,
+					../modules/lua/src,
+					"$(ExternalLib)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = (
-					"-L/opt/homebrew/lib",
-					"-L../modules/lua/src",
-				);
+				OTHER_LDFLAGS = "";
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -1550,15 +1547,12 @@
 					/usr/local/include,
 				);
 				LIBRARY_SEARCH_PATHS = (
-					/opt/homebrew/opt/openssl/lib,
-					/usr/local/lib,
+					../modules/lua/src,
+					"$(ExternalLib)",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
-				OTHER_LDFLAGS = (
-					"-L/opt/homebrew/lib",
-					"-L../modules/lua/src",
-				);
+				OTHER_LDFLAGS = "";
 				SDKROOT = macosx;
 			};
 			name = Release;

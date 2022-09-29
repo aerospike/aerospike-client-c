@@ -10,68 +10,110 @@ OS = $(shell uname)
 ARCH = $(shell uname -m)
 PLATFORM = $(OS)-$(ARCH)
 
-CFLAGS = -std=gnu99 -g -Wall -fPIC -O3
-CFLAGS += -fno-common -fno-strict-aliasing
-CFLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
+CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O3
+CC_FLAGS += -fno-common -fno-strict-aliasing
+CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
 ifeq ($(ARCH),x86_64)
-  CFLAGS += -march=nocona
+  CC_FLAGS += -march=nocona
 endif
 
 ifeq ($(OS),Darwin)
-  CFLAGS += -D_DARWIN_UNLIMITED_SELECT
+  CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT
   
-  # homebrew libevent include path
-  ifneq ($(wildcard /usr/local/opt/libevent/include),)
-    CFLAGS += -I/usr/local/opt/libevent/include
+  ifneq ($(wildcard /opt/homebrew/include),)
+    # Mac new homebrew external include path
+    CC_FLAGS += -I/opt/homebrew/include
+  else ifneq ($(wildcard /usr/local/opt/libevent/include),)
+  	# Mac old homebrew libevent include path
+    CC_FLAGS += -I/usr/local/opt/libevent/include
+  endif
+
+  ifneq ($(wildcard /opt/homebrew/opt/openssl/include),)
+    # Mac new homebrew openssl include path
+    CC_FLAGS += -I/opt/homebrew/opt/openssl/include
+  else ifneq ($(wildcard /usr/local/opt/openssl/include),)
+    # Mac old homebrew openssl include path
+    CC_FLAGS += -I/usr/local/opt/openssl/include
+  else ifneq ($(wildcard /opt/local/include/openssl),)
+    # macports openssl include path
+    CC_FLAGS += -I/opt/local/include
   endif
 else ifeq ($(OS),Linux)
-  CFLAGS += -rdynamic
+  CC_FLAGS += -I/usr/local/include -rdynamic
+else
+  CC_FLAGS += -I/usr/local/include
 endif
 
-CFLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
-CFLAGS += -I../../utils/src/include -I/usr/local/include
+CC_FLAGS += -I$(AEROSPIKE)/target/$(PLATFORM)/include
+CC_FLAGS += -I../../utils/src/include
 
 ifeq ($(EVENT_LIB),libev)
-  CFLAGS += -DAS_USE_LIBEV 
+  CC_FLAGS += -DAS_USE_LIBEV
 endif
 
 ifeq ($(EVENT_LIB),libuv)
-  CFLAGS += -DAS_USE_LIBUV
+  CC_FLAGS += -DAS_USE_LIBUV
 endif
 
 ifeq ($(EVENT_LIB),libevent)
-  CFLAGS += -DAS_USE_LIBEVENT
+  CC_FLAGS += -DAS_USE_LIBEVENT
 endif
 
-LDFLAGS = -L/usr/local/lib
+LD_FLAGS = $(EXT_LDFLAGS)
 
 ifeq ($(OS),Darwin)
-  LDFLAGS += -L/usr/local/opt/openssl/lib
-
-  ifeq ($(EVENT_LIB),libevent)
-    TEST_LDFLAGS += -L/usr/local/opt/libevent/lib
+  ifneq ($(wildcard /opt/homebrew/lib),)
+    # Mac new homebrew external lib path
+    LD_FLAGS += -L/opt/homebrew/lib
+  else
+    # Mac old homebrew external lib path
+    LD_FLAGS += -L/usr/local/lib
+  
+    ifeq ($(EVENT_LIB),libevent)
+      LD_FLAGS += -L/usr/local/opt/libevent/lib
+    endif
   endif
+
+  ifneq ($(wildcard /opt/homebrew/opt/openssl/lib),)
+    # Mac new homebrew openssl lib path
+    LD_FLAGS += -L/opt/homebrew/opt/openssl/lib
+  else
+    # Mac old homebrew openssl lib path
+    LD_FLAGS += -L/usr/local/opt/openssl/lib
+  endif
+  
+  ifeq ($(USE_LUAJIT),1)
+    LD_FLAGS += -pagezero_size 10000 -image_base 100000000
+  endif
+  
+  LINK_SUFFIX =
+else ifeq ($(OS),FreeBSD)
+  LD_FLAGS += -L/usr/local/lib
+  LINK_SUFFIX = -lrt
+else
+  LD_FLAGS += -L/usr/local/lib
+  LINK_SUFFIX = -lrt -ldl
 endif
 
 ifeq ($(EVENT_LIB),libev)
-  LDFLAGS += -lev
+  LD_FLAGS += -lev
 endif
 
 ifeq ($(EVENT_LIB),libuv)
-  LDFLAGS += -luv
+  LD_FLAGS += -luv
 endif
 
 ifeq ($(EVENT_LIB),libevent)
-  LDFLAGS += -levent_core -levent_pthreads
+  LD_FLAGS += -levent_core -levent_pthreads
 endif
 
-LDFLAGS += -lssl -lcrypto -lpthread
+LD_FLAGS += -lssl -lcrypto $(LIB_LUA) -lpthread -lm -lz $(LINK_SUFFIX)
 
 ifeq ($(OS),Linux)
-  LDFLAGS += -lrt -ldl
+  LD_FLAGS += -lrt -ldl
 else ifeq ($(OS),FreeBSD)
-  LDFLAGS += -lrt
+  LD_FLAGS += -lrt
 endif
 
 # Use the Lua submodule?  [By default, yes.]
@@ -91,7 +133,7 @@ endif
 
 ifeq ($(USE_LUAJIT),1)
   ifeq ($(OS),Darwin)
-    LDFLAGS += -pagezero_size 10000 -image_base 100000000
+    LD_FLAGS += -pagezero_size 10000 -image_base 100000000
   endif
 else
   ifeq ($(USE_LUAMOD),0)
@@ -120,11 +162,11 @@ else
       LUA_LIBDIR = $(dir $(LUA_LIBPATH))
       LUA_LIB = $(patsubst lib%,%,$(basename $(notdir $(LUA_LIBPATH))))
     endif
-    LDFLAGS += -L$(LUA_LIBDIR) -l$(LUA_LIB)
+    LD_FLAGS += -L$(LUA_LIBDIR) -l$(LUA_LIB)
   endif
 endif
 
-LDFLAGS += -lm -lz
+LD_FLAGS += -lm -lz
 CC = cc
 
 ###############################################################################
@@ -153,13 +195,13 @@ target/obj: | target
 	mkdir $@
 
 target/obj/example_utils.o: ../../utils/src/main/example_utils.c | target/obj
-	$(CC) $(CFLAGS) -o $@ -c $^
+	$(CC) $(CC_FLAGS) -o $@ -c $^
 
 target/obj/%.o: src/main/%.c | target/obj
-	$(CC) $(CFLAGS) -o $@ -c $^
+	$(CC) $(CC_FLAGS) -o $@ -c $^
 
 target/example: $(addprefix target/obj/,$(OBJECTS)) $(AEROSPIKE)/target/$(PLATFORM)/lib/libaerospike.a | target
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) -o $@ $^ $(LD_FLAGS)
 
 .PHONY: run
 run: build

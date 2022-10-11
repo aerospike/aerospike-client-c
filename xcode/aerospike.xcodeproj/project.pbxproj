@@ -1027,7 +1027,6 @@
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				OTHER_CFLAGS = (
 					"-D_DARWIN_UNLIMITED_SELECT",
-					"-DLUA_DEBUG_HOOK",
 				);
 				OTHER_LDFLAGS = (
 					"-L/usr/local/lib",
@@ -1058,7 +1057,6 @@
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				OTHER_CFLAGS = (
 					"-D_DARWIN_UNLIMITED_SELECT",
-					"-DLUA_DEBUG_HOOK",
 				);
 				OTHER_LDFLAGS = (
 					"-L/usr/local/lib",

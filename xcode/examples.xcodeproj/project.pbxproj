@@ -1501,7 +1501,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					../modules/lua/src,
 					"$(OpenSSL)/lib",
-					"$(ExternalLib)",
+					"$(External)/lib",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				ONLY_ACTIVE_ARCH = YES;
@@ -1550,7 +1550,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					../modules/lua/src,
 					"$(OpenSSL)/lib",
-					"$(ExternalLib)",
+					"$(External)/lib",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
@@ -1835,7 +1835,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(OpenSSL)/lib",
-					"$(ExternalLib)",
+					"$(External)/lib",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
@@ -1876,7 +1876,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(inherited)",
 					"$(OpenSSL)/lib",
-					"$(ExternalLib)",
+					"$(External)/lib",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";

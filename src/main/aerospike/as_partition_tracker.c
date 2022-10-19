@@ -300,8 +300,7 @@ as_partition_tracker_assign(
 										   "Node not found for partition %u", ps->part_id);
 				}
 
-				// TODO: Is the acq barrier necessary?
-				as_node* node = (as_node*)as_load_ptr_acq((void* const*)&local_nodes[master-1]);
+				as_node* node = as_node_load(&local_nodes[master-1]);
 
 				if (! node) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,

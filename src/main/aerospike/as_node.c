@@ -59,8 +59,7 @@ extern uint32_t as_event_loop_capacity;
 static inline as_racks*
 as_racks_load(as_racks** racks)
 {
-	// TODO: Is the acq barrier necessary?
-	return (as_racks*)as_load_ptr_acq((void* const*)racks);
+	return (as_racks*)as_load_ptr((void* const*)racks);
 }
 
 static inline void

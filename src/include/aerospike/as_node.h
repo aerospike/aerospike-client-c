@@ -459,6 +459,16 @@ as_node_deactivate(as_node* node)
 
 /**
  * @private
+ * Read volatile node.
+ */
+static inline as_node*
+as_node_load(as_node** node)
+{
+	return (as_node*)as_load_ptr((void* const*)node);
+}
+
+/**
+ * @private
  * Reserve existing cluster node.
  */
 static inline void
@@ -469,12 +479,23 @@ as_node_reserve(as_node* node)
 
 /**
  * @private
+ * Set volatile node.
+ */
+static inline void
+as_node_store(as_node** trg, as_node* src)
+{
+	as_store_ptr_rls((void**)trg, src);
+}
+
+/**
+ * @private
  * Release existing cluster node.
  */
 static inline void
 as_node_release(as_node* node)
 {
 	if (as_aaf_uint32_rls(&node->ref_count, -1) == 0) {
+		as_fence_seq();
 		as_node_destroy(node);
 	}
 }
@@ -623,8 +644,7 @@ as_node_has_rack(as_node* node, const char* ns, int rack_id);
 static inline as_session*
 as_session_load(as_session** session)
 {
-	// TODO: Is the acq barrier necessary?
-	return (as_session*)as_load_ptr_acq((void* const*)session);
+	return (as_session*)as_load_ptr((void* const*)session);
 }
 
 /**

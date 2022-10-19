@@ -1483,7 +1483,7 @@ connector_execute_command(as_event_loop* event_loop, connector_shared* cs);
 static inline void
 connector_release(as_monitor* monitor, uint32_t* loop_count)
 {
-	if (as_aaf_uint32(loop_count, -1) == 0) {
+	if (as_aaf_uint32_rls(loop_count, -1) == 0) {
 		as_monitor_notify(monitor);
 	}
 }
@@ -1732,7 +1732,7 @@ typedef struct {
 static inline void
 balancer_release(balancer_shared* bs)
 {
-	if (as_aaf_uint32(&bs->loop_count, -1) == 0) {
+	if (as_aaf_uint32_rls(&bs->loop_count, -1) == 0) {
 		as_monitor_notify(&bs->monitor);
 	}
 }
@@ -1844,7 +1844,7 @@ typedef struct {
 static inline void
 balancer_release_node(balancer_shared_node* bs)
 {
-	if (as_aaf_uint32(&bs->loop_count, -1) == 0) {
+	if (as_aaf_uint32_rls(&bs->loop_count, -1) == 0) {
 		as_node_release(bs->node);
 		as_monitor_notify(&bs->monitor);
 	}
@@ -1907,7 +1907,8 @@ as_event_close_cluster_event_loop(
 {
 	event_state->closed = true;
 
-	if (as_aaf_uint32(&state->event_loop_count, -1) == 0) {
+	if (as_aaf_uint32_rls(&state->event_loop_count, -1) == 0) {
+		as_fence_seq();
 		as_cluster_destroy(state->cluster);
 
 		if (state->monitor) {

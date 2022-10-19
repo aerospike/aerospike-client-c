@@ -138,19 +138,6 @@ as_shm_get_max_size()
 }
 #endif
 
-static inline as_node*
-as_shm_load_node(as_node** node)
-{
-	// TODO: Is the acq barrier necessary?
-	return (as_node*)as_load_ptr_acq((void* const*)node);
-}
-
-static inline void
-as_shm_store_node(as_node** trg, as_node* src)
-{
-	as_store_ptr_rls((void**)trg, src);
-}
-
 static int
 as_shm_find_node_index(as_cluster_shm* cluster_shm, const char* name)
 {
@@ -230,7 +217,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 					node_to_add->name, address->name, cluster_shm->nodes_capacity);
 			}
 		}
-		as_shm_store_node(&shm_info->local_nodes[node_to_add->index], node_to_add);
+		as_node_store(&shm_info->local_nodes[node_to_add->index], node_to_add);
 	}
 	as_incr_uint32(&cluster_shm->nodes_gen);
 }
@@ -254,7 +241,7 @@ as_shm_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_re
 		// Set local node pointer to null, but do not decrement cluster_shm->nodes_size
 		// because nodes are stored in a fixed array.
 		// TODO: Could decrement nodes_size when index is the last node in the array.
-		as_shm_store_node(&shm_info->local_nodes[node_to_remove->index], 0);
+		as_node_store(&shm_info->local_nodes[node_to_remove->index], 0);
 	}
 	as_incr_uint32(&cluster_shm->nodes_gen);
 }
@@ -343,7 +330,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 					as_shm_ensure_login_node(&err, node);
 				}
 				as_vector_append(&nodes_to_add, &node);
-				as_shm_store_node(&shm_info->local_nodes[i], node);
+				as_node_store(&shm_info->local_nodes[i], node);
 			}
 			node->rebalance_generation = node_tmp.rebalance_generation;
 		}
@@ -351,7 +338,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 			if (node) {
 				as_node_deactivate(node);
 				as_vector_append(&nodes_to_remove, &node);
-				as_shm_store_node(&shm_info->local_nodes[i], 0);
+				as_node_store(&shm_info->local_nodes[i], 0);
 			}
 		}
 	}
@@ -512,7 +499,7 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 						if (p->master) {
 							as_shm_force_replicas_refresh(shm_info, p->master);
 						}
-						as_store_uint32(&p->master, node_index);
+						as_store_uint32_rls(&p->master, node_index);
 					}
 				}
 				else {
@@ -520,7 +507,7 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 						if (p->prole) {
 							as_shm_force_replicas_refresh(shm_info, p->prole);
 						}
-						as_store_uint32(&p->prole, node_index);
+						as_store_uint32_rls(&p->prole, node_index);
 					}
 				}
 			}
@@ -548,7 +535,7 @@ as_shm_try_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_inde
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
-		as_node* node = as_shm_load_node(&local_nodes[node_index-1]);
+		as_node* node = as_node_load(&local_nodes[node_index-1]);
 
 		if (node && as_node_is_active(node)) {
 			return node;
@@ -563,7 +550,7 @@ as_shm_try_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
-		as_node* node = as_shm_load_node(&local_nodes[node_index-1]);
+		as_node* node = as_node_load(&local_nodes[node_index-1]);
 
 		if (node && as_node_is_active(node)) {
 			return node;
@@ -578,7 +565,7 @@ as_shm_try_node_alternate(
 	)
 {
 	// index values start at one (zero indicates unset).
-	as_node* chosen = as_shm_load_node(&local_nodes[chosen_index-1]);
+	as_node* chosen = as_node_load(&local_nodes[chosen_index-1]);
 	
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (chosen && as_node_is_active(chosen)) {
@@ -592,8 +579,8 @@ shm_get_sequence_node(
 	as_cluster* cluster, as_node** local_nodes, as_partition_shm* p, bool use_master
 	)
 {
-	uint32_t master = as_load_uint32(&p->master);
-	uint32_t prole = as_load_uint32(&p->prole);
+	uint32_t master = as_load_uint32_acq(&p->master);
+	uint32_t prole = as_load_uint32_acq(&p->prole);
 
 	if (! prole) {
 		return as_shm_try_node(cluster, local_nodes, master);
@@ -619,12 +606,12 @@ shm_prefer_rack_node(
 	uint32_t node_indexes[2];
 
 	if (use_master) {
-		node_indexes[0] = as_load_uint32(&p->master);
-		node_indexes[1] = as_load_uint32(&p->prole);
+		node_indexes[0] = as_load_uint32_acq(&p->master);
+		node_indexes[1] = as_load_uint32_acq(&p->prole);
 	}
 	else {
-		node_indexes[0] = as_load_uint32(&p->prole);
-		node_indexes[1] = as_load_uint32(&p->master);
+		node_indexes[0] = as_load_uint32_acq(&p->prole);
+		node_indexes[1] = as_load_uint32_acq(&p->master);
 	}
 
 	as_node* fallback1 = NULL;
@@ -656,7 +643,7 @@ shm_prefer_rack_node(
 				continue;
 			}
 
-			as_node* node = as_shm_load_node(&local_nodes[node_index]);
+			as_node* node = as_node_load(&local_nodes[node_index]);
 
 			// Avoid retrying on node where command failed even if node is the
 			// only one on the same rack. The contents of prev_node may have
@@ -708,7 +695,7 @@ as_partition_shm_get_node(
 	switch (replica) {
 		case AS_POLICY_REPLICA_MASTER: {
 			// Make volatile reference so changes to tend thread will be reflected in this thread.
-			uint32_t master = as_load_uint32(&p->master);
+			uint32_t master = as_load_uint32_acq(&p->master);
 			return as_shm_try_master(cluster, local_nodes, master);
 		}
 

@@ -141,15 +141,14 @@ as_shm_get_max_size()
 static inline as_node*
 as_shm_load_node(as_node** node)
 {
-	// TODO review atomics
-	return (as_node*)as_load_ptr((void* const*)node);
+	// TODO: Is the acq barrier necessary?
+	return (as_node*)as_load_ptr_acq((void* const*)node);
 }
 
 static inline void
 as_shm_store_node(as_node** trg, as_node* src)
 {
-	// TODO review atomics
-	as_store_ptr((void**)trg, src);
+	as_store_ptr_rls((void**)trg, src);
 }
 
 static int
@@ -223,7 +222,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				node_to_add->index = cluster_shm->nodes_size;
 
 				// Increment node array size.
-				as_incr_uint32(&cluster_shm->nodes_size);
+				as_incr_uint32_rls(&cluster_shm->nodes_size);
 			}
 			else {
 				// There are no more node slots available in shared memory.
@@ -277,7 +276,7 @@ as_shm_ensure_login(as_cluster* cluster, as_error* err)
 	as_shm_info* shm_info = cluster->shm_info;
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	as_node_shm* nodes_shm = cluster_shm->nodes;
-	uint32_t max = as_load_uint32(&cluster_shm->nodes_size);
+	uint32_t max = as_load_uint32_acq(&cluster_shm->nodes_size);
 
 	for (uint32_t i = 0; i < max; i++) {
 		as_node_shm* node_shm = &nodes_shm[i];
@@ -551,7 +550,7 @@ as_shm_try_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_inde
 	if (node_index) {
 		as_node* node = as_shm_load_node(&local_nodes[node_index-1]);
 
-		if (node && as_load_uint8(&node->active)) {
+		if (node && as_node_is_active(node)) {
 			return node;
 		}
 	}
@@ -566,7 +565,7 @@ as_shm_try_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
 	if (node_index) {
 		as_node* node = as_shm_load_node(&local_nodes[node_index-1]);
 
-		if (node && as_load_uint8(&node->active)) {
+		if (node && as_node_is_active(node)) {
 			return node;
 		}
 	}
@@ -582,7 +581,7 @@ as_shm_try_node_alternate(
 	as_node* chosen = as_shm_load_node(&local_nodes[chosen_index-1]);
 	
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (chosen && as_load_uint8(&chosen->active)) {
+	if (chosen && as_node_is_active(chosen)) {
 		return chosen;
 	}
 	return as_shm_try_node(cluster, local_nodes, alternate_index);
@@ -909,7 +908,7 @@ as_shm_wait_till_ready(as_cluster* cluster, as_cluster_shm* cluster_shm, uint32_
 	do {
 		as_sleep(interval_ms);
 		
-		if (as_load_uint8(&cluster_shm->ready)) {
+		if (as_load_uint8_acq(&cluster_shm->ready)) {
 			as_log_info("Follow cluster initialized: %d", pid);
 			return;
 		}
@@ -1030,8 +1029,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 
 	if (shm_info->is_tend_master) {
 		as_log_info("Take over shared memory cluster: %d", pid);
-		// TODO review atomics
-		as_fence_acq();
+		// TODO: Review whether this is redundant when ready flag is true.
 		cluster_shm->n_partitions = cluster->n_partitions;
 		cluster_shm->nodes_capacity = config->shm_max_nodes;
 		cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
@@ -1057,22 +1055,16 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 				as_shm_destroy(cluster);
 				return status;
 			}
-			as_store_uint8(&cluster_shm->ready, 1);
+			as_store_uint8_rls(&cluster_shm->ready, 1);
 		}
-		// TODO review atomics
-		as_fence_rls();
 	}
 	else {
 		as_log_info("Follow shared memory cluster: %d", pid);
-		// TODO review atomics
-		as_fence_acq();
 
 		// Prole should wait until master has fully initialized shared memory.
-		if (! as_load_uint8(&cluster_shm->ready)) {
+		if (! as_load_uint8_acq(&cluster_shm->ready)) {
 			as_shm_wait_till_ready(cluster, cluster_shm, pid);
 		}
-		// TODO review atomics
-		as_fence_rls();
 
 		// Copy shared memory nodes to local nodes.
 		as_shm_reset_nodes(cluster);

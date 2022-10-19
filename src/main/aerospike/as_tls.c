@@ -260,10 +260,7 @@ as_tls_check_init()
 
 		s_ex_name_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 		s_ex_ctxt_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
-		
-		// TODO review atomics
-		// as_fence_memory();
-		
+				
 		s_tls_inited = true;
 	}
 

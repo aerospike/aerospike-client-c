@@ -438,13 +438,23 @@ as_node_create_min_connections(as_node* node);
 
 /**
  * @private
+ * Check if node is active from a transaction thread.
+ */
+static inline bool
+as_node_is_active(const as_node* node)
+{
+	return (bool)as_load_uint8_acq(&node->active);
+}
+
+/**
+ * @private
  * Set node to inactive.
  */
 static inline void
 as_node_deactivate(as_node* node)
 {
 	// Make volatile write so changes are reflected in other threads.
-	as_store_uint8(&node->active, false);
+	as_store_uint8_rls(&node->active, false);
 }
 
 /**
@@ -454,7 +464,6 @@ as_node_deactivate(as_node* node)
 static inline void
 as_node_reserve(as_node* node)
 {
-	//as_fence_acquire();
 	as_incr_uint32(&node->ref_count);
 }
 
@@ -465,8 +474,7 @@ as_node_reserve(as_node* node)
 static inline void
 as_node_release(as_node* node)
 {
-	//as_fence_release();
-	if (as_aaf_uint32(&node->ref_count, -1) == 0) {
+	if (as_aaf_uint32_rls(&node->ref_count, -1) == 0) {
 		as_node_destroy(node);
 	}
 }
@@ -615,7 +623,8 @@ as_node_has_rack(as_node* node, const char* ns, int rack_id);
 static inline as_session*
 as_session_load(as_session** session)
 {
-	return (as_session*)as_load_ptr((void* const*)session);
+	// TODO: Is the acq barrier necessary?
+	return (as_session*)as_load_ptr_acq((void* const*)session);
 }
 
 /**
@@ -625,8 +634,7 @@ as_session_load(as_session** session)
 static inline void
 as_session_release(as_session* session)
 {
-	//as_fence_release();
-	if (as_aaf_uint32(&session->ref_count, -1) == 0) {
+	if (as_aaf_uint32_rls(&session->ref_count, -1) == 0) {
 		cf_free(session);
 	}
 }

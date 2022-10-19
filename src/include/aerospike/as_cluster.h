@@ -415,9 +415,8 @@ as_cluster_get_node_names(as_cluster* cluster, int* n_nodes, char** node_names);
 static inline as_nodes*
 as_nodes_reserve(as_cluster* cluster)
 {
-	as_nodes* nodes = (as_nodes*)as_load_ptr((void* const*)&cluster->nodes);
-	// TODO review atomics
-	// as_fence_acquire();
+	// TODO: Is the acq barrier necessary?
+	as_nodes* nodes = (as_nodes*)as_load_ptr_acq((void* const*)&cluster->nodes);
 	as_incr_uint32(&nodes->ref_count);
 	return nodes;
 }
@@ -428,8 +427,7 @@ as_nodes_reserve(as_cluster* cluster)
 static inline void
 as_nodes_release(as_nodes* nodes)
 {
-	//as_fence_release();
-	if (as_aaf_uint32(&nodes->ref_count, -1) == 0) {
+	if (as_aaf_uint32_rls(&nodes->ref_count, -1) == 0) {
 		cf_free(nodes);
 	}
 }

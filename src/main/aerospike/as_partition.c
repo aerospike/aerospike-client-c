@@ -110,16 +110,14 @@ as_partition_release_node_now(as_node* node)
 static inline as_node*
 load_node(as_node** node)
 {
-	// TODO review atomics
-	return (as_node*)as_load_ptr((void* const*)node);
+	// TODO: Is the acq barrier necessary?
+	return (as_node*)as_load_ptr_acq((void* const*)node);
 }
 
 static inline void
 set_node(as_node** trg, as_node* src)
 {
-	// TODO review atomics
-	// as_fence_store();
-	as_store_ptr((void**)trg, src);
+	as_store_ptr_rls((void**)trg, src);
 }
 
 static as_partition_table*
@@ -165,7 +163,7 @@ static inline as_node*
 try_master(as_cluster* cluster, as_node* node)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (node && as_load_uint8(&node->active)) {
+	if (node && as_node_is_active(node)) {
 		return node;
 	}
 	// When master only specified, should never get random nodes.
@@ -176,7 +174,7 @@ static inline as_node*
 try_node(as_cluster* cluster, as_node* node)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (node && as_load_uint8(&node->active)) {
+	if (node && as_node_is_active(node)) {
 		return node;
 	}
 	return NULL;
@@ -186,7 +184,7 @@ static as_node*
 try_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
 {
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (as_load_uint8(&chosen->active)) {
+	if (as_node_is_active(chosen)) {
 		return chosen;
 	}
 	return try_node(cluster, alternate);
@@ -245,16 +243,16 @@ prefer_rack_node(
 				// examine the contents of prev_node!
 				if (node != prev_node) {
 					if (as_node_has_rack(node, ns, rack_id)) {
-						if (as_load_uint8(&node->active)) {
+						if (as_node_is_active(node)) {
 							return node;
 						}
 					}
-					else if (!fallback1 && as_load_uint8(&node->active)) {
+					else if (!fallback1 && as_node_is_active(node)) {
 						// Meets all criteria except not on same rack.
 						fallback1 = node;
 					}
 				}
-				else if (!fallback2 && as_load_uint8(&node->active)) {
+				else if (!fallback2 && as_node_is_active(node)) {
 					// Previous node is the least desirable fallback.
 					fallback2 = node;
 				}
@@ -345,7 +343,7 @@ as_partition_info_init(as_partition_info* pi, as_cluster* cluster, as_error* err
 as_partition_table*
 as_partition_tables_get(as_partition_tables* tables, const char* ns)
 {
-	uint32_t max = as_load_uint32(&tables->size);
+	uint32_t max = as_load_uint32_acq(&tables->size);
 	
 	for (uint32_t i = 0; i < max; i++) {
 		as_partition_table* table = tables->tables[i];
@@ -532,9 +530,7 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 
 						if (create) {
 							tables->tables[tables->size] = table;
-							// TODO review atomics
-							// as_fence_store();
-							tables->size++;
+							as_store_uint32_rls(&tables->size, tables->size + 1);
 						}
 					}
 				}

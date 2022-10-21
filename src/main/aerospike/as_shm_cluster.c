@@ -880,7 +880,7 @@ as_shm_tender(void* userdata)
 	
 	if (shm_info->is_tend_master) {
 		shm_info->is_tend_master = false;
-		as_store_uint8(&cluster_shm->lock, 0);
+		as_store_uint8_rls(&cluster_shm->lock, 0);
 	}
 	return 0;
 }
@@ -1016,8 +1016,8 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 
 	if (shm_info->is_tend_master) {
 		as_log_info("Take over shared memory cluster: %d", pid);
-		cluster_shm->timestamp = cf_getms();
-		as_store_uint32_rls(&cluster_shm->owner_pid, pid);
+		as_store_uint64(&cluster_shm->timestamp, cf_getms());
+		as_store_uint32(&cluster_shm->owner_pid, pid);
 
 		uint32_t pt_offset = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes);
 		uint32_t pt_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions);
@@ -1060,7 +1060,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 			as_status status = as_cluster_init(cluster, err);
 			
 			if (status != AEROSPIKE_OK) {
-				as_store_uint8(&cluster_shm->lock, 0);
+				as_store_uint8_rls(&cluster_shm->lock, 0);
 				as_shm_destroy(cluster);
 				return status;
 			}

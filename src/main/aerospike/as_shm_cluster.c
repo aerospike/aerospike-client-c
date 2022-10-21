@@ -1016,25 +1016,47 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 
 	if (shm_info->is_tend_master) {
 		as_log_info("Take over shared memory cluster: %d", pid);
-		// TODO: Review whether this is redundant when ready flag is true.
-		cluster_shm->n_partitions = cluster->n_partitions;
-		cluster_shm->nodes_capacity = config->shm_max_nodes;
-		cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
-		cluster_shm->partition_tables_offset = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes);
-		cluster_shm->partition_table_byte_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions);
 		cluster_shm->timestamp = cf_getms();
+		as_store_uint32_rls(&cluster_shm->owner_pid, pid);
 
-		as_store_uint32(&cluster_shm->owner_pid, pid);
-		
+		uint32_t pt_offset = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes);
+		uint32_t pt_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions);
+
 		// Ensure shared memory cluster is fully initialized.
-		if (as_load_uint8(&cluster_shm->ready)) {
-			// Copy shared memory nodes to local nodes.
+		if (as_load_uint8_acq(&cluster_shm->ready)) {
 			as_log_info("Cluster already initialized: %d", pid);
+
+			// Validate that the already initialized shared memory has the expected offset and size.
+			if (! (cluster_shm->partition_tables_capacity == config->shm_max_namespaces &&
+				cluster_shm->partition_tables_offset == pt_offset &&
+				cluster_shm->partition_table_byte_size == pt_size)) {
+
+				as_error_update(err, AEROSPIKE_ERR_CLIENT,
+					"Existing shared memory size is not compatible with new configuration. "
+					"Stop client processes and ensure shared memory is removed before "
+					"attempting new configuration: %u,%u,%u vs %u,%u,%u",
+					cluster_shm->partition_tables_capacity,
+					cluster_shm->partition_tables_offset,
+					cluster_shm->partition_table_byte_size,
+					config->shm_max_namespaces, pt_offset, pt_size);
+
+				as_store_uint8_rls(&cluster_shm->lock, 0);
+				as_shm_destroy(cluster);
+				return err->code;
+			}
+
+			// Copy shared memory nodes to local nodes.
 			as_shm_reset_nodes(cluster);
 			as_cluster_add_seeds(cluster);
 		}
 		else {
 			as_log_info("Initialize cluster: %d", pid);
+			cluster_shm->n_partitions = cluster->n_partitions;
+			cluster_shm->nodes_capacity = config->shm_max_nodes;
+			cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
+			cluster_shm->partition_tables_offset = pt_offset;
+			cluster_shm->partition_table_byte_size = pt_size;
+
 			as_status status = as_cluster_init(cluster, err);
 			
 			if (status != AEROSPIKE_OK) {

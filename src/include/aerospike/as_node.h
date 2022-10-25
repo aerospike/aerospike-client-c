@@ -495,7 +495,7 @@ static inline void
 as_node_release(as_node* node)
 {
 	if (as_aaf_uint32_rls(&node->ref_count, -1) == 0) {
-		as_fence_seq();
+		as_fence_acq();
 		as_node_destroy(node);
 	}
 }

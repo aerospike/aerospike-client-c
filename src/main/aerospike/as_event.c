@@ -1908,7 +1908,7 @@ as_event_close_cluster_event_loop(
 	event_state->closed = true;
 
 	if (as_aaf_uint32_rls(&state->event_loop_count, -1) == 0) {
-		as_fence_seq();
+		as_fence_acq();
 		as_cluster_destroy(state->cluster);
 
 		if (state->monitor) {

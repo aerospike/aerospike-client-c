@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -53,8 +53,8 @@ static query_data qdata;
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-extern bool query_foreach_create();
-extern bool query_foreach_destroy();
+extern bool query_foreach_create(void);
+extern bool query_foreach_destroy(void);
 
 static bool
 before(atf_suite* suite)

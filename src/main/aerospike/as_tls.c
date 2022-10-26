@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -35,7 +35,7 @@ static bool cert_blacklist_check(void* cert_blacklist,
 								 const char* issuer_name);
 static void cert_blacklist_destroy(void* cert_blacklist);
 
-static void manage_sigpipe();
+static void manage_sigpipe(void);
 
 static bool s_tls_inited = false;
 static pthread_mutex_t s_tls_init_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -117,10 +117,10 @@ protocols_parse(as_config_tls* tlscfg, uint16_t* oprotocols, as_error* errp)
 
 		if (act == '-') {
 			protocols &= ~current;
-        }
-        else if (act == '+') {
-            protocols |= current;
-        }
+		}
+		else if (act == '+') {
+			protocols |= current;
+		}
 		else {
 			if (protocols != AS_TLS_PROTOCOL_NONE) {
 				return as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
@@ -187,11 +187,12 @@ static pthread_mutex_t *lock_cs;
 static void
 pthreads_locking_callback(int mode, int type, const char *file, int line)
 {
-    if (mode & CRYPTO_LOCK) {
-        pthread_mutex_lock(&(lock_cs[type]));
-    } else {
-        pthread_mutex_unlock(&(lock_cs[type]));
-    }
+	if (mode & CRYPTO_LOCK) {
+		pthread_mutex_lock(&(lock_cs[type]));
+	}
+	else {
+		pthread_mutex_unlock(&(lock_cs[type]));
+	}
 }
 
 static void
@@ -207,27 +208,27 @@ pthreads_thread_id(CRYPTO_THREADID *tid)
 static void
 threading_setup(void)
 {
-    int i;
+	int i;
 
-    lock_cs = cf_malloc(CRYPTO_num_locks() * sizeof(pthread_mutex_t));
-    for (i = 0; i < CRYPTO_num_locks(); i++) {
-        pthread_mutex_init(&(lock_cs[i]), NULL);
-    }
+	lock_cs = cf_malloc(CRYPTO_num_locks() * sizeof(pthread_mutex_t));
+	for (i = 0; i < CRYPTO_num_locks(); i++) {
+		pthread_mutex_init(&(lock_cs[i]), NULL);
+	}
 
-    CRYPTO_THREADID_set_callback(pthreads_thread_id);
-    CRYPTO_set_locking_callback(pthreads_locking_callback);
+	CRYPTO_THREADID_set_callback(pthreads_thread_id);
+	CRYPTO_set_locking_callback(pthreads_locking_callback);
 }
 
 static void
 threading_cleanup(void)
 {
-    int i;
+	int i;
 
-    CRYPTO_set_locking_callback(NULL);
-    for (i = 0; i < CRYPTO_num_locks(); i++) {
-        pthread_mutex_destroy(&(lock_cs[i]));
-    }
-    cf_free(lock_cs);
+	CRYPTO_set_locking_callback(NULL);
+	for (i = 0; i < CRYPTO_num_locks(); i++) {
+		pthread_mutex_destroy(&(lock_cs[i]));
+	}
+	cf_free(lock_cs);
 }
 #endif
 
@@ -259,9 +260,7 @@ as_tls_check_init()
 
 		s_ex_name_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
 		s_ex_ctxt_index = SSL_get_ex_new_index(0, NULL, NULL, NULL, NULL);
-		
-		as_fence_memory();
-		
+				
 		s_tls_inited = true;
 	}
 
@@ -301,7 +300,7 @@ as_tls_cleanup(void)
 	// http://stackoverflow.com/questions/29845527/how-to-properly-uninitialize-openssl
 	STACK_OF(SSL_COMP) *ssl_comp_methods = SSL_COMP_get_compression_methods();
 	if (ssl_comp_methods != NULL) {
-        sk_SSL_COMP_free(ssl_comp_methods);
+		sk_SSL_COMP_free(ssl_comp_methods);
 	}
 #endif
 }
@@ -325,12 +324,12 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 		return preverify_ok;
 	}
 
-    SSL* ssl = X509_STORE_CTX_get_ex_data(
+	SSL* ssl = X509_STORE_CTX_get_ex_data(
 					ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
 
 	// The verify callback is called for each cert in the chain.
 	
-    X509* current_cert = X509_STORE_CTX_get_current_cert(ctx);
+	X509* current_cert = X509_STORE_CTX_get_current_cert(ctx);
 
 	as_tls_context* asctxt = SSL_get_ex_data(ssl, s_ex_ctxt_index);
 	if (! asctxt) {
@@ -495,19 +494,19 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 	}
 
 	/* always disable SSLv2, as per RFC 6176 */
-    SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2);
+	SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv2);
 	SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_SSLv3);
 
 	// Turn off non-enabled protocols.
 	if (! (protocols & AS_TLS_PROTOCOL_TLSV1)) {
-        SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1);
-    }
+		SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1);
+	}
 	if (! (protocols & AS_TLS_PROTOCOL_TLSV1_1)) {
-        SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1_1);
-    }
+		SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1_1);
+	}
 	if (! (protocols & AS_TLS_PROTOCOL_TLSV1_2)) {
-        SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1_2);
-    }
+		SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1_2);
+	}
 	
 	if (tlscfg->cafile || tlscfg->capath) {
 		int rv = SSL_CTX_load_verify_locations(ctx->ssl_ctx, tlscfg->cafile, tlscfg->capath);

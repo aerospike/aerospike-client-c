@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -56,11 +56,16 @@ extern uint32_t as_event_loop_capacity;
  * Functions.
  *****************************************************************************/
 
+static inline as_racks*
+as_racks_load(as_racks** racks)
+{
+	return (as_racks*)as_load_ptr((void* const*)racks);
+}
+
 static inline void
 as_racks_release(as_racks* racks)
 {
-	//as_fence_release();
-	if (as_aaf_uint32(&racks->ref_count, -1) == 0) {
+	if (as_aaf_uint32_rls(&racks->ref_count, -1) == 0) {
 		cf_free(racks);
 	}
 }
@@ -194,13 +199,13 @@ as_node_destroy(as_node* node)
 		cf_free(node->tls_name);
 	}
 
-	as_session* session = (as_session*)as_load_ptr(&node->session);
+	as_session* session = as_session_load(&node->session);
 
 	if (session) {
 		as_session_release(session);
 	}
 
-	as_racks* racks = (as_racks*)as_load_ptr(&node->racks);
+	as_racks* racks = as_racks_load(&node->racks);
 
 	if (racks) {
 		as_racks_release(racks);
@@ -440,7 +445,7 @@ as_node_create_connection(
 
 	if (cluster->auth_enabled) {
 		// Must reserve session because not called from cluster tend thread.
-		as_session* session = (as_session*)as_load_ptr(&node->session);
+		as_session* session = as_session_load(&node->session);
 
 		if (session) {
 			as_incr_uint32(&session->ref_count);
@@ -596,7 +601,7 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 static void
 as_node_close_idle_connections(as_node* node, as_conn_pool* pool, int count)
 {
-	uint64_t max_socket_idle_ns = node->cluster->max_socket_idle_ns_trim;
+	uint64_t max_socket_idle_ns = as_load_uint64(&node->cluster->max_socket_idle_ns_trim);
 	as_socket s;
 
 	while (count > 0) {
@@ -669,7 +674,6 @@ as_node_login(as_error* err, as_node* node, as_socket* sock)
 	as_status status = as_cluster_login(cluster, err, sock, deadline_ms, &node_info);
 
 	if (status) {
-		as_fence_store();
 		as_store_uint8(&node->perform_login, 1);
 		as_error_append(err, as_node_get_address_string(node));
 		return status;
@@ -677,8 +681,7 @@ as_node_login(as_error* err, as_node* node, as_socket* sock)
 
 	as_session* old = node->session;
 
-	as_fence_store();
-	as_store_ptr(&node->session, node_info.session);
+	as_store_ptr_rls((void**)&node->session, node_info.session);
 	as_store_uint8(&node->perform_login, 0);
 
 	if (old) {
@@ -729,7 +732,7 @@ as_node_should_login(as_node* node)
 bool
 as_node_has_rack(as_node* node, const char* ns, int rack_id)
 {
-	as_racks* racks = (as_racks*)as_load_ptr(&node->racks);
+	as_racks* racks = as_racks_load(&node->racks);
 
 	if (! racks) {
 		return false;
@@ -889,7 +892,7 @@ as_node_verify_name(as_error* err, as_node* node, const char* name)
 	if (strcmp(node->name, name) != 0) {
 		// Set node to inactive immediately.
 		// Make volatile write so changes are reflected in other threads.
-		as_store_uint8(&node->active, false);
+		as_store_uint8_rls(&node->active, false);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node name has changed. Old=%s New=%s", node->name, name);
 	}
 	return AEROSPIKE_OK;
@@ -1187,8 +1190,7 @@ as_node_replace_racks(as_cluster* cluster, as_node* node, as_racks* racks)
 
 	as_racks* old = node->racks;
 
-	as_fence_store();
-	as_store_ptr(&node->racks, racks);
+	as_store_ptr_rls((void**)&node->racks, racks);
 
 	if (old) {
 		// Put old racks on garbage collector stack.

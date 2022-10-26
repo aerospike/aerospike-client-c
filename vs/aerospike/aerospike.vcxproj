@@ -291,7 +291,6 @@
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_log_macros.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_map.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_map_iterator.h" />
-    <ClInclude Include="..\..\modules\common\src\include\aerospike\as_memtracker.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_module.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_monitor.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_msgpack.h" />
@@ -323,7 +322,6 @@
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_vector.h" />
     <ClInclude Include="..\..\modules\common\src\include\aerospike\ssl_util.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\alloc.h" />
-    <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_atomic.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_b64.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_byte_order.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_clock.h" />
@@ -411,7 +409,6 @@
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_list.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_log.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_map.c" />
-    <ClCompile Include="..\..\modules\common\src\main\aerospike\as_memtracker.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_module.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_msgpack.c" />
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_msgpack_ext.c" />

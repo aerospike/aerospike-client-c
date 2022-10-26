@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -29,7 +29,7 @@ struct as_cluster_s;
  *****************************************************************************/
 
 AS_EXTERN uint32_t
-as_async_get_cluster_count();
+as_async_get_cluster_count(void);
 
 AS_EXTERN uint32_t
 as_async_get_pending(struct as_cluster_s* cluster);

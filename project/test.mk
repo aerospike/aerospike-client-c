@@ -31,22 +31,40 @@ TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-call
 
 TEST_CFLAGS = -I$(TARGET_INCL)
 
-TEST_LDFLAGS = -L/usr/local/lib $(EXT_LDFLAGS) -lssl -lcrypto $(LIB_LUA) -lpthread -lm -lz
+TEST_LDFLAGS = $(EXT_LDFLAGS)
 
 ifeq ($(OS),Darwin)
-  TEST_LDFLAGS += -L/usr/local/opt/openssl/lib
-
-  ifeq ($(EVENT_LIB),libevent)
-    TEST_LDFLAGS += -L/usr/local/opt/libevent/lib
+  ifneq ($(wildcard /opt/homebrew/lib),)
+    # Mac new homebrew external lib path
+    TEST_LDFLAGS += -L/opt/homebrew/lib
+  else
+    # Mac old homebrew external lib path
+    TEST_LDFLAGS += -L/usr/local/lib
+  
+    ifeq ($(EVENT_LIB),libevent)
+      TEST_LDFLAGS += -L/usr/local/opt/libevent/lib
+    endif
   endif
 
+  ifneq ($(wildcard /opt/homebrew/opt/openssl/lib),)
+    # Mac new homebrew openssl lib path
+    TEST_LDFLAGS += -L/opt/homebrew/opt/openssl/lib
+  else
+    # Mac old homebrew openssl lib path
+    TEST_LDFLAGS += -L/usr/local/opt/openssl/lib
+  endif
+  
   ifeq ($(USE_LUAJIT),1)
     TEST_LDFLAGS += -pagezero_size 10000 -image_base 100000000
   endif
+  
+  LINK_SUFFIX =
 else ifeq ($(OS),FreeBSD)
-  TEST_LDFLAGS += -lrt
+  TEST_LDFLAGS += -L/usr/local/lib
+  LINK_SUFFIX = -lrt
 else
-  TEST_LDFLAGS += -lrt -ldl
+  TEST_LDFLAGS += -L/usr/local/lib
+  LINK_SUFFIX = -lrt -ldl
 endif
 
 ifeq ($(EVENT_LIB),libev)
@@ -60,6 +78,8 @@ endif
 ifeq ($(EVENT_LIB),libevent)
   TEST_LDFLAGS += -levent_core -levent_pthreads
 endif
+
+TEST_LDFLAGS += -lssl -lcrypto $(LIB_LUA) -lpthread -lm -lz $(LINK_SUFFIX)
 
 AS_HOST := 127.0.0.1
 AS_PORT := 3000

@@ -70,8 +70,7 @@ as_event_balance_connections(as_cluster* cluster);
 static inline void
 set_nodes(as_cluster* cluster, as_nodes* nodes)
 {
-	as_fence_store();
-	as_store_ptr(&cluster->nodes, nodes);
+	as_store_ptr_rls((void**)&cluster->nodes, nodes);
 }
 
 static as_nodes*
@@ -1065,9 +1064,8 @@ as_node_get_random(as_cluster* cluster)
 		// Must handle concurrency with other threads.
 		uint32_t index = as_faa_uint32(&cluster->node_index, 1);
 		as_node* node = nodes->array[index % size];
-		uint8_t active = as_load_uint8(&node->active);
 
-		if (active) {
+		if (as_node_is_active(node)) {
 			as_node_reserve(node);
 			as_nodes_release(nodes);
 			return node;

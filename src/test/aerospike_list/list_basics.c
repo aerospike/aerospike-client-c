@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -2195,7 +2195,7 @@ TEST(list_ctx_create_nontoplvl_map, "Nested map ctx create non top level")
 		{AS_LIST_ORDERED, false}
 	};
 
-	for (int top_i = 0; top_i < sizeof(top_types) / sizeof(list_order_type); top_i++) {
+	for (int top_i = 0; top_i < sizeof(top_types) / sizeof(uint32_t); top_i++) {
 		uint32_t top_type = top_types[top_i];
 
 		for (int ord = 0; ord < 2; ord++) {

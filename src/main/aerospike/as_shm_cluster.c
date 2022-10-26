@@ -209,7 +209,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				node_to_add->index = cluster_shm->nodes_size;
 
 				// Increment node array size.
-				as_incr_uint32(&cluster_shm->nodes_size);
+				as_incr_uint32_rls(&cluster_shm->nodes_size);
 			}
 			else {
 				// There are no more node slots available in shared memory.
@@ -217,7 +217,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 					node_to_add->name, address->name, cluster_shm->nodes_capacity);
 			}
 		}
-		as_store_ptr(&shm_info->local_nodes[node_to_add->index], node_to_add);
+		as_node_store(&shm_info->local_nodes[node_to_add->index], node_to_add);
 	}
 	as_incr_uint32(&cluster_shm->nodes_gen);
 }
@@ -241,7 +241,7 @@ as_shm_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_re
 		// Set local node pointer to null, but do not decrement cluster_shm->nodes_size
 		// because nodes are stored in a fixed array.
 		// TODO: Could decrement nodes_size when index is the last node in the array.
-		as_store_ptr(&shm_info->local_nodes[node_to_remove->index], 0);
+		as_node_store(&shm_info->local_nodes[node_to_remove->index], 0);
 	}
 	as_incr_uint32(&cluster_shm->nodes_gen);
 }
@@ -263,7 +263,7 @@ as_shm_ensure_login(as_cluster* cluster, as_error* err)
 	as_shm_info* shm_info = cluster->shm_info;
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	as_node_shm* nodes_shm = cluster_shm->nodes;
-	uint32_t max = as_load_uint32(&cluster_shm->nodes_size);
+	uint32_t max = as_load_uint32_acq(&cluster_shm->nodes_size);
 
 	for (uint32_t i = 0; i < max; i++) {
 		as_node_shm* node_shm = &nodes_shm[i];
@@ -330,7 +330,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 					as_shm_ensure_login_node(&err, node);
 				}
 				as_vector_append(&nodes_to_add, &node);
-				as_store_ptr(&shm_info->local_nodes[i], node);
+				as_node_store(&shm_info->local_nodes[i], node);
 			}
 			node->rebalance_generation = node_tmp.rebalance_generation;
 		}
@@ -338,7 +338,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 			if (node) {
 				as_node_deactivate(node);
 				as_vector_append(&nodes_to_remove, &node);
-				as_store_ptr(&shm_info->local_nodes[i], 0);
+				as_node_store(&shm_info->local_nodes[i], 0);
 			}
 		}
 	}
@@ -499,7 +499,7 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 						if (p->master) {
 							as_shm_force_replicas_refresh(shm_info, p->master);
 						}
-						as_store_uint32(&p->master, node_index);
+						as_store_uint32_rls(&p->master, node_index);
 					}
 				}
 				else {
@@ -507,7 +507,7 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 						if (p->prole) {
 							as_shm_force_replicas_refresh(shm_info, p->prole);
 						}
-						as_store_uint32(&p->prole, node_index);
+						as_store_uint32_rls(&p->prole, node_index);
 					}
 				}
 			}
@@ -535,9 +535,9 @@ as_shm_try_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_inde
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
-		as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index-1]);
+		as_node* node = as_node_load(&local_nodes[node_index-1]);
 
-		if (node && as_load_uint8(&node->active)) {
+		if (node && as_node_is_active(node)) {
 			return node;
 		}
 	}
@@ -550,9 +550,9 @@ as_shm_try_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
 {
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
-		as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index-1]);
+		as_node* node = as_node_load(&local_nodes[node_index-1]);
 
-		if (node && as_load_uint8(&node->active)) {
+		if (node && as_node_is_active(node)) {
 			return node;
 		}
 	}
@@ -565,10 +565,10 @@ as_shm_try_node_alternate(
 	)
 {
 	// index values start at one (zero indicates unset).
-	as_node* chosen = (as_node*)as_load_ptr(&local_nodes[chosen_index-1]);
+	as_node* chosen = as_node_load(&local_nodes[chosen_index-1]);
 	
 	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (chosen && as_load_uint8(&chosen->active)) {
+	if (chosen && as_node_is_active(chosen)) {
 		return chosen;
 	}
 	return as_shm_try_node(cluster, local_nodes, alternate_index);
@@ -579,8 +579,8 @@ shm_get_sequence_node(
 	as_cluster* cluster, as_node** local_nodes, as_partition_shm* p, bool use_master
 	)
 {
-	uint32_t master = as_load_uint32(&p->master);
-	uint32_t prole = as_load_uint32(&p->prole);
+	uint32_t master = as_load_uint32_acq(&p->master);
+	uint32_t prole = as_load_uint32_acq(&p->prole);
 
 	if (! prole) {
 		return as_shm_try_node(cluster, local_nodes, master);
@@ -606,12 +606,12 @@ shm_prefer_rack_node(
 	uint32_t node_indexes[2];
 
 	if (use_master) {
-		node_indexes[0] = as_load_uint32(&p->master);
-		node_indexes[1] = as_load_uint32(&p->prole);
+		node_indexes[0] = as_load_uint32_acq(&p->master);
+		node_indexes[1] = as_load_uint32_acq(&p->prole);
 	}
 	else {
-		node_indexes[0] = as_load_uint32(&p->prole);
-		node_indexes[1] = as_load_uint32(&p->master);
+		node_indexes[0] = as_load_uint32_acq(&p->prole);
+		node_indexes[1] = as_load_uint32_acq(&p->master);
 	}
 
 	as_node* fallback1 = NULL;
@@ -643,7 +643,7 @@ shm_prefer_rack_node(
 				continue;
 			}
 
-			as_node* node = (as_node*)as_load_ptr(&local_nodes[node_index]);
+			as_node* node = as_node_load(&local_nodes[node_index]);
 
 			// Avoid retrying on node where command failed even if node is the
 			// only one on the same rack. The contents of prev_node may have
@@ -695,7 +695,7 @@ as_partition_shm_get_node(
 	switch (replica) {
 		case AS_POLICY_REPLICA_MASTER: {
 			// Make volatile reference so changes to tend thread will be reflected in this thread.
-			uint32_t master = as_load_uint32(&p->master);
+			uint32_t master = as_load_uint32_acq(&p->master);
 			return as_shm_try_master(cluster, local_nodes, master);
 		}
 
@@ -880,7 +880,7 @@ as_shm_tender(void* userdata)
 	
 	if (shm_info->is_tend_master) {
 		shm_info->is_tend_master = false;
-		as_store_uint8(&cluster_shm->lock, 0);
+		as_store_uint8_rls(&cluster_shm->lock, 0);
 	}
 	return 0;
 }
@@ -895,7 +895,7 @@ as_shm_wait_till_ready(as_cluster* cluster, as_cluster_shm* cluster_shm, uint32_
 	do {
 		as_sleep(interval_ms);
 		
-		if (as_load_uint8(&cluster_shm->ready)) {
+		if (as_load_uint8_acq(&cluster_shm->ready)) {
 			as_log_info("Follow cluster initialized: %d", pid);
 			return;
 		}
@@ -1016,45 +1016,64 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 
 	if (shm_info->is_tend_master) {
 		as_log_info("Take over shared memory cluster: %d", pid);
-		as_fence_lock();
-		cluster_shm->n_partitions = cluster->n_partitions;
-		cluster_shm->nodes_capacity = config->shm_max_nodes;
-		cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
-		cluster_shm->partition_tables_offset = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes);
-		cluster_shm->partition_table_byte_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions);
-		cluster_shm->timestamp = cf_getms();
-
+		as_store_uint64(&cluster_shm->timestamp, cf_getms());
 		as_store_uint32(&cluster_shm->owner_pid, pid);
-		
+
+		uint32_t pt_offset = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes);
+		uint32_t pt_size = sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions);
+
 		// Ensure shared memory cluster is fully initialized.
-		if (as_load_uint8(&cluster_shm->ready)) {
-			// Copy shared memory nodes to local nodes.
+		if (as_load_uint8_acq(&cluster_shm->ready)) {
 			as_log_info("Cluster already initialized: %d", pid);
+
+			// Validate that the already initialized shared memory has the expected offset and size.
+			if (! (cluster_shm->partition_tables_capacity == config->shm_max_namespaces &&
+				cluster_shm->partition_tables_offset == pt_offset &&
+				cluster_shm->partition_table_byte_size == pt_size)) {
+
+				as_error_update(err, AEROSPIKE_ERR_CLIENT,
+					"Existing shared memory size is not compatible with new configuration. "
+					"Stop client processes and ensure shared memory is removed before "
+					"attempting new configuration: %u,%u,%u vs %u,%u,%u",
+					cluster_shm->partition_tables_capacity,
+					cluster_shm->partition_tables_offset,
+					cluster_shm->partition_table_byte_size,
+					config->shm_max_namespaces, pt_offset, pt_size);
+
+				as_store_uint8_rls(&cluster_shm->lock, 0);
+				as_shm_destroy(cluster);
+				return err->code;
+			}
+
+			// Copy shared memory nodes to local nodes.
 			as_shm_reset_nodes(cluster);
 			as_cluster_add_seeds(cluster);
 		}
 		else {
 			as_log_info("Initialize cluster: %d", pid);
+			cluster_shm->n_partitions = cluster->n_partitions;
+			cluster_shm->nodes_capacity = config->shm_max_nodes;
+			cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
+			cluster_shm->partition_tables_offset = pt_offset;
+			cluster_shm->partition_table_byte_size = pt_size;
+
 			as_status status = as_cluster_init(cluster, err);
 			
 			if (status != AEROSPIKE_OK) {
-				as_store_uint8(&cluster_shm->lock, 0);
+				as_store_uint8_rls(&cluster_shm->lock, 0);
 				as_shm_destroy(cluster);
 				return status;
 			}
-			as_store_uint8(&cluster_shm->ready, 1);
+			as_store_uint8_rls(&cluster_shm->ready, 1);
 		}
-		as_fence_unlock();
 	}
 	else {
 		as_log_info("Follow shared memory cluster: %d", pid);
-		as_fence_lock();
 
 		// Prole should wait until master has fully initialized shared memory.
-		if (! as_load_uint8(&cluster_shm->ready)) {
+		if (! as_load_uint8_acq(&cluster_shm->ready)) {
 			as_shm_wait_till_ready(cluster, cluster_shm, pid);
 		}
-		as_fence_unlock();
 
 		// Copy shared memory nodes to local nodes.
 		as_shm_reset_nodes(cluster);

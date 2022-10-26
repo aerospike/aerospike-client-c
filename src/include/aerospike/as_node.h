@@ -438,13 +438,33 @@ as_node_create_min_connections(as_node* node);
 
 /**
  * @private
+ * Check if node is active from a transaction thread.
+ */
+static inline bool
+as_node_is_active(const as_node* node)
+{
+	return (bool)as_load_uint8_acq(&node->active);
+}
+
+/**
+ * @private
  * Set node to inactive.
  */
 static inline void
 as_node_deactivate(as_node* node)
 {
 	// Make volatile write so changes are reflected in other threads.
-	as_store_uint8(&node->active, false);
+	as_store_uint8_rls(&node->active, false);
+}
+
+/**
+ * @private
+ * Read volatile node.
+ */
+static inline as_node*
+as_node_load(as_node** node)
+{
+	return (as_node*)as_load_ptr((void* const*)node);
 }
 
 /**
@@ -454,8 +474,17 @@ as_node_deactivate(as_node* node)
 static inline void
 as_node_reserve(as_node* node)
 {
-	//as_fence_acquire();
 	as_incr_uint32(&node->ref_count);
+}
+
+/**
+ * @private
+ * Set volatile node.
+ */
+static inline void
+as_node_store(as_node** trg, as_node* src)
+{
+	as_store_ptr_rls((void**)trg, src);
 }
 
 /**
@@ -465,8 +494,8 @@ as_node_reserve(as_node* node)
 static inline void
 as_node_release(as_node* node)
 {
-	//as_fence_release();
-	if (as_aaf_uint32(&node->ref_count, -1) == 0) {
+	if (as_aaf_uint32_rls(&node->ref_count, -1) == 0) {
+		as_fence_acq();
 		as_node_destroy(node);
 	}
 }
@@ -610,13 +639,22 @@ as_node_has_rack(as_node* node, const char* ns, int rack_id);
 
 /**
  * @private
+ * Volatile read session pointer.
+ */
+static inline as_session*
+as_session_load(as_session** session)
+{
+	return (as_session*)as_load_ptr((void* const*)session);
+}
+
+/**
+ * @private
  * Release existing session.
  */
 static inline void
 as_session_release(as_session* session)
 {
-	//as_fence_release();
-	if (as_aaf_uint32(&session->ref_count, -1) == 0) {
+	if (as_aaf_uint32_rls(&session->ref_count, -1) == 0) {
 		cf_free(session);
 	}
 }

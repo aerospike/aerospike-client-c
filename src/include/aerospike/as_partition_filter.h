@@ -29,14 +29,22 @@ extern "C" {
  * TYPES
  *****************************************************************************/
 
+struct as_node_s;
+
 /**
  * Status of a single partition.
  */
 typedef struct as_partition_status_s {
 	uint16_t part_id;
+	bool master;
+	bool unavailable;
 	bool retry;
 	as_digest digest;
 	uint64_t bval;
+	union {
+		struct as_node_s* master_node;
+		uint32_t master_index;
+	};
 } as_partition_status;
 
 /**

@@ -102,7 +102,9 @@ as_partition_tracker_part_unavailable(
 	)
 {
 	as_partitions_status* ps = pt->parts_all;
-	ps->parts[part_id - ps->part_begin].retry = true;
+	as_partition_status* p = &ps->parts[part_id - ps->part_begin];
+	p->unavailable = true;
+	p->retry = true;
 	np->parts_unavailable++;
 }
 

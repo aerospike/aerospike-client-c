@@ -258,13 +258,27 @@ as_partition_tracker_assign(
 			as_partition_status* ps = &parts_all->parts[i];
 
 			if (retry || ps->retry) {
-				as_node* node = table->partitions[ps->part_id].master;
+				as_partition* part = &table->partitions[ps->part_id];
+				as_node* master_node = as_node_load(&part->master);
+				as_node* node;
+
+				if (pt->iteration == 1 || !ps->unavailable || ps->master_node != master_node) {
+					node = ps->master_node = master_node;
+					ps->master = true;
+				}
+				else {
+					// Partition was unavailable in the previous iteration and the
+					// master node has not changed. Switch replica.
+					node = ps->master ? as_node_load(&part->prole) : master_node;
+					ps->master = !ps->master;
+				}
 
 				if (! node) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 										   "Node not found for partition %u", ps->part_id);
 				}
 
+				ps->unavailable = false;
 				ps->retry = false;
 
 				// Use node name to check for single node equality because
@@ -292,21 +306,35 @@ as_partition_tracker_assign(
 			as_partition_status* ps = &parts_all->parts[i];
 
 			if (retry || ps->retry) {
-				uint32_t master = as_load_uint32(&table->partitions[ps->part_id].master);
+				as_partition_shm* part = &table->partitions[ps->part_id];
+				uint32_t master_index = as_load_uint32(&part->master);
+				uint32_t index;
+
+				if (pt->iteration == 1 || !ps->unavailable || ps->master_index != master_index) {
+					index = ps->master_index = master_index;
+					ps->master = true;
+				}
+				else {
+					// Partition was unavailable in the previous iteration and the
+					// master node has not changed. Switch replica.
+					index = ps->master ? as_load_uint32(&part->prole) : master_index;
+					ps->master = !ps->master;
+				}
 
 				// node index zero indicates unset.
-				if (master == 0) {
+				if (index == 0) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 										   "Node not found for partition %u", ps->part_id);
 				}
 
-				as_node* node = as_node_load(&local_nodes[master-1]);
+				as_node* node = as_node_load(&local_nodes[index-1]);
 
 				if (! node) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 										   "Node not found for partition %u", ps->part_id);
 				}
 
+				ps->unavailable = false;
 				ps->retry = false;
 
 				// Use node name to check for single node equality because

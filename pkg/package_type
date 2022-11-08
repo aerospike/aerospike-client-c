@@ -109,7 +109,7 @@ case ${platform:0:2} in
 el|fc)
   CreatePackage usr opt
   rpmrev=`echo $rev | sed 's/-/_/g'`
-  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rpmrev/g" -e “s/@ARCH@/$arch/g” < rpm/client$pkgSuffix.spec > $stageDir/rpm.spec
+  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rpmrev/g" -e "s/@ARCH@/$arch/g" < rpm/client$pkgSuffix.spec > $stageDir/rpm.spec
   rpmbuild -bb -vv --define "dist .$platform" --define "_topdir $stageDir" --buildroot $buildDir $stageDir/rpm.spec
   mv $stageDir/RPMS/$arch/aerospike-client-c$eventName$pkgSuffix-$rpmrev*.rpm $targetDir
   rm $stageDir/rpm.spec
@@ -125,7 +125,7 @@ de|ub)
   CreatePackage usr opt
   mkdir -p $buildDir/DEBIAN
   install -m 755 deb/postinst.client $buildDir/DEBIAN/postinst
-  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rev/g" -e “s/@ARCH@/$debarch/g” < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
+  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rev/g" -e "s/@ARCH@/$debarch/g" < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
   fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.$platform.$arch.deb
   ;;
 

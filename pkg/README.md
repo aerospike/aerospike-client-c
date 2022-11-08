@@ -89,10 +89,10 @@ command line or in an IDE.  Example:
 Only one of the installers is needed on each client machine.  All installers install the libaerospike library with the same name, but different implementation.
 
 #### Centos/RHEL
-    sudo rpm -i aerospike-client-c[-<eventlib>][-devel]-<version>-<os>.x86_64.rpm
+    sudo rpm -i aerospike-client-c[-<eventlib>][-devel]-<version>-<os>.<arch>.rpm
   
 #### Debian/Ubuntu
-    sudo dpkg -i aerospike-client-c[-<eventlib>][-devel]-<version>-<os>.x86_64.deb
+    sudo dpkg -i aerospike-client-c[-<eventlib>][-devel]-<version>-<os>.<arch>.deb
 
 #### MacOS
     open aerospike-client-c[-<eventlib>][-devel]-<version>.pkg

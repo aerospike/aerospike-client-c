@@ -82,7 +82,7 @@ do
   ./package_type $signPackage lib $eventLib $baseDir $stageDir $stageFinalDir
 
   # Retain copies of all client packages for individual distribution
-  cp $stageFinalDir/aerospike-client-c-* $stageDir/packages
+  cp $stageFinalDir/aerospike-client-c* $stageDir/packages
 
   # Combine distribution into one final package.
   tar cf - -C $stageDir/final $packageName | gzip -c > $stageDir/packages/$packageName.tgz

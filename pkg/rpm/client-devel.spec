@@ -4,7 +4,7 @@ Release: 1%{?dist}
 Summary: Aerospike C Client Development@EVENTDESC@
 License: Proprietary
 Group: Development/Libraries
-BuildArch: x86_64
+BuildArch: @ARCH@
 Vendor: Aerospike, Inc.
 
 %description

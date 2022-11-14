@@ -77,8 +77,6 @@ cd `dirname $0`
 
 platform=`./platform`
 rev=`./version`
-arch=`uname -m`
-os=`uname`-$arch
 
 # Create library package.
 buildDir=$stageDir/BUILD
@@ -88,17 +86,18 @@ rm -rf $buildDir
 function CreatePackage {
   topDir=$buildDir/$1
   optDir=$buildDir/$2
+  trgName=$3
 
   mkdir -p $topDir/lib
 
   if [ "$pkgType" = "devel" ]
   then
-    cp -p $baseDir/target/$os/lib/libaerospike.a $topDir/lib
+    cp -p $baseDir/target/$trgName/lib/libaerospike.a $topDir/lib
     chmod g-w,o-w $topDir/lib/libaerospike.a
-    cp -pr $baseDir/target/$os/include $topDir
+    cp -pr $baseDir/target/$trgName/include $topDir
     chmod -R g-w,o-w $topDir/include/*
   else
-    cp -p $baseDir/target/$os/lib/libaerospike.* $topDir/lib
+    cp -p $baseDir/target/$trgName/lib/libaerospike.* $topDir/lib
     rm $topDir/lib/libaerospike.a
     chmod g-w,o-w $topDir/lib/libaerospike.*
   fi
@@ -107,24 +106,30 @@ function CreatePackage {
 case ${platform:0:2} in
 
 el|fc)
-  CreatePackage usr opt
+  arch=`uname -m`
+  os=`uname -s`-$arch
+  CreatePackage usr opt $os
   rpmrev=`echo $rev | sed 's/-/_/g'`
-  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rpmrev/g" < rpm/client$pkgSuffix.spec > $stageDir/rpm.spec
+  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rpmrev/g" -e "s/@ARCH@/$arch/g" < rpm/client$pkgSuffix.spec > $stageDir/rpm.spec
   rpmbuild -bb -vv --define "dist .$platform" --define "_topdir $stageDir" --buildroot $buildDir $stageDir/rpm.spec
   mv $stageDir/RPMS/$arch/aerospike-client-c$eventName$pkgSuffix-$rpmrev*.rpm $targetDir
   rm $stageDir/rpm.spec
   ;;
 
 de|ub)
-  CreatePackage usr opt
+  arch=`dpkg-architecture -qDEB_HOST_ARCH`
+  os=`uname -s`-`uname -m`
+  CreatePackage usr opt $os
   mkdir -p $buildDir/DEBIAN
   install -m 755 deb/postinst.client $buildDir/DEBIAN/postinst
-  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rev/g" < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
-  fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.$platform.$arch.deb
+  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rev/g" -e "s/@ARCH@/$arch/g" < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
+  fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix"_"$rev"-"$platform"_"$arch.deb
   ;;
 
 ma)
-  CreatePackage usr/local usr/local
+  arch=`uname -m`
+  os=`uname -s`-$arch
+  CreatePackage usr/local usr/local $os
   if [ "$signPackage" = "-sign" ]
   then
     if [ "$pkgType" = "devel" ]
@@ -134,10 +139,10 @@ ma)
       codesign --force --sign "Developer ID Application: Aerospike, Inc." $buildDir/usr/local/lib/libaerospike.dylib
     fi
     pkgbuild --identifier com.aerospike.client.c$eventId$idSuffix.$rev --root $buildDir $targetDir/unsigned.pkg
-    productsign --sign "Developer ID Installer: Aerospike, Inc." $targetDir/unsigned.pkg $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.pkg
+    productsign --sign "Developer ID Installer: Aerospike, Inc." $targetDir/unsigned.pkg $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev-$arch.pkg
     rm $targetDir/unsigned.pkg
   else
-    pkgbuild --identifier com.aerospike.client.c$eventId$idSuffix.$rev --root $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev.pkg    
+    pkgbuild --identifier com.aerospike.client.c$eventId$idSuffix.$rev --root $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix-$rev-$arch.pkg    
   fi
   ;;
 

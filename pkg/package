@@ -50,7 +50,9 @@ cd $stageDir/SOURCE
 zip -r $stageDir/packages/$srcDir.zip $srcDir
 cd $origin
 
-# Package each event library implmentation for current platform.
+arch=`uname -m`
+
+# Package each event library implementation for current platform.
 for eventLib in sync libuv libev libevent
 do
   echo Make $eventLib
@@ -59,10 +61,10 @@ do
 
   if [ "$eventLib" = "sync" ]
   then
-    packageName=aerospike-client-c-$version.$platform.x86_64
+    packageName=aerospike-client-c-$version.$platform.$arch
     make -C $baseDir all
   else
-    packageName=aerospike-client-c-$eventLib-$version.$platform.x86_64
+    packageName=aerospike-client-c-$eventLib-$version.$platform.$arch
     make EVENT_LIB=$eventLib -C $baseDir all
   fi
 
@@ -80,7 +82,7 @@ do
   ./package_type $signPackage lib $eventLib $baseDir $stageDir $stageFinalDir
 
   # Retain copies of all client packages for individual distribution
-  cp $stageFinalDir/aerospike-client-c-* $stageDir/packages
+  cp $stageFinalDir/aerospike-client-c* $stageDir/packages
 
   # Combine distribution into one final package.
   tar cf - -C $stageDir/final $packageName | gzip -c > $stageDir/packages/$packageName.tgz

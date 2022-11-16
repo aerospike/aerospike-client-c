@@ -61,10 +61,10 @@ do
 
   if [ "$eventLib" = "sync" ]
   then
-    packageName=aerospike-client-c-$version.$platform.$arch
+    packageName=aerospike-client-c_$version_$platform_$arch
     make -C $baseDir all
   else
-    packageName=aerospike-client-c-$eventLib-$version.$platform.$arch
+    packageName=aerospike-client-c-$eventLib_$version_$platform_$arch
     make EVENT_LIB=$eventLib -C $baseDir all
   fi
 

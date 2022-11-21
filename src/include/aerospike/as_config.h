@@ -421,9 +421,11 @@ typedef struct as_config_s {
 	char password[AS_PASSWORD_SIZE];
 	
 	/**
-	 * Expected cluster name.  If not null, server nodes must return this cluster name in order to
-	 * join the client's view of the cluster. Should only be set when connecting to servers that
-	 * support the "cluster-name" info command.  Use as_config_set_cluster_name() to set this field.
+	 * Expected cluster name.  If populated, the cluster_name must match the cluster-name field
+	 * in the service section in each server configuration.  This ensures that the specified
+	 * seed nodes belong to the expected cluster on startup.  If not, the client will refuse
+	 * to add the node to the client's view of the cluster.
+	 *
 	 * Default: NULL
 	 */
 	char* cluster_name;

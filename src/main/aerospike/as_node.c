@@ -920,11 +920,19 @@ static as_status
 as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_vector* values,
 						 as_peers* peers)
 {
+	as_status status;
+
 	for (uint32_t i = 0; i < values->size; i++) {
 		as_name_value* nv = as_vector_get(values, i);
 		
+		status = as_info_validate_item(err, nv->value);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
 		if (strcmp(nv->name, "node") == 0) {
-			as_status status = as_node_verify_name(err, node, nv->value);
+			status = as_node_verify_name(err, node, nv->value);
 			
 			if (status != AEROSPIKE_OK) {
 				return status;
@@ -956,7 +964,8 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 			}
 		}
 		else {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s did not request info '%s'", node->name, nv->name);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Did not request info '%s'",
+				nv->name);
 		}
 	}
 	return AEROSPIKE_OK;
@@ -1299,6 +1308,12 @@ as_node_process_racks(as_cluster* cluster, as_error* err, as_node* node, as_vect
 	for (uint32_t i = 0; i < values->size; i++) {
 		as_name_value* nv = as_vector_get(values, i);
 
+		as_status status = as_info_validate_item(err, nv->value);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
 		if (strcmp(nv->name, "rebalance-generation") == 0) {
 			node->rebalance_generation = (uint32_t)strtoul(nv->value, NULL, 10);
 		}
@@ -1306,7 +1321,8 @@ as_node_process_racks(as_cluster* cluster, as_error* err, as_node* node, as_vect
 			return as_node_parse_racks(cluster, err, node, nv->value);
 		}
 		else {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s did not request info '%s'", node->name, nv->name);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Did not request info '%s'",
+				nv->name);
 		}
 	}
 	return AEROSPIKE_OK;

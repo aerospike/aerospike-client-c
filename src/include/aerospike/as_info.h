@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -105,6 +105,13 @@ as_info_create_socket(
  */
 as_status
 as_info_validate(char* response, char** message);
+
+/**
+ * @private
+ * Validate an individual response in a multiple response info request.
+ */
+as_status
+as_info_validate_item(as_error* err, char* response);
 
 /**
  * @private

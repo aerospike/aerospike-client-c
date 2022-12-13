@@ -251,7 +251,8 @@ as_partition_tracker_assign(
 		as_partition_table* table = as_partition_tables_get(&cluster->partition_tables, ns);
 
 		if (! table) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
+			return as_error_update(err, AEROSPIKE_ERR_NAMESPACE_NOT_FOUND, "Invalid namespace: %s",
+				ns);
 		}
 
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
@@ -297,7 +298,8 @@ as_partition_tracker_assign(
 		as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
 
 		if (! table) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
+			return as_error_update(err, AEROSPIKE_ERR_NAMESPACE_NOT_FOUND, "Invalid namespace: %s",
+				ns);
 		}
 
 		as_node** local_nodes = cluster->shm_info->local_nodes;

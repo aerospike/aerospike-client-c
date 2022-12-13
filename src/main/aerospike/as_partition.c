@@ -297,9 +297,11 @@ as_partition_info_init(as_partition_info* pi, as_cluster* cluster, as_error* err
 			as_nodes_release(nodes);
 
 			if (n_nodes == 0) {
-				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+				return as_error_set_message(err, AEROSPIKE_ERR_NAMESPACE_NOT_FOUND,
+					"Cluster is empty");
 			}
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
+			return as_error_update(err, AEROSPIKE_ERR_NAMESPACE_NOT_FOUND, "Invalid namespace: %s",
+				key->ns);
 		}
 		pi->ns = table->ns;
 		pi->partition_id = as_partition_getid(key->digest.value, cluster_shm->n_partitions);
@@ -315,9 +317,11 @@ as_partition_info_init(as_partition_info* pi, as_cluster* cluster, as_error* err
 			as_nodes_release(nodes);
 
 			if (n_nodes == 0) {
-				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster is empty");
+				return as_error_set_message(err, AEROSPIKE_ERR_NAMESPACE_NOT_FOUND,
+					"Cluster is empty");
 			}
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", key->ns);
+			return as_error_update(err, AEROSPIKE_ERR_NAMESPACE_NOT_FOUND, "Invalid namespace: %s",
+				key->ns);
 		}
 		pi->ns = table->ns;
 		pi->partition_id = as_partition_getid(key->digest.value, cluster->n_partitions);

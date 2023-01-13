@@ -980,6 +980,369 @@ TEST(filter_compare_strings, "filter compare strings")
 	as_exp_destroy(filter);
 }
 
+TEST(filter_compare_lists_basic, "filter compare lists basic")
+{
+	as_key keyA;
+	as_key keyB;
+	assert_true(filter_prepare(&keyA, &keyB));
+
+	as_arraylist l1;
+	as_arraylist_inita(&l1, 3);
+	assert_int_eq(as_arraylist_append_int64(&l1, 7), 0);
+	assert_int_eq(as_arraylist_append_int64(&l1, 9), 0);
+	assert_int_eq(as_arraylist_append_int64(&l1, 5), 0);
+
+	as_record new_rec;
+	as_record_inita(&new_rec, 1);
+
+	assert_true(as_record_set_list(&new_rec, AString, (as_list*)&l1));
+
+	as_error err;
+	as_status rc = aerospike_key_put(as, &err, NULL, &keyA, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_exp_build(filter_eq,
+			as_exp_cmp_eq(as_exp_bin_list(AString), as_exp_val(&l1)));
+	assert_not_null(filter_eq);
+	as_exp_build(filter_ne,
+			as_exp_cmp_ne(as_exp_bin_list(AString), as_exp_val(&l1)));
+	assert_not_null(filter_ne);
+	as_exp_build(filter_ge,
+			as_exp_cmp_ge(as_exp_bin_list(AString), as_exp_val(&l1)));
+	assert_not_null(filter_ge);
+	as_exp_build(filter_gt,
+			as_exp_cmp_gt(as_exp_bin_list(AString), as_exp_val(&l1)));
+	assert_not_null(filter_gt);
+	as_exp_build(filter_le,
+			as_exp_cmp_le(as_exp_bin_list(AString), as_exp_val(&l1)));
+	assert_not_null(filter_le);
+	as_exp_build(filter_lt,
+			as_exp_cmp_lt(as_exp_bin_list(AString), as_exp_val(&l1)));
+	assert_not_null(filter_lt);
+
+
+	as_policy_read p;
+	assert_not_null(as_policy_read_init(&p));
+	as_record* rec = NULL;
+
+	// Equality on identical lists.
+	p.base.filter_exp = filter_eq;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Non-equality on identical lists.
+	p.base.filter_exp = filter_ne;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Greater-equals on identical lists.
+	p.base.filter_exp = filter_ge;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Greater-than on identical lists.
+	p.base.filter_exp = filter_gt;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Less-equals on identical lists.
+	p.base.filter_exp = filter_le;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Less-than on identical lists.
+	p.base.filter_exp = filter_lt;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	as_arraylist l2;
+	as_arraylist_inita(&l2, 3);
+	assert_int_eq(as_arraylist_append_int64(&l2, 7), 0);
+	assert_int_eq(as_arraylist_append_int64(&l2, 9), 0);
+	assert_int_eq(as_arraylist_append_int64(&l2, 10), 0);
+
+	as_record_inita(&new_rec, 1);
+	assert_true(as_record_set_list(&new_rec, AString, (as_list*)&l2));
+
+	rc = aerospike_key_put(as, &err, NULL, &keyA, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	// Equality on non-identical lists.
+	p.base.filter_exp = filter_eq;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Non-equality on non-identical lists.
+	p.base.filter_exp = filter_ne;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Greater-equals on non-identical lists.
+	p.base.filter_exp = filter_ge;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Greater-than on non-identical lists.
+	p.base.filter_exp = filter_gt;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Less-equals on non-identical lists.
+	p.base.filter_exp = filter_le;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Less-than on non-identical lists.
+	p.base.filter_exp = filter_lt;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_exp_destroy(filter_lt);
+	as_exp_destroy(filter_le);
+	as_exp_destroy(filter_gt);
+	as_exp_destroy(filter_ge);
+	as_exp_destroy(filter_ne);
+	as_exp_destroy(filter_eq);
+	as_arraylist_destroy(&l2);
+	as_arraylist_destroy(&l1);
+}
+
+TEST(filter_compare_maps_basic, "filter compare maps basic")
+{
+	as_key keyA;
+	as_key keyB;
+	assert_true(filter_prepare(&keyA, &keyB));
+
+	as_orderedmap m1; // { "key1"=1, "key2"=2 }
+	assert_not_null(as_orderedmap_init(&m1, 2));
+	as_string k1;
+	assert_not_null(as_string_init(&k1, "key1", false));
+	as_integer v1;
+	assert_not_null(as_integer_init(&v1, 1));
+	assert_int_eq(as_orderedmap_set(&m1, (as_val*)&k1, (as_val*)&v1), 0);
+	as_string k2;
+	assert_not_null(as_string_init(&k2, "key2", false));
+	as_integer v2;
+	assert_not_null(as_integer_init(&v2, 2));
+	assert_int_eq(as_orderedmap_set(&m1, (as_val*)&k2, (as_val*)&v2), 0);
+
+	as_record new_rec;
+	as_record_inita(&new_rec, 1);
+
+	assert_true(as_record_set_map(&new_rec, AString, (as_map*)&m1));
+
+	as_hashmap hm; // { "key1"=1, "key2"=2 }
+	assert_not_null(as_orderedmap_init(&hm, 2));
+	assert_not_null(as_string_init(&k1, "key1", false));
+	assert_not_null(as_integer_init(&v1, 1));
+	assert_int_eq(as_orderedmap_set(&hm, (as_val*)&k1, (as_val*)&v1), 0);
+	assert_not_null(as_string_init(&k2, "key2", false));
+	assert_not_null(as_integer_init(&v2, 2));
+	assert_int_eq(as_orderedmap_set(&hm, (as_val*)&k2, (as_val*)&v2), 0);
+
+	as_error err;
+	as_status rc = aerospike_key_put(as, &err, NULL, &keyA, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_exp_build(filter_eq,
+			as_exp_cmp_eq(as_exp_bin_map(AString), as_exp_val(&m1)));
+	assert_not_null(filter_eq);
+	as_exp_build(filter_ne,
+			as_exp_cmp_ne(as_exp_bin_map(AString), as_exp_val(&m1)));
+	assert_not_null(filter_ne);
+	as_exp_build(filter_ge,
+			as_exp_cmp_ge(as_exp_bin_map(AString), as_exp_val(&m1)));
+	assert_not_null(filter_ge);
+	as_exp_build(filter_gt,
+			as_exp_cmp_gt(as_exp_bin_map(AString), as_exp_val(&m1)));
+	assert_not_null(filter_gt);
+	as_exp_build(filter_le,
+			as_exp_cmp_le(as_exp_bin_map(AString), as_exp_val(&m1)));
+	assert_not_null(filter_le);
+	as_exp_build(filter_lt,
+			as_exp_cmp_lt(as_exp_bin_map(AString), as_exp_val(&m1)));
+	assert_not_null(filter_lt);
+	as_exp_build(filter_bad,
+			as_exp_cmp_eq(as_exp_bin_map(AString), as_exp_val(&hm)));
+	assert_not_null(filter_bad);
+
+
+	as_policy_read p;
+	assert_not_null(as_policy_read_init(&p));
+	as_record* rec = NULL;
+
+	// Equality on identical maps.
+	p.base.filter_exp = filter_eq;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Non-equality on identical maps.
+	p.base.filter_exp = filter_ne;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Greater-equals on identical maps.
+	p.base.filter_exp = filter_ge;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Greater-than on identical maps.
+	p.base.filter_exp = filter_gt;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Less-equals on identical maps.
+	p.base.filter_exp = filter_le;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Less-than on identical maps.
+	p.base.filter_exp = filter_lt;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	as_orderedmap m2; // { "key1"=9, "key2"=3 }
+	assert_not_null(as_orderedmap_init(&m2, 2));
+	assert_not_null(as_integer_init(&v1, 9));
+	assert_int_eq(as_orderedmap_set(&m2, (as_val*)&k1, (as_val*)&v1), 0);
+	as_integer v3;
+	assert_not_null(as_integer_init(&v3, 3));
+	assert_int_eq(as_orderedmap_set(&m2, (as_val*)&k2, (as_val*)&v3), 0);
+
+	as_record_inita(&new_rec, 1);
+	assert_true(as_record_set_map(&new_rec, AString, (as_map*)&m2));
+
+	rc = aerospike_key_put(as, &err, NULL, &keyA, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	// Equality on non-identical maps.
+	p.base.filter_exp = filter_eq;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Non-equality on non-identical maps.
+	p.base.filter_exp = filter_ne;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Greater-equals on non-identical maps.
+	p.base.filter_exp = filter_ge;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Greater-than on non-identical maps.
+	p.base.filter_exp = filter_gt;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Less-equals on non-identical maps.
+	p.base.filter_exp = filter_le;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Less-than on non-identical maps.
+	p.base.filter_exp = filter_lt;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Compare ordered map bin to unordered map value.
+	p.base.filter_exp = filter_bad;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Compare unordered map bin to ordered map value.
+	as_record_inita(&new_rec, 1);
+	assert_true(as_record_set_map(&new_rec, AString, (as_map*)&hm));
+	rc = aerospike_key_put(as, &err, NULL, &keyA, &new_rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	p.base.filter_exp = filter_eq;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	// Compare unordered map bin to unordered map value.
+	p.base.filter_exp = filter_bad;
+	rc = aerospike_key_get(as, &err, &p, &keyA, &rec);
+	assert_int_eq(rc, AEROSPIKE_FILTERED_OUT);
+
+	rec = NULL;
+
+	as_exp_destroy(filter_bad);
+	as_exp_destroy(filter_lt);
+	as_exp_destroy(filter_le);
+	as_exp_destroy(filter_gt);
+	as_exp_destroy(filter_ge);
+	as_exp_destroy(filter_ne);
+	as_exp_destroy(filter_eq);
+	as_orderedmap_destroy(&hm);
+	as_orderedmap_destroy(&m2);
+	as_orderedmap_destroy(&m1);
+}
+
 TEST(filter_xor, "filter xor")
 {
 	as_key keyA;
@@ -2819,52 +3182,53 @@ SUITE(filter_exp, "filter expression tests")
 	suite_add(filter_compare_string_to_unk);
 	suite_add(filter_compare_strings);
 
-	if (true) {
-		// Requires Aerospike 5.6.
-		suite_add(filter_xor);
-		suite_add(filter_add);
-		suite_add(filter_add_1);
-		suite_add(filter_add_float);
-		suite_add(filter_add_float_1);
-		suite_add(filter_sub);
-		suite_add(filter_sub_1);
-		suite_add(filter_add_float);
-		suite_add(filter_add_float_1);
-		suite_add(filter_mul);
-		suite_add(filter_mul_1);
-		suite_add(filter_div);
-		suite_add(filter_div_1);
-		suite_add(filter_div_float);
-		suite_add(filter_div_float_1);
-		suite_add(filter_pow);
-		suite_add(filter_log);
-		suite_add(filter_mod);
-		suite_add(filter_abs);
-		suite_add(filter_floor);
-		suite_add(filter_ceil);
-		suite_add(filter_to_int);
-		suite_add(filter_to_float);
-		suite_add(filter_bitwise_and);
-		suite_add(filter_bitwise_or);
-		suite_add(filter_bitwise_xor);
-		suite_add(filter_bitwise_not);
-		suite_add(filter_bitwise_lshift);
-		suite_add(filter_bitwise_rshift);
-		suite_add(filter_bitwise_arshift);
-		suite_add(filter_bitwise_count);
-		suite_add(filter_bitwise_lscan);
-		suite_add(filter_bitwise_rscan);
-		suite_add(filter_min);
-		suite_add(filter_max);
-		suite_add(filter_min_float);
-		suite_add(filter_max_float);
-		suite_add(filter_let);
-		suite_add(filter_cond);
+	// Requires Aerospike 6.3.
+	suite_add(filter_compare_lists_basic);
+	suite_add(filter_compare_maps_basic);
 
-		// Value to bin promotion tests:
-		suite_add(filter_list_value_to_bin);
-		suite_add(filter_map_value_to_bin);
-		suite_add(filter_blob_value_to_bin);
-		suite_add(filter_hll_value_to_bin);
-	}
+	// Requires Aerospike 5.6.
+	suite_add(filter_xor);
+	suite_add(filter_add);
+	suite_add(filter_add_1);
+	suite_add(filter_add_float);
+	suite_add(filter_add_float_1);
+	suite_add(filter_sub);
+	suite_add(filter_sub_1);
+	suite_add(filter_add_float);
+	suite_add(filter_add_float_1);
+	suite_add(filter_mul);
+	suite_add(filter_mul_1);
+	suite_add(filter_div);
+	suite_add(filter_div_1);
+	suite_add(filter_div_float);
+	suite_add(filter_div_float_1);
+	suite_add(filter_pow);
+	suite_add(filter_log);
+	suite_add(filter_mod);
+	suite_add(filter_abs);
+	suite_add(filter_floor);
+	suite_add(filter_ceil);
+	suite_add(filter_to_int);
+	suite_add(filter_to_float);
+	suite_add(filter_bitwise_and);
+	suite_add(filter_bitwise_or);
+	suite_add(filter_bitwise_xor);
+	suite_add(filter_bitwise_not);
+	suite_add(filter_bitwise_lshift);
+	suite_add(filter_bitwise_rshift);
+	suite_add(filter_bitwise_arshift);
+	suite_add(filter_bitwise_count);
+	suite_add(filter_bitwise_lscan);
+	suite_add(filter_bitwise_rscan);
+	suite_add(filter_min);
+	suite_add(filter_max);
+	suite_add(filter_min_float);
+	suite_add(filter_max_float);
+	suite_add(filter_let);
+	suite_add(filter_cond);
+	// Value to bin promotion tests:
+	suite_add(filter_list_value_to_bin);
+	suite_add(filter_map_value_to_bin);
+	suite_add(filter_blob_value_to_bin);
+	suite_add(filter_hll_value_to_bin);
 }

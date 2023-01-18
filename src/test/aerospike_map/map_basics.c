@@ -25,6 +25,7 @@
 #include <aerospike/as_integer.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_map_operations.h>
+#include <aerospike/as_msgpack.h>
 #include <aerospike/as_msgpack_ext.h>
 #include <aerospike/as_nil.h>
 #include <aerospike/as_random.h>
@@ -107,6 +108,36 @@ example_dump_record(const as_record* p_rec)
 	}
 
 	as_record_iterator_destroy(&it);
+}
+
+static bool
+map_cmp(as_list* list, as_map* map)
+{
+	uint32_t n = as_list_size(list);
+
+	if (as_map_size(map) != as_list_size(list) / 2) {
+		info("list=%u map=%u", as_list_size(list), as_map_size(map));
+		return false;
+	}
+
+	for (uint32_t i = 0; i < n;) {
+		as_val* k = as_list_get(list, i++);
+		as_val* v = as_list_get(list, i++);
+		as_val* v1 = as_map_get(map, k);
+
+		if (as_val_cmp(v, v1) != MSGPACK_COMPARE_EQUAL) {
+			char* kk = as_val_val_tostring(k);
+			char* s = as_val_val_tostring(v);
+			char* s1 = as_val_val_tostring(v1);
+			info("k=%s s=%s s1=%s", kk, s, s1);
+			cf_free(kk);
+			cf_free(s);
+			cf_free(s1);
+			return false;
+		}
+	}
+
+	return true;
 }
 
 /******************************************************************************
@@ -233,7 +264,7 @@ TEST(map_put_items, "Map put items operations")
 	assert_true(err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
 	as_operations ops;
-	as_operations_inita(&ops, 7);
+	as_operations_inita(&ops, 9);
 
 	as_map_policy put_mode;
 	as_map_policy_init(&put_mode);
@@ -309,6 +340,12 @@ TEST(map_put_items, "Map put items operations")
 	as_integer_init(&mkey1, 12);
 	as_integer_init(&mkey2, 15);
 	as_operations_add_map_get_by_key_range(&ops, BIN_NAME, (as_val*)&mkey1, (as_val*)&mkey2, AS_MAP_RETURN_KEY_VALUE);
+	as_integer_init(&mkey1, 12);
+	as_integer_init(&mkey2, 15);
+	as_operations_add_map_get_by_key_range(&ops, BIN_NAME, (as_val*)&mkey1, (as_val*)&mkey2, AS_MAP_RETURN_UNORDERED_MAP);
+	as_integer_init(&mkey1, 12);
+	as_integer_init(&mkey2, 15);
+	as_operations_add_map_get_by_key_range(&ops, BIN_NAME, (as_val*)&mkey1, (as_val*)&mkey2, AS_MAP_RETURN_ORDERED_MAP);
 
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -339,6 +376,14 @@ TEST(map_put_items, "Map put items operations")
 
 	as_list* list = &results[i++].valuep->list;
 	assert_int_eq(as_list_size(list), 3 * 2);
+
+	as_map* map0 = &results[i++].valuep->map;
+	assert_int_eq(map0->flags, 0);
+	assert_true(map_cmp(list, map0));
+
+	as_map* map1 = &results[i++].valuep->map;
+	assert_int_eq(map1->flags, 1);
+	assert_true(map_cmp(list, map1));
 
 	as_record_destroy(rec);
 }

@@ -242,6 +242,16 @@ typedef enum as_map_return_type_e {
 	AS_MAP_RETURN_EXISTS = 13,
 
 	/**
+	 * Return an unordered map.
+	 */
+	AS_MAP_RETURN_UNORDERED_MAP = 16,
+
+	/**
+	 * Return an ordered map.
+	 */
+	AS_MAP_RETURN_ORDERED_MAP = 17,
+
+	/**
 	 * Invert meaning of map command and return values.  For example:
 	 *
 	 * ~~~~~~~~~~{.c}

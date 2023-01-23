@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -240,6 +240,16 @@ typedef enum as_map_return_type_e {
 	 * Return true if count > 0.
 	 */
 	AS_MAP_RETURN_EXISTS = 13,
+
+	/**
+	 * Return an unordered map.
+	 */
+	AS_MAP_RETURN_UNORDERED_MAP = 16,
+
+	/**
+	 * Return an ordered map.
+	 */
+	AS_MAP_RETURN_ORDERED_MAP = 17,
 
 	/**
 	 * Invert meaning of map command and return values.  For example:

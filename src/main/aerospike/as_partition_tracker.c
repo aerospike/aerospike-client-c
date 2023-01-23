@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -463,26 +463,29 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 
 	// Check if limits have been reached.
 	if (pt->iteration > pt->max_retries) {
-		as_error_set_message(err, AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED, "");
+		if (!pt->errors || pt->errors->size <= 0) {
+			return as_error_set_message(err, AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED,
+				"Max retries exceeded");
+		}
 
+		// Return last sub-error code received.
+		uint32_t max = pt->errors->size;
+		as_status last_code = *(as_status*)as_vector_get(pt->errors, max - 1);
+		as_error_set_message(err, last_code, "");
+
+		// Include all sub-errors in error message.
 		as_string_builder sb;
 		as_string_builder_assign(&sb, sizeof(err->message), err->message);
-		as_string_builder_append(&sb, "Max retries exceeded: ");
-		as_string_builder_append_uint(&sb, pt->max_retries);
+		as_string_builder_append(&sb, as_error_string(err->code));
+		as_string_builder_append_newline(&sb);
+		as_string_builder_append(&sb, "sub-errors:");
 
-		if (pt->errors) {
+		for (uint32_t i = 0; i < max; i++) {
+			as_status st = *(as_status*)as_vector_get(pt->errors, i);
 			as_string_builder_append_newline(&sb);
-			as_string_builder_append(&sb, "sub-errors:");
-
-			uint32_t max = pt->errors->size;
-
-			for (uint32_t i = 0; i < max; i++) {
-				as_status st = *(as_status*)as_vector_get(pt->errors, i);
-				as_string_builder_append_newline(&sb);
-				as_string_builder_append_int(&sb, st);
-				as_string_builder_append_char(&sb, ' ');
-				as_string_builder_append(&sb, as_error_string(st));
-			}
+			as_string_builder_append_int(&sb, st);
+			as_string_builder_append_char(&sb, ' ');
+			as_string_builder_append(&sb, as_error_string(st));
 		}
 		return err->code;
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -441,7 +441,9 @@ as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns)
 }
 
 static as_partition_table_shm*
-as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns, bool sc_mode)
+as_shm_add_partition_table(
+	as_cluster_shm* cluster_shm, const char* ns, uint8_t replica_size, bool sc_mode
+	)
 {
 	if (cluster_shm->partition_tables_size >= cluster_shm->partition_tables_capacity) {
 		// There are no more partition table slots available in shared memory.
@@ -453,6 +455,7 @@ as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns, bool sc_
 	as_partition_table_shm* tables = as_shm_get_partition_tables(cluster_shm);
 	as_partition_table_shm* table = as_shm_get_partition_table(cluster_shm, tables, cluster_shm->partition_tables_size);
 	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
+	table->replica_size = replica_size;
 	table->sc_mode = sc_mode;
 	
 	// Increment partition tables array size.
@@ -472,7 +475,10 @@ as_shm_force_replicas_refresh(as_shm_info* shm_info, uint32_t node_index)
 }
 
 static void
-as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, as_partition_table_shm* table, uint32_t node_index, bool master, uint32_t regime)
+as_shm_decode_and_update(
+	as_shm_info* shm_info, char* bitmap_b64, int64_t len, as_partition_table_shm* table,
+	uint32_t node_index, uint8_t replica_index, uint32_t regime
+	)
 {
 	// Size allows for padding - is actual size rounded up to multiple of 3.
 	uint8_t* bitmap = (uint8_t*)alloca(cf_b64_decoded_buf_size((uint32_t)len));
@@ -493,22 +499,14 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 					as_store_uint32(&p->regime, regime);
 				}
 
-				if (master) {
-					// node_index starts at one (zero indicates unset).
-					if (node_index != p->master) {
-						if (p->master) {
-							as_shm_force_replicas_refresh(shm_info, p->master);
-						}
-						as_store_uint32_rls(&p->master, node_index);
+				uint32_t node_index_old = p->nodes[replica_index];
+
+				if (node_index != node_index_old) {
+					// node index starts at one (zero indicates unset).
+					if (node_index_old) {
+						as_shm_force_replicas_refresh(shm_info, node_index_old);
 					}
-				}
-				else {
-					if (node_index != p->prole) {
-						if (p->prole) {
-							as_shm_force_replicas_refresh(shm_info, p->prole);
-						}
-						as_store_uint32_rls(&p->prole, node_index);
-					}
+					as_store_uint32_rls(&p->nodes[replica_index], node_index);
 				}
 			}
 		}
@@ -516,23 +514,28 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 }
 
 void
-as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node, bool master, uint32_t regime)
+as_shm_update_partitions(
+	as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node,
+	uint8_t replica_size, uint8_t replica_index, uint32_t regime
+	)
 {
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
 	
 	if (! table) {
-		table = as_shm_add_partition_table(cluster_shm, ns, regime != 0);
+		table = as_shm_add_partition_table(cluster_shm, ns, replica_size, regime != 0);
 	}
 	
 	if (table) {
-		as_shm_decode_and_update(shm_info, bitmap_b64, len, table, node->index + 1, master, regime);
+		as_shm_decode_and_update(shm_info, bitmap_b64, len, table, node->index + 1, replica_index, regime);
 	}
 }
 
-static inline as_node*
-as_shm_try_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
+static as_node*
+as_shm_get_replica_master(as_partition_shm* p, as_node** local_nodes)
 {
+	uint32_t node_index = as_load_uint32_acq(&p->nodes[0]);
+
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
 		as_node* node = as_node_load(&local_nodes[node_index-1]);
@@ -545,84 +548,49 @@ as_shm_try_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_inde
 	return NULL;
 }
 
-static inline as_node*
-as_shm_try_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
+static as_node*
+as_shm_get_replica_sequence(
+	as_node** local_nodes, as_partition_shm* p, uint8_t replica_size, uint8_t* replica_index
+	)
 {
-	// node_index starts at one (zero indicates unset).
-	if (node_index) {
-		as_node* node = as_node_load(&local_nodes[node_index-1]);
+	for (uint8_t i = 0; i < replica_size; i++) {
+		uint8_t index = (*replica_index) % replica_size;
+		uint32_t node_index = as_load_uint32_acq(&p->nodes[index]);
 
-		if (node && as_node_is_active(node)) {
-			return node;
+		// node_index starts at one (zero indicates unset).
+		if (node_index) {
+			as_node* node = as_node_load(&local_nodes[node_index-1]);
+
+			if (node && as_node_is_active(node)) {
+				return node;
+			}
 		}
+		(*replica_index)++;
 	}
 	return NULL;
 }
 
 static as_node*
-as_shm_try_node_alternate(
-	as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index
-	)
-{
-	// index values start at one (zero indicates unset).
-	as_node* chosen = as_node_load(&local_nodes[chosen_index-1]);
-	
-	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (chosen && as_node_is_active(chosen)) {
-		return chosen;
-	}
-	return as_shm_try_node(cluster, local_nodes, alternate_index);
-}
-
-static as_node*
-shm_get_sequence_node(
-	as_cluster* cluster, as_node** local_nodes, as_partition_shm* p, bool use_master
-	)
-{
-	uint32_t master = as_load_uint32_acq(&p->master);
-	uint32_t prole = as_load_uint32_acq(&p->prole);
-
-	if (! prole) {
-		return as_shm_try_node(cluster, local_nodes, master);
-	}
-
-	if (! master) {
-		return as_shm_try_node(cluster, local_nodes, prole);
-	}
-
-	if (use_master) {
-		return as_shm_try_node_alternate(cluster, local_nodes, master, prole);
-	}
-	return as_shm_try_node_alternate(cluster, local_nodes, prole, master);
-}
-
-static as_node*
-shm_prefer_rack_node(
+as_shm_get_replica_rack(
 	as_cluster* cluster, as_node** local_nodes, const char* ns, as_partition_shm* p,
-	as_node* prev_node, bool use_master
+	as_node* prev_node, uint8_t replica_size, uint8_t* replica_index
 	)
 {
 	as_node_shm* nodes_shm = cluster->shm_info->cluster_shm->nodes;
-	uint32_t node_indexes[2];
-
-	if (use_master) {
-		node_indexes[0] = as_load_uint32_acq(&p->master);
-		node_indexes[1] = as_load_uint32_acq(&p->prole);
-	}
-	else {
-		node_indexes[0] = as_load_uint32_acq(&p->prole);
-		node_indexes[1] = as_load_uint32_acq(&p->master);
-	}
-
 	as_node* fallback1 = NULL;
 	as_node* fallback2 = NULL;
-	uint32_t max = cluster->rack_ids_size;
+	uint32_t replica_max = replica_size;
+	uint32_t seq1 = 0;
+	uint32_t seq2 = 0;
+	uint32_t rack_max = cluster->rack_ids_size;
 
-	for (uint32_t i = 0; i < max; i++) {
+	for (uint32_t i = 0; i < rack_max; i++) {
 		int search_id = cluster->rack_ids[i];
+		uint32_t seq = (*replica_index);
 
-		for (uint32_t j = 0; j < 2; j++) {
-			uint32_t node_index = node_indexes[j];
+		for (uint32_t j = 0; j < replica_max; j++, seq++) {
+			uint32_t index = seq % replica_max;
+			uint32_t node_index = as_load_uint32_acq(&p->nodes[index]);
 
 			// node_index starts at one (zero indicates unset).
 			if (! node_index) {
@@ -653,6 +621,7 @@ shm_prefer_rack_node(
 				// Previous node is the least desirable fallback.
 				if (! fallback2) {
 					fallback2 = node;
+					seq2 = index;
 				}
 				continue;
 			}
@@ -668,17 +637,20 @@ shm_prefer_rack_node(
 			// Node meets all criteria except not on same rack.
 			if (! fallback1) {
 				fallback1 = node;
+				seq1 = index;
 			}
 		}
 	}
 
 	// Return node on a different rack if it exists.
 	if (fallback1) {
+		*replica_index = (uint8_t)seq1;
 		return fallback1;
 	}
 
 	// Return previous node if it still exists.
 	if (fallback2) {
+		*replica_index = (uint8_t)seq2;
 		return fallback2;
 	}
 	return NULL;
@@ -687,27 +659,23 @@ shm_prefer_rack_node(
 as_node*
 as_partition_shm_get_node(
 	as_cluster* cluster, const char* ns, as_partition_shm* p, as_node* prev_node,
-	as_policy_replica replica, bool use_master
+	as_policy_replica replica, uint8_t replica_size, uint8_t* replica_index
 	)
 {
 	as_node** local_nodes = cluster->shm_info->local_nodes;
 
 	switch (replica) {
-		case AS_POLICY_REPLICA_MASTER: {
-			// Make volatile reference so changes to tend thread will be reflected in this thread.
-			uint32_t master = as_load_uint32_acq(&p->master);
-			return as_shm_try_master(cluster, local_nodes, master);
-		}
+		case AS_POLICY_REPLICA_MASTER:
+			return as_shm_get_replica_master(p, local_nodes);
 
 		default:
 		case AS_POLICY_REPLICA_ANY:
-		case AS_POLICY_REPLICA_SEQUENCE: {
-			return shm_get_sequence_node(cluster, local_nodes, p, use_master);
-		}
+		case AS_POLICY_REPLICA_SEQUENCE:
+			return as_shm_get_replica_sequence(local_nodes, p, replica_size, replica_index);
 
-		case AS_POLICY_REPLICA_PREFER_RACK: {
-			return shm_prefer_rack_node(cluster, local_nodes, ns, p, prev_node, use_master);
-		}
+		case AS_POLICY_REPLICA_PREFER_RACK:
+			return as_shm_get_replica_rack(cluster, local_nodes, ns, p, prev_node, replica_size,
+				replica_index);
 	}
 }
 

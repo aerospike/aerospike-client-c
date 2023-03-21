@@ -379,7 +379,9 @@ as_shm_reset_racks_node(as_cluster* cluster, as_error* err, as_node* node)
 }
 
 static void
-as_shm_reset_racks(as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, as_error* err)
+as_shm_reset_racks(
+	as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, as_error* err
+	)
 {
 	// Per namespace racks not stored in shared memory.
 	// Retrieve racks from server on prole tender.
@@ -447,13 +449,15 @@ as_shm_add_partition_table(
 {
 	if (cluster_shm->partition_tables_size >= cluster_shm->partition_tables_capacity) {
 		// There are no more partition table slots available in shared memory.
-		as_log_error("Failed to add partition table namespace %s. Shared memory capacity exceeeded: %d",
-				 ns, cluster_shm->partition_tables_capacity);
+		as_log_error(
+			"Failed to add partition table namespace %s. Shared memory capacity exceeeded: %u",
+			ns, cluster_shm->partition_tables_capacity);
 		return NULL;
 	}
 	
 	as_partition_table_shm* tables = as_shm_get_partition_tables(cluster_shm);
-	as_partition_table_shm* table = as_shm_get_partition_table(cluster_shm, tables, cluster_shm->partition_tables_size);
+	as_partition_table_shm* table = as_shm_get_partition_table(cluster_shm, tables,
+		cluster_shm->partition_tables_size);
 	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
 	table->replica_size = replica_size;
 	table->sc_mode = sc_mode;
@@ -527,7 +531,8 @@ as_shm_update_partitions(
 	}
 	
 	if (table) {
-		as_shm_decode_and_update(shm_info, bitmap_b64, len, table, node->index + 1, replica_index, regime);
+		as_shm_decode_and_update(shm_info, bitmap_b64, len, table, node->index + 1, replica_index,
+			regime);
 	}
 }
 
@@ -703,9 +708,11 @@ as_shm_reset_rebalance_gen(as_shm_info* shm_info, as_cluster_shm* cluster_shm)
 }
 
 static void
-as_shm_takeover_cluster(as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, uint32_t pid)
+as_shm_takeover_cluster(
+	as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, uint32_t pid
+	)
 {
-	as_log_info("Take over shared memory cluster: %d", pid);
+	as_log_info("Take over shared memory cluster: %u", pid);
 	as_store_uint32(&cluster_shm->owner_pid, pid);
 	shm_info->is_tend_master = true;
 
@@ -864,11 +871,11 @@ as_shm_wait_till_ready(as_cluster* cluster, as_cluster_shm* cluster_shm, uint32_
 		as_sleep(interval_ms);
 		
 		if (as_load_uint8_acq(&cluster_shm->ready)) {
-			as_log_info("Follow cluster initialized: %d", pid);
+			as_log_info("Follow cluster initialized: %u", pid);
 			return;
 		}
 	} while (cf_getms() < limit);
-	as_log_warn("Follow cluster initialize timed out: %d", pid);
+	as_log_warn("Follow cluster initialize timed out: %u", pid);
 }
 
 as_status
@@ -881,7 +888,8 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	cluster->n_partitions = 4096;
 	
 	uint32_t size = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes) +
-		((sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions)) * config->shm_max_namespaces);
+		((sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions)) *
+		config->shm_max_namespaces);
 	
 	uint32_t pid = getpid();
 
@@ -890,17 +898,18 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	int id = shmget(config->shm_key, size, IPC_CREAT | IPC_EXCL | 0666);
 
 	if (id >= 0) {
-		// Exclusive shared memory lock succeeded.
-		// shmget docs say shared memory create initializes memory to zero, so memset is not necessary.
+		// Exclusive shared memory lock succeeded. shmget docs say shared memory create initializes
+		// memory to zero, so memset is not necessary.
 		// memset(cluster_shm, 0, size);
-		as_log_info("Create shared memory cluster: %d", pid);
+		as_log_info("Create shared memory cluster: %u", pid);
 	}
 	else if (errno == EEXIST) {
 		// Some other process has created shared memory.  Use that shared memory.
 		id = shmget(config->shm_key, size, IPC_CREAT | 0666);
 		
 		if (id < 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory get failed: %s pid: %d", strerror(errno), pid);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"Shared memory get failed: %s pid: %u", strerror(errno), pid);
 		}
 	}
 	else if (errno == ENOMEM) {
@@ -918,14 +927,16 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	}
 	else {
 		// Exclusive shared memory lock failed.
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory get failed: %s pid: %d", strerror(errno), pid);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory get failed: %s pid: %u",
+			strerror(errno), pid);
 	}
 
 	// Attach to shared memory.
 	as_cluster_shm* cluster_shm = shmat(id, NULL, 0);
 
 	if (cluster_shm == (void*)-1) {
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %s pid: %d", strerror(errno), pid);		
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %s pid: %u",
+			strerror(errno), pid);
 		// Try removing the shared memory - it will fail if any other process is still attached.
 		shmctl(id, IPC_RMID, 0);
 		return err->code;
@@ -947,11 +958,11 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 
 		if (id && id != INVALID_HANDLE_VALUE) {
 			if (code == 0) {
-				as_log_info("Create shared memory cluster: %s pid: %d", name, pid);
+				as_log_info("Create shared memory cluster: %s pid: %u", name, pid);
 				break;
 			}
 			else if (code == ERROR_ALREADY_EXISTS) {
-				as_log_info("Follow shared memory cluster: %s pid: %d", name, pid);
+				as_log_info("Follow shared memory cluster: %s pid: %u", name, pid);
 				// Handle should be handle of file that was already created.
 				// There is no need to reopen.
 				// id = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, name);
@@ -961,13 +972,14 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	}
 
 	if (i >= 2) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory create/get failed: %s pid: %d code: %d", name, pid, code);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Shared memory create/get failed: %s pid: %u code: %d", name, pid, code);
 	}
 
 	as_cluster_shm* cluster_shm = MapViewOfFile(id, FILE_MAP_ALL_ACCESS, 0, 0, size);
 
 	if (cluster_shm == NULL) {
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %d pid: %d", GetLastError(), pid);
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %d pid: %u", GetLastError(), pid);
 		CloseHandle(id);
 		return err->code;
 	}
@@ -983,7 +995,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	cluster->shm_info = shm_info;
 
 	if (shm_info->is_tend_master) {
-		as_log_info("Take over shared memory cluster: %d", pid);
+		as_log_info("Take over shared memory cluster: %u", pid);
 		as_store_uint64(&cluster_shm->timestamp, cf_getms());
 		as_store_uint32(&cluster_shm->owner_pid, pid);
 
@@ -992,7 +1004,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 
 		// Ensure shared memory cluster is fully initialized.
 		if (as_load_uint8_acq(&cluster_shm->ready)) {
-			as_log_info("Cluster already initialized: %d", pid);
+			as_log_info("Cluster already initialized: %u", pid);
 
 			// Validate that the already initialized shared memory has the expected offset and size.
 			if (! (cluster_shm->partition_tables_capacity == config->shm_max_namespaces &&
@@ -1018,7 +1030,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 			as_cluster_add_seeds(cluster);
 		}
 		else {
-			as_log_info("Initialize cluster: %d", pid);
+			as_log_info("Initialize cluster: %u", pid);
 			cluster_shm->n_partitions = cluster->n_partitions;
 			cluster_shm->nodes_capacity = config->shm_max_nodes;
 			cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
@@ -1036,7 +1048,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		}
 	}
 	else {
-		as_log_info("Follow shared memory cluster: %d", pid);
+		as_log_info("Follow shared memory cluster: %u", pid);
 
 		// Prole should wait until master has fully initialized shared memory.
 		if (! as_load_uint8_acq(&cluster_shm->ready)) {
@@ -1058,7 +1070,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	}
 
 	if (pthread_create(&cluster->tend_thread, &attr, as_shm_tender, cluster) != 0) {
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s pid: %d",
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s pid: %u",
 						strerror(errno), pid);
 		pthread_attr_destroy(&attr);
 		as_shm_destroy(cluster);
@@ -1080,10 +1092,17 @@ as_shm_destroy(as_cluster* cluster)
 #if !defined(_MSC_VER)
 	// Detach shared memory.
 	shmdt(shm_info->cluster_shm);
-	
-	// Try removing the shared memory - it will fail if any other process is still attached.
-	// Failure is normal behavior, so don't check return code.
-	shmctl(shm_info->shm_id, IPC_RMID, 0);
+
+	// Determine how many processes are still attached to shared memory.
+	struct shmid_ds shm_stat;
+	int rv = shmctl(shm_info->shm_id, IPC_STAT, &shm_stat);
+
+	// If no more processes are attached, remove shared memory.
+	if (rv == 0 && shm_stat.shm_nattch == 0) {
+		uint32_t pid = getpid();
+		as_log_info("Remove shared memory segment: %u", pid);
+		shmctl(shm_info->shm_id, IPC_RMID, 0);
+	}
 #else
 	if (!UnmapViewOfFile(shm_info->cluster_shm)) {
 		as_log_error("Failed to detach from shared memory");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -36,7 +36,7 @@ struct as_node_s;
  */
 typedef struct as_partition_status_s {
 	uint16_t part_id;
-	bool master;
+	uint8_t replica_index;
 	bool unavailable;
 	bool retry;
 	as_digest digest;

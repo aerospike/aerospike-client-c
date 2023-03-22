@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -595,7 +595,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		// This works because the previous node is only used for pointer comparison
 		// and the previous node's contents are not examined during this call.
 		cmd->node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, cmd->node,
-										  cmd->replica, cmd->flags & AS_ASYNC_FLAGS_MASTER);
+										  cmd->replica, cmd->replica_size, &cmd->replica_index);
 
 		if (! cmd->node) {
 			event_loop->errors++;
@@ -892,7 +892,7 @@ as_event_command_retry(as_event_command* cmd, bool timeout)
 	if (! timeout || ((cmd->flags & AS_ASYNC_FLAGS_READ) &&
 					  !(cmd->flags & AS_ASYNC_FLAGS_LINEARIZE))) {
 		// Note: SC session read will ignore this setting because it uses master only.
-		cmd->flags ^= AS_ASYNC_FLAGS_MASTER;
+		cmd->replica_index++;
 	}
 
 	// Old connection should already be closed or is closing.
@@ -1294,7 +1294,7 @@ as_event_command_parse_result(as_event_command* cmd)
 
 	switch (status) {
 		case AEROSPIKE_OK: {
-			if (cmd->flags2 & AS_ASYNC_FLAGS2_HEAP_REC) {
+			if (cmd->flags & AS_ASYNC_FLAGS_HEAP_REC) {
 				// Create record on heap and let user call as_record_destroy() on success.
 				as_record* rec = as_record_new(msg->n_ops);
 
@@ -1303,7 +1303,7 @@ as_event_command_parse_result(as_event_command* cmd)
 
 				p = as_command_ignore_fields(p, msg->n_fields);
 				status = as_command_parse_bins(&p, &err, rec, msg->n_ops,
-											   cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
+											   cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
 
 				if (status == AEROSPIKE_OK) {
 					as_event_response_complete(cmd);
@@ -1331,7 +1331,7 @@ as_event_command_parse_result(as_event_command* cmd)
 				
 				p = as_command_ignore_fields(p, msg->n_fields);
 				status = as_command_parse_bins(&p, &err, &rec, msg->n_ops,
-											   cmd->flags2 & AS_ASYNC_FLAGS2_DESERIALIZE);
+											   cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
 
 				if (status == AEROSPIKE_OK) {
 					as_event_response_complete(cmd);
@@ -1577,7 +1577,9 @@ connector_execute_command(as_event_loop* event_loop, connector_shared* cs)
 	cmd->type = AS_ASYNC_TYPE_CONNECTOR;
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_CONNECT;
-	cmd->flags = AS_ASYNC_FLAGS_MASTER;
+	cmd->flags = 0;
+	cmd->replica_size = 1;
+	cmd->replica_index = 0;
 
 	event_loop->pending++;
 	cmd->event_state->pending++;

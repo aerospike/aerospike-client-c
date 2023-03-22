@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -57,17 +57,14 @@ extern "C" {
 #define AS_ASYNC_STATE_QUEUE_ERROR 11
 #define AS_ASYNC_STATE_RETRY 12
 
-#define AS_ASYNC_FLAGS_MASTER 1
+#define AS_ASYNC_FLAGS_DESERIALIZE 1
 #define AS_ASYNC_FLAGS_READ 2
 #define AS_ASYNC_FLAGS_HAS_TIMER 4
 #define AS_ASYNC_FLAGS_USING_SOCKET_TIMER 8
 #define AS_ASYNC_FLAGS_EVENT_RECEIVED 16
 #define AS_ASYNC_FLAGS_FREE_BUF 32
 #define AS_ASYNC_FLAGS_LINEARIZE 64
-#define AS_ASYNC_FLAGS_MASTER_SC 128
-
-#define AS_ASYNC_FLAGS2_DESERIALIZE 1
-#define AS_ASYNC_FLAGS2_HEAP_REC 2
+#define AS_ASYNC_FLAGS_HEAP_REC 128
 
 #define AS_ASYNC_AUTH_RETURN_CODE 1
 
@@ -155,7 +152,9 @@ typedef struct as_event_command {
 	uint8_t proto_type_rcv;
 	uint8_t state;
 	uint8_t flags;
-	uint8_t flags2;
+	uint8_t replica_size;
+	uint8_t replica_index;
+	uint8_t replica_index_sc; // Used in batch only.
 } as_event_command;
 
 typedef struct {

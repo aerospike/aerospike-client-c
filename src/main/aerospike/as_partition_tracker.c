@@ -260,18 +260,23 @@ as_partition_tracker_assign(
 
 			if (retry || ps->retry) {
 				as_partition* part = &table->partitions[ps->part_id];
-				as_node* master_node = as_node_load(&part->master);
+				as_node* master_node = as_node_load(&part->nodes[0]);
 				as_node* node;
 
 				if (pt->iteration == 1 || !ps->unavailable || ps->master_node != master_node) {
 					node = ps->master_node = master_node;
-					ps->master = true;
+					ps->replica_index = 0;
 				}
 				else {
 					// Partition was unavailable in the previous iteration and the
 					// master node has not changed. Switch replica.
-					node = ps->master ? as_node_load(&part->prole) : master_node;
-					ps->master = !ps->master;
+					ps->replica_index++;
+
+					if (ps->replica_index >= table->replica_size) {
+						ps->replica_index = 0;
+					}
+
+					node = as_node_load(&part->nodes[ps->replica_index]);
 				}
 
 				if (! node) {
@@ -309,18 +314,23 @@ as_partition_tracker_assign(
 
 			if (retry || ps->retry) {
 				as_partition_shm* part = &table->partitions[ps->part_id];
-				uint32_t master_index = as_load_uint32(&part->master);
+				uint32_t master_index = as_load_uint32(&part->nodes[0]);
 				uint32_t index;
 
 				if (pt->iteration == 1 || !ps->unavailable || ps->master_index != master_index) {
 					index = ps->master_index = master_index;
-					ps->master = true;
+					ps->replica_index = 0;
 				}
 				else {
 					// Partition was unavailable in the previous iteration and the
 					// master node has not changed. Switch replica.
-					index = ps->master ? as_load_uint32(&part->prole) : master_index;
-					ps->master = !ps->master;
+					ps->replica_index++;
+
+					if (ps->replica_index >= table->replica_size) {
+						ps->replica_index = 0;
+					}
+
+					index = as_load_uint32(&part->nodes[ps->replica_index]);
 				}
 
 				// node index zero indicates unset.

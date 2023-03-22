@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -38,6 +38,7 @@ extern "C" {
 #define AS_COMMAND_FLAGS_READ 1
 #define AS_COMMAND_FLAGS_BATCH 2
 #define AS_COMMAND_FLAGS_LINEARIZE 4
+#define AS_COMMAND_FLAGS_SPLIT_RETRY 8
 
 // Field IDs
 #define AS_FIELD_NAMESPACE 0
@@ -186,9 +187,9 @@ typedef struct as_command_s {
 	uint32_t iteration;
 	uint32_t sent;
 	uint8_t flags;
-	bool master;
-	bool master_sc;   // Used in batch only.
-	bool split_retry; // Used in batch only.
+	uint8_t replica_size;
+	uint8_t replica_index;
+	uint8_t replica_index_sc; // Used in batch only.
 } as_command;
 
 /**
@@ -664,18 +665,19 @@ as_task_id_resolve(uint64_t* task_id_ptr)
 
 /**
  * @private
- * Replica round robin iterator.
+ * Return command's starting replica index for AS_POLICY_REPLICA_ANY.
  */
-extern uint32_t g_replica_rr;
+uint8_t
+as_replica_index_any();
 
 /**
  * @private
- * Should command target master on first iteration.
+ * Return starting replica index for read commands.
  */
-static inline bool
-as_command_target_master(as_policy_replica replica)
+static inline uint8_t
+as_replica_index_init_read(as_policy_replica replica)
 {
-	return (replica != AS_POLICY_REPLICA_ANY || (as_faa_uint32(&g_replica_rr, 1) & 1));
+	return (replica != AS_POLICY_REPLICA_ANY)? 0 : as_replica_index_any();
 }
 
 /**

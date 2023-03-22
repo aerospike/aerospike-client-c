@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -39,6 +39,11 @@ extern "C" {
  */
 #define AS_MAX_NAMESPACE_SIZE 32
 
+/**
+ * Maximum number of stored replicas in partition map.
+ */
+#define AS_MAX_REPLICATION_FACTOR 3
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -50,12 +55,9 @@ struct as_key_s;
 /**
  * @private
  * Map of namespace data partitions to nodes.
- *
- * TODO - not ideal for replication factor > 2.
  */
 typedef struct as_partition_s {
-	struct as_node_s* master;
-	struct as_node_s* prole;
+	struct as_node_s* nodes[AS_MAX_REPLICATION_FACTOR];
 	uint32_t regime;
 } as_partition;
 
@@ -66,8 +68,9 @@ typedef struct as_partition_s {
 typedef struct as_partition_table_s {
 	char ns[AS_MAX_NAMESPACE_SIZE];
 	uint32_t size;
+	uint8_t replica_size;  // replication-factor on server.
 	bool sc_mode;
-	char pad[3];
+	char pad[2];
 	as_partition partitions[];
 } as_partition_table;
 
@@ -88,6 +91,7 @@ typedef struct as_partition_info_s {
 	const char* ns;
 	void* partition;  // as_partition or as_shm_partition.
 	uint32_t partition_id;
+	uint8_t replica_size;
 	bool sc_mode;
 } as_partition_info;
 

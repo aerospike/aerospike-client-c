@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -29,34 +29,6 @@
 /******************************************************************************
  * Functions
  *****************************************************************************/
-
-/* Used for debugging only.
-static void
-as_partition_table_print(as_partition_table* table)
-{
-	for (uint32_t i = 0; i < table->size; i++) {
-		as_partition* p = &table->partitions[i];
-		
-		if (p->master) {
-			printf("%u %s\n", i, p->master->name);
-		}
-		else {
-			printf("%u null\n", i);
-		}
-	}
-}
-
-void
-as_partition_tables_print(as_partition_tables* tables)
-{
-	for (uint32_t i = 0; i < tables->size; i++) {
-		as_partition_table* table = tables->tables[i];
-		
-		printf("Namespace: %s\n", table->ns);
-		as_partition_table_print(table);
-	}
-}
-*/
 
 static void
 as_partition_reserve_node(as_node* node)
@@ -108,13 +80,14 @@ as_partition_release_node_now(as_node* node)
 }
 
 static as_partition_table*
-as_partition_table_create(const char* ns, uint32_t capacity, bool sc_mode)
+as_partition_table_create(const char* ns, uint32_t capacity, uint8_t replica_size, bool sc_mode)
 {
 	size_t len = sizeof(as_partition_table) + (sizeof(as_partition) * capacity);
 	as_partition_table* table = cf_malloc(len);
 	memset(table, 0, len);
 	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
 	table->size = capacity;
+	table->replica_size = replica_size;
 	table->sc_mode = sc_mode;
 	return table;
 }
@@ -124,13 +97,13 @@ as_partition_table_destroy(as_partition_table* table)
 {
 	for (uint32_t i = 0; i < table->size; i++) {
 		as_partition* p = &table->partitions[i];
-		
-		if (p->master) {
-			as_partition_release_node_now(p->master);
-		}
-		
-		if (p->prole) {
-			as_partition_release_node_now(p->prole);
+
+		for (uint32_t j = 0; j < AS_MAX_REPLICATION_FACTOR; j++) {
+			as_node* node = p->nodes[j];
+
+			if (node) {
+				as_partition_release_node_now(node);
+			}
 		}
 	}
 	cf_free(table);
@@ -146,21 +119,11 @@ as_partition_tables_destroy(as_partition_tables* tables)
 	}
 }
 
-static inline as_node*
-try_master(as_cluster* cluster, as_node* node)
+static as_node*
+get_replica_master(as_partition* p)
 {
-	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (node && as_node_is_active(node)) {
-		return node;
-	}
-	// When master only specified, should never get random nodes.
-	return NULL;
-}
+	as_node* node = as_node_load(&p->nodes[0]);
 
-static inline as_node*
-try_node(as_cluster* cluster, as_node* node)
-{
-	// Make volatile reference so changes to tend thread will be reflected in this thread.
 	if (node && as_node_is_active(node)) {
 		return node;
 	}
@@ -168,60 +131,40 @@ try_node(as_cluster* cluster, as_node* node)
 }
 
 static as_node*
-try_node_alternate(as_cluster* cluster, as_node* chosen, as_node* alternate)
+get_replica_sequence(as_partition* p, uint8_t replica_size, uint8_t* replica_index)
 {
-	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (as_node_is_active(chosen)) {
-		return chosen;
+	for (uint8_t i = 0; i < replica_size; i++) {
+		uint8_t index = (*replica_index) % replica_size;
+		as_node* node = as_node_load(&p->nodes[index]);
+
+		if (node && as_node_is_active(node)) {
+			return node;
+		}
+		(*replica_index)++;
 	}
-	return try_node(cluster, alternate);
+	return NULL;
 }
 
 static as_node*
-get_sequence_node(as_cluster* cluster, as_partition* p, bool use_master)
-{
-	as_node* master = as_node_load(&p->master);
-	as_node* prole = as_node_load(&p->prole);
-
-	if (! prole) {
-		return try_node(cluster, master);
-	}
-
-	if (! master) {
-		return try_node(cluster, prole);
-	}
-	
-	if (use_master) {
-		return try_node_alternate(cluster, master, prole);
-	}
-	return try_node_alternate(cluster, prole, master);
-}
-
-static as_node*
-prefer_rack_node(
-	as_cluster* cluster, const char* ns, as_partition* p, as_node* prev_node, bool use_master
+get_replica_rack(
+	as_cluster* cluster, const char* ns, as_partition* p, as_node* prev_node,
+	uint8_t replica_size, uint8_t* replica_index
 	)
 {
-	as_node* nodes[2];
-
-	if (use_master) {
-		nodes[0] = as_node_load(&p->master);
-		nodes[1] = as_node_load(&p->prole);
-	}
-	else {
-		nodes[0] = as_node_load(&p->prole);
-		nodes[1] = as_node_load(&p->master);
-	}
-
 	as_node* fallback1 = NULL;
 	as_node* fallback2 = NULL;
-	uint32_t max = cluster->rack_ids_size;
+	uint32_t replica_max = replica_size;
+	uint32_t seq1 = 0;
+	uint32_t seq2 = 0;
+	uint32_t rack_max = cluster->rack_ids_size;
 
-	for (uint32_t i = 0; i < max; i++) {
+	for (uint32_t i = 0; i < rack_max; i++) {
 		int rack_id = cluster->rack_ids[i];
+		uint32_t seq = (*replica_index);
 
-		for (uint32_t j = 0; j < 2; j++) {
-			as_node* node = nodes[j];
+		for (uint32_t j = 0; j < replica_max; j++) {
+			uint32_t index = seq % replica_max;
+			as_node* node = as_node_load(&p->nodes[index]);
 
 			if (node) {
 				// Avoid retrying on node where command failed even if node is the
@@ -231,29 +174,35 @@ prefer_rack_node(
 				if (node != prev_node) {
 					if (as_node_has_rack(node, ns, rack_id)) {
 						if (as_node_is_active(node)) {
+							*replica_index = (uint8_t)index;
 							return node;
 						}
 					}
 					else if (!fallback1 && as_node_is_active(node)) {
 						// Meets all criteria except not on same rack.
 						fallback1 = node;
+						seq1 = index;
 					}
 				}
 				else if (!fallback2 && as_node_is_active(node)) {
 					// Previous node is the least desirable fallback.
 					fallback2 = node;
+					seq2 = index;
 				}
 			}
+			seq++;
 		}
 	}
 
 	// Return node on a different rack if it exists.
 	if (fallback1) {
+		*replica_index = (uint8_t)seq1;
 		return fallback1;
 	}
 
 	// Return previous node if it still exists.
 	if (fallback2) {
+		*replica_index = (uint8_t)seq2;
 		return fallback2;
 	}
 	return NULL;
@@ -262,25 +211,20 @@ prefer_rack_node(
 as_node*
 as_partition_reg_get_node(
 	as_cluster* cluster, const char* ns, as_partition* p, as_node* prev_node,
-	as_policy_replica replica, bool use_master
+	as_policy_replica replica, uint8_t replica_size, uint8_t* replica_index
 	)
 {
 	switch (replica) {
-		case AS_POLICY_REPLICA_MASTER: {
-			// Make volatile reference so changes to tend thread will be reflected in this thread.
-			as_node* master = as_node_load(&p->master);
-			return try_master(cluster, master);
-		}
+		case AS_POLICY_REPLICA_MASTER:
+			return get_replica_master(p);
 
 		default:
 		case AS_POLICY_REPLICA_ANY:
-		case AS_POLICY_REPLICA_SEQUENCE: {
-			return get_sequence_node(cluster, p, use_master);
-		}
+		case AS_POLICY_REPLICA_SEQUENCE:
+			return get_replica_sequence(p, replica_size, replica_index);
 
-		case AS_POLICY_REPLICA_PREFER_RACK: {
-			return prefer_rack_node(cluster, ns, p, prev_node, use_master);
-		}
+		case AS_POLICY_REPLICA_PREFER_RACK:
+			return get_replica_rack(cluster, ns, p, prev_node, replica_size, replica_index);
 	}
 }
 
@@ -306,6 +250,7 @@ as_partition_info_init(as_partition_info* pi, as_cluster* cluster, as_error* err
 		pi->ns = table->ns;
 		pi->partition_id = as_partition_getid(key->digest.value, cluster_shm->n_partitions);
 		pi->partition = &table->partitions[pi->partition_id];
+		pi->replica_size = table->replica_size;
 		pi->sc_mode = table->sc_mode;
 	}
 	else {
@@ -326,6 +271,7 @@ as_partition_info_init(as_partition_info* pi, as_cluster* cluster, as_error* err
 		pi->ns = table->ns;
 		pi->partition_id = as_partition_getid(key->digest.value, cluster->n_partitions);
 		pi->partition = &table->partitions[pi->partition_id];
+		pi->replica_size = table->replica_size;
 		pi->sc_mode = table->sc_mode;
 	}
 	return AEROSPIKE_OK;
@@ -354,8 +300,8 @@ force_replicas_refresh(as_node* node)
 
 static void
 decode_and_update(
-	char* bitmap_b64, uint32_t len, as_partition_table* table, as_node* node, bool master,
-	uint32_t regime, bool* regime_error
+	char* bitmap_b64, uint32_t len, as_partition_table* table, as_node* node,
+	uint8_t replica_index, uint32_t regime, bool* regime_error
 	)
 {
 	// Size allows for padding - is actual size rounded up to multiple of 3.
@@ -380,28 +326,15 @@ decode_and_update(
 					p->regime = regime;
 				}
 
-				if (master) {
-					if (node != p->master) {
-						as_node* tmp = p->master;
-						as_partition_reserve_node(node);
-						as_node_store(&p->master, node);
+				as_node* node_old = p->nodes[replica_index];
 
-						if (tmp) {
-							force_replicas_refresh(tmp);
-							as_partition_release_node_delayed(tmp);
-						}
-					}
-				}
-				else {
-					if (node != p->prole) {
-						as_node* tmp = p->prole;
-						as_partition_reserve_node(node);
-						as_node_store(&p->prole, node);
+				if (node != node_old) {
+					as_partition_reserve_node(node);
+					as_node_store(&p->nodes[replica_index], node);
 
-						if (tmp) {
-							force_replicas_refresh(tmp);
-							as_partition_release_node_delayed(tmp);
-						}
+					if (node_old) {
+						force_replicas_refresh(node_old);
+						as_partition_release_node_delayed(node_old);
 					}
 				}
 			}
@@ -417,12 +350,12 @@ decode_and_update(
 }
 
 bool
-as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bool has_regime)
+as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf)
 {
 	// Use destructive parsing (ie modifying input buffer with null termination) for performance.
-	// Receive format: replicas-all\t or replicas\t
-	//              <ns1>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;
-	//              <ns2>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;\n
+	// Receive format: replicas\t
+	//     <ns1>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;
+	//     <ns2>:[regime],<count>,<base 64 encoded bitmap1>,<base 64 encoded bitmap2>...;\n
 	as_partition_tables* tables = &cluster->partition_tables;
 	uint32_t bitmap_size = (cluster->n_partitions + 7) / 8;
 	long expected_len = (long)cf_b64_encoded_len(bitmap_size);
@@ -446,18 +379,16 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 			}
 			begin = ++p;
 
-			if (has_regime) {
-				// Parse regime.
-				while (*p) {
-					if (*p == ',') {
-						*p = 0;
-						break;
-					}
-					p++;
+			// Parse regime.
+			while (*p) {
+				if (*p == ',') {
+					*p = 0;
+					break;
 				}
-				regime = (uint32_t)strtoul(begin, NULL, 10);
-				begin = ++p;
+				p++;
 			}
+			regime = (uint32_t)strtoul(begin, NULL, 10);
+			begin = ++p;
 
 			// Parse replica count.
 			while (*p) {
@@ -468,10 +399,19 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 				p++;
 			}
 			
-			int replica_count = atoi(begin);
+			int replication_factor = atoi(begin);
+
+			if (replication_factor <= 0 || replication_factor > 255) {
+				as_log_error("Invalid replication factor: %s %d", ns, replication_factor);
+				return false;
+			}
+
+			uint8_t replica_max = (uint8_t)replication_factor;
+			uint8_t replica_size = (replica_max <= AS_MAX_REPLICATION_FACTOR)?
+				replication_factor : AS_MAX_REPLICATION_FACTOR;
 			
-			// Parse master and one prole partition bitmaps.
-			for (int i = 0; i < replica_count; i++) {
+			// Parse partition bitmaps.
+			for (uint8_t replica_index = 0; replica_index < replica_max; replica_index++) {
 				begin = ++p;
 				
 				while (*p) {
@@ -490,15 +430,11 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 					return false;
 				}
 				
-				// Only handle first two levels.  Do not process other proles.
-				// Level 0: master
-				// Level 1: prole 1
-				if (i < 2) {
-					bool master = (i == 0);
-					
+				// Only handle AS_MAX_REPLICATION_FACTOR levels. Do not process other proles.
+				if (replica_index < AS_MAX_REPLICATION_FACTOR) {
 					if (cluster->shm_info) {
-						as_shm_update_partitions(cluster->shm_info, ns, begin, len, node, master,
-												 regime);
+						as_shm_update_partitions(cluster->shm_info, ns, begin, len, node,
+							replica_size, replica_index, regime);
 					}
 					else {
 						as_partition_table* table = as_partition_tables_get(tables, ns);
@@ -512,12 +448,15 @@ as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf, bo
 							}
 
 							table = as_partition_table_create(ns, cluster->n_partitions,
-															  regime != 0);
+								replica_size, regime != 0);
+						}
+						else {
+							table->replica_size = replica_size;
 						}
 						
 						// Decode partition bitmap and update client's view.
-						decode_and_update(begin, (uint32_t)len, table, node, master, regime,
-										  &regime_error);
+						decode_and_update(begin, (uint32_t)len, table, node, replica_index, regime,
+							&regime_error);
 
 						if (create) {
 							tables->tables[tables->size] = table;
@@ -547,12 +486,13 @@ as_partition_tables_dump(as_cluster* cluster)
 
 		for (uint32_t j = 0; j < pt->size; j++) {
 			as_partition* p = &pt->partitions[j];
-			as_node* master = as_node_load(&p->master);
-			as_node* prole = as_node_load(&p->prole);
-			const char* mstr = master ? as_node_get_address_string(master) : "null";
-			const char* pstr = prole ? as_node_get_address_string(prole) : "null";
+			as_log_info("%u,%u", j, p->regime);
 
-			as_log_info("%s[%u] %u,%s,%s", pt->ns, j, p->regime, mstr, pstr);
+			for (uint32_t k = 0; k < pt->replica_size; k++) {
+				as_node* node = as_node_load(&p->nodes[k]);
+				const char* str = node ? as_node_get_address_string(node) : "null";
+				as_log_info("%s", str);
+			}
 		}
 	}
 }

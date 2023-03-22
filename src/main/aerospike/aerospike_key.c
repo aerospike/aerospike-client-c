@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -44,6 +44,7 @@
 typedef struct as_read_info_s {
 	as_policy_replica replica;
 	uint8_t flags;
+	uint8_t replica_index;
 } as_read_info;
 
 /******************************************************************************
@@ -103,7 +104,8 @@ as_command_init_read(
 		cmd->replica = replica;
 		cmd->flags = AS_COMMAND_FLAGS_READ;
 	}
-	cmd->master = as_command_target_master(cmd->replica);
+	cmd->replica_size = pi->replica_size;
+	cmd->replica_index = as_replica_index_init_read(cmd->replica);
 }
 
 static inline as_status
@@ -139,7 +141,8 @@ as_command_init_write(
 	cmd->partition_id = pi->partition_id;
 	cmd->flags = 0;
 	cmd->replica = as_command_write_replica(replica);
-	cmd->master = true;
+	cmd->replica_size = pi->replica_size;
+	cmd->replica_index = 0;
 }
 
 static inline void
@@ -171,9 +174,7 @@ as_event_command_init_read(
 		ri->flags =  AS_ASYNC_FLAGS_READ;
 	}
 
-	if (as_command_target_master(ri->replica)) {
-		ri->flags |= AS_ASYNC_FLAGS_MASTER;
-	}
+	ri->replica_index = as_replica_index_init_read(ri->replica);
 }
 
 static inline uint32_t
@@ -269,9 +270,9 @@ aerospike_key_get_async(
 	size += filter_size;
 
 	as_event_command* cmd = as_async_record_command_create(
-		cluster, &policy->base, ri.replica, pi.ns, pi.partition, policy->deserialize,
-		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-		size, as_event_command_parse_result);
+		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
+		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
+		as_event_command_parse_result);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
@@ -381,9 +382,9 @@ aerospike_key_select_async(
 	}
 
 	as_event_command* cmd = as_async_record_command_create(
-		cluster, &policy->base, ri.replica, pi.ns, pi.partition, policy->deserialize,
-		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-		size, as_event_command_parse_result);
+		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
+		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
+		as_event_command_parse_result);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
@@ -472,9 +473,8 @@ aerospike_key_exists_async(
 	size += filter_size;
 
 	as_event_command* cmd = as_async_record_command_create(
-		cluster, &policy->base, ri.replica, pi.ns, pi.partition, false, policy->async_heap_rec,
-		ri.flags, listener, udata, event_loop, pipe_listener,
-		size, as_event_command_parse_result);
+		cluster, &policy->base, &pi, ri.replica, ri.replica_index, false, policy->async_heap_rec,
+		ri.flags, listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result);
 
 	uint8_t* p = as_command_write_header_read_header(cmd->buf, &policy->base, policy->read_mode_ap,
 		policy->read_mode_sc, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
@@ -635,7 +635,7 @@ aerospike_key_put_async_ex(
 	if (compression_threshold == 0 || (put.size <= compression_threshold)) {
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_write_command_create(
-			cluster, &policy->base, policy->replica, pi.ns, pi.partition, listener, udata, event_loop,
+			cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
 			pipe_listener, put.size, as_event_command_parse_header);
 
 		cmd->write_len = (uint32_t)as_put_write(&put, cmd->buf);
@@ -660,7 +660,7 @@ aerospike_key_put_async_ex(
 		// Allocate command with compressed upper bound.
 		size_t comp_size = as_command_compress_max_size(size);
 		as_event_command* cmd = as_async_write_command_create(
-			cluster, &policy->base, policy->replica, pi.ns, pi.partition, listener, udata, event_loop,
+			cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
 			pipe_listener, comp_size, as_event_command_parse_header);
 
 		// Compress buffer and execute.
@@ -768,7 +768,7 @@ aerospike_key_remove_async_ex(
 	size += filter_size;
 
 	as_event_command* cmd = as_async_write_command_create(
-		cluster, &policy->base, policy->replica, pi.ns, pi.partition, listener, udata, event_loop,
+		cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
 		pipe_listener, size, as_event_command_parse_header);
 
 	uint8_t* p = as_command_write_header_write(cmd->buf, &policy->base, policy->commit_level,
@@ -1037,16 +1037,16 @@ aerospike_key_operate_async(
 		// Send uncompressed command.
 		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
 			cmd = as_async_record_command_create(
-				cluster, &policy->base, policy->replica, pi.ns, pi.partition, policy->deserialize,
-				policy->async_heap_rec, AS_ASYNC_FLAGS_MASTER, listener, udata, event_loop,
-				pipe_listener, oper.size, as_event_command_parse_result);
+				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
+				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, oper.size,
+				as_event_command_parse_result);
 		}
 		else {
 			as_read_info ri;
 			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 			cmd = as_async_record_command_create(
-				cluster, &policy->base, ri.replica, pi.ns, pi.partition, policy->deserialize,
+				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
 				oper.size, as_event_command_parse_result);
 		}
@@ -1065,16 +1065,16 @@ aerospike_key_operate_async(
 
 		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
 			cmd = as_async_record_command_create(
-				cluster, &policy->base, policy->replica, pi.ns, pi.partition, policy->deserialize,
-				policy->async_heap_rec, AS_ASYNC_FLAGS_MASTER, listener, udata, event_loop,
-				pipe_listener, comp_size, as_event_command_parse_result);
+				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
+				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, comp_size,
+				as_event_command_parse_result);
 		}
 		else {
 			as_read_info ri;
 			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 			cmd = as_async_record_command_create(
-				cluster, &policy->base, ri.replica, pi.ns, pi.partition, policy->deserialize,
+				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
 				comp_size, as_event_command_parse_result);
 		}
@@ -1216,8 +1216,8 @@ aerospike_key_apply_async(
 
 	if (! (policy->base.compress && size > AS_COMPRESS_THRESHOLD)) {
 		// Send uncompressed command.
-		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base,
-			policy->replica, pi.ns, pi.partition, listener, udata, event_loop, pipe_listener, size,
+		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base, &pi,
+			policy->replica, listener, udata, event_loop, pipe_listener, size,
 			as_event_command_parse_success_failure);
 
 		cmd->write_len = (uint32_t)as_apply_write(&ap, cmd->buf);
@@ -1239,9 +1239,9 @@ aerospike_key_apply_async(
 		// Allocate command with compressed upper bound.
 		size_t comp_size = as_command_compress_max_size(size);
 
-		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base,
-			policy->replica, pi.ns, pi.partition, listener, udata, event_loop, pipe_listener,
-			comp_size, as_event_command_parse_success_failure);
+		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base, &pi,
+			policy->replica, listener, udata, event_loop, pipe_listener, comp_size,
+			as_event_command_parse_success_failure);
 
 		// Compress buffer and execute.
 		status = as_command_compress(err, buf, size, cmd->buf, &comp_size);

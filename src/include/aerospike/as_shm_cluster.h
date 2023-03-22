@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -36,55 +36,46 @@ extern "C" {
  */
 typedef struct as_node_shm_s {
 	/**
-	 * @private
 	 * Node name.
 	 */
 	char name[AS_NODE_NAME_SIZE];
 		
 	/**
-	 * @private
 	 * Lightweight node read/write lock.
 	 */
 	as_swlock lock;
 	
 	/**
-	 * @private
 	 * Socket address.
 	 */
 	struct sockaddr_storage addr;
 
 	/**
-	 * @private
 	 * TLS certificate name (needed for TLS only).
 	 */
 	char tls_name[AS_HOSTNAME_SIZE];
 	
 	/**
-	 * @private
 	 * Features supported by server.  Stored in bitmap.
 	 */
 	uint32_t features;
 
 	/**
-	 * @private
 	 * Server's generation count for partition rebalancing.
 	 */
 	uint32_t rebalance_generation;
 
 	/**
-	 * @private
 	 * Rack ID.
 	 */
 	int rack_id;
 
 	/**
-	 * @private
 	 * Is node currently active.
 	 */
 	uint8_t active;
 	
 	/**
-	 * @private
 	 * Pad to 8 byte boundary.
 	 */
 	char pad[3];
@@ -96,28 +87,14 @@ typedef struct as_node_shm_s {
  */
 typedef struct as_partition_shm_s {
 	/**
-	 * @private
-	 * Master node index offset.
+	 * Node offsets array.
 	 */
-	uint32_t master;
+	uint32_t nodes[AS_MAX_REPLICATION_FACTOR];
 
 	/**
-	 * @private
-	 * Prole node index offset.
-	 */
-	uint32_t prole;
-
-	/**
-	 * @private
 	 * Current regime for strong consistency mode.
 	 */
 	uint32_t regime;
-
-	/**
-	 * @private
-	 * Pad to 8 byte boundary.
-	 */
-	uint32_t pad;
 } as_partition_shm;
 
 /**
@@ -126,25 +103,26 @@ typedef struct as_partition_shm_s {
  */
 typedef struct as_partition_table_shm_s {
 	/**
-	 * @private
 	 * Namespace name.
 	 */
 	char ns[AS_MAX_NAMESPACE_SIZE];
-	
+
 	/**
-	 * @private
+	 * Replication factor.
+	 */
+	uint8_t replica_size;
+
+	/**
 	 * Is namespace running in strong consistency mode.
 	 */
 	uint8_t sc_mode;
 
 	/**
-	 * @private
 	 * Pad to 8 byte boundary.
 	 */
-	char pad[7];
+	char pad[6];
 
 	/**
-	 * @private
 	 * Array of partitions for a given namespace.
 	 */
 	as_partition_shm partitions[];
@@ -160,97 +138,81 @@ typedef struct as_partition_table_shm_s {
  */
 typedef struct as_cluster_shm_s {
 	/**
-	 * @private
 	 * Last time cluster was tended in milliseconds since epoch.
 	 */
 	uint64_t timestamp;
 
 	/**
-	 * @private
 	 * Cluster tend owner process id.
 	 */
 	uint32_t owner_pid;
 	
 	/**
-	 * @private
 	 * Current size of nodes array.
 	 */
 	uint32_t nodes_size;
 	
 	/**
-	 * @private
 	 * Maximum size of nodes array.
 	 */
 	uint32_t nodes_capacity;
 	
 	/**
-	 * @private
 	 * Nodes generation count.  Incremented whenever a node is added or removed from cluster.
 	 */
 	uint32_t nodes_gen;
 	
 	/**
-	 * @private
 	 * Total number of data partitions used by cluster.
 	 */
 	uint32_t n_partitions;
 
 	/**
-	 * @private
 	 * Current size of partition tables array.
 	 */
 	uint32_t partition_tables_size;
 	
 	/**
-	 * @private
 	 * Maximum size of partition tables array.
 	 */
 	uint32_t partition_tables_capacity;
 
 	/**
-	 * @private
 	 * Cluster offset to partition tables at the end of this structure.
 	 */
 	uint32_t partition_tables_offset;
 	
 	/**
-	 * @private
 	 * Bytes required to hold one partition_table.
 	 */
 	uint32_t partition_table_byte_size;
 
 	/**
-	 * @private
 	 * Spin lock for taking over from a dead cluster tender.
 	 */
 	as_spinlock take_over_lock;
 	
 	/**
-	 * @private
 	 * Shared memory master mutex lock.  Used to determine cluster tend owner.
 	 */
 	uint8_t lock;
 	
 	/**
-	 * @private
 	 * Has shared memory been fully initialized and populated.
 	 */
 	uint8_t ready;
 	
 	/**
-	 * @private
 	 * Pad to 4 byte boundary.
 	 */
 	char pad[2];
 
 	/**
-	 * @private
 	 * Cluster rebalance generation count.
 	 */
 	uint32_t rebalance_gen;
 
 	/*
-	 * @private
 	 * Dynamically allocated node array.
 	 */
 	as_node_shm nodes[];
@@ -264,20 +226,17 @@ typedef struct as_cluster_shm_s {
  */
 typedef struct as_shm_info_s {
 	/**
-	 * @private
 	 * Pointer to cluster shared memory.
 	 */
 	as_cluster_shm* cluster_shm;
 	
 	/**
-	 * @private
-	 * Array of pointers to local nodes.  
+	 * Array of pointers to local nodes.
 	 * Array index offsets are synchronized with shared memory node offsets.
 	 */
 	as_node** local_nodes;
 	
 	/**
-	 * @private
 	 * Shared memory identifier.
 	 */
 #if !defined(_MSC_VER)
@@ -287,14 +246,12 @@ typedef struct as_shm_info_s {
 #endif
 
 	/**
-	 * @private
 	 * Take over shared memory cluster tending if the cluster hasn't been tended by this
 	 * millisecond threshold.
 	 */
 	uint32_t takeover_threshold_ms;
 	
 	/**
-	 * @private
 	 * Is this process responsible for performing cluster tending.
 	 */
 	volatile bool is_tend_master;
@@ -353,7 +310,7 @@ as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns);
 void
 as_shm_update_partitions(
 	as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node,
-	bool master, uint32_t regime
+	uint8_t replica_size, uint8_t replica_index, uint32_t regime
 	);
 
 /**

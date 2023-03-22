@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -379,7 +379,9 @@ as_shm_reset_racks_node(as_cluster* cluster, as_error* err, as_node* node)
 }
 
 static void
-as_shm_reset_racks(as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, as_error* err)
+as_shm_reset_racks(
+	as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, as_error* err
+	)
 {
 	// Per namespace racks not stored in shared memory.
 	// Retrieve racks from server on prole tender.
@@ -441,18 +443,23 @@ as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns)
 }
 
 static as_partition_table_shm*
-as_shm_add_partition_table(as_cluster_shm* cluster_shm, const char* ns, bool sc_mode)
+as_shm_add_partition_table(
+	as_cluster_shm* cluster_shm, const char* ns, uint8_t replica_size, bool sc_mode
+	)
 {
 	if (cluster_shm->partition_tables_size >= cluster_shm->partition_tables_capacity) {
 		// There are no more partition table slots available in shared memory.
-		as_log_error("Failed to add partition table namespace %s. Shared memory capacity exceeeded: %d",
-				 ns, cluster_shm->partition_tables_capacity);
+		as_log_error(
+			"Failed to add partition table namespace %s. Shared memory capacity exceeeded: %u",
+			ns, cluster_shm->partition_tables_capacity);
 		return NULL;
 	}
 	
 	as_partition_table_shm* tables = as_shm_get_partition_tables(cluster_shm);
-	as_partition_table_shm* table = as_shm_get_partition_table(cluster_shm, tables, cluster_shm->partition_tables_size);
+	as_partition_table_shm* table = as_shm_get_partition_table(cluster_shm, tables,
+		cluster_shm->partition_tables_size);
 	as_strncpy(table->ns, ns, AS_MAX_NAMESPACE_SIZE);
+	table->replica_size = replica_size;
 	table->sc_mode = sc_mode;
 	
 	// Increment partition tables array size.
@@ -472,7 +479,10 @@ as_shm_force_replicas_refresh(as_shm_info* shm_info, uint32_t node_index)
 }
 
 static void
-as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, as_partition_table_shm* table, uint32_t node_index, bool master, uint32_t regime)
+as_shm_decode_and_update(
+	as_shm_info* shm_info, char* bitmap_b64, int64_t len, as_partition_table_shm* table,
+	uint32_t node_index, uint8_t replica_index, uint32_t regime
+	)
 {
 	// Size allows for padding - is actual size rounded up to multiple of 3.
 	uint8_t* bitmap = (uint8_t*)alloca(cf_b64_decoded_buf_size((uint32_t)len));
@@ -493,22 +503,14 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 					as_store_uint32(&p->regime, regime);
 				}
 
-				if (master) {
-					// node_index starts at one (zero indicates unset).
-					if (node_index != p->master) {
-						if (p->master) {
-							as_shm_force_replicas_refresh(shm_info, p->master);
-						}
-						as_store_uint32_rls(&p->master, node_index);
+				uint32_t node_index_old = p->nodes[replica_index];
+
+				if (node_index != node_index_old) {
+					// node index starts at one (zero indicates unset).
+					if (node_index_old) {
+						as_shm_force_replicas_refresh(shm_info, node_index_old);
 					}
-				}
-				else {
-					if (node_index != p->prole) {
-						if (p->prole) {
-							as_shm_force_replicas_refresh(shm_info, p->prole);
-						}
-						as_store_uint32_rls(&p->prole, node_index);
-					}
+					as_store_uint32_rls(&p->nodes[replica_index], node_index);
 				}
 			}
 		}
@@ -516,23 +518,29 @@ as_shm_decode_and_update(as_shm_info* shm_info, char* bitmap_b64, int64_t len, a
 }
 
 void
-as_shm_update_partitions(as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node, bool master, uint32_t regime)
+as_shm_update_partitions(
+	as_shm_info* shm_info, const char* ns, char* bitmap_b64, int64_t len, as_node* node,
+	uint8_t replica_size, uint8_t replica_index, uint32_t regime
+	)
 {
 	as_cluster_shm* cluster_shm = shm_info->cluster_shm;
 	as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
 	
 	if (! table) {
-		table = as_shm_add_partition_table(cluster_shm, ns, regime != 0);
+		table = as_shm_add_partition_table(cluster_shm, ns, replica_size, regime != 0);
 	}
 	
 	if (table) {
-		as_shm_decode_and_update(shm_info, bitmap_b64, len, table, node->index + 1, master, regime);
+		as_shm_decode_and_update(shm_info, bitmap_b64, len, table, node->index + 1, replica_index,
+			regime);
 	}
 }
 
-static inline as_node*
-as_shm_try_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
+static as_node*
+as_shm_get_replica_master(as_partition_shm* p, as_node** local_nodes)
 {
+	uint32_t node_index = as_load_uint32_acq(&p->nodes[0]);
+
 	// node_index starts at one (zero indicates unset).
 	if (node_index) {
 		as_node* node = as_node_load(&local_nodes[node_index-1]);
@@ -545,84 +553,49 @@ as_shm_try_master(as_cluster* cluster, as_node** local_nodes, uint32_t node_inde
 	return NULL;
 }
 
-static inline as_node*
-as_shm_try_node(as_cluster* cluster, as_node** local_nodes, uint32_t node_index)
+static as_node*
+as_shm_get_replica_sequence(
+	as_node** local_nodes, as_partition_shm* p, uint8_t replica_size, uint8_t* replica_index
+	)
 {
-	// node_index starts at one (zero indicates unset).
-	if (node_index) {
-		as_node* node = as_node_load(&local_nodes[node_index-1]);
+	for (uint8_t i = 0; i < replica_size; i++) {
+		uint8_t index = (*replica_index) % replica_size;
+		uint32_t node_index = as_load_uint32_acq(&p->nodes[index]);
 
-		if (node && as_node_is_active(node)) {
-			return node;
+		// node_index starts at one (zero indicates unset).
+		if (node_index) {
+			as_node* node = as_node_load(&local_nodes[node_index-1]);
+
+			if (node && as_node_is_active(node)) {
+				return node;
+			}
 		}
+		(*replica_index)++;
 	}
 	return NULL;
 }
 
 static as_node*
-as_shm_try_node_alternate(
-	as_cluster* cluster, as_node** local_nodes, uint32_t chosen_index, uint32_t alternate_index
-	)
-{
-	// index values start at one (zero indicates unset).
-	as_node* chosen = as_node_load(&local_nodes[chosen_index-1]);
-	
-	// Make volatile reference so changes to tend thread will be reflected in this thread.
-	if (chosen && as_node_is_active(chosen)) {
-		return chosen;
-	}
-	return as_shm_try_node(cluster, local_nodes, alternate_index);
-}
-
-static as_node*
-shm_get_sequence_node(
-	as_cluster* cluster, as_node** local_nodes, as_partition_shm* p, bool use_master
-	)
-{
-	uint32_t master = as_load_uint32_acq(&p->master);
-	uint32_t prole = as_load_uint32_acq(&p->prole);
-
-	if (! prole) {
-		return as_shm_try_node(cluster, local_nodes, master);
-	}
-
-	if (! master) {
-		return as_shm_try_node(cluster, local_nodes, prole);
-	}
-
-	if (use_master) {
-		return as_shm_try_node_alternate(cluster, local_nodes, master, prole);
-	}
-	return as_shm_try_node_alternate(cluster, local_nodes, prole, master);
-}
-
-static as_node*
-shm_prefer_rack_node(
+as_shm_get_replica_rack(
 	as_cluster* cluster, as_node** local_nodes, const char* ns, as_partition_shm* p,
-	as_node* prev_node, bool use_master
+	as_node* prev_node, uint8_t replica_size, uint8_t* replica_index
 	)
 {
 	as_node_shm* nodes_shm = cluster->shm_info->cluster_shm->nodes;
-	uint32_t node_indexes[2];
-
-	if (use_master) {
-		node_indexes[0] = as_load_uint32_acq(&p->master);
-		node_indexes[1] = as_load_uint32_acq(&p->prole);
-	}
-	else {
-		node_indexes[0] = as_load_uint32_acq(&p->prole);
-		node_indexes[1] = as_load_uint32_acq(&p->master);
-	}
-
 	as_node* fallback1 = NULL;
 	as_node* fallback2 = NULL;
-	uint32_t max = cluster->rack_ids_size;
+	uint32_t replica_max = replica_size;
+	uint32_t seq1 = 0;
+	uint32_t seq2 = 0;
+	uint32_t rack_max = cluster->rack_ids_size;
 
-	for (uint32_t i = 0; i < max; i++) {
+	for (uint32_t i = 0; i < rack_max; i++) {
 		int search_id = cluster->rack_ids[i];
+		uint32_t seq = (*replica_index);
 
-		for (uint32_t j = 0; j < 2; j++) {
-			uint32_t node_index = node_indexes[j];
+		for (uint32_t j = 0; j < replica_max; j++, seq++) {
+			uint32_t index = seq % replica_max;
+			uint32_t node_index = as_load_uint32_acq(&p->nodes[index]);
 
 			// node_index starts at one (zero indicates unset).
 			if (! node_index) {
@@ -653,6 +626,7 @@ shm_prefer_rack_node(
 				// Previous node is the least desirable fallback.
 				if (! fallback2) {
 					fallback2 = node;
+					seq2 = index;
 				}
 				continue;
 			}
@@ -668,17 +642,20 @@ shm_prefer_rack_node(
 			// Node meets all criteria except not on same rack.
 			if (! fallback1) {
 				fallback1 = node;
+				seq1 = index;
 			}
 		}
 	}
 
 	// Return node on a different rack if it exists.
 	if (fallback1) {
+		*replica_index = (uint8_t)seq1;
 		return fallback1;
 	}
 
 	// Return previous node if it still exists.
 	if (fallback2) {
+		*replica_index = (uint8_t)seq2;
 		return fallback2;
 	}
 	return NULL;
@@ -687,27 +664,23 @@ shm_prefer_rack_node(
 as_node*
 as_partition_shm_get_node(
 	as_cluster* cluster, const char* ns, as_partition_shm* p, as_node* prev_node,
-	as_policy_replica replica, bool use_master
+	as_policy_replica replica, uint8_t replica_size, uint8_t* replica_index
 	)
 {
 	as_node** local_nodes = cluster->shm_info->local_nodes;
 
 	switch (replica) {
-		case AS_POLICY_REPLICA_MASTER: {
-			// Make volatile reference so changes to tend thread will be reflected in this thread.
-			uint32_t master = as_load_uint32_acq(&p->master);
-			return as_shm_try_master(cluster, local_nodes, master);
-		}
+		case AS_POLICY_REPLICA_MASTER:
+			return as_shm_get_replica_master(p, local_nodes);
 
 		default:
 		case AS_POLICY_REPLICA_ANY:
-		case AS_POLICY_REPLICA_SEQUENCE: {
-			return shm_get_sequence_node(cluster, local_nodes, p, use_master);
-		}
+		case AS_POLICY_REPLICA_SEQUENCE:
+			return as_shm_get_replica_sequence(local_nodes, p, replica_size, replica_index);
 
-		case AS_POLICY_REPLICA_PREFER_RACK: {
-			return shm_prefer_rack_node(cluster, local_nodes, ns, p, prev_node, use_master);
-		}
+		case AS_POLICY_REPLICA_PREFER_RACK:
+			return as_shm_get_replica_rack(cluster, local_nodes, ns, p, prev_node, replica_size,
+				replica_index);
 	}
 }
 
@@ -735,9 +708,11 @@ as_shm_reset_rebalance_gen(as_shm_info* shm_info, as_cluster_shm* cluster_shm)
 }
 
 static void
-as_shm_takeover_cluster(as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, uint32_t pid)
+as_shm_takeover_cluster(
+	as_cluster* cluster, as_shm_info* shm_info, as_cluster_shm* cluster_shm, uint32_t pid
+	)
 {
-	as_log_info("Take over shared memory cluster: %d", pid);
+	as_log_info("Take over shared memory cluster: %u", pid);
 	as_store_uint32(&cluster_shm->owner_pid, pid);
 	shm_info->is_tend_master = true;
 
@@ -896,11 +871,11 @@ as_shm_wait_till_ready(as_cluster* cluster, as_cluster_shm* cluster_shm, uint32_
 		as_sleep(interval_ms);
 		
 		if (as_load_uint8_acq(&cluster_shm->ready)) {
-			as_log_info("Follow cluster initialized: %d", pid);
+			as_log_info("Follow cluster initialized: %u", pid);
 			return;
 		}
 	} while (cf_getms() < limit);
-	as_log_warn("Follow cluster initialize timed out: %d", pid);
+	as_log_warn("Follow cluster initialize timed out: %u", pid);
 }
 
 as_status
@@ -913,7 +888,8 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	cluster->n_partitions = 4096;
 	
 	uint32_t size = sizeof(as_cluster_shm) + (sizeof(as_node_shm) * config->shm_max_nodes) +
-		((sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions)) * config->shm_max_namespaces);
+		((sizeof(as_partition_table_shm) + (sizeof(as_partition_shm) * cluster->n_partitions)) *
+		config->shm_max_namespaces);
 	
 	uint32_t pid = getpid();
 
@@ -922,17 +898,18 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	int id = shmget(config->shm_key, size, IPC_CREAT | IPC_EXCL | 0666);
 
 	if (id >= 0) {
-		// Exclusive shared memory lock succeeded.
-		// shmget docs say shared memory create initializes memory to zero, so memset is not necessary.
+		// Exclusive shared memory lock succeeded. shmget docs say shared memory create initializes
+		// memory to zero, so memset is not necessary.
 		// memset(cluster_shm, 0, size);
-		as_log_info("Create shared memory cluster: %d", pid);
+		as_log_info("Create shared memory cluster: %u", pid);
 	}
 	else if (errno == EEXIST) {
 		// Some other process has created shared memory.  Use that shared memory.
 		id = shmget(config->shm_key, size, IPC_CREAT | 0666);
 		
 		if (id < 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory get failed: %s pid: %d", strerror(errno), pid);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"Shared memory get failed: %s pid: %u", strerror(errno), pid);
 		}
 	}
 	else if (errno == ENOMEM) {
@@ -950,14 +927,16 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	}
 	else {
 		// Exclusive shared memory lock failed.
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory get failed: %s pid: %d", strerror(errno), pid);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory get failed: %s pid: %u",
+			strerror(errno), pid);
 	}
 
 	// Attach to shared memory.
 	as_cluster_shm* cluster_shm = shmat(id, NULL, 0);
 
 	if (cluster_shm == (void*)-1) {
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %s pid: %d", strerror(errno), pid);		
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %s pid: %u",
+			strerror(errno), pid);
 		// Try removing the shared memory - it will fail if any other process is still attached.
 		shmctl(id, IPC_RMID, 0);
 		return err->code;
@@ -979,11 +958,11 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 
 		if (id && id != INVALID_HANDLE_VALUE) {
 			if (code == 0) {
-				as_log_info("Create shared memory cluster: %s pid: %d", name, pid);
+				as_log_info("Create shared memory cluster: %s pid: %u", name, pid);
 				break;
 			}
 			else if (code == ERROR_ALREADY_EXISTS) {
-				as_log_info("Follow shared memory cluster: %s pid: %d", name, pid);
+				as_log_info("Follow shared memory cluster: %s pid: %u", name, pid);
 				// Handle should be handle of file that was already created.
 				// There is no need to reopen.
 				// id = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, name);
@@ -993,13 +972,14 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	}
 
 	if (i >= 2) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Shared memory create/get failed: %s pid: %d code: %d", name, pid, code);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Shared memory create/get failed: %s pid: %u code: %d", name, pid, code);
 	}
 
 	as_cluster_shm* cluster_shm = MapViewOfFile(id, FILE_MAP_ALL_ACCESS, 0, 0, size);
 
 	if (cluster_shm == NULL) {
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %d pid: %d", GetLastError(), pid);
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error attaching to shared memory: %d pid: %u", GetLastError(), pid);
 		CloseHandle(id);
 		return err->code;
 	}
@@ -1015,7 +995,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	cluster->shm_info = shm_info;
 
 	if (shm_info->is_tend_master) {
-		as_log_info("Take over shared memory cluster: %d", pid);
+		as_log_info("Take over shared memory cluster: %u", pid);
 		as_store_uint64(&cluster_shm->timestamp, cf_getms());
 		as_store_uint32(&cluster_shm->owner_pid, pid);
 
@@ -1024,7 +1004,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 
 		// Ensure shared memory cluster is fully initialized.
 		if (as_load_uint8_acq(&cluster_shm->ready)) {
-			as_log_info("Cluster already initialized: %d", pid);
+			as_log_info("Cluster already initialized: %u", pid);
 
 			// Validate that the already initialized shared memory has the expected offset and size.
 			if (! (cluster_shm->partition_tables_capacity == config->shm_max_namespaces &&
@@ -1050,7 +1030,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 			as_cluster_add_seeds(cluster);
 		}
 		else {
-			as_log_info("Initialize cluster: %d", pid);
+			as_log_info("Initialize cluster: %u", pid);
 			cluster_shm->n_partitions = cluster->n_partitions;
 			cluster_shm->nodes_capacity = config->shm_max_nodes;
 			cluster_shm->partition_tables_capacity = config->shm_max_namespaces;
@@ -1068,7 +1048,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		}
 	}
 	else {
-		as_log_info("Follow shared memory cluster: %d", pid);
+		as_log_info("Follow shared memory cluster: %u", pid);
 
 		// Prole should wait until master has fully initialized shared memory.
 		if (! as_load_uint8_acq(&cluster_shm->ready)) {
@@ -1090,7 +1070,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 	}
 
 	if (pthread_create(&cluster->tend_thread, &attr, as_shm_tender, cluster) != 0) {
-		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s pid: %d",
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s pid: %u",
 						strerror(errno), pid);
 		pthread_attr_destroy(&attr);
 		as_shm_destroy(cluster);
@@ -1112,10 +1092,17 @@ as_shm_destroy(as_cluster* cluster)
 #if !defined(_MSC_VER)
 	// Detach shared memory.
 	shmdt(shm_info->cluster_shm);
-	
-	// Try removing the shared memory - it will fail if any other process is still attached.
-	// Failure is normal behavior, so don't check return code.
-	shmctl(shm_info->shm_id, IPC_RMID, 0);
+
+	// Determine how many processes are still attached to shared memory.
+	struct shmid_ds shm_stat;
+	int rv = shmctl(shm_info->shm_id, IPC_STAT, &shm_stat);
+
+	// If no more processes are attached, remove shared memory.
+	if (rv == 0 && shm_stat.shm_nattch == 0) {
+		uint32_t pid = getpid();
+		as_log_info("Remove shared memory segment: %u", pid);
+		shmctl(shm_info->shm_id, IPC_RMID, 0);
+	}
 #else
 	if (!UnmapViewOfFile(shm_info->cluster_shm)) {
 		as_log_error("Failed to detach from shared memory");

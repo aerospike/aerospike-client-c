@@ -233,7 +233,6 @@ insert_records(aerospike* p_as)
 struct counter {
 	uint32_t count;
 	uint32_t max;
-	as_digest digest;
 };
 
 static bool
@@ -423,6 +422,84 @@ query_terminate_resume(aerospike* p_as, as_error* err)
 	return status;
 }
 
+static bool
+compare_partitions(as_partitions_status* p1, as_partitions_status* p2)
+{
+	if (p1->ref_count != p2->ref_count) {
+		printf("refcount\n");
+		return false;
+	}
+
+	if (p1->part_begin != p2->part_begin) {
+		printf("part_begin\n");
+		return false;
+	}
+
+	if (p1->part_count != p2->part_count) {
+		printf("part_count\n");
+		return false;
+	}
+
+	if (p1->done != p2->done) {
+		printf("done\n");
+		return false;
+	}
+
+	if (p1->retry != p2->retry) {
+		printf("retry\n");
+		return false;
+	}
+
+	for (uint16_t i = 0; i < p1->part_count; i++) {
+		as_partition_status* ps1 = &p1->parts[i];
+		as_partition_status* ps2 = &p2->parts[i];
+
+		if (ps1->part_id != ps2->part_id) {
+			printf("part_id %d\n", i);
+			return false;
+		}
+
+		if (ps1->replica_index != ps2->replica_index) {
+			printf("replica_index %d\n", i);
+			return false;
+		}
+
+		if (ps1->unavailable != ps2->unavailable) {
+			printf("unavailable %d\n", i);
+			return false;
+		}
+
+		if (ps1->retry != ps2->retry) {
+			printf("retry %d\n", i);
+			return false;
+		}
+
+		if (ps1->digest.init != ps2->digest.init) {
+			printf("digest.init %d\n", i);
+			return false;
+		}
+
+		if (memcmp(ps1->digest.value, ps2->digest.value, AS_DIGEST_VALUE_SIZE) != 0) {
+			printf("digest.value %d\n", i);
+			return false;
+		}
+
+		if (ps1->bval != ps2->bval) {
+			printf("bval %d\n", i);
+			return false;
+		}
+
+		/* Always different
+		if (ps1->master_node != ps2->master_node) {
+			printf("master_node %d\n", i);
+			return false;
+		}
+		*/
+	}
+	return true;
+}
+
+
 as_status
 query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 {
@@ -460,6 +537,8 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	LOG("terminate records returned: %u", c.count);
 	LOG("start query resume");
 
+	as_partitions_status* p1 = as_partitions_status_reserve(query.parts_all);
+
 	// Store completion status of all partitions to bytes.
 	size_t bytes_size;
 	uint8_t* bytes = as_partitions_status_to_bytes(query.parts_all, &bytes_size);
@@ -476,6 +555,9 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 
 	// Free bytes
 	free(bytes);
+
+	printf("COMPARE\n");
+	compare_partitions(p1, parts_all);
 
 	// Use partition filter to set parts_all.
 	// Calling as_query_set_partitions(&query_resume, parts_all) works too.

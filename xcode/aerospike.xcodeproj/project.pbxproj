@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BF00CA9E29CBC59D00B369F8 /* as_partition_filter.c in Sources */ = {isa = PBXBuildFile; fileRef = BF00CA9D29CBC59D00B369F8 /* as_partition_filter.c */; };
 		BF162EBE2413000B001B1747 /* as_cdt_order.h in Headers */ = {isa = PBXBuildFile; fileRef = BF162EBD2413000B001B1747 /* as_cdt_order.h */; };
 		BF1C2ADF20BE031B00868695 /* aerospike_stats.h in Headers */ = {isa = PBXBuildFile; fileRef = BF1C2ADE20BE031B00868695 /* aerospike_stats.h */; };
 		BF1C2AE120BE089700868695 /* aerospike_stats.c in Sources */ = {isa = PBXBuildFile; fileRef = BF1C2AE020BE089700868695 /* aerospike_stats.c */; };
@@ -185,6 +186,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		BF00CA9D29CBC59D00B369F8 /* as_partition_filter.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_partition_filter.c; path = ../src/main/aerospike/as_partition_filter.c; sourceTree = "<group>"; };
 		BF07F63718B4252500CE1850 /* libaerospike.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libaerospike.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF162EBD2413000B001B1747 /* as_cdt_order.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_cdt_order.h; path = ../src/include/aerospike/as_cdt_order.h; sourceTree = "<group>"; };
 		BF1C2ADE20BE031B00868695 /* aerospike_stats.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_stats.h; path = ../src/include/aerospike/aerospike_stats.h; sourceTree = "<group>"; };
@@ -445,6 +447,7 @@
 				BFBB3C8E192D729A00251B15 /* as_node.c */,
 				BF2AA7C718BEBFA400E54AF3 /* as_operations.c */,
 				BFBA916A1914344B00AADA9A /* as_partition.c */,
+				BF00CA9D29CBC59D00B369F8 /* as_partition_filter.c */,
 				BF32147023E8F9C6004A7E19 /* as_partition_tracker.c */,
 				BF4E4E441D50150700BEEF94 /* as_peers.c */,
 				BF6FE4321BF2748E00175BF8 /* as_pipe.c */,
@@ -850,6 +853,7 @@
 				BF2AA7ED18BEBFA500E54AF3 /* as_operations.c in Sources */,
 				BFBBBAEF18B6D9D0003FFD88 /* cf_digest.c in Sources */,
 				BFBA104D18B7D8B300A64E68 /* as_arraylist_hooks.c in Sources */,
+				BF00CA9E29CBC59D00B369F8 /* as_partition_filter.c in Sources */,
 				BF2AA7E418BEBFA500E54AF3 /* aerospike_udf.c in Sources */,
 				BFBA105A18B7D8B300A64E68 /* as_list.c in Sources */,
 				BF1C2AE120BE089700868695 /* aerospike_stats.c in Sources */,
@@ -1025,9 +1029,7 @@
 					/opt/homebrew/opt/openssl/include,
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				OTHER_CFLAGS = (
-					"-D_DARWIN_UNLIMITED_SELECT",
-				);
+				OTHER_CFLAGS = "-D_DARWIN_UNLIMITED_SELECT";
 				OTHER_LDFLAGS = (
 					"-L/usr/local/lib",
 					"-L../modules/lua/src",
@@ -1055,9 +1057,7 @@
 					/opt/homebrew/opt/openssl/include,
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				OTHER_CFLAGS = (
-					"-D_DARWIN_UNLIMITED_SELECT",
-				);
+				OTHER_CFLAGS = "-D_DARWIN_UNLIMITED_SELECT";
 				OTHER_LDFLAGS = (
 					"-L/usr/local/lib",
 					"-L../modules/lua/src",

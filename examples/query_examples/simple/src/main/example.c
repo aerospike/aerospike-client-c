@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2022 by Aerospike.
+ * Copyright 2008-2023 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -56,6 +56,7 @@ void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
 as_status query_pages(aerospike* p_as, as_error* err);
 as_status query_terminate_resume(aerospike* p_as, as_error* err);
+as_status query_terminate_resume_with_serialization(aerospike* p_as, as_error* err);
 
 //==========================================================
 // SIMPLE QUERY Examples
@@ -132,6 +133,13 @@ main(int argc, char* argv[])
 	// Run query terminate/resume.
 	if (query_terminate_resume(&as, &err) != AEROSPIKE_OK) {
 		LOG("query_terminate_resume() returned %d - %s", err.code, err.message);
+		cleanup(&as);
+		exit(-1);
+	}
+
+	// Run query terminate/resume with serialization.
+	if (query_terminate_resume_with_serialization(&as, &err) != AEROSPIKE_OK) {
+		LOG("query_terminate_resume_with_serialization() returned %d - %s", err.code, err.message);
 		cleanup(&as);
 		exit(-1);
 	}
@@ -351,7 +359,6 @@ query_resume_cb(const as_val* val, void* udata)
 	return true;
 }
 
-
 as_status
 query_terminate_resume(aerospike* p_as, as_error* err)
 {
@@ -396,6 +403,79 @@ query_terminate_resume(aerospike* p_as, as_error* err)
 	// Resume query using new query instance.
 	as_query query_resume;
 	as_query_init(&query_resume, g_namespace, set);
+
+	// Use partition filter to set parts_all.
+	// Calling as_query_set_partitions(&query_resume, parts_all) works too.
+	// as_partition_filter_set_partitions() is just a wrapper for eventually calling
+	// as_query_set_partitions().
+	as_partition_filter pf;
+	as_partition_filter_set_partitions(&pf, parts_all);
+
+	c.count = 0;
+	c.max = 0;
+
+	status = aerospike_query_partitions(p_as, err, NULL, &query_resume, &pf, query_resume_cb, &c);
+
+	LOG("resume records returned: %u", c.count);
+
+	as_partitions_status_release(parts_all);
+	as_query_destroy(&query_resume);
+	return status;
+}
+
+as_status
+query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
+{
+	// Same as query_terminate_resume(), but the query is saved to bytes that could
+	// be resumed in a separate process.
+	const char* set = "queryresume";
+	uint32_t total_size = 200;
+
+	LOG("write records for query terminate/resume with serialization");
+	as_status status = insert_records_for_query_page(p_as, err, set, total_size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	LOG("records written: %u", total_size);
+	LOG("start query terminate");
+
+	struct counter c;
+	c.count = 0;
+	c.max = 50;
+
+	as_query query;
+	as_query_init(&query, g_namespace, set);
+	as_query_set_paginate(&query, true);
+
+	// Start query. Query will be terminated early in callback.
+	status = aerospike_query_foreach(p_as, err, NULL, &query, query_terminate_cb, &c);
+
+	if (status != AEROSPIKE_OK) {
+		as_query_destroy(&query);
+		return status;
+	}
+
+	LOG("terminate records returned: %u", c.count);
+	LOG("start query resume");
+
+	// Store completion status of all partitions to bytes.
+	size_t bytes_size;
+	uint8_t* bytes = as_partitions_status_to_bytes(query.parts_all, &bytes_size);
+
+	// Destroy query
+	as_query_destroy(&query);
+
+	// Resume query using new query instance.
+	as_query query_resume;
+	as_query_init(&query_resume, g_namespace, set);
+
+	// Restore status of all partitions from serialized bytes.
+	as_partitions_status* parts_all = as_partitions_status_from_bytes(bytes, bytes_size);
+
+	// Free bytes
+	free(bytes);
 
 	// Use partition filter to set parts_all.
 	// Calling as_query_set_partitions(&query_resume, parts_all) works too.

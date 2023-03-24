@@ -38,8 +38,10 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 	for (uint16_t i = 0; i < part_count; i++) {
 		as_partition_status* ps = &parts_all->parts[i];
 		ps->part_id = part_begin + i;
+		ps->unavailable = false;
 		ps->retry = true;
 		ps->digest.init = false;
+		ps->bval = 0;
 	}
 
 	if (digest && digest->init) {

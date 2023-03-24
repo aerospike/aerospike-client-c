@@ -323,6 +323,26 @@ query_pages(aerospike* p_as, as_error* err)
 // Query Terminate and Resume
 //
 
+struct page_counter {
+	as_spinlock lock;
+	uint32_t count;
+	uint32_t max;
+};
+
+static void
+page_counter_init(struct page_counter* c, uint32_t max)
+{
+	as_spinlock_init(&c->lock);
+	c->count = 0;
+	c->max = max;
+}
+
+static void
+page_counter_reset(struct page_counter* c)
+{
+	c->count = 0;
+}
+
 static bool
 query_terminate_cb(const as_val* val, void* udata)
 {
@@ -331,18 +351,22 @@ query_terminate_cb(const as_val* val, void* udata)
 		return true;
 	}
 
-	struct counter* c = udata;
+	struct page_counter* c = udata;
+	bool rv;
 
-	// query.concurrent is false, so atomics are not necessary.
-	if (c->count >= c->max) {
+	as_spinlock_lock(&c->lock);
+	if (c->count < c->max) {
+		c->count++;
+		rv = true;
+	}
+	else {
 		// Since we are terminating the query here, the query last digest
 		// will not be set and the current record will be returned again
 		// if the query resumes at a later time.
-		return false;
+		rv = false;
 	}
-
-	c->count++;
-	return true;
+	as_spinlock_unlock(&c->lock);
+	return rv;
 }
 
 static bool
@@ -353,8 +377,8 @@ query_resume_cb(const as_val* val, void* udata)
 		return true;
 	}
 
-	struct counter* c = udata;
-	c->count++;
+	struct page_counter* c = udata;
+	as_incr_uint32(&c->count);
 	return true;
 }
 
@@ -374,9 +398,8 @@ query_terminate_resume(aerospike* p_as, as_error* err)
 	LOG("records written: %u", total_size);
 	LOG("start query terminate");
 
-	struct counter c;
-	c.count = 0;
-	c.max = 50;
+	struct page_counter c;
+	page_counter_init(&c, 50);
 
 	as_query query;
 	as_query_init(&query, g_namespace, set);
@@ -410,8 +433,7 @@ query_terminate_resume(aerospike* p_as, as_error* err)
 	as_partition_filter pf;
 	as_partition_filter_set_partitions(&pf, parts_all);
 
-	c.count = 0;
-	c.max = 0;
+	page_counter_reset(&c);
 
 	status = aerospike_query_partitions(p_as, err, NULL, &query_resume, &pf, query_resume_cb, &c);
 
@@ -421,84 +443,6 @@ query_terminate_resume(aerospike* p_as, as_error* err)
 	as_query_destroy(&query_resume);
 	return status;
 }
-
-static bool
-compare_partitions(as_partitions_status* p1, as_partitions_status* p2)
-{
-	if (p1->ref_count != p2->ref_count) {
-		printf("refcount\n");
-		return false;
-	}
-
-	if (p1->part_begin != p2->part_begin) {
-		printf("part_begin\n");
-		return false;
-	}
-
-	if (p1->part_count != p2->part_count) {
-		printf("part_count\n");
-		return false;
-	}
-
-	if (p1->done != p2->done) {
-		printf("done\n");
-		return false;
-	}
-
-	if (p1->retry != p2->retry) {
-		printf("retry\n");
-		return false;
-	}
-
-	for (uint16_t i = 0; i < p1->part_count; i++) {
-		as_partition_status* ps1 = &p1->parts[i];
-		as_partition_status* ps2 = &p2->parts[i];
-
-		if (ps1->part_id != ps2->part_id) {
-			printf("part_id %d\n", i);
-			return false;
-		}
-
-		if (ps1->replica_index != ps2->replica_index) {
-			printf("replica_index %d\n", i);
-			return false;
-		}
-
-		if (ps1->unavailable != ps2->unavailable) {
-			printf("unavailable %d\n", i);
-			return false;
-		}
-
-		if (ps1->retry != ps2->retry) {
-			printf("retry %d\n", i);
-			return false;
-		}
-
-		if (ps1->digest.init != ps2->digest.init) {
-			printf("digest.init %d\n", i);
-			return false;
-		}
-
-		if (memcmp(ps1->digest.value, ps2->digest.value, AS_DIGEST_VALUE_SIZE) != 0) {
-			printf("digest.value %d\n", i);
-			return false;
-		}
-
-		if (ps1->bval != ps2->bval) {
-			printf("bval %d\n", i);
-			return false;
-		}
-
-		/* Always different
-		if (ps1->master_node != ps2->master_node) {
-			printf("master_node %d\n", i);
-			return false;
-		}
-		*/
-	}
-	return true;
-}
-
 
 as_status
 query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
@@ -518,9 +462,8 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	LOG("records written: %u", total_size);
 	LOG("start query terminate");
 
-	struct counter c;
-	c.count = 0;
-	c.max = 50;
+	struct page_counter c;
+	page_counter_init(&c, 50);
 
 	as_query query;
 	as_query_init(&query, g_namespace, set);
@@ -536,8 +479,6 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 
 	LOG("terminate records returned: %u", c.count);
 	LOG("start query resume");
-
-	as_partitions_status* p1 = as_partitions_status_reserve(query.parts_all);
 
 	// Store completion status of all partitions to bytes.
 	size_t bytes_size;
@@ -556,9 +497,6 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	// Free bytes
 	free(bytes);
 
-	printf("COMPARE\n");
-	compare_partitions(p1, parts_all);
-
 	// Use partition filter to set parts_all.
 	// Calling as_query_set_partitions(&query_resume, parts_all) works too.
 	// as_partition_filter_set_partitions() is just a wrapper for eventually calling
@@ -566,8 +504,7 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	as_partition_filter pf;
 	as_partition_filter_set_partitions(&pf, parts_all);
 
-	c.count = 0;
-	c.max = 0;
+	page_counter_reset(&c);
 
 	status = aerospike_query_partitions(p_as, err, NULL, &query_resume, &pf, query_resume_cb, &c);
 

@@ -223,46 +223,7 @@ endif
 ###############################################################################
 
 COMMON-HEADERS :=
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arch.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arraylist.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_arraylist_iterator.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_atomic.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_atomic_gcc.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_boolean.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_bytes.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_dir.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_double.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_geojson.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_hashmap.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_hashmap_iterator.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_integer.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_iterator.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_list.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_list_iterator.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_log.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_map_iterator.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_monitor.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_msgpack_ext.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_nil.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_orderedmap.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_pair.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_password.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_queue.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_queue_mt.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_random.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_rec.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_sleep.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_std.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stream.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_string_builder.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_stringmap.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_thread.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_thread_pool.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_util.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_val.h
-COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/aerospike/as_vector.h
+COMMON-HEADERS += $(wildcard $(COMMON)/$(SOURCE_INCL)/aerospike/*.h)
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/alloc.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_b64.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_byte_order.h
@@ -357,3 +318,4 @@ $(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aero
 
 ###############################################################################
 include project/modules.mk project/test.mk project/rules.mk
+

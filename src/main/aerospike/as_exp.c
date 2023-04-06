@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2022 Aerospike, Inc.
+ * Copyright 2021-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -422,7 +422,9 @@ as_exp_get_list_type(as_exp_type type, as_list_return_type rtype, bool is_multi)
 		if (is_multi) {
 			expected_type = AS_EXP_TYPE_LIST;
 		}
-
+		break;
+	case AS_LIST_RETURN_EXISTS:
+		expected_type = AS_EXP_TYPE_BOOL;
 		break;
 	case AS_LIST_RETURN_NONE:
 	default:
@@ -456,10 +458,14 @@ as_exp_get_map_type(as_exp_type type, as_map_return_type rtype, bool is_multi)
 		if (is_multi) {
 			expected_type = AS_EXP_TYPE_LIST;
 		}
-
 		break;
 	case AS_MAP_RETURN_KEY_VALUE:
+	case AS_MAP_RETURN_UNORDERED_MAP:
+	case AS_MAP_RETURN_ORDERED_MAP:
 		expected_type = AS_EXP_TYPE_MAP;
+		break;
+	case AS_MAP_RETURN_EXISTS:
+		expected_type = AS_EXP_TYPE_BOOL;
 		break;
 	case AS_MAP_RETURN_NONE:
 	default:

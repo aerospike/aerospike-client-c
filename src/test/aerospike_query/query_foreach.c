@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1328,10 +1328,13 @@ TEST(query_with_mapval_filter, "query_with_mapval_filter")
 	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_exp_build(filter,
-		as_exp_cmp_ne(
-			as_exp_map_get_by_value(NULL, AS_MAP_RETURN_COUNT, as_exp_str("yvalue"),
+		as_exp_and(
+			as_exp_map_get_by_value(NULL, AS_MAP_RETURN_EXISTS, as_exp_str("yvalue"),
 				as_exp_bin_map("y")),
-			as_exp_int(0)));
+			as_exp_cmp_ne(
+				as_exp_map_get_by_value(NULL, AS_MAP_RETURN_COUNT, as_exp_str("yvalue"),
+					as_exp_bin_map("y")),
+				as_exp_int(0))));
 
 	as_policy_query p;
 	as_policy_query_init(&p);

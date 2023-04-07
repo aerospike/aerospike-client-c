@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -118,34 +118,17 @@ struct as_operations_s;
  * Union of supported predicates
  */
 typedef union as_predicate_value_u {
-	
-	/**
-	 * String Value
-	 */
-	char * string;
-
-	/**
-	 * Integer Value
-	 */
 	int64_t integer;
 
-	/**
-	 * Integer Range Value
-	 */
 	struct {
+		char* string;
+		bool _free;
+	} string_val;
 
-		/**
-		 * Minimum value
-		 */
+	struct {
 		int64_t min;
-
-		/**
-		 * Maximum value
-		 */
 		int64_t max;
-
 	} integer_range;
-
 } as_predicate_value;
 
 /**
@@ -182,6 +165,11 @@ typedef struct as_predicate_s {
 	 * The size of the CDT context. Use as_query_where_with_ctx() to set.
 	 */
 	uint32_t ctx_size;
+
+	/**
+	 * Should ctx be destroyed on as_query_destroy(). Default: false.
+	 */
+	bool ctx_free;
 
 	/**
 	 * The predicate type, dictates which values to use from the union
@@ -304,7 +292,7 @@ typedef struct as_query_predicates_s {
 	/**
 	 * Sequence of entries
 	 */
-	as_predicate * 	entries;
+	as_predicate* entries;
 
 } as_query_predicates;
 
@@ -848,6 +836,24 @@ as_query_is_done(as_query* query)
 {
 	return query->parts_all && query->parts_all->done;
 }
+
+/**
+ * Serialize query definition to bytes.
+ *
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+AS_EXTERN bool
+as_query_to_bytes(const as_query* query, uint8_t** bytes, size_t* bytes_size);
+
+/**
+ * Deserialize bytes to query definition.
+ *
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+AS_EXTERN bool
+as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size);
 
 #ifdef __cplusplus
 } // end extern "C"

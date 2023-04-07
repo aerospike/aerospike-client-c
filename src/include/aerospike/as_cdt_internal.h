@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,7 @@
  */
 #pragma once
 
+#include <aerospike/as_error.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_cdt_ctx.h>
 #include <aerospike/as_operations.h>
@@ -62,6 +63,9 @@ as_cdt_ctx_pack(const as_cdt_ctx* ctx, as_packer* pk);
 
 bool
 as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operator op_type);
+
+bool
+as_cdt_ctx_from_unpacker(as_cdt_ctx* ctx, as_unpacker* pk);
 
 #ifdef __cplusplus
 } // end extern "C"

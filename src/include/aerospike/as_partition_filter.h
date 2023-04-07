@@ -174,28 +174,6 @@ as_partitions_status_release(as_partitions_status* parts_all)
 	}
 }
 
-/**
- * Serialize status of all partitions to bytes. Used to store a partially completed scan/query
- * for resumption in a different process.
- *
- * @param parts_all		Partitions status.
- * @param bytes_size	Returned size of serialized bytes (output).
- * @return				Serialized bytes. User is responsible for calling free() on bytes.
- */
-AS_EXTERN uint8_t*
-as_partitions_status_to_bytes(as_partitions_status* parts_all, size_t* bytes_size);
-
-/**
- * Deserialize bytes to as_partitions_status. Used to resume a scan/query that started in a
- * different process.
- *
- * @param bytes			Serialized bytes.
- * @param bytes_size	Size of serialized bytes.
- * @return				Partitions status. User is responsible for calling free() on struct.
- */
-AS_EXTERN as_partitions_status*
-as_partitions_status_from_bytes(uint8_t* bytes, size_t bytes_size);
-
 #ifdef __cplusplus
 } // end extern "C"
 #endif

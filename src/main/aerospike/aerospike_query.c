@@ -675,7 +675,7 @@ as_query_command_size(
 		switch(pred->type) {
 			case AS_PREDICATE_EQUAL:
 				if (pred->dtype == AS_INDEX_STRING) {
-					filter_size += (uint32_t)strlen(pred->value.string) * 2;
+					filter_size += (uint32_t)strlen(pred->value.string_val.string) * 2;
 				}
 				else if (pred->dtype == AS_INDEX_NUMERIC) {
 					filter_size += sizeof(int64_t) * 2;
@@ -686,7 +686,7 @@ as_query_command_size(
 					filter_size += sizeof(int64_t) * 2;
 				}
 				else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
-					filter_size += (uint32_t)strlen(pred->value.string) * 2;
+					filter_size += (uint32_t)strlen(pred->value.string_val.string) * 2;
 				}
 				break;
 		}
@@ -888,7 +888,8 @@ as_query_command_init(
 		switch(pred->type) {
 			case AS_PREDICATE_EQUAL:
 				if (pred->dtype == AS_INDEX_STRING) {
-					p = as_query_write_range_string(p, pred->value.string, pred->value.string);
+					char* str = pred->value.string_val.string;
+					p = as_query_write_range_string(p, str, str);
 				}
 				else if (pred->dtype == AS_INDEX_NUMERIC) {
 					p = as_query_write_range_integer(p, pred->value.integer, pred->value.integer);
@@ -899,7 +900,8 @@ as_query_command_init(
 					p = as_query_write_range_integer(p, pred->value.integer_range.min, pred->value.integer_range.max);
 				}
 				else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
-					p = as_query_write_range_geojson(p, pred->value.string, pred->value.string);
+					char* str = pred->value.string_val.string;
+					p = as_query_write_range_geojson(p, str, str);
 				}
 				break;
 		}

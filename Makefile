@@ -183,7 +183,6 @@ AEROSPIKE += as_map_operations.o
 AEROSPIKE += as_node.o
 AEROSPIKE += as_operations.o
 AEROSPIKE += as_partition.o
-AEROSPIKE += as_partition_filter.o
 AEROSPIKE += as_partition_tracker.o
 AEROSPIKE += as_peers.o
 AEROSPIKE += as_pipe.o

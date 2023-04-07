@@ -482,35 +482,31 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 
 	// Store completion status of all partitions to bytes.
 	size_t bytes_size;
-	uint8_t* bytes = as_partitions_status_to_bytes(query.parts_all, &bytes_size);
+	uint8_t* bytes;
+
+	if (! as_query_to_bytes(&query, &bytes, &bytes_size)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to serialize query");
+	}
 
 	// Destroy query
 	as_query_destroy(&query);
 
 	// Resume query using new query instance.
 	as_query query_resume;
-	as_query_init(&query_resume, g_namespace, set);
 
-	// Restore status of all partitions from serialized bytes.
-	as_partitions_status* parts_all = as_partitions_status_from_bytes(bytes, bytes_size);
+	if (! as_query_from_bytes(&query_resume, bytes, bytes_size)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to deserialize query");
+	}
 
 	// Free bytes
 	free(bytes);
 
-	// Use partition filter to set parts_all.
-	// Calling as_query_set_partitions(&query_resume, parts_all) works too.
-	// as_partition_filter_set_partitions() is just a wrapper for eventually calling
-	// as_query_set_partitions().
-	as_partition_filter pf;
-	as_partition_filter_set_partitions(&pf, parts_all);
-
 	page_counter_reset(&c);
 
-	status = aerospike_query_partitions(p_as, err, NULL, &query_resume, &pf, query_resume_cb, &c);
+	status = aerospike_query_foreach(p_as, err, NULL, &query_resume, query_resume_cb, &c);
 
 	LOG("resume records returned: %u", c.count);
 
-	as_partitions_status_release(parts_all);
 	as_query_destroy(&query_resume);
 	return status;
 }

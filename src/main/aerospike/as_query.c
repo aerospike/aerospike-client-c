@@ -528,123 +528,127 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
 		return false;
 	}
 
-	query->select.capacity = query->select.size = (uint16_t)uval;
-	query->select.entries = cf_malloc(sizeof(as_bin_name) * query->select.size);
-	query->select._free = true;
+	if (uval > 0) {
+		query->select.capacity = query->select.size = (uint16_t)uval;
+		query->select.entries = cf_malloc(sizeof(as_bin_name) * query->select.size);
+		query->select._free = true;
 
-	for (uint16_t i = 0; i < query->select.size; i++) {
-		if (! unpack_str_init(&pk, query->select.entries[i], AS_BIN_NAME_MAX_SIZE)) {
-			goto HandleError;
+		for (uint16_t i = 0; i < query->select.size; i++) {
+			if (! unpack_str_init(&pk, query->select.entries[i], AS_BIN_NAME_MAX_SIZE)) {
+				goto HandleError;
+			}
 		}
 	}
 
 	// Unpack where
+	as_predicate* pred = NULL;
+	bool free_pred_string = false;
+	bool b = false;
+
 	if (as_unpack_uint64(&pk, &uval) != 0) {
 		goto HandleError;
 	}
 
-	uint32_t max = (uint32_t)uval;
-	query->where.capacity = (uint16_t)uval;
-	query->where.entries = cf_malloc(sizeof(as_predicate) * max);
-	query->where._free = true;
+	if (uval > 0) {
+		uint32_t max = (uint32_t)uval;
+		query->where.capacity = (uint16_t)uval;
+		query->where.entries = cf_malloc(sizeof(as_predicate) * max);
+		query->where._free = true;
 
-	as_predicate* pred = NULL;
-	bool free_pred_string = false;
-	bool b;
+		for (uint16_t i = 0; i < max; i++, query->where.size++) {
+			pred = &query->where.entries[i];
+			pred->ctx = NULL;
+			pred->ctx_size = 0;
+			pred->ctx_free = false;
+			free_pred_string = false;
 
-	for (uint16_t i = 0; i < max; i++, query->where.size++) {
-		pred = &query->where.entries[i];
-		pred->ctx = NULL;
-		pred->ctx_size = 0;
-		pred->ctx_free = false;
-		free_pred_string = false;
+			if (! unpack_str_init(&pk, pred->bin, AS_BIN_NAME_MAX_SIZE)) {
+				goto HandleError;
+			}
 
-		if (! unpack_str_init(&pk, pred->bin, AS_BIN_NAME_MAX_SIZE)) {
-			goto HandleError;
-		}
+			if (as_unpack_boolean(&pk, &b) != 0) {
+				goto HandleError;
+			}
 
-		if (as_unpack_boolean(&pk, &b) != 0) {
-			goto HandleError;
-		}
+			if (b) {
+				pred->ctx = cf_malloc(sizeof(as_cdt_ctx));
+				pred->ctx_free = true;
 
-		if (b) {
-			pred->ctx = cf_malloc(sizeof(as_cdt_ctx));
-			pred->ctx_free = true;
+				if (! as_cdt_ctx_from_unpacker(pred->ctx, &pk)) {
+					goto HandlePredError;
+				}
 
-			if (! as_cdt_ctx_from_unpacker(pred->ctx, &pk)) {
-				goto HandlePredError;
+				if (as_unpack_uint64(&pk, &uval) != 0) {
+					goto HandlePredError;
+				}
+
+				pred->ctx_size = (uint32_t)uval;
 			}
 
 			if (as_unpack_uint64(&pk, &uval) != 0) {
 				goto HandlePredError;
 			}
 
-			pred->ctx_size = (uint32_t)uval;
-		}
+			pred->type = (as_predicate_type)uval;
 
-		if (as_unpack_uint64(&pk, &uval) != 0) {
-			goto HandlePredError;
-		}
-
-		pred->type = (as_predicate_type)uval;
-
-		switch(pred->type) {
-			case AS_PREDICATE_EQUAL:
-				if (pred->dtype == AS_INDEX_STRING) {
-					if (! unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
-						goto HandlePredError;
+			switch(pred->type) {
+				case AS_PREDICATE_EQUAL:
+					if (pred->dtype == AS_INDEX_STRING) {
+						if (! unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
+							goto HandlePredError;
+						}
+						pred->value.string_val._free = true;
+						free_pred_string = true;
 					}
-					pred->value.string_val._free = true;
-					free_pred_string = true;
-				}
-				else if (pred->dtype == AS_INDEX_NUMERIC) {
-					if (as_unpack_int64(&pk, &pred->value.integer) != 0) {
-						goto HandlePredError;
+					else if (pred->dtype == AS_INDEX_NUMERIC) {
+						if (as_unpack_int64(&pk, &pred->value.integer) != 0) {
+							goto HandlePredError;
+						}
 					}
-				}
-				break;
+					break;
 
-			case AS_PREDICATE_RANGE:
-				if (pred->dtype == AS_INDEX_NUMERIC) {
-					if (as_unpack_int64(&pk, &pred->value.integer_range.min) != 0) {
-						goto HandlePredError;
-					}
+				case AS_PREDICATE_RANGE:
+					if (pred->dtype == AS_INDEX_NUMERIC) {
+						if (as_unpack_int64(&pk, &pred->value.integer_range.min) != 0) {
+							goto HandlePredError;
+						}
 
-					if (as_unpack_int64(&pk, &pred->value.integer_range.max) != 0) {
-						goto HandlePredError;
+						if (as_unpack_int64(&pk, &pred->value.integer_range.max) != 0) {
+							goto HandlePredError;
+						}
 					}
-				}
-				else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
-					if (! unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
-						goto HandlePredError;
+					else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
+						if (! unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
+							goto HandlePredError;
+						}
+						pred->value.string_val._free = true;
+						free_pred_string = true;
 					}
-					pred->value.string_val._free = true;
-					free_pred_string = true;
-				}
-				break;
+					break;
 
-			default:
+				default:
+					goto HandlePredError;
+			}
+
+			// TODO Destroy what allocated!!
+			if (as_unpack_int64(&pk, &ival) != 0) {
 				goto HandlePredError;
-		}
+			}
 
-		// TODO Destroy what allocated!!
-		if (as_unpack_int64(&pk, &ival) != 0) {
-			goto HandlePredError;
-		}
+			if (ival < 0 || ival > AS_INDEX_GEO2DSPHERE) {
+				goto HandlePredError;
+			}
+			pred->dtype = (as_index_datatype)ival;
 
-		if (ival < 0 || ival > AS_INDEX_GEO2DSPHERE) {
-			goto HandlePredError;
-		}
-		pred->dtype = (as_index_datatype)ival;
+			if (as_unpack_int64(&pk, &ival) != 0) {
+				goto HandlePredError;
+			}
 
-		if (as_unpack_int64(&pk, &ival) != 0) {
-			goto HandlePredError;
+			if (ival < 0 || ival > AS_INDEX_TYPE_MAPVALUES) {
+				goto HandlePredError;
+			}
+			pred->itype = (as_index_type)ival;
 		}
-
-		if (ival < 0 || ival > AS_INDEX_TYPE_MAPVALUES) {
-			goto HandlePredError;
-		}
-		pred->itype = (as_index_type)ival;
 	}
 
 	// Query Apply

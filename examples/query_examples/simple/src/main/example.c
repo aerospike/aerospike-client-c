@@ -48,7 +48,8 @@
 const char TEST_INDEX_NAME[] = "test-bin-index";
 
 const char PAGE_INDEX_NAME[] = "page-index";
-const char PAGE_BIN[] = "bin1";
+const char PAGE_BIN_INT[] = "binint";
+const char PAGE_BIN_STR[] = "binstr";
 
 //==========================================================
 // Forward Declarations
@@ -88,11 +89,6 @@ main(int argc, char* argv[])
 	}
 
 	if (! insert_records(&as)) {
-		cleanup(&as);
-		exit(-1);
-	}
-
-	if (! example_read_test_records(&as)) {
 		cleanup(&as);
 		exit(-1);
 	}
@@ -256,8 +252,9 @@ insert_records_for_query_page(aerospike* p_as, as_error* err, const char* set, u
 {
 	// Write records that belong to the specified partition.
 	as_record rec;
-	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, PAGE_BIN, 55);
+	as_record_inita(&rec, 2);
+	as_record_set_int64(&rec, PAGE_BIN_INT, 55);
+	as_record_set_str(&rec, PAGE_BIN_STR, "str");
 
 	as_status status;
 
@@ -277,6 +274,7 @@ insert_records_for_query_page(aerospike* p_as, as_error* err, const char* set, u
 			return status;
 		}
 	}
+	as_record_destroy(&rec);
 	return AEROSPIKE_OK;
 }
 
@@ -447,289 +445,6 @@ query_terminate_resume(aerospike* p_as, as_error* err)
 	return status;
 }
 
-#define cmp_error() \
-	printf("Line %d\n", __LINE__);\
-	return false;
-
-static bool
-val_compare(as_val* v1, as_val* v2)
-{
-	char* s1 = as_val_tostring(v1);
-	char* s2 = as_val_tostring(v2);
-	bool rv = strcmp(s1, s2);
-	cf_free(s1);
-	cf_free(s2);
-	return rv == 0;
-}
-
-static bool
-query_compare(as_query* q1, as_query* q2) {
-	if (q1->_free != q2->_free) {
-		cmp_error();
-	}
-
-	if (strcmp(q1->ns, q2->ns) != 0) {
-		cmp_error();
-	}
-
-	if (strcmp(q1->set, q2->set) != 0) {
-		cmp_error();
-	}
-
-	if (q1->select._free != q2->select._free) {
-		cmp_error();
-	}
-
-	if (q1->select.capacity != q2->select.capacity) {
-		cmp_error();
-	}
-
-	if (q1->select.size != q2->select.size) {
-		cmp_error();
-	}
-
-	for (uint16_t i = 0; i < q1->select.size; i++) {
-		if (strcmp(q1->select.entries[i], q2->select.entries[i]) != 0) {
-			cmp_error();
-		}
-	}
-
-	if (q1->where._free != q2->where._free) {
-		cmp_error();
-	}
-
-	if (q1->where.capacity != q2->where.capacity) {
-		cmp_error();
-	}
-
-	if (q1->select.size != q2->select.size) {
-		cmp_error();
-	}
-
-	for (uint16_t i = 0; i < q1->where.size; i++) {
-		as_predicate* p1 = &q1->where.entries[i];
-		as_predicate* p2 = &q2->where.entries[i];
-
-		if (strcmp(p1->bin, p2->bin) != 0) {
-			cmp_error();
-		}
-
-		if (p1->ctx_free != p2->ctx_free) {
-			cmp_error();
-		}
-
-		if (p1->ctx_size != p2->ctx_size) {
-			cmp_error();
-		}
-
-		as_cdt_ctx* c1 = p1->ctx;
-		as_cdt_ctx* c2 = p2->ctx;
-
-		if (c1 != c2) {
-			if (c1->list.size != c2->list.size) {
-				cmp_error();
-			}
-
-			for (uint32_t j = 0; j < c1->list.size; j++) {
-				as_cdt_ctx_item* ci1 = as_vector_get(&c1->list, j);
-				as_cdt_ctx_item* ci2 = as_vector_get(&c2->list, j);
-
-				if (ci1->type != ci2->type) {
-					cmp_error();
-				}
-
-				if (ci1->type & AS_CDT_CTX_VALUE) {
-					if (! val_compare(ci1->val.pval, ci2->val.pval)) {
-						cmp_error();
-					}
-				}
-				else {
-					if (ci1->val.ival != ci2->val.ival) {
-						cmp_error();
-					}
-				}
-			}
-		}
-
-		if (p1->type != p2->type) {
-			cmp_error();
-		}
-
-		if (p1->dtype != p2->dtype) {
-			cmp_error();
-		}
-
-		if (p1->itype != p2->itype) {
-			cmp_error();
-		}
-
-		switch(p1->type) {
-			case AS_PREDICATE_EQUAL:
-				if (p1->dtype == AS_INDEX_STRING) {
-					if (strcmp(p1->value.string_val.string, p2->value.string_val.string) != 0) {
-						cmp_error();
-					}
-				}
-				else if (p1->dtype == AS_INDEX_NUMERIC) {
-					if (p1->value.integer != p2->value.integer) {
-						cmp_error();
-					}
-				}
-				break;
-
-			case AS_PREDICATE_RANGE:
-				if (p1->dtype == AS_INDEX_NUMERIC) {
-					if (p1->value.integer_range.min != p2->value.integer_range.min) {
-						cmp_error();
-					}
-
-					if (p1->value.integer_range.max != p2->value.integer_range.max) {
-						cmp_error();
-					}
-				}
-				else if (p1->dtype == AS_INDEX_GEO2DSPHERE) {
-					if (strcmp(p1->value.string_val.string, p2->value.string_val.string) != 0) {
-						cmp_error();
-					}
-				}
-				break;
-		}
-	}
-
-	if (q1->apply._free != q2->apply._free) {
-		cmp_error();
-	}
-
-	if (strcmp(q1->apply.module, q2->apply.module) != 0) {
-		cmp_error();
-	}
-
-	if (strcmp(q1->apply.function, q2->apply.function) != 0) {
-		cmp_error();
-	}
-
-	if (q1->apply.arglist != q2->apply.arglist) {
-		if (! val_compare((as_val*)q1->apply.arglist, (as_val*)q2->apply.arglist)) {
-			cmp_error();
-		}
-	}
-
-	if (q1->ops != q2->ops) {
-		if (q1->ops->_free != q2->ops->_free) {
-			cmp_error();
-		}
-
-		if (q1->ops->gen != q2->ops->gen) {
-			cmp_error();
-		}
-
-		if (q1->ops->ttl != q2->ops->ttl) {
-			cmp_error();
-		}
-
-		if (q1->ops->binops.size != q2->ops->binops.size) {
-			cmp_error();
-		}
-
-		for (uint16_t i = 0; i < q1->ops->binops.size; i++) {
-			as_binop* op1 = &q1->ops->binops.entries[i];
-			as_binop* op2 = &q2->ops->binops.entries[i];
-
-			if (op1->op != op2->op) {
-				cmp_error();
-			}
-
-			if (strcmp(op1->bin.name, op2->bin.name) != 0) {
-				cmp_error();
-			}
-
-			if (op1->bin.valuep != op2->bin.valuep) {
-				if (! val_compare((as_val*)op1->bin.valuep, (as_val*)op2->bin.valuep)) {
-					cmp_error();
-				}
-			}
-		}
-	}
-
-	if (q1->parts_all != q2->parts_all) {
-		as_partitions_status* p1 = q1->parts_all;
-		as_partitions_status* p2 = q2->parts_all;
-
-		if (p1->ref_count != p2->ref_count) {
-			cmp_error();
-		}
-
-		if (p1->part_begin != p2->part_begin) {
-			cmp_error();
-		}
-
-		if (p1->part_count != p2->part_count) {
-			cmp_error();
-		}
-
-		if (p1->done != p2->done) {
-			cmp_error();
-		}
-
-		for (uint16_t i = 0; i < p1->part_count; i++) {
-			as_partition_status* ps1 = &p1->parts[i];
-			as_partition_status* ps2 = &p2->parts[i];
-
-			if (ps1->part_id != ps2->part_id) {
-				cmp_error();
-			}
-
-			if (ps1->retry != ps2->retry) {
-				cmp_error();
-			}
-
-			if (ps1->bval != ps2->bval) {
-				cmp_error();
-			}
-
-			if (ps1->replica_index != ps2->replica_index) {
-				cmp_error();
-			}
-
-			if (ps1->unavailable != ps2->unavailable) {
-				cmp_error();
-			}
-
-			if (ps1->digest.init != ps2->digest.init) {
-				cmp_error();
-			}
-
-			if (ps1->digest.init) {
-				if (memcmp(ps1->digest.value, ps2->digest.value, AS_DIGEST_VALUE_SIZE) != 0) {
-					cmp_error();
-				}
-			}
-		}
-	}
-
-	if (q1->max_records != q2->max_records) {
-		cmp_error();
-	}
-
-	if (q1->records_per_second != q2->records_per_second) {
-		cmp_error();
-	}
-
-	if (q1->ttl != q2->ttl) {
-		cmp_error();
-	}
-
-	if (q1->paginate != q2->paginate) {
-		cmp_error();
-	}
-
-	if (q1->no_bins != q2->no_bins) {
-		cmp_error();
-	}
-
-	return true;
-}
-
 as_status
 query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 {
@@ -739,7 +454,7 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	uint32_t total_size = 200;
 
 	LOG("create index for terminate/resume with serialization");
-	if (! example_create_integer_index(p_as, set, PAGE_BIN, PAGE_INDEX_NAME)) {
+	if (! example_create_integer_index(p_as, set, PAGE_BIN_INT, PAGE_INDEX_NAME)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to create query index");
 	}
 
@@ -760,10 +475,10 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	as_query_init(&query, g_namespace, set);
 	as_query_set_paginate(&query, true);
 
-	as_query_select(&query, PAGE_BIN);
+	as_query_select(&query, PAGE_BIN_INT);
 
 	as_query_where_init(&query, 1);
-	as_query_where(&query, PAGE_BIN, as_integer_range(0, 100));
+	as_query_where(&query, PAGE_BIN_INT, as_integer_range(0, 100));
 
 	// Start query. Query will be terminated early in callback.
 	status = aerospike_query_foreach(p_as, err, NULL, &query, query_terminate_cb, &c);
@@ -785,7 +500,7 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	}
 
 	// Destroy query
-	//as_query_destroy(&query);
+	as_query_destroy(&query);
 
 	// Resume query using new query instance.
 	as_query query_resume;
@@ -793,14 +508,6 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	if (! as_query_from_bytes(&query_resume, bytes, bytes_size)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to deserialize query");
 	}
-
-	if (! query_compare(&query, &query_resume)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "query_compare failed");
-	}
-
-	LOG("Query compare success");
-
-	as_query_destroy(&query);
 
 	// Free bytes
 	free(bytes);

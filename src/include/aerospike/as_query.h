@@ -855,6 +855,15 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, size_t* bytes_size);
 AS_EXTERN bool
 as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size);
 
+/**
+ * Compare query objects.
+ * @private
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+AS_EXTERN bool
+as_query_compare(as_query* q1, as_query* q2);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

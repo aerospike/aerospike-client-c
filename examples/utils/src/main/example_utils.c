@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2022 by Aerospike.
+ * Copyright 2008-2023 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -793,11 +793,11 @@ example_remove_udf(aerospike* p_as, const char* udf_file_path)
 // specified bin in the database.
 //
 bool
-example_create_integer_index(aerospike* p_as, const char* bin, const char* index)
+example_create_integer_index(aerospike* p_as, const char* set, const char* bin, const char* index)
 {
 	as_error err;
 	as_index_task task;
-	as_status status = aerospike_index_create(p_as, &err, &task, NULL, g_namespace, g_set, bin, index, AS_INDEX_NUMERIC);
+	as_status status = aerospike_index_create(p_as, &err, &task, NULL, g_namespace, set, bin, index, AS_INDEX_NUMERIC);
 
 	switch (status) {
 		case AEROSPIKE_OK:

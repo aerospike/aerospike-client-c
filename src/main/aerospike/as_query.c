@@ -344,6 +344,8 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, size_t* bytes_size)
 		}
 
 		as_pack_int64(&pk, pred->type);
+		as_pack_int64(&pk, pred->dtype);
+		as_pack_int64(&pk, pred->itype);
 
 		switch(pred->type) {
 			case AS_PREDICATE_EQUAL:
@@ -368,9 +370,6 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, size_t* bytes_size)
 			default:
 				goto HandleError;
 		}
-
-		as_pack_int64(&pk, pred->dtype);
-		as_pack_int64(&pk, pred->itype);
 	}
 
 	if (query->apply.function[0]) {
@@ -585,11 +584,35 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
 				pred->ctx_size = (uint32_t)uval;
 			}
 
-			if (as_unpack_uint64(&pk, &uval) != 0) {
+			if (as_unpack_int64(&pk, &ival) != 0) {
 				goto HandlePredError;
 			}
 
-			pred->type = (as_predicate_type)uval;
+			if (ival < 0 || ival > AS_PREDICATE_RANGE) {
+				goto HandlePredError;
+			}
+
+			pred->type = (as_predicate_type)ival;
+
+			if (as_unpack_int64(&pk, &ival) != 0) {
+				goto HandlePredError;
+			}
+
+			if (ival < 0 || ival > AS_INDEX_GEO2DSPHERE) {
+				goto HandlePredError;
+			}
+
+			pred->dtype = (as_index_datatype)ival;
+
+			if (as_unpack_int64(&pk, &ival) != 0) {
+				goto HandlePredError;
+			}
+
+			if (ival < 0 || ival > AS_INDEX_TYPE_MAPVALUES) {
+				goto HandlePredError;
+			}
+
+			pred->itype = (as_index_type)ival;
 
 			switch(pred->type) {
 				case AS_PREDICATE_EQUAL:
@@ -629,25 +652,6 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
 				default:
 					goto HandlePredError;
 			}
-
-			// TODO Destroy what allocated!!
-			if (as_unpack_int64(&pk, &ival) != 0) {
-				goto HandlePredError;
-			}
-
-			if (ival < 0 || ival > AS_INDEX_GEO2DSPHERE) {
-				goto HandlePredError;
-			}
-			pred->dtype = (as_index_datatype)ival;
-
-			if (as_unpack_int64(&pk, &ival) != 0) {
-				goto HandlePredError;
-			}
-
-			if (ival < 0 || ival > AS_INDEX_TYPE_MAPVALUES) {
-				goto HandlePredError;
-			}
-			pred->itype = (as_index_type)ival;
 		}
 	}
 
@@ -767,6 +771,8 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
 
 		for (uint16_t i = 0; i < max; i++) {
 			as_partition_status* ps = &query->parts_all->parts[i];
+			ps->replica_index = 0;
+			ps->unavailable = false;
 
 			if (as_unpack_uint64(&pk, &uval) != 0) {
 				goto HandleError;
@@ -786,7 +792,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
 				goto HandleError;
 			}
 
-			if (as_unpack_uint64(&pk, &uval) != 0) {
+			if (as_unpack_uint64(&pk, &ps->bval) != 0) {
 				goto HandleError;
 			}
 		}

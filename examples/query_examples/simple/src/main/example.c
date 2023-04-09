@@ -47,6 +47,9 @@
 
 const char TEST_INDEX_NAME[] = "test-bin-index";
 
+const char PAGE_INDEX_NAME[] = "page-index";
+const char PAGE_BIN[] = "bin1";
+
 //==========================================================
 // Forward Declarations
 //
@@ -79,7 +82,7 @@ main(int argc, char* argv[])
 	example_remove_index(&as, TEST_INDEX_NAME);
 
 	// Create a numeric secondary index on test-bin.
-	if (! example_create_integer_index(&as, "test-bin", TEST_INDEX_NAME)) {
+	if (! example_create_integer_index(&as, g_set, "test-bin", TEST_INDEX_NAME)) {
 		cleanup(&as);
 		exit(-1);
 	}
@@ -254,7 +257,7 @@ insert_records_for_query_page(aerospike* p_as, as_error* err, const char* set, u
 	// Write records that belong to the specified partition.
 	as_record rec;
 	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, "bin1", 55);
+	as_record_set_int64(&rec, PAGE_BIN, 55);
 
 	as_status status;
 
@@ -522,26 +525,28 @@ query_compare(as_query* q1, as_query* q2) {
 		as_cdt_ctx* c1 = p1->ctx;
 		as_cdt_ctx* c2 = p2->ctx;
 
-		if (c1->list.size != c2->list.size) {
-			cmp_error();
-		}
-
-		for (uint32_t j = 0; j < c1->list.size; j++) {
-			as_cdt_ctx_item* ci1 = as_vector_get(&c1->list, j);
-			as_cdt_ctx_item* ci2 = as_vector_get(&c2->list, j);
-
-			if (ci1->type != ci2->type) {
+		if (c1 != c2) {
+			if (c1->list.size != c2->list.size) {
 				cmp_error();
 			}
 
-			if (ci1->type & AS_CDT_CTX_VALUE) {
-				if (! val_compare(ci1->val.pval, ci2->val.pval)) {
+			for (uint32_t j = 0; j < c1->list.size; j++) {
+				as_cdt_ctx_item* ci1 = as_vector_get(&c1->list, j);
+				as_cdt_ctx_item* ci2 = as_vector_get(&c2->list, j);
+
+				if (ci1->type != ci2->type) {
 					cmp_error();
 				}
-			}
-			else {
-				if (ci1->val.ival != ci2->val.ival) {
-					cmp_error();
+
+				if (ci1->type & AS_CDT_CTX_VALUE) {
+					if (! val_compare(ci1->val.pval, ci2->val.pval)) {
+						cmp_error();
+					}
+				}
+				else {
+					if (ci1->val.ival != ci2->val.ival) {
+						cmp_error();
+					}
 				}
 			}
 		}
@@ -733,6 +738,11 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	const char* set = "queryresume";
 	uint32_t total_size = 200;
 
+	LOG("create index for terminate/resume with serialization");
+	if (! example_create_integer_index(p_as, set, PAGE_BIN, PAGE_INDEX_NAME)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to create query index");
+	}
+
 	LOG("write records for query terminate/resume with serialization");
 	as_status status = insert_records_for_query_page(p_as, err, set, total_size);
 
@@ -749,6 +759,11 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	as_query query;
 	as_query_init(&query, g_namespace, set);
 	as_query_set_paginate(&query, true);
+
+	as_query_select(&query, PAGE_BIN);
+
+	as_query_where_init(&query, 1);
+	as_query_where(&query, PAGE_BIN, as_integer_range(0, 100));
 
 	// Start query. Query will be terminated early in callback.
 	status = aerospike_query_foreach(p_as, err, NULL, &query, query_terminate_cb, &c);
@@ -782,6 +797,8 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	if (! query_compare(&query, &query_resume)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "query_compare failed");
 	}
+
+	LOG("Query compare success");
 
 	as_query_destroy(&query);
 

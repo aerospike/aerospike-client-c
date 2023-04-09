@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2022 by Aerospike.
+ * Copyright 2008-2023 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -84,7 +84,7 @@ main(int argc, char* argv[])
 	example_remove_index(&as, TEST_INDEX_NAME);
 
 	// Create a numeric secondary index on test-bin.
-	if (! example_create_integer_index(&as, "test-bin", TEST_INDEX_NAME)) {
+	if (! example_create_integer_index(&as, g_set, "test-bin", TEST_INDEX_NAME)) {
 		example_cleanup(&as);
 		return -1;
 	}

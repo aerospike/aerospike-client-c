@@ -661,8 +661,6 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
 	}
 
 	if (b) {
-		query->apply._free = true;
-
 		if (! unpack_str_init(&pk, query->apply.module, AS_UDF_MODULE_MAX_SIZE)) {
 			goto HandleError;
 		}
@@ -693,9 +691,6 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
 		else {
 			query->apply.arglist = NULL;
 		}
-	}
-	else {
-		query->apply._free = false;
 	}
 
 	// Query Operations
@@ -895,9 +890,11 @@ as_query_compare(as_query* q1, as_query* q2) {
 		}
 	}
 
+	/* _free might be different if as_query_where_inita() is used.
 	if (q1->where._free != q2->where._free) {
 		cmp_error();
 	}
+	*/
 
 	if (q1->where.capacity != q2->where.capacity) {
 		cmp_error();

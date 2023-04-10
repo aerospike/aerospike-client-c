@@ -66,6 +66,35 @@ as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operat
 bool
 as_cdt_ctx_from_unpacker(as_cdt_ctx* ctx, as_unpacker* pk);
 
+static inline void
+as_pack_string(as_packer* pk, const char* s)
+{
+	uint32_t len = (uint32_t)strlen(s);
+	as_pack_str(pk, (uint8_t*)s, len);
+}
+
+static inline void
+as_pack_byte_string(as_packer* pk, const uint8_t* b, uint32_t len)
+{
+	as_pack_str(pk, b, len);
+}
+
+bool
+as_unpack_str_init(as_unpacker* pk, char* str, uint32_t max);
+
+bool
+as_unpack_str_new(as_unpacker* pk, char** str, uint32_t max);
+
+bool
+as_unpack_bytes_init(as_unpacker* pk, uint8_t* b, uint32_t max);
+
+#define as_cmp_error() \
+	printf("Line %d\n", __LINE__);\
+	return false;
+
+bool
+as_val_compare(as_val* v1, as_val* v2);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

@@ -304,36 +304,23 @@ as_query_apply(as_query* query, const char* module, const char* function, const 
 // Query Serialization
 //---------------------------------
 
-static inline void
-pack_str(as_packer* pk, const char* s)
-{
-	uint32_t len = (uint32_t)strlen(s);
-	as_pack_str(pk, (uint8_t*)s, len);
-}
-
-static inline void
-pack_bytes(as_packer* pk, const uint8_t* b, uint32_t len)
-{
-	as_pack_str(pk, b, len);
-}
-
 bool
 as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 {
 	as_packer pk = as_cdt_begin();
-	pack_str(&pk, query->ns);
-	pack_str(&pk, query->set);
+	as_pack_string(&pk, query->ns);
+	as_pack_string(&pk, query->set);
 	as_pack_uint64(&pk, query->select.size);
 
 	for (uint16_t i = 0; i < query->select.size; i++) {
-		pack_str(&pk, query->select.entries[i]);
+		as_pack_string(&pk, query->select.entries[i]);
 	}
 
 	as_pack_uint64(&pk, query->where.size);
 
 	for (uint16_t i = 0; i < query->where.size; i++) {
 		as_predicate* pred = &query->where.entries[i];
-		pack_str(&pk, pred->bin);
+		as_pack_string(&pk, pred->bin);
 
 		if (pred->ctx) {
 			as_pack_bool(&pk, true);
@@ -351,7 +338,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 		switch(pred->type) {
 			case AS_PREDICATE_EQUAL:
 				if (pred->dtype == AS_INDEX_STRING) {
-					pack_str(&pk, pred->value.string_val.string);
+					as_pack_string(&pk, pred->value.string_val.string);
 				}
 				else if (pred->dtype == AS_INDEX_NUMERIC) {
 					as_pack_int64(&pk, pred->value.integer);
@@ -364,7 +351,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 					as_pack_int64(&pk, pred->value.integer_range.max);
 				}
 				else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
-					pack_str(&pk, pred->value.string_val.string);
+					as_pack_string(&pk, pred->value.string_val.string);
 				}
 				break;
 
@@ -375,8 +362,8 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 
 	if (query->apply.function[0]) {
 		as_pack_bool(&pk, true);
-		pack_str(&pk, query->apply.module);
-		pack_str(&pk, query->apply.function);
+		as_pack_string(&pk, query->apply.module);
+		as_pack_string(&pk, query->apply.function);
 
 		if (query->apply.arglist) {
 			as_pack_bool(&pk, true);
@@ -401,7 +388,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 		for (uint16_t i = 0; i < max; i++) {
 			as_binop* op = &query->ops->binops.entries[i];
 			as_pack_uint64(&pk, op->op);
-			pack_str(&pk, op->bin.name);
+			as_pack_string(&pk, op->bin.name);
 			as_pack_val(&pk, (as_val*)op->bin.valuep);
 		}
 	}
@@ -422,7 +409,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 			as_pack_uint64(&pk, ps->part_id);
 			as_pack_bool(&pk, ps->retry);
 			as_pack_bool(&pk, ps->digest.init);
-			pack_bytes(&pk, ps->digest.value, AS_DIGEST_VALUE_SIZE);
+			as_pack_byte_string(&pk, ps->digest.value, AS_DIGEST_VALUE_SIZE);
 			as_pack_uint64(&pk, ps->bval);
 		}
 	}
@@ -455,52 +442,6 @@ HandleError:
 // Query Deserialization
 //---------------------------------
 
-static bool
-unpack_str_init(as_unpacker* pk, char* str, uint32_t max)
-{
-	uint32_t size;
-	const uint8_t* p = as_unpack_str(pk, &size);
-
-	if (!p || size >= max) {
-		return false;
-	}
-
-	memcpy(str, p, size);
-	*(str + size) = 0;
-	return true;
-}
-
-static bool
-unpack_str_new(as_unpacker* pk, char** str, uint32_t max)
-{
-	uint32_t size;
-	const uint8_t* p = as_unpack_str(pk, &size);
-
-	if (!p || size >= max) {
-		return false;
-	}
-
-	char* s = cf_malloc(size + 1);
-	memcpy(s, p, size);
-	*(s + size) = 0;
-	*str = s;
-	return true;
-}
-
-static bool
-unpack_bytes_init(as_unpacker* pk, uint8_t* b, uint32_t max)
-{
-	uint32_t size;
-	const uint8_t* p = as_unpack_str(pk, &size);
-
-	if (!p || size > max) {
-		return false;
-	}
-
-	memcpy(b, p, size);
-	return true;
-}
-
 bool
 as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 {
@@ -514,11 +455,11 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 		.offset = 0,
 	};
 
-	if (! unpack_str_init(&pk, query->ns, AS_NAMESPACE_MAX_SIZE)) {
+	if (! as_unpack_str_init(&pk, query->ns, AS_NAMESPACE_MAX_SIZE)) {
 		return false;
 	}
 
-	if (! unpack_str_init(&pk, query->set, AS_SET_MAX_SIZE)) {
+	if (! as_unpack_str_init(&pk, query->set, AS_SET_MAX_SIZE)) {
 		return false;
 	}
 
@@ -536,7 +477,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 		query->select._free = true;
 
 		for (uint16_t i = 0; i < query->select.size; i++) {
-			if (! unpack_str_init(&pk, query->select.entries[i], AS_BIN_NAME_MAX_SIZE)) {
+			if (! as_unpack_str_init(&pk, query->select.entries[i], AS_BIN_NAME_MAX_SIZE)) {
 				goto HandleError;
 			}
 		}
@@ -565,7 +506,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 			pred->ctx_free = false;
 			free_pred_string = false;
 
-			if (! unpack_str_init(&pk, pred->bin, AS_BIN_NAME_MAX_SIZE)) {
+			if (! as_unpack_str_init(&pk, pred->bin, AS_BIN_NAME_MAX_SIZE)) {
 				goto HandleError;
 			}
 
@@ -621,7 +562,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 			switch(pred->type) {
 				case AS_PREDICATE_EQUAL:
 					if (pred->dtype == AS_INDEX_STRING) {
-						if (! unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
+						if (! as_unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
 							goto HandlePredError;
 						}
 						pred->value.string_val._free = true;
@@ -645,7 +586,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 						}
 					}
 					else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
-						if (! unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
+						if (! as_unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
 							goto HandlePredError;
 						}
 						pred->value.string_val._free = true;
@@ -665,11 +606,11 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 	}
 
 	if (b) {
-		if (! unpack_str_init(&pk, query->apply.module, AS_UDF_MODULE_MAX_SIZE)) {
+		if (! as_unpack_str_init(&pk, query->apply.module, AS_UDF_MODULE_MAX_SIZE)) {
 			goto HandleError;
 		}
 
-		if (! unpack_str_init(&pk, query->apply.function, AS_UDF_FUNCTION_MAX_SIZE)) {
+		if (! as_unpack_str_init(&pk, query->apply.function, AS_UDF_FUNCTION_MAX_SIZE)) {
 			goto HandleError;
 		}
 
@@ -737,7 +678,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 			}
 			op->op = (as_operator)ival;
 
-			if (! unpack_str_init(&pk, op->bin.name, AS_BIN_NAME_MAX_SIZE)) {
+			if (! as_unpack_str_init(&pk, op->bin.name, AS_BIN_NAME_MAX_SIZE)) {
 				goto HandleError;
 			}
 
@@ -802,7 +743,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 				goto HandleError;
 			}
 
-			if (! unpack_bytes_init(&pk, ps->digest.value, AS_DIGEST_VALUE_SIZE)) {
+			if (! as_unpack_bytes_init(&pk, ps->digest.value, AS_DIGEST_VALUE_SIZE)) {
 				goto HandleError;
 			}
 
@@ -862,65 +803,50 @@ HandleError:
 // Query Compare
 //---------------------------------
 
-#define cmp_error() \
-	printf("Line %d\n", __LINE__);\
-	return false;
-
-static bool
-val_compare(as_val* v1, as_val* v2)
-{
-	char* s1 = as_val_tostring(v1);
-	char* s2 = as_val_tostring(v2);
-	bool rv = strcmp(s1, s2);
-	cf_free(s1);
-	cf_free(s2);
-	return rv == 0;
-}
-
 bool
 as_query_compare(as_query* q1, as_query* q2) {
 	if (q1->_free != q2->_free) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (strcmp(q1->ns, q2->ns) != 0) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (strcmp(q1->set, q2->set) != 0) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (q1->select._free != q2->select._free) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (q1->select.capacity != q2->select.capacity) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (q1->select.size != q2->select.size) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	for (uint16_t i = 0; i < q1->select.size; i++) {
 		if (strcmp(q1->select.entries[i], q2->select.entries[i]) != 0) {
-			cmp_error();
+			as_cmp_error();
 		}
 	}
 
 	/* _free might be different if as_query_where_inita() is used.
 	if (q1->where._free != q2->where._free) {
-		cmp_error();
+		as_cmp_error();
 	}
 	*/
 
 	if (q1->where.capacity != q2->where.capacity) {
-		cmp_error();
+		as_cmp_error();
 	}
 
-	if (q1->select.size != q2->select.size) {
-		cmp_error();
+	if (q1->where.size != q2->where.size) {
+		as_cmp_error();
 	}
 
 	for (uint16_t i = 0; i < q1->where.size; i++) {
@@ -928,17 +854,17 @@ as_query_compare(as_query* q1, as_query* q2) {
 		as_predicate* p2 = &q2->where.entries[i];
 
 		if (strcmp(p1->bin, p2->bin) != 0) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		/* ctx_free may be different.
 		if (p1->ctx_free != p2->ctx_free) {
-			cmp_error();
+			as_cmp_error();
 		}
 		*/
 
 		if (p1->ctx_size != p2->ctx_size) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		as_cdt_ctx* c1 = p1->ctx;
@@ -946,7 +872,7 @@ as_query_compare(as_query* q1, as_query* q2) {
 
 		if (c1 != c2) {
 			if (c1->list.size != c2->list.size) {
-				cmp_error();
+				as_cmp_error();
 			}
 
 			for (uint32_t j = 0; j < c1->list.size; j++) {
@@ -954,44 +880,44 @@ as_query_compare(as_query* q1, as_query* q2) {
 				as_cdt_ctx_item* ci2 = as_vector_get(&c2->list, j);
 
 				if (ci1->type != ci2->type) {
-					cmp_error();
+					as_cmp_error();
 				}
 
 				if (ci1->type & AS_CDT_CTX_VALUE) {
-					if (! val_compare(ci1->val.pval, ci2->val.pval)) {
-						cmp_error();
+					if (! as_val_compare(ci1->val.pval, ci2->val.pval)) {
+						as_cmp_error();
 					}
 				}
 				else {
 					if (ci1->val.ival != ci2->val.ival) {
-						cmp_error();
+						as_cmp_error();
 					}
 				}
 			}
 		}
 
 		if (p1->type != p2->type) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		if (p1->dtype != p2->dtype) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		if (p1->itype != p2->itype) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		switch(p1->type) {
 			case AS_PREDICATE_EQUAL:
 				if (p1->dtype == AS_INDEX_STRING) {
 					if (strcmp(p1->value.string_val.string, p2->value.string_val.string) != 0) {
-						cmp_error();
+						as_cmp_error();
 					}
 				}
 				else if (p1->dtype == AS_INDEX_NUMERIC) {
 					if (p1->value.integer != p2->value.integer) {
-						cmp_error();
+						as_cmp_error();
 					}
 				}
 				break;
@@ -999,16 +925,16 @@ as_query_compare(as_query* q1, as_query* q2) {
 			case AS_PREDICATE_RANGE:
 				if (p1->dtype == AS_INDEX_NUMERIC) {
 					if (p1->value.integer_range.min != p2->value.integer_range.min) {
-						cmp_error();
+						as_cmp_error();
 					}
 
 					if (p1->value.integer_range.max != p2->value.integer_range.max) {
-						cmp_error();
+						as_cmp_error();
 					}
 				}
 				else if (p1->dtype == AS_INDEX_GEO2DSPHERE) {
 					if (strcmp(p1->value.string_val.string, p2->value.string_val.string) != 0) {
-						cmp_error();
+						as_cmp_error();
 					}
 				}
 				break;
@@ -1016,40 +942,40 @@ as_query_compare(as_query* q1, as_query* q2) {
 	}
 
 	if (q1->apply._free != q2->apply._free) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (strcmp(q1->apply.module, q2->apply.module) != 0) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (strcmp(q1->apply.function, q2->apply.function) != 0) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (q1->apply.arglist != q2->apply.arglist) {
-		if (! val_compare((as_val*)q1->apply.arglist, (as_val*)q2->apply.arglist)) {
-			cmp_error();
+		if (! as_val_compare((as_val*)q1->apply.arglist, (as_val*)q2->apply.arglist)) {
+			as_cmp_error();
 		}
 	}
 
 	if (q1->ops != q2->ops) {
 		/* _free might be different if as_operations_inita() is used.
 		if (q1->ops->_free != q2->ops->_free) {
-			cmp_error();
+			as_cmp_error();
 		}
 		*/
 
 		if (q1->ops->gen != q2->ops->gen) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		if (q1->ops->ttl != q2->ops->ttl) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		if (q1->ops->binops.size != q2->ops->binops.size) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		for (uint16_t i = 0; i < q1->ops->binops.size; i++) {
@@ -1057,16 +983,16 @@ as_query_compare(as_query* q1, as_query* q2) {
 			as_binop* op2 = &q2->ops->binops.entries[i];
 
 			if (op1->op != op2->op) {
-				cmp_error();
+				as_cmp_error();
 			}
 
 			if (strcmp(op1->bin.name, op2->bin.name) != 0) {
-				cmp_error();
+				as_cmp_error();
 			}
 
 			if (op1->bin.valuep != op2->bin.valuep) {
-				if (! val_compare((as_val*)op1->bin.valuep, (as_val*)op2->bin.valuep)) {
-					cmp_error();
+				if (! as_val_compare((as_val*)op1->bin.valuep, (as_val*)op2->bin.valuep)) {
+					as_cmp_error();
 				}
 			}
 		}
@@ -1077,19 +1003,19 @@ as_query_compare(as_query* q1, as_query* q2) {
 		as_partitions_status* p2 = q2->parts_all;
 
 		if (p1->ref_count != p2->ref_count) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		if (p1->part_begin != p2->part_begin) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		if (p1->part_count != p2->part_count) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		if (p1->done != p2->done) {
-			cmp_error();
+			as_cmp_error();
 		}
 
 		for (uint16_t i = 0; i < p1->part_count; i++) {
@@ -1097,55 +1023,55 @@ as_query_compare(as_query* q1, as_query* q2) {
 			as_partition_status* ps2 = &p2->parts[i];
 
 			if (ps1->part_id != ps2->part_id) {
-				cmp_error();
+				as_cmp_error();
 			}
 
 			if (ps1->retry != ps2->retry) {
-				cmp_error();
+				as_cmp_error();
 			}
 
 			if (ps1->bval != ps2->bval) {
-				cmp_error();
+				as_cmp_error();
 			}
 
 			if (ps1->replica_index != ps2->replica_index) {
-				cmp_error();
+				as_cmp_error();
 			}
 
 			if (ps1->unavailable != ps2->unavailable) {
-				cmp_error();
+				as_cmp_error();
 			}
 
 			if (ps1->digest.init != ps2->digest.init) {
-				cmp_error();
+				as_cmp_error();
 			}
 
 			if (ps1->digest.init) {
 				if (memcmp(ps1->digest.value, ps2->digest.value, AS_DIGEST_VALUE_SIZE) != 0) {
-					cmp_error();
+					as_cmp_error();
 				}
 			}
 		}
 	}
 
 	if (q1->max_records != q2->max_records) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (q1->records_per_second != q2->records_per_second) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (q1->ttl != q2->ttl) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (q1->paginate != q2->paginate) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	if (q1->no_bins != q2->no_bins) {
-		cmp_error();
+		as_cmp_error();
 	}
 
 	return true;

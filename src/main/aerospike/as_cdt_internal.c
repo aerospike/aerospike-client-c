@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_cdt_internal.h>
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include "_bin.h"
 
@@ -198,4 +199,61 @@ HandleError:
 	as_cdt_ctx_destroy(ctx);
 	as_val_destroy(listval);
 	return false;
+}
+
+bool
+as_unpack_str_init(as_unpacker* pk, char* str, uint32_t max)
+{
+	uint32_t size;
+	const uint8_t* p = as_unpack_str(pk, &size);
+
+	if (!p || size >= max) {
+		return false;
+	}
+
+	memcpy(str, p, size);
+	*(str + size) = 0;
+	return true;
+}
+
+bool
+as_unpack_str_new(as_unpacker* pk, char** str, uint32_t max)
+{
+	uint32_t size;
+	const uint8_t* p = as_unpack_str(pk, &size);
+
+	if (!p || size >= max) {
+		return false;
+	}
+
+	char* s = cf_malloc(size + 1);
+	memcpy(s, p, size);
+	*(s + size) = 0;
+	*str = s;
+	return true;
+}
+
+bool
+as_unpack_bytes_init(as_unpacker* pk, uint8_t* b, uint32_t max)
+{
+	uint32_t size;
+	const uint8_t* p = as_unpack_str(pk, &size);
+
+	if (!p || size > max) {
+		return false;
+	}
+
+	memcpy(b, p, size);
+	return true;
+}
+
+bool
+as_val_compare(as_val* v1, as_val* v2)
+{
+	char* s1 = as_val_tostring(v1);
+	char* s2 = as_val_tostring(v2);
+	bool rv = strcmp(s1, s2);
+	cf_free(s1);
+	cf_free(s2);
+	return rv == 0;
 }

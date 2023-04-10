@@ -844,7 +844,7 @@ as_query_is_done(as_query* query)
  * @ingroup as_query_object
  */
 AS_EXTERN bool
-as_query_to_bytes(const as_query* query, uint8_t** bytes, size_t* bytes_size);
+as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size);
 
 /**
  * Deserialize bytes to query definition.
@@ -853,7 +853,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, size_t* bytes_size);
  * @ingroup as_query_object
  */
 AS_EXTERN bool
-as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size);
+as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size);
 
 /**
  * Compare query objects.

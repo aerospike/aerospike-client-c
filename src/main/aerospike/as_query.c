@@ -317,7 +317,7 @@ pack_bytes(as_packer* pk, const uint8_t* b, uint32_t len)
 }
 
 bool
-as_query_to_bytes(const as_query* query, uint8_t** bytes, size_t* bytes_size)
+as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 {
 	as_packer pk = as_cdt_begin();
 	pack_str(&pk, query->ns);
@@ -391,6 +391,8 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, size_t* bytes_size)
 
 	if (query->ops) {
 		as_pack_bool(&pk, true);
+		as_pack_uint64(&pk, query->ops->ttl);
+		as_pack_uint64(&pk, query->ops->gen);
 
 		uint16_t max = query->ops->binops.size;
 		as_pack_uint64(&pk, max);
@@ -499,7 +501,7 @@ unpack_bytes_init(as_unpacker* pk, uint8_t* b, uint32_t max)
 }
 
 bool
-as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
+as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 {
 	// Initialize query so it can be safely destroyed if a failure occurs.
 	// Assume query passed on the stack.
@@ -553,6 +555,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
 		query->where.capacity = (uint16_t)uval;
 		query->where.entries = cf_malloc(sizeof(as_predicate) * max);
 		query->where._free = true;
+		query->where.size = 0;
 
 		for (uint16_t i = 0; i < max; i++, query->where.size++) {
 			pred = &query->where.entries[i];
@@ -699,16 +702,31 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, size_t bytes_size)
 	}
 
 	if (b) {
+		query->ops = cf_malloc(sizeof(as_operations));
+		query->ops->_free = true;
+
+		if (as_unpack_uint64(&pk, &uval) != 0) {
+			goto HandleError;
+		}
+
+		query->ops->ttl = (uint32_t)uval;
+
+		if (as_unpack_uint64(&pk, &uval) != 0) {
+			goto HandleError;
+		}
+
+		query->ops->gen = (uint16_t)uval;
+
 		if (as_unpack_uint64(&pk, &uval) != 0) {
 			goto HandleError;
 		}
 
 		uint16_t max = (uint16_t)uval;
 
-		query->ops = cf_malloc(sizeof(as_operations));
 		query->ops->binops.capacity = max;
 		query->ops->binops.entries = cf_malloc(sizeof(as_binop) * max);
 		query->ops->binops._free = true;
+		query->ops->binops.size = 0;
 
 		for (uint16_t i = 0; i < max; i++, query->ops->binops.size++) {
 			as_binop* op = &query->ops->binops.entries[i];
@@ -1013,9 +1031,11 @@ as_query_compare(as_query* q1, as_query* q2) {
 	}
 
 	if (q1->ops != q2->ops) {
+		/* _free might be different if as_operations_inita() is used.
 		if (q1->ops->_free != q2->ops->_free) {
 			cmp_error();
 		}
+		*/
 
 		if (q1->ops->gen != q2->ops->gen) {
 			cmp_error();

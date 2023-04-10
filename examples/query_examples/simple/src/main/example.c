@@ -492,7 +492,7 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	LOG("start query resume");
 
 	// Store completion status of all partitions to bytes.
-	size_t bytes_size;
+	uint32_t bytes_size;
 	uint8_t* bytes;
 
 	if (! as_query_to_bytes(&query, &bytes, &bytes_size)) {

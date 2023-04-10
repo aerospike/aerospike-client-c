@@ -16,7 +16,6 @@
  */
 #pragma once
 
-#include <aerospike/as_error.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_cdt_ctx.h>
 #include <aerospike/as_operations.h>

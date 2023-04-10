@@ -749,9 +749,6 @@
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_orderedmap.c">
       <Filter>Source Files\common\aerospike</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\main\aerospike\as_partition_filter.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

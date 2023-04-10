@@ -490,7 +490,6 @@
     <ClCompile Include="..\..\src\main\aerospike\as_node.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_partition.c" />
-    <ClCompile Include="..\..\src\main\aerospike\as_partition_filter.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_partition_tracker.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_peers.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_pipe.c" />

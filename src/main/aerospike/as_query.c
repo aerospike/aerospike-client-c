@@ -101,6 +101,7 @@ as_query_destroy(as_query* query)
 
 			if (pred->ctx && pred->ctx_free) {
 				as_cdt_ctx_destroy(pred->ctx);
+				cf_free(pred->ctx);
 			}
 
 			if ((pred->dtype == AS_INDEX_STRING || pred->dtype == AS_INDEX_GEO2DSPHERE) &&
@@ -930,9 +931,11 @@ as_query_compare(as_query* q1, as_query* q2) {
 			cmp_error();
 		}
 
+		/* ctx_free may be different.
 		if (p1->ctx_free != p2->ctx_free) {
 			cmp_error();
 		}
+		*/
 
 		if (p1->ctx_size != p2->ctx_size) {
 			cmp_error();

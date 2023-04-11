@@ -491,7 +491,7 @@ query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	LOG("terminate records returned: %u", c.count);
 	LOG("start query resume");
 
-	// Store completion status of all partitions to bytes.
+	// Serialize query to bytes.
 	uint32_t bytes_size;
 	uint8_t* bytes;
 

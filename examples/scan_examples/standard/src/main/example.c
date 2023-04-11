@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2022 by Aerospike.
+ * Copyright 2008-2023 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -53,6 +53,7 @@ bool insert_records(aerospike* p_as);
 as_status scan_partition(aerospike* p_as, as_error* err);
 as_status scan_pages(aerospike* p_as, as_error* err);
 as_status scan_terminate_resume(aerospike* p_as, as_error* err);
+as_status scan_terminate_resume_with_serialization(aerospike* p_as, as_error* err);
 
 //==========================================================
 // STANDARD SCAN Example
@@ -74,11 +75,6 @@ main(int argc, char* argv[])
 	example_remove_test_records(&as);
 
 	if (! insert_records(&as)) {
-		cleanup(&as);
-		exit(-1);
-	}
-
-	if (! example_read_test_records(&as)) {
 		cleanup(&as);
 		exit(-1);
 	}
@@ -144,6 +140,13 @@ main(int argc, char* argv[])
 	// Run scan terminate/resume.
 	if (scan_terminate_resume(&as, &err) != AEROSPIKE_OK) {
 		LOG("scan_terminate_resume() returned %d - %s", err.code, err.message);
+		cleanup(&as);
+		exit(-1);
+	}
+
+	// Run scan terminate/resume with serialization.
+	if (scan_terminate_resume_with_serialization(&as, &err) != AEROSPIKE_OK) {
+		LOG("scan_terminate_resume_with_serialization() returned %d - %s", err.code, err.message);
 		cleanup(&as);
 		exit(-1);
 	}
@@ -566,6 +569,73 @@ scan_terminate_resume(aerospike* p_as, as_error* err)
 	LOG("resume records returned: %u", c.count);
 
 	as_partitions_status_release(parts_all);
+	as_scan_destroy(&scan_resume);
+	return status;
+}
+
+as_status
+scan_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
+{
+	const char* set = "scanresume";
+	uint32_t total_size = 200;
+
+	LOG("write records for scan terminate/resume");
+	as_status status = insert_records_for_scan_page(p_as, err, set, total_size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	LOG("records written: %u", total_size);
+	LOG("start scan terminate");
+
+	struct counter c;
+	c.count = 0;
+	c.max = 50;
+
+	as_scan scan;
+	as_scan_init(&scan, g_namespace, set);
+	as_scan_set_paginate(&scan, true);
+
+	// Start scan. Scan will be terminated early in callback.
+	status = aerospike_scan_foreach(p_as, err, NULL, &scan, scan_terminate_cb, &c);
+
+	if (status != AEROSPIKE_OK) {
+		as_scan_destroy(&scan);
+		return status;
+	}
+
+	LOG("terminate records returned: %u", c.count);
+	LOG("start scan resume");
+
+	// Serialize scan to bytes.
+	uint32_t bytes_size;
+	uint8_t* bytes;
+
+	if (! as_scan_to_bytes(&scan, &bytes, &bytes_size)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to serialize scan");
+	}
+
+	// Destroy scan
+	as_scan_destroy(&scan);
+
+	// Resume scan using new scan instance.
+	as_scan scan_resume;
+
+	if (! as_scan_from_bytes(&scan_resume, bytes, bytes_size)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to deserialize scan");
+	}
+
+	// Free bytes
+	free(bytes);
+
+	c.count = 0;
+	c.max = 0;
+
+	status = aerospike_scan_foreach(p_as, err, NULL, &scan_resume, scan_resume_cb, &c);
+
+	LOG("resume records returned: %u", c.count);
+
 	as_scan_destroy(&scan_resume);
 	return status;
 }

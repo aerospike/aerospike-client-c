@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_cdt_internal.h>
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include "_bin.h"
 
@@ -137,4 +138,122 @@ as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operat
 	}
 	as_bin_init(&binop->bin, name, (as_bin_value*)bytes);
 	return true;
+}
+
+bool
+as_cdt_ctx_from_unpacker(as_cdt_ctx* ctx, as_unpacker* pk)
+{
+	as_val* listval = NULL;
+	int rv = as_unpack_val(pk, &listval);
+
+	if (rv != 0 || !listval) {
+		return false;
+	}
+
+	if (listval->type != AS_LIST) {
+		return false;
+	}
+
+	as_list* list = (as_list*)listval;
+	uint32_t max = as_list_size(list);
+
+	as_cdt_ctx_init(ctx, max / 2);
+
+	as_cdt_ctx_item item;
+	uint32_t i = 0;
+
+	while (i < max) {
+		as_val* vtype = as_list_get(list, i);
+
+		if (vtype->type != AS_INTEGER) {
+			goto HandleError;
+		}
+
+		item.type = (uint32_t)((as_integer*)vtype)->value;
+
+		if (++i >= max) {
+			goto HandleError;
+		}
+
+		as_val* v = as_list_get(list, i);
+
+		if (item.type & AS_CDT_CTX_VALUE) {
+			as_val_reserve(v);
+			item.val.pval = v;
+		}
+		else {
+			if (v->type != AS_INTEGER) {
+				goto HandleError;
+			}
+
+			item.val.ival = ((as_integer*)v)->value;
+		}
+
+		as_vector_append(&ctx->list, &item);
+		i++;
+	}
+	as_val_destroy(listval);
+	return true;
+
+HandleError:
+	as_cdt_ctx_destroy(ctx);
+	as_val_destroy(listval);
+	return false;
+}
+
+bool
+as_unpack_str_init(as_unpacker* pk, char* str, uint32_t max)
+{
+	uint32_t size;
+	const uint8_t* p = as_unpack_str(pk, &size);
+
+	if (!p || size >= max) {
+		return false;
+	}
+
+	memcpy(str, p, size);
+	*(str + size) = 0;
+	return true;
+}
+
+bool
+as_unpack_str_new(as_unpacker* pk, char** str, uint32_t max)
+{
+	uint32_t size;
+	const uint8_t* p = as_unpack_str(pk, &size);
+
+	if (!p || size >= max) {
+		return false;
+	}
+
+	char* s = cf_malloc(size + 1);
+	memcpy(s, p, size);
+	*(s + size) = 0;
+	*str = s;
+	return true;
+}
+
+bool
+as_unpack_bytes_init(as_unpacker* pk, uint8_t* b, uint32_t max)
+{
+	uint32_t size;
+	const uint8_t* p = as_unpack_str(pk, &size);
+
+	if (!p || size > max) {
+		return false;
+	}
+
+	memcpy(b, p, size);
+	return true;
+}
+
+bool
+as_val_compare(as_val* v1, as_val* v2)
+{
+	char* s1 = as_val_tostring(v1);
+	char* s2 = as_val_tostring(v2);
+	bool rv = strcmp(s1, s2);
+	cf_free(s1);
+	cf_free(s2);
+	return rv == 0;
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2022 by Aerospike.
+ * Copyright 2008-2023 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -90,8 +90,7 @@ bool example_get_opts(int argc, char* argv[], int which_opts);
 
 bool example_create_event_loop(void);
 void example_connect_to_aerospike(aerospike* p_as);
-void example_connect_to_aerospike_with_udf_config(aerospike* p_as,
-		const char* lua_user_path);
+void example_connect_to_aerospike_with_udf_config(aerospike* p_as, const char* lua_user_path);
 void example_cleanup(aerospike* p_as);
 bool example_read_test_record(aerospike* p_as);
 void example_remove_test_record(aerospike* p_as);
@@ -99,10 +98,9 @@ bool example_read_test_records(aerospike* p_as);
 void example_remove_test_records(aerospike* p_as);
 bool example_register_udf(aerospike* p_as, const char* filename);
 bool example_remove_udf(aerospike* p_as, const char* filename);
-bool example_create_integer_index(aerospike* p_as, const char* bin,
+bool example_create_integer_index(aerospike* p_as, const char* set, const char* bin,
 		const char* index);
-bool example_create_2dsphere_index(aerospike* p_as, const char* bin,
-		const char* index);
+bool example_create_2dsphere_index(aerospike* p_as, const char* bin, const char* index);
 void example_remove_index(aerospike* p_as, const char* index);
 void example_dump_record(const as_record* p_rec);
 void example_dump_operations(const as_operations* p_ops);

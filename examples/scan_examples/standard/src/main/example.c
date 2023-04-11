@@ -579,7 +579,7 @@ scan_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
 	const char* set = "scanresume";
 	uint32_t total_size = 200;
 
-	LOG("write records for scan terminate/resume");
+	LOG("write records for scan terminate/resume with serialization");
 	as_status status = insert_records_for_scan_page(p_as, err, set, total_size);
 
 	if (status != AEROSPIKE_OK) {

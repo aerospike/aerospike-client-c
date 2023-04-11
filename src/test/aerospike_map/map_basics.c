@@ -2901,6 +2901,55 @@ TEST(map_ordered_result, "Map with ordered results")
 	rec = NULL;
 }
 
+TEST(ordered_map_eq_exp, "Ordered Map Equality Expression")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 28);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_orderedmap map;
+	as_orderedmap_init(&map, 10);
+
+	as_orderedmap_set(&map, (as_val*)as_string_new("key3", false), (as_val*)as_string_new("c", false));
+	as_orderedmap_set(&map, (as_val*)as_string_new("key1", false), (as_val*)as_string_new("e", false));
+	as_orderedmap_set(&map, (as_val*)as_string_new("key5", false), (as_val*)as_string_new("a", false));
+	as_orderedmap_set(&map, (as_val*)as_string_new("key4", false), (as_val*)as_string_new("b", false));
+	as_orderedmap_set(&map, (as_val*)as_string_new("key2", false), (as_val*)as_string_new("d", false));
+
+	// Reserve map because as_record_destroy() would otherwise delete it.
+	as_val_reserve((as_val*)&map);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&map);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	as_exp_build(filter, as_exp_cmp_eq(as_exp_bin_map(BIN_NAME), as_exp_val(&map)));
+	assert_not_null(filter);
+	p.base.filter_exp = filter;
+
+	as_orderedmap_destroy(&map);
+
+	rec = NULL;
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(rec->bins.size, 1);
+	assert_int_eq(rec->bins.entries[0].valuep->map._.type, AS_MAP);
+	assert_int_eq(rec->bins.entries[0].valuep->map.flags, 1);
+
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -2936,4 +2985,5 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_exp_read);
 	suite_add(map_exp);
 	suite_add(map_ordered_result);
+	suite_add(ordered_map_eq_exp);
 }

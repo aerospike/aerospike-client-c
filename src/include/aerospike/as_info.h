@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -108,10 +108,17 @@ as_info_validate(char* response, char** message);
 
 /**
  * @private
+ * Validate an individual response in a multiple response info request.
+ */
+as_status
+as_info_validate_item(as_error* err, char* response);
+
+/**
+ * @private
  * Return the single command's info response buffer value.
  * The original buffer will be modified with the null termination character.
  */
-as_status
+AS_EXTERN as_status
 as_info_parse_single_response(char *values, char **value);
 
 /**

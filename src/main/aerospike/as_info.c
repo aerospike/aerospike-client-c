@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -381,6 +381,17 @@ as_info_validate(char* response, char** message)
 				return AEROSPIKE_ERR_UDF;
 			}
 		}
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_info_validate_item(as_error* err, char* response)
+{
+	if (strncmp(response, "ERROR:", 6) == 0) {
+		char* msg = NULL;
+		as_status status = as_info_parse_error(response + 6, &msg);
+		return as_error_set_message(err, status, msg);
 	}
 	return AEROSPIKE_OK;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -3295,12 +3295,12 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
 		__bin
 
 /**
- * Create an expression that checks if the HLL __bin contains all keys in
+ * Create an expression that checks if the HLL __bin may contain all keys in
  *  __list..
  *
  * @param __list		A list expression of keys to check if the HLL may contain them.
  * @param __bin			A bin expression to apply this function to.
- * @return (integer bin) 1 __bin contains all of __list, 0 otherwise.
+ * @return (integer bin) 1 __bin may contain all of __list, 0 otherwise.
  * @ingroup expression
  */
 #define as_exp_hll_may_contain(__list, __bin) \

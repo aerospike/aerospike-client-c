@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -2779,6 +2779,8 @@ TEST(list_exp_read, "List Read Expressions")
 				as_exp_list_get_by_rel_rank_range(NULL, AS_LIST_RETURN_COUNT, as_exp_int(5), as_exp_int(0), as_exp_int(3),
 					as_exp_bin_list(BIN_NAME)),
 				as_exp_int(3)),
+			as_exp_list_get_by_rel_rank_range(NULL, AS_LIST_RETURN_EXISTS, as_exp_int(5), as_exp_int(0), as_exp_int(3),
+					as_exp_bin_list(BIN_NAME)),
 			as_exp_cmp_eq(
 				as_exp_list_get_by_index_range_to_end(NULL, AS_LIST_RETURN_VALUE, as_exp_int(3),
 					as_exp_bin_list(BIN_NAME)),

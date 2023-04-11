@@ -172,18 +172,18 @@ typedef enum as_policy_retry_e {
 typedef enum as_policy_gen_e {
 
 	/**
-	 * Write a record, regardless of generation.
+	 * Do not use record generation to restrict writes.
 	 */
 	AS_POLICY_GEN_IGNORE,
 
 	/**
-	 * Write a record, ONLY if generations are equal
+	 * Update/delete record if expected generation is equal to server generation. Otherwise, fail.
 	 */
 	AS_POLICY_GEN_EQ,
 
 	/**
-	 * Write a record, ONLY if local generation is 
-	 * greater-than remote generation
+	 * Update/delete record if expected generation greater than the server generation. 
+	 * Otherwise, fail. This is useful for restore after backup.
 	 */
 	AS_POLICY_GEN_GT
 
@@ -1136,7 +1136,7 @@ typedef struct as_policy_query_s {
 	bool deserialize;
 
 	/**
-	 * Is query expected to return less than 100 records.
+	 * Is query expected to return less than 100 records per node.
 	 * If true, the server will optimize the query for a small record set.
 	 * This field is ignored for aggregation queries, background queries
 	 * and server versions &lt; 6.0.

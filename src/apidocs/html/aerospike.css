@@ -710,3 +710,7 @@ dl.reflist > dd {
   padding: 8px;
 }
 
+table.directory > tbody > tr > td.entry span.icona {
+  display: none;
+  visibility: hidden;
+}

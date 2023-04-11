@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,6 +25,7 @@
 #include <aerospike/as_integer.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_map_operations.h>
+#include <aerospike/as_msgpack.h>
 #include <aerospike/as_msgpack_ext.h>
 #include <aerospike/as_nil.h>
 #include <aerospike/as_random.h>
@@ -107,6 +108,36 @@ example_dump_record(const as_record* p_rec)
 	}
 
 	as_record_iterator_destroy(&it);
+}
+
+static bool
+map_cmp(as_list* list, as_map* map)
+{
+	uint32_t n = as_list_size(list);
+
+	if (as_map_size(map) != as_list_size(list) / 2) {
+		info("list=%u map=%u", as_list_size(list), as_map_size(map));
+		return false;
+	}
+
+	for (uint32_t i = 0; i < n;) {
+		as_val* k = as_list_get(list, i++);
+		as_val* v = as_list_get(list, i++);
+		as_val* v1 = as_map_get(map, k);
+
+		if (as_val_cmp(v, v1) != MSGPACK_COMPARE_EQUAL) {
+			char* kk = as_val_val_tostring(k);
+			char* s = as_val_val_tostring(v);
+			char* s1 = as_val_val_tostring(v1);
+			info("k=%s s=%s s1=%s", kk, s, s1);
+			cf_free(kk);
+			cf_free(s);
+			cf_free(s1);
+			return false;
+		}
+	}
+
+	return true;
 }
 
 /******************************************************************************
@@ -233,7 +264,7 @@ TEST(map_put_items, "Map put items operations")
 	assert_true(err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
 	as_operations ops;
-	as_operations_inita(&ops, 7);
+	as_operations_inita(&ops, 9);
 
 	as_map_policy put_mode;
 	as_map_policy_init(&put_mode);
@@ -309,6 +340,12 @@ TEST(map_put_items, "Map put items operations")
 	as_integer_init(&mkey1, 12);
 	as_integer_init(&mkey2, 15);
 	as_operations_add_map_get_by_key_range(&ops, BIN_NAME, (as_val*)&mkey1, (as_val*)&mkey2, AS_MAP_RETURN_KEY_VALUE);
+	as_integer_init(&mkey1, 12);
+	as_integer_init(&mkey2, 15);
+	as_operations_add_map_get_by_key_range(&ops, BIN_NAME, (as_val*)&mkey1, (as_val*)&mkey2, AS_MAP_RETURN_UNORDERED_MAP);
+	as_integer_init(&mkey1, 12);
+	as_integer_init(&mkey2, 15);
+	as_operations_add_map_get_by_key_range(&ops, BIN_NAME, (as_val*)&mkey1, (as_val*)&mkey2, AS_MAP_RETURN_ORDERED_MAP);
 
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -339,6 +376,14 @@ TEST(map_put_items, "Map put items operations")
 
 	as_list* list = &results[i++].valuep->list;
 	assert_int_eq(as_list_size(list), 3 * 2);
+
+	as_map* map0 = &results[i++].valuep->map;
+	assert_int_eq(map0->flags, 0);
+	assert_true(map_cmp(list, map0));
+
+	as_map* map1 = &results[i++].valuep->map;
+	assert_int_eq(map1->flags, 1);
+	assert_true(map_cmp(list, map1));
 
 	as_record_destroy(rec);
 }
@@ -2807,6 +2852,104 @@ TEST(map_exp, "Map Expression")
 	as_exp_destroy(filter1);
 }
 
+TEST(map_ordered_result, "Map with ordered results")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 27);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_map_policy pol;
+	as_map_policy_init(&pol);
+	as_operations ops;
+	as_record* rec = NULL;
+
+	for (int i = 10; i > 0; i--) {
+		as_operations_init(&ops, 1);
+		as_integer k;
+		as_integer v;
+		as_integer_init(&k, i);
+		as_integer_init(&v, i);
+		as_operations_add_map_put(&ops, BIN_NAME, &pol, (as_val*)&k, (as_val*)&v);
+		status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+		assert_int_eq(status, AEROSPIKE_OK);
+		as_operations_destroy(&ops);
+		as_record_destroy(rec);
+		rec = NULL;
+	}
+
+	as_integer mkey1;
+	as_integer mkey2;
+	as_integer_init(&mkey1, 2);
+	as_integer_init(&mkey2, 5);
+
+	as_operations_init(&ops, 1);
+	as_operations_add_map_get_by_key_range(&ops, BIN_NAME, (as_val*)&mkey1, (as_val*)&mkey2, AS_MAP_RETURN_ORDERED_MAP);
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	as_bin* results = rec->bins.entries;
+	as_map* map0 = &results[0].valuep->map;
+	assert_int_eq(map0->flags, 1);
+	assert_int_eq(as_map_size(map0), 3);
+
+//	example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
+TEST(ordered_map_eq_exp, "Ordered Map Equality Expression")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 28);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_orderedmap map;
+	as_orderedmap_init(&map, 10);
+
+	as_orderedmap_set(&map, (as_val*)as_string_new("key3", false), (as_val*)as_string_new("c", false));
+	as_orderedmap_set(&map, (as_val*)as_string_new("key1", false), (as_val*)as_string_new("e", false));
+	as_orderedmap_set(&map, (as_val*)as_string_new("key5", false), (as_val*)as_string_new("a", false));
+	as_orderedmap_set(&map, (as_val*)as_string_new("key4", false), (as_val*)as_string_new("b", false));
+	as_orderedmap_set(&map, (as_val*)as_string_new("key2", false), (as_val*)as_string_new("d", false));
+
+	// Reserve map because as_record_destroy() would otherwise delete it.
+	as_val_reserve((as_val*)&map);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&map);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+
+	as_exp_build(filter, as_exp_cmp_eq(as_exp_bin_map(BIN_NAME), as_exp_val(&map)));
+	assert_not_null(filter);
+	p.base.filter_exp = filter;
+
+	as_orderedmap_destroy(&map);
+
+	rec = NULL;
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(rec->bins.size, 1);
+	assert_int_eq(rec->bins.entries[0].valuep->map._.type, AS_MAP);
+	assert_int_eq(rec->bins.entries[0].valuep->map.flags, 1);
+
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -2841,4 +2984,6 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_exp_mod);
 	suite_add(map_exp_read);
 	suite_add(map_exp);
+	suite_add(map_ordered_result);
+	suite_add(ordered_map_eq_exp);
 }

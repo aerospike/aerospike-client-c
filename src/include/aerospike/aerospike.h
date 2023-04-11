@@ -62,13 +62,6 @@
  * @defgroup aerospike_t Client Types
  */
 
-/**
- * @defgroup client_utilities Utilities
- * @{
- *   @defgroup stringmap_t StringMap
- * @}
- */
-
 #include <aerospike/as_error.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_log.h>

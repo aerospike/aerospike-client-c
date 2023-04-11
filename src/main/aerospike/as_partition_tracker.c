@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -38,8 +38,12 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 	for (uint16_t i = 0; i < part_count; i++) {
 		as_partition_status* ps = &parts_all->parts[i];
 		ps->part_id = part_begin + i;
+		ps->replica_index = 0;
+		ps->unavailable = false;
 		ps->retry = true;
 		ps->digest.init = false;
+		ps->bval = 0;
+		ps->master_node = NULL;
 	}
 
 	if (digest && digest->init) {
@@ -251,7 +255,8 @@ as_partition_tracker_assign(
 		as_partition_table* table = as_partition_tables_get(&cluster->partition_tables, ns);
 
 		if (! table) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
+			return as_error_update(err, AEROSPIKE_ERR_NAMESPACE_NOT_FOUND, "Invalid namespace: %s",
+				ns);
 		}
 
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
@@ -259,18 +264,23 @@ as_partition_tracker_assign(
 
 			if (retry || ps->retry) {
 				as_partition* part = &table->partitions[ps->part_id];
-				as_node* master_node = as_node_load(&part->master);
+				as_node* master_node = as_node_load(&part->nodes[0]);
 				as_node* node;
 
 				if (pt->iteration == 1 || !ps->unavailable || ps->master_node != master_node) {
 					node = ps->master_node = master_node;
-					ps->master = true;
+					ps->replica_index = 0;
 				}
 				else {
 					// Partition was unavailable in the previous iteration and the
 					// master node has not changed. Switch replica.
-					node = ps->master ? as_node_load(&part->prole) : master_node;
-					ps->master = !ps->master;
+					ps->replica_index++;
+
+					if (ps->replica_index >= table->replica_size) {
+						ps->replica_index = 0;
+					}
+
+					node = as_node_load(&part->nodes[ps->replica_index]);
 				}
 
 				if (! node) {
@@ -297,7 +307,8 @@ as_partition_tracker_assign(
 		as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
 
 		if (! table) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid namespace: %s", ns);
+			return as_error_update(err, AEROSPIKE_ERR_NAMESPACE_NOT_FOUND, "Invalid namespace: %s",
+				ns);
 		}
 
 		as_node** local_nodes = cluster->shm_info->local_nodes;
@@ -307,18 +318,23 @@ as_partition_tracker_assign(
 
 			if (retry || ps->retry) {
 				as_partition_shm* part = &table->partitions[ps->part_id];
-				uint32_t master_index = as_load_uint32(&part->master);
+				uint32_t master_index = as_load_uint32(&part->nodes[0]);
 				uint32_t index;
 
 				if (pt->iteration == 1 || !ps->unavailable || ps->master_index != master_index) {
 					index = ps->master_index = master_index;
-					ps->master = true;
+					ps->replica_index = 0;
 				}
 				else {
 					// Partition was unavailable in the previous iteration and the
 					// master node has not changed. Switch replica.
-					index = ps->master ? as_load_uint32(&part->prole) : master_index;
-					ps->master = !ps->master;
+					ps->replica_index++;
+
+					if (ps->replica_index >= table->replica_size) {
+						ps->replica_index = 0;
+					}
+
+					index = as_load_uint32(&part->nodes[ps->replica_index]);
 				}
 
 				// node index zero indicates unset.
@@ -461,26 +477,29 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 
 	// Check if limits have been reached.
 	if (pt->iteration > pt->max_retries) {
-		as_error_set_message(err, AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED, "");
+		if (!pt->errors || pt->errors->size <= 0) {
+			return as_error_set_message(err, AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED,
+				"Max retries exceeded");
+		}
 
+		// Return last sub-error code received.
+		uint32_t max = pt->errors->size;
+		as_status last_code = *(as_status*)as_vector_get(pt->errors, max - 1);
+		as_error_set_message(err, last_code, "");
+
+		// Include all sub-errors in error message.
 		as_string_builder sb;
 		as_string_builder_assign(&sb, sizeof(err->message), err->message);
-		as_string_builder_append(&sb, "Max retries exceeded: ");
-		as_string_builder_append_uint(&sb, pt->max_retries);
+		as_string_builder_append(&sb, as_error_string(err->code));
+		as_string_builder_append_newline(&sb);
+		as_string_builder_append(&sb, "sub-errors:");
 
-		if (pt->errors) {
+		for (uint32_t i = 0; i < max; i++) {
+			as_status st = *(as_status*)as_vector_get(pt->errors, i);
 			as_string_builder_append_newline(&sb);
-			as_string_builder_append(&sb, "sub-errors:");
-
-			uint32_t max = pt->errors->size;
-
-			for (uint32_t i = 0; i < max; i++) {
-				as_status st = *(as_status*)as_vector_get(pt->errors, i);
-				as_string_builder_append_newline(&sb);
-				as_string_builder_append_int(&sb, st);
-				as_string_builder_append_char(&sb, ' ');
-				as_string_builder_append(&sb, as_error_string(st));
-			}
+			as_string_builder_append_int(&sb, st);
+			as_string_builder_append_char(&sb, ' ');
+			as_string_builder_append(&sb, as_error_string(st));
 		}
 		return err->code;
 	}

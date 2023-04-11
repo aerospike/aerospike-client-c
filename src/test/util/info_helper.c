@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2016 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -26,11 +26,12 @@ void get_info_field(const char *input, const char *field, char *output, uint32_t
 	as_error err;
 	as_error_reset(&err);
 
-	char *response = NULL;
+	char* response = NULL;
+	as_status status = aerospike_info_any(as, &err, NULL, input, &response);
 
-	aerospike_info_any(as, &err, NULL, input, &response);
-	if (err.code != AEROSPIKE_OK) {
-        error("error caused by aerospike_info_any(): (%d) %s @ %s[%s:%d]", err.code, err.message, err.func, err.file, err.line);
+	if (status != AEROSPIKE_OK) {
+        error("aerospike_info_any() error: (%d) %s @ %s[%s:%d]",
+			err.code, err.message, err.func, err.file, err.line);
         return;
 	}
 
@@ -39,9 +40,16 @@ void get_info_field(const char *input, const char *field, char *output, uint32_t
         return;
 	}
 
-	// response format-null terminated string of the form "name1=value1;name2=value2;"
-	char* p = response;
-	char* begin = p;
+	char* begin = NULL;
+	status = as_info_parse_single_response(response, &begin);
+
+	if (status != AEROSPIKE_OK) {
+        error("as_info_parse_single_response() error: %d", err.code);
+        return;
+	}
+
+	// Response format: name1=value1;name2=value2;...
+	char* p = begin;
 
 	as_name_value nv;
 
@@ -92,6 +100,6 @@ void get_info_field(const char *input, const char *field, char *output, uint32_t
 
 Done:
 	if (response) {
-		free (response);
+		free(response);
 	}
 }

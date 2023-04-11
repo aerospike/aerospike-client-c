@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -39,11 +39,18 @@
 // These values must line up with as_operator enum.
 static uint8_t as_protocol_types[] = {1, 2, 3, 4, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
-uint32_t g_replica_rr = 0;
+static uint32_t g_replica_rr = 0;
 
 /******************************************************************************
  * FUNCTIONS
  *****************************************************************************/
+
+uint8_t
+as_replica_index_any()
+{
+	uint32_t seq = as_faa_uint32(&g_replica_rr, 1);
+	return (uint8_t)(seq % AS_MAX_REPLICATION_FACTOR);
+}
 
 static as_status
 as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node);
@@ -595,7 +602,7 @@ as_command_execute(as_command* cmd, as_error* err)
 			// This works because the previous node is only used for pointer comparison
 			// and the previous node's contents are not examined during this call.
 			node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, node, cmd->replica,
-										 cmd->master);
+										 cmd->replica_size, &cmd->replica_index);
 
 			if (! node) {
 				return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
@@ -718,7 +725,7 @@ Retry:
 			 status != AEROSPIKE_MAX_ERROR_RATE)
 			)) {
 			// Note: SC session read will ignore this setting because it uses master only.
-			cmd->master = !cmd->master;
+			cmd->replica_index++;
 
 			// Disable sleep on first failure because target node is likely to change.
 			sleep_between_retries = (cmd->iteration == 1)? 0 : cmd->policy->sleep_between_retries;

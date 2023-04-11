@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -492,7 +492,7 @@ as_node_get_by_name(as_cluster* cluster, const char* name);
 as_node*
 as_partition_reg_get_node(
 	as_cluster* cluster, const char* ns, as_partition* p, as_node* prev_node,
-	as_policy_replica replica, bool use_master
+	as_policy_replica replica, uint8_t replica_size, uint8_t* replica_index
 	);
 
 struct as_partition_shm_s;
@@ -505,7 +505,7 @@ struct as_partition_shm_s;
 as_node*
 as_partition_shm_get_node(
 	as_cluster* cluster, const char* ns, struct as_partition_shm_s* partition,
-	as_node* prev_node, as_policy_replica replica, bool use_master
+	as_node* prev_node, as_policy_replica replica, uint8_t replica_size, uint8_t* replica_index
 	);
 
 /**
@@ -516,16 +516,16 @@ as_partition_shm_get_node(
 static inline as_node*
 as_partition_get_node(
 	as_cluster* cluster, const char* ns, void* partition, as_node* prev_node,
-	as_policy_replica replica, bool master
+	as_policy_replica replica, uint8_t replica_size, uint8_t* replica_index
 	)
 {
 	if (cluster->shm_info) {
 		return as_partition_shm_get_node(cluster, ns, (struct as_partition_shm_s*)partition,
-										 prev_node, replica, master);
+			prev_node, replica, replica_size, replica_index);
 	}
 	else {
-		return as_partition_reg_get_node(cluster, ns, (as_partition*)partition,
-										 prev_node, replica, master);
+		return as_partition_reg_get_node(cluster, ns, (as_partition*)partition, prev_node,
+			replica, replica_size, replica_index);
 	}
 }
 

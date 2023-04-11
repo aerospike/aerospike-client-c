@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2022 by Aerospike.
+ * Copyright 2008-2023 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -47,6 +47,10 @@
 
 const char TEST_INDEX_NAME[] = "test-bin-index";
 
+const char PAGE_INDEX_NAME[] = "page-index";
+const char PAGE_BIN_INT[] = "binint";
+const char PAGE_BIN_STR[] = "binstr";
+
 //==========================================================
 // Forward Declarations
 //
@@ -56,6 +60,7 @@ void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
 as_status query_pages(aerospike* p_as, as_error* err);
 as_status query_terminate_resume(aerospike* p_as, as_error* err);
+as_status query_terminate_resume_with_serialization(aerospike* p_as, as_error* err);
 
 //==========================================================
 // SIMPLE QUERY Examples
@@ -78,17 +83,12 @@ main(int argc, char* argv[])
 	example_remove_index(&as, TEST_INDEX_NAME);
 
 	// Create a numeric secondary index on test-bin.
-	if (! example_create_integer_index(&as, "test-bin", TEST_INDEX_NAME)) {
+	if (! example_create_integer_index(&as, g_set, "test-bin", TEST_INDEX_NAME)) {
 		cleanup(&as);
 		exit(-1);
 	}
 
 	if (! insert_records(&as)) {
-		cleanup(&as);
-		exit(-1);
-	}
-
-	if (! example_read_test_records(&as)) {
 		cleanup(&as);
 		exit(-1);
 	}
@@ -132,6 +132,13 @@ main(int argc, char* argv[])
 	// Run query terminate/resume.
 	if (query_terminate_resume(&as, &err) != AEROSPIKE_OK) {
 		LOG("query_terminate_resume() returned %d - %s", err.code, err.message);
+		cleanup(&as);
+		exit(-1);
+	}
+
+	// Run query terminate/resume with serialization.
+	if (query_terminate_resume_with_serialization(&as, &err) != AEROSPIKE_OK) {
+		LOG("query_terminate_resume_with_serialization() returned %d - %s", err.code, err.message);
 		cleanup(&as);
 		exit(-1);
 	}
@@ -225,7 +232,6 @@ insert_records(aerospike* p_as)
 struct counter {
 	uint32_t count;
 	uint32_t max;
-	as_digest digest;
 };
 
 static bool
@@ -246,8 +252,9 @@ insert_records_for_query_page(aerospike* p_as, as_error* err, const char* set, u
 {
 	// Write records that belong to the specified partition.
 	as_record rec;
-	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, "bin1", 55);
+	as_record_inita(&rec, 2);
+	as_record_set_int64(&rec, PAGE_BIN_INT, 55);
+	as_record_set_str(&rec, PAGE_BIN_STR, "str");
 
 	as_status status;
 
@@ -267,6 +274,7 @@ insert_records_for_query_page(aerospike* p_as, as_error* err, const char* set, u
 			return status;
 		}
 	}
+	as_record_destroy(&rec);
 	return AEROSPIKE_OK;
 }
 
@@ -316,6 +324,26 @@ query_pages(aerospike* p_as, as_error* err)
 // Query Terminate and Resume
 //
 
+struct page_counter {
+	as_spinlock lock;
+	uint32_t count;
+	uint32_t max;
+};
+
+static void
+page_counter_init(struct page_counter* c, uint32_t max)
+{
+	as_spinlock_init(&c->lock);
+	c->count = 0;
+	c->max = max;
+}
+
+static void
+page_counter_reset(struct page_counter* c)
+{
+	c->count = 0;
+}
+
 static bool
 query_terminate_cb(const as_val* val, void* udata)
 {
@@ -324,18 +352,22 @@ query_terminate_cb(const as_val* val, void* udata)
 		return true;
 	}
 
-	struct counter* c = udata;
+	struct page_counter* c = udata;
+	bool rv;
 
-	// query.concurrent is false, so atomics are not necessary.
-	if (c->count >= c->max) {
+	as_spinlock_lock(&c->lock);
+	if (c->count < c->max) {
+		c->count++;
+		rv = true;
+	}
+	else {
 		// Since we are terminating the query here, the query last digest
 		// will not be set and the current record will be returned again
 		// if the query resumes at a later time.
-		return false;
+		rv = false;
 	}
-
-	c->count++;
-	return true;
+	as_spinlock_unlock(&c->lock);
+	return rv;
 }
 
 static bool
@@ -346,11 +378,10 @@ query_resume_cb(const as_val* val, void* udata)
 		return true;
 	}
 
-	struct counter* c = udata;
-	c->count++;
+	struct page_counter* c = udata;
+	as_incr_uint32(&c->count);
 	return true;
 }
-
 
 as_status
 query_terminate_resume(aerospike* p_as, as_error* err)
@@ -368,9 +399,8 @@ query_terminate_resume(aerospike* p_as, as_error* err)
 	LOG("records written: %u", total_size);
 	LOG("start query terminate");
 
-	struct counter c;
-	c.count = 0;
-	c.max = 50;
+	struct page_counter c;
+	page_counter_init(&c, 50);
 
 	as_query query;
 	as_query_init(&query, g_namespace, set);
@@ -404,14 +434,90 @@ query_terminate_resume(aerospike* p_as, as_error* err)
 	as_partition_filter pf;
 	as_partition_filter_set_partitions(&pf, parts_all);
 
-	c.count = 0;
-	c.max = 0;
+	page_counter_reset(&c);
 
 	status = aerospike_query_partitions(p_as, err, NULL, &query_resume, &pf, query_resume_cb, &c);
 
 	LOG("resume records returned: %u", c.count);
 
 	as_partitions_status_release(parts_all);
+	as_query_destroy(&query_resume);
+	return status;
+}
+
+as_status
+query_terminate_resume_with_serialization(aerospike* p_as, as_error* err)
+{
+	// Same as query_terminate_resume(), but the query is saved to bytes that could
+	// be resumed in a separate process.
+	const char* set = "queryresume";
+	uint32_t total_size = 200;
+
+	LOG("create index for terminate/resume with serialization");
+	if (! example_create_integer_index(p_as, set, PAGE_BIN_INT, PAGE_INDEX_NAME)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to create query index");
+	}
+
+	LOG("write records for query terminate/resume with serialization");
+	as_status status = insert_records_for_query_page(p_as, err, set, total_size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	LOG("records written: %u", total_size);
+	LOG("start query terminate");
+
+	struct page_counter c;
+	page_counter_init(&c, 50);
+
+	as_query query;
+	as_query_init(&query, g_namespace, set);
+	as_query_set_paginate(&query, true);
+
+	as_query_select(&query, PAGE_BIN_INT);
+
+	as_query_where_init(&query, 1);
+	as_query_where(&query, PAGE_BIN_INT, as_integer_range(0, 100));
+
+	// Start query. Query will be terminated early in callback.
+	status = aerospike_query_foreach(p_as, err, NULL, &query, query_terminate_cb, &c);
+
+	if (status != AEROSPIKE_OK) {
+		as_query_destroy(&query);
+		return status;
+	}
+
+	LOG("terminate records returned: %u", c.count);
+	LOG("start query resume");
+
+	// Serialize query to bytes.
+	uint32_t bytes_size;
+	uint8_t* bytes;
+
+	if (! as_query_to_bytes(&query, &bytes, &bytes_size)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to serialize query");
+	}
+
+	// Destroy query
+	as_query_destroy(&query);
+
+	// Resume query using new query instance.
+	as_query query_resume;
+
+	if (! as_query_from_bytes(&query_resume, bytes, bytes_size)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to deserialize query");
+	}
+
+	// Free bytes
+	free(bytes);
+
+	page_counter_reset(&c);
+
+	status = aerospike_query_foreach(p_as, err, NULL, &query_resume, query_resume_cb, &c);
+
+	LOG("resume records returned: %u", c.count);
+
 	as_query_destroy(&query_resume);
 	return status;
 }

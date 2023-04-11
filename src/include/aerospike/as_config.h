@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -421,9 +421,11 @@ typedef struct as_config_s {
 	char password[AS_PASSWORD_SIZE];
 	
 	/**
-	 * Expected cluster name.  If not null, server nodes must return this cluster name in order to
-	 * join the client's view of the cluster. Should only be set when connecting to servers that
-	 * support the "cluster-name" info command.  Use as_config_set_cluster_name() to set this field.
+	 * Expected cluster name.  If populated, the cluster_name must match the cluster-name field
+	 * in the service section in each server configuration.  This ensures that the specified
+	 * seed nodes belong to the expected cluster on startup.  If not, the client will refuse
+	 * to add the node to the client's view of the cluster.
+	 *
 	 * Default: NULL
 	 */
 	char* cluster_name;
@@ -726,7 +728,7 @@ typedef struct as_config_s {
 	 * Each shared memory segment contains state for one Aerospike cluster.  If there are
 	 * multiple Aerospike clusters, a different shm_key must be defined for each cluster.
 	 * 
-	 * Default: 0xA8000000
+	 * Default: 0xA9000000
 	 */
 	int shm_key;
 	

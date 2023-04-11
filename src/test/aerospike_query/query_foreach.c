@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -89,7 +89,8 @@ bool namespace_in_memory = false;
  *      d = c % 10
  *      e = b + (c + 1) * (d + 1) / 2
  */
-bool query_foreach_create(void)
+bool
+query_foreach_create(void)
 {
 	as_error err;
 	as_error_reset(&err);
@@ -145,7 +146,7 @@ bool query_foreach_create(void)
 	uint32_t the_ttl = AS_RECORD_NO_EXPIRE_TTL;
 	
 	// insert records
-	for ( int i = 0; i < n_recs; i++ ) {
+	for (int i = 0; i < n_recs; i++) {
 
 		if (i == 10) {
 			// We change the TTL from never to 100 days
@@ -182,7 +183,7 @@ bool query_foreach_create(void)
 		// Make list		
 		as_arraylist list;
 		as_arraylist_init(&list, 3, 0);
-		if ( (i%3) == 0) {
+		if ((i%3) == 0) {
 			as_arraylist_append_str(&list, "x");
 			as_arraylist_append_str(&list, "x1");
 			as_arraylist_append_str(&list, "x2");
@@ -196,7 +197,7 @@ bool query_foreach_create(void)
 		// Make map
 		as_hashmap map;
 		as_hashmap_init(&map, 1);
-		if ( (i%7) == 0) {
+		if ((i%7) == 0) {
 			as_stringmap_set_str((as_map *) &map, "ykey", "yvalue");
 		} else {
 			as_stringmap_set_str((as_map *) &map, "ykey_not", "yvalue_not");
@@ -273,62 +274,64 @@ bool query_foreach_create(void)
 /**
  * Destroy 9 indexes.
  */
-bool query_foreach_destroy(void)
+bool
+query_foreach_destroy(void)
 {
 	as_error err;
 	as_error_reset(&err);
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_a");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_b");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_c");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_d");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_x");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_y");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_y1");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_z");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 
 	return true;
 }
 
-static bool before(atf_suite * suite) {
-
-	if ( ! udf_put(LUA_FILE) ) {
+static bool
+before(atf_suite * suite)
+{
+	if (! udf_put(LUA_FILE)) {
 		error("failure while uploading: %s", LUA_FILE);
 		return false;
 	}
 
-	if ( ! udf_exists(LUA_FILE) ) {
+	if (! udf_exists(LUA_FILE)) {
 		error("lua file does not exist: %s", LUA_FILE);
 		return false;
 	}
@@ -336,9 +339,10 @@ static bool before(atf_suite * suite) {
 	return query_foreach_create();
 }
 
-static bool after(atf_suite * suite) {
-	
-	if ( ! udf_remove(LUA_FILE) ) {
+static bool
+after(atf_suite * suite)
+{
+	if (! udf_remove(LUA_FILE)) {
 		error("failure while removing: %s", LUA_FILE);
 		return false;
 	}
@@ -346,9 +350,11 @@ static bool after(atf_suite * suite) {
 	return query_foreach_destroy();
 }
 
-static bool count_callback(const as_val * v, void * udata) {
+static bool
+count_callback(const as_val* v, void* udata)
+{
 	uint32_t * count = (uint32_t *) udata;
-	if ( v == NULL ) {
+	if (v == NULL) {
 		info("count: %d", as_load_uint32(count));
 	}
 	else {
@@ -361,14 +367,16 @@ static bool count_callback(const as_val * v, void * udata) {
  * TEST CASES
  *****************************************************************************/
 
-TEST( query_foreach_exists, UDF_FILE" exists" ) {
-	assert_true( udf_exists(LUA_FILE) );
+TEST(query_foreach_exists, UDF_FILE" exists")
+{
+	assert_true(udf_exists(LUA_FILE));
 }
 
-static bool query_foreach_count_callback(const as_val * v, void * udata) {
-
+static bool
+query_foreach_count_callback(const as_val* v, void* udata)
+{
 	uint32_t * count = (uint32_t *) udata;
-	if ( v == NULL ) {
+	if (v == NULL) {
 		info("count: %d", as_load_uint32(count));
 	}
 	else {
@@ -377,8 +385,8 @@ static bool query_foreach_count_callback(const as_val * v, void * udata) {
 	return true;
 }
 
-TEST( query_foreach_1, "count(*) where a == 'abc' (non-aggregating)" ) {
-
+TEST(query_foreach_1, "count(*) where a == 'abc' (non-aggregating)")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -395,16 +403,18 @@ TEST( query_foreach_1, "count(*) where a == 'abc' (non-aggregating)" ) {
 	
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 100 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 100);
 
 	as_query_destroy(&q);
 }
 
-static bool query_foreach_2_callback(const as_val * v, void * udata) {
-	if ( v != NULL ) {
+static bool
+query_foreach_2_callback(const as_val* v, void* udata)
+{
+	if (v != NULL) {
 		as_integer * i = as_integer_fromval(v);
-		if ( i ) {
+		if (i) {
 			int64_t * count = (int64_t *) udata;
 			*count = i ? as_integer_toint(i) : 0;
 		}
@@ -412,8 +422,8 @@ static bool query_foreach_2_callback(const as_val * v, void * udata) {
 	return true;
 }
 
-TEST( query_foreach_2, "count(*) where a == 'abc' (aggregating)" ) {
-
+TEST(query_foreach_2, "count(*) where a == 'abc' (aggregating)")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -427,23 +437,24 @@ TEST( query_foreach_2, "count(*) where a == 'abc' (aggregating)" ) {
 
 	as_query_apply(&q, UDF_FILE, "count", NULL);
 	
-	if ( aerospike_query_foreach(as, &err, NULL, &q, query_foreach_2_callback, &count) != AEROSPIKE_OK ) {
+	if (aerospike_query_foreach(as, &err, NULL, &q, query_foreach_2_callback, &count) != AEROSPIKE_OK) {
 		error("%s (%d) [%s:%d]", err.message, err.code, err.file, err.line);
 	}
 
 	info("count: %d",count);
 	
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 100 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 100);
 
 	as_query_destroy(&q);
 }
 
-
-static bool query_foreach_3_callback(const as_val * v, void * udata) {
-	if ( v != NULL ) {
+static bool
+query_foreach_3_callback(const as_val* v, void* udata)
+{
+	if (v != NULL) {
 		as_integer * result = as_integer_fromval(v);
-		if ( result != NULL ) {
+		if (result != NULL) {
 			int64_t * value = (int64_t *) udata;
 			*value = as_integer_get(result);
 		}
@@ -451,8 +462,8 @@ static bool query_foreach_3_callback(const as_val * v, void * udata) {
 	return true;
 }
 
-TEST( query_foreach_3, "sum(e) where a == 'abc'" ) {
-	
+TEST(query_foreach_3, "sum(e) where a == 'abc'")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -468,23 +479,24 @@ TEST( query_foreach_3, "sum(e) where a == 'abc'" ) {
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_3_callback, &value);
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
 	info("value: %ld", value);
 
-
-	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( value, 24275 );
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(value, 24275);
 
 	as_query_destroy(&q);
 }
 
-static bool query_foreach_4_callback(const as_val * v, void * udata) {
-	if ( v != NULL ) {
+static bool
+query_foreach_4_callback(const as_val* v, void* udata)
+{
+	if (v != NULL) {
 		as_integer * result = as_integer_fromval(v);
-		if ( result != NULL ) {
+		if (result != NULL) {
 			int64_t * value = (int64_t *) udata;
 			*value = as_integer_get(result);
 		}
@@ -492,8 +504,8 @@ static bool query_foreach_4_callback(const as_val * v, void * udata) {
 	return true;
 }
 
-TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
-	
+TEST(query_foreach_4, "sum(d) where b == 100 and d == 1")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -514,22 +526,21 @@ TEST( query_foreach_4, "sum(d) where b == 100 and d == 1" ) {
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_4_callback, &value);
 
-	if ( err.code != AEROSPIKE_OK ) {
-		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	if (err.code != AEROSPIKE_OK) {
+		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
 	info("value: %ld", value);
 
-	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( value, 10 );
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(value, 10);
 
 	as_arraylist_destroy(&args);
 	as_query_destroy(&q);
 }
 
-
-TEST( query_foreach_5, "IN LIST count(*) where x contains 'x'" ) {
-	
+TEST(query_foreach_5, "IN LIST count(*) where x contains 'x'")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -543,18 +554,18 @@ TEST( query_foreach_5, "IN LIST count(*) where x contains 'x'" ) {
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
-	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( count, 34 );
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(count, 34);
 
 	as_query_destroy(&q);
 }
 
-TEST( query_foreach_6, "IN MAPKEYS count(*) where y contains 'ykey'" ) {
-	
+TEST(query_foreach_6, "IN MAPKEYS count(*) where y contains 'ykey'")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -568,18 +579,18 @@ TEST( query_foreach_6, "IN MAPKEYS count(*) where y contains 'ykey'" ) {
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
-	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( count, 15 );
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(count, 15);
 
 	as_query_destroy(&q);
 }
 
-TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'yvalue'" ) {
-
+TEST(query_foreach_7, "IN MAPVALUES count(*) where y contains 'yvalue'")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -593,18 +604,18 @@ TEST( query_foreach_7, "IN MAPVALUES count(*) where y contains 'yvalue'" ) {
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
-	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert_int_eq( count, 15 );
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(count, 15);
 
 	as_query_destroy(&q);
 }
 
-TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
-	
+TEST(query_foreach_8, "IN LIST count(*) where z between 50 and 51")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -618,7 +629,7 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
@@ -634,14 +645,14 @@ TEST( query_foreach_8, "IN LIST count(*) where z between 50 and 51" ) {
 	// The middle 4 are found twice in the secondary index. We might return
 	// duplicates, so may see any count between 6 and 10.
 
-	assert_int_eq( err.code, AEROSPIKE_OK );
-	assert( count >= 6 && count <= 10 );
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert(count >= 6 && count <= 10);
 
 	as_query_destroy(&q);
 }
 
-TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'z' is between 51 and 54" ) {
-
+TEST(query_foreach_9, "CTX on LIST count(*) where max value in list 'z' is between 51 and 54")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -660,7 +671,7 @@ TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'z' is betw
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
@@ -673,15 +684,15 @@ TEST( query_foreach_9, "CTX on LIST count(*) where max value in list 'z' is betw
 	// [50, 51, 52, 53, 54] *
 	// [51, 52, 53, 54, 55]
 
-	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq(err.code, AEROSPIKE_OK);
 	assert_int_eq(count, 4);
 
 	as_query_destroy(&q);
 	as_cdt_ctx_destroy(&ctx);
 }
 
-TEST( query_with_range_filter, "query_with_range_filter" ) {
-
+TEST(query_with_range_filter, "query_with_range_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -715,15 +726,15 @@ TEST( query_with_range_filter, "query_with_range_filter" ) {
 	// The second range filter should match all records that mod 10
 	// returns 3, 4 and 5.  The combination should match only 13, 14
 	// and 15.
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 3 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 3);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( query_with_equality_filter, "query_with_equality_filter" ) {
-
+TEST(query_with_equality_filter, "query_with_equality_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -748,15 +759,15 @@ TEST( query_with_equality_filter, "query_with_equality_filter" ) {
 	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
 
 	// We should only match one record.
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 1 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 1);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( query_with_rec_device_size_filter, "query_with_rec_device_size_filter" ) {
-
+TEST(query_with_rec_device_size_filter, "query_with_rec_device_size_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -781,21 +792,21 @@ TEST( query_with_rec_device_size_filter, "query_with_rec_device_size_filter" ) {
 	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
 
 	// We should match 100 - 65 records
-	assert_int_eq( err.code, 0 );
+	assert_int_eq(err.code, 0);
 
 	if (namespace_has_persistence) {
-		assert_int_eq( count, 35 );
+		assert_int_eq(count, 35);
 	}
 	else {
-		assert_int_eq( count, 0 );
+		assert_int_eq(count, 0);
 	}
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( query_with_rec_memory_size_filter, "query_with_rec_memory_size_filter" ) {
-
+TEST(query_with_rec_memory_size_filter, "query_with_rec_memory_size_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -820,22 +831,21 @@ TEST( query_with_rec_memory_size_filter, "query_with_rec_memory_size_filter" ) {
 	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
 
 	// We should match 100 - 65 records
-	assert_int_eq( err.code, 0 );
+	assert_int_eq(err.code, 0);
 
 	if (namespace_in_memory) {
-		assert_int_eq( count, 35 );
+		assert_int_eq(count, 35);
 	}
 	else {
-		assert_int_eq( count, 0 );
+		assert_int_eq(count, 0);
 	}
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-
-TEST( query_intermittent_bin_filter, "query_intermittent_bin_filter" ) {
-
+TEST(query_intermittent_bin_filter, "query_intermittent_bin_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -862,15 +872,15 @@ TEST( query_intermittent_bin_filter, "query_intermittent_bin_filter" ) {
 	// Where clause matches c between 10, 11, 12 ... 28, 29, 30.
 	// The "g" bin is larger than 20 for 21, 23, 25, 27, 29
 	// The "g" bin is missing for even numbers, should be false.
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 5 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 5);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( scan_with_rec_last_update_filter, "scan_with_rec_last_update_filter" ) {
-
+TEST(scan_with_rec_last_update_filter, "scan_with_rec_last_update_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -892,17 +902,17 @@ TEST( scan_with_rec_last_update_filter, "scan_with_rec_last_update_filter" ) {
 	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
 
 	// We should match 100 - 42 records
-	assert_int_eq( err.code, 0 );
+	assert_int_eq(err.code, 0);
 
 	// Clock skew between client and server can cause slightly different results.
-	//assert_int_eq( count, 100 - 42 );
+	//assert_int_eq(count, 100 - 42);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( scan_with_rec_last_update_filter_less, "scan_with_rec_last_update_filter_less" ) {
-
+TEST(scan_with_rec_last_update_filter_less, "scan_with_rec_last_update_filter_less")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -924,17 +934,17 @@ TEST( scan_with_rec_last_update_filter_less, "scan_with_rec_last_update_filter_l
 	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
 
 	// We should match 42 records
-	assert_int_eq( err.code, 0 );
+	assert_int_eq(err.code, 0);
 
 	// Clock skew between client and server can cause slightly different results.
-	//assert_int_eq( count, 42 );
+	//assert_int_eq(count, 42);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( scan_with_rec_void_time_filter_1, "scan_with_rec_void_time_filter_1" ) {
-
+TEST(scan_with_rec_void_time_filter_1, "scan_with_rec_void_time_filter_1")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -956,15 +966,15 @@ TEST( scan_with_rec_void_time_filter_1, "scan_with_rec_void_time_filter_1" ) {
 	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
 
 	// These are the 0 TTL, from [0:9]
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 10 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 10);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( scan_with_rec_void_time_filter_2, "scan_with_rec_void_time_filter_2" ) {
-
+TEST(scan_with_rec_void_time_filter_2, "scan_with_rec_void_time_filter_2")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -998,15 +1008,15 @@ TEST( scan_with_rec_void_time_filter_2, "scan_with_rec_void_time_filter_2" ) {
 							count_callback, &count);
 
 	// These are the 10 day TTL, from [42:99]
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 58 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 58);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( scan_with_rec_void_time_filter_3, "scan_with_rec_void_time_filter_3" ) {
-
+TEST(scan_with_rec_void_time_filter_3, "scan_with_rec_void_time_filter_3")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1032,15 +1042,15 @@ TEST( scan_with_rec_void_time_filter_3, "scan_with_rec_void_time_filter_3" ) {
 							count_callback, &count);
 
 	// These are the 100 day TTL, from index [10:41]
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 32 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 32);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( scan_with_rec_digest_modulo_filter, "scan_with_rec_digest_modulo_filter" ) {
-
+TEST(scan_with_rec_digest_modulo_filter, "scan_with_rec_digest_modulo_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1068,14 +1078,14 @@ TEST( scan_with_rec_digest_modulo_filter, "scan_with_rec_digest_modulo_filter" )
 		as_query_destroy(&q);
 	}
 
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count[0], 31 );
-	assert_int_eq( count[1], 30 );
-	assert_int_eq( count[2], 39 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count[0], 31);
+	assert_int_eq(count[1], 30);
+	assert_int_eq(count[2], 39);
 }
 
-TEST( query_with_or_filter, "query_with_or_filter" ) {
-
+TEST(query_with_or_filter, "query_with_or_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1109,15 +1119,15 @@ TEST( query_with_or_filter, "query_with_or_filter" ) {
 	// total) The second range filter should match all records that
 	// mod 10 returns 3, 4 and 5 (30 total).  The combination should
 	// match 40 less the 3 in common, so 37.
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 37 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 37);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( query_with_not_filter, "query_with_not_filter" ) {
-
+TEST(query_with_not_filter, "query_with_not_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1152,15 +1162,15 @@ TEST( query_with_not_filter, "query_with_not_filter" ) {
 	// total) The second range filter should match all records that
 	// mod 10 returns 3, 4 and 5 (30 total).  The combination should
 	// match 40 less the 3 in common, so 37.  The not inverts to 63.
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 63 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 63);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( query_with_regex_filter, "query_with_regex_filter" ) {
-
+TEST(query_with_regex_filter, "query_with_regex_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1186,15 +1196,15 @@ TEST( query_with_regex_filter, "query_with_regex_filter" ) {
 	// I think we match:
 	//     0x0001, 0x0002, 0x0011, 0x0012 ... 0x0061, 0x0062
 	// for a total of 14 matches
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 14 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 14);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( query_with_regex_filter_icase, "query_with_regex_filter_icase" ) {
-
+TEST(query_with_regex_filter_icase, "query_with_regex_filter_icase")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1221,15 +1231,15 @@ TEST( query_with_regex_filter_icase, "query_with_regex_filter_icase" ) {
 	// I think we match:
 	//     0x0001, 0x0002, 0x0011, 0x0012 ... 0x0061, 0x0062
 	// for a total of 14 matches
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 14 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 14);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
 }
 
-TEST( query_with_list_filter, "query_with_list_filter" ) {
-
+TEST(query_with_list_filter, "query_with_list_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1257,15 +1267,15 @@ TEST( query_with_list_filter, "query_with_list_filter" ) {
 	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
 
 	// Should match on records 0, 3, 6 ... 99
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 34 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 34);
 
 	as_query_destroy(&q);
 	as_exp_destroy(filter);
 }
 
-TEST( query_with_mapkey_filter, "query_with_mapkey_filter" ) {
-
+TEST(query_with_mapkey_filter, "query_with_mapkey_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1294,15 +1304,15 @@ TEST( query_with_mapkey_filter, "query_with_mapkey_filter" ) {
 
 	// Should skip 0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98
 	// 100 - 15 = 85
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 85 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 85);
 
 	as_query_destroy(&q);
 	as_exp_destroy(filter);
 }
 
-TEST( query_with_mapval_filter, "query_with_mapval_filter" ) {
-
+TEST(query_with_mapval_filter, "query_with_mapval_filter")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1318,10 +1328,13 @@ TEST( query_with_mapval_filter, "query_with_mapval_filter" ) {
 	as_query_where(&q, "a", as_string_equals("abc"));
 
 	as_exp_build(filter,
-		as_exp_cmp_ne(
-			as_exp_map_get_by_value(NULL, AS_MAP_RETURN_COUNT, as_exp_str("yvalue"),
+		as_exp_and(
+			as_exp_map_get_by_value(NULL, AS_MAP_RETURN_EXISTS, as_exp_str("yvalue"),
 				as_exp_bin_map("y")),
-			as_exp_int(0)));
+			as_exp_cmp_ne(
+				as_exp_map_get_by_value(NULL, AS_MAP_RETURN_COUNT, as_exp_str("yvalue"),
+					as_exp_bin_map("y")),
+				as_exp_int(0))));
 
 	as_policy_query p;
 	as_policy_query_init(&p);
@@ -1330,14 +1343,16 @@ TEST( query_with_mapval_filter, "query_with_mapval_filter" ) {
 	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
 
 	// Should match on  0, 7, 14, 21, 28, 35, 42, 49, 56, 63, 70, 77, 84, 91, 98
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( count, 15 );
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 15);
 
 	as_query_destroy(&q);
 	as_exp_destroy(filter);
 }
 
-static bool query_quit_early_callback(const as_val * v, void * udata) {
+static bool
+query_quit_early_callback(const as_val* v, void* udata)
+{
 	if (v) {
 		uint32_t * count = (uint32_t *) udata;
 		as_incr_uint32(count);
@@ -1345,8 +1360,8 @@ static bool query_quit_early_callback(const as_val * v, void * udata) {
 	return false;
 }
 
-TEST( query_quit_early, "normal query and quit early" ) {
-	
+TEST(query_quit_early, "normal query and quit early")
+{
 	as_nodes* nodes = as_nodes_reserve(as->cluster);
 	uint32_t nodes_size = nodes->size;
 	as_nodes_release(nodes);
@@ -1362,20 +1377,20 @@ TEST( query_quit_early, "normal query and quit early" ) {
 	as_query_where_inita(&q, 1);
 	as_query_where(&q, "a", as_string_equals("abc"));
 	
-	if ( aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_callback, &count) != AEROSPIKE_OK ) {
+	if (aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_callback, &count) != AEROSPIKE_OK) {
 		error("%s (%d) [%s:%d]", err.message, err.code, err.file, err.line);
 	}
 	
 	info("count: %d",count);
 	
-	assert_int_eq( err.code, 0 );
-	assert_true( count <= nodes_size );
+	assert_int_eq(err.code, 0);
+	assert_true(count <= nodes_size);
 	
 	as_query_destroy(&q);
 }
 
-TEST( query_agg_quit_early, "aggregation and quit early" ) {
-	
+TEST(query_agg_quit_early, "aggregation and quit early")
+{
 	as_nodes* nodes = as_nodes_reserve(as->cluster);
 	uint32_t nodes_size = nodes->size;
 	as_nodes_release(nodes);
@@ -1393,32 +1408,34 @@ TEST( query_agg_quit_early, "aggregation and quit early" ) {
 	
 	as_query_apply(&q, UDF_FILE, "filter_passthrough", NULL);
 	
-	if ( aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_callback, &count) != AEROSPIKE_OK ) {
+	if (aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_callback, &count) != AEROSPIKE_OK) {
 		error("%s (%d) [%s:%d]", err.message, err.code, err.file, err.line);
 	}
 	
 	info("count: %d",count);
 	
-	assert_int_eq( err.code, 0 );
-	assert_true( count <= nodes_size );
+	assert_int_eq(err.code, 0);
+	assert_true(count <= nodes_size);
 	
 	as_query_destroy(&q);
 }
 
-static bool query_quit_early_bytes_callback(const as_val * v, void * udata) {
+static bool
+query_quit_early_bytes_callback(const as_val* v, void* udata)
+{
 	if (v) {
 		as_bytes * bval = as_bytes_fromval(v);
 
 		if (bval) {
 			uint32_t* byte_count = (uint32_t*)udata;
-			as_add_uint32( byte_count, as_bytes_size(bval));
+			as_add_uint32(byte_count, as_bytes_size(bval));
 		}
 	}
 	return false;
 }
 
-TEST( query_filter_map_bytes, "return bytes from a mapper" ) {
-
+TEST(query_filter_map_bytes, "return bytes from a mapper")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1432,20 +1449,20 @@ TEST( query_filter_map_bytes, "return bytes from a mapper" ) {
 
 	as_query_apply(&q, UDF_FILE, "filter_passthrough_digest", NULL);
 
-	if ( aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_bytes_callback, &byte_count) != AEROSPIKE_OK ) {
+	if (aerospike_query_foreach(as, &err, NULL, &q, query_quit_early_bytes_callback, &byte_count) != AEROSPIKE_OK) {
 		error("%s (%d) [%s:%d]", err.message, err.code, err.file, err.line);
 	}
 
 	info("byte count: %d",byte_count);
 
-	assert_int_eq( err.code, 0 );
-	assert_int_eq( byte_count, 20 ); // one digest
+	assert_int_eq(err.code, 0);
+	assert_int_eq(byte_count, 20); // one digest
 
 	as_query_destroy(&q);
 }
 
-TEST( query_foreach_nullset, "test null-set behavior" ) {
-
+TEST(query_foreach_nullset, "test null-set behavior")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1467,7 +1484,7 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 	as_key_init(&key, NAMESPACE, setname, "keyindex-nullset");
 
 	aerospike_key_put(as, &err, NULL, &key, &r);
-	assert_int_eq( err.code, AEROSPIKE_OK);
+	assert_int_eq(err.code, AEROSPIKE_OK);
 
 	as_record_destroy(&r);
 	as_key_destroy(&key);
@@ -1484,10 +1501,10 @@ TEST( query_foreach_nullset, "test null-set behavior" ) {
 	assert_true(count == 1);
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx2");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
-	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq(err.code, AEROSPIKE_OK);
 }
 
 typedef struct foreach_double_udata_s {
@@ -1496,8 +1513,9 @@ typedef struct foreach_double_udata_s {
 	pthread_mutex_t lock;
 } foreach_double_udata;
 
-static bool query_foreach_double_callback(const as_val * v, void * udata) {
-	
+static bool
+query_foreach_double_callback(const as_val* v, void* udata)
+{
 	if (v) {
 		as_record* rec = as_record_fromval(v);
 		foreach_double_udata *d = (foreach_double_udata *)udata;
@@ -1509,8 +1527,8 @@ static bool query_foreach_double_callback(const as_val * v, void * udata) {
     return true;
 }
 
-TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
-
+TEST(query_foreach_int_with_double_bin, "test query on double behavior")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -1531,7 +1549,7 @@ TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
 	as_record r;
 	as_record_init(&r, 2);
 	// insert records
-	for ( int i = 1; i <= n_recs; i++ ) {
+	for (int i = 1; i <= n_recs; i++) {
 		as_key key;
 		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
 
@@ -1557,87 +1575,88 @@ TEST( query_foreach_int_with_double_bin, "test query on double behavior" ) {
 
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_double_callback, &udata);
 
-	for ( int j = n_start; j <= n_end; j++ ) {
+	for (int j = n_start; j <= n_end; j++) {
 		expected_sum += j/(double)10;
 	}
 
-	assert_int_eq( err.code, 0 );
-	assert_double_eq( udata.sum, expected_sum );
-	assert_int_eq( udata.count, 20 );
+	assert_int_eq(err.code, 0);
+	assert_double_eq(udata.sum, expected_sum);
+	assert_int_eq(udata.count, 20);
 
 	as_query_destroy(&q);
 
 	pthread_mutex_destroy(&udata.lock);
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_int_bin");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
-	assert_int_eq( err.code, AEROSPIKE_OK );
+	assert_int_eq(err.code, AEROSPIKE_OK);
 }
 
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
-SUITE( query_foreach, "aerospike_query_foreach tests" ) {
-
-	suite_before( before );
-	suite_after( after   );
+SUITE(query_foreach, "aerospike_query_foreach tests")
+{
+	suite_before(before);
+	suite_after(after);
 
 	// find out storage type of namespace
 	char namespace_storage[128];
-	get_info_field(NAMESPACE_INFO, "storage-engine", namespace_storage,
-			sizeof(namespace_storage));
-	if ( strcmp(namespace_storage, "device") == 0 ||
-			strcmp(namespace_storage, "file") == 0 ) {
+
+	get_info_field(NAMESPACE_INFO, "storage-engine", namespace_storage, sizeof(namespace_storage));
+
+	if (strcmp(namespace_storage, "device") == 0 || strcmp(namespace_storage, "file") == 0) {
 		namespace_has_persistence = true;
 	}
 
-	if ( strcmp(namespace_storage, "memory") == 0) {
+	if (strcmp(namespace_storage, "memory") == 0) {
 		namespace_in_memory = true;
 	}
 
 	if (! namespace_in_memory) {
 		char namespace_dim[128];
+
 		get_info_field(NAMESPACE_INFO, "storage-engine.data-in-memory",
-				namespace_dim,
-				sizeof(namespace_dim));
-		if ( strcmp(namespace_dim, "true") == 0 ) {
+			namespace_dim, sizeof(namespace_dim));
+
+		if (strcmp(namespace_dim, "true") == 0) {
 			namespace_in_memory = true;
 		}
 	}
 
-	suite_add( query_foreach_1 );
-	suite_add( query_foreach_2 );
-	suite_add( query_foreach_3 );
-	suite_add( query_foreach_4 );
-	suite_add( query_foreach_5 );
-	suite_add( query_foreach_6 );
-	suite_add( query_foreach_7 );
-	suite_add( query_foreach_8 );
-	suite_add( query_foreach_9 );
-	suite_add( query_with_range_filter );
-	suite_add( query_with_equality_filter );
-	suite_add( query_with_rec_device_size_filter );
-	suite_add( query_with_rec_memory_size_filter );
-	suite_add( query_intermittent_bin_filter );
-	suite_add( scan_with_rec_last_update_filter );
-	suite_add( scan_with_rec_last_update_filter_less );
-	suite_add( scan_with_rec_void_time_filter_1 );
-	suite_add( scan_with_rec_void_time_filter_2 );
-	suite_add( scan_with_rec_void_time_filter_3 );
-	suite_add( scan_with_rec_digest_modulo_filter );
-	suite_add( query_with_or_filter );
-	suite_add( query_with_not_filter );
-	suite_add( query_with_regex_filter );
-	suite_add( query_with_regex_filter_icase );
-	suite_add( query_with_list_filter );
-	suite_add( query_with_mapkey_filter );
-	suite_add( query_with_mapval_filter );
-	suite_add( query_quit_early );
-	suite_add( query_agg_quit_early );
-	suite_add( query_filter_map_bytes );
-	suite_add( query_foreach_nullset );
-	suite_add( query_foreach_int_with_double_bin );
+	suite_add(query_foreach_1);
+	suite_add(query_foreach_2);
+	suite_add(query_foreach_3);
+	suite_add(query_foreach_4);
+	suite_add(query_foreach_5);
+	suite_add(query_foreach_6);
+	suite_add(query_foreach_7);
+	suite_add(query_foreach_8);
+	suite_add(query_foreach_9);
+	suite_add(query_with_range_filter);
+	suite_add(query_with_equality_filter);
+	suite_add(query_with_rec_device_size_filter);
+	suite_add(query_with_rec_memory_size_filter);
+	suite_add(query_intermittent_bin_filter);
+	suite_add(scan_with_rec_last_update_filter);
+	suite_add(scan_with_rec_last_update_filter_less);
+	suite_add(scan_with_rec_void_time_filter_1);
+	suite_add(scan_with_rec_void_time_filter_2);
+	suite_add(scan_with_rec_void_time_filter_3);
+	suite_add(scan_with_rec_digest_modulo_filter);
+	suite_add(query_with_or_filter);
+	suite_add(query_with_not_filter);
+	suite_add(query_with_regex_filter);
+	suite_add(query_with_regex_filter_icase);
+	suite_add(query_with_list_filter);
+	suite_add(query_with_mapkey_filter);
+	suite_add(query_with_mapval_filter);
+	suite_add(query_quit_early);
+	suite_add(query_agg_quit_early);
+	suite_add(query_filter_map_bytes);
+	suite_add(query_foreach_nullset);
+	suite_add(query_foreach_int_with_double_bin);
 }

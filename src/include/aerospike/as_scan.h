@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -596,6 +596,33 @@ as_scan_is_done(as_scan* scan)
 {
 	return scan->parts_all && scan->parts_all->done;
 }
+
+/**
+ * Serialize scan definition to bytes.
+ *
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+AS_EXTERN bool
+as_scan_to_bytes(const as_scan* scan, uint8_t** bytes, uint32_t* bytes_size);
+
+/**
+ * Deserialize bytes to scan definition.
+ *
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+AS_EXTERN bool
+as_scan_from_bytes(as_scan* scan, const uint8_t* bytes, uint32_t bytes_size);
+
+/**
+ * Compare scan objects.
+ * @private
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+AS_EXTERN bool
+as_scan_compare(as_scan* s1, as_scan* s2);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -78,8 +78,8 @@ typedef struct as_async_info_command {
 
 static inline as_event_command*
 as_async_write_command_create(
-	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, const char* ns,
-	void* partition, as_async_write_listener listener, void* udata,
+	as_cluster* cluster, const as_policy_base* policy, as_partition_info* pi,
+	as_policy_replica replica, as_async_write_listener listener, void* udata,
 	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
 	as_event_parse_results_fn parse_results
 	)
@@ -97,8 +97,8 @@ as_async_write_command_create(
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
-	cmd->ns = ns;
-	cmd->partition = partition;
+	cmd->ns = pi->ns;
+	cmd->partition = pi->partition;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
 	cmd->pipe_listener = pipe_listener;
@@ -107,17 +107,18 @@ as_async_write_command_create(
 	cmd->type = AS_ASYNC_TYPE_WRITE;
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = AS_ASYNC_FLAGS_MASTER;
-	cmd->flags2 = 0;
+	cmd->flags = 0;
+	cmd->replica_size = pi->replica_size;
+	cmd->replica_index = 0;
 	wcmd->listener = listener;
 	return cmd;
 }
 	
 static inline as_event_command*
 as_async_record_command_create(
-	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, const char* ns,
-	void* partition, bool deserialize, bool heap_rec, uint8_t flags,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_cluster* cluster, const as_policy_base* policy, as_partition_info* pi,
+	as_policy_replica replica, uint8_t replica_index, bool deserialize, bool heap_rec,
+	uint8_t flags, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
 	)
 {
@@ -135,8 +136,8 @@ as_async_record_command_create(
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
-	cmd->ns = ns;
-	cmd->partition = partition;
+	cmd->ns = pi->ns;
+	cmd->partition = pi->partition;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
 	cmd->pipe_listener = pipe_listener;
@@ -146,21 +147,25 @@ as_async_record_command_create(
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = flags;
-	cmd->flags2 = 0;
+
 	if (deserialize) {
-		cmd->flags2 |= AS_ASYNC_FLAGS2_DESERIALIZE;
+		cmd->flags |= AS_ASYNC_FLAGS_DESERIALIZE;
 	}
+
 	if (heap_rec) {
-		cmd->flags2 |= AS_ASYNC_FLAGS2_HEAP_REC;
+		cmd->flags |= AS_ASYNC_FLAGS_HEAP_REC;
 	}
+
+	cmd->replica_size = pi->replica_size;
+	cmd->replica_index = replica_index;
 	rcmd->listener = listener;
 	return cmd;
 }
 
 static inline as_event_command*
 as_async_value_command_create(
-	as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica, const char* ns,
-	void* partition, as_async_value_listener listener, void* udata,
+	as_cluster* cluster, const as_policy_base* policy, as_partition_info* pi,
+	as_policy_replica replica, as_async_value_listener listener, void* udata,
 	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
 	as_event_parse_results_fn parse_results
 	)
@@ -179,8 +184,8 @@ as_async_value_command_create(
 	cmd->event_loop = as_event_assign(event_loop);
 	cmd->cluster = cluster;
 	cmd->node = NULL;
-	cmd->ns = ns;
-	cmd->partition = partition;
+	cmd->ns = pi->ns;
+	cmd->partition = pi->partition;
 	cmd->udata = udata;
 	cmd->parse_results = parse_results;
 	cmd->pipe_listener = pipe_listener;
@@ -189,8 +194,9 @@ as_async_value_command_create(
 	cmd->type = AS_ASYNC_TYPE_VALUE;
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = AS_ASYNC_FLAGS_MASTER;
-	cmd->flags2 = 0;
+	cmd->flags = 0;
+	cmd->replica_size = pi->replica_size;
+	cmd->replica_index = 0;
 	vcmd->listener = listener;
 	return cmd;
 }
@@ -224,8 +230,9 @@ as_async_info_command_create(
 	cmd->type = AS_ASYNC_TYPE_INFO;
 	cmd->proto_type = AS_INFO_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
-	cmd->flags = AS_ASYNC_FLAGS_MASTER;
-	cmd->flags2 = 0;
+	cmd->flags = 0;
+	cmd->replica_size = 1;
+	cmd->replica_index = 0;
 	icmd->listener = listener;
 	return cmd;
 }

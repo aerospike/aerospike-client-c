@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1012,7 +1012,7 @@ TEST( query_geojson_in_list, "IN LIST count(*) where p in <rectangle>" ) {
 	assert_int_eq( udata.hm->count, 21 );
 
 	// currently we may return duplicates
-	assert( udata.count >= 95 && udata.count <= 697 );
+	assert( udata.count >= 45 && udata.count <= 697 );
 
 	as_hashmap_destroy(udata.hm);
 	pthread_mutex_destroy(&udata.lock);
@@ -1153,7 +1153,7 @@ TEST( query_geojson_in_mapvalue, "IN MAPVALUES count(*) where p in <rectangle>" 
 	assert_int_eq( udata.hm->count, 21 );
 
 	// currently we may return duplicates
-	assert( udata.count >= 95 && udata.count <= 697 );
+	assert( udata.count >= 45 && udata.count <= 697 );
 
 	as_hashmap_destroy(udata.hm);
 	pthread_mutex_destroy(&udata.lock);

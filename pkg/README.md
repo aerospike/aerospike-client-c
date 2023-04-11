@@ -92,7 +92,7 @@ Only one of the installers is needed on each client machine.  All installers ins
     sudo rpm -i aerospike-client-c[-<eventlib>][-devel]-<version>-<os>.<arch>.rpm
   
 #### Debian/Ubuntu
-    sudo dpkg -i aerospike-client-c[-<eventlib>][-devel]-<version>-<os>.<arch>.deb
+    sudo dpkg -i aerospike-client-c[-<eventlib>][-devel]_<version>-<os>_<arch>.deb
 
 #### MacOS
     open aerospike-client-c[-<eventlib>][-devel]-<version>.pkg

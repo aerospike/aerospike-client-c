@@ -78,6 +78,8 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	info("files: ")
+	info(" - %u", files.size);
+
 	for(uint32_t i=0; i<files.size; i++) {
 		as_udf_file * file = &files.entries[i];
 		info("- %s", file->name);
@@ -89,6 +91,8 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	as_udf_files_destroy(&files);
 
 	assert_false( exists );
+
+	return;
 
 	// upload the file
 

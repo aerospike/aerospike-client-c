@@ -11,7 +11,7 @@
     <icon>icon.png</icon>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Aerospike C client library for synchronous database commands.</description>
-    <copyright>Copyright 2008-2022 Aerospike, Inc.</copyright>
+    <copyright>Copyright 2008-2023 Aerospike, Inc.</copyright>
     <tags>Aerospike database C client native</tags>
   </metadata>
   <files>

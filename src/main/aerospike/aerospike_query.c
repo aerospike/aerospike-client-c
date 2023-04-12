@@ -99,6 +99,7 @@ typedef struct as_async_query_executor {
 	as_async_query_record_listener listener;
 	as_cluster* cluster;
 	as_partition_tracker* pt;
+	uint64_t parent_id;
 	uint8_t* cmd_buf;
 	uint32_t cmd_size;
 	uint32_t cmd_size_pre;
@@ -139,6 +140,12 @@ typedef struct as_query_builder {
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
+
+static inline void
+as_query_log_iter(uint64_t parent_id, uint64_t task_id, uint32_t iter)
+{
+	as_log_debug("Query parent=%" PRIu64 " task=%" PRIu64 " iter=%u", parent_id, task_id, iter);
+}
 
 static int
 as_query_aerospike_log(const as_aerospike* as, const char * file, const int line, const int level, const char * msg)
@@ -1397,10 +1404,12 @@ as_query_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
 	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata)
 {
-	as_status status;
+	uint64_t parent_id = as_random_get_uint64();
+	as_status status = AEROSPIKE_OK;
 
 	while (true) {
 		uint64_t task_id = as_random_get_uint64();
+		as_query_log_iter(parent_id, task_id, pt->iteration);
 		status = as_partition_tracker_assign(pt, cluster, query->ns, err);
 
 		if (status != AEROSPIKE_OK) {
@@ -1697,7 +1706,9 @@ as_query_partition_async(
 		as_queue_inita(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
 	}
 
+	uint64_t parent_id = as_random_get_uint64();
 	uint64_t task_id = as_random_get_uint64();
+	as_query_log_iter(parent_id, task_id, pt->iteration);
 
 	// Create command builder without partition fields.
 	// The partition fields will be added later.
@@ -1723,6 +1734,7 @@ as_query_partition_async(
 	qe->listener = listener;
 	qe->cluster = cluster;
 	qe->pt = pt;
+	qe->parent_id = parent_id;
 	qe->cmd_buf = cmd_buf;
 	qe->cmd_size = (uint32_t)cmd_size;
 	qe->cmd_size_pre = qb.cmd_size_pre;
@@ -1761,6 +1773,7 @@ as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 	qe->listener = qe_old->listener;
 	qe->cluster = qe_old->cluster;
 	qe->pt = qe_old->pt;
+	qe->parent_id = qe_old->parent_id;
 	qe->cmd_buf = qe_old->cmd_buf;
 	qe->cmd_size = qe_old->cmd_size;
 	qe->cmd_size_pre = qe_old->cmd_size_pre;
@@ -1773,6 +1786,7 @@ as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 
 	// Must change task_id each round. Otherwise, server rejects command.
 	uint64_t task_id = as_random_get_uint64();
+	as_query_log_iter(qe->parent_id, task_id, qe->pt->iteration);
 	*(uint64_t*)(qe->cmd_buf + qe->task_id_offset) = task_id;
 
 	uint32_t n_nodes = qe->pt->node_parts.size;
@@ -2082,6 +2096,8 @@ aerospike_query_async(
 	}
 
 	uint64_t task_id = as_random_get_uint64();
+	as_query_log_iter(0, task_id, 1);
+
 	as_queue opsbuffers;
 
 	if (query->ops) {
@@ -2135,6 +2151,7 @@ aerospike_query_async(
 	exec->valid = true;
 	executor->listener = listener;
 	executor->info_timeout = policy->info_timeout;
+	executor->parent_id = 0;
 
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to allow socket
 	// read to reuse buffer.

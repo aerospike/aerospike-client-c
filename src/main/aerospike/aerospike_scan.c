@@ -21,7 +21,7 @@
 #include <aerospike/as_exp.h>
 #include <aerospike/as_job.h>
 #include <aerospike/as_key.h>
-#include <aerospike/as_log.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition_tracker.h>
@@ -67,6 +67,7 @@ typedef struct as_async_scan_executor {
 	as_async_scan_listener listener;
 	as_cluster* cluster;
 	as_partition_tracker* pt;
+	uint64_t parent_id;
 	uint8_t* cmd_buf;
 	uint32_t cmd_size;
 	uint32_t cmd_size_pre;
@@ -101,6 +102,12 @@ typedef struct as_scan_builder {
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
+
+static inline void
+as_scan_log_iter(uint64_t parent_id, uint64_t task_id, uint32_t iter)
+{
+	as_log_debug("Scan parent=%" PRIu64 " task=%" PRIu64 " iter=%u", parent_id, task_id, iter);
+}
 
 static as_status
 as_scan_partition_retry_async(as_async_scan_executor* se, as_error* err);
@@ -852,10 +859,12 @@ as_scan_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_scan* policy, const as_scan* scan,
 	as_partition_tracker* pt, aerospike_scan_foreach_callback callback, void* udata)
 {
-	as_status status;
+	uint64_t parent_id = as_random_get_uint64();
+	as_status status = AEROSPIKE_OK;
 
 	while (true) {
 		uint64_t task_id = as_random_get_uint64();
+		as_scan_log_iter(parent_id, task_id, pt->iteration);
 		status = as_partition_tracker_assign(pt, cluster, scan->ns, err);
 
 		if (status != AEROSPIKE_OK) {
@@ -1103,6 +1112,7 @@ as_scan_partition_retry_async(as_async_scan_executor* se_old, as_error* err)
 	se->listener = se_old->listener;
 	se->cluster = se_old->cluster;
 	se->pt = se_old->pt;
+	se->parent_id = se_old->parent_id;
 	se->cmd_buf = se_old->cmd_buf;
 	se->cmd_size = se_old->cmd_size;
 	se->cmd_size_pre = se_old->cmd_size_pre;
@@ -1114,6 +1124,7 @@ as_scan_partition_retry_async(as_async_scan_executor* se_old, as_error* err)
 
 	// Must change task_id each round. Otherwise, server rejects command.
 	uint64_t task_id = as_random_get_uint64();
+	as_scan_log_iter(se->parent_id, task_id, se->pt->iteration);
 	*(uint64_t*)(se->cmd_buf + se->task_id_offset) = task_id;
 
 	uint32_t n_nodes = se->pt->node_parts.size;
@@ -1163,7 +1174,10 @@ as_scan_partition_async(
 
 	// Create scan command buffer without partition fields.
 	// The partition fields will be added later.
+	uint64_t parent_id = as_random_get_uint64();
 	uint64_t task_id = as_random_get_uint64();
+	as_scan_log_iter(parent_id, task_id, pt->iteration);
+
 	as_scan_builder sb;
 	sb.pt = NULL;
 	sb.np = NULL;
@@ -1188,6 +1202,7 @@ as_scan_partition_async(
 	se->listener = listener;
 	se->cluster = cluster;
 	se->pt = pt;
+	se->parent_id = parent_id;
 	se->cmd_buf = cmd_buf;
 	se->cmd_size = (uint32_t)cmd_size;
 	se->cmd_size_pre = sb.cmd_size_pre;

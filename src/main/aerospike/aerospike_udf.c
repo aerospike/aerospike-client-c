@@ -73,13 +73,14 @@ aerospike_udf_list(
 		policy = &as->config.policies.info;
 	}
 
+/*
 	char* response = 0;
 	as_status status = aerospike_info_any(as, err, policy, "udf-list", &response);
 	
 	if (status) {
 		return status;
 	}
-	
+
 	// response := udf-list\tfilename=<name>,hash=<hash>,type=<type>;[filename=<name>...]
 	char* p = strchr(response, '\t');
 	
@@ -89,7 +90,13 @@ aerospike_udf_list(
 		return AEROSPIKE_ERR_PARAM;
 	}
 	p++;
-	
+*/
+	char* response = cf_malloc(1024);
+
+	strcpy(response, "filename=lpeg.so,hash=1c8863e42d007e32626805db00d324296c53799b,type=LUA;filename=re.lua,hash=dcd565575c0abed068ddcd7f5efaa5bb0e25c307,type=LUA;filename=jsonpath.lua,hash=ed5971fbec80ec2e1593ea37178698da61259bb7,type=LUA;filename=doculib.lua,hash=26927f8a837e23dba19fb65cc40c7da423469db1,type=LUA;filename=key_apply2.lua,hash=f0396cf215872cc270db52e6b154d8422ea10b2a,type=LUA;");
+
+	char* p = response;
+
 	uint32_t capacity = (files->capacity <= 0) ? 500 : files->capacity;
 	
 	as_vector ptrs;

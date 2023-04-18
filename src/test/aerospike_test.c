@@ -371,7 +371,7 @@ static bool before(atf_plan* plan)
 
 		if (p) {
 			p += strlen(search);
-			g_has_ttl = strncmp(p, "true", 4) == 0;
+			g_has_ttl = (strncmp(p, "true;", 5) == 0 || strcmp(p, "true") == 0);
 		}
 		else {
 			error("Failed to find namespace config allow-ttl-without-nsup");

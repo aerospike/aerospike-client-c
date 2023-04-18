@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -45,6 +45,7 @@
  *****************************************************************************/
 
 extern aerospike* as;
+extern bool g_has_ttl;
 
 /******************************************************************************
  * MACROS
@@ -494,5 +495,8 @@ SUITE(query_background, "aerospike_query_background tests")
 	suite_add(query_aggregation_double);
 	suite_add(query_operate);
 	suite_add(query_operate_expop);
-	suite_add(query_operate_ttl);
+
+	if (g_has_ttl) {
+		suite_add(query_operate_ttl);
+	}
 }

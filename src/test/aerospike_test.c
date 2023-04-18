@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -49,6 +49,7 @@ static char g_password[AS_PASSWORD_SIZE];
 as_config_tls g_tls = {0};
 as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
 bool g_enterprise_server = false;
+bool g_has_ttl = false;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -337,6 +338,46 @@ static bool before(atf_plan* plan)
 
 	if (strstr(result, "Aerospike Enterprise Edition") != NULL) {
 		g_enterprise_server = true;
+	}
+
+	cf_free(result);
+
+	if (aerospike_info_any(as, &err, NULL, "get-config:context=namespace;id=test", &result)
+		!= AEROSPIKE_OK) {
+		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
+		aerospike_close(as, &err);
+		aerospike_destroy(as);
+		as_event_close_loops();
+		return false;
+	}
+
+	// Run ttl tests if nsup-period or allow-ttl-without-nsup is defined.
+	const char* search = "nsup-period=";
+	char* p = strstr(result, search);
+
+	if (p) {
+		p += strlen(search);
+		g_has_ttl = *p != '0';
+	}
+	else {
+		error("Failed to find namespace config nsup-period");
+		cf_free(result);
+		return false;
+	}
+
+	if (! g_has_ttl) {
+		search = "allow-ttl-without-nsup=";
+		p = strstr(result, search);
+
+		if (p) {
+			p += strlen(search);
+			g_has_ttl = (strncmp(p, "true;", 5) == 0 || strcmp(p, "true") == 0);
+		}
+		else {
+			error("Failed to find namespace config allow-ttl-without-nsup");
+			cf_free(result);
+			return false;
+		}
 	}
 
 	cf_free(result);

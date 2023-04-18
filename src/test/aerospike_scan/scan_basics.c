@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -18,10 +18,9 @@
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_info.h>
-
 #include <aerospike/as_error.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_status.h>
-
 #include <aerospike/as_exp.h>
 #include <aerospike/as_exp_operations.h>
 #include <aerospike/as_record.h>
@@ -35,8 +34,6 @@
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
-#include <aerospike/as_cluster.h>
-
 #include "../test.h"
 #include "../util/udf.h"
 
@@ -44,7 +41,8 @@
  * GLOBAL VARS
  *****************************************************************************/
 
-extern aerospike * as;
+extern aerospike* as;
+extern bool g_has_ttl;
 
 /******************************************************************************
  * MACROS
@@ -77,33 +75,35 @@ extern aerospike * as;
  *****************************************************************************/
 typedef struct scan_check_s {
 	bool failed;
-	char * set;
+	char* set;
 	bool allow_null_set;
 	bool nobindata; // flag to be set when you dont expect to get back any bins 
 	uint32_t count;
-	char * bins[10];
+	char* bins[10];
 } scan_check;
 
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static bool scan_udf_info_callback(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
-
+static bool scan_udf_info_callback(
+	const as_error* err, const as_node* node, const char* req, char* res, void* udata
+	)
+{
 	if (!err) {
 		goto done;
 	}
 
-	if ( err->code != AEROSPIKE_OK ) {
+	if (err->code != AEROSPIKE_OK) {
 		debug("UDF_CALLBACK Error: (%d) %s - node=%s response=%s\n", err->code, err->message, node ? node->name : "NULL", res);
 	}
 	else {
-		if ( res == NULL || strlen(res) == 0 ) {
+		if (res == NULL || strlen(res) == 0) {
 			goto done;
 		}
-		char * start_resp = strchr(res, '\t');
+		char* start_resp = strchr(res, '\t');
 
-		if ( start_resp == NULL || strlen(start_resp) == 0 ) {
+		if (start_resp == NULL || strlen(start_resp) == 0) {
 			goto done;
 		}
 		char print_resp[128];
@@ -114,16 +114,16 @@ done:
 	return true;
 }
 
-static int check_bin1(as_record * rec, scan_check * check)
+static int check_bin1(as_record* rec, scan_check* check)
 {
-	as_val * bin = (as_val *) as_record_get(rec, "bin1");
-	if ( !bin ) {
+	as_val* bin = (as_val*) as_record_get(rec, "bin1");
+	if (!bin) {
 		error("Expected a value in bin('%s'), but got null", "bin1");
 		return !(check->failed = true);
 	}
 
-	as_integer * integer = as_integer_fromval(bin);
-	if ( !integer ) {
+	as_integer* integer = as_integer_fromval(bin);
+	if (!integer) {
 		error("Expected a integer in bin('%s'), but got type %d", "bin1", as_val_type(bin));
 		return !(check->failed = true);
 	}
@@ -132,22 +132,22 @@ static int check_bin1(as_record * rec, scan_check * check)
 }
 
 
-static int check_bin2(as_record * rec, scan_check * check)
+static int check_bin2(as_record* rec, scan_check* check)
 {
-	as_val * bin = (as_val *) as_record_get(rec, "bin2");
-	if ( !bin ) {
+	as_val* bin = (as_val*) as_record_get(rec, "bin2");
+	if (!bin) {
 		error("Expected a value in bin('%s'), but got null", "bin2");
 		return !(check->failed = true);
 	}
 
-	as_string * string = as_string_fromval(bin);
-	if ( !string ) {
+	as_string* string = as_string_fromval(bin);
+	if (!string) {
 		error("Expected a string in bin('%s'), but got type %d", "bin2", as_val_type(bin));
 		return !(check->failed = true);
 	}
 
-	char * str = as_string_get(string);
-	if ( !str ) {
+	char* str = as_string_get(string);
+	if (!str) {
 		error("Expected a string value but it is NULL");
 		return !(check->failed = true);
 	}
@@ -165,23 +165,22 @@ static int check_bin2(as_record * rec, scan_check * check)
 	return !(check->failed = false);
 }
 
-
-static bool check_bin3(as_record * rec, scan_check * check)
+static bool check_bin3(as_record* rec, scan_check* check)
 {
-	as_val * bin = (as_val *) as_record_get(rec, "bin3");
-	if ( !bin ) {
+	as_val* bin = (as_val*) as_record_get(rec, "bin3");
+	if (!bin) {
 		error("Expected a value in bin('%s'), but got null", "bin3");
 		return !(check->failed = true);
 	}
 
 	as_map * map = as_map_fromval(bin);
-	if ( !map ) {
+	if (!map) {
 		error("Expected a map in bin('%s'), but got type %d", "bin3", as_val_type(bin));
 		return !(check->failed = true);
 	}
 
 	int sz = as_map_size(map);
-	if ( sz != 3 ) {
+	if (sz != 3) {
 		error("Expected map size of %d, but got %d", 3, sz);
 		return !(check->failed = true);
 	} 
@@ -190,19 +189,19 @@ static bool check_bin3(as_record * rec, scan_check * check)
 	int64_t ival = 0;
 
 	ival = as_stringmap_get_int64(map, "x");
-	if ( ival != bin1 ) {
+	if (ival != bin1) {
 		error("Expected map value '%s'=%ld, but got %ld", "x", bin1, ival);
 		return !(check->failed = true);
 	}
 
 	ival = as_stringmap_get_int64(map, "y");
-	if ( ival != bin1+1 ) {
+	if (ival != bin1+1) {
 		error("Expected map value '%s'=%ld, but got %ld", "y", bin1+1, ival);
 		return !(check->failed = true);
 	}
 
 	ival = as_stringmap_get_int64(map, "z");
-	if ( ival != bin1+2 ) {
+	if (ival != bin1+2) {
 		error("Expected map value '%s'=%ld, but got %ld", "z", bin1+2, ival);
 		return !(check->failed = true);
 	}
@@ -210,36 +209,35 @@ static bool check_bin3(as_record * rec, scan_check * check)
 	return !(check->failed = false);
 }
 
-
-static int check_bin4(as_record * rec, scan_check * check)
+static int check_bin4(as_record* rec, scan_check* check)
 {
-	as_val * bin = (as_val *) as_record_get(rec, "bin4");
-	if ( !bin ) {
+	as_val* bin = (as_val*) as_record_get(rec, "bin4");
+	if (!bin) {
 		error("Expected a value in bin('%s'), but got null", "bin4");
 		return !(check->failed = true);
 	}
 
-	as_list * list = as_list_fromval(bin);
-	if ( !list ) {
+	as_list* list = as_list_fromval(bin);
+	if (!list) {
 		error("Expected a list in bin('%s'), but got type %d", "bin4", as_val_type(bin));
 		return !(check->failed = true);
 	}
 
 	int sz = as_list_size(list);
-	if ( sz < 3 ) {
+	if (sz < 3) {
 		error("Expected list size of %d, but got %d", 3, sz);
 		return !(check->failed = true);
 	}
 
-	for ( int i = 0; i < sz; i++ ) {
-		as_val * val = as_list_get(list, i);
-		if ( !val ) {
+	for (int i = 0; i < sz; i++) {
+		as_val* val = as_list_get(list, i);
+		if (!val) {
 			error("Expecting value at %d, but got null", i);
 			return !(check->failed = true);
 		}
 
-		as_integer * ival = as_integer_fromval(val);
-		if ( !ival ) {
+		as_integer* ival = as_integer_fromval(val);
+		if (!ival) {
 			error("Expecting integer at %d, but got type %d", i, as_val_type(val));
 			return !(check->failed = true);
 		}
@@ -248,31 +246,31 @@ static int check_bin4(as_record * rec, scan_check * check)
 	return !(check->failed = false);
 }
 
-static bool scan_check_callback(const as_val * val, void * udata) 
+static bool scan_check_callback(const as_val* val, void* udata) 
 {
 	// NULL is END OF SCAN
-	if ( !val ) {
+	if (!val) {
 		return false;
 	}
 
-	scan_check * check = (scan_check *) udata;
+	scan_check* check = (scan_check*) udata;
 
-	as_record * rec = as_record_fromval(val);
-	if ( !rec ) {
+	as_record* rec = as_record_fromval(val);
+	if (!rec) {
 		error("Expected a record, but got type %d", as_val_type(val));
 		return !(check->failed = true);
 	}
 
-	const char * set = rec->key.set[0] == '\0' ? NULL : rec->key.set;
+	const char* set = rec->key.set[0] == '\0' ? NULL : rec->key.set;
 
 	as_incr_uint32(&check->count);
 
 	// Check if we are getting the results only from the set the scan is triggered for
 	// If scan is called with NULL set, all the recs will come. So, no checks in this case.
-	if ( check->set ) {
+	if (check->set) {
 		// Do the check only if the rec also have a setname
-		if ( !set ) {
-			if ( !check->allow_null_set) {
+		if (!set) {
+			if (!check->allow_null_set) {
 				error("Expected set '%s', but got set NULL", check->set);
 				return !(check->failed = true);
 			}
@@ -280,7 +278,7 @@ static bool scan_check_callback(const as_val * val, void * udata)
 				return !(check->failed = false);
 			}
 		}
-		else if ( strcmp(check->set, set) != 0) {
+		else if (strcmp(check->set, set) != 0) {
 			error("Expected set '%s', but got set '%s'", check->set, set);
 			return !(check->failed = true);
 		}
@@ -289,8 +287,8 @@ static bool scan_check_callback(const as_val * val, void * udata)
 	// Check that we got the right number of bins
 	int numbins = as_record_numbins(rec);
 
-	if ( check->nobindata ) {
-		if ( numbins != 0 ) {
+	if (check->nobindata) {
+		if (numbins != 0) {
 			error("Expected 0 bins, but got %d", numbins);
 			return !(check->failed = true);
 		}
@@ -298,34 +296,34 @@ static bool scan_check_callback(const as_val * val, void * udata)
 	} 
 
 	// only validate data if in sb_set1 or sb_set2
-	if ( set && strcmp(set, SET1) != 0 && strcmp(set, SET2) != 0 ) {
+	if (set && strcmp(set, SET1) != 0 && strcmp(set, SET2) != 0) {
 		return !(check->failed = false);
 	}
 
 	// validate bins
-	int nbins = sizeof(check->bins) / sizeof(char *);
-	for( int i = 0; i < nbins && check->bins[i]; i++ ) {
-		char * bin = check->bins[i];
-		if ( strcmp(bin, "bin1") == 0 ) {
-			if ( !check_bin1(rec, check) ) {
+	int nbins = sizeof(check->bins) / sizeof(char*);
+	for(int i = 0; i < nbins && check->bins[i]; i++) {
+		char* bin = check->bins[i];
+		if (strcmp(bin, "bin1") == 0) {
+			if (!check_bin1(rec, check)) {
 				error("Failed check of bin1");
 				return !(check->failed = true);
 			}
 		}
-		else if ( strcmp(bin, "bin2") == 0 ) {
-			if ( !check_bin2(rec, check) ) {
+		else if (strcmp(bin, "bin2") == 0) {
+			if (!check_bin2(rec, check)) {
 				error("Failed check of bin2");
 				return !(check->failed = true);
 			}
 		}
-		else if ( strcmp(bin, "bin3") == 0 ) {
-			if ( !check_bin3(rec, check) ) {
+		else if (strcmp(bin, "bin3") == 0) {
+			if (!check_bin3(rec, check)) {
 				error("Failed check of bin3");
 				return !(check->failed = true);
 			}
 		}
-		else if ( strcmp(bin, "bin4") == 0 ) {
-			if ( !check_bin4(rec, check) ) {
+		else if (strcmp(bin, "bin4") == 0) {
+			if (!check_bin4(rec, check)) {
 				error("Failed check of bin4");
 				return !(check->failed = true);
 			}
@@ -339,7 +337,7 @@ static bool scan_check_callback(const as_val * val, void * udata)
 	return !(check->failed = false);
 }
 
-static void insert_data(int numrecs, const char *setname)
+static void insert_data(int numrecs, const char* setname)
 {
 	as_status rc;
 	char strval[SET_STRSZ], strkey[SET_STRSZ];
@@ -398,7 +396,7 @@ static void insert_data(int numrecs, const char *setname)
 	}
 }
 
-static void insert_data_int_key(int numrecs, const char *setname)
+static void insert_data_int_key(int numrecs, const char* setname)
 {
 	as_status rc;
 	char strval[SET_STRSZ], strkey[SET_STRSZ];
@@ -457,13 +455,12 @@ static void insert_data_int_key(int numrecs, const char *setname)
 	}
 }
 
-
 /******************************************************************************
  * TEST CASES
  *****************************************************************************/
 
-TEST( scan_basics_null_set , "full scan (using NULL setname)" ) {
-
+TEST(scan_basics_null_set , "full scan (using NULL setname)")
+{
 	scan_check check = {
 		.failed = false,
 		.set = NULL,
@@ -479,20 +476,20 @@ TEST( scan_basics_null_set , "full scan (using NULL setname)" ) {
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	// assert_int_eq( scan_data.ret_failed, false );
+	// assert_int_eq(scan_data.ret_failed, false);
 	// // We should get all the data that we inserted
 	// int exp_rec_count = (NUM_RECS_SET1 + NUM_RECS_SET2 + NUM_RECS_NULLSET);
-	// assert_true( scan_data.ret_rec_count >= exp_rec_count );
+	// assert_true(scan_data.ret_rec_count >= exp_rec_count);
 	// info("Got %d records in the scan. Expected atleast %d", scan_data.ret_rec_count, exp_rec_count);
 
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_set1 , "scan "SET1"" ) {
-
+TEST(scan_basics_set1 , "scan "SET1"")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET1,
@@ -508,17 +505,17 @@ TEST( scan_basics_set1 , "scan "SET1"" ) {
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	assert_int_eq( check.count, NUM_RECS_SET1 );
+	assert_int_eq(check.count, NUM_RECS_SET1);
 	info("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET1);
 
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_filter_set1 , "scan "SET1" w/ 25 <= bin1 <= 33" ) {
-
+TEST(scan_filter_set1 , "scan "SET1" w/ 25 <= bin1 <= 33")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET1,
@@ -543,18 +540,18 @@ TEST( scan_filter_set1 , "scan "SET1" w/ 25 <= bin1 <= 33" ) {
 
 	as_status rc = aerospike_scan_foreach(as, &err, &p, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	assert_int_eq( check.count, 9 );
+	assert_int_eq(check.count, 9);
 	info("Got %d records in the scan. Expected %d", check.count, 9);
 
 	as_scan_destroy(&scan);
 	as_exp_destroy(filter);
 }
 
-TEST( scan_basics_set1_concurrent , "scan "SET1" concurrently" ) {
-
+TEST(scan_basics_set1_concurrent , "scan "SET1" concurrently")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET1,
@@ -571,17 +568,17 @@ TEST( scan_basics_set1_concurrent , "scan "SET1" concurrently" ) {
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	assert_int_eq( check.count, NUM_RECS_SET1 );
+	assert_int_eq(check.count, NUM_RECS_SET1);
 	info("Got %d records in the concurrent scan. Expected %d", check.count, NUM_RECS_SET1);
 
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_set1_select , "scan "SET1" and select 'bin1'" ) {
-
+TEST(scan_basics_set1_select , "scan "SET1" and select 'bin1'")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET1,
@@ -600,18 +597,18 @@ TEST( scan_basics_set1_select , "scan "SET1" and select 'bin1'" ) {
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	// assert_int_eq( scan_data.ret_failed, false );
-	// assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
+	// assert_int_eq(scan_data.ret_failed, false);
+	// assert_int_eq(scan_data.ret_rec_count, NUM_RECS_SET1);
 	// info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
 
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_set1_nodata , "scan "SET1" with no-bin-data" ) {
-
+TEST(scan_basics_set1_nodata , "scan "SET1" with no-bin-data")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET1,
@@ -628,19 +625,18 @@ TEST( scan_basics_set1_nodata , "scan "SET1" with no-bin-data" ) {
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	// assert_int_eq( scan_data.ret_failed, false );
-	// assert_int_eq( scan_data.ret_rec_count, NUM_RECS_SET1 );
+	// assert_int_eq(scan_data.ret_failed, false);
+	// assert_int_eq(scan_data.ret_rec_count, NUM_RECS_SET1);
 	// info("Got %d records in the scan. Expected %d", scan_data.ret_rec_count, NUM_RECS_SET1);
 
 	as_scan_destroy(&scan);
 }
 
-
-TEST( scan_basics_background , "scan "SET1" in background to insert a new bin" ) {
-
+TEST(scan_basics_background , "scan "SET1" in background to insert a new bin")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET1,
@@ -658,7 +654,7 @@ TEST( scan_basics_background , "scan "SET1" in background to insert a new bin" )
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
 
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
+	assert_int_eq(udf_rc, AEROSPIKE_OK);
 
 	aerospike_scan_wait(as, &err, NULL, scanid, 0);
 
@@ -668,15 +664,15 @@ TEST( scan_basics_background , "scan "SET1" in background to insert a new bin" )
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
 	as_scan_destroy(&scan);
 	as_scan_destroy(&scan2);
 }
 
-TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the background and poll for job-status" ) {
-
+TEST(scan_basics_background_poll_job_status , "Start a UDF scan job in the background and poll for job-status")
+{
 	as_error err;
 
 	as_scan scan;
@@ -687,7 +683,7 @@ TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the bac
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
 
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
+	assert_int_eq(udf_rc, AEROSPIKE_OK);
 
 	as_status rc = AEROSPIKE_OK;
 	as_error cb_err;
@@ -714,15 +710,15 @@ TEST( scan_basics_background_poll_job_status , " Start a UDF scan job in the bac
 	for(int i = 0; i < 5; i++){
 		as_error_reset(&cb_err);
 		rc = aerospike_info_foreach(as, &cb_err, NULL, cmd, scan_udf_info_callback, NULL);
-		assert_int_eq( rc, AEROSPIKE_OK );
+		assert_int_eq(rc, AEROSPIKE_OK);
 		as_sleep(1 * 1000);
 	}
 
 	as_scan_destroy(&scan);
 }
 
-TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in SET1, conditional-delete of bin1, verify that bin1 is gone" ) {
-
+TEST(scan_basics_background_delete_bins , "Apply scan to count num-records in SET1, conditional-delete of bin1, verify that bin1 is gone")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET1,
@@ -739,10 +735,10 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	assert_int_eq( check.count, NUM_RECS_SET1 );
+	assert_int_eq(check.count, NUM_RECS_SET1);
 	debug("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET1);
 
 	as_scan scan_del;
@@ -752,7 +748,7 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan_del, &scanid);
 
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
+	assert_int_eq(udf_rc, AEROSPIKE_OK);
 
 	aerospike_scan_wait(as, &err, NULL, scanid, 0);
 
@@ -771,10 +767,10 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 
 	rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check2);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check2.failed );  
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check2.failed);  
 
-	assert_int_eq( check2.count,  NUM_RECS_SET1);
+	assert_int_eq(check2.count,  NUM_RECS_SET1);
 	debug("Got %d records in the scan after deletion ", check.count);
 
 	as_scan_destroy(&scan);
@@ -782,8 +778,8 @@ TEST( scan_basics_background_delete_bins , "Apply scan to count num-records in S
 	as_scan_destroy(&scan2);
 }
 
-TEST( scan_basics_background_delete_records_rec_filter , "scan_basics_background_delete_records_rec_filter" ) {
-
+TEST(scan_basics_background_delete_records_rec_filter , "scan_basics_background_delete_records_rec_filter")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET3,
@@ -800,10 +796,10 @@ TEST( scan_basics_background_delete_records_rec_filter , "scan_basics_background
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	assert_int_eq( check.count, NUM_RECS_SET3 );
+	assert_int_eq(check.count, NUM_RECS_SET3);
 	debug("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET3);
 
 	as_scan scan_del;
@@ -821,7 +817,7 @@ TEST( scan_basics_background_delete_records_rec_filter , "scan_basics_background
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, &p, &scan_del, &scanid);
 
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
+	assert_int_eq(udf_rc, AEROSPIKE_OK);
 
 	aerospike_scan_wait(as, &err, NULL, scanid, 0);
 
@@ -834,11 +830,11 @@ TEST( scan_basics_background_delete_records_rec_filter , "scan_basics_background
 
 	rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
 	debug("Got %d records in the scan after deletion ", check.count);
-	assert_int_eq( check.count, 90 );
+	assert_int_eq(check.count, 90);
 
 	as_scan_destroy(&scan);
 	as_scan_destroy(&scan_del);
@@ -847,8 +843,8 @@ TEST( scan_basics_background_delete_records_rec_filter , "scan_basics_background
 	as_exp_destroy(filter);
 }
 
-TEST( scan_basics_background_delete_records_md_filter , "scan_basics_background_delete_records_md_filter" ) {
-
+TEST(scan_basics_background_delete_records_md_filter , "scan_basics_background_delete_records_md_filter")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET4,
@@ -865,10 +861,10 @@ TEST( scan_basics_background_delete_records_md_filter , "scan_basics_background_
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	assert_int_eq( check.count, NUM_RECS_SET4 );
+	assert_int_eq(check.count, NUM_RECS_SET4);
 	debug("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET4);
 
 	as_scan scan_del;
@@ -886,7 +882,7 @@ TEST( scan_basics_background_delete_records_md_filter , "scan_basics_background_
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, &p, &scan_del, &scanid);
 
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
+	assert_int_eq(udf_rc, AEROSPIKE_OK);
 
 	aerospike_scan_wait(as, &err, NULL, scanid, 0);
 
@@ -899,11 +895,11 @@ TEST( scan_basics_background_delete_records_md_filter , "scan_basics_background_
 
 	rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
 	debug("Got %d records in the scan after deletion ", check.count);
-	assert_int_eq( check.count, 70 );
+	assert_int_eq(check.count, 70);
 
 	as_scan_destroy(&scan);
 	as_scan_destroy(&scan_del);
@@ -911,8 +907,8 @@ TEST( scan_basics_background_delete_records_md_filter , "scan_basics_background_
 	as_exp_destroy(filter);
 }
 
-TEST( scan_basics_background_delete_records , "Apply scan to count num-records in SET1, delete some of them and verify the count after deletion" ) {
-
+TEST(scan_basics_background_delete_records , "Apply scan to count num-records in SET1, delete some of them and verify the count after deletion")
+{
 	scan_check check = {
 		.failed = false,
 		.set = SET1,
@@ -929,10 +925,10 @@ TEST( scan_basics_background_delete_records , "Apply scan to count num-records i
 
 	as_status rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
-	assert_int_eq( check.count, NUM_RECS_SET1 );
+	assert_int_eq(check.count, NUM_RECS_SET1);
 	debug("Got %d records in the scan. Expected %d", check.count, NUM_RECS_SET1);
 
 	as_scan scan_del;
@@ -942,7 +938,7 @@ TEST( scan_basics_background_delete_records , "Apply scan to count num-records i
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan_del, &scanid);
 
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
+	assert_int_eq(udf_rc, AEROSPIKE_OK);
 
 	aerospike_scan_wait(as, &err, NULL, scanid, 0);
 
@@ -955,19 +951,19 @@ TEST( scan_basics_background_delete_records , "Apply scan to count num-records i
 
 	rc = aerospike_scan_foreach(as, &err, NULL, &scan2, scan_check_callback, &check);
 
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert_false( check.failed );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert_false(check.failed);
 
 	debug("Got %d records in the scan after deletion ", check.count);
-	assert_int_eq( check.count, 0 );
+	assert_int_eq(check.count, 0);
 
 	as_scan_destroy(&scan);
 	as_scan_destroy(&scan_del);
 	as_scan_destroy(&scan2);
 }
 
-TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in background with same scan-id" ) {
-
+TEST(scan_basics_background_sameid , "starting two udf scan of "SET2" in background with same scan-id")
+{
 	as_error err;
 
 	// insert a new bin using udf
@@ -978,7 +974,7 @@ TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in backgr
 	uint64_t scanid = 0;
 	as_status udf_rc = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
 
-	assert_int_eq( udf_rc, AEROSPIKE_OK );
+	assert_int_eq(udf_rc, AEROSPIKE_OK);
 
 	aerospike_scan_wait(as, &err, NULL, scanid, 0);
  
@@ -990,7 +986,7 @@ TEST( scan_basics_background_sameid , "starting two udf scan of "SET2" in backgr
 	as_status udf_rc2 = aerospike_scan_background(as, &err, NULL, &scan2, &scanid2);
 
 	// TODO - don't allow AEROSPIKE_ERR_SERVER when older servers are gone.
-	assert_true( udf_rc2 == AEROSPIKE_ERR_SERVER || udf_rc2 == AEROSPIKE_ERR_REQUEST_INVALID );
+	assert_true(udf_rc2 == AEROSPIKE_ERR_SERVER || udf_rc2 == AEROSPIKE_ERR_REQUEST_INVALID);
 
 	aerospike_scan_wait(as, &err, NULL, scanid, 0);
 
@@ -1348,12 +1344,12 @@ static bool before(atf_suite * suite) {
 	insert_data(NUM_RECS_SET6, SET6);
 	insert_data_int_key(NUM_RECS_SET6, SET6);
 
-	if ( ! udf_put(LUA_FILE) ) {
+	if (! udf_put(LUA_FILE)) {
 		error("failure while uploading: %s", LUA_FILE);
 		return false;
 	}
 
-	if ( ! udf_exists(LUA_FILE) ) {
+	if (! udf_exists(LUA_FILE)) {
 		error("lua file does not exist: %s", LUA_FILE);
 		return false;
 	}
@@ -1362,7 +1358,7 @@ static bool before(atf_suite * suite) {
 }
 
 static bool after(atf_suite * suite) {
-	if ( ! udf_remove(LUA_FILE) ) {
+	if (! udf_remove(LUA_FILE)) {
 		error("failure while removing: %s", LUA_FILE);
 		return false;
 	}
@@ -1370,33 +1366,36 @@ static bool after(atf_suite * suite) {
 	return true;
 }
 
-SUITE( scan_basics, "aerospike_scan basic tests" ) {
+SUITE(scan_basics, "aerospike_scan basic tests")
+{
+	if (! g_has_ttl) {
+		// Records are inserted with ttl in before().
+		return;
+	}
 
-	// For the cluster to settle as it is important for the per-node testcases
-	as_sleep(1 * 1000);
-	suite_before( before );
-	suite_after( after );
+	suite_before(before);
+	suite_after(after);
 
-	suite_add( scan_basics_null_set );
-	suite_add( scan_basics_set1 );
-	suite_add( scan_filter_set1 );
-	suite_add( scan_basics_set1_concurrent );
-	suite_add( scan_basics_set1_select );
-	suite_add( scan_basics_set1_nodata );
-	suite_add( scan_basics_background );
-	suite_add( scan_basics_background_sameid );
-	suite_add( scan_basics_background_poll_job_status );
-	suite_add( scan_basics_background_delete_bins );
-	suite_add( scan_basics_background_delete_records_rec_filter );
-	suite_add( scan_basics_background_delete_records_md_filter );
-	suite_add( scan_basics_background_delete_records );
-	suite_add( scan_operate );
-	suite_add( scan_operate_ttl);
-	suite_add( scan_operate_expop );
-	suite_add( scan_filter_set_name );
-	suite_add( scan_filter_rec_ttl );
-	suite_add( scan_filter_rec_str_key );
-	suite_add( scan_filter_rec_int_key );
-	suite_add( scan_filter_bin_exists );
-	suite_add( scan_invalid_filter );
+	suite_add(scan_basics_null_set);
+	suite_add(scan_basics_set1);
+	suite_add(scan_filter_set1);
+	suite_add(scan_basics_set1_concurrent);
+	suite_add(scan_basics_set1_select);
+	suite_add(scan_basics_set1_nodata);
+	suite_add(scan_basics_background);
+	suite_add(scan_basics_background_sameid);
+	suite_add(scan_basics_background_poll_job_status);
+	suite_add(scan_basics_background_delete_bins);
+	suite_add(scan_basics_background_delete_records_rec_filter);
+	suite_add(scan_basics_background_delete_records_md_filter);
+	suite_add(scan_basics_background_delete_records);
+	suite_add(scan_operate);
+	suite_add(scan_operate_ttl);
+	suite_add(scan_operate_expop);
+	suite_add(scan_filter_set_name);
+	suite_add(scan_filter_rec_ttl);
+	suite_add(scan_filter_rec_str_key);
+	suite_add(scan_filter_rec_int_key);
+	suite_add(scan_filter_bin_exists);
+	suite_add(scan_invalid_filter);
 }

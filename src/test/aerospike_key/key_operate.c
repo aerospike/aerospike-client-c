@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -36,7 +36,8 @@
  * GLOBAL VARS
  *****************************************************************************/
 
-extern aerospike * as;
+extern aerospike* as;
+extern bool g_has_ttl;
 
 /******************************************************************************
  * MACROS
@@ -384,9 +385,11 @@ TEST(key_operate_read_all_bins , "operate read all bins")
 
 SUITE(key_operate, "aerospike_key_operate tests")
 {
-	suite_add(key_operate_touchget);
+	if (g_has_ttl) {
+		suite_add(key_operate_touchget);
+		suite_add(key_operate_gen_equal);
+	}
 	suite_add(key_operate_9);
-	suite_add(key_operate_gen_equal);
 	suite_add(key_operate_float);
 	suite_add(key_operate_delete);
 	suite_add(key_operate_bool);

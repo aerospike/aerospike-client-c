@@ -351,7 +351,8 @@ static bool before(atf_plan* plan)
 		return false;
 	}
 
-	const char* search = "default-ttl=";
+	// Run ttl tests if nsup-period or allow-ttl-without-nsup is defined.
+	const char* search = "nsup-period=";
 	char* p = strstr(result, search);
 
 	if (p) {
@@ -359,9 +360,24 @@ static bool before(atf_plan* plan)
 		g_has_ttl = *p != '0';
 	}
 	else {
-		error("Failed to find namespace config default-ttl");
+		error("Failed to find namespace config nsup-period");
 		cf_free(result);
 		return false;
+	}
+
+	if (! g_has_ttl) {
+		search = "allow-ttl-without-nsup=";
+		p = strstr(result, search);
+
+		if (p) {
+			p += strlen(search);
+			g_has_ttl = strcmp(p, "true") == 0;
+		}
+		else {
+			error("Failed to find namespace config allow-ttl-without-nsup");
+			cf_free(result);
+			return false;
+		}
 	}
 
 	cf_free(result);

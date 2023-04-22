@@ -105,7 +105,7 @@ function CreatePackage {
 
 case ${platform:0:2} in
 
-el|fc)
+el|fc|am)
   arch=`uname -m`
   os=`uname -s`-$arch
   CreatePackage usr opt $os

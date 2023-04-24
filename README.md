@@ -17,7 +17,7 @@ are also included.
 	[Optional:]
 	$ sudo apt-get install liblua5.1-dev
 
-### Red Hat Enterprise Linux or CentOS
+### Red Hat Enterprise Linux, CentOS and Amazon Linux
 
 	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
 

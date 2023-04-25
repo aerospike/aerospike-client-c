@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2020 by Aerospike.
+ * Copyright 2008-2023 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -35,23 +35,38 @@
 
 #include "example_utils.h"
 
-//==========================================================
+//---------------------------------
+// Types
+//---------------------------------
+
+struct counter {
+	as_scan* scan;
+	uint32_t page;
+	uint32_t count;
+};
+
+//---------------------------------
 // Globals
-//
+//---------------------------------
 
 static aerospike as;
 static as_monitor monitor;
 static uint32_t max_commands = 100;
 
-//==========================================================
+//---------------------------------
 // Forward Declarations
-//
+//---------------------------------
 
 void insert_records(uint32_t* counter);
 bool insert_record(as_event_loop* event_loop, void* udata, uint32_t index);
 void insert_listener(as_error* err, void* udata, as_event_loop* event_loop);
 void run_scan(as_event_loop* event_loop);
-bool scan_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop);
+void run_first_page_scan(as_event_loop* event_loop);
+void run_page_scan(as_event_loop* event_loop, struct counter* c);
+
+//---------------------------------
+// Main
+//---------------------------------
 
 int
 main(int argc, char* argv[])
@@ -91,6 +106,10 @@ main(int argc, char* argv[])
 	as_event_close_loops();
 	return 0;
 }
+
+//---------------------------------
+// Insert Records
+//---------------------------------
 
 void
 insert_records(uint32_t* counter)
@@ -148,7 +167,7 @@ insert_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	// Atomic increment is not necessary since only one event loop is used.
 	if (++(*counter) == g_n_keys) {
 		// We have reached max number of records.
-		LOG("inserted %u keys", *counter);
+		LOG("Inserted %u keys", *counter);
 		run_scan(event_loop);
 		return;
 	}
@@ -161,6 +180,30 @@ insert_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 }
 
+//---------------------------------
+// Async Scan Regular
+//---------------------------------
+
+static bool
+scan_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	if (err) {
+		LOG("aerospike_scan_async() returned %d - %s", err->code, err->message);
+		as_monitor_notify(&monitor);
+		return false;	
+	}
+
+	if (! record) {
+		LOG("Scan is complete");
+		run_first_page_scan(event_loop);
+		return false;
+	}
+
+	LOG("Scan returned record:");
+	example_dump_record(record);
+	return true;
+}
+
 void
 run_scan(as_event_loop* event_loop)
 {
@@ -168,7 +211,7 @@ run_scan(as_event_loop* event_loop)
 	as_scan scan;
 	as_scan_init(&scan, g_namespace, g_set);
 
-	LOG("execute scan");
+	LOG("Execute scan");
 
 	as_policy_scan p;
 	as_policy_scan_init(&p);
@@ -184,22 +227,76 @@ run_scan(as_event_loop* event_loop)
 	as_scan_destroy(&scan);
 }
 
-bool
-scan_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+//---------------------------------
+// Async Scan Page
+//---------------------------------
+
+static bool
+scan_page_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
 {
+	struct counter* c = udata;
+
 	if (err) {
 		LOG("aerospike_scan_async() returned %d - %s", err->code, err->message);
+		as_scan_destroy(c->scan);
 		as_monitor_notify(&monitor);
 		return false;	
 	}
 
 	if (! record) {
-		LOG("scan is complete");
-		as_monitor_notify(&monitor);
+		LOG("Scan page %u complete: count=%u", c->page, c->count);
+
+		if (c->page < 2) {
+			c->count = 0;
+			c->page++;
+			run_page_scan(event_loop, c);
+		}
+		else {
+			as_scan_destroy(c->scan);
+			cf_free(c);
+			as_monitor_notify(&monitor);
+		}
 		return false;
 	}
 
-	LOG("scan callback returned record:");
+	LOG("Scan returned record:");
+	c->count++;
 	example_dump_record(record);
 	return true;
+}
+
+void
+run_first_page_scan(as_event_loop* event_loop)
+{
+	// Must allocate as_scan on heap when paginate is used because
+	// the scan's as_partitions_status is stored/written during the
+	// scan.
+	as_scan* scan = as_scan_new(g_namespace, g_set);
+	as_scan_set_paginate(scan, true);
+
+	// Must allocate counter on heap too.
+	struct counter* c = cf_malloc(sizeof(struct counter));
+	c->scan = scan;
+	c->page = 1;
+	c->count = 0;
+
+	run_page_scan(event_loop, c);
+}
+
+void
+run_page_scan(as_event_loop* event_loop, struct counter* c)
+{
+	LOG("Scan page %u", c->page);
+
+	as_policy_scan p;
+	as_policy_scan_init(&p);
+	p.base.socket_timeout = 5000;
+	p.max_records = 11;
+
+	// Execute the scan.
+	as_error err;
+	if (aerospike_scan_async(&as, &err, &p, c->scan, NULL, scan_page_listener, c, event_loop)
+		!= AEROSPIKE_OK) {
+		scan_listener(&err, NULL, NULL, event_loop);
+	}
 }

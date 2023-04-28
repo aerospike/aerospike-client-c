@@ -37,14 +37,10 @@ struct as_node_s;
 typedef struct as_partition_status_s {
 	uint16_t part_id;
 	uint8_t replica_index;
-	bool unavailable;
 	bool retry;
 	as_digest digest;
 	uint64_t bval;
-	union {
-		struct as_node_s* master_node;
-		uint32_t master_index;
-	};
+	struct as_node_s* node;
 } as_partition_status;
 
 /**

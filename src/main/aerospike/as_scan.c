@@ -429,7 +429,7 @@ as_scan_from_bytes(as_scan* scan, const uint8_t* bytes, uint32_t bytes_size)
 		for (uint16_t i = 0; i < max; i++) {
 			as_partition_status* ps = &scan->parts_all->parts[i];
 			ps->replica_index = 0;
-			ps->unavailable = false;
+			ps->node = NULL;
 
 			if (as_unpack_uint64(&pk, &uval) != 0) {
 				goto HandleError;
@@ -618,10 +618,6 @@ as_scan_compare(as_scan* s1, as_scan* s2)
 			}
 
 			if (ps1->replica_index != ps2->replica_index) {
-				as_cmp_error();
-			}
-
-			if (ps1->unavailable != ps2->unavailable) {
 				as_cmp_error();
 			}
 

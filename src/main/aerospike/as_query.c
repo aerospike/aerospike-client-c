@@ -727,7 +727,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 		for (uint16_t i = 0; i < max; i++) {
 			as_partition_status* ps = &query->parts_all->parts[i];
 			ps->replica_index = 0;
-			ps->unavailable = false;
+			ps->node = NULL;
 
 			if (as_unpack_uint64(&pk, &uval) != 0) {
 				goto HandleError;
@@ -1035,10 +1035,6 @@ as_query_compare(as_query* q1, as_query* q2) {
 			}
 
 			if (ps1->replica_index != ps2->replica_index) {
-				as_cmp_error();
-			}
-
-			if (ps1->unavailable != ps2->unavailable) {
 				as_cmp_error();
 			}
 

@@ -38,12 +38,16 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 	for (uint16_t i = 0; i < part_count; i++) {
 		as_partition_status* ps = &parts_all->parts[i];
 		ps->part_id = part_begin + i;
+		// as_replica_index_init_read() could be called here to support AS_POLICY_REPLICA_ANY,
+		// but AS_POLICY_REPLICA_ANY does not make sense in the scan/query context since
+		// partitions are already well distributed across nodes.  Therefore, treat
+		// AS_POLICY_REPLICA_ANY like AS_POLICY_REPLICA_SEQUENCE and start at the primary node.
+		// ps->replica_index = as_replica_index_init_read(replica);
 		ps->replica_index = 0;
-		ps->unavailable = false;
 		ps->retry = true;
 		ps->digest.init = false;
 		ps->bval = 0;
-		ps->master_node = NULL;
+		ps->node = NULL;
 	}
 
 	if (digest && digest->init) {
@@ -55,8 +59,8 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 static void
 tracker_init(
 	as_partition_tracker* pt, const as_policy_base* policy, as_partitions_status** pp_resume,
-	uint64_t max_records, bool paginate, uint16_t part_begin, uint16_t part_count,
-	const as_digest* digest
+	uint64_t max_records, as_policy_replica replica, bool paginate, uint16_t part_begin,
+	uint16_t part_count, const as_digest* digest
 	)
 {
 	as_partitions_status* resume = *pp_resume;
@@ -78,6 +82,14 @@ tracker_init(
 		if (max_records == 0) {
 			pt->parts_all->retry = true;
 		}
+
+		// Reset replica sequence and last node used.
+		for (uint16_t i = 0; i < part_count; i++) {
+			as_partition_status* ps = &pt->parts_all->parts[i];
+			// ps->replica_index = as_replica_index_init_read(replica);
+			ps->replica_index = 0;
+			ps->node = NULL;
+		}
 	}
 
 	pthread_mutex_init(&pt->lock, NULL);
@@ -85,6 +97,7 @@ tracker_init(
 	as_vector_init(&pt->node_parts, sizeof(as_node_partitions), pt->node_capacity);
 	pt->errors = NULL;
 	pt->max_records = max_records;
+	pt->replica = replica;
 
 	pt->sleep_between_retries = policy->sleep_between_retries;
 	pt->socket_timeout = policy->socket_timeout;
@@ -143,6 +156,26 @@ assign_partition(as_partition_tracker* pt, as_partition_status* ps, as_node* nod
 }
 
 static void
+mark_retry_on_error(as_partition_tracker* pt, as_node_partitions* np)
+{
+	as_vector* list = &np->parts_full;
+
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
+		ps->retry = true;
+		ps->replica_index++;
+	}
+
+	list = &np->parts_partial;
+
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_partition_status* ps = as_partition_tracker_get_status(pt, list, i);
+		ps->retry = true;
+		ps->replica_index++;
+	}
+}
+
+static void
 mark_retry(as_partition_tracker* pt, as_node_partitions* np)
 {
 	as_vector* list = &np->parts_full;
@@ -184,7 +217,8 @@ release_node_partitions(as_vector* list)
 void
 as_partition_tracker_init_nodes(
 	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
-	uint64_t max_records, as_partitions_status** parts_all, bool paginate, uint32_t cluster_size
+	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
+	bool paginate, uint32_t cluster_size
 	)
 {
 	pt->node_filter = NULL;
@@ -194,26 +228,26 @@ as_partition_tracker_init_nodes(
 	uint32_t ppn = cluster->n_partitions / cluster_size;
 	ppn += ppn >> 2;
 	pt->parts_capacity = ppn;
-	tracker_init(pt, policy, parts_all, max_records, paginate, 0, cluster->n_partitions, NULL);
+	tracker_init(pt, policy, parts_all, max_records, replica, paginate, 0, cluster->n_partitions, NULL);
 }
 
 void
 as_partition_tracker_init_node(
 	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
-	uint64_t max_records, as_partitions_status** parts_all, bool paginate, as_node* node
+	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all, bool paginate, as_node* node
 	)
 {
 	pt->node_filter = node;
 	pt->node_capacity = 1;
 	pt->parts_capacity = cluster->n_partitions;
-	tracker_init(pt, policy, parts_all, max_records, paginate, 0, cluster->n_partitions, NULL);
+	tracker_init(pt, policy, parts_all, max_records, replica, paginate, 0, cluster->n_partitions, NULL);
 }
 
 as_status
 as_partition_tracker_init_filter(
 	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
-	uint64_t max_records, as_partitions_status** parts_all, bool paginate,
-	uint32_t cluster_size, as_partition_filter* pf, as_error* err
+	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
+	bool paginate, uint32_t cluster_size, as_partition_filter* pf, as_error* err
 	)
 {
 	if (pf->digest.init) {
@@ -237,7 +271,7 @@ as_partition_tracker_init_filter(
 	pt->node_filter = NULL;
 	pt->node_capacity = cluster_size;
 	pt->parts_capacity = pf->count;
-	tracker_init(pt, policy, parts_all, max_records, paginate, pf->begin, pf->count, &pf->digest);
+	tracker_init(pt, policy, parts_all, max_records, replica, paginate, pf->begin, pf->count, &pf->digest);
 	return AEROSPIKE_OK;
 }
 
@@ -264,31 +298,16 @@ as_partition_tracker_assign(
 
 			if (retry || ps->retry) {
 				as_partition* part = &table->partitions[ps->part_id];
-				as_node* master_node = as_node_load(&part->nodes[0]);
-				as_node* node;
 
-				if (pt->iteration == 1 || !ps->unavailable || ps->master_node != master_node) {
-					node = ps->master_node = master_node;
-					ps->replica_index = 0;
-				}
-				else {
-					// Partition was unavailable in the previous iteration and the
-					// master node has not changed. Switch replica.
-					ps->replica_index++;
-
-					if (ps->replica_index >= table->replica_size) {
-						ps->replica_index = 0;
-					}
-
-					node = as_node_load(&part->nodes[ps->replica_index]);
-				}
+				as_node* node = as_partition_get_node(cluster, ns, part, ps->node, pt->replica,
+													  table->replica_size, &ps->replica_index);
 
 				if (! node) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 										   "Node not found for partition %u", ps->part_id);
 				}
 
-				ps->unavailable = false;
+				ps->node = node;
 				ps->retry = false;
 
 				// Use node name to check for single node equality because
@@ -311,46 +330,21 @@ as_partition_tracker_assign(
 				ns);
 		}
 
-		as_node** local_nodes = cluster->shm_info->local_nodes;
-
 		for (uint16_t i = 0; i < parts_all->part_count; i++) {
 			as_partition_status* ps = &parts_all->parts[i];
 
 			if (retry || ps->retry) {
 				as_partition_shm* part = &table->partitions[ps->part_id];
-				uint32_t master_index = as_load_uint32(&part->nodes[0]);
-				uint32_t index;
 
-				if (pt->iteration == 1 || !ps->unavailable || ps->master_index != master_index) {
-					index = ps->master_index = master_index;
-					ps->replica_index = 0;
-				}
-				else {
-					// Partition was unavailable in the previous iteration and the
-					// master node has not changed. Switch replica.
-					ps->replica_index++;
-
-					if (ps->replica_index >= table->replica_size) {
-						ps->replica_index = 0;
-					}
-
-					index = as_load_uint32(&part->nodes[ps->replica_index]);
-				}
-
-				// node index zero indicates unset.
-				if (index == 0) {
-					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-										   "Node not found for partition %u", ps->part_id);
-				}
-
-				as_node* node = as_node_load(&local_nodes[index-1]);
+				as_node* node = as_partition_get_node(cluster, ns, part, ps->node, pt->replica,
+													  table->replica_size, &ps->replica_index);
 
 				if (! node) {
 					return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 										   "Node not found for partition %u", ps->part_id);
 				}
 
-				ps->unavailable = false;
+				ps->node = node;
 				ps->retry = false;
 
 				// Use node name to check for single node equality because
@@ -552,7 +546,7 @@ as_partition_tracker_should_retry(
 		as_vector_append(pt->errors, &status);
 		pthread_mutex_unlock(&pt->lock);
 
-		mark_retry(pt, np);
+		mark_retry_on_error(pt, np);
 		np->parts_unavailable = np->parts_full.size + np->parts_partial.size;
 		return true;
 

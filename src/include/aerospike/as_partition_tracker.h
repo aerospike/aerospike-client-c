@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -19,6 +19,7 @@
 #include <aerospike/as_std.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_partition_filter.h>
+#include <aerospike/as_policy.h>
 #include <aerospike/as_vector.h>
 #include <pthread.h>
 
@@ -31,7 +32,6 @@ extern "C" {
  *****************************************************************************/
 struct as_node_s;
 struct as_cluster_s;
-struct as_policy_base_s;
 struct as_error_s;
 
 /**
@@ -59,6 +59,7 @@ typedef struct as_partition_tracker_s {
 	as_vector node_parts;
 	as_vector* errors;
 	uint64_t max_records;
+	as_policy_replica replica;
 	uint32_t parts_capacity;
 	uint32_t sleep_between_retries;
 	uint32_t socket_timeout;
@@ -74,21 +75,22 @@ typedef struct as_partition_tracker_s {
 
 void
 as_partition_tracker_init_nodes(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
-	uint64_t max_records, as_partitions_status** parts_all, bool paginate, uint32_t cluster_size
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const as_policy_base* policy,
+	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
+	bool paginate, uint32_t cluster_size
 	);
 
 void
 as_partition_tracker_init_node(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
-	uint64_t max_records, as_partitions_status** parts_all, bool paginate, struct as_node_s* node
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const as_policy_base* policy,
+	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all, bool paginate, struct as_node_s* node
 	);
 
 as_status
 as_partition_tracker_init_filter(
-	as_partition_tracker* pt, struct as_cluster_s* cluster, const struct as_policy_base_s* policy,
-	uint64_t max_records, as_partitions_status** parts_all, bool paginate, uint32_t cluster_size,
-	as_partition_filter* pf, struct as_error_s* err
+	as_partition_tracker* pt, struct as_cluster_s* cluster, const as_policy_base* policy,
+	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
+	bool paginate, uint32_t cluster_size, as_partition_filter* pf, struct as_error_s* err
 	);
 
 as_status
@@ -103,8 +105,8 @@ as_partition_tracker_part_unavailable(
 {
 	as_partitions_status* ps = pt->parts_all;
 	as_partition_status* p = &ps->parts[part_id - ps->part_begin];
-	p->unavailable = true;
 	p->retry = true;
+	p->replica_index++;
 	np->parts_unavailable++;
 }
 

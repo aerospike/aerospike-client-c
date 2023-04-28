@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1120,6 +1120,11 @@ typedef struct as_policy_query_s {
 	uint32_t info_timeout;
 
 	/**
+	 * Algorithm used to determine target node.
+	 */
+	as_policy_replica replica;
+
+	/**
 	 * Terminate query if cluster is in migration state. If the server supports partition
 	 * queries or the query filter is null (scan), this field is ignored.
 	 *
@@ -1176,6 +1181,11 @@ typedef struct as_policy_scan_s {
 	 * Default: 0
 	 */
 	uint32_t records_per_second;
+
+	/**
+	 * Algorithm used to determine target node.
+	 */
+	as_policy_replica replica;
 
 	/**
 	 * If the transaction results in a record deletion, leave a tombstone for the record.
@@ -1673,6 +1683,7 @@ as_policy_scan_init(as_policy_scan* p)
 	as_policy_base_query_init(&p->base);
 	p->max_records = 0;
 	p->records_per_second = 0;
+	p->replica = AS_POLICY_REPLICA_SEQUENCE;
 	p->durable_delete = false;
 	return p;
 }
@@ -1704,6 +1715,7 @@ as_policy_query_init(as_policy_query* p)
 {
 	as_policy_base_query_init(&p->base);
 	p->info_timeout = 10000;
+	p->replica = AS_POLICY_REPLICA_SEQUENCE;
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;
 	p->short_query = false;

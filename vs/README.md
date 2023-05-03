@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- Windows 7 or greater.
-- Visual Studio 2017 or greater.
+- Windows 10+
+- Visual Studio 2022+
 
 The Aerospike C client library is dependent on several third party libraries.
 Since many of these libraries are difficult to build on Windows, pre-built 

@@ -487,6 +487,19 @@ HandleError:
 	return false;
 }
 
+as_scan*
+as_scan_from_bytes_new(const uint8_t* bytes, uint32_t bytes_size)
+{
+	as_scan* scan = (as_scan*)cf_malloc(sizeof(as_scan));
+
+	if (! as_scan_from_bytes(scan, bytes, bytes_size)) {
+		cf_free(scan);
+		return NULL;
+	}
+	scan->_free = true;
+	return scan;
+}
+
 //---------------------------------
 // Scan Compare
 //---------------------------------

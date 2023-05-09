@@ -847,13 +847,26 @@ AS_EXTERN bool
 as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size);
 
 /**
- * Deserialize bytes to query definition.
+ * Deserialize bytes to query definition. Query definition is assumed to be on the stack.
+ * as_query_destroy() should be called when done with the query definition.
  *
+ * @returns true on success and false on failure.
  * @relates as_query
  * @ingroup as_query_object
  */
 AS_EXTERN bool
 as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size);
+
+/**
+ * Create query definition on the heap and deserialize bytes to that query definition.
+ * as_query_destroy() should be called when done with the query definition.
+ *
+ * @returns query definition on success and NULL on failure.
+ * @relates as_query
+ * @ingroup as_query_object
+ */
+AS_EXTERN as_query*
+as_query_from_bytes_new(const uint8_t* bytes, uint32_t bytes_size);
 
 /**
  * Compare query objects.

@@ -607,13 +607,26 @@ AS_EXTERN bool
 as_scan_to_bytes(const as_scan* scan, uint8_t** bytes, uint32_t* bytes_size);
 
 /**
- * Deserialize bytes to scan definition.
+ * Deserialize bytes to scan definition. Scan definition is assumed to be on the stack.
+ * as_scan_destroy() should be called when done with the scan definition.
  *
+ * @returns true on success and false on failure.
  * @relates as_scan
  * @ingroup as_scan_object
  */
 AS_EXTERN bool
 as_scan_from_bytes(as_scan* scan, const uint8_t* bytes, uint32_t bytes_size);
+
+/**
+ * Create scan definition on the heap and deserialize bytes to that scan definition.
+ * as_scan_destroy() should be called when done with the scan definition.
+ *
+ * @returns scan definition on success and NULL on failure.
+ * @relates as_scan
+ * @ingroup as_scan_object
+ */
+AS_EXTERN as_scan*
+as_scan_from_bytes_new(const uint8_t* bytes, uint32_t bytes_size);
 
 /**
  * Compare scan objects.

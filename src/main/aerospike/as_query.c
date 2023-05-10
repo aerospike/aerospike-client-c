@@ -799,6 +799,19 @@ HandleError:
 	return false;
 }
 
+as_query*
+as_query_from_bytes_new(const uint8_t* bytes, uint32_t bytes_size)
+{
+	as_query* query = (as_query*)cf_malloc(sizeof(as_query));
+
+	if (! as_query_from_bytes(query, bytes, bytes_size)) {
+		cf_free(query);
+		return NULL;
+	}
+	query->_free = true;
+	return query;
+}
+
 //---------------------------------
 // Query Compare
 //---------------------------------

@@ -43,6 +43,7 @@ struct counter {
 	as_scan* scan;
 	uint32_t page;
 	uint32_t count;
+	uint32_t max; // Only used in terminate/resume
 };
 
 //---------------------------------
@@ -63,6 +64,8 @@ void insert_listener(as_error* err, void* udata, as_event_loop* event_loop);
 void run_scan(as_event_loop* event_loop);
 void run_first_page_scan(as_event_loop* event_loop);
 void run_page_scan(as_event_loop* event_loop, struct counter* c);
+void scan_terminate_with_serialization(as_event_loop* event_loop);
+void scan_resume_with_serialization(as_event_loop* event_loop, uint8_t* bytes, uint32_t bytes_size);
 
 //---------------------------------
 // Main
@@ -254,14 +257,15 @@ scan_page_listener(as_error* err, as_record* record, void* udata, as_event_loop*
 		else {
 			as_scan_destroy(c->scan);
 			cf_free(c);
-			as_monitor_notify(&monitor);
+
+			scan_terminate_with_serialization(event_loop);
 		}
 		return false;
 	}
 
-	LOG("Scan returned record:");
 	c->count++;
-	example_dump_record(record);
+	//LOG("Scan returned record:");
+	//example_dump_record(record);
 	return true;
 }
 
@@ -298,5 +302,124 @@ run_page_scan(as_event_loop* event_loop, struct counter* c)
 	if (aerospike_scan_async(&as, &err, &p, c->scan, NULL, scan_page_listener, c, event_loop)
 		!= AEROSPIKE_OK) {
 		scan_listener(&err, NULL, NULL, event_loop);
+	}
+}
+
+//---------------------------------
+// Async Scan Terminate/Resume
+//---------------------------------
+
+static bool
+scan_terminate_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	struct counter* c = udata;
+
+	if (err) {
+		LOG("Scan terminate returned %d - %s", err->code, err->message);
+		as_scan_destroy(c->scan);
+		cf_free(c);
+		as_monitor_notify(&monitor);
+		return false;	
+	}
+
+	if (! record) {
+		LOG("Scan terminate unexpectedly complete: count=%u", c->count);
+		as_scan_destroy(c->scan);
+		cf_free(c);
+		as_monitor_notify(&monitor);
+		return false;
+	}
+
+	if (c->count >= c->max) {
+		// Since we are terminating the scan here, the scan last digest
+		// will not be set and the current record will be returned again
+		// if the scan resumes at a later time.
+		LOG("Terminate scan after %u records", c->count);
+		uint32_t bytes_size = 0;
+		uint8_t* bytes = NULL;
+		as_scan_to_bytes(c->scan, &bytes, &bytes_size);
+		as_scan_destroy(c->scan);
+		cf_free(c);
+
+		LOG("Resume scan");
+		scan_resume_with_serialization(event_loop, bytes, bytes_size);
+		return false;
+	}
+
+	c->count++;
+	//LOG("Scan returned record:");
+	//example_dump_record(record);
+	return true;
+}
+
+void
+scan_terminate_with_serialization(as_event_loop* event_loop)
+{
+	LOG("Scan to be terminated");
+
+	// Must allocate as_scan on heap when paginate is used.
+	as_scan* scan = as_scan_new(g_namespace, g_set);
+	as_scan_set_paginate(scan, true);
+
+	// Must allocate counter on heap too.
+	struct counter* c = cf_malloc(sizeof(struct counter));
+	c->scan = scan;
+	c->page = 1;
+	c->count = 0;
+	c->max = 11;
+
+	// Execute the scan.
+	as_error err;
+
+	if (aerospike_scan_async(&as, &err, NULL, c->scan, NULL, scan_terminate_listener, c, event_loop)
+		!= AEROSPIKE_OK) {
+		scan_terminate_listener(&err, NULL, NULL, event_loop);
+	}
+}
+
+static bool
+scan_resume_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	struct counter* c = udata;
+
+	if (err) {
+		LOG("Scan resume returned %d - %s", err->code, err->message);
+		as_scan_destroy(c->scan);
+		cf_free(c);
+		as_monitor_notify(&monitor);
+		return false;	
+	}
+
+	if (! record) {
+		LOG("Scan resume complete: count=%u", c->count);
+		as_scan_destroy(c->scan);
+		cf_free(c);
+		as_monitor_notify(&monitor);
+		return false;
+	}
+
+	c->count++;
+	//LOG("Scan returned record:");
+	//example_dump_record(record);
+	return true;
+}
+
+void
+scan_resume_with_serialization(as_event_loop* event_loop, uint8_t* bytes, uint32_t bytes_size)
+{
+	struct counter* c = cf_malloc(sizeof(struct counter));
+	c->scan = as_scan_from_bytes_new(bytes, bytes_size);
+	c->page = 2;
+	c->count = 0;
+	c->max = 0;
+
+	cf_free(bytes);
+
+	// Execute the scan.
+	as_error err;
+
+	if (aerospike_scan_async(&as, &err, NULL, c->scan, NULL, scan_resume_listener, c, event_loop)
+		!= AEROSPIKE_OK) {
+		scan_resume_listener(&err, NULL, NULL, event_loop);
 	}
 }

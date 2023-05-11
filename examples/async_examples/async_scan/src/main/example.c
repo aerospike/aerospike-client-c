@@ -240,8 +240,9 @@ scan_page_listener(as_error* err, as_record* record, void* udata, as_event_loop*
 	struct counter* c = udata;
 
 	if (err) {
-		LOG("aerospike_scan_async() returned %d - %s", err->code, err->message);
+		LOG("scan page returned %d - %s", err->code, err->message);
 		as_scan_destroy(c->scan);
+		cf_free(c);
 		as_monitor_notify(&monitor);
 		return false;	
 	}
@@ -301,7 +302,7 @@ run_page_scan(as_event_loop* event_loop, struct counter* c)
 	as_error err;
 	if (aerospike_scan_async(&as, &err, &p, c->scan, NULL, scan_page_listener, c, event_loop)
 		!= AEROSPIKE_OK) {
-		scan_listener(&err, NULL, NULL, event_loop);
+		scan_page_listener(&err, NULL, c, event_loop);
 	}
 }
 

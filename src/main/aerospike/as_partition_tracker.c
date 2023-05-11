@@ -374,17 +374,11 @@ as_partition_tracker_assign(
 	if (pt->max_records > 0) {
 		// Distribute max_records across nodes.
 		if (pt->max_records < node_size) {
-			// Only include nodes that have at least 1 record requested.
-			node_size = (uint32_t)pt->max_records;
-
-			// Delete unused node partitions.
-			for (uint32_t i = node_size; i < pt->node_parts.size; i++) {
-				as_node_partitions* np = as_vector_get(&pt->node_parts, i);
-				release_np(np);
-			}
-
-			// Reset list size.
-			pt->node_parts.size = node_size;
+			// If max_records < node_size, the scan/query could consistently return 0 records
+			// even when some records are still available in nodes that were not included in the
+			// max_record distribution.
+			return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
+				"max_records %u must be >= assigned nodes %u", pt->max_records, node_size);
 		}
 
 		uint64_t max = pt->max_records / node_size;

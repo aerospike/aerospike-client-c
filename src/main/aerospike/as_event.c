@@ -1019,11 +1019,24 @@ as_event_executor_destroy(as_event_executor* executor)
 void
 as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t command_count)
 {
+	bool complete;
+
 	pthread_mutex_lock(&executor->lock);
+
 	bool first_error = executor->valid;
 	executor->valid = false;
-	executor->count += command_count;
-	bool complete = executor->count == executor->max;
+
+	if (executor->max_concurrent == 1) {
+		// Add current command that failed when running commands in sequence.
+		executor->count++;
+		complete = executor->count == executor->queued;
+	}
+	else {
+		// Add current command and any remaining commands.
+		executor->count += command_count;
+		complete = executor->count == executor->max;
+	}
+
 	pthread_mutex_unlock(&executor->lock);
 
 	if (complete) {
@@ -1053,6 +1066,8 @@ as_event_executor_cancel(as_event_executor* executor, uint32_t queued_count)
 	// Cancel group of commands that already have been queued.
 	// We are cancelling commands running in the event loop thread when this method
 	// is NOT running in the event loop thread.  Enforce thread-safety.
+	bool complete;
+
 	pthread_mutex_lock(&executor->lock);
 
 	// Do not call user listener because an error will be returned
@@ -1060,10 +1075,17 @@ as_event_executor_cancel(as_event_executor* executor, uint32_t queued_count)
 	executor->notify = false;
 	executor->valid = false;
 
-	// Add tasks that were never queued.
-	executor->count += (executor->max - queued_count);
-	
-	bool complete = executor->count == executor->max;
+	if (executor->max_concurrent == 1) {
+		// Add current task that failed when running commands in sequence.
+		executor->count++;
+		complete = executor->count == executor->queued;
+	}
+	else {
+		// Add tasks that were never queued.
+		executor->count += (executor->max - queued_count);
+		complete = executor->count == executor->max;
+	}
+
 	pthread_mutex_unlock(&executor->lock);
 
 	if (complete) {

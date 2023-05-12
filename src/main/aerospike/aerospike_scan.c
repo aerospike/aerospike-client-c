@@ -1097,7 +1097,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 			}
 			else {
 				// On retry, caller will cleanup and call listener.
-				as_event_executor_error(ee, err, (ee->max_concurrent == 1)? 1 : n_nodes - i);
+				as_event_executor_error(ee, err, n_nodes - i);
 			}
 			return status;
 		}

@@ -1019,15 +1019,24 @@ as_event_executor_destroy(as_event_executor* executor)
 void
 as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t command_count)
 {
+	bool complete;
+
 	pthread_mutex_lock(&executor->lock);
+
 	bool first_error = executor->valid;
 	executor->valid = false;
-	executor->count += command_count;
-	// Scans can be executed in sequence (max_concurrent == 1) so they can stop at
-	// queued while all others must wait until all commands finish.
-	bool complete = (executor->max_concurrent == 1)?
-		executor->count == executor->queued :
-		executor->count == executor->max;
+
+	if (executor->max_concurrent == 1) {
+		// Add current command that failed when running commands in sequence.
+		executor->count++;
+		complete = executor->count == executor->queued;
+	}
+	else {
+		// Add current command and any remaining commands.
+		executor->count += command_count;
+		complete = executor->count == executor->max;
+	}
+
 	pthread_mutex_unlock(&executor->lock);
 
 	if (complete) {

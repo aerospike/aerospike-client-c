@@ -1088,16 +1088,16 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 
 		if (status != AEROSPIKE_OK) {
 			// as_event_executor_destroy() will release nodes that were not queued.
-			// as_event_executor_cancel_query() or as_event_executor_error() will eventually
+			// as_event_executor_cancel() or as_event_executor_error() will eventually
 			// call as_event_executor_destroy().
 			if (pt->iteration == 1) {
 				// On first iteration, cleanup and do not call listener.
 				as_scan_partition_executor_destroy(se);
-				as_event_executor_cancel_query(ee);
+				as_event_executor_cancel(ee, i);
 			}
 			else {
 				// On retry, caller will cleanup and call listener.
-				as_event_executor_error(ee, err, 1);
+				as_event_executor_error(ee, err, (ee->max_concurrent == 1)? 1 : n_nodes - i);
 			}
 			return status;
 		}

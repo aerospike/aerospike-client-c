@@ -226,9 +226,6 @@ void
 as_event_executor_cancel(as_event_executor* executor, uint32_t queued_count);
 
 void
-as_event_executor_cancel_query(as_event_executor* executor);
-
-void
 as_event_executor_complete(as_event_executor* executor);
 
 void

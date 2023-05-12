@@ -1023,7 +1023,10 @@ as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t com
 	bool first_error = executor->valid;
 	executor->valid = false;
 	executor->count += command_count;
-	bool complete = executor->count == executor->max;
+	// Scan/Query node commands stop on error after all queued commands are complete.
+	// Batch node commands are all executed at once, but queued and max have
+	// the same value in batch, so they effectively stop at max.
+	bool complete = executor->count == executor->queued;
 	pthread_mutex_unlock(&executor->lock);
 
 	if (complete) {
@@ -1064,6 +1067,30 @@ as_event_executor_cancel(as_event_executor* executor, uint32_t queued_count)
 	executor->count += (executor->max - queued_count);
 	
 	bool complete = executor->count == executor->max;
+	pthread_mutex_unlock(&executor->lock);
+
+	if (complete) {
+		as_event_executor_destroy(executor);
+	}
+}
+
+void
+as_event_executor_cancel_query(as_event_executor* executor)
+{
+	// Cancel group of commands that already have been queued.
+	// We are cancelling commands running in the event loop thread when this method
+	// is NOT running in the event loop thread.  Enforce thread-safety.
+	pthread_mutex_lock(&executor->lock);
+
+	// Do not call user listener because an error will be returned
+	// on initial scan or query call.
+	executor->notify = false;
+	executor->valid = false;
+
+	// Add current task that failed.
+	executor->count++;
+	
+	bool complete = executor->count == executor->queued;
 	pthread_mutex_unlock(&executor->lock);
 
 	if (complete) {

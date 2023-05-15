@@ -97,6 +97,8 @@ tracker_init(
 	as_vector_init(&pt->node_parts, sizeof(as_node_partitions), pt->node_capacity);
 	pt->errors = NULL;
 	pt->max_records = max_records;
+	pt->record_count = 0;
+	pt->check_max = false;
 	pt->replica = replica;
 
 	pt->sleep_between_retries = policy->sleep_between_retries;
@@ -372,21 +374,26 @@ as_partition_tracker_assign(
 	parts_all->retry = true;
 
 	if (pt->max_records > 0) {
-		// Distribute max_records across nodes.
-		if (pt->max_records < node_size) {
-			// If max_records < node_size, the scan/query could consistently return 0 records
-			// even when some records are still available in nodes that were not included in the
-			// max_record distribution.
-			return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-				"max_records %u must be >= assigned nodes %u", pt->max_records, node_size);
+		if (pt->max_records >= node_size) {
+			// Distribute max_records across nodes.
+			uint64_t max = pt->max_records / node_size;
+			uint32_t rem = (uint32_t)(pt->max_records - (max * node_size));
+
+			for (uint32_t i = 0; i < node_size; i++) {
+				as_node_partitions* np = as_vector_get(&pt->node_parts, i);
+				np->record_max = i < rem ? max + 1 : max;
+			}
 		}
-
-		uint64_t max = pt->max_records / node_size;
-		uint32_t rem = (uint32_t)(pt->max_records - (max * node_size));
-
-		for (uint32_t i = 0; i < node_size; i++) {
-			as_node_partitions* np = as_vector_get(&pt->node_parts, i);
-			np->record_max = i < rem ? max + 1 : max;
+		else {
+			// If max_records < node_size, the scan/query could consistently return 0 records even
+			// when some records are still available in nodes that were not included in the
+			// max_record distribution. Therefore, ensure each node receives at least one max record
+			// allocation and filter out excess records when receiving records from the server.
+			for (uint32_t i = 0; i < node_size; i++) {
+				as_node_partitions* np = as_vector_get(&pt->node_parts, i);
+				np->record_max = 1;
+			}
+			pt->check_max = true;
 		}
 	}
 	return AEROSPIKE_OK;

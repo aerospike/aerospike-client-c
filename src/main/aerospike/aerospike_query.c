@@ -336,7 +336,7 @@ as_query_parse_record_async(
 		return status;
 	}
 
-	if (as_partition_tracker_reached_max_records_sync(qe->pt)) {
+	if (as_partition_tracker_reached_max_records_async(qe->pt)) {
 		as_record_destroy(&rec);
 		return AEROSPIKE_OK;
 	}

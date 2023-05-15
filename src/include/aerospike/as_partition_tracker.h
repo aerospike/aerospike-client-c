@@ -141,7 +141,7 @@ static inline bool
 as_partition_tracker_reached_max_records_sync(as_partition_tracker* pt)
 {
 	// Sync scan/query runs in multiple threads, so atomics are required.
-	return pt && pt->check_max && (as_aaf_uint64(pt->record_count, 1) > pt->max_records);
+	return pt && pt->check_max && (as_aaf_uint64(&pt->record_count, 1) > pt->max_records);
 }
 
 static inline bool

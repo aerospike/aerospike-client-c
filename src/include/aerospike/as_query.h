@@ -452,7 +452,7 @@ typedef struct as_query_s {
 	as_query_predicates where;
 
 	/**
-	 * UDF to apply to results of the background query.
+	 * UDF to apply to results of a background query or a foreground aggregation query.
 	 *
 	 * Should be set via `as_query_apply()`.
 	 */

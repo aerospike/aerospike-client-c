@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -53,7 +53,7 @@
  * 
  * ~~~~~~~~~~{.c}
  * if (aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK) {
- * 	    fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * ~~~~~~~~~~
  *
@@ -62,10 +62,14 @@
  * ~~~~~~~~~~{.c}
  * bool callback(const as_val* val, void* udata)
  * {
- * 	   as_record* rec = as_record_fromval(val);
- * 	   if ( !rec ) return false;
- * 	   fprintf("record contains %d bins", as_record_numbins(rec));
- * 	   return true;
+ *     if (!val) {
+ *         return false; // Query complete.
+ *     }
+ *
+ *     as_record* rec = as_record_fromval(val);
+ *     // Process record
+ *     // Do not call as_record_destroy() because the calling function will do that for you.
+ *     return true;
  * }
  * ~~~~~~~~~~
  *
@@ -99,12 +103,41 @@ extern "C" {
  * Multiple threads will likely be calling this callback in parallel.  Therefore,
  * your callback implementation should be thread safe.
  *
- * aerospike_query_foreach() and aerospike_query_partitions() accept this callback.
+ * A regular foreground query always returns as_record instances:
  *
  * ~~~~~~~~~~{.c}
- * bool my_callback(as_val * val, void* udata)
+ * bool callback(const as_val* val, void* udata)
  * {
- * 	   return true;
+ *     if (!val) {
+ *         return false; // Query complete.
+ *     }
+ *
+ *     as_record* rec = as_record_fromval(val);
+ *     // Process record
+ *     // Do not call as_record_destroy() because the calling function will do that for you.
+ *     return true;
+ * }
+ * ~~~~~~~~~~
+ *
+ * An aggregation query using a UDF returns as_val instances. The as_val type depends on
+ * what the UDF returns:
+ *
+ * ~~~~~~~~~~{.c}
+ * bool callback(const as_val* val, void* udata)
+ * {
+ *     if (!val) {
+ *         return false; // Query complete.
+ *     }
+ *
+ *     // Ensure UDF returned val is the expected type:
+ *     as_integer* i = as_integer_fromval(val);
+ *     
+ *     if (!i) {
+ *         return false;
+ *     }
+ *
+ *     // Process integer
+ *     return true;
  * }
  * ~~~~~~~~~~
  *
@@ -120,9 +153,8 @@ typedef bool (*aerospike_query_foreach_callback)(const as_val* val, void* udata)
  * Asynchronous query user callback.  This function is called for each record returned.
  * This function is also called once when the query completes or an error has occurred.
  *
- * @param err			This error structure is only populated on command failure. Null on success.
- * @param record 		Returned record. Use as_val_reserve() on record to prevent calling function
- *						from destroying. The record will be null on final query completion or query
+ * @param err			This error structure is only populated on command failure. NULL on success.
+ * @param record 		Returned record. The record will be NULL on final query completion or query
  *						error.
  * @param udata 		User data that is forwarded from asynchronous command function.
  * @param event_loop 	Event loop that this command was executed on.  Use this event loop when
@@ -146,20 +178,32 @@ typedef bool (*as_async_query_record_listener)(
  * your callback implementation should be thread safe.
  *
  * ~~~~~~~~~~{.c}
+ * bool callback(const as_val* val, void* udata)
+ * {
+ *     if (!val) {
+ *         return false; // Query complete.
+ *     }
+ *
+ *     as_record* rec = as_record_fromval(val);
+ *     // Process record
+ *     // Do not call as_record_destroy() because the calling function will do that for you.
+ *     return true;
+ * }
+ *
  * as_query query;
  * as_query_init(&query, "test", "demo");
  * as_query_select(&query, "bin1");
  * as_query_where(&query, "bin2", as_integer_equals(100));
  * 
  * if (aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK) {
- * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
  * ~~~~~~~~~~
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
- * @param policy		Query policy configuration parameters, pass in null for default.
+ * @param policy		Query policy configuration parameters, pass in NULL for default.
  * @param query			Query definition.
  * @param callback		Query callback function called for each result value.
  * @param udata			User-data to be passed to the callback.
@@ -179,6 +223,18 @@ aerospike_query_foreach(
  * Requires server version 6.0+.
  *
  * ~~~~~~~~~~{.c}
+ * bool callback(const as_val* val, void* udata)
+ * {
+ *     if (!val) {
+ *         return false; // Query complete.
+ *     }
+ *
+ *     as_record* rec = as_record_fromval(val);
+ *     // Process record
+ *     // Do not call as_record_destroy() because the calling function will do that for you.
+ *     return true;
+ * }
+ *
  * as_query query;
  * as_query_init(&query, "test", "demo");
  * as_query_select(&query, "bin1");
@@ -188,14 +244,14 @@ aerospike_query_foreach(
  * as_partition_filter_set_range(&pf, 0, 1024);
  * 
  * if (aerospike_query_partitions(&as, &err, NULL, &query, &pf, callback, NULL) != AEROSPIKE_OK) {
- * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
  * ~~~~~~~~~~
  * 
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
- * @param policy		Query policy configuration parameters, pass in null for default.
+ * @param policy		Query policy configuration parameters, pass in NULL for default.
  * @param query			Query definition.
  * @param pf			Partition filter.
  * @param callback		Query callback function called for each result value.
@@ -217,19 +273,19 @@ aerospike_query_partitions(
  * ~~~~~~~~~~{.c}
  * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
- * 	   if (err) {
- * 	       printf("Query failed: %d %s\n", err->code, err->message);
- * 	       return false;
- * 	   }
- *
- * 	   if (! record) {
- * 	       printf("Query ended\n");
- * 	       return false;
+ *     if (err) {
+ *         printf("Query failed: %d %s\n", err->code, err->message);
+ *         return false;
  *     }
  *
- * 	   // Process record
- * 	   // Do not call as_record_destroy() because the calling function will do that for you.
- * 	   return true;
+ *     if (! record) {
+ *         printf("Query ended\n");
+ *         return false;
+ *     }
+ *
+ *     // Process record
+ *     // Do not call as_record_destroy() because the calling function will do that for you.
+ *     return true;
  * }
  *
  * as_query query;
@@ -238,14 +294,14 @@ aerospike_query_partitions(
  * as_query_where(&query, "bin2", as_integer_equals(100));
  *
  * if (aerospike_query_async(&as, &err, NULL, &query, my_listener, NULL, NULL) != AEROSPIKE_OK) {
- * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
  * ~~~~~~~~~~
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
- * @param policy		Query policy configuration parameters, pass in null for default.
+ * @param policy		Query policy configuration parameters, pass in NULL for default.
  * @param query			Query definition.
  * @param listener		The function to be called for each returned value.
  * @param udata			User-data to be passed to the callback.
@@ -269,19 +325,19 @@ aerospike_query_async(
  * ~~~~~~~~~~{.c}
  * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
- * 	   if (err) {
- * 	       printf("Query failed: %d %s\n", err->code, err->message);
- * 	       return false;
- * 	   }
- *
- * 	   if (! record) {
- * 	       printf("Query ended\n");
- * 	       return false;
+ *     if (err) {
+ *         printf("Query failed: %d %s\n", err->code, err->message);
+ *         return false;
  *     }
  *
- * 	   // Process record
- * 	   // Do not call as_record_destroy() because the calling function will do that for you.
- * 	   return true;
+ *     if (! record) {
+ *         printf("Query ended\n");
+ *         return false;
+ *     }
+ *
+ *     // Process record
+ *     // Do not call as_record_destroy() because the calling function will do that for you.
+ *     return true;
  * }
  *
  * as_query query;
@@ -294,14 +350,14 @@ aerospike_query_async(
  * 
  * if (aerospike_query_partitions_async(&as, &err, NULL, &query, &pf, my_listener, NULL, NULL) 
  *     != AEROSPIKE_OK) {
- * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
  * ~~~~~~~~~~
  * 
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
- * @param policy		Query policy configuration parameters, pass in null for default.
+ * @param policy		Query policy configuration parameters, pass in NULL for default.
  * @param query			Query definition.
  * @param pf			Partition filter.
  * @param listener		The function to be called for each returned value.
@@ -333,17 +389,17 @@ aerospike_query_partitions_async(
  * uint64_t query_id = 0;
  *
  * if (aerospike_query_background(&as, &err, NULL, &query, &query_id) == AEROSPIKE_OK) {
- * 	   aerospike_query_wait(as, &err, NULL, &query, query_id, 0);
+ *     aerospike_query_wait(as, &err, NULL, &query, query_id, 0);
  * }
  * else {
- * 	   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
  * ~~~~~~~~~~
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
- * @param policy		Write configuration parameters, pass in null for default.
+ * @param policy		Write configuration parameters, pass in NULL for default.
  * @param query			The query to execute against the cluster.
  * @param query_id		The id for the query job, which can be used for obtaining query status.
  *
@@ -361,7 +417,7 @@ aerospike_query_background(
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
- * @param policy		Info configuration parameters, pass in null for default.
+ * @param policy		Info configuration parameters, pass in NULL for default.
  * @param query			The query that was executed against the cluster.
  * @param query_id		The id for the query job, which can be used for obtaining query status.
  * @param interval_ms	Polling interval in milliseconds. If zero, 1000 ms is used.
@@ -384,7 +440,7 @@ aerospike_query_wait(
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
- * @param policy		Info configuration parameters, pass in null for default.
+ * @param policy		Info configuration parameters, pass in NULL for default.
  * @param query			The query that was executed against the cluster.
  * @param query_id		The id for the query job, which can be used for obtaining query status.
  * @param info			Information about this background query, to be populated by this operation.

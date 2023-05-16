@@ -59,6 +59,8 @@ typedef struct as_partition_tracker_s {
 	as_vector node_parts;
 	as_vector* errors;
 	uint64_t max_records;
+	uint64_t record_count;
+	uint64_t deadline;
 	as_policy_replica replica;
 	uint32_t parts_capacity;
 	uint32_t sleep_between_retries;
@@ -66,7 +68,7 @@ typedef struct as_partition_tracker_s {
 	uint32_t total_timeout;
 	uint32_t max_retries;
 	uint32_t iteration;
-	uint64_t deadline;
+	bool check_max;
 } as_partition_tracker;
 
 /******************************************************************************
@@ -133,6 +135,20 @@ as_partition_tracker_set_last(
 	p->digest = *digest;
 	p->bval = bval;
 	np->record_count++;
+}
+
+static inline bool
+as_partition_tracker_reached_max_records_sync(as_partition_tracker* pt)
+{
+	// Sync scan/query runs in multiple threads, so atomics are required.
+	return pt && pt->check_max && (as_aaf_uint64(&pt->record_count, 1) > pt->max_records);
+}
+
+static inline bool
+as_partition_tracker_reached_max_records_async(as_partition_tracker* pt)
+{
+	// Async scan/query runs in a single event loop thread, so atomics are not necessary.
+	return pt && pt->check_max && (++pt->record_count > pt->max_records);
 }
 
 static inline uint16_t

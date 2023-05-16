@@ -336,6 +336,11 @@ as_query_parse_record_async(
 		return status;
 	}
 
+	if (as_partition_tracker_reached_max_records_async(qe->pt)) {
+		as_record_destroy(&rec);
+		return AEROSPIKE_OK;
+	}
+
 	bool rv = qe->listener(NULL, &rec, qe->executor.udata, qe->executor.event_loop);
 
 	if (! rv) {
@@ -464,6 +469,11 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		if (status != AEROSPIKE_OK) {
 			as_record_destroy(&rec);
 			return status;
+		}
+
+		if (as_partition_tracker_reached_max_records_sync(task->pt)) {
+			as_record_destroy(&rec);
+			return AEROSPIKE_OK;
 		}
 
 		if (task->callback) {

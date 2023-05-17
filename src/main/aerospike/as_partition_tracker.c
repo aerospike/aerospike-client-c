@@ -372,6 +372,8 @@ as_partition_tracker_assign(
 	// Global retry will be set to false if the scan/query completes normally and max_records
 	// is specified.
 	parts_all->retry = true;
+	pt->record_count = 0;
+	pt->check_max = false;
 
 	if (pt->max_records > 0) {
 		if (pt->max_records >= node_size) {
@@ -393,6 +395,8 @@ as_partition_tracker_assign(
 				as_node_partitions* np = as_vector_get(&pt->node_parts, i);
 				np->record_max = 1;
 			}
+
+			// Track records returned for this iteration.
 			pt->check_max = true;
 		}
 	}

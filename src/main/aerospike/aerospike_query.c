@@ -2016,6 +2016,8 @@ aerospike_query_partitions(
 	as_partition_filter* pf, aerospike_query_foreach_callback callback, void* udata
 	)
 {
+	as_log_warn("In aerospike_query_partitions");
+
 	if (query->apply.function[0] || query->ops) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");

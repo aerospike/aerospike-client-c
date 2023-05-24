@@ -1146,7 +1146,7 @@ as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 as_status
 as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
 {
-	as_log_debug("Update partition map for node %s", as_node_get_address_string(node));
+	as_log_warn("Update partition map for node %s", as_node_get_address_string(node));
 
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
 	const char* command = INFO_STR_GET_REPLICAS_REGIME;

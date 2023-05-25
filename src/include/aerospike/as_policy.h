@@ -279,7 +279,7 @@ typedef enum as_policy_replica_e {
 
 	/**
 	 * Distribute reads across nodes containing key's master and replicated partition
-	 * in round-robin fashion.  Currently restricted to master and one prole.
+	 * in round-robin fashion.
 	 */
 	AS_POLICY_REPLICA_ANY,
 
@@ -288,7 +288,6 @@ typedef enum as_policy_replica_e {
 	 * If connection fails, all commands try nodes containing replicated partitions.
 	 * If socketTimeout is reached, reads also try nodes containing replicated partitions,
 	 * but writes remain on master node.
-	 * Currently restricted to master and one prole.
 	 */
 	AS_POLICY_REPLICA_SEQUENCE,
 

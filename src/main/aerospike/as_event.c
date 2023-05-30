@@ -1261,6 +1261,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 
 	// Close socket on errors that can leave unread data in socket.
 	switch (err->code) {
+		case AEROSPIKE_ERR_CLUSTER:
 		case AEROSPIKE_ERR_DEVICE_OVERLOAD:
 			as_event_put_connection(cmd, pool);
 			as_node_incr_error_count(cmd->node);

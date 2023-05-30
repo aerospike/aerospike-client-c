@@ -538,10 +538,10 @@ as_partition_tracker_should_retry(
 {
 	switch (status) {
 	case AEROSPIKE_ERR_CLUSTER:
+	case AEROSPIKE_ERR_INVALID_NODE:
 	case AEROSPIKE_ERR_CONNECTION:
 	case AEROSPIKE_ERR_ASYNC_CONNECTION:
 	case AEROSPIKE_ERR_TIMEOUT:
-	case AEROSPIKE_ERR_INVALID_NODE:
 	case AEROSPIKE_ERR_INDEX_NOT_FOUND:
 	case AEROSPIKE_ERR_INDEX_NOT_READABLE:
 		// Multiple scan/query threads may call this function, so error

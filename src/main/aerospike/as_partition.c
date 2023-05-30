@@ -331,7 +331,6 @@ decode_and_update(
 				if (node != node_old) {
 					as_partition_reserve_node(node);
 					as_node_store(&p->nodes[replica_index], node);
-					as_log_warn("%u %u %s", i, replica_index, as_node_get_address_string(node));
 
 					if (node_old) {
 						force_replicas_refresh(node_old);

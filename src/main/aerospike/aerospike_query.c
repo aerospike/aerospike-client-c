@@ -1869,8 +1869,6 @@ aerospike_query_foreach(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	aerospike_query_foreach_callback callback, void* udata)
 {
-	as_log_warn("In aerospike_query_foreach");
-
 	if (query->ops) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Use aerospike_query_background() for background queries");
@@ -2018,8 +2016,6 @@ aerospike_query_partitions(
 	as_partition_filter* pf, aerospike_query_foreach_callback callback, void* udata
 	)
 {
-	as_log_warn("In aerospike_query_partitions");
-
 	if (query->apply.function[0] || query->ops) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");

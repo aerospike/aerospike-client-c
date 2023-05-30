@@ -193,17 +193,12 @@ ifeq ($(USE_LUAJIT),1)
 	$(MAKE) -C $(LUAJIT) Q= TARGET_SONAME=libluajit.so CCDEBUG=-g CFLAGS= LDFLAGS=
 endif
 
-$(LUAJIT)/src/luaconf.h:	$(LUAJIT)/src/luaconf.h.orig
-ifeq ($(USE_LUAJIT),1)
-	(cd $(LUAJIT)/src; ln -s $(notdir $<) $(notdir $@))
-endif
-
 .PHONY: LUAJIT-clean
-LUAJIT-clean:	$(LUAJIT)/src/luaconf.h
+LUAJIT-clean:
 ifeq ($(USE_LUAJIT),1)
 	$(MAKE) -e -C $(LUAJIT) clean
-	(cd $(LUAJIT)/src; $(RM) $(LUAJIT)/src/luaconf.h $(LUAJIT)/src/libluajit.a)
+	(cd $(LUAJIT)/src; $(RM) $(LUAJIT)/src/libluajit.a)
 endif
 
 .PHONY: LUAJIT-prepare
-LUAJIT-prepare:	$(LUAJIT)/src/luaconf.h
+LUAJIT-prepare:

@@ -664,6 +664,7 @@ as_command_execute(as_command* cmd, as_error* err)
 
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
+				case AEROSPIKE_ERR_CLUSTER:
 				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
 					as_node_put_conn_error(node, &socket);
 					goto Retry;

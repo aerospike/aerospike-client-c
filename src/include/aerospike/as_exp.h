@@ -51,6 +51,7 @@
 #include <aerospike/as_hll_operations.h>
 #include <aerospike/as_list_operations.h>
 #include <aerospike/as_map_operations.h>
+#include <aerospike/as_msgpack_ext.h>
 #include <aerospike/as_nil.h>
 #include <aerospike/as_std.h>
 
@@ -310,6 +311,18 @@ AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype
  * @ingroup expression
  */
 #define as_exp_nil() as_exp_val(&as_nil)
+
+/**
+ * Create infinity value.
+ * @ingroup expression
+ */
+#define as_exp_inf() as_exp_val(&as_cmp_inf)
+
+/**
+ * Create wildcard value.
+ * @ingroup expression
+ */
+#define as_exp_wildcard() as_exp_val(&as_cmp_wildcard)
 
 /*********************************************************************************
  * KEY EXPRESSIONS

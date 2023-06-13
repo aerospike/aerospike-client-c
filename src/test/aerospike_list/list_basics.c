@@ -2856,6 +2856,53 @@ TEST(exp_returns_list, "exp returns list")
 	as_exp_destroy(expr);
 }
 
+TEST(list_exp_infinity, "test as_exp_inf()")
+{
+    as_arraylist list;
+    as_arraylist_inita(&list, 10);
+    as_arraylist_append_int64(&list, 40);
+    as_arraylist_append_int64(&list, 6);
+    as_arraylist_append_int64(&list, 13);
+    as_arraylist_append_int64(&list, 27);
+    as_arraylist_append_int64(&list, 33);
+    as_arraylist_append_int64(&list, 33);
+    as_arraylist_append_int64(&list, 10);
+    as_arraylist_append_int64(&list, 7);
+    as_arraylist_append_int64(&list, 15);
+    as_arraylist_append_int64(&list, 5);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 211);
+
+	as_record rec;
+    as_record_init(&rec, 1);
+    as_record_set_list(&rec, BIN_NAME, (as_list*)&list);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+    as_record_destroy(&rec);
+
+	// Remove values >= 30
+	as_exp_build(read_exp, as_exp_list_remove_by_value_range(NULL, as_exp_int(30), as_exp_inf(), as_exp_bin_list(BIN_NAME)));
+	assert_not_null(read_exp);
+
+	as_operations ops;
+    as_operations_inita(&ops, 1);
+    as_operations_exp_read(&ops, BIN_NAME, read_exp, AS_EXP_READ_DEFAULT);
+    
+    as_record* rec_ptr = NULL;
+    status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec_ptr);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_list* rlist = as_record_get_list(rec_ptr, BIN_NAME);
+	// Should return [6,13,27,10,7,15,5]
+	assert_int_eq(as_list_size(rlist), 7);
+
+    as_record_destroy(rec_ptr);
+    as_operations_destroy(&ops);
+    as_exp_destroy(read_exp);
+}
 
 /******************************************************************************
  * TEST SUITE
@@ -2890,4 +2937,6 @@ SUITE(list_basics, "aerospike list basic tests")
 
 	// Requires Aerospike 5.6.
 	suite_add(exp_returns_list);
+
+	suite_add(list_exp_infinity);
 }

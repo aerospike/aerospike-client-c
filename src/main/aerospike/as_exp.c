@@ -370,6 +370,17 @@ as_exp_compile_b64(as_exp* exp)
 	return b64;
 }
 
+as_exp*
+as_exp_from_base64(const char* base64)
+{
+	uint32_t base64_len = (uint32_t)strlen(base64);
+	uint32_t sz = cf_b64_decoded_buf_size(base64_len);
+	as_exp* exp = cf_malloc(sizeof(as_exp) + sz);
+
+	cf_b64_decode(base64, base64_len, exp->packed, &exp->packed_sz);
+	return exp;
+}
+
 void
 as_exp_destroy(as_exp* exp)
 {

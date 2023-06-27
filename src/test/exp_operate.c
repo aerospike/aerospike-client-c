@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -794,6 +794,40 @@ TEST(exp_merge, "exp merge")
 	as_exp_destroy(eor);
 }
 
+TEST(exp_base64, "exp base64")
+{
+	as_exp_build(exp,
+		as_exp_and(
+			as_exp_cmp_eq(
+				as_exp_int_xor(
+					as_exp_bin_int(AString),
+					as_exp_int(0)),
+				as_exp_int(0)),
+			as_exp_cmp_eq(
+				as_exp_int_xor(
+					as_exp_bin_int(AString),
+					as_exp_int(-1)),
+				as_exp_int(-1)),
+			as_exp_cmp_eq(
+				as_exp_int_xor(
+					as_exp_bin_int(BString),
+					as_exp_int(-1)),
+				as_exp_int(0))));
+
+	char* base64 = as_exp_to_base64(exp);
+	assert_not_null(base64);
+
+	as_exp* exp2 = as_exp_from_base64(base64);
+	assert_not_null(exp2);
+	assert_int_eq(exp2->packed_sz, exp->packed_sz);
+
+	int r = memcmp(exp2->packed, exp->packed, exp->packed_sz);
+	assert_int_eq(r, 0);
+
+	as_exp_destroy(exp);
+	as_exp_destroy(exp2);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -816,4 +850,5 @@ SUITE(exp_operate, "filter expression tests")
 	suite_add(exp_returns_bool);
 	suite_add(exp_returns_hll);
 	suite_add(exp_merge);
+	suite_add(exp_base64);
 }

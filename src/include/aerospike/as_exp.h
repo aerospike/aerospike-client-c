@@ -205,14 +205,59 @@ typedef struct {
 	} v;
 } as_exp_entry;
 
+/*********************************************************************************
+ * PRIVATE FUNCTIONS
+ *********************************************************************************/
+
 AS_EXTERN as_exp* as_exp_compile(as_exp_entry* table, uint32_t n);
 AS_EXTERN char* as_exp_compile_b64(as_exp* exp);
-AS_EXTERN void as_exp_destroy(as_exp* exp);
 AS_EXTERN void as_exp_destroy_b64(char* b64);
 AS_EXTERN uint8_t* as_exp_write(as_exp* exp, uint8_t* ptr);
 AS_EXTERN int64_t as_exp_get_ctx_type(const as_cdt_ctx* ctx, as_exp_type default_type);
 AS_EXTERN int64_t as_exp_get_list_type(as_exp_type default_type, as_list_return_type rtype, bool is_multi);
 AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype, bool is_multi);
+
+/*********************************************************************************
+ * PUBLIC FUNCTIONS
+ *********************************************************************************/
+
+/**
+ * Encode expression to null-terminated base64 string.
+ * Call as_exp_destroy_base64() when done with base64 string.
+ *
+ * @ingroup expression
+ */
+static inline char*
+as_exp_to_base64(as_exp* exp)
+{
+	return as_exp_compile_b64(exp);
+}
+
+/**
+ * Decode null-terminated base64 string to expression.
+ * Call as_exp_destroy() when done with expression.
+ *
+ * @ingroup expression
+ */
+AS_EXTERN as_exp* as_exp_from_base64(const char* base64);
+
+/**
+ * Free expression bytes.
+ *
+ * @ingroup expression
+ */
+AS_EXTERN void as_exp_destroy(as_exp* exp);
+
+/**
+ * Free base64 string.
+ *
+ * @ingroup expression
+ */
+static inline void
+as_exp_destroy_base64(char* base64)
+{
+	as_exp_destroy_b64(base64);
+}
 
 /*********************************************************************************
  * VALUE EXPRESSIONS

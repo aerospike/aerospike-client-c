@@ -824,6 +824,7 @@ TEST(exp_base64, "exp base64")
 	int r = memcmp(exp2->packed, exp->packed, exp->packed_sz);
 	assert_int_eq(r, 0);
 
+	as_exp_destroy_base64(base64);
 	as_exp_destroy(exp);
 	as_exp_destroy(exp2);
 }

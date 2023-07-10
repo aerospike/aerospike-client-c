@@ -1,5 +1,5 @@
 #!/bin/bash -e
-ver="2.1.8-stable"
+ver="2.1.12-stable"
 dir=libevent-$ver
 fn=$dir.tar.gz
 url=https://github.com/libevent/libevent/releases/download/release-$ver/$fn

@@ -266,7 +266,6 @@ typedef enum as_policy_exists_e {
  * Replica Policy
  *
  * Defines algorithm used to determine the target node for a command.
- * Scan and query are not affected by this replica algorithm.
  *
  * @ingroup client_policies
  */

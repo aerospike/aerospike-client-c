@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2018 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -157,18 +157,14 @@ aerospike_info_foreach(
 		policy = &as->config.policies.info;
 	}
 	
-	as_nodes* nodes;
-	as_status status = as_cluster_reserve_all_nodes(as->cluster, err, &nodes);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
+	as_status status = AEROSPIKE_ERR_CLUSTER;
 	uint64_t deadline = as_socket_deadline(policy->timeout);
-
+	as_cluster* cluster = as->cluster;
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
-		char* response = NULL;
+		char* response = 0;
 	
 		status = as_info_command_node(err, node, (char*)req, policy->send_as_is, deadline, &response);
 		
@@ -185,6 +181,6 @@ aerospike_info_foreach(
 			break;
 		}
 	}
-	as_cluster_release_all_nodes(nodes);
+	as_nodes_release(nodes);
 	return status;
 }

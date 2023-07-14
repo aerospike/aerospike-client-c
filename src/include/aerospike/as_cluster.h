@@ -421,22 +421,30 @@ as_nodes_reserve(as_cluster* cluster)
 }
 
 /**
+ * Release each individual node and free nodes struct.
+ */
+AS_EXTERN void
+as_nodes_destroy(as_nodes* nodes);
+
+/**
  * Release reference counted access to cluster nodes.
  */
 static inline void
 as_nodes_release(as_nodes* nodes)
 {
 	if (as_aaf_uint32_rls(&nodes->ref_count, -1) == 0) {
-		cf_free(nodes);
+		as_nodes_destroy(nodes);
 	}
 }
 
+// TODO: REMOVE
 /**
  * Reserve nodes and all sub nodes.
  */
 as_status
 as_cluster_reserve_all_nodes(as_cluster* cluster, as_error* err, as_nodes** nodes);
 
+// TODO: REMOVE
 /**
  * Release nodes and all sub nodes.
  */

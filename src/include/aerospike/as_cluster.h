@@ -437,19 +437,20 @@ as_nodes_release(as_nodes* nodes)
 	}
 }
 
-// TODO: REMOVE
 /**
- * Reserve nodes and all sub nodes.
+ * Reserve nodes. Return error if cluster is empty.
  */
-as_status
+AS_EXTERN as_status
 as_cluster_reserve_all_nodes(as_cluster* cluster, as_error* err, as_nodes** nodes);
 
-// TODO: REMOVE
 /**
- * Release nodes and all sub nodes.
+ * Release nodes.
  */
-void
-as_cluster_release_all_nodes(as_nodes* nodes);
+static inline void
+as_cluster_release_all_nodes(as_nodes* nodes)
+{
+	as_nodes_release(nodes);
+}
 
 /**
  * Verify cluster contains nodes and return node count.

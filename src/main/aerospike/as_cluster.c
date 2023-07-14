@@ -165,24 +165,8 @@ as_cluster_reserve_all_nodes(as_cluster* cluster, as_error* err, as_nodes** node
 									"Command failed because cluster is empty.");
 	}
 
-	// Reserve each node in cluster.
-	for (uint32_t i = 0; i < nds->size; i++) {
-		as_node_reserve(nds->array[i]);
-	}
 	*nodes = nds;
 	return AEROSPIKE_OK;
-}
-
-void
-as_cluster_release_all_nodes(as_nodes* nodes)
-{
-	// Release each node in cluster.
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_release(nodes->array[i]);
-	}
-	
-	// Release nodes array.
-	as_nodes_release(nodes);
 }
 
 as_status

@@ -433,6 +433,7 @@ static inline void
 as_nodes_release(as_nodes* nodes)
 {
 	if (as_aaf_uint32_rls(&nodes->ref_count, -1) == 0) {
+		as_fence_acq();
 		as_nodes_destroy(nodes);
 	}
 }

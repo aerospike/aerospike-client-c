@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -50,6 +50,16 @@ as_mark_end(char* p)
 	return p;
 }
 
+static char*
+as_set_records_read(char* p, as_job_info* info) {
+	char* begin = p;
+	p = as_mark_end(p);
+
+	long count = atol(begin);
+	info->records_read += count;
+	return p;
+}
+
 static void
 as_job_process(char* response, as_job_info* info)
 {
@@ -85,14 +95,17 @@ as_job_process(char* response, as_job_info* info)
 				info->progress_pct = pct;
 			}
 		}
-		// Newer servers use dash while older servers use underscore
-		else if (!found_recs_read && (strncmp(p, "recs-read=", 10) == 0 || strncmp(p, "recs_read=", 10) == 0)) {
+		// Recent servers use recs-succeeded.
+		else if (!found_recs_read && strncmp(p, "recs-succeeded=", 15) == 0) {
+			p += 15;
+			p = as_set_records_read(p, info);
+			found_recs_read = true;
+		}
+		// Some servers used dash while much older servers use underscore.
+		else if (!found_recs_read && (strncmp(p, "recs-read=", 10) == 0 ||
+			strncmp(p, "recs_read=", 10) == 0)) {
 			p += 10;
-			begin = p;
-			p = as_mark_end(p);
-			
-			long count = atol(begin);
-			info->records_read += count;
+			p = as_set_records_read(p, info);
 			found_recs_read = true;
 		}
 		else {

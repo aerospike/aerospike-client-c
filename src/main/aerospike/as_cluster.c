@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -84,6 +84,16 @@ as_nodes_create(uint32_t capacity)
 	return nodes;
 }
 
+void
+as_nodes_destroy(as_nodes* nodes)
+{
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+		as_node_release(node);
+	}
+	cf_free(nodes);
+}
+
 /**
  * Use non-inline function for garbarge collector function pointer reference.
  * Forward to inlined release.
@@ -155,24 +165,8 @@ as_cluster_reserve_all_nodes(as_cluster* cluster, as_error* err, as_nodes** node
 									"Command failed because cluster is empty.");
 	}
 
-	// Reserve each node in cluster.
-	for (uint32_t i = 0; i < nds->size; i++) {
-		as_node_reserve(nds->array[i]);
-	}
 	*nodes = nds;
 	return AEROSPIKE_OK;
-}
-
-void
-as_cluster_release_all_nodes(as_nodes* nodes)
-{
-	// Release each node in cluster.
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_release(nodes->array[i]);
-	}
-	
-	// Release nodes array.
-	as_nodes_release(nodes);
 }
 
 as_status
@@ -196,9 +190,8 @@ void
 as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 {
 	// Log node additions.
-	as_node* node;
 	for (uint32_t i = 0; i < nodes_to_add->size; i++) {
-		node = as_vector_get_ptr(nodes_to_add, i);
+		as_node* node = as_vector_get_ptr(nodes_to_add, i);
 		as_log_info("Add node %s %s", node->name, as_node_get_address_string(node));
 		as_cluster_event_notify(cluster, node, AS_CLUSTER_ADD_NODE);
 	}
@@ -207,10 +200,15 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 	as_nodes* nodes_old = cluster->nodes;
 	as_nodes* nodes_new = as_nodes_create(nodes_old->size + nodes_to_add->size);
 
-	// Add existing nodes.
-	memcpy(nodes_new->array, nodes_old->array, sizeof(as_node*) * nodes_old->size);
-		
-	// Add new nodes.
+	// Add existing nodes. Reserve each node because when nodes_old is destroyed, these nodes
+	// will be released.
+	for (uint32_t i = 0; i < nodes_old->size; i++) {
+		as_node* node = nodes_old->array[i];
+		as_node_reserve(node);
+		nodes_new->array[i] = node;
+	}
+
+	// Add new nodes. New nodes already have ref_count set to 1, so no need to reserve.
 	memcpy(&nodes_new->array[nodes_old->size], nodes_to_add->list, sizeof(as_node*) * nodes_to_add->size);
 
 	// Replace nodes with copy.
@@ -520,10 +518,13 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 		if (as_cluster_find_node_by_reference(nodes_to_remove, node)) {
 			as_log_info("Remove node %s %s", node->name, as_node_get_address_string(node));
 			as_cluster_event_notify(cluster, node, AS_CLUSTER_REMOVE_NODE);
-			as_node_release_delayed(node);
+			// No need to release node here because it will be released when nodes_old is destroyed.
 		}
 		else {
 			if (count < nodes_new->size) {
+				// This node need to be reserved because when nodes_old is destroyed,
+				// this node will also be released.
+				as_node_reserve(node);
 				nodes_new->array[count++] = node;
 			}
 			else {
@@ -1438,9 +1439,6 @@ as_cluster_destroy(as_cluster* cluster)
 
 	// Release nodes.
 	as_nodes* nodes = cluster->nodes;
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_release(nodes->array[i]);
-	}
 	as_nodes_release(nodes);
 	
 	// Destroy IP map.

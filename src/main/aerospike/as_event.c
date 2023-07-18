@@ -1804,19 +1804,9 @@ as_event_balance_connections_cluster(as_event_loop* event_loop, as_cluster* clus
 {
 	as_nodes* nodes = as_nodes_reserve(cluster);
 
-	// Reserve each node.
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_reserve(nodes->array[i]);
-	}
-
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		as_event_balance_connections_node(event_loop, cluster, node);
-	}
-
-	// Release each node.
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_release(nodes->array[i]);
 	}
 
 	as_nodes_release(nodes);

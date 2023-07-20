@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -213,6 +213,7 @@ as_error_setall(as_error* err, as_status code, const char * message, const char 
 	err->func = func;
 	err->file = file;
 	err->line = line;
+	err->in_doubt = false;
 	return err->code;
 }
 
@@ -237,25 +238,7 @@ as_error_setallv(as_error* err, as_status code, const char * func, const char * 
 	err->func = func;
 	err->file = file;
 	err->line = line;
-	return err->code;
-}
-
-/**
- * Sets the error message
- *
- * @relates as_error
- */
-static inline as_status
-as_error_set(as_error* err, as_status code, const char * fmt, ...)
-{
-	if ( fmt != NULL ) {
-		va_list ap;
-		va_start(ap, fmt);
-		vsnprintf(err->message, AS_ERROR_MESSAGE_MAX_LEN, fmt, ap);
-		err->message[AS_ERROR_MESSAGE_MAX_LEN] = '\0';
-		va_end(ap);   
-	}
-	err->code = code;
+	err->in_doubt = false;
 	return err->code;
 }
 

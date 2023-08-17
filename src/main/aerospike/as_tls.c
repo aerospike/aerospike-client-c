@@ -286,13 +286,6 @@ as_tls_cleanup(void)
 
 	// https://wiki.openssl.org/index.php/Library_Initialization#Cleanup
 	//
-	FIPS_mode_set(0);
-	ENGINE_cleanup();
-	CONF_modules_unload(1);
-	EVP_cleanup();
-	as_tls_thread_cleanup();
-	CRYPTO_cleanup_all_ex_data();
-	ERR_free_strings();
 
 	// http://stackoverflow.com/questions/29845527/how-to-properly-uninitialize-openssl
 	STACK_OF(SSL_COMP) *ssl_comp_methods = SSL_COMP_get_compression_methods();

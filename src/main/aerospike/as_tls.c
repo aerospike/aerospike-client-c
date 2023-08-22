@@ -419,7 +419,7 @@ password_cb(char* buf, int size, int rwflag, void* udata)
 }
 
 static bool
-as_tls_load_ca_str(SSL_CTX* ctx, const char* cert_str)
+as_tls_load_ca_str(SSL_CTX* ctx, char* cert_str)
 {
 	BIO* cert_bio = BIO_new_mem_buf(cert_str, -1);
 
@@ -456,7 +456,7 @@ as_tls_load_ca_str(SSL_CTX* ctx, const char* cert_str)
 }
 
 static bool
-as_tls_load_cert_chain_str(SSL_CTX* ctx, const char* cert_str)
+as_tls_load_cert_chain_str(SSL_CTX* ctx, char* cert_str)
 {
 	BIO* cert_bio = BIO_new_mem_buf(cert_str, -1);
 
@@ -524,7 +524,7 @@ Error:
 }
 
 static bool
-as_tls_load_key_str(SSL_CTX* ctx, const char* key_str, const char* key_pw)
+as_tls_load_key_str(SSL_CTX* ctx, char* key_str, const char* key_pw)
 {
 	BIO* key_bio = BIO_new_mem_buf(key_str, -1);
 

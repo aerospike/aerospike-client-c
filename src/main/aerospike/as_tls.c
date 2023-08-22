@@ -440,6 +440,8 @@ as_tls_load_ca_str(SSL_CTX* ctx, const char* cert_str)
 		else {
 			as_log_warn("Failed to add TLS certificate from string");
 		}
+
+		X509_free(cert);
 	}
 
 	// Above loop always ends with an error - clear it so it doesn't affect
@@ -540,7 +542,11 @@ as_tls_load_key_str(SSL_CTX* ctx, const char* key_str, const char* key_pw)
 		}
 		return false;
 	}
-	return SSL_CTX_use_PrivateKey(ctx, pkey) == 1;
+
+	int rv = SSL_CTX_use_PrivateKey(ctx, pkey);
+
+	EVP_PKEY_free(pkey);
+	return rv == 1;
 }
 
 as_status

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -418,6 +418,137 @@ password_cb(char* buf, int size, int rwflag, void* udata)
 	return pw_len;
 }
 
+static bool
+as_tls_load_ca_str(SSL_CTX* ctx, char* cert_str)
+{
+	BIO* cert_bio = BIO_new_mem_buf(cert_str, -1);
+
+	if (cert_bio == NULL) {
+		return false;
+	}
+
+	X509* cert;
+	int count = 0;
+
+	while ((cert = PEM_read_bio_X509(cert_bio, NULL, 0, NULL)) != NULL) {
+		X509_STORE* store = SSL_CTX_get_cert_store(ctx);
+		int rv = X509_STORE_add_cert(store, cert);
+
+		if (rv == 1) {
+			count++;
+		}
+		else {
+			as_log_warn("Failed to add TLS certificate from string");
+		}
+
+		X509_free(cert);
+	}
+
+	// Above loop always ends with an error - clear it so it doesn't affect
+	// subsequent SSL calls in this thread.
+	ERR_clear_error();
+	BIO_vfree(cert_bio);
+
+	if (count == 0) {
+		return false;
+	}
+	return true;
+}
+
+static bool
+as_tls_load_cert_chain_str(SSL_CTX* ctx, char* cert_str)
+{
+	BIO* cert_bio = BIO_new_mem_buf(cert_str, -1);
+
+	if (cert_bio == NULL) {
+		return false;
+	}
+
+	STACK_OF(X509_INFO)* inf = PEM_X509_INFO_read_bio(cert_bio, NULL, NULL, NULL);
+
+	if (!inf) {
+		BIO_free(cert_bio);
+		return false;
+	}
+
+	/* Iterate over contents of the PEM buffer, and add certs. */
+	bool first = true;
+
+	for (int i = 0; i < sk_X509_INFO_num(inf); i++) {
+		X509_INFO* itmp = sk_X509_INFO_value(inf, i);
+
+		if (itmp->x509) {
+			/* First cert is server cert. Remaining, if any, are intermediate certs. */
+			if (first) {
+				first = false;
+
+				/*
+				 * Set server certificate. Note that this operation increments the
+				 * reference count, which means that it is okay for cleanup to free it.
+				 */
+				if (!SSL_CTX_use_certificate(ctx, itmp->x509)) {
+					goto Error;
+				}
+
+				if (ERR_peek_error() != 0) {
+					goto Error;
+				}
+
+				/* Get ready to store intermediate certs, if any. */
+				SSL_CTX_clear_chain_certs(ctx);
+			}
+			else
+			{
+				/* Add intermediate cert to chain. */
+				if (!SSL_CTX_add0_chain_cert(ctx, itmp->x509)) {
+					goto Error;
+				}
+
+				/*
+				 * Above function doesn't increment cert reference count. NULL the info
+				 * reference to it in order to prevent it from being freed during cleanup.
+				 */
+				itmp->x509 = NULL;
+			}
+		}
+	}
+
+	sk_X509_INFO_pop_free(inf, X509_INFO_free);
+	BIO_free(cert_bio);
+	return true;
+
+Error:
+	sk_X509_INFO_pop_free(inf, X509_INFO_free);
+	BIO_free(cert_bio);
+	return false;
+}
+
+static bool
+as_tls_load_key_str(SSL_CTX* ctx, char* key_str, const char* key_pw)
+{
+	BIO* key_bio = BIO_new_mem_buf(key_str, -1);
+
+	if (key_bio == NULL) {
+		return false;
+	}
+
+	EVP_PKEY* pkey = PEM_read_bio_PrivateKey(key_bio, NULL, password_cb, (void*)key_pw);
+
+	BIO_vfree(key_bio);
+
+	if (pkey == NULL) {
+		if (ERR_GET_REASON(ERR_peek_error()) == EVP_R_BAD_DECRYPT) {
+			as_log_warn("Invalid password for key string");
+		}
+		return false;
+	}
+
+	int rv = SSL_CTX_use_PrivateKey(ctx, pkey);
+
+	EVP_PKEY_free(pkey);
+	return rv == 1;
+}
+
 as_status
 as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 {
@@ -524,6 +655,12 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 										"Unknown failure loading CAFile");
 		}
 	}
+	else if (tlscfg->castring) {
+		if (! as_tls_load_ca_str(ctx->ssl_ctx, tlscfg->castring)) {
+			return as_error_set_message(errp, AEROSPIKE_ERR_TLS_ERROR,
+				"Failed to add any TLS certificates from castring");
+		}
+	}
 
 	if (tlscfg->certfile) {
 		int rv = SSL_CTX_use_certificate_chain_file(ctx->ssl_ctx, tlscfg->certfile);
@@ -546,6 +683,12 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 									   "SSL_CTX_use_certificate_chain_file failed: %s",
 									   errbuf);
 			}
+		}
+	}
+	else if (tlscfg->certstring) {
+		if (! as_tls_load_cert_chain_str(ctx->ssl_ctx, tlscfg->certstring)) {
+			return as_error_set_message(errp, AEROSPIKE_ERR_TLS_ERROR,
+				"Failed to add any TLS certificate chains from certstrings");
 		}
 	}
 
@@ -600,6 +743,12 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 
 		if (!ok) {
 			return AEROSPIKE_ERR_TLS_ERROR;
+		}
+	}
+	else if (tlscfg->keystring) {
+		if (! as_tls_load_key_str(ctx->ssl_ctx, tlscfg->keystring, tlscfg->keyfile_pw)) {
+			return as_error_set_message(errp, AEROSPIKE_ERR_TLS_ERROR,
+				"Failed to load private key from keystring");
 		}
 	}
 

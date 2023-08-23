@@ -2598,10 +2598,10 @@ TEST(map_exp_mod, "Map Modify Expression")
 				as_exp_int(0)),
 			as_exp_cmp_eq(
 				as_exp_map_size(NULL,
-					as_exp_map_remove_by_value(NULL, as_exp_int(700),
-						as_exp_map_remove_by_key_range(NULL, as_exp_int(40), as_exp_int(51),
-							as_exp_map_remove_by_key_list(NULL, as_exp_val(&rem),
-								as_exp_map_remove_by_key(NULL, as_exp_int(0),
+					as_exp_map_remove_by_value(NULL, AS_MAP_RETURN_NONE, as_exp_int(700),
+						as_exp_map_remove_by_key_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(40), as_exp_int(51),
+							as_exp_map_remove_by_key_list(NULL, AS_MAP_RETURN_NONE, as_exp_val(&rem),
+								as_exp_map_remove_by_key(NULL, AS_MAP_RETURN_NONE, as_exp_int(0),
 									as_exp_bin_map(BIN_NAME)))))),
 				as_exp_int(4))));
 
@@ -2625,34 +2625,34 @@ TEST(map_exp_mod, "Map Modify Expression")
 		as_exp_and(
 			as_exp_cmp_eq(
 				as_exp_map_size(NULL,
-					as_exp_map_remove_by_key_rel_index_range_to_end(NULL, as_exp_int(50), as_exp_int(1),
+					as_exp_map_remove_by_key_rel_index_range_to_end(NULL, AS_MAP_RETURN_NONE, as_exp_int(50), as_exp_int(1),
 						as_exp_bin_map(BIN_NAME))),
 				as_exp_int(6)),
 			as_exp_cmp_eq(
 				as_exp_map_size(NULL,
-					as_exp_map_remove_by_key_rel_index_range(NULL, as_exp_int(50), as_exp_int(1), as_exp_int(2),
+					as_exp_map_remove_by_key_rel_index_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(50), as_exp_int(1), as_exp_int(2),
 						as_exp_bin_map(BIN_NAME))),
 				as_exp_int(8)),
 			as_exp_cmp_eq(
 				as_exp_map_get_by_rank(NULL, AS_MAP_RETURN_VALUE, AS_EXP_TYPE_INT, as_exp_int(-1),
-					as_exp_map_remove_by_value_list(NULL, as_exp_val(&rem),
-						as_exp_map_remove_by_value_range(NULL, as_exp_int(400), as_exp_int(701),
-							as_exp_map_remove_by_value_rel_rank_range_to_end(NULL, as_exp_int(700), as_exp_int(1),
+					as_exp_map_remove_by_value_list(NULL, AS_MAP_RETURN_NONE, as_exp_val(&rem),
+						as_exp_map_remove_by_value_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(400), as_exp_int(701),
+							as_exp_map_remove_by_value_rel_rank_range_to_end(NULL, AS_MAP_RETURN_NONE, as_exp_int(700), as_exp_int(1),
 								as_exp_bin_map(BIN_NAME))))),
 				as_exp_int(300)),
 			as_exp_cmp_eq(
 				as_exp_map_size(NULL,
-					as_exp_map_remove_by_index_range(NULL, as_exp_int(0), as_exp_int(1),
-						as_exp_map_remove_by_index(NULL, as_exp_int(0),
-							as_exp_map_remove_by_value_rel_rank_range(NULL, as_exp_int(500), as_exp_int(2), as_exp_int(4),
+					as_exp_map_remove_by_index_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(0), as_exp_int(1),
+						as_exp_map_remove_by_index(NULL, AS_MAP_RETURN_NONE, as_exp_int(0),
+							as_exp_map_remove_by_value_rel_rank_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(500), as_exp_int(2), as_exp_int(4),
 								as_exp_bin_map(BIN_NAME))))),
 				as_exp_int(5)),
 			as_exp_cmp_eq(
 				as_exp_map_size(NULL,
-					as_exp_map_remove_by_rank_range(NULL, as_exp_int(1), as_exp_int(2),
-						as_exp_map_remove_by_rank(NULL, as_exp_int(-1),
-							as_exp_map_remove_by_rank_range_to_end(NULL, as_exp_int(-2),
-								as_exp_map_remove_by_index_range_to_end(NULL, as_exp_int(7),
+					as_exp_map_remove_by_rank_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(1), as_exp_int(2),
+						as_exp_map_remove_by_rank(NULL, AS_MAP_RETURN_NONE, as_exp_int(-1),
+							as_exp_map_remove_by_rank_range_to_end(NULL, AS_MAP_RETURN_NONE, as_exp_int(-2),
+								as_exp_map_remove_by_index_range_to_end(NULL, AS_MAP_RETURN_NONE, as_exp_int(7),
 									as_exp_bin_map(BIN_NAME)))))),
 				as_exp_int(2))));
 

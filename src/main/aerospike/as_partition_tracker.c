@@ -477,8 +477,9 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 	// Check if limits have been reached.
 	if (pt->iteration > pt->max_retries) {
 		if (!pt->errors || pt->errors->size <= 0) {
-			return as_error_set_message(err, AEROSPIKE_ERR_MAX_RETRIES_EXCEEDED,
-				"Max retries exceeded");
+			// The only retryable errors that are not added to the errors list is
+			// AEROSPIKE_ERR_CLUSTER (ie some partition(s) are unavailable).
+			return as_error_set_message(err, AEROSPIKE_ERR_CLUSTER, "Partition(s) unavailable");
 		}
 
 		// Return last sub-error code received.

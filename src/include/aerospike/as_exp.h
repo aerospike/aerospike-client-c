@@ -1745,14 +1745,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes list items identified by value.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __val			Value expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_value(__ctx, __val, __bin) \
+#define as_exp_list_remove_by_value(__ctx, __rtype, __val, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_ALL_BY_VALUE, 2, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__val, \
 		__bin
 
@@ -1760,14 +1761,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes list items identified by values.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __values		Values list expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_value_list(__ctx, __values, __bin) \
+#define as_exp_list_remove_by_value_list(__ctx, __rtype, __values, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_VALUE_LIST, 2, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__values, \
 		__bin
 
@@ -1777,15 +1779,16 @@ as_exp_destroy_base64(char* base64)
  * If end is infinity, the range is greater than equal to begin.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __begin		Begin value expression.
  * @param __end			End value expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_value_range(__ctx, __begin, __end, __bin) \
+#define as_exp_list_remove_by_value_range(__ctx, __rtype, __begin, __end, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_VALUE_INTERVAL, 3, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__begin, __end, \
 		__bin
 
@@ -1793,15 +1796,16 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes list items nearest to value and greater by relative rank.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __val			Value expression.
  * @param __rank		Rank integer expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_rel_rank_range_to_end(__ctx, __val, __rank, __bin) \
+#define as_exp_list_remove_by_rel_rank_range_to_end(__ctx, __rtype, __val, __rank, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_VALUE_REL_RANK_RANGE, 3, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__val, __rank, \
 		__bin
 
@@ -1810,6 +1814,7 @@ as_exp_destroy_base64(char* base64)
  * count limit.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __val			Value expression.
  * @param __rank		Rank integer expression.
  * @param __count		Count integer expression.
@@ -1817,9 +1822,9 @@ as_exp_destroy_base64(char* base64)
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_rel_rank_range(__ctx, __val, __rank, __count, __bin) \
+#define as_exp_list_remove_by_rel_rank_range(__ctx, __rtype, __val, __rank, __count, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_VALUE_REL_RANK_RANGE, 4, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__val, __rank, __count, \
 		__bin
 
@@ -1827,14 +1832,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes list item identified by index.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __idx			Index integer expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_index(__ctx, __idx, __bin) \
+#define as_exp_list_remove_by_index(__ctx, __rtype, __idx, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_INDEX, 2, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__idx, \
 		__bin
 
@@ -1842,14 +1848,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes list items starting at specified index to the end of list.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __idx			Index integer expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_index_range_to_end(__ctx, __idx, __bin) \
+#define as_exp_list_remove_by_index_range_to_end(__ctx, __rtype, __idx, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_INDEX_RANGE, 2, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__idx, \
 		__bin
 
@@ -1857,15 +1864,16 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes "count" list items starting at specified index.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __idx			Index integer expression.
  * @param __count		Count integer expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_index_range(__ctx, __idx, __count, __bin) \
+#define as_exp_list_remove_by_index_range(__ctx, __rtype, __idx, __count, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_INDEX_RANGE, 3, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__idx, __count, \
 		__bin
 
@@ -1873,14 +1881,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes list item identified by rank.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __rank		Rank integer expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_rank(__ctx, __rank, __bin) \
+#define as_exp_list_remove_by_rank(__ctx, __rtype, __rank, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_RANK, 2, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__rank, \
 		__bin
 
@@ -1888,14 +1897,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes list items starting at specified rank to the last ranked item.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __rank		Rank integer expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_rank_range_to_end(__ctx, __rank, __bin) \
+#define as_exp_list_remove_by_rank_range_to_end(__ctx, __rtype, __rank, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_RANK_RANGE, 2, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__rank, \
 		__bin
 
@@ -1903,15 +1913,16 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes "count" list items starting at specified rank.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_LIST_RETURN_NONE or AS_LIST_RETURN_INVERTED.
  * @param __rank		Rank integer expression.
  * @param __count		Count integer expression.
  * @param __bin			List bin or list value expression.
  * @return (list expression)
  * @ingroup expression
  */
-#define as_exp_list_remove_by_rank_range(__ctx, __rank, __count, __bin) \
+#define as_exp_list_remove_by_rank_range(__ctx, __rtype, __rank, __count, __bin) \
 		_AS_EXP_LIST_MOD(__ctx, NULL, AS_CDT_OP_LIST_REMOVE_BY_RANK_RANGE, 3, 0), \
-		as_exp_int(AS_LIST_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__rank, __count, \
 		__bin
 
@@ -2225,14 +2236,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map item identified by key.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __key			Key expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_key(__ctx, __key, __bin) \
+#define as_exp_map_remove_by_key(__ctx, __rtype, __key, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_KEY, 2, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__key, \
 		__bin
 
@@ -2240,14 +2252,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map items identified by keys.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __keys		List expression of keys to remove.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_key_list(__ctx, __keys, __bin) \
+#define as_exp_map_remove_by_key_list(__ctx, __rtype, __keys, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_KEY_LIST, 2, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__keys, \
 		__bin
 
@@ -2257,15 +2270,16 @@ as_exp_destroy_base64(char* base64)
  * If end is infinity, the range is greater than equal to begin.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __begin		Begin value expression.
  * @param __end			End value expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_key_range(__ctx, __begin, __end, __bin) \
+#define as_exp_map_remove_by_key_range(__ctx, __rtype, __begin, __end, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_KEY_INTERVAL, 3, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__begin, __end, \
 		__bin
 
@@ -2273,15 +2287,16 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map items nearest to key and greater by index.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __key			Key expression.
  * @param __idx			Index integer expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_key_rel_index_range_to_end(__ctx, __key, __idx, __bin) \
+#define as_exp_map_remove_by_key_rel_index_range_to_end(__ctx, __rtype, __key, __idx, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_KEY_REL_INDEX_RANGE, 3, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__key, __idx, \
 		__bin
 
@@ -2289,6 +2304,7 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map items nearest to key and greater by index with a count limit.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __key			Key expression.
  * @param __idx			Index integer expression.
  * @param __count		Count integer expression.
@@ -2296,9 +2312,9 @@ as_exp_destroy_base64(char* base64)
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_key_rel_index_range(__ctx, __key, __idx, __count, __bin) \
+#define as_exp_map_remove_by_key_rel_index_range(__ctx, __rtype, __key, __idx, __count, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_KEY_REL_INDEX_RANGE, 4, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__key, __idx, __count, \
 		__bin
 
@@ -2306,14 +2322,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map items identified by value.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __val			Value expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_value(__ctx, __val, __bin) \
+#define as_exp_map_remove_by_value(__ctx, __rtype, __val, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_ALL_BY_VALUE, 2, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__val, \
 		__bin
 
@@ -2321,14 +2338,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map items identified by values.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __values		Values list expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_value_list(__ctx, __values, __bin) \
+#define as_exp_map_remove_by_value_list(__ctx, __rtype, __values, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_VALUE_LIST, 2, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__values, \
 		__bin
 
@@ -2338,15 +2356,16 @@ as_exp_destroy_base64(char* base64)
  * If end is infinity, the range is greater than equal to begin.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __begin		Begin value expression.
  * @param __end			End value expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_value_range(__ctx, __begin, __end, __bin) \
+#define as_exp_map_remove_by_value_range(__ctx, __rtype, __begin, __end, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_VALUE_INTERVAL, 3, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__begin, __end, \
 		__bin
 
@@ -2354,15 +2373,16 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map items nearest to value and greater by relative rank.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __val			Value expression.
  * @param __rank		Rank integer expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_value_rel_rank_range_to_end(__ctx, __val, __rank, __bin) \
+#define as_exp_map_remove_by_value_rel_rank_range_to_end(__ctx, __rtype, __val, __rank, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_VALUE_REL_RANK_RANGE, 3, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__val, __rank, \
 		__bin
 
@@ -2371,6 +2391,7 @@ as_exp_destroy_base64(char* base64)
  * count limit.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __val			Value expression.
  * @param __rank		Rank integer expression.
  * @param __count		Count integer expression.
@@ -2378,9 +2399,9 @@ as_exp_destroy_base64(char* base64)
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_value_rel_rank_range(__ctx, __val, __rank, __count, __bin) \
+#define as_exp_map_remove_by_value_rel_rank_range(__ctx, __rtype, __val, __rank, __count, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_VALUE_REL_RANK_RANGE, 4, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__val, __rank, __count, \
 		__bin
 
@@ -2388,14 +2409,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map item identified by index.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __idx			Index integer expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_index(__ctx, __idx, __bin) \
+#define as_exp_map_remove_by_index(__ctx, __rtype, __idx, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_INDEX, 2, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__idx, \
 		__bin
 
@@ -2403,14 +2425,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map items starting at specified index to the end of map.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __idx			Index integer expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_index_range_to_end(__ctx, __idx, __bin) \
+#define as_exp_map_remove_by_index_range_to_end(__ctx, __rtype, __idx, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_INDEX_RANGE, 2, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__idx, \
 		__bin
 
@@ -2418,15 +2441,16 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes "count" map items starting at specified index.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __idx			Index integer expression.
  * @param __count		Count integer expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_index_range(__ctx, __idx, __count, __bin) \
+#define as_exp_map_remove_by_index_range(__ctx, __rtype, __idx, __count, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_INDEX_RANGE, 3, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__idx, __count, \
 		__bin
 
@@ -2434,14 +2458,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map item identified by rank.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __rank		Rank integer expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_rank(__ctx, __rank, __bin) \
+#define as_exp_map_remove_by_rank(__ctx, __rtype, __rank, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_RANK, 2, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__rank, \
 		__bin
 
@@ -2449,14 +2474,15 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes map items starting at specified rank to the last ranked item.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __rank		Rank integer expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_rank_range_to_end(__ctx, __rank, __bin) \
+#define as_exp_map_remove_by_rank_range_to_end(__ctx, __rtype, __rank, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_RANK_RANGE, 2, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__rank, \
 		__bin
 
@@ -2464,15 +2490,16 @@ as_exp_destroy_base64(char* base64)
  * Create expression that removes "count" map items starting at specified rank.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __rtype		Return type. Valid values are AS_MAP_RETURN_NONE or AS_MAP_RETURN_INVERTED.
  * @param __rank		Rank integer expression.
  * @param __count		Count integer expression.
  * @param __bin			Map bin or map value expression.
  * @return (map expression)
  * @ingroup expression
  */
-#define as_exp_map_remove_by_rank_range(__ctx, __rank, __count, __bin) \
+#define as_exp_map_remove_by_rank_range(__ctx, __rtype, __rank, __count, __bin) \
 		_AS_EXP_MAP_MOD(__ctx, NULL, AS_CDT_OP_MAP_REMOVE_BY_RANK_RANGE, 3, 0), \
-		as_exp_int(AS_MAP_RETURN_NONE), \
+		as_exp_int(__rtype), \
 		__rank, __count, \
 		__bin
 

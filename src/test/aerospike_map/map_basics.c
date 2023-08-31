@@ -21,6 +21,7 @@
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
+#include <aerospike/as_exp_operations.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_map.h>
@@ -33,6 +34,7 @@
 #include <aerospike/as_record_iterator.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
 #include "../test.h"
@@ -2601,7 +2603,7 @@ TEST(map_exp_mod, "Map Modify Expression")
 					as_exp_map_remove_by_value(NULL, AS_MAP_RETURN_NONE, as_exp_int(700),
 						as_exp_map_remove_by_key_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(40), as_exp_int(51),
 							as_exp_map_remove_by_key_list(NULL, AS_MAP_RETURN_NONE, as_exp_val(&rem),
-								as_exp_map_remove_by_key(NULL, AS_MAP_RETURN_NONE, as_exp_int(0),
+								as_exp_map_remove_by_key(NULL, as_exp_int(0),
 									as_exp_bin_map(BIN_NAME)))))),
 				as_exp_int(4))));
 
@@ -2643,14 +2645,14 @@ TEST(map_exp_mod, "Map Modify Expression")
 			as_exp_cmp_eq(
 				as_exp_map_size(NULL,
 					as_exp_map_remove_by_index_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(0), as_exp_int(1),
-						as_exp_map_remove_by_index(NULL, AS_MAP_RETURN_NONE, as_exp_int(0),
+						as_exp_map_remove_by_index(NULL, as_exp_int(0),
 							as_exp_map_remove_by_value_rel_rank_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(500), as_exp_int(2), as_exp_int(4),
 								as_exp_bin_map(BIN_NAME))))),
 				as_exp_int(5)),
 			as_exp_cmp_eq(
 				as_exp_map_size(NULL,
 					as_exp_map_remove_by_rank_range(NULL, AS_MAP_RETURN_NONE, as_exp_int(1), as_exp_int(2),
-						as_exp_map_remove_by_rank(NULL, AS_MAP_RETURN_NONE, as_exp_int(-1),
+						as_exp_map_remove_by_rank(NULL, as_exp_int(-1),
 							as_exp_map_remove_by_rank_range_to_end(NULL, AS_MAP_RETURN_NONE, as_exp_int(-2),
 								as_exp_map_remove_by_index_range_to_end(NULL, AS_MAP_RETURN_NONE, as_exp_int(7),
 									as_exp_bin_map(BIN_NAME)))))),
@@ -2950,6 +2952,64 @@ TEST(ordered_map_eq_exp, "Ordered Map Equality Expression")
 	as_exp_destroy(filter);
 }
 
+TEST(map_inverted_exp, "Map Inverted Expression")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 29);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+    as_hashmap map;
+    as_hashmap_init(&map, 4);
+    as_stringmap_set_int64((as_map*)&map, "a", 1);
+    as_stringmap_set_int64((as_map*)&map, "b", 2);
+    as_stringmap_set_int64((as_map*)&map, "c", 2);
+    as_stringmap_set_int64((as_map*)&map, "d", 3);
+
+    const char* bin_name = "smap";
+	as_record rec;
+    as_record_init(&rec, 1);
+	as_record_set_map(&rec, bin_name, (as_map*)&map);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	// Use INVERTED to remove all entries where value != 2.
+	as_exp_build(expr, as_exp_map_remove_by_value(NULL, AS_MAP_RETURN_INVERTED, as_exp_int(2),
+		as_exp_bin_map(bin_name)));
+
+    as_operations ops;
+    as_operations_inita(&ops, 1);
+    as_operations_exp_read(&ops, bin_name, expr, AS_EXP_READ_DEFAULT);
+
+    as_record* results = NULL;
+
+    status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &results);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_map* map_result = as_record_get_map(results, bin_name);
+	assert_int_eq(as_map_size(map_result), 2);
+
+	as_string s1;
+	as_string_init(&s1, "b", false);
+	as_val* v1 = as_map_get(map_result, (as_val*)&s1);
+	assert_int_eq(v1->type, AS_INTEGER);
+	assert_int_eq(((as_integer*)v1)->value, 2);
+
+	as_string s2;
+	as_string_init(&s2, "c", false);
+	as_val* v2 = as_map_get(map_result, (as_val*)&s2);
+	assert_int_eq(v2->type, AS_INTEGER);
+	assert_int_eq(((as_integer*)v2)->value, 2);
+
+	as_operations_destroy(&ops);
+	as_exp_destroy(expr);
+	as_record_destroy(results);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -2986,4 +3046,5 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_exp);
 	suite_add(map_ordered_result);
 	suite_add(ordered_map_eq_exp);
+	suite_add(map_inverted_exp);
 }

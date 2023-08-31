@@ -2675,12 +2675,12 @@ TEST(list_exp_mod, "List Modify Expressions")
 		as_exp_and(
 			as_exp_cmp_eq(
 				as_exp_list_size(NULL,
-					as_exp_list_remove_by_index(NULL, AS_LIST_RETURN_NONE, as_exp_int(3),
+					as_exp_list_remove_by_index(NULL, as_exp_int(3),
 						as_exp_bin_list(BIN_NAME))),
 				as_exp_int(5)),
 			as_exp_cmp_eq(
 				as_exp_list_get_by_index(NULL, AS_LIST_RETURN_VALUE, AS_EXP_TYPE_INT, as_exp_int(-1),
-					as_exp_list_remove_by_rank(NULL, AS_LIST_RETURN_NONE, as_exp_int(0),
+					as_exp_list_remove_by_rank(NULL, as_exp_int(0),
 						as_exp_bin_list(BIN_NAME))),
 				as_exp_int(5)),
 			as_exp_cmp_eq(

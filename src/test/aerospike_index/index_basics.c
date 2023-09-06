@@ -167,12 +167,6 @@ TEST(index_ctx_test , "Create ctx index on bin")
 	info("sindex-info: %s", res);
 	free(res);
 	res = NULL;
-
-	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_ctx");
-
-	if (err.code != AEROSPIKE_OK) {
-		info("error(%d): %s", err.code, err.message);
-	}
 }
 
 TEST(ctx_restore_test , "backup/restore ctx")

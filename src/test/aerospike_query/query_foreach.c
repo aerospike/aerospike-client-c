@@ -116,19 +116,20 @@ query_foreach_create(void)
 	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_NUMERIC);
 	index_process_return_code(status, &err, &task);
 
-	// create complex index on "e"
-	as_cdt_ctx ctx;
-	as_cdt_ctx_init(&ctx, 1);
-	as_cdt_ctx_add_list_rank(&ctx, -1);
-
-	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_ctx_test_z", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, &ctx);
-	index_process_return_code(status, &err, &task);
-
-	as_cdt_ctx_destroy(&ctx);
 
 	// create complex index on "x"
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "x", "idx_test_x", AS_INDEX_TYPE_LIST, AS_INDEX_STRING);
 	index_process_return_code(status, &err, &task);
+
+	as_cdt_ctx ctx;
+
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index(&ctx, 0);
+
+	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "x", "idx_ctx_test_x", AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING, &ctx);
+	index_process_return_code(status, &err, &task);
+
+	as_cdt_ctx_destroy(&ctx);
 
 	// create complex index on "y"
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y", AS_INDEX_TYPE_MAPKEYS, AS_INDEX_STRING);
@@ -138,9 +139,28 @@ query_foreach_create(void)
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_test_y1", AS_INDEX_TYPE_MAPVALUES, AS_INDEX_STRING);
 	index_process_return_code(status, &err, &task);
 
+	as_string ykey;
+	as_string_init(&ykey, "ykey", false);
+
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)&ykey);
+
+	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "y", "idx_ctx_test_y", AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING, &ctx);
+	index_process_return_code(status, &err, &task);
+
+	as_cdt_ctx_destroy(&ctx);
+
 	// create complex index on "z"	 
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_test_z", AS_INDEX_TYPE_LIST, AS_INDEX_NUMERIC);
 	index_process_return_code(status, &err, &task);
+
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_rank(&ctx, -1);
+
+	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_ctx_test_z", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, &ctx);
+	index_process_return_code(status, &err, &task);
+
+	as_cdt_ctx_destroy(&ctx);
 
 	char* buffer = alloca(n_recs * 1024 + 1);
 	uint32_t the_ttl = AS_RECORD_NO_EXPIRE_TTL;
@@ -305,6 +325,11 @@ query_foreach_destroy(void)
 		info("error(%d): %s", err.code, err.message);
 	}
 
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_ctx_test_x");
+	if (err.code != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_y");
 	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
@@ -315,7 +340,17 @@ query_foreach_destroy(void)
 		info("error(%d): %s", err.code, err.message);
 	}
 
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_ctx_test_y");
+	if (err.code != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_z");
+	if (err.code != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_ctx_test_z");
 	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
@@ -555,7 +590,7 @@ TEST(query_foreach_5, "IN LIST count(*) where x contains 'x'")
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
 	if (err.code != AEROSPIKE_OK) {
-		 fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
 	assert_int_eq(err.code, AEROSPIKE_OK);
@@ -1594,6 +1629,67 @@ TEST(query_foreach_int_with_double_bin, "test query on double behavior")
 	assert_int_eq(err.code, AEROSPIKE_OK);
 }
 
+TEST(query_list_ctx_is_string, "IN LIST count(*) where x[0] is 'x'")
+{
+	as_error err;
+	as_error_reset(&err);
+
+	uint32_t count = 0;
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index(&ctx, 0);
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where_with_ctx(&q, "x", &ctx, as_string_equals("x"));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if (err.code != AEROSPIKE_OK) {
+		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(count, 34);
+
+	as_query_destroy(&q);
+}
+
+TEST(query_map_ctx_is_string, "IN LIST count(*) where y['ykey'] is 'yvalue'")
+{
+	as_error err;
+	as_error_reset(&err);
+
+	uint32_t count = 0;
+
+	as_string ykey;
+	as_string_init(&ykey, "ykey", false);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)&ykey);
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_where_inita(&q, 1);
+	as_query_where_with_ctx(&q, "y", &ctx, as_string_equals("yvalue"));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	if (err.code != AEROSPIKE_OK) {
+		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(count, 15);
+
+	as_query_destroy(&q);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1659,4 +1755,6 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_filter_map_bytes);
 	suite_add(query_foreach_nullset);
 	suite_add(query_foreach_int_with_double_bin);
+	suite_add(query_list_ctx_is_string);
+	suite_add(query_map_ctx_is_string);
 }

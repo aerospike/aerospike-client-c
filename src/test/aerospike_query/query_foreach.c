@@ -1710,6 +1710,22 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 
 	if (strcmp(namespace_storage, "memory") == 0) {
 		namespace_in_memory = true;
+
+		char shadow[128];
+		shadow[0] = '\0';
+
+		get_info_field(NAMESPACE_INFO, "storage-engine.file[0]", shadow, sizeof(shadow));
+
+		if (shadow[0] != '\0') {
+			namespace_has_persistence = true;
+		}
+		else {
+			get_info_field(NAMESPACE_INFO, "storage-engine.device[0]", shadow, sizeof(shadow));
+
+			if (shadow[0] != '\0') {
+				namespace_has_persistence = true;
+			}
+		}
 	}
 
 	if (! namespace_in_memory) {

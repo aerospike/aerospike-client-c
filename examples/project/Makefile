@@ -20,12 +20,12 @@ endif
 
 ifeq ($(OS),Darwin)
   CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT
-  
+
   ifneq ($(wildcard /opt/homebrew/include),)
     # Mac new homebrew external include path
     CC_FLAGS += -I/opt/homebrew/include
   else ifneq ($(wildcard /usr/local/opt/libevent/include),)
-  	# Mac old homebrew libevent include path
+    # Mac old homebrew libevent include path
     CC_FLAGS += -I/usr/local/opt/libevent/include
   endif
 
@@ -69,7 +69,7 @@ ifeq ($(OS),Darwin)
   else
     # Mac old homebrew external lib path
     LD_FLAGS += -L/usr/local/lib
-  
+
     ifeq ($(EVENT_LIB),libevent)
       LD_FLAGS += -L/usr/local/opt/libevent/lib
     endif
@@ -82,11 +82,7 @@ ifeq ($(OS),Darwin)
     # Mac old homebrew openssl lib path
     LD_FLAGS += -L/usr/local/opt/openssl/lib
   endif
-  
-  ifeq ($(USE_LUAJIT),1)
-    LD_FLAGS += -pagezero_size 10000 -image_base 100000000
-  endif
-  
+
   LINK_SUFFIX =
 else ifeq ($(OS),FreeBSD)
   LD_FLAGS += -L/usr/local/lib
@@ -108,62 +104,12 @@ ifeq ($(EVENT_LIB),libevent)
   LD_FLAGS += -levent_core -levent_pthreads
 endif
 
-LD_FLAGS += -lssl -lcrypto $(LIB_LUA) -lpthread -lm -lz $(LINK_SUFFIX)
+LD_FLAGS += -lssl -lcrypto -lpthread -lm -lz $(LINK_SUFFIX)
 
 ifeq ($(OS),Linux)
   LD_FLAGS += -lrt -ldl
 else ifeq ($(OS),FreeBSD)
   LD_FLAGS += -lrt
-endif
-
-# Use the Lua submodule?  [By default, yes.]
-USE_LUAMOD = 1
-
-# Use LuaJIT instead of Lua?  [By default, no.]
-USE_LUAJIT = 0
-
-# Permit easy overriding of the default.
-ifeq ($(USE_LUAJIT),1)
-  USE_LUAMOD = 0
-endif
-
-ifeq ($(and $(USE_LUAMOD:0=),$(USE_LUAJIT:0=)),1)
-  $(error Only at most one of USE_LUAMOD or USE_LUAJIT may be enabled (i.e., set to 1.))
-endif
-
-ifeq ($(USE_LUAJIT),1)
-  ifeq ($(OS),Darwin)
-    LD_FLAGS += -pagezero_size 10000 -image_base 100000000
-  endif
-else
-  ifeq ($(USE_LUAMOD),0)
-    # Find where the Lua development package is installed in the build environment.
-    ifeq ($(OS),Darwin)
-      LUA_LIBPATH = $(or \
-	$(wildcard /usr/local/lib/liblua.5.1.dylib), \
-	$(wildcard /usr/local/lib/liblua.5.1.a), \
-	$(wildcard /usr/local/lib/liblua.dylib), \
-	$(wildcard /usr/local/lib/liblua.a), \
-	  $(error Cannot find liblua 5.1))
-      LUA_LIBDIR = $(dir $(LUA_LIBPATH))
-      LUA_LIB = $(patsubst lib%,%,$(basename $(notdir $(LUA_LIBPATH))))
-    else
-      # Linux
-      LUA_LIBPATH = $(or \
-	$(wildcard /usr/lib/liblua5.1.so), \
-	$(wildcard /usr/lib/liblua5.1.a), \
-	$(wildcard /usr/lib/x86_64-linux-gnu/liblua5.1.so), \
-	$(wildcard /usr/lib/x86_64-linux-gnu/liblua5.1.a), \
-	$(wildcard /usr/lib64/liblua-5.1.so), \
-	$(wildcard /usr/lib64/liblua-5.1.a), \
-	$(wildcard /usr/lib/liblua.so), \
-	$(wildcard /usr/lib/liblua.a), \
-	  $(error Cannot find liblua 5.1))
-      LUA_LIBDIR = $(dir $(LUA_LIBPATH))
-      LUA_LIB = $(patsubst lib%,%,$(basename $(notdir $(LUA_LIBPATH))))
-    endif
-    LD_FLAGS += -L$(LUA_LIBDIR) -l$(LUA_LIB)
-  endif
 endif
 
 LD_FLAGS += -lm -lz

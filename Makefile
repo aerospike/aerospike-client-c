@@ -4,34 +4,12 @@
 include project/settings.mk
 
 # Modules
-COMMON := modules/common
-LUAMOD := modules/lua
-LUAJIT := modules/luajit
-MOD_LUA	:= modules/mod-lua
-MODULES	:= COMMON MOD_LUA
-
-# Use the Lua submodule?  [By default, yes.]
-USE_LUAMOD = 1
-
-# Use LuaJIT instead of Lua?  [By default, no.]
-USE_LUAJIT = 0
-
-# Permit easy overriding of the default.
-ifeq ($(USE_LUAJIT),1)
-  USE_LUAMOD = 0
-endif
-
-ifeq ($(and $(USE_LUAMOD:0=),$(USE_LUAJIT:0=)),1)
-  $(error Only at most one of USE_LUAMOD or USE_LUAJIT may be enabled (i.e., set to 1.))
-else
-  ifeq ($(USE_LUAMOD),1)
-    MODULES += LUAMOD
-  else
-    ifeq ($(USE_LUAJIT),1)
-      MODULES += LUAJIT
-    endif
-  endif
-endif
+COMMON := $(abspath modules/common)
+LUAMOD := $(abspath modules/lua)
+MOD_LUA	:= $(abspath modules/mod-lua)
+MODULES	:= COMMON
+MODULES += LUAMOD
+MODULES += MOD_LUA
 
 # Override optimizations via: make O=n
 O = 3
@@ -59,12 +37,13 @@ endif
 
 ifeq ($(OS),Darwin)
   CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT -I/usr/local/include
+  LUA_PLATFORM = LUA_USE_MACOSX
 
   ifneq ($(wildcard /opt/homebrew/include),)
     # Mac new homebrew external include path
     CC_FLAGS += -I/opt/homebrew/include
   else ifneq ($(wildcard /usr/local/opt/libevent/include),)
-  	# Mac old homebrew libevent include path
+    # Mac old homebrew libevent include path
     CC_FLAGS += -I/usr/local/opt/libevent/include
   endif
 
@@ -78,14 +57,12 @@ ifeq ($(OS),Darwin)
     # macports openssl include path
     CC_FLAGS += -I/opt/local/include
   endif
-
-  LUA_PLATFORM = macosx
 else ifeq ($(OS),FreeBSD)
   CC_FLAGS += -finline-functions -I/usr/local/include
-  LUA_PLATFORM = freebsd
+  LUA_PLATFORM = LUA_USE_LINUX # nothing BSD specific in luaconf.h
 else
   CC_FLAGS += -finline-functions -rdynamic
-  LUA_PLATFORM = linux
+  LUA_PLATFORM = LUA_USE_LINUX
 
   ifneq ($(wildcard /etc/alpine-release),)
     CC_FLAGS += -DAS_ALPINE
@@ -109,35 +86,7 @@ endif
 # Include Paths
 INC_PATH += $(COMMON)/$(TARGET_INCL)
 INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
-
-# Library Paths
-# LIB_PATH +=
-
-ifeq ($(USE_LUAMOD),1)
-  INC_PATH += $(LUAMOD)/src
-else
-  ifeq ($(USE_LUAJIT),1)
-    INC_PATH += $(LUAJIT)/src
-  else
-    # Find where the Lua development package is installed in the build environment.
-    INC_PATH += $(or \
-      $(wildcard /usr/include/lua-5.1), \
-      $(wildcard /usr/include/lua5.1))
-    INCLUDE_LUA_5_1 = /usr/include/lua5.1
-    ifneq ($(wildcard $(INCLUDE_LUA_5_1)),)
-      LUA_SUFFIX=5.1
-    endif
-    ifeq ($(OS),Darwin)
-      ifneq ($(wildcard /usr/local/include),)
-        INC_PATH += /usr/local/include
-      endif
-      ifneq ($(wildcard /usr/local/lib),)
-        LIB_LUA = -L/usr/local/lib
-      endif
-    endif
-    LIB_LUA += -llua$(LUA_SUFFIX)
-  endif
-endif
+INC_PATH += $(LUAMOD)
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -208,15 +157,8 @@ DEPS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
 DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
 DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
 
-ifeq ($(USE_LUAMOD),1)
-  LUA_DYNAMIC_OBJ = $(filter-out $(LUAMOD)/src/lua.o $(LUAMOD)/src/luac.o, $(shell ls $(LUAMOD)/src/*.o))
-  LUA_STATIC_OBJ  = $(LUA_DYNAMIC_OBJ)
-else
-  ifeq ($(USE_LUAJIT),1)
-    LUA_DYNAMIC_OBJ = $(shell ls $(LUAJIT)/src/*_dyn.o)
-    LUA_STATIC_OBJ  = $(filter-out $(LUA_DYNAMIC_OBJ) $(LUAJIT)/src/luajit.o, $(shell ls $(LUAJIT)/src/*.o))
-  endif
-endif
+LUA_DYNAMIC_OBJ = $(filter-out $(LUAMOD)/lua.o, $(shell ls $(LUAMOD)/*.o))
+LUA_STATIC_OBJ = $(LUA_DYNAMIC_OBJ)
 
 ###############################################################################
 ##  HEADERS                                                                  ##

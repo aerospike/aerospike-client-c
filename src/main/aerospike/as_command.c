@@ -605,6 +605,7 @@ as_command_execute(as_command* cmd, as_error* err)
 										 cmd->replica_size, &cmd->replica_index);
 
 			if (! node) {
+				printf("IN DOUBT ERROR %u\n", cmd->sent);
 				return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 									   "Node not found for partition %s:%u",
 									   cmd->ns, cmd->partition_id);
@@ -787,6 +788,7 @@ Retry:
 		as_node_release(node);
 	}
 	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+	printf("TIMEOUT %d\n", (int)err->in_doubt);
 	return err->code;
 }
 

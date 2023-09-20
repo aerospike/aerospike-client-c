@@ -135,7 +135,7 @@ typedef struct as_error_s {
  *****************************************************************************/
 
 /**
- * as_error_update(&as->error, AEROSPIKE_OK, "%s %d", "a", 1);
+ * Set all as_error fields and default in_doubt to false. Variable arguments are accepted.
  *
  * @ingroup as_error_object
  */
@@ -143,7 +143,7 @@ typedef struct as_error_s {
 	as_error_setallv( __err, __code, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__ );
 
 /**
- * as_error_set_message(&as->error, AEROSPIKE_ERR, "error message");
+ * Set all as_error fields and default in_doubt to false. Variable arguments are not accepted.
  *
  * @ingroup as_error_object
  */

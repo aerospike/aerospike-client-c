@@ -119,6 +119,7 @@ typedef enum {
 	_AS_EXP_CODE_KEY_EXIST = 71,
 	_AS_EXP_CODE_IS_TOMBSTONE = 72,
 	_AS_EXP_CODE_MEMORY_SIZE = 73,
+	_AS_EXP_CODE_RECORD_SIZE = 74,
 
 	_AS_EXP_CODE_KEY = 80,
 	_AS_EXP_CODE_BIN = 81,
@@ -671,9 +672,30 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_set_name() {.op=_AS_EXP_CODE_SET_NAME, .count=1}
 
 /**
+ * Create expression that returns the record size. This expression usually evaluates
+ * quickly because record meta data is cached in memory.
+ *
+ * Requires server version 7.0+. This expression replaces as_exp_device_size() and
+ * as_exp_memory_size().
+ *
+ * ~~~~~~~~~~{.c}
+ * // Record size >= 100 KB
+ * as_exp_build(expression,
+ * 		as_exp_cmp_ge(as_exp_record_size(), as_exp_int(100 * 1024)));
+ * ~~~~~~~~~~
+ *
+ * @return (integer value) Uncompressed size of the record.
+ * @ingroup expression
+ */
+#define as_exp_record_size() {.op=_AS_EXP_CODE_RECORD_SIZE, .count=1}
+
+/**
  * Create expression that returns record size on disk. If server storage-engine is
  * memory, then zero is returned. This expression usually evaluates quickly
  * because record meta data is cached in memory.
+ *
+ * This expression should only be used for server versions less than 7.0. Use
+ * as_exp_record_size() for server version 7.0+.
  *
  * ~~~~~~~~~~{.c}
  * // Record device size >= 100 KB
@@ -773,7 +795,9 @@ as_exp_destroy_base64(char* base64)
  * storage-engine is memory or data-in-memory is true, otherwise returns 0.
  * This expression usually evaluates quickly because record meta data is cached
  * in memory.
- * Requires server version 5.3.0+.
+ *
+ * Requires server version between 5.3 inclusive and 7.0 exclusive.
+ * Use as_exp_record_size() for server version 7.0+.
  *
  * ~~~~~~~~~~{.c}
  * // Record memory size >= 100 KB

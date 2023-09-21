@@ -27,7 +27,7 @@ ifeq ($(ARCH),aarch64)
   REAL_ARCH = -mcpu=neoverse-n1
 endif
 
-CC_CFLAGS += REAL_ARCH
+CC_CFLAGS += $(REAL_ARCH)
 
 ifeq ($(EVENT_LIB),libev)
   CC_FLAGS += -DAS_USE_LIBEV

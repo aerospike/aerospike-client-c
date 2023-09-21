@@ -20,8 +20,14 @@ CC_FLAGS += -fno-common -fno-strict-aliasing
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
 ifeq ($(ARCH),x86_64)
-  CC_FLAGS += -march=nocona
+  REAL_ARCH = -march=nocona
 endif
+
+ifeq ($(ARCH),aarch64)
+  REAL_ARCH = -mcpu=neoverse-n1
+endif
+
+CC_CFLAGS += REAL_ARCH
 
 ifeq ($(EVENT_LIB),libev)
   CC_FLAGS += -DAS_USE_LIBEV

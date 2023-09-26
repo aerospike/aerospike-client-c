@@ -110,7 +110,7 @@ endif
 LUAMOD-build: $(LUAMOD)/liblua.a
 
 $(LUAMOD)/liblua.a:
-	$(MAKE) -C $(LUAMOD) CFLAGS="-Wall -O2 -std=c99 -D$(LUA_PLATFORM) -fPIC -fno-stack-protector -fno-common $(REAL_ARCH) -g" MYLIBS="-ldl" a
+	$(MAKE) -C $(LUAMOD) CFLAGS="-Wall -O2 -std=c99 -D$(LUA_PLATFORM) -fPIC -fno-stack-protector -fno-common $(REAL_ARCH) -g" a
 
 .PHONY: LUAMOD-clean
 LUAMOD-clean:

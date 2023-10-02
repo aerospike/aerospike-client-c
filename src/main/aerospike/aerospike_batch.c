@@ -3550,14 +3550,6 @@ aerospike_batch_operate(
 {
 	as_error_reset(err);
 	
-	if (! policy) {
-		policy = &as->config.policies.batch_parent_write;
-	}
-	
-	if (! policy_write) {
-		policy_write = &as->config.policies.batch_write;
-	}
-
 	uint32_t n_operations = ops->binops.size;
 	bool has_write = false;
 
@@ -3571,6 +3563,14 @@ aerospike_batch_operate(
 	}
 
 	if (has_write) {
+		if (! policy) {
+			policy = &as->config.policies.batch_parent_write;
+		}
+	
+		if (! policy_write) {
+			policy_write = &as->config.policies.batch_write;
+		}
+
 		as_batch_write_record rec = {
 			.type = AS_BATCH_WRITE,
 			.has_write = true,
@@ -3585,6 +3585,10 @@ aerospike_batch_operate(
 			listener, udata);
 	}
 	else {
+		if (! policy) {
+			policy = &as->config.policies.batch;
+		}
+
 		as_batch_read_record rec = {
 			.type = AS_BATCH_READ,
 			.ops = ops

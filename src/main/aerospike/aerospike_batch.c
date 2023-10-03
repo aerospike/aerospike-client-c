@@ -3550,26 +3550,57 @@ aerospike_batch_operate(
 {
 	as_error_reset(err);
 	
-	if (! policy) {
-		policy = &as->config.policies.batch_parent_write;
+	uint32_t n_operations = ops->binops.size;
+	bool has_write = false;
+
+	for (uint32_t i = 0; i < n_operations; i++) {
+		as_binop* op = &ops->binops.entries[i];
+
+		if (as_op_is_write[op->op]) {
+			has_write = true;
+			break;
+		}
 	}
+
+	if (has_write) {
+		if (! policy) {
+			policy = &as->config.policies.batch_parent_write;
+		}
 	
-	if (! policy_write) {
-		policy_write = &as->config.policies.batch_write;
+		if (! policy_write) {
+			policy_write = &as->config.policies.batch_write;
+		}
+
+		as_batch_write_record rec = {
+			.type = AS_BATCH_WRITE,
+			.has_write = true,
+			.policy = policy_write,
+			.ops = ops
+		};
+
+		as_batch_attr attr;
+		as_batch_attr_write_row(&attr, policy_write, ops);
+
+		return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
+			listener, udata);
 	}
+	else {
+		if (! policy) {
+			policy = &as->config.policies.batch;
+		}
 
-	as_batch_write_record rec = {
-		.type = AS_BATCH_WRITE,
-		.has_write = true,
-		.policy = policy_write,
-		.ops = ops
-	};
+		as_batch_read_record rec = {
+			.type = AS_BATCH_READ,
+			.ops = ops
+		};
 
-	as_batch_attr attr;
-	as_batch_attr_write_row(&attr, policy_write, ops);
+		as_batch_attr attr;
+		as_batch_attr_read_header(&attr, policy);
+		as_batch_attr_read_adjust_ops(&attr, ops);
 
-	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
-		listener, udata);
+		return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
+			listener, udata);
+	}
 }
 
 as_status

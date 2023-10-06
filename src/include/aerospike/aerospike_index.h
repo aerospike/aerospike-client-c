@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -73,6 +73,7 @@ typedef enum as_index_type_s {
 typedef enum as_index_datatype_s {
 	AS_INDEX_STRING,
 	AS_INDEX_NUMERIC,
+	AS_INDEX_BLOB,  // Requires server version 7.0+.
 	AS_INDEX_GEO2DSPHERE
 } as_index_datatype;
 

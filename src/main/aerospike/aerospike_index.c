@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -46,6 +46,9 @@ aerospike_index_create_ctx(
 	switch (dtype) {
 		case AS_INDEX_NUMERIC:
 			dtype_string = "NUMERIC";
+			break;
+		case AS_INDEX_BLOB:
+			dtype_string = "BLOB";
 			break;
 		case AS_INDEX_GEO2DSPHERE:
 			dtype_string = "GEO2DSPHERE";

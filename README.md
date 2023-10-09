@@ -41,6 +41,10 @@ Run this script after installing XCode and Brew:
 
 See [Windows Build](vs).
 	
+### OpenSSL Library
+
+This minimum OpenSSL library version is 1.0.2.
+
 ### Event Library (Optional)
 
 An event library is required when C client asynchronous functionality is used.

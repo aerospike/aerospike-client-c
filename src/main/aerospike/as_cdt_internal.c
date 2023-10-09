@@ -248,6 +248,23 @@ as_unpack_bytes_init(as_unpacker* pk, uint8_t* b, uint32_t max)
 }
 
 bool
+as_unpack_bytes_new(as_unpacker* pk, uint8_t** bytes, uint32_t* bytes_size, uint32_t max)
+{
+	uint32_t size;
+	const uint8_t* p = as_unpack_str(pk, &size);
+
+	if (!p || size > max) {
+		return false;
+	}
+
+	uint8_t* b = cf_malloc(size);
+	memcpy(b, p, size);
+	*bytes = b;
+	*bytes_size = size;
+	return true;
+}
+
+bool
 as_val_compare(as_val* v1, as_val* v2)
 {
 	char* s1 = as_val_tostring(v1);

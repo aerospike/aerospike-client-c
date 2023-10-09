@@ -162,6 +162,9 @@ query_foreach_create(void)
 
 	as_cdt_ctx_destroy(&ctx);
 
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "blob", "idx_blob_test", AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB);
+	index_process_return_code(status, &err, &task);
+
 	char* buffer = alloca(n_recs * 1024 + 1);
 	uint32_t the_ttl = AS_RECORD_NO_EXPIRE_TTL;
 	
@@ -239,11 +242,16 @@ query_foreach_create(void)
 		}
 		buffer[i * 1024] = '\0';
 
+		// Make blob.
+		uint8_t blob[4];
+		uint8_t* blob_ptr = blob;
+		*(uint32_t*)blob_ptr = 50000 + i;
+
 		// We only create the g bin for odd records.
 		bool create_g_bin = i % 2 == 1;
 		
 		as_record r;
-		as_record_init(&r, 10 + (create_g_bin ? 1 : 0));
+		as_record_init(&r, 11 + (create_g_bin ? 1 : 0));
 		as_record_set_str(&r,   "a", a);
 		as_record_set_int64(&r, "b", b);
 		as_record_set_int64(&r, "c", c);
@@ -256,7 +264,8 @@ query_foreach_create(void)
 		as_record_set_list(&r, "x", (as_list *) &list);
 		as_record_set_map(&r, "y", (as_map *) &map);
 		as_record_set_list(&r, "z", (as_list *) &list2);
-		as_record_set_str(&r,   "bigstr", buffer);
+		as_record_set_str(&r, "bigstr", buffer);
+		as_record_set_rawp(&r, "blob", blob_ptr, sizeof(uint32_t), false);
 
 		r.ttl = the_ttl;
 		
@@ -351,6 +360,11 @@ query_foreach_destroy(void)
 	}
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_ctx_test_z");
+	if (err.code != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_blob_test");
 	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
@@ -796,6 +810,39 @@ TEST(query_with_equality_filter, "query_with_equality_filter")
 	// We should only match one record.
 	assert_int_eq(err.code, 0);
 	assert_int_eq(count, 1);
+
+	as_exp_destroy(filter);
+	as_query_destroy(&q);
+}
+
+TEST(query_with_rec_size_filter, "query_with_rec_size_filter")
+{
+	as_error err;
+	as_error_reset(&err);
+
+	int count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	as_exp_build(filter,
+		as_exp_cmp_ge(as_exp_record_size(), as_exp_int(65 * 1024)));
+
+	as_policy_query p;
+	as_policy_query_init(&p);
+	p.base.filter_exp = filter;
+
+	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
+
+	// We should match 100 - 65 records
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 35);
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
@@ -1655,6 +1702,7 @@ TEST(query_list_ctx_is_string, "IN LIST count(*) where x[0] is 'x'")
 	assert_int_eq(err.code, AEROSPIKE_OK);
 	assert_int_eq(count, 34);
 
+	as_cdt_ctx_destroy(&ctx);
 	as_query_destroy(&q);
 }
 
@@ -1687,6 +1735,34 @@ TEST(query_map_ctx_is_string, "IN LIST count(*) where y['ykey'] is 'yvalue'")
 	assert_int_eq(err.code, AEROSPIKE_OK);
 	assert_int_eq(count, 15);
 
+	as_cdt_ctx_destroy(&ctx);
+	as_query_destroy(&q);
+}
+
+TEST(query_blob_index, "query blob index")
+{
+	as_error err;
+	as_error_reset(&err);
+
+	uint32_t count = 0;
+
+	uint8_t blob[4];
+	*((uint32_t*)blob) = 50003;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "blob");
+	
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "blob", as_blob_equals(blob, 4, false));
+	
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 1);
+
 	as_query_destroy(&q);
 }
 
@@ -1710,6 +1786,22 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 
 	if (strcmp(namespace_storage, "memory") == 0) {
 		namespace_in_memory = true;
+
+		char shadow[128];
+		shadow[0] = '\0';
+
+		get_info_field(NAMESPACE_INFO, "storage-engine.file[0]", shadow, sizeof(shadow));
+
+		if (shadow[0] != '\0') {
+			namespace_has_persistence = true;
+		}
+		else {
+			get_info_field(NAMESPACE_INFO, "storage-engine.device[0]", shadow, sizeof(shadow));
+
+			if (shadow[0] != '\0') {
+				namespace_has_persistence = true;
+			}
+		}
 	}
 
 	if (! namespace_in_memory) {
@@ -1734,6 +1826,7 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_foreach_9);
 	suite_add(query_with_range_filter);
 	suite_add(query_with_equality_filter);
+	suite_add(query_with_rec_size_filter);
 	suite_add(query_with_rec_device_size_filter);
 	suite_add(query_with_rec_memory_size_filter);
 	suite_add(query_intermittent_bin_filter);
@@ -1757,4 +1850,5 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_foreach_int_with_double_bin);
 	suite_add(query_list_ctx_is_string);
 	suite_add(query_map_ctx_is_string);
+	suite_add(query_blob_index);
 }

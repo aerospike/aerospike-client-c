@@ -605,9 +605,11 @@ as_command_execute(as_command* cmd, as_error* err)
 										 cmd->replica_size, &cmd->replica_index);
 
 			if (! node) {
-				return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-									   "Node not found for partition %s:%u",
-									   cmd->ns, cmd->partition_id);
+				as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
+					"Node not found for partition %s:%u", cmd->ns, cmd->partition_id);
+
+				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+				return err->code;
 			}
 			as_node_reserve(node);
 			release_node = true;

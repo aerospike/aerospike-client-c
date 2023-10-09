@@ -2618,11 +2618,11 @@ TEST(list_exp_mod, "List Modify Expressions")
 				as_exp_val(&expected)),
 			as_exp_cmp_eq(
 				as_exp_list_size(NULL,
-					as_exp_list_remove_by_value(NULL, as_exp_int(5), as_exp_bin_list(BIN_NAME))),
+					as_exp_list_remove_by_value(NULL, AS_LIST_RETURN_NONE, as_exp_int(5), as_exp_bin_list(BIN_NAME))),
 				as_exp_int(5)),
 			as_exp_cmp_eq(
 				as_exp_list_size(NULL,
-					as_exp_list_remove_by_value_list(NULL, as_exp_val(&expected), as_exp_bin_list(BIN_NAME))),
+					as_exp_list_remove_by_value_list(NULL, AS_LIST_RETURN_NONE, as_exp_val(&expected), as_exp_bin_list(BIN_NAME))),
 				as_exp_int(4))));
 
 	as_arraylist_destroy(&expected);
@@ -2640,17 +2640,17 @@ TEST(list_exp_mod, "List Modify Expressions")
 		as_exp_not(as_exp_or(
 			as_exp_cmp_gt(
 				as_exp_list_size(NULL,
-					as_exp_list_remove_by_value_range(NULL, as_exp_int(3), as_exp_int(6),
+					as_exp_list_remove_by_value_range(NULL, AS_LIST_RETURN_NONE, as_exp_int(3), as_exp_int(6),
 						as_exp_bin_list(BIN_NAME))),
 				as_exp_int(4)),
 			as_exp_cmp_gt(
 				as_exp_list_size(NULL,
-					as_exp_list_remove_by_rel_rank_range_to_end(NULL, as_exp_int(9), as_exp_int(0),
+					as_exp_list_remove_by_rel_rank_range_to_end(NULL, AS_LIST_RETURN_NONE, as_exp_int(9), as_exp_int(0),
 						as_exp_bin_list(BIN_NAME))),
 				as_exp_int(2)),
 			as_exp_cmp_gt(
 				as_exp_list_size(NULL,
-					as_exp_list_remove_by_rel_rank_range(NULL, as_exp_int(9), as_exp_int(0), as_exp_int(3),
+					as_exp_list_remove_by_rel_rank_range(NULL, AS_LIST_RETURN_NONE, as_exp_int(9), as_exp_int(0), as_exp_int(3),
 						as_exp_bin_list(BIN_NAME))),
 				as_exp_int(3)))));
 	assert_not_null(filter6);
@@ -2684,16 +2684,16 @@ TEST(list_exp_mod, "List Modify Expressions")
 						as_exp_bin_list(BIN_NAME))),
 				as_exp_int(5)),
 			as_exp_cmp_eq(
-				as_exp_list_remove_by_rank_range_to_end(NULL, as_exp_int(3),
+				as_exp_list_remove_by_rank_range_to_end(NULL, AS_LIST_RETURN_NONE, as_exp_int(3),
 					as_exp_bin_list(BIN_NAME)),
 				as_exp_val(&expected)),
 			as_exp_cmp_eq(
-				as_exp_list_remove_by_rank_range(NULL, as_exp_int(-3), as_exp_int(3),
+				as_exp_list_remove_by_rank_range(NULL, AS_LIST_RETURN_NONE, as_exp_int(-3), as_exp_int(3),
 					as_exp_bin_list(BIN_NAME)),
 				as_exp_val(&expected)),
 			as_exp_cmp_eq(
 				as_exp_list_size(NULL,
-					as_exp_list_remove_by_index_range_to_end(NULL, as_exp_int(1),
+					as_exp_list_remove_by_index_range_to_end(NULL, AS_LIST_RETURN_NONE, as_exp_int(1),
 						as_exp_bin_list(BIN_NAME))),
 				as_exp_int(1)),
 			as_exp_cmp_eq(
@@ -2701,7 +2701,7 @@ TEST(list_exp_mod, "List Modify Expressions")
 					as_exp_bin_list(BIN_NAME)),
 				as_exp_val(&empty)),
 			as_exp_cmp_eq(
-				as_exp_list_remove_by_index_range(NULL, as_exp_int(0), as_exp_int(3),
+				as_exp_list_remove_by_index_range(NULL, AS_LIST_RETURN_NONE, as_exp_int(0), as_exp_int(3),
 						as_exp_bin_list(BIN_NAME)),
 				as_exp_val(&expected))));
 
@@ -2884,7 +2884,7 @@ TEST(list_exp_infinity, "test as_exp_inf()")
     as_record_destroy(&rec);
 
 	// Remove values >= 30
-	as_exp_build(read_exp, as_exp_list_remove_by_value_range(NULL, as_exp_int(30), as_exp_inf(), as_exp_bin_list(BIN_NAME)));
+	as_exp_build(read_exp, as_exp_list_remove_by_value_range(NULL, AS_LIST_RETURN_NONE, as_exp_int(30), as_exp_inf(), as_exp_bin_list(BIN_NAME)));
 	assert_not_null(read_exp);
 
 	as_operations ops;

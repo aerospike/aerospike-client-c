@@ -213,8 +213,16 @@ typedef struct as_config_tls_s {
 	 * Path to a trusted CA certificate file.
 	 * By default TLS will use system standard trusted CA certificates.
 	 * Use as_config_tls_set_cafile() to set this field.
+	 * If cafile is populated, castring is ignored.
 	 */
 	char* cafile;
+
+	/**
+	 * String containing trusted CA certificate(s).
+	 * Use as_config_tls_set_castring() to set this field.
+	 * If cafile is populated, castring is ignored.
+	 */
+	char* castring;
 
 	/**
 	 * Path to a directory of trusted certificates.
@@ -272,8 +280,8 @@ typedef struct as_config_tls_s {
 	/**
 	 * Path to the client's key for mutual authentication.
 	 * By default mutual authentication is disabled.
-	 *
 	 * Use as_config_tls_set_keyfile() to set this field.
+	 * If keyfile is populated, keystring is ignored.
 	 */
 	char* keyfile;
 
@@ -286,12 +294,28 @@ typedef struct as_config_tls_s {
 	char* keyfile_pw;
 
 	/**
+	 * Client's key string for mutual authentication.
+	 * By default mutual authentication is disabled.
+	 * Use as_config_tls_set_keystring() to set this field.
+	 * If keyfile is populated, keystring is ignored.
+	 */
+	char* keystring;
+
+	/**
 	 * Path to the client's certificate chain file for mutual authentication.
 	 * By default mutual authentication is disabled.
-	 *
 	 * Use as_config_tls_set_certfile() to set this field.
+	 * If certfile is populated, certstring is ignored.
 	 */
 	char* certfile;
+
+	/**
+	 * Client's certificate chain file string for mutual authentication.
+	 * By default mutual authentication is disabled.
+	 * Use as_config_tls_set_certstring() to set this field.
+	 * If certfile is populated, certstring is ignored.
+	 */
+	char* certstring;
 
 	/**
 	 * Enable CRL checking for the certificate chain leaf certificate.
@@ -893,6 +917,17 @@ as_config_tls_set_cafile(as_config* config, const char* cafile)
 }
 
 /**
+ * Set string containing trusted CA certificate(s).
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_tls_set_castring(as_config* config, const char* castring)
+{
+	as_config_set_string(&config->tls.castring, castring);
+}
+
+/**
  * Set TLS path to a directory of trusted certificates.
  *
  * @relates as_config
@@ -959,6 +994,17 @@ as_config_tls_set_keyfile_pw(as_config* config, const char* pw)
 }
 
 /**
+ * Set client's key string for mutual authentication.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_tls_set_keystring(as_config* config, const char* keystring)
+{
+	as_config_set_string(&config->tls.keystring, keystring);
+}
+
+/**
  * Set TLS path to the client's certificate chain file for mutual authentication.
  *
  * @relates as_config
@@ -967,6 +1013,17 @@ static inline void
 as_config_tls_set_certfile(as_config* config, const char* certfile)
 {
 	as_config_set_string(&config->tls.certfile, certfile);
+}
+
+/**
+ * Set client's certificate chain file string for mutual authentication.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_tls_set_certstring(as_config* config, const char* certstring)
+{
+	as_config_set_string(&config->tls.certstring, certstring);
 }
 
 /**

@@ -45,6 +45,19 @@ extern "C" {
 #define as_string_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING, __val
 
 /**
+ * Macro for setting setting the BLOB_EQUAL predicate.
+ * Requires server version 7.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // as_blob_equals(uint8_t* bytes, uint32_t size, bool free)
+ * as_query_where(query, "bin1", as_blob_equals(bytes, size, true));
+ * ~~~~~~~~~~
+ *
+ * @relates as_query
+ */
+#define as_blob_equals(__val, __size, __free) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB, __val, __size, __free
+
+/**
  * Macro for setting setting the INTEGER_EQUAL predicate.
  *
  * ~~~~~~~~~~{.c}
@@ -124,6 +137,12 @@ typedef union as_predicate_value_u {
 		char* string;
 		bool _free;
 	} string_val;
+
+	struct {
+		uint8_t* bytes;
+		uint32_t bytes_size;
+		bool _free;
+	} blob_val;
 
 	struct {
 		int64_t min;

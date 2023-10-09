@@ -104,9 +104,22 @@ as_query_destroy(as_query* query)
 				cf_free(pred->ctx);
 			}
 
-			if ((pred->dtype == AS_INDEX_STRING || pred->dtype == AS_INDEX_GEO2DSPHERE) &&
-				 pred->value.string_val._free) {
-				cf_free(pred->value.string_val.string);
+			switch (pred->dtype) {
+				case AS_INDEX_GEO2DSPHERE:
+				case AS_INDEX_STRING:
+					if (pred->value.string_val._free) {
+						cf_free(pred->value.string_val.string);
+					}
+					break;
+
+				case AS_INDEX_BLOB:
+					if (pred->value.blob_val._free) {
+						cf_free(pred->value.blob_val.bytes);
+					}
+					break;
+
+				default:
+					break;
 			}
 		}
 		cf_free(query->where.entries);
@@ -227,19 +240,30 @@ as_query_where_internal(
 		p->ctx_size = 0;
 	}
 
-	switch(type) {
+	switch (type) {
 	case AS_PREDICATE_EQUAL:
-		if (dtype == AS_INDEX_STRING) {
-			p->value.string_val.string = va_arg(ap, char*);
-			p->value.string_val._free = false;
-		}
-		else if (dtype == AS_INDEX_NUMERIC) {
-			p->value.integer = va_arg(ap, int64_t);
-		}
-		else {
-			status = false;
+		switch (dtype) {
+			case AS_INDEX_STRING:
+				p->value.string_val.string = va_arg(ap, char*);
+				p->value.string_val._free = false;
+				break;
+
+			case AS_INDEX_NUMERIC:
+				p->value.integer = va_arg(ap, int64_t);
+				break;
+
+			case AS_INDEX_BLOB:
+				p->value.blob_val.bytes = va_arg(ap, uint8_t*);
+				p->value.blob_val.bytes_size = va_arg(ap, uint32_t);
+				p->value.blob_val._free = (bool)va_arg(ap, uint32_t);
+				break;
+
+			default:
+				status = false;
+				break;
 		}
 		break;
+
 	case AS_PREDICATE_RANGE:
 		if (dtype == AS_INDEX_NUMERIC) {
 			p->value.integer_range.min = va_arg(ap, int64_t);
@@ -335,13 +359,23 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 		as_pack_int64(&pk, pred->dtype);
 		as_pack_int64(&pk, pred->itype);
 
-		switch(pred->type) {
+		switch (pred->type) {
 			case AS_PREDICATE_EQUAL:
-				if (pred->dtype == AS_INDEX_STRING) {
-					as_pack_string(&pk, pred->value.string_val.string);
-				}
-				else if (pred->dtype == AS_INDEX_NUMERIC) {
-					as_pack_int64(&pk, pred->value.integer);
+				switch (pred->dtype) {
+					case AS_INDEX_STRING:
+						as_pack_string(&pk, pred->value.string_val.string);
+						break;
+
+					case AS_INDEX_NUMERIC:
+						as_pack_int64(&pk, pred->value.integer);
+						break;
+
+					case AS_INDEX_BLOB:
+						as_pack_bytes(&pk, pred->value.blob_val.bytes, pred->value.blob_val.bytes_size);
+						break;
+
+					default:
+						break;
 				}
 				break;
 
@@ -485,7 +519,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 
 	// Unpack where
 	as_predicate* pred = NULL;
-	bool free_pred_string = false;
+	bool free_pred_val = false;
 	bool b = false;
 
 	if (as_unpack_uint64(&pk, &uval) != 0) {
@@ -504,7 +538,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 			pred->ctx = NULL;
 			pred->ctx_size = 0;
 			pred->ctx_free = false;
-			free_pred_string = false;
+			free_pred_val = false;
 
 			if (! as_unpack_str_init(&pk, pred->bin, AS_BIN_NAME_MAX_SIZE)) {
 				goto HandleError;
@@ -559,19 +593,34 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 
 			pred->itype = (as_index_type)ival;
 
-			switch(pred->type) {
+			switch (pred->type) {
 				case AS_PREDICATE_EQUAL:
-					if (pred->dtype == AS_INDEX_STRING) {
-						if (! as_unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
-							goto HandlePredError;
-						}
-						pred->value.string_val._free = true;
-						free_pred_string = true;
-					}
-					else if (pred->dtype == AS_INDEX_NUMERIC) {
-						if (as_unpack_int64(&pk, &pred->value.integer) != 0) {
-							goto HandlePredError;
-						}
+					switch (pred->dtype) {
+						case AS_INDEX_STRING:
+							if (! as_unpack_str_new(&pk, &pred->value.string_val.string, 4096)) {
+								goto HandlePredError;
+							}
+							pred->value.string_val._free = true;
+							free_pred_val = true;
+							break;
+
+						case AS_INDEX_NUMERIC:
+							if (as_unpack_int64(&pk, &pred->value.integer) != 0) {
+								goto HandlePredError;
+							}
+							break;
+
+						case AS_INDEX_BLOB:
+							if (! as_unpack_bytes_new(&pk, &pred->value.blob_val.bytes,
+														   &pred->value.blob_val.bytes_size, 4096)) {
+								goto HandlePredError;
+							}
+							pred->value.blob_val._free = true;
+							free_pred_val = true;
+							break;
+
+						default:
+							break;
 					}
 					break;
 
@@ -590,7 +639,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 							goto HandlePredError;
 						}
 						pred->value.string_val._free = true;
-						free_pred_string = true;
+						free_pred_val = true;
 					}
 					break;
 
@@ -789,9 +838,23 @@ HandlePredError:
 		pred->ctx = NULL;
 	}
 
-	if (free_pred_string) {
-		cf_free(pred->value.string_val.string);
-		pred->value.string_val.string = NULL;
+	if (free_pred_val) {
+		switch (pred->dtype) {
+			case AS_INDEX_GEO2DSPHERE:
+			case AS_INDEX_STRING:
+				cf_free(pred->value.string_val.string);
+				pred->value.string_val.string = NULL;
+				break;
+
+			case AS_INDEX_BLOB:
+				cf_free(pred->value.blob_val.bytes);
+				pred->value.blob_val.bytes = NULL;
+				pred->value.blob_val.bytes_size = 0;
+				break;
+
+			default:
+				break;
+		}
 	}
 
 HandleError:
@@ -921,17 +984,34 @@ as_query_compare(as_query* q1, as_query* q2) {
 			as_cmp_error();
 		}
 
-		switch(p1->type) {
+		switch (p1->type) {
 			case AS_PREDICATE_EQUAL:
-				if (p1->dtype == AS_INDEX_STRING) {
-					if (strcmp(p1->value.string_val.string, p2->value.string_val.string) != 0) {
-						as_cmp_error();
-					}
-				}
-				else if (p1->dtype == AS_INDEX_NUMERIC) {
-					if (p1->value.integer != p2->value.integer) {
-						as_cmp_error();
-					}
+				switch (p1->dtype) {
+					case AS_INDEX_STRING:
+						if (strcmp(p1->value.string_val.string, p2->value.string_val.string) != 0) {
+							as_cmp_error();
+						}
+						break;
+
+					case AS_INDEX_NUMERIC:
+						if (p1->value.integer != p2->value.integer) {
+							as_cmp_error();
+						}
+						break;
+
+					case AS_INDEX_BLOB:
+						if (p1->value.blob_val.bytes_size != p2->value.blob_val.bytes_size) {
+							as_cmp_error();
+						}
+
+						if (memcmp(p1->value.blob_val.bytes, p2->value.blob_val.bytes,
+								   p1->value.blob_val.bytes_size) != 0) {
+							as_cmp_error();
+						}
+						break;
+
+					default:
+						break;
 				}
 				break;
 

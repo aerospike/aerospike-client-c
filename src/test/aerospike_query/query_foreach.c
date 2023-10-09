@@ -1702,6 +1702,7 @@ TEST(query_list_ctx_is_string, "IN LIST count(*) where x[0] is 'x'")
 	assert_int_eq(err.code, AEROSPIKE_OK);
 	assert_int_eq(count, 34);
 
+	as_cdt_ctx_destroy(&ctx);
 	as_query_destroy(&q);
 }
 
@@ -1734,6 +1735,7 @@ TEST(query_map_ctx_is_string, "IN LIST count(*) where y['ykey'] is 'yvalue'")
 	assert_int_eq(err.code, AEROSPIKE_OK);
 	assert_int_eq(count, 15);
 
+	as_cdt_ctx_destroy(&ctx);
 	as_query_destroy(&q);
 }
 

@@ -55,7 +55,7 @@ extern "C" {
  *
  * @relates as_query
  */
-#define as_blob_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB, __val
+#define as_blob_equals(__val, __size, __free) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB, __val, __size, __free
 
 /**
  * Macro for setting setting the INTEGER_EQUAL predicate.

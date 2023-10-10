@@ -256,7 +256,7 @@ version:
 build:  libaerospike
 
 .PHONY: prepare
-prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS))
+prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS)) | $(TARGET_INCL)/aerospike
 	$(noop)
 
 .PHONY: prepare-clean

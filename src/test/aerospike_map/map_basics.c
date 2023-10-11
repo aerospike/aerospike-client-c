@@ -2510,7 +2510,7 @@ TEST(map_create, "Map create")
 	as_operations ops;
 	as_operations_inita(&ops, 3);
 
-	as_operations_map_create(&ops, BIN_NAME, &ctx, AS_MAP_KEY_ORDERED);
+	as_operations_map_create_all(&ops, BIN_NAME, &ctx, AS_MAP_KEY_ORDERED, true);
 	as_string k31;
 	as_string_init(&k31, "key31", false);
 	as_integer v31;

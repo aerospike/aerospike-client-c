@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -130,6 +130,19 @@ as_map_policy_set_flags(as_map_policy* policy, as_map_order order, uint32_t flag
 	policy->items_command = PUT_ITEMS;
 }
 
+void
+as_map_policy_set_all(as_map_policy* policy, as_map_order order, uint32_t flags, bool persist_index)
+{
+	policy->attributes = order;
+
+	if (persist_index) {
+		policy->attributes |= 0x10;
+	}
+	policy->flags = flags;
+	policy->item_command = PUT;
+	policy->items_command = PUT_ITEMS;
+}
+
 bool
 as_operations_map_create(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_order order
@@ -152,13 +165,42 @@ as_operations_map_create(
 }
 
 bool
+as_operations_map_create_all(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_order order, bool persist_index
+	)
+{
+	// If context not defined, the set order for top-level bin list.
+	if (! ctx) {
+		as_map_policy policy;
+		as_map_policy_set_all(&policy, order, AS_MAP_UPDATE, persist_index);
+		return as_operations_map_set_policy(ops, name, NULL, &policy);
+	}
+
+	uint32_t flag = as_map_order_to_flag(order);
+
+	// Create nested map. persist_index does not apply here, so ignore it.
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header_flag(&pk, ctx, SET_TYPE, 1, flag);
+	as_pack_uint64(&pk, (uint64_t)order);
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
+}
+
+bool
 as_operations_map_set_policy(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_policy* policy
 	)
 {
+	uint64_t attr = policy->attributes;
+
+	// Remove persist_index flag for nested maps.
+	if (ctx && (attr & 0x10) != 0) {
+		attr &= ~0x10;
+	}
+
 	as_packer pk = as_cdt_begin();
 	as_cdt_pack_header(&pk, ctx, SET_TYPE, 1);
-	as_pack_uint64(&pk, policy->attributes);
+	as_pack_uint64(&pk, attr);
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_MAP_MODIFY);
 }

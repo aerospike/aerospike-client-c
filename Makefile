@@ -8,13 +8,13 @@ COMMON := $(abspath modules/common)
 LUAMOD := $(abspath modules/lua)
 MOD_LUA	:= $(abspath modules/mod-lua)
 MODULES	:= COMMON
-MODULES += LUAMOD
 MODULES += MOD_LUA
 
 # Override optimizations via: make O=n
 O = 3
 
 # Make-local Compiler Flags
+EXT_CFLAGS =
 CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O$(O)
 CC_FLAGS += -fno-common -fno-strict-aliasing 
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
@@ -28,6 +28,7 @@ ifeq ($(ARCH),aarch64)
 endif
 
 CC_CFLAGS += $(REAL_ARCH)
+EVENT_LIB =
 
 ifeq ($(EVENT_LIB),libev)
   CC_FLAGS += -DAS_USE_LIBEV
@@ -159,12 +160,11 @@ OBJECTS :=
 OBJECTS += $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%)
 
 DEPS :=
-DEPS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
-DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
-DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
+DEPS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o)
+DEPS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o)
+DEPS += $(wildcard $(MOD_LUA)/$(TARGET_OBJ)/*.o)
 
-LUA_DYNAMIC_OBJ = $(filter-out $(LUAMOD)/lua.o, $(shell ls $(LUAMOD)/*.o))
-LUA_STATIC_OBJ = $(LUA_DYNAMIC_OBJ)
+LUA_OBJECTS = $(filter-out $(LUAMOD)/lua.o, $(shell ls $(LUAMOD)/*.o))
 
 ###############################################################################
 ##  HEADERS                                                                  ##
@@ -181,8 +181,9 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 
 EXCLUDE-HEADERS = 
 
-HEADERS := 
-HEADERS += $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
+AEROSPIKE_HEADERS := $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
+
+HEADERS := $(AEROSPIKE_HEADERS)
 HEADERS += $(COMMON-HEADERS)
 
 ###############################################################################
@@ -204,8 +205,7 @@ version:
 build:  libaerospike
 
 .PHONY: prepare
-prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS))
-	$(noop)
+prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(AEROSPIKE_HEADERS))
 
 .PHONY: prepare-clean
 prepare-clean: 
@@ -246,17 +246,14 @@ tags etags:
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_OBJ)/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h | modules
+$(TARGET_OBJ)/aerospike/%.o: $(SOURCE_MAIN)/aerospike/%.c
 	$(object)
 
-$(TARGET_OBJ)/aerospike/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/aerospike/%.c $(SOURCE_INCL)/citrusleaf/*.h $(SOURCE_INCL)/aerospike/*.h | modules
-	$(object)
+$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(DEPS) | modules
+	$(library) $(DEPS) $(LUA_OBJECTS)
 
-$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) | modules
-	$(library) $(DEPS) $(LUA_DYNAMIC_OBJ)
-
-$(TARGET_LIB)/libaerospike.a: $(OBJECTS) | modules
-	$(archive) $(DEPS) $(LUA_STATIC_OBJ)
+$(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(DEPS) | modules
+	$(archive) $(DEPS) $(LUA_OBJECTS)
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)
 	mkdir $@

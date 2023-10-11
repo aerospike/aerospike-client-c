@@ -18,8 +18,7 @@ PROJECT = project
 MODULES = modules
 SOURCE  = src
 TARGET  = target
-
-MODULES = 
+LIBRARIES =
 
 ###############################################################################
 ##  BUILD TOOLS                                                              ##
@@ -119,7 +118,6 @@ define executable
 	@if [ ! -d `dirname $@` ]; then mkdir -p `dirname $@`; fi
 	$(strip $(CC) \
 		$(addprefix -I, $(INC_PATH)) \
-		$(addprefix -L, $(SUBMODULES:%=%/$(TARGET_LIB))) \
 		$(addprefix -L, $(LIB_PATH)) \
 		$(addprefix -l, $(LIBRARIES)) \
 		$(CC_FLAGS) \
@@ -145,7 +143,6 @@ define library
 	@if [ ! -d `dirname $@` ]; then mkdir -p `dirname $@`; fi
 	$(strip $(CC) $(DYNAMIC_FLAG) \
 		$(addprefix -I, $(INC_PATH)) \
-		$(addprefix -L, $(SUBMODULES:%=%/$(TARGET_LIB))) \
 		$(addprefix -L, $(LIB_PATH)) \
 		$(addprefix -l, $(LIBRARIES)) \
 		-o $@ \
@@ -158,7 +155,6 @@ define object
 	@if [ ! -d `dirname $@` ]; then mkdir -p `dirname $@`; fi
 	$(strip $(CC) \
 		$(addprefix -I, $(INC_PATH)) \
-		$(addprefix -L, $(SUBMODULES:%=%/$(TARGET_LIB))) \
 		$(addprefix -L, $(LIB_PATH)) \
 		$(CC_FLAGS) \
 		$(CFLAGS) \

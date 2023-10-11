@@ -37,10 +37,10 @@ $(COMMON)/$(TARGET_LIB)/libaerospike-common.a:
 
 .PHONY: COMMON-prepare
 COMMON-prepare: $(COMMON-TARGET)
-	$(noop)
+	$(MAKE) -e -C $(COMMON) prepare
 
 $(TARGET_INCL)/%.h: $(COMMON)/$(SOURCE_INCL)/%.h
-	@mkdir -p $(@D)
+	mkdir -p $(@D)
 	cp $< $@
 
 ###############################################################################
@@ -79,43 +79,4 @@ $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a:
 	$(MAKE) -e -C $(MOD_LUA) COMMON=$(COMMON) LUAMOD=$(LUAMOD) EXT_CFLAGS=-DAS_MOD_LUA_CLIENT
 
 .PHONY: MOD_LUA-prepare
-	@$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON) LUAMOD=$(LUAMOD)
-
-###############################################################################
-##  LUA MODULE                                                               ##
-###############################################################################
-
-ifndef LUAMOD
-  $(warning ***************************************************************)
-  $(warning *)
-  $(warning *  LUAMOD is not defined. )
-  $(warning *  LUAMOD should be set to a valid path. )
-  $(warning *)
-  $(warning ***************************************************************)
-  $(error )
-endif
-
-ifeq ($(wildcard $(LUAMOD)/makefile),)
-  $(warning ***************************************************************)
-  $(warning *)
-  $(warning *  LUAMOD is '$(LUAMOD)')
-  $(warning *  LUAMOD doesn't contain 'makefile'. )
-  $(warning *  LUAMOD should be set to a valid path. )
-  $(warning *)
-  $(warning ***************************************************************)
-  $(error )
-endif
-
-.PHONY: LUAMOD-build
-LUAMOD-build: $(LUAMOD)/liblua.a
-
-$(LUAMOD)/liblua.a:
-	$(MAKE) -C $(LUAMOD) CFLAGS="-Wall -O2 -std=c99 -D$(LUA_PLATFORM) -fPIC -fno-stack-protector -fno-common $(REAL_ARCH) -g" a
-
-.PHONY: LUAMOD-clean
-LUAMOD-clean:
-	$(MAKE) -e -C $(LUAMOD) clean
-
-.PHONY: LUAMOD-prepare
-LUAMOD-prepare: ;
-
+	$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON) LUAMOD=$(LUAMOD)

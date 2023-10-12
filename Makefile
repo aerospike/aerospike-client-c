@@ -91,8 +91,8 @@ ifdef DEBUG
 endif
 
 # Include Paths
-INC_PATH += $(COMMON)/$(TARGET_INCL)
-INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
+INC_PATH += $(COMMON)/$(SOURCE_INCL)
+INC_PATH += $(MOD_LUA)/$(SOURCE_INCL)
 INC_PATH += $(LUAMOD)
 
 ###############################################################################
@@ -257,8 +257,8 @@ $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(EXP_DEPS) | modules
 $(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(EXP_DEPS) | modules
 	$(archive) $(DEPS) $(LUA_OBJECTS)
 
-$(TARGET_INCL)/aerospike: | $(TARGET_INCL)
-	mkdir $@
+$(TARGET_INCL)/aerospike:
+	mkdir -p $@
 
 $(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
 	cp -p $^ $@

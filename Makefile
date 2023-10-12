@@ -77,7 +77,7 @@ else
 endif
 
 # Linker flags
-LD_FLAGS = $(LDFLAGS) 
+LD_FLAGS = $(LDFLAGS)
 
 ifeq ($(OS),Darwin)
   LD_FLAGS += -undefined dynamic_lookup
@@ -257,10 +257,8 @@ $(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(EXP_DEPS) | modules
 $(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(EXP_DEPS) | modules
 	$(archive) $(DEPS) $(LUA_OBJECTS)
 
-$(TARGET_INCL)/aerospike:
-	mkdir -p $@
-
-$(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
+$(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h
+	@mkdir -p $(@D)
 	cp -p $^ $@
 
 ###############################################################################

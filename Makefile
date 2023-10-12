@@ -159,10 +159,12 @@ AEROSPIKE += version.o
 OBJECTS := 
 OBJECTS += $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%)
 
-DEPS :=
-DEPS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o)
-DEPS += $(wildcard $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o)
-DEPS += $(wildcard $(MOD_LUA)/$(TARGET_OBJ)/*.o)
+DEPS =
+DEPS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
+DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
+DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
+
+EXP_DEPS := $(foreach DD, $(DEPS), $(wildcard $(DEP)))
 
 LUA_OBJECTS = $(filter-out $(LUAMOD)/lua.o, $(shell ls $(LUAMOD)/*.o))
 
@@ -181,9 +183,9 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 
 EXCLUDE-HEADERS = 
 
-AEROSPIKE_HEADERS := $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
+AEROSPIKE-HEADERS := $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
 
-HEADERS := $(AEROSPIKE_HEADERS)
+HEADERS := $(AEROSPIKE-HEADERS)
 HEADERS += $(COMMON-HEADERS)
 
 ###############################################################################
@@ -205,7 +207,7 @@ version:
 build:  libaerospike
 
 .PHONY: prepare
-prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(AEROSPIKE_HEADERS))
+prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(AEROSPIKE-HEADERS))
 
 .PHONY: prepare-clean
 prepare-clean: 
@@ -249,10 +251,10 @@ tags etags:
 $(TARGET_OBJ)/aerospike/%.o: $(SOURCE_MAIN)/aerospike/%.c
 	$(object)
 
-$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(DEPS) | modules
+$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(EXP_DEPS) | modules
 	$(library) $(DEPS) $(LUA_OBJECTS)
 
-$(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(DEPS) | modules
+$(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(EXP_DEPS) | modules
 	$(archive) $(DEPS) $(LUA_OBJECTS)
 
 $(TARGET_INCL)/aerospike: | $(TARGET_INCL)

@@ -7,18 +7,7 @@ on:
     branches: [master, stage]
 
 jobs:
-  package:
-    runs-on: ubuntu-latest
-    env:
-      LD_LIBRARY_PATH: /usr/local/lib
-    steps:
-    - name: Checkout client
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - run: make package
-  build-and-test-libev:
+  build:
     runs-on: ubuntu-latest
     env:
       LD_LIBRARY_PATH: /usr/local/lib
@@ -33,34 +22,11 @@ jobs:
     - run: ./install_libev
     - run: make EVENT_LIB=libev
     - run: make EVENT_LIB=libev test
-  build-and-test-libuv:
-    runs-on: ubuntu-latest
-    env:
-      LD_LIBRARY_PATH: /usr/local/lib
-    steps:
-    - name: Checkout client
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Setup Aerospike Database
-      uses: reugn/github-action-aerospike@v1
+    - run: make clean
     - run: ./install_libuv
     - run: make EVENT_LIB=libuv
     - run: make EVENT_LIB=libuv test
-  build-and-test-libevent:
-    runs-on: ubuntu-latest
-    env:
-      LD_LIBRARY_PATH: /usr/local/lib
-    steps:
-    - name: Checkout client
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Setup Aerospike Database
-      uses: reugn/github-action-aerospike@v1
+    - run: make clean
     - run: ./install_libevent
     - run: make EVENT_LIB=libevent
     - run: make EVENT_LIB=libevent test
-      

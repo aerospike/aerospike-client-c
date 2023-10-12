@@ -40,7 +40,7 @@ COMMON-prepare: $(COMMON-TARGET)
 	$(MAKE) -e -C $(COMMON) prepare
 
 $(TARGET_INCL)/%.h: $(COMMON)/$(SOURCE_INCL)/%.h
-	mkdir -p $(@D)
+	@mkdir -p $(@D)
 	cp $< $@
 
 ###############################################################################

@@ -4,46 +4,31 @@
 include project/settings.mk
 
 # Modules
-COMMON := modules/common
-LUAMOD := modules/lua
-LUAJIT := modules/luajit
-MOD_LUA	:= modules/mod-lua
-MODULES	:= COMMON MOD_LUA
-
-# Use the Lua submodule?  [By default, yes.]
-USE_LUAMOD = 1
-
-# Use LuaJIT instead of Lua?  [By default, no.]
-USE_LUAJIT = 0
-
-# Permit easy overriding of the default.
-ifeq ($(USE_LUAJIT),1)
-  USE_LUAMOD = 0
-endif
-
-ifeq ($(and $(USE_LUAMOD:0=),$(USE_LUAJIT:0=)),1)
-  $(error Only at most one of USE_LUAMOD or USE_LUAJIT may be enabled (i.e., set to 1.))
-else
-  ifeq ($(USE_LUAMOD),1)
-    MODULES += LUAMOD
-  else
-    ifeq ($(USE_LUAJIT),1)
-      MODULES += LUAJIT
-    endif
-  endif
-endif
+COMMON := $(abspath modules/common)
+LUAMOD := $(abspath modules/lua)
+MOD_LUA	:= $(abspath modules/mod-lua)
+MODULES	:= COMMON
+MODULES += MOD_LUA
 
 # Override optimizations via: make O=n
 O = 3
 
 # Make-local Compiler Flags
+EXT_CFLAGS =
 CC_FLAGS = -std=gnu99 -g -Wall -fPIC -O$(O)
 CC_FLAGS += -fno-common -fno-strict-aliasing 
 CC_FLAGS += -D_FILE_OFFSET_BITS=64 -D_REENTRANT -D_GNU_SOURCE $(EXT_CFLAGS)
 
 ifeq ($(ARCH),x86_64)
-  CC_FLAGS += -march=nocona
+  REAL_ARCH = -march=nocona
 endif
+
+ifeq ($(ARCH),aarch64)
+  REAL_ARCH = -mcpu=neoverse-n1
+endif
+
+CC_CFLAGS += $(REAL_ARCH)
+EVENT_LIB =
 
 ifeq ($(EVENT_LIB),libev)
   CC_FLAGS += -DAS_USE_LIBEV
@@ -59,12 +44,13 @@ endif
 
 ifeq ($(OS),Darwin)
   CC_FLAGS += -D_DARWIN_UNLIMITED_SELECT -I/usr/local/include
+  LUA_PLATFORM = LUA_USE_MACOSX
 
   ifneq ($(wildcard /opt/homebrew/include),)
     # Mac new homebrew external include path
     CC_FLAGS += -I/opt/homebrew/include
   else ifneq ($(wildcard /usr/local/opt/libevent/include),)
-  	# Mac old homebrew libevent include path
+    # Mac old homebrew libevent include path
     CC_FLAGS += -I/usr/local/opt/libevent/include
   endif
 
@@ -78,14 +64,12 @@ ifeq ($(OS),Darwin)
     # macports openssl include path
     CC_FLAGS += -I/opt/local/include
   endif
-
-  LUA_PLATFORM = macosx
 else ifeq ($(OS),FreeBSD)
   CC_FLAGS += -finline-functions -I/usr/local/include
-  LUA_PLATFORM = freebsd
+  LUA_PLATFORM = LUA_USE_LINUX # nothing BSD specific in luaconf.h
 else
   CC_FLAGS += -finline-functions -rdynamic
-  LUA_PLATFORM = linux
+  LUA_PLATFORM = LUA_USE_LINUX
 
   ifneq ($(wildcard /etc/alpine-release),)
     CC_FLAGS += -DAS_ALPINE
@@ -93,7 +77,7 @@ else
 endif
 
 # Linker flags
-LD_FLAGS = $(LDFLAGS) 
+LD_FLAGS = $(LDFLAGS)
 
 ifeq ($(OS),Darwin)
   LD_FLAGS += -undefined dynamic_lookup
@@ -107,37 +91,9 @@ ifdef DEBUG
 endif
 
 # Include Paths
-INC_PATH += $(COMMON)/$(TARGET_INCL)
-INC_PATH += $(MOD_LUA)/$(TARGET_INCL)
-
-# Library Paths
-# LIB_PATH +=
-
-ifeq ($(USE_LUAMOD),1)
-  INC_PATH += $(LUAMOD)/src
-else
-  ifeq ($(USE_LUAJIT),1)
-    INC_PATH += $(LUAJIT)/src
-  else
-    # Find where the Lua development package is installed in the build environment.
-    INC_PATH += $(or \
-      $(wildcard /usr/include/lua-5.1), \
-      $(wildcard /usr/include/lua5.1))
-    INCLUDE_LUA_5_1 = /usr/include/lua5.1
-    ifneq ($(wildcard $(INCLUDE_LUA_5_1)),)
-      LUA_SUFFIX=5.1
-    endif
-    ifeq ($(OS),Darwin)
-      ifneq ($(wildcard /usr/local/include),)
-        INC_PATH += /usr/local/include
-      endif
-      ifneq ($(wildcard /usr/local/lib),)
-        LIB_LUA = -L/usr/local/lib
-      endif
-    endif
-    LIB_LUA += -llua$(LUA_SUFFIX)
-  endif
-endif
+INC_PATH += $(COMMON)/$(SOURCE_INCL)
+INC_PATH += $(MOD_LUA)/$(SOURCE_INCL)
+INC_PATH += $(LUAMOD)
 
 ###############################################################################
 ##  OBJECTS                                                                  ##
@@ -203,20 +159,14 @@ AEROSPIKE += version.o
 OBJECTS := 
 OBJECTS += $(AEROSPIKE:%=$(TARGET_OBJ)/aerospike/%)
 
-DEPS :=
+DEPS =
 DEPS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
 DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
 DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
 
-ifeq ($(USE_LUAMOD),1)
-  LUA_DYNAMIC_OBJ = $(filter-out $(LUAMOD)/src/lua.o $(LUAMOD)/src/luac.o, $(shell ls $(LUAMOD)/src/*.o))
-  LUA_STATIC_OBJ  = $(LUA_DYNAMIC_OBJ)
-else
-  ifeq ($(USE_LUAJIT),1)
-    LUA_DYNAMIC_OBJ = $(shell ls $(LUAJIT)/src/*_dyn.o)
-    LUA_STATIC_OBJ  = $(filter-out $(LUA_DYNAMIC_OBJ) $(LUAJIT)/src/luajit.o, $(shell ls $(LUAJIT)/src/*.o))
-  endif
-endif
+EXP_DEPS := $(foreach DD, $(DEPS), $(wildcard $(DEP)))
+
+LUA_OBJECTS = $(filter-out $(LUAMOD)/lua.o, $(shell ls $(LUAMOD)/*.o))
 
 ###############################################################################
 ##  HEADERS                                                                  ##
@@ -233,8 +183,9 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 
 EXCLUDE-HEADERS = 
 
-HEADERS := 
-HEADERS += $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
+AEROSPIKE-HEADERS := $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
+
+HEADERS := $(AEROSPIKE-HEADERS)
 HEADERS += $(COMMON-HEADERS)
 
 ###############################################################################
@@ -256,8 +207,7 @@ version:
 build:  libaerospike
 
 .PHONY: prepare
-prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(HEADERS))
-	$(noop)
+prepare: modules-prepare $(subst $(SOURCE_INCL),$(TARGET_INCL),$(AEROSPIKE-HEADERS))
 
 .PHONY: prepare-clean
 prepare-clean: 
@@ -298,23 +248,18 @@ tags etags:
 ##  BUILD TARGETS                                                            ##
 ###############################################################################
 
-$(TARGET_OBJ)/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/%.c $(SOURCE_INCL)/citrusleaf/*.h | modules
+$(TARGET_OBJ)/aerospike/%.o: $(SOURCE_MAIN)/aerospike/%.c
 	$(object)
 
-$(TARGET_OBJ)/aerospike/%.o: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a $(SOURCE_MAIN)/aerospike/%.c $(SOURCE_INCL)/citrusleaf/*.h $(SOURCE_INCL)/aerospike/*.h | modules
-	$(object)
+$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(EXP_DEPS) | modules
+	$(library) $(DEPS) $(LUA_OBJECTS)
 
-$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) | modules
-	$(library) $(DEPS) $(LUA_DYNAMIC_OBJ)
+$(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(EXP_DEPS) | modules
+	$(archive) $(DEPS) $(LUA_OBJECTS)
 
-$(TARGET_LIB)/libaerospike.a: $(OBJECTS) | modules
-	$(archive) $(DEPS) $(LUA_STATIC_OBJ)
-
-$(TARGET_INCL)/aerospike: | $(TARGET_INCL)
-	mkdir $@
-
-$(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h | $(TARGET_INCL)/aerospike
-	cp -p $^ $@
+$(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h
+	@mkdir -p $(@D)
+	cp -p $< $@
 
 ###############################################################################
 include project/modules.mk project/test.mk project/rules.mk

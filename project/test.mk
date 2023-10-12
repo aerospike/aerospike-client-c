@@ -40,7 +40,7 @@ ifeq ($(OS),Darwin)
   else
     # Mac old homebrew external lib path
     TEST_LDFLAGS += -L/usr/local/lib
-  
+
     ifeq ($(EVENT_LIB),libevent)
       TEST_LDFLAGS += -L/usr/local/opt/libevent/lib
     endif
@@ -53,11 +53,7 @@ ifeq ($(OS),Darwin)
     # Mac old homebrew openssl lib path
     TEST_LDFLAGS += -L/usr/local/opt/openssl/lib
   endif
-  
-  ifeq ($(USE_LUAJIT),1)
-    TEST_LDFLAGS += -pagezero_size 10000 -image_base 100000000
-  endif
-  
+
   LINK_SUFFIX =
 else ifeq ($(OS),FreeBSD)
   TEST_LDFLAGS += -L/usr/local/lib
@@ -79,7 +75,7 @@ ifeq ($(EVENT_LIB),libevent)
   TEST_LDFLAGS += -levent_core -levent_pthreads
 endif
 
-TEST_LDFLAGS += -lssl -lcrypto $(LIB_LUA) -lpthread -lm -lz $(LINK_SUFFIX)
+TEST_LDFLAGS += -lssl -lcrypto -lpthread -lm -lz $(LINK_SUFFIX)
 
 AS_HOST := 127.0.0.1
 AS_PORT := 3000

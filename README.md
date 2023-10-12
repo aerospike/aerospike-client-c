@@ -14,15 +14,11 @@ are also included.
 	[Also do on Ubuntu:]
 	$ sudo apt-get install ncurses-dev
 
-	[Optional:]
-	$ sudo apt-get install liblua5.1-dev
-
 ### Red Hat Enterprise Linux, CentOS and Amazon Linux
 
 	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
 
 	[Optional:]
-	$ sudo yum install lua-devel
 	$ sudo yum install gcc-c++ graphviz rpm-build 
 
 ### Fedora
@@ -30,7 +26,6 @@ are also included.
 	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
 
 	[Optional:]
-	$ sudo yum install compat-lua-devel-5.1.5
 	$ sudo yum install gcc-c++ graphviz rpm-build 
 
 ### MacOS
@@ -153,31 +148,6 @@ or with valgrind:
 To install header files and library on the current machine:
 
 	$ sudo make install
-
-## Lua
-
-The C client requires [Lua](http://www.lua.org) 5.1 support for the
-client-side portion of User Defined Function (UDF) query aggregation.
-By default, the C client builds with Lua support provided by the
-included `lua` submodule.
-
-Optionally, Lua support may be provided by either the included `luajit`
-submodule or by the build environment.
-
-To enable [LuaJIT](http://luajit.org) 2.0.3, the build must be performed
-with the `USE_LUAJIT=1` option passed on all relevant `make` command
-lines (i.e., the C client itself and API examples). 
-[Note that on some platforms, [Valgrind](http://www.valgrind.org)
-may not function out-of-the-box on applications built with the C client
-when LuaJIT is enabled without using an unreleased version of LuaJIT
-built with additional options.]
-
-To use Lua provided by the development environment, either the `lua5.1`
-development package may be installed (on platforms that have it), or
-else Lua 5.1.5 may be built from the source release and installed into
-the standard location (usually `/usr/local/`.) In either of these two
-cases, the build must be performed with the option `USE_LUAMOD=0` passed
-on all relevant `make` command lines.
 
 ## Package
 

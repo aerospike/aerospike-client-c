@@ -165,7 +165,7 @@ query_foreach_create(void)
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "blob", "idx_blob_test", AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB);
 	index_process_return_code(status, &err, &task);
 
-	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "blob", "idx_list_blob_test", AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB);
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "blob", "idx_list_blob_test", AS_INDEX_TYPE_LIST, AS_INDEX_BLOB);
 	index_process_return_code(status, &err, &task);
 
 	char* buffer = alloca(n_recs * 1024 + 1);

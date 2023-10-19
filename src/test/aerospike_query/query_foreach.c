@@ -165,6 +165,9 @@ query_foreach_create(void)
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "blob", "idx_blob_test", AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB);
 	index_process_return_code(status, &err, &task);
 
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "blob_list", "idx_list_blob_test", AS_INDEX_TYPE_LIST, AS_INDEX_BLOB);
+	index_process_return_code(status, &err, &task);
+
 	char* buffer = alloca(n_recs * 1024 + 1);
 	uint32_t the_ttl = AS_RECORD_NO_EXPIRE_TTL;
 	
@@ -247,6 +250,13 @@ query_foreach_create(void)
 		uint8_t* blob_ptr = blob;
 		*(uint32_t*)blob_ptr = 50000 + i;
 
+		// Make list of blobs
+		as_arraylist list3;
+		as_arraylist_init(&list3, 1, 0);
+		as_bytes bytes;
+		as_bytes_init_wrap(&bytes, blob_ptr, 4, false);
+		as_arraylist_append_bytes(&list3, &bytes);
+
 		// We only create the g bin for odd records.
 		bool create_g_bin = i % 2 == 1;
 		
@@ -264,6 +274,7 @@ query_foreach_create(void)
 		as_record_set_list(&r, "x", (as_list *) &list);
 		as_record_set_map(&r, "y", (as_map *) &map);
 		as_record_set_list(&r, "z", (as_list *) &list2);
+		as_record_set_list(&r, "blob_list", (as_list *) &list3);
 		as_record_set_str(&r, "bigstr", buffer);
 		as_record_set_rawp(&r, "blob", blob_ptr, sizeof(uint32_t), false);
 
@@ -365,6 +376,11 @@ query_foreach_destroy(void)
 	}
 
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_blob_test");
+	if (err.code != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_list_blob_test");
 	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
@@ -1766,6 +1782,33 @@ TEST(query_blob_index, "query blob index")
 	as_query_destroy(&q);
 }
 
+TEST(query_blob_list_index, "query blob list index")
+{
+	as_error err;
+	as_error_reset(&err);
+
+	uint32_t count = 0;
+
+	uint8_t blob[4];
+	*((uint32_t*)blob) = 50003;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "blob_list");
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "blob_list", as_blob_contains(LIST, &blob, 4, false));
+	
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+
+	assert_int_eq(err.code, 0);
+	assert_int_eq(count, 1);
+
+	as_query_destroy(&q);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1851,4 +1894,5 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_list_ctx_is_string);
 	suite_add(query_map_ctx_is_string);
 	suite_add(query_blob_index);
+	suite_add(query_blob_list_index);
 }

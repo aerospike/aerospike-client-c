@@ -34,18 +34,19 @@ extern "C" {
  *****************************************************************************/
 
 /**
- * Macro for setting setting the STRING_EQUAL predicate.
+ * Filter on string bins.
  *
  * ~~~~~~~~~~{.c}
  * as_query_where(query, "bin1", as_string_equals("abc"));
  * ~~~~~~~~~~
  *
  * @relates as_query
+ * @ingroup query_object
  */
 #define as_string_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING, __val
 
 /**
- * Macro for setting setting the BLOB_EQUAL predicate.
+ * Filter on blob bins.
  * Requires server version 7.0+.
  *
  * ~~~~~~~~~~{.c}
@@ -54,22 +55,24 @@ extern "C" {
  * ~~~~~~~~~~
  *
  * @relates as_query
+ * @ingroup query_object
  */
 #define as_blob_equals(__val, __size, __free) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB, __val, __size, __free
 
 /**
- * Macro for setting setting the INTEGER_EQUAL predicate.
+ * Filter on integer bins.
  *
  * ~~~~~~~~~~{.c}
  * as_query_where(query, "bin1", as_integer_equals(123));
  * ~~~~~~~~~~
  *
  * @relates as_query
+ * @ingroup query_object
  */
 #define as_integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, (int64_t)__val
 
 /**
- * Macro for setting setting the INTEGER_RANGE predicate.
+ * Ranger filter on integer bins.
  *
  * ~~~~~~~~~~{.c}
  * as_query_where(query, "bin1", as_integer_range(1,100));
@@ -81,7 +84,7 @@ extern "C" {
 #define as_integer_range(__min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, (int64_t)__min, (int64_t)__max
 
 /**
- * Macro for setting setting the RANGE predicate.
+ * Range filter on list/map elements.
  *
  * ~~~~~~~~~~{.c}
  * as_query_where(query, "bin1", as_range(LIST,NUMERIC,1,100));
@@ -93,7 +96,7 @@ extern "C" {
 #define as_range(indextype, datatype, __min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, __min, __max
 
 /**
- * Macro for setting setting the CONTAINS predicate.
+ * Contains filter on list/map elements.
  *
  * ~~~~~~~~~~{.c}
  * as_query_where(query, "bin1", as_contains(LIST,STRING,"val"));
@@ -105,7 +108,21 @@ extern "C" {
 #define as_contains(indextype, datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, __val
 
 /**
- * Macro for setting setting the EQUALS predicate.
+ * Contains blob filter on list/map elements.
+ * Requires server version 7.0+.
+ *
+ * ~~~~~~~~~~{.c}
+ * // as_blob_contains(type, uint8_t* bytes, uint32_t size, bool free)
+ * as_query_where(query, "bin1", as_blob_equals(LIST, bytes, size, true));
+ * ~~~~~~~~~~
+ *
+ * @relates as_query
+ * @ingroup query_object
+ */
+#define as_blob_contains(indextype, __val, __size, __free) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_ ##indextype, AS_INDEX_BLOB, __val, __size, __free
+
+/**
+ * Filter specified type on bins.
  *
  * ~~~~~~~~~~{.c}
  * as_query_where(query, "bin1", as_equals(NUMERIC,5));
@@ -116,8 +133,28 @@ extern "C" {
  */
 #define as_equals(datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_ ##datatype, __val
 
+/**
+ * Within filter on GEO bins.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_query_where(query, "bin1", as_geo_within(region));
+ * ~~~~~~~~~~
+ * 
+ * @relates as_query
+ * @ingroup query_object
+ */
 #define as_geo_within(__val) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_GEO2DSPHERE, __val
 
+/**
+ * Contains filter on GEO bins.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_query_where(query, "bin1", as_geo_contains(region));
+ * ~~~~~~~~~~
+ * 
+ * @relates as_query
+ * @ingroup query_object
+ */
 #define as_geo_contains(__val) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_GEO2DSPHERE, __val
 
 

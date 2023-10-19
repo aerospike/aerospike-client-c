@@ -165,7 +165,7 @@ query_foreach_create(void)
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "blob", "idx_blob_test", AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB);
 	index_process_return_code(status, &err, &task);
 
-	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "blob", "idx_list_blob_test", AS_INDEX_TYPE_LIST, AS_INDEX_BLOB);
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "blob_list", "idx_list_blob_test", AS_INDEX_TYPE_LIST, AS_INDEX_BLOB);
 	index_process_return_code(status, &err, &task);
 
 	char* buffer = alloca(n_recs * 1024 + 1);
@@ -239,14 +239,6 @@ query_foreach_create(void)
 		as_arraylist_append_int64(&list2, i+3);
 		as_arraylist_append_int64(&list2, i+4);
 
-		// Make list of blobs
-		as_arraylist list3;
-		as_arraylist_init(&list3, 1, 0);
-		as_bytes *bytes = as_bytes_new(1);
-		// Set blob value to be the index
-		as_bytes_set_int64(bytes, 0, i);
-		as_arraylist_append_bytes(&list3, bytes);
-
 		// Make a string of variable size
 		for (int jj = 0; jj < i * 1024; ++jj) {
 			buffer[jj] = 'X';
@@ -257,6 +249,13 @@ query_foreach_create(void)
 		uint8_t blob[4];
 		uint8_t* blob_ptr = blob;
 		*(uint32_t*)blob_ptr = 50000 + i;
+
+		// Make list of blobs
+		as_arraylist list3;
+		as_arraylist_init(&list3, 1, 0);
+		as_bytes bytes;
+		as_bytes_init_wrap(&bytes, blob_ptr, 4, false);
+		as_arraylist_append_bytes(&list3, &bytes);
 
 		// We only create the g bin for odd records.
 		bool create_g_bin = i % 2 == 1;
@@ -1790,13 +1789,17 @@ TEST(query_blob_list_index, "query blob list index")
 
 	uint32_t count = 0;
 
-	uint8_t blob = 1;
+	uint8_t blob[4];
+	*((uint32_t*)blob) = 50003;
 
 	as_query q;
 	as_query_init(&q, NAMESPACE, SET);
 
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "blob_list");
+
 	as_query_where_inita(&q, 1);
-	as_query_where(&q, "blob_list", as_contains(LIST, BLOB, &blob));
+	as_query_where(&q, "blob_list", as_blob_contains(LIST, &blob, 4, false));
 	
 	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 
@@ -1891,4 +1894,5 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_list_ctx_is_string);
 	suite_add(query_map_ctx_is_string);
 	suite_add(query_blob_index);
+	suite_add(query_blob_list_index);
 }

@@ -13,7 +13,6 @@
 		BF1CA19828D9399B00110268 /* libz.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF1CA18E28D9399B00110268 /* libz.a */; };
 		BF1CA1A828D93CA900110268 /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
 		BF2CE58F201976C2000CD2C8 /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD60E64201964E4004A6CE2 /* example.c */; };
-		BF78C0E228E3BCC60013CD2B /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280D81E4BA65D007F7DA7 /* liblua.a */; };
 		BFBDFE7622F3A30800F585B2 /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
 		BFBDFE8922F3A3CE00F585B2 /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BF508B4622F3592D00BA4282 /* example.c */; };
 		BFC65C891C923CEB0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
@@ -331,7 +330,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				BF1CA1A828D93CA900110268 /* libaerospike.a in Frameworks */,
-				BF78C0E228E3BCC60013CD2B /* liblua.a in Frameworks */,
 				BF1CA15E28D9345200110268 /* libssl.a in Frameworks */,
 				BF1CA17528D9348A00110268 /* libcrypto.a in Frameworks */,
 				BF1CA19828D9399B00110268 /* libz.a in Frameworks */,
@@ -1499,7 +1497,6 @@
 					/usr/local/include,
 				);
 				LIBRARY_SEARCH_PATHS = (
-					../modules/lua/src,
 					"$(OpenSSL)/lib",
 					"$(External)/lib",
 				);
@@ -1548,7 +1545,6 @@
 					/usr/local/include,
 				);
 				LIBRARY_SEARCH_PATHS = (
-					../modules/lua/src,
 					"$(OpenSSL)/lib",
 					"$(External)/lib",
 				);

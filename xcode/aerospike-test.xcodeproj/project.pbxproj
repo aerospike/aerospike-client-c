@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BE9280C61E4AC2F0007F7DA7 /* liblua.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280C51E4AC2F0007F7DA7 /* liblua.a */; };
 		BE9280C81E4AC521007F7DA7 /* libz.1.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280C71E4AC521007F7DA7 /* libz.1.dylib */; };
 		BF1881E028E5093F003DCB7B /* libssl.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF1881DF28E5093F003DCB7B /* libssl.a */; };
 		BF3F7D47259BDD2B0092D808 /* map_sort.c in Sources */ = {isa = PBXBuildFile; fileRef = BF3F7D46259BDD2B0092D808 /* map_sort.c */; };
@@ -166,7 +165,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				BFD8C86F18D7E3A300CB8B6D /* libaerospike.a in Frameworks */,
-				BE9280C61E4AC2F0007F7DA7 /* liblua.a in Frameworks */,
 				BF9750111E4EC8C900B737CF /* libev.a in Frameworks */,
 				BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */,
 				BF1881E028E5093F003DCB7B /* libssl.a in Frameworks */,
@@ -575,7 +573,6 @@
 					"$(OpenSSL)/include",
 				);
 				LIBRARY_SEARCH_PATHS = (
-					../modules/lua/src,
 					"$(External)/lib",
 					"$(OpenSSL)/lib",
 				);
@@ -632,7 +629,6 @@
 					"$(OpenSSL)/include",
 				);
 				LIBRARY_SEARCH_PATHS = (
-					../modules/lua/src,
 					"$(External)/lib",
 					"$(OpenSSL)/lib",
 				);

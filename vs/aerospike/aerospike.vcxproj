@@ -134,28 +134,28 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libevent|x64'">
-    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libuv|x64'">
-    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release nodejs|x64'">
-    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libevent|x64'">
-    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libuv|x64'">
     <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug nodejs|x64'">
-    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

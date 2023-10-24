@@ -261,7 +261,7 @@ query_foreach_create(void)
 		bool create_g_bin = i % 2 == 1;
 		
 		as_record r;
-		as_record_init(&r, 11 + (create_g_bin ? 1 : 0));
+		as_record_init(&r, 12 + (create_g_bin ? 1 : 0));
 		as_record_set_str(&r,   "a", a);
 		as_record_set_int64(&r, "b", b);
 		as_record_set_int64(&r, "c", c);

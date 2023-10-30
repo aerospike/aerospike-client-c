@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -186,17 +186,14 @@ typedef struct as_record_s {
 
 	/**
 	 * The time-to-live (expiration) of the record in seconds.
-	 * There are also special values that can be set in the record TTL:
-	 * (*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
-	 *     record will adopt the default TTL value from the namespace.
-	 * (*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
-	 *     (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
-	 *     will get an internal "void_time" of zero, and thus will never expire.
-	 * (*) 0xFFFFFFFE (also, -2 in a signed 32 bit int)
-	 *     (defined as AS_RECORD_NO_CHANGE_TTL), which means that the record
-	 *     ttl will not change when the record is updated.
 	 *
-	 * Note that the TTL value will be employed ONLY on write/update calls.
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * <li>AS_RECORD_CLIENT_DEFAULT_TTL: Use the default client ttl in as_policy_write.</li>
+	 * </ul>
 	 */
 	uint32_t ttl;
 
@@ -209,7 +206,7 @@ typedef struct as_record_s {
 
 /**
  * When the record is given a TTL value of ZERO, it will adopt the TTL value
- * that is the default TTL value for the namespace (defined in the config file).
+ * that is the server default TTL value for the namespace (defined in the config file).
  */
 #define AS_RECORD_DEFAULT_TTL 0
 
@@ -225,6 +222,13 @@ typedef struct as_record_s {
  * when a record is updated.
  */
 #define AS_RECORD_NO_CHANGE_TTL 0xFFFFFFFE
+
+/**
+ * When the record is given a TTL value of 0xFFFFFFFD, the default client ttl in
+ * in as_policy_write or as_policy_operate will be used. This value must only be
+ * used in as_record.ttl or as_operations.ttl.
+ */
+#define AS_RECORD_CLIENT_DEFAULT_TTL 0xFFFFFFFD
 
 /******************************************************************************
  * MACROS

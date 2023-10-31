@@ -878,14 +878,21 @@ as_query_command_init(
 	else if (query->ops) {
 		// Background query with operations.
 		uint32_t ttl = (query->ttl)? query->ttl : query->ops->ttl;
+
+		if (ttl == AS_RECORD_CLIENT_DEFAULT_TTL) {
+			ttl = write_policy->ttl;
+		}
+
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
 			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, ttl, qb->n_fields, qb->n_ops,
 			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {
 		// Background query with UDF.
+		uint32_t ttl = (query->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? write_policy->ttl : query->ttl;
+
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
-			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, query->ttl, qb->n_fields, qb->n_ops,
+			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, ttl, qb->n_fields, qb->n_ops,
 			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 

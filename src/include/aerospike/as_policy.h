@@ -1222,6 +1222,19 @@ typedef struct as_policy_scan_s {
 	as_policy_replica replica;
 
 	/**
+	 * The default time-to-live (expiration) of the record in seconds. This field will only be
+	 * used on background scan writes if "as_scan.ttl" is set to AS_RECORD_CLIENT_DEFAULT_TTL.
+	 *
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * </ul>
+	 */
+	uint32_t ttl;
+
+	/**
 	 * If the transaction results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
@@ -1721,6 +1734,7 @@ as_policy_scan_init(as_policy_scan* p)
 	p->max_records = 0;
 	p->records_per_second = 0;
 	p->replica = AS_POLICY_REPLICA_SEQUENCE;
+	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
 	return p;
 }

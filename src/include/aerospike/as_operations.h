@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2023 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -260,6 +260,14 @@ typedef struct as_operations_s {
 	
 	/**
 	 * The time-to-live (expiration) of the record in seconds.
+	 *
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * <li>AS_RECORD_CLIENT_DEFAULT_TTL: Use the default client ttl in as_policy_operate.</li>
+	 * </ul>
 	 */
 	uint32_t ttl;
 

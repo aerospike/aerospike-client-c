@@ -305,18 +305,16 @@ typedef struct as_scan_s {
 	as_partitions_status* parts_all;
 
 	/**
-	 * The time-to-live (expiration) of the record in seconds.
-	 * There are also special values that can be set in the record TTL:
-	 * (*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
-	 *    record will adopt the default TTL value from the namespace.
-	 * (*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
-	 *    (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
-	 *    will get an internal "void_time" of zero, and thus will never expire.
-	 * (*) 0xFFFFFFFE (also, -2 in a signed 32 bit int)
-	 *    (defined as AS_RECORD_NO_CHANGE_TTL), which means that the record
-	 *    ttl will not change when the record is updated.
+	 * The time-to-live (expiration) of the record in seconds. Note that ttl
+	 * is only used on background scan writes.
 	 *
-	 * Note that the TTL value will be employed ONLY on background scan writes.
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * <li>AS_RECORD_CLIENT_DEFAULT_TTL: Use the default client ttl in as_policy_write.</li>
+	 * </ul>
 	 */
 	uint32_t ttl;
 

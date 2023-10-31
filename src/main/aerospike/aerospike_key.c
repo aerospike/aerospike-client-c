@@ -533,9 +533,10 @@ as_put_write(void* udata, uint8_t* buf)
 	as_put* put = udata;
 	const as_policy_write* policy = put->policy;
 	as_record* rec = put->rec;
+	uint32_t ttl = (rec->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? policy->ttl : rec->ttl;
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
-		policy->exists, policy->gen, rec->gen, rec->ttl, put->n_fields, put->n_bins,
+		policy->exists, policy->gen, rec->gen, ttl, put->n_fields, put->n_bins,
 		policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 
 	p = as_command_write_key(p, policy->key, put->key);
@@ -917,9 +918,10 @@ as_operate_write(void* udata, uint8_t* buf)
 	as_operate* oper = udata;
 	const as_policy_operate* policy = oper->policy;
 	const as_operations* ops = oper->ops;
+	uint32_t ttl = (ops->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? policy->ttl : ops->ttl;
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
-		policy->exists, policy->gen, ops->gen, ops->ttl, oper->n_fields,
+		policy->exists, policy->gen, ops->gen, ttl, oper->n_fields,
 		oper->n_operations, policy->durable_delete, oper->read_attr, oper->write_attr,
 		oper->info_attr);
 

@@ -347,8 +347,10 @@ TEST( key_basics_put_generation , "put generation: (test,test,foo)" ) {
 	as_policy_write wpol;
 	as_policy_write_init(&wpol);
 	wpol.gen = AS_POLICY_GEN_EQ; // perform generation equality check on writes
+	wpol.ttl = 5000;
 
 	rec->gen = 2; // generation in database should be 1, so this should fail
+	rec->ttl = AS_RECORD_CLIENT_DEFAULT_TTL;
 
 	rc = aerospike_key_put(as, &err, &wpol, &key, rec);
 

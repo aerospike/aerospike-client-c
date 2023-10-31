@@ -592,6 +592,20 @@ typedef struct as_policy_write_s {
 	as_policy_exists exists;
 	
 	/**
+	 * The default time-to-live (expiration) of the record in seconds. This field will 
+	 * only be used if "as_record.ttl" is set to AS_RECORD_CLIENT_DEFAULT_TTL. The
+	 * as_record instance is passed in to write functions along with as_policy_write.
+	 *
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * </ul>
+	 */
+	uint32_t ttl;
+
+	/**
 	 * Minimum record size beyond which it is compressed and sent to the server.
 	 */
 	uint32_t compression_threshold;
@@ -636,18 +650,15 @@ typedef struct as_policy_apply_s {
 	as_policy_commit_level commit_level;
 
 	/**
-	 * The time-to-live (expiration) of the record in seconds.
-	 * There are also special values that can be set in the record TTL:
-	 * (*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
-	 *    record will adopt the default TTL value from the namespace.
-	 * (*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
-	 *    (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
-	 *    will get an internal "void_time" of zero, and thus will never expire.
-	 * (*) 0xFFFFFFFE (also, -2 in a signed 32 bit int)
-	 *    (defined as AS_RECORD_NO_CHANGE_TTL), which means that the record
-	 *    ttl will not change when the record is updated.
+	 * The time-to-live (expiration) of the record in seconds. Note that ttl
+	 * is only used on write/update calls.
 	 *
-	 * Note that the TTL value will be employed ONLY on write/update calls.
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * </ul>
 	 */
 	uint32_t ttl;
 
@@ -711,6 +722,20 @@ typedef struct as_policy_operate_s {
 	 * Specifies the behavior for the existence of the record.
 	 */
 	as_policy_exists exists;
+
+	/**
+	 * The default time-to-live (expiration) of the record in seconds. This field will 
+	 * only be used if "as_operations.ttl" is set to AS_RECORD_CLIENT_DEFAULT_TTL. The
+	 * as_operations instance is passed in to operate functions along with as_policy_operate.
+	 *
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * </ul>
+	 */
+	uint32_t ttl;
 
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
@@ -981,6 +1006,20 @@ typedef struct as_policy_batch_write_s {
 	as_policy_exists exists;
 
 	/**
+	 * The default time-to-live (expiration) of the record in seconds. This field will only be
+	 * used if "as_operations.ttl" is set to AS_RECORD_CLIENT_DEFAULT_TTL. The as_operations
+	 * instance is passed in to batch write functions along with as_policy_batch_write.
+	 *
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * </ul>
+	 */
+	uint32_t ttl;
+
+	/**
 	 * If the transaction results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
@@ -1021,18 +1060,15 @@ typedef struct as_policy_batch_apply_s {
 	as_policy_commit_level commit_level;
 
 	/**
-	 * The time-to-live (expiration) of the record in seconds.
-	 * There are also special values that can be set in the record TTL:
-	 * (*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
-	 *    record will adopt the default TTL value from the namespace.
-	 * (*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
-	 *    (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
-	 *    will get an internal "void_time" of zero, and thus will never expire.
-	 * (*) 0xFFFFFFFE (also, -2 in a signed 32 bit int)
-	 *    (defined as AS_RECORD_NO_CHANGE_TTL), which means that the record
-	 *    ttl will not change when the record is updated.
+	 * The time-to-live (expiration) of the record in seconds. Note that ttl
+	 * is only used on write/update calls.
 	 *
-	 * Note that the TTL value will be employed ONLY on write/update calls.
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * </ul>
 	 */
 	uint32_t ttl;
 
@@ -1184,6 +1220,19 @@ typedef struct as_policy_scan_s {
 	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
+
+	/**
+	 * The default time-to-live (expiration) of the record in seconds. This field will only be
+	 * used on background scan writes if "as_scan.ttl" is set to AS_RECORD_CLIENT_DEFAULT_TTL.
+	 *
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * </ul>
+	 */
+	uint32_t ttl;
 
 	/**
 	 * If the transaction results in a record deletion, leave a tombstone for the record.
@@ -1426,6 +1475,7 @@ as_policy_write_init(as_policy_write* p)
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
+	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->compression_threshold = AS_POLICY_COMPRESSION_THRESHOLD_DEFAULT;
 	p->durable_delete = false;
 	return p;
@@ -1464,6 +1514,7 @@ as_policy_operate_init(as_policy_operate* p)
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
+	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->deserialize = true;
 	p->durable_delete = false;
 	p->async_heap_rec = false;
@@ -1632,6 +1683,7 @@ as_policy_batch_write_init(as_policy_batch_write* p)
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
+	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
 	return p;
 }
@@ -1646,7 +1698,7 @@ as_policy_batch_apply_init(as_policy_batch_apply* p)
 	p->filter_exp = NULL;
 	p->key = AS_POLICY_KEY_DEFAULT;
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
-	p->ttl = 0;
+	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
 	return p;
 }
@@ -1682,6 +1734,7 @@ as_policy_scan_init(as_policy_scan* p)
 	p->max_records = 0;
 	p->records_per_second = 0;
 	p->replica = AS_POLICY_REPLICA_SEQUENCE;
+	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
 	return p;
 }

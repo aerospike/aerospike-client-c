@@ -1141,7 +1141,7 @@ as_batch_attr_read_adjust(as_batch_attr* attr, bool read_all_bins)
 }
 
 static void
-as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
+as_batch_attr_write_header(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
 {
 	attr->filter_exp = NULL;
 	attr->read_attr = 0;
@@ -1162,7 +1162,7 @@ as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
 	}
 
 	attr->info_attr = 0;
-	attr->ttl = ops->ttl;
+	attr->ttl = (ops->ttl == AS_RECORD_CLIENT_DEFAULT_TTL && p)? p->ttl : ops->ttl;
 	attr->gen = 0;
 	attr->has_write = true;
 	attr->send_key = false;
@@ -1171,7 +1171,7 @@ as_batch_attr_write_header(as_batch_attr* attr, as_operations* ops)
 static void
 as_batch_attr_write_row(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
 {
-	as_batch_attr_write_header(attr, ops);
+	as_batch_attr_write_header(attr, p, ops);
 	attr->filter_exp = p->filter_exp;
 	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
 
@@ -1466,7 +1466,7 @@ as_batch_records_write_new(
 						as_batch_attr_write_row(&attr, bw->policy, bw->ops);
 					}
 					else {
-						as_batch_attr_write_header(&attr, bw->ops);
+						as_batch_attr_write_header(&attr, NULL, bw->ops);
 					}
 					p = as_batch_write_operations(p, &bw->key, &attr, attr.filter_exp, bw->ops,
 						bb->buffers);

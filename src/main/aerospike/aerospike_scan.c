@@ -500,14 +500,21 @@ as_scan_command_init(
 	if (scan->ops) {
 		// Background scan with operations.
 		uint32_t ttl = (scan->ttl)? scan->ttl : scan->ops->ttl;
+
+		if (ttl == AS_RECORD_CLIENT_DEFAULT_TTL) {
+			ttl = policy->ttl;
+		}
+
 		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
 				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
 				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else if (scan->apply_each.function[0]) {
 		// Background scan with UDF.
+		uint32_t ttl = (scan->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? policy->ttl : scan->ttl;
+
 		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
-				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, scan->ttl, sb->n_fields, n_ops,
+				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
 				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {

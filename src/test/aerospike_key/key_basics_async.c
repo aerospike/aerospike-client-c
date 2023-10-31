@@ -410,6 +410,7 @@ as_put_operate_callback_heap(as_error* err, void* udata, as_event_loop* event_lo
 	as_policy_operate p;
 	as_policy_operate_init(&p);
 	p.async_heap_rec = true;
+	p.ttl = 10000;
 
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "paheap5");
@@ -421,6 +422,7 @@ as_put_operate_callback_heap(as_error* err, void* udata, as_event_loop* event_lo
 	as_operations_add_prepend_str(&ops, "b", "abc");
 	as_operations_add_read(&ops, "a");
 	as_operations_add_read(&ops, "b");
+	ops.ttl = AS_RECORD_CLIENT_DEFAULT_TTL;
 	
 	as_error e;
 	as_status status = aerospike_key_operate_async(as, &e, &p, &key, &ops, as_operate_callback_heap, __result__, event_loop, NULL);

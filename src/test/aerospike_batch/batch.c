@@ -605,14 +605,17 @@ TEST(batch_write_complex, "Batch write complex")
 	as_operations wops1;
 	as_operations_inita(&wops1, 1);
 	as_operations_add_write_int64(&wops1, bin2, 100);
+	wops1.ttl = AS_RECORD_CLIENT_DEFAULT_TTL;
 
 	as_operations wops2;
 	as_operations_inita(&wops2, 1);
 	as_operations_exp_write(&wops2, bin3, wexp1, AS_EXP_WRITE_DEFAULT);
+	wops2.ttl = AS_RECORD_CLIENT_DEFAULT_TTL;
 
 	as_policy_batch_write wp;
 	as_policy_batch_write_init(&wp);
 	wp.key = AS_POLICY_KEY_SEND;
+	wp.ttl = 500;
 
 	as_batch_records recs;
 	as_batch_records_inita(&recs, 3);
@@ -629,8 +632,14 @@ TEST(batch_write_complex, "Batch write complex")
 	as_batch_remove_record* rm = as_batch_remove_reserve(&recs);
 	as_key_init_int64(&rm->key, NAMESPACE, SET, 10002);
 
+	// Test default ttl.
+	as->config.policies.batch_write.ttl = 1000;
+
 	as_error err;
 	as_status status = aerospike_batch_write(as, &err, NULL, &recs);
+
+	// Reset default ttl.
+	as->config.policies.batch_write.ttl = 0;
 
 	assert_int_eq(status, AEROSPIKE_OK);
 

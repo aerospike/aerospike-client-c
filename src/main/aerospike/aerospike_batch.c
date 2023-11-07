@@ -103,6 +103,7 @@ typedef struct as_batch_task_s {
 
 typedef struct as_batch_task_records_s {
 	as_batch_task base;
+	as_policies* defs;
 	as_vector* records;
 } as_batch_task_records;
 
@@ -1401,7 +1402,7 @@ as_batch_write_udf(
 
 static size_t
 as_batch_records_write_new(
-	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
+	const as_policy_batch* policy, as_policies* defs, as_vector* records, as_vector* offsets, as_batch_builder* bb,
 	uint8_t* cmd
 	)
 {
@@ -1466,7 +1467,7 @@ as_batch_records_write_new(
 						as_batch_attr_write_row(&attr, bw->policy, bw->ops);
 					}
 					else {
-						as_batch_attr_write_header(&attr, NULL, bw->ops);
+						as_batch_attr_write_header(&attr, &defs->batch_write, bw->ops);
 					}
 					p = as_batch_write_operations(p, &bw->key, &attr, attr.filter_exp, bw->ops,
 						bb->buffers);
@@ -1507,12 +1508,12 @@ as_batch_records_write_new(
 
 static inline size_t
 as_batch_records_write(
-	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
+	const as_policy_batch* policy, as_policies* defs, as_vector* records, as_vector* offsets, as_batch_builder* bb,
 	uint8_t* cmd
 	)
 {
 	if (bb->batch_any) {
-		return as_batch_records_write_new(policy, records, offsets, bb, cmd);
+		return as_batch_records_write_new(policy, defs, records, offsets, bb, cmd);
 	}
 	else {
 		return as_batch_records_write_old(policy, records, offsets, bb, cmd);
@@ -1709,7 +1710,7 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	// Write command
 	size_t capacity = bb.size;
 	uint8_t* buf = as_command_buffer_init(capacity);
-	size_t size = as_batch_records_write(policy, btr->records, &task->offsets, &bb, buf);
+	size_t size = as_batch_records_write(policy, btr->defs, btr->records, &task->offsets, &bb, buf);
 	as_batch_builder_destroy(&bb);
 
 	if (policy->base.compress && size > AS_COMPRESS_THRESHOLD) {
@@ -2276,9 +2277,9 @@ as_batch_keys_execute(
 
 static as_status
 as_batch_execute_sync(
-	as_cluster* cluster, as_error* err, const as_policy_batch* policy, bool has_write,
-	as_batch_replica* rep, as_vector* records, uint32_t n_keys, as_vector* batch_nodes,
-	as_command* parent, bool* error_row
+	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policies* defs,
+	bool has_write, as_batch_replica* rep, as_vector* records, uint32_t n_keys,
+	as_vector* batch_nodes, as_command* parent, bool* error_row
 	)
 {
 	as_status status = AEROSPIKE_OK;
@@ -2300,6 +2301,7 @@ as_batch_execute_sync(
 	btr.base.has_write = has_write;
 	btr.base.replica_index = rep->replica_index;
 	btr.base.replica_index_sc = rep->replica_index_sc;
+	btr.defs = defs;
 	btr.records = records;
 
 	if (policy->concurrent && n_batch_nodes > 1 && parent == NULL) {
@@ -2428,8 +2430,9 @@ as_batch_command_create(
 
 static as_status
 as_batch_execute_async(
-	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_batch_replica* rep,
-	as_vector* records, as_vector* batch_nodes, as_async_batch_executor* executor
+	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policies* defs,
+	as_batch_replica* rep, as_vector* records, as_vector* batch_nodes,
+	as_async_batch_executor* executor
 	)
 {
 	uint32_t n_batch_nodes = batch_nodes->size;
@@ -2476,8 +2479,8 @@ as_batch_execute_async(
 
 			as_event_command* cmd = &bc->command;
 
-			cmd->write_len = (uint32_t)as_batch_records_write(policy, records, &batch_node->offsets,
-				&bb, cmd->buf);
+			cmd->write_len = (uint32_t)as_batch_records_write(policy, defs, records,
+				&batch_node->offsets, &bb, cmd->buf);
 
 			status = as_event_command_execute(cmd, err);
 		}
@@ -2486,7 +2489,8 @@ as_batch_execute_async(
 			// First write uncompressed buffer.
 			size_t capacity = bb.size;
 			uint8_t* ubuf = cf_malloc(capacity);
-			size_t size = as_batch_records_write(policy, records, &batch_node->offsets, &bb, ubuf);
+			size_t size = as_batch_records_write(policy, defs, records, &batch_node->offsets, &bb,
+				ubuf);
 
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);
@@ -2636,12 +2640,12 @@ as_batch_records_execute(
 
 	if (async_executor) {
 		async_executor->error_row = error_row;
-		return as_batch_execute_async(cluster, err, policy, &rep, list, &batch_nodes,
-			async_executor);
+		return as_batch_execute_async(cluster, err, policy, &as->config.policies, &rep, list,
+			&batch_nodes, async_executor);
 	}
 	else {
-		status = as_batch_execute_sync(cluster, err, policy, has_write, &rep, list, n_keys,
-			&batch_nodes, NULL, &error_row);
+		status = as_batch_execute_sync(cluster, err, policy, &as->config.policies, has_write, &rep,
+			list, n_keys, &batch_nodes, NULL, &error_row);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -2783,7 +2787,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	}
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
 
-	return as_batch_execute_sync(cluster, err, task->policy, task->has_write, &rep,
+	return as_batch_execute_sync(cluster, err, task->policy, btr->defs, task->has_write, &rep,
 		list, task->n_keys, &batch_nodes, parent, task->error_row);
 }
 

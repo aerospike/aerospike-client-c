@@ -221,8 +221,8 @@ typedef struct as_record_s {
 #define AS_RECORD_NO_CHANGE_TTL 0xFFFFFFFE
 
 /**
- * Use the applicable client policy ttl in as_policy_write, as_policy_operate or
- * as_policy_scan. If the policy is not defined for the transaction, use the default
+ * Use the applicable client policy ttl (as_policy_write, as_policy_operate, as_policy_scan,
+ * as_policy_batch_write, ...). If the policy is not defined for the transaction, use the default
  * in as_config.policies.
  */
 #define AS_RECORD_CLIENT_DEFAULT_TTL 0xFFFFFFFD

@@ -46,7 +46,7 @@ static uint32_t g_replica_rr = 0;
  *****************************************************************************/
 
 uint8_t
-as_replica_index_any()
+as_replica_index_any(void)
 {
 	uint32_t seq = as_faa_uint32(&g_replica_rr, 1);
 	return (uint8_t)(seq % AS_MAX_REPLICATION_FACTOR);

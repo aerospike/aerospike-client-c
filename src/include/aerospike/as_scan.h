@@ -313,7 +313,7 @@ typedef struct as_scan_s {
 	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
 	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
 	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
-	 * <li>AS_RECORD_CLIENT_DEFAULT_TTL: Use the default client ttl in as_policy_write.</li>
+	 * <li>AS_RECORD_CLIENT_DEFAULT_TTL: Use the default client ttl in as_policy_scan.</li>
 	 * </ul>
 	 */
 	uint32_t ttl;

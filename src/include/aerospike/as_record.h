@@ -205,28 +205,25 @@ typedef struct as_record_s {
 } as_record;
 
 /**
- * When the record is given a TTL value of ZERO, it will adopt the TTL value
- * that is the server default TTL value for the namespace (defined in the config file).
+ * Use the server default ttl for the namespace in the aerospke server config file.
  */
 #define AS_RECORD_DEFAULT_TTL 0
 
 /**
- * When the record is given a TTL value of 0xFFFFFFFF, it will set the internal
- * void_time value (the absolute clock time value that shows when a record
- * will expire) to zero, which means the record will never expire
+ * Set the internal void_time value (the absolute clock time value that shows when a record
+ * will expire) to zero, which means the record will never expire.
  */
 #define AS_RECORD_NO_EXPIRE_TTL 0xFFFFFFFF
 
 /**
- * When the record is given a TTL value of 0xFFFFFFFE, the TTL will not change
- * when a record is updated.
+ * Do not change the  ttl when the record is updated.
  */
 #define AS_RECORD_NO_CHANGE_TTL 0xFFFFFFFE
 
 /**
- * When the record is given a TTL value of 0xFFFFFFFD, the default client ttl in
- * in as_policy_write or as_policy_operate will be used. This value must only be
- * used in as_record.ttl or as_operations.ttl.
+ * Use the applicable client policy ttl in as_policy_write, as_policy_operate or
+ * as_policy_scan. If the policy is not defined for the transaction, use the default
+ * in as_config.policies.
  */
 #define AS_RECORD_CLIENT_DEFAULT_TTL 0xFFFFFFFD
 

@@ -201,7 +201,7 @@ as_scan_parse_record_async(
 		return status;
 	}
 
-	if (as_partition_tracker_reached_max_records_async(se->pt)) {
+	if (as_partition_tracker_reached_max_records_async(se->pt, sc->np)) {
 		as_record_destroy(&rec);
 		return AEROSPIKE_OK;
 	}
@@ -305,7 +305,7 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 		return status;
 	}
 
-	if (as_partition_tracker_reached_max_records_sync(task->pt)) {
+	if (as_partition_tracker_reached_max_records_sync(task->pt, task->np)) {
 		as_record_destroy(&rec);
 		return AEROSPIKE_OK;
 	}

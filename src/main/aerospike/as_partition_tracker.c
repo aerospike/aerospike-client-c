@@ -446,7 +446,7 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 				for (uint32_t i = 0; i < list->size; i++) {
 					as_node_partitions* np = as_vector_get(list, i);
 
-					if (np->record_count >= np->record_max) {
+					if (np->record_count + np->disallowed_count >= np->record_max) {
 						mark_retry(pt, np);
 						is_done = false;
 					}
@@ -460,7 +460,7 @@ as_partition_tracker_is_complete(as_partition_tracker* pt, as_cluster* cluster, 
 				for (uint32_t i = 0; i < list->size; i++) {
 					as_node_partitions* np = as_vector_get(list, i);
 
-					if (np->record_count > 0) {
+					if (np->record_count + np->disallowed_count > 0) {
 						mark_retry(pt, np);
 					}
 				}

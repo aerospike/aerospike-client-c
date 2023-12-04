@@ -44,8 +44,8 @@ typedef struct as_node_partitions_s {
 	as_vector parts_partial;
 	uint64_t record_count;
 	uint64_t record_max;
-	uint64_t disallowed_count;
 	uint32_t parts_unavailable;
+	bool retry;
 } as_node_partitions;
 
 /**
@@ -143,9 +143,9 @@ as_partition_tracker_reached_max_records_sync(as_partition_tracker* pt, as_node_
 {
 	// Sync scan/query runs in multiple threads, so atomics are required.
 	if (pt && pt->check_max && (as_aaf_uint64(&pt->record_count, 1) > pt->max_records)) {
-		// Record was returned, but would exceed max_records.
-		// Discard record and increment disallowed_count.
-		np->disallowed_count++;
+		// Record was returned, but would exceed max_records. Discard record
+		// and mark node for retry on next scan/query page.
+		np->retry = true;
 		return true;
 	}
 	return false;
@@ -156,9 +156,9 @@ as_partition_tracker_reached_max_records_async(as_partition_tracker* pt, as_node
 {
 	// Async scan/query runs in a single event loop thread, so atomics are not necessary.
 	if (pt && pt->check_max && (++pt->record_count > pt->max_records)) {
-		// Record was returned, but would exceed max_records.
-		// Discard record and increment disallowed_count.
-		np->disallowed_count++;
+		// Record was returned, but would exceed max_records. Discard record
+		// and mark node for retry on next scan/query page.
+		np->retry = true;
 		return true;
 	}
 	return false;

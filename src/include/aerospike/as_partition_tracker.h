@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -101,17 +101,10 @@ as_partition_tracker_assign(
 	as_partition_tracker* pt, struct as_cluster_s* cluster, const char* ns, struct as_error_s* err
 	);
 
-static inline void
+void
 as_partition_tracker_part_unavailable(
 	as_partition_tracker* pt, as_node_partitions* np, uint32_t part_id
-	)
-{
-	as_partitions_status* ps = pt->parts_all;
-	as_partition_status* p = &ps->parts[part_id - ps->part_begin];
-	p->retry = true;
-	p->replica_index++;
-	np->parts_unavailable++;
-}
+	);
 
 static inline void
 as_partition_tracker_set_digest(

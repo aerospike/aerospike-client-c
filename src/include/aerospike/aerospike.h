@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -42,10 +42,10 @@
  * - Shared memory cluster tend state for multi-process applications
  * - TLS secure sockets
  *
- * See <a href="modules.html">Modules</a> for an API overview.
- *
- * See <a href="http://www.aerospike.com/docs/client/c">Developer Guide</a> for installation
- * instructions and example code.
+ * See <a href="files.html">Files</a> for aerospike header files.<br/>
+ * See <a href="classes.html">Types</a> for aerospike  types.<br/>
+ * See <a href="https://aerospike.com/developer/client/install?client=c">Developer Guide</a> for installation
+ * instructions and example code.<br/>
  */
  
 /**
@@ -71,9 +71,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * @private
@@ -184,9 +184,9 @@ typedef struct aerospike_s {
 
 } aerospike;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Initialize a stack allocated aerospike instance. 

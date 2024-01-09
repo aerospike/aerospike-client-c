@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -29,9 +29,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
  * Filter on string bins.
@@ -41,7 +41,7 @@ extern "C" {
  * ~~~~~~~~~~
  *
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_string_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING, __val
 
@@ -55,7 +55,7 @@ extern "C" {
  * ~~~~~~~~~~
  *
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_blob_equals(__val, __size, __free) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_BLOB, __val, __size, __free
 
@@ -67,7 +67,7 @@ extern "C" {
  * ~~~~~~~~~~
  *
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, (int64_t)__val
 
@@ -79,7 +79,7 @@ extern "C" {
  * ~~~~~~~~~~
  * 
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_integer_range(__min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, (int64_t)__min, (int64_t)__max
 
@@ -91,7 +91,7 @@ extern "C" {
  * ~~~~~~~~~~
  * 
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_range(indextype, datatype, __min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, __min, __max
 
@@ -103,7 +103,7 @@ extern "C" {
  * ~~~~~~~~~~
  * 
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_contains(indextype, datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_ ##indextype, AS_INDEX_ ##datatype, __val
 
@@ -117,7 +117,7 @@ extern "C" {
  * ~~~~~~~~~~
  *
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_blob_contains(indextype, __val, __size, __free) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_ ##indextype, AS_INDEX_BLOB, __val, __size, __free
 
@@ -129,7 +129,7 @@ extern "C" {
  * ~~~~~~~~~~
  * 
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_equals(datatype, __val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_ ##datatype, __val
 
@@ -141,7 +141,7 @@ extern "C" {
  * ~~~~~~~~~~
  * 
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_geo_within(__val) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_GEO2DSPHERE, __val
 
@@ -153,14 +153,13 @@ extern "C" {
  * ~~~~~~~~~~
  * 
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_geo_contains(__val) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_GEO2DSPHERE, __val
 
-
-/******************************************************************************
- * TYPES 	
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 struct as_operations_s;
 
@@ -457,7 +456,7 @@ typedef struct as_query_predicates_s {
  * as_query_apply(query, "udf_module", "udf_function", arglist);
  * ~~~~~~~~~~
  *
- * @ingroup client_objects
+ * @ingroup query_operations
  */
 typedef struct as_query_s {
 
@@ -573,9 +572,9 @@ typedef struct as_query_s {
 
 } as_query;
 
-/******************************************************************************
- * INSTANCE FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Instance Functions
+//---------------------------------
 
 /**
  * Initialize a stack allocated as_query.
@@ -592,6 +591,7 @@ typedef struct as_query_s {
  * @return On success, the initialized query. Otherwise NULL.
  *
  * @relates as_query
+ * @ingroup query_operations
  */
 AS_EXTERN as_query*
 as_query_init(as_query* query, const char* ns, const char* set);
@@ -609,7 +609,7 @@ as_query_init(as_query* query, const char* ns, const char* set);
  * @return On success, the new query. Otherwise NULL.
  *
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 AS_EXTERN as_query*
 as_query_new(const char* ns, const char* set);
@@ -618,14 +618,14 @@ as_query_new(const char* ns, const char* set);
  * Destroy the query and associated resources.
  * 
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 AS_EXTERN void
 as_query_destroy(as_query* query);
 
-/******************************************************************************
- * SELECT FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Select Functions
+//---------------------------------
 
 /** 
  * Initializes `as_query.select` with a capacity of `n` using `alloca`
@@ -642,7 +642,7 @@ as_query_destroy(as_query* query);
  * @param __n		The number of bins to allocate.
  *
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 #define as_query_select_inita(__query, __n) \
 	do { \
@@ -673,7 +673,7 @@ as_query_destroy(as_query* query);
  * @return On success, the initialized. Otherwise an error occurred.
  *
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 AS_EXTERN bool
 as_query_select_init(as_query* query, uint16_t n);
@@ -690,20 +690,19 @@ as_query_select_init(as_query* query, uint16_t n);
  * as_query_select(&query, "bin2");
  * ~~~~~~~~~~
  *
- * @param query 	The query to modify.
+ * @param query		The query to modify.
  * @param bin 		The name of the bin to select.
  *
  * @return On success, true. Otherwise an error occurred.
- *
  * @relates as_query
- * @ingroup query_object
+ * @ingroup query_operations
  */
 AS_EXTERN bool
 as_query_select(as_query* query, const char * bin);
 
-/******************************************************************************
- * WHERE FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Where Functions
+//---------------------------------
 
 /** 
  * Initializes `as_query.where` with a capacity of `n` using `alloca()`.
@@ -721,6 +720,7 @@ as_query_select(as_query* query, const char * bin);
  * @return On success, true. Otherwise an error occurred.
  *
  * @relates as_query
+ * @ingroup query_operations
  */
 #define as_query_where_inita(__query, __n) \
 	do { \
@@ -750,6 +750,7 @@ as_query_select(as_query* query, const char * bin);
  * @return On success, true. Otherwise an error occurred.
  *
  * @relates as_query
+ * @ingroup query_operations
  */
 AS_EXTERN bool
 as_query_where_init(as_query* query, uint16_t n);
@@ -781,6 +782,7 @@ as_query_where_init(as_query* query, uint16_t n);
  * @return On success, true. Otherwise an error occurred.
  *
  * @relates as_query
+ * @ingroup query_operations
  */
 AS_EXTERN bool
 as_query_where(
@@ -819,6 +821,7 @@ as_query_where(
  * @return On success, true. Otherwise an error occurred.
  *
  * @relates as_query
+ * @ingroup query_operations
  */
 AS_EXTERN bool
 as_query_where_with_ctx(
@@ -826,9 +829,9 @@ as_query_where_with_ctx(
 	as_index_type itype, as_index_datatype dtype, ...
 	);
 
-/******************************************************************************
- * QUERY MODIFIER FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Background Query Functions
+//---------------------------------
 
 /**
  * Apply a function to the results of the query.
@@ -845,19 +848,20 @@ as_query_where_with_ctx(
  * @return On success, true. Otherwise an error occurred.
  *
  * @relates as_query
+ * @ingroup query_operations
  */
 AS_EXTERN bool
 as_query_apply(as_query* query, const char* module, const char* function, const as_list* arglist);
 
-/******************************************************************************
- * QUERY PAGINATE
- *****************************************************************************/
+//---------------------------------
+// Paginate Functions
+//---------------------------------
 
 /**
  * Set if records should be read in pages in conjunction with max_records policy.
  * 
  * @relates as_query
- * @ingroup as_query_object
+ * @ingroup query_operations
  */
 static inline void
 as_query_set_paginate(as_query* query, bool paginate)
@@ -870,7 +874,7 @@ as_query_set_paginate(as_query* query, bool paginate)
  * The query will resume from this point.
  *
  * @relates as_query
- * @ingroup as_query_object
+ * @ingroup query_operations
  */
 static inline void
 as_query_set_partitions(as_query* query, as_partitions_status* parts_all)
@@ -883,7 +887,7 @@ as_query_set_partitions(as_query* query, as_partitions_status* parts_all)
  * return all records?
  *
  * @relates as_query
- * @ingroup as_query_object
+ * @ingroup query_operations
  */
 static inline bool
 as_query_is_done(as_query* query)
@@ -891,11 +895,15 @@ as_query_is_done(as_query* query)
 	return query->parts_all && query->parts_all->done;
 }
 
+//---------------------------------
+// Serialization Functions
+//---------------------------------
+
 /**
  * Serialize query definition to bytes.
  *
  * @relates as_query
- * @ingroup as_query_object
+ * @ingroup query_operations
  */
 AS_EXTERN bool
 as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size);
@@ -905,8 +913,9 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size);
  * as_query_destroy() should be called when done with the query definition.
  *
  * @returns true on success and false on failure.
+ *
  * @relates as_query
- * @ingroup as_query_object
+ * @ingroup query_operations
  */
 AS_EXTERN bool
 as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size);
@@ -916,8 +925,9 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size);
  * as_query_destroy() should be called when done with the query definition.
  *
  * @returns query definition on success and NULL on failure.
+ * 
  * @relates as_query
- * @ingroup as_query_object
+ * @ingroup query_operations
  */
 AS_EXTERN as_query*
 as_query_from_bytes_new(const uint8_t* bytes, uint32_t bytes_size);
@@ -926,7 +936,7 @@ as_query_from_bytes_new(const uint8_t* bytes, uint32_t bytes_size);
  * Compare query objects.
  * @private
  * @relates as_query
- * @ingroup as_query_object
+ * @ingroup query_operations
  */
 AS_EXTERN bool
 as_query_compare(as_query* q1, as_query* q2);

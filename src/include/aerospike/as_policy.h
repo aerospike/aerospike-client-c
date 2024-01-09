@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -59,9 +59,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
  * Default socket idle timeout value
@@ -133,9 +133,9 @@ extern "C" {
  */
 #define AS_POLICY_COMMIT_LEVEL_DEFAULT AS_POLICY_COMMIT_LEVEL_ALL
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 struct as_exp;
 
@@ -1288,7 +1288,7 @@ typedef struct as_policy_admin_s {
  * 
  * This is utilized by as_config to define default values for policies.
  *
- * @ingroup as_config_t
+ * @ingroup client_policies
  */
 typedef struct as_policies_s {
 
@@ -1364,9 +1364,9 @@ typedef struct as_policies_s {
 
 } as_policies;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Initialize base defaults for reads.

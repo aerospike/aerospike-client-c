@@ -544,6 +544,7 @@ as_query_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 		}
 
 		if (as_load_uint32(task->error_mutex)) {
+			printf("QUERY ABORTED at 547\n");
 			err->code = AEROSPIKE_ERR_QUERY_ABORTED;
 			return err->code;
 		}
@@ -1273,6 +1274,7 @@ as_query_worker_old(void* data)
 		complete_task.result = as_query_command_execute_old(task);
 	}
 	else {
+		printf("QUERY ABORTED at 1276\n");
 		complete_task.result = AEROSPIKE_ERR_QUERY_ABORTED;
 	}
 
@@ -1292,6 +1294,7 @@ as_query_worker_new(void* data)
 		complete_task.result = as_query_command_execute_new(task);
 	}
 	else {
+		printf("QUERY ABORTED at 1295\n");
 		complete_task.result = AEROSPIKE_ERR_QUERY_ABORTED;
 	}
 

@@ -611,7 +611,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
-	if (! as_node_valid_error_count(cmd->node)) {
+	if (! as_node_valid_error_rate(cmd->node)) {
 		event_loop->errors++;
 
 		if (as_event_command_retry(cmd, true)) {
@@ -648,7 +648,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		if (len != 0) {
 			as_log_debug("Invalid async socket from pool: %d", len);
 			as_event_release_connection(&conn->base, pool);
-			as_node_incr_error_count(cmd->node);
+			as_node_incr_error_rate(cmd->node);
 			continue;
 		}
 
@@ -1264,7 +1264,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLUSTER:
 		case AEROSPIKE_ERR_DEVICE_OVERLOAD:
 			as_event_put_connection(cmd, pool);
-			as_node_incr_error_count(cmd->node);
+			as_node_incr_error_rate(cmd->node);
 			break;
 
 		case AEROSPIKE_ERR_QUERY_ABORTED:
@@ -1275,7 +1275,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
 			as_event_release_connection(cmd->conn, pool);
-			as_node_incr_error_count(cmd->node);
+			as_node_incr_error_rate(cmd->node);
 			break;
 			
 		default:
@@ -1794,7 +1794,7 @@ as_event_balance_connections_node(as_event_loop* event_loop, as_cluster* cluster
 		// Do not close idle pipeline connections because pipelines work better with a stable
 		// number of connections.
 	}
-	else if (excess < 0 && as_node_valid_error_count(node)) {
+	else if (excess < 0 && as_node_valid_error_rate(node)) {
 		create_connections(event_loop, node, pool, -excess);
 	}
 }

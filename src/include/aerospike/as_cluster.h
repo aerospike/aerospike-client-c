@@ -18,6 +18,7 @@
 
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_metrics.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
@@ -379,6 +380,19 @@ typedef struct as_cluster_s {
 	 * Should continue to tend cluster.
 	 */
 	volatile bool valid;
+
+	bool metrics_enabled;
+
+	as_policy_metrics* metrics_policy;
+
+	as_metrics_callbacks* metrics_callbacks;
+
+	uint64_t retry_count;
+
+	uint64_t tran_count;
+
+	uint64_t delay_queue_timeout_count;
+
 } as_cluster;
 
 /******************************************************************************
@@ -518,6 +532,18 @@ as_partition_shm_get_node(
 	as_node* prev_node, as_policy_replica replica, uint8_t replica_size, uint8_t* replica_index
 	);
 
+void
+as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy);
+
+void
+as_cluster_disable_metrics(as_cluster* cluster);
+
+void 
+as_cluster_add_tran(as_cluster* cluster);
+
+uint64_t
+as_cluster_get_tran_count(const as_cluster* cluster);
+
 /**
  * @private
  * Get mapped node given partition and replica.  This function does not reserve the node.
@@ -544,10 +570,10 @@ as_partition_get_node(
  * Increment node's error count.
  */
 static inline void
-as_node_incr_error_count(as_node* node)
+as_node_incr_error_rate(as_node* node)
 {
 	if (node->cluster->max_error_rate > 0) {
-		as_incr_uint32(&node->error_count);
+		as_incr_uint32(&node->error_rate_count);
 	}
 }
 
@@ -556,9 +582,9 @@ as_node_incr_error_count(as_node* node)
  * Reset node's error count.
  */
 static inline void
-as_node_reset_error_count(as_node* node)
+as_node_reset_error_rate_count(as_node* node)
 {
-	as_store_uint32(&node->error_count, 0);
+	as_store_uint32(&node->error_rate_count, 0);
 }
 
 /**
@@ -566,9 +592,9 @@ as_node_reset_error_count(as_node* node)
  * Get node's error count.
  */
 static inline uint32_t
-as_node_get_error_count(as_node* node)
+as_node_get_error_rate(as_node* node)
 {
-	return as_load_uint32(&node->error_count);
+	return as_load_uint32(&node->error_rate_count);
 }
 
 /**
@@ -576,10 +602,10 @@ as_node_get_error_count(as_node* node)
  * Validate node's error count.
  */
 static inline bool
-as_node_valid_error_count(as_node* node)
+as_node_valid_error_rate(as_node* node)
 {
 	uint32_t max = node->cluster->max_error_rate;
-	return max == 0 || max >= as_load_uint32(&node->error_count);
+	return max == 0 || max >= as_load_uint32(&node->error_rate_count);
 }
 
 /**
@@ -590,7 +616,7 @@ static inline void
 as_node_close_conn_error(as_node* node, as_socket* sock, as_conn_pool* pool)
 {
 	as_node_close_connection(node, sock, pool);
-	as_node_incr_error_count(node);
+	as_node_incr_error_rate(node);
 }
 
 /**
@@ -601,7 +627,7 @@ static inline void
 as_node_put_conn_error(as_node* node, as_socket* sock)
 {
 	as_node_put_connection(node, sock);
-	as_node_incr_error_count(node);
+	as_node_incr_error_rate(node);
 }
 
 #ifdef __cplusplus

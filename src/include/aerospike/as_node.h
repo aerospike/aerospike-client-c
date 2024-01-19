@@ -21,6 +21,7 @@
 #include <aerospike/as_conn_pool.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
+#include <aerospike/as_metrics.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_queue.h>
@@ -297,6 +298,8 @@ typedef struct as_node_s {
 	 */
 	as_racks* racks;
 
+	as_node_metrics* metrics;
+
 	/**
 	 * Socket used exclusively for cluster tend thread info requests.
 	 */
@@ -320,7 +323,11 @@ typedef struct as_node_s {
 	/**
 	 * Error count for this node's error_rate_window.
 	 */
-	uint32_t error_count;
+	uint32_t error_rate_count;
+
+	uint64_t error_count;
+
+	uint64_t timeout_count;
 
 	/**
 	 * Server's generation count for peers.
@@ -636,6 +643,14 @@ as_node_signal_login(as_node* node);
  */
 bool
 as_node_has_rack(as_node* node, const char* ns, int rack_id);
+
+typedef enum as_latency_type_e as_latency_type;
+
+void
+as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed);
+
+void
+as_node_enable_metrics(as_node* node, as_policy_metrics* policy);
 
 /**
  * @private

@@ -554,6 +554,86 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	as_vector_append(cluster->gc, &item);
 }
 
+void
+as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy)
+{
+	if (cluster->metrics_enabled)
+	{
+		cluster->metrics_callbacks->disable_callback(policy, cluster);
+	}
+
+	cluster->metrics_callbacks = policy->metrics_callbacks;
+	if (cluster->metrics_callbacks == NULL)
+	{
+		as_metrics_callbacks_init(cluster->metrics_callbacks);
+	}
+
+	cluster->metrics_policy = policy;
+
+	as_nodes* nodes = cluster->nodes;
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+		as_node_enable_metrics(node, policy);
+	}
+
+	cluster->metrics_callbacks->enable_callback(policy);
+}
+
+void
+as_cluster_disable_metrics(as_cluster* cluster)
+{
+	if (cluster->metrics_enabled)
+	{
+		cluster->metrics_enabled = false;
+		cluster->metrics_callbacks->disable_callback(cluster->metrics_policy, cluster);
+	}
+}
+
+void
+as_cluster_add_tran(as_cluster* cluster)
+{
+	if (cluster->metrics_enabled)
+	{
+		as_incr_uint64(&cluster->tran_count);
+	}
+}
+
+uint64_t
+as_cluster_get_tran_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->tran_count);
+}
+
+void
+as_cluster_add_retry(as_cluster* cluster)
+{
+	as_incr_uint64(&cluster->retry_count);
+}
+
+void
+as_cluster_add_retries(as_cluster* cluster, uint32_t count)
+{
+	as_faa_uint64(&cluster->retry_count, count);
+}
+
+uint64_t
+as_cluster_get_retry_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->retry_count);
+}
+
+void
+as_cluster_add_delay_queue_timeout(as_cluster* cluster)
+{
+	as_incr_uint64(&cluster->delay_queue_timeout_count);
+}
+
+uint64_t
+as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->delay_queue_timeout_count);
+}
+
 static void
 as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
 {
@@ -565,6 +645,10 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 	for (uint32_t i = 0; i < nodes_to_remove->size; i++) {
 		as_node* node = as_vector_get_ptr(nodes_to_remove, i);
 		as_node_deactivate(node);
+
+		if (cluster->metrics_enabled) {
+			cluster->metrics_callbacks->node_close_callback(node->cluster->metrics_policy, node);
+		}
 	}
 			
 	// Remove all nodes at once to avoid copying entire array multiple times.
@@ -635,12 +719,12 @@ as_cluster_balance_connections(as_cluster* cluster)
 }
 
 static void
-as_cluster_reset_error_count(as_cluster* cluster)
+as_cluster_reset_error_rate(as_cluster* cluster)
 {
 	as_nodes* nodes = cluster->nodes;
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_reset_error_count(nodes->array[i]);
+		as_node_reset_error_rate_count(nodes->array[i]);
 	}
 }
 
@@ -656,7 +740,7 @@ as_cluster_manage(as_cluster* cluster)
 
 	// Reset connection error window for all nodes every error_rate_window tend iterations.
 	if (cluster->max_error_rate > 0 && cluster->tend_count % cluster->error_rate_window == 0) {
-		as_cluster_reset_error_count(cluster);
+		as_cluster_reset_error_rate(cluster);
 	}
 }
 
@@ -841,7 +925,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		}
 	}
 
-	cluster->invalid_node_count = as_peers_invalid_count(&peers);
+	cluster->invalid_node_count += as_peers_invalid_count(&peers);
 
 	// Refresh partition map when necessary.
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -880,6 +964,11 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 	if (rebalance && cluster->shm_info) {
 		// Update shared memory to notify prole tenders to rebalance (retrieve racks info).
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
+	}
+
+	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_policy->interval))
+	{
+		cluster->metrics_callbacks->snapshot_callback(cluster->metrics_policy, cluster);
 	}
 
 	as_cluster_destroy_peers(&peers);

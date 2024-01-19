@@ -90,7 +90,7 @@ typedef struct as_node_stats_s {
 	/**
 	 * Node error count within current window.
 	 */
-	uint32_t error_count;
+	uint32_t error_rate_count;
 
 } as_node_stats;
 
@@ -143,6 +143,11 @@ typedef struct as_cluster_stats_s {
 	 * then all threads in the thread pool are active.
 	 */
 	uint32_t thread_pool_queued_tasks;
+
+	/**
+	* Count of transaction retries since cluster was started.
+	*/
+	uint64_t retry_count;
 
 } as_cluster_stats;
 
@@ -241,6 +246,18 @@ aerospike_event_loop_stats(as_event_loop* event_loop, as_event_loop_stats* stats
  */
 AS_EXTERN char*
 aerospike_stats_to_string(as_cluster_stats* stats);
+
+/**
+ * Enable extended periodic cluster and node latency metrics.
+ */
+AS_EXTERN void
+aerospike_enable_metrics(aerospike* as, const struct as_policy_metrics_s* policy);
+
+/**
+ * Disable extended periodic cluster and node latency metrics.
+ */
+AS_EXTERN void
+aerospike_disable_metrics(aerospike* as);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -590,6 +590,8 @@ as_command_execute(as_command* cmd, as_error* err)
 	as_node* node = NULL;
 	as_status status;
 	bool release_node;
+	as_latency_type latency_type = cmd->cluster->metrics_enabled ? cmd->latency_type : AS_LATENCY_TYPE_NONE;
+	uint64_t begin = cf_getns();
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
@@ -615,7 +617,7 @@ as_command_execute(as_command* cmd, as_error* err)
 			release_node = true;
 		}
 
-		if (! as_node_valid_error_count(node)) {
+		if (! as_node_valid_error_rate(node)) {
 			status = as_error_set_message(err, AEROSPIKE_MAX_ERROR_RATE, "Max error rate exceeded");
 			goto Retry;
 		}
@@ -705,6 +707,12 @@ as_command_execute(as_command* cmd, as_error* err)
 		
 		// Put connection back in pool.
 		as_node_put_connection(node, &socket);
+
+		if (latency_type != AS_LATENCY_TYPE_NONE)
+		{
+			uint64_t elapsed = cf_getns() - begin;
+			as_node_add_latency(node, latency_type, elapsed);
+		}
 		
 		// Release resources.
 		if (release_node) {

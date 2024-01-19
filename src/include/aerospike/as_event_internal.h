@@ -761,7 +761,7 @@ as_event_release_async_connection(as_event_command* cmd)
 {
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	as_event_release_connection(cmd->conn, pool);
-	as_node_incr_error_count(cmd->node);
+	as_node_incr_error_rate(cmd->node);
 }
 
 static inline void
@@ -783,7 +783,7 @@ as_event_connection_timeout(as_event_command* cmd, as_async_conn_pool* pool)
 		if (conn->watching > 0) {
 			as_event_stop_watcher(cmd, conn);
 			as_event_release_connection(conn, pool);
-			as_node_incr_error_count(cmd->node);
+			as_node_incr_error_rate(cmd->node);
 		}
 		else {
 			cf_free(conn);

@@ -136,11 +136,18 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->partition_changed = true;
 	node->rebalance_changed = cluster->rack_aware;
 
+	if (cluster->metrics_enabled)
+	{
+		as_node_metrics_init(node->metrics, cluster->metrics_policy);
+	}
+
 	// Create sync connection pools.
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
 	node->sync_conns_opened = 1;
 	node->sync_conns_closed = 0;
+	node->error_rate_count = 0;
 	node->error_count = 0;
+	node->timeout_count = 0;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
@@ -635,7 +642,7 @@ as_node_balance_connections(as_node* node)
 		if (excess > 0) {
 			as_node_close_idle_connections(node, pool, excess);
 		}
-		else if (excess < 0 && as_node_valid_error_count(node)) {
+		else if (excess < 0 && as_node_valid_error_rate(node)) {
 			as_node_create_connections(node, pool, timeout_ms, -excess);
 		}
 	}
@@ -902,7 +909,7 @@ static void
 as_node_restart(as_cluster* cluster, as_node* node)
 {
 	if (cluster->max_error_rate > 0) {
-		as_node_reset_error_count(node);
+		as_node_reset_error_rate_count(node);
 	}
 
 	// Balance sync connections.
@@ -1297,6 +1304,18 @@ as_node_parse_racks(as_cluster* cluster, as_error* err, as_node* node, char* buf
 
 	as_node_replace_racks(cluster, node, racks);
 	return AEROSPIKE_OK;
+}
+
+void
+as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed)
+{
+	as_metrics_add_latency(node->metrics, latency_type, elapsed);
+}
+
+void
+as_node_enable_metrics(as_node* node, as_policy_metrics* policy)
+{
+	as_node_metrics_init(node->metrics, policy);
 }
 
 static as_status

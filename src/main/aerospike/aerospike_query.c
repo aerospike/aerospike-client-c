@@ -1132,6 +1132,8 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.flags = flags;
 	cmd.replica_size = 1;
 	cmd.replica_index = 0;
+	cmd.latency_type = AS_LATENCY_TYPE_QUERY;
+	as_cluster_add_tran(task->cluster);
 
 	as_command_start_timer(&cmd);
 
@@ -1233,6 +1235,8 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.flags = flags;
 	cmd.replica_size = 1;
 	cmd.replica_index = 0;
+	cmd.latency_type = AS_LATENCY_TYPE_QUERY;
+	as_cluster_add_tran(task->cluster);
 
 	as_command_start_timer(&cmd);
 

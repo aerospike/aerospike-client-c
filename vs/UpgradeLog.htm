@@ -1,0 +1,297 @@
+﻿<!DOCTYPE html>
+<!-- saved from url=(0014)about:internet -->
+ <html xmlns:msxsl="urn:schemas-microsoft-com:xslt"><head><meta content="en-us" http-equiv="Content-Language" /><meta content="text/html; charset=utf-16" http-equiv="Content-Type" /><title _locID="ConversionReport0">
+          Migration Report
+        </title><style> 
+                    /* Body style, for the entire document */
+                    body
+                    {
+                        background: #F3F3F4;
+                        color: #1E1E1F;
+                        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                        padding: 0;
+                        margin: 0;
+                    }
+
+                    /* Header1 style, used for the main title */
+                    h1
+                    {
+                        padding: 10px 0px 10px 10px;
+                        font-size: 21pt;
+                        background-color: #E2E2E2;
+                        border-bottom: 1px #C1C1C2 solid; 
+                        color: #201F20;
+                        margin: 0;
+                        font-weight: normal;
+                    }
+
+                    /* Header2 style, used for "Overview" and other sections */
+                    h2
+                    {
+                        font-size: 18pt;
+                        font-weight: normal;
+                        padding: 15px 0 5px 0;
+                        margin: 0;
+                    }
+
+                    /* Header3 style, used for sub-sections, such as project name */
+                    h3
+                    {
+                        font-weight: normal;
+                        font-size: 15pt;
+                        margin: 0;
+                        padding: 15px 0 5px 0;
+                        background-color: transparent;
+                    }
+
+                    /* Color all hyperlinks one color */
+                    a
+                    {
+                        color: #1382CE;
+                    }
+
+                    /* Table styles */ 
+                    table
+                    {
+                        border-spacing: 0 0;
+                        border-collapse: collapse;
+                        font-size: 10pt;
+                    }
+
+                    table th
+                    {
+                        background: #E7E7E8;
+                        text-align: left;
+                        text-decoration: none;
+                        font-weight: normal;
+                        padding: 3px 6px 3px 6px;
+                    }
+
+                    table td
+                    {
+                        vertical-align: top;
+                        padding: 3px 6px 5px 5px;
+                        margin: 0px;
+                        border: 1px solid #E7E7E8;
+                        background: #F7F7F8;
+                    }
+
+                    /* Local link is a style for hyperlinks that link to file:/// content, there are lots so color them as 'normal' text until the user mouse overs */
+                    .localLink
+                    {
+                        color: #1E1E1F;
+                        background: #EEEEED;
+                        text-decoration: none;
+                    }
+
+                    .localLink:hover
+                    {
+                        color: #1382CE;
+                        background: #FFFF99;
+                        text-decoration: none;
+                    }
+
+                    /* Center text, used in the over views cells that contain message level counts */ 
+                    .textCentered
+                    {
+                        text-align: center;
+                    }
+
+                    /* The message cells in message tables should take up all avaliable space */
+                    .messageCell
+                    {
+                        width: 100%;
+                    }
+
+                    /* Padding around the content after the h1 */ 
+                    #content 
+                    {
+	                    padding: 0px 12px 12px 12px; 
+                    }
+
+                    /* The overview table expands to width, with a max width of 97% */ 
+                    #overview table
+                    {
+                        width: auto;
+                        max-width: 75%; 
+                    }
+
+                    /* The messages tables are always 97% width */
+                    #messages table
+                    {
+                        width: 97%;
+                    }
+
+                    /* All Icons */
+                    .IconSuccessEncoded, .IconInfoEncoded, .IconWarningEncoded, .IconErrorEncoded
+                    {
+                        min-width:18px;
+                        min-height:18px; 
+                        background-repeat:no-repeat;
+                        background-position:center;
+                    }
+
+                    /* Success icon encoded */
+                    .IconSuccessEncoded
+                    {
+                        /* Note: Do not delete the comment below. It is used to verify the correctness of the encoded image resource below before the product is released */
+                        /* [---XsltValidateInternal-Base64EncodedImage:IconSuccess#Begin#background-image: url(data:image/png;base64,#Separator#);#End#] */
+                        background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAA7EAAAOxAGVKw4bAAABcElEQVR4Xq2TsUsCURzHv15g8ZJcBWlyiYYgCIWcb9DFRRwMW5TA2c0/QEFwFkxxUQdxVlBwCYWOi6IhWgQhBLHJUCkhLr/BW8S7gvrAg+N+v8/v+x68Z8MGy+XSCyABQAXgBgHGALoASkIIDWSLeLBetdHryMjd5IxQPWT4rn1c/P7+xxp72Cs9m5SZ0Bq2vPnbPFafK2zDvmNHypdC0BPkLlQhxJsCAhQoZwdZU5mwxh720qGo8MzTxTTKZDPCx2HoVzp6lz0Q9tKhyx0kGs8Ny+TkWRKk8lCROwEduhyg9l/6lunOPSfmH3NUH6uQ0KHLAe7JYvJjevm+DAMGJHToKtigE+vwvIidxLamb8IBY9e+C5LiXREkfho3TSd06HJA13/oh6T51MTsfQbHrsMynQ5dDihFjiK8JJAU9AKIWTp76dCVN7HWHrajmUEGvyF9nkbAE6gLIS7kTUyuf2gscLoJrElZo/Mvj+nPz/kLTmfnEwP3tB0AAAAASUVORK5CYII=);
+                    }
+
+                    /* Information icon encoded */
+                    .IconInfoEncoded
+                    {
+                        /* Note: Do not delete the comment below. It is used to verify the correctness of the encoded image resource below before the product is released */
+                        /* [---XsltValidateInternal-Base64EncodedImage:IconInformation#Begin#background-image: url(data:image/png;base64,#Separator#);#End#] */
+                        background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABHElEQVR4Xs2TsUoDQRRF7wwoziokjZUKadInhdhukR9YP8DMX1hYW+QvdsXa/QHBbcXC7W0CamWTQnclFutceIQJwwaWNLlwm5k5d94M76mmaeCrrmsLYOocY12FcxZFUeozCqKqqgYA8uevv1H6VuPxcwlfk5N92KHBxfFeCSAxxswlYAW/Xr989x/mv9gkhtyMDhcAxgzRsp7flj8B/HF1RsMXq+NZMkopaHe7lbKxQUEIGbKsYNoGn969060hZBkQex/W8oRQwsQaW2o3Ago2SVcJUzAgY3N0lTCZZm+zPS8HB51gMmS1DEYyOz9acKO1D8JWTlafKIMxdhvlfdyT94Vv5h7P8Ky7nQzACmhvKq3zk3PjW9asz9D/1oigecsioooAAAAASUVORK5CYII=);
+                    }
+
+                    /* Warning icon encoded */
+                    .IconWarningEncoded
+                    {
+                        /* Note: Do not delete the comment below. It is used to verify the correctness of the encoded image resource below before the product is released */
+                        /* [---XsltValidateInternal-Base64EncodedImage:IconWarning#Begin#background-image: url(data:image/png;base64,#Separator#);#End#] */
+                        background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAx0lEQVR4XpWSMQ7CMAxFf4xAyBMLCxMrO8dhaBcuwdCJS3RJBw7SA/QGTCxdWJgiQYWKXJWKIXHIlyw5lqr34tQgEOdcBsCOx5yZK3hCCKdYXneQkh4pEfqzLfu+wVDSyyzFoJjfz9NB+pAF+eizx2Vruts0k15mPgvS6GYvpVtQhB61IB/dk6AF6fS4Ben0uIX5odtFe8Q/eW1KvFeH4e8khT6+gm5B+t3juyDt7n0jpe+CANTd+oTUjN/U3yVaABnSUjFz/gFq44JaVSCXeQAAAABJRU5ErkJggg==);
+                    }
+
+                    /* Error icon encoded */
+                    .IconErrorEncoded
+                    {
+                        /* Note: Do not delete the comment below. It is used to verify the correctness of the encoded image resource below before the product is released */
+                        /* [---XsltValidateInternal-Base64EncodedImage:IconError#Begin#background-image: url(data:image/png;base64,#Separator#);#End#] */
+                        background-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABQElEQVR4XqWTvUoEQRCE6wYPZUA80AfwAQz23uCMjA7MDRQEIzPBVEyNTQUFIw00vcQTTMzuAh/AxEQQT8HF/3G/oGGnEUGuoNnd6qoZuqltyKEsyzVJq5I6rnUp6SjGeGhESikzzlc1eL7opfuVbrqbU1Zw9NCgtQMaZpY0eNnaaL2fHusvTK5vKu7sjSS1Y4y3QUA6K3e3Mau5UFDyMP7tYF9o8cAHZv68vipoIJg971PZIZ5HiwdvYGGvFVFHmGmZ2MxwmQYPXubPl9Up0tfoMQGetXd6mRbvhBw+boZ6WF7Mbv1+GsHRk0fQmPAH1GfmZirbCfDJ61tw3Px8/8pZsPAG4jlVhcPgZ7adwNWBB68lkRQWFiTgFlbnLY3DGGM7izIJIyT/jjIvEJw6fdJTc6krDzh6aMwMP9bvDH4ADSsa9uSWVJkAAAAASUVORK5CYII=);
+                    }
+                 </style><script type="text/javascript" language="javascript"> 
+          
+            // Startup 
+            // Hook up the the loaded event for the document/window, to linkify the document content
+            var startupFunction = function() { linkifyElement("messages"); };
+            
+            if(window.attachEvent)
+            {
+              window.attachEvent('onload', startupFunction);
+            }
+            else if (window.addEventListener) 
+            {
+              window.addEventListener('load', startupFunction, false);
+            }
+            else 
+            {
+              document.addEventListener('load', startupFunction, false);
+            } 
+            
+            // Toggles the visibility of table rows with the specified name 
+            function toggleTableRowsByName(name)
+            {
+               var allRows = document.getElementsByTagName('tr');
+               for (i=0; i < allRows.length; i++)
+               {
+                  var currentName = allRows[i].getAttribute('name');
+                  if(!!currentName && currentName.indexOf(name) == 0)
+                  {
+                      var isVisible = allRows[i].style.display == ''; 
+                      isVisible ? allRows[i].style.display = 'none' : allRows[i].style.display = '';
+                  }
+               }
+            }
+            
+            function scrollToFirstVisibleRow(name) 
+            {
+               var allRows = document.getElementsByTagName('tr');
+               for (i=0; i < allRows.length; i++)
+               {
+                  var currentName = allRows[i].getAttribute('name');
+                  var isVisible = allRows[i].style.display == ''; 
+                  if(!!currentName && currentName.indexOf(name) == 0 && isVisible)
+                  {
+                     allRows[i].scrollIntoView(true); 
+                     return true; 
+                  }
+               }
+               
+               return false;
+            }
+            
+            // Linkifies the specified text content, replaces candidate links with html links 
+            function linkify(text)
+            {
+                 if(!text || 0 === text.length)
+                 {
+                     return text; 
+                 }
+
+                 // Find http, https and ftp links and replace them with hyper links 
+                 var urlLink = /(http|https|ftp)\:\/\/[a-zA-Z0-9\-\.]+(:[a-zA-Z0-9]*)?\/?([a-zA-Z0-9\-\._\?\,\/\\\+&%\$#\=~;\{\}])*/gi;
+                 
+                 return text.replace(urlLink, '<a href="$&">$&</a>') ;
+            }
+            
+            // Linkifies the specified element by ID
+            function linkifyElement(id)
+            {
+                var element = document.getElementById(id);
+                if(!!element)
+                {
+                  element.innerHTML = linkify(element.innerHTML); 
+                }
+            }
+            
+            function ToggleMessageVisibility(projectName)
+            {
+              if(!projectName || 0 === projectName.length)
+              {
+                return; 
+              }
+              
+              toggleTableRowsByName("MessageRowClass" + projectName);
+              toggleTableRowsByName('MessageRowHeaderShow' + projectName);
+              toggleTableRowsByName('MessageRowHeaderHide' + projectName); 
+            }
+            
+            function ScrollToFirstVisibleMessage(projectName)
+            {
+              if(!projectName || 0 === projectName.length)
+              {
+                return; 
+              }
+              
+              // First try the 'Show messages' row
+              if(!scrollToFirstVisibleRow('MessageRowHeaderShow' + projectName))
+              {
+                // Failed to find a visible row for 'Show messages', try an actual message row 
+                scrollToFirstVisibleRow('MessageRowClass' + projectName); 
+              }
+            }
+           </script></head><body><h1 _locID="ConversionReport">
+          Migration Report - </h1><div id="content"><h2 _locID="OverviewTitle">Overview</h2><div id="overview"><table><tr><th></th><th _locID="ProjectTableHeader">Project</th><th _locID="PathTableHeader">Path</th><th _locID="ErrorsTableHeader">Errors</th><th _locID="WarningsTableHeader">Warnings</th><th _locID="MessagesTableHeader">Messages</th></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#aerospike">aerospike</a></strong></td><td>aerospike\aerospike.vcxproj</td><td class="textCentered"><a href="#aerospikeError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#aerospike-test">aerospike-test</a></strong></td><td>aerospike-test\aerospike-test.vcxproj</td><td class="textCentered"><a href="#aerospike-testError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#append">append</a></strong></td><td>examples\append\append.vcxproj</td><td class="textCentered"><a href="#appendError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#async-batch-get">async-batch-get</a></strong></td><td>examples\async-batch-get\async-batch-get.vcxproj</td><td class="textCentered"><a href="#async-batch-getError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#async-delay-queue">async-delay-queue</a></strong></td><td>examples\async-delay-queue\async-delay-queue.vcxproj</td><td class="textCentered"><a href="#async-delay-queueError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#async-get">async-get</a></strong></td><td>examples\async-get\async-get.vcxproj</td><td class="textCentered"><a href="#async-getError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#async-query">async-query</a></strong></td><td>examples\async-query\async-query.vcxproj</td><td class="textCentered"><a href="#async-queryError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#async-scan">async-scan</a></strong></td><td>examples\async-scan\async-scan.vcxproj</td><td class="textCentered"><a href="#async-scanError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#batch-get">batch-get</a></strong></td><td>examples\batch-get\batch-get.vcxproj</td><td class="textCentered"><a href="#batch-getError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#expire">expire</a></strong></td><td>examples\expire\expire.vcxproj</td><td class="textCentered"><a href="#expireError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#generation">generation</a></strong></td><td>examples\generation\generation.vcxproj</td><td class="textCentered"><a href="#generationError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#geo-filter">geo-filter</a></strong></td><td>examples\geo-filter\geo-filter.vcxproj</td><td class="textCentered"><a href="#geo-filterError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#geo-simple">geo-simple</a></strong></td><td>examples\geo-simple\geo-simple.vcxproj</td><td class="textCentered"><a href="#geo-simpleError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#get">get</a></strong></td><td>examples\get\get.vcxproj</td><td class="textCentered"><a href="#getError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#incr">incr</a></strong></td><td>examples\incr\incr.vcxproj</td><td class="textCentered"><a href="#incrError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#list">list</a></strong></td><td>examples\list\list.vcxproj</td><td class="textCentered"><a href="#listError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#map">map</a></strong></td><td>examples\map\map.vcxproj</td><td class="textCentered"><a href="#mapError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#put">put</a></strong></td><td>examples\put\put.vcxproj</td><td class="textCentered"><a href="#putError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#query">query</a></strong></td><td>examples\query\query.vcxproj</td><td class="textCentered"><a href="#queryError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#query-aggregate">query-aggregate</a></strong></td><td>examples\query-aggregate\query-aggregate.vcxproj</td><td class="textCentered"><a href="#query-aggregateError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#scan">scan</a></strong></td><td>examples\scan\scan.vcxproj</td><td class="textCentered"><a href="#scanError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#scan-background">scan-background</a></strong></td><td>examples\scan-background\scan-background.vcxproj</td><td class="textCentered"><a href="#scan-backgroundError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#touch">touch</a></strong></td><td>examples\touch\touch.vcxproj</td><td class="textCentered"><a href="#touchError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconErrorEncoded" /><td><strong><a href="#udf">udf</a></strong></td><td>examples\udf\udf.vcxproj</td><td class="textCentered"><a href="#udfError">1</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconSuccessEncoded" /><td><strong><a href="#examples">examples</a></strong></td><td>examples</td><td class="textCentered"><a>0</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#">0</a></td></tr><tr><td class="IconSuccessEncoded" /><td><strong><a href="#Solution"><span _locID="OverviewSolutionSpan">Solution</span></a></strong></td><td>aerospike.sln</td><td class="textCentered"><a>0</a></td><td class="textCentered"><a>0</a></td><td class="textCentered"><a href="#" onclick="ScrollToFirstVisibleMessage('Solution'); return false;">1</a></td></tr></table></div><h2 _locID="SolutionAndProjectsTitle">Solution and projects</h2><div id="messages"><a name="aerospike" /><h3>aerospike</h3><table><tr id="aerospikeHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassaerospike"><td class="IconErrorEncoded"><a name="aerospikeError" /></td><td class="messageCell"><strong>aerospike\aerospike.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="aerospike-test" /><h3>aerospike-test</h3><table><tr id="aerospike-testHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassaerospike-test"><td class="IconErrorEncoded"><a name="aerospike-testError" /></td><td class="messageCell"><strong>aerospike-test\aerospike-test.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="append" /><h3>append</h3><table><tr id="appendHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassappend"><td class="IconErrorEncoded"><a name="appendError" /></td><td class="messageCell"><strong>examples\append\append.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="async-batch-get" /><h3>async-batch-get</h3><table><tr id="async-batch-getHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassasync-batch-get"><td class="IconErrorEncoded"><a name="async-batch-getError" /></td><td class="messageCell"><strong>examples\async-batch-get\async-batch-get.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="async-delay-queue" /><h3>async-delay-queue</h3><table><tr id="async-delay-queueHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassasync-delay-queue"><td class="IconErrorEncoded"><a name="async-delay-queueError" /></td><td class="messageCell"><strong>examples\async-delay-queue\async-delay-queue.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="async-get" /><h3>async-get</h3><table><tr id="async-getHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassasync-get"><td class="IconErrorEncoded"><a name="async-getError" /></td><td class="messageCell"><strong>examples\async-get\async-get.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="async-query" /><h3>async-query</h3><table><tr id="async-queryHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassasync-query"><td class="IconErrorEncoded"><a name="async-queryError" /></td><td class="messageCell"><strong>examples\async-query\async-query.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="async-scan" /><h3>async-scan</h3><table><tr id="async-scanHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassasync-scan"><td class="IconErrorEncoded"><a name="async-scanError" /></td><td class="messageCell"><strong>examples\async-scan\async-scan.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="batch-get" /><h3>batch-get</h3><table><tr id="batch-getHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassbatch-get"><td class="IconErrorEncoded"><a name="batch-getError" /></td><td class="messageCell"><strong>examples\batch-get\batch-get.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="expire" /><h3>expire</h3><table><tr id="expireHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassexpire"><td class="IconErrorEncoded"><a name="expireError" /></td><td class="messageCell"><strong>examples\expire\expire.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="generation" /><h3>generation</h3><table><tr id="generationHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassgeneration"><td class="IconErrorEncoded"><a name="generationError" /></td><td class="messageCell"><strong>examples\generation\generation.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="geo-filter" /><h3>geo-filter</h3><table><tr id="geo-filterHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassgeo-filter"><td class="IconErrorEncoded"><a name="geo-filterError" /></td><td class="messageCell"><strong>examples\geo-filter\geo-filter.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="geo-simple" /><h3>geo-simple</h3><table><tr id="geo-simpleHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassgeo-simple"><td class="IconErrorEncoded"><a name="geo-simpleError" /></td><td class="messageCell"><strong>examples\geo-simple\geo-simple.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="get" /><h3>get</h3><table><tr id="getHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassget"><td class="IconErrorEncoded"><a name="getError" /></td><td class="messageCell"><strong>examples\get\get.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="incr" /><h3>incr</h3><table><tr id="incrHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassincr"><td class="IconErrorEncoded"><a name="incrError" /></td><td class="messageCell"><strong>examples\incr\incr.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="list" /><h3>list</h3><table><tr id="listHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClasslist"><td class="IconErrorEncoded"><a name="listError" /></td><td class="messageCell"><strong>examples\list\list.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="map" /><h3>map</h3><table><tr id="mapHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassmap"><td class="IconErrorEncoded"><a name="mapError" /></td><td class="messageCell"><strong>examples\map\map.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="put" /><h3>put</h3><table><tr id="putHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassput"><td class="IconErrorEncoded"><a name="putError" /></td><td class="messageCell"><strong>examples\put\put.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="query" /><h3>query</h3><table><tr id="queryHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassquery"><td class="IconErrorEncoded"><a name="queryError" /></td><td class="messageCell"><strong>examples\query\query.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="query-aggregate" /><h3>query-aggregate</h3><table><tr id="query-aggregateHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassquery-aggregate"><td class="IconErrorEncoded"><a name="query-aggregateError" /></td><td class="messageCell"><strong>examples\query-aggregate\query-aggregate.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="scan" /><h3>scan</h3><table><tr id="scanHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassscan"><td class="IconErrorEncoded"><a name="scanError" /></td><td class="messageCell"><strong>examples\scan\scan.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="scan-background" /><h3>scan-background</h3><table><tr id="scan-backgroundHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassscan-background"><td class="IconErrorEncoded"><a name="scan-backgroundError" /></td><td class="messageCell"><strong>examples\scan-background\scan-background.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="touch" /><h3>touch</h3><table><tr id="touchHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClasstouch"><td class="IconErrorEncoded"><a name="touchError" /></td><td class="messageCell"><strong>examples\touch\touch.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="udf" /><h3>udf</h3><table><tr id="udfHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="ErrorRowClassudf"><td class="IconErrorEncoded"><a name="udfError" /></td><td class="messageCell"><strong>examples\udf\udf.vcxproj:
+        </strong><span>The application which this project type is based on was not found. Please try this link for further information: 8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942</span></td></tr></table><a name="examples" /><h3>examples</h3><table><tr id="examplesHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr><td class="IconInfoEncoded" /><td class="messageCell" _locID="NoMessagesRow">examples logged no messages.
+                  </td></tr></table><a name="Solution" /><h3 _locID="ProjectDisplayNameHeader">Solution</h3><table><tr id="SolutionHeaderRow"><th></th><th class="messageCell" _locID="MessageTableHeader">Message</th></tr><tr name="MessageRowHeaderShowSolution"><td class="IconInfoEncoded" /><td class="messageCell"><a _locID="ShowAdditionalMessages" href="#" name="SolutionMessage" onclick="ToggleMessageVisibility('Solution'); return false;">
+          Show 1 additional messages
+        </a></td></tr><tr name="MessageRowClassSolution" style="display: none"><td class="IconInfoEncoded"><a name="SolutionMessage" /></td><td class="messageCell"><strong>aerospike.sln:
+        </strong><span>The solution file does not require migration.</span></td></tr><tr style="display: none" name="MessageRowHeaderHideSolution"><td class="IconInfoEncoded" /><td class="messageCell"><a _locID="HideAdditionalMessages" href="#" name="SolutionMessage" onclick="ToggleMessageVisibility('Solution'); return false;">
+          Hide 1 additional messages
+        </a></td></tr></table></div></div></body></html>

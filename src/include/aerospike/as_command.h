@@ -190,6 +190,7 @@ typedef struct as_command_s {
 	uint8_t replica_size;
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
+	as_latency_type latency_type;
 } as_command;
 
 /**

@@ -110,6 +110,7 @@ aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
 
 	// cf_queue applies locks, so we are safe here.
 	stats->thread_pool_queued_tasks = cf_queue_sz(cluster->thread_pool.dispatch_queue);
+	stats->retry_count = cluster->retry_count;
 }
 
 void
@@ -133,7 +134,7 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 {
 	as_node_reserve(node); // Released in aerospike_node_stats_destroy()
 	stats->node = node;
-	stats->error_count = as_node_get_error_count(node);
+	stats->error_rate_count = as_node_get_error_rate(node);
 
 	as_sum_init(&stats->sync);
 	as_sum_init(&stats->async);
@@ -184,7 +185,7 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		as_conn_stats_tostring(&sb, "pipeline", &node_stats->pipeline);
 		as_string_builder_append_newline(&sb);
 		as_string_builder_append(&sb, "error count: ");
-		as_string_builder_append_uint(&sb, node_stats->error_count);
+		as_string_builder_append_uint(&sb, node_stats->error_rate_count);
 		as_string_builder_append_newline(&sb);
 	}
 
@@ -206,4 +207,18 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		as_string_builder_append_newline(&sb);
 	}
 	return sb.data;
+}
+
+void
+aerospike_enable_metrics(aerospike* as, const as_policy_metrics* policy)
+{
+	as_cluster* cluster = as->cluster;
+	as_cluster_enable_metrics(cluster, policy);
+}
+
+void
+aerospike_disable_metrics(aerospike* as)
+{
+	as_cluster* cluster = as->cluster;
+	as_cluster_disable_metrics(cluster);
 }

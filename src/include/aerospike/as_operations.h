@@ -578,7 +578,8 @@ AS_EXTERN bool
 as_operations_add_read_all(as_operations* ops);
 
 /**
- * Add a `AS_OPERATOR_INCR` bin operation with (required) int64_t value.
+ * Add a `AS_OPERATOR_INCR` bin operation with int64_t value. If the record or bin does not exist,
+ * the record/bin will be created by default with the value to be added.
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
@@ -593,7 +594,8 @@ AS_EXTERN bool
 as_operations_add_incr(as_operations* ops, const char* name, int64_t value);
 
 /**
- * Add a `AS_OPERATOR_INCR` bin operation with double value.
+ * Add a `AS_OPERATOR_INCR` bin operation with double value. If the record or bin does not exist,
+ * the record/bin will be created by default with the value to be added.
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.

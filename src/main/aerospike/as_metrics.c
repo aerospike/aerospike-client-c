@@ -248,6 +248,21 @@ as_metrics_write_cluster(struct as_policy_metrics_s* policy, const struct as_clu
 	as_string_builder_append(&sb, ',');
 	as_string_builder_append(&sb, cluster->delay_queue_timeout_count); // Cumulative. Not reset on each interval.
 	as_string_builder_append(&sb, ",[");
+
+	as_event_loop_stats* event_loops = stats->event_loops;
+	for (uint32_t i = 0; i < stats->event_loops_size; i++)
+	{
+		as_event_loop_stats* loop = &event_loops[i];
+		if (i > 0) {
+			as_string_builder_append(&sb, ',');
+		}
+		as_string_builder_append(&sb, '[');
+		as_string_builder_append(&sb, loop->process_size);
+		as_string_builder_append(&sb, ',');
+		as_string_builder_append(&sb, loop->queue_size);
+		as_string_builder_append(&sb, ']');
+	}
+	as_string_builder_append(&sb, '],[');
 	
 	as_node_stats* nodes = stats->nodes;
 	for (uint32_t i = 0; i < stats->nodes_size; i++) {

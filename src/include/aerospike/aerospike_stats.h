@@ -97,7 +97,7 @@ typedef struct as_node_stats_s {
 	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
 	 * multiple timeouts per transaction may occur.
 	 */
-	int64_t timeout_count;
+	uint64_t timeout_count;
 
 } as_node_stats;
 

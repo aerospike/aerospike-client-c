@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -88,9 +88,16 @@ typedef struct as_node_stats_s {
 	as_conn_stats pipeline;
 
 	/**
-	 * Node error count within current window.
+	 * Transaction error count since node was initialized. If the error is retryable, multiple errors per
+	 * transaction may occur.
 	 */
-	uint32_t error_rate_count;
+	uint32_t error_count;
+
+	/**
+	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * multiple timeouts per transaction may occur.
+	 */
+	int64_t timeout_count;
 
 } as_node_stats;
 

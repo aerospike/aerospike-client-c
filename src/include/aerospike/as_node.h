@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -651,6 +651,32 @@ as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapse
 
 void
 as_node_enable_metrics(as_node* node, as_policy_metrics* policy);
+
+/**
+ * Return transaction error count. The value is cumulative and not reset per metrics interval.
+ */
+uint64_t
+as_node_get_error_count(as_node* node);
+
+/**
+ * Increment transaction error count. If the error is retryable, multiple errors per
+ * transaction may occur.
+ */
+void 
+as_node_add_error(as_node* node);
+
+/**
+ * Return transaction timeout count. The value is cumulative and not reset per metrics interval.
+ */
+uint64_t
+as_node_get_timeout_count(as_node* node);
+
+/**
+ * Increment transaction timeout count. If the timeout is retryable (ie socketTimeout),
+ * multiple timeouts per transaction may occur.
+ */
+void
+as_node_add_timeout(as_node* node);
 
 /**
  * @private

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -134,7 +134,8 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 {
 	as_node_reserve(node); // Released in aerospike_node_stats_destroy()
 	stats->node = node;
-	stats->error_rate_count = as_node_get_error_rate(node);
+	stats->error_count = as_node_get_error_count(node);
+	stats->timeout_count = as_node_get_timeout_count(node);
 
 	as_sum_init(&stats->sync);
 	as_sum_init(&stats->async);
@@ -185,7 +186,7 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		as_conn_stats_tostring(&sb, "pipeline", &node_stats->pipeline);
 		as_string_builder_append_newline(&sb);
 		as_string_builder_append(&sb, "error count: ");
-		as_string_builder_append_uint(&sb, node_stats->error_rate_count);
+		as_string_builder_append_uint(&sb, node_stats->error_count);
 		as_string_builder_append_newline(&sb);
 	}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1317,6 +1317,31 @@ as_node_enable_metrics(as_node* node, as_policy_metrics* policy)
 {
 	as_node_metrics_init(node->metrics, policy);
 }
+
+uint64_t
+as_node_get_error_count(as_node* node)
+{
+	return as_load_uint64(&node->error_count);
+}
+
+void
+as_node_add_error(as_node* node)
+{
+	as_incr_uint64(&node->error_count);
+}
+
+uint64_t
+as_node_get_timeout_count(as_node* node)
+{
+	return as_load_uint64(&node->timeout_count);
+}
+
+void
+as_node_add_timeout(as_node* node)
+{
+	as_incr_uint64(&node->timeout_count);
+}
+
 
 static as_status
 as_node_process_racks(as_cluster* cluster, as_error* err, as_node* node, as_vector* values)

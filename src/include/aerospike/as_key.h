@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -26,53 +26,41 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
  * The size of as_digest.value
- *
- * @ingroup as_key_object
  */
 #define AS_DIGEST_VALUE_SIZE 20
 
 /**
  * The maxium size of as_namespace.
- *
- * @ingroup as_key_object
  */
 #define AS_NAMESPACE_MAX_SIZE 32
 
 /**
  * The maxium size of as_set.
- *
- * @ingroup as_key_object
  */
 #define AS_SET_MAX_SIZE 64
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Namespace Name
- *
- * @ingroup as_key_object
  */
 typedef char as_namespace[AS_NAMESPACE_MAX_SIZE];
 
 /**
  * Set Name
- *
- * @ingroup as_key_object
  */
 typedef char as_set[AS_SET_MAX_SIZE];
 
 /**
  * Digest value
- *
- * @ingroup as_key_object
  */
 typedef uint8_t as_digest_value[AS_DIGEST_VALUE_SIZE];
 
@@ -80,8 +68,6 @@ typedef uint8_t as_digest_value[AS_DIGEST_VALUE_SIZE];
  * The digest is the value used to locate a record based on the
  * set and digest of the record. The digest is calculated using RIPEMD-160.
  * Keys for digests can be either a string or integer.
- *
- * @ingroup as_key_object
  */
 typedef struct as_digest_s {
 
@@ -99,8 +85,6 @@ typedef struct as_digest_s {
 
 /**
  * Key value
- *
- * @ingroup as_key_object
  */
 typedef union as_key_value_u {
 
@@ -230,9 +214,9 @@ typedef struct as_key_s {
 
 } as_key;
 
-/******************************************************************************
- * as_key FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Initialize a stack allocated as_key to a NULL-terminated string value.
@@ -253,7 +237,6 @@ typedef struct as_key_s {
  * @return The initialized as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_init(as_key* key, const char* ns, const char* set, const char* value);
@@ -276,7 +259,6 @@ as_key_init(as_key* key, const char* ns, const char* set, const char* value);
  * @return The initialized as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_init_int64(as_key* key, const char* ns, const char* set, int64_t value);
@@ -300,7 +282,6 @@ as_key_init_int64(as_key* key, const char* ns, const char* set, int64_t value);
  * @return The initialized as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_init_strp(as_key* key, const char* ns, const char* set, const char* value, bool free);
@@ -323,7 +304,6 @@ as_key_init_strp(as_key* key, const char* ns, const char* set, const char* value
  * @return The initialized as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 static inline as_key*
 as_key_init_str(as_key* key, const char* ns, const char* set, const char* value)
@@ -356,7 +336,6 @@ as_key_init_str(as_key* key, const char* ns, const char* set, const char* value)
  * @return The initialized as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_init_rawp(as_key* key, const char* ns, const char* set, const uint8_t* value, uint32_t size, bool free);
@@ -382,7 +361,6 @@ as_key_init_rawp(as_key* key, const char* ns, const char* set, const uint8_t* va
  * @return The initialized as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 static inline as_key*
 as_key_init_raw(as_key* key, const char* ns, const char* set, const uint8_t* value, uint32_t size)
@@ -410,7 +388,6 @@ as_key_init_raw(as_key* key, const char* ns, const char* set, const uint8_t* val
  * @return The initialized as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_init_digest(as_key* key, const char* ns, const char* set, const as_digest_value digest);
@@ -436,7 +413,6 @@ as_key_init_digest(as_key* key, const char* ns, const char* set, const as_digest
  * @return The initialized as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_init_value(as_key* key, const char* ns, const char* set, const as_key_value* value);
@@ -458,7 +434,6 @@ as_key_init_value(as_key* key, const char* ns, const char* set, const as_key_val
  * @return A new as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_new(const char* ns, const char* set, const char* value);
@@ -480,7 +455,6 @@ as_key_new(const char* ns, const char* set, const char* value);
  * @return A new as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_new_int64(const char* ns, const char* set, int64_t value);
@@ -503,7 +477,6 @@ as_key_new_int64(const char* ns, const char* set, int64_t value);
  * @return A new as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_new_strp(const char* ns, const char* set, const char* value, bool free);
@@ -525,7 +498,6 @@ as_key_new_strp(const char* ns, const char* set, const char* value, bool free);
  * @return A new as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 static inline as_key*
 as_key_new_str(const char* ns, const char* set, const char* value)
@@ -557,7 +529,6 @@ as_key_new_str(const char* ns, const char* set, const char* value)
  * @return A new as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_new_rawp(const char* ns, const char* set, const uint8_t* value, uint32_t size, bool free);
@@ -582,7 +553,6 @@ as_key_new_rawp(const char* ns, const char* set, const uint8_t* value, uint32_t 
  * @return A new as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 static inline as_key*
 as_key_new_raw(const char* ns, const char* set, const uint8_t* value, uint32_t size)
@@ -609,7 +579,6 @@ as_key_new_raw(const char* ns, const char* set, const uint8_t* value, uint32_t s
  * @return A new as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_new_digest(const char* ns, const char* set, const as_digest_value digest);
@@ -634,7 +603,6 @@ as_key_new_digest(const char* ns, const char* set, const as_digest_value digest)
  * @return A new as_key on success. Otherwise NULL.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_key*
 as_key_new_value(const char* ns, const char* set, const as_key_value* value);
@@ -649,7 +617,6 @@ as_key_new_value(const char* ns, const char* set, const as_key_value* value);
  * @param key The as_key to destroy.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN void
 as_key_destroy(as_key* key);
@@ -669,7 +636,6 @@ as_key_destroy(as_key* key);
  * @return The digest for the key.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_digest*
 as_key_digest(as_key* key);
@@ -684,7 +650,6 @@ as_key_digest(as_key* key);
  * @return Status code.
  *
  * @relates as_key
- * @ingroup as_key_object
  */
 AS_EXTERN as_status
 as_key_set_digest(as_error* err, as_key* key);

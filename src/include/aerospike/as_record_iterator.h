@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,9 +32,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Iterator over bins of a record.
@@ -112,7 +112,7 @@ extern "C" {
  * }
  * ~~~~~~~~~~
  *
- * @ingroup as_record_object
+ * @relates as_record
  */
 typedef struct as_record_iterator_s {
 
@@ -134,9 +134,9 @@ typedef struct as_record_iterator_s {
 
 } as_record_iterator;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Create and initialize a heap allocated as_record_iterator for the 
@@ -157,7 +157,6 @@ typedef struct as_record_iterator_s {
  * @return On success, a new as_record_iterator. Otherwise an error occurred.
  *
  * @relates as_record_iterator
- * @ingroup as_record_object
  */
 AS_EXTERN as_record_iterator*
 as_record_iterator_new(const as_record* record);
@@ -185,7 +184,6 @@ as_record_iterator_new(const as_record* record);
  * @return On success, a new as_record_iterator. Otherwise an error occurred.
  *
  * @relates as_record_iterator
- * @ingroup as_record_object
  */
 AS_EXTERN as_record_iterator*
 as_record_iterator_init(as_record_iterator* iterator, const as_record* record);
@@ -196,7 +194,6 @@ as_record_iterator_init(as_record_iterator* iterator, const as_record* record);
  * @param iterator The iterator to destroy.
  *
  * @relates as_record_iterator
- * @ingroup as_record_object
  */
 AS_EXTERN void
 as_record_iterator_destroy(as_record_iterator* iterator);
@@ -209,7 +206,6 @@ as_record_iterator_destroy(as_record_iterator* iterator);
  * @return the number of bins in the record.
  *
  * @relates as_record_iterator
- * @ingroup as_record_object
  */
 AS_EXTERN bool
 as_record_iterator_has_next(const as_record_iterator* iterator);
@@ -222,7 +218,6 @@ as_record_iterator_has_next(const as_record_iterator* iterator);
  * @return The next bin from the iterator.
  *
  * @relates as_record_iterator
- * @ingroup as_record_object
  */
 AS_EXTERN as_bin*
 as_record_iterator_next(as_record_iterator* iterator);

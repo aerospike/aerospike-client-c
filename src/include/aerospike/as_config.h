@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -26,9 +26,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 #ifdef __linux__
 /**
@@ -60,14 +60,14 @@ extern "C" {
  */
 #define AS_PASSWORD_SIZE 64
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * IP translation table.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef struct as_addr_map_s {
 	
@@ -86,7 +86,7 @@ typedef struct as_addr_map_s {
 /**
  * Authentication mode.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef enum as_auth_mode_e {
 	/**
@@ -120,7 +120,7 @@ typedef enum as_auth_mode_e {
 /**
  * Cluster event notification type.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef enum as_cluster_event_type_e {
 	/**
@@ -142,7 +142,7 @@ typedef enum as_cluster_event_type_e {
 /**
  * Cluster event notification data.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef struct as_cluster_event_s {
 	/**
@@ -171,14 +171,14 @@ typedef struct as_cluster_event_s {
  * as_cluster_event is placed on the stack before calling.
  * Do not free node_name or node_address.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef void (*as_cluster_event_callback) (as_cluster_event* event);
 
 /**
  * lua module config
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef struct as_config_lua_s {
 
@@ -199,7 +199,7 @@ typedef struct as_config_lua_s {
 /**
  * TLS module config
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef struct as_config_tls_s {
 
@@ -780,9 +780,9 @@ typedef struct as_config_s {
 	uint32_t shm_takeover_threshold_sec;
 } as_config;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Initialize the configuration to default values.

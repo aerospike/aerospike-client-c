@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -24,15 +24,15 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Nested CDT context type.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 typedef enum {
 	AS_CDT_CTX_LIST_INDEX = 0x10,
@@ -50,7 +50,7 @@ typedef enum {
  * Nested CDT context level.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 typedef struct as_cdt_ctx_item {
 	uint32_t type;
@@ -65,15 +65,15 @@ typedef struct as_cdt_ctx_item {
  * List of CDT context level(s).
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 typedef struct as_cdt_ctx {
 	as_vector list;
 } as_cdt_ctx;
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
  * Initialize a stack allocated nested CDT context list.
@@ -92,20 +92,20 @@ typedef struct as_cdt_ctx {
  * @param __cap		The max number of context levels allowed.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 #define as_cdt_ctx_inita(__ctx, __cap) as_vector_inita(&(__ctx)->list, sizeof(as_cdt_ctx_item), __cap)
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Initialize a stack allocated nested CDT context list, with item storage on the heap.
  * Call as_cdt_ctx_destroy() when done with the context list.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_init(as_cdt_ctx* ctx, uint32_t capacity)
@@ -118,7 +118,7 @@ as_cdt_ctx_init(as_cdt_ctx* ctx, uint32_t capacity)
  * Call as_cdt_ctx_destroy() when done with the context list.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline as_cdt_ctx*
 as_cdt_ctx_create(uint32_t capacity)
@@ -130,7 +130,7 @@ as_cdt_ctx_create(uint32_t capacity)
  * Destroy nested CDT context list and as_val based context items that were allocated on the heap.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN void
 as_cdt_ctx_destroy(as_cdt_ctx* ctx);
@@ -148,7 +148,7 @@ as_cdt_ctx_destroy(as_cdt_ctx* ctx);
  * </ul>
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_add_list_index(as_cdt_ctx* ctx, int index)
@@ -163,7 +163,7 @@ as_cdt_ctx_add_list_index(as_cdt_ctx* ctx, int index)
  * Create list with given type at index offset.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_add_list_index_create(as_cdt_ctx* ctx, int index, as_list_order order, bool pad)
@@ -183,7 +183,7 @@ as_cdt_ctx_add_list_index_create(as_cdt_ctx* ctx, int index, as_list_order order
  * </ul>
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_add_list_rank(as_cdt_ctx* ctx, int rank)
@@ -198,7 +198,7 @@ as_cdt_ctx_add_list_rank(as_cdt_ctx* ctx, int rank)
  * Lookup list by value.  The ctx list takes ownership of val.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_add_list_value(as_cdt_ctx* ctx, as_val* val)
@@ -222,7 +222,7 @@ as_cdt_ctx_add_list_value(as_cdt_ctx* ctx, as_val* val)
  * </ul>
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_add_map_index(as_cdt_ctx* ctx, int index)
@@ -242,7 +242,7 @@ as_cdt_ctx_add_map_index(as_cdt_ctx* ctx, int index)
  * </ul>
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_add_map_rank(as_cdt_ctx* ctx, int rank)
@@ -257,7 +257,7 @@ as_cdt_ctx_add_map_rank(as_cdt_ctx* ctx, int rank)
  * Lookup map by key.  The ctx list takes ownership of key.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_add_map_key(as_cdt_ctx* ctx, as_val* key)
@@ -273,7 +273,7 @@ as_cdt_ctx_add_map_key(as_cdt_ctx* ctx, as_val* key)
  * The ctx list takes ownership of key.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_add_map_key_create(as_cdt_ctx* ctx, as_val* key, as_map_order order)
@@ -288,7 +288,7 @@ as_cdt_ctx_add_map_key_create(as_cdt_ctx* ctx, as_val* key, as_map_order order)
  * Lookup map by value.  The ctx list takes ownership of val.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline void
 as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)

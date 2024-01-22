@@ -208,12 +208,12 @@ as_metrics_disable(struct as_policy_metrics_s* policy, const struct as_cluster_s
 }
 
 void
-as_metrics_callbacks_init(as_metrics_callbacks* callbacks)
+as_metrics_listeners_init(as_metrics_listeners* listeners)
 {
-	callbacks->enable_callback = as_metrics_enable;
-	callbacks->disable_callback = as_metrics_disable;
-	callbacks->node_close_callback = as_metrics_node_close;
-	callbacks->snapshot_callback = as_metrics_snapshot;
+	listeners->enable_callback = as_metrics_enable;
+	listeners->disable_callback = as_metrics_disable;
+	listeners->node_close_callback = as_metrics_node_close;
+	listeners->snapshot_callback = as_metrics_snapshot;
 }
 
 void

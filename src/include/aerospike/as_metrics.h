@@ -39,18 +39,18 @@ extern "C" {
 #define MIN_FILE_SIZE 1000000
 #define UTC_STR_LEN 72
 
+typedef uint8_t as_latency_type;
+
+#define AS_LATENCY_TYPE_CONN 0
+#define AS_LATENCY_TYPE_WRITE 1
+#define AS_LATENCY_TYPE_READ 2
+#define AS_LATENCY_TYPE_BATCH 3
+#define AS_LATENCY_TYPE_QUERY 4
+#define AS_LATENCY_TYPE_NONE 5
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
-
-typedef enum as_latency_type_e {
-	AS_LATENCY_TYPE_CONN, //as_queue or as_async_conn_pool?
-	AS_LATENCY_TYPE_WRITE,
-	AS_LATENCY_TYPE_READ,
-	AS_LATENCY_TYPE_BATCH,
-	AS_LATENCY_TYPE_QUERY,
-	AS_LATENCY_TYPE_NONE
-} as_latency_type;
 
 typedef struct as_latency_buckets_s {
 	int32_t latency_shift;
@@ -60,7 +60,7 @@ typedef struct as_latency_buckets_s {
 	uint64_t* buckets;
 } as_latency_buckets;
 
-struct as_metrics_callbacks_s;
+struct as_metrics_listeners_s;
 
 /**
 * Metrics Policy
@@ -76,7 +76,7 @@ typedef struct as_policy_metrics_s {
 
 	int32_t latency_shift; // default 1
 
-	struct as_metrics_callbacks_s* metrics_callbacks;
+	struct as_metrics_listeners_s* metrics_listeners;
 
 	FILE* file;
 } as_policy_metrics;
@@ -92,12 +92,12 @@ typedef void (*as_metrics_node_close_callback)(const struct as_policy_metrics_s*
 
 typedef void (*as_metrics_disable_callback)(struct as_policy_metrics_s* policy, const struct as_cluster_s* cluster);
 
-typedef struct as_metrics_callbacks_s {
+typedef struct as_metrics_listeners_s {
 	as_metrics_enable_callback enable_callback;
 	as_metrics_snapshot_callback snapshot_callback;
 	as_metrics_node_close_callback node_close_callback;
 	as_metrics_disable_callback disable_callback;
-} as_metrics_callbacks;
+} as_metrics_listeners;
 
 typedef struct as_node_metrics_s {
 	as_latency_buckets* latency;
@@ -131,7 +131,7 @@ void
 as_metrics_add_latency(as_node_metrics* node_metrics, as_latency_type latency_type, uint64_t elapsed);
 
 void
-as_metrics_callbacks_init(as_metrics_callbacks* callbacks);
+as_metrics_listeners_init(as_metrics_listeners* listeners);
 
 void
 as_metrics_process_cpu_load_mem_usage(double* cpu_usage, double* mem);

@@ -145,7 +145,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
 	node->sync_conns_opened = 1;
 	node->sync_conns_closed = 0;
-	node->error_rate_count = 0;
+	node->error_rate = 0;
 	node->error_count = 0;
 	node->timeout_count = 0;
 	node->conn_iter = 0;
@@ -909,7 +909,7 @@ static void
 as_node_restart(as_cluster* cluster, as_node* node)
 {
 	if (cluster->max_error_rate > 0) {
-		as_node_reset_error_rate_count(node);
+		as_node_reset_error_rate(node);
 	}
 
 	// Balance sync connections.

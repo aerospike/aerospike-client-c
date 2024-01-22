@@ -559,13 +559,13 @@ as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy)
 {
 	if (cluster->metrics_enabled)
 	{
-		cluster->metrics_callbacks->disable_callback(policy, cluster);
+		cluster->metrics_listeners->disable_callback(policy, cluster);
 	}
 
-	cluster->metrics_callbacks = policy->metrics_callbacks;
-	if (cluster->metrics_callbacks == NULL)
+	cluster->metrics_listeners = policy->metrics_listeners;
+	if (cluster->metrics_listeners == NULL)
 	{
-		as_metrics_callbacks_init(cluster->metrics_callbacks);
+		as_metrics_listeners_init(cluster->metrics_listeners);
 	}
 
 	cluster->metrics_policy = policy;
@@ -576,7 +576,7 @@ as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy)
 		as_node_enable_metrics(node, policy);
 	}
 
-	cluster->metrics_callbacks->enable_callback(policy);
+	cluster->metrics_listeners->enable_callback(policy);
 }
 
 void
@@ -585,7 +585,7 @@ as_cluster_disable_metrics(as_cluster* cluster)
 	if (cluster->metrics_enabled)
 	{
 		cluster->metrics_enabled = false;
-		cluster->metrics_callbacks->disable_callback(cluster->metrics_policy, cluster);
+		cluster->metrics_listeners->disable_callback(cluster->metrics_policy, cluster);
 	}
 }
 
@@ -647,7 +647,7 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 		as_node_deactivate(node);
 
 		if (cluster->metrics_enabled) {
-			cluster->metrics_callbacks->node_close_callback(node->cluster->metrics_policy, node);
+			cluster->metrics_listeners->node_close_callback(node->cluster->metrics_policy, node);
 		}
 	}
 			
@@ -724,7 +724,7 @@ as_cluster_reset_error_rate(as_cluster* cluster)
 	as_nodes* nodes = cluster->nodes;
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_reset_error_rate_count(nodes->array[i]);
+		as_node_reset_error_rate(nodes->array[i]);
 	}
 }
 
@@ -968,7 +968,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 
 	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_policy->interval))
 	{
-		cluster->metrics_callbacks->snapshot_callback(cluster->metrics_policy, cluster);
+		cluster->metrics_listeners->snapshot_callback(cluster->metrics_policy, cluster);
 	}
 
 	as_cluster_destroy_peers(&peers);

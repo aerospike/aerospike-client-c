@@ -385,7 +385,7 @@ typedef struct as_cluster_s {
 
 	as_policy_metrics* metrics_policy;
 
-	as_metrics_callbacks* metrics_callbacks;
+	as_metrics_listeners* metrics_listeners;
 
 	uint64_t retry_count;
 
@@ -532,15 +532,31 @@ as_partition_shm_get_node(
 	as_node* prev_node, as_policy_replica replica, uint8_t replica_size, uint8_t* replica_index
 	);
 
+/**
+ * @private
+ * Enable the collection of metrics
+ */
 void
 as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy);
 
+/**
+ * @private
+ * Disable the collection of metrics
+ */
 void
 as_cluster_disable_metrics(as_cluster* cluster);
 
+/**
+ * @private
+ * Increment transaction count when metrics are enabled.
+ */
 void 
 as_cluster_add_tran(as_cluster* cluster);
 
+/**
+ * @private
+ * Return transaction count. The value is cumulative and not reset per metrics interval.
+ */
 uint64_t
 as_cluster_get_tran_count(const as_cluster* cluster);
 
@@ -573,7 +589,7 @@ static inline void
 as_node_incr_error_rate(as_node* node)
 {
 	if (node->cluster->max_error_rate > 0) {
-		as_incr_uint32(&node->error_rate_count);
+		as_incr_uint32(&node->error_rate);
 	}
 }
 
@@ -582,9 +598,9 @@ as_node_incr_error_rate(as_node* node)
  * Reset node's error count.
  */
 static inline void
-as_node_reset_error_rate_count(as_node* node)
+as_node_reset_error_rate(as_node* node)
 {
-	as_store_uint32(&node->error_rate_count, 0);
+	as_store_uint32(&node->error_rate, 0);
 }
 
 /**
@@ -594,7 +610,7 @@ as_node_reset_error_rate_count(as_node* node)
 static inline uint32_t
 as_node_get_error_rate(as_node* node)
 {
-	return as_load_uint32(&node->error_rate_count);
+	return as_load_uint32(&node->error_rate);
 }
 
 /**
@@ -605,7 +621,7 @@ static inline bool
 as_node_valid_error_rate(as_node* node)
 {
 	uint32_t max = node->cluster->max_error_rate;
-	return max == 0 || max >= as_load_uint32(&node->error_rate_count);
+	return max == 0 || max >= as_load_uint32(&node->error_rate);
 }
 
 /**

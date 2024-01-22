@@ -323,10 +323,18 @@ typedef struct as_node_s {
 	/**
 	 * Error count for this node's error_rate_window.
 	 */
-	uint32_t error_rate_count;
+	uint32_t error_rate;
 
+	/**
+     * Transaction error count since node was initialized. If the error is retryable, multiple errors per
+     * transaction may occur.
+     */
 	uint64_t error_count;
 
+	/**
+	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * multiple timeouts per transaction may occur.
+	 */
 	uint64_t timeout_count;
 
 	/**
@@ -643,8 +651,6 @@ as_node_signal_login(as_node* node);
  */
 bool
 as_node_has_rack(as_node* node, const char* ns, int rack_id);
-
-typedef enum as_latency_type_e as_latency_type;
 
 void
 as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed);

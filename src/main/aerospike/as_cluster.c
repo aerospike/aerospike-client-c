@@ -554,8 +554,8 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	as_vector_append(cluster->gc, &item);
 }
 
-void
-as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy)
+as_status
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_policy_metrics* policy)
 {
 	if (cluster->metrics_enabled)
 	{
@@ -576,16 +576,24 @@ as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy)
 		as_node_enable_metrics(node, policy);
 	}
 
-	cluster->metrics_listeners->enable_callback(policy, policy->udata);
+	as_status status = cluster->metrics_listeners->enable_callback(err, policy, policy->udata);
+	if (status != AEROSPIKE_OK)
+	{
+		return status;
+	}
 }
 
-void
-as_cluster_disable_metrics(as_cluster* cluster)
+as_status
+as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 {
 	if (cluster->metrics_enabled)
 	{
 		cluster->metrics_enabled = false;
-		cluster->metrics_listeners->disable_callback(cluster->metrics_policy, cluster, cluster->metrics_policy->udata);
+		as_status status = cluster->metrics_listeners->disable_callback(cluster->metrics_policy, cluster, cluster->metrics_policy->udata);
+		if (status != AEROSPIKE_OK)
+		{
+			return status;
+		}
 	}
 }
 

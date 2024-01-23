@@ -20,6 +20,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_string_builder.h>
 
 #if !defined(_MSC_VER)
@@ -84,13 +85,13 @@ typedef struct as_policy_metrics_s {
 struct as_cluster_s;
 struct as_node_s;
 
-typedef void (*as_metrics_enable_callback)(const struct as_policy_metrics_s* policy);
+typedef as_status (*as_metrics_enable_callback)(as_error* err, const struct as_policy_metrics_s* policy);
 
 typedef void (*as_metrics_snapshot_callback)(const struct as_cluster_s* cluster, void* udata);
 
 typedef void (*as_metrics_node_close_callback)(const struct as_node_s* node, void* udata);
 
-typedef void (*as_metrics_disable_callback)(const struct as_cluster_s* cluster, void* udata);
+typedef as_status (*as_metrics_disable_callback)(as_error* err, const struct as_cluster_s* cluster, void* udata);
 
 typedef struct as_metrics_listeners_s {
 	as_metrics_enable_callback enable_callback;
@@ -117,6 +118,8 @@ typedef struct as_metrics_writer_s {
 	int32_t latency_columns;
 
 	int32_t latency_shift;
+
+	const char* report_directory;
 } as_metrics_writer;
 
 const char* 

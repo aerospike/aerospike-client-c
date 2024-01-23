@@ -257,14 +257,14 @@ aerospike_stats_to_string(as_cluster_stats* stats);
 /**
  * Enable extended periodic cluster and node latency metrics.
  */
-AS_EXTERN void
-aerospike_enable_metrics(aerospike* as, const struct as_policy_metrics_s* policy);
+AS_EXTERN as_status
+aerospike_enable_metrics(aerospike* as, as_error* err, const struct as_policy_metrics_s* policy);
 
 /**
  * Disable extended periodic cluster and node latency metrics.
  */
-AS_EXTERN void
-aerospike_disable_metrics(aerospike* as);
+AS_EXTERN as_status
+aerospike_disable_metrics(aerospike* as, as_error* err);
 
 #ifdef __cplusplus
 } // end extern "C"

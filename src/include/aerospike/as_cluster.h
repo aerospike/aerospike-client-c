@@ -536,15 +536,15 @@ as_partition_shm_get_node(
  * @private
  * Enable the collection of metrics
  */
-void
-as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy);
+as_status
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_policy_metrics* policy);
 
 /**
  * @private
  * Disable the collection of metrics
  */
-void
-as_cluster_disable_metrics(as_cluster* cluster);
+as_status
+as_cluster_disable_metrics(as_error* err, as_cluster* cluster);
 
 /**
  * @private

@@ -141,21 +141,29 @@ as_metrics_add_latency(as_node_metrics* node_metrics, as_latency_type latency_ty
 	as_metrics_latency_buckets_add(&node_metrics->latency[latency_type], elapsed);
 }
 
-void 
-as_metrics_writer_enable(const struct as_policy_metrics_s* policy)
+as_status
+as_metrics_writer_enable(as_error* err, const struct as_policy_metrics_s* policy)
 {
 	if (policy->report_size_limit != 0 && policy->report_size_limit < MIN_FILE_SIZE)
 	{
-		// error
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, 
+			"Metrics policy report_size_limit %d must be at least %d", policy->report_size_limit, MIN_FILE_SIZE);
 	}
 
 	// create file directory
 	as_metrics_writer* mw = policy->udata;
 	mw->file = fopen(policy->report_directory, "w");
+
+	if (!mw->file)
+	{
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to open file: %s", policy->report_directory);
+	}
 	mw->max_size = policy->report_size_limit;
 	mw->latency_columns = policy->latency_columns;
 	mw->latency_shift = policy->latency_shift;
 	mw->size = 0;
+	mw->report_directory = policy->report_directory;
 
 	as_string_builder_inita(mw->sb, 25, true);
 	as_string_builder_append(&mw->sb, utc_time_str(time(NULL)));
@@ -198,17 +206,22 @@ as_metrics_writer_node_close(const struct as_node_s* node, void* udata)
 	}
 }
 
-void
-as_metrics_writer_disable(const struct as_cluster_s* cluster, void* udata)
+as_status
+as_metrics_writer_disable(as_error* err, const struct as_cluster_s* cluster, void* udata)
 {
 	// write cluster into to file, disable
 	as_metrics_writer* mw = udata;
 	if (mw->enable && mw->file != NULL)
 	{
 		as_metrics_write_cluster(mw, cluster);
-		fclose(mw->file);
+		uint32_t result = fclose(mw->file);
 		mw->file = NULL;
 		mw->enable = false;
+		if (result != 0)
+		{
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"File stream did not close successfully: %s", mw->report_directory);
+		}
 	}
 }
 

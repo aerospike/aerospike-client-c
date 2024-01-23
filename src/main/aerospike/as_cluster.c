@@ -646,8 +646,8 @@ as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
 	return as_load_uint64(&cluster->delay_queue_timeout_count);
 }
 
-static void
-as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
+static as_status
+as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
 {
 	// There is no need to delete nodes from partition tables because the nodes
 	// have already been set to inactive. Further connection requests will result
@@ -659,7 +659,11 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 		as_node_deactivate(node);
 
 		if (cluster->metrics_enabled) {
-			cluster->metrics_listeners->node_close_callback(node, node->cluster->metrics_policy->udata);
+			as_status status = cluster->metrics_listeners->node_close_callback(err, node, node->cluster->metrics_policy->udata);
+			if (status != AEROSPIKE_OK)
+			{
+				return status;
+			}
 		}
 	}
 			
@@ -670,6 +674,8 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 	if (cluster->shm_info) {
 		as_shm_remove_nodes(cluster, nodes_to_remove);
 	}
+
+	return AEROSPIKE_OK;
 }
 
 static as_status
@@ -923,7 +929,11 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 			
 			// Remove nodes in a batch.
 			if (nodes_to_remove.size > 0) {
-				as_cluster_remove_nodes(cluster, &nodes_to_remove);
+				as_status status = as_cluster_remove_nodes(err, cluster, &nodes_to_remove);
+				if (status != AEROSPIKE_OK)
+				{
+					return status;
+				}
 				nodes = cluster->nodes;
 			}
 			as_vector_destroy(&nodes_to_remove);
@@ -980,7 +990,11 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 
 	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_policy->interval))
 	{
-		cluster->metrics_listeners->snapshot_callback(cluster, cluster->metrics_policy->udata);
+		as_status status = cluster->metrics_listeners->snapshot_callback(err, cluster, cluster->metrics_policy->udata);
+		if (status != AEROSPIKE_OK)
+		{
+			return status;
+		}
 	}
 
 	as_cluster_destroy_peers(&peers);

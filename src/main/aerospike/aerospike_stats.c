@@ -31,36 +31,6 @@ extern uint32_t as_event_loop_size;
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static inline void
-as_sum_init(as_conn_stats* stats)
-{
-	stats->in_pool = 0;
-	stats->in_use = 0;
-	stats->opened = 0;
-	stats->closed = 0;
-}
-
-static inline void
-as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats)
-{
-	// Warning: cross-thread reference without a lock.
-	int tmp = as_queue_size(&pool->queue);
-
-	// Timing issues may cause values to go negative. Adjust.
-	if (tmp < 0) {
-		tmp = 0;
-	}
-	stats->in_pool += tmp;
-	tmp = pool->queue.total - tmp;
-
-	if (tmp < 0) {
-		tmp = 0;
-	}
-	stats->in_use += tmp;
-	stats->opened += pool->opened;
-	stats->closed += pool->closed;
-}
-
 static void
 as_conn_stats_tostring(as_string_builder* sb, const char* title, as_conn_stats* cs)
 {
@@ -186,7 +156,7 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		as_conn_stats_tostring(&sb, "pipeline", &node_stats->pipeline);
 		as_string_builder_append_newline(&sb);
 		as_string_builder_append(&sb, "error count: ");
-		as_string_builder_append_uint(&sb, node_stats->error_count);
+		as_string_builder_append_uint64(&sb, node_stats->error_count);
 		as_string_builder_append_newline(&sb);
 	}
 
@@ -211,7 +181,7 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 }
 
 as_status
-aerospike_enable_metrics(aerospike* as, as_error* err, const struct as_policy_metrics_s* policy)
+aerospike_enable_metrics(aerospike* as, as_error* err, struct as_policy_metrics_s* policy)
 {
 	as_cluster* cluster = as->cluster;
 	as_status status = as_cluster_enable_metrics(err, cluster, policy);
@@ -219,6 +189,8 @@ aerospike_enable_metrics(aerospike* as, as_error* err, const struct as_policy_me
 	{
 		return status;
 	}
+
+	return AEROSPIKE_OK;
 }
 
 as_status
@@ -230,4 +202,6 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 	{
 		return status;
 	}
+
+	return AEROSPIKE_OK;
 }

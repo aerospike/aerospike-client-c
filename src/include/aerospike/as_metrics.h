@@ -92,11 +92,11 @@ struct as_node_s;
  */
 typedef as_status (*as_metrics_enable_callback)(as_error* err, const struct as_policy_metrics_s* policy);
 
-typedef void (*as_metrics_snapshot_callback)(const struct as_cluster_s* cluster, void* udata);
+typedef as_status (*as_metrics_snapshot_callback)(as_error* err, struct as_cluster_s* cluster, void* udata);
 
-typedef void (*as_metrics_node_close_callback)(const struct as_node_s* node, void* udata);
+typedef as_status (*as_metrics_node_close_callback)(as_error* err, struct as_node_s* node, void* udata);
 
-typedef as_status (*as_metrics_disable_callback)(as_error* err, const struct as_cluster_s* cluster, void* udata);
+typedef as_status (*as_metrics_disable_callback)(as_error* err, struct as_cluster_s* cluster, void* udata);
 
 /**
  * Struct to hold required callbacks
@@ -197,6 +197,12 @@ void
 as_metrics_listeners_init(as_metrics_listeners* listeners);
 
 /**
+ * Open output metrics file and write header 
+ */
+as_status
+as_metrics_open_writer(as_metrics_writer* mw, as_error* err);
+
+/**
  * Calculate CPU and memory usage
  */
 void
@@ -206,27 +212,34 @@ struct as_cluster_s;
 /**
  * Write cluster information to the metrics output file
  */
-void
-as_metrics_write_cluster(as_metrics_writer* mw, const struct as_cluster_s* cluster);
+as_status
+as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster_s* cluster);
 
-struct as_node_stats_s;
+struct as_node_s;
 /**
  * Write node information to the metrics output file
  */
 void
-as_metrics_write_node(as_metrics_writer* mw, struct as_node_stats_s* node_stats);
+as_metrics_write_node(as_metrics_writer* mw, struct as_node_s* node_stats);
 
+struct as_conn_stats_s;
 /**
  * Write connection information to the metrics output file
  */
 void
-as_metrics_write_conn(as_metrics_writer* mw, struct as_conn_stats_s* conn_stats);
+as_metrics_write_conn(as_metrics_writer* mw, const struct as_conn_stats_s* conn_stats);
+
+void
+as_metrics_get_node_sync_conn_stats(const struct as_node_s* node, struct as_conn_stats_s* async);
+
+void
+as_metrics_get_node_async_conn_stats(const struct as_node_s* node, struct as_conn_stats_s* sync);
 
 /**
  * Write line to the metrics output file
  */
-void
-as_metrics_write_line(as_metrics_writer* mw);
+as_status
+as_metrics_write_line(as_metrics_writer* mw, as_error* err);
 
 #if defined(__linux__)
 /**
@@ -259,7 +272,7 @@ as_metrics_process_cpu_load();
 /**
  * Gets memory usage using GlobalMemoryStatusEx()
  */
-double
+DWORDLONG
 as_metrics_process_mem_usage();
 #endif
 

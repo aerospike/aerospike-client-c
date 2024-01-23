@@ -202,12 +202,14 @@ as_metrics_listeners_init(as_metrics_listeners* listeners);
 void
 as_metrics_process_cpu_load_mem_usage(double* cpu_usage, double* mem);
 
+struct as_cluster_s;
 /**
  * Write cluster information to the metrics output file
  */
 void
 as_metrics_write_cluster(as_metrics_writer* mw, const struct as_cluster_s* cluster);
 
+struct as_node_stats_s;
 /**
  * Write node information to the metrics output file
  */

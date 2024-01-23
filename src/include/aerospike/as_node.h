@@ -655,9 +655,17 @@ as_node_signal_login(as_node* node);
 bool
 as_node_has_rack(as_node* node, const char* ns, int rack_id);
 
+/**
+ * @private
+ * Record latency of type latency_type for node
+ */
 void
 as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed);
 
+/**
+ * @private
+ * Enable metrics at the node level
+ */
 void
 as_node_enable_metrics(as_node* node, as_policy_metrics* policy);
 

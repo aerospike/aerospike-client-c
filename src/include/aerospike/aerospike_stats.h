@@ -91,7 +91,7 @@ typedef struct as_node_stats_s {
 	 * Transaction error count since node was initialized. If the error is retryable, multiple errors per
 	 * transaction may occur.
 	 */
-	uint32_t error_count;
+	uint64_t error_count;
 
 	/**
 	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),

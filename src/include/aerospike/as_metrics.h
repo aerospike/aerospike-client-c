@@ -78,19 +78,19 @@ typedef struct as_policy_metrics_s {
 
 	struct as_metrics_listeners_s* metrics_listeners;
 
-	FILE* file;
+	void* udata;
 } as_policy_metrics;
 
 struct as_cluster_s;
 struct as_node_s;
 
-typedef void (*as_metrics_enable_callback)(struct as_policy_metrics_s* policy);
+typedef void (*as_metrics_enable_callback)(const struct as_policy_metrics_s* policy);
 
-typedef void (*as_metrics_snapshot_callback)(const struct as_policy_metrics_s* policy, const struct as_cluster_s* cluster);
+typedef void (*as_metrics_snapshot_callback)(const struct as_cluster_s* cluster, void* udata);
 
-typedef void (*as_metrics_node_close_callback)(const struct as_policy_metrics_s* policy, const struct as_node_s* node);
+typedef void (*as_metrics_node_close_callback)(const struct as_node_s* node, void* udata);
 
-typedef void (*as_metrics_disable_callback)(struct as_policy_metrics_s* policy, const struct as_cluster_s* cluster);
+typedef void (*as_metrics_disable_callback)(const struct as_cluster_s* cluster, void* udata);
 
 typedef struct as_metrics_listeners_s {
 	as_metrics_enable_callback enable_callback;
@@ -102,6 +102,22 @@ typedef struct as_metrics_listeners_s {
 typedef struct as_node_metrics_s {
 	as_latency_buckets* latency;
 } as_node_metrics;
+
+typedef struct as_metrics_writer_s {
+	FILE* file;
+
+	as_string_builder* sb;
+
+	bool enable;
+
+	uint64_t max_size;
+
+	uint64_t size;
+
+	int32_t latency_columns;
+
+	int32_t latency_shift;
+} as_metrics_writer;
 
 const char* 
 utc_time_str(time_t t);
@@ -137,13 +153,16 @@ void
 as_metrics_process_cpu_load_mem_usage(double* cpu_usage, double* mem);
 
 void
-as_metrics_write_cluster(struct as_policy_metrics_s* policy, const struct as_cluster_s* cluster);
+as_metrics_write_cluster(as_metrics_writer* mw, const struct as_cluster_s* cluster);
 
 void
-as_metrics_write_node(as_string_builder* sb, struct as_node_stats_s* node_stats);
+as_metrics_write_node(as_metrics_writer* mw, struct as_node_stats_s* node_stats);
 
 void
-as_metrics_write_conn(as_string_builder* sb, struct as_conn_stats_s* conn_stats);
+as_metrics_write_conn(as_metrics_writer* mw, struct as_conn_stats_s* conn_stats);
+
+void
+as_metrics_write_line(as_metrics_writer* mw);
 
 #if defined(__linux__)
 void

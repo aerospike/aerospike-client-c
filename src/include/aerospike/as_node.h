@@ -298,6 +298,9 @@ typedef struct as_node_s {
 	 */
 	as_racks* racks;
 
+	/**
+	 * Node metrics 
+	 */
 	as_node_metrics* metrics;
 
 	/**

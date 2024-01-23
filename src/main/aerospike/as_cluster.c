@@ -559,7 +559,7 @@ as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy)
 {
 	if (cluster->metrics_enabled)
 	{
-		cluster->metrics_listeners->disable_callback(policy, cluster);
+		cluster->metrics_listeners->disable_callback(policy, cluster, policy->udata);
 	}
 
 	cluster->metrics_listeners = policy->metrics_listeners;
@@ -576,7 +576,7 @@ as_cluster_enable_metrics(as_cluster* cluster, as_policy_metrics* policy)
 		as_node_enable_metrics(node, policy);
 	}
 
-	cluster->metrics_listeners->enable_callback(policy);
+	cluster->metrics_listeners->enable_callback(policy, policy->udata);
 }
 
 void
@@ -585,7 +585,7 @@ as_cluster_disable_metrics(as_cluster* cluster)
 	if (cluster->metrics_enabled)
 	{
 		cluster->metrics_enabled = false;
-		cluster->metrics_listeners->disable_callback(cluster->metrics_policy, cluster);
+		cluster->metrics_listeners->disable_callback(cluster->metrics_policy, cluster, cluster->metrics_policy->udata);
 	}
 }
 
@@ -968,7 +968,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 
 	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_policy->interval))
 	{
-		cluster->metrics_listeners->snapshot_callback(cluster->metrics_policy, cluster);
+		cluster->metrics_listeners->snapshot_callback(cluster->metrics_policy, cluster, cluster->metrics_policy->udata);
 	}
 
 	as_cluster_destroy_peers(&peers);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -22,9 +22,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * List storage order.
@@ -46,7 +46,6 @@ typedef enum as_list_order_e {
 	 * Persist index on server.
 	 */
 	AS_LIST_FLAG_PERSIST_INDEX = 0x10
-
 } as_list_order;
 
 /**
@@ -76,9 +75,9 @@ typedef enum as_map_order_e {
 	AS_MAP_FLAG_PERSIST_INDEX = 0x10
 } as_map_order;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 static inline uint32_t
 as_list_order_to_flag(as_list_order order, bool pad)
@@ -94,20 +93,23 @@ as_list_order_to_flag(as_list_order order, bool pad)
 static inline uint32_t
 as_map_order_to_flag(as_map_order order)
 {
+	uint32_t flag;
+	
 	switch (order & 0x3) {
 		default:
 		case AS_MAP_UNORDERED:
-			return 0x40 |
-					(((order & AS_LIST_FLAG_PERSIST_INDEX) != 0) ? 0x100 : 0x0);
+			flag = 0x40;
+			break;
 
 		case AS_MAP_KEY_ORDERED:
-			return 0x80  |
-					(((order & AS_LIST_FLAG_PERSIST_INDEX) != 0) ? 0x100 : 0x0);
+			flag = 0x80;
+			break;
 
 		case AS_MAP_KEY_VALUE_ORDERED:
-			return 0xc0 |
-					(((order & AS_LIST_FLAG_PERSIST_INDEX) != 0) ? 0x100 : 0x0);
+			flag = 0xc0;
+			break;
 	}
+	return flag | (((order & AS_LIST_FLAG_PERSIST_INDEX) != 0) ? 0x100 : 0x0);
 }
 
 #ifdef __cplusplus

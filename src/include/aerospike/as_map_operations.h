@@ -21,7 +21,13 @@
  * @ingroup client_operations
  *
  * Unique key map bin operations. Create map operations used by the client operate command.
- * The default unique key map is unordered.
+ * The default unique key map is unordered. Valid map key types are:
+ * <ul>
+ * <li>as_string</li>
+ * <li>as_integer</li>
+ * <li>as_bytes</li>
+ * <li>as_list</li>
+ * </ul>
  *
  * All maps maintain an index and a rank.  The index is the item offset from the start of the map,
  * for both unordered and ordered maps.  The rank is the sorted index of the value component.
@@ -346,6 +352,21 @@ AS_EXTERN void
 as_map_policy_set_flags(as_map_policy* policy, as_map_order order, uint32_t flags);
 
 /**
+ * Set map attributes to specified map order, write flags and whether to persist the map index.
+ *
+ * @param policy		Target map policy.
+ * @param order			Map order.
+ * @param flags			Map write flags. See as_map_write_flags.
+ * @param persist_index	If true, persist map index. A map index improves lookup performance,
+ * 						but requires more storage. A map index can be created for a top-level
+ * 						ordered map only. Nested and unordered map indexes are not supported.
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN void
+as_map_policy_set_all(as_map_policy* policy, as_map_order order, uint32_t flags, bool persist_index);
+
+/**
  * Create map create operation.
  * Server creates map at given context level.
  *
@@ -354,6 +375,25 @@ as_map_policy_set_flags(as_map_policy* policy, as_map_order order, uint32_t flag
 AS_EXTERN bool
 as_operations_map_create(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_order order
+	);
+
+/**
+ * Create map create operation.
+ * Server creates map at given context level.
+ *
+ * @param ops			Target operations list.
+ * @param name			Bin name.
+ * @param ctx			Optional path to nested map. If not defined, the top-level map is used.
+ * @param order			Map order.
+ * @param persist_index	If true, persist map index. A map index improves lookup performance,
+ * 						but requires more storage. A map index can be created for a top-level
+ * 						ordered map only. Nested and unordered map indexes are not supported.
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_map_create_all(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_order order, bool persist_index
 	);
 
 /**

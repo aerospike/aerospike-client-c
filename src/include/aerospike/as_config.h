@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -26,9 +26,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 #ifdef __linux__
 /**
@@ -60,14 +60,14 @@ extern "C" {
  */
 #define AS_PASSWORD_SIZE 64
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * IP translation table.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef struct as_addr_map_s {
 	
@@ -86,7 +86,7 @@ typedef struct as_addr_map_s {
 /**
  * Authentication mode.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef enum as_auth_mode_e {
 	/**
@@ -120,7 +120,7 @@ typedef enum as_auth_mode_e {
 /**
  * Cluster event notification type.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef enum as_cluster_event_type_e {
 	/**
@@ -142,7 +142,7 @@ typedef enum as_cluster_event_type_e {
 /**
  * Cluster event notification data.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef struct as_cluster_event_s {
 	/**
@@ -171,14 +171,14 @@ typedef struct as_cluster_event_s {
  * as_cluster_event is placed on the stack before calling.
  * Do not free node_name or node_address.
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef void (*as_cluster_event_callback) (as_cluster_event* event);
 
 /**
  * lua module config
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef struct as_config_lua_s {
 
@@ -199,7 +199,7 @@ typedef struct as_config_lua_s {
 /**
  * TLS module config
  *
- * @ingroup as_config_object
+ * @relates as_config
  */
 typedef struct as_config_tls_s {
 
@@ -213,8 +213,16 @@ typedef struct as_config_tls_s {
 	 * Path to a trusted CA certificate file.
 	 * By default TLS will use system standard trusted CA certificates.
 	 * Use as_config_tls_set_cafile() to set this field.
+	 * If cafile is populated, castring is ignored.
 	 */
 	char* cafile;
+
+	/**
+	 * String containing trusted CA certificate(s).
+	 * Use as_config_tls_set_castring() to set this field.
+	 * If cafile is populated, castring is ignored.
+	 */
+	char* castring;
 
 	/**
 	 * Path to a directory of trusted certificates.
@@ -272,8 +280,8 @@ typedef struct as_config_tls_s {
 	/**
 	 * Path to the client's key for mutual authentication.
 	 * By default mutual authentication is disabled.
-	 *
 	 * Use as_config_tls_set_keyfile() to set this field.
+	 * If keyfile is populated, keystring is ignored.
 	 */
 	char* keyfile;
 
@@ -286,12 +294,28 @@ typedef struct as_config_tls_s {
 	char* keyfile_pw;
 
 	/**
+	 * Client's key string for mutual authentication.
+	 * By default mutual authentication is disabled.
+	 * Use as_config_tls_set_keystring() to set this field.
+	 * If keyfile is populated, keystring is ignored.
+	 */
+	char* keystring;
+
+	/**
 	 * Path to the client's certificate chain file for mutual authentication.
 	 * By default mutual authentication is disabled.
-	 *
 	 * Use as_config_tls_set_certfile() to set this field.
+	 * If certfile is populated, certstring is ignored.
 	 */
 	char* certfile;
+
+	/**
+	 * Client's certificate chain file string for mutual authentication.
+	 * By default mutual authentication is disabled.
+	 * Use as_config_tls_set_certstring() to set this field.
+	 * If certfile is populated, certstring is ignored.
+	 */
+	char* certstring;
 
 	/**
 	 * Enable CRL checking for the certificate chain leaf certificate.
@@ -756,9 +780,9 @@ typedef struct as_config_s {
 	uint32_t shm_takeover_threshold_sec;
 } as_config;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Initialize the configuration to default values.
@@ -893,6 +917,17 @@ as_config_tls_set_cafile(as_config* config, const char* cafile)
 }
 
 /**
+ * Set string containing trusted CA certificate(s).
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_tls_set_castring(as_config* config, const char* castring)
+{
+	as_config_set_string(&config->tls.castring, castring);
+}
+
+/**
  * Set TLS path to a directory of trusted certificates.
  *
  * @relates as_config
@@ -959,6 +994,17 @@ as_config_tls_set_keyfile_pw(as_config* config, const char* pw)
 }
 
 /**
+ * Set client's key string for mutual authentication.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_tls_set_keystring(as_config* config, const char* keystring)
+{
+	as_config_set_string(&config->tls.keystring, keystring);
+}
+
+/**
  * Set TLS path to the client's certificate chain file for mutual authentication.
  *
  * @relates as_config
@@ -967,6 +1013,17 @@ static inline void
 as_config_tls_set_certfile(as_config* config, const char* certfile)
 {
 	as_config_set_string(&config->tls.certfile, certfile);
+}
+
+/**
+ * Set client's certificate chain file string for mutual authentication.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_tls_set_certstring(as_config* config, const char* certstring)
+{
+	as_config_set_string(&config->tls.certstring, certstring);
 }
 
 /**

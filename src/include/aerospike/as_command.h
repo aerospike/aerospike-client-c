@@ -668,7 +668,7 @@ as_task_id_resolve(uint64_t* task_id_ptr)
  * Return command's starting replica index for AS_POLICY_REPLICA_ANY.
  */
 uint8_t
-as_replica_index_any();
+as_replica_index_any(void);
 
 /**
  * @private

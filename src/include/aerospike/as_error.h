@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -28,27 +28,23 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Definitions
+//---------------------------------
 
 /**
  * The size of as_error.message
- *
- * @ingroup as_error_object
  */
 #define AS_ERROR_MESSAGE_MAX_SIZE 	1024
 
 /**
  * The maximum string length of as_error.message
- *
- * @ingroup as_error_object
  */
 #define AS_ERROR_MESSAGE_MAX_LEN 	(AS_ERROR_MESSAGE_MAX_SIZE - 1)
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * All operations that interact with the Aerospike cluster accept an as_error
@@ -130,29 +126,29 @@ typedef struct as_error_s {
 
 } as_error;
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
- * as_error_update(&as->error, AEROSPIKE_OK, "%s %d", "a", 1);
+ * Set all as_error fields and default in_doubt to false. Variable arguments are accepted.
  *
- * @ingroup as_error_object
+ * @relates as_error
  */
 #define as_error_update(__err, __code, __fmt, ...) \
 	as_error_setallv( __err, __code, __func__, __FILE__, __LINE__, __fmt, ##__VA_ARGS__ );
 
 /**
- * as_error_set_message(&as->error, AEROSPIKE_ERR, "error message");
+ * Set all as_error fields and default in_doubt to false. Variable arguments are not accepted.
  *
- * @ingroup as_error_object
+ * @relates as_error
  */
 #define as_error_set_message(__err, __code, __msg) \
 	as_error_setall( __err, __code, __msg, __func__, __FILE__, __LINE__ );
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Initialize the error to default (empty) values, returning the error.
@@ -162,7 +158,6 @@ typedef struct as_error_s {
  * @returns The initialized err.
  *
  * @relates as_error
- * @ingroup as_error_object
  */
 static inline as_error*
 as_error_init(as_error* err)
@@ -184,7 +179,6 @@ as_error_init(as_error* err)
  * @returns AEROSPIKE_OK.
  *
  * @relates as_error
- * @ingroup as_error_object
  */
 static inline as_status
 as_error_reset(as_error* err)

@@ -37,7 +37,7 @@ $(COMMON)/$(TARGET_LIB)/libaerospike-common.a:
 
 .PHONY: COMMON-prepare
 COMMON-prepare: $(COMMON-TARGET)
-	$(noop)
+	$(MAKE) -e -C $(COMMON) prepare
 
 $(TARGET_INCL)/%.h: $(COMMON)/$(SOURCE_INCL)/%.h
 	@mkdir -p $(@D)
@@ -68,137 +68,15 @@ ifeq ($(wildcard $(MOD_LUA)/Makefile),)
   $(error )
 endif
 
-ifeq ($(COMMON),$(abspath $(COMMON)))
-  COMMON_PATH = $(COMMON)
-else
-  COMMON_PATH = ../../$(COMMON)
-endif
-
-ifeq ($(LUAJIT),$(abspath $(LUAJIT)))
-  LUAJIT_PATH = $(LUAJIT)
-else
-  LUAJIT_PATH = ../../$(LUAJIT)
-endif
-
-ifeq ($(LUAMOD),$(abspath $(LUAMOD)))
-  LUAMOD_PATH  = $(LUAMOD)
-else
-  LUAMOD_PATH = ../../$(LUAMOD)
-endif
-
 .PHONY: MOD_LUA-build
 MOD_LUA-build: $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a
 
 .PHONY: MOD_LUA-clean
 MOD_LUA-clean:
-	$(MAKE) -e -C $(MOD_LUA) clean COMMON=$(COMMON_PATH) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT_PATH) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD_PATH)
+	$(MAKE) -e -C $(MOD_LUA) clean COMMON=$(COMMON) LUAMOD=$(LUAMOD)
 
 $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a:
-	$(MAKE) -e -C $(MOD_LUA) libmod_lua.a COMMON=$(COMMON_PATH) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT_PATH) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD_PATH) EXT_CFLAGS=-DAS_MOD_LUA_CLIENT
+	$(MAKE) -e -C $(MOD_LUA) COMMON=$(COMMON) LUAMOD=$(LUAMOD) EXT_CFLAGS=-DAS_MOD_LUA_CLIENT
 
 .PHONY: MOD_LUA-prepare
-MOD_LUA-prepare: MOD_LUA-make-prepare
-	$(noop)
-
-.PHONY: MOD_LUA-make-prepare
-MOD_LUA-make-prepare:
-	@$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON_PATH) USE_LUAJIT=$(USE_LUAJIT) LUAJIT=$(LUAJIT_PATH) USE_LUAMOD=$(USE_LUAMOD) LUAMOD=$(LUAMOD_PATH)
-
-###############################################################################
-##  LUA MODULE                                                               ##
-###############################################################################
-
-ifeq ($(USE_LUAMOD),1)
-  ifndef LUAMOD
-    $(warning ***************************************************************)
-    $(warning *)
-    $(warning *  LUAMOD is not defined. )
-    $(warning *  LUAMOD should be set to a valid path. )
-    $(warning *)
-    $(warning ***************************************************************)
-    $(error )
-  endif
-
-  ifeq ($(wildcard $(LUAMOD)/Makefile),)
-    $(warning ***************************************************************)
-    $(warning *)
-    $(warning *  LUAMOD is '$(LUAMOD)')
-    $(warning *  LUAMOD doesn't contain 'Makefile'. )
-    $(warning *  LUAMOD should be set to a valid path. )
-    $(warning *)
-    $(warning ***************************************************************)
-    $(error )
-  endif
-endif
-
-.PHONY: LUAMOD-build
-LUAMOD-build:	$(LUAMOD)/src/liblua.a
-
-$(LUAMOD)/src/liblua.a:	$(LUAMOD)/src/luaconf.h
-ifeq ($(USE_LUAMOD),1)
-  ifeq ($(OS),FreeBSD)
-	  $(MAKE) CC=$(CC) CFLAGS="-O2 -Wall -fPIC -DLUA_USE_LINUX" -C $(LUAMOD) $(LUA_PLATFORM)
-  else
-	  $(MAKE) -C $(LUAMOD) $(LUA_PLATFORM)
-  endif
-endif
-
-$(LUAMOD)/src/luaconf.h:	$(LUAMOD)/src/luaconf.h.orig
-ifeq ($(USE_LUAMOD),1)
-	(cd $(LUAMOD)/src; rm -f $(notdir $@); ln -s $(notdir $<) $(notdir $@))
-endif
-
-.PHONY: LUAMOD-clean
-LUAMOD-clean:
-ifeq ($(USE_LUAMOD),1)
-	$(MAKE) -e -C $(LUAMOD) clean
-	rm -f $(LUAMOD)/src/luaconf.h
-endif
-
-.PHONY: LUAMOD-prepare
-LUAMOD-prepare:	$(LUAMOD)/src/luaconf.h
-
-###############################################################################
-##  LUA JIT MODULE                                                           ##
-###############################################################################
-
-ifeq ($(USE_LUAJIT),1)
-  ifndef LUAJIT
-    $(warning ***************************************************************)
-    $(warning *)
-    $(warning *  LUAJIT is not defined. )
-    $(warning *  LUAJIT should be set to a valid path. )
-    $(warning *)
-    $(warning ***************************************************************)
-    $(error )
-  endif
-
-  ifeq ($(wildcard $(LUAJIT)/Makefile),)
-    $(warning ***************************************************************)
-    $(warning *)
-    $(warning *  LUAJIT is '$(LUAJIT)')
-    $(warning *  LUAJIT doesn't contain 'Makefile'. )
-    $(warning *  LUAJIT should be set to a valid path. )
-    $(warning *)
-    $(warning ***************************************************************)
-    $(error )
-  endif
-endif
-
-.PHONY: LUAJIT-build
-LUAJIT-build:	$(LUAJIT)/src/libluajit.a
-
-$(LUAJIT)/src/libluajit.a:	$(LUAJIT)/src/luaconf.h
-ifeq ($(USE_LUAJIT),1)
-	$(MAKE) -C $(LUAJIT) Q= TARGET_SONAME=libluajit.so CCDEBUG=-g CFLAGS= LDFLAGS=
-endif
-
-.PHONY: LUAJIT-clean
-LUAJIT-clean:
-ifeq ($(USE_LUAJIT),1)
-	$(MAKE) -e -C $(LUAJIT) clean
-	(cd $(LUAJIT)/src; $(RM) $(LUAJIT)/src/libluajit.a)
-endif
-
-.PHONY: LUAJIT-prepare
-LUAJIT-prepare:
+	$(MAKE) -e -C $(MOD_LUA) prepare COMMON=$(COMMON) LUAMOD=$(LUAMOD)

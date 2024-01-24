@@ -2,7 +2,7 @@
 <package>
   <metadata>
     <id>aerospike-client-c-libevent</id>
-    <version>6.4.4</version>
+    <version>6.5.1</version>
     <title>Aerospike C Client with libevent</title>
     <authors>Aerospike</authors>
     <owners>Aerospike</owners>
@@ -11,7 +11,7 @@
     <icon>icon.png</icon>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Aerospike C client library for sync and async database commands using the libevent event framework.</description>
-    <copyright>Copyright 2008-2023 Aerospike, Inc.</copyright>
+    <copyright>Copyright 2008-2024 Aerospike, Inc.</copyright>
     <tags>Aerospike database C client native libevent</tags>
   </metadata>
   <files>

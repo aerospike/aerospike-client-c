@@ -100,6 +100,10 @@ as_config_destroy(as_config* config) {
 		cf_free(tls->cafile);
 	}
 
+	if (tls->castring) {
+		cf_free(tls->castring);
+	}
+
 	if (tls->capath) {
 		cf_free(tls->capath);
 	}
@@ -124,8 +128,16 @@ as_config_destroy(as_config* config) {
 		cf_free(tls->keyfile_pw);
 	}
 
+	if (tls->keystring) {
+		cf_free(tls->keystring);
+	}
+
 	if (tls->certfile) {
 		cf_free(tls->certfile);
+	}
+
+	if (tls->certstring) {
+		cf_free(tls->certstring);
 	}
 }
 

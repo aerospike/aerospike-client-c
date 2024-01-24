@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,9 +25,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
  * Default value for as_scan.no_bins
@@ -44,9 +44,9 @@ extern "C" {
  */
 #define AS_SCAN_DESERIALIZE_DEFAULT true
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 struct as_operations_s;
 
@@ -80,8 +80,6 @@ typedef enum as_scan_status_e {
 
 /**
  * Information about a particular background scan.
- *
- * @ingroup as_scan_object 
  */
 typedef struct as_scan_info_s {
 
@@ -252,7 +250,7 @@ typedef struct as_scan_bins_s {
  * as_scan_apply_each(scan, "udf_module", "udf_function", arglist);
  * ~~~~~~~~~~
  *
- * @ingroup client_objects
+ * @ingroup scan_operations
  */
 typedef struct as_scan_s {
 
@@ -305,18 +303,16 @@ typedef struct as_scan_s {
 	as_partitions_status* parts_all;
 
 	/**
-	 * The time-to-live (expiration) of the record in seconds.
-	 * There are also special values that can be set in the record TTL:
-	 * (*) ZERO (defined as AS_RECORD_DEFAULT_TTL), which means that the
-	 *    record will adopt the default TTL value from the namespace.
-	 * (*) 0xFFFFFFFF (also, -1 in a signed 32 bit int)
-	 *    (defined as AS_RECORD_NO_EXPIRE_TTL), which means that the record
-	 *    will get an internal "void_time" of zero, and thus will never expire.
-	 * (*) 0xFFFFFFFE (also, -2 in a signed 32 bit int)
-	 *    (defined as AS_RECORD_NO_CHANGE_TTL), which means that the record
-	 *    ttl will not change when the record is updated.
+	 * The time-to-live (expiration) of the record in seconds. Note that ttl
+	 * is only used on background scan writes.
 	 *
-	 * Note that the TTL value will be employed ONLY on background scan writes.
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * <li>AS_RECORD_CLIENT_DEFAULT_TTL: Use the default client ttl in as_policy_scan.</li>
+	 * </ul>
 	 */
 	uint32_t ttl;
 
@@ -357,9 +353,9 @@ typedef struct as_scan_s {
 
 } as_scan;
 
-/******************************************************************************
- * INSTANCE FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Instance Functions
+//---------------------------------
 
 /**
  * Initializes a scan.
@@ -379,7 +375,7 @@ typedef struct as_scan_s {
  * @returns On succes, the initialized scan. Otherwise NULL.
  *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN as_scan*
 as_scan_init(as_scan* scan, const char* ns, const char* set);
@@ -400,7 +396,7 @@ as_scan_init(as_scan* scan, const char* ns, const char* set);
  * @returns On success, a new scan. Otherwise NULL.
  *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN as_scan*
 as_scan_new(const char* ns, const char* set);
@@ -413,14 +409,14 @@ as_scan_new(const char* ns, const char* set);
  * ~~~~~~~~~~
  *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN void
 as_scan_destroy(as_scan* scan);
 
-/******************************************************************************
- * SELECT FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Select Functions
+//---------------------------------
 
 /** 
  * Initializes `as_scan.select` with a capacity of `n` using `alloca`
@@ -436,7 +432,8 @@ as_scan_destroy(as_scan* scan);
  * @param __scan	The scan to initialize.
  * @param __n		The number of bins to allocate.
  *
- * @ingroup as_scan_object
+ * @relates as_scan
+ * @ingroup scan_operations
  */
 #define as_scan_select_inita(__scan, __n) \
 	do {\
@@ -461,13 +458,13 @@ as_scan_destroy(as_scan* scan);
  * as_scan_select(&scan, "bin2");
  * ~~~~~~~~~~
  *
- * @param scan		The scan to initialize.
+ * @param scan	The scan to initialize.
  * @param n		The number of bins to allocate.
  *
- * @return On success, the initialized. Otherwise an error occurred.
+ * @return On success, true. Otherwise an error occurred.
  *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN bool
 as_scan_select_init(as_scan* scan, uint16_t n);
@@ -484,20 +481,20 @@ as_scan_select_init(as_scan* scan, uint16_t n);
  * as_scan_select(&scan, "bin2");
  * ~~~~~~~~~~
  *
- * @param scan 		The scan to modify.
- * @param bin 			The name of the bin to select.
+ * @param scan 	The scan to modify.
+ * @param bin 	The name of the bin to select.
  *
  * @return On success, true. Otherwise an error occurred.
  *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN bool
 as_scan_select(as_scan* scan, const char * bin);
 
-/******************************************************************************
- * MODIFIER FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Modifier Functions
+//---------------------------------
 
 /**
  * Do not return bins. This will only return the metadata for the records.
@@ -512,7 +509,7 @@ as_scan_select(as_scan* scan, const char * bin);
  * @return On success, true. Otherwise an error occurred.
  *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN bool
 as_scan_set_nobins(as_scan* scan, bool nobins);
@@ -528,9 +525,16 @@ as_scan_set_nobins(as_scan* scan, bool nobins);
  * @param concurrent	If true, scan all the nodes in parallel
  *
  * @return On success, true. Otherwise an error occurred.
+ *
+ * @relates as_scan
+ * @ingroup scan_operations
  */
 AS_EXTERN bool
 as_scan_set_concurrent(as_scan* scan, bool concurrent);
+
+//---------------------------------
+// Background Scan Functions
+//---------------------------------
 
 /**
  * Apply a UDF to each record scanned on the server.
@@ -554,16 +558,20 @@ as_scan_set_concurrent(as_scan* scan, bool concurrent);
  * @return On success, true. Otherwise an error occurred.
  *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN bool
 as_scan_apply_each(as_scan* scan, const char* module, const char* function, as_list* arglist);
+
+//---------------------------------
+// Paginate Functions
+//---------------------------------
 
 /**
  * Set to true if as_policy_scan.max_records is set and you need to scan data in pages.
  * 
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 static inline void
 as_scan_set_paginate(as_scan* scan, bool paginate)
@@ -576,7 +584,7 @@ as_scan_set_paginate(as_scan* scan, bool paginate)
  * The scan will resume from this point.
  *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 static inline void
 as_scan_set_partitions(as_scan* scan, as_partitions_status* parts_all)
@@ -589,7 +597,7 @@ as_scan_set_partitions(as_scan* scan, as_partitions_status* parts_all)
  * return all records?
  *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 static inline bool
 as_scan_is_done(as_scan* scan)
@@ -597,11 +605,17 @@ as_scan_is_done(as_scan* scan)
 	return scan->parts_all && scan->parts_all->done;
 }
 
+//---------------------------------
+// Serialization Functions
+//---------------------------------
+
 /**
  * Serialize scan definition to bytes.
  *
+ * @returns true on success and false on failure.
+ *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN bool
 as_scan_to_bytes(const as_scan* scan, uint8_t** bytes, uint32_t* bytes_size);
@@ -611,8 +625,9 @@ as_scan_to_bytes(const as_scan* scan, uint8_t** bytes, uint32_t* bytes_size);
  * as_scan_destroy() should be called when done with the scan definition.
  *
  * @returns true on success and false on failure.
+ *
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN bool
 as_scan_from_bytes(as_scan* scan, const uint8_t* bytes, uint32_t bytes_size);
@@ -622,8 +637,9 @@ as_scan_from_bytes(as_scan* scan, const uint8_t* bytes, uint32_t bytes_size);
  * as_scan_destroy() should be called when done with the scan definition.
  *
  * @returns scan definition on success and NULL on failure.
+ * 
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN as_scan*
 as_scan_from_bytes_new(const uint8_t* bytes, uint32_t bytes_size);
@@ -632,7 +648,7 @@ as_scan_from_bytes_new(const uint8_t* bytes, uint32_t bytes_size);
  * Compare scan objects.
  * @private
  * @relates as_scan
- * @ingroup as_scan_object
+ * @ingroup scan_operations
  */
 AS_EXTERN bool
 as_scan_compare(as_scan* s1, as_scan* s2);

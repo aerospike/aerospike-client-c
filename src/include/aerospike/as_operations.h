@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,15 +16,22 @@
  */
 #pragma once
 
+/**
+ * @defgroup base_operations  Base Operations
+ * @ingroup client_operations
+ *
+ * Basic  single record read/write/delete/touch  operations.
+ */
+
 #include <aerospike/as_bin.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Operation Identifiers
@@ -249,7 +256,7 @@ typedef struct as_binops_s {
  * as_operations_add_touch(ops);
  * ~~~~~~~~~~
  *
- * @ingroup client_objects
+ * @ingroup base_operations
  */
 typedef struct as_operations_s {
 
@@ -260,6 +267,14 @@ typedef struct as_operations_s {
 	
 	/**
 	 * The time-to-live (expiration) of the record in seconds.
+	 *
+	 * There are also special values that can be set in the record ttl:
+	 * <ul>
+	 * <li>AS_RECORD_DEFAULT_TTL: Use the server default ttl from the namespace.</li>
+	 * <li>AS_RECORD_NO_EXPIRE_TTL: Do not expire the record.</li>
+	 * <li>AS_RECORD_NO_CHANGE_TTL: Keep the existing record ttl when the record is updated.</li>
+	 * <li>AS_RECORD_CLIENT_DEFAULT_TTL: Use the default client ttl in as_policy_operate.</li>
+	 * </ul>
 	 */
 	uint32_t ttl;
 
@@ -276,9 +291,9 @@ typedef struct as_operations_s {
 
 } as_operations;
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
  * Initializes a stack allocated `as_operations` (as_operations) and allocates
@@ -292,11 +307,10 @@ typedef struct as_operations_s {
  * ~~~~~~~~~~
  *
  * @param __ops		The `as_operations *` to initialize.
- * @param __nops	The number of `as_binops.entries` to allocate on the
- * 					stack.
+ * @param __nops	The number of `as_binops.entries` to allocate on the stack.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 #define as_operations_inita(__ops, __nops) \
 	(__ops)->binops.entries = (as_binop*) alloca(sizeof(as_binop) * (__nops));\
@@ -307,9 +321,9 @@ typedef struct as_operations_s {
 	(__ops)->gen = 0;\
 	(__ops)->_free = false;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Intializes a stack allocated `as_operations`.
@@ -330,7 +344,7 @@ typedef struct as_operations_s {
  * @return The initialized `as_operations` on success. Otherwise NULL.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN as_operations*
 as_operations_init(as_operations* ops, uint16_t nops);
@@ -352,7 +366,7 @@ as_operations_init(as_operations* ops, uint16_t nops);
  * @return The new `as_operations` on success. Otherwise NULL.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN as_operations*
 as_operations_new(uint16_t nops);
@@ -367,7 +381,7 @@ as_operations_new(uint16_t nops);
  * @param ops 	The `as_operations` to destroy.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN void
 as_operations_destroy(as_operations* ops);
@@ -375,14 +389,14 @@ as_operations_destroy(as_operations* ops);
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation.
  *
- * @param ops			The `as_operations` to append the operation to.
- * @param name 			The name of the bin to perform the operation on.
+ * @param ops		The `as_operations` to append the operation to.
+ * @param name 		The name of the bin to perform the operation on.
  * @param value 		The value to be used in the operation.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_write(as_operations* ops, const char* name, as_bin_value* value);
@@ -390,14 +404,14 @@ as_operations_add_write(as_operations* ops, const char* name, as_bin_value* valu
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with an bool value.
  *
- * @param ops			The `as_operations` to append the operation to.
- * @param name 			The name of the bin to perform the operation on.
+ * @param ops		The `as_operations` to append the operation to.
+ * @param name 		The name of the bin to perform the operation on.
  * @param value 		The value to be used in the operation.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_write_bool(as_operations* ops, const char* name, bool value);
@@ -405,14 +419,14 @@ as_operations_add_write_bool(as_operations* ops, const char* name, bool value);
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with an int64_t value.
  *
- * @param ops			The `as_operations` to append the operation to.
- * @param name 			The name of the bin to perform the operation on.
+ * @param ops		The `as_operations` to append the operation to.
+ * @param name 		The name of the bin to perform the operation on.
  * @param value 		The value to be used in the operation.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_write_int64(as_operations* ops, const char* name, int64_t value);
@@ -420,14 +434,14 @@ as_operations_add_write_int64(as_operations* ops, const char* name, int64_t valu
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with a double value.
  *
- * @param ops			The `as_operations` to append the operation to.
- * @param name 			The name of the bin to perform the operation on.
+ * @param ops		The `as_operations` to append the operation to.
+ * @param name 		The name of the bin to perform the operation on.
  * @param value 		The value to be used in the operation.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_write_double(as_operations* ops, const char* name, double value);
@@ -435,15 +449,15 @@ as_operations_add_write_double(as_operations* ops, const char* name, double valu
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation with a NULL-terminated string value.
  *
- * @param ops			The `as_operations` to append the operation to.
- * @param name 			The name of the bin to perform the operation on.
+ * @param ops		The `as_operations` to append the operation to.
+ * @param name 		The name of the bin to perform the operation on.
  * @param value 		The value to be used in the operation.
- * @param free			If true, then the value will be freed when the operations is destroyed.
+ * @param free		If true, then the value will be freed when the operations is destroyed.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_write_strp(as_operations* ops, const char* name, const char* value, bool free);
@@ -458,7 +472,7 @@ as_operations_add_write_strp(as_operations* ops, const char* name, const char* v
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline bool
 as_operations_add_write_str(as_operations* ops, const char* name, const char* value)
@@ -477,7 +491,7 @@ as_operations_add_write_str(as_operations* ops, const char* name, const char* va
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_write_geojson_strp(as_operations* ops, const char* name, const char* value, bool free);
@@ -492,7 +506,7 @@ as_operations_add_write_geojson_strp(as_operations* ops, const char* name, const
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline bool
 as_operations_add_write_geojson_str(as_operations* ops, const char* name, const char* value)
@@ -505,14 +519,14 @@ as_operations_add_write_geojson_str(as_operations* ops, const char* name, const 
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation.
+ * @param value 			The value to be used in the operation.
  * @param size 			The size of the value.
  * @param free			If true, then the value will be freed when the operations is destroyed.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_write_rawp(as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free);
@@ -522,13 +536,13 @@ as_operations_add_write_rawp(as_operations* ops, const char* name, const uint8_t
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation.
+ * @param value 			The value to be used in the operation.
  * @param size 			The size of the value. Must last for the lifetime of the operations.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline bool
 as_operations_add_write_raw(as_operations* ops, const char* name, const uint8_t* value, uint32_t size)
@@ -545,7 +559,7 @@ as_operations_add_write_raw(as_operations* ops, const char* name, const uint8_t*
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_read(as_operations* ops, const char* name);
@@ -558,37 +572,39 @@ as_operations_add_read(as_operations* ops, const char* name);
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_read_all(as_operations* ops);
 
 /**
- * Add a `AS_OPERATOR_INCR` bin operation with (required) int64_t value.
+ * Add a `AS_OPERATOR_INCR` bin operation with int64_t value. If the record or bin does not exist,
+ * the record/bin will be created by default with the value to be added.
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation.
+ * @param value 			The value to be used in the operation.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_incr(as_operations* ops, const char* name, int64_t value);
 
 /**
- * Add a `AS_OPERATOR_INCR` bin operation with double value.
+ * Add a `AS_OPERATOR_INCR` bin operation with double value. If the record or bin does not exist,
+ * the record/bin will be created by default with the value to be added.
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation.
+ * @param value 			The value to be used in the operation.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_incr_double(as_operations* ops, const char* name, double value);
@@ -598,13 +614,13 @@ as_operations_add_incr_double(as_operations* ops, const char* name, double value
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation.
+ * @param value 			The value to be used in the operation.
  * @param free			If true, then the value will be freed when the operations is destroyed.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_prepend_strp(as_operations* ops, const char* name, const char* value, bool free);
@@ -614,12 +630,12 @@ as_operations_add_prepend_strp(as_operations* ops, const char* name, const char*
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation. Must last for the lifetime of the operations.
+ * @param value 			The value to be used in the operation. Must last for the lifetime of the operations.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline bool
 as_operations_add_prepend_str(as_operations* ops, const char* name, const char* value)
@@ -632,14 +648,14 @@ as_operations_add_prepend_str(as_operations* ops, const char* name, const char* 
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation.
+ * @param value 			The value to be used in the operation.
  * @param size 			The size of the value.
  * @param free			If true, then the value will be freed when the operations is destroyed.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_prepend_rawp(as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free);
@@ -649,13 +665,13 @@ as_operations_add_prepend_rawp(as_operations* ops, const char* name, const uint8
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation. Must last for the lifetime of the operations.
+ * @param value 			The value to be used in the operation. Must last for the lifetime of the operations.
  * @param size 			The size of the value.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline bool
 as_operations_add_prepend_raw(as_operations* ops, const char* name, const uint8_t* value, uint32_t size)
@@ -668,13 +684,13 @@ as_operations_add_prepend_raw(as_operations* ops, const char* name, const uint8_
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation.
+ * @param value 			The value to be used in the operation.
  * @param free			If true, then the value will be freed when the operations is destroyed.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_append_strp(as_operations* ops, const char* name, const char* value, bool free);
@@ -684,12 +700,12 @@ as_operations_add_append_strp(as_operations* ops, const char* name, const char* 
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation. Must last for the lifetime of the operations.
+ * @param value 			The value to be used in the operation. Must last for the lifetime of the operations.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline bool
 as_operations_add_append_str(as_operations* ops, const char* name, const char* value)
@@ -702,14 +718,14 @@ as_operations_add_append_str(as_operations* ops, const char* name, const char* v
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation.
+ * @param value 			The value to be used in the operation.
  * @param size 			The size of the value.
  * @param free			If true, then the value will be freed when the operations is destroyed.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_append_rawp(as_operations* ops, const char* name, const uint8_t* value, uint32_t size, bool free);
@@ -719,13 +735,13 @@ as_operations_add_append_rawp(as_operations* ops, const char* name, const uint8_
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
- * @param value 		The value to be used in the operation. Must last for the lifetime of the operations.
+ * @param value 			The value to be used in the operation. Must last for the lifetime of the operations.
  * @param size 			The size of the value.
  *
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 static inline bool
 as_operations_add_append_raw(as_operations* ops, const char* name, const uint8_t* value, uint32_t size)
@@ -741,7 +757,7 @@ as_operations_add_append_raw(as_operations* ops, const char* name, const uint8_t
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_touch(as_operations* ops);
@@ -754,7 +770,7 @@ as_operations_add_touch(as_operations* ops);
  * @return true on success. Otherwise an error occurred.
  *
  * @relates as_operations
- * @ingroup as_operations_object
+ * @ingroup base_operations
  */
 AS_EXTERN bool
 as_operations_add_delete(as_operations* ops);

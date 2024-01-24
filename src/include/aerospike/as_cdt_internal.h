@@ -88,6 +88,9 @@ as_unpack_str_new(as_unpacker* pk, char** str, uint32_t max);
 bool
 as_unpack_bytes_init(as_unpacker* pk, uint8_t* b, uint32_t max);
 
+bool
+as_unpack_bytes_new(as_unpacker* pk, uint8_t** bytes, uint32_t* bytes_size, uint32_t max);
+
 #define as_cmp_error() \
 	printf("Line %d\n", __LINE__);\
 	return false;

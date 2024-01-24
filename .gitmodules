@@ -10,7 +10,3 @@
 	path = modules/lua
 	url = https://github.com/aerospike/lua.git
 	ignore = dirty
-[submodule "modules/luajit"]
-	path = modules/luajit
-	url = https://github.com/aerospike/luajit.git
-	ignore = dirty

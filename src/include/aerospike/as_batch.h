@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,9 +25,9 @@
 extern "C" {
 #endif
 
-/*****************************************************************************
- * STRUCTURES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * A collection of keys to be batch processed.
@@ -99,10 +99,9 @@ typedef struct as_batch_result_s {
  */
 typedef as_batch_result as_batch_read;
 
-/*********************************************************************************
- * INSTANCE MACROS
- *********************************************************************************/
-
+//---------------------------------
+// Macros
+//---------------------------------
 
 /** 
  * Initializes `as_batch` with specified capacity using alloca().
@@ -123,7 +122,7 @@ typedef as_batch_result as_batch_read;
  * @param __size		The number of keys to allocate.
  *
  * @relates as_batch
- * @ingroup batch_object
+ * @ingroup batch_operations
  */
 #define as_batch_inita(__batch, __size) \
 	do {\
@@ -135,9 +134,9 @@ typedef as_batch_result as_batch_read;
 		(__batch)->_free = false;\
 	} while(0)
 
-/*********************************************************************************
- * INSTANCE FUNCTIONS
- *********************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Create and initialize a heap allocated as_batch capable of storing
@@ -155,7 +154,7 @@ typedef as_batch_result as_batch_read;
  * @param size			The number of keys to allocate.
  *
  * @relates as_batch
- * @ingroup batch_object
+ * @ingroup batch_operations
  */
 AS_EXTERN as_batch*
 as_batch_new(uint32_t size);
@@ -177,7 +176,7 @@ as_batch_new(uint32_t size);
  * @param size			The number of keys to allocate.
  * 
  * @relates as_batch
- * @ingroup batch_object
+ * @ingroup batch_operations
  */
 AS_EXTERN as_batch*
 as_batch_init(as_batch* batch, uint32_t size);
@@ -192,7 +191,7 @@ as_batch_init(as_batch* batch, uint32_t size);
  * @param batch 	The batch to release.
  *
  * @relates as_batch
- * @ingroup batch_object
+ * @ingroup batch_operations
  */
 AS_EXTERN void
 as_batch_destroy(as_batch* batch);
@@ -201,13 +200,13 @@ as_batch_destroy(as_batch* batch);
  * Get the key at given position of the batch. If the position is not
  * within the allocated capacity for the batchm then NULL is returned.
  *
- * @param batch 	The batch to get the key from.
+ * @param batch 		The batch to get the key from.
  * @param i			The position of the key.
  *
  * @return On success, the key at specified position. If position is invalid, then NULL.
  *
  * @relates as_batch
- * @ingroup batch_object
+ * @ingroup batch_operations
  */
 static inline as_key*
 as_batch_keyat(const as_batch* batch, uint32_t i)

@@ -563,7 +563,7 @@ batch_write_operate_cb(const as_batch_result* results, uint32_t n, void* udata)
 	return true;
 }
 
-TEST(batch_write_list_operate, "Batch write list operate")
+TEST(batch_write_list_operate, "Batch write list operate with default ttl")
 {
 	as_batch batch;
 	as_batch_inita(&batch, N_KEYS);
@@ -581,10 +581,15 @@ TEST(batch_write_list_operate, "Batch write list operate")
 	as_operations_list_insert(&ops, LIST_BIN, NULL, NULL, 0, (as_val*)&val);
 	as_operations_list_size(&ops, LIST_BIN, NULL);
 	as_operations_list_get_by_index(&ops, LIST_BIN, NULL, -1, AS_LIST_RETURN_VALUE);
+	ops.ttl = AS_RECORD_CLIENT_DEFAULT_TTL;
+
+	as_policy_batch_write p;
+	as_policy_batch_write_init(&p);
+	p.ttl = 5000;
 
 	batch_stats data = {0};
 	as_error err;
-	as_status status = aerospike_batch_operate(as, &err, NULL, NULL, &batch, &ops,
+	as_status status = aerospike_batch_operate(as, &err, NULL, &p, &batch, &ops,
 		batch_write_operate_cb, &data);
 
 	as_operations_destroy(&ops);
@@ -600,14 +605,17 @@ TEST(batch_write_complex, "Batch write complex")
 	as_operations wops1;
 	as_operations_inita(&wops1, 1);
 	as_operations_add_write_int64(&wops1, bin2, 100);
+	wops1.ttl = AS_RECORD_CLIENT_DEFAULT_TTL;
 
 	as_operations wops2;
 	as_operations_inita(&wops2, 1);
 	as_operations_exp_write(&wops2, bin3, wexp1, AS_EXP_WRITE_DEFAULT);
+	wops2.ttl = AS_RECORD_CLIENT_DEFAULT_TTL;
 
 	as_policy_batch_write wp;
 	as_policy_batch_write_init(&wp);
 	wp.key = AS_POLICY_KEY_SEND;
+	wp.ttl = 500;
 
 	as_batch_records recs;
 	as_batch_records_inita(&recs, 3);
@@ -624,8 +632,14 @@ TEST(batch_write_complex, "Batch write complex")
 	as_batch_remove_record* rm = as_batch_remove_reserve(&recs);
 	as_key_init_int64(&rm->key, NAMESPACE, SET, 10002);
 
+	// Test default ttl.
+	as->config.policies.batch_write.ttl = 1000;
+
 	as_error err;
 	as_status status = aerospike_batch_write(as, &err, NULL, &recs);
+
+	// Reset default ttl.
+	as->config.policies.batch_write.ttl = 0;
 
 	assert_int_eq(status, AEROSPIKE_OK);
 

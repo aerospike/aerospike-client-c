@@ -336,7 +336,7 @@ as_query_parse_record_async(
 		return status;
 	}
 
-	if (as_partition_tracker_reached_max_records_async(qe->pt)) {
+	if (as_partition_tracker_reached_max_records_async(qe->pt, qc->np)) {
 		as_record_destroy(&rec);
 		return AEROSPIKE_OK;
 	}
@@ -471,7 +471,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 			return status;
 		}
 
-		if (as_partition_tracker_reached_max_records_sync(task->pt)) {
+		if (as_partition_tracker_reached_max_records_sync(task->pt, task->np)) {
 			as_record_destroy(&rec);
 			return AEROSPIKE_OK;
 		}
@@ -575,6 +575,27 @@ as_query_write_range_string(uint8_t* p, char* begin, char* end)
 	}
 	*len_ptr = cf_swap_to_be32((uint32_t)(q - end));
 	
+	return p;
+}
+
+static uint8_t*
+as_query_write_range_blob(uint8_t* p, uint8_t* bytes, uint32_t size)
+{
+	// Write particle type.
+	*p++ = AS_BYTES_BLOB;
+	
+	// Write begin value.
+	*(uint32_t*)p = cf_swap_to_be32(size);
+	p += sizeof(uint32_t);
+	memcpy(p, bytes, size);
+	p += size;
+
+	// Write end value.
+	*(uint32_t*)p = cf_swap_to_be32(size);
+	p += sizeof(uint32_t);
+	memcpy(p, bytes, size);
+	p += size;
+
 	return p;
 }
 
@@ -689,15 +710,26 @@ as_query_command_size(
 		// bin name size(1) + particle type size(1) + begin particle size(4) + end particle size(4) = 10
 		filter_size += (uint32_t)strlen(pred->bin) + 10;
 		
-		switch(pred->type) {
+		switch (pred->type) {
 			case AS_PREDICATE_EQUAL:
-				if (pred->dtype == AS_INDEX_STRING) {
-					filter_size += (uint32_t)strlen(pred->value.string_val.string) * 2;
-				}
-				else if (pred->dtype == AS_INDEX_NUMERIC) {
-					filter_size += sizeof(int64_t) * 2;
+				switch (pred->dtype) {
+					case AS_INDEX_STRING:
+						filter_size += (uint32_t)strlen(pred->value.string_val.string) * 2;
+						break;
+
+					case AS_INDEX_NUMERIC:
+						filter_size += sizeof(int64_t) * 2;
+						break;
+
+					case AS_INDEX_BLOB:
+						filter_size += pred->value.blob_val.bytes_size * 2;
+						break;
+
+					default:
+						break;
 				}
 				break;
+
 			case AS_PREDICATE_RANGE:
 				if (pred->dtype == AS_INDEX_NUMERIC) {
 					filter_size += sizeof(int64_t) * 2;
@@ -846,14 +878,21 @@ as_query_command_init(
 	else if (query->ops) {
 		// Background query with operations.
 		uint32_t ttl = (query->ttl)? query->ttl : query->ops->ttl;
+
+		if (ttl == AS_RECORD_CLIENT_DEFAULT_TTL) {
+			ttl = write_policy->ttl;
+		}
+
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
 			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, ttl, qb->n_fields, qb->n_ops,
 			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {
 		// Background query with UDF.
+		uint32_t ttl = (query->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? write_policy->ttl : query->ttl;
+
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
-			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, query->ttl, qb->n_fields, qb->n_ops,
+			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, ttl, qb->n_fields, qb->n_ops,
 			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 
@@ -902,16 +941,31 @@ as_query_command_init(
 		*len_ptr = (uint8_t)(s - (uint8_t*)pred->bin);
 		
 		// Write particle type and range values.
-		switch(pred->type) {
+		switch (pred->type) {
 			case AS_PREDICATE_EQUAL:
-				if (pred->dtype == AS_INDEX_STRING) {
-					char* str = pred->value.string_val.string;
-					p = as_query_write_range_string(p, str, str);
-				}
-				else if (pred->dtype == AS_INDEX_NUMERIC) {
-					p = as_query_write_range_integer(p, pred->value.integer, pred->value.integer);
+				switch (pred->dtype) {
+					case AS_INDEX_STRING: {
+						char* str = pred->value.string_val.string;
+						p = as_query_write_range_string(p, str, str);
+						break;
+					}
+
+					case AS_INDEX_NUMERIC: {
+						p = as_query_write_range_integer(p, pred->value.integer, pred->value.integer);
+						break;
+					}
+
+					case AS_INDEX_BLOB: {
+						p = as_query_write_range_blob(p, pred->value.blob_val.bytes, pred->value.blob_val.bytes_size);
+						break;
+					}
+
+					default: {
+						break;
+					}
 				}
 				break;
+
 			case AS_PREDICATE_RANGE:
 				if (pred->dtype == AS_INDEX_NUMERIC) {
 					p = as_query_write_range_integer(p, pred->value.integer_range.min, pred->value.integer_range.max);

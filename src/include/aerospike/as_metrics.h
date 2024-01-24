@@ -206,7 +206,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err);
  * Calculate CPU and memory usage
  */
 void
-as_metrics_process_cpu_load_mem_usage(double* cpu_usage, double* mem);
+as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem);
 
 struct as_cluster_s;
 /**
@@ -229,9 +229,15 @@ struct as_conn_stats_s;
 void
 as_metrics_write_conn(as_metrics_writer* mw, const struct as_conn_stats_s* conn_stats);
 
+/**
+ * Calculate sync conn stats data
+ */
 void
 as_metrics_get_node_sync_conn_stats(const struct as_node_s* node, struct as_conn_stats_s* async);
 
+/**
+ * Calculate async conn stats data
+ */
 void
 as_metrics_get_node_async_conn_stats(const struct as_node_s* node, struct as_conn_stats_s* sync);
 
@@ -270,9 +276,9 @@ double
 as_metrics_process_cpu_load();
 
 /**
- * Gets memory usage using GlobalMemoryStatusEx()
+ * Gets memory usage using GetProcessMemoryInfo()
  */
-DWORDLONG
+uint32_t
 as_metrics_process_mem_usage();
 #endif
 

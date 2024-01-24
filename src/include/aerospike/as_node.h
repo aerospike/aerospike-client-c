@@ -327,11 +327,11 @@ typedef struct as_node_s {
 	 * Error count for this node's error_rate_window.
 	 */
 	uint32_t error_rate;
-
+	
 	/**
-     * Transaction error count since node was initialized. If the error is retryable, multiple errors per
-     * transaction may occur.
-     */
+	 * Transaction error count since node was initialized. If the error is retryable, multiple errors per
+	 * transaction may occur.
+	 */
 	uint64_t error_count;
 
 	/**

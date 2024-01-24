@@ -291,21 +291,17 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster
 		cluster_name = "";
 	}
 
-	double* cpu_load;
-	double* mem;
-	as_metrics_process_cpu_load_mem_usage(cpu_load, mem);
-	*cpu_load = *cpu_load + 0.5 - (*cpu_load < 0);
-	*mem = *mem + 0.5 - (*mem < 0);
-	uint32_t cpu_load_rounded = (uint32_t)cpu_load;
-	uint32_t mem_rounded = (uint32_t)mem;
+	uint32_t cpu_load = 0;
+	uint32_t mem = 0;
+	as_metrics_process_cpu_load_mem_usage(&cpu_load, &mem);
 
 	as_string_builder_append(mw->sb, utc_time_str(time(NULL)));
 	as_string_builder_append(mw->sb, " cluster[");
 	as_string_builder_append(mw->sb, cluster_name);
 	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_int(mw->sb, cpu_load_rounded);
+	as_string_builder_append_int(mw->sb, cpu_load);
 	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_int(mw->sb, mem_rounded);
+	as_string_builder_append_int(mw->sb, mem);
 	as_string_builder_append_char(mw->sb, ',');
 	as_string_builder_append_uint(mw->sb, cluster->invalid_node_count); // Cumulative. Not reset on each interval.
 	as_string_builder_append_char(mw->sb, ',');
@@ -363,15 +359,15 @@ as_metrics_write_node(as_metrics_writer* mw, struct as_node_s* node)
 	as_string_builder_append(mw->sb, as_node_get_address_string(node));
 	as_string_builder_append_char(mw->sb, ',');
 
-	struct as_conn_stats_s* sync;
-	struct as_conn_stats_s* async;
-	as_sum_init(sync);
-	as_sum_init(async);
-	as_metrics_get_node_sync_conn_stats(node, sync);
-	as_metrics_write_conn(mw, sync);
+	struct as_conn_stats_s sync;
+	struct as_conn_stats_s async;
+	as_sum_init(&sync);
+	as_sum_init(&async);
+	as_metrics_get_node_sync_conn_stats(node, &sync);
+	as_metrics_write_conn(mw, &sync);
 	as_string_builder_append_char(mw->sb, ',');
-	as_metrics_get_node_async_conn_stats(node, async);
-	as_metrics_write_conn(mw, async);
+	as_metrics_get_node_async_conn_stats(node, &async);
+	as_metrics_write_conn(mw, &async);
 	as_string_builder_append_char(mw->sb, ',');
 
 	as_string_builder_append_uint64(mw->sb, as_node_get_error_count(node));
@@ -475,10 +471,14 @@ as_metrics_write_line(as_metrics_writer* mw, as_error* err)
 
 #if defined(__linux__)
 void
-as_metrics_process_cpu_load_mem_usage(double* cpu_usage, double* mem)
+as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem)
 {
-	double resident_set;
-	as_metrics_proc_stat_mem_cpu(mem, resident_set, cpu_usage);
+	double resident_set, mem_d, cpu_usage_d;
+	as_metrics_proc_stat_mem_cpu(&mem_d, &resident_set, &cpu_usage_d);
+	cpu_usage_d = cpu_usage_d + 0.5 - (cpu_usage_d < 0);
+	mem_d = mem_d + 0.5 - (mem_d < 0);
+	*cpu_usage = (uint32_t)cpu_usage_d;
+	*mem = (uint32_t)mem_d;
 }
 
 void 
@@ -512,27 +512,28 @@ as_metrics_proc_stat_mem_cpu(double* vm_usage, double* resident_set, double* cpu
 	stat_stream.close();
 
 	int64_t page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
-	vm_usage = vsize / 1024.0;
-	resident_set = rss * page_size_kb;
+	*vm_usage = vsize / 1024.0;
+	*resident_set = rss * page_size_kb;
 
 	uint64_t u_time_sec = utime / sysconf(_SC_CLK_TCK);
 	uint64_t s_time_sec = stime / sysconf(_SC_CLK_TCK);
 	uint64_t start_time_sec = starttime / sysconf(_SC_CLK_TCK);
 
-	cpu_usage = (u_time_sec + s_time_sec) / (cf_get_seconds() - start_time_sec);
+	*cpu_usage = (u_time_sec + s_time_sec) / (cf_get_seconds() - start_time_sec);
 }
 #endif
 
 #if defined(_MSC_VER)
 #include <Windows.h>
+#include <Psapi.h>
 
 void
-as_metrics_process_cpu_load_mem_usage(double* cpu_usage, double* mem)
+as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem)
 {
-	*cpu_usage = as_metrics_process_cpu_load();
-	DWORDLONG dword = as_metrics_process_mem_usage();
-	dword = dword + 0.5 - (dword < 0);
-	*mem = dword;
+	double cpu_usage_d = as_metrics_process_cpu_load();
+	cpu_usage_d = cpu_usage_d + 0.5 - (cpu_usage_d < 0);
+	*cpu_usage = (uint32_t)cpu_usage_d;
+	*mem = as_metrics_process_mem_usage();
 }
 
 static double 
@@ -568,15 +569,15 @@ as_metrics_process_cpu_load()
 		as_metrics_calculate_cpu_load(as_metrics_file_time_to_uint_64(idleTime), as_metrics_file_time_to_uint_64(kernelTime) + as_metrics_file_time_to_uint_64(userTime)) * 100: -1.0f;
 }
 
-DWORDLONG
+uint32_t
 as_metrics_process_mem_usage()
 {
-	MEMORYSTATUSEX statex;
+	PROCESS_MEMORY_COUNTERS memCounter;
+	BOOL result = GetProcessMemoryInfo(GetCurrentProcess(),
+		&memCounter,
+		sizeof(memCounter));
 
-	statex.dwLength = sizeof(statex);
-
-	GlobalMemoryStatusEx(&statex);
-	return statex.ullTotalVirtual - statex.ullAvailVirtual;
+	return (uint32_t)memCounter.WorkingSetSize;
 }
 
 #endif
@@ -587,10 +588,14 @@ as_metrics_process_mem_usage()
 #include<sys/syscall.h>
 
 void
-as_metrics_process_cpu_load_mem_usage(double* cpu_usage, double* mem)
+as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem)
 {
-	*cpu_usage = as_metrics_process_cpu_load();
-	*mem = as_metrics_process_mem_usage();
+	double cpu_usage_d = as_metrics_process_cpu_load();
+	double mem_d = as_metrics_process_mem_usage();
+	cpu_usage_d = cpu_usage_d + 0.5 - (cpu_usage_d < 0);
+	mem_d = mem_d + 0.5 - (mem_d < 0);
+	*cpu_usage = (uint32_t)cpu_usage_d;
+	*mem = (uint32_t)mem_d;
 }
 
 double
@@ -608,6 +613,7 @@ as_metrics_process_mem_usage()
 
 	return t_info.virtual_size;
 }
+
 double
 as_metrics_process_cpu_load()
 {

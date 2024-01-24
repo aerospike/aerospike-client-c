@@ -2950,6 +2950,460 @@ TEST(ordered_map_eq_exp, "Ordered Map Equality Expression")
 	as_exp_destroy(filter);
 }
 
+TEST(map_self_correct, "Test Map put with wrong order and compactness")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 29);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	uint8_t buf[4096];
+	as_bytes b;
+
+	// Test out of order rejection.
+	as_packer pk = {
+			.buffer = buf,
+			.capacity = sizeof(buf)
+	};
+
+	as_pack_map_header(&pk, 6);
+
+	as_pack_ext_header(&pk, 0, AS_MAP_KEY_ORDERED);
+	as_pack_nil(&pk);
+
+	for (int i = 0; i < 5; i++) {
+		as_pack_int64(&pk, 5 - i); // key
+		as_pack_int64(&pk, i); // value
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset, false);
+	as_bytes_set_type(&b, AS_BYTES_MAP);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_ne(status, AEROSPIKE_OK); // rejected
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test compactify.
+	pk.offset = 0;
+	as_pack_map_header(&pk, 6);
+
+	as_pack_ext_header(&pk, 0, AS_MAP_KEY_ORDERED);
+	as_pack_nil(&pk);
+
+	as_pack_int64(&pk, 0);
+	as_pack_int64(&pk, 0x100000000);
+
+	uint64_t* p64 = (uint64_t*)(pk.buffer + pk.offset - sizeof(uint64_t));
+	*p64 = 0; // set it to 0 overpacked as a uint64_t so it cost 9 bytes instead of 1
+
+	for (int i = 1; i < 5; i++) {
+		as_pack_int64(&pk, i); // key
+		as_pack_int64(&pk, i); // value
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset, false);
+	as_bytes_set_type(&b, AS_BYTES_MAP);
+
+	rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get.
+	as_policy_read rp;
+	as_policy_read_init(&rp);
+	rp.deserialize = false;
+	status = aerospike_key_get(as, &err, &rp, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_bytes *rb = as_record_get_bytes(rec, BIN_NAME);
+	assert_int_eq(as_bytes_size(rb), 15);
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test compactify 2.
+	pk.offset = 0;
+	as_pack_map_header(&pk, 6);
+
+	as_pack_ext_header(&pk, 0, AS_MAP_KEY_ORDERED);
+	as_pack_nil(&pk);
+
+	as_pack_int64(&pk, 0);
+	as_pack_int64(&pk, -0x100000000);
+
+	p64 = (uint64_t*)(pk.buffer + pk.offset - sizeof(uint64_t));
+	*p64 = cf_swap_to_be64(4294967295);
+
+	as_pack_int64(&pk, 1);
+	as_pack_int64(&pk, -0x100000000);
+
+	p64 = (uint64_t*)(pk.buffer + pk.offset - sizeof(uint64_t));
+	*p64 = cf_swap_to_be64(4294967296);
+
+	for (int i = 2; i < 5; i++) {
+		as_pack_int64(&pk, i); // key
+		as_pack_int64(&pk, i); // value
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset, false);
+	as_bytes_set_type(&b, AS_BYTES_MAP);
+
+	rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get.
+	status = aerospike_key_get(as, &err, &rp, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	rb = as_record_get_bytes(rec, BIN_NAME);
+	assert_int_eq(as_bytes_size(rb), 27);
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test incorrect offset index.
+	pk.offset = 0;
+	as_pack_map_header(&pk, 6);
+
+	uint8_t idxbuf[10];
+
+	for (size_t i = 0; i < sizeof(idxbuf); i++) {
+		idxbuf[i] = (uint8_t)i + 55;
+	}
+
+	as_pack_ext_header(&pk, sizeof(idxbuf), AS_MAP_KEY_ORDERED);
+	as_pack_append(&pk, idxbuf, sizeof(idxbuf));
+	as_pack_nil(&pk);
+
+	for (int i = 0; i < 5; i++) {
+		as_pack_int64(&pk, i); // key
+		as_pack_int64(&pk, i); // value
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset, false);
+	as_bytes_set_type(&b, AS_BYTES_MAP);
+
+	rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get.
+	status = aerospike_key_get(as, &err, &rp, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	rb = as_record_get_bytes(rec, BIN_NAME);
+	assert_int_eq(as_bytes_size(rb), 15);
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test padding rejection.
+	pk.offset = 0;
+	as_pack_map_header(&pk, 6);
+
+	as_pack_ext_header(&pk, 0, AS_MAP_KEY_ORDERED);
+	as_pack_nil(&pk);
+
+	for (int i = 0; i < 5; i++) {
+		as_pack_int64(&pk, i); // key
+		as_pack_int64(&pk, i); // value
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset + 1, false);
+	as_bytes_set_type(&b, AS_BYTES_MAP);
+
+	rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_ne(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+}
+
+TEST(map_persist_index, "Test Map Persist Index")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 30);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	uint8_t buf[4096];
+	as_bytes b;
+
+	// Test out of order rejection.
+	as_packer pk = {
+			.buffer = buf,
+			.capacity = sizeof(buf)
+	};
+
+	as_pack_map_header(&pk, 6);
+
+	as_pack_ext_header(&pk, 0, AS_MAP_KEY_ORDERED | AS_MAP_FLAG_PERSIST_INDEX);
+	as_pack_nil(&pk);
+
+	for (int i = 0; i < 5; i++) {
+		as_pack_int64(&pk, 5 - i); // key
+		as_pack_int64(&pk, i); // value
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset, false);
+	as_bytes_set_type(&b, AS_BYTES_MAP);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_ne(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test compactify.
+	pk.offset = 0;
+	as_pack_map_header(&pk, 6);
+
+	as_pack_ext_header(&pk, 0, AS_MAP_KEY_ORDERED | AS_MAP_FLAG_PERSIST_INDEX);
+	as_pack_nil(&pk);
+
+	as_pack_int64(&pk, 0);
+	as_pack_int64(&pk, 0x100000000);
+
+	uint64_t* p64 = (uint64_t*)(pk.buffer + pk.offset - sizeof(uint64_t));
+	*p64 = 0; // set it to 0 overpacked as a uint64_t so it cost 9 bytes instead of 1
+
+	for (int i = 1; i < 5; i++) {
+		as_pack_int64(&pk, i); // key
+		as_pack_int64(&pk, i); // value
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset, false);
+	as_bytes_set_type(&b, AS_BYTES_MAP);
+
+	rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get.
+	as_policy_read rp;
+	as_policy_read_init(&rp);
+	rp.deserialize = false;
+	status = aerospike_key_get(as, &err, &rp, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_bytes *rb = as_record_get_bytes(rec, BIN_NAME);
+	assert_int_eq(as_bytes_size(rb), 15);
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test incorrect offset index.
+	pk.offset = 0;
+	as_pack_map_header(&pk, 6);
+
+	uint8_t idxbuf[10];
+
+	for (size_t i = 0; i < sizeof(idxbuf); i++) {
+		idxbuf[i] = (uint8_t)i + 55;
+	}
+
+	as_pack_ext_header(&pk, sizeof(idxbuf), AS_MAP_KEY_ORDERED | AS_MAP_FLAG_PERSIST_INDEX);
+	as_pack_append(&pk, idxbuf, sizeof(idxbuf));
+	as_pack_nil(&pk);
+
+	for (int i = 0; i < 5; i++) {
+		as_pack_int64(&pk, i); // key
+		as_pack_int64(&pk, i); // value
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset, false);
+	as_bytes_set_type(&b, AS_BYTES_MAP);
+
+	rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get.
+	status = aerospike_key_get(as, &err, &rp, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	rb = as_record_get_bytes(rec, BIN_NAME);
+	assert_int_eq(as_bytes_size(rb), 15);
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test padding rejection.
+	pk.offset = 0;
+	as_pack_map_header(&pk, 6);
+
+	as_pack_ext_header(&pk, 0, AS_MAP_KEY_ORDERED | AS_MAP_FLAG_PERSIST_INDEX);
+	as_pack_nil(&pk);
+
+	for (int i = 0; i < 5; i++) {
+		as_pack_int64(&pk, i); // key
+		as_pack_int64(&pk, i); // value
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset + 1, false);
+	as_bytes_set_type(&b, AS_BYTES_MAP);
+
+	rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_ne(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test ctx create.
+	status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK);
+
+	as_operations ops;
+	as_operations_init(&ops, 1);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(0),
+			AS_MAP_KEY_ORDERED | AS_MAP_FLAG_PERSIST_INDEX);
+
+	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Get.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_map* m = as_record_get_map(rec, BIN_NAME);
+	//example_dump_record(rec);
+	assert_int_eq(m->flags, AS_MAP_KEY_ORDERED);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test ctx create sub presist.
+	status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK);
+
+	as_operations_init(&ops, 1);
+
+	as_cdt_ctx_init(&ctx, 2);
+	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_UNORDERED, false);
+	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(0),
+			AS_MAP_KEY_ORDERED | AS_MAP_FLAG_PERSIST_INDEX);
+
+	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_ne(status, AEROSPIKE_OK); // rejected
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Test ctx create sub presist 2.
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(0), AS_MAP_FLAG_PERSIST_INDEX);
+
+	as_operations_init(&ops, 1);
+	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+
+	as_cdt_ctx_init(&ctx, 3);
+	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(0), AS_MAP_FLAG_PERSIST_INDEX);
+	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(1), AS_MAP_FLAG_PERSIST_INDEX);
+	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(2), AS_MAP_FLAG_PERSIST_INDEX);
+
+	as_operations_init(&ops, 1);
+	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_ne(status, AEROSPIKE_OK); // rejected
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Test set flags.
+	status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK);
+
+	as_orderedmap m1;
+	as_orderedmap_init(&m1, 4);
+	as_orderedmap_set(&m1, (as_val*)as_string_new("a1", false), (as_val*)as_integer_new(1));
+	as_orderedmap_set(&m1, (as_val*)as_string_new("b1", false), (as_val*)as_integer_new(2));
+	as_orderedmap_set(&m1, (as_val*)as_string_new("c1", false), (as_val*)as_integer_new(3));
+	as_orderedmap_set(&m1, (as_val*)as_string_new("pk1", false), (as_val*)as_string_new("231108133342353844", false));
+
+	rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&m1);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get.
+	status = aerospike_key_get(as, &err, &rp, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	rb = as_record_get_bytes(rec, BIN_NAME);
+	uint32_t check_size = as_bytes_size(rb);
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_map_policy pol;
+	as_map_policy_init(&pol);
+	as_map_policy_set_flags(&pol, AS_MAP_FLAG_PERSIST_INDEX, 0);
+	as_operations_init(&ops, 1);
+	as_operations_add_map_set_policy(&ops, BIN_NAME, &pol);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get.
+	status = aerospike_key_get(as, &err, &rp, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	rb = as_record_get_bytes(rec, BIN_NAME);
+	assert_int_eq(as_bytes_size(rb), check_size - 4); // -4 for meta header
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -2986,4 +3440,6 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_exp);
 	suite_add(map_ordered_result);
 	suite_add(ordered_map_eq_exp);
+	suite_add(map_self_correct);
+	suite_add(map_persist_index);
 }

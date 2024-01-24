@@ -18,6 +18,7 @@
 #include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_info.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_udf.h>
 
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_error.h>
@@ -27,13 +28,16 @@
 #include <aerospike/as_hashmap_iterator.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_udf.h>
 #include <aerospike/as_val.h>
 
 #include "../test.h"
+#include "../util/udf.h"
 
 /******************************************************************************
  * GLOBAL VARS
@@ -72,6 +76,37 @@ typedef struct list_order_type_s
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
+
+#define LUA_DIR "src/test/lua/"
+
+static bool
+load_udf(const char* filename)
+{
+	as_error err;
+	as_bytes content;
+
+	char namebuf[512];
+	sprintf(namebuf, "%s%s", LUA_DIR, filename);
+	info("reading: %s", namebuf);
+	bool b = udf_readfile(namebuf, &content);
+
+	if (! b) {
+		info("read failed");
+		return false;
+	}
+
+	info("uploading: %s",filename);
+	aerospike_udf_put(as, &err, NULL, filename, AS_UDF_TYPE_LUA, &content);
+
+	if (err.code != AEROSPIKE_OK) {
+		info("put failed");
+		return false;
+	}
+
+	aerospike_udf_put_wait(as, &err, NULL, filename, 100);
+	as_bytes_destroy(&content);
+	return true;
+}
 
 static bool as_testlist_compare(as_testlist *tlist);
 
@@ -2718,7 +2753,6 @@ TEST(list_exp_mod, "List Modify Expressions")
 	as_exp_destroy(filter7);
 }
 
-
 TEST(list_exp_read, "List Read Expressions")
 {
 	as_key rkey;
@@ -2904,6 +2938,282 @@ TEST(list_exp_infinity, "test as_exp_inf()")
     as_exp_destroy(read_exp);
 }
 
+TEST(list_persist_index, "test persist index")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 212);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	uint8_t buf[4096];
+	as_bytes b;
+
+	// Test out of order.
+	as_packer pk = {
+			.buffer = buf,
+			.capacity = sizeof(buf)
+	};
+
+	as_pack_list_header(&pk, 6);
+	as_pack_ext_header(&pk, 0, AS_LIST_ORDERED | AS_LIST_FLAG_PERSIST_INDEX);
+
+	for (int i = 0; i < 5; i++) {
+		as_pack_int64(&pk, 5 - i);
+	}
+
+	as_bytes_init_wrap(&b, buf, pk.offset, false);
+	as_bytes_set_type(&b, AS_BYTES_LIST);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_bytes(rec, BIN_NAME, (as_bytes*)&b);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_ne(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_operations ops;
+	as_cdt_ctx ctx;
+
+	// Test ctx create.
+	as_operations_init(&ops, 1);
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_UNORDERED | AS_MAP_FLAG_PERSIST_INDEX, false);
+	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Get.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_list* check_list = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(check_list);
+	as_list* check_list1 = as_list_get_list(check_list, 0);
+	assert_not_null(check_list1);
+	assert_int_eq(as_list_size(check_list1), 1);
+	assert_int_eq(as_list_get_int64(check_list1, 0), 1);
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test ctx create UNBOUNDED.
+	status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK);
+
+	as_operations_init(&ops, 1);
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index_create(&ctx, 10, AS_LIST_UNORDERED | AS_MAP_FLAG_PERSIST_INDEX, true);
+	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Get.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	check_list = as_record_get_list(rec, BIN_NAME);
+	assert_int_eq(as_list_size(check_list), 11);
+	check_list1 = as_list_get_list(check_list, 10);
+	assert_int_eq(as_list_get_int64(check_list1, 0), 1);
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test ctx create sub presist.
+	status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK);
+
+	as_operations_init(&ops, 1);
+
+	as_cdt_ctx_init(&ctx, 2);
+	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_UNORDERED, false);
+	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_ORDERED | AS_MAP_FLAG_PERSIST_INDEX, false);
+
+	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_ne(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+}
+
+TEST(list_persist_udf, "test persist udf")
+{
+	load_udf("client_record_lists.lua");
+
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 213);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist l;
+	as_arraylist_init(&l, 4, 4);
+
+	as_arraylist_append_int64(&l, 10);
+	as_arraylist_append_int64(&l, 20);
+	as_arraylist_append_int64(&l, 30);
+	as_arraylist_append_int64(&l, 0);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&l);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_operations ops;
+	as_operations_init(&ops, 1);
+
+	as_operations_list_set_order(&ops, BIN_NAME, NULL, AS_LIST_ORDERED);
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+
+	// Get.
+	as_list *check_list;
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	check_list = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(check_list);
+	assert_int_eq(as_list_size(check_list), 4);
+	int64_t check_int = as_list_get_int64(check_list, 0);
+	for (uint32_t i = 1; i < as_list_size(check_list); i++) {
+		int64_t num = as_list_get_int64(check_list, i);
+		assert_true(check_int <= num);
+		check_int = num;
+	}
+	//example_dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_arraylist args;
+	as_arraylist_init(&args,2,2);
+	as_arraylist_append_str(&args, BIN_NAME);
+	as_arraylist_append_int64(&args, 5);
+	as_val* val = NULL;
+
+	aerospike_key_apply(as, &err, NULL, &rkey, "client_record_lists", "append", (as_list*)&args, &val);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	as_val_destroy(val);
+	as_arraylist_destroy(&args);
+
+	// Get.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	//example_dump_record(rec);
+	check_list = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(check_list);
+	assert_int_eq(as_list_size(check_list), 5);
+	check_int = as_list_get_int64(check_list, 0);
+	for (uint32_t i = 1; i < as_list_size(check_list); i++) {
+		int64_t num = as_list_get_int64(check_list, i);
+		assert_true(check_int <= num);
+		check_int = num;
+	}
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
+TEST(list_ordered_udf, "test ordered udf")
+{
+	bool check = load_udf("list_unordered.lua");
+	assert_true(check);
+
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 214);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	const char* test_strings[] = {
+			"1", "231020204109691000", "231020204109704569"
+	};
+	as_arraylist l;
+	as_arraylist_init(&l, 4, 4);
+	as_arraylist_append_str(&l, test_strings[1]);
+	as_arraylist_append_str(&l, test_strings[2]);
+	as_arraylist_append_str(&l, test_strings[0]);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_list(rec, "list1", (as_list*)&l);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_list_set_order(&ops, "list1", NULL, AS_LIST_ORDERED);
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+
+	// Get.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	//example_dump_record(rec);
+	as_list* check_list = as_record_get_list(rec, "list1");
+	for (int i = 0; i < 3; i++) {
+		assert_string_eq(test_strings[i], as_list_get_str(check_list, i));
+	}
+	as_record_destroy(rec);
+	rec = NULL;
+
+	const char* test_strings2[] = {
+			test_strings[0], test_strings[1],
+			"231020204109704558",
+			"231020204109704567", test_strings[2]
+	};
+	as_arraylist args;
+	as_arraylist_init(&args,4,4);
+	as_arraylist_append_str(&args, test_strings2[2]);
+	as_arraylist_append_str(&args, test_strings2[3]);
+	as_val* val = NULL;
+
+	aerospike_key_apply(as, &err, NULL, &rkey, "list_unordered", "list_unordered", (as_list*)&args, &val);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+//	char* s = as_val_tostring(val);
+//	info("ret %s", s);
+//	info(s);
+//	free(s);
+	as_arraylist_destroy(&args);
+	as_val_destroy(val);
+
+	// Get.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	//example_dump_record(rec);
+	check_list = as_record_get_list(rec, "list1");
+	for (int i = 0; i < 5; i++) {
+		assert_string_eq(test_strings2[i], as_list_get_str(check_list, i));
+	}
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -2939,4 +3249,8 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(exp_returns_list);
 
 	suite_add(list_exp_infinity);
+
+	suite_add(list_persist_index);
+	suite_add(list_persist_udf);
+	suite_add(list_ordered_udf);
 }

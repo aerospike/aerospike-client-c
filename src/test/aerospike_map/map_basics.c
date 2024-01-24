@@ -3458,6 +3458,7 @@ TEST(map_persist_index, "Test Map Persist Index")
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_true(status == AEROSPIKE_OK);
 	as_record_destroy(rec);
+	as_operations_destroy(&ops);
 	rec = NULL;
 
 	// Get.

@@ -77,7 +77,7 @@ typedef struct list_order_type_s
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-#define LUA_DIR "src/test/lua/"
+#define LUA_DIR AS_START_DIR "src/test/lua/"
 
 static bool
 load_udf(const char* filename)

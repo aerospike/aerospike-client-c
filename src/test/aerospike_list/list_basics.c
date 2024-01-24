@@ -2980,7 +2980,7 @@ TEST(list_persist_index, "test persist index")
 	// Test ctx create.
 	as_operations_init(&ops, 1);
 	as_cdt_ctx_init(&ctx, 1);
-	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_UNORDERED | AS_MAP_FLAG_PERSIST_INDEX, false);
+	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_UNORDERED | AS_LIST_FLAG_PERSIST_INDEX, false);
 	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3010,7 +3010,7 @@ TEST(list_persist_index, "test persist index")
 
 	as_operations_init(&ops, 1);
 	as_cdt_ctx_init(&ctx, 1);
-	as_cdt_ctx_add_list_index_create(&ctx, 10, AS_LIST_UNORDERED | AS_MAP_FLAG_PERSIST_INDEX, true);
+	as_cdt_ctx_add_list_index_create(&ctx, 10, AS_LIST_UNORDERED | AS_LIST_FLAG_PERSIST_INDEX, true);
 	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3031,7 +3031,7 @@ TEST(list_persist_index, "test persist index")
 	as_record_destroy(rec);
 	rec = NULL;
 
-	// Test ctx create sub presist.
+	// Test ctx create sub presist rejection.
 	status = aerospike_key_remove(as, &err, NULL, &rkey);
 	assert_true(status == AEROSPIKE_OK);
 
@@ -3039,7 +3039,9 @@ TEST(list_persist_index, "test persist index")
 
 	as_cdt_ctx_init(&ctx, 2);
 	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_UNORDERED, false);
-	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_ORDERED | AS_MAP_FLAG_PERSIST_INDEX, false);
+	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_ORDERED, false);
+	as_cdt_ctx_item* hack_item = as_vector_get(&ctx.list, ctx.list.size - 1);
+	hack_item->type |= 0x100; // hack in a persist flag, do not do this normally
 
 	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
 

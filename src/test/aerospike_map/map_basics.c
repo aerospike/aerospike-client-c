@@ -3368,7 +3368,7 @@ TEST(map_persist_index, "Test Map Persist Index")
 	as_record_destroy(rec);
 	rec = NULL;
 
-	// Test ctx create sub presist.
+	// Test ctx create sub presist rejection.
 	status = aerospike_key_remove(as, &err, NULL, &rkey);
 	assert_true(status == AEROSPIKE_OK);
 
@@ -3376,8 +3376,9 @@ TEST(map_persist_index, "Test Map Persist Index")
 
 	as_cdt_ctx_init(&ctx, 2);
 	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_UNORDERED, false);
-	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(0),
-			AS_MAP_KEY_ORDERED | AS_MAP_FLAG_PERSIST_INDEX);
+	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(0), AS_MAP_KEY_ORDERED);
+	as_cdt_ctx_item* hack_item = as_vector_get(&ctx.list, ctx.list.size - 1);
+	hack_item->type |= 0x100; // hack in a persist flag, do not do this normally
 
 	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
 
@@ -3388,7 +3389,7 @@ TEST(map_persist_index, "Test Map Persist Index")
 	as_operations_destroy(&ops);
 	as_cdt_ctx_destroy(&ctx);
 
-	// Test ctx create sub presist 2.
+	// Test ctx create sub presist rejection 2.
 	as_cdt_ctx_init(&ctx, 1);
 	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(0), AS_MAP_FLAG_PERSIST_INDEX);
 
@@ -3402,15 +3403,19 @@ TEST(map_persist_index, "Test Map Persist Index")
 	as_cdt_ctx_destroy(&ctx);
 
 	as_cdt_ctx_init(&ctx, 3);
-	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(0), AS_MAP_FLAG_PERSIST_INDEX);
 	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(1), AS_MAP_FLAG_PERSIST_INDEX);
+	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(1), AS_MAP_FLAG_PERSIST_INDEX);
+	hack_item = as_vector_get(&ctx.list, ctx.list.size - 1);
+	hack_item->type |= 0x100; // hack in a persist flag, do not do this normally
 	as_cdt_ctx_add_map_key_create(&ctx, (as_val*)as_integer_new(2), AS_MAP_FLAG_PERSIST_INDEX);
+	hack_item = as_vector_get(&ctx.list, ctx.list.size - 1);
+	hack_item->type |= 0x100; // hack in a persist flag, do not do this normally
 
 	as_operations_init(&ops, 1);
 	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
-	assert_int_ne(status, AEROSPIKE_OK); // rejected
+	assert_int_ne(status, AEROSPIKE_OK); // should be rejected
 	as_record_destroy(rec);
 	rec = NULL;
 	as_operations_destroy(&ops);
@@ -3446,7 +3451,7 @@ TEST(map_persist_index, "Test Map Persist Index")
 
 	as_map_policy pol;
 	as_map_policy_init(&pol);
-	as_map_policy_set_flags(&pol, AS_MAP_FLAG_PERSIST_INDEX, 0);
+	as_map_policy_set_all(&pol, AS_MAP_UNORDERED, 0, true);
 	as_operations_init(&ops, 1);
 	as_operations_add_map_set_policy(&ops, BIN_NAME, &pol);
 

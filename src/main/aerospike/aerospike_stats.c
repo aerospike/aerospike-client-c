@@ -52,6 +52,36 @@ as_conn_stats_tostring(as_string_builder* sb, const char* title, as_conn_stats* 
  *****************************************************************************/
 
 void
+as_sum_init(as_conn_stats* stats)
+{
+	stats->in_pool = 0;
+	stats->in_use = 0;
+	stats->opened = 0;
+	stats->closed = 0;
+}
+
+void
+as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats)
+{
+	// Warning: cross-thread reference without a lock.
+	int tmp = as_queue_size(&pool->queue);
+
+	// Timing issues may cause values to go negative. Adjust.
+	if (tmp < 0) {
+		tmp = 0;
+	}
+	stats->in_pool += tmp;
+	tmp = pool->queue.total - tmp;
+
+	if (tmp < 0) {
+		tmp = 0;
+	}
+	stats->in_use += tmp;
+	stats->opened += pool->opened;
+	stats->closed += pool->closed;
+}
+
+void
 aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
 {
 	// Node stats.

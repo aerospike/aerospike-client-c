@@ -245,35 +245,11 @@ aerospike_event_loop_stats(as_event_loop* event_loop, as_event_loop_stats* stats
 	stats->queue_size = as_event_loop_get_queue_size(event_loop);
 }
 
-static inline void
-as_sum_init(as_conn_stats* stats)
-{
-	stats->in_pool = 0;
-	stats->in_use = 0;
-	stats->opened = 0;
-	stats->closed = 0;
-}
+void
+as_sum_init(as_conn_stats* stats);
 
-static inline void
-as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats)
-{
-	// Warning: cross-thread reference without a lock.
-	int tmp = as_queue_size(&pool->queue);
-
-	// Timing issues may cause values to go negative. Adjust.
-	if (tmp < 0) {
-		tmp = 0;
-	}
-	stats->in_pool += tmp;
-	tmp = pool->queue.total - tmp;
-
-	if (tmp < 0) {
-		tmp = 0;
-	}
-	stats->in_use += tmp;
-	stats->opened += pool->opened;
-	stats->closed += pool->closed;
-}
+void
+as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats);
 
 /**
  * Return string representation of cluster statistics.

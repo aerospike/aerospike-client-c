@@ -58,12 +58,36 @@ typedef uint8_t as_latency_type;
  * Latency bucket counts are cumulative and not reset on each metrics snapshot interval
  */
 typedef struct as_latency_buckets_s {
-	int32_t latency_shift;
-	int32_t latency_columns;
+	uint32_t latency_shift;
+	uint32_t latency_columns;
 	uint64_t* buckets;
 } as_latency_buckets;
 
-struct as_metrics_listeners_s;
+struct as_policy_metrics_s;
+struct as_node_s;
+struct as_cluster_s;
+
+/**
+ * Callbacks for metrics listener operations
+ */
+typedef as_status(*as_metrics_enable_listener)(as_error* err, const struct as_policy_metrics_s* policy, void* udata);
+
+typedef as_status(*as_metrics_snapshot_listener)(as_error* err, struct as_cluster_s* cluster, void* udata);
+
+typedef as_status(*as_metrics_node_close_listener)(as_error* err, struct as_node_s* node, void* udata);
+
+typedef as_status(*as_metrics_disable_listener)(as_error* err, struct as_cluster_s* cluster, void* udata);
+
+/**
+ * Struct to hold required callbacks
+ */
+typedef struct as_metrics_listeners_s {
+	as_metrics_enable_listener enable_listener;
+	as_metrics_snapshot_listener snapshot_listener;
+	as_metrics_node_close_listener node_close_listener;
+	as_metrics_disable_listener disable_listener;
+	void* udata;
+} as_metrics_listeners;
 
 /**
 * Metrics Policy
@@ -71,42 +95,16 @@ struct as_metrics_listeners_s;
 typedef struct as_policy_metrics_s {
 	const char* report_directory; // where the metrics file is output
 
-	int64_t report_size_limit; // default 0
+	uint64_t report_size_limit; // default 0
 
-	int32_t interval; // default 30
+	uint32_t interval; // default 30
 
-	int32_t latency_columns; // default 7
+	uint32_t latency_columns; // default 7
 
-	int32_t latency_shift; // default 1
+	uint32_t latency_shift; // default 1
 
-	struct as_metrics_listeners_s* metrics_listeners;
-
-	void* udata;
+	as_metrics_listeners metrics_listeners;
 } as_policy_metrics;
-
-struct as_cluster_s;
-struct as_node_s;
-
-/**
- * Callbacks for metrics listener operations
- */
-typedef as_status (*as_metrics_enable_callback)(as_error* err, const struct as_policy_metrics_s* policy);
-
-typedef as_status (*as_metrics_snapshot_callback)(as_error* err, struct as_cluster_s* cluster, void* udata);
-
-typedef as_status (*as_metrics_node_close_callback)(as_error* err, struct as_node_s* node, void* udata);
-
-typedef as_status (*as_metrics_disable_callback)(as_error* err, struct as_cluster_s* cluster, void* udata);
-
-/**
- * Struct to hold required callbacks
- */
-typedef struct as_metrics_listeners_s {
-	as_metrics_enable_callback enable_callback;
-	as_metrics_snapshot_callback snapshot_callback;
-	as_metrics_node_close_callback node_close_callback;
-	as_metrics_disable_callback disable_callback;
-} as_metrics_listeners;
 
 /**
  * Node metrics latency bucket struct
@@ -129,24 +127,31 @@ typedef struct as_metrics_writer_s {
 
 	uint64_t size;
 
-	int32_t latency_columns;
+	uint32_t latency_columns;
 
-	int32_t latency_shift;
+	uint32_t latency_shift;
 
 	const char* report_directory;
 } as_metrics_writer;
 
 /**
- * Format time into UTC string
- */
-const char* 
-utc_time_str(time_t t);
-
-/**
  * Initalize metrics policy
  */
-void
+AS_EXTERN void
 as_metrics_policy_init(as_policy_metrics* policy);
+
+static inline void
+as_metrics_set_listeners(
+	as_policy_metrics* policy, as_metrics_enable_listener enable, 
+	as_metrics_disable_listener disable, as_metrics_node_close_listener node_close,
+	as_metrics_snapshot_listener snapshot
+	)
+{
+	policy->metrics_listeners.enable_listener = enable;
+	policy->metrics_listeners.disable_listener = disable;
+	policy->metrics_listeners.node_close_listener = node_close;
+	policy->metrics_listeners.snapshot_listener = snapshot;
+}
 
 /**
  * Convert latency_type to string version for printing to the output file
@@ -158,7 +163,7 @@ as_latency_type_to_string(as_latency_type type);
  * Initalize latency bucket struct
  */
 void
-as_metrics_latency_buckets_init(as_latency_buckets* latency_buckets, int32_t latency_columns, int32_t latency_shift);
+as_metrics_latency_buckets_init(as_latency_buckets* latency_buckets, uint32_t latency_columns, uint32_t latency_shift);
 
 /**
  * Return cumulative count of a bucket.
@@ -181,8 +186,8 @@ as_metrics_get_index(as_latency_buckets* latency_buckets, uint64_t elapsed_nanos
 /**
  * Initalize node metrics struct
  */
-void
-as_node_metrics_init(as_node_metrics* node_metrics, const as_policy_metrics* policy);
+as_node_metrics*
+as_node_metrics_init(uint32_t latency_columns, uint32_t latency_shift);
 
 /**
  * Add latency to corresponding bucket type
@@ -191,61 +196,10 @@ void
 as_metrics_add_latency(as_node_metrics* node_metrics, as_latency_type latency_type, uint64_t elapsed);
 
 /**
- * Initalize metrics listener struct
- */
-void
-as_metrics_listeners_init(as_metrics_listeners* listeners);
-
-/**
- * Open output metrics file and write header 
- */
-as_status
-as_metrics_open_writer(as_metrics_writer* mw, as_error* err);
-
-/**
  * Calculate CPU and memory usage
  */
 void
 as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem);
-
-struct as_cluster_s;
-/**
- * Write cluster information to the metrics output file
- */
-as_status
-as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster_s* cluster);
-
-struct as_node_s;
-/**
- * Write node information to the metrics output file
- */
-void
-as_metrics_write_node(as_metrics_writer* mw, struct as_node_s* node_stats);
-
-struct as_conn_stats_s;
-/**
- * Write connection information to the metrics output file
- */
-void
-as_metrics_write_conn(as_metrics_writer* mw, const struct as_conn_stats_s* conn_stats);
-
-/**
- * Calculate sync conn stats data
- */
-void
-as_metrics_get_node_sync_conn_stats(const struct as_node_s* node, struct as_conn_stats_s* async);
-
-/**
- * Calculate async conn stats data
- */
-void
-as_metrics_get_node_async_conn_stats(const struct as_node_s* node, struct as_conn_stats_s* sync);
-
-/**
- * Write line to the metrics output file
- */
-as_status
-as_metrics_write_line(as_metrics_writer* mw, as_error* err);
 
 #if defined(__linux__)
 /**

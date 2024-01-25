@@ -557,31 +557,28 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 as_status
 as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_policy_metrics* policy)
 {
-	if (cluster->metrics_enabled)
-	{
-		cluster->metrics_listeners->disable_callback(err, cluster, policy->udata);
+	if (cluster->metrics_enabled) {
+		cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
 	}
 
 	cluster->metrics_listeners = policy->metrics_listeners;
-	if (cluster->metrics_listeners == NULL)
-	{
-		as_metrics_listeners_init(cluster->metrics_listeners);
-	}
+	cluster->metrics_interval = policy->interval;
+	cluster->metrics_latency_columns = policy->latency_columns;
+	cluster->metrics_latency_shift = policy->latency_shift;
 
-	cluster->metrics_policy = policy;
-
-	as_nodes* nodes = cluster->nodes;
+	as_nodes* nodes = as_nodes_reserve(cluster);
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		as_node_enable_metrics(node, policy);
 	}
 
-	as_status status = cluster->metrics_listeners->enable_callback(err, policy);
-	if (status != AEROSPIKE_OK)
-	{
+	as_nodes_release(nodes);
+
+	as_status status = cluster->metrics_listeners.enable_listener(err, policy, cluster->metrics_listeners.udata);
+	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-
+	cluster->metrics_enabled = true;
 	return AEROSPIKE_OK;
 }
 
@@ -591,11 +588,7 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 	if (cluster->metrics_enabled)
 	{
 		cluster->metrics_enabled = false;
-		as_status status = cluster->metrics_listeners->disable_callback(err, cluster, cluster->metrics_policy->udata);
-		if (status != AEROSPIKE_OK)
-		{
-			return status;
-		}
+		return cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
 	}
 
 	return AEROSPIKE_OK;
@@ -659,7 +652,7 @@ as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_no
 		as_node_deactivate(node);
 
 		if (cluster->metrics_enabled) {
-			as_status status = cluster->metrics_listeners->node_close_callback(err, node, node->cluster->metrics_policy->udata);
+			as_status status = cluster->metrics_listeners.node_close_listener(err, node, node->cluster->metrics_listeners.udata);
 			if (status != AEROSPIKE_OK)
 			{
 				return status;
@@ -988,9 +981,9 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
 
-	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_policy->interval))
+	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_interval))
 	{
-		as_status status = cluster->metrics_listeners->snapshot_callback(err, cluster, cluster->metrics_policy->udata);
+		as_status status = cluster->metrics_listeners.snapshot_listener(err, cluster, cluster->metrics_listeners.udata);
 		if (status != AEROSPIKE_OK)
 		{
 			return status;
@@ -1510,6 +1503,15 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		}
 		pthread_attr_destroy(&attr);
 	}
+
+	// Initialize metrics fields
+	cluster->metrics_enabled = false;
+	cluster->metrics_interval = 0;
+	cluster->metrics_latency_columns = 0;
+	cluster->metrics_latency_shift = 0;
+	cluster->tran_count = 0;
+	cluster->retry_count = 0;
+	cluster->delay_queue_timeout_count = 0;
 	*cluster_out = cluster;
 	return AEROSPIKE_OK;
 }

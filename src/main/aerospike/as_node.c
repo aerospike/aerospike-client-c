@@ -138,7 +138,11 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 
 	if (cluster->metrics_enabled)
 	{
-		as_node_metrics_init(node->metrics, cluster->metrics_policy);
+		node->metrics = as_node_metrics_init(cluster->metrics_latency_columns, cluster->metrics_latency_shift);
+	}
+	else
+	{
+		node->metrics = NULL;
 	}
 
 	// Create sync connection pools.
@@ -1315,7 +1319,7 @@ as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapse
 void
 as_node_enable_metrics(as_node* node, const as_policy_metrics* policy)
 {
-	as_node_metrics_init(node->metrics, policy);
+	 node->metrics = as_node_metrics_init(policy->latency_columns, policy->latency_shift);
 }
 
 uint64_t

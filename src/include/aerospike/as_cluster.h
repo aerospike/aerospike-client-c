@@ -383,9 +383,13 @@ typedef struct as_cluster_s {
 
 	bool metrics_enabled;
 
-	as_policy_metrics* metrics_policy;
+	uint32_t metrics_interval;
 
-	as_metrics_listeners* metrics_listeners;
+	uint32_t metrics_latency_columns;
+
+	uint32_t metrics_latency_shift;
+
+	as_metrics_listeners metrics_listeners;
 
 	uint64_t retry_count;
 

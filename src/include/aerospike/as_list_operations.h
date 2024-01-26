@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -300,6 +300,27 @@ as_list_policy_set(as_list_policy* policy, as_list_order order, as_list_write_fl
 AS_EXTERN bool
 as_operations_list_create(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_order order, bool pad
+	);
+
+/**
+ * Create list create operation.
+ * Server creates list  at given context level.
+ *
+ * @param ops			Target operations list.
+ * @param name			Bin name.
+ * @param ctx			Optional path to nested list. If not defined, the top-level list is used.
+ * @param order			List  order.
+ * @param pad			If true, the context is allowed to be beyond list boundaries. In that case, nil
+ * 						list entries will be inserted to satisfy the context position.
+ * @param persist_index	If true, persist list index. A list index improves lookup performance,
+ * 						but requires more storage. A list index can be created for a top-level
+ * 						ordered list only. Nested and unordered list indexes are not supported.
+ *
+ * @ingroup map_operations
+ */
+AS_EXTERN bool
+as_operations_list_create_all(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_order order, bool pad, bool persist_index
 	);
 
 /**

@@ -168,10 +168,6 @@ as_cdt_ctx_add_list_index(as_cdt_ctx* ctx, int index)
 static inline void
 as_cdt_ctx_add_list_index_create(as_cdt_ctx* ctx, int index, as_list_order order, bool pad)
 {
-	if (ctx->list.size != 0) {
-		order &= ~AS_LIST_FLAG_PERSIST_INDEX;
-	}
-
 	as_cdt_ctx_item item;
 	item.type = AS_CDT_CTX_LIST_INDEX | as_list_order_to_flag(order, pad);
 	item.val.ival = index;
@@ -282,10 +278,6 @@ as_cdt_ctx_add_map_key(as_cdt_ctx* ctx, as_val* key)
 static inline void
 as_cdt_ctx_add_map_key_create(as_cdt_ctx* ctx, as_val* key, as_map_order order)
 {
-	if (ctx->list.size != 0) {
-		order &= ~AS_MAP_FLAG_PERSIST_INDEX;
-	}
-
 	as_cdt_ctx_item item;
 	item.type = AS_CDT_CTX_MAP_KEY | as_map_order_to_flag(order);
 	item.val.pval = key;

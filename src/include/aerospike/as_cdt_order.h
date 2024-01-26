@@ -22,9 +22,9 @@
 extern "C" {
 #endif
 
-//---------------------------------
-// Types
-//---------------------------------
+/******************************************************************************
+ * TYPES
+ *****************************************************************************/
 
 /**
  * List storage order.
@@ -40,12 +40,7 @@ typedef enum as_list_order_e {
 	/**
 	 * List is ordered.
 	 */
-	AS_LIST_ORDERED = 1,
-
-	/**
-	 * Persist index on server.
-	 */
-	AS_LIST_FLAG_PERSIST_INDEX = 0x10
+	AS_LIST_ORDERED = 1
 } as_list_order;
 
 /**
@@ -67,49 +62,33 @@ typedef enum as_map_order_e {
 	/**
 	 * Order map by key, then value.
 	 */
-	AS_MAP_KEY_VALUE_ORDERED = 3,
-
-	/**
-	 * Persist index on server.
-	 */
-	AS_MAP_FLAG_PERSIST_INDEX = 0x10
+	AS_MAP_KEY_VALUE_ORDERED = 3
 } as_map_order;
 
-//---------------------------------
-// Functions
-//---------------------------------
+/******************************************************************************
+ * FUNCTIONS
+ *****************************************************************************/
 
 static inline uint32_t
 as_list_order_to_flag(as_list_order order, bool pad)
 {
-	if ((order & AS_LIST_ORDERED) != 0) {
-		return ((order & AS_LIST_FLAG_PERSIST_INDEX) != 0) ? 0x1c0 : 0xc0;
-	}
-
-	return (pad ? 0x80 : 0x40) |
-			(((order & AS_LIST_FLAG_PERSIST_INDEX) != 0) ? 0x100 : 0x0);
+	return (order == AS_LIST_ORDERED)? 0xc0 : pad ? 0x80 : 0x40;
 }
 
 static inline uint32_t
 as_map_order_to_flag(as_map_order order)
 {
-	uint32_t flag;
-	
-	switch (order & 0x3) {
+	switch (order) {
 		default:
 		case AS_MAP_UNORDERED:
-			flag = 0x40;
-			break;
+			return 0x40;
 
 		case AS_MAP_KEY_ORDERED:
-			flag = 0x80;
-			break;
+			return 0x80;
 
 		case AS_MAP_KEY_VALUE_ORDERED:
-			flag = 0xc0;
-			break;
+			return 0xc0;
 	}
-	return flag | (((order & AS_LIST_FLAG_PERSIST_INDEX) != 0) ? 0x100 : 0x0);
 }
 
 #ifdef __cplusplus

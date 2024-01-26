@@ -2938,6 +2938,9 @@ TEST(list_exp_infinity, "test as_exp_inf()")
     as_exp_destroy(read_exp);
 }
 
+// Add flag for the purpose of tests that bypass user functions and use low-level wire protocol.
+#define AS_LIST_FLAG_PERSIST_INDEX 0x10
+
 TEST(list_persist_index, "test persist index")
 {
 	as_key rkey;
@@ -2978,17 +2981,19 @@ TEST(list_persist_index, "test persist index")
 	as_cdt_ctx ctx;
 
 	// Test ctx create.
-	as_operations_init(&ops, 1);
-	as_cdt_ctx_init(&ctx, 1);
-	as_cdt_ctx_add_list_index_create(&ctx, 0, AS_LIST_UNORDERED | AS_LIST_FLAG_PERSIST_INDEX, false);
-	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
+	as_arraylist list;
+	as_arraylist_init(&list, 1, 0);
+	as_arraylist_append_int64(&list, 1);
+
+	as_operations_init(&ops, 2);
+	as_operations_list_create_all(&ops, BIN_NAME, NULL, AS_LIST_UNORDERED, false, true);
+	as_operations_list_append(&ops, BIN_NAME, NULL, NULL, (as_val*)&list);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	rec = NULL;
-	as_operations_destroy(&ops);
-	as_cdt_ctx_destroy(&ctx);
 
 	// Get.
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
@@ -3008,17 +3013,18 @@ TEST(list_persist_index, "test persist index")
 	status = aerospike_key_remove(as, &err, NULL, &rkey);
 	assert_true(status == AEROSPIKE_OK);
 
-	as_operations_init(&ops, 1);
-	as_cdt_ctx_init(&ctx, 1);
-	as_cdt_ctx_add_list_index_create(&ctx, 10, AS_LIST_UNORDERED | AS_LIST_FLAG_PERSIST_INDEX, true);
-	as_operations_list_append(&ops, BIN_NAME, &ctx, NULL, (as_val*)as_integer_new(1));
+	as_arraylist_init(&list, 1, 0);
+	as_arraylist_append_int64(&list, 1);
+
+	as_operations_init(&ops, 2);
+	as_operations_list_create_all(&ops, BIN_NAME, NULL, AS_LIST_UNORDERED, true, true);
+	as_operations_list_insert(&ops, BIN_NAME, NULL, NULL, 10, (as_val*)&list);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	rec = NULL;
-	as_operations_destroy(&ops);
-	as_cdt_ctx_destroy(&ctx);
 
 	// Get.
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);

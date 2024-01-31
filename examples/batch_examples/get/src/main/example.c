@@ -20,6 +20,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_stats.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_batch.h>
 #include <aerospike/as_error.h>
@@ -29,10 +30,10 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 #include "example_utils.h"
 #include <aerospike/as_metrics.h>
-#include <Windows.h>
 
 //------------------------------------
 // Forward Declarations
@@ -80,6 +81,12 @@ main(int argc, char* argv[])
 
 	// enable metrics
 	as_status status = aerospike_enable_metrics(&as, &err, &policy);
+	
+	if (status != AEROSPIKE_OK) {
+		LOG("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
+		cleanup(&as);
+		exit(-1);
+	}
 
 	// Start clean.
 	example_remove_test_records(&as);
@@ -207,7 +214,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	Sleep(30000);
+	as_sleep(30000);
 
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);

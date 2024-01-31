@@ -692,11 +692,12 @@ as_metrics_process_mem_usage()
 double
 as_metrics_process_cpu_load()
 {
+	/* This code does not compile on mac.
 	pid_t pid = getpid();
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 20, true);
 	as_string_builder_append(&sb, "ps -p ");
-	as_string_builder_append(&sb, pid);
+	as_string_builder_append_int(&sb, pid);
 	as_string_builder_append(&sb, " -o %CPU");
 	FILE* result = popen(sb.data);
 	char[5] cpu_holder;
@@ -706,5 +707,7 @@ as_metrics_process_cpu_load()
 	pclose(result);
 
 	return atof(cpu_percent);
+	*/
+	return 1.0;
 }
 #endif

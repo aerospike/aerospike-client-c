@@ -229,13 +229,13 @@ as_metrics_process_mem_usage();
  * Gets memory usage using task_info
  */
 double
-as_metrics_process_mem_usage();
+as_metrics_process_mem_usage(void);
 
 /**
  * Gets cpu usage using ps -p
  */
 double
-as_metrics_process_cpu_load();
+as_metrics_process_cpu_load(void);
 #endif
 
 #ifdef __cplusplus

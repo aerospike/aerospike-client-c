@@ -31,7 +31,7 @@ extern uint32_t as_event_loop_size;
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-static void
+static inline void
 as_conn_stats_tostring(as_string_builder* sb, const char* title, as_conn_stats* cs)
 {
 	as_string_builder_append_char(sb, ' ');

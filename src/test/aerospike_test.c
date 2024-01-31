@@ -384,6 +384,7 @@ static bool before(atf_plan* plan)
 
 	as_policy_metrics policy;
 	as_metrics_policy_init(&policy);
+	policy.interval = 5;
 	policy.report_directory = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
 
 	// enable metrics

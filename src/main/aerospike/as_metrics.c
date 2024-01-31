@@ -22,6 +22,8 @@
 #include <aerospike/as_node.h>
 #include <aerospike/aerospike_stats.h>
 
+#define LOG(_fmt, ...) { printf(_fmt "\n", ##__VA_ARGS__); fflush(stdout); }
+
 //---------------------------------
 // Globals
 //---------------------------------
@@ -37,7 +39,7 @@ time_str_file(time_t t)
 	static char buf[UTC_STR_LEN + 1];
 	struct tm* local = localtime(&t);
 	snprintf(buf, sizeof(buf),
-		"%4d%02d%02d%02d%02d%02dZ",
+		"%4d%02d%02d%02d%02d%02d",
 		1900 + local->tm_year, local->tm_mon + 1, local->tm_mday,
 		local->tm_hour, local->tm_min, local->tm_sec);
 	return buf;
@@ -49,7 +51,7 @@ time_str(time_t t)
 	static char buf[UTC_STR_LEN + 1];
 	struct tm* local = localtime(&t);
 	snprintf(buf, sizeof(buf),
-		"%4d-%02d-%02d %02d:%02d:%02dZ",
+		"%4d-%02d-%02d %02d:%02d:%02d",
 		1900 + local->tm_year, local->tm_mon + 1, local->tm_mday,
 		local->tm_hour, local->tm_min, local->tm_sec);
 	return buf;
@@ -61,13 +63,24 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err);
 static as_status
 as_metrics_write_line(as_metrics_writer* mw, as_error* err)
 {
+	LOG("as_metrics_write_line begin");
 	as_string_builder_append_newline(mw->sb);
-	fprintf(mw->file, "%s", mw->sb->data);
+	int written = fprintf(mw->file, "%s", mw->sb->data);
+	if (mw->sb->length != written)
+	{
+		LOG("wrong number of chars written");
+		LOG("expected %d", mw->sb->length);
+	}
+	LOG("written %d", written);
+	LOG("data %s", mw->sb->data);
 	mw->size += mw->sb->length;
 	as_string_builder_reset(mw->sb);
 
 	if (mw->max_size > 0 && mw->size >= mw->max_size) {
+		LOG("need new file");
 		uint32_t result = fclose(mw->file);
+		as_string_builder_destroy(mw->sb);
+		mw->sb = NULL;
 
 		if (result != 0) {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
@@ -76,12 +89,14 @@ as_metrics_write_line(as_metrics_writer* mw, as_error* err)
 		return as_metrics_open_writer(mw, err);
 	}
 
+	LOG("as_metrics_write_line end");
 	return AEROSPIKE_OK;
 }
 
 static void*
 as_metrics_writer_init_udata()
 {
+	LOG("as_metrics_writer_init_udata begin");
 	as_metrics_writer* mw = (as_metrics_writer *)cf_malloc(sizeof(as_metrics_writer));
 	mw->file = NULL;
 	mw->sb = NULL;
@@ -91,12 +106,14 @@ as_metrics_writer_init_udata()
 	mw->latency_shift = 0;
 	mw->report_directory = NULL;
 
+	LOG("as_metrics_writer_init_udata end");
 	return mw;
 }
 
 static as_status
 as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 {
+	LOG("as_metrics_open_writer begin");
 	const char* now_file = time_str_file(time(NULL));
 	as_string_builder file_name;
 	as_string_builder_inita(&file_name, 100, true);
@@ -105,6 +122,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	as_string_builder_append(&file_name, now_file);
 	as_string_builder_append(&file_name, ".log");
 	mw->file = fopen(file_name.data, "w");
+	as_string_builder_destroy(&file_name);
 
 	if (!mw->file) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
@@ -112,7 +130,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	}
 
 	mw->size = 0;
-	mw->sb = (as_string_builder*)cf_malloc(sizeof(as_string_builder));
+	mw->sb = (as_string_builder *)cf_malloc(sizeof(as_string_builder));
 	as_string_builder_inita(mw->sb, 2048, true);
 	const char* now = time_str(time(NULL));
 	as_string_builder_append(mw->sb, now);
@@ -127,12 +145,14 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	as_string_builder_append_int(mw->sb, mw->latency_shift);
 	as_string_builder_append_char(mw->sb, ')');
 	as_string_builder_append(mw->sb, "[type[l1,l2,l3...]]");
+	LOG("as_metrics_open_writer end");
 	return as_metrics_write_line(mw, err);
 }
 
 static void
 as_metrics_get_node_sync_conn_stats(const struct as_node_s* node, struct as_conn_stats_s* sync)
 {
+	LOG("as_metrics_get_node_sync_conn_stats begin");
 	uint32_t max = node->cluster->conn_pools_per_node;
 
 	// Sync connection summary.
@@ -149,11 +169,13 @@ as_metrics_get_node_sync_conn_stats(const struct as_node_s* node, struct as_conn
 	}
 	sync->opened = node->sync_conns_opened;
 	sync->closed = node->sync_conns_closed;
+	LOG("as_metrics_get_node_sync_conn_stats end");
 }
 
 static void
 as_metrics_get_node_async_conn_stats(const struct as_node_s* node, struct as_conn_stats_s* async)
 {
+	LOG("as_metrics_get_node_async_conn_stats begin");
 	// Async connection summary.
 	if (as_event_loop_capacity > 0) {
 		for (uint32_t i = 0; i < as_event_loop_size; i++) {
@@ -161,11 +183,13 @@ as_metrics_get_node_async_conn_stats(const struct as_node_s* node, struct as_con
 			as_sum_no_lock(&node->async_conn_pools[i], async);
 		}
 	}
+	LOG("as_metrics_get_node_async_conn_stats end");
 }
 
 static void
 as_metrics_write_conn(as_metrics_writer* mw, const struct as_conn_stats_s* stats)
 {
+	LOG("as_metrics_write_conn begin");
 	as_string_builder_append_uint(mw->sb, stats->in_use);
 	as_string_builder_append_char(mw->sb, ',');
 	as_string_builder_append_uint(mw->sb, stats->in_pool);
@@ -173,11 +197,13 @@ as_metrics_write_conn(as_metrics_writer* mw, const struct as_conn_stats_s* stats
 	as_string_builder_append_uint(mw->sb, stats->opened); // Cumulative. Not reset on each interval.
 	as_string_builder_append_char(mw->sb, ',');
 	as_string_builder_append_uint(mw->sb, stats->closed); // Cumulative. Not reset on each interval.
+	LOG("as_metrics_write_conn end");
 }
 
 static void
 as_metrics_write_node(as_metrics_writer* mw, struct as_node_s* node)
 {
+	LOG("as_metrics_write_node begin");
 	as_string_builder_append_char(mw->sb, '[');
 	as_string_builder_append(mw->sb, node->name);
 	as_string_builder_append_char(mw->sb, ',');
@@ -204,7 +230,6 @@ as_metrics_write_node(as_metrics_writer* mw, struct as_node_s* node)
 	as_node_metrics* node_metrics = node->metrics;
 	uint32_t max = AS_LATENCY_TYPE_NONE;
 
-
 	for (uint32_t i = 0; i < max; i++) {
 		if (i > 0) {
 			as_string_builder_append_char(mw->sb, ',');
@@ -219,15 +244,18 @@ as_metrics_write_node(as_metrics_writer* mw, struct as_node_s* node)
 			if (j > 0) {
 				as_string_builder_append_char(mw->sb, ',');
 			}
-			as_string_builder_append_uint64(mw->sb, as_metrics_get_bucket(buckets, i));
+			as_string_builder_append_uint64(mw->sb, as_metrics_get_bucket(buckets, j));
 		}
 		as_string_builder_append_char(mw->sb, ']');
 	}
 	as_string_builder_append(mw->sb, "]]");
+	LOG("as_metrics_write_node end");
 }
 
 static as_status
-as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster_s* cluster) {
+as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster_s* cluster) 
+{
+	LOG("as_metrics_write_cluster begin");
 	char* cluster_name = cluster->cluster_name;
 	
 	if (cluster_name == NULL) {
@@ -283,12 +311,14 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster
 	as_string_builder_append(mw->sb, "]]");
 
 	as_nodes_release(nodes);
+	LOG("as_metrics_write_cluster end");
 	return as_metrics_write_line(mw, err);
 }
 
 static as_status
 as_metrics_writer_enable(as_error* err, const struct as_policy_metrics_s* policy, void* udata)
 {
+	LOG("as_metrics_writer_enable begin");
 	if (policy->report_size_limit != 0 && policy->report_size_limit < MIN_FILE_SIZE) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Metrics policy report_size_limit %d must be at least %d", policy->report_size_limit, MIN_FILE_SIZE);
@@ -308,26 +338,31 @@ as_metrics_writer_enable(as_error* err, const struct as_policy_metrics_s* policy
 	}
 
 	mw->enable = true;
+	LOG("as_metrics_writer_enable end");
 	return AEROSPIKE_OK;
 }
 
 static as_status
 as_metrics_writer_snapshot(as_error* err, struct as_cluster_s* cluster, void* udata)
 {
+	LOG("as_metrics_writer_snapshot begin");
 	as_metrics_writer* mw = udata;
 
 	if (mw->enable && mw->file != NULL) {
 		as_status status = as_metrics_write_cluster(err, mw, cluster);
 		if (status != AEROSPIKE_OK) {
+			LOG("as_metrics_writer_snapshot not ok");
 			return status;
 		}
 	}
+	LOG("as_metrics_writer_snapshot end");
 	return AEROSPIKE_OK;
 }
 
 static as_status
 as_metrics_writer_disable(as_error* err, struct as_cluster_s* cluster, void* udata)
 {
+	LOG("as_metrics_writer_disable begin");
 	// write cluster into to file, disable
 	as_metrics_writer* mw = udata;
 	if (mw->enable && mw->file != NULL) {
@@ -346,7 +381,7 @@ as_metrics_writer_disable(as_error* err, struct as_cluster_s* cluster, void* uda
 				"File stream did not close successfully: %s", mw->report_directory);
 		}
 	}
-
+	LOG("as_metrics_writer_disable end");
 	return AEROSPIKE_OK;
 }
 
@@ -354,6 +389,7 @@ as_metrics_writer_disable(as_error* err, struct as_cluster_s* cluster, void* uda
 static as_status
 as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
 {
+	LOG("as_metrics_writer_node_close begin");
 	// write node info to file
 	as_metrics_writer* mw = udata;
 
@@ -367,6 +403,7 @@ as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
 			return status;
 		}
 	}
+	LOG("as_metrics_writer_node_close end");
 	return AEROSPIKE_OK;
 }
 
@@ -378,6 +415,7 @@ as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
 void
 as_metrics_policy_init(as_policy_metrics* policy)
 {
+	LOG("as_metrics_policy_init begin");
 	policy->report_size_limit = 0;
 	policy->interval = 30;
 	policy->latency_columns = 7;
@@ -387,11 +425,13 @@ as_metrics_policy_init(as_policy_metrics* policy)
 	policy->metrics_listeners.node_close_listener = as_metrics_writer_node_close;
 	policy->metrics_listeners.snapshot_listener = as_metrics_writer_snapshot;
 	policy->metrics_listeners.udata = as_metrics_writer_init_udata();
+	LOG("as_metrics_policy_init end");
 }
 
 char*
 as_latency_type_to_string(as_latency_type type)
 {
+	//LOG("as_latency_type_to_string begin");
 	switch (type)
 	{
 	case AS_LATENCY_TYPE_CONN:
@@ -416,28 +456,33 @@ as_latency_type_to_string(as_latency_type type)
 		return "none";
 		break;
 	}
+	LOG("as_latency_type_to_string end");
 }
 
 void
 as_metrics_latency_buckets_init(as_latency_buckets* latency_buckets, uint32_t latency_columns, uint32_t latency_shift)
 {
+	LOG("as_metrics_latency_buckets_init begin");
 	latency_buckets->latency_columns = latency_columns;
 	latency_buckets->latency_shift = latency_shift;
 	latency_buckets->buckets = cf_malloc(sizeof(uint64_t) * latency_columns);
 	for (uint32_t i = 0; i < latency_columns; i++) {
 		as_store_uint64(&latency_buckets->buckets[i], 0);
 	}
+	LOG("as_metrics_latency_buckets_init end");
 }
 
 uint64_t
 as_metrics_get_bucket(as_latency_buckets* buckets, uint32_t i)
 {
+	//LOG("as_metrics_get_bucket");
 	return as_load_uint64(&buckets->buckets[i]);
 }
 
 void
 as_metrics_latency_buckets_add(as_latency_buckets* latency_buckets, uint64_t elapsed)
 {
+	LOG("as_metrics_latency_buckets_add");
 	uint32_t index = as_metrics_get_index(latency_buckets, elapsed);
 	as_incr_uint64(&latency_buckets->buckets[index]);
 }
@@ -445,6 +490,7 @@ as_metrics_latency_buckets_add(as_latency_buckets* latency_buckets, uint64_t ela
 uint32_t 
 as_metrics_get_index(as_latency_buckets* latency_buckets, uint64_t elapsed_nanos)
 {
+	LOG("as_metrics_get_index begin");
 	// Convert nanoseconds to milliseconds.
 	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
 
@@ -462,26 +508,28 @@ as_metrics_get_index(as_latency_buckets* latency_buckets, uint64_t elapsed_nanos
 		}
 		limit <<= latency_buckets->latency_shift;
 	}
-
+	LOG("as_metrics_get_index end");
 	return last_bucket;
 }
 
 as_node_metrics*
 as_node_metrics_init(uint32_t latency_columns, uint32_t latency_shift)
 {
+	LOG("as_node_metrics_init begin");
 	as_node_metrics* node_metrics = (as_node_metrics *)cf_malloc(sizeof(as_node_metrics));
 	uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
 	node_metrics->latency = (as_latency_buckets *)cf_malloc(sizeof(as_latency_buckets) * max_latency_type);
 	for (uint32_t i = 0; i < max_latency_type; i++) {
 		as_metrics_latency_buckets_init(&node_metrics->latency[i], latency_columns, latency_shift);
 	}
-
+	LOG("as_node_metrics_init end");
 	return node_metrics;
 }
 
 void
 as_metrics_add_latency(as_node_metrics* node_metrics, as_latency_type latency_type, uint64_t elapsed)
 {
+	LOG("as_metrics_add_latency");
 	as_metrics_latency_buckets_add(&node_metrics->latency[latency_type], elapsed);
 }
 
@@ -553,6 +601,7 @@ as_metrics_proc_stat_mem_cpu(double* vm_usage, double* resident_set, double* cpu
 void
 as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem)
 {
+	LOG("as_metrics_process_cpu_load_mem_usage");
 	double cpu_usage_d = as_metrics_process_cpu_load();
 	cpu_usage_d = cpu_usage_d + 0.5 - (cpu_usage_d < 0);
 	*cpu_usage = (uint32_t)cpu_usage_d;
@@ -562,6 +611,7 @@ as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem)
 static double 
 as_metrics_calculate_cpu_load(uint64_t idleTicks, uint64_t totalTicks)
 {
+	LOG("as_metrics_calculate_cpu_load");
 	static uint64_t _previousTotalTicks = 0;
 	static uint64_t _previousIdleTicks = 0;
 
@@ -587,6 +637,7 @@ as_metrics_file_time_to_uint_64(const FILETIME ft)
 double
 as_metrics_process_cpu_load()
 {
+	LOG("as_metrics_process_cpu_load");
 	FILETIME idleTime, kernelTime, userTime;
 	return GetSystemTimes(&idleTime, &kernelTime, &userTime) ? 
 		as_metrics_calculate_cpu_load(as_metrics_file_time_to_uint_64(idleTime), as_metrics_file_time_to_uint_64(kernelTime) + as_metrics_file_time_to_uint_64(userTime)) * 100: -1.0f;
@@ -595,6 +646,7 @@ as_metrics_process_cpu_load()
 uint32_t
 as_metrics_process_mem_usage()
 {
+	LOG("as_metrics_process_mem_usage");
 	PROCESS_MEMORY_COUNTERS memCounter;
 	BOOL result = GetProcessMemoryInfo(GetCurrentProcess(),
 		&memCounter,

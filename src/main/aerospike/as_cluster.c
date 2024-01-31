@@ -981,7 +981,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
 
-	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_interval))
+	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_interval) == 0)
 	{
 		as_status status = cluster->metrics_listeners.snapshot_listener(err, cluster, cluster->metrics_listeners.udata);
 		if (status != AEROSPIKE_OK)

@@ -31,6 +31,8 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include "example_utils.h"
+#include <aerospike/as_metrics.h>
+#include <Windows.h>
 
 //------------------------------------
 // Forward Declarations
@@ -69,6 +71,16 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
+	as_error err;
+	as_error_reset(&err);
+	as_policy_metrics policy;
+	as_metrics_policy_init(&policy);
+	policy.interval = 5;
+	policy.report_directory = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
+
+	// enable metrics
+	as_status status = aerospike_enable_metrics(&as, &err, &policy);
+
 	// Start clean.
 	example_remove_test_records(&as);
 
@@ -77,7 +89,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	as_error err;
+	//as_error err;
 
 	// Make a batch of all the keys we inserted.
 	as_batch batch;
@@ -194,6 +206,8 @@ main(int argc, char* argv[])
 		cleanup(&as);
 		exit(-1);
 	}
+
+	Sleep(30000);
 
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);

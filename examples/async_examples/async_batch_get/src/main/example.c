@@ -28,6 +28,7 @@
 #include <aerospike/as_monitor.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_metrics.h>
 
 #include "example_utils.h"
 
@@ -75,6 +76,16 @@ main(int argc, char* argv[])
 	// Connect to the aerospike database cluster.
 	example_connect_to_aerospike(&as);
 
+	as_error err;
+	as_error_reset(&err);
+	as_policy_metrics policy;
+	as_metrics_policy_init(&policy);
+	policy.interval = 5;
+	policy.report_directory = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
+
+	// enable metrics
+	as_status status = aerospike_enable_metrics(&as, &err, &policy);
+
 	// Start clean.
 	example_remove_test_records(&as);
 
@@ -86,6 +97,7 @@ main(int argc, char* argv[])
 
 	// Wait till commands have completed before shutting down.
 	as_monitor_wait(&monitor);
+	Sleep(30000);
 	
 	// Cleanup and shutdown.
 	example_remove_test_records(&as);

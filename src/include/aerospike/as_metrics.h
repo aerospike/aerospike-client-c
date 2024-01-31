@@ -212,18 +212,6 @@ as_metrics_proc_stat_mem_cpu(double* vm_usage, double* resident_set, double* cpu
 #if defined(_MSC_VER)
 
 /**
- * Helper method that calculates CPU usage using ticks
- */
-static double
-as_metrics_calculate_cpu_load(uint64_t idleTicks, uint64_t totalTicks);
-
-/**
- * Helper method for converting file time to uint64_t
- */
-static uint64_t
-as_metrics_file_time_to_uint_64(const FILETIME ft);
-
-/**
  * Gets CPU usage using GetSystemTimes()
  */
 double

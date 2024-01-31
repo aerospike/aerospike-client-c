@@ -110,6 +110,15 @@ as_metrics_writer_init_udata()
 	return mw;
 }
 
+static inline char separator()
+{
+#ifdef _WIN32
+	return '\\';
+#else
+	return '/';
+#endif
+}
+
 static as_status
 as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 {
@@ -118,7 +127,12 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	as_string_builder file_name;
 	as_string_builder_inita(&file_name, 100, true);
 	as_string_builder_append(&file_name, mw->report_directory);
-	as_string_builder_append(&file_name, "\\metrics-");
+	char last_char = mw->report_directory[(strlen(mw->report_directory) - 1)];
+	if (last_char != '/' && last_char != '\\')
+	{
+		as_string_builder_append_char(&file_name, separator());
+	}
+	as_string_builder_append(&file_name, "metrics-");
 	as_string_builder_append(&file_name, now_file);
 	as_string_builder_append(&file_name, ".log");
 	mw->file = fopen(file_name.data, "w");

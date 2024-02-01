@@ -35,7 +35,7 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_metrics.h>
-#include <aerospike/aerospike_stats.h>
+#include <aerospike/as_sleep.h>
 
 #include "example_utils.h"
 
@@ -61,10 +61,19 @@ main(int argc, char* argv[])
 	as_policy_metrics policy;
 	as_metrics_policy_init(&policy);
 	policy.interval = 5;
+#ifdef _WIN32
 	policy.report_directory = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
+#else
+	policy.report_directory = "/home/sklaus/metrics";
+#endif
 
 	// enable metrics
 	as_status status = aerospike_enable_metrics(&as, &err, &policy);
+
+	if (status != AEROSPIKE_OK) {
+		LOG("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
+		exit(-1);
+	}
 
 	// Start clean.
 	example_remove_test_record(&as);
@@ -136,7 +145,7 @@ main(int argc, char* argv[])
 	LOG("as_operations object to apply to database:");
 	example_dump_operations(&ops);
 
-	Sleep(30000);
+	as_sleep(30000);
 
 	// Try to apply the operations. This will fail, since we can't append a
 	// string value to an existing bin with "raw" value. Note that if any

@@ -329,6 +329,41 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster
 	return as_metrics_write_line(mw, err);
 }
 
+static void
+as_metrics_writer_free_writer(as_metrics_writer* mw)
+{
+	mw->enable = false;
+	as_string_builder_destroy(mw->sb);
+	cf_free(mw->file);
+	cf_free(mw->report_directory);
+	cf_free(mw);
+}
+
+static void
+as_metrics_writer_free_node_metrics(as_node* node)
+{
+	if (node->metrics != NULL) {
+		uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
+		for (uint32_t i = 0; i < max_latency_type; i++) {
+			cf_free(node->metrics->latency[i].buckets);
+		}
+		cf_free(node->metrics->latency);
+		cf_free(node->metrics);
+		node->metrics = NULL;
+	}
+}
+
+static void
+as_metrics_writer_free_all_node_metrics(as_cluster* cluster)
+{
+	// Free node memory
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_metrics_writer_free_node_metrics(nodes->array[i]);
+	}
+	as_nodes_release(nodes);
+}
+
 static as_status
 as_metrics_writer_enable(as_error* err, const struct as_policy_metrics_s* policy, void* udata)
 {
@@ -365,8 +400,17 @@ as_metrics_writer_snapshot(as_error* err, struct as_cluster_s* cluster, void* ud
 	if (mw->enable && mw->file != NULL) {
 		as_status status = as_metrics_write_cluster(err, mw, cluster);
 		if (status != AEROSPIKE_OK) {
+			as_metrics_writer_free_all_node_metrics(cluster);
+			as_metrics_writer_free_writer(mw);
 			LOG("as_metrics_writer_snapshot not ok");
 			return status;
+		}
+		uint32_t result = fflush(mw->file);
+		if (result != 0) {
+			as_metrics_writer_free_all_node_metrics(cluster);
+			as_metrics_writer_free_writer(mw);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"File stream did not flush successfully: %s", mw->report_directory);
 		}
 	}
 	LOG("as_metrics_writer_snapshot end");
@@ -381,14 +425,13 @@ as_metrics_writer_disable(as_error* err, struct as_cluster_s* cluster, void* uda
 	as_metrics_writer* mw = udata;
 	if (mw->enable && mw->file != NULL) {
 		as_status status = as_metrics_write_cluster(err, mw, cluster);
+		uint32_t result = fclose(mw->file);
+		as_metrics_writer_free_all_node_metrics(cluster);
+		as_metrics_writer_free_writer(mw);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
-		uint32_t result = fclose(mw->file);
-		mw->file = NULL;
-		mw->enable = false;
-		as_string_builder_destroy(mw->sb);
 
 		if (result != 0) {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
@@ -399,7 +442,6 @@ as_metrics_writer_disable(as_error* err, struct as_cluster_s* cluster, void* uda
 	return AEROSPIKE_OK;
 }
 
-
 static as_status
 as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
 {
@@ -407,11 +449,12 @@ as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
 	// write node info to file
 	as_metrics_writer* mw = udata;
 
-	if (mw->enable && mw->file != NULL)
-	{
+	if (mw->enable && mw->file != NULL) {
 		as_string_builder_append(mw->sb, time_str(time(NULL)));
 		as_metrics_write_node(mw, node);
 		as_status status = as_metrics_write_line(mw, err);
+
+		as_metrics_writer_free_node_metrics(node);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -422,9 +465,29 @@ as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
 }
 
 
+
 //---------------------------------
 // Functions
 //---------------------------------
+
+as_status
+aerospike_enable_metrics(aerospike* as, as_error* err, struct as_policy_metrics_s* policy)
+{
+	return as_cluster_enable_metrics(err, as->cluster, policy);
+}
+
+as_status
+aerospike_disable_metrics(aerospike* as, as_error* err)
+{
+	as_cluster* cluster = as->cluster;
+	as_status status = as_cluster_disable_metrics(err, cluster);
+	if (status != AEROSPIKE_OK)
+	{
+		return status;
+	}
+
+	return AEROSPIKE_OK;
+}
 
 void
 as_metrics_policy_init(as_policy_metrics* policy)
@@ -549,24 +612,26 @@ as_metrics_add_latency(as_node_metrics* node_metrics, as_latency_type latency_ty
 
 
 #if defined(__linux__)
-#include <unistd.h>
-#include <ios>
-#include <iostream>
-#include <fstream>
-#include <string>
+//#include <unistd.h>
+//#include <ios>
+//#include <iostream>
+//#include <fstream>
+//#include <string>
 
 void
 as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem)
 {
-	double resident_set, mem_d, cpu_usage_d;
+	/*double resident_set, mem_d, cpu_usage_d;
 	as_metrics_proc_stat_mem_cpu(&mem_d, &resident_set, &cpu_usage_d);
 	cpu_usage_d = cpu_usage_d + 0.5 - (cpu_usage_d < 0);
 	mem_d = mem_d + 0.5 - (mem_d < 0);
 	*cpu_usage = (uint32_t)cpu_usage_d;
-	*mem = (uint32_t)mem_d;
+	*mem = (uint32_t)mem_d;*/
+	*cpu_usage = 100;
+	*mem = 100;
 }
 
-void 
+/*void
 as_metrics_proc_stat_mem_cpu(double* vm_usage, double* resident_set, double* cpu_usage)
 {
 	using std::ios_base;
@@ -605,7 +670,7 @@ as_metrics_proc_stat_mem_cpu(double* vm_usage, double* resident_set, double* cpu
 	uint64_t start_time_sec = starttime / sysconf(_SC_CLK_TCK);
 
 	*cpu_usage = (u_time_sec + s_time_sec) / (cf_get_seconds() - start_time_sec);
-}
+}*/
 #endif
 
 #if defined(_MSC_VER)

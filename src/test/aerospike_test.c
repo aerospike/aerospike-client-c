@@ -25,7 +25,6 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_metrics.h>
-#include <aerospike/aerospike_stats.h>
 
 #include "test.h"
 #include "aerospike_test.h"
@@ -385,10 +384,19 @@ static bool before(atf_plan* plan)
 	as_policy_metrics policy;
 	as_metrics_policy_init(&policy);
 	policy.interval = 5;
+#ifdef _WIN32
 	policy.report_directory = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
+#else
+	policy.report_directory = "/home/sklaus/metrics";
+#endif
 
 	// enable metrics
 	as_status status = aerospike_enable_metrics(as, &err, &policy);
+
+	if (status != AEROSPIKE_OK) {
+		error("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
+		exit(-1);
+	}
 
 	cf_free(result);
 	return true;
@@ -404,6 +412,11 @@ static bool after(atf_plan* plan)
 	as_error err;
 	as_error_reset(&err);
 
+	if (as->cluster->metrics_enabled) {
+		aerospike_disable_metrics(as, &err);
+	}
+
+	as_error_reset(&err);
 	as_status status = aerospike_close(as, &err);
 	aerospike_destroy(as);
 

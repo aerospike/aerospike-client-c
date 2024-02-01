@@ -209,22 +209,3 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 	}
 	return sb.data;
 }
-
-as_status
-aerospike_enable_metrics(aerospike* as, as_error* err, struct as_policy_metrics_s* policy)
-{
-	return as_cluster_enable_metrics(err, as->cluster, policy);
-}
-
-as_status
-aerospike_disable_metrics(aerospike* as, as_error* err)
-{
-	as_cluster* cluster = as->cluster;
-	as_status status = as_cluster_disable_metrics(err, cluster);
-	if (status != AEROSPIKE_OK)
-	{
-		return status;
-	}
-
-	return AEROSPIKE_OK;
-}

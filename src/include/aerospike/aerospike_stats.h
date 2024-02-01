@@ -260,18 +260,6 @@ as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats);
 AS_EXTERN char*
 aerospike_stats_to_string(as_cluster_stats* stats);
 
-/**
- * Enable extended periodic cluster and node latency metrics.
- */
-AS_EXTERN as_status
-aerospike_enable_metrics(aerospike* as, as_error* err, struct as_policy_metrics_s* policy);
-
-/**
- * Disable extended periodic cluster and node latency metrics.
- */
-AS_EXTERN as_status
-aerospike_disable_metrics(aerospike* as, as_error* err);
-
 #ifdef __cplusplus
 } // end extern "C"
 #endif

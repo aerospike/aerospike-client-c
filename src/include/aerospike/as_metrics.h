@@ -20,6 +20,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_string_builder.h>
 
@@ -139,6 +140,18 @@ typedef struct as_metrics_writer_s {
  */
 AS_EXTERN void
 as_metrics_policy_init(as_policy_metrics* policy);
+
+/**
+ * Enable extended periodic cluster and node latency metrics.
+ */
+AS_EXTERN as_status
+aerospike_enable_metrics(aerospike* as, as_error* err, as_policy_metrics* policy);
+
+/**
+ * Disable extended periodic cluster and node latency metrics.
+ */
+AS_EXTERN as_status
+aerospike_disable_metrics(aerospike* as, as_error* err);
 
 static inline void
 as_metrics_set_listeners(

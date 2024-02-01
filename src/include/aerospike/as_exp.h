@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -778,7 +778,10 @@ as_exp_destroy_base64(char* base64)
  * tombstone state. This expression usually evaluates quickly because record
  * meta data is cached in memory.
  *
- * Note - this is only useful for XDR filters.
+ * This expression works for XDR filters and when used from a write request within
+ * as_operations_exp_write() or as_operations_exp_read(). This expression does not
+ * work with normal filtering of records because the tombstone record will be filtered
+ * out before this expression is evaluated.
  *
  * ~~~~~~~~~~{.c}
  * // Deleted records that are in tombstone state.

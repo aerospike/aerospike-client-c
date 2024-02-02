@@ -251,6 +251,10 @@ aerospike_close(aerospike* as, as_error* err)
 	as_cluster* cluster = as->cluster;
 	
 	if (cluster) {
+		if (cluster->metrics_enabled) {
+			aerospike_disable_metrics(as, err);
+		}
+		
 		if (as_event_loop_size > 0 && !as_event_single_thread) {
 			// Async configurations will attempt to wait till pending async commands have completed.
 			as_event_close_cluster(cluster);
@@ -259,6 +263,7 @@ aerospike_close(aerospike* as, as_error* err)
 			// Close sync only configurations immediately.
 			as_cluster_destroy(cluster);
 		}
+
 		as->cluster = NULL;
 	}
 	return err->code;

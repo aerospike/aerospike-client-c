@@ -36,12 +36,10 @@
 #include <aerospike/aerospike_udf.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_bytes.h>
-#include <aerospike/as_cluster.h>
 #include <aerospike/as_dir.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
-#include <aerospike/as_metrics.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_record.h>
@@ -574,10 +572,6 @@ example_cleanup(aerospike* p_as)
 	// using multiple records call that from their own cleanup utilities.
 
 	as_error err;
-
-	if (p_as->cluster->metrics_enabled) {
-		aerospike_disable_metrics(p_as, &err);
-	}
 
 	// Disconnect from the database cluster and clean up the aerospike object.
 	aerospike_close(p_as, &err);

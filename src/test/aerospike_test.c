@@ -412,11 +412,6 @@ static bool after(atf_plan* plan)
 	as_error err;
 	as_error_reset(&err);
 
-	if (as->cluster->metrics_enabled) {
-		aerospike_disable_metrics(as, &err);
-	}
-
-	as_error_reset(&err);
 	as_status status = aerospike_close(as, &err);
 	aerospike_destroy(as);
 

@@ -64,23 +64,21 @@ static as_status
 as_metrics_write_line(as_metrics_writer* mw, as_error* err)
 {
 	LOG("as_metrics_write_line begin");
-	as_string_builder_append_newline(mw->sb);
-	int written = fprintf(mw->file, "%s", mw->sb->data);
-	if (mw->sb->length != written)
+	as_string_builder_append_newline(&mw->sb);
+	int written = fprintf(mw->file, "%s", mw->sb.data);
+	if (mw->sb.length != written)
 	{
 		LOG("wrong number of chars written");
-		LOG("expected %d", mw->sb->length);
+		LOG("expected %d", mw->sb.length);
 	}
 	LOG("written %d", written);
-	LOG("data %s", mw->sb->data);
-	mw->size += mw->sb->length;
-	as_string_builder_reset(mw->sb);
+	LOG("data %s", mw->sb.data);
+	mw->size += mw->sb.length;
+	as_string_builder_reset(&mw->sb);
 
 	if (mw->max_size > 0 && mw->size >= mw->max_size) {
 		LOG("need new file");
 		uint32_t result = fclose(mw->file);
-		as_string_builder_destroy(mw->sb);
-		mw->sb = NULL;
 
 		if (result != 0) {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
@@ -99,7 +97,6 @@ as_metrics_writer_init_udata()
 	LOG("as_metrics_writer_init_udata begin");
 	as_metrics_writer* mw = (as_metrics_writer *)cf_malloc(sizeof(as_metrics_writer));
 	mw->file = NULL;
-	mw->sb = NULL;
 	mw->enable = false;
 	mw->max_size = 0;
 	mw->latency_columns = 0;
@@ -144,21 +141,20 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	}
 
 	mw->size = 0;
-	mw->sb = (as_string_builder *)cf_malloc(sizeof(as_string_builder));
-	as_string_builder_inita(mw->sb, 2048, true);
+	as_string_builder_inita(&mw->sb, 2048, true);
 	const char* now = time_str(time(NULL));
-	as_string_builder_append(mw->sb, now);
-	as_string_builder_append(mw->sb, " header(1)");
-	as_string_builder_append(mw->sb, " cluster[name,cpu,mem,invalidNodeCount,tranCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]]");
-	as_string_builder_append(mw->sb, " eventloop[processSize,queueSize]");
-	as_string_builder_append(mw->sb, " node[name,address,port,syncConn,asyncConn,errors,timeouts,latency[]]");
-	as_string_builder_append(mw->sb, " conn[inUse,inPool,opened,closed]");
-	as_string_builder_append(mw->sb, " latency(");
-	as_string_builder_append_int(mw->sb, mw->latency_columns);
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_int(mw->sb, mw->latency_shift);
-	as_string_builder_append_char(mw->sb, ')');
-	as_string_builder_append(mw->sb, "[type[l1,l2,l3...]]");
+	as_string_builder_append(&mw->sb, now);
+	as_string_builder_append(&mw->sb, " header(1)");
+	as_string_builder_append(&mw->sb, " cluster[name,cpu,mem,invalidNodeCount,tranCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]]");
+	as_string_builder_append(&mw->sb, " eventloop[processSize,queueSize]");
+	as_string_builder_append(&mw->sb, " node[name,address,port,syncConn,asyncConn,errors,timeouts,latency[]]");
+	as_string_builder_append(&mw->sb, " conn[inUse,inPool,opened,closed]");
+	as_string_builder_append(&mw->sb, " latency(");
+	as_string_builder_append_int(&mw->sb, mw->latency_columns);
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_int(&mw->sb, mw->latency_shift);
+	as_string_builder_append_char(&mw->sb, ')');
+	as_string_builder_append(&mw->sb, "[type[l1,l2,l3...]]");
 	LOG("as_metrics_open_writer end");
 	return as_metrics_write_line(mw, err);
 }
@@ -204,13 +200,13 @@ static void
 as_metrics_write_conn(as_metrics_writer* mw, const struct as_conn_stats_s* stats)
 {
 	LOG("as_metrics_write_conn begin");
-	as_string_builder_append_uint(mw->sb, stats->in_use);
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_uint(mw->sb, stats->in_pool);
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_uint(mw->sb, stats->opened); // Cumulative. Not reset on each interval.
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_uint(mw->sb, stats->closed); // Cumulative. Not reset on each interval.
+	as_string_builder_append_uint(&mw->sb, stats->in_use);
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_uint(&mw->sb, stats->in_pool);
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_uint(&mw->sb, stats->opened); // Cumulative. Not reset on each interval.
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_uint(&mw->sb, stats->closed); // Cumulative. Not reset on each interval.
 	LOG("as_metrics_write_conn end");
 }
 
@@ -218,12 +214,12 @@ static void
 as_metrics_write_node(as_metrics_writer* mw, struct as_node_s* node)
 {
 	LOG("as_metrics_write_node begin");
-	as_string_builder_append_char(mw->sb, '[');
-	as_string_builder_append(mw->sb, node->name);
-	as_string_builder_append_char(mw->sb, ',');
+	as_string_builder_append_char(&mw->sb, '[');
+	as_string_builder_append(&mw->sb, node->name);
+	as_string_builder_append_char(&mw->sb, ',');
 
-	as_string_builder_append(mw->sb, as_node_get_address_string(node));
-	as_string_builder_append_char(mw->sb, ',');
+	as_string_builder_append(&mw->sb, as_node_get_address_string(node));
+	as_string_builder_append_char(&mw->sb, ',');
 
 	struct as_conn_stats_s sync;
 	struct as_conn_stats_s async;
@@ -231,38 +227,38 @@ as_metrics_write_node(as_metrics_writer* mw, struct as_node_s* node)
 	as_sum_init(&async);
 	as_metrics_get_node_sync_conn_stats(node, &sync);
 	as_metrics_write_conn(mw, &sync);
-	as_string_builder_append_char(mw->sb, ',');
+	as_string_builder_append_char(&mw->sb, ',');
 	as_metrics_get_node_async_conn_stats(node, &async);
 	as_metrics_write_conn(mw, &async);
-	as_string_builder_append_char(mw->sb, ',');
+	as_string_builder_append_char(&mw->sb, ',');
 
-	as_string_builder_append_uint64(mw->sb, as_node_get_error_count(node));
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_uint64(mw->sb, as_node_get_timeout_count(node));
-	as_string_builder_append(mw->sb, ",[");
+	as_string_builder_append_uint64(&mw->sb, as_node_get_error_count(node));
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_uint64(&mw->sb, as_node_get_timeout_count(node));
+	as_string_builder_append(&mw->sb, ",[");
 
 	as_node_metrics* node_metrics = node->metrics;
 	uint32_t max = AS_LATENCY_TYPE_NONE;
 
 	for (uint32_t i = 0; i < max; i++) {
 		if (i > 0) {
-			as_string_builder_append_char(mw->sb, ',');
+			as_string_builder_append_char(&mw->sb, ',');
 		}
-		as_string_builder_append(mw->sb, as_latency_type_to_string(i));
-		as_string_builder_append_char(mw->sb, '[');
+		as_string_builder_append(&mw->sb, as_latency_type_to_string(i));
+		as_string_builder_append_char(&mw->sb, '[');
 
 		as_latency_buckets* buckets = &node_metrics->latency[i];
 		uint32_t bucket_max = buckets->latency_columns;
 
 		for (uint32_t j = 0; j < bucket_max; j++) {
 			if (j > 0) {
-				as_string_builder_append_char(mw->sb, ',');
+				as_string_builder_append_char(&mw->sb, ',');
 			}
-			as_string_builder_append_uint64(mw->sb, as_metrics_get_bucket(buckets, j));
+			as_string_builder_append_uint64(&mw->sb, as_metrics_get_bucket(buckets, j));
 		}
-		as_string_builder_append_char(mw->sb, ']');
+		as_string_builder_append_char(&mw->sb, ']');
 	}
-	as_string_builder_append(mw->sb, "]]");
+	as_string_builder_append(&mw->sb, "]]");
 	LOG("as_metrics_write_node end");
 }
 
@@ -280,35 +276,35 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster
 	uint32_t mem = 0;
 	as_metrics_process_cpu_load_mem_usage(&cpu_load, &mem);
 
-	as_string_builder_append(mw->sb, time_str(time(NULL)));
-	as_string_builder_append(mw->sb, " cluster[");
-	as_string_builder_append(mw->sb, cluster_name);
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_int(mw->sb, cpu_load);
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_int(mw->sb, mem);
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_uint(mw->sb, cluster->invalid_node_count); // Cumulative. Not reset on each interval.
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_uint64(mw->sb, as_cluster_get_tran_count(cluster));  // Cumulative. Not reset on each interval.
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_uint64(mw->sb, cluster->retry_count); // Cumulative. Not reset on each interval.
-	as_string_builder_append_char(mw->sb, ',');
-	as_string_builder_append_uint64(mw->sb, cluster->delay_queue_timeout_count); // Cumulative. Not reset on each interval.
-	as_string_builder_append(mw->sb, ",[");
+	as_string_builder_append(&mw->sb, time_str(time(NULL)));
+	as_string_builder_append(&mw->sb, " cluster[");
+	as_string_builder_append(&mw->sb, cluster_name);
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_int(&mw->sb, cpu_load);
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_int(&mw->sb, mem);
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_uint(&mw->sb, cluster->invalid_node_count); // Cumulative. Not reset on each interval.
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_uint64(&mw->sb, as_cluster_get_tran_count(cluster));  // Cumulative. Not reset on each interval.
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_uint64(&mw->sb, cluster->retry_count); // Cumulative. Not reset on each interval.
+	as_string_builder_append_char(&mw->sb, ',');
+	as_string_builder_append_uint64(&mw->sb, cluster->delay_queue_timeout_count); // Cumulative. Not reset on each interval.
+	as_string_builder_append(&mw->sb, ",[");
 
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* loop = &as_event_loops[i];
 		if (i > 0) {
-			as_string_builder_append_char(mw->sb, ',');
+			as_string_builder_append_char(&mw->sb, ',');
 		}
-		as_string_builder_append_char(mw->sb, '[');
-		as_string_builder_append_int(mw->sb, as_event_loop_get_process_size(loop));
-		as_string_builder_append_char(mw->sb, ',');
-		as_string_builder_append_uint(mw->sb, as_event_loop_get_queue_size(loop));
-		as_string_builder_append_char(mw->sb, ']');
+		as_string_builder_append_char(&mw->sb, '[');
+		as_string_builder_append_int(&mw->sb, as_event_loop_get_process_size(loop));
+		as_string_builder_append_char(&mw->sb, ',');
+		as_string_builder_append_uint(&mw->sb, as_event_loop_get_queue_size(loop));
+		as_string_builder_append_char(&mw->sb, ']');
 	}
-	as_string_builder_append(mw->sb, "],[");
+	as_string_builder_append(&mw->sb, "],[");
 
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -316,13 +312,13 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster
 		as_node_reserve(node);
 		
 		if (i > 0) {
-			as_string_builder_append_char(mw->sb, ',');
+			as_string_builder_append_char(&mw->sb, ',');
 		}
 		as_metrics_write_node(mw, node);
 
 		as_node_release(node);
 	}
-	as_string_builder_append(mw->sb, "]]");
+	as_string_builder_append(&mw->sb, "]]");
 
 	as_nodes_release(nodes);
 	LOG("as_metrics_write_cluster end");
@@ -330,17 +326,17 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster
 }
 
 static void
-as_metrics_writer_free_writer(as_metrics_writer* mw)
+as_metrics_writer_destroy(as_metrics_writer* mw)
 {
-	mw->enable = false;
-	as_string_builder_destroy(mw->sb);
-	cf_free(mw->file);
-	cf_free(mw->report_directory);
+	LOG("destorying string builder");
+	as_string_builder_destroy(&mw->sb);
+	LOG("string builder %s", &mw->sb);
+	fclose(mw->file);
 	cf_free(mw);
 }
 
 static void
-as_metrics_writer_free_node_metrics(as_node* node)
+as_metrics_writer_destroy_node_metrics(as_node* node)
 {
 	if (node->metrics != NULL) {
 		uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
@@ -354,12 +350,12 @@ as_metrics_writer_free_node_metrics(as_node* node)
 }
 
 static void
-as_metrics_writer_free_all_node_metrics(as_cluster* cluster)
+as_metrics_writer_destroy_nodes(as_cluster* cluster)
 {
 	// Free node memory
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_metrics_writer_free_node_metrics(nodes->array[i]);
+		as_metrics_writer_destroy_node_metrics(nodes->array[i]);
 	}
 	as_nodes_release(nodes);
 }
@@ -400,15 +396,15 @@ as_metrics_writer_snapshot(as_error* err, struct as_cluster_s* cluster, void* ud
 	if (mw->enable && mw->file != NULL) {
 		as_status status = as_metrics_write_cluster(err, mw, cluster);
 		if (status != AEROSPIKE_OK) {
-			as_metrics_writer_free_all_node_metrics(cluster);
-			as_metrics_writer_free_writer(mw);
+			as_metrics_writer_destroy_nodes(cluster);
+			as_metrics_writer_destroy(mw);
 			LOG("as_metrics_writer_snapshot not ok");
 			return status;
 		}
 		uint32_t result = fflush(mw->file);
 		if (result != 0) {
-			as_metrics_writer_free_all_node_metrics(cluster);
-			as_metrics_writer_free_writer(mw);
+			as_metrics_writer_destroy_nodes(cluster);
+			as_metrics_writer_destroy(mw);
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"File stream did not flush successfully: %s", mw->report_directory);
 		}
@@ -423,20 +419,18 @@ as_metrics_writer_disable(as_error* err, struct as_cluster_s* cluster, void* uda
 	LOG("as_metrics_writer_disable begin");
 	// write cluster into to file, disable
 	as_metrics_writer* mw = udata;
-	if (mw->enable && mw->file != NULL) {
-		as_status status = as_metrics_write_cluster(err, mw, cluster);
-		uint32_t result = fclose(mw->file);
-		as_metrics_writer_free_all_node_metrics(cluster);
-		as_metrics_writer_free_writer(mw);
+	if (mw != NULL) {
+		if (mw->enable && mw->file != NULL) {
+			as_status status = as_metrics_write_cluster(err, mw, cluster);
 
-		if (status != AEROSPIKE_OK) {
-			return status;
+			if (status != AEROSPIKE_OK) {
+				as_metrics_writer_destroy_nodes(cluster);
+				as_metrics_writer_destroy(mw);
+				return status;
+			}
 		}
-
-		if (result != 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-				"File stream did not close successfully: %s", mw->report_directory);
-		}
+		as_metrics_writer_destroy_nodes(cluster);
+		as_metrics_writer_destroy(mw);
 	}
 	LOG("as_metrics_writer_disable end");
 	return AEROSPIKE_OK;
@@ -450,11 +444,12 @@ as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
 	as_metrics_writer* mw = udata;
 
 	if (mw->enable && mw->file != NULL) {
-		as_string_builder_append(mw->sb, time_str(time(NULL)));
+		as_string_builder_append(&mw->sb, time_str(time(NULL)));
+		as_node_reserve(node);
 		as_metrics_write_node(mw, node);
 		as_status status = as_metrics_write_line(mw, err);
-
-		as_metrics_writer_free_node_metrics(node);
+		as_metrics_writer_destroy_node_metrics(node);
+		as_node_release(node);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -463,8 +458,6 @@ as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
 	LOG("as_metrics_writer_node_close end");
 	return AEROSPIKE_OK;
 }
-
-
 
 //---------------------------------
 // Functions
@@ -681,13 +674,15 @@ void
 as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem)
 {
 	LOG("as_metrics_process_cpu_load_mem_usage");
-	double cpu_usage_d = as_metrics_process_cpu_load();
+	/*double cpu_usage_d = as_metrics_process_cpu_load();
 	cpu_usage_d = cpu_usage_d + 0.5 - (cpu_usage_d < 0);
 	*cpu_usage = (uint32_t)cpu_usage_d;
-	*mem = as_metrics_process_mem_usage();
+	*mem = as_metrics_process_mem_usage();*/
+	*cpu_usage = 100;
+	*mem = 100;
 }
 
-static double 
+/*static double
 as_metrics_calculate_cpu_load(uint64_t idleTicks, uint64_t totalTicks)
 {
 	LOG("as_metrics_calculate_cpu_load");
@@ -732,7 +727,7 @@ as_metrics_process_mem_usage()
 		sizeof(memCounter));
 
 	return (uint32_t)memCounter.WorkingSetSize;
-}
+}*/
 
 #endif
 

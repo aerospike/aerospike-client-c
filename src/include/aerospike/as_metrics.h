@@ -120,7 +120,7 @@ typedef struct as_node_metrics_s {
 typedef struct as_metrics_writer_s {
 	FILE* file;
 
-	as_string_builder* sb;
+	as_string_builder sb;
 
 	bool enable;
 

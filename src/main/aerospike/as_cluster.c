@@ -576,6 +576,7 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_policy_metrics*
 
 	as_status status = cluster->metrics_listeners.enable_listener(err, policy, cluster->metrics_listeners.udata);
 	if (status != AEROSPIKE_OK) {
+		as_cluster_disable_metrics(err, cluster);
 		return status;
 	}
 	cluster->metrics_enabled = true;

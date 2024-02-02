@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -811,20 +811,23 @@ as_batch_equals_read(as_batch_read_record* prev, as_batch_read_record* rec)
 static inline bool
 as_batch_equals_write(as_batch_write_record* prev, as_batch_write_record* rec)
 {
-	return prev->ops == rec->ops && prev->policy == rec->policy;
+	return prev->ops == rec->ops && prev->policy == rec->policy &&
+		   (rec->policy == NULL || rec->policy->key == AS_POLICY_KEY_DIGEST);
 }
 
 static inline bool
 as_batch_equals_apply(as_batch_apply_record* prev, as_batch_apply_record* rec)
 {
 	return prev->function == rec->function && prev->arglist == rec->arglist &&
-		   prev->module == rec->module && prev->policy == rec->policy;
+		   prev->module == rec->module && prev->policy == rec->policy &&
+		   (rec->policy == NULL || rec->policy->key == AS_POLICY_KEY_DIGEST);
 }
 
 static inline bool
 as_batch_equals_remove(as_batch_remove_record* prev, as_batch_remove_record* rec)
 {
-	return prev->policy == rec->policy;
+	return prev->policy == rec->policy &&
+		   (rec->policy == NULL || rec->policy->key == AS_POLICY_KEY_DIGEST);
 }
 
 static bool
@@ -1749,7 +1752,8 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 
 static as_status
 as_batch_keys_size_new(
-	as_key* keys, as_vector* offsets, as_batch_base_record* rec, as_batch_builder* bb, as_error* err
+	as_key* keys, as_vector* offsets, as_batch_base_record* rec, as_batch_attr* attr,
+	as_batch_builder* bb, as_error* err
 	)
 {
 	as_key* prev = 0;
@@ -1761,7 +1765,7 @@ as_batch_keys_size_new(
 
 		bb->size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
 
-		if (prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
+		if (!attr->send_key && prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
 			// Can set repeat flag to save space.
 			bb->size++;
 		}
@@ -1780,14 +1784,14 @@ as_batch_keys_size_new(
 
 static as_status
 as_batch_keys_size(
-	as_key* keys, as_vector* offsets, as_batch_base_record* rec, as_batch_builder* bb,
-	as_error* err
+	as_key* keys, as_vector* offsets, as_batch_base_record* rec, as_batch_attr* attr,
+	as_batch_builder* bb, as_error* err
 	)
 {
 	as_batch_init_size(bb);
 
 	if (bb->batch_any) {
-		return as_batch_keys_size_new(keys, offsets, rec, bb, err);
+		return as_batch_keys_size_new(keys, offsets, rec, attr, bb, err);
 	}
 	else {
 		if (rec->type != AS_BATCH_READ) {
@@ -1824,7 +1828,7 @@ as_batch_keys_write_new(
 		memcpy(p, key->digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 
-		if (prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
+		if (!attr->send_key && prev && strcmp(prev->ns, key->ns) == 0 && strcmp(prev->set, key->set) == 0) {
 			// Can set repeat flag to save space.
 			*p++ = BATCH_MSG_REPEAT;
 		}
@@ -1902,7 +1906,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 
 	as_batch_builder_set_node(&bb, task->node);
 
-	as_status status = as_batch_keys_size(btk->keys, &task->offsets, btk->rec, &bb, err);
+	as_status status = as_batch_keys_size(btk->keys, &task->offsets, btk->rec, btk->attr, &bb, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_batch_builder_destroy(&bb);

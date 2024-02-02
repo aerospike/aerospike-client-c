@@ -66,8 +66,7 @@ as_metrics_write_line(as_metrics_writer* mw, as_error* err)
 	LOG("as_metrics_write_line begin");
 	as_string_builder_append_newline(&mw->sb);
 	int written = fprintf(mw->file, "%s", mw->sb.data);
-	if (mw->sb.length != written)
-	{
+	if (mw->sb.length != written) {
 		LOG("wrong number of chars written");
 		LOG("expected %d", mw->sb.length);
 	}
@@ -125,8 +124,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	as_string_builder_inita(&file_name, 100, true);
 	as_string_builder_append(&file_name, mw->report_directory);
 	char last_char = mw->report_directory[(strlen(mw->report_directory) - 1)];
-	if (last_char != '/' && last_char != '\\')
-	{
+	if (last_char != '/' && last_char != '\\') {
 		as_string_builder_append_char(&file_name, separator());
 	}
 	as_string_builder_append(&file_name, "metrics-");
@@ -472,14 +470,7 @@ aerospike_enable_metrics(aerospike* as, as_error* err, struct as_policy_metrics_
 as_status
 aerospike_disable_metrics(aerospike* as, as_error* err)
 {
-	as_cluster* cluster = as->cluster;
-	as_status status = as_cluster_disable_metrics(err, cluster);
-	if (status != AEROSPIKE_OK)
-	{
-		return status;
-	}
-
-	return AEROSPIKE_OK;
+	return as_cluster_disable_metrics(err, as->cluster);
 }
 
 void
@@ -502,8 +493,7 @@ char*
 as_latency_type_to_string(as_latency_type type)
 {
 	//LOG("as_latency_type_to_string begin");
-	switch (type)
-	{
+	switch (type) {
 	case AS_LATENCY_TYPE_CONN:
 		return "conn"; 
 		break;

@@ -586,8 +586,7 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_policy_metrics*
 as_status
 as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 {
-	if (cluster->metrics_enabled)
-	{
+	if (cluster->metrics_enabled) {
 		cluster->metrics_enabled = false;
 		return cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
 	}
@@ -598,8 +597,7 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 void
 as_cluster_add_tran(as_cluster* cluster)
 {
-	if (cluster->metrics_enabled)
-	{
+	if (cluster->metrics_enabled) {
 		as_incr_uint64(&cluster->tran_count);
 	}
 }
@@ -654,8 +652,7 @@ as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_no
 
 		if (cluster->metrics_enabled) {
 			as_status status = cluster->metrics_listeners.node_close_listener(err, node, node->cluster->metrics_listeners.udata);
-			if (status != AEROSPIKE_OK)
-			{
+			if (status != AEROSPIKE_OK) {
 				return status;
 			}
 		}
@@ -924,8 +921,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 			// Remove nodes in a batch.
 			if (nodes_to_remove.size > 0) {
 				as_status status = as_cluster_remove_nodes(err, cluster, &nodes_to_remove);
-				if (status != AEROSPIKE_OK)
-				{
+				if (status != AEROSPIKE_OK) {
 					return status;
 				}
 				nodes = cluster->nodes;
@@ -982,11 +978,9 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
 
-	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_interval) == 0)
-	{
+	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_interval) == 0) {
 		as_status status = cluster->metrics_listeners.snapshot_listener(err, cluster, cluster->metrics_listeners.udata);
-		if (status != AEROSPIKE_OK)
-		{
+		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 	}

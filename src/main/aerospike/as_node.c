@@ -136,12 +136,10 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->partition_changed = true;
 	node->rebalance_changed = cluster->rack_aware;
 
-	if (cluster->metrics_enabled)
-	{
+	if (cluster->metrics_enabled) {
 		node->metrics = as_node_metrics_init(cluster->metrics_latency_columns, cluster->metrics_latency_shift);
 	}
-	else
-	{
+	else {
 		node->metrics = NULL;
 	}
 

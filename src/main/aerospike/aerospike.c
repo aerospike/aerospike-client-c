@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -263,7 +263,6 @@ aerospike_close(aerospike* as, as_error* err)
 			// Close sync only configurations immediately.
 			as_cluster_destroy(cluster);
 		}
-
 		as->cluster = NULL;
 	}
 	return err->code;

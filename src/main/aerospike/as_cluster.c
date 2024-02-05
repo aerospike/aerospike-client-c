@@ -588,7 +588,7 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 {
 	if (cluster->metrics_enabled) {
 		cluster->metrics_enabled = false;
-		return cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
+		//return cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
 	}
 
 	return AEROSPIKE_OK;

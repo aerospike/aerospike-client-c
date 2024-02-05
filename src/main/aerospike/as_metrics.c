@@ -328,7 +328,6 @@ as_metrics_writer_destroy(as_metrics_writer* mw)
 {
 	LOG("destorying string builder");
 	as_string_builder_destroy(&mw->sb);
-	LOG("string builder %s", &mw->sb);
 	fclose(mw->file);
 	cf_free(mw);
 }

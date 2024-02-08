@@ -1,32 +1,6 @@
-/*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
- ******************************************************************************/
-
-
-//==========================================================
-// Includes
-//
-
 #include <stddef.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -34,165 +8,238 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_dir.h>
+#include <aerospike/as_proto.h>
+#include <aerospike/as_command.h>
 
 #include "example_utils.h"
 
+typedef struct {
+	uint32_t rec_count;
+	uint32_t bytes;
+} stats;
 
-//==========================================================
-// Forward Declarations
-//
+static as_status
+parse_record(uint8_t** pp, as_msg* msg, as_error* err)
+{
+	// Parse normal record values.
+	as_record rec;
+	as_record_inita(&rec, msg->n_ops);
+	
+	rec.gen = msg->generation;
+	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 
-bool write_record(aerospike* p_as);
+	uint64_t bval = 0;
+	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
 
+	as_status status = as_command_parse_bins(pp, err, &rec, msg->n_ops, true);
 
-//==========================================================
-// GET Example
-//
+	if (status != AEROSPIKE_OK) {
+		as_record_destroy(&rec);
+		return status;
+	}
+
+	as_record_destroy(&rec);
+	return AEROSPIKE_OK;
+}
+
+static as_status
+parse_records(as_error* err, uint8_t* buf, size_t size)
+{
+	uint8_t* p = buf;
+	uint8_t* end = buf + size;
+	as_status status;
+
+	while (p < end) {
+		as_msg* msg = (as_msg*)p;
+		as_msg_swap_header_from_be(msg);
+		p += sizeof(as_msg);
+
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			if (msg->result_code != AEROSPIKE_OK) {
+				// The server returned a fatal error.
+				return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+			}
+			return AEROSPIKE_NO_MORE_RECORDS;
+		}
+
+		if (msg->info3 & AS_MSG_INFO3_PARTITION_DONE) {
+			// When an error code is received, mark partition as unavailable
+			// for the current round. Unavailable partitions will be retried
+			// in the next round. Generation is overloaded as partition id.
+			if (msg->result_code != AEROSPIKE_OK) {
+				//as_partition_tracker_part_unavailable(task->pt, task->np, msg->generation);
+			}
+			continue;
+		}
+
+		if (msg->result_code != AEROSPIKE_OK) {
+			// Background scans return AEROSPIKE_ERR_RECORD_NOT_FOUND
+			// when the set does not exist on the target node.
+			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+				// Non-fatal error.
+				return AEROSPIKE_NO_MORE_RECORDS;
+			}
+			return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+		}
+
+		status = parse_record(&p, msg, err);
+		
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+read_messages(as_error* err, FILE* fp, stats* stats)
+{
+	size_t capacity = 0;
+	uint8_t* buf = NULL;
+	size_t size;
+	as_proto proto;
+	as_status status;
+
+	while (true) {
+		// Read header
+		size_t rv = fread((uint8_t*)&proto, 1, sizeof(as_proto), fp);
+		
+		if (rv != sizeof(as_proto)) {
+			if (rv == 0) {
+				// End of file.
+				status = AEROSPIKE_NO_MORE_RECORDS;
+			}
+			else {
+				status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Header fread failed: %u, %u\n", (uint32_t)rv, (uint32_t)sizeof(as_proto));
+			}
+			break;
+		}
+
+		stats->bytes += sizeof(proto);
+		status = as_proto_parse(err, &proto);
+
+		if (status != AEROSPIKE_OK) {
+			break;
+		}
+
+		size = proto.sz;
+
+		if (size == 0) {
+			continue;
+		}
+
+		// Prepare buffer
+		if (size > capacity) {
+			as_command_buffer_free(buf, capacity);
+			capacity = (size + 16383) & ~16383; // Round up in 16KB increments.
+			buf = as_command_buffer_init(capacity);
+		}
+		
+		// Read remaining message bytes in group
+		rv = fread(buf, 1, size, fp);
+
+		if (rv != size) {
+			status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Detail fread failed: %u, %u\n", (uint32_t)rv, (uint32_t)size);
+			break;
+		}
+		
+		stats->bytes += size;
+
+		if (proto.type == AS_MESSAGE_TYPE) {
+			status = parse_records(err, buf, size);
+			stats->rec_count++;
+		}
+		else if (proto.type == AS_COMPRESSED_MESSAGE_TYPE) {
+			status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Unexpected compress!\n");
+			break;
+		}
+		else {
+			status = as_proto_type_error(err, &proto, AS_MESSAGE_TYPE);
+			break;
+		}
+
+		if (status != AEROSPIKE_OK) {
+			if (status == AEROSPIKE_NO_MORE_RECORDS) {
+				status = AEROSPIKE_OK;
+			}
+			break;
+		}
+	}
+	as_command_buffer_free(buf, capacity);
+	return status;
+}
+
+static as_status
+read_file(as_error* err, const char* path, stats* stats) {
+	FILE* fp = fopen(path, "r");
+	
+	if (!fp) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to open: %s\n", path);
+	}
+
+	as_error_reset(err);
+	as_status status;
+	
+	while (true) {
+		status = read_messages(err, fp, stats);
+		
+		if (status != AEROSPIKE_OK) {
+			break;
+		}
+	}
+	
+	fclose(fp);
+	
+	if (status == AEROSPIKE_NO_MORE_RECORDS) {
+		return AEROSPIKE_OK;
+	}
+	return status;
+}
 
 int
 main(int argc, char* argv[])
 {
-	// Parse command line arguments.
-	if (! example_get_opts(argc, argv, EXAMPLE_BASIC_OPTS)) {
-		exit(-1);
+	if (argc < 2) {
+		printf("Usage %s <dir>\n", argv[0]);
+		return -1;
+	}
+		
+	const char* dir_path = argv[1];
+	as_dir dir;
+
+	if (! as_dir_open(&dir, dir_path)) {
+		printf("Failed to open directory: %s\n", dir_path);
+		return -1;
 	}
 
-	// Connect to the aerospike database cluster.
-	aerospike as;
-	example_connect_to_aerospike(&as);
-
-	// Start clean.
-	example_remove_test_record(&as);
+	char path[256];
+	const char* entry;
 
 	as_error err;
-	as_record* p_rec = NULL;
+	as_status status = AEROSPIKE_OK;
+	stats st;
 
-	// Try to read the test record from the database. This should fail since the
-	// record is not there.
-	if (aerospike_key_get(&as, &err, NULL, &g_key, &p_rec) !=
-			AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-		LOG("aerospike_key_get() returned %d - %s, expected "
-				"AEROSPIKE_ERR_RECORD_NOT_FOUND", err.code, err.message);
-		as_record_destroy(p_rec);
-		example_cleanup(&as);
-		exit(-1);
+	while ((entry = as_dir_read(&dir)) != NULL) {
+		if (entry[0] == '.') {
+			continue;
+		}
+		
+		st.rec_count = 0;
+		st.bytes = 0;
+
+		sprintf(path, "%s/%s", dir_path, entry);
+		status = read_file(&err, path, &st);
+		
+		if (status == AEROSPIKE_OK) {
+			printf("%s %u %u\n", path, st.rec_count, st.bytes);
+		}
+		else {
+			printf("Failed to read file %s: %u,%u,%d,%s\n", path, st.rec_count, st.bytes, err.code, err.message);
+			break;
+		}
 	}
 
-	// Note that p_rec will still be NULL here.
-	LOG("get (non-existent record) failed as expected");
-
-	// Write a record to the database so we can demonstrate read success.
-	if (! write_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Read the (whole) test record from the database.
-	if (aerospike_key_get(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Log the result and recycle the as_record object.
-	LOG("record was successfully read from database:");
-	example_dump_record(p_rec);
-	as_record_destroy(p_rec);
-	p_rec = NULL;
-
-	// Select bins 1 and 3 to read.
-	static const char* bins_1_3[] = { "test-bin-1", "test-bin-3", NULL };
-
-	// Read only these two bins of the test record from the database.
-	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_1_3, &p_rec) !=
-			AEROSPIKE_OK) {
-		LOG("aerospike_key_select() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Log the result and recycle the as_record object.
-	LOG("bins 1 and 3 were read from database:");
-	example_dump_record(p_rec);
-	as_record_destroy(p_rec);
-	p_rec = NULL;
-
-	// Select non-existent bin 5 to read.
-	static const char* bins_5[] = { "test-bin-5", NULL };
-
-	// Read only this bin from the database. This call should return an
-	// as_record object with one bin, with null as_bin_value.
-	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_5, &p_rec) !=
-			AEROSPIKE_OK) {
-		LOG("aerospike_key_select() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Log the result and destroy the as_record object.
-	LOG("non-existent bin 5 was read from database:");
-	example_dump_record(p_rec);
-	as_record_destroy(p_rec);
-	p_rec = NULL;
-
-	// Sleep 2 seconds, just to show the TTL decrease.
-	LOG("waiting 2 seconds ...");
-	as_sleep(2000);
-
-	// Use aerospike_key_exists() to get only record metadata.
-	if (aerospike_key_exists(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_exists() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Log the result, which will only have metadata.
-	LOG("existence check found record metadata:");
-	example_dump_record(p_rec);
-	as_record_destroy(p_rec);
-
-	// Cleanup and disconnect from the database cluster.
-	example_cleanup(&as);
-
-	LOG("get example successfully completed");
-
-	return 0;
-}
-
-
-//==========================================================
-// Helpers
-//
-
-bool
-write_record(aerospike* p_as)
-{
-	as_error err;
-
-	// Create an as_record object with four bins with different value types. By
-	// using as_record_inita(), we won't need to destroy the record if we only
-	// set bins using as_record_set_int64(), as_record_set_str(), and
-	// as_record_set_raw().
-	as_record rec;
-	as_record_inita(&rec, 4);
-	as_record_set_int64(&rec, "test-bin-1", 1111);
-	as_record_set_int64(&rec, "test-bin-2", 2222);
-	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
-
-	static const uint8_t bytes[] = { 1, 2, 3 };
-	as_record_set_raw(&rec, "test-bin-4", bytes, 3);
-
-	// Log its contents.
-	LOG("as_record object to write to database:");
-	example_dump_record(&rec);
-
-	// Write the record to the database.
-	if (aerospike_key_put(p_as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		return false;
-	}
-
-	LOG("write succeeded");
-
-	return true;
+	as_dir_close(&dir);
+	return status;
 }

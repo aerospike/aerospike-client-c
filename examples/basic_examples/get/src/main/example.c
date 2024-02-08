@@ -228,7 +228,7 @@ main(int argc, char* argv[])
 		st.rec_count = 0;
 		st.bytes = 0;
 
-		sprintf(path, "%s/%s", dir_path, entry);
+		snprintf(path, sizeof(path), "%s/%s", dir_path, entry);
 		status = read_file(&err, path, &st);
 		
 		if (status == AEROSPIKE_OK) {

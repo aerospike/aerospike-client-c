@@ -213,7 +213,7 @@ main(int argc, char* argv[])
 		return -1;
 	}
 
-	char path[256];
+	char path[512];
 	const char* entry;
 
 	as_error err;

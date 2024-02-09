@@ -245,6 +245,8 @@ aerospike_new(as_config* config);
  * Initialize global lua configuration.
  *
  * @param config 	The lua configuration to use for all cluster instances.
+ *
+ * @relates aerospike
  */
 AS_EXTERN void
 aerospike_init_lua(as_config_lua* config);	

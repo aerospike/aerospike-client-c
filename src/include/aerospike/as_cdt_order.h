@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -40,7 +40,7 @@ typedef enum as_list_order_e {
 	/**
 	 * List is ordered.
 	 */
-	AS_LIST_ORDERED = 1,
+	AS_LIST_ORDERED = 1
 } as_list_order;
 
 /**

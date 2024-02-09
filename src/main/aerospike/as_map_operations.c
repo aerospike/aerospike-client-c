@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -148,7 +148,7 @@ as_operations_map_create(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_order order
 	)
 {
-	// If context not defined, the set order for top-level bin list.
+	// If context not defined, the set order for top-level bin map.
 	if (! ctx) {
 		as_map_policy policy;
 		as_map_policy_set(&policy, order, AS_MAP_UPDATE);
@@ -169,7 +169,7 @@ as_operations_map_create_all(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_map_order order, bool persist_index
 	)
 {
-	// If context not defined, the set order for top-level bin list.
+	// If context not defined, the set order for top-level bin map.
 	if (! ctx) {
 		as_map_policy policy;
 		as_map_policy_set_all(&policy, order, AS_MAP_UPDATE, persist_index);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -97,6 +97,36 @@ as_operations_list_create(
 
 	uint32_t flag = as_list_order_to_flag(order, pad);
 
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header_flag(&pk, ctx, SET_TYPE, 1, flag);
+	as_pack_uint64(&pk, (uint64_t)order);
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_MODIFY);
+}
+
+bool
+as_operations_list_create_all(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_list_order order, bool pad, bool persist_index
+	)
+{
+	// If context not defined, the set order for top-level bin list.
+	if (! ctx) {
+		uint64_t flag = (uint64_t)order;
+		
+		if (persist_index) {
+			flag |= 0x10;
+		}
+
+		as_packer pk = as_cdt_begin();
+		as_cdt_pack_header(&pk, ctx, SET_TYPE, 1);
+		as_pack_uint64(&pk, flag);
+		as_cdt_end(&pk);
+		return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_MODIFY);
+	}
+
+	uint32_t flag = as_list_order_to_flag(order, pad);
+	
+	// Create nested list. persist_index does not apply here, so ignore it.
 	as_packer pk = as_cdt_begin();
 	as_cdt_pack_header_flag(&pk, ctx, SET_TYPE, 1, flag);
 	as_pack_uint64(&pk, (uint64_t)order);

@@ -25,6 +25,7 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_metrics.h>
+#include <aerospike/as_sleep.h>
 
 #include "test.h"
 #include "aerospike_test.h"
@@ -408,6 +409,8 @@ static bool after(atf_plan* plan)
 		error("aerospike was not initialized");
 		return false;
 	}
+
+	as_sleep(5*60000);
 
 	as_error err;
 	as_error_reset(&err);

@@ -29,6 +29,10 @@
 #include <sys/uio.h>
 #endif
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -39,7 +43,6 @@ extern "C" {
 
 #define NS_TO_MS 1000000
 #define MIN_FILE_SIZE 1000000
-#define UTC_STR_LEN 72
 
 typedef uint8_t as_latency_type;
 
@@ -59,9 +62,9 @@ typedef uint8_t as_latency_type;
  * Latency bucket counts are cumulative and not reset on each metrics snapshot interval
  */
 typedef struct as_latency_buckets_s {
+	uint64_t* buckets;
 	uint32_t latency_shift;
 	uint32_t latency_columns;
-	uint64_t* buckets;
 } as_latency_buckets;
 
 struct as_policy_metrics_s;
@@ -119,20 +122,20 @@ typedef struct as_node_metrics_s {
  */
 typedef struct as_metrics_writer_s {
 	FILE* file;
-
-	as_string_builder sb;
-
-	bool enable;
-
-	uint64_t max_size;
-
-	uint64_t size;
-
-	uint32_t latency_columns;
-
-	uint32_t latency_shift;
-
 	const char* report_directory;
+	uint64_t max_size;
+	uint64_t size;
+	uint32_t latency_columns;
+	uint32_t latency_shift;
+#ifdef _WIN32
+	FILETIME prev_process_times_kernel;
+	FILETIME prev_system_times_kernel;
+	FILETIME prev_process_times_user;
+	FILETIME prev_system_times_user;
+	HANDLE process;
+	DWORD pid;
+#endif
+	bool enable;
 } as_metrics_writer;
 
 /**
@@ -207,49 +210,6 @@ as_node_metrics_init(uint32_t latency_columns, uint32_t latency_shift);
  */
 void
 as_metrics_add_latency(as_node_metrics* node_metrics, as_latency_type latency_type, uint64_t elapsed);
-
-/**
- * Calculate CPU and memory usage
- */
-void
-as_metrics_process_cpu_load_mem_usage(uint32_t* cpu_usage, uint32_t* mem);
-
-#if defined(__linux__)
-/**
- * Gets memory and CPU usage information from proc/stat
- */
-void
-as_metrics_proc_stat_mem_cpu(double* vm_usage, double* resident_set, double* cpu_usage);
-#endif
-
-#if defined(_MSC_VER)
-
-/**
- * Gets CPU usage using GetSystemTimes()
- */
-double
-as_metrics_process_cpu_load();
-
-/**
- * Gets memory usage using GetProcessMemoryInfo()
- */
-uint32_t
-as_metrics_process_mem_usage();
-#endif
-
-#if defined(__APPLE__)
-/**
- * Gets memory usage using task_info
- */
-double
-as_metrics_process_mem_usage(void);
-
-/**
- * Gets cpu usage using ps -p
- */
-double
-as_metrics_process_cpu_load(void);
-#endif
 
 #ifdef __cplusplus
 } // end extern "C"

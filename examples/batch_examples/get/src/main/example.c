@@ -86,7 +86,7 @@ main(int argc, char* argv[])
 	// enable metrics
 	as_status status = aerospike_enable_metrics(&as, &err, &policy);
 	
-	/*if (status != AEROSPIKE_OK) {
+	if (status != AEROSPIKE_OK) {
 		LOG("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
 		cleanup(&as);
 		exit(-1);
@@ -216,7 +216,7 @@ main(int argc, char* argv[])
 		LOG("batch_write_operate_complex() returned %d - %s", err.code, err.message);
 		cleanup(&as);
 		exit(-1);
-	}*/
+	}
 
 	as_sleep(10000);
 

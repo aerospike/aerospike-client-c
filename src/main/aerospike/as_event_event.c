@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -469,6 +469,21 @@ as_event_command_write_start(as_event_command* cmd)
 	as_event_command_write(cmd);
 }
 
+static int
+as_event_command_start(as_event_command* cmd)
+{
+	as_event_connection_complete(cmd);
+	
+	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
+		as_event_connector_success(cmd);
+		return AS_EVENT_COMMAND_DONE;
+	}
+	else {
+		as_event_command_write_start(cmd);
+		return AS_EVENT_READ_COMPLETE;
+	}
+}
+
 static inline void
 as_event_command_auth_write(as_event_command* cmd)
 {
@@ -482,7 +497,7 @@ as_event_command_auth_write(as_event_command* cmd)
 }
 
 static inline void
-as_event_command_start(as_event_command* cmd)
+as_event_connect_complete(as_event_command* cmd)
 {
 	if (cmd->cluster->auth_enabled) {
 		as_session* session = as_session_load(&cmd->node->session);
@@ -496,14 +511,11 @@ as_event_command_start(as_event_command* cmd)
 			as_event_command_auth_write(cmd);
 		}
 		else {
-			as_event_command_write_start(cmd);
+			as_event_command_start(cmd);
 		}
 	}
-	else if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
-		as_event_connector_success(cmd);
-	}
 	else {
-		as_event_command_write_start(cmd);
+		as_event_command_start(cmd);
 	}
 }
 
@@ -608,13 +620,7 @@ as_event_parse_authentication(as_event_command* cmd)
 		return AS_EVENT_READ_ERROR;
 	}
 	
-	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
-		as_event_connector_success(cmd);
-		return AS_EVENT_COMMAND_DONE;
-	}
-
-	as_event_command_write_start(cmd);
-	return AS_EVENT_READ_COMPLETE;
+	return as_event_command_start(cmd);
 }
 
 static int
@@ -709,7 +715,7 @@ as_event_tls_connect(as_event_command* cmd, as_event_connection* conn)
 	}
 
 	// TLS connection established.
-	as_event_command_start(cmd);
+	as_event_connect_complete(cmd);
 	return false;
 }
 
@@ -717,7 +723,7 @@ static void
 as_event_callback_common(as_event_command* cmd, as_event_connection* conn) {
 	switch (cmd->state) {
 	case AS_ASYNC_STATE_CONNECT:
-		as_event_command_start(cmd);
+		as_event_connect_complete(cmd);
 		break;
 
 	case AS_ASYNC_STATE_TLS_CONNECT:

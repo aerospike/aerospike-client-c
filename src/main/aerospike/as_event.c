@@ -580,6 +580,12 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	as_event_connect(cmd, pool);
 }
 
+void
+as_event_connection_complete(as_event_command* cmd)
+{
+	// Put connect metrics here.
+}
+
 static void
 as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 {

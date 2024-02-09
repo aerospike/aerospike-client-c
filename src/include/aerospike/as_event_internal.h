@@ -189,6 +189,9 @@ as_event_command_execute(as_event_command* cmd, as_error* err);
 void
 as_event_command_schedule(as_event_command* cmd);
 
+void
+as_event_connection_complete(as_event_command* cmd);
+
 bool
 as_event_proto_parse(as_event_command* cmd, as_proto* proto);
 

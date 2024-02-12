@@ -481,7 +481,13 @@ as_node_create_connections(as_node* node, as_conn_pool* pool, uint32_t timeout_m
 	// Create sync connections.
 	while (count > 0) {
 		uint64_t deadline_ms = as_socket_deadline(timeout_ms);
+		uint64_t begin = cf_getns();
 		status = as_node_create_connection(&err, node, 0, deadline_ms, pool, &sock);
+		if (node->cluster->metrics_enabled)
+		{
+			uint64_t elapsed = cf_getns() - begin;
+			as_node_add_latency(node, AS_LATENCY_TYPE_CONN, elapsed);
+		}
 
 		if (status != AEROSPIKE_OK) {
 			as_log_debug("Failed to create min connections: %d %s", err.code, err.message);

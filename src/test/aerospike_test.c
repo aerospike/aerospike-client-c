@@ -385,6 +385,7 @@ static bool before(atf_plan* plan)
 	as_policy_metrics policy;
 	as_metrics_policy_init(&policy);
 	policy.interval = 5;
+	policy.report_size_limit = 1000000;
 #ifdef _WIN32
 	policy.report_directory = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
 #else
@@ -410,7 +411,7 @@ static bool after(atf_plan* plan)
 		return false;
 	}
 
-	as_sleep(5*60000);
+	//as_sleep(5*60000);
 
 	as_error err;
 	as_error_reset(&err);

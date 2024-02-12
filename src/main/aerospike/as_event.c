@@ -577,13 +577,18 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	conn->base.watching = 0;
 	conn->cmd = cmd;
 	cmd->conn = &conn->base;
+	cmd->begin = cf_getns();
 	as_event_connect(cmd, pool);
 }
 
 void
 as_event_connection_complete(as_event_command* cmd)
 {
-	// Put connect metrics here.
+	if (cmd->cluster->metrics_enabled)
+	{
+		uint64_t elapsed = cf_getns() - cmd->begin;
+		as_node_add_latency(cmd->node, AS_LATENCY_TYPE_CONN, elapsed);
+	}
 }
 
 static void

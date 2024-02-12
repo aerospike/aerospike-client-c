@@ -140,6 +140,7 @@ typedef struct as_event_command {
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
+	uint64_t begin; // Used for metrics
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
 	uint32_t write_len;

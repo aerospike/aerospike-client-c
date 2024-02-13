@@ -595,6 +595,7 @@ static void
 as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_CONNECT;
+	cmd->begin = cf_getns();
 
 	if (cmd->partition) {
 		// If in retry, need to release node from prior attempt.
@@ -989,6 +990,12 @@ as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 static inline void
 as_event_response_complete(as_event_command* cmd)
 {
+	if (cmd->cluster->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE)
+	{
+		uint64_t elapsed = cf_getns() - cmd->begin;
+		as_node_add_latency(cmd->node, cmd->latency_type, elapsed);
+	}
+	
 	if (cmd->pipe_listener != NULL) {
 		as_pipe_response_complete(cmd);
 		return;
@@ -1258,6 +1265,12 @@ as_event_socket_error(as_event_command* cmd, as_error* err)
 void
 as_event_response_error(as_event_command* cmd, as_error* err)
 {
+	if (cmd->cluster->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE)
+	{
+		uint64_t elapsed = cf_getns() - cmd->begin;
+		as_node_add_latency(cmd->node, cmd->latency_type, elapsed);
+	}
+	
 	if (cmd->pipe_listener != NULL) {
 		as_pipe_response_error(cmd, err);
 		return;

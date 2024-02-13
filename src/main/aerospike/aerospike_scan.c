@@ -1093,6 +1093,9 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		cmd->flags = se->deserialize_list_map ? AS_ASYNC_FLAGS_DESERIALIZE : 0;
 		cmd->replica_size = 1;
 		cmd->replica_index = 0;
+		cmd->begin = 0;
+		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
+		as_cluster_add_tran(np->node->cluster);
 		ee->commands[i] = cmd;
 	}
 

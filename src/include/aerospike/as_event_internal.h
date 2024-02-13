@@ -156,6 +156,7 @@ typedef struct as_event_command {
 	uint8_t replica_size;
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
+	as_latency_type latency_type;
 } as_event_command;
 
 typedef struct {

@@ -2431,6 +2431,9 @@ as_batch_command_create(
 	// cmd->replica_size = 1;
 	cmd->replica_index = rep->replica_index;
 	cmd->replica_index_sc = rep->replica_index_sc;
+	cmd->begin = 0;
+	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+	as_cluster_add_tran(cluster);
 	return bc;
 }
 
@@ -2951,6 +2954,9 @@ as_batch_retry_command_create(
 	// cmd->replica_size = 1;
 	cmd->replica_index = rep->replica_index;
 	cmd->replica_index_sc = rep->replica_index_sc;
+	cmd->begin = 0;
+	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+	as_cluster_add_tran(node->cluster);
 	return bc;
 }
 

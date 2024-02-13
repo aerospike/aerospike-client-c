@@ -182,7 +182,7 @@ as_metrics_get_node_async_conn_stats(const struct as_node_s* node, struct as_con
 	if (as_event_loop_capacity > 0) {
 		for (uint32_t i = 0; i < as_event_loop_size; i++) {
 			// Regular async.
-			as_sum_no_lock(&node->async_conn_pools[i], async);
+			as_conn_stats_sum(async, &node->async_conn_pools[i]);
 		}
 	}
 }
@@ -211,8 +211,8 @@ as_metrics_write_node(as_metrics_writer* mw, as_string_builder* sb, struct as_no
 
 	struct as_conn_stats_s sync;
 	struct as_conn_stats_s async;
-	as_sum_init(&sync);
-	as_sum_init(&async);
+	as_conn_stats_init(&sync);
+	as_conn_stats_init(&async);
 	as_metrics_get_node_sync_conn_stats(node, &sync);
 	as_metrics_write_conn(mw, sb, &sync);
 	as_string_builder_append_char(sb, ',');
@@ -449,24 +449,33 @@ static double
 as_metrics_process_cpu_load()
 {
 	pid_t pid = getpid();
+
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 128, false);
 	as_string_builder_append(&sb, "ps -p ");
 	as_string_builder_append_int(&sb, pid);
 	as_string_builder_append(&sb, " -o %CPU");
-	FILE* file = popen(sb.data, "r");
-	if (!file) {
-		return -1;
-	}
-	char[5] cpu_holder;
-	char[6] cpu_percent;
-	fgets(file, 4, cpu_holder); // %CPU placeholder
-	fgets(file, 5, cpu_percent);
-	int result = pclose(file);
-	if (result < 0) {
-		return -1;
-	}
 
+	FILE* file = popen(sb.data, "r");
+	
+	if (!file) {
+		return -1.0;
+	}
+	
+	char cpu_holder[5];
+	char cpu_percent[6];
+	
+	if (!fgets(cpu_holder, sizeof(cpu_holder), file)) {
+		pclose(file);
+		return -1.0;
+	}
+	
+	if (!fgets(cpu_percent, sizeof(cpu_percent), file)) {
+		pclose(file);
+		return -1.0;
+	}
+	
+	pclose(file);
 	return atof(cpu_percent);
 }
 

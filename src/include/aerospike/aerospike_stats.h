@@ -94,7 +94,7 @@ typedef struct as_node_stats_s {
 	uint64_t error_count;
 
 	/**
-	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socket timeout),
 	 * multiple timeouts per transaction may occur.
 	 */
 	uint64_t timeout_count;
@@ -245,12 +245,6 @@ aerospike_event_loop_stats(as_event_loop* event_loop, as_event_loop_stats* stats
 	stats->queue_size = as_event_loop_get_queue_size(event_loop);
 }
 
-void
-as_sum_init(as_conn_stats* stats);
-
-void
-as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats);
-
 /**
  * Return string representation of cluster statistics.
  * The string should be freed when it's no longer needed.
@@ -259,6 +253,18 @@ as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats);
  */
 AS_EXTERN char*
 aerospike_stats_to_string(as_cluster_stats* stats);
+
+static inline void
+as_conn_stats_init(as_conn_stats* stats)
+{
+	stats->in_pool = 0;
+	stats->in_use = 0;
+	stats->opened = 0;
+	stats->closed = 0;
+}
+
+void
+as_conn_stats_sum(as_conn_stats* stats, as_async_conn_pool* pool);
 
 #ifdef __cplusplus
 } // end extern "C"

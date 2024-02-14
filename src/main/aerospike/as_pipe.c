@@ -365,6 +365,9 @@ as_pipe_get_connection(as_event_command* cmd)
 	as_log_trace("Creating new pipeline connection");
 
 	if (as_async_conn_pool_incr_total(pool)) {
+		if (cmd->cluster->metrics_enabled) {
+			cmd->begin = cf_getns();
+		}
 		conn = cf_malloc(sizeof(as_pipe_connection));
 		assert(conn != NULL);
 

@@ -2081,7 +2081,8 @@ as_batch_keys_execute(
 	as_batch_base_record* rec, as_batch_attr* attr, as_batch_listener listener, void* udata
 	)
 {
-	as_cluster_add_tran(as->cluster);
+	as_cluster* cluster = as->cluster;
+	as_cluster_add_tran(cluster);
 	uint32_t n_keys = batch->keys.size;
 	
 	if (n_keys == 0) {
@@ -2091,7 +2092,6 @@ as_batch_keys_execute(
 		return AEROSPIKE_OK;
 	}
 	
-	as_cluster* cluster = as->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);
@@ -2557,7 +2557,8 @@ as_batch_records_execute(
 	as_async_batch_executor* async_executor, bool has_write
 	)
 {
-	as_cluster_add_tran(as->cluster);
+	as_cluster* cluster = as->cluster;
+	as_cluster_add_tran(cluster);
 	as_vector* list = &records->list;
 	uint32_t n_keys = records->list.size;
 	
@@ -2565,7 +2566,6 @@ as_batch_records_execute(
 		return AEROSPIKE_OK;
 	}
 	
-	as_cluster* cluster = as->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);

@@ -110,7 +110,6 @@ as_async_write_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = 0;
-	cmd->begin = 0;
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	wcmd->listener = listener;
 	as_cluster_add_tran(cluster);
@@ -162,7 +161,6 @@ as_async_record_command_create(
 
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = replica_index;
-	cmd->begin = 0;
 	cmd->latency_type = latency_type;
 	rcmd->listener = listener;
 	as_cluster_add_tran(cluster);
@@ -204,7 +202,6 @@ as_async_value_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = 0;
-	cmd->begin = 0;
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	vcmd->listener = listener;
 	as_cluster_add_tran(cluster);
@@ -243,7 +240,6 @@ as_async_info_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = 1;
 	cmd->replica_index = 0;
-	cmd->begin = 0;
 	cmd->latency_type = AS_LATENCY_TYPE_NONE;
 	icmd->listener = listener;
 	as_cluster_add_tran(node->cluster);

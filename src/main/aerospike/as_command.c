@@ -591,7 +591,6 @@ as_command_execute(as_command* cmd, as_error* err)
 	as_status status;
 	bool release_node;
 	as_latency_type latency_type = cmd->cluster->metrics_enabled ? cmd->latency_type : AS_LATENCY_TYPE_NONE;
-	uint64_t begin = cf_getns();
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
@@ -637,6 +636,10 @@ as_command_execute(as_command* cmd, as_error* err)
 			goto Retry;
 		}
 		
+		uint64_t begin = 0;
+		if (latency_type != AS_LATENCY_TYPE_NONE) {
+			begin = cf_getns();
+		}
 		// Send command.
 		status = as_socket_write_deadline(err, &socket, node, cmd->buf, cmd->buf_size,
 										  cmd->socket_timeout, cmd->deadline_ms);
@@ -705,14 +708,14 @@ as_command_execute(as_command* cmd, as_error* err)
 			}
 		}
 		
-		// Put connection back in pool.
-		as_node_put_connection(node, &socket);
-
 		if (latency_type != AS_LATENCY_TYPE_NONE)
 		{
 			uint64_t elapsed = cf_getns() - begin;
 			as_node_add_latency(node, latency_type, elapsed);
 		}
+
+		// Put connection back in pool.
+		as_node_put_connection(node, &socket);
 		
 		// Release resources.
 		if (release_node) {

@@ -433,6 +433,8 @@ void
 as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd)
 {
 	// Initialize read buffer (buf) to be located after write buffer.
+	cmd->begin = 0;
+	cmd->latency_type = cmd->cluster->metrics_enabled ? cmd->latency_type : AS_LATENCY_TYPE_NONE;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
 	cmd->conn = NULL;
@@ -577,7 +579,9 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	conn->base.watching = 0;
 	conn->cmd = cmd;
 	cmd->conn = &conn->base;
-	cmd->begin = cf_getns();
+	if (cmd->cluster->metrics_enabled) {
+		cmd->begin = cf_getns();
+	}
 	as_event_connect(cmd, pool);
 }
 
@@ -595,7 +599,6 @@ static void
 as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_CONNECT;
-	cmd->begin = cf_getns();
 
 	if (cmd->partition) {
 		// If in retry, need to release node from prior attempt.
@@ -673,6 +676,9 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 
 	// Create connection only when connection count within limit.
 	if (as_async_conn_pool_incr_total(pool)) {
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->begin = cf_getns();
+		}
 		as_event_create_connection(cmd, pool);
 		return;
 	}
@@ -990,7 +996,7 @@ as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 static inline void
 as_event_response_complete(as_event_command* cmd)
 {
-	if (cmd->cluster->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE)
+	if (cmd->latency_type != AS_LATENCY_TYPE_NONE)
 	{
 		uint64_t elapsed = cf_getns() - cmd->begin;
 		as_node_add_latency(cmd->node, cmd->latency_type, elapsed);
@@ -1265,7 +1271,7 @@ as_event_socket_error(as_event_command* cmd, as_error* err)
 void
 as_event_response_error(as_event_command* cmd, as_error* err)
 {
-	if (cmd->cluster->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE)
+	if (cmd->latency_type != AS_LATENCY_TYPE_NONE)
 	{
 		uint64_t elapsed = cf_getns() - cmd->begin;
 		as_node_add_latency(cmd->node, cmd->latency_type, elapsed);

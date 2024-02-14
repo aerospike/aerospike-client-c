@@ -1617,7 +1617,6 @@ as_batch_command_init(
 	cmd->partition_id = 0; // Not referenced when node set.
 	cmd->replica = task->replica;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
-	as_cluster_add_tran(task->cluster);
 
 	// Note: Do not set flags to AS_COMMAND_FLAGS_LINEARIZE because AP and SC replicas
 	// are tracked separately for batch (cmd->master and cmd->master_sc).
@@ -2082,6 +2081,7 @@ as_batch_keys_execute(
 	as_batch_base_record* rec, as_batch_attr* attr, as_batch_listener listener, void* udata
 	)
 {
+	as_cluster_add_tran(as->cluster);
 	uint32_t n_keys = batch->keys.size;
 	
 	if (n_keys == 0) {
@@ -2433,7 +2433,6 @@ as_batch_command_create(
 	cmd->replica_index_sc = rep->replica_index_sc;
 	cmd->begin = 0;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
-	as_cluster_add_tran(cluster);
 	return bc;
 }
 
@@ -2558,6 +2557,7 @@ as_batch_records_execute(
 	as_async_batch_executor* async_executor, bool has_write
 	)
 {
+	as_cluster_add_tran(as->cluster);
 	as_vector* list = &records->list;
 	uint32_t n_keys = records->list.size;
 	
@@ -2674,6 +2674,7 @@ as_batch_records_execute_async(
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop, bool has_write
 	)
 {
+	as_cluster_add_tran(as->cluster);
 	// Check for empty batch.
 	if (records->list.size == 0) {
 		listener(0, records, udata, event_loop);
@@ -2956,7 +2957,6 @@ as_batch_retry_command_create(
 	cmd->replica_index_sc = rep->replica_index_sc;
 	cmd->begin = 0;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
-	as_cluster_add_tran(node->cluster);
 	return bc;
 }
 

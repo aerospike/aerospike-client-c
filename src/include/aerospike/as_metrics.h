@@ -29,8 +29,9 @@
 #include <sys/uio.h>
 #endif
 
-#ifdef _WIN32
-#include <Windows.h>
+#if defined(_MSC_VER)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #endif
 
 #ifdef __cplusplus
@@ -127,7 +128,7 @@ typedef struct as_metrics_writer_s {
 	uint64_t size;
 	uint32_t latency_columns;
 	uint32_t latency_shift;
-#ifdef _WIN32
+#ifdef _MSC_VER
 	FILETIME prev_process_times_kernel;
 	FILETIME prev_system_times_kernel;
 	FILETIME prev_process_times_user;

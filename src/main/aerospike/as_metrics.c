@@ -92,7 +92,7 @@ as_metrics_writer_init_udata()
 	mw->latency_columns = 0;
 	mw->latency_shift = 0;
 	mw->enable = false;
-#ifdef _WIN32
+#ifdef _MSC_VER
 	mw->pid = GetCurrentProcessId();
 	mw->process = OpenProcess(PROCESS_QUERY_INFORMATION, false, mw->pid);
 	FILETIME dummy;
@@ -108,7 +108,7 @@ as_metrics_writer_init_udata()
 
 static inline char separator()
 {
-#ifdef _WIN32
+#ifdef _MSC_VER
 	return '\\';
 #else
 	return '/';
@@ -515,7 +515,7 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, struct as_cluster
 
 	uint32_t cpu_load = 0;
 	uint32_t mem = 0;
-#ifdef _WIN32
+#ifdef _MSC_VER
 	as_status result = as_metrics_process_cpu_load_mem_usage(err, mw, &cpu_load, &mem);
 #else
 	as_status result = as_metrics_process_cpu_load_mem_usage(err, &cpu_load, &mem);

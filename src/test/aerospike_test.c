@@ -386,7 +386,7 @@ static bool before(atf_plan* plan)
 	as_metrics_policy_init(&policy);
 	policy.interval = 5;
 	policy.report_size_limit = 1000000;
-#ifdef _WIN32
+#ifdef _MSC_VER
 	policy.report_directory = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
 #else
 	policy.report_directory = "/home/sklaus/metrics";

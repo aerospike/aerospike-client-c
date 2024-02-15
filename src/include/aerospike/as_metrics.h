@@ -14,7 +14,6 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
 #pragma once
 
 #include <stddef.h>
@@ -68,7 +67,7 @@ struct as_node_s;
 struct as_cluster_s;
 
 /**
- * Callbacks for metrics listener operations
+ * Callbacks for metrics listener operations.
  */
 typedef as_status(*as_metrics_enable_listener)(as_error* err, const struct as_policy_metrics_s* policy, void* udata);
 
@@ -79,31 +78,98 @@ typedef as_status(*as_metrics_node_close_listener)(as_error* err, struct as_node
 typedef as_status(*as_metrics_disable_listener)(as_error* err, struct as_cluster_s* cluster, void* udata);
 
 /**
- * Struct to hold required callbacks
+ * Metrics listener callbacks.
  */
 typedef struct as_metrics_listeners_s {
+	/**
+	 * Periodic extended metrics has been enabled for the given cluster.
+	 */
 	as_metrics_enable_listener enable_listener;
+
+	/**
+	 * A metrics snapshot has been requested for the given cluster.
+	 */
 	as_metrics_snapshot_listener snapshot_listener;
+
+	/**
+	 * A node is being dropped from the cluster.
+	 */
 	as_metrics_node_close_listener node_close_listener;
+
+	/**
+	 * Periodic extended metrics has been disabled for the given cluster.
+	 */
 	as_metrics_disable_listener disable_listener;
+
+	/**
+	 * User defined data.
+	 */
 	void* udata;
 } as_metrics_listeners;
 
 /**
-* Metrics Policy
-*/
+ * Client periodic metrics configuration.
+ */
 typedef struct as_policy_metrics_s {
-	const char* report_directory; // where the metrics file is output
-
-	uint64_t report_size_limit; // default 0
-
-	uint32_t interval; // default 30
-
-	uint32_t latency_columns; // default 7
-
-	uint32_t latency_shift; // default 1
-
+	/**
+	 * Listeners that handles metrics notification events. The default listener implementation
+	 * writes the metrics snapshot to a file which will later be read and forwarded to
+	 * OpenTelemetry by a separate offline application.
+	 * <p>
+	 * The listener could be overridden to send the metrics snapshot directly to OpenTelemetry.
+	 */
 	as_metrics_listeners metrics_listeners;
+	
+	/**
+	 * Directory path to write metrics log files for listeners that write logs.
+	 *
+	 * Default: <current directory>
+	 */
+	const char* report_directory;
+
+	/**
+	 * Metrics file size soft limit in bytes for listeners that write logs.
+	 *
+	 * When report_size_limit is reached or exceeded, the current metrics file is closed and a new
+	 * metrics file is created with a new timestamp. If report_size_limit is zero, the metrics file
+	 * size is unbounded and the file will only be closed when aerospike_disable_metrics() or
+	 * aerospike_close() is called.
+	 *
+	 * Default: 0
+	 */
+	uint64_t report_size_limit;
+
+	/**
+	 * Number of cluster tend iterations between metrics notification events. One tend iteration
+	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
+	 * nodes.
+	 *
+	 * Default: 30
+	 */
+	uint32_t interval;
+
+	/**
+	 * Number of elapsed time range buckets in latency histograms.
+	 *
+	 * Default: 7
+	 */
+	uint32_t latency_columns;
+
+	/**
+	 * Power of 2 multiple between each range bucket in latency histograms starting at column 3. The bucket units
+	 * are in milliseconds. The first 2 buckets are "<=1ms" and ">1ms". Examples:
+	 * 
+	 * ~~~~~~~~~~{.c}
+	 * // latencyColumns=7 latencyShift=1
+	 * <=1ms >1ms >2ms >4ms >8ms >16ms >32ms
+	 *
+	 * // latencyColumns=5 latencyShift=3
+	 * <=1ms >1ms >8ms >64ms >512ms
+	 * ~~~~~~~~~~
+	 *
+	 * Default: 1
+	 */
+	uint32_t latency_shift;
 } as_policy_metrics;
 
 /**

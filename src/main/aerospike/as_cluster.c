@@ -555,7 +555,7 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 }
 
 as_status
-as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_policy_metrics* policy)
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy* policy)
 {
 	if (cluster->metrics_enabled) {
 		cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);

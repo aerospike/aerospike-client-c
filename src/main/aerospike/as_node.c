@@ -1322,7 +1322,7 @@ as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapse
 }
 
 void
-as_node_enable_metrics(as_node* node, const as_policy_metrics* policy)
+as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 {
 	 node->metrics = as_node_metrics_init(policy->latency_columns, policy->latency_shift);
 }

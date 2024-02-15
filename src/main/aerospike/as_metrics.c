@@ -729,10 +729,10 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 }
 
 void
-as_metrics_policy_init(as_policy_metrics* policy, const char* report_dir)
+as_metrics_policy_init(as_metrics_policy* policy)
 {
 	policy->report_size_limit = 0;
-	as_strncpy(policy->report_dir, report_dir, sizeof(policy->report_dir));
+	as_strncpy(policy->report_dir, ".", sizeof(policy->report_dir));
 	policy->interval = 30;
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;

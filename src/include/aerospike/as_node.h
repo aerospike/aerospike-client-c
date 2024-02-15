@@ -667,7 +667,7 @@ as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapse
  * Enable metrics at the node level
  */
 void
-as_node_enable_metrics(as_node* node, const as_policy_metrics* policy);
+as_node_enable_metrics(as_node* node, const as_metrics_policy* policy);
 
 /**
  * Return transaction error count. The value is cumulative and not reset per metrics interval.

@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_string.h>
 #include <aerospike/as_string_builder.h>
 
 #if defined(_MSC_VER)
@@ -51,16 +52,6 @@ typedef uint8_t as_latency_type;
 //---------------------------------
 // Types
 //---------------------------------
-
-/**
- * Latency buckets for a transaction group.
- * Latency bucket counts are cumulative and not reset on each metrics snapshot interval
- */
-typedef struct as_latency_buckets_s {
-	uint64_t* buckets;
-	uint32_t latency_shift;
-	uint32_t latency_columns;
-} as_latency_buckets;
 
 struct as_policy_metrics_s;
 struct as_node_s;
@@ -170,7 +161,17 @@ typedef struct as_policy_metrics_s {
 	 * Default: 1
 	 */
 	uint32_t latency_shift;
-} as_policy_metrics;
+} as_metrics_policy;
+
+/**
+ * Latency buckets for a transaction group.
+ * Latency bucket counts are cumulative and not reset on each metrics snapshot interval
+ */
+typedef struct as_latency_buckets_s {
+	uint64_t* buckets;
+	uint32_t latency_shift;
+	uint32_t latency_columns;
+} as_latency_buckets;
 
 /**
  * Node metrics latency bucket struct
@@ -200,17 +201,30 @@ typedef struct as_metrics_writer_s {
 	bool enable;
 } as_metrics_writer;
 
+//---------------------------------
+// Functions
+//---------------------------------
+
 /**
  * Initalize metrics policy
  */
 AS_EXTERN void
-as_metrics_policy_init(as_policy_metrics* policy, const char* report_dir);
+as_metrics_policy_init(as_metrics_policy* policy);
+
+/**
+ * Initalize metrics policy
+ */
+static inline void
+as_metrics_policy_set_report_dir(as_metrics_policy* policy, const char* report_dir)
+{
+	as_strncpy(policy->report_dir, report_dir, sizeof(policy->report_dir));
+}
 
 /**
  * Enable extended periodic cluster and node latency metrics.
  */
 AS_EXTERN as_status
-aerospike_enable_metrics(aerospike* as, as_error* err, as_policy_metrics* policy);
+aerospike_enable_metrics(aerospike* as, as_error* err, as_metrics_policy* policy);
 
 /**
  * Disable extended periodic cluster and node latency metrics.
@@ -220,7 +234,7 @@ aerospike_disable_metrics(aerospike* as, as_error* err);
 
 static inline void
 as_metrics_set_listeners(
-	as_policy_metrics* policy, as_metrics_enable_listener enable, 
+	as_metrics_policy* policy, as_metrics_enable_listener enable, 
 	as_metrics_disable_listener disable, as_metrics_node_close_listener node_close,
 	as_metrics_snapshot_listener snapshot
 	)

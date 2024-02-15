@@ -383,14 +383,15 @@ static bool before(atf_plan* plan)
 	}
 
 	as_policy_metrics policy;
-	as_metrics_policy_init(&policy);
+#ifdef _MSC_VER
+	char report_dir[] = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
+#else
+	char report_dir[] = "/home/sklaus/metrics";
+#endif
+	as_metrics_policy_init(&policy, &report_dir);
 	policy.interval = 5;
 	policy.report_size_limit = 1000000;
-#ifdef _MSC_VER
-	policy.report_directory = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
-#else
-	policy.report_directory = "/home/sklaus/metrics";
-#endif
+
 
 	// enable metrics
 	as_status status = aerospike_enable_metrics(as, &err, &policy);

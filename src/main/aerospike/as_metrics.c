@@ -65,7 +65,7 @@ as_metrics_write_line(as_metrics_writer* mw, const char* data, as_error* err)
 	int written = fprintf(mw->file, "%s", data);
 	if (written <= 0) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Failed to write metrics data: %d,%s", written, mw->report_directory);
+			"Failed to write metrics data: %d,%s", written, mw->report_dir);
 	}
 	mw->size += written;
 
@@ -74,7 +74,7 @@ as_metrics_write_line(as_metrics_writer* mw, const char* data, as_error* err)
 
 		if (result != 0) {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-				"File stream did not close successfully: %s", mw->report_directory);
+				"File stream did not close successfully: %s", mw->report_dir);
 		}
 		return as_metrics_open_writer(mw, err);
 	}
@@ -87,7 +87,6 @@ as_metrics_writer_init_udata()
 {
 	as_metrics_writer* mw = (as_metrics_writer*)cf_malloc(sizeof(as_metrics_writer));
 	mw->file = NULL;
-	mw->report_directory = NULL;
 	mw->max_size = 0;
 	mw->latency_columns = 0;
 	mw->latency_shift = 0;
@@ -124,8 +123,8 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	
 	as_string_builder file_name;
 	as_string_builder_inita(&file_name, 256, false);
-	as_string_builder_append(&file_name, mw->report_directory);
-	char last_char = mw->report_directory[(strlen(mw->report_directory) - 1)];
+	as_string_builder_append(&file_name, mw->report_dir);
+	char last_char = mw->report_dir[(strlen(mw->report_dir) - 1)];
 	if (last_char != '/' && last_char != '\\') {
 		as_string_builder_append_char(&file_name, separator());
 	}
@@ -136,7 +135,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 
 	if (!mw->file) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Failed to open file: %s", mw->report_directory);
+			"Failed to open file: %s", mw->report_dir);
 	}
 
 	mw->size = 0;
@@ -625,7 +624,7 @@ as_metrics_writer_enable(as_error* err, const struct as_policy_metrics_s* policy
 	mw->max_size = policy->report_size_limit;
 	mw->latency_columns = policy->latency_columns;
 	mw->latency_shift = policy->latency_shift;
-	mw->report_directory = policy->report_directory;
+	as_strncpy(mw->report_dir, policy->report_dir, sizeof(mw->report_dir));
 
 	as_status status = as_metrics_open_writer(mw, err);
 
@@ -655,7 +654,7 @@ as_metrics_writer_snapshot(as_error* err, struct as_cluster_s* cluster, void* ud
 			as_metrics_writer_destroy_nodes(cluster);
 			as_metrics_writer_destroy(mw);
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-				"File stream did not flush successfully: %s", mw->report_directory);
+				"File stream did not flush successfully: %s", mw->report_dir);
 		}
 	}
 
@@ -730,9 +729,10 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 }
 
 void
-as_metrics_policy_init(as_policy_metrics* policy)
+as_metrics_policy_init(as_policy_metrics* policy, const char* report_dir)
 {
 	policy->report_size_limit = 0;
+	as_strncpy(policy->report_dir, report_dir, sizeof(policy->report_dir));
 	policy->interval = 30;
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;

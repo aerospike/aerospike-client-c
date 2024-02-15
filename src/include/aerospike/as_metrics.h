@@ -125,7 +125,7 @@ typedef struct as_policy_metrics_s {
 	 *
 	 * Default: <current directory>
 	 */
-	const char* report_directory;
+	char report_dir[256];
 
 	/**
 	 * Metrics file size soft limit in bytes for listeners that write logs.
@@ -184,7 +184,7 @@ typedef struct as_node_metrics_s {
  */
 typedef struct as_metrics_writer_s {
 	FILE* file;
-	const char* report_directory;
+	char report_dir[256];
 	uint64_t max_size;
 	uint64_t size;
 	uint32_t latency_columns;
@@ -204,7 +204,7 @@ typedef struct as_metrics_writer_s {
  * Initalize metrics policy
  */
 AS_EXTERN void
-as_metrics_policy_init(as_policy_metrics* policy);
+as_metrics_policy_init(as_policy_metrics* policy, const char* report_dir);
 
 /**
  * Enable extended periodic cluster and node latency metrics.

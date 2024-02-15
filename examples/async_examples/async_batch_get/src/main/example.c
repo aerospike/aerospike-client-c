@@ -80,14 +80,15 @@ main(int argc, char* argv[])
 	as_error err;
 	as_error_reset(&err);
 	as_policy_metrics policy;
-	as_metrics_policy_init(&policy);
+#ifdef _MSC_VER
+	char report_dir[] = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
+#else
+	char report_dir[] = "/home/sklaus/metrics";
+#endif
+	as_metrics_policy_init(&policy, report_dir);
 	policy.interval = 5;
 
-#ifdef _MSC_VER
-	policy.report_directory = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
-#else
-	policy.report_directory = "/home/sklaus/metrics";
-#endif
+
 
 	// enable metrics
 	as_status status = aerospike_enable_metrics(&as, &err, &policy);

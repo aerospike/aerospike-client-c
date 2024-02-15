@@ -24,11 +24,6 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_string_builder.h>
 
-#if !defined(_MSC_VER)
-#include <netinet/in.h>
-#include <sys/uio.h>
-#endif
-
 #if defined(_MSC_VER)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

@@ -22,12 +22,6 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_string.h>
-#include <aerospike/as_string_builder.h>
-
-#if defined(_MSC_VER)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,7 +32,6 @@ extern "C" {
 //---------------------------------
 
 #define NS_TO_MS 1000000
-#define MIN_FILE_SIZE 1000000
 
 typedef uint8_t as_latency_type;
 
@@ -60,7 +53,7 @@ struct as_cluster_s;
 /**
  * Callbacks for metrics listener operations.
  */
-typedef as_status(*as_metrics_enable_listener)(as_error* err, const struct as_policy_metrics_s* policy, void* udata);
+typedef as_status(*as_metrics_enable_listener)(as_error* err, void* udata);
 
 typedef as_status(*as_metrics_snapshot_listener)(as_error* err, struct as_cluster_s* cluster, void* udata);
 
@@ -180,27 +173,6 @@ typedef struct as_node_metrics_s {
 	as_latency_buckets* latency;
 } as_node_metrics;
 
-/**
- * Implementation of metrics_listeners
- */
-typedef struct as_metrics_writer_s {
-	FILE* file;
-	char report_dir[256];
-	uint64_t max_size;
-	uint64_t size;
-	uint32_t latency_columns;
-	uint32_t latency_shift;
-#ifdef _MSC_VER
-	FILETIME prev_process_times_kernel;
-	FILETIME prev_system_times_kernel;
-	FILETIME prev_process_times_user;
-	FILETIME prev_system_times_user;
-	HANDLE process;
-	DWORD pid;
-#endif
-	bool enable;
-} as_metrics_writer;
-
 //---------------------------------
 // Functions
 //---------------------------------
@@ -220,6 +192,20 @@ as_metrics_policy_set_report_dir(as_metrics_policy* policy, const char* report_d
 	as_strncpy(policy->report_dir, report_dir, sizeof(policy->report_dir));
 }
 
+static inline void
+as_metrics_policy_set_listeners(
+	as_metrics_policy* policy, as_metrics_enable_listener enable,
+	as_metrics_disable_listener disable, as_metrics_node_close_listener node_close,
+	as_metrics_snapshot_listener snapshot, void* udata
+	)
+{
+	policy->metrics_listeners.enable_listener = enable;
+	policy->metrics_listeners.disable_listener = disable;
+	policy->metrics_listeners.node_close_listener = node_close;
+	policy->metrics_listeners.snapshot_listener = snapshot;
+	policy->metrics_listeners.udata = udata;
+}
+
 /**
  * Enable extended periodic cluster and node latency metrics.
  */
@@ -231,19 +217,6 @@ aerospike_enable_metrics(aerospike* as, as_error* err, as_metrics_policy* policy
  */
 AS_EXTERN as_status
 aerospike_disable_metrics(aerospike* as, as_error* err);
-
-static inline void
-as_metrics_set_listeners(
-	as_metrics_policy* policy, as_metrics_enable_listener enable, 
-	as_metrics_disable_listener disable, as_metrics_node_close_listener node_close,
-	as_metrics_snapshot_listener snapshot
-	)
-{
-	policy->metrics_listeners.enable_listener = enable;
-	policy->metrics_listeners.disable_listener = disable;
-	policy->metrics_listeners.node_close_listener = node_close;
-	policy->metrics_listeners.snapshot_listener = snapshot;
-}
 
 /**
  * Convert latency_type to string version for printing to the output file

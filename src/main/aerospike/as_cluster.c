@@ -22,6 +22,7 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
+#include <aerospike/as_metrics_writer.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_shm_cluster.h>
@@ -561,26 +562,52 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy*
 		cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
 	}
 
-	cluster->metrics_listeners = policy->metrics_listeners;
+	as_status status = AEROSPIKE_OK;
+	
+	as_error_reset(err);
+
+	if (policy->metrics_listeners.enable_listener) {
+		// Use listeners defined in the metrics policy.
+		// Ensure all listeners and user data has been defined.
+		if (! (policy->metrics_listeners.enable_listener && policy->metrics_listeners.snapshot_listener &&
+			   policy->metrics_listeners.node_close_listener &&  policy->metrics_listeners.disable_listener &&
+			   policy->metrics_listeners.udata)) {
+			return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "All metrics listeners and udata must be defined");
+		}
+		
+		// Copy listeners from policy.
+		cluster->metrics_listeners = policy->metrics_listeners;
+	}
+	else {
+		// Create default metrics writer and set cluster llsteners.
+		status = as_metrics_writer_create(err, policy, &cluster->metrics_listeners);
+		
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	
 	cluster->metrics_interval = policy->interval;
 	cluster->metrics_latency_columns = policy->latency_columns;
 	cluster->metrics_latency_shift = policy->latency_shift;
 
 	as_nodes* nodes = as_nodes_reserve(cluster);
+	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		as_node_enable_metrics(node, policy);
 	}
-
 	as_nodes_release(nodes);
 
-	as_status status = cluster->metrics_listeners.enable_listener(err, policy, cluster->metrics_listeners.udata);
+	status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
+	
 	if (status != AEROSPIKE_OK) {
 		as_cluster_disable_metrics(err, cluster);
 		return status;
 	}
+	
 	cluster->metrics_enabled = true;
-	return AEROSPIKE_OK;
+	return status;
 }
 
 as_status
@@ -648,14 +675,11 @@ as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_no
 	// Set node to inactive.
 	for (uint32_t i = 0; i < nodes_to_remove->size; i++) {
 		as_node* node = as_vector_get_ptr(nodes_to_remove, i);
-		as_node_deactivate(node);
 
 		if (cluster->metrics_enabled) {
-			as_status status = cluster->metrics_listeners.node_close_listener(err, node, node->cluster->metrics_listeners.udata);
-			if (status != AEROSPIKE_OK) {
-				return status;
-			}
+			cluster->metrics_listeners.node_close_listener(err, node, node->cluster->metrics_listeners.udata);
 		}
+		as_node_deactivate(node);
 	}
 			
 	// Remove all nodes at once to avoid copying entire array multiple times.
@@ -750,6 +774,15 @@ as_cluster_manage(as_cluster* cluster)
 	// Reset connection error window for all nodes every error_rate_window tend iterations.
 	if (cluster->max_error_rate > 0 && cluster->tend_count % cluster->error_rate_window == 0) {
 		as_cluster_reset_error_rate(cluster);
+	}
+	
+	if (cluster->metrics_enabled && cluster->tend_count % cluster->metrics_interval == 0) {
+		as_error err;
+		as_status status = cluster->metrics_listeners.snapshot_listener(&err, cluster, cluster->metrics_listeners.udata);
+		
+		if (status != AEROSPIKE_OK) {
+			as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
+		}
 	}
 }
 
@@ -976,13 +1009,6 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 	if (rebalance && cluster->shm_info) {
 		// Update shared memory to notify prole tenders to rebalance (retrieve racks info).
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
-	}
-
-	if (cluster->metrics_enabled && (cluster->tend_count % cluster->metrics_interval) == 0) {
-		as_status status = cluster->metrics_listeners.snapshot_listener(err, cluster, cluster->metrics_listeners.udata);
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
 	}
 
 	as_cluster_destroy_peers(&peers);

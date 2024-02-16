@@ -593,11 +593,9 @@ as_metrics_writer_create(as_error* err, const as_metrics_policy* policy, as_metr
 			"Metrics policy report_size_limit %" PRIu64 " must be at least %d", policy->report_size_limit, MIN_FILE_SIZE);
 	}
 
-	as_metrics_writer* mw = cf_malloc(sizeof(as_metrics_writer));
+	as_metrics_writer* mw = cf_calloc(1, sizeof(as_metrics_writer));
 	as_strncpy(mw->report_dir, policy->report_dir, sizeof(mw->report_dir));
-	mw->file = NULL;
 	mw->max_size = policy->report_size_limit;
-	mw->size = 0;
 	mw->latency_columns = policy->latency_columns;
 	mw->latency_shift = policy->latency_shift;
 	mw->enable = false;
@@ -605,10 +603,6 @@ as_metrics_writer_create(as_error* err, const as_metrics_policy* policy, as_metr
 #ifdef _MSC_VER
 	mw->pid = GetCurrentProcessId();
 	mw->process = OpenProcess(PROCESS_QUERY_INFORMATION, false, mw->pid);
-	mw->prev_process_times_kernel = 0;
-	mw->prev_process_times_user = 0;
-	mw->prev_system_times_kernel = 0;
-	mw->prev_system_times_user = 0;
 
 	FILETIME dummy;
 	if (mw->process != NULL)

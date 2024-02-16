@@ -399,6 +399,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_lookup.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_map_operations.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_metrics.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_metrics_writer.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_node.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_operations.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_partition.h" />
@@ -551,6 +552,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_lookup.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_map_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_metrics.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_metrics_writer.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_node.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_partition.c" />

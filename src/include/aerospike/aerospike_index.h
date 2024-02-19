@@ -43,6 +43,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_exp.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_status.h>
@@ -50,6 +51,12 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/******************************************************************************
+ * MACROS
+ *****************************************************************************/
+
+#define AS_INDEX_NAME_MAX_SIZE 64
 
 /******************************************************************************
  * TYPES
@@ -98,7 +105,7 @@ typedef struct as_index_task_s {
 	/**
 	 * The name of the index.
 	 */
-	char name[64];
+	char name[AS_INDEX_NAME_MAX_SIZE];
 
 	/**
 	 * Maximum time in milliseconds to wait for info command to return create index status.
@@ -158,10 +165,10 @@ struct as_cdt_ctx;
  * @ingroup index_operations
  */
 AS_EXTERN as_status
-aerospike_index_create_ctx(
+aerospike_index_create_ctx_exp(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
 	const char* set, const char* bin_name, const char* index_name, as_index_type itype,
-	as_index_datatype dtype, struct as_cdt_ctx* ctx
+	as_index_datatype dtype, struct as_cdt_ctx* ctx, as_exp* exp
 	);
 
 /**
@@ -201,8 +208,8 @@ aerospike_index_create_complex(
 	as_index_datatype dtype
 	)
 {
-	return aerospike_index_create_ctx(as, err, task, policy, ns, set, bin_name,
-			index_name, itype, dtype, NULL);
+	return aerospike_index_create_ctx_exp(as, err, task, policy, ns, set, bin_name,
+			index_name, itype, dtype, NULL, NULL);
 }
 
 /**
@@ -240,8 +247,8 @@ aerospike_index_create(
 	as_index_datatype dtype
 	)
 {
-	return aerospike_index_create_ctx(as, err, task, policy, ns, set, bin_name, index_name,
-			AS_INDEX_TYPE_DEFAULT, dtype, NULL);
+	return aerospike_index_create_ctx_exp(as, err, task, policy, ns, set, bin_name, index_name,
+			AS_INDEX_TYPE_DEFAULT, dtype, NULL, NULL);
 }
 
 /**

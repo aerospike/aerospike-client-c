@@ -46,6 +46,7 @@
 //
 
 const char TEST_INDEX_NAME[] = "test-bin-index";
+const char CAMPAIGN_INDEX_NAME[] = "exp-campaign";
 
 const char PAGE_INDEX_NAME[] = "page-index";
 const char PAGE_BIN_INT[] = "binint";
@@ -80,20 +81,15 @@ main(int argc, char* argv[])
 
 	// Start clean.
 	example_remove_test_records(&as);
-	example_remove_index(&as, TEST_INDEX_NAME);
+	example_remove_index(&as, CAMPAIGN_INDEX_NAME);
 
-	// Create a numeric secondary index on test-bin.
-	if (! example_create_integer_index(&as, g_set, "test-bin", TEST_INDEX_NAME)) {
+	insert_records(&as);
+
+	// Create an expression index.
+	if (! example_create_exp_index(&as, g_set, CAMPAIGN_INDEX_NAME)) {
 		cleanup(&as);
 		exit(-1);
 	}
-
-	if (! insert_records(&as)) {
-		cleanup(&as);
-		exit(-1);
-	}
-
-	as_error err;
 
 	// Create an as_query object.
 	as_query query;
@@ -103,45 +99,29 @@ main(int argc, char* argv[])
 	// care of destroying all the query's member objects if necessary. However
 	// using as_query_where_inita() does avoid internal heap usage.
 	as_query_where_inita(&query, 1);
-	as_query_where(&query, "test-bin", as_integer_equals(7));
+	as_query_where_with_index_name(&query, CAMPAIGN_INDEX_NAME, as_integer_range(300, 1000));
 
-	LOG("executing query: where test-bin = 7");
+	LOG("executing query: where exp_campaign between 300 and 1000");
+
+	as_error err;
+
+	uint32_t n_responses = 0;
 
 	// Execute the query. This call blocks - callbacks are made in the scope of
 	// this call.
-	if (aerospike_query_foreach(&as, &err, NULL, &query, query_cb, NULL) !=
-			AEROSPIKE_OK) {
+	if (aerospike_query_foreach(&as, &err, NULL, &query, query_cb,
+			&n_responses) != AEROSPIKE_OK) {
 		LOG("aerospike_query_foreach() returned %d - %s", err.code,
 				err.message);
+		sleep(1000);
 		as_query_destroy(&query);
 		cleanup(&as);
 		exit(-1);
 	}
 
-	LOG("query executed");
+	LOG("query executed and returned %u", n_responses);
 
 	as_query_destroy(&query);
-
-	// Run query pages.
-	if (query_pages(&as, &err) != AEROSPIKE_OK) {
-		LOG("query_pages() returned %d - %s", err.code, err.message);
-		cleanup(&as);
-		exit(-1);
-	}
-
-	// Run query terminate/resume.
-	if (query_terminate_resume(&as, &err) != AEROSPIKE_OK) {
-		LOG("query_terminate_resume() returned %d - %s", err.code, err.message);
-		cleanup(&as);
-		exit(-1);
-	}
-
-	// Run query terminate/resume with serialization.
-	if (query_terminate_resume_with_serialization(&as, &err) != AEROSPIKE_OK) {
-		LOG("query_terminate_resume_with_serialization() returned %d - %s", err.code, err.message);
-		cleanup(&as);
-		exit(-1);
-	}
 
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);
@@ -171,8 +151,12 @@ query_cb(const as_val* p_val, void* udata)
 		return true;
 	}
 
-	LOG("query callback returned record:");
-	example_dump_record(p_rec);
+	uint32_t* n_responses = (uint32_t*)udata;
+
+	(*n_responses)++;
+
+	//	LOG("query callback returned record:");
+//	example_dump_record(p_rec);
 
 	return true;
 }
@@ -197,11 +181,13 @@ insert_records(aerospike* p_as)
 	// as_record_inita(), we won't need to destroy the record if we only set
 	// bins using as_record_set_int64().
 	as_record rec;
-	as_record_inita(&rec, 1);
+	as_record_inita(&rec, 3);
+
+	uint32_t n_keys = 10000;
 
 	// Re-using rec, write records into the database such that each record's key
 	// and (test-bin) value is based on the loop index.
-	for (uint32_t i = 0; i < g_n_keys; i++) {
+	for (uint32_t i = 0; i < n_keys; i++) {
 		as_error err;
 
 		// No need to destroy a stack as_key object, if we only use
@@ -209,9 +195,9 @@ insert_records(aerospike* p_as)
 		as_key key;
 		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
-		// In general it's ok to reset a bin value - all as_record_set_... calls
-		// destroy any previous value.
-		as_record_set_int64(&rec, "test-bin", (int64_t)i);
+		as_record_set_int64(&rec, "campaign1", i);
+		as_record_set_int64(&rec, "campaign2", 100);
+		as_record_set_int64(&rec, "campaign3", 100);
 
 		// Write a record to the database.
 		if (aerospike_key_put(p_as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {

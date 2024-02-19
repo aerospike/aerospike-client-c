@@ -204,10 +204,12 @@ as_query_where_init(as_query* query, uint16_t n)
 
 static bool
 as_query_where_internal(
-	as_query* query, const char* bin, as_cdt_ctx* ctx, as_predicate_type type, as_index_type itype,
-	as_index_datatype dtype, va_list ap
+	as_query* query, const char* bin, const char* index_name, as_cdt_ctx* ctx,
+	as_predicate_type type, as_index_type itype, as_index_datatype dtype,
+	va_list ap
 	)
 {
+	// TODO: (varun) bin name compulsory? (even though fake?)
 	// test preconditions
 	if (! query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE) {
 		return false;
@@ -220,6 +222,10 @@ as_query_where_internal(
 
 	as_predicate* p = &query->where.entries[query->where.size++];
 	bool status = true;
+
+	if (index_name != NULL) {
+		strcpy(p->index_name, index_name);
+	}
 
 	strcpy(p->bin, bin);
 	p->type = type;
@@ -291,7 +297,7 @@ as_query_where(
 	va_list ap;
 	va_start(ap, dtype);
 
-	bool rv = as_query_where_internal(query, bin, NULL, type, itype, dtype, ap);
+	bool rv = as_query_where_internal(query, bin, NULL, NULL, type, itype, dtype, ap);
 
 	va_end(ap);
 	return rv;
@@ -306,7 +312,22 @@ as_query_where_with_ctx(
 	va_list ap;
 	va_start(ap, dtype);
 
-	bool rv = as_query_where_internal(query, bin, ctx, type, itype, dtype, ap);
+	bool rv = as_query_where_internal(query, bin, NULL, ctx, type, itype, dtype, ap);
+
+	va_end(ap);
+	return rv;
+}
+
+bool
+as_query_where_with_index_name(
+	as_query* query, const char* index_name, as_predicate_type type,
+	as_index_type itype, as_index_datatype dtype, ...
+	)
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_internal(query, "<dummy>", index_name, NULL, type, itype, dtype, ap);
 
 	va_end(ap);
 	return rv;

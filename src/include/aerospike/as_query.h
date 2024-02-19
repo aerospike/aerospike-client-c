@@ -207,6 +207,11 @@ typedef enum as_predicate_type_e {
 typedef struct as_predicate_s {
 
 	/**
+	 * Name of the index to apply predicate to.
+	 */
+	char index_name[AS_INDEX_NAME_MAX_SIZE];
+
+	/**
 	 * Bin to apply the predicate to
 	 */
 	as_bin_name bin;
@@ -826,6 +831,12 @@ as_query_where(
 AS_EXTERN bool
 as_query_where_with_ctx(
 	as_query* query, const char* bin, struct as_cdt_ctx* ctx, as_predicate_type type,
+	as_index_type itype, as_index_datatype dtype, ...
+	);
+
+bool
+as_query_where_with_index_name(
+	as_query* query, const char* index_name, as_predicate_type type,
 	as_index_type itype, as_index_datatype dtype, ...
 	);
 

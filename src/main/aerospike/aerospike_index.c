@@ -18,6 +18,7 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_exp.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_string_builder.h>
@@ -30,10 +31,10 @@
  *****************************************************************************/
 
 as_status
-aerospike_index_create_ctx(
+aerospike_index_create_ctx_exp(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
 	const char* set, const char* bin_name, const char* index_name, as_index_type itype,
-	as_index_datatype dtype, as_cdt_ctx* ctx
+	as_index_datatype dtype, as_cdt_ctx* ctx, as_exp* exp
 	)
 {
 	as_error_reset(err);
@@ -116,13 +117,30 @@ aerospike_index_create_ctx(
 		cf_free(b64);
 	}
 
+	if (exp != NULL) {
+		char* b64 = as_exp_compile_b64(exp);
+
+		as_string_builder_append(&sb, ";exp=");
+		as_string_builder_append(&sb, b64);
+		cf_free(b64);
+	}
+
 	as_string_builder_append(&sb, ";indextype=");
 	as_string_builder_append(&sb, itype_string);
 
-	as_string_builder_append(&sb, ";indexdata=");
-	as_string_builder_append(&sb, bin_name);
-	as_string_builder_append_char(&sb, ',');
+//	as_string_builder_append(&sb, ";indexdata=");
+//	as_string_builder_append(&sb, bin_name);
+//	as_string_builder_append_char(&sb, ',');
+//	as_string_builder_append(&sb, dtype_string);
+
+	as_string_builder_append(&sb, ";keytype=");
 	as_string_builder_append(&sb, dtype_string);
+
+	if (bin_name != NULL) {
+		as_string_builder_append(&sb, ";binname=");
+		as_string_builder_append(&sb, bin_name);
+	}
+
 	as_string_builder_append_newline(&sb);
 
 	if (sb.length + 1 >= sb.capacity) {

@@ -126,7 +126,7 @@ query_foreach_create(void)
 	as_cdt_ctx_init(&ctx, 1);
 	as_cdt_ctx_add_list_index(&ctx, 0);
 
-	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "x", "idx_ctx_test_x", AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING, &ctx);
+	status = aerospike_index_create_ctx_exp(as, &err, &task, NULL, NAMESPACE, SET, "x", "idx_ctx_test_x", AS_INDEX_TYPE_DEFAULT, AS_INDEX_STRING, &ctx, NULL);
 	index_process_return_code(status, &err, &task);
 
 	as_cdt_ctx_destroy(&ctx);

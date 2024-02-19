@@ -822,6 +822,44 @@ example_create_integer_index(aerospike* p_as, const char* set, const char* bin, 
 }
 
 //------------------------------------------------
+// Create an expression secondary index
+//
+bool
+example_create_exp_index(aerospike* p_as, const char* set, const char* index)
+{
+	as_error err;
+	as_index_task task;
+
+	as_exp_build(expr, as_exp_add(as_exp_bin_int("campaign1"),
+			as_exp_bin_int("campaign2"), as_exp_bin_int("campaign3")));
+
+	as_status status = aerospike_index_create_ctx_exp(p_as, &err, &task, NULL,
+			g_namespace, set, NULL, index, AS_INDEX_TYPE_DEFAULT,
+			AS_INDEX_NUMERIC, NULL, expr);
+
+	switch (status) {
+		case AEROSPIKE_OK:
+			// Wait for the system metadata to spread to all nodes.
+			status = aerospike_index_create_wait(&err, &task, 0);
+
+			if (status != AEROSPIKE_OK) {
+				LOG("aerospike_index_create_wait() returned %d - %s", err.code, err.message);
+				return false;
+			}
+			break;
+
+		case AEROSPIKE_ERR_INDEX_FOUND:
+			LOG("index already exists");
+			break;
+
+		default:
+			LOG("aerospike_index_create() returned %d - %s", err.code, err.message);
+			return false;
+	}
+	return true;
+}
+
+//------------------------------------------------
 // Create a geospatial secondary index for a
 // specified bin in the database.
 //

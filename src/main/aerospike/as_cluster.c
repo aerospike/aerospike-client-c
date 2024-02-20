@@ -785,7 +785,7 @@ as_cluster_manage(as_cluster* cluster)
 		as_status status = cluster->metrics_listeners.snapshot_listener(&err, cluster, cluster->metrics_listeners.udata);
 		
 		if (status != AEROSPIKE_OK) {
-			as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
+			as_log_warn("Metrics error: %d %s", err.code, err.message);
 		}
 	}
 }

@@ -381,6 +381,7 @@ static bool before(atf_plan* plan)
 			return false;
 		}
 	}
+	cf_free(result);
 
 	as_metrics_policy policy;
 	as_metrics_policy_init(&policy);
@@ -392,10 +393,9 @@ static bool before(atf_plan* plan)
 
 	if (status != AEROSPIKE_OK) {
 		error("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
-		exit(-1);
+		return false;
 	}
-
-	cf_free(result);
+	
 	return true;
 }
 

@@ -677,7 +677,11 @@ as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_no
 		as_node* node = as_vector_get_ptr(nodes_to_remove, i);
 
 		if (cluster->metrics_enabled) {
-			cluster->metrics_listeners.node_close_listener(err, node, node->cluster->metrics_listeners.udata);
+			as_status status = cluster->metrics_listeners.node_close_listener(err, node, node->cluster->metrics_listeners.udata);
+			if (status != AEROSPIKE_OK) {
+				as_log_warn("Metrics error: %s %s", as_error_string(status), err->message);
+			}
+			as_error_reset(err);
 		}
 		as_node_deactivate(node);
 	}

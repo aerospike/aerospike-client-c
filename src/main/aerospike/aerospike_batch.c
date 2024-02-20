@@ -2730,6 +2730,8 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
 
+	as_cluster_add_retries(cluster, batch_nodes.size);
+
 	// Create initial key capacity for each node as average + 25%.
 	uint32_t offsets_size = task->offsets.size;
 	uint32_t offsets_capacity = offsets_size / n_nodes;
@@ -2815,6 +2817,8 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
+
+	as_cluster_add_retries(cluster, batch_nodes.size);
 
 	as_status status = AEROSPIKE_OK;
 
@@ -3147,6 +3151,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 	as_vector bnodes;
 	as_vector_inita(&bnodes, sizeof(as_batch_retry_node), n_nodes);
+
+	as_cluster_add_retries(cluster, bnodes.size);
 
 	as_batch_replica rep;
 	rep.replica = be->replica;

@@ -20,7 +20,6 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
-#include <aerospike/aerospike_stats.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_batch.h>
 #include <aerospike/as_error.h>
@@ -30,10 +29,8 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
-#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 #include "example_utils.h"
-#include <aerospike/as_metrics.h>
 
 //------------------------------------
 // Forward Declarations
@@ -72,27 +69,6 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
-	as_error err;
-	as_error_reset(&err);
-	as_metrics_policy policy;
-#ifdef _MSC_VER
-	char report_dir[] = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
-#else
-	char report_dir[] = "/home/sklaus/metrics";
-#endif
-	as_metrics_policy_init(&policy);
-	as_metrics_policy_set_report_dir(&policy, report_dir);
-	policy.interval = 5;
-
-	// enable metrics
-	as_status status = aerospike_enable_metrics(&as, &err, &policy);
-	
-	if (status != AEROSPIKE_OK) {
-		LOG("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
-		cleanup(&as);
-		exit(-1);
-	}
-
 	// Start clean.
 	example_remove_test_records(&as);
 
@@ -101,7 +77,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	//as_error err;
+	as_error err;
 
 	// Make a batch of all the keys we inserted.
 	as_batch batch;
@@ -218,8 +194,6 @@ main(int argc, char* argv[])
 		cleanup(&as);
 		exit(-1);
 	}
-
-	as_sleep(10000);
 
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);

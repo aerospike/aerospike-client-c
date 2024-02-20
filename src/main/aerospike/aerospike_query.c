@@ -1878,6 +1878,7 @@ as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
+	as_cluster_add_retry(qe->cluster);
 
 	return as_query_partition_execute_async(qe, qe->pt, err);
 }

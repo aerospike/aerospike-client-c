@@ -783,6 +783,8 @@ Retry:
 				return status;
 			}
 		}
+
+		as_cluster_add_retry(cmd->cluster);
 	}
 
 	// Retries have been exhausted.

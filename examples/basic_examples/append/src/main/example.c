@@ -34,8 +34,6 @@
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
-#include <aerospike/as_metrics.h>
-#include <aerospike/as_sleep.h>
 
 #include "example_utils.h"
 
@@ -56,30 +54,10 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
-	as_error err;
-	as_error_reset(&err);
-	as_metrics_policy policy;
-#ifdef _MSC_VER
-	char report_dir[] = "C:\\Users\\sklaus\\repos\\aerospike-client-c\\src\\test";
-#else
-	char report_dir[] = "/home/sklaus/metrics";
-#endif
-	as_metrics_policy_init(&policy);
-	as_metrics_policy_set_report_dir(&policy, report_dir);
-	policy.interval = 5;
-
-	// enable metrics
-	as_status status = aerospike_enable_metrics(&as, &err, &policy);
-
-	if (status != AEROSPIKE_OK) {
-		LOG("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
-		exit(-1);
-	}
-
 	// Start clean.
 	example_remove_test_record(&as);
 
-	//as_error err;
+	as_error err;
 
 	// Create an as_operations object with three concatenation operations.
 	// Generally, if using as_operations_inita(), we won't need to destroy the
@@ -145,8 +123,6 @@ main(int argc, char* argv[])
 	// Log the operations.
 	LOG("as_operations object to apply to database:");
 	example_dump_operations(&ops);
-
-	as_sleep(30000);
 
 	// Try to apply the operations. This will fail, since we can't append a
 	// string value to an existing bin with "raw" value. Note that if any

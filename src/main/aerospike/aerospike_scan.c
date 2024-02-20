@@ -1167,6 +1167,7 @@ as_scan_partition_retry_async(as_async_scan_executor* se_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
+	as_cluster_add_retry(se->cluster);
 
 	return as_scan_partition_execute_async(se, se->pt, err);
 }

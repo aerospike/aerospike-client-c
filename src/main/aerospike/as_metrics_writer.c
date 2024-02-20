@@ -26,8 +26,6 @@
 
 #define MIN_FILE_SIZE 1000000
 
-#define LOG(_fmt, ...) { printf(_fmt "\n", ##__VA_ARGS__); fflush(stdout); }
-
 #ifdef _MSC_VER
 static char as_dir_sep = '\\';
 #else
@@ -93,6 +91,7 @@ as_metrics_proc_stat_mem_cpu(as_error* err, double* vm_usage, double* resident_s
 
 	struct sysinfo info;
 	int success = sysinfo(&info);
+	success = 3;
 	if (success != 0) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Error calculating CPU usage");
@@ -114,7 +113,6 @@ as_metrics_process_cpu_load_mem_usage(as_error* err, as_metrics_writer* mw, uint
 		return result;
 	}
 
-	LOG("cpu %f", cpu_usage_d);
 	cpu_usage_d = cpu_usage_d + 0.5 - (cpu_usage_d < 0);
 	mem_d = mem_d + 0.5 - (mem_d < 0);
 	*cpu_usage = (uint32_t)cpu_usage_d;
@@ -286,6 +284,7 @@ static as_status
 as_metrics_process_cpu_load_mem_usage(as_error* err, as_metrics_writer* mw, uint32_t* cpu_usage, uint32_t* mem)
 {
 	double cpu_usage_d = as_metrics_process_cpu_load(mw);
+	cpu_usage_d = -1.0;
 	if (cpu_usage_d < 0) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Error calculating CPU usage");
@@ -513,9 +512,9 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append_uint64(&sb, as_cluster_get_tran_count(cluster));  // Cumulative. Not reset on each interval.
 	as_string_builder_append_char(&sb, ',');
-	as_string_builder_append_uint64(&sb, cluster->retry_count); // Cumulative. Not reset on each interval.
+	as_string_builder_append_uint64(&sb, as_cluster_get_retry_count(cluster)); // Cumulative. Not reset on each interval.
 	as_string_builder_append_char(&sb, ',');
-	as_string_builder_append_uint64(&sb, cluster->delay_queue_timeout_count); // Cumulative. Not reset on each interval.
+	as_string_builder_append_uint64(&sb, as_cluster_get_delay_queue_timeout_count(cluster)); // Cumulative. Not reset on each interval.
 	as_string_builder_append(&sb, ",[");
 
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
@@ -643,14 +642,10 @@ as_metrics_writer_snapshot(as_error* err, as_cluster* cluster, void* udata)
 	if (mw->enable && mw->file != NULL) {
 		as_status status = as_metrics_write_cluster(err, mw, cluster);
 		if (status != AEROSPIKE_OK) {
-			as_metrics_writer_destroy_nodes(cluster);
-			as_metrics_writer_destroy(mw);
 			return status;
 		}
 		uint32_t result = fflush(mw->file);
 		if (result != 0) {
-			as_metrics_writer_destroy_nodes(cluster);
-			as_metrics_writer_destroy(mw);
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"File stream did not flush successfully: %s", mw->report_dir);
 		}

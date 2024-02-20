@@ -178,7 +178,7 @@ TEST(query_async_quit_early, "normal query and quit early")
 	
 	as_query_destroy(&q);
 	
-	assert_int_eq(status, AEROSPIKE_OK);
+ 	assert_int_eq(status, AEROSPIKE_OK);
 	as_monitor_wait(&monitor);
 }
 

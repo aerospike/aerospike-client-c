@@ -852,6 +852,10 @@ as_event_delay_timeout(as_event_command* cmd)
 
 	// Notify user, but do not destroy command.
 	as_event_notify_error(cmd, &err);
+	if (cmd->latency_type != AS_LATENCY_TYPE_NONE)
+	{
+		as_cluster_add_delay_queue_timeout(cmd->cluster);
+	}
 }
 
 void
@@ -980,6 +984,7 @@ as_event_execute_retry(as_event_command* cmd)
 	}
 
 	// Retry command.
+	as_cluster_add_retry(cmd->cluster);
 	as_event_command_begin(cmd->event_loop, cmd);
 }
 

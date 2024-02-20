@@ -381,20 +381,72 @@ typedef struct as_cluster_s {
 	 */
 	volatile bool valid;
 
+	/**
+	 * @private
+	 * Is metrics colleciton enabled.
+	 */
 	bool metrics_enabled;
 
+	/**
+	 * @private
+	 * Number of cluster tend iterations between metrics notification events. One tend iteration
+	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
+	 * nodes. This is set using as_policy_metrics.
+	 */
 	uint32_t metrics_interval;
 
+	/**
+	 * @private
+	 * Number of elapsed time range buckets in latency histograms. This is set using as_policy_metrics.
+	 */
 	uint32_t metrics_latency_columns;
 
+	/**
+	 * @private
+	 * Power of 2 multiple between each range bucket in latency histograms starting at column 3. The bucket units
+	 * are in milliseconds. The first 2 buckets are "<=1ms" and ">1ms". Examples:
+	 * 
+	 * ~~~~~~~~~~{.c}
+	 * // latencyColumns=7 latencyShift=1
+	 * <=1ms >1ms >2ms >4ms >8ms >16ms >32ms
+	 *
+	 * // latencyColumns=5 latencyShift=3
+	 * <=1ms >1ms >8ms >64ms >512ms
+	 * ~~~~~~~~~~
+	 * 
+	 * This is set using as_policy_metrics.
+	 */
 	uint32_t metrics_latency_shift;
 
+	/**
+	 * @private
+	 * Listeners that handles metrics notification events. The default listener implementation
+	 * writes the metrics snapshot to a file which will later be read and forwarded to
+	 * OpenTelemetry by a separate offline application.
+	 * <p>
+	 * The listener could be overridden to send the metrics snapshot directly to OpenTelemetry.
+	 * 
+	 * This is set using as_policy_metrics.
+	 */
 	as_metrics_listeners metrics_listeners;
 
+	/**
+	 * @private
+	 * Transaction retry count. There can be multiple retries for a single transaction.
+	 * The value is cumulative and not reset per metrics interval.
+	 */
 	uint64_t retry_count;
 
+	/**
+	 * @private
+	 * Transaction count. The value is cumulative and not reset per metrics interval.
+	 */
 	uint64_t tran_count;
 
+	/**
+	 * @private
+	 * Delay queue timeout count. The value is cumulative and not reset per metrics interval.
+	 */
 	uint64_t delay_queue_timeout_count;
 
 } as_cluster;
@@ -563,6 +615,41 @@ as_cluster_add_tran(as_cluster* cluster);
  */
 uint64_t
 as_cluster_get_tran_count(const as_cluster* cluster);
+
+/**
+ * @private
+ * Increment async delay queue timeout count.
+ */
+void
+as_cluster_add_retry(as_cluster* cluster);
+
+/**
+ * @private
+ * Add transaction retry count. There can be multiple retries for a single transaction.
+ */
+void
+as_cluster_add_retries(as_cluster* cluster, uint32_t count);
+
+/**
+ * @private
+ * Return transaction retry count. The value is cumulative and not reset per metrics interval.
+ */
+uint64_t
+as_cluster_get_retry_count(const as_cluster* cluster);
+
+/**
+ * @private
+ * Increment async delay queue timeout count.
+ */
+void
+as_cluster_add_delay_queue_timeout(as_cluster* cluster);
+
+/**
+ * @private
+ * Return async delay queue timeout count.
+ */
+uint64_t
+as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster);
 
 /**
  * @private

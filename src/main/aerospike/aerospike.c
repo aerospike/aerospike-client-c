@@ -253,10 +253,11 @@ aerospike_close(aerospike* as, as_error* err)
 	if (cluster) {
 		if (cluster->metrics_enabled) {
 			as_status status = aerospike_disable_metrics(as, err);
+			
 			if (status != AEROSPIKE_OK) {
 				as_log_warn("Metrics error: %s %s", as_error_string(status), err->message);
+				as_error_reset(err);
 			}
-			as_error_reset(err);
 		}
 		
 		if (as_event_loop_size > 0 && !as_event_single_thread) {

@@ -28,21 +28,6 @@ extern "C" {
 #endif
 
 //---------------------------------
-// Macros
-//---------------------------------
-
-#define NS_TO_MS 1000000
-
-typedef uint8_t as_latency_type;
-
-#define AS_LATENCY_TYPE_CONN 0
-#define AS_LATENCY_TYPE_WRITE 1
-#define AS_LATENCY_TYPE_READ 2
-#define AS_LATENCY_TYPE_BATCH 3
-#define AS_LATENCY_TYPE_QUERY 4
-#define AS_LATENCY_TYPE_NONE 5
-
-//---------------------------------
 // Types
 //---------------------------------
 
@@ -94,7 +79,7 @@ typedef struct as_metrics_listeners_s {
 /**
  * Client periodic metrics configuration.
  */
-typedef struct as_policy_metrics_s {
+typedef struct as_metrics_policy_s {
 	/**
 	 * Listeners that handles metrics notification events. The default listener implementation
 	 * writes the metrics snapshot to a file which will later be read and forwarded to
@@ -156,23 +141,6 @@ typedef struct as_policy_metrics_s {
 	uint32_t latency_shift;
 } as_metrics_policy;
 
-/**
- * Latency buckets for a transaction group.
- * Latency bucket counts are cumulative and not reset on each metrics snapshot interval
- */
-typedef struct as_latency_buckets_s {
-	uint64_t* buckets;
-	uint32_t latency_shift;
-	uint32_t latency_columns;
-} as_latency_buckets;
-
-/**
- * Node metrics latency bucket struct
- */
-typedef struct as_node_metrics_s {
-	as_latency_buckets* latency;
-} as_node_metrics;
-
 //---------------------------------
 // Functions
 //---------------------------------
@@ -217,48 +185,6 @@ aerospike_enable_metrics(aerospike* as, as_error* err, as_metrics_policy* policy
  */
 AS_EXTERN as_status
 aerospike_disable_metrics(aerospike* as, as_error* err);
-
-/**
- * Convert latency_type to string version for printing to the output file
- */
-char*
-as_latency_type_to_string(as_latency_type type);
-
-/**
- * Initalize latency bucket struct
- */
-void
-as_metrics_latency_buckets_init(as_latency_buckets* latency_buckets, uint32_t latency_columns, uint32_t latency_shift);
-
-/**
- * Return cumulative count of a bucket.
- */
-uint64_t
-as_metrics_get_bucket(as_latency_buckets* buckets, uint32_t i);
-
-/**
- * Increment count of bucket corresponding to the elapsed time in nanoseconds.
- */
-void
-as_metrics_latency_buckets_add(as_latency_buckets* latency_buckets, uint64_t elapsed);
-
-/**
- * Determine which index of bucket the elapsed time belongs in
- */
-uint32_t
-as_metrics_get_index(as_latency_buckets* latency_buckets, uint64_t elapsed_nanos);
-
-/**
- * Initalize node metrics struct
- */
-as_node_metrics*
-as_node_metrics_init(uint32_t latency_columns, uint32_t latency_shift);
-
-/**
- * Add latency to corresponding bucket type
- */
-void
-as_metrics_add_latency(as_node_metrics* node_metrics, as_latency_type latency_type, uint64_t elapsed);
 
 #ifdef __cplusplus
 } // end extern "C"

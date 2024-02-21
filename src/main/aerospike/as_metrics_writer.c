@@ -471,7 +471,7 @@ as_metrics_write_node(as_metrics_writer* mw, as_string_builder* sb, struct as_no
 			if (j > 0) {
 				as_string_builder_append_char(sb, ',');
 			}
-			as_string_builder_append_uint64(sb, as_metrics_get_bucket(buckets, j));
+			as_string_builder_append_uint64(sb, as_latency_get_bucket(buckets, j));
 		}
 		as_string_builder_append_char(sb, ']');
 	}

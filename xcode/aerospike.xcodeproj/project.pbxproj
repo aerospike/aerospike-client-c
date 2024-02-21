@@ -109,6 +109,8 @@
 		BF90C76C22AB154A0062D920 /* as_cdt_internal.c in Sources */ = {isa = PBXBuildFile; fileRef = BF90C76B22AB154A0062D920 /* as_cdt_internal.c */; };
 		BF90C77122AB30E40062D920 /* as_map_operations.c in Sources */ = {isa = PBXBuildFile; fileRef = BF90C77022AB30E40062D920 /* as_map_operations.c */; };
 		BF93AA061AE9E6EB003ECE3B /* as_thread_pool.c in Sources */ = {isa = PBXBuildFile; fileRef = BF93AA051AE9E6EB003ECE3B /* as_thread_pool.c */; };
+		BF94A3BD2B86A87800295885 /* as_latency.h in Headers */ = {isa = PBXBuildFile; fileRef = BF94A3BC2B86A87800295885 /* as_latency.h */; };
+		BF94A3BF2B86AA4300295885 /* as_latency.c in Sources */ = {isa = PBXBuildFile; fileRef = BF94A3BE2B86AA4300295885 /* as_latency.c */; };
 		BF986E001F466BEE0057802C /* version.h in Headers */ = {isa = PBXBuildFile; fileRef = BF986DFF1F466BEE0057802C /* version.h */; };
 		BFA5B21020FD3FA4002AF0BB /* as_cpu.h in Headers */ = {isa = PBXBuildFile; fileRef = BFA5B20F20FD3FA4002AF0BB /* as_cpu.h */; };
 		BFABF3311FCF85EC004745A1 /* as_queue_mt.c in Sources */ = {isa = PBXBuildFile; fileRef = BFABF3301FCF85EC004745A1 /* as_queue_mt.c */; };
@@ -326,6 +328,8 @@
 		BF90C76B22AB154A0062D920 /* as_cdt_internal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_cdt_internal.c; path = ../src/main/aerospike/as_cdt_internal.c; sourceTree = "<group>"; };
 		BF90C77022AB30E40062D920 /* as_map_operations.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_map_operations.c; path = ../src/main/aerospike/as_map_operations.c; sourceTree = "<group>"; };
 		BF93AA051AE9E6EB003ECE3B /* as_thread_pool.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_thread_pool.c; path = ../modules/common/src/main/aerospike/as_thread_pool.c; sourceTree = "<group>"; };
+		BF94A3BC2B86A87800295885 /* as_latency.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_latency.h; path = ../src/include/aerospike/as_latency.h; sourceTree = "<group>"; };
+		BF94A3BE2B86AA4300295885 /* as_latency.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_latency.c; path = ../src/main/aerospike/as_latency.c; sourceTree = "<group>"; };
 		BF986DFF1F466BEE0057802C /* version.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = version.h; path = ../src/include/aerospike/version.h; sourceTree = "<group>"; };
 		BFA5B20F20FD3FA4002AF0BB /* as_cpu.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_cpu.h; path = ../src/include/aerospike/as_cpu.h; sourceTree = "<group>"; };
 		BFABF3301FCF85EC004745A1 /* as_queue_mt.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_queue_mt.c; path = ../modules/common/src/main/aerospike/as_queue_mt.c; sourceTree = "<group>"; };
@@ -556,6 +560,7 @@
 				BFBDAFDF191B0C5C007EB07C /* as_info.c */,
 				BF26C4661B45AE8F00E6929D /* as_job.c */,
 				BF2AA7C418BEBFA400E54AF3 /* as_key.c */,
+				BF94A3BE2B86AA4300295885 /* as_latency.c */,
 				BF90C76422AB0EB20062D920 /* as_list_operations.c */,
 				BFC002891901E08500CB9BC8 /* as_lookup.c */,
 				BF90C77022AB30E40062D920 /* as_map_operations.c */,
@@ -755,6 +760,7 @@
 				BFC65B4D1C921E9E0079DF5A /* as_info.h */,
 				BFC65B4E1C921E9E0079DF5A /* as_job.h */,
 				BFC65B4F1C921E9E0079DF5A /* as_key.h */,
+				BF94A3BC2B86A87800295885 /* as_latency.h */,
 				BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */,
 				BFC65B511C921E9E0079DF5A /* as_listener.h */,
 				BFC65B521C921E9E0079DF5A /* as_lookup.h */,
@@ -797,6 +803,7 @@
 				BF986E001F466BEE0057802C /* version.h in Headers */,
 				BFC65B8B1C921E9E0079DF5A /* as_udf.h in Headers */,
 				BFC65B811C921E9E0079DF5A /* as_pipe.h in Headers */,
+				BF94A3BD2B86A87800295885 /* as_latency.h in Headers */,
 				BF32146F23E8F630004A7E19 /* as_partition_tracker.h in Headers */,
 				BF457A8622B1AC6600409D04 /* as_bit_operations.h in Headers */,
 				BFC65B761C921E9E0079DF5A /* as_event_internal.h in Headers */,
@@ -934,6 +941,7 @@
 				BF93AA061AE9E6EB003ECE3B /* as_thread_pool.c in Sources */,
 				BFC38AE11948F7CA000C53D9 /* as_admin.c in Sources */,
 				BF8EF4CE2AE1B47B00FEEC3A /* lstrlib.c in Sources */,
+				BF94A3BF2B86AA4300295885 /* as_latency.c in Sources */,
 				BFBD205618BC3436009ED931 /* mod_lua_record.c in Sources */,
 				BF8EF4A52AE1B41100FEEC3A /* lauxlib.c in Sources */,
 				BF8EF4BA2AE1B44900FEEC3A /* lgc.c in Sources */,

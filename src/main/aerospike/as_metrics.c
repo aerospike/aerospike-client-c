@@ -25,7 +25,7 @@
 //---------------------------------
 
 as_status
-aerospike_enable_metrics(aerospike* as, as_error* err, struct as_policy_metrics_s* policy)
+aerospike_enable_metrics(aerospike* as, as_error* err, as_metrics_policy* policy)
 {
 	return as_cluster_enable_metrics(err, as->cluster, policy);
 }
@@ -49,98 +49,4 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->metrics_listeners.node_close_listener = NULL;
 	policy->metrics_listeners.disable_listener = NULL;
 	policy->metrics_listeners.udata = NULL;
-}
-
-char*
-as_latency_type_to_string(as_latency_type type)
-{
-	switch (type) {
-	case AS_LATENCY_TYPE_CONN:
-		return "conn"; 
-		break;
-	case AS_LATENCY_TYPE_WRITE:
-		return "write";
-		break;
-	case AS_LATENCY_TYPE_READ:
-		return "read";
-		break;
-	case AS_LATENCY_TYPE_BATCH:
-		return "batch";
-		break;
-	case AS_LATENCY_TYPE_QUERY:
-		return "query";
-		break;
-	case AS_LATENCY_TYPE_NONE:
-		return "none";
-		break;
-	default:
-		return "none";
-		break;
-	}
-}
-
-void
-as_metrics_latency_buckets_init(as_latency_buckets* latency_buckets, uint32_t latency_columns, uint32_t latency_shift)
-{
-	latency_buckets->latency_columns = latency_columns;
-	latency_buckets->latency_shift = latency_shift;
-	latency_buckets->buckets = cf_malloc(sizeof(uint64_t) * latency_columns);
-	for (uint32_t i = 0; i < latency_columns; i++) {
-		as_store_uint64(&latency_buckets->buckets[i], 0);
-	}
-}
-
-uint64_t
-as_metrics_get_bucket(as_latency_buckets* buckets, uint32_t i)
-{
-	return as_load_uint64(&buckets->buckets[i]);
-}
-
-void
-as_metrics_latency_buckets_add(as_latency_buckets* latency_buckets, uint64_t elapsed)
-{
-	uint32_t index = as_metrics_get_index(latency_buckets, elapsed);
-	as_incr_uint64(&latency_buckets->buckets[index]);
-}
-
-uint32_t 
-as_metrics_get_index(as_latency_buckets* latency_buckets, uint64_t elapsed_nanos)
-{
-	// Convert nanoseconds to milliseconds.
-	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
-
-	// Round up elapsed to nearest millisecond.
-	if ((elapsed_nanos - (elapsed * NS_TO_MS)) > 0) {
-		elapsed++;
-	}
-
-	uint32_t last_bucket = latency_buckets->latency_columns - 1;
-	uint64_t limit = 1;
-
-	for (uint32_t i = 0; i < last_bucket; i++) {
-		if (elapsed <= limit) {
-			return i;
-		}
-		limit <<= latency_buckets->latency_shift;
-	}
-	return last_bucket;
-}
-
-as_node_metrics*
-as_node_metrics_init(uint32_t latency_columns, uint32_t latency_shift)
-{
-	as_node_metrics* node_metrics = (as_node_metrics*)cf_malloc(sizeof(as_node_metrics));
-	uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
-	node_metrics->latency = (as_latency_buckets*)cf_malloc(sizeof(as_latency_buckets) * max_latency_type);
-	for (uint32_t i = 0; i < max_latency_type; i++) {
-		as_metrics_latency_buckets_init(&node_metrics->latency[i], latency_columns, latency_shift);
-	}
-
-	return node_metrics;
-}
-
-void
-as_metrics_add_latency(as_node_metrics* node_metrics, as_latency_type latency_type, uint64_t elapsed)
-{
-	as_metrics_latency_buckets_add(&node_metrics->latency[latency_type], elapsed);
 }

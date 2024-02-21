@@ -21,7 +21,7 @@
 #include <aerospike/as_conn_pool.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
-#include <aerospike/as_metrics.h>
+#include <aerospike/as_latency.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_queue.h>
@@ -205,6 +205,13 @@ typedef struct as_async_conn_pool_s {
 	uint32_t closed;
 
 } as_async_conn_pool;
+
+/**
+ * Node metrics latency bucket struct
+ */
+typedef struct as_node_metrics_s {
+	as_latency_buckets* latency;
+} as_node_metrics;
 
 struct as_cluster_s;
 
@@ -662,12 +669,14 @@ as_node_has_rack(as_node* node, const char* ns, int rack_id);
 void
 as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed);
 
+struct as_metrics_policy_s;
+
 /**
  * @private
  * Enable metrics at the node level
  */
 void
-as_node_enable_metrics(as_node* node, const as_metrics_policy* policy);
+as_node_enable_metrics(as_node* node, const struct as_metrics_policy_s* policy);
 
 /**
  * Return transaction error count. The value is cumulative and not reset per metrics interval.

@@ -133,6 +133,7 @@ AEROSPIKE += as_host.o
 AEROSPIKE += as_info.o
 AEROSPIKE += as_job.o
 AEROSPIKE += as_key.o
+AEROSPIKE += as_latency.o
 AEROSPIKE += as_list_operations.o
 AEROSPIKE += as_lookup.o
 AEROSPIKE += as_map_operations.o

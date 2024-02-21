@@ -23,6 +23,7 @@
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_shm_cluster.h>
@@ -33,6 +34,9 @@
 
 // Replicas take ~2K per namespace, so this will cover most deployments:
 #define INFO_STACK_BUF_SIZE (16 * 1024)
+
+// Number of nanoseconds per millisecond
+#define NS_TO_MS 1000000
 
 /******************************************************************************
  * Function declarations.
@@ -89,6 +93,31 @@ as_node_create_async_pools(uint32_t min_conns_per_node, uint32_t max_conns_per_n
 		as_async_conn_pool_init(pool, min_size, max_size);
 	}
 	return pools;
+}
+
+static void
+as_latency_buckets_init(as_latency_buckets* latency_buckets, uint32_t latency_columns, uint32_t latency_shift)
+{
+	latency_buckets->latency_columns = latency_columns;
+	latency_buckets->latency_shift = latency_shift;
+	latency_buckets->buckets = cf_malloc(sizeof(uint64_t) * latency_columns);
+	
+	for (uint32_t i = 0; i < latency_columns; i++) {
+		as_store_uint64(&latency_buckets->buckets[i], 0);
+	}
+}
+
+static as_node_metrics*
+as_node_metrics_init(uint32_t latency_columns, uint32_t latency_shift)
+{
+	as_node_metrics* node_metrics = (as_node_metrics*)cf_malloc(sizeof(as_node_metrics));
+	uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
+	node_metrics->latency = (as_latency_buckets*)cf_malloc(sizeof(as_latency_buckets) * max_latency_type);
+
+	for (uint32_t i = 0; i < max_latency_type; i++) {
+		as_latency_buckets_init(&node_metrics->latency[i], latency_columns, latency_shift);
+	}
+	return node_metrics;
 }
 
 as_node*
@@ -1315,10 +1344,35 @@ as_node_parse_racks(as_cluster* cluster, as_error* err, as_node* node, char* buf
 	return AEROSPIKE_OK;
 }
 
+static uint32_t
+as_latency_buckets_get_index(as_latency_buckets* latency_buckets, uint64_t elapsed_nanos)
+{
+	// Convert nanoseconds to milliseconds.
+	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
+
+	// Round up elapsed to nearest millisecond.
+	if ((elapsed_nanos - (elapsed * NS_TO_MS)) > 0) {
+		elapsed++;
+	}
+
+	uint32_t last_bucket = latency_buckets->latency_columns - 1;
+	uint64_t limit = 1;
+
+	for (uint32_t i = 0; i < last_bucket; i++) {
+		if (elapsed <= limit) {
+			return i;
+		}
+		limit <<= latency_buckets->latency_shift;
+	}
+	return last_bucket;
+}
+
 void
 as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed)
 {
-	as_metrics_add_latency(node->metrics, latency_type, elapsed);
+	as_latency_buckets* latency_buckets = &node->metrics->latency[latency_type];
+	uint32_t index = as_latency_buckets_get_index(latency_buckets, elapsed);
+	as_incr_uint64(&latency_buckets->buckets[index]);
 }
 
 void
@@ -1350,7 +1404,6 @@ as_node_add_timeout(as_node* node)
 {
 	as_incr_uint64(&node->timeout_count);
 }
-
 
 static as_status
 as_node_process_racks(as_cluster* cluster, as_error* err, as_node* node, as_vector* values)

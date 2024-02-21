@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -382,15 +382,14 @@ static bool before(atf_plan* plan)
 	}
 	cf_free(result);
 
-	// enable metrics
-	/*as_metrics_policy policy;
+	as_metrics_policy policy;
 	as_metrics_policy_init(&policy);
 
 	as_status status = aerospike_enable_metrics(as, &err, &policy);
 
 	if (status != AEROSPIKE_OK) {
 		error("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
-	}*/
+	}
 	
 	return true;
 }

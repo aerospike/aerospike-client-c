@@ -394,6 +394,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_info.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_job.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_key.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_latency.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_listener.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_list_operations.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_lookup.h" />
@@ -548,6 +549,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_info.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_job.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_key.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_latency.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_list_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_lookup.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_map_operations.c" />

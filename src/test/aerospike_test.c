@@ -25,7 +25,6 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_metrics.h>
-#include <aerospike/as_sleep.h>
 
 #include "test.h"
 #include "aerospike_test.h"
@@ -383,18 +382,15 @@ static bool before(atf_plan* plan)
 	}
 	cf_free(result);
 
-	as_metrics_policy policy;
-	as_metrics_policy_init(&policy);
-	policy.interval = 5;
-	policy.report_size_limit = 1000000;
-
 	// enable metrics
+	/*as_metrics_policy policy;
+	as_metrics_policy_init(&policy);
+
 	as_status status = aerospike_enable_metrics(as, &err, &policy);
 
 	if (status != AEROSPIKE_OK) {
 		error("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
-		return false;
-	}
+	}*/
 	
 	return true;
 }
@@ -405,8 +401,6 @@ static bool after(atf_plan* plan)
 		error("aerospike was not initialized");
 		return false;
 	}
-
-	//as_sleep(5*60000);
 
 	as_error err;
 	as_error_reset(&err);

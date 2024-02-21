@@ -91,7 +91,6 @@ as_metrics_proc_stat_mem_cpu(as_error* err, double* vm_usage, double* resident_s
 
 	struct sysinfo info;
 	int success = sysinfo(&info);
-	success = 3;
 	if (success != 0) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Error calculating CPU usage");
@@ -284,7 +283,6 @@ static as_status
 as_metrics_process_cpu_load_mem_usage(as_error* err, as_metrics_writer* mw, uint32_t* cpu_usage, uint32_t* mem)
 {
 	double cpu_usage_d = as_metrics_process_cpu_load(mw);
-	cpu_usage_d = -1.0;
 	if (cpu_usage_d < 0) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Error calculating CPU usage");
@@ -668,6 +666,7 @@ as_metrics_writer_node_close(as_error* err, as_node* node, void* udata)
 		as_string_builder sb;
 		as_string_builder_inita(&sb, 16384, true);
 		as_string_builder_append(&sb, now_str);
+		as_string_builder_append_char(&sb, ' ');
 		as_metrics_write_node(mw, &sb, node);
 		as_string_builder_append_newline(&sb);
 		

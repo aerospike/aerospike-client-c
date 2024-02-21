@@ -559,11 +559,10 @@ as_status
 as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy* policy)
 {
 	if (cluster->metrics_enabled) {
-		cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
+		as_cluster_disable_metrics(err, cluster);
 	}
 
 	as_status status = AEROSPIKE_OK;
-	
 	as_error_reset(err);
 
 	if (policy->metrics_listeners.enable_listener) {
@@ -599,6 +598,7 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy*
 	}
 	as_nodes_release(nodes);
 
+	cluster->metrics_enabled = true;
 	status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
 	
 	if (status != AEROSPIKE_OK) {
@@ -606,7 +606,6 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy*
 		return status;
 	}
 	
-	cluster->metrics_enabled = true;
 	return status;
 }
 
@@ -680,8 +679,8 @@ as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_no
 			as_status status = cluster->metrics_listeners.node_close_listener(err, node, node->cluster->metrics_listeners.udata);
 			if (status != AEROSPIKE_OK) {
 				as_log_warn("Metrics error: %s %s", as_error_string(status), err->message);
+				as_error_reset(err);
 			}
-			as_error_reset(err);
 		}
 		as_node_deactivate(node);
 	}

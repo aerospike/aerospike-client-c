@@ -120,6 +120,23 @@ as_node_metrics_init(uint32_t latency_columns, uint32_t latency_shift)
 	return node_metrics;
 }
 
+void
+as_node_destroy_metrics(as_node* node)
+{
+	as_node_metrics* node_metrics = node->metrics;
+	
+	if (node_metrics) {
+		uint32_t max = AS_LATENCY_TYPE_NONE;
+		
+		for (uint32_t i = 0; i < max; i++) {
+			cf_free(node_metrics->latency[i].buckets);
+		}
+		cf_free(node_metrics->latency);
+		cf_free(node_metrics);
+		node->metrics = NULL;
+	}
+}
+
 as_node*
 as_node_create(as_cluster* cluster, as_node_info* node_info)
 {
@@ -248,6 +265,8 @@ as_node_destroy(as_node* node)
 	if (racks) {
 		as_racks_release(racks);
 	}
+	
+	as_node_destroy_metrics(node);
 	cf_free(node);
 }
 

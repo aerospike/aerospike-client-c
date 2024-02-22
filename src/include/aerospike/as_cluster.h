@@ -206,6 +206,12 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Lock for metrics operations.
+	 */
+	pthread_mutex_t metrics_lock;
+
+	/**
+	 * @private
 	 * Lock for the tend thread to wait on with the tend interval as timeout.
 	 * Normally locked, resulting in waiting a full interval between
 	 * tend iterations.  Upon cluster shutdown, unlocked by the main

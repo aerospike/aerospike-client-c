@@ -378,11 +378,17 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,cpu,mem,invalidNodeCount,tranCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] eventloop[processSize,queueSize] node[name,address:port,syncConn,asyncConn,errors,timeouts,latency[]] conn[inUse,inPool,opened,closed] latency(%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, mw->latency_columns, mw->latency_shift);
 	if (rv <= 0) {
+		fclose(mw->file);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Failed to construct metrics header: %d,%s", rv, file_name.data);
+			"Failed to write metrics header: %d,%s", rv, file_name.data);
 	}
 
-	return as_metrics_write_line(mw, data, err);
+	as_status status = as_metrics_write_line(mw, data, err);
+	
+	if (status != AEROSPIKE_OK) {
+		fclose(mw->file);
+	}
+	return status;
 }
 
 static void
@@ -547,31 +553,6 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 }
 
 static void
-as_metrics_writer_destroy_node_metrics(as_node* node)
-{
-	if (node->metrics != NULL) {
-		uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
-		for (uint32_t i = 0; i < max_latency_type; i++) {
-			cf_free(node->metrics->latency[i].buckets);
-		}
-		cf_free(node->metrics->latency);
-		cf_free(node->metrics);
-		node->metrics = NULL;
-	}
-}
-
-static void
-as_metrics_writer_destroy_nodes(as_cluster* cluster)
-{
-	// Free node memory
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_metrics_writer_destroy_node_metrics(nodes->array[i]);
-	}
-	as_nodes_release(nodes);
-}
-
-static void
 as_metrics_writer_destroy(as_metrics_writer* mw)
 {
 	fclose(mw->file);
@@ -648,7 +629,6 @@ as_metrics_writer_snapshot(as_error* err, as_cluster* cluster, void* udata)
 				"File stream did not flush successfully: %s", mw->report_dir);
 		}
 	}
-
 	return AEROSPIKE_OK;
 }
 
@@ -671,13 +651,10 @@ as_metrics_writer_node_close(as_error* err, as_node* node, void* udata)
 		as_string_builder_append_newline(&sb);
 		
 		as_status status = as_metrics_write_line(mw, sb.data, err);
-
-		as_metrics_writer_destroy_node_metrics(node);
+		
 		as_string_builder_destroy(&sb);
-
 		return status;
 	}
-
 	return AEROSPIKE_OK;
 }
 
@@ -687,19 +664,15 @@ as_metrics_writer_disable(as_error* err, as_cluster* cluster, void* udata)
 	// write cluster into to file, disable
 	as_error_reset(err);
 	as_metrics_writer* mw = udata;
+	
 	if (mw != NULL) {
+		as_status status = AEROSPIKE_OK;
+		
 		if (mw->enable && mw->file != NULL) {
-			as_status status = as_metrics_write_cluster(err, mw, cluster);
-
-			if (status != AEROSPIKE_OK) {
-				as_metrics_writer_destroy_nodes(cluster);
-				as_metrics_writer_destroy(mw);
-				return status;
-			}
+			status = as_metrics_write_cluster(err, mw, cluster);
 		}
-		as_metrics_writer_destroy_nodes(cluster);
 		as_metrics_writer_destroy(mw);
+		return status;
 	}
-
 	return AEROSPIKE_OK;
 }

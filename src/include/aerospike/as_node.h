@@ -456,6 +456,13 @@ as_node_destroy(as_node* node);
 
 /**
  * @private
+ * Destroy node metrics.
+ */
+void
+as_node_destroy_metrics(as_node* node);
+
+/**
+ * @private
  * Create configured minimum number of connections.
  */
 void

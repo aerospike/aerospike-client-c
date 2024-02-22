@@ -111,6 +111,7 @@ main(int argc, char* argv[])
 	LOG("First MRT write succeeded");
 
 	example_read_test_record(&as);
+	example_read_test_record_tr(&as, &tr);
 
 	as_record_inita(&rec, 3);
 	as_record_set_int64(&rec, "test-bin-1", 3);
@@ -143,6 +144,7 @@ main(int argc, char* argv[])
 	LOG("Roll forward succeeded");
 
 	example_read_test_record(&as);
+	example_read_test_record_tr(&as, &tr);
 
 	tr.mrt_trid = 2;
 	// Generate another as_record object to write.
@@ -167,6 +169,7 @@ main(int argc, char* argv[])
 	}
 
 	example_read_test_record(&as);
+	example_read_test_record_tr(&as, &tr);
 
 	if (aerospike_key_put_tr(&as, &tr, &err, NULL, &g_key, &rec,
 			MRT_ROLL_BACK) != AEROSPIKE_OK) {
@@ -178,6 +181,7 @@ main(int argc, char* argv[])
 	LOG("Roll back succeeded");
 
 	example_read_test_record(&as);
+	example_read_test_record_tr(&as, &tr);
 
 	// Cleanup and disconnect from the database cluster.
 	example_cleanup(&as);

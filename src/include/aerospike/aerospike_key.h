@@ -81,6 +81,12 @@ aerospike_key_get(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	);
 
+as_status
+aerospike_key_get_tr(
+	aerospike* as, as_transaction* tr, as_error* err,
+	const as_policy_read* policy, const as_key* key, as_record** rec
+	);
+
 /**
  * Asynchronously look up a record by key and return all bins.
  *

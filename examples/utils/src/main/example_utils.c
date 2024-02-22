@@ -587,13 +587,19 @@ example_cleanup(aerospike* p_as)
 // Read the whole test record from the database.
 //
 bool
-example_read_test_record(aerospike* p_as)
+example_read_test_record(aerospike* p_as) {
+	return example_read_test_record_tr(p_as, NULL);
+}
+
+bool
+example_read_test_record_tr(aerospike* p_as, as_transaction* tr)
 {
 	as_error err;
 	as_record* p_rec = NULL;
 
 	// Read the test record from the database.
-	if (aerospike_key_get(p_as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
+	if (aerospike_key_get_tr(p_as, tr, &err, NULL, &g_key, &p_rec) !=
+			AEROSPIKE_OK) {
 		LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
 		return false;
 	}
@@ -605,7 +611,13 @@ example_read_test_record(aerospike* p_as)
 	}
 
 	// Log the result.
-	LOG("record was successfully read from database:");
+	if (tr == NULL) {
+		LOG("SRT read successful from database:");
+	}
+	else {
+		LOG("MRT read successful from database:");
+	}
+
 	example_dump_record(p_rec);
 
 	// Destroy the as_record object.

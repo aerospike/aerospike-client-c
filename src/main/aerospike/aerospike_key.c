@@ -212,7 +212,17 @@ as_command_mrt_trid_size(as_transaction* tr, uint16_t* n_fields)
 
 as_status
 aerospike_key_get(
-	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	aerospike* as, as_error* err, const as_policy_read* policy,
+	const as_key* key, as_record** rec
+	)
+{
+	return aerospike_key_get_tr(as, NULL, err, policy, key, rec);
+}
+
+as_status
+aerospike_key_get_tr(
+	aerospike* as, as_transaction* tr, as_error* err,
+	const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
 	if (! policy) {
@@ -231,6 +241,7 @@ aerospike_key_get(
 	size_t size = as_command_key_size(policy->key, key, &n_fields);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
 	size += filter_size;
+	size += as_command_mrt_trid_size(tr, &n_fields);
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
@@ -239,6 +250,12 @@ aerospike_key_get(
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
+
+	if (tr != NULL) {
+		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_TRID,
+				tr->mrt_trid);
+	}
+
 	size = as_command_write_end(buf, p);
 
 	as_command_parse_result_data data;

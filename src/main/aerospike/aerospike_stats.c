@@ -145,7 +145,7 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 {
 	as_string_builder sb;
 	as_string_builder_init(&sb, 4096, true);
-	as_string_builder_append(&sb, "nodes(inUse,inPool,opened,closed):");
+	as_string_builder_append(&sb, "nodes(inUse,inPool,opened,closed) error_count,timeout_count");
 	as_string_builder_append_newline(&sb);
 
 	for (uint32_t i = 0; i < stats->nodes_size; i++) {
@@ -154,9 +154,10 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		as_conn_stats_tostring(&sb, "sync", &node_stats->sync);
 		as_conn_stats_tostring(&sb, "async", &node_stats->async);
 		as_conn_stats_tostring(&sb, "pipeline", &node_stats->pipeline);
-		as_string_builder_append_newline(&sb);
-		as_string_builder_append(&sb, "error count: ");
+		as_string_builder_append_char(&sb, ' ');
 		as_string_builder_append_uint64(&sb, node_stats->error_count);
+		as_string_builder_append_char(&sb, ',');
+		as_string_builder_append_uint64(&sb, node_stats->timeout_count);
 		as_string_builder_append_newline(&sb);
 	}
 
@@ -177,6 +178,10 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		}
 		as_string_builder_append_newline(&sb);
 	}
+	
+	as_string_builder_append(&sb, "retry_count: ");
+	as_string_builder_append_uint64(&sb, stats->retry_count);
+
 	return sb.data;
 }
 

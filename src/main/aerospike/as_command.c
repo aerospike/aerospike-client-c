@@ -186,7 +186,7 @@ as_command_write_header_write(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
 	uint16_t n_fields, uint16_t n_bins, bool durable_delete, uint8_t read_attr, uint8_t write_attr,
-	uint8_t info_attr
+	uint8_t info_attr, uint8_t mrt_attr
 	)
 {
 	switch (exists) {
@@ -246,7 +246,8 @@ as_command_write_header_write(
 	cmd[9] = read_attr;
 	cmd[10] = write_attr;
 	cmd[11] = info_attr;
-	*(uint16_t*)&cmd[12] = 0;
+	cmd[12] = mrt_attr;
+	cmd[13] = 0;
 	*(uint32_t*)&cmd[14] = cf_swap_to_be32(generation);
 	*(uint32_t*)&cmd[18] = cf_swap_to_be32(ttl);
 	uint32_t timeout = as_command_server_timeout(policy);

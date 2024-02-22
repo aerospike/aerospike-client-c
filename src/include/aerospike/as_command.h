@@ -45,6 +45,7 @@ extern "C" {
 #define AS_FIELD_SETNAME 1
 #define AS_FIELD_KEY 2
 #define AS_FIELD_DIGEST 4
+#define AS_FIELD_MRT_TRID 5
 #define AS_FIELD_TASK_ID 7
 #define AS_FIELD_SOCKET_TIMEOUT 9
 #define AS_FIELD_RPS 10
@@ -106,6 +107,11 @@ extern "C" {
 //                -------
 //   1      0     allow prole
 //   1      1     allow unavailable
+
+// Bits in info4.
+#define AS_MSG_INFO4_MRT_VERIFY_READ        (1 << 0)
+#define AS_MSG_INFO4_MRT_ROLL_FORWARD       (1 << 1)
+#define AS_MSG_INFO4_MRT_ROLL_BACK          (1 << 2)
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -355,7 +361,7 @@ as_command_write_header_write(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
 	uint16_t n_fields, uint16_t n_bins, bool durable_delete, uint8_t read_attr, uint8_t write_attr,
-	uint8_t info_attr
+	uint8_t info_attr, uint8_t mrt_attr
 	);
 
 /**
@@ -430,6 +436,18 @@ as_command_write_field_uint64(uint8_t* p, uint8_t id, uint64_t val)
 {
 	p = as_command_write_field_header(p, id, sizeof(uint64_t));
 	*(uint64_t*)p = cf_swap_to_be64(val);
+	return p + sizeof(uint64_t);
+}
+
+/**
+ * @private
+ * Write uint64_t field in little endian.
+ */
+static inline uint8_t*
+as_command_write_field_uint64_le(uint8_t* p, uint8_t id, uint64_t val)
+{
+	p = as_command_write_field_header(p, id, sizeof(uint64_t));
+	*(uint64_t*)p = cf_swap_to_le64(val);
 	return p + sizeof(uint64_t);
 }
 

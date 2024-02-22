@@ -62,9 +62,10 @@ main(int argc, char* argv[])
 	// using as_record_inita(), we won't need to destroy the record if we only
 	// set bins using as_record_set_int64(), as_record_set_str(), and
 	// as_record_set_nil().
+
 	as_record rec;
 	as_record_inita(&rec, 2);
-	as_record_set_int64(&rec, "test-bin-1", 1234);
+	as_record_set_int64(&rec, "test-bin-1", 1);
 	as_record_set_str(&rec, "test-bin-2", "test-bin-2-data");
 
 	// Log its contents.
@@ -72,117 +73,111 @@ main(int argc, char* argv[])
 	example_dump_record(&rec);
 
 	// Write the record to the database.
-	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("write succeeded");
-
-	if (! example_read_test_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Generate a different as_record object to write. In general it's ok to
-	// reuse the stack object by calling as_record_inita() again, as long as the
-	// previous contents are destroyed if necessary.
-	as_record_inita(&rec, 2);
-	as_record_set_int64(&rec, "test-bin-2", 2222);
-	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
-
-	// Log its contents.
-	LOG("as_record object to write to database:");
-	example_dump_record(&rec);
-
-	// Write the record to the database. This will change the type and value of
-	// test-bin-2, will add test-bin-3, and will leave test-bin-one unchanged.
-	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("write succeeded");
-
-	if (! example_read_test_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Generate another as_record object to write.
-	as_record_inita(&rec, 1);
-	as_record_set_nil(&rec, "test-bin-3");
-
-	// Log its contents.
-	LOG("as_record object to write to database:");
-	example_dump_record(&rec);
-
-	// Write the record to the database. This will remove test-bin-3 and
-	// will leave test-bin-1 and test-bin-2 unchanged.
-	if (aerospike_key_put(&as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("write succeeded");
-
-	if (! example_read_test_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Generate another as_record object to write.
-	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, "test-bin-1", 1111);
-
-	// Require that the write succeeds only if the record doesn't exist.
-	as_policy_write wpol;
-	as_policy_write_init(&wpol);
-	wpol.exists = AS_POLICY_EXISTS_CREATE;
-
-	// Log its contents.
-	LOG("as_record object to create in database:");
-	example_dump_record(&rec);
-
-	// Try to create the record. This should fail since the record already
-	// exists in the database.
-	if (aerospike_key_put(&as, &err, &wpol, &g_key, &rec) !=
-			AEROSPIKE_ERR_RECORD_EXISTS) {
-		LOG("aerospike_key_put() returned %d - %s, expected "
-				"AEROSPIKE_ERR_RECORD_EXISTS", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("create failed as expected");
-
-	// Remove the record from the database so we can demonstrate create success.
-	if (aerospike_key_remove(&as, &err, NULL, &g_key) != AEROSPIKE_OK) {
-		LOG("aerospike_key_remove() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	LOG("record removed from database, trying create again");
-
-	// Try to create the record again. This should succeed since the record is
-	// not currently in the database.
-	if (aerospike_key_put(&as, &err, &wpol, &g_key, &rec) !=
+	if (aerospike_key_put_tr(&as, NULL, &err, NULL, &g_key, &rec, 0) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}
 
-	LOG("create succeeded");
+	LOG("SRT write succeeded");
 
-	if (! example_read_test_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
+	example_read_test_record(&as);
+
+	as_transaction tr;
+	tr.mrt_trid = 1;
+
+	// Generate a different as_record object to write. In general it's ok to
+	// reuse the stack object by calling as_record_inita() again, as long as the
+	// previous contents are destroyed if necessary.
+	as_record_inita(&rec, 3);
+	as_record_set_int64(&rec, "test-bin-1", 2);
+	as_record_set_int64(&rec, "test-bin-2", 2222);
+	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
+
+	// Log its contents.
+//	LOG("as_record object to write to database:");
+//	example_dump_record(&rec);
+
+	// Write the record to the database. This will change the type and value of
+	// test-bin-2, will add test-bin-3, and will leave test-bin-one unchanged.
+	if (aerospike_key_put_tr(&as, &tr, &err, NULL, &g_key, &rec, 0) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_key_put() first MRT write failed - returned %d - %s",
+				err.code, err.message);
+		exit(1);
 	}
+
+	LOG("First MRT write succeeded");
+
+	example_read_test_record(&as);
+
+	as_record_inita(&rec, 3);
+	as_record_set_int64(&rec, "test-bin-1", 3);
+	as_record_set_int64(&rec, "test-bin-2", 3333);
+	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
+
+	// Log its contents.
+//	LOG("as_record object to write to database:");
+//	example_dump_record(&rec);
+
+	// Write the record to the database. This will change the type and value of
+	// test-bin-2, will add test-bin-3, and will leave test-bin-one unchanged.
+	if (aerospike_key_put_tr(&as, &tr, &err, NULL, &g_key, &rec, 0) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_key_put() second MRT write failed - returned %d - %s",
+				err.code, err.message);
+		exit(1);
+	}
+
+	LOG("Second MRT write succeeded");
+
+	// commit
+	if (aerospike_key_put_tr(&as, &tr, &err, NULL, &g_key, &rec,
+			MRT_ROLL_FORWARD) != AEROSPIKE_OK) {
+		LOG("aerospike_key_put() MRT roll forward failed - returned %d - %s",
+				err.code, err.message);
+		exit(1);
+	}
+
+	LOG("Roll forward succeeded");
+
+	example_read_test_record(&as);
+
+	tr.mrt_trid = 2;
+	// Generate another as_record object to write.
+	as_record_inita(&rec, 3);
+	as_record_set_int64(&rec, "test-bin-1", 4);
+	as_record_set_int64(&rec, "test-bin-2", 3333);
+	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
+
+	// Log its contents.
+//	LOG("as_record object to write to database:");
+//	example_dump_record(&rec);
+
+	// Write the record to the database. This will remove test-bin-3 and
+	// will leave test-bin-1 and test-bin-2 unchanged.
+	if (aerospike_key_put_tr(&as, &tr, &err, NULL, &g_key, &rec, 0)
+			!= AEROSPIKE_OK) {
+		LOG("aerospike_key_put() MRT write failed - returned %d - %s", err.code, err.message);
+		exit(1);
+	}
+	else {
+		LOG("SUCCESS - expected parallel MRT write to SUCCEED");
+	}
+
+	example_read_test_record(&as);
+
+	if (aerospike_key_put_tr(&as, &tr, &err, NULL, &g_key, &rec,
+			MRT_ROLL_BACK) != AEROSPIKE_OK) {
+		LOG("aerospike_key_put() MRT roll forward failed - returned %d - %s",
+				err.code, err.message);
+		exit(1);
+	}
+
+	LOG("Roll back succeeded");
+
+	example_read_test_record(&as);
 
 	// Cleanup and disconnect from the database cluster.
 	example_cleanup(&as);

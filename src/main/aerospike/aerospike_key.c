@@ -196,6 +196,16 @@ as_command_write_filter(const as_policy_base* policy, uint32_t filter_size, uint
 	return p;
 }
 
+static inline uint32_t
+as_command_mrt_trid_size(as_transaction* tr, uint16_t* n_fields)
+{
+	if (tr != NULL) {
+		(*n_fields)++;
+		return AS_FIELD_HEADER_SIZE + sizeof(uint64_t);
+	}
+	return 0;
+}
+
 /******************************************************************************
  * GET
  *****************************************************************************/
@@ -490,6 +500,8 @@ aerospike_key_exists_async(
  *****************************************************************************/
 
 typedef struct as_put_s {
+	as_transaction* tr;
+	uint8_t mrt_attr;
 	const as_policy_write* policy;
 	const as_key* key;
 	as_record* rec;
@@ -502,10 +514,12 @@ typedef struct as_put_s {
 
 static as_status
 as_put_init(
-	as_put* put, const as_policy_write* policy, const as_key* key, as_record* rec,
-	as_queue* buffers, as_error* err
+	as_put* put, as_transaction* tr, const as_policy_write* policy,
+	const as_key* key, as_record* rec, as_queue* buffers, as_error* err
 	)
 {
+	put->tr = tr;
+	put->mrt_attr = 0;
 	put->policy = policy;
 	put->key = key;
 	put->rec = rec;
@@ -513,6 +527,7 @@ as_put_init(
 	put->size = as_command_key_size(policy->key, key, &put->n_fields);
 	put->filter_size = as_command_filter_size(&policy->base, &put->n_fields);
 	put->size += put->filter_size;
+	put->size += as_command_mrt_trid_size(tr, &put->n_fields);
 	put->n_bins = rec->bins.size;
 
 	as_bin* bins = rec->bins.entries;
@@ -537,9 +552,14 @@ as_put_write(void* udata, uint8_t* buf)
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 		policy->exists, policy->gen, rec->gen, ttl, put->n_fields, put->n_bins,
-		policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+		policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0, put->mrt_attr);
 
 	p = as_command_write_key(p, policy->key, put->key);
+
+	if (put->tr != NULL) {
+		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_TRID, put->tr->mrt_trid);
+	}
+
 	p = as_command_write_filter(&policy->base, put->filter_size, p);
 
 	as_bin* bins = rec->bins.entries;
@@ -555,7 +575,18 @@ as_put_write(void* udata, uint8_t* buf)
 
 as_status
 aerospike_key_put(
-	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec
+	aerospike* as, as_error* err, const as_policy_write* policy,
+	const as_key* key, as_record* rec
+	)
+{
+	return aerospike_key_put_tr(as, NULL, err, policy, key, rec, 0);
+}
+
+as_status
+aerospike_key_put_tr(
+	aerospike* as, as_transaction* tr, as_error* err,
+	const as_policy_write* policy, const as_key* key, as_record* rec,
+	as_mrt_cmd mrt_cmd
 	)
 {
 	if (! policy) {
@@ -574,11 +605,18 @@ aerospike_key_put(
 	as_queue_inita(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
-	status = as_put_init(&put, policy, key, rec, &buffers, err);
+	status = as_put_init(&put, tr, policy, key, rec, &buffers, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_buffers_destroy(&buffers);
 		return status;
+	}
+
+	if (mrt_cmd == MRT_ROLL_FORWARD) {
+		put.mrt_attr = AS_MSG_INFO4_MRT_ROLL_FORWARD;
+	}
+	else if (mrt_cmd == MRT_ROLL_BACK) {
+		put.mrt_attr = AS_MSG_INFO4_MRT_ROLL_BACK;
 	}
 
 	// Support new compress while still being compatible with old XDR compression_threshold.
@@ -619,7 +657,7 @@ aerospike_key_put_async_ex(
 	as_queue_inita(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
-	status = as_put_init(&put, policy, key, rec, &buffers, err);
+	status = as_put_init(&put, NULL, policy, key, rec, &buffers, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_buffers_destroy(&buffers);
@@ -726,7 +764,7 @@ aerospike_key_remove(
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, n_fields, 0,
-					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
+					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -774,7 +812,7 @@ aerospike_key_remove_async_ex(
 
 	uint8_t* p = as_command_write_header_write(cmd->buf, &policy->base, policy->commit_level,
 					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, n_fields, 0,
-					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
+					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -923,7 +961,7 @@ as_operate_write(void* udata, uint8_t* buf)
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 		policy->exists, policy->gen, ops->gen, ttl, oper->n_fields,
 		oper->n_operations, policy->durable_delete, oper->read_attr, oper->write_attr,
-		oper->info_attr);
+		oper->info_attr, 0);
 
 	p = as_command_write_key(p, policy->key, oper->key);
 	p = as_command_write_filter(&policy->base, oper->filter_size, p);
@@ -1149,7 +1187,7 @@ as_apply_write(void* udata, uint8_t* buf)
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level, 0,
 		AS_POLICY_GEN_IGNORE, 0, policy->ttl, ap->n_fields, 0, policy->durable_delete,
-		ap->read_attr, AS_MSG_INFO2_WRITE, 0);
+		ap->read_attr, AS_MSG_INFO2_WRITE, 0, 0);
 
 	p = as_command_write_key(p, policy->key, ap->key);
 	p = as_command_write_filter(&policy->base, ap->filter_size, p);

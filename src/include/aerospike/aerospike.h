@@ -184,6 +184,17 @@ typedef struct aerospike_s {
 
 } aerospike;
 
+typedef enum {
+	MRT_VERIFY_READ = 1,
+	MRT_ROLL_FORWARD,
+	MRT_ROLL_BACK
+} as_mrt_cmd;
+
+// TODO: move this to a better place. as_transaction.h?
+typedef struct as_transaction_s {
+	uint64_t mrt_trid;
+} as_transaction;
+
 //---------------------------------
 // Functions
 //---------------------------------

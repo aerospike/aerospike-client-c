@@ -333,6 +333,13 @@ aerospike_key_put(
 	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec
 	);
 
+AS_EXTERN as_status
+aerospike_key_put_tr(
+	aerospike* as, as_transaction* tr, as_error* err,
+	const as_policy_write* policy, const as_key* key, as_record* rec,
+	as_mrt_cmd mrt_cmd
+	);
+
 /**
  * Asynchronously store a record in the cluster.
  *

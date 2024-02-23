@@ -640,6 +640,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		if (latency_type != AS_LATENCY_TYPE_NONE) {
 			begin = cf_getns();
 		}
+		
 		// Send command.
 		status = as_socket_write_deadline(err, &socket, node, cmd->buf, cmd->buf_size,
 										  cmd->socket_timeout, cmd->deadline_ms);
@@ -661,6 +662,11 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		if (status == AEROSPIKE_OK) {
+			if (latency_type != AS_LATENCY_TYPE_NONE) {
+				uint64_t elapsed = cf_getns() - begin;
+				as_node_add_latency(node, latency_type, elapsed);
+			}
+			
 			// Reset error code if retry had occurred.
 			if (cmd->iteration > 0) {
 				as_error_reset(err);
@@ -673,10 +679,12 @@ as_command_execute(as_command* cmd, as_error* err)
 			switch (status) {
 				case AEROSPIKE_ERR_CLUSTER:
 				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
+					as_node_add_error(node);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
 				case AEROSPIKE_ERR_CONNECTION:
+					as_node_add_error(node);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					goto Retry;
 
@@ -697,6 +705,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
+					as_node_add_error(node);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					if (release_node) {
 						as_node_release(node);
@@ -705,17 +714,12 @@ as_command_execute(as_command* cmd, as_error* err)
 					return status;
 				
 				default:
+					as_node_add_error(node);
 					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 					break;
 			}
 		}
 		
-		if (latency_type != AS_LATENCY_TYPE_NONE)
-		{
-			uint64_t elapsed = cf_getns() - begin;
-			as_node_add_latency(node, latency_type, elapsed);
-		}
-
 		// Put connection back in pool.
 		as_node_put_connection(node, &socket);
 		

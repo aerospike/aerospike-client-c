@@ -491,7 +491,12 @@ as_node_create_connection(
 	as_socket* sock
 	)
 {
-	uint64_t begin = cf_getns();
+	uint64_t begin = 0;
+
+	if (node->cluster->metrics_enabled) {
+		begin = cf_getns();
+	}
+	
 	as_status status = as_node_create_socket(err, node, pool, sock, deadline_ms);
 
 	if (status) {
@@ -518,8 +523,7 @@ as_node_create_connection(
 		}
 	}
 
-	if (node->cluster->metrics_enabled)
-	{
+	if (node->cluster->metrics_enabled) {
 		uint64_t elapsed = cf_getns() - begin;
 		as_node_add_latency(node, AS_LATENCY_TYPE_CONN, elapsed);
 	}

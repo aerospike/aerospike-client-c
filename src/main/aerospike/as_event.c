@@ -433,7 +433,12 @@ void
 as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd)
 {
 	// Initialize read buffer (buf) to be located after write buffer.
-	cmd->begin = 0;
+	if (cmd->cluster->metrics_enabled) {
+		cmd->begin = cf_getns();
+	}
+	else {
+		cmd->begin = 0;
+	}
 	cmd->latency_type = cmd->cluster->metrics_enabled ? cmd->latency_type : AS_LATENCY_TYPE_NONE;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
@@ -579,17 +584,13 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	conn->base.watching = 0;
 	conn->cmd = cmd;
 	cmd->conn = &conn->base;
-	if (cmd->cluster->metrics_enabled) {
-		cmd->begin = cf_getns();
-	}
 	as_event_connect(cmd, pool);
 }
 
 void
 as_event_connection_complete(as_event_command* cmd)
 {
-	if (cmd->cluster->metrics_enabled)
-	{
+	if (cmd->cluster->metrics_enabled) {
 		uint64_t elapsed = cf_getns() - cmd->begin;
 		as_node_add_latency(cmd->node, AS_LATENCY_TYPE_CONN, elapsed);
 	}
@@ -676,9 +677,6 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 
 	// Create connection only when connection count within limit.
 	if (as_async_conn_pool_incr_total(pool)) {
-		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			cmd->begin = cf_getns();
-		}
 		as_event_create_connection(cmd, pool);
 		return;
 	}
@@ -1005,8 +1003,7 @@ as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 static inline void
 as_event_response_complete(as_event_command* cmd)
 {
-	if (cmd->latency_type != AS_LATENCY_TYPE_NONE)
-	{
+	if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 		uint64_t elapsed = cf_getns() - cmd->begin;
 		as_node_add_latency(cmd->node, cmd->latency_type, elapsed);
 	}
@@ -1280,12 +1277,6 @@ as_event_socket_error(as_event_command* cmd, as_error* err)
 void
 as_event_response_error(as_event_command* cmd, as_error* err)
 {
-	if (cmd->latency_type != AS_LATENCY_TYPE_NONE)
-	{
-		uint64_t elapsed = cf_getns() - cmd->begin;
-		as_node_add_latency(cmd->node, cmd->latency_type, elapsed);
-	}
-	
 	if (cmd->pipe_listener != NULL) {
 		as_pipe_response_error(cmd, err);
 		return;
@@ -1302,8 +1293,9 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	switch (err->code) {
 		case AEROSPIKE_ERR_CLUSTER:
 		case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-			as_event_put_connection(cmd, pool);
+			as_node_add_error(cmd->node);
 			as_node_incr_error_rate(cmd->node);
+			as_event_put_connection(cmd, pool);
 			break;
 
 		case AEROSPIKE_ERR_QUERY_ABORTED:
@@ -1313,8 +1305,9 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
-			as_event_release_connection(cmd->conn, pool);
+			as_node_add_error(cmd->node);
 			as_node_incr_error_rate(cmd->node);
+			as_event_release_connection(cmd->conn, pool);
 			break;
 		
 		case AEROSPIKE_ERR_TIMEOUT:
@@ -1323,6 +1316,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 			break;
 			
 		default:
+			as_node_add_error(cmd->node);
 			as_event_put_connection(cmd, pool);
 			break;
 	}

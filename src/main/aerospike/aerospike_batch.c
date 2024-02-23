@@ -2730,8 +2730,6 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
 
-	as_cluster_add_retries(cluster, batch_nodes.size);
-
 	// Create initial key capacity for each node as average + 25%.
 	uint32_t offsets_size = task->offsets.size;
 	uint32_t offsets_capacity = offsets_size / n_nodes;
@@ -2796,6 +2794,8 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 			return AEROSPIKE_USE_NORMAL_RETRY;
 		}
 	}
+	
+	as_cluster_add_retries(cluster, batch_nodes.size);
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
 
 	return as_batch_execute_sync(cluster, err, task->policy, btr->defs, task->has_write, &rep,
@@ -2817,8 +2817,6 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
-
-	as_cluster_add_retries(cluster, batch_nodes.size);
 
 	as_status status = AEROSPIKE_OK;
 
@@ -2883,6 +2881,8 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 			return AEROSPIKE_USE_NORMAL_RETRY;
 		}
 	}
+	
+	as_cluster_add_retries(cluster, batch_nodes.size);
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
 
 	// Run batch retries sequentially in same thread.
@@ -3152,8 +3152,6 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	as_vector bnodes;
 	as_vector_inita(&bnodes, sizeof(as_batch_retry_node), n_nodes);
 
-	as_cluster_add_retries(cluster, bnodes.size);
-
 	as_batch_replica rep;
 	rep.replica = be->replica;
 	rep.replica_sc = be->replica_sc;
@@ -3267,6 +3265,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			return -2;  // Timeout occurred, defer to original error.
 		}
 	}
+
+	as_cluster_add_retries(cluster, bnodes.size);
 
 	as_event_executor* e = &be->executor;
 	pthread_mutex_lock(&e->lock);

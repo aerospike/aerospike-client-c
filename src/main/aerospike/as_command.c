@@ -681,6 +681,8 @@ as_command_execute(as_command* cmd, as_error* err)
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
+					as_node_add_timeout(node);
+					
 					if (is_server_timeout(err)) {
 						as_node_put_conn_error(node, &socket);
 					}

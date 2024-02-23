@@ -655,50 +655,6 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 	return status;
 }
 
-void
-as_cluster_add_tran(as_cluster* cluster)
-{
-	if (cluster->metrics_enabled) {
-		as_incr_uint64(&cluster->tran_count);
-	}
-}
-
-uint64_t
-as_cluster_get_tran_count(const as_cluster* cluster)
-{
-	return as_load_uint64(&cluster->tran_count);
-}
-
-void
-as_cluster_add_retry(as_cluster* cluster)
-{
-	as_incr_uint64(&cluster->retry_count);
-}
-
-void
-as_cluster_add_retries(as_cluster* cluster, uint32_t count)
-{
-	as_faa_uint64(&cluster->retry_count, count);
-}
-
-uint64_t
-as_cluster_get_retry_count(const as_cluster* cluster)
-{
-	return as_load_uint64(&cluster->retry_count);
-}
-
-void
-as_cluster_add_delay_queue_timeout(as_cluster* cluster)
-{
-	as_incr_uint64(&cluster->delay_queue_timeout_count);
-}
-
-uint64_t
-as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
-{
-	return as_load_uint64(&cluster->delay_queue_timeout_count);
-}
-
 static as_status
 as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
 {

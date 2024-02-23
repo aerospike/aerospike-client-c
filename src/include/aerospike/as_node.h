@@ -688,28 +688,40 @@ as_node_enable_metrics(as_node* node, const struct as_metrics_policy_s* policy);
 /**
  * Return transaction error count. The value is cumulative and not reset per metrics interval.
  */
-uint64_t
-as_node_get_error_count(as_node* node);
+static inline uint64_t
+as_node_get_error_count(as_node* node)
+{
+	return as_load_uint64(&node->error_count);
+}
 
 /**
  * Increment transaction error count. If the error is retryable, multiple errors per
  * transaction may occur.
  */
-void 
-as_node_add_error(as_node* node);
+static inline void
+as_node_add_error(as_node* node)
+{
+	as_incr_uint64(&node->error_count);
+}
 
 /**
  * Return transaction timeout count. The value is cumulative and not reset per metrics interval.
  */
-uint64_t
-as_node_get_timeout_count(as_node* node);
+static inline uint64_t
+as_node_get_timeout_count(as_node* node)
+{
+	return as_load_uint64(&node->timeout_count);
+}
 
 /**
  * Increment transaction timeout count. If the timeout is retryable (ie socketTimeout),
  * multiple timeouts per transaction may occur.
  */
-void
-as_node_add_timeout(as_node* node);
+static inline void
+as_node_add_timeout(as_node* node)
+{
+	as_incr_uint64(&node->timeout_count);
+}
 
 /**
  * @private

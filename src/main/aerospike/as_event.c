@@ -823,6 +823,8 @@ as_event_socket_timeout(as_event_command* cmd)
 		return;
 	}
 
+	as_node_add_timeout(cmd->node);
+
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, true);
 		return;
@@ -847,15 +849,15 @@ as_event_delay_timeout(as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_QUEUE_ERROR;
 
+	if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+		as_cluster_add_delay_queue_timeout(cmd->cluster);
+	}
+
 	as_error err;
 	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Delay queue timeout");
 
 	// Notify user, but do not destroy command.
 	as_event_notify_error(cmd, &err);
-	if (cmd->latency_type != AS_LATENCY_TYPE_NONE)
-	{
-		as_cluster_add_delay_queue_timeout(cmd->cluster);
-	}
 }
 
 void
@@ -887,12 +889,14 @@ as_event_process_timer(as_event_command* cmd)
 void
 as_event_total_timeout(as_event_command* cmd)
 {
+	// Node should not be null at this point.
+	as_node_add_timeout(cmd->node);
+	
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, false);
 		return;
 	}
 
-	// Node should not be null at this point.
 	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
 
 	as_error err;
@@ -1311,6 +1315,11 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_NOT_AUTHENTICATED:
 			as_event_release_connection(cmd->conn, pool);
 			as_node_incr_error_rate(cmd->node);
+			break;
+		
+		case AEROSPIKE_ERR_TIMEOUT:
+			as_node_add_timeout(cmd->node);
+			as_event_put_connection(cmd, pool);
 			break;
 			
 		default:

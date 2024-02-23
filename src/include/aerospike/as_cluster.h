@@ -612,50 +612,73 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster);
  * @private
  * Increment transaction count when metrics are enabled.
  */
-void 
-as_cluster_add_tran(as_cluster* cluster);
+static inline void
+as_cluster_add_tran(as_cluster* cluster)
+{
+	if (cluster->metrics_enabled) {
+		as_incr_uint64(&cluster->tran_count);
+	}
+}
 
 /**
  * @private
  * Return transaction count. The value is cumulative and not reset per metrics interval.
  */
-uint64_t
-as_cluster_get_tran_count(const as_cluster* cluster);
+static inline uint64_t
+as_cluster_get_tran_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->tran_count);
+}
 
 /**
  * @private
  * Increment async delay queue timeout count.
  */
-void
-as_cluster_add_retry(as_cluster* cluster);
+static inline void
+as_cluster_add_retry(as_cluster* cluster)
+{
+	as_incr_uint64(&cluster->retry_count);
+}
 
 /**
  * @private
  * Add transaction retry count. There can be multiple retries for a single transaction.
  */
-void
-as_cluster_add_retries(as_cluster* cluster, uint32_t count);
+static inline void
+as_cluster_add_retries(as_cluster* cluster, uint32_t count)
+{
+	as_faa_uint64(&cluster->retry_count, count);
+}
 
 /**
  * @private
  * Return transaction retry count. The value is cumulative and not reset per metrics interval.
  */
-uint64_t
-as_cluster_get_retry_count(const as_cluster* cluster);
+static inline uint64_t
+as_cluster_get_retry_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->retry_count);
+}
 
 /**
  * @private
  * Increment async delay queue timeout count.
  */
-void
-as_cluster_add_delay_queue_timeout(as_cluster* cluster);
+static inline void
+as_cluster_add_delay_queue_timeout(as_cluster* cluster)
+{
+	as_incr_uint64(&cluster->delay_queue_timeout_count);
+}
 
 /**
  * @private
  * Return async delay queue timeout count.
  */
-uint64_t
-as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster);
+static inline uint64_t
+as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->delay_queue_timeout_count);
+}
 
 /**
  * @private

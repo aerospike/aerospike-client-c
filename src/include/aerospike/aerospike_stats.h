@@ -136,6 +136,11 @@ typedef struct as_cluster_stats_s {
 	as_event_loop_stats* event_loops;
 
 	/**
+	* Count of transaction retries since cluster was started.
+	*/
+	uint64_t retry_count;
+
+	/**
 	 * Node count.
 	 */
 	uint32_t nodes_size;
@@ -150,11 +155,6 @@ typedef struct as_cluster_stats_s {
 	 * then all threads in the thread pool are active.
 	 */
 	uint32_t thread_pool_queued_tasks;
-
-	/**
-	* Count of transaction retries since cluster was started.
-	*/
-	uint64_t retry_count;
 
 } as_cluster_stats;
 

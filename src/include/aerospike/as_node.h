@@ -316,6 +316,18 @@ typedef struct as_node_s {
 	as_socket info_socket;
 
 	/**
+	 * Transaction error count since node was initialized. If the error is retryable, multiple errors per
+	 * transaction may occur.
+	 */
+	uint64_t error_count;
+
+	/**
+	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * multiple timeouts per transaction may occur.
+	 */
+	uint64_t timeout_count;
+
+	/**
 	 * Connection queue iterator.  Not atomic by design.
 	 */
 	uint32_t conn_iter;
@@ -335,18 +347,6 @@ typedef struct as_node_s {
 	 */
 	uint32_t error_rate;
 	
-	/**
-	 * Transaction error count since node was initialized. If the error is retryable, multiple errors per
-	 * transaction may occur.
-	 */
-	uint64_t error_count;
-
-	/**
-	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
-	 * multiple timeouts per transaction may occur.
-	 */
-	uint64_t timeout_count;
-
 	/**
 	 * Server's generation count for peers.
 	 */

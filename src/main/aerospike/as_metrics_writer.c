@@ -375,7 +375,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	timestamp_to_string(now_str, sizeof(now_str));
 	
 	char data[512];
-	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,cpu,mem,invalidNodeCount,tranCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] eventloop[processSize,queueSize] node[name,address:port,syncConn,asyncConn,errors,timeouts,latency[]] conn[inUse,inPool,opened,closed] latency(%u,%u)[type[l1,l2,l3...]]\n",
+	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,cpu,mem,invalidNodeCount,tranCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,errors,timeouts,latency[]] conn[inUse,inPool,opened,closed] latency(%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, mw->latency_columns, mw->latency_shift);
 	if (rv <= 0) {
 		fclose(mw->file);
@@ -440,8 +440,17 @@ as_metrics_write_node(as_metrics_writer* mw, as_string_builder* sb, struct as_no
 	as_string_builder_append_char(sb, '[');
 	as_string_builder_append(sb, node->name);
 	as_string_builder_append_char(sb, ',');
+	
+	as_address* address = as_node_get_address(node);
+	struct sockaddr* addr = (struct sockaddr*)&address->addr;
+	
+	char address_name[AS_IP_ADDRESS_SIZE];
+	as_address_short_name(addr, address_name, sizeof(address_name));
+	as_string_builder_append(sb, address_name);
+	as_string_builder_append_char(sb, ',');
 
-	as_string_builder_append(sb, as_node_get_address_string(node));
+	uint16_t port = as_address_port(addr);
+	as_string_builder_append_uint(sb, port);
 	as_string_builder_append_char(sb, ',');
 
 	struct as_conn_stats_s sync;

@@ -181,6 +181,9 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->active = true;
 	node->partition_changed = true;
 	node->rebalance_changed = cluster->rack_aware;
+	node->error_rate = 0;
+	node->error_count = 0;
+	node->timeout_count = 0;
 
 	if (cluster->metrics_enabled) {
 		node->metrics = as_node_metrics_init(cluster->metrics_latency_columns, cluster->metrics_latency_shift);
@@ -193,9 +196,6 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
 	node->sync_conns_opened = 1;
 	node->sync_conns_closed = 0;
-	node->error_rate = 0;
-	node->error_count = 0;
-	node->timeout_count = 0;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;

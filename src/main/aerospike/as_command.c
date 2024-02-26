@@ -713,6 +713,11 @@ as_command_execute(as_command* cmd, as_error* err)
 					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 					return status;
 				
+				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
+					// Do not increment error count on record not found.
+					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+					break;
+
 				default:
 					as_node_add_error(node);
 					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);

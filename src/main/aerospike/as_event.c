@@ -438,8 +438,8 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	}
 	else {
 		cmd->begin = 0;
+		cmd->latency_type = AS_LATENCY_TYPE_NONE;
 	}
-	cmd->latency_type = cmd->cluster->metrics_enabled ? cmd->latency_type : AS_LATENCY_TYPE_NONE;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
 	cmd->conn = NULL;

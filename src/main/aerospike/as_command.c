@@ -715,6 +715,11 @@ as_command_execute(as_command* cmd, as_error* err)
 				
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 					// Do not increment error count on record not found.
+					// Add latency metrics instead.
+					if (latency_type != AS_LATENCY_TYPE_NONE) {
+						uint64_t elapsed = cf_getns() - begin;
+						as_node_add_latency(node, latency_type, elapsed);
+					}
 					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 					break;
 

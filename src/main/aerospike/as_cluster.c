@@ -655,12 +655,13 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 	return status;
 }
 
-static as_status
-as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
+static void
+as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
 {
 	// There is no need to delete nodes from partition tables because the nodes
 	// have already been set to inactive. Further connection requests will result
 	// in an exception and a different node will be tried.
+	as_error err;
 	
 	// Set node to inactive.
 	for (uint32_t i = 0; i < nodes_to_remove->size; i++) {
@@ -670,15 +671,14 @@ as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_no
 		pthread_mutex_lock(&cluster->metrics_lock);
 
 		if (cluster->metrics_enabled) {
-			status = cluster->metrics_listeners.node_close_listener(err, node, node->cluster->metrics_listeners.udata);
+			status = cluster->metrics_listeners.node_close_listener(&err, node, node->cluster->metrics_listeners.udata);
 		}
 		pthread_mutex_unlock(&cluster->metrics_lock);
 		
 		if (status != AEROSPIKE_OK) {
 			// Metrics failures should not interrupt cluster tend.
 			// Log warning and continue processing.
-			as_log_warn("Metrics error: %s %s", as_error_string(status), err->message);
-			as_error_reset(err);
+			as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
 		}
 		as_node_deactivate(node);
 	}
@@ -690,8 +690,6 @@ as_cluster_remove_nodes(as_error* err, as_cluster* cluster, as_vector* /* <as_no
 	if (cluster->shm_info) {
 		as_shm_remove_nodes(cluster, nodes_to_remove);
 	}
-
-	return AEROSPIKE_OK;
 }
 
 static as_status
@@ -962,10 +960,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 			
 			// Remove nodes in a batch.
 			if (nodes_to_remove.size > 0) {
-				as_status status = as_cluster_remove_nodes(err, cluster, &nodes_to_remove);
-				if (status != AEROSPIKE_OK) {
-					return status;
-				}
+				as_cluster_remove_nodes(cluster, &nodes_to_remove);
 				nodes = cluster->nodes;
 			}
 			as_vector_destroy(&nodes_to_remove);

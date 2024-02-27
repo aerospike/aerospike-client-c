@@ -892,6 +892,10 @@ as_scan_partitions(
 		}
 
 		uint32_t n_nodes = pt->node_parts.size;
+		
+		if (pt->iteration > 1) {
+			as_cluster_add_retries(cluster, n_nodes);
+		}
 
 		// Initialize task.
 		uint32_t error_mutex = 0;

@@ -543,8 +543,8 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 	}
 	as_string_builder_append(&sb, "],[");
 
-	// Since this function is only called from the cluster tend thread, there is no need to reserve nodes.
-	as_nodes* nodes = cluster->nodes;
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		
@@ -553,6 +553,7 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 		}
 		as_metrics_write_node(mw, &sb, node);
 	}
+	as_nodes_release(nodes);
 	as_string_builder_append(&sb, "]]");
 
 	as_string_builder_append_newline(&sb);

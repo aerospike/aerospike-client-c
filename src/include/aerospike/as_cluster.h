@@ -429,7 +429,7 @@ typedef struct as_cluster_s {
 	 * Listeners that handles metrics notification events. The default listener implementation
 	 * writes the metrics snapshot to a file which will later be read and forwarded to
 	 * OpenTelemetry by a separate offline application.
-	 * <p>
+	 *
 	 * The listener could be overridden to send the metrics snapshot directly to OpenTelemetry.
 	 * 
 	 * This is set using as_policy_metrics.

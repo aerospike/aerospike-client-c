@@ -84,7 +84,7 @@ typedef struct as_metrics_policy_s {
 	 * Listeners that handles metrics notification events. The default listener implementation
 	 * writes the metrics snapshot to a file which will later be read and forwarded to
 	 * OpenTelemetry by a separate offline application.
-	 * <p>
+	 *
 	 * The listener could be overridden to send the metrics snapshot directly to OpenTelemetry.
 	 */
 	as_metrics_listeners metrics_listeners;
@@ -92,7 +92,7 @@ typedef struct as_metrics_policy_s {
 	/**
 	 * Directory path to write metrics log files for listeners that write logs.
 	 *
-	 * Default: <current directory>
+	 * Default: . (current directory)
 	 */
 	char report_dir[256];
 

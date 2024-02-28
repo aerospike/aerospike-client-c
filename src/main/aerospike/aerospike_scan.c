@@ -310,6 +310,9 @@ as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* er
 		return AEROSPIKE_OK;
 	}
 
+	char* node_str = as_node_get_address_string(task->node);
+	as_log_info("Scanned record from node: %s", node_str);
+
 	if (task->callback) {
 		bool rv = task->callback((as_val*)&rec, task->udata);
 

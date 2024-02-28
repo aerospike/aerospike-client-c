@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -251,6 +251,15 @@ aerospike_close(aerospike* as, as_error* err)
 	as_cluster* cluster = as->cluster;
 	
 	if (cluster) {
+		if (cluster->metrics_enabled) {
+			as_status status = aerospike_disable_metrics(as, err);
+			
+			if (status != AEROSPIKE_OK) {
+				as_log_warn("Metrics error: %s %s", as_error_string(status), err->message);
+				as_error_reset(err);
+			}
+		}
+		
 		if (as_event_loop_size > 0 && !as_event_single_thread) {
 			// Async configurations will attempt to wait till pending async commands have completed.
 			as_event_close_cluster(cluster);

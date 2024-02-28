@@ -1616,6 +1616,7 @@ as_batch_command_init(
 	cmd->buf_size = size;
 	cmd->partition_id = 0; // Not referenced when node set.
 	cmd->replica = task->replica;
+	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
 
 	// Note: Do not set flags to AS_COMMAND_FLAGS_LINEARIZE because AP and SC replicas
 	// are tracked separately for batch (cmd->master and cmd->master_sc).
@@ -2080,6 +2081,8 @@ as_batch_keys_execute(
 	as_batch_base_record* rec, as_batch_attr* attr, as_batch_listener listener, void* udata
 	)
 {
+	as_cluster* cluster = as->cluster;
+	as_cluster_add_tran(cluster);
 	uint32_t n_keys = batch->keys.size;
 	
 	if (n_keys == 0) {
@@ -2089,7 +2092,6 @@ as_batch_keys_execute(
 		return AEROSPIKE_OK;
 	}
 	
-	as_cluster* cluster = as->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);
@@ -2429,6 +2431,7 @@ as_batch_command_create(
 	// cmd->replica_size = 1;
 	cmd->replica_index = rep->replica_index;
 	cmd->replica_index_sc = rep->replica_index_sc;
+	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
 	return bc;
 }
 
@@ -2553,6 +2556,8 @@ as_batch_records_execute(
 	as_async_batch_executor* async_executor, bool has_write
 	)
 {
+	as_cluster* cluster = as->cluster;
+	as_cluster_add_tran(cluster);
 	as_vector* list = &records->list;
 	uint32_t n_keys = records->list.size;
 	
@@ -2560,7 +2565,6 @@ as_batch_records_execute(
 		return AEROSPIKE_OK;
 	}
 	
-	as_cluster* cluster = as->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);
@@ -2669,6 +2673,7 @@ as_batch_records_execute_async(
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop, bool has_write
 	)
 {
+	as_cluster_add_tran(as->cluster);
 	// Check for empty batch.
 	if (records->list.size == 0) {
 		listener(0, records, udata, event_loop);
@@ -2789,6 +2794,8 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 			return AEROSPIKE_USE_NORMAL_RETRY;
 		}
 	}
+	
+	as_cluster_add_retries(cluster, batch_nodes.size);
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
 
 	return as_batch_execute_sync(cluster, err, task->policy, btr->defs, task->has_write, &rep,
@@ -2874,6 +2881,8 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 			return AEROSPIKE_USE_NORMAL_RETRY;
 		}
 	}
+	
+	as_cluster_add_retries(cluster, batch_nodes.size);
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
 
 	// Run batch retries sequentially in same thread.
@@ -2949,6 +2958,7 @@ as_batch_retry_command_create(
 	// cmd->replica_size = 1;
 	cmd->replica_index = rep->replica_index;
 	cmd->replica_index_sc = rep->replica_index_sc;
+	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
 	return bc;
 }
 
@@ -3255,6 +3265,8 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			return -2;  // Timeout occurred, defer to original error.
 		}
 	}
+
+	as_cluster_add_retries(cluster, bnodes.size);
 
 	as_event_executor* e = &be->executor;
 	pthread_mutex_lock(&e->lock);

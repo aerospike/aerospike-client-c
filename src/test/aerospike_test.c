@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -24,6 +24,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_event.h>
+#include <aerospike/as_metrics.h>
 
 #include "test.h"
 #include "aerospike_test.h"
@@ -379,8 +380,20 @@ static bool before(atf_plan* plan)
 			return false;
 		}
 	}
-
 	cf_free(result);
+
+	/*
+	// Test metrics
+	as_metrics_policy policy;
+	as_metrics_policy_init(&policy);
+
+	as_status status = aerospike_enable_metrics(as, &err, &policy);
+
+	if (status != AEROSPIKE_OK) {
+		error("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
+	}
+	*/
+	
 	return true;
 }
 

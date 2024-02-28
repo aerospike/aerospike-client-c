@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -155,7 +155,7 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool ret
 		conn->canceled = true;
 		as_async_conn_pool* pool = &node->pipe_conn_pools[loop->index];
 		as_event_release_connection((as_event_connection*)conn, pool);
-		as_node_incr_error_count(node);
+		as_node_incr_error_rate(node);
 		as_node_release(node);
 		return;
 	}
@@ -349,7 +349,7 @@ as_pipe_get_connection(as_event_command* cmd)
 			if (len < 0) {
 				as_log_debug("Invalid pipeline socket from pool: %d", len);
 				release_connection(cmd, conn, pool);
-				as_node_incr_error_count(cmd->node);
+				as_node_incr_error_rate(cmd->node);
 				continue;
 			}
 

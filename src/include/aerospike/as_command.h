@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -190,6 +190,7 @@ typedef struct as_command_s {
 	uint8_t replica_size;
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
+	as_latency_type latency_type;
 } as_command;
 
 /**

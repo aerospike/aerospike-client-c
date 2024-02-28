@@ -8,7 +8,7 @@
   <ItemDefinitionGroup>
     <ClCompile>
       <PreprocessorDefinitions>_CRT_SECURE_NO_DEPRECATE;_TIMESPEC_DEFINED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <DisableSpecificWarnings>4098;4996</DisableSpecificWarnings>
+      <DisableSpecificWarnings>4098;4996;6255;6262;26451</DisableSpecificWarnings>
     </ClCompile>
     <Link>
     </Link>

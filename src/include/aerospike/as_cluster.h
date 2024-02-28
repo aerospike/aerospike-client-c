@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -18,6 +18,7 @@
 
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_metrics.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
@@ -205,6 +206,12 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Lock for metrics operations.
+	 */
+	pthread_mutex_t metrics_lock;
+
+	/**
+	 * @private
 	 * Lock for the tend thread to wait on with the tend interval as timeout.
 	 * Normally locked, resulting in waiting a full interval between
 	 * tend iterations.  Upon cluster shutdown, unlocked by the main
@@ -379,6 +386,75 @@ typedef struct as_cluster_s {
 	 * Should continue to tend cluster.
 	 */
 	volatile bool valid;
+
+	/**
+	 * @private
+	 * Is metrics colleciton enabled.
+	 */
+	bool metrics_enabled;
+
+	/**
+	 * @private
+	 * Number of cluster tend iterations between metrics notification events. One tend iteration
+	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
+	 * nodes. This is set using as_policy_metrics.
+	 */
+	uint32_t metrics_interval;
+
+	/**
+	 * @private
+	 * Number of elapsed time range buckets in latency histograms. This is set using as_policy_metrics.
+	 */
+	uint32_t metrics_latency_columns;
+
+	/**
+	 * @private
+	 * Power of 2 multiple between each range bucket in latency histograms starting at column 3. The bucket units
+	 * are in milliseconds. The first 2 buckets are "<=1ms" and ">1ms". Examples:
+	 * 
+	 * ~~~~~~~~~~{.c}
+	 * // latencyColumns=7 latencyShift=1
+	 * <=1ms >1ms >2ms >4ms >8ms >16ms >32ms
+	 *
+	 * // latencyColumns=5 latencyShift=3
+	 * <=1ms >1ms >8ms >64ms >512ms
+	 * ~~~~~~~~~~
+	 * 
+	 * This is set using as_policy_metrics.
+	 */
+	uint32_t metrics_latency_shift;
+
+	/**
+	 * @private
+	 * Listeners that handles metrics notification events. The default listener implementation
+	 * writes the metrics snapshot to a file which will later be read and forwarded to
+	 * OpenTelemetry by a separate offline application.
+	 *
+	 * The listener could be overridden to send the metrics snapshot directly to OpenTelemetry.
+	 * 
+	 * This is set using as_policy_metrics.
+	 */
+	as_metrics_listeners metrics_listeners;
+
+	/**
+	 * @private
+	 * Transaction retry count. There can be multiple retries for a single transaction.
+	 * The value is cumulative and not reset per metrics interval.
+	 */
+	uint64_t retry_count;
+
+	/**
+	 * @private
+	 * Transaction count. The value is cumulative and not reset per metrics interval.
+	 */
+	uint64_t tran_count;
+
+	/**
+	 * @private
+	 * Delay queue timeout count. The value is cumulative and not reset per metrics interval.
+	 */
+	uint64_t delay_queue_timeout_count;
+
 } as_cluster;
 
 /******************************************************************************
@@ -520,6 +596,92 @@ as_partition_shm_get_node(
 
 /**
  * @private
+ * Enable the collection of metrics
+ */
+as_status
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy* policy);
+
+/**
+ * @private
+ * Disable the collection of metrics
+ */
+as_status
+as_cluster_disable_metrics(as_error* err, as_cluster* cluster);
+
+/**
+ * @private
+ * Increment transaction count when metrics are enabled.
+ */
+static inline void
+as_cluster_add_tran(as_cluster* cluster)
+{
+	if (cluster->metrics_enabled) {
+		as_incr_uint64(&cluster->tran_count);
+	}
+}
+
+/**
+ * @private
+ * Return transaction count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_cluster_get_tran_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->tran_count);
+}
+
+/**
+ * @private
+ * Increment async delay queue timeout count.
+ */
+static inline void
+as_cluster_add_retry(as_cluster* cluster)
+{
+	as_incr_uint64(&cluster->retry_count);
+}
+
+/**
+ * @private
+ * Add transaction retry count. There can be multiple retries for a single transaction.
+ */
+static inline void
+as_cluster_add_retries(as_cluster* cluster, uint32_t count)
+{
+	as_faa_uint64(&cluster->retry_count, count);
+}
+
+/**
+ * @private
+ * Return transaction retry count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_cluster_get_retry_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->retry_count);
+}
+
+/**
+ * @private
+ * Increment async delay queue timeout count.
+ */
+static inline void
+as_cluster_add_delay_queue_timeout(as_cluster* cluster)
+{
+	as_incr_uint64(&cluster->delay_queue_timeout_count);
+}
+
+/**
+ * @private
+ * Return async delay queue timeout count.
+ */
+static inline uint64_t
+as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->delay_queue_timeout_count);
+}
+
+/**
+ * @private
  * Get mapped node given partition and replica.  This function does not reserve the node.
  * The caller must reserve the node for future use.
  */
@@ -544,10 +706,10 @@ as_partition_get_node(
  * Increment node's error count.
  */
 static inline void
-as_node_incr_error_count(as_node* node)
+as_node_incr_error_rate(as_node* node)
 {
 	if (node->cluster->max_error_rate > 0) {
-		as_incr_uint32(&node->error_count);
+		as_incr_uint32(&node->error_rate);
 	}
 }
 
@@ -556,9 +718,9 @@ as_node_incr_error_count(as_node* node)
  * Reset node's error count.
  */
 static inline void
-as_node_reset_error_count(as_node* node)
+as_node_reset_error_rate(as_node* node)
 {
-	as_store_uint32(&node->error_count, 0);
+	as_store_uint32(&node->error_rate, 0);
 }
 
 /**
@@ -566,9 +728,9 @@ as_node_reset_error_count(as_node* node)
  * Get node's error count.
  */
 static inline uint32_t
-as_node_get_error_count(as_node* node)
+as_node_get_error_rate(as_node* node)
 {
-	return as_load_uint32(&node->error_count);
+	return as_load_uint32(&node->error_rate);
 }
 
 /**
@@ -576,10 +738,10 @@ as_node_get_error_count(as_node* node)
  * Validate node's error count.
  */
 static inline bool
-as_node_valid_error_count(as_node* node)
+as_node_valid_error_rate(as_node* node)
 {
 	uint32_t max = node->cluster->max_error_rate;
-	return max == 0 || max >= as_load_uint32(&node->error_count);
+	return max == 0 || max >= as_load_uint32(&node->error_rate);
 }
 
 /**
@@ -590,7 +752,7 @@ static inline void
 as_node_close_conn_error(as_node* node, as_socket* sock, as_conn_pool* pool)
 {
 	as_node_close_connection(node, sock, pool);
-	as_node_incr_error_count(node);
+	as_node_incr_error_rate(node);
 }
 
 /**
@@ -601,7 +763,7 @@ static inline void
 as_node_put_conn_error(as_node* node, as_socket* sock)
 {
 	as_node_put_connection(node, sock);
-	as_node_incr_error_count(node);
+	as_node_incr_error_rate(node);
 }
 
 #ifdef __cplusplus

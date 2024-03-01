@@ -433,18 +433,13 @@ void
 as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd)
 {
 	// Initialize read buffer (buf) to be located after write buffer.
-	if (cmd->cluster->metrics_enabled) {
-		cmd->begin = cf_getns();
-	}
-	else {
-		cmd->begin = 0;
-		cmd->latency_type = AS_LATENCY_TYPE_NONE;
-	}
+	cmd->begin = 0;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
 	cmd->conn = NULL;
 	cmd->proto_type_rcv = 0;
 	cmd->event_state = &cmd->cluster->event_state[event_loop->index];
+	cmd->metrics_enabled = cmd->cluster->metrics_enabled;
 
 	if (cmd->event_state->closed) {
 		as_error err;
@@ -587,12 +582,18 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	as_event_connect(cmd, pool);
 }
 
+static inline void
+as_event_add_latency(as_event_command* cmd, as_latency_type type)
+{
+	uint64_t elapsed = cf_getns() - cmd->begin;
+	as_node_add_latency(cmd->node, type, elapsed);
+}
+
 void
 as_event_connection_complete(as_event_command* cmd)
 {
-	if (cmd->cluster->metrics_enabled) {
-		uint64_t elapsed = cf_getns() - cmd->begin;
-		as_node_add_latency(cmd->node, AS_LATENCY_TYPE_CONN, elapsed);
+	if (cmd->metrics_enabled) {
+		as_event_add_latency(cmd, AS_LATENCY_TYPE_CONN);
 	}
 }
 
@@ -640,6 +641,10 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_event_timer_stop(cmd);
 		as_event_error_callback(cmd, &err);
 		return;
+	}
+
+	if (cmd->metrics_enabled) {
+		cmd->begin = cf_getns();
 	}
 
 	if (cmd->pipe_listener) {
@@ -847,7 +852,7 @@ as_event_delay_timeout(as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_QUEUE_ERROR;
 
-	if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+	if (cmd->metrics_enabled) {
 		as_cluster_add_delay_queue_timeout(cmd->cluster);
 	}
 
@@ -1003,9 +1008,8 @@ as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 static inline void
 as_event_response_complete(as_event_command* cmd)
 {
-	if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-		uint64_t elapsed = cf_getns() - cmd->begin;
-		as_node_add_latency(cmd->node, cmd->latency_type, elapsed);
+	if (cmd->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+		as_event_add_latency(cmd, cmd->latency_type);
 	}
 	
 	if (cmd->pipe_listener != NULL) {
@@ -1318,9 +1322,8 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 			// Do not increment error count on record not found.
 			// Add latency metrics instead.
-			if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-				uint64_t elapsed = cf_getns() - cmd->begin;
-				as_node_add_latency(cmd->node, cmd->latency_type, elapsed);
+			if (cmd->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+				as_event_add_latency(cmd, cmd->latency_type);
 			}
 			as_event_put_connection(cmd, pool);
 			break;

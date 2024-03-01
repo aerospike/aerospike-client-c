@@ -621,6 +621,11 @@ as_command_execute(as_command* cmd, as_error* err)
 			goto Retry;
 		}
 
+		uint64_t begin = 0;
+		if (latency_type != AS_LATENCY_TYPE_NONE) {
+			begin = cf_getns();
+		}
+		
 		as_socket socket;
 		status = as_node_get_connection(err, node, cmd->socket_timeout, cmd->deadline_ms, &socket);
 		
@@ -634,11 +639,6 @@ as_command_execute(as_command* cmd, as_error* err)
 				return status;
 			}
 			goto Retry;
-		}
-		
-		uint64_t begin = 0;
-		if (latency_type != AS_LATENCY_TYPE_NONE) {
-			begin = cf_getns();
 		}
 		
 		// Send command.

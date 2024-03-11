@@ -3081,6 +3081,29 @@ as_exp_destroy_base64(char* base64)
  * @param __policy		An as_bit_policy value.
  * @param __bit_offset	Bit index of where to start operation.
  * @param __bit_size	Number of bits to be operated on.
+ * @param __value		Integer expression for value to add.
+ * @param __signed		Boolean indicating if bits should be treated as a signed number.
+ * @param __action		as_bit_overflow_action value.
+ * @param __bin			A blob bin expression to apply this function to.
+ * @return (blob bin) resulting blob with the bytes operated on.
+ * @ingroup expression
+ */
+#define as_exp_bit_add_signed(__policy, __bit_offset, __bit_size, __value, __signed, __action, __bin) \
+		_AS_EXP_BIT_MOD_START(AS_BIT_OP_ADD, 5), \
+		__bit_offset, \
+		__bit_size, \
+		__value, \
+		as_exp_uint(__policy ? ((as_bit_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__signed ? __action | 0x01 : __action), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_bit_subtract operation.
+ * Note: integers are stored big-endian.
+ *
+ * @param __policy		An as_bit_policy value.
+ * @param __bit_offset	Bit index of where to start operation.
+ * @param __bit_size	Number of bits to be operated on.
  * @param __value		Integer expression for value to subtract.
  * @param __action		as_bit_overflow_action value.
  * @param __bin			A blob bin expression to apply this function to.
@@ -3097,7 +3120,30 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Create an expression that performs an as_operations_bit_add operation.
+ * Create an expression that performs an as_operations_bit_subtract operation.
+ * Note: integers are stored big-endian.
+ *
+ * @param __policy		An as_bit_policy value.
+ * @param __bit_offset	Bit index of where to start operation.
+ * @param __bit_size	Number of bits to be operated on.
+ * @param __value		Integer expression for value to subtract.
+ * @param __signed		Boolean indicating if bits should be treated as a signed number.
+ * @param __action		as_bit_overflow_action value.
+ * @param __bin			A blob bin expression to apply this function to.
+ * @return (blob bin) resulting blob with the bytes operated on.
+ * @ingroup expression
+ */
+#define as_exp_bit_subtract_signed(__policy, __bit_offset, __bit_size, __value, __signed, __action, __bin) \
+		_AS_EXP_BIT_MOD_START(AS_BIT_OP_SUBTRACT, 5), \
+		__bit_offset, \
+		__bit_size, \
+		__value, \
+		as_exp_uint(__policy ? ((as_bit_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__signed ? __action | 0x01 : __action), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_bit_set_int operation.
  * Note: integers are stored big-endian.
  *
  * @param __policy		An as_bit_policy value.

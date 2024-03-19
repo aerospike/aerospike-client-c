@@ -229,7 +229,8 @@ aerospike_key_get(
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0, 0);
+		policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, 0,
+		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -280,7 +281,8 @@ aerospike_key_get_async(
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0, 0);
+		policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, 0,
+		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -328,7 +330,8 @@ aerospike_key_select(
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-				policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ, 0, 0);
+				policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, nvalues,
+				AS_MSG_INFO1_READ, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -392,7 +395,8 @@ aerospike_key_select_async(
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-					policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ, 0, 0);
+					policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, nvalues,
+					AS_MSG_INFO1_READ, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -432,7 +436,8 @@ aerospike_key_exists(
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_read_header(buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
+		policy->read_mode_sc, policy->read_touch_ttl_percent, n_fields, 0,
+		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -482,7 +487,8 @@ aerospike_key_exists_async(
 		AS_LATENCY_TYPE_READ);
 
 	uint8_t* p = as_command_write_header_read_header(cmd->buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
+		policy->read_mode_sc, policy->read_touch_ttl_percent, n_fields, 0,
+		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -923,7 +929,17 @@ as_operate_write(void* udata, uint8_t* buf)
 	as_operate* oper = udata;
 	const as_policy_operate* policy = oper->policy;
 	const as_operations* ops = oper->ops;
-	uint32_t ttl = (ops->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? policy->ttl : ops->ttl;
+	uint32_t ttl;
+	
+	if (oper->write_attr & AS_MSG_INFO2_WRITE) {
+		ttl = (ops->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? policy->ttl : ops->ttl;
+	}
+	else {
+		// ttl is an unsigned 32 bit integer in the wire protocol, but it still
+		// works if a negative read_touch_ttl_percent is used. The server casts
+		// ttl back to a signed integer when all operations are read operations.
+		ttl = (uint32_t)policy->read_touch_ttl_percent;
+	}
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 		policy->exists, policy->gen, ops->gen, ttl, oper->n_fields,

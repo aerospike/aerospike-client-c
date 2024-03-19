@@ -529,7 +529,7 @@ as_scan_command_init(
 		int info_attr = cluster->has_partition_query? AS_MSG_INFO3_PARTITION_DONE : 0;
 
 		p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
-				AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, sb->n_fields, n_ops,
+				AS_POLICY_READ_MODE_SC_SESSION, -1, policy->base.total_timeout, sb->n_fields, n_ops,
 				read_attr, 0, info_attr);
 	}
 	

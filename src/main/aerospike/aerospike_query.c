@@ -876,7 +876,7 @@ as_query_command_init(
 		uint8_t info_attr = qb->is_new ? AS_MSG_INFO3_PARTITION_DONE : 0;
 
 		p = as_command_write_header_read(cmd, base_policy, AS_POLICY_READ_MODE_AP_ONE,
-			AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, qb->n_fields, qb->n_ops,
+			AS_POLICY_READ_MODE_SC_SESSION, -1, base_policy->total_timeout, qb->n_fields, qb->n_ops,
 			read_attr, write_attr, info_attr);
 	}
 	else if (query->ops) {

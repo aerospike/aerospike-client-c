@@ -530,7 +530,7 @@ as_scan_command_init(
 
 		p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
 				AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, sb->n_fields, n_ops,
-				read_attr, info_attr);
+				read_attr, 0, info_attr);
 	}
 	
 	if (scan->ns[0]) {

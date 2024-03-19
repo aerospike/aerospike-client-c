@@ -260,7 +260,7 @@ uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, uint32_t timeout, uint16_t n_fields, uint16_t n_bins,
-	uint8_t read_attr, uint8_t info_attr
+	uint8_t read_attr, uint8_t write_attr, uint8_t info_attr
 	)
 {
 	as_command_set_attr_read(read_mode_ap, read_mode_sc, policy->compress, &read_attr,
@@ -268,7 +268,7 @@ as_command_write_header_read(
 
 	cmd[8] = 22;
 	cmd[9] = read_attr;
-	cmd[10] = 0;
+	cmd[10] = write_attr;
 	cmd[11] = info_attr;
 	memset(&cmd[12], 0, 10);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);

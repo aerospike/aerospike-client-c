@@ -80,7 +80,7 @@ extern "C" {
 #define AS_MSG_INFO2_GENERATION_GT		(1 << 3) // apply write if new generation >= old, good for restore
 #define AS_MSG_INFO2_DURABLE_DELETE		(1 << 4) // transaction resulting in record deletion leaves tombstone (Enterprise only).
 #define AS_MSG_INFO2_CREATE_ONLY		(1 << 5) // write record only if it doesn't exist
-// (Note:  Bit 6 is unused.)
+#define AS_MSG_INFO2_RELAX_AP_LONG_QUERY (1 << 6) // treat as long query, but relax read consistency.
 #define AS_MSG_INFO2_RESPOND_ALL_OPS	(1 << 7) // return a result for every operation.
 
 // Message info3 bits
@@ -367,7 +367,7 @@ uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, uint32_t timeout, uint16_t n_fields, uint16_t n_bins,
-	uint8_t read_attr, uint8_t info_attr
+	uint8_t read_attr, uint8_t write_attr, uint8_t info_attr
 	);
 
 /**

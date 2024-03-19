@@ -860,20 +860,24 @@ as_query_command_init(
 	if (query_policy) {
 		// Foreground query.
 		uint8_t read_attr = AS_MSG_INFO1_READ;
+		uint8_t write_attr = 0;
 
 		if (query->no_bins) {
 			read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
 		}
 
-		if (query_policy->short_query) {
+		if (query_policy->short_query || query_policy->expected_duration == AS_QUERY_DURATION_SHORT) {
 			read_attr |= AS_MSG_INFO1_SHORT_QUERY;
+		}
+		else if (query_policy->expected_duration == AS_QUERY_DURATION_LONG_RELAX_AP) {
+			write_attr |= AS_MSG_INFO2_RELAX_AP_LONG_QUERY;
 		}
 
 		uint8_t info_attr = qb->is_new ? AS_MSG_INFO3_PARTITION_DONE : 0;
 
 		p = as_command_write_header_read(cmd, base_policy, AS_POLICY_READ_MODE_AP_ONE,
 			AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, qb->n_fields, qb->n_ops,
-			read_attr, info_attr);
+			read_attr, write_attr, info_attr);
 	}
 	else if (query->ops) {
 		// Background query with operations.

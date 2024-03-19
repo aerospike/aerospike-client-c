@@ -382,6 +382,49 @@ typedef enum as_policy_commit_level_e {
 } as_policy_commit_level;
 
 /**
+ * Expected query duration. The server treats the query in different ways depending on the expected duration.
+ * This enum is ignored for aggregation queries, background queries and server versions &lt; 6.0.
+ *
+ * @ingroup client_policies
+ */
+typedef enum as_query_duration_e {
+
+	/**
+	 * The query is expected to return more than 100 records per node. The server optimizes for a
+	 * large record set in the following ways:
+	 * <ul>
+	 * <li>Allow query to be run in multiple threads using the server's query threading configuration.</li>
+	 * <li>Do not relax read consistency for AP namespaces.</li>
+	 * <li>Add the query to the server's query monitor.</li>
+	 * <li>Do not add the overall latency to the server's latency histogram.</li>
+	 * <li>Do not allow server timeouts.</li>
+	 * </ul>
+	 */
+	AS_QUERY_DURATION_LONG,
+
+	/**
+	 * The query is expected to return less than 100 records per node. The server optimizes for a
+	 * small record set in the following ways:
+	 * <ul>
+	 * <li>Always run the query in one thread and ignore the server's query threading configuration.</li>
+	 * <li>Allow query to be inlined directly on the server's service thread.</li>
+	 * <li>Relax read consistency for AP namespaces.</li>
+	 * <li>Do not add the query to the server's query monitor.</li>
+	 * <li>Add the overall latency to the server's latency histogram.</li>
+	 * <li>Allow server timeouts. The default server timeout for a short query is 1 second.</li>
+	 * </ul>
+	 */
+	AS_QUERY_DURATION_SHORT,
+	
+	/**
+	 * Treat query as a LONG query, but relax read consistency for AP namespaces.
+	 * This value is treated exactly like LONG for server versions &lt; 7.1.
+	 */
+	AS_QUERY_DURATION_LONG_RELAX_AP
+
+} as_query_duration;
+
+/**
  * Generic policy fields shared among all policies.
  *
  * @ingroup client_policies
@@ -1157,6 +1200,14 @@ typedef struct as_policy_query_s {
 	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
+	
+	/**
+	 * Expected query duration. The server treats the query in different ways depending on the expected duration.
+	 * This field is ignored for aggregation queries, background queries and server versions &lt; 6.0.
+	 *
+	 * Default: AS_QUERY_DURATION_LONG
+	 */
+	as_query_duration expected_duration;
 
 	/**
 	 * Terminate query if cluster is in migration state. If the server supports partition
@@ -1175,12 +1226,20 @@ typedef struct as_policy_query_s {
 	bool deserialize;
 
 	/**
+	 * This field is deprecated and will eventually be removed. Use expected_duration instead.
+	 *
+	 * For backwards compatibility: If short_query is true, the query is treated as a short query and
+	 * expected_duration is ignored. If short_query is false, expected_duration is used
+	 * and defaults to AS_QUERY_DURATION_LONG.
+	 *
 	 * Is query expected to return less than 100 records per node.
 	 * If true, the server will optimize the query for a small record set.
 	 * This field is ignored for aggregation queries, background queries
 	 * and server versions &lt; 6.0.
 	 *
 	 * Default: false
+	 *
+	 * @deprecated Use expected_duration instead.
 	 */
 	bool short_query;
 
@@ -1767,6 +1826,7 @@ as_policy_query_init(as_policy_query* p)
 	as_policy_base_query_init(&p->base);
 	p->info_timeout = 10000;
 	p->replica = AS_POLICY_REPLICA_SEQUENCE;
+	p->expected_duration = AS_QUERY_DURATION_LONG;
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;
 	p->short_query = false;

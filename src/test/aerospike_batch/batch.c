@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -46,6 +46,7 @@
 #define N_KEYS 200
 
 extern aerospike* as;
+extern bool g_has_ttl;
 
 uint32_t num_threads = 0;
 pthread_rwlock_t rwlock;
@@ -802,6 +803,55 @@ TEST(batch_remove, "Batch remove")
 	assert_int_eq(errors, 0);
 }
 
+TEST(batch_reset_read_ttl, "Batch reset read ttl")
+{
+	as_error err;
+	as_status status;
+	uint32_t errors;
+
+	// Define keys
+	as_batch batch;
+	as_batch_inita(&batch, 2);
+	as_key_init_int64(as_batch_keyat(&batch, 0), NAMESPACE, SET, 8888);
+	as_key_init_int64(as_batch_keyat(&batch, 1), NAMESPACE, SET, 8889);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write_int64(&ops, "a", 1);
+	ops.ttl = 2;
+
+	errors = 0;
+	status = aerospike_batch_operate(as, &err, NULL, NULL, &batch, &ops, result_cb, &errors);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(errors, 0);
+
+	// Read the records before they expire and reset read ttl.
+	as_sleep(1010);
+	as_policy_batch pb;
+	as_policy_batch_init(&pb);
+	pb.read_touch_ttl_percent = 40;
+	
+	errors = 0;
+	status = aerospike_batch_exists(as, &err, &pb, &batch, result_cb, &errors);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(errors, 0);
+
+	// Read the records again, but don't reset read ttl.
+	as_sleep(1010);
+	pb.read_touch_ttl_percent = -1;
+	errors = 0;
+	status = aerospike_batch_exists(as, &err, &pb, &batch, result_cb, &errors);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(errors, 0);
+
+	// Read the record after it expires, showing it's gone.
+	as_sleep(1500);
+	errors = 0;
+	status = aerospike_batch_exists(as, &err, NULL, &batch, not_exists_cb, &errors);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(errors, 0);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -819,4 +869,8 @@ SUITE(batch, "aerospike batch tests")
 	suite_add(batch_write_complex);
 	suite_add(batch_write_read_all_bins);
 	suite_add(batch_remove);
+	
+	if (g_has_ttl) {
+		suite_add(batch_reset_read_ttl);
+	}
 }

@@ -38,14 +38,15 @@
 // Constants
 //---------------------------------
 
- #define BATCH_MSG_READ 0x0
- #define BATCH_MSG_REPEAT 0x1
- #define BATCH_MSG_INFO 0x2
- #define BATCH_MSG_WRITE 0xe
+#define BATCH_MSG_READ 0x0
+#define BATCH_MSG_REPEAT 0x1
+#define BATCH_MSG_INFO 0x2
+#define BATCH_MSG_GEN 0x4
+#define BATCH_MSG_TTL 0x8
 
- #define BATCH_TYPE_RECORDS 0
- #define BATCH_TYPE_KEYS 1
- #define BATCH_TYPE_KEYS_NO_CALLBACK 2
+#define BATCH_TYPE_RECORDS 0
+#define BATCH_TYPE_KEYS 1
+#define BATCH_TYPE_KEYS_NO_CALLBACK 2
 
 //---------------------------------
 // Types
@@ -537,7 +538,7 @@ as_batch_read_record_size_old(
 	as_key* key, as_batch_read_record* rec, as_batch_builder* bb, as_error* err
 	)
 {
-	bb->size += 6;
+	bb->size += 6; // repeat(1) + info1(1) + n_fields(2) + n_ops(2) = 6
 	bb->size += as_command_string_field_size(key->ns);
 	bb->size += as_command_string_field_size(key->set);
 
@@ -640,8 +641,8 @@ as_batch_header_write_old(
 	}
 
 	p = as_command_write_header_read(p, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, policy->base.total_timeout, bb->field_count_header, 0,
-		bb->read_attr | AS_MSG_INFO1_BATCH_INDEX, 0, 0);
+		policy->read_mode_sc, policy->read_touch_ttl_percent, policy->base.total_timeout,
+		bb->field_count_header, 0, bb->read_attr | AS_MSG_INFO1_BATCH_INDEX, 0, 0);
 
 	if (bb->filter_exp) {
 		p = as_exp_write(bb->filter_exp, p);
@@ -889,7 +890,7 @@ as_batch_write_record_size(
 	as_key* key, as_batch_write_record* rec, as_batch_builder* bb, as_error* err
 	)
 {
-	bb->size += 6; // gen(2) + ttl(4) = 6
+	bb->size += 2; // gen(2) = 2
 
 	if (rec->policy) {
 		if (rec->policy->filter_exp) {
@@ -930,7 +931,7 @@ as_batch_write_record_size(
 static void
 as_batch_apply_record_size(as_key* key, as_batch_apply_record* rec, as_batch_builder* bb)
 {
-	bb->size += 6; // gen(2) + ttl(4) = 6
+	bb->size += 2; // gen(2) = 2
 
 	if (rec->policy) {
 		if (rec->policy->filter_exp) {
@@ -957,7 +958,7 @@ as_batch_apply_record_size(as_key* key, as_batch_apply_record* rec, as_batch_bui
 static void
 as_batch_remove_record_size(as_key* key, as_batch_remove_record* rec, as_batch_builder* bb)
 {
-	bb->size += 6; // gen(2) + ttl(4) = 6
+	bb->size += 2; // gen(2) = 2
 
 	if (rec->policy) {
 		if (rec->policy->filter_exp) {
@@ -975,7 +976,7 @@ as_batch_record_size(
 	as_key* key, as_batch_base_record* rec, as_batch_builder* bb, as_error* err
 	)
 {
-	bb->size += 8;
+	bb->size += 12; // repeat(1) + info(3) + ttl(4) + n_fields(2) + n_ops(2) = 12
 	bb->size += as_command_string_field_size(key->ns);
 	bb->size += as_command_string_field_size(key->set);
 
@@ -1081,7 +1082,7 @@ as_batch_attr_read_header(as_batch_attr* attr, const as_policy_batch* p)
 		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
 		break;
 	}
-	attr->ttl = 0;
+	attr->ttl = p->read_touch_ttl_percent;
 	attr->gen = 0;
 	attr->has_write = false;
 	attr->send_key = false;
@@ -1114,7 +1115,7 @@ as_batch_attr_read_row(as_batch_attr* attr, const as_policy_batch_read* p)
 		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
 		break;
 	}
-	attr->ttl = 0;
+	attr->ttl = p->read_touch_ttl_percent;
 	attr->gen = 0;
 	attr->has_write = false;
 	attr->send_key = false;
@@ -1322,10 +1323,12 @@ as_batch_write_read(
 	uint8_t* p, as_key* key, as_batch_attr* attr, as_exp* filter, uint16_t n_ops
 	)
 {
-	*p++ = BATCH_MSG_INFO;
+	*p++ = (BATCH_MSG_INFO | BATCH_MSG_TTL);
 	*p++ = attr->read_attr;
 	*p++ = attr->write_attr;
 	*p++ = attr->info_attr;
+	*(uint32_t*)p = cf_swap_to_be32(attr->ttl);
+	p += sizeof(uint32_t);
 	p = as_batch_write_fields_filter(p, key, filter, 0, n_ops);
 	return p;
 }
@@ -1335,7 +1338,7 @@ as_batch_write_write(
 	uint8_t* p, as_key* key, as_batch_attr* attr, as_exp* filter, uint16_t n_fields, uint16_t n_ops
 	)
 {
-	*p++ = BATCH_MSG_WRITE;
+	*p++ = (BATCH_MSG_INFO | BATCH_MSG_GEN | BATCH_MSG_TTL);
 	*p++ = attr->read_attr;
 	*p++ = attr->write_attr;
 	*p++ = attr->info_attr;
@@ -3065,20 +3068,28 @@ as_batch_retry_parse_row(uint8_t* p, uint8_t* type)
 {
 	p += sizeof(uint32_t) + AS_DIGEST_VALUE_SIZE;
 
-	*type = *p++;
+	uint8_t t = *p++;
+	*type = t;
 
-	switch (*type) {
-	case BATCH_MSG_REPEAT:
+	if (t == BATCH_MSG_REPEAT) {
 		return p;
-	case BATCH_MSG_READ:
+	}
+	
+	if (t == BATCH_MSG_READ) {
 		p++;
-		break;
-	case BATCH_MSG_INFO:
-		p += 3;
-		break;
-	case BATCH_MSG_WRITE:
-		p += 9;
-		break;
+	}
+	else {
+		if (t & BATCH_MSG_INFO) {
+			p += 3;
+		}
+		
+		if (t & BATCH_MSG_GEN) {
+			p += 2;
+		}
+		
+		if (t & BATCH_MSG_TTL) {
+			p += 4;
+		}
 	}
 
 	uint16_t n_fields = cf_swap_from_be16(*(uint16_t*)p);

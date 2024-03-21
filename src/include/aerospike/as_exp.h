@@ -1540,8 +1540,11 @@ as_exp_destroy_base64(char* base64)
  *********************************************************************************/
 
 /**
- * Conditionally select an expression from a variable number of expression pairs
- * followed by default expression action. Requires server version 5.6.0+.
+ * Conditionally select an action expression from a variable number of expression pairs
+ * followed by a default action expression. Every action expression must return the same type.
+ * The only exception is as_exp_unknown() which can be mixed with other types.
+ *
+ * Requires server version 5.6.0+.
  *
  * ~~~~~~~~~~{.c}
  * Args Format: bool exp1, action exp1, bool exp2, action exp2, ..., action-default

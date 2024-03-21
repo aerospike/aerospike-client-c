@@ -845,7 +845,7 @@ TEST(batch_reset_read_ttl, "Batch reset read ttl")
 	assert_int_eq(errors, 0);
 
 	// Read the record after it expires, showing it's gone.
-	as_sleep(1500);
+	as_sleep(2000);
 	errors = 0;
 	status = aerospike_batch_exists(as, &err, NULL, &batch, not_exists_cb, &errors);
 	assert_int_eq(status, AEROSPIKE_OK);

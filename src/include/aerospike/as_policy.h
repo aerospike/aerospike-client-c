@@ -592,7 +592,6 @@ typedef struct as_policy_read_s {
 	 * <li>-1 : Do not reset record TTL on reads.</li>
 	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
 	 * </ul>
-	 * <li>
 	 *
 	 * Default: 0
 	 */
@@ -819,7 +818,6 @@ typedef struct as_policy_operate_s {
 	 * <li>-1 : Do not reset record TTL on reads.</li>
 	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
 	 * </ul>
-	 * <li>
 	 *
 	 * Default: 0
 	 */
@@ -948,7 +946,6 @@ typedef struct as_policy_batch_s {
 	 * <li>-1 : Do not reset record TTL on reads.</li>
 	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
 	 * </ul>
-	 * <li>
 	 *
 	 * Default: 0
 	 */
@@ -1090,7 +1087,6 @@ typedef struct as_policy_batch_read_s {
 	 * <li>-1 : Do not reset record TTL on reads.</li>
 	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
 	 * </ul>
-	 * <li>
 	 *
 	 * Default: 0
 	 */

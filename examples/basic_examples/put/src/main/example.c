@@ -87,6 +87,8 @@ main(int argc, char* argv[])
 	as_transaction tr;
 	tr.mrt_trid = 1;
 
+	example_read_test_record_tr(&as, &tr);
+
 	// Generate a different as_record object to write. In general it's ok to
 	// reuse the stack object by calling as_record_inita() again, as long as the
 	// previous contents are destroyed if necessary.

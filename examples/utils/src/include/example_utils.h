@@ -94,6 +94,7 @@ void example_connect_to_aerospike_with_udf_config(aerospike* p_as, const char* l
 void example_cleanup(aerospike* p_as);
 bool example_read_test_record(aerospike* p_as);
 bool example_read_test_record_tr(aerospike* p_as, as_transaction* tr);
+bool example_read_and_check_test_record_tr(aerospike* p_as, as_transaction* tr, as_key* key, char* bin_name, char* value);
 void example_remove_test_record(aerospike* p_as);
 bool example_read_test_records(aerospike* p_as);
 void example_remove_test_records(aerospike* p_as);

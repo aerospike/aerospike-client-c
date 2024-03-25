@@ -626,6 +626,67 @@ example_read_test_record_tr(aerospike* p_as, as_transaction* tr)
 	return true;
 }
 
+bool
+example_read_and_check_test_record_tr(aerospike* p_as, as_transaction* tr,
+		as_key* key, char* bin_name, char* value)
+{
+	as_error err;
+	as_record* p_rec = NULL;
+
+	// Read the test record from the database.
+	if (aerospike_key_get_tr(p_as, tr, &err, NULL, key, &p_rec) !=
+			AEROSPIKE_OK) {
+		if (bin_name == NULL && err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			return true;
+		}
+
+		// FIXME: temporary as orig particles are not sent yet
+		if (tr == NULL && err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			return true;
+		}
+
+		LOG("FAILED: read error %d", err.code);
+		return false;
+	}
+
+	// If we didn't get an as_record object back, something's wrong.
+	if (! p_rec) {
+		LOG("aerospike_key_get() retrieved null as_record object");
+		return false;
+	}
+
+	as_record_iterator it;
+	as_record_iterator_init(&it, p_rec);
+
+	while (as_record_iterator_has_next(&it)) {
+		as_bin* bin = as_record_iterator_next(&it);
+
+		if (strcmp(bin->name, bin_name) == 0) {
+			char* val_as_str = as_val_tostring(as_bin_get_value(bin));
+
+			if (strncmp(&val_as_str[1], value, strlen(value)) != 0) {
+				LOG("FAILED: read not as expected. expected %s got %s", value,
+						val_as_str);
+				free(val_as_str);
+				as_record_iterator_destroy(&it);
+				// Destroy the as_record object.
+				as_record_destroy(p_rec);
+
+				return false;
+			}
+
+			free(val_as_str);
+		}
+	}
+
+	as_record_iterator_destroy(&it);
+
+	// Destroy the as_record object.
+	as_record_destroy(p_rec);
+
+	return true;
+}
+
 //------------------------------------------------
 // Remove the test record from the database.
 //

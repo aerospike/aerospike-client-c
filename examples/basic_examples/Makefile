@@ -9,6 +9,7 @@ default: all
 	$(MAKE) -C incr $@
 	$(MAKE) -C list $@
 	$(MAKE) -C map $@
+	$(MAKE) -C mrt $@
 	$(MAKE) -C put $@
 	$(MAKE) -C touch $@
 	$(MAKE) -C udf $@

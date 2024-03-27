@@ -1146,9 +1146,9 @@ as_batch_attr_read_adjust(as_batch_attr* attr, bool read_all_bins)
 }
 
 static void
-as_batch_attr_write_header(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
+as_batch_attr_write(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
 {
-	attr->filter_exp = NULL;
+	attr->filter_exp = p->filter_exp;
 	attr->read_attr = 0;
 	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS;
 
@@ -1170,14 +1170,6 @@ as_batch_attr_write_header(as_batch_attr* attr, const as_policy_batch_write* p, 
 	attr->ttl = (ops->ttl == AS_RECORD_CLIENT_DEFAULT_TTL && p)? p->ttl : ops->ttl;
 	attr->gen = 0;
 	attr->has_write = true;
-	attr->send_key = false;
-}
-
-static void
-as_batch_attr_write_row(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
-{
-	as_batch_attr_write_header(attr, p, ops);
-	attr->filter_exp = p->filter_exp;
 	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
 
 	switch (p->gen) {
@@ -1221,20 +1213,7 @@ as_batch_attr_write_row(as_batch_attr* attr, const as_policy_batch_write* p, as_
 }
 
 static void
-as_batch_attr_apply_header(as_batch_attr* attr)
-{
-	attr->filter_exp = NULL;
-	attr->read_attr = 0;
-	attr->write_attr = AS_MSG_INFO2_WRITE;
-	attr->info_attr = 0;
-	attr->ttl = 0;
-	attr->gen = 0;
-	attr->has_write = true;
-	attr->send_key = false;
-}
-
-static void
-as_batch_attr_apply_row(as_batch_attr* attr, const as_policy_batch_apply* p)
+as_batch_attr_apply(as_batch_attr* attr, const as_policy_batch_apply* p)
 {
 	attr->filter_exp = p->filter_exp;
 	attr->read_attr = 0;
@@ -1255,20 +1234,7 @@ as_batch_attr_apply_row(as_batch_attr* attr, const as_policy_batch_apply* p)
 }
 
 static void
-as_batch_attr_remove_header(as_batch_attr* attr)
-{
-	attr->filter_exp = NULL;
-	attr->read_attr = 0;
-	attr->write_attr = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_RESPOND_ALL_OPS | AS_MSG_INFO2_DELETE;
-	attr->info_attr = 0;
-	attr->ttl = 0;
-	attr->gen = 0;
-	attr->has_write = true;
-	attr->send_key = false;
-}
-
-static void
-as_batch_attr_remove_row(as_batch_attr* attr, const as_policy_batch_remove* p)
+as_batch_attr_remove(as_batch_attr* attr, const as_policy_batch_remove* p)
 {
 	attr->filter_exp = p->filter_exp;
 	attr->read_attr = 0;
@@ -1468,13 +1434,9 @@ as_batch_records_write_new(
 
 				case AS_BATCH_WRITE: {
 					as_batch_write_record* bw = (as_batch_write_record*)rec;
+					const as_policy_batch_write* pbw = bw->policy ? bw->policy : &defs->batch_write;
 
-					if (bw->policy) {
-						as_batch_attr_write_row(&attr, bw->policy, bw->ops);
-					}
-					else {
-						as_batch_attr_write_header(&attr, &defs->batch_write, bw->ops);
-					}
+					as_batch_attr_write(&attr, pbw, bw->ops);
 					p = as_batch_write_operations(p, &bw->key, &attr, attr.filter_exp, bw->ops,
 						bb->buffers);
 					break;
@@ -1482,26 +1444,18 @@ as_batch_records_write_new(
 
 				case AS_BATCH_APPLY: {
 					as_batch_apply_record* ba = (as_batch_apply_record*)rec;
+					const as_policy_batch_apply* pba = ba->policy ? ba->policy : &defs->batch_apply;
 
-					if (ba->policy) {
-						as_batch_attr_apply_row(&attr, ba->policy);
-					}
-					else {
-						as_batch_attr_apply_header(&attr);
-					}
+					as_batch_attr_apply(&attr, pba);
 					p = as_batch_write_udf(p, &ba->key, ba, &attr, attr.filter_exp, bb->buffers);
 					break;
 				}
 
 				case AS_BATCH_REMOVE: {
 					as_batch_remove_record* brm = (as_batch_remove_record*)rec;
+					const as_policy_batch_remove* pbr = brm->policy ? brm->policy : &defs->batch_remove;
 
-					if (brm->policy) {
-						as_batch_attr_remove_row(&attr, brm->policy);
-					}
-					else {
-						as_batch_attr_remove_header(&attr);
-					}
+					as_batch_attr_remove(&attr, pbr);
 					p = as_batch_write_write(p, &brm->key, &attr, attr.filter_exp, 0, 0);
 					break;
 				}
@@ -3610,7 +3564,7 @@ aerospike_batch_operate(
 		};
 
 		as_batch_attr attr;
-		as_batch_attr_write_row(&attr, policy_write, ops);
+		as_batch_attr_write(&attr, policy_write, ops);
 
 		return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
 			listener, udata);
@@ -3662,7 +3616,7 @@ aerospike_batch_apply(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_apply_row(&attr, policy_apply);
+	as_batch_attr_apply(&attr, policy_apply);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
 		listener, udata);
@@ -3692,7 +3646,7 @@ aerospike_batch_remove(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_remove_row(&attr, policy_remove);
+	as_batch_attr_remove(&attr, policy_remove);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, &attr,
 		listener, udata);

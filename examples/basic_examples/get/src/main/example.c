@@ -34,6 +34,8 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
+#include <aerospike/aerospike_batch.h>
+#include <aerospike/as_arraylist.h>
 
 #include "example_utils.h"
 
@@ -42,7 +44,7 @@
 // Forward Declarations
 //
 
-bool write_record(aerospike* p_as);
+// bool write_record(aerospike* p_as);
 
 
 //==========================================================
@@ -52,147 +54,37 @@ bool write_record(aerospike* p_as);
 int
 main(int argc, char* argv[])
 {
-	// Parse command line arguments.
-	if (! example_get_opts(argc, argv, EXAMPLE_BASIC_OPTS)) {
-		exit(-1);
-	}
+	as_config config;
+	as_config_init(&config);
+	as_config_add_host(&config, "127.0.0.1", 3000);
 
-	// Connect to the aerospike database cluster.
+	config.policies.batch_apply.key = AS_POLICY_KEY_SEND;
+
 	aerospike as;
-	example_connect_to_aerospike(&as);
-
-	// Start clean.
-	example_remove_test_record(&as);
-
+	aerospike_init(&as, &config);
 	as_error err;
-	as_record* p_rec = NULL;
 
-	// Try to read the test record from the database. This should fail since the
-	// record is not there.
-	if (aerospike_key_get(&as, &err, NULL, &g_key, &p_rec) !=
-			AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-		LOG("aerospike_key_get() returned %d - %s, expected "
-				"AEROSPIKE_ERR_RECORD_NOT_FOUND", err.code, err.message);
-		as_record_destroy(p_rec);
-		example_cleanup(&as);
-		exit(-1);
+	if (aerospike_connect(&as, &err) != AEROSPIKE_OK) {
+	  fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
 	}
 
-	// Note that p_rec will still be NULL here.
-	LOG("get (non-existent record) failed as expected");
+	as_batch_records recs;
+	as_batch_records_init(&recs, 1);
 
-	// Write a record to the database so we can demonstrate read success.
-	if (! write_record(&as)) {
-		example_cleanup(&as);
-		exit(-1);
-	}
+	as_batch_apply_record *r = as_batch_apply_reserve(&recs);
+	as_key_init_int64(&r->key, "test", "demo", 0);
+	r->module = "sample";
+	r->function = "list_append";
+	as_arraylist *args = as_arraylist_new(2, 0);
+	as_arraylist_set_str(args, 0, "ilist_bin");
+	as_arraylist_set_int64(args, 1, 200);
+	r->arglist = (as_list*)args;
 
-	// Read the (whole) test record from the database.
-	if (aerospike_key_get(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
+	aerospike_batch_write(&as, &err, NULL, &recs);
 
-	// Log the result and recycle the as_record object.
-	LOG("record was successfully read from database:");
-	example_dump_record(p_rec);
-	as_record_destroy(p_rec);
-	p_rec = NULL;
+	as_arraylist_destroy(args);
+	as_batch_records_destroy(&recs);
 
-	// Select bins 1 and 3 to read.
-	static const char* bins_1_3[] = { "test-bin-1", "test-bin-3", NULL };
-
-	// Read only these two bins of the test record from the database.
-	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_1_3, &p_rec) !=
-			AEROSPIKE_OK) {
-		LOG("aerospike_key_select() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Log the result and recycle the as_record object.
-	LOG("bins 1 and 3 were read from database:");
-	example_dump_record(p_rec);
-	as_record_destroy(p_rec);
-	p_rec = NULL;
-
-	// Select non-existent bin 5 to read.
-	static const char* bins_5[] = { "test-bin-5", NULL };
-
-	// Read only this bin from the database. This call should return an
-	// as_record object with one bin, with null as_bin_value.
-	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_5, &p_rec) !=
-			AEROSPIKE_OK) {
-		LOG("aerospike_key_select() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Log the result and destroy the as_record object.
-	LOG("non-existent bin 5 was read from database:");
-	example_dump_record(p_rec);
-	as_record_destroy(p_rec);
-	p_rec = NULL;
-
-	// Sleep 2 seconds, just to show the TTL decrease.
-	LOG("waiting 2 seconds ...");
-	as_sleep(2000);
-
-	// Use aerospike_key_exists() to get only record metadata.
-	if (aerospike_key_exists(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_exists() returned %d - %s", err.code, err.message);
-		example_cleanup(&as);
-		exit(-1);
-	}
-
-	// Log the result, which will only have metadata.
-	LOG("existence check found record metadata:");
-	example_dump_record(p_rec);
-	as_record_destroy(p_rec);
-
-	// Cleanup and disconnect from the database cluster.
-	example_cleanup(&as);
-
-	LOG("get example successfully completed");
-
+	aerospike_close(&as, &err);
 	return 0;
-}
-
-
-//==========================================================
-// Helpers
-//
-
-bool
-write_record(aerospike* p_as)
-{
-	as_error err;
-
-	// Create an as_record object with four bins with different value types. By
-	// using as_record_inita(), we won't need to destroy the record if we only
-	// set bins using as_record_set_int64(), as_record_set_str(), and
-	// as_record_set_raw().
-	as_record rec;
-	as_record_inita(&rec, 4);
-	as_record_set_int64(&rec, "test-bin-1", 1111);
-	as_record_set_int64(&rec, "test-bin-2", 2222);
-	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
-
-	static const uint8_t bytes[] = { 1, 2, 3 };
-	as_record_set_raw(&rec, "test-bin-4", bytes, 3);
-
-	// Log its contents.
-	LOG("as_record object to write to database:");
-	example_dump_record(&rec);
-
-	// Write the record to the database.
-	if (aerospike_key_put(p_as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		return false;
-	}
-
-	LOG("write succeeded");
-
-	return true;
 }

@@ -1676,7 +1676,7 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	size_t size = as_batch_records_write(policy, btr->defs, btr->records, &task->offsets, &bb, buf);
 	
 	if (size > capacity) {
-		as_log_warn("Batch command buffer size %z exceeded capacity %z", size, capacity);
+		as_log_warn("Batch command buffer size %zu exceeded capacity %zu", size, capacity);
 	}
 	as_batch_builder_destroy(&bb);
 

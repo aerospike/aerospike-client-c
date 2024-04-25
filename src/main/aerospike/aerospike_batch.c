@@ -1674,6 +1674,10 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	size_t capacity = bb.size;
 	uint8_t* buf = as_command_buffer_init(capacity);
 	size_t size = as_batch_records_write(policy, btr->defs, btr->records, &task->offsets, &bb, buf);
+	
+	if (size > capacity) {
+		as_log_warn("Batch command buffer size %z exceeded capacity %z", size, capacity);
+	}
 	as_batch_builder_destroy(&bb);
 
 	if (policy->base.compress && size > AS_COMPRESS_THRESHOLD) {
@@ -1913,6 +1917,11 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	uint8_t* buf = as_command_buffer_init(capacity);
 	size_t size = as_batch_keys_write(policy, btk->keys, &task->offsets, btk->rec, btk->attr, &bb,
 		buf);
+
+	if (size > capacity) {
+		as_log_warn("Batch command buffer size %z exceeded capacity %z", size, capacity);
+	}
+
 	as_batch_builder_destroy(&bb);
 
 	if (policy->base.compress && size > AS_COMPRESS_THRESHOLD) {

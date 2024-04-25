@@ -44,7 +44,6 @@
 // Forward Declarations
 //
 
-bool write_record(aerospike* p_as);
 
 
 //==========================================================
@@ -68,12 +67,28 @@ main(int argc, char* argv[])
 
 	aerospike as;
 	aerospike_init(&as, &config);
+
 	as_error err;
+	as_error_init(&err);
 
 	if (aerospike_connect(&as, &err) != AEROSPIKE_OK) {
-	  fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
-	  exit(1);
+		goto CLEANUP1;
 	}
+
+	// Test setup
+
+	as_key key;
+	as_key_init_int64(&key, "test", "demo", 0);
+
+	as_record rec;
+	as_record_init(&rec, 1);
+	as_record_set_int64(&rec, "count", 0);
+
+	if (aerospike_key_put(&as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {
+		goto CLEANUP2;
+	}
+
+	// Test
 
 	as_batch_records recs;
 	as_batch_records_init(&recs, 1);
@@ -81,7 +96,7 @@ main(int argc, char* argv[])
 	as_batch_remove_record *r = as_batch_remove_reserve(&recs);
 	as_key_init_int64(&r->key, "test", "demo", 0);
 
-#if 1
+#if 0
 	as_policy_batch_remove transaction_level_policy;
 	as_policy_batch_remove_init(&transaction_level_policy);
 	customize_batch_remove_policy(&transaction_level_policy);
@@ -93,49 +108,23 @@ main(int argc, char* argv[])
 		printf("Batch write succeeded\n");
 	} else {
 		printf("Batch write returned an error: %d\n", result);
+		printf("as_batch_remove_record return code: %d\n", r->result);
 	}
 
 	as_batch_records_destroy(&recs);
 
+CLEANUP2:
+	as_record_destroy(&rec);
 	aerospike_close(&as, &err);
 
-	return 0;
+CLEANUP1:
+	if (err.code != AEROSPIKE_OK) {
+		fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+	}
+	return err.code;
 }
 
 
 //==========================================================
 // Helpers
 //
-
-bool
-write_record(aerospike* p_as)
-{
-	as_error err;
-
-	// Create an as_record object with four bins with different value types. By
-	// using as_record_inita(), we won't need to destroy the record if we only
-	// set bins using as_record_set_int64(), as_record_set_str(), and
-	// as_record_set_raw().
-	as_record rec;
-	as_record_inita(&rec, 4);
-	as_record_set_int64(&rec, "test-bin-1", 1111);
-	as_record_set_int64(&rec, "test-bin-2", 2222);
-	as_record_set_str(&rec, "test-bin-3", "test-bin-3-data");
-
-	static const uint8_t bytes[] = { 1, 2, 3 };
-	as_record_set_raw(&rec, "test-bin-4", bytes, 3);
-
-	// Log its contents.
-	LOG("as_record object to write to database:");
-	example_dump_record(&rec);
-
-	// Write the record to the database.
-	if (aerospike_key_put(p_as, &err, NULL, &g_key, &rec) != AEROSPIKE_OK) {
-		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
-		return false;
-	}
-
-	LOG("write succeeded");
-
-	return true;
-}

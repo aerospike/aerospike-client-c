@@ -810,29 +810,33 @@ as_batch_equals_read(as_batch_read_record* prev, as_batch_read_record* rec)
 }
 
 static inline bool
-as_batch_equals_write(as_batch_write_record* prev, as_batch_write_record* rec)
+as_batch_equals_write(as_policies* defs, as_batch_write_record* prev, as_batch_write_record* rec)
 {
-	return prev->ops == rec->ops && prev->policy == rec->policy &&
-		   (rec->policy == NULL || rec->policy->key == AS_POLICY_KEY_DIGEST);
+	const as_policy_batch_write* pbw = rec->policy ? rec->policy : &defs->batch_write;
+	
+	return prev->ops == rec->ops && prev->policy == rec->policy && pbw->key == AS_POLICY_KEY_DIGEST;
 }
 
 static inline bool
-as_batch_equals_apply(as_batch_apply_record* prev, as_batch_apply_record* rec)
+as_batch_equals_apply(as_policies* defs, as_batch_apply_record* prev, as_batch_apply_record* rec)
 {
+	const as_policy_batch_apply* pba = rec->policy ? rec->policy : &defs->batch_apply;
+
 	return prev->function == rec->function && prev->arglist == rec->arglist &&
 		   prev->module == rec->module && prev->policy == rec->policy &&
-		   (rec->policy == NULL || rec->policy->key == AS_POLICY_KEY_DIGEST);
+		   pba->key == AS_POLICY_KEY_DIGEST;
 }
 
 static inline bool
-as_batch_equals_remove(as_batch_remove_record* prev, as_batch_remove_record* rec)
+as_batch_equals_remove(as_policies* defs, as_batch_remove_record* prev, as_batch_remove_record* rec)
 {
-	return prev->policy == rec->policy &&
-		   (rec->policy == NULL || rec->policy->key == AS_POLICY_KEY_DIGEST);
+	const as_policy_batch_remove* pbr = rec->policy ? rec->policy : &defs->batch_remove;
+
+	return prev->policy == rec->policy && pbr->key == AS_POLICY_KEY_DIGEST;
 }
 
 static bool
-as_batch_equals(as_batch_base_record* prev, as_batch_base_record* rec, as_batch_builder* bb)
+as_batch_equals(as_policies* defs, as_batch_base_record* prev, as_batch_base_record* rec, as_batch_builder* bb)
 {
 	if (! (prev && prev->type == rec->type && strcmp(prev->key.ns, rec->key.ns) == 0 &&
 		strcmp(prev->key.set, rec->key.set) == 0)) {
@@ -844,13 +848,13 @@ as_batch_equals(as_batch_base_record* prev, as_batch_base_record* rec, as_batch_
 		return as_batch_equals_read((as_batch_read_record*)prev, (as_batch_read_record*)rec);
 
 	case AS_BATCH_WRITE:
-		return as_batch_equals_write((as_batch_write_record*)prev, (as_batch_write_record*)rec);
+		return as_batch_equals_write(defs, (as_batch_write_record*)prev, (as_batch_write_record*)rec);
 
 	case AS_BATCH_APPLY:
-		return as_batch_equals_apply((as_batch_apply_record*)prev, (as_batch_apply_record*)rec);
+		return as_batch_equals_apply(defs, (as_batch_apply_record*)prev, (as_batch_apply_record*)rec);
 
 	case AS_BATCH_REMOVE:
-		return as_batch_equals_remove((as_batch_remove_record*)prev, (as_batch_remove_record*)rec);
+		return as_batch_equals_remove(defs, (as_batch_remove_record*)prev, (as_batch_remove_record*)rec);
 
 	default:
 		return false;
@@ -858,16 +862,8 @@ as_batch_equals(as_batch_base_record* prev, as_batch_base_record* rec, as_batch_
 }
 
 static as_status
-as_batch_read_record_size(
-	as_key* key, as_batch_read_record* rec, as_batch_builder* bb, as_error* err
-	)
+as_batch_read_record_size(as_batch_read_record* rec, as_batch_builder* bb, as_error* err)
 {
-	if (rec->policy) {
-		if (rec->policy->filter_exp) {
-			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
-		}
-	}
-
 	if (rec->bin_names) {
 		for (uint32_t j = 0; j < rec->n_bin_names; j++) {
 			bb->size += as_command_string_operation_size(rec->bin_names[j]);
@@ -886,21 +882,9 @@ as_batch_read_record_size(
 }
 
 static as_status
-as_batch_write_record_size(
-	as_key* key, as_batch_write_record* rec, as_batch_builder* bb, as_error* err
-	)
+as_batch_write_record_size(as_batch_write_record* rec, as_batch_builder* bb, as_error* err)
 {
 	bb->size += 2; // gen(2) = 2
-
-	if (rec->policy) {
-		if (rec->policy->filter_exp) {
-			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
-		}
-
-		if (rec->policy->key == AS_POLICY_KEY_SEND) {
-			bb->size += as_command_user_key_size(key);
-		}
-	}
 
 	bool has_write = false;
 
@@ -929,20 +913,9 @@ as_batch_write_record_size(
 }
 
 static void
-as_batch_apply_record_size(as_key* key, as_batch_apply_record* rec, as_batch_builder* bb)
+as_batch_apply_record_size(as_batch_apply_record* rec, as_batch_builder* bb)
 {
 	bb->size += 2; // gen(2) = 2
-
-	if (rec->policy) {
-		if (rec->policy->filter_exp) {
-			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
-		}
-
-		if (rec->policy->key == AS_POLICY_KEY_SEND) {
-			bb->size += as_command_user_key_size(key);
-		}
-	}
-
 	bb->size += as_command_string_field_size(rec->module);
 	bb->size += as_command_string_field_size(rec->function);
 
@@ -956,49 +929,26 @@ as_batch_apply_record_size(as_key* key, as_batch_apply_record* rec, as_batch_bui
 }
 
 static void
-as_batch_remove_record_size(as_key* key, as_batch_remove_record* rec, as_batch_builder* bb)
+as_batch_remove_record_size(as_batch_builder* bb)
 {
 	bb->size += 2; // gen(2) = 2
-
-	if (rec->policy) {
-		if (rec->policy->filter_exp) {
-			bb->size += rec->policy->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
-		}
-
-		if (rec->policy->key == AS_POLICY_KEY_SEND) {
-			bb->size += as_command_user_key_size(key);
-		}
-	}
 }
 
-static as_status
-as_batch_record_size(
-	as_key* key, as_batch_base_record* rec, as_batch_builder* bb, as_error* err
-	)
+static void
+as_batch_size_fields(as_key* key, as_exp* filter_exp, as_policy_key key_policy, as_batch_builder* bb)
 {
-	bb->size += 12; // repeat(1) + info(3) + ttl(4) + n_fields(2) + n_ops(2) = 12
-	bb->size += as_command_string_field_size(key->ns);
-	bb->size += as_command_string_field_size(key->set);
-
-	switch (rec->type) {
-	case AS_BATCH_READ:
-		return as_batch_read_record_size(key, (as_batch_read_record*)rec, bb, err);
-	case AS_BATCH_WRITE:
-		return as_batch_write_record_size(key, (as_batch_write_record*)rec, bb, err);
-	case AS_BATCH_APPLY:
-		as_batch_apply_record_size(key, (as_batch_apply_record*)rec, bb);
-		return AEROSPIKE_OK;
-	case AS_BATCH_REMOVE:
-		as_batch_remove_record_size(key, (as_batch_remove_record*)rec, bb);
-		return AEROSPIKE_OK;
-	default:
-		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", rec->type);
+	if (filter_exp) {
+		bb->size += filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
+	}
+	
+	if (key_policy == AS_POLICY_KEY_SEND ) {
+		bb->size += as_command_user_key_size(key);
 	}
 }
 
 static as_status
 as_batch_records_size_new(
-	as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
+	as_policies* defs, as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
 	)
 {
 	as_batch_base_record* prev = 0;
@@ -1011,14 +961,64 @@ as_batch_records_size_new(
 		
 		bb->size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
 
-		if (as_batch_equals(prev, rec, bb)) {
+		if (as_batch_equals(defs, prev, rec, bb)) {
 			// Can set repeat flag to save space.
 			bb->size++;
 		}
 		else {
 			// Size full message.
-			status = as_batch_record_size(&rec->key, rec, bb, err);
+			as_key* key = &rec->key;
+			
+			bb->size += 12; // repeat(1) + info(3) + ttl(4) + n_fields(2) + n_ops(2) = 12
+			bb->size += as_command_string_field_size(key->ns);
+			bb->size += as_command_string_field_size(key->set);
 
+			switch (rec->type) {
+				case AS_BATCH_READ: {
+					as_batch_read_record* br = (as_batch_read_record*)rec;
+					
+					if (br->policy) {
+						as_batch_size_fields(key, br->policy->filter_exp, AS_POLICY_KEY_DIGEST, bb);
+					}
+					status = as_batch_read_record_size(br, bb, err);
+					break;
+				}
+			
+				case AS_BATCH_WRITE: {
+					as_batch_write_record* bw = (as_batch_write_record*)rec;
+					const as_policy_batch_write* pbw = bw->policy ? bw->policy : &defs->batch_write;
+					
+					as_batch_size_fields(key, pbw->filter_exp, pbw->key, bb);
+					status = as_batch_write_record_size(bw, bb, err);
+					break;
+				}
+			
+				case AS_BATCH_APPLY: {
+					as_batch_apply_record* ba = (as_batch_apply_record*)rec;
+					const as_policy_batch_apply* pba = ba->policy ? ba->policy : &defs->batch_apply;
+
+					as_batch_size_fields(key, pba->filter_exp, pba->key, bb);
+					as_batch_apply_record_size(ba, bb);
+					status = AEROSPIKE_OK;
+					break;
+				}
+			
+				case AS_BATCH_REMOVE: {
+					as_batch_remove_record* brm = (as_batch_remove_record*)rec;
+					const as_policy_batch_remove* pbr = brm->policy ? brm->policy : &defs->batch_remove;
+
+					as_batch_size_fields(key, pbr->filter_exp, pbr->key, bb);
+					as_batch_remove_record_size(bb);
+					status = AEROSPIKE_OK;
+					break;
+				}
+			
+				default: {
+					status = as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", rec->type);
+					break;
+				}
+			}
+			
 			if (status != AEROSPIKE_OK) {
 				return status;
 			}
@@ -1043,12 +1043,14 @@ as_batch_init_size(as_batch_builder* bb)
 }
 
 static as_status
-as_batch_records_size(as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err)
+as_batch_records_size(
+	as_policies* defs, as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
+	)
 {
 	as_batch_init_size(bb);
 
 	if (bb->batch_any) {
-		return as_batch_records_size_new(records, offsets, bb, err);
+		return as_batch_records_size_new(defs, records, offsets, bb, err);
 	}
 	else {
 		return as_batch_records_size_old(records, offsets, bb, err);
@@ -1399,7 +1401,7 @@ as_batch_records_write_new(
 		memcpy(p, rec->key.digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 		
-		if (as_batch_equals(prev, rec, bb)) {
+		if (as_batch_equals(defs, prev, rec, bb)) {
 			// Can set repeat flag to save space.
 			*p++ = BATCH_MSG_REPEAT;
 		}
@@ -1661,7 +1663,7 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 
 	as_batch_builder_set_node(&bb, task->node);
 
-	as_status status = as_batch_records_size(btr->records, &task->offsets, &bb, err);
+	as_status status = as_batch_records_size(btr->defs, btr->records, &task->offsets, &bb, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_batch_builder_destroy(&bb);
@@ -1714,6 +1716,7 @@ as_batch_keys_size_new(
 	as_batch_builder* bb, as_error* err
 	)
 {
+	as_status status;
 	as_key* prev = 0;
 	uint32_t n_offsets = offsets->size;
 
@@ -1729,11 +1732,46 @@ as_batch_keys_size_new(
 		}
 		else {
 			// Size full message.
-			as_status status = as_batch_record_size(key, rec, bb, err);
+			bb->size += 12; // repeat(1) + info(3) + ttl(4) + n_fields(2) + n_ops(2) = 12
+			bb->size += as_command_string_field_size(key->ns);
+			bb->size += as_command_string_field_size(key->set);
+
+			if (attr->filter_exp) {
+				bb->size += attr->filter_exp->packed_sz + AS_FIELD_HEADER_SIZE;
+			}
+
+			if (attr->send_key) {
+				bb->size += as_command_user_key_size(key);
+			}
+			
+			switch (rec->type) {
+				case AS_BATCH_READ:
+					status = as_batch_read_record_size((as_batch_read_record*)rec, bb, err);
+					break;
+						
+				case AS_BATCH_WRITE:
+					status = as_batch_write_record_size((as_batch_write_record*)rec, bb, err);
+					break;
+
+				case AS_BATCH_APPLY:
+					as_batch_apply_record_size((as_batch_apply_record*)rec, bb);
+					status = AEROSPIKE_OK;
+					break;
+
+				case AS_BATCH_REMOVE:
+					as_batch_remove_record_size(bb);
+					status = AEROSPIKE_OK;
+					break;
+						
+				default:
+					status = as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", rec->type);
+					break;
+			}
 
 			if (status != AEROSPIKE_OK) {
 				return status;
 			}
+
 			prev = key;
 		}
 	}
@@ -2428,7 +2466,7 @@ as_batch_execute_async(
 		as_batch_builder_set_node(&bb, batch_node->node);
 
 		// Estimate buffer size.
-		status = as_batch_records_size(records, &batch_node->offsets, &bb, err);
+		status = as_batch_records_size(defs, records, &batch_node->offsets, &bb, err);
 
 		if (status != AEROSPIKE_OK) {
 			as_event_executor_cancel(exec, i);

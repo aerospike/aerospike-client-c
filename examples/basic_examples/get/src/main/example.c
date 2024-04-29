@@ -75,7 +75,8 @@ main(int argc, char* argv[])
 		goto CLEANUP1;
 	}
 
-	aerospike_info_foreach(&as, &err, NULL, "fake_request_string_not_real", callback, NULL);
+	as_status status = aerospike_info_foreach(&as, &err, NULL, "fake_request_string_not_real", callback, NULL);
+	printf("Status: %d\n", status);
 
 	aerospike_close(&as, &err);
 

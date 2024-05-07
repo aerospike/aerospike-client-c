@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -26,8 +26,9 @@
  * <li>as_string</li>
  * <li>as_integer</li>
  * <li>as_bytes</li>
- * <li>as_list</li>
  * </ul>
+ *
+ * The server will validate map key types in an upcoming release.
  *
  * All maps maintain an index and a rank.  The index is the item offset from the start of the map,
  * for both unordered and ordered maps.  The rank is the sorted index of the value component.

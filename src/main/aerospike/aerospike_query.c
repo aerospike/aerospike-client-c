@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -860,20 +860,24 @@ as_query_command_init(
 	if (query_policy) {
 		// Foreground query.
 		uint8_t read_attr = AS_MSG_INFO1_READ;
+		uint8_t write_attr = 0;
 
 		if (query->no_bins) {
 			read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
 		}
 
-		if (query_policy->short_query) {
+		if (query_policy->short_query || query_policy->expected_duration == AS_QUERY_DURATION_SHORT) {
 			read_attr |= AS_MSG_INFO1_SHORT_QUERY;
+		}
+		else if (query_policy->expected_duration == AS_QUERY_DURATION_LONG_RELAX_AP) {
+			write_attr |= AS_MSG_INFO2_RELAX_AP_LONG_QUERY;
 		}
 
 		uint8_t info_attr = qb->is_new ? AS_MSG_INFO3_PARTITION_DONE : 0;
 
 		p = as_command_write_header_read(cmd, base_policy, AS_POLICY_READ_MODE_AP_ONE,
-			AS_POLICY_READ_MODE_SC_SESSION, base_policy->total_timeout, qb->n_fields, qb->n_ops,
-			read_attr, info_attr);
+			AS_POLICY_READ_MODE_SC_SESSION, -1, base_policy->total_timeout, qb->n_fields, qb->n_ops,
+			read_attr, write_attr, info_attr);
 	}
 	else if (query->ops) {
 		// Background query with operations.
@@ -1132,6 +1136,7 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.flags = flags;
 	cmd.replica_size = 1;
 	cmd.replica_index = 0;
+	cmd.latency_type = AS_LATENCY_TYPE_QUERY;
 
 	as_command_start_timer(&cmd);
 
@@ -1233,6 +1238,7 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.flags = flags;
 	cmd.replica_size = 1;
 	cmd.replica_index = 0;
+	cmd.latency_type = AS_LATENCY_TYPE_QUERY;
 
 	as_command_start_timer(&cmd);
 
@@ -1301,6 +1307,7 @@ as_query_worker_new(void* data)
 static as_status
 as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 {
+	as_cluster_add_tran(task->cluster);
 	as_status status = AEROSPIKE_OK;
 
 	if (task->query_policy && task->query_policy->fail_on_cluster_change) {
@@ -1468,6 +1475,7 @@ as_query_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
 	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata)
 {
+	as_cluster_add_tran(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1481,6 +1489,10 @@ as_query_partitions(
 		}
 
 		uint32_t n_nodes = pt->node_parts.size;
+
+		if (pt->iteration > 1) {
+			as_cluster_add_retries(cluster, n_nodes);
+		}
 
 		// Initialize task.
 		uint32_t error_mutex = 0;
@@ -1717,6 +1729,7 @@ as_query_partition_execute_async(
 		cmd->flags = qe->deserialize ? AS_ASYNC_FLAGS_DESERIALIZE : 0;
 		cmd->replica_size = 1;
 		cmd->replica_index = 0;
+		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
 		ee->commands[i] = cmd;
 	}
 
@@ -1755,6 +1768,7 @@ as_query_partition_async(
 	as_event_loop* event_loop
 	)
 {
+	as_cluster_add_tran(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, query->ns, err);
 
@@ -1872,6 +1886,7 @@ as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
+	as_cluster_add_retry(qe->cluster);
 
 	return as_query_partition_execute_async(qe, qe->pt, err);
 }
@@ -2249,6 +2264,7 @@ aerospike_query_async(
 		cmd->flags = policy->deserialize ? AS_ASYNC_FLAGS_DESERIALIZE : 0;
 		cmd->replica_size = 1;
 		cmd->replica_index = 0;
+		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
 		memcpy(cmd->buf, cmd_buf, size);
 		exec->commands[i] = cmd;
 	}

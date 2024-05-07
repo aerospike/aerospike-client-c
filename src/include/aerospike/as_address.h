@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -45,7 +45,7 @@ extern "C" {
  * IPv6: [xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx]:<port>
  * ~~~~~~~~~~
  */
-void
+AS_EXTERN void
 as_address_name(struct sockaddr* addr, char* name, socklen_t size);
 
 /**
@@ -58,7 +58,7 @@ as_address_name(struct sockaddr* addr, char* name, socklen_t size);
  * IPv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
  * ~~~~~~~~~~
  */
-void
+AS_EXTERN void
 as_address_short_name(struct sockaddr* addr, char* name, socklen_t size);
 
 /**

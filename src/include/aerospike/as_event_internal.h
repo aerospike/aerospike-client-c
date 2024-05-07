@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -140,6 +140,7 @@ typedef struct as_event_command {
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
+	uint64_t begin; // Used for metrics
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
 	uint32_t write_len;
@@ -155,6 +156,8 @@ typedef struct as_event_command {
 	uint8_t replica_size;
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
+	as_latency_type latency_type;
+	bool metrics_enabled;
 } as_event_command;
 
 typedef struct {
@@ -188,6 +191,9 @@ as_event_command_execute(as_event_command* cmd, as_error* err);
 
 void
 as_event_command_schedule(as_event_command* cmd);
+
+void
+as_event_connection_complete(as_event_command* cmd);
 
 bool
 as_event_proto_parse(as_event_command* cmd, as_proto* proto);
@@ -761,7 +767,7 @@ as_event_release_async_connection(as_event_command* cmd)
 {
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	as_event_release_connection(cmd->conn, pool);
-	as_node_incr_error_count(cmd->node);
+	as_node_incr_error_rate(cmd->node);
 }
 
 static inline void
@@ -783,7 +789,7 @@ as_event_connection_timeout(as_event_command* cmd, as_async_conn_pool* pool)
 		if (conn->watching > 0) {
 			as_event_stop_watcher(cmd, conn);
 			as_event_release_connection(conn, pool);
-			as_node_incr_error_count(cmd->node);
+			as_node_incr_error_rate(cmd->node);
 		}
 		else {
 			cf_free(conn);

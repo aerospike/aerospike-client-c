@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -29,6 +29,7 @@
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_sleep.h>
 
 #include "../test.h"
 
@@ -379,6 +380,65 @@ TEST(key_operate_read_all_bins , "operate read all bins")
 	as_record_destroy(prec);
 }
 
+TEST(key_operate_reset_read_ttl, "operate reset_read_ttl")
+{
+	// Write initial record.
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "oprrttl");
+
+	// Write record with 2 second ttl.
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_str(&rec, "a", "expirevalue");
+	rec.ttl = 2;
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Read the record with operate command before it expires and reset read ttl.
+	as_sleep(1000);
+	
+	as_policy_operate po;
+	as_policy_operate_init(&po);
+	po.read_touch_ttl_percent = 80;
+	
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_read(&ops, "a");
+
+	as_record* prec = NULL;
+	status = aerospike_key_operate(as, &err, &po, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	
+	char* s = as_record_get_str(prec, "a");
+	assert_not_null(s);
+	assert_string_eq(s, "expirevalue");
+	as_record_destroy(prec);
+
+	// Read the record again, but don't reset read ttl.
+	as_sleep(1000);
+	po.read_touch_ttl_percent = -1;
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, &po, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	
+	s = as_record_get_str(prec, "a");
+	assert_not_null(s);
+	assert_string_eq(s, "expirevalue");
+	as_record_destroy(prec);
+
+	// Read the record after it expires, showing it's gone.
+	as_sleep(2000);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_operations_destroy(&ops);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -388,6 +448,7 @@ SUITE(key_operate, "aerospike_key_operate tests")
 	if (g_has_ttl) {
 		suite_add(key_operate_touchget);
 		suite_add(key_operate_gen_equal);
+		suite_add(key_operate_reset_read_ttl);
 	}
 	suite_add(key_operate_9);
 	suite_add(key_operate_float);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -85,7 +85,7 @@ as_bit_shift(
 bool
 as_bit_math(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
-	uint16_t command, int bit_offset, uint32_t bit_size, int64_t value, bool sign,
+	uint16_t command, int bit_offset, uint32_t bit_size, uint64_t value, bool sign,
 	as_bit_overflow_action action
 	)
 {
@@ -93,7 +93,7 @@ as_bit_math(
 	as_bit_pack_header(&pk, ctx, command, 5);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
-	as_pack_int64(&pk, value);
+	as_pack_uint64(&pk, value);
 	as_bit_pack_policy(&pk, policy);
 
 	uint64_t flags = (uint64_t)action;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -110,7 +110,9 @@ as_async_write_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = 0;
+	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	wcmd->listener = listener;
+	as_cluster_add_tran(cluster);
 	return cmd;
 }
 	
@@ -119,7 +121,8 @@ as_async_record_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_partition_info* pi,
 	as_policy_replica replica, uint8_t replica_index, bool deserialize, bool heap_rec,
 	uint8_t flags, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
+	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results, 
+	as_latency_type latency_type
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -158,7 +161,9 @@ as_async_record_command_create(
 
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = replica_index;
+	cmd->latency_type = latency_type;
 	rcmd->listener = listener;
+	as_cluster_add_tran(cluster);
 	return cmd;
 }
 
@@ -197,7 +202,9 @@ as_async_value_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = 0;
+	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	vcmd->listener = listener;
+	as_cluster_add_tran(cluster);
 	return cmd;
 }
 
@@ -233,7 +240,9 @@ as_async_info_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = 1;
 	cmd->replica_index = 0;
+	cmd->latency_type = AS_LATENCY_TYPE_NONE;
 	icmd->listener = listener;
+	as_cluster_add_tran(node->cluster);
 	return cmd;
 }
 

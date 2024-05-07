@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -88,9 +88,16 @@ typedef struct as_node_stats_s {
 	as_conn_stats pipeline;
 
 	/**
-	 * Node error count within current window.
+	 * Transaction error count since node was initialized. If the error is retryable, multiple errors per
+	 * transaction may occur.
 	 */
-	uint32_t error_count;
+	uint64_t error_count;
+
+	/**
+	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socket timeout),
+	 * multiple timeouts per transaction may occur.
+	 */
+	uint64_t timeout_count;
 
 } as_node_stats;
 
@@ -127,6 +134,11 @@ typedef struct as_cluster_stats_s {
 	 * Statistics for all event loops.
 	 */
 	as_event_loop_stats* event_loops;
+
+	/**
+	* Count of transaction retries since cluster was started.
+	*/
+	uint64_t retry_count;
 
 	/**
 	 * Node count.
@@ -241,6 +253,18 @@ aerospike_event_loop_stats(as_event_loop* event_loop, as_event_loop_stats* stats
  */
 AS_EXTERN char*
 aerospike_stats_to_string(as_cluster_stats* stats);
+
+static inline void
+as_conn_stats_init(as_conn_stats* stats)
+{
+	stats->in_pool = 0;
+	stats->in_use = 0;
+	stats->opened = 0;
+	stats->closed = 0;
+}
+
+void
+as_conn_stats_sum(as_conn_stats* stats, as_async_conn_pool* pool);
 
 #ifdef __cplusplus
 } // end extern "C"

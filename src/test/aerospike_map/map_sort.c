@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -352,100 +352,6 @@ TEST(map_sort_bool, "sort map of bool keys")
 	as_record_destroy(rec);
 }
 
-TEST(map_sort_double, "sort map of double keys")
-{
-	as_key key;
-	as_key_init(&key, NAMESPACE, SET, "k4");
-
-	as_error err;
-	as_status status = aerospike_key_remove(as, &err, NULL, &key);
-	assert_true(err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND);
-
-    as_hashmap map1;
-    as_hashmap_init(&map1, 4);
-
-    as_double k11,k12,k13,k14;
-    as_integer v11,v12,v13,v14;
-    as_double_init(&k11, 2000);
-    as_integer_init(&v11, 1);
-    as_double_init(&k12, 1050);
-    as_integer_init(&v12, 2);
-    as_double_init(&k13, 2500);
-    as_integer_init(&v13, 3);
-    as_double_init(&k14, 1000);
-    as_integer_init(&v14, 4);
-    as_hashmap_set(&map1, (as_val*)&k11, (as_val*)&v11);
-    as_hashmap_set(&map1, (as_val*)&k12, (as_val*)&v12);
-    as_hashmap_set(&map1, (as_val*)&k13, (as_val*)&v13);
-    as_hashmap_set(&map1, (as_val*)&k14, (as_val*)&v14);
-
-    as_hashmap map2;
-    as_hashmap_init(&map2, 4);
-
-    as_double k21,k22,k23,k24;
-    as_integer v21,v22,v23,v24;
-    as_double_init(&k21, 9000);
-    as_integer_init(&v21, 1);
-    as_double_init(&k22, 6700);
-    as_integer_init(&v22, 2);
-    as_double_init(&k23, 7000);
-    as_integer_init(&v23, 3);
-    as_double_init(&k24, 6800);
-    as_integer_init(&v24, 4);
-    as_hashmap_set(&map2, (as_val*)&k21, (as_val*)&v21);
-    as_hashmap_set(&map2, (as_val*)&k22, (as_val*)&v22);
-    as_hashmap_set(&map2, (as_val*)&k23, (as_val*)&v23);
-    as_hashmap_set(&map2, (as_val*)&k24, (as_val*)&v24);
-
-    as_map_policy mp;
-    as_map_policy_init(&mp);
-    as_map_policy_set(&mp, AS_MAP_KEY_ORDERED, 0);
-
-    as_cdt_ctx ctx;
-    as_cdt_ctx_init(&ctx, 1);
-    as_cdt_ctx_add_list_index(&ctx, -1);
-
-	as_val_reserve(&map2);
-
-    as_operations ops;
-    as_operations_inita(&ops, 4);
-
-    as_operations_list_append(&ops, BIN, NULL, NULL, (as_val*)&map1);
-    as_operations_map_set_policy(&ops, BIN, &ctx, &mp);
-
-    as_operations_list_append(&ops, BIN, NULL, NULL, (as_val*)&map2); 
-    as_operations_map_set_policy(&ops, BIN, &ctx, &mp);
-
-    as_record* rec = NULL;
-    status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
-	assert_int_eq(status, AEROSPIKE_OK);
-	as_operations_destroy(&ops);
-	as_record_destroy(rec);
-	as_cdt_ctx_destroy(&ctx);
-
-	as_operations ops2;
-    as_operations_inita(&ops2, 1);
-	as_hashmap_set_flags(&map2, AS_MAP_KEY_ORDERED);
-	as_operations_list_remove_by_value(&ops2, BIN, NULL, (as_val*)&map2, AS_LIST_RETURN_NONE);
-
-	rec = NULL;
-	status = aerospike_key_operate(as, &err, NULL, &key, &ops2, &rec);
-	assert_int_eq(status, AEROSPIKE_OK);
-	as_operations_destroy(&ops2);
-	as_record_destroy(rec);
-
-	rec = NULL;
-    status = aerospike_key_get(as, &err, NULL, &key, &rec);
-	assert_int_eq(status, AEROSPIKE_OK);
-	//example_dump_record(rec);
-
-	as_list* list = as_record_get_list(rec, BIN);
-	uint32_t size = as_list_size(list);
-	assert_int_eq(size, 1);
-
-	as_record_destroy(rec);
-}
-
 TEST(map_sort_bytes, "sort map of byte array keys")
 {
 	as_key key;
@@ -540,53 +446,58 @@ TEST(map_sort_mixed, "sort map of mixed type keys")
 	as_status status = aerospike_key_remove(as, &err, NULL, &key);
 	assert_true(err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
-    as_hashmap map1;
-    as_hashmap_init(&map1, 4);
+	as_hashmap map1;
+	as_hashmap_init(&map1, 4);
 
 	as_integer k11,k12;
-    as_integer_init(&k11, 50);
-    as_integer_init(&k12, 25);
+	as_integer_init(&k11, 50);
+	as_integer_init(&k12, 25);
 
-	as_double k13,k14;
-    as_double_init(&k13, 40.5);
-    as_double_init(&k14, 45.1);
+	as_string k13,k14;
+	as_string_init(&k13, "John", false);
+	as_string_init(&k14, "Andrew", false);
 
-    as_integer v11,v12,v13,v14;
-    as_integer_init(&v11, 1);
-    as_integer_init(&v12, 2);
-    as_integer_init(&v13, 3);
-    as_integer_init(&v14, 4);
+	as_integer v11,v12,v13,v14;
+	as_integer_init(&v11, 1);
+	as_integer_init(&v12, 2);
+	as_integer_init(&v13, 3);
+	as_integer_init(&v14, 4);
 
-    as_hashmap_set(&map1, (as_val*)&k11, (as_val*)&v11);
-    as_hashmap_set(&map1, (as_val*)&k12, (as_val*)&v12);
-    as_hashmap_set(&map1, (as_val*)&k13, (as_val*)&v13);
-    as_hashmap_set(&map1, (as_val*)&k14, (as_val*)&v14);
+	int r;
+	r = as_hashmap_set(&map1, (as_val*)&k11, (as_val*)&v11);
+	assert_int_eq(r, 0);
+	r = as_hashmap_set(&map1, (as_val*)&k12, (as_val*)&v12);
+	assert_int_eq(r, 0);
+	r = as_hashmap_set(&map1, (as_val*)&k13, (as_val*)&v13);
+	assert_int_eq(r, 0);
+	r = as_hashmap_set(&map1, (as_val*)&k14, (as_val*)&v14);
+	assert_int_eq(r, 0);
 
-    as_map_policy mp;
-    as_map_policy_init(&mp);
-    as_map_policy_set(&mp, AS_MAP_KEY_ORDERED, 0);
+	as_map_policy mp;
+	as_map_policy_init(&mp);
+	as_map_policy_set(&mp, AS_MAP_KEY_ORDERED, 0);
 
-    as_cdt_ctx ctx;
-    as_cdt_ctx_init(&ctx, 1);
-    as_cdt_ctx_add_list_index(&ctx, -1);
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index(&ctx, -1);
 
 	as_val_reserve(&map1);
 
-    as_operations ops;
-    as_operations_inita(&ops, 4);
+	as_operations ops;
+	as_operations_inita(&ops, 4);
 
-    as_operations_list_append(&ops, BIN, NULL, NULL, (as_val*)&map1);
-    as_operations_map_set_policy(&ops, BIN, &ctx, &mp);
+	as_operations_list_append(&ops, BIN, NULL, NULL, (as_val*)&map1);
+	as_operations_map_set_policy(&ops, BIN, &ctx, &mp);
 
-    as_record* rec = NULL;
-    status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_record* rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	as_cdt_ctx_destroy(&ctx);
 
 	as_operations ops2;
-    as_operations_inita(&ops2, 1);
+	as_operations_inita(&ops2, 1);
 	as_hashmap_set_flags(&map1, AS_MAP_KEY_ORDERED);
 	as_operations_list_remove_by_value(&ops2, BIN, NULL, (as_val*)&map1, AS_LIST_RETURN_NONE);
 
@@ -597,7 +508,7 @@ TEST(map_sort_mixed, "sort map of mixed type keys")
 	as_record_destroy(rec);
 
 	rec = NULL;
-    status = aerospike_key_get(as, &err, NULL, &key, &rec);
+	status = aerospike_key_get(as, &err, NULL, &key, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	//example_dump_record(rec);
 
@@ -617,53 +528,58 @@ TEST(map_sort_kv, "sort map of mixed type keys and order by key and value")
 	as_status status = aerospike_key_remove(as, &err, NULL, &key);
 	assert_true(err.code == AEROSPIKE_OK || err.code == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
-    as_hashmap map1;
-    as_hashmap_init(&map1, 4);
+	as_hashmap map1;
+	as_hashmap_init(&map1, 4);
 
 	as_integer k11,k12;
-    as_integer_init(&k11, 50);
-    as_integer_init(&k12, 25);
+	as_integer_init(&k11, 50);
+	as_integer_init(&k12, 25);
 
-	as_double k13,k14;
-    as_double_init(&k13, 40.5);
-    as_double_init(&k14, 45.1);
+	as_string k13,k14;
+	as_string_init(&k13, "John", false);
+	as_string_init(&k14, "Andrew", false);
 
-    as_integer v11,v12,v13,v14;
-    as_integer_init(&v11, 1);
-    as_integer_init(&v12, 2);
-    as_integer_init(&v13, 3);
-    as_integer_init(&v14, 4);
+	as_integer v11,v12,v13,v14;
+	as_integer_init(&v11, 1);
+	as_integer_init(&v12, 2);
+	as_integer_init(&v13, 3);
+	as_integer_init(&v14, 4);
 
-    as_hashmap_set(&map1, (as_val*)&k11, (as_val*)&v11);
-    as_hashmap_set(&map1, (as_val*)&k12, (as_val*)&v12);
-    as_hashmap_set(&map1, (as_val*)&k13, (as_val*)&v13);
-    as_hashmap_set(&map1, (as_val*)&k14, (as_val*)&v14);
+	int r;
+	r = as_hashmap_set(&map1, (as_val*)&k11, (as_val*)&v11);
+	assert_int_eq(r, 0);
+	r = as_hashmap_set(&map1, (as_val*)&k12, (as_val*)&v12);
+	assert_int_eq(r, 0);
+	r = as_hashmap_set(&map1, (as_val*)&k13, (as_val*)&v13);
+	assert_int_eq(r, 0);
+	r = as_hashmap_set(&map1, (as_val*)&k14, (as_val*)&v14);
+	assert_int_eq(r, 0);
 
-    as_map_policy mp;
-    as_map_policy_init(&mp);
-    as_map_policy_set(&mp, AS_MAP_KEY_VALUE_ORDERED, 0);
+	as_map_policy mp;
+	as_map_policy_init(&mp);
+	as_map_policy_set(&mp, AS_MAP_KEY_VALUE_ORDERED, 0);
 
-    as_cdt_ctx ctx;
-    as_cdt_ctx_init(&ctx, 1);
-    as_cdt_ctx_add_list_index(&ctx, -1);
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_list_index(&ctx, -1);
 
 	as_val_reserve(&map1);
 
-    as_operations ops;
-    as_operations_inita(&ops, 4);
+	as_operations ops;
+	as_operations_inita(&ops, 4);
 
-    as_operations_list_append(&ops, BIN, NULL, NULL, (as_val*)&map1);
-    as_operations_map_set_policy(&ops, BIN, &ctx, &mp);
+	as_operations_list_append(&ops, BIN, NULL, NULL, (as_val*)&map1);
+	as_operations_map_set_policy(&ops, BIN, &ctx, &mp);
 
-    as_record* rec = NULL;
-    status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_record* rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	as_cdt_ctx_destroy(&ctx);
 
 	as_operations ops2;
-    as_operations_inita(&ops2, 1);
+	as_operations_inita(&ops2, 1);
 	as_hashmap_set_flags(&map1, AS_MAP_KEY_VALUE_ORDERED);
 	as_operations_list_remove_by_value(&ops2, BIN, NULL, (as_val*)&map1, AS_LIST_RETURN_NONE);
 
@@ -674,7 +590,7 @@ TEST(map_sort_kv, "sort map of mixed type keys and order by key and value")
 	as_record_destroy(rec);
 
 	rec = NULL;
-    status = aerospike_key_get(as, &err, NULL, &key, &rec);
+	status = aerospike_key_get(as, &err, NULL, &key, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	//example_dump_record(rec);
 
@@ -694,7 +610,6 @@ SUITE(map_sort, "map sort tests")
 	suite_add(map_sort_int);
 	suite_add(map_sort_string);
 	suite_add(map_sort_bool);
-	suite_add(map_sort_double);
 	suite_add(map_sort_bytes);
 	suite_add(map_sort_mixed);
 	suite_add(map_sort_kv);

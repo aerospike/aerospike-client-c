@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -529,8 +529,8 @@ as_scan_command_init(
 		int info_attr = cluster->has_partition_query? AS_MSG_INFO3_PARTITION_DONE : 0;
 
 		p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
-				AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, sb->n_fields, n_ops,
-				read_attr, info_attr);
+				AS_POLICY_READ_MODE_SC_SESSION, -1, policy->base.total_timeout, sb->n_fields, n_ops,
+				read_attr, 0, info_attr);
 	}
 	
 	if (scan->ns[0]) {
@@ -687,6 +687,7 @@ as_scan_command_execute(as_scan_task* task)
 	cmd.flags = AS_COMMAND_FLAGS_READ;
 	cmd.replica_size = 1;
 	cmd.replica_index = 0;
+	cmd.latency_type = AS_LATENCY_TYPE_QUERY;
 
 	as_command_start_timer(&cmd);
 
@@ -760,6 +761,7 @@ as_scan_generic(
 	aerospike_scan_foreach_callback callback, void* udata, uint64_t* task_id_ptr
 	)
 {
+	as_cluster_add_tran(cluster);
 	as_status status = as_scan_validate(err, policy, scan);
 
 	if (status != AEROSPIKE_OK) {
@@ -876,6 +878,7 @@ as_scan_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_scan* policy, const as_scan* scan,
 	as_partition_tracker* pt, aerospike_scan_foreach_callback callback, void* udata)
 {
+	as_cluster_add_tran(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -889,6 +892,10 @@ as_scan_partitions(
 		}
 
 		uint32_t n_nodes = pt->node_parts.size;
+		
+		if (pt->iteration > 1) {
+			as_cluster_add_retries(cluster, n_nodes);
+		}
 
 		// Initialize task.
 		uint32_t error_mutex = 0;
@@ -1091,6 +1098,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		cmd->flags = se->deserialize_list_map ? AS_ASYNC_FLAGS_DESERIALIZE : 0;
 		cmd->replica_size = 1;
 		cmd->replica_index = 0;
+		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
 		ee->commands[i] = cmd;
 	}
 
@@ -1163,6 +1171,7 @@ as_scan_partition_retry_async(as_async_scan_executor* se_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
+	as_cluster_add_retry(se->cluster);
 
 	return as_scan_partition_execute_async(se, se->pt, err);
 }
@@ -1174,6 +1183,7 @@ as_scan_partition_async(
 	as_event_loop* event_loop
 	)
 {
+	as_cluster_add_tran(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, scan->ns, err);
 

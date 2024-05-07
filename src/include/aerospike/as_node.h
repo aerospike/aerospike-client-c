@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -21,6 +21,7 @@
 #include <aerospike/as_conn_pool.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
+#include <aerospike/as_latency.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_queue.h>
@@ -205,6 +206,13 @@ typedef struct as_async_conn_pool_s {
 
 } as_async_conn_pool;
 
+/**
+ * Node metrics latency bucket struct
+ */
+typedef struct as_node_metrics_s {
+	as_latency_buckets* latency;
+} as_node_metrics;
+
 struct as_cluster_s;
 
 /**
@@ -298,9 +306,26 @@ typedef struct as_node_s {
 	as_racks* racks;
 
 	/**
+	 * Node metrics 
+	 */
+	as_node_metrics* metrics;
+
+	/**
 	 * Socket used exclusively for cluster tend thread info requests.
 	 */
 	as_socket info_socket;
+
+	/**
+	 * Transaction error count since node was initialized. If the error is retryable, multiple errors per
+	 * transaction may occur.
+	 */
+	uint64_t error_count;
+
+	/**
+	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * multiple timeouts per transaction may occur.
+	 */
+	uint64_t timeout_count;
 
 	/**
 	 * Connection queue iterator.  Not atomic by design.
@@ -320,8 +345,8 @@ typedef struct as_node_s {
 	/**
 	 * Error count for this node's error_rate_window.
 	 */
-	uint32_t error_count;
-
+	uint32_t error_rate;
+	
 	/**
 	 * Server's generation count for peers.
 	 */
@@ -428,6 +453,13 @@ as_node_create(struct as_cluster_s* cluster, as_node_info* node_info);
  */
 AS_EXTERN void
 as_node_destroy(as_node* node);
+
+/**
+ * @private
+ * Destroy node metrics.
+ */
+void
+as_node_destroy_metrics(as_node* node);
 
 /**
  * @private
@@ -636,6 +668,60 @@ as_node_signal_login(as_node* node);
  */
 bool
 as_node_has_rack(as_node* node, const char* ns, int rack_id);
+
+/**
+ * @private
+ * Record latency of type latency_type for node
+ */
+void
+as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed);
+
+struct as_metrics_policy_s;
+
+/**
+ * @private
+ * Enable metrics at the node level
+ */
+void
+as_node_enable_metrics(as_node* node, const struct as_metrics_policy_s* policy);
+
+/**
+ * Return transaction error count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_error_count(as_node* node)
+{
+	return as_load_uint64(&node->error_count);
+}
+
+/**
+ * Increment transaction error count. If the error is retryable, multiple errors per
+ * transaction may occur.
+ */
+static inline void
+as_node_add_error(as_node* node)
+{
+	as_incr_uint64(&node->error_count);
+}
+
+/**
+ * Return transaction timeout count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_timeout_count(as_node* node)
+{
+	return as_load_uint64(&node->timeout_count);
+}
+
+/**
+ * Increment transaction timeout count. If the timeout is retryable (ie socketTimeout),
+ * multiple timeouts per transaction may occur.
+ */
+static inline void
+as_node_add_timeout(as_node* node)
+{
+	as_incr_uint64(&node->timeout_count);
+}
 
 /**
  * @private

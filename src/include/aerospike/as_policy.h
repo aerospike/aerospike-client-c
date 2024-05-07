@@ -382,6 +382,49 @@ typedef enum as_policy_commit_level_e {
 } as_policy_commit_level;
 
 /**
+ * Expected query duration. The server treats the query in different ways depending on the expected duration.
+ * This enum is ignored for aggregation queries, background queries and server versions &lt; 6.0.
+ *
+ * @ingroup client_policies
+ */
+typedef enum as_query_duration_e {
+
+	/**
+	 * The query is expected to return more than 100 records per node. The server optimizes for a
+	 * large record set in the following ways:
+	 * <ul>
+	 * <li>Allow query to be run in multiple threads using the server's query threading configuration.</li>
+	 * <li>Do not relax read consistency for AP namespaces.</li>
+	 * <li>Add the query to the server's query monitor.</li>
+	 * <li>Do not add the overall latency to the server's latency histogram.</li>
+	 * <li>Do not allow server timeouts.</li>
+	 * </ul>
+	 */
+	AS_QUERY_DURATION_LONG,
+
+	/**
+	 * The query is expected to return less than 100 records per node. The server optimizes for a
+	 * small record set in the following ways:
+	 * <ul>
+	 * <li>Always run the query in one thread and ignore the server's query threading configuration.</li>
+	 * <li>Allow query to be inlined directly on the server's service thread.</li>
+	 * <li>Relax read consistency for AP namespaces.</li>
+	 * <li>Do not add the query to the server's query monitor.</li>
+	 * <li>Add the overall latency to the server's latency histogram.</li>
+	 * <li>Allow server timeouts. The default server timeout for a short query is 1 second.</li>
+	 * </ul>
+	 */
+	AS_QUERY_DURATION_SHORT,
+	
+	/**
+	 * Treat query as a LONG query, but relax read consistency for AP namespaces.
+	 * This value is treated exactly like LONG for server versions &lt; 7.1.
+	 */
+	AS_QUERY_DURATION_LONG_RELAX_AP
+
+} as_query_duration;
+
+/**
  * Generic policy fields shared among all policies.
  *
  * @ingroup client_policies
@@ -533,6 +576,27 @@ typedef struct as_policy_read_s {
 	 */
 	as_policy_read_mode_sc read_mode_sc;
 
+	/**
+	 * Determine how record TTL (time to live) is affected on reads. When enabled, the server can
+	 * efficiently operate as a read-based LRU cache where the least recently used records are expired.
+	 * The value is expressed as a percentage of the TTL sent on the most recent write such that a read
+	 * within this interval of the record’s end of life will generate a touch.
+	 *
+	 * For example, if the most recent write had a TTL of 10 hours and read_touch_ttl_percent is set to
+	 * 80, the next read within 8 hours of the record's end of life (equivalent to 2 hours after the most
+	 * recent write) will result in a touch, resetting the TTL to another 10 hours.
+	 *
+	 * Values:
+	 * <ul>
+	 * <li> 0 : Use server config default-read-touch-ttl-pct for the record's namespace/set.</li>
+	 * <li>-1 : Do not reset record TTL on reads.</li>
+	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
+	 * </ul>
+	 *
+	 * Default: 0
+	 */
+	int read_touch_ttl_percent;
+	
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
@@ -725,8 +789,9 @@ typedef struct as_policy_operate_s {
 
 	/**
 	 * The default time-to-live (expiration) of the record in seconds. This field will 
-	 * only be used if "as_operations.ttl" is set to AS_RECORD_CLIENT_DEFAULT_TTL. The
-	 * as_operations instance is passed in to operate functions along with as_policy_operate.
+	 * only be used if one or more of the  operations is a write operation and  if "as_operations.ttl"
+	 * is set to AS_RECORD_CLIENT_DEFAULT_TTL. The as_operations instance is passed in to
+	 * operate functions along with as_policy_operate.
 	 *
 	 * There are also special values that can be set in the record ttl:
 	 * <ul>
@@ -736,6 +801,27 @@ typedef struct as_policy_operate_s {
 	 * </ul>
 	 */
 	uint32_t ttl;
+
+	/**
+	 * Determine how record TTL (time to live) is affected on reads. When enabled, the server can
+	 * efficiently operate as a read-based LRU cache where the least recently used records are expired.
+	 * The value is expressed as a percentage of the TTL sent on the most recent write such that a read
+	 * within this interval of the record’s end of life will generate a touch.
+	 *
+	 * For example, if the most recent write had a TTL of 10 hours and read_touch_ttl_percent is set to
+	 * 80, the next read within 8 hours of the record's end of life (equivalent to 2 hours after the most
+	 * recent write) will result in a touch, resetting the TTL to another 10 hours.
+	 *
+	 * Values:
+	 * <ul>
+	 * <li> 0 : Use server config default-read-touch-ttl-pct for the record's namespace/set.</li>
+	 * <li>-1 : Do not reset record TTL on reads.</li>
+	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
+	 * </ul>
+	 *
+	 * Default: 0
+	 */
+	int read_touch_ttl_percent;
 
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
@@ -845,6 +931,27 @@ typedef struct as_policy_batch_s {
 	as_policy_read_mode_sc read_mode_sc;
 
 	/**
+	 * Determine how record TTL (time to live) is affected on reads. When enabled, the server can
+	 * efficiently operate as a read-based LRU cache where the least recently used records are expired.
+	 * The value is expressed as a percentage of the TTL sent on the most recent write such that a read
+	 * within this interval of the record’s end of life will generate a touch.
+	 *
+	 * For example, if the most recent write had a TTL of 10 hours and read_touch_ttl_percent is set to
+	 * 80, the next read within 8 hours of the record's end of life (equivalent to 2 hours after the most
+	 * recent write) will result in a touch, resetting the TTL to another 10 hours.
+	 *
+	 * Values:
+	 * <ul>
+	 * <li> 0 : Use server config default-read-touch-ttl-pct for the record's namespace/set.</li>
+	 * <li>-1 : Do not reset record TTL on reads.</li>
+	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
+	 * </ul>
+	 *
+	 * Default: 0
+	 */
+	int read_touch_ttl_percent;
+
+	/**
 	 * Determine if batch commands to each server are run in parallel threads.
 	 *
 	 * Values:
@@ -944,7 +1051,7 @@ typedef struct as_policy_batch_read_s {
 	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
-	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
+	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary transaction policies.
 	 *
@@ -964,6 +1071,27 @@ typedef struct as_policy_batch_read_s {
 	 */
 	as_policy_read_mode_sc read_mode_sc;
 
+	/**
+	 * Determine how record TTL (time to live) is affected on reads. When enabled, the server can
+	 * efficiently operate as a read-based LRU cache where the least recently used records are expired.
+	 * The value is expressed as a percentage of the TTL sent on the most recent write such that a read
+	 * within this interval of the record’s end of life will generate a touch.
+	 *
+	 * For example, if the most recent write had a TTL of 10 hours and read_touch_ttl_percent is set to
+	 * 80, the next read within 8 hours of the record's end of life (equivalent to 2 hours after the most
+	 * recent write) will result in a touch, resetting the TTL to another 10 hours.
+	 *
+	 * Values:
+	 * <ul>
+	 * <li> 0 : Use server config default-read-touch-ttl-pct for the record's namespace/set.</li>
+	 * <li>-1 : Do not reset record TTL on reads.</li>
+	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
+	 * </ul>
+	 *
+	 * Default: 0
+	 */
+	int read_touch_ttl_percent;
+
 } as_policy_batch_read;
 
 /**
@@ -976,7 +1104,7 @@ typedef struct as_policy_batch_write_s {
 	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
-	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
+	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary transaction policies.
 	 *
@@ -1157,6 +1285,14 @@ typedef struct as_policy_query_s {
 	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
+	
+	/**
+	 * Expected query duration. The server treats the query in different ways depending on the expected duration.
+	 * This field is ignored for aggregation queries, background queries and server versions &lt; 6.0.
+	 *
+	 * Default: AS_QUERY_DURATION_LONG
+	 */
+	as_query_duration expected_duration;
 
 	/**
 	 * Terminate query if cluster is in migration state. If the server supports partition
@@ -1175,12 +1311,20 @@ typedef struct as_policy_query_s {
 	bool deserialize;
 
 	/**
+	 * This field is deprecated and will eventually be removed. Use expected_duration instead.
+	 *
+	 * For backwards compatibility: If short_query is true, the query is treated as a short query and
+	 * expected_duration is ignored. If short_query is false, expected_duration is used
+	 * and defaults to AS_QUERY_DURATION_LONG.
+	 *
 	 * Is query expected to return less than 100 records per node.
 	 * If true, the server will optimize the query for a small record set.
 	 * This field is ignored for aggregation queries, background queries
 	 * and server versions &lt; 6.0.
 	 *
 	 * Default: false
+	 *
+	 * @deprecated Use expected_duration instead.
 	 */
 	bool short_query;
 
@@ -1439,6 +1583,7 @@ as_policy_read_init(as_policy_read* p)
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	p->read_touch_ttl_percent = 0;
 	p->deserialize = true;
 	p->async_heap_rec = false;
 	return p;
@@ -1515,6 +1660,7 @@ as_policy_operate_init(as_policy_operate* p)
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
+	p->read_touch_ttl_percent = 0;
 	p->deserialize = true;
 	p->durable_delete = false;
 	p->async_heap_rec = false;
@@ -1619,6 +1765,7 @@ as_policy_batch_init(as_policy_batch* p)
 	p->replica = AS_POLICY_REPLICA_SEQUENCE;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	p->read_touch_ttl_percent = 0;
 	p->concurrent = false;
 	p->allow_inline = true;
 	p->allow_inline_ssd = false;
@@ -1668,6 +1815,7 @@ as_policy_batch_read_init(as_policy_batch_read* p)
 	p->filter_exp = NULL;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	p->read_touch_ttl_percent = 0;
 	return p;
 }
 
@@ -1767,6 +1915,7 @@ as_policy_query_init(as_policy_query* p)
 	as_policy_base_query_init(&p->base);
 	p->info_timeout = 10000;
 	p->replica = AS_POLICY_REPLICA_SEQUENCE;
+	p->expected_duration = AS_QUERY_DURATION_LONG;
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;
 	p->short_query = false;

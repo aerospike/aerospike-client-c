@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -259,8 +259,8 @@ as_command_write_header_write(
 uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
-	as_policy_read_mode_sc read_mode_sc, uint32_t timeout, uint16_t n_fields, uint16_t n_bins,
-	uint8_t read_attr, uint8_t info_attr
+	as_policy_read_mode_sc read_mode_sc, int read_ttl, uint32_t timeout, uint16_t n_fields,
+	uint16_t n_bins, uint8_t read_attr, uint8_t write_attr, uint8_t info_attr
 	)
 {
 	as_command_set_attr_read(read_mode_ap, read_mode_sc, policy->compress, &read_attr,
@@ -268,9 +268,10 @@ as_command_write_header_read(
 
 	cmd[8] = 22;
 	cmd[9] = read_attr;
-	cmd[10] = 0;
+	cmd[10] = write_attr;
 	cmd[11] = info_attr;
-	memset(&cmd[12], 0, 10);
+	memset(&cmd[12], 0, 6);
+	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
 	*(uint16_t*)&cmd[28] = cf_swap_to_be16(n_bins);
@@ -280,7 +281,8 @@ as_command_write_header_read(
 uint8_t*
 as_command_write_header_read_header(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
-	as_policy_read_mode_sc read_mode_sc, uint16_t n_fields, uint16_t n_bins, uint8_t read_attr
+	as_policy_read_mode_sc read_mode_sc, int read_ttl, uint16_t n_fields, uint16_t n_bins,
+	uint8_t read_attr
 	)
 {
 	uint8_t info_attr = 0;
@@ -290,7 +292,8 @@ as_command_write_header_read_header(
 	cmd[9] = read_attr;
 	cmd[10] = 0;
 	cmd[11] = info_attr;
-	memset(&cmd[12], 0, 10);
+	memset(&cmd[12], 0, 6);
+	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
 	uint32_t timeout = as_command_server_timeout(policy);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
@@ -590,6 +593,7 @@ as_command_execute(as_command* cmd, as_error* err)
 	as_node* node = NULL;
 	as_status status;
 	bool release_node;
+	as_latency_type latency_type = cmd->cluster->metrics_enabled ? cmd->latency_type : AS_LATENCY_TYPE_NONE;
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
@@ -615,11 +619,16 @@ as_command_execute(as_command* cmd, as_error* err)
 			release_node = true;
 		}
 
-		if (! as_node_valid_error_count(node)) {
+		if (! as_node_valid_error_rate(node)) {
 			status = as_error_set_message(err, AEROSPIKE_MAX_ERROR_RATE, "Max error rate exceeded");
 			goto Retry;
 		}
 
+		uint64_t begin = 0;
+		if (latency_type != AS_LATENCY_TYPE_NONE) {
+			begin = cf_getns();
+		}
+		
 		as_socket socket;
 		status = as_node_get_connection(err, node, cmd->socket_timeout, cmd->deadline_ms, &socket);
 		
@@ -656,6 +665,11 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		if (status == AEROSPIKE_OK) {
+			if (latency_type != AS_LATENCY_TYPE_NONE) {
+				uint64_t elapsed = cf_getns() - begin;
+				as_node_add_latency(node, latency_type, elapsed);
+			}
+			
 			// Reset error code if retry had occurred.
 			if (cmd->iteration > 0) {
 				as_error_reset(err);
@@ -668,14 +682,18 @@ as_command_execute(as_command* cmd, as_error* err)
 			switch (status) {
 				case AEROSPIKE_ERR_CLUSTER:
 				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
+					as_node_add_error(node);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
 				case AEROSPIKE_ERR_CONNECTION:
+					as_node_add_error(node);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
+					as_node_add_timeout(node);
+					
 					if (is_server_timeout(err)) {
 						as_node_put_conn_error(node, &socket);
 					}
@@ -690,6 +708,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
+					as_node_add_error(node);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					if (release_node) {
 						as_node_release(node);
@@ -697,7 +716,18 @@ as_command_execute(as_command* cmd, as_error* err)
 					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 					return status;
 				
+				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
+					// Do not increment error count on record not found.
+					// Add latency metrics instead.
+					if (latency_type != AS_LATENCY_TYPE_NONE) {
+						uint64_t elapsed = cf_getns() - begin;
+						as_node_add_latency(node, latency_type, elapsed);
+					}
+					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+					break;
+
 				default:
+					as_node_add_error(node);
 					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 					break;
 			}
@@ -772,6 +802,8 @@ Retry:
 				return status;
 			}
 		}
+
+		as_cluster_add_retry(cmd->cluster);
 	}
 
 	// Retries have been exhausted.

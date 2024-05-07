@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -80,6 +80,8 @@ as_command_init_read(
 	cmd->udata = udata;
 	cmd->buf_size = size;
 	cmd->partition_id = pi->partition_id;
+	cmd->latency_type = AS_LATENCY_TYPE_READ;
+	as_cluster_add_tran(cluster);
 
 	if (pi->sc_mode) {
 		switch (read_mode_sc) {
@@ -143,6 +145,8 @@ as_command_init_write(
 	cmd->replica = as_command_write_replica(replica);
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = 0;
+	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
+	as_cluster_add_tran(cluster);
 }
 
 static inline void
@@ -225,7 +229,8 @@ aerospike_key_get(
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0);
+		policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, 0,
+		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -272,11 +277,12 @@ aerospike_key_get_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-		as_event_command_parse_result);
+		as_event_command_parse_result, AS_LATENCY_TYPE_READ);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, timeout, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0);
+		policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, 0,
+		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -324,7 +330,8 @@ aerospike_key_select(
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-				policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ, 0);
+				policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, nvalues,
+				AS_MSG_INFO1_READ, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -384,11 +391,12 @@ aerospike_key_select_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-		as_event_command_parse_result);
+		as_event_command_parse_result, AS_LATENCY_TYPE_READ);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-					policy->read_mode_sc, timeout, n_fields, nvalues, AS_MSG_INFO1_READ, 0);
+					policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, nvalues,
+					AS_MSG_INFO1_READ, 0, 0);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -428,7 +436,8 @@ aerospike_key_exists(
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_read_header(buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
+		policy->read_mode_sc, policy->read_touch_ttl_percent, n_fields, 0,
+		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -474,10 +483,12 @@ aerospike_key_exists_async(
 
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, false, policy->async_heap_rec,
-		ri.flags, listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result);
+		ri.flags, listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result,
+		AS_LATENCY_TYPE_READ);
 
 	uint8_t* p = as_command_write_header_read_header(cmd->buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, n_fields, 0, AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
+		policy->read_mode_sc, policy->read_touch_ttl_percent, n_fields, 0,
+		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 
 	p = as_command_write_key(p, policy->key, key);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -918,7 +929,17 @@ as_operate_write(void* udata, uint8_t* buf)
 	as_operate* oper = udata;
 	const as_policy_operate* policy = oper->policy;
 	const as_operations* ops = oper->ops;
-	uint32_t ttl = (ops->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? policy->ttl : ops->ttl;
+	uint32_t ttl;
+	
+	if (oper->write_attr & AS_MSG_INFO2_WRITE) {
+		ttl = (ops->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? policy->ttl : ops->ttl;
+	}
+	else {
+		// ttl is an unsigned 32 bit integer in the wire protocol, but it still
+		// works if a negative read_touch_ttl_percent is used. The server casts
+		// ttl back to a signed integer when all operations are read operations.
+		ttl = (uint32_t)policy->read_touch_ttl_percent;
+	}
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 		policy->exists, policy->gen, ops->gen, ttl, oper->n_fields,
@@ -1035,13 +1056,13 @@ aerospike_key_operate_async(
 
 	as_event_command* cmd;
 
-	if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {
+	if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {		
 		// Send uncompressed command.
 		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, oper.size,
-				as_event_command_parse_result);
+				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE);
 		}
 		else {
 			as_read_info ri;
@@ -1050,7 +1071,7 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-				oper.size, as_event_command_parse_result);
+				oper.size, as_event_command_parse_result, AS_LATENCY_TYPE_READ);
 		}
 
 		cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
@@ -1069,7 +1090,7 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, comp_size,
-				as_event_command_parse_result);
+				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE);
 		}
 		else {
 			as_read_info ri;
@@ -1078,7 +1099,7 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-				comp_size, as_event_command_parse_result);
+				comp_size, as_event_command_parse_result, AS_LATENCY_TYPE_READ);
 		}
 
 		// Compress buffer and execute.

@@ -353,6 +353,74 @@ TEST(batch_udf_complex, "Batch UDF Complex")
 	as_batch_records_destroy(&recs);
 }
 
+TEST(batch_udf_default_key_send, "Batch default key send")
+{
+	// It's not a good idea to configure cluster default policies after the
+	// cluster has been initialized, but this default policy feature still
+	// needs to be tested. Reset at the end of the test.
+	as->config.policies.batch_apply.key = AS_POLICY_KEY_SEND;
+
+	as_batch_records recs;
+	as_batch_records_init(&recs, 2);
+	
+	as_batch_apply_record* bar = as_batch_apply_reserve(&recs);
+	as_key_init_int64(&bar->key, NAMESPACE, SET, 22);
+	bar->module = module;
+	bar->function = "write_bin";
+	as_arraylist* args = as_arraylist_new(2, 0);
+	as_arraylist_set_str(args, 0, "stringbin");
+	as_arraylist_append_str(args, "s100");
+	bar->arglist = (as_list*)args;
+
+	as_operations wops1;
+	as_operations_inita(&wops1, 1);
+	as_operations_add_write_int64(&wops1, "intbin", 100);
+	wops1.ttl = 500;
+
+	as_batch_write_record* bwr = as_batch_write_reserve(&recs);
+	as_key_init_int64(&bwr->key, NAMESPACE, SET, 32);
+	bwr->ops = &wops1;
+
+	as_error err;
+	as_status status = aerospike_batch_write(as, &err, NULL, &recs);
+
+	// Reset key send default policy.
+	as->config.policies.batch_apply.key = AS_POLICY_KEY_DIGEST;
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(bar->result, AEROSPIKE_OK);
+	assert_int_eq(bar->record.bins.entries[0].valuep->nil.type, AS_NIL);
+	assert_int_eq(bwr->result, AEROSPIKE_OK);
+	assert_int_eq(bwr->record.bins.entries[0].valuep->nil.type, AS_NIL);
+
+	as_arraylist_destroy(args);
+	as_operations_destroy(&wops1);
+	as_batch_records_destroy(&recs);
+	
+	// Read records that were written.
+	as_batch_records_inita(&recs, 2);
+
+	as_batch_read_record* r22 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&r22->key, NAMESPACE, SET, 22);
+	r22->read_all_bins = true;
+
+	as_batch_read_record* r32 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&r32->key, NAMESPACE, SET, 32);
+	r32->read_all_bins = true;
+
+	status = aerospike_batch_read(as, &err, NULL, &recs);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	assert_int_eq(r22->result, AEROSPIKE_OK);
+	assert_string_eq(r22->record.bins.entries[0].valuep->string.value, "s100");
+
+	assert_int_eq(r32->result, AEROSPIKE_OK);
+	assert_int_eq(r32->record.bins.entries[0].valuep->integer.value, 100);
+
+	as_batch_records_destroy(&recs);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -365,4 +433,5 @@ SUITE(udf_record, "aerospike udf record tests")
 	suite_add(batch_udf);
 	suite_add(batch_udf_error);
 	suite_add(batch_udf_complex);
+	suite_add(batch_udf_default_key_send);
 }

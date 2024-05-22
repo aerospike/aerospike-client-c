@@ -642,21 +642,27 @@ as_uv_tls_try_send_pending(as_event_connection* conn)
 
 		// Put remaining buffer on heap.
 		as_uv_tls* tls = conn->tls;
-		pending -= rv;
-
-		if (pending > tls->capacity) {
-			tls->buf = cf_realloc(tls->buf, pending);
-			tls->capacity = pending;
+		tls->len = pending - rv;
+		
+		if (tls->len > tls->capacity) {
+			tls->buf = cf_realloc(tls->buf, tls->len);
+			tls->capacity = tls->len;
 		}
-		memcpy(tls->buf, buf.base + rv, buf.len - rv);
-
-		int len = pending - rv;
-		rv = BIO_read(tls->nbio, tls->buf + rv, len);
-
-		if (rv != len) {
+		
+		int unsent_len = buf.len - rv;
+		memcpy(tls->buf, buf.base + rv, unsent_len);
+		
+		// TODO: Shouldn't the following be: int read_len = tls->len;
+		//rv = BIO_read(tls->nbio, tls->buf + unsent_len, tls->len);
+		//
+		//if (rv != tls->len) {
+		//	return -2;
+		//}
+		rv = BIO_read(tls->nbio, tls->buf + unsent_len, pending - buf.len);
+		
+		if (rv != pending - buf.len) {
 			return -2;
 		}
-		tls->len = pending;
 		return 1;
 	}
 	return 0;

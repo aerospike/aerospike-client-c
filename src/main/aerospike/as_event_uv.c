@@ -652,15 +652,10 @@ as_uv_tls_try_send_pending(as_event_connection* conn)
 		int unsent_len = buf.len - rv;
 		memcpy(tls->buf, buf.base + rv, unsent_len);
 		
-		// TODO: Shouldn't the following be:
-		//rv = BIO_read(tls->nbio, tls->buf + unsent_len, tls->len);
-		//
-		//if (rv != tls->len) {
-		//	return -2;
-		//}
-		rv = BIO_read(tls->nbio, tls->buf + unsent_len, pending - buf.len);
+		int read_len = pending - buf.len;
+		rv = BIO_read(tls->nbio, tls->buf + unsent_len, read_len);
 		
-		if (rv != pending - buf.len) {
+		if (rv != read_len) {
 			return -2;
 		}
 		return 1;

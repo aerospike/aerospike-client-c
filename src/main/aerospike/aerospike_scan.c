@@ -525,12 +525,9 @@ as_scan_command_init(
 			read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
 		}
 
-		// Clusters that support partition queries also support not sending partition done messages.
-		int info_attr = cluster->has_partition_query? AS_MSG_INFO3_PARTITION_DONE : 0;
-
 		p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
 				AS_POLICY_READ_MODE_SC_SESSION, policy->base.total_timeout, sb->n_fields, n_ops,
-				read_attr, info_attr);
+				read_attr, AS_MSG_INFO3_PARTITION_DONE);
 	}
 	
 	if (scan->ns[0]) {

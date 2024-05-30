@@ -32,7 +32,7 @@ void
 as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec);
 
 uint32_t
-as_async_get_cluster_count()
+as_async_get_cluster_count(void)
 {
 	return as_load_uint32(&as_cluster_count);
 }

@@ -307,7 +307,7 @@ as_event_loop_find(void* loop)
 }
 
 bool
-as_event_close_loops()
+as_event_close_loops(void)
 {
 	if (! as_event_loops) {
 		return false;
@@ -341,7 +341,7 @@ as_event_close_loops()
 }
 
 void
-as_event_destroy_loops()
+as_event_destroy_loops(void)
 {
 #if defined(_MSC_VER)
 	// Call WSACleanup() on event loops destroy on windows.
@@ -1751,7 +1751,7 @@ create_connections_nowait(as_node* node, as_async_conn_pool* pools)
 }
 
 static bool
-as_in_event_loops()
+as_in_event_loops(void)
 {
 	// Determine if current thread is an event loop thread.
 	bool in_event_loop = false;

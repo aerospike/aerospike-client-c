@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -120,7 +120,7 @@ as_udf_file_init(as_udf_file * file)
 }
 
 as_udf_file*
-as_udf_file_new()
+as_udf_file_new(void)
 {
 	as_udf_file * file = (as_udf_file *) cf_malloc(sizeof(as_udf_file));
 	if ( !file ) return file;

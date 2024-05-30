@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -326,7 +326,7 @@ as_socket_write_deadline(
 	size_t pos = 0;
 	as_status status = AEROSPIKE_OK;
 	uint32_t timeout;
-	int try = 0;
+	//int try = 0;
 
 	do {
 		if (deadline > 0) {
@@ -392,7 +392,7 @@ as_socket_write_deadline(
 			}
 		}
 	
-		try++;
+		//try++;
 	
 	} while (pos < buf_len);
 
@@ -429,7 +429,7 @@ as_socket_read_deadline(
 	size_t pos = 0;
 	as_status status = AEROSPIKE_OK;
 	uint32_t timeout;
-	int try = 0;
+	//int try = 0;
 
 	do {
 		if (deadline > 0) {
@@ -493,7 +493,7 @@ as_socket_read_deadline(
 			}
 		}
 	
-		try++;
+		//try++;
 	
 	} while (pos < buf_len);
 

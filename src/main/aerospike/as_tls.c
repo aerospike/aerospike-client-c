@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -233,7 +233,7 @@ threading_cleanup(void)
 #endif
 
 void
-as_tls_check_init()
+as_tls_check_init(void)
 {
 	// Bail if we've already initialized.
 	if (s_tls_inited) {
@@ -306,7 +306,7 @@ as_tls_cleanup(void)
 }
 
 void
-as_tls_thread_cleanup()
+as_tls_thread_cleanup(void)
 {
 	// Skip if we were never initialized.
 	if (! s_tls_inited) {
@@ -1491,7 +1491,7 @@ static void cert_blacklist_destroy(void* cbl)
 	cf_free(cbp);
 }
 
-static void manage_sigpipe()
+static void manage_sigpipe(void)
 {
 #if !defined(_MSC_VER)
 	// OpenSSL can encounter a SIGPIPE in the SSL_shutdown sequence.

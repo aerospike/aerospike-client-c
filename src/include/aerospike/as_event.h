@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -377,7 +377,7 @@ as_event_loop_get_by_index(uint32_t index)
  * @ingroup async_events
  */
 static inline as_event_loop*
-as_event_loop_get()
+as_event_loop_get(void)
 {
 	// The last event loop points to the first event loop to create a circular linked list.
 	// Not atomic because doesn't need to be exactly accurate.

@@ -131,7 +131,7 @@ as_metrics_process_cpu_load_mem_usage(as_error* err, as_metrics_writer* mw, uint
 #include<sys/syscall.h>
 
 static double
-as_metrics_process_mem_usage()
+as_metrics_process_mem_usage(void)
 {
 	struct task_basic_info t_info;
 	mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
@@ -145,7 +145,7 @@ as_metrics_process_mem_usage()
 }
 
 static double
-as_metrics_process_cpu_load()
+as_metrics_process_cpu_load(void)
 {
 	pid_t pid = getpid();
 

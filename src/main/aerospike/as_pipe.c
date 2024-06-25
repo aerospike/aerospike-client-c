@@ -287,7 +287,7 @@ get_buffer_size(const char* proc, int size)
 #endif
 
 int
-as_pipe_get_send_buffer_size()
+as_pipe_get_send_buffer_size(void)
 {
 #if defined(__linux__)
 	return get_buffer_size("/proc/sys/net/core/wmem_max", PIPE_WRITE_BUFFER_SIZE);
@@ -297,7 +297,7 @@ as_pipe_get_send_buffer_size()
 }
 
 int
-as_pipe_get_recv_buffer_size()
+as_pipe_get_recv_buffer_size(void)
 {
 #if defined(__linux__)
 	return get_buffer_size("/proc/sys/net/core/rmem_max", PIPE_READ_BUFFER_SIZE);

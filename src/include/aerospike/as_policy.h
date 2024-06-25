@@ -334,24 +334,24 @@ typedef enum as_policy_read_mode_sc_e {
 
 	/**
 	 * Ensures this client will only see an increasing sequence of record versions.
-	 * Server only reads from master.  This is the default.
+	 * Client only reads from master.  This is the default.
 	 */
 	AS_POLICY_READ_MODE_SC_SESSION,
 
 	/**
-	 * Ensures ALL clients will only see an increasing sequence of record versions.
-	 * Server only reads from master.
+	 * Ensures all clients will only see an increasing sequence of record versions.
+	 * Client only reads from master.
 	 */
 	AS_POLICY_READ_MODE_SC_LINEARIZE,
 
 	/**
-	 * Server may read from master or any full (non-migrating) replica.
+	 * Client may read from master or any full (non-migrating) replica.
 	 * Increasing sequence of record versions is not guaranteed.
 	 */
 	AS_POLICY_READ_MODE_SC_ALLOW_REPLICA,
 
 	/**
-	 * Server may read from master or any full (non-migrating) replica or from unavailable
+	 * Client may read from master or any full (non-migrating) replica or from unavailable
 	 * partitions.  Increasing sequence of record versions is not guaranteed.
 	 */
 	AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE,

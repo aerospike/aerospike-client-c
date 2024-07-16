@@ -217,7 +217,7 @@ khash_reduce(as_khash* h, khash_reduce_fn cb, void* udata)
 	}
 }
 
-static uint64_t
+static inline uint64_t
 as_tran_create_id(void)
 {
 	// An id of zero is considered invalid. Create random numbers
@@ -242,10 +242,10 @@ as_tran_init(as_tran* tran)
 }
 
 void
-as_tran_init_buckets(as_tran* tran, uint32_t read_capacity, uint32_t write_capacity)
+as_tran_init_buckets(as_tran* tran, uint32_t read_buckets, uint32_t write_buckets)
 {
 	uint64_t id = as_tran_create_id();
-	as_tran_init_all(tran, id, read_capacity, write_capacity);
+	as_tran_init_all(tran, id, read_buckets, write_buckets);
 }
 
 void

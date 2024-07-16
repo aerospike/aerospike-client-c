@@ -20,6 +20,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
+#include <pthread.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,17 +31,45 @@ extern "C" {
 //---------------------------------
 
 /**
+ * Hash map element.
+ * @private
+ */
+typedef struct as_khash_ele_s {
+	as_digest_value keyd;
+	char set[64];
+	uint64_t version;
+	struct as_khash_ele_s* next;
+} as_khash_ele;
+
+/**
+ * Hash map row.
+ * @private
+ */
+typedef struct as_khash_row_s {
+	bool used;
+	as_khash_ele head;
+} as_khash_row;
+
+/**
+ * Hashmap.
+ * @private
+ */
+typedef struct as_khash_s {
+	pthread_mutex_t lock;
+	uint32_t n_eles;
+	uint32_t n_rows;
+	as_khash_row* table;
+} as_khash;
+
+/**
  * Multi-record transaction (MRT). Each command in the MRT must use the same namespace.
  */
 typedef struct as_tran_s {
 	uint64_t id;
 	as_namespace ns;
+	as_khash reads;
+	as_khash writes;
 	uint32_t deadline;
-	// TODO: Declare reads and writes hashmap.
-	// Each key requires digest and setname. setname could alternatively be part of the value.
-	// The uint64_t value is the record version.
-	// hashmap<key,uint64_t> writes
-	// hashset<key> reads
 } as_tran;
 
 //---------------------------------
@@ -48,7 +77,7 @@ typedef struct as_tran_s {
 //---------------------------------
 
 /**
- * Create transaction and assign random transaction id.
+ * Initialize multi-record transaction using defaults and assign random transaction id.
  *
  * @param tran		Multi-record transaction.
  */
@@ -56,13 +85,25 @@ AS_EXTERN void
 as_tran_init(as_tran* tran);
 
 /**
- * Create transaction with given transaction id. Transaction id must be unique and non-zero.
+ * Initialize multi-record transaction with given hash bucket sizes.
  *
- * @param tran		Multi-record transaction.
- * @param id		Multi-record transaction identifier.
+ * @param tran			Multi-record transaction.
+ * @param read_buckets	Fixed number of hash buckets for record reads.
+ * @param write_buckets	Fixed number of hash buckets for record writes.
  */
 AS_EXTERN void
-as_tran_init_uint64(as_tran* tran, uint64_t id);
+as_tran_init_buckets(as_tran* tran, uint32_t read_buckets, uint32_t write_buckets);
+
+/**
+ * Initialize multi-record transaction with given transaction id and hash bucket sizes.
+ *
+ * @param tran			Multi-record transaction.
+ * @param id			Multi-record transaction identifier. Must be unique and non-zero.
+ * @param read_buckets	Fixed number of hash buckets for record reads.
+ * @param write_buckets	Fixed number of hash buckets for record writes.
+ */
+AS_EXTERN void
+as_tran_init_all(as_tran* tran, uint64_t id, uint32_t read_buckets, uint32_t write_buckets);
 
 /**
  * Set MRT namespace only if doesn't already exist.

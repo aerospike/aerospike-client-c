@@ -38,7 +38,7 @@ static inline void
 fill_ele(as_khash_ele* e, const uint8_t* keyd, const char* set, uint64_t version)
 {
 	memcpy(e->keyd, keyd, sizeof(e->keyd));
-	strcpy(e->set, set);
+	as_strncpy(e->set, set, sizeof(e->set));
 	e->version = version;
 	e->next = NULL;
 }
@@ -57,7 +57,7 @@ khash_init(as_khash* h, uint32_t n_rows)
 }
 
 static void
-khash_destroy(as_khash* h)
+khash_clear(as_khash* h)
 {
 	as_khash_row* row = h->table;
 
@@ -70,10 +70,20 @@ khash_destroy(as_khash* h)
 				cf_free(e);
 				e = t;
 			}
+			row->used = false;
 		}
 		row++;
 	}
+	
+	h->n_eles = 0;
+}
 
+static void
+khash_destroy(as_khash* h)
+{
+	if (h->n_eles > 0) {
+		khash_clear(h);
+	}
 	pthread_mutex_destroy(&h->lock);
 	cf_free(h->table);
 }
@@ -81,6 +91,7 @@ khash_destroy(as_khash* h)
 static bool
 khash_is_empty(const as_khash* h)
 {
+	// TODO: Should this be done under lock?
 	return h->n_eles == 0;
 }
 
@@ -198,7 +209,8 @@ khash_get_version(as_khash* h, const uint8_t* keyd)
 	return 0;
 }
 
-// Only called if not empty, and can't contend with anything else.
+// This function is only called on as_tran_commit() or as_tran_abort() so it's not possible
+// to contend with other parallel khash function calls. Therfore, there are no locks.
 static void
 khash_reduce(as_khash* h, khash_reduce_fn cb, void* udata)
 {
@@ -217,8 +229,8 @@ khash_reduce(as_khash* h, khash_reduce_fn cb, void* udata)
 	}
 }
 
-static inline uint64_t
-as_tran_create_id(void)
+static void
+as_tran_init_all(as_tran* tran, uint32_t read_buckets, uint32_t write_buckets)
 {
 	// An id of zero is considered invalid. Create random numbers
 	// in a loop until non-zero is returned.
@@ -227,7 +239,13 @@ as_tran_create_id(void)
 	while (id == 0) {
 		id = cf_get_rand64();
 	}
-	return id;
+	
+	tran->id = id;
+	tran->ns[0] = 0;
+	tran->deadline = 0;
+	tran->roll_attempted = false;
+	khash_init(&tran->reads, read_buckets);
+	khash_init(&tran->writes, write_buckets);
 }
 
 //---------------------------------
@@ -237,25 +255,88 @@ as_tran_create_id(void)
 void
 as_tran_init(as_tran* tran)
 {
-	uint64_t id = as_tran_create_id();
-	as_tran_init_all(tran, id, 256, 256);
+	as_tran_init_all(tran, 128, 128);
+	tran->free = false;
 }
 
 void
-as_tran_init_buckets(as_tran* tran, uint32_t read_buckets, uint32_t write_buckets)
+as_tran_init_capacity(as_tran* tran, uint32_t reads_capacity, uint32_t writes_capacity)
 {
-	uint64_t id = as_tran_create_id();
-	as_tran_init_all(tran, id, read_buckets, write_buckets);
+	if (reads_capacity < 16) {
+		reads_capacity = 16;
+	}
+
+	if (writes_capacity < 16) {
+		writes_capacity = 16;
+	}
+
+	// Double record capacity to allocate enough buckets to alleviate collisions.
+	as_tran_init_all(tran, reads_capacity * 2, writes_capacity * 2);
+	tran->free = false;
+}
+
+as_tran*
+as_tran_create(void)
+{
+	as_tran* tran = cf_malloc(sizeof(as_tran));
+	as_tran_init(tran);
+	tran->free = true;
+	return tran;
+}
+
+as_tran*
+as_tran_create_capacity(uint32_t reads_capacity, uint32_t writes_capacity)
+{
+	as_tran* tran = cf_malloc(sizeof(as_tran));
+	as_tran_init_capacity(tran, reads_capacity, writes_capacity);
+	tran->free = true;
+	return tran;
 }
 
 void
-as_tran_init_all(as_tran* tran, uint64_t id, uint32_t read_buckets, uint32_t write_buckets)
+as_tran_destroy(as_tran* tran)
 {
-	tran->id = id;
-	tran->ns[0] = 0;
-	tran->deadline = 0;
-	khash_init(&tran->reads, read_buckets);
-	khash_init(&tran->writes, write_buckets);
+	khash_destroy(&tran->reads);
+	khash_destroy(&tran->writes);
+	
+	if (tran->free) {
+		cf_free(tran);
+	}
+}
+
+bool
+as_tran_on_read(as_tran* tran, as_key* key, uint64_t version)
+{
+	// Read commands do not call as_tran_set_ns() prior to sending the command,
+	// so call as_tran_set_ns() here when receiving the response.
+	if (! as_tran_set_ns(tran, key->ns)) {
+		return false;
+	}
+	
+	if (version != 0) {
+		khash_put(&tran->reads, key->digest.value, key->set, version);
+	}
+	return true;
+}
+
+uint64_t
+as_tran_get_read_version(as_tran* tran, as_key* key)
+{
+	return khash_get_version(&tran->reads, key->digest.value);
+}
+
+void
+as_tran_on_write(as_tran* tran, as_key* key, uint64_t version, int rc)
+{
+	if (version != 0) {
+		khash_put(&tran->reads, key->digest.value, key->set, version);
+	}
+	else {
+		if (rc == AEROSPIKE_OK) {
+			khash_remove(&tran->reads, key->digest.value);
+			khash_put(&tran->writes, key->digest.value, key->set, 0);
+		}
+	}
 }
 
 bool
@@ -270,52 +351,21 @@ as_tran_set_ns(as_tran* tran, const char* ns)
 }
 
 bool
-as_tran_on_read(as_tran* tran, as_key* key, uint64_t version)
+as_tran_set_roll_attempted(as_tran* tran)
 {
-	// TODO: Do not call as_tran_on_read() when version not returned from server. 
-	// TODO: Can we just make zero an invalid version?
-	if (! as_tran_set_ns(tran, key->ns)) {
+	if (tran->roll_attempted) {
 		return false;
 	}
 	
-	// TODO: Put key/version in reads hashmap.
-	return true;
-}
-
-uint64_t
-as_tran_get_read_version(as_tran* tran, as_key* key)
-{
-	// TODO:
-	//return reads.get(key);
-	return 0;
-}
-
-bool
-as_tran_on_write(as_tran* tran, as_key* key, uint64_t version, int rc)
-{
-	// TOOD: Can we just make zero an invalid version?
-	// TODO: Should key.namespace be verified here?
-	if (version != 0) {
-		// TODO:
-		//reads.put(key, version);
-	}
-	else {
-		if (rc == AEROSPIKE_OK) {
-			// TODO:
-			//reads.remove(key);
-			//writes.add(key);
-		}
-	}
+	tran->roll_attempted = true;
 	return true;
 }
 
 void
-as_tran_close(as_tran* tran)
+as_tran_clear(as_tran* tran)
 {
 	tran->ns[0] = 0;
 	tran->deadline = 0;
-	
-	// TODO:
-	//reads.clear();
-	//writes.clear();
+	khash_clear(&tran->reads);
+	khash_clear(&tran->writes);
 }

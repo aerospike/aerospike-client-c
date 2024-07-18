@@ -70,6 +70,8 @@ typedef struct as_tran_s {
 	as_khash reads;
 	as_khash writes;
 	uint32_t deadline;
+	bool roll_attempted;
+	bool free;
 } as_tran;
 
 //---------------------------------
@@ -77,7 +79,9 @@ typedef struct as_tran_s {
 //---------------------------------
 
 /**
- * Initialize multi-record transaction using defaults and assign random transaction id.
+ * Initialize multi-record transaction (MRT),  assign random transaction id and initialize
+ * reads/writes hashmaps with default capacities. Call this function or as_tran_init_capacity(),
+ * but not both.
  *
  * @param tran		Multi-record transaction.
  */
@@ -85,37 +89,42 @@ AS_EXTERN void
 as_tran_init(as_tran* tran);
 
 /**
- * Initialize multi-record transaction with given hash bucket sizes.
+ * Initialize multi-record transaction (MRT), assign random transaction id and initialize
+ * reads/writes hashmaps with given capacities. Call this function or as_tran_init(),
+ * but not both.
  *
- * @param tran			Multi-record transaction.
- * @param read_buckets	Fixed number of hash buckets for record reads.
- * @param write_buckets	Fixed number of hash buckets for record writes.
+ * @param tran				Multi-record transaction.
+ * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
+ * @param writes_capacity	expected number of record writes in the MRT. Minimum value is 16.
  */
 AS_EXTERN void
-as_tran_init_buckets(as_tran* tran, uint32_t read_buckets, uint32_t write_buckets);
+as_tran_init_capacity(as_tran* tran, uint32_t reads_capacity, uint32_t writes_capacity);
 
 /**
- * Initialize multi-record transaction with given transaction id and hash bucket sizes.
+ * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
+ * reads/writes hashmaps with default capacities.
+ */
+AS_EXTERN as_tran*
+as_tran_create(void);
+
+/**
+ * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
+ * reads/writes hashmaps with given capacities.
  *
- * @param tran			Multi-record transaction.
- * @param id			Multi-record transaction identifier. Must be unique and non-zero.
- * @param read_buckets	Fixed number of hash buckets for record reads.
- * @param write_buckets	Fixed number of hash buckets for record writes.
+ * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
+ * @param writes_capacity	expected number of record writes in the MRT. Minimum value is 16.
+ */
+AS_EXTERN as_tran*
+as_tran_create_capacity(uint32_t reads_capacity, uint32_t writes_capacity);
+
+/**
+ * Destroy MRT.
  */
 AS_EXTERN void
-as_tran_init_all(as_tran* tran, uint64_t id, uint32_t read_buckets, uint32_t write_buckets);
-
-/**
- * Set MRT namespace only if doesn't already exist.
- * If namespace already exists, verify new namespace is the same.
- * For internal use only.
- */
-AS_EXTERN bool
-as_tran_set_ns(as_tran* tran, const char* ns);
+as_tran_destroy(as_tran* tran);
 
 /**
  * Process the results of a record read. For internal use only.
- * TODO: Key will probably be a custom structure.
  */
 AS_EXTERN bool
 as_tran_on_read(as_tran* tran, as_key* key, uint64_t version);
@@ -129,14 +138,28 @@ as_tran_get_read_version(as_tran* tran, as_key* key);
 /**
  * Process the results of a record write. For internal use only.
  */
-AS_EXTERN bool
+AS_EXTERN void
 as_tran_on_write(as_tran* tran, as_key* key, uint64_t version, int rc);
 
 /**
- * Close transaction. Remove all tracked keys.
+ * Set MRT namespace only if doesn't already exist.
+ * If namespace already exists, verify new namespace is the same.
+ * For internal use only.
+ */
+AS_EXTERN bool
+as_tran_set_ns(as_tran* tran, const char* ns);
+
+/**
+ * Verify that commit/abort is only attempted once. For internal use only.
+ */
+AS_EXTERN bool
+as_tran_set_roll_attempted(as_tran* tran);
+
+/**
+ * Clear MRT. Remove all tracked keys. For internal use only.
  */
 AS_EXTERN void
-as_tran_close(as_tran* tran);
+as_tran_clear(as_tran* tran);
 
 #ifdef __cplusplus
 } // end extern "C"

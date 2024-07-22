@@ -157,6 +157,7 @@ AEROSPIKE += as_shm_cluster.o
 AEROSPIKE += as_socket.o
 AEROSPIKE += as_tls.o
 AEROSPIKE += as_tran.o
+AEROSPIKE += as_tran_monitor.o
 AEROSPIKE += as_udf.o
 AEROSPIKE += version.o
 

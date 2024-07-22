@@ -35,6 +35,7 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_tran_monitor.h>
 #include <citrusleaf/cf_clock.h>
 
 /******************************************************************************
@@ -573,9 +574,20 @@ aerospike_key_put(
 		policy = &as->config.policies.write;
 	}
 	
+	as_status status;
+	
+	if (policy->base.tran) {
+		status = as_tran_monitor_add_key(as, &policy->base, key, err);
+		
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	
+	status = as_key_partition_init(cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -721,9 +733,20 @@ aerospike_key_remove(
 		policy = &as->config.policies.remove;
 	}
 	
+	as_status status;
+	
+	if (policy->base.tran) {
+		status = as_tran_monitor_add_key(as, &policy->base, key, err);
+		
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	
+	status = as_key_partition_init(cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -995,6 +1018,15 @@ aerospike_key_operate(
 	}
 
 	policy = oper.policy;
+	
+	if (policy->base.tran && (oper.write_attr & AS_MSG_INFO2_WRITE)) {
+		status = as_tran_monitor_add_key(as, &policy->base, key, err);
+		
+		if (status != AEROSPIKE_OK) {
+			as_buffers_destroy(&buffers);
+			return status;
+		}
+	}
 
 	as_command_parse_result_data data;
 	data.record = rec;
@@ -1189,10 +1221,21 @@ aerospike_key_apply(
 	if (! policy) {
 		policy = &as->config.policies.apply;
 	}
+	
+	as_status status;
+
+	if (policy->base.tran) {
+		status = as_tran_monitor_add_key(as, &policy->base, key, err);
+		
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	
+	status = as_key_partition_init(cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;

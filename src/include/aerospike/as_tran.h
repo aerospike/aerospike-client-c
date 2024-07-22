@@ -64,7 +64,7 @@ typedef struct as_khash_s {
 /**
  * Multi-record transaction (MRT). Each command in the MRT must use the same namespace.
  */
-typedef struct as_tran_s {
+typedef struct as_tran {
 	uint64_t id;
 	as_namespace ns;
 	as_khash reads;
@@ -126,8 +126,8 @@ as_tran_destroy(as_tran* tran);
 /**
  * Process the results of a record read. For internal use only.
  */
-AS_EXTERN bool
-as_tran_on_read(as_tran* tran, as_key* key, uint64_t version);
+AS_EXTERN as_status
+as_tran_on_read(as_tran* tran, as_key* key, uint64_t version, as_error* err);
 
 /**
  * Get record version for a given key. For internal use only.
@@ -142,12 +142,18 @@ AS_EXTERN void
 as_tran_on_write(as_tran* tran, as_key* key, uint64_t version, int rc);
 
 /**
+ * Return if writes hashmap contains the given key.
+ */
+AS_EXTERN bool
+as_tran_writes_contain(as_tran* tran, const as_key* key);
+
+/**
  * Set MRT namespace only if doesn't already exist.
  * If namespace already exists, verify new namespace is the same.
  * For internal use only.
  */
-AS_EXTERN bool
-as_tran_set_ns(as_tran* tran, const char* ns);
+AS_EXTERN as_status
+as_tran_set_ns(as_tran* tran, const char* ns, as_error* err);
 
 /**
  * Verify that commit/abort is only attempted once. For internal use only.

@@ -30,6 +30,7 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_thread_pool.h>
+#include <aerospike/as_tran_monitor.h>
 #include <aerospike/as_val.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_digest.h>
@@ -3440,6 +3441,14 @@ aerospike_batch_write(
 		policy = &as->config.policies.batch_parent_write;
 	}
 
+	if (policy->base.tran) {
+		as_status status = as_tran_monitor_add_keys_records(as, &policy->base, records, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	return as_batch_records_execute(as, err, policy, records, NULL, true);
 }
 
@@ -3603,6 +3612,14 @@ aerospike_batch_operate(
 			policy_write = &as->config.policies.batch_write;
 		}
 
+		if (policy->base.tran) {
+			as_status status = as_tran_monitor_add_keys_batch(as, &policy->base, batch, err);
+			
+			if (status != AEROSPIKE_OK) {
+				return status;
+			}
+		}
+
 		as_batch_write_record rec = {
 			.type = AS_BATCH_WRITE,
 			.has_write = true,
@@ -3653,6 +3670,14 @@ aerospike_batch_apply(
 		policy_apply = &as->config.policies.batch_apply;
 	}
 
+	if (policy->base.tran) {
+		as_status status = as_tran_monitor_add_keys_batch(as, &policy->base, batch, err);
+		
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_batch_apply_record rec = {
 		.type = AS_BATCH_APPLY,
 		.has_write = true,
@@ -3684,6 +3709,14 @@ aerospike_batch_remove(
 	
 	if (! policy_remove) {
 		policy_remove = &as->config.policies.batch_remove;
+	}
+
+	if (policy->base.tran) {
+		as_status status = as_tran_monitor_add_keys_batch(as, &policy->base, batch, err);
+		
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 	}
 
 	as_batch_remove_record rec = {

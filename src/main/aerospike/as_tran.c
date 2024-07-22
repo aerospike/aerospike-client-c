@@ -209,6 +209,37 @@ khash_get_version(as_khash* h, const uint8_t* keyd)
 	return 0;
 }
 
+static bool
+khash_contains(as_khash* h, const uint8_t* keyd)
+{
+	as_khash_row* row = get_row(h, keyd);
+
+	if (! row->used) {
+		return false;
+	}
+
+	as_khash_ele* e = &row->head;
+
+	pthread_mutex_lock(&h->lock);
+
+	if (! row->used) {
+		pthread_mutex_unlock(&h->lock);
+		return false;
+	}
+
+	do {
+		if (memcmp(keyd, e->keyd, AS_DIGEST_VALUE_SIZE) == 0) {
+			pthread_mutex_unlock(&h->lock);
+			return true;
+		}
+
+		e = e->next;
+	} while (e != NULL);
+
+	pthread_mutex_unlock(&h->lock);
+	return false;
+}
+
 // This function is only called on as_tran_commit() or as_tran_abort() so it's not possible
 // to contend with other parallel khash function calls. Therfore, there are no locks.
 static void
@@ -304,19 +335,21 @@ as_tran_destroy(as_tran* tran)
 	}
 }
 
-bool
-as_tran_on_read(as_tran* tran, as_key* key, uint64_t version)
+as_status
+as_tran_on_read(as_tran* tran, as_key* key, uint64_t version, as_error* err)
 {
 	// Read commands do not call as_tran_set_ns() prior to sending the command,
 	// so call as_tran_set_ns() here when receiving the response.
-	if (! as_tran_set_ns(tran, key->ns)) {
-		return false;
+	as_status status = as_tran_set_ns(tran, key->ns, err);
+	
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 	
 	if (version != 0) {
 		khash_put(&tran->reads, key->digest.value, key->set, version);
 	}
-	return true;
+	return AEROSPIKE_OK;
 }
 
 uint64_t
@@ -340,14 +373,25 @@ as_tran_on_write(as_tran* tran, as_key* key, uint64_t version, int rc)
 }
 
 bool
-as_tran_set_ns(as_tran* tran, const char* ns)
+as_tran_writes_contain(as_tran* tran, const as_key* key)
+{
+	return khash_contains(&tran->writes, key->digest.value);
+}
+
+as_status
+as_tran_set_ns(as_tran* tran, const char* ns, as_error* err)
 {
 	if (tran->ns[0] == 0) {
 		as_strncpy(tran->ns, ns, sizeof(tran->ns));
-		return true;
+		return AEROSPIKE_OK;
 	}
 	
-	return strncmp(tran->ns, ns, sizeof(tran->ns)) == 0;
+	if (strncmp(tran->ns, ns, sizeof(tran->ns)) != 0) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"Namespace must be the same for all commands in the MRT. orig: %s new: %s",
+			tran->ns, ns);
+	}
+	return AEROSPIKE_OK;
 }
 
 bool

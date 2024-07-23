@@ -1125,7 +1125,7 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.cluster = task->cluster;
 	cmd.policy = policy;
 	cmd.node = task->node;
-	cmd.ns = NULL;        // Not referenced when node set.
+	cmd.key = NULL;       // Not referenced when node set.
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;
@@ -1227,7 +1227,7 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.cluster = task->cluster;
 	cmd.policy = policy;
 	cmd.node = task->node;
-	cmd.ns = NULL;        // Not referenced when node set.
+	cmd.key = NULL;       // Not referenced when node set.
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;

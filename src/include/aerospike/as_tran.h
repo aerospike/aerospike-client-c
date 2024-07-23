@@ -127,7 +127,7 @@ as_tran_destroy(as_tran* tran);
  * Process the results of a record read. For internal use only.
  */
 AS_EXTERN as_status
-as_tran_on_read(as_tran* tran, as_key* key, uint64_t version, as_error* err);
+as_tran_on_read(as_tran* tran, const as_key* key, uint64_t version, as_error* err);
 
 /**
  * Get record version for a given key. For internal use only.
@@ -139,7 +139,7 @@ as_tran_get_read_version(as_tran* tran, const as_key* key);
  * Process the results of a record write. For internal use only.
  */
 AS_EXTERN void
-as_tran_on_write(as_tran* tran, as_key* key, uint64_t version, int rc);
+as_tran_on_write(as_tran* tran, const as_key* key, uint64_t version, int rc);
 
 /**
  * Return if writes hashmap contains the given key.

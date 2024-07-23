@@ -68,14 +68,14 @@ as_key_partition_init(as_cluster* cluster, as_error* err, const as_key* key, as_
 static inline void
 as_command_init_read(
 	as_command* cmd, as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica,
-	as_policy_read_mode_sc read_mode_sc, size_t size, as_partition_info* pi,
+	as_policy_read_mode_sc read_mode_sc, const as_key* key, size_t size, as_partition_info* pi,
 	const as_parse_results_fn fn, void* udata
 	)
 {
 	cmd->cluster = cluster;
 	cmd->policy = policy;
 	cmd->node = NULL;
-	cmd->ns = pi->ns;
+	cmd->key = key;
 	cmd->partition = pi->partition;
 	cmd->parse_results_fn = fn;
 	cmd->udata = udata;
@@ -114,12 +114,12 @@ as_command_init_read(
 static inline as_status
 as_command_execute_read(
 	as_cluster* cluster, as_error* err, const as_policy_base* policy, as_policy_replica replica,
-	as_policy_read_mode_sc read_mode_sc, uint8_t* buf, size_t size, as_partition_info* pi,
-	const as_parse_results_fn fn, void* udata
+	as_policy_read_mode_sc read_mode_sc, const as_key* key, uint8_t* buf, size_t size,
+	as_partition_info* pi, const as_parse_results_fn fn, void* udata
 	)
 {
 	as_command cmd;
-	as_command_init_read(&cmd, cluster, policy, replica, read_mode_sc, size, pi,
+	as_command_init_read(&cmd, cluster, policy, replica, read_mode_sc, key, size, pi,
 						 fn, udata);
 
 	cmd.buf = buf;
@@ -130,13 +130,13 @@ as_command_execute_read(
 static inline void
 as_command_init_write(
 	as_command* cmd, as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica,
-	size_t size, as_partition_info* pi, const as_parse_results_fn fn, void* udata
+	const as_key* key, size_t size, as_partition_info* pi, const as_parse_results_fn fn, void* udata
 	)
 {
 	cmd->cluster = cluster;
 	cmd->policy = policy;
 	cmd->node = NULL;
-	cmd->ns = pi->ns;
+	cmd->key = key;
 	cmd->partition = pi->partition;
 	cmd->parse_results_fn = fn;
 	cmd->udata = udata;
@@ -242,7 +242,7 @@ aerospike_key_get(
 	data.deserialize = policy->deserialize;
 
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
-				policy->read_mode_sc, buf, size, &pi, as_command_parse_result, &data);
+				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data);
 
 	as_command_buffer_free(buf, size);
 	return status;
@@ -347,7 +347,7 @@ aerospike_key_select(
 	data.deserialize = policy->deserialize;
 
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
-				policy->read_mode_sc, buf, size, &pi, as_command_parse_result, &data);
+				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data);
 
 	as_command_buffer_free(buf, size);
 	return status;
@@ -445,7 +445,7 @@ aerospike_key_exists(
 	size = as_command_write_end(buf, p);
 
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
-				policy->read_mode_sc, buf, size, &pi, as_command_parse_header, rec);
+				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_header, rec);
 
 	as_command_buffer_free(buf, size);
 
@@ -612,7 +612,7 @@ aerospike_key_put(
 	}
 
 	as_command cmd;
-	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, put.size, &pi,
+	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, key, put.size, &pi,
 						  as_command_parse_header, NULL);
 
 	status = as_command_send(&cmd, err, compression_threshold, as_put_write, &put);
@@ -767,7 +767,7 @@ aerospike_key_remove(
 	size = as_command_write_end(buf, p);
 
 	as_command cmd;
-	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, size, &pi,
+	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, key, size, &pi,
 						  as_command_parse_header, NULL);
 
 	cmd.buf = buf;
@@ -1035,11 +1035,11 @@ aerospike_key_operate(
 	as_command cmd;
 
 	if (oper.write_attr & AS_MSG_INFO2_WRITE) {
-		as_command_init_write(&cmd, cluster, &policy->base, policy->replica, oper.size, &pi,
+		as_command_init_write(&cmd, cluster, &policy->base, policy->replica, key, oper.size, &pi,
 							  as_command_parse_result, &data);
 	}
 	else {
-		as_command_init_read(&cmd, cluster, &policy->base, policy->replica, policy->read_mode_sc,
+		as_command_init_read(&cmd, cluster, &policy->base, policy->replica, policy->read_mode_sc, key,
 							 oper.size, &pi, as_command_parse_result, &data);
 	}
 
@@ -1245,7 +1245,7 @@ aerospike_key_apply(
 	size_t size = as_apply_init(&ap, policy, key, module, function, arglist);
 
 	as_command cmd;
-	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, size, &pi,
+	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, key, size, &pi,
 						  as_command_parse_success_failure, result);
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;

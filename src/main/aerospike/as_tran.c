@@ -336,7 +336,7 @@ as_tran_destroy(as_tran* tran)
 }
 
 as_status
-as_tran_on_read(as_tran* tran, as_key* key, uint64_t version, as_error* err)
+as_tran_on_read(as_tran* tran, const as_key* key, uint64_t version, as_error* err)
 {
 	// Read commands do not call as_tran_set_ns() prior to sending the command,
 	// so call as_tran_set_ns() here when receiving the response.
@@ -359,7 +359,7 @@ as_tran_get_read_version(as_tran* tran, const as_key* key)
 }
 
 void
-as_tran_on_write(as_tran* tran, as_key* key, uint64_t version, int rc)
+as_tran_on_write(as_tran* tran, const as_key* key, uint64_t version, int rc)
 {
 	if (version != 0) {
 		khash_put(&tran->reads, key->digest.value, key->set, version);

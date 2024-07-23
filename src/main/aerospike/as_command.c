@@ -651,12 +651,12 @@ as_command_execute(as_command* cmd, as_error* err)
 			// node might already be destroyed on retry and is still set as the previous node.
 			// This works because the previous node is only used for pointer comparison
 			// and the previous node's contents are not examined during this call.
-			node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, node, cmd->replica,
+			node = as_partition_get_node(cmd->cluster, cmd->key->ns, cmd->partition, node, cmd->replica,
 										 cmd->replica_size, &cmd->replica_index);
 
 			if (! node) {
 				as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-					"Node not found for partition %s:%u", cmd->ns, cmd->partition_id);
+					"Node not found for partition %s:%u", cmd->key->ns, cmd->partition_id);
 
 				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 				return err->code;
@@ -1060,12 +1060,10 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		}
 
 		if (cmd->flags == 0) {
-			// TODO: Finish.
-			//as_tran_on_write(cmd->policy->tran, TODO, version, msg->result_code);
+			as_tran_on_write(cmd->policy->tran, cmd->key, version, msg->result_code);
 		}
 		else {
-			// TODO: Finish.
-			//status = as_tran_on_read(cmd->policy->tran, TODO, version, err);
+			status = as_tran_on_read(cmd->policy->tran, cmd->key, version, err);
 
 			if (status != AEROSPIKE_OK) {
 				return status;

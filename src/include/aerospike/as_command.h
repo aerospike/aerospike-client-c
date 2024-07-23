@@ -180,7 +180,7 @@ typedef struct as_command_s {
 	as_cluster* cluster;
 	const as_policy_base* policy;
 	as_node* node;
-	const char* ns;
+	const as_key* key;
 	void* partition;
 	as_parse_results_fn parse_results_fn;
 	void* udata;

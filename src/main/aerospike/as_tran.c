@@ -353,7 +353,7 @@ as_tran_on_read(as_tran* tran, as_key* key, uint64_t version, as_error* err)
 }
 
 uint64_t
-as_tran_get_read_version(as_tran* tran, as_key* key)
+as_tran_get_read_version(as_tran* tran, const as_key* key)
 {
 	return khash_get_version(&tran->reads, key->digest.value);
 }

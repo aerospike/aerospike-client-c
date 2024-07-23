@@ -222,18 +222,18 @@ aerospike_key_get(
 		return status;
 	}
 
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	as_command_tran_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, 0,
+		policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, tdata.n_fields, 0,
 		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0, 0);
 
-	p = as_command_write_key(p, policy->key, key);
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	size = as_command_write_end(buf, p);
 
@@ -270,9 +270,9 @@ aerospike_key_get_async(
 	as_read_info ri;
 	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	as_command_tran_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
 	as_event_command* cmd = as_async_record_command_create(
@@ -282,10 +282,10 @@ aerospike_key_get_async(
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, 0,
+		policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, tdata.n_fields, 0,
 		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL, 0, 0);
 
-	p = as_command_write_key(p, policy->key, key);
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 	return as_event_command_execute(cmd, err);
@@ -313,9 +313,9 @@ aerospike_key_select(
 		return status;
 	}
 
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	as_command_tran_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
 	int nvalues = 0;
@@ -331,10 +331,10 @@ aerospike_key_select(
 	uint8_t* buf = as_command_buffer_init(size);
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
-				policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, nvalues,
+				policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, tdata.n_fields, nvalues,
 				AS_MSG_INFO1_READ, 0, 0);
 
-	p = as_command_write_key(p, policy->key, key);
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 
 	for (int i = 0; i < nvalues; i++) {
@@ -374,9 +374,9 @@ aerospike_key_select_async(
 	as_read_info ri;
 	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	as_command_tran_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
 	int nvalues = 0;
@@ -396,10 +396,10 @@ aerospike_key_select_async(
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
-					policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, n_fields, nvalues,
+					policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, tdata.n_fields, nvalues,
 					AS_MSG_INFO1_READ, 0, 0);
 
-	p = as_command_write_key(p, policy->key, key);
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 
 	for (int i = 0; i < nvalues; i++) {
@@ -430,17 +430,17 @@ aerospike_key_exists(
 		return status;
 	}
 
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	as_command_tran_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_read_header(buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, policy->read_touch_ttl_percent, n_fields, 0,
+		policy->read_mode_sc, policy->read_touch_ttl_percent, tdata.n_fields, 0,
 		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 
-	p = as_command_write_key(p, policy->key, key);
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	size = as_command_write_end(buf, p);
 
@@ -477,9 +477,9 @@ aerospike_key_exists_async(
 	as_read_info ri;
 	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	as_command_tran_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
 	as_event_command* cmd = as_async_record_command_create(
@@ -488,10 +488,10 @@ aerospike_key_exists_async(
 		AS_LATENCY_TYPE_READ);
 
 	uint8_t* p = as_command_write_header_read_header(cmd->buf, &policy->base, policy->read_mode_ap,
-		policy->read_mode_sc, policy->read_touch_ttl_percent, n_fields, 0,
+		policy->read_mode_sc, policy->read_touch_ttl_percent, tdata.n_fields, 0,
 		AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 
-	p = as_command_write_key(p, policy->key, key);
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 	return as_event_command_execute(cmd, err);
@@ -507,8 +507,8 @@ typedef struct as_put_s {
 	as_record* rec;
 	as_queue* buffers;
 	size_t size;
+	as_command_tran_data tdata;
 	uint32_t filter_size;
-	uint16_t n_fields;
 	uint16_t n_bins;
 } as_put;
 
@@ -522,8 +522,8 @@ as_put_init(
 	put->key = key;
 	put->rec = rec;
 	put->buffers = buffers;
-	put->size = as_command_key_size(policy->key, key, &put->n_fields);
-	put->filter_size = as_command_filter_size(&policy->base, &put->n_fields);
+	put->size = as_command_key_size(&policy->base, policy->key, key, true, &put->tdata);
+	put->filter_size = as_command_filter_size(&policy->base, &put->tdata.n_fields);
 	put->size += put->filter_size;
 	put->n_bins = rec->bins.size;
 
@@ -548,10 +548,10 @@ as_put_write(void* udata, uint8_t* buf)
 	uint32_t ttl = (rec->ttl == AS_RECORD_CLIENT_DEFAULT_TTL)? policy->ttl : rec->ttl;
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
-		policy->exists, policy->gen, rec->gen, ttl, put->n_fields, put->n_bins,
+		policy->exists, policy->gen, rec->gen, ttl, put->tdata.n_fields, put->n_bins,
 		policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
 
-	p = as_command_write_key(p, policy->key, put->key);
+	p = as_command_write_key(p, &policy->base, policy->key, put->key, &put->tdata);
 	p = as_command_write_filter(&policy->base, put->filter_size, p);
 
 	as_bin* bins = rec->bins.entries;
@@ -752,17 +752,17 @@ aerospike_key_remove(
 		return status;
 	}
 
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	as_command_tran_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, true, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
-					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, n_fields, 0,
+					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
 					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
 
-	p = as_command_write_key(p, policy->key, key);
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	size = as_command_write_end(buf, p);
 
@@ -797,9 +797,9 @@ aerospike_key_remove_async_ex(
 		return status;
 	}
 	
-	uint16_t n_fields;
-	size_t size = as_command_key_size(policy->key, key, &n_fields);
-	uint32_t filter_size = as_command_filter_size(&policy->base, &n_fields);
+	as_command_tran_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, true, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
 	as_event_command* cmd = as_async_write_command_create(
@@ -807,10 +807,10 @@ aerospike_key_remove_async_ex(
 		pipe_listener, size, as_event_command_parse_header);
 
 	uint8_t* p = as_command_write_header_write(cmd->buf, &policy->base, policy->commit_level,
-					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, n_fields, 0,
+					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
 					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
 
-	p = as_command_write_key(p, policy->key, key);
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 
@@ -841,8 +841,8 @@ typedef struct as_operate_s {
 	const as_operations* ops;
 	as_queue* buffers;
 	size_t size;
+	as_command_tran_data tdata;
 	uint32_t filter_size;
-	uint16_t n_fields;
 	uint16_t n_operations;
 	uint8_t read_attr;
 	uint8_t write_attr;
@@ -940,8 +940,8 @@ as_operate_init(
 	as_command_set_attr_read(policy->read_mode_ap, policy->read_mode_sc, policy->base.compress,
 							 &oper->read_attr, &oper->info_attr);
 
-	oper->size += as_command_key_size(policy->key, key, &oper->n_fields);
-	oper->filter_size = as_command_filter_size(&policy->base, &oper->n_fields);
+	oper->size += as_command_key_size(&policy->base, policy->key, key, oper->write_attr & AS_MSG_INFO2_WRITE, &oper->tdata);
+	oper->filter_size = as_command_filter_size(&policy->base, &oper->tdata.n_fields);
 	oper->size += oper->filter_size;
 	return AEROSPIKE_OK;
 }
@@ -965,11 +965,11 @@ as_operate_write(void* udata, uint8_t* buf)
 	}
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
-		policy->exists, policy->gen, ops->gen, ttl, oper->n_fields,
+		policy->exists, policy->gen, ops->gen, ttl, oper->tdata.n_fields,
 		oper->n_operations, policy->durable_delete, oper->read_attr, oper->write_attr,
 		oper->info_attr);
 
-	p = as_command_write_key(p, policy->key, oper->key);
+	p = as_command_write_key(p, &policy->base, policy->key, oper->key, &oper->tdata);
 	p = as_command_write_filter(&policy->base, oper->filter_size, p);
 
 	uint16_t n_operations = oper->n_operations;
@@ -1159,8 +1159,8 @@ typedef struct as_apply_s {
 	const char* function;
 	as_serializer ser;
 	as_buffer args;
+	as_command_tran_data tdata;
 	uint32_t filter_size;
-	uint16_t n_fields;
 	uint8_t read_attr;
 } as_apply;
 
@@ -1176,9 +1176,9 @@ as_apply_init(
 	ap->function = function;
 	ap->read_attr = 0;
 
-	size_t size = as_command_key_size(policy->key, key, &ap->n_fields);
+	size_t size = as_command_key_size(&policy->base, policy->key, key, true, &ap->tdata);
 
-	ap->filter_size = as_command_filter_size(&policy->base, &ap->n_fields);
+	ap->filter_size = as_command_filter_size(&policy->base, &ap->tdata.n_fields);
 	size += ap->filter_size;
 
 	size += as_command_string_field_size(module);
@@ -1188,7 +1188,7 @@ as_apply_init(
 	as_buffer_init(&ap->args);
 	as_serializer_serialize(&ap->ser, (as_val*)arglist, &ap->args);
 	size += as_command_field_size(ap->args.size);
-	ap->n_fields += 3;
+	ap->tdata.n_fields += 3;
 
 	as_command_set_attr_compress(policy->base.compress, &ap->read_attr);
 	return size;
@@ -1201,10 +1201,10 @@ as_apply_write(void* udata, uint8_t* buf)
 	const as_policy_apply* policy = ap->policy;
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level, 0,
-		AS_POLICY_GEN_IGNORE, 0, policy->ttl, ap->n_fields, 0, policy->durable_delete,
+		AS_POLICY_GEN_IGNORE, 0, policy->ttl, ap->tdata.n_fields, 0, policy->durable_delete,
 		ap->read_attr, AS_MSG_INFO2_WRITE, 0);
 
-	p = as_command_write_key(p, policy->key, ap->key);
+	p = as_command_write_key(p, &policy->base, policy->key, ap->key, &ap->tdata);
 	p = as_command_write_filter(&policy->base, ap->filter_size, p);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_PACKAGE_NAME, ap->module);
 	p = as_command_write_field_string(p, AS_FIELD_UDF_FUNCTION, ap->function);

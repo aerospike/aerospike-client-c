@@ -25,6 +25,7 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
+#include <aerospike/as_tran.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_digest.h>
@@ -32,18 +33,18 @@
 #include <string.h>
 #include <zlib.h>
 
-/******************************************************************************
- * STATIC VARIABLES
- *****************************************************************************/
+//---------------------------------
+// Static Variables
+//---------------------------------
 
 // These values must line up with as_operator enum.
 static uint8_t as_protocol_types[] = {1, 2, 3, 4, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
 static uint32_t g_replica_rr = 0;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 uint8_t
 as_replica_index_any(void)
@@ -99,14 +100,42 @@ as_command_user_key_size(const as_key* key)
 }
 
 size_t
-as_command_key_size(as_policy_key policy, const as_key* key, uint16_t* n_fields)
+as_command_key_size(
+	const as_policy_base* policy, as_policy_key pol_key, const as_key* key, bool send_deadline,
+	as_command_tran_data* tdata
+	)
 {
-	*n_fields = 3;
+	tdata->n_fields = 3;
+	tdata->send_deadline = send_deadline;
+
 	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
 	
-	if (policy == AS_POLICY_KEY_SEND && key->valuep) {
+	if (policy->tran) {
+		size += AS_FIELD_HEADER_SIZE + sizeof(uint64_t);
+		tdata->n_fields++;
+
+		as_tran* tran = policy->tran;
+		tdata->version = as_tran_get_read_version(tran, key);
+
+		if (tdata->version != 0) {
+			// Version is a 7 byte integer.
+			size += AS_FIELD_HEADER_SIZE + 7;
+			tdata->n_fields++;
+		}
+
+		// Store deadline in temp variable because tran->deadline could possibly change
+		// between buffer size estimation and buffer write.
+		tdata->deadline = tran->deadline;
+
+		if (send_deadline && tdata->deadline != 0) {
+			size += AS_FIELD_HEADER_SIZE + sizeof(uint32_t);
+			tdata->n_fields++;
+		}
+	}
+
+	if (pol_key == AS_POLICY_KEY_SEND && key->valuep) {
 		size += as_command_user_key_size(key);
-		(*n_fields)++;
+		tdata->n_fields++;
 	}
 	return size;
 }
@@ -358,13 +387,30 @@ as_command_write_user_key(uint8_t* begin, const as_key* key)
 }
 
 uint8_t*
-as_command_write_key(uint8_t* p, as_policy_key policy, const as_key* key)
+as_command_write_key(
+	uint8_t* p, const as_policy_base* policy, as_policy_key pol_key, const as_key* key,
+	as_command_tran_data* tdata
+	)
 {
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
 	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
 	p = as_command_write_field_digest(p, &key->digest);
 	
-	if (policy == AS_POLICY_KEY_SEND && key->valuep) {
+	if (policy->tran) {
+		as_tran* tran = policy->tran;
+
+		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, tran->id);
+
+		if (tdata->version != 0) {
+			p = as_command_write_field_version(p, tdata->version);
+		}
+
+		if (tdata->send_deadline && tdata->deadline != 0) {
+			p = as_command_write_field_uint32_le(p, AS_FIELD_MRT_DEADLINE, tdata->deadline);
+		}
+	}
+
+	if (pol_key == AS_POLICY_KEY_SEND && key->valuep) {
 		p = as_command_write_user_key(p, key);
 	}
 	return p;
@@ -988,6 +1034,45 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		return status;
 	}
 
+	if (msg->n_fields > 0 && cmd->policy->tran) {
+		uint8_t* p = buf + sizeof(as_msg);
+		uint64_t version = 0;
+		uint32_t len;
+		uint8_t type;
+
+		for (uint32_t i = 0; i < msg->n_fields; i++) {
+			len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+			p += 4;
+			type = *p++;
+
+			if (type == AS_FIELD_RECORD_VERSION) {
+				if (len == 7) {
+					uint64_t ver = 0;
+					memcpy(&ver, p, 7);
+					version = cf_swap_from_le64(ver);
+					version |= (1L << 63);
+				}
+				else {
+					return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Record version field has invalid size: %u", len);
+				}
+			}
+			p += len;
+		}
+
+		if (cmd->flags == 0) {
+			// TODO: Finish.
+			//as_tran_on_write(cmd->policy->tran, TODO, version, msg->result_code);
+		}
+		else {
+			// TODO: Finish.
+			//status = as_tran_on_read(cmd->policy->tran, TODO, version, err);
+
+			if (status != AEROSPIKE_OK) {
+				return status;
+			}
+		}
+	}
+
 	if (msg->result_code) {
 		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
 	}
@@ -996,7 +1081,7 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 
 	if (rec) {
 		as_record* r = *rec;
-		
+
 		if (r == NULL) {
 			r = as_record_new(0);
 			*rec = r;

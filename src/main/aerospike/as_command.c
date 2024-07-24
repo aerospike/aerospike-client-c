@@ -1024,6 +1024,54 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 	}
 }
 
+static as_status
+as_command_parse_fields(as_error* err, as_command* cmd, as_msg* msg, uint8_t** buf)
+{
+	uint8_t* p = *buf;
+
+	if (! cmd->policy->tran) {
+		p = as_command_ignore_fields(p, msg->n_fields);
+		*buf = p;
+		return AEROSPIKE_OK;
+	}
+
+	uint64_t version = 0;
+	uint32_t len;
+	uint8_t type;
+
+	for (uint32_t i = 0; i < msg->n_fields; i++) {
+		len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+		p += 4;
+		type = *p++;
+
+		if (type == AS_FIELD_RECORD_VERSION) {
+			if (len == 7) {
+				uint64_t ver = 0;
+				memcpy(&ver, p, 7);
+				version = cf_swap_from_le64(ver);
+				version |= (1L << 63);
+			}
+			else {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Record version field has invalid size: %u", len);
+			}
+		}
+		p += len;
+	}
+
+	if (cmd->flags == 0) {
+		as_tran_on_write(cmd->policy->tran, cmd->key, version, msg->result_code);
+	}
+	else {
+		as_status status = as_tran_on_read(cmd->policy->tran, cmd->key, version, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	*buf = p;
+	return AEROSPIKE_OK;
+}
+
 as_status
 as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
@@ -1034,41 +1082,11 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		return status;
 	}
 
-	if (msg->n_fields > 0 && cmd->policy->tran) {
-		uint8_t* p = buf + sizeof(as_msg);
-		uint64_t version = 0;
-		uint32_t len;
-		uint8_t type;
+	uint8_t* p = buf + sizeof(as_msg);
+	status = as_command_parse_fields(err, cmd, msg, &p);
 
-		for (uint32_t i = 0; i < msg->n_fields; i++) {
-			len = cf_swap_from_be32(*(uint32_t*)p) - 1;
-			p += 4;
-			type = *p++;
-
-			if (type == AS_FIELD_RECORD_VERSION) {
-				if (len == 7) {
-					uint64_t ver = 0;
-					memcpy(&ver, p, 7);
-					version = cf_swap_from_le64(ver);
-					version |= (1L << 63);
-				}
-				else {
-					return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Record version field has invalid size: %u", len);
-				}
-			}
-			p += len;
-		}
-
-		if (cmd->flags == 0) {
-			as_tran_on_write(cmd->policy->tran, cmd->key, version, msg->result_code);
-		}
-		else {
-			status = as_tran_on_read(cmd->policy->tran, cmd->key, version, err);
-
-			if (status != AEROSPIKE_OK) {
-				return status;
-			}
-		}
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
 	if (msg->result_code) {
@@ -1321,8 +1339,6 @@ as_status
 as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, as_val** value)
 {
 	uint8_t* p = *pp;
-	p = as_command_ignore_fields(p, msg->n_fields);
-		
 	as_bin_name name;
 	
 	for (uint32_t i = 0; i < msg->n_ops; i++) {
@@ -1394,8 +1410,6 @@ as_command_parse_udf_error(as_error* err, as_status status, as_val* val)
 as_status
 as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status)
 {
-	p = as_command_ignore_fields(p, msg->n_fields);
-	
 	as_bin_name name;
 	
 	for (uint32_t i = 0; i < msg->n_ops; i++) {
@@ -1581,9 +1595,15 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-	status = msg->result_code;
 
 	uint8_t* p = buf + sizeof(as_msg);
+	status = as_command_parse_fields(err, cmd, msg, &p);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
@@ -1617,8 +1637,7 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 				}
 				rec->gen = msg->generation;
 				rec->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-				
-				p = as_command_ignore_fields(p, msg->n_fields);
+
 				status = as_command_parse_bins(&p, err, rec, msg->n_ops, data->deserialize);
 
 				if (status != AEROSPIKE_OK && free_on_error) {
@@ -1627,12 +1646,12 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 			}
 			break;
 		}
-			
+
 		case AEROSPIKE_ERR_UDF: {
 			status = as_command_parse_udf_failure(p, err, msg, status);
 			break;
 		}
-			
+
 		default:
 			as_error_update(err, status, "%s %s", as_node_get_address_string(node),
 							as_error_string(status));
@@ -1653,9 +1672,15 @@ as_command_parse_success_failure(
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-	status = msg->result_code;
 
 	uint8_t* p = buf + sizeof(as_msg);
+	status = as_command_parse_fields(err, cmd, msg, &p);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {

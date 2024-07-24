@@ -1421,6 +1421,7 @@ as_event_command_parse_result(as_event_command* cmd)
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
+			p = as_command_ignore_fields(p, msg->n_fields);
 			as_command_parse_udf_failure(p, &err, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
@@ -1447,6 +1448,8 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 
 	switch (status) {
 		case AEROSPIKE_OK: {
+			p = as_command_ignore_fields(p, msg->n_fields);
+
 			as_error err;
 			as_val* val = 0;
 			status = as_command_parse_success_failure_bins(&p, &err, msg, &val);
@@ -1465,6 +1468,7 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 			
 		case AEROSPIKE_ERR_UDF: {
 			as_error err;
+			p = as_command_ignore_fields(p, msg->n_fields);
 			as_command_parse_udf_failure(p, &err, msg, status);
 			as_event_response_error(cmd, &err);
 			break;

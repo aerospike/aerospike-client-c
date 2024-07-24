@@ -427,6 +427,8 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 {
 	if (task->input_queue) {
 		// Parse aggregate return values.
+		*pp = as_command_ignore_fields(*pp, msg->n_fields);
+
 		as_val* val = 0;
 		as_status status = as_command_parse_success_failure_bins(pp, err, msg, &val);
 		

@@ -30,6 +30,7 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_thread_pool.h>
+#include <aerospike/as_tran.h>
 #include <aerospike/as_tran_monitor.h>
 #include <aerospike/as_val.h>
 #include <citrusleaf/cf_clock.h>
@@ -47,7 +48,6 @@
 
 #define BATCH_TYPE_RECORDS 0
 #define BATCH_TYPE_KEYS 1
-#define BATCH_TYPE_KEYS_NO_CALLBACK 2
 
 //---------------------------------
 // Types
@@ -189,6 +189,7 @@ static const char cluster_empty_error[] = "Batch command failed because cluster 
 // Static Functions
 //---------------------------------
 
+// TODO: Remove
 static uint8_t*
 as_batch_parse_fields(uint8_t* p, uint32_t n_fields)
 {
@@ -289,9 +290,19 @@ as_batch_async_parse_records(as_event_command* cmd)
 			return true;
 		}
 		
+		// TODO: Replace with as_command_parse_fields().
 		p = as_batch_parse_fields(p, msg->n_fields);
 		
 		as_batch_base_record* rec = as_vector_get(records, offset);
+
+		/*
+		as_status status = as_command_parse_fields(&p, err, msg, tran, &rec->key, rec->has_write);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+		*/
+
 		rec->result = msg->result_code;
 
 		if (msg->result_code == AEROSPIKE_OK) {
@@ -328,6 +339,7 @@ static as_status
 as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
 	as_batch_task* task = cmd->udata;
+	as_tran* tran = cmd->policy->tran;
 	bool deserialize = task->policy->deserialize;
 
 	uint8_t* p = buf;
@@ -352,17 +364,22 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 								   offset, task->n_keys);
 		}
 
-		p = as_batch_parse_fields(p, msg->n_fields);
-
 		switch (task->type)
 		{
 			case BATCH_TYPE_RECORDS: {
 				as_batch_task_records* btr = (as_batch_task_records*)task;
 				as_batch_base_record* rec = as_vector_get(btr->records, offset);
+
+				as_status status = as_command_parse_fields(&p, err, msg, tran, &rec->key, rec->has_write);
+
+				if (status != AEROSPIKE_OK) {
+					return status;
+				}
+
 				rec->result = msg->result_code;
 
 				if (msg->result_code == AEROSPIKE_OK) {
-					as_status status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
+					status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -373,7 +390,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					*task->error_row = true;
 
 					// AEROSPIKE_ERR_UDF results in "FAILURE" bin that contains an error message.
-					as_status status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
+					status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -389,10 +406,17 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 			case BATCH_TYPE_KEYS: {
 				as_batch_task_keys* btk = (as_batch_task_keys*)task;
 				as_batch_result* res = &btk->results[offset];
+
+				as_status status = as_command_parse_fields(&p, err, msg, tran, res->key, btk->base.has_write);
+
+				if (status != AEROSPIKE_OK) {
+					return status;
+				}
+
 				res->result = msg->result_code;
 
 				if (msg->result_code == AEROSPIKE_OK) {
-					as_status status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
+					status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -401,7 +425,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				else if (msg->result_code == AEROSPIKE_ERR_UDF) {
 					res->in_doubt = as_batch_in_doubt(task->has_write, cmd->sent);
 					*task->error_row = true;
-					as_status status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
+					status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -411,31 +435,6 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					res->in_doubt = as_batch_in_doubt(task->has_write, cmd->sent);
 					*task->error_row = true;
 				}
-				break;
-			}
-
-			case BATCH_TYPE_KEYS_NO_CALLBACK: {
-				as_record rec;
-
-				if (msg->result_code == AEROSPIKE_OK) {
-					as_status status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
-
-					if (status != AEROSPIKE_OK) {
-						return status;
-					}
-				}
-				else if (msg->result_code == AEROSPIKE_ERR_UDF) {
-					*task->error_row = true;
-					as_status status = as_batch_parse_record(&p, err, msg, &rec, deserialize);
-
-					if (status != AEROSPIKE_OK) {
-						return status;
-					}
-				}
-				else if (as_batch_set_error_row(msg->result_code)) {
-					*task->error_row = true;
-				}
-				as_record_destroy(&rec);
 				break;
 			}
 		}
@@ -2106,7 +2105,7 @@ as_batch_keys_execute(
 	}
 	
 	// Allocate results array on stack.  May be an issue for huge batch.
-	as_batch_result* results = (listener)? (as_batch_result*)alloca(sizeof(as_batch_read) * n_keys) : 0;
+	as_batch_result* results = (as_batch_result*)alloca(sizeof(as_batch_read) * n_keys);
 
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
@@ -2132,14 +2131,12 @@ as_batch_keys_execute(
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_key* key = &batch->keys.entries[i];
 		
-		if (listener) {
-			as_batch_result* result = &results[i];
-			result->key = key;
-			result->result = AEROSPIKE_NO_RESPONSE;
-			result->in_doubt = false;
-			as_record_init(&result->record, 0);
-		}
-		
+		as_batch_result* result = &results[i];
+		result->key = key;
+		result->result = AEROSPIKE_NO_RESPONSE;
+		result->in_doubt = false;
+		as_record_init(&result->record, 0);
+
 		status = as_key_set_digest(err, key);
 		
 		if (status != AEROSPIKE_OK) {
@@ -2181,15 +2178,6 @@ as_batch_keys_execute(
 		return as_error_set_message(err, AEROSPIKE_BATCH_FAILED, "Nodes not found");
 	}
 
-	uint8_t type;
-
-	if (listener) {
-		type = BATCH_TYPE_KEYS;
-	}
-	else {
-		type = BATCH_TYPE_KEYS_NO_CALLBACK;
-	}
-
 	uint32_t error_mutex = 0;
 
 	// Initialize task.
@@ -2203,7 +2191,7 @@ as_batch_keys_execute(
 	btk.base.n_keys = n_keys;
 	btk.base.replica = rep.replica;
 	btk.base.replica_sc = rep.replica_sc;
-	btk.base.type = type;
+	btk.base.type = BATCH_TYPE_KEYS;
 	btk.base.has_write = rec->has_write;
 	btk.base.replica_index = rep.replica_index;
 	btk.base.replica_index_sc = rep.replica_index_sc;
@@ -2271,12 +2259,12 @@ as_batch_keys_execute(
 	// Call user defined function with results.
 	if (listener) {
 		listener(btk.results, n_keys, udata);
-		
-		// Destroy records. User is responsible for destroying keys with as_batch_destroy().
-		for (uint32_t i = 0; i < n_keys; i++) {
-			as_batch_result* br = &btk.results[i];
-			as_record_destroy(&br->record);
-		}
+	}
+
+	// Destroy records. User is responsible for destroying keys with as_batch_destroy().
+	for (uint32_t i = 0; i < n_keys; i++) {
+		as_batch_result* br = &btk.results[i];
+		as_record_destroy(&br->record);
 	}
 
 	if (status == AEROSPIKE_OK && error_row) {

@@ -1024,14 +1024,51 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 	}
 }
 
-static as_status
-as_command_parse_fields(as_error* err, as_command* cmd, as_msg* msg, uint8_t** buf)
+as_status
+as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
-	uint8_t* p = *buf;
+	as_msg* msg = (as_msg*)buf;
+	as_status status = as_msg_parse(err, msg, size);
 
-	if (! cmd->policy->tran) {
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	uint8_t* p = buf + sizeof(as_msg);
+
+	status = as_command_parse_fields(&p, err, msg, cmd->policy->tran, cmd->key, cmd->flags == 0);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	if (msg->result_code) {
+		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+	}
+
+	as_record** rec = cmd->udata;
+
+	if (rec) {
+		as_record* r = *rec;
+
+		if (r == NULL) {
+			r = as_record_new(0);
+			*rec = r;
+		}
+		r->gen = (uint16_t)msg->generation;
+		r->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_command_parse_fields(uint8_t** pp, as_error* err, as_msg* msg, as_tran* tran, const as_key* key, bool is_write)
+{
+	uint8_t* p = *pp;
+
+	if (! tran) {
 		p = as_command_ignore_fields(p, msg->n_fields);
-		*buf = p;
+		*pp = p;
 		return AEROSPIKE_OK;
 	}
 
@@ -1058,53 +1095,17 @@ as_command_parse_fields(as_error* err, as_command* cmd, as_msg* msg, uint8_t** b
 		p += len;
 	}
 
-	if (cmd->flags == 0) {
-		as_tran_on_write(cmd->policy->tran, cmd->key, version, msg->result_code);
+	if (is_write) {
+		as_tran_on_write(tran, key, version, msg->result_code);
 	}
 	else {
-		as_status status = as_tran_on_read(cmd->policy->tran, cmd->key, version, err);
+		as_status status = as_tran_on_read(tran, key, version, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 	}
-	*buf = p;
-	return AEROSPIKE_OK;
-}
-
-as_status
-as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
-{
-	as_msg* msg = (as_msg*)buf;
-	as_status status = as_msg_parse(err, msg, size);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
-	uint8_t* p = buf + sizeof(as_msg);
-	status = as_command_parse_fields(err, cmd, msg, &p);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
-	if (msg->result_code) {
-		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
-	}
-
-	as_record** rec = cmd->udata;
-
-	if (rec) {
-		as_record* r = *rec;
-
-		if (r == NULL) {
-			r = as_record_new(0);
-			*rec = r;
-		}
-		r->gen = (uint16_t)msg->generation;
-		r->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-	}
+	*pp = p;
 	return AEROSPIKE_OK;
 }
 
@@ -1597,7 +1598,7 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	}
 
 	uint8_t* p = buf + sizeof(as_msg);
-	status = as_command_parse_fields(err, cmd, msg, &p);
+	status = as_command_parse_fields(&p, err, msg, cmd->policy->tran, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1674,7 +1675,7 @@ as_command_parse_success_failure(
 	}
 
 	uint8_t* p = buf + sizeof(as_msg);
-	status = as_command_parse_fields(err, cmd, msg, &p);
+	status = as_command_parse_fields(&p, err, msg, cmd->policy->tran, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;

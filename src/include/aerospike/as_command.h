@@ -163,6 +163,7 @@ local_free(void* memory)
 typedef size_t (*as_write_fn) (void* udata, uint8_t* buf);
 
 struct as_command_s;
+struct as_tran;
 
 /**
  * @private
@@ -652,6 +653,15 @@ as_command_execute(as_command* cmd, as_error* err);
  */
 as_status
 as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
+
+/**
+ * @private
+ * Parse record fields.
+ */
+as_status
+as_command_parse_fields(
+	uint8_t** pp, as_error* err, as_msg* msg, struct as_tran* tran, const as_key* key, bool is_write
+	);
 
 /**
  * @private

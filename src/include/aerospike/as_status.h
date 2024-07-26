@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -279,6 +279,21 @@ typedef enum as_status_e {
 	 * Write command loses conflict to XDR.
 	 */
 	AEROSPIKE_LOST_CONFLICT = 28,
+
+	/**
+	 * MRT record blocked by a different transaction.
+	 */
+	AEROSPIKE_MRT_BLOCKED = 29,
+
+	/**
+	 * MRT read verify failed. Some other command changed record outside of the transaction.
+	 */
+	AEROSPIKE_MRT_CONFLICT = 30,
+
+	/**
+	 * MRT deadline reached without a successful commit or abort.
+	 */
+	AEROSPIKE_MRT_EXPIRED = 31,
 
 	/**
 	 * There are no more records left for query.

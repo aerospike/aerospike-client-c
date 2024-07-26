@@ -1096,14 +1096,10 @@ as_command_parse_fields(uint8_t** pp, as_error* err, as_msg* msg, as_tran* tran,
 	}
 
 	if (is_write) {
-		as_tran_on_write(tran, key, version, msg->result_code);
+		as_tran_on_write(tran, key->digest.value, key->set, version, msg->result_code);
 	}
 	else {
-		as_status status = as_tran_on_read(tran, key, version, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
+		as_tran_on_read(tran, key->digest.value, key->set, version);
 	}
 	*pp = p;
 	return AEROSPIKE_OK;

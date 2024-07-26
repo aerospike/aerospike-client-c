@@ -119,16 +119,15 @@ as_tran_get_ops_records(as_tran* tran, as_batch_records* records, as_operations*
 
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_base_record* rec = as_vector_get(records_list, i);
-		
-		if (rec->has_write) {
-			as_key* key = &rec->key;
-			as_status status = as_tran_set_ns(tran, key->ns, err);
-			
-			if (status != AEROSPIKE_OK) {
-				as_arraylist_destroy(&digests);
-				return status;
-			}
+		as_key* key = &rec->key;
+		as_status status = as_tran_set_ns(tran, key->ns, err);
 
+		if (status != AEROSPIKE_OK) {
+			as_arraylist_destroy(&digests);
+			return status;
+		}
+
+		if (rec->has_write) {
 			as_bytes_init_wrap(&bytes, key->digest.value, AS_DIGEST_VALUE_SIZE, false);
 			as_arraylist_append_bytes(&digests, &bytes);
 		}

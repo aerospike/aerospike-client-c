@@ -3482,6 +3482,14 @@ aerospike_batch_get(
 		policy = &as->config.policies.batch;
 	}
 	
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_batch_read_record rec = {
 		.type = AS_BATCH_READ,
 		.read_all_bins = true
@@ -3507,6 +3515,14 @@ aerospike_batch_get_bins(
 		policy = &as->config.policies.batch;
 	}
 	
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_batch_read_record rec = {
 		.type = AS_BATCH_READ,
 		// Cast to maintain backwards compatibility. Field is not really modified.
@@ -3533,6 +3549,14 @@ aerospike_batch_get_ops(
 		policy = &as->config.policies.batch;
 	}
 	
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_batch_read_record rec = {
 		.type = AS_BATCH_READ,
 		.ops = ops
@@ -3558,6 +3582,14 @@ aerospike_batch_exists(
 		policy = &as->config.policies.batch;
 	}
 	
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_batch_read_record rec = {
 		.type = AS_BATCH_READ
 	};
@@ -3624,6 +3656,14 @@ aerospike_batch_operate(
 	else {
 		if (! policy) {
 			policy = &as->config.policies.batch;
+		}
+
+		if (policy->base.tran) {
+			as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+
+			if (status != AEROSPIKE_OK) {
+				return status;
+			}
 		}
 
 		as_batch_read_record rec = {

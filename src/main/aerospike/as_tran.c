@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_tran.h>
+#include <aerospike/as_batch.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_random.h>
 
@@ -335,21 +336,12 @@ as_tran_destroy(as_tran* tran)
 	}
 }
 
-as_status
-as_tran_on_read(as_tran* tran, const as_key* key, uint64_t version, as_error* err)
+void
+as_tran_on_read(as_tran* tran, const uint8_t* digest, const char* set, uint64_t version)
 {
-	// Read commands do not call as_tran_set_ns() prior to sending the command,
-	// so call as_tran_set_ns() here when receiving the response.
-	as_status status = as_tran_set_ns(tran, key->ns, err);
-	
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-	
 	if (version != 0) {
-		khash_put(&tran->reads, key->digest.value, key->set, version);
+		khash_put(&tran->reads, digest, set, version);
 	}
-	return AEROSPIKE_OK;
 }
 
 uint64_t
@@ -359,15 +351,15 @@ as_tran_get_read_version(as_tran* tran, const as_key* key)
 }
 
 void
-as_tran_on_write(as_tran* tran, const as_key* key, uint64_t version, int rc)
+as_tran_on_write(as_tran* tran, const uint8_t* digest, const char* set, uint64_t version, int rc)
 {
 	if (version != 0) {
-		khash_put(&tran->reads, key->digest.value, key->set, version);
+		khash_put(&tran->reads, digest, set, version);
 	}
 	else {
 		if (rc == AEROSPIKE_OK) {
-			khash_remove(&tran->reads, key->digest.value);
-			khash_put(&tran->writes, key->digest.value, key->set, 0);
+			khash_remove(&tran->reads, digest);
+			khash_put(&tran->writes, digest, set, 0);
 		}
 	}
 }
@@ -390,6 +382,22 @@ as_tran_set_ns(as_tran* tran, const char* ns, as_error* err)
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Namespace must be the same for all commands in the MRT. orig: %s new: %s",
 			tran->ns, ns);
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_tran_set_ns_batch(as_tran* tran, const as_batch* batch, as_error* err)
+{
+	uint32_t n_keys = batch->keys.size;
+
+	for (uint32_t i = 0; i < n_keys; i++) {
+		as_key* key = &batch->keys.entries[i];
+		as_status status = as_tran_set_ns(tran, key->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 	}
 	return AEROSPIKE_OK;
 }

@@ -74,6 +74,8 @@ typedef struct as_tran {
 	bool free;
 } as_tran;
 
+struct as_batch_s;
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -81,7 +83,7 @@ typedef struct as_tran {
 /**
  * Initialize multi-record transaction (MRT),  assign random transaction id and initialize
  * reads/writes hashmaps with default capacities. Call this function or as_tran_init_capacity(),
- * but not both.
+ * but not both. Do not use thie function for async commands (use as_tran_create() instead).
  *
  * @param tran		Multi-record transaction.
  */
@@ -91,7 +93,7 @@ as_tran_init(as_tran* tran);
 /**
  * Initialize multi-record transaction (MRT), assign random transaction id and initialize
  * reads/writes hashmaps with given capacities. Call this function or as_tran_init(),
- * but not both.
+ * but not both. Do not use thie function for async commands (use as_tran_create_capacity() instead).
  *
  * @param tran				Multi-record transaction.
  * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
@@ -126,8 +128,8 @@ as_tran_destroy(as_tran* tran);
 /**
  * Process the results of a record read. For internal use only.
  */
-AS_EXTERN as_status
-as_tran_on_read(as_tran* tran, const as_key* key, uint64_t version, as_error* err);
+AS_EXTERN void
+as_tran_on_read(as_tran* tran, const uint8_t* digest, const char* set, uint64_t version);
 
 /**
  * Get record version for a given key. For internal use only.
@@ -139,7 +141,7 @@ as_tran_get_read_version(as_tran* tran, const as_key* key);
  * Process the results of a record write. For internal use only.
  */
 AS_EXTERN void
-as_tran_on_write(as_tran* tran, const as_key* key, uint64_t version, int rc);
+as_tran_on_write(as_tran* tran, const uint8_t* digest, const char* set, uint64_t version, int rc);
 
 /**
  * Return if writes hashmap contains the given key.
@@ -154,6 +156,14 @@ as_tran_writes_contain(as_tran* tran, const as_key* key);
  */
 AS_EXTERN as_status
 as_tran_set_ns(as_tran* tran, const char* ns, as_error* err);
+
+/**
+ * Set MRT namespaces only if the don't already exist from a batch.
+ * If namespaces already exist, verify new namespaces are the same.
+ * For internal use only.
+ */
+AS_EXTERN as_status
+as_tran_set_ns_batch(as_tran* tran, const struct as_batch_s* batch, as_error* err);
 
 /**
  * Verify that commit/abort is only attempted once. For internal use only.

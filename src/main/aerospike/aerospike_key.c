@@ -35,6 +35,7 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_tran.h>
 #include <aerospike/as_tran_monitor.h>
 #include <citrusleaf/cf_clock.h>
 
@@ -214,6 +215,14 @@ aerospike_key_get(
 		policy = &as->config.policies.read;
 	}
 
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);
@@ -257,6 +266,14 @@ aerospike_key_get_async(
 {
 	if (! policy) {
 		policy = &as->config.policies.read;
+	}
+
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 	}
 
 	as_cluster* cluster = as->cluster;
@@ -305,6 +322,14 @@ aerospike_key_select(
 		policy = &as->config.policies.read;
 	}
 	
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);
@@ -363,6 +388,14 @@ aerospike_key_select_async(
 		policy = &as->config.policies.read;
 	}
 	
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);
@@ -422,6 +455,14 @@ aerospike_key_exists(
 		policy = &as->config.policies.read;
 	}
 
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);
@@ -466,6 +507,14 @@ aerospike_key_exists_async(
 		policy = &as->config.policies.read;
 	}
 	
+	if (policy->base.tran) {
+		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);
@@ -574,11 +623,9 @@ aerospike_key_put(
 		policy = &as->config.policies.write;
 	}
 	
-	as_status status;
-	
 	if (policy->base.tran) {
-		status = as_tran_monitor_add_key(as, &policy->base, key, err);
-		
+		as_status status = as_tran_monitor_add_key(as, &policy->base, key, err);
+
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
@@ -586,8 +633,8 @@ aerospike_key_put(
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	
-	status = as_key_partition_init(cluster, err, key, &pi);
+
+	as_status status = as_key_partition_init(cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -629,6 +676,8 @@ aerospike_key_put_async_ex(
 	if (! policy) {
 		policy = &as->config.policies.write;
 	}
+
+	// TODO: Add async call to add tran monitor key.
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -732,12 +781,10 @@ aerospike_key_remove(
 	if (! policy) {
 		policy = &as->config.policies.remove;
 	}
-	
-	as_status status;
-	
+
 	if (policy->base.tran) {
-		status = as_tran_monitor_add_key(as, &policy->base, key, err);
-		
+		as_status status = as_tran_monitor_add_key(as, &policy->base, key, err);
+
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
@@ -746,7 +793,7 @@ aerospike_key_remove(
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	
-	status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_key_partition_init(cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -788,6 +835,8 @@ aerospike_key_remove_async_ex(
 	if (! policy) {
 		policy = &as->config.policies.remove;
 	}
+
+	// TODO: Add async call to add tran monitor key.
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -1019,9 +1068,14 @@ aerospike_key_operate(
 
 	policy = oper.policy;
 	
-	if (policy->base.tran && (oper.write_attr & AS_MSG_INFO2_WRITE)) {
-		status = as_tran_monitor_add_key(as, &policy->base, key, err);
-		
+	if (policy->base.tran) {
+		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
+			status = as_tran_monitor_add_key(as, &policy->base, key, err);
+		}
+		else {
+			status = as_tran_set_ns(policy->base.tran, key->ns, err);
+		}
+
 		if (status != AEROSPIKE_OK) {
 			as_buffers_destroy(&buffers);
 			return status;
@@ -1083,6 +1137,8 @@ aerospike_key_operate_async(
 		as_buffers_destroy(&buffers);
 		return status;
 	}
+
+	// TODO: Add async call to add tran monitor key for writes or set namespace for reads.
 
 	policy = oper.policy;
 
@@ -1222,11 +1278,9 @@ aerospike_key_apply(
 		policy = &as->config.policies.apply;
 	}
 	
-	as_status status;
-
 	if (policy->base.tran) {
-		status = as_tran_monitor_add_key(as, &policy->base, key, err);
-		
+		as_status status = as_tran_monitor_add_key(as, &policy->base, key, err);
+
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
@@ -1235,7 +1289,7 @@ aerospike_key_apply(
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	
-	status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_key_partition_init(cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1269,6 +1323,8 @@ aerospike_key_apply_async(
 		policy = &as->config.policies.apply;
 	}
 	
+	// TODO: Add async call to add tran monitor key.
+
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);

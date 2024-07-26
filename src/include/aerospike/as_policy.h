@@ -530,7 +530,8 @@ typedef struct as_policy_base_s {
 	struct as_exp* filter_exp;
 	
 	/**
-	 * Multi-record transaction identifier.
+	 * Multi-record transaction identifier. If set for an async command,  the source tran instance must
+	 * be allocated on the heap using as_tran_create() or as_tran_create_capacity().
 	 *
 	 * Default: NULL
 	 */

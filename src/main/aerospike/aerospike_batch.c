@@ -189,19 +189,6 @@ static const char cluster_empty_error[] = "Batch command failed because cluster 
 // Static Functions
 //---------------------------------
 
-// TODO: Remove
-static uint8_t*
-as_batch_parse_fields(uint8_t* p, uint32_t n_fields)
-{
-	uint32_t len;
-	
-	for (uint32_t i = 0; i < n_fields; i++) {
-		len = cf_swap_from_be32(*(uint32_t*)p);
-		p += 4 + len;
-	}
-	return p;
-}
-
 static as_status
 as_batch_set_tran_ns(as_tran* tran, const as_batch* batch, as_error* err)
 {
@@ -323,18 +310,13 @@ as_batch_async_parse_records(as_event_command* cmd)
 			return true;
 		}
 		
-		// TODO: Replace with as_command_parse_fields().
-		p = as_batch_parse_fields(p, msg->n_fields);
-		
 		as_batch_base_record* rec = as_vector_get(records, offset);
 
-		/*
-		as_status status = as_command_parse_fields(&p, err, msg, tran, &rec->key, rec->has_write);
+		as_status status = as_command_parse_fields(&p, &err, msg, cmd->tran, &rec->key, rec->has_write);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
-		*/
 
 		rec->result = msg->result_code;
 

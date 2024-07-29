@@ -18,6 +18,7 @@
 
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_listener.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_proto.h>
@@ -109,6 +110,11 @@ typedef struct {
 	void* udata;
 } as_queued_pipe_cb;
 
+typedef struct {
+	as_set set;
+	as_digest_value digest;
+} as_event_key;
+
 typedef void (*as_event_executable) (as_event_loop* event_loop, void* udata);
 typedef bool (*as_event_parse_results_fn) (struct as_event_command* cmd);
 typedef void (*as_event_executor_complete_fn) (struct as_event_executor* executor);
@@ -132,6 +138,8 @@ typedef struct as_event_command {
 	as_event_connection* conn;
 	as_cluster* cluster;
 	as_node* node;
+	as_event_key* key;    // TODO: populate
+	struct as_tran* tran; // TODO: populate
 	const char* ns;
 	void* partition;  // as_partition* or as_partition_shm*
 	void* udata;

@@ -15,7 +15,6 @@
  * the License.
  */
 #include <aerospike/as_tran.h>
-#include <aerospike/as_batch.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_random.h>
 
@@ -382,22 +381,6 @@ as_tran_set_ns(as_tran* tran, const char* ns, as_error* err)
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Namespace must be the same for all commands in the MRT. orig: %s new: %s",
 			tran->ns, ns);
-	}
-	return AEROSPIKE_OK;
-}
-
-as_status
-as_tran_set_ns_batch(as_tran* tran, const as_batch* batch, as_error* err)
-{
-	uint32_t n_keys = batch->keys.size;
-
-	for (uint32_t i = 0; i < n_keys; i++) {
-		as_key* key = &batch->keys.entries[i];
-		as_status status = as_tran_set_ns(tran, key->ns, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
 	}
 	return AEROSPIKE_OK;
 }

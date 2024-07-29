@@ -202,6 +202,39 @@ as_batch_parse_fields(uint8_t* p, uint32_t n_fields)
 	return p;
 }
 
+static as_status
+as_batch_set_tran_ns(as_tran* tran, const as_batch* batch, as_error* err)
+{
+	uint32_t n_keys = batch->keys.size;
+
+	for (uint32_t i = 0; i < n_keys; i++) {
+		as_key* key = &batch->keys.entries[i];
+		as_status status = as_tran_set_ns(tran, key->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_batch_records_set_tran_ns(as_tran* tran, as_batch_records* records, as_error* err)
+{
+	as_vector* list = &records->list;
+	uint32_t n_keys = records->list.size;
+
+	for (uint32_t i = 0; i < n_keys; i++) {
+		as_batch_base_record* rec = as_vector_get(list, i);
+		as_status status = as_tran_set_ns(tran, rec->key.ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
 static inline as_status
 as_batch_parse_record(uint8_t** pp, as_error* err, as_msg* msg, as_record* rec, bool deserialize)
 {
@@ -3399,6 +3432,14 @@ aerospike_batch_read(
 		policy = &as->config.policies.batch;
 	}
 
+	if (policy->base.tran) {
+		as_status status = as_batch_records_set_tran_ns(policy->base.tran, records, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
 	return as_batch_records_execute(as, err, policy, records, NULL, false);
 }
 
@@ -3412,6 +3453,14 @@ aerospike_batch_read_async(
 	
 	if (! policy) {
 		policy = &as->config.policies.batch;
+	}
+
+	if (policy->base.tran) {
+		as_status status = as_batch_records_set_tran_ns(policy->base.tran, records, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 	}
 
 	return as_batch_records_execute_async(as, err, policy, records, listener, udata, event_loop,
@@ -3483,7 +3532,7 @@ aerospike_batch_get(
 	}
 	
 	if (policy->base.tran) {
-		as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+		as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3516,7 +3565,7 @@ aerospike_batch_get_bins(
 	}
 	
 	if (policy->base.tran) {
-		as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+		as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3550,7 +3599,7 @@ aerospike_batch_get_ops(
 	}
 	
 	if (policy->base.tran) {
-		as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+		as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3583,7 +3632,7 @@ aerospike_batch_exists(
 	}
 	
 	if (policy->base.tran) {
-		as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+		as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3659,7 +3708,7 @@ aerospike_batch_operate(
 		}
 
 		if (policy->base.tran) {
-			as_status status = as_tran_set_ns_batch(policy->base.tran, batch, err);
+			as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
 
 			if (status != AEROSPIKE_OK) {
 				return status;

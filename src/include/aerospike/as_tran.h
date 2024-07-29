@@ -74,8 +74,6 @@ typedef struct as_tran {
 	bool free;
 } as_tran;
 
-struct as_batch_s;
-
 //---------------------------------
 // Functions
 //---------------------------------
@@ -156,14 +154,6 @@ as_tran_writes_contain(as_tran* tran, const as_key* key);
  */
 AS_EXTERN as_status
 as_tran_set_ns(as_tran* tran, const char* ns, as_error* err);
-
-/**
- * Set MRT namespaces only if the don't already exist from a batch.
- * If namespaces already exist, verify new namespaces are the same.
- * For internal use only.
- */
-AS_EXTERN as_status
-as_tran_set_ns_batch(as_tran* tran, const struct as_batch_s* batch, as_error* err);
 
 /**
  * Verify that commit/abort is only attempted once. For internal use only.

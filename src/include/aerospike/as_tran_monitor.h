@@ -29,9 +29,10 @@ extern "C" {
 
 struct as_batch_s;
 struct as_batch_records_s;
+struct as_event_command;
 
 //---------------------------------
-// Functions
+// Sync Functions
 //---------------------------------
 
 as_status
@@ -42,6 +43,13 @@ as_tran_monitor_add_keys_batch(aerospike* as, const as_policy_base* cmd_policy, 
 
 as_status
 as_tran_monitor_add_keys_records(aerospike* as, const as_policy_base* cmd_policy, struct as_batch_records_s* records, as_error* err);
+
+//---------------------------------
+// Async Functions
+//---------------------------------
+
+as_status
+as_async_execute(aerospike* as, as_error* err, const as_policy_base* cmd_policy, const as_key* cmd_key, struct as_event_command* cmd);
 
 #ifdef __cplusplus
 } // end extern "C"

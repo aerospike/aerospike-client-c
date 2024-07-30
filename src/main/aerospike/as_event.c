@@ -395,11 +395,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 			(as_event_executable)as_event_command_execute_in_loop, cmd)) {
 
 			cmd->event_loop->errors++;  // May not be in event loop thread, so not exactly accurate.
-
-			if (cmd->node) {
-				as_node_release(cmd->node);
-			}
-			cf_free(cmd);
+			as_event_command_destroy(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
 		}
 	}

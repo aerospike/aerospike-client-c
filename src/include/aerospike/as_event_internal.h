@@ -822,8 +822,11 @@ as_event_socket_retry(as_event_command* cmd)
 static inline void
 as_event_command_destroy(as_event_command* cmd)
 {
-	// Use this function to free batch/scan/query commands that were never started.
-	as_node_release(cmd->node);
+	// Use this function to free async commands that were never started.
+	if (cmd->node) {
+		as_node_release(cmd->node);
+	}
+	// TODO: If do an extra malloc for digest/set, must account for that here.
 	cf_free(cmd);
 }
 

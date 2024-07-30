@@ -677,8 +677,6 @@ aerospike_key_put_async_ex(
 		policy = &as->config.policies.write;
 	}
 
-	// TODO: Add async call to add tran monitor key.
-
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);
@@ -721,7 +719,7 @@ aerospike_key_put_async_ex(
 			*comp_length = cmd->write_len;
 		}
 
-		return as_event_command_execute(cmd, err);
+		return as_async_execute(as, err, &policy->base, key, cmd);
 	}
 	else {
 		// Send compressed command.
@@ -751,10 +749,10 @@ aerospike_key_put_async_ex(
 				*comp_length = comp_size;
 			}
 
-			return as_event_command_execute(cmd, err);
+			return as_async_execute(as, err, &policy->base, key, cmd);
 		}
 		else {
-			cf_free(cmd);
+			as_event_command_destroy(cmd);
 			return status;
 		}
 	}
@@ -1195,7 +1193,7 @@ aerospike_key_operate_async(
 		as_command_buffer_free(buf, capacity);
 
 		if (status != AEROSPIKE_OK) {
-			cf_free(cmd);
+			as_event_command_destroy(cmd);
 			return status;
 		}
 
@@ -1370,7 +1368,7 @@ aerospike_key_apply_async(
 		as_command_buffer_free(buf, capacity);
 
 		if (status != AEROSPIKE_OK) {
-			cf_free(cmd);
+			as_event_command_destroy(cmd);
 			return status;
 		}
 

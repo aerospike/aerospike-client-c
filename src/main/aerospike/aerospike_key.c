@@ -834,8 +834,6 @@ aerospike_key_remove_async_ex(
 		policy = &as->config.policies.remove;
 	}
 
-	// TODO: Add async call to add tran monitor key.
-
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);
@@ -865,7 +863,7 @@ aerospike_key_remove_async_ex(
 		*length = size;
 	}
 
-	return as_event_command_execute(cmd, err);
+	return as_async_execute(as, err, &policy->base, key, cmd);
 }
 
 as_status
@@ -1136,21 +1134,64 @@ aerospike_key_operate_async(
 		return status;
 	}
 
-	// TODO: Add async call to add tran monitor key for writes or set namespace for reads.
-
 	policy = oper.policy;
 
 	as_event_command* cmd;
 
-	if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {		
-		// Send uncompressed command.
-		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
+	if (oper.write_attr & AS_MSG_INFO2_WRITE) {
+		// Write command
+		if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {
+			// Send uncompressed command.
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, oper.size,
 				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE);
+
+			cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
 		}
 		else {
+			// Send compressed command.
+			// First write uncompressed buffer.
+			size_t capacity = oper.size;
+			uint8_t* buf = as_command_buffer_init(capacity);
+			size_t size = as_operate_write(&oper, buf);
+
+			// Allocate command with compressed upper bound.
+			size_t comp_size = as_command_compress_max_size(size);
+
+			cmd = as_async_record_command_create(
+				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
+				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, comp_size,
+				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE);
+
+			// Compress buffer and execute.
+			status = as_command_compress(err, buf, size, cmd->buf, &comp_size);
+			as_command_buffer_free(buf, capacity);
+
+			if (status != AEROSPIKE_OK) {
+				as_event_command_destroy(cmd);
+				return status;
+			}
+
+			cmd->write_len = (uint32_t)comp_size;
+		}
+
+		// This function will also add write keys to the MRT monitor if in a MRT.
+		return as_async_execute(as, err, &policy->base, key, cmd);
+	}
+	else {
+		// Read command
+		if (policy->base.tran) {
+			status = as_tran_set_ns(policy->base.tran, key->ns, err);
+
+			if (status != AEROSPIKE_OK) {
+				as_buffers_destroy(&buffers);
+				return status;
+			}
+		}
+
+		if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {
+			// Send uncompressed command.
 			as_read_info ri;
 			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
@@ -1158,27 +1199,19 @@ aerospike_key_operate_async(
 				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
 				oper.size, as_event_command_parse_result, AS_LATENCY_TYPE_READ);
-		}
 
-		cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
-	}
-	else {
-		// Send compressed command.
-		// First write uncompressed buffer.
-		size_t capacity = oper.size;
-		uint8_t* buf = as_command_buffer_init(capacity);
-		size_t size = as_operate_write(&oper, buf);
-
-		// Allocate command with compressed upper bound.
-		size_t comp_size = as_command_compress_max_size(size);
-
-		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
-			cmd = as_async_record_command_create(
-				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
-				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, comp_size,
-				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE);
+			cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
 		}
 		else {
+			// Send compressed command.
+			// First write uncompressed buffer.
+			size_t capacity = oper.size;
+			uint8_t* buf = as_command_buffer_init(capacity);
+			size_t size = as_operate_write(&oper, buf);
+
+			// Allocate command with compressed upper bound.
+			size_t comp_size = as_command_compress_max_size(size);
+
 			as_read_info ri;
 			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
@@ -1186,20 +1219,22 @@ aerospike_key_operate_async(
 				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
 				comp_size, as_event_command_parse_result, AS_LATENCY_TYPE_READ);
+
+			// Compress buffer and execute.
+			status = as_command_compress(err, buf, size, cmd->buf, &comp_size);
+			as_command_buffer_free(buf, capacity);
+
+			if (status != AEROSPIKE_OK) {
+				as_event_command_destroy(cmd);
+				return status;
+			}
+
+			cmd->write_len = (uint32_t)comp_size;
 		}
 
-		// Compress buffer and execute.
-		status = as_command_compress(err, buf, size, cmd->buf, &comp_size);
-		as_command_buffer_free(buf, capacity);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_command_destroy(cmd);
-			return status;
-		}
-
-		cmd->write_len = (uint32_t)comp_size;
+		// Call normal execute since readonly commands do not add keys to the MRT monitor.
+		return as_event_command_execute(cmd, err);
 	}
-	return as_event_command_execute(cmd, err);
 }
 
 /******************************************************************************
@@ -1321,8 +1356,6 @@ aerospike_key_apply_async(
 		policy = &as->config.policies.apply;
 	}
 	
-	// TODO: Add async call to add tran monitor key.
-
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
 	as_status status = as_key_partition_init(cluster, err, key, &pi);
@@ -1344,7 +1377,7 @@ aerospike_key_apply_async(
 
 		as_buffer_destroy(&ap.args);
 		as_serializer_destroy(&ap.ser);
-		return as_event_command_execute(cmd, err);
+		return as_async_execute(as, err, &policy->base, key, cmd);
 	}
 	else {
 		// Send compressed command.
@@ -1373,6 +1406,6 @@ aerospike_key_apply_async(
 		}
 
 		cmd->write_len = (uint32_t)comp_size;
-		return as_event_command_execute(cmd, err);
+		return as_async_execute(as, err, &policy->base, key, cmd);
 	}
 }

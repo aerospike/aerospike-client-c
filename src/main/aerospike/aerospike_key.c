@@ -202,6 +202,76 @@ as_command_write_filter(const as_policy_base* policy, uint32_t filter_size, uint
 	return p;
 }
 
+static void
+as_write_command_notify(as_error* err, as_event_command* cmd, as_event_loop* event_loop)
+{
+	switch (cmd->type) {
+		case AS_ASYNC_TYPE_WRITE:
+			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);
+			break;
+		case AS_ASYNC_TYPE_RECORD:
+			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			break;
+		case AS_ASYNC_TYPE_VALUE:
+			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			break;
+	}
+}
+
+static void
+as_write_command_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+{
+	as_event_command* cmd = udata;
+
+	if (err) {
+		as_write_command_notify(err, cmd, event_loop);
+		as_event_command_destroy(cmd);
+		return;
+	}
+
+	// Add tran monitor keys succeeded. Run original command.
+	as_status status = as_event_command_execute(cmd, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_write_command_notify(err, cmd, event_loop);
+		// Do not destroy command because as_event_command_execute() does that on error.
+	}
+}
+
+static as_status
+as_write_command_execute(
+	aerospike* as, as_error* err, const as_policy_base* cmd_policy, const as_key* key,
+	as_event_command* cmd
+	)
+{
+	// Execute async write command.
+	if (! cmd_policy->tran) {
+		// Command is not run under a MRT monitor. Run original async command.
+		return as_event_command_execute(cmd, err);
+	}
+
+	as_tran* tran = cmd_policy->tran;
+
+	if (as_tran_writes_contain(tran, key)) {
+		// Transaction monitor already contains this key. Run original command.
+		return as_event_command_execute(cmd, err);
+	}
+
+	as_status status = as_tran_set_ns(tran, key->ns, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_event_command_destroy(cmd);
+		return status;
+	}
+
+	status = as_tran_monitor_add_key_async(as, err, tran, cmd_policy, key, as_write_command_callback, cmd, cmd->event_loop);
+
+	if (status != AEROSPIKE_OK) {
+		as_event_command_destroy(cmd);
+	}
+	return status;
+}
+
 /******************************************************************************
  * GET
  *****************************************************************************/
@@ -719,7 +789,7 @@ aerospike_key_put_async_ex(
 			*comp_length = cmd->write_len;
 		}
 
-		return as_async_execute(as, err, &policy->base, key, cmd);
+		return as_write_command_execute(as, err, &policy->base, key, cmd);
 	}
 	else {
 		// Send compressed command.
@@ -749,7 +819,7 @@ aerospike_key_put_async_ex(
 				*comp_length = comp_size;
 			}
 
-			return as_async_execute(as, err, &policy->base, key, cmd);
+			return as_write_command_execute(as, err, &policy->base, key, cmd);
 		}
 		else {
 			as_event_command_destroy(cmd);
@@ -863,7 +933,7 @@ aerospike_key_remove_async_ex(
 		*length = size;
 	}
 
-	return as_async_execute(as, err, &policy->base, key, cmd);
+	return as_write_command_execute(as, err, &policy->base, key, cmd);
 }
 
 as_status
@@ -1177,7 +1247,7 @@ aerospike_key_operate_async(
 		}
 
 		// This function will also add write keys to the MRT monitor if in a MRT.
-		return as_async_execute(as, err, &policy->base, key, cmd);
+		return as_write_command_execute(as, err, &policy->base, key, cmd);
 	}
 	else {
 		// Read command
@@ -1377,7 +1447,7 @@ aerospike_key_apply_async(
 
 		as_buffer_destroy(&ap.args);
 		as_serializer_destroy(&ap.ser);
-		return as_async_execute(as, err, &policy->base, key, cmd);
+		return as_write_command_execute(as, err, &policy->base, key, cmd);
 	}
 	else {
 		// Send compressed command.
@@ -1406,6 +1476,6 @@ aerospike_key_apply_async(
 		}
 
 		cmd->write_len = (uint32_t)comp_size;
-		return as_async_execute(as, err, &policy->base, key, cmd);
+		return as_write_command_execute(as, err, &policy->base, key, cmd);
 	}
 }

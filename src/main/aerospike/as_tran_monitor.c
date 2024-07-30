@@ -97,7 +97,7 @@ as_tran_get_ops_keys(as_tran* tran, const as_batch* batch, as_operations* ops, a
 
 	as_operations_list_append_items(ops, BIN_NAME_DIGESTS, NULL, &lp, (as_list*)&digests);
 
-	as_arraylist_destroy(&digests);
+	// Do not destroy digests because the previous function took ownership.
 	return AEROSPIKE_OK;
 }
 
@@ -151,8 +151,7 @@ as_tran_get_ops_records(as_tran* tran, as_batch_records* records, as_operations*
 
 	as_operations_list_append_items(ops, BIN_NAME_DIGESTS, NULL, &lp, (as_list*)&digests);
 
-	// Do not destroy digests array because
-	as_arraylist_destroy(&digests);
+	// Do not destroy digests because the previous function took ownership.
 	return AEROSPIKE_OK;
 }
 
@@ -196,7 +195,9 @@ as_tran_monitor_add_keys(
 }
 
 as_status
-as_tran_monitor_add_key(aerospike* as, const as_policy_base* cmd_policy, const as_key* cmd_key, as_error* err)
+as_tran_monitor_add_key(
+	aerospike* as, const as_policy_base* cmd_policy, const as_key* cmd_key, as_error* err
+	)
 {
 	as_tran* tran = cmd_policy->tran;
 
@@ -222,7 +223,9 @@ as_tran_monitor_add_key(aerospike* as, const as_policy_base* cmd_policy, const a
 }
 
 as_status
-as_tran_monitor_add_keys_batch(aerospike* as, const as_policy_base* cmd_policy, const as_batch* batch, as_error* err)
+as_tran_monitor_add_keys_batch(
+   aerospike* as, const as_policy_base* cmd_policy, const as_batch* batch, as_error* err
+   )
 {
 	as_tran* tran = cmd_policy->tran;
 
@@ -241,7 +244,9 @@ as_tran_monitor_add_keys_batch(aerospike* as, const as_policy_base* cmd_policy, 
 }
 
 as_status
-as_tran_monitor_add_keys_records(aerospike* as, const as_policy_base* cmd_policy, as_batch_records* records, as_error* err)
+as_tran_monitor_add_keys_records(
+	aerospike* as, const as_policy_base* cmd_policy, as_batch_records* records, as_error* err
+	)
 {
 	as_tran* tran = cmd_policy->tran;
 
@@ -269,53 +274,10 @@ as_tran_monitor_add_keys_records(aerospike* as, const as_policy_base* cmd_policy
 // Async Functions
 //---------------------------------
 
-static void
-as_tran_monitor_notify_error(as_error* err, as_event_command* cmd, as_event_loop* event_loop)
-{
-	switch (cmd->type) {
-		case AS_ASYNC_TYPE_WRITE:
-			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);
-			break;
-		case AS_ASYNC_TYPE_RECORD:
-			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
-			break;
-		case AS_ASYNC_TYPE_VALUE:
-			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
-			break;
-		// TOOD: HANDLE!
-		case AS_ASYNC_TYPE_BATCH:
-			//as_async_batch_error(cmd, err);
-			//as_event_executor_error(cmd->udata, err, 1);
-			break;
-		default:
-			as_log_error("Invalid command type: %u", cmd->type);
-			break;
-	}
-}
-
-static void
-as_tran_monitor_add_keys_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
-{
-	as_event_command* cmd = udata;
-
-	if (err) {
-		as_tran_monitor_notify_error(err, cmd, event_loop);
-		as_event_command_destroy(cmd);
-		return;
-	}
-
-	// Add tran monitor keys succeeded. Run original command.
-	as_status status = as_event_command_execute(cmd, err);
-
-	if (status != AEROSPIKE_OK) {
-		as_tran_monitor_notify_error(err, cmd, event_loop);
-	}
-}
-
 static as_status
 as_tran_monitor_add_keys_async(
 	aerospike* as, as_error* err, as_tran* tran, const as_policy_base* cmd_policy, as_operations* ops,
-	as_event_command* cmd
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
 	as_key key;
@@ -324,42 +286,21 @@ as_tran_monitor_add_keys_async(
 	as_policy_operate tran_policy;
 	as_tran_policy_copy(cmd_policy, &tran_policy);
 
-	return aerospike_key_operate_async(as, err, &tran_policy, &key, ops, as_tran_monitor_add_keys_callback, cmd, cmd->event_loop, NULL);
+	return aerospike_key_operate_async(as, err, &tran_policy, &key, ops, listener, udata, event_loop, NULL);
 }
 
 as_status
-as_async_execute(aerospike* as, as_error* err, const as_policy_base* cmd_policy, const as_key* cmd_key, as_event_command* cmd)
+as_tran_monitor_add_key_async(
+	aerospike* as, as_error* err, as_tran* tran, const as_policy_base* cmd_policy, const as_key* cmd_key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop
+	)
 {
-	if (! cmd_policy->tran) {
-		// Command is not run under a MRT monitor. Run original command.
-		return as_event_command_execute(cmd, err);
-	}
-
-	as_tran* tran = cmd_policy->tran;
-
-	if (as_tran_writes_contain(tran, cmd_key)) {
-		// Transaction monitor already contains this key. Run original command.
-		return as_event_command_execute(cmd, err);
-	}
-
-	as_status status = as_tran_set_ns(tran, cmd_key->ns, err);
-
-	if (status != AEROSPIKE_OK) {
-		as_event_command_destroy(cmd);
-		return status;
-	}
-
-	// Add key to MRT monitor and then run original command.
+	// Add key to MRT monitor.
 	as_operations ops;
 	as_operations_inita(&ops, 2);
 	as_tran_get_ops_single(tran, cmd_key, &ops);
 
-	status = as_tran_monitor_add_keys_async(as, err, tran, cmd_policy, &ops, cmd);
+	as_status status = as_tran_monitor_add_keys_async(as, err, tran, cmd_policy, &ops, listener, udata, event_loop);
 	as_operations_destroy(&ops);
-
-	if (status != AEROSPIKE_OK) {
-		as_event_command_destroy(cmd);
-	}
-
 	return status;
 }

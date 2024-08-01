@@ -18,7 +18,6 @@
 
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
-#include <aerospike/as_key.h>
 #include <aerospike/as_listener.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_proto.h>
@@ -110,11 +109,6 @@ typedef struct {
 	void* udata;
 } as_queued_pipe_cb;
 
-typedef struct {
-	as_set set;
-	as_digest_value digest;
-} as_event_key;
-
 typedef void (*as_event_executable) (as_event_loop* event_loop, void* udata);
 typedef bool (*as_event_parse_results_fn) (struct as_event_command* cmd);
 typedef void (*as_event_executor_complete_fn) (struct as_event_executor* executor);
@@ -138,8 +132,6 @@ typedef struct as_event_command {
 	as_event_connection* conn;
 	as_cluster* cluster;
 	as_node* node;
-	as_event_key* key;    // TODO: populate
-	struct as_tran* tran; // TODO: populate
 	const char* ns;
 	void* partition;  // as_partition* or as_partition_shm*
 	void* udata;
@@ -164,6 +156,10 @@ typedef struct as_event_command {
 	uint8_t replica_size;
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
+
+	struct as_tran* tran;
+	uint8_t* ubuf; // Uncompressed send buffer. Used when compression is enabled.
+	uint32_t ubuf_size;
 	as_latency_type latency_type;
 	bool metrics_enabled;
 } as_event_command;
@@ -826,7 +822,11 @@ as_event_command_destroy(as_event_command* cmd)
 	if (cmd->node) {
 		as_node_release(cmd->node);
 	}
-	// TODO: If do an extra malloc for digest/set, must account for that here.
+
+	if (cmd->ubuf) {
+		cf_free(cmd->ubuf);
+	}
+
 	cf_free(cmd);
 }
 

@@ -139,9 +139,6 @@ typedef struct {
 
 typedef struct as_async_batch_command {
 	as_event_command command;
-	uint8_t* ubuf;
-	uint32_t ubuf_size;
-	uint32_t pad;
 	uint8_t space[];
 } as_async_batch_command;
 
@@ -269,15 +266,6 @@ as_batch_set_error_row(uint8_t res)
 	return res != AEROSPIKE_ERR_RECORD_NOT_FOUND && res != AEROSPIKE_FILTERED_OUT;
 }
 
-static inline void
-as_batch_destroy_ubuf(as_async_batch_command* bc)
-{
-	if (bc->ubuf) {
-		cf_free(bc->ubuf);
-		bc->ubuf = NULL;
-	}
-}
-
 static inline bool
 as_batch_in_doubt(bool has_write, uint32_t sent)
 {
@@ -304,7 +292,6 @@ as_batch_async_parse_records(as_event_command* cmd)
 				as_event_response_error(cmd, &err);
 				return true;
 			}
-			as_batch_destroy_ubuf((as_async_batch_command*)cmd);
 			as_event_batch_complete(cmd);
 			return true;
 		}
@@ -2413,11 +2400,7 @@ as_batch_command_create(
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
 	// fragmentation and to allow socket read to reuse buffer.
 	size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
-
 	as_async_batch_command* bc = cf_malloc(s);
-	bc->ubuf = ubuf;
-	bc->ubuf_size = ubuf_size;
-
 	as_event_command* cmd = &bc->command;
 	cmd->total_deadline = policy->base.total_timeout;
 	cmd->socket_timeout = policy->base.socket_timeout;
@@ -2447,6 +2430,9 @@ as_batch_command_create(
 	// cmd->replica_size = 1;
 	cmd->replica_index = rep->replica_index;
 	cmd->replica_index_sc = rep->replica_index_sc;
+	cmd->tran = policy->base.tran;
+	cmd->ubuf = ubuf;
+	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
 	return bc;
 }
@@ -2943,11 +2929,7 @@ as_batch_retry_command_create(
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
 	// fragmentation and to allow socket read to reuse buffer.
 	size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
-
 	as_async_batch_command* bc = cf_malloc(s);
-	bc->ubuf = ubuf;
-	bc->ubuf_size = ubuf_size;
-
 	as_event_command* cmd = &bc->command;
 	cmd->total_deadline = deadline;
 	cmd->socket_timeout = parent->socket_timeout;
@@ -2974,6 +2956,9 @@ as_batch_retry_command_create(
 	// cmd->replica_size = 1;
 	cmd->replica_index = rep->replica_index;
 	cmd->replica_index_sc = rep->replica_index_sc;
+	cmd->tran = parent->tran;
+	cmd->ubuf = ubuf;
+	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
 	return bc;
 }
@@ -3069,11 +3054,11 @@ as_batch_retry_release_nodes_after_async(as_vector* bnodes)
 }
 
 static inline uint8_t*
-as_batch_retry_get_ubuf(as_async_batch_command* bc)
+as_batch_retry_get_ubuf(as_event_command* cmd)
 {
 	// Return saved uncompressed buffer when compression is enabled.
 	// Return command buffer when compression is not enabled.
-	return bc->ubuf ? bc->ubuf : (uint8_t*)bc + bc->command.write_offset;
+	return cmd->ubuf ? cmd->ubuf : (uint8_t*)cmd + cmd->write_offset;
 }
 
 static uint8_t*
@@ -3125,7 +3110,6 @@ as_batch_retry_parse_row(uint8_t* p, uint8_t* type)
 int
 as_batch_retry_async(as_event_command* parent, bool timeout)
 {
-	as_async_batch_command* parent_bc = (as_async_batch_command*)parent;
 	as_async_batch_executor* be = parent->udata; // udata is overloaded to contain executor.
 
 	if (parent->replica == AS_POLICY_REPLICA_MASTER) {
@@ -3148,7 +3132,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 	// Batch offsets, read/write operations and other arguments are out of scope in async batch
 	// retry, so they must be parsed from the parent command's send buffer.
-	uint8_t* header = as_batch_retry_get_ubuf(parent_bc);
+	uint8_t* header = as_batch_retry_get_ubuf(parent);
 	uint8_t* p = header;
 
 	p += AS_HEADER_SIZE;
@@ -3305,7 +3289,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 	for (uint32_t i = 0; i < bnodes.size; i++) {
 		as_batch_retry_node* bnode = as_vector_get(&bnodes, i);
 
-		if (! (parent_bc->ubuf && bnode->size > AS_COMPRESS_THRESHOLD)) {
+		if (! (parent->ubuf && bnode->size > AS_COMPRESS_THRESHOLD)) {
 			as_async_batch_command* bc = as_batch_retry_command_create(parent, bnode->node, &rep,
 				bnode->size, deadline, flags, NULL, 0);
 
@@ -3352,7 +3336,6 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 	}
 	as_batch_retry_release_nodes_after_async(&bnodes);
-	as_batch_destroy_ubuf(parent_bc);
 
 	// Close parent command.
 	as_event_timer_stop(parent);
@@ -3363,7 +3346,6 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 void
 as_async_batch_error(as_event_command* cmd, as_error* err)
 {
-	as_async_batch_command* bc = (as_async_batch_command*)cmd;
 	as_async_batch_executor* be = cmd->udata;  // udata is overloaded to contain executor.
 
 	be->error_row = true;
@@ -3371,7 +3353,7 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 	// Set error/in_doubt in each key contained in the command.
 	// Batch offsets are out of scope, so they must be parsed
 	// from the parent command's send buffer.
-	uint8_t* p = as_batch_retry_get_ubuf(bc);
+	uint8_t* p = as_batch_retry_get_ubuf(cmd);
 
 	p += AS_HEADER_SIZE;
 
@@ -3383,7 +3365,6 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 	// Field ID must be AS_FIELD_BATCH_INDEX at this point.
 	if (*(p + sizeof(uint32_t)) != AS_FIELD_BATCH_INDEX) {
 		as_log_error("Batch retry buffer is corrupt");
-		as_batch_destroy_ubuf(bc);
 		return;
 	}
 	p += AS_FIELD_HEADER_SIZE;
@@ -3404,7 +3385,6 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 		uint8_t type;
 		p = as_batch_retry_parse_row(p, &type);
 	}
-	as_batch_destroy_ubuf(bc);
 }
 
 static void

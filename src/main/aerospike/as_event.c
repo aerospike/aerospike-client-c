@@ -1337,7 +1337,18 @@ as_event_command_parse_header(as_event_command* cmd)
 {
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
-	
+
+	if (cmd->tran) {
+		// TODO: Call parse_fields with key data.
+		/*
+		as_error err;
+		as_status status = as_command_parse_fields(&p, &err, msg, cmd->tran, cmd->key, (cmd->flags & AS_ASYNC_FLAGS_READ) == 0);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}*/
+	}
+
 	if (msg->result_code == AEROSPIKE_OK) {
 		as_event_response_complete(cmd);
 		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
@@ -1519,6 +1530,10 @@ as_event_command_free(as_event_command* cmd)
 
 	if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
 		cf_free(cmd->buf);
+	}
+
+	if (cmd->ubuf) {
+		cf_free(cmd->ubuf);
 	}
 
 	cf_free(cmd);

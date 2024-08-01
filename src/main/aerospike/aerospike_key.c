@@ -365,7 +365,7 @@ aerospike_key_get_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-		as_event_command_parse_result, AS_LATENCY_TYPE_READ);
+		as_event_command_parse_result, AS_LATENCY_TYPE_READ, NULL, 0);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
@@ -495,7 +495,7 @@ aerospike_key_select_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-		as_event_command_parse_result, AS_LATENCY_TYPE_READ);
+		as_event_command_parse_result, AS_LATENCY_TYPE_READ, NULL, 0);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
@@ -604,7 +604,7 @@ aerospike_key_exists_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, false, policy->async_heap_rec,
 		ri.flags, listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result,
-		AS_LATENCY_TYPE_READ);
+		AS_LATENCY_TYPE_READ, NULL, 0);
 
 	uint8_t* p = as_command_write_header_read_header(cmd->buf, &policy->base, policy->read_mode_ap,
 		policy->read_mode_sc, policy->read_touch_ttl_percent, tdata.n_fields, 0,
@@ -777,7 +777,7 @@ aerospike_key_put_async_ex(
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_write_command_create(
 			cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
-			pipe_listener, put.size, as_event_command_parse_header);
+			pipe_listener, put.size, as_event_command_parse_header, NULL, 0);
 
 		cmd->write_len = (uint32_t)as_put_write(&put, cmd->buf);
 
@@ -795,18 +795,17 @@ aerospike_key_put_async_ex(
 		// Send compressed command.
 		// First write uncompressed buffer.
 		size_t capacity = put.size;
-		uint8_t* buf = as_command_buffer_init(capacity);
-		size_t size = as_put_write(&put, buf);
+		uint8_t* ubuf = cf_malloc(capacity);
+		size_t size = as_put_write(&put, ubuf);
 
 		// Allocate command with compressed upper bound.
 		size_t comp_size = as_command_compress_max_size(size);
 		as_event_command* cmd = as_async_write_command_create(
 			cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
-			pipe_listener, comp_size, as_event_command_parse_header);
+			pipe_listener, comp_size, as_event_command_parse_header, ubuf, (uint32_t)size);
 
 		// Compress buffer and execute.
-		status = as_command_compress(err, buf, size, cmd->buf, &comp_size);
-		as_command_buffer_free(buf, capacity);
+		status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
 		
 		if (status == AEROSPIKE_OK) {
 			cmd->write_len = (uint32_t)comp_size;
@@ -919,7 +918,7 @@ aerospike_key_remove_async_ex(
 
 	as_event_command* cmd = as_async_write_command_create(
 		cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
-		pipe_listener, size, as_event_command_parse_header);
+		pipe_listener, size, as_event_command_parse_header, NULL, 0);
 
 	uint8_t* p = as_command_write_header_write(cmd->buf, &policy->base, policy->commit_level,
 					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
@@ -1215,7 +1214,7 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, oper.size,
-				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE);
+				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE, NULL, 0);
 
 			cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
 		}
@@ -1223,8 +1222,8 @@ aerospike_key_operate_async(
 			// Send compressed command.
 			// First write uncompressed buffer.
 			size_t capacity = oper.size;
-			uint8_t* buf = as_command_buffer_init(capacity);
-			size_t size = as_operate_write(&oper, buf);
+			uint8_t* ubuf = cf_malloc(capacity);
+			size_t size = as_operate_write(&oper, ubuf);
 
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);
@@ -1232,11 +1231,10 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, comp_size,
-				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE);
+				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE, ubuf, (uint32_t)size);
 
 			// Compress buffer and execute.
-			status = as_command_compress(err, buf, size, cmd->buf, &comp_size);
-			as_command_buffer_free(buf, capacity);
+			status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
 
 			if (status != AEROSPIKE_OK) {
 				as_event_command_destroy(cmd);
@@ -1268,7 +1266,7 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-				oper.size, as_event_command_parse_result, AS_LATENCY_TYPE_READ);
+				oper.size, as_event_command_parse_result, AS_LATENCY_TYPE_READ, NULL, 0);
 
 			cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
 		}
@@ -1276,8 +1274,8 @@ aerospike_key_operate_async(
 			// Send compressed command.
 			// First write uncompressed buffer.
 			size_t capacity = oper.size;
-			uint8_t* buf = as_command_buffer_init(capacity);
-			size_t size = as_operate_write(&oper, buf);
+			uint8_t* ubuf = cf_malloc(capacity);
+			size_t size = as_operate_write(&oper, ubuf);
 
 			// Allocate command with compressed upper bound.
 			size_t comp_size = as_command_compress_max_size(size);
@@ -1288,11 +1286,10 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-				comp_size, as_event_command_parse_result, AS_LATENCY_TYPE_READ);
+				comp_size, as_event_command_parse_result, AS_LATENCY_TYPE_READ, ubuf, (uint32_t)size);
 
 			// Compress buffer and execute.
-			status = as_command_compress(err, buf, size, cmd->buf, &comp_size);
-			as_command_buffer_free(buf, capacity);
+			status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
 
 			if (status != AEROSPIKE_OK) {
 				as_event_command_destroy(cmd);
@@ -1441,7 +1438,7 @@ aerospike_key_apply_async(
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base, &pi,
 			policy->replica, listener, udata, event_loop, pipe_listener, size,
-			as_event_command_parse_success_failure);
+			as_event_command_parse_success_failure, NULL, 0);
 
 		cmd->write_len = (uint32_t)as_apply_write(&ap, cmd->buf);
 
@@ -1453,8 +1450,8 @@ aerospike_key_apply_async(
 		// Send compressed command.
 		// First write uncompressed buffer.
 		size_t capacity = size;
-		uint8_t* buf = as_command_buffer_init(capacity);
-		size = as_apply_write(&ap, buf);
+		uint8_t* ubuf = cf_malloc(capacity);
+		size = as_apply_write(&ap, ubuf);
 
 		as_buffer_destroy(&ap.args);
 		as_serializer_destroy(&ap.ser);
@@ -1464,11 +1461,10 @@ aerospike_key_apply_async(
 
 		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base, &pi,
 			policy->replica, listener, udata, event_loop, pipe_listener, comp_size,
-			as_event_command_parse_success_failure);
+			as_event_command_parse_success_failure, ubuf, (uint32_t)size);
 
 		// Compress buffer and execute.
-		status = as_command_compress(err, buf, size, cmd->buf, &comp_size);
-		as_command_buffer_free(buf, capacity);
+		status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
 
 		if (status != AEROSPIKE_OK) {
 			as_event_command_destroy(cmd);

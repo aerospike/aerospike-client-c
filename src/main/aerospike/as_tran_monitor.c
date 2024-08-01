@@ -291,8 +291,8 @@ as_tran_monitor_add_keys_async(
 
 as_status
 as_tran_monitor_add_key_async(
-	aerospike* as, as_error* err, as_tran* tran, const as_policy_base* cmd_policy, const as_key* cmd_key,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop
+	aerospike* as, as_error* err, as_tran* tran, const as_policy_base* cmd_policy,
+	const as_key* cmd_key, as_async_record_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
 	// Add key to MRT monitor.
@@ -301,6 +301,35 @@ as_tran_monitor_add_key_async(
 	as_tran_get_ops_single(tran, cmd_key, &ops);
 
 	as_status status = as_tran_monitor_add_keys_async(as, err, tran, cmd_policy, &ops, listener, udata, event_loop);
+	as_operations_destroy(&ops);
+	return status;
+}
+
+as_status
+as_tran_monitor_add_keys_records_async(
+	aerospike* as, as_error* err, as_tran* tran, const as_policy_base* cmd_policy,
+	as_batch_records* records, as_async_record_listener listener, void* udata,
+	as_event_loop* event_loop
+	)
+{
+	// Add keys to MRT monitor.
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+
+	as_status status = as_tran_get_ops_records(tran, records, &ops, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	if (ops.binops.size == 0) {
+		// Do not add keys for readonly batch.
+		as_operations_destroy(&ops);
+		listener(NULL, NULL, udata, event_loop);
+		return AEROSPIKE_OK;
+	}
+
+	status = as_tran_monitor_add_keys_async(as, err, tran, cmd_policy, &ops, listener, udata, event_loop);
 	as_operations_destroy(&ops);
 	return status;
 }

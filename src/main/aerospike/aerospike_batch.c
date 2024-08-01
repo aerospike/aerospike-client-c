@@ -158,6 +158,14 @@ typedef struct {
 	uint32_t size;
 } as_batch_retry_offset;
 
+typedef struct {
+	aerospike* as;
+	as_batch_records* records;
+	as_async_batch_listener listener;
+	void* udata;
+	as_policy_batch policy;
+} as_batch_tran;
+
 //---------------------------------
 // Static Variables
 //---------------------------------
@@ -3399,6 +3407,27 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 	as_batch_destroy_ubuf(bc);
 }
 
+static void
+as_batch_tran_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+{
+	as_batch_tran* bt = udata;
+
+	if (err) {
+		bt->listener(err, bt->records, bt->udata, event_loop);
+		cf_free(bt);
+		return;
+	}
+
+	// Add tran monitor keys succeeded. Run original batch write.
+	as_status status = as_batch_records_execute_async(bt->as, err, &bt->policy, bt->records,
+		bt->listener, bt->udata, event_loop, true);
+
+	if (status != AEROSPIKE_OK) {
+		bt->listener(err, bt->records, bt->udata, event_loop);
+	}
+	cf_free(bt);
+}
+
 //---------------------------------
 // Public Functions
 //---------------------------------
@@ -3483,8 +3512,24 @@ aerospike_batch_write_async(
 		policy = &as->config.policies.batch_parent_write;
 	}
 
-	return as_batch_records_execute_async(as, err, policy, records, listener, udata, event_loop,
-		true);
+	if (policy->base.tran) {
+		// Add keys to MRT monitor record. Original batch write will be performed when this completes.
+		as_batch_tran* bt = cf_malloc(sizeof(as_batch_tran));
+		bt->as = as; // Assume "as" is either global or was allocated on the heap.
+		bt->records = records; // Already required to be allocated on the heap.
+		bt->listener = listener;
+		bt->udata = udata; // Already required to be global or allocated on the heap.
+		// Since the policy is allowed to be placed on stack, it must be copied to the heap.
+		as_policy_batch_copy(policy, &bt->policy);
+
+		return as_tran_monitor_add_keys_records_async(as, err, policy->base.tran, &policy->base, records,
+			as_batch_tran_callback, bt, event_loop);
+	}
+	else {
+		// Perform batch write.
+		return as_batch_records_execute_async(as, err, policy, records, listener, udata, event_loop,
+			true);
+	}
 }
 
 void

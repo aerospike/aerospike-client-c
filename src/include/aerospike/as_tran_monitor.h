@@ -58,8 +58,16 @@ as_tran_monitor_add_keys_records(
 
 as_status
 as_tran_monitor_add_key_async(
-	aerospike* as, as_error* err, struct as_tran* tran, const as_policy_base* cmd_policy, const as_key* cmd_key,
-	as_async_record_listener listener, void* udata, struct as_event_loop* event_loop
+	aerospike* as, as_error* err, struct as_tran* tran, const as_policy_base* cmd_policy,
+	const as_key* cmd_key, as_async_record_listener listener, void* udata,
+	struct as_event_loop* event_loop
+	);
+
+as_status
+as_tran_monitor_add_keys_records_async(
+	aerospike* as, as_error* err, struct as_tran* tran, const as_policy_base* cmd_policy,
+	struct as_batch_records_s* records, as_async_record_listener listener, void* udata,
+	as_event_loop* event_loop
 	);
 
 #ifdef __cplusplus

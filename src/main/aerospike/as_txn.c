@@ -274,6 +274,7 @@ as_txn_init_all(as_txn* txn, uint32_t read_buckets, uint32_t write_buckets)
 	txn->id = id;
 	txn->ns[0] = 0;
 	txn->deadline = 0;
+	txn->monitor_in_doubt = false;
 	txn->roll_attempted = false;
 	khash_init(&txn->reads, read_buckets);
 	khash_init(&txn->writes, write_buckets);
@@ -361,6 +362,13 @@ as_txn_on_write(as_txn* txn, const uint8_t* digest, const char* set, uint64_t ve
 			khash_put(&txn->writes, digest, set, 0);
 		}
 	}
+}
+
+void
+as_txn_on_write_in_doubt(as_txn* txn, const uint8_t* digest, const char* set)
+{
+	khash_remove(&txn->reads, digest);
+	khash_put(&txn->writes, digest, set, 0);
 }
 
 bool

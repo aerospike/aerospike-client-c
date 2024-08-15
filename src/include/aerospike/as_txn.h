@@ -70,6 +70,7 @@ typedef struct as_txn {
 	as_khash reads;
 	as_khash writes;
 	uint32_t deadline;
+	bool monitor_in_doubt;
 	bool roll_attempted;
 	bool free;
 } as_txn;
@@ -142,6 +143,12 @@ AS_EXTERN void
 as_txn_on_write(as_txn* txn, const uint8_t* digest, const char* set, uint64_t version, int rc);
 
 /**
+ * Add key to write hash when write command is in doubt (usually caused by timeout). For internal use only.
+ */
+AS_EXTERN void
+as_txn_on_write_in_doubt(as_txn* txn, const uint8_t* digest, const char* set);
+
+/**
  * Return if writes hashmap contains the given key.
  */
 AS_EXTERN bool
@@ -160,6 +167,24 @@ as_txn_set_ns(as_txn* txn, const char* ns, as_error* err);
  */
 AS_EXTERN bool
 as_txn_set_roll_attempted(as_txn* txn);
+
+/**
+ * Does MRT monitor record exist or is in doubt.
+ */
+static inline bool
+as_txn_monitor_might_exist(as_txn* txn)
+{
+	return txn->deadline != 0 || txn->monitor_in_doubt;
+}
+
+/**
+ * Does MRT monitor record exist.
+ */
+static inline bool
+as_txn_monitor_exists(as_txn* txn)
+{
+	return txn->deadline != 0;
+}
 
 /**
  * Clear MRT. Remove all tracked keys. For internal use only.

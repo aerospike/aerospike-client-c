@@ -42,7 +42,7 @@
 static void
 as_txn_get_ops_single(as_txn* txn, const as_key* key, as_operations* ops)
 {
-	if (txn->deadline == 0) {
+	if (! as_txn_monitor_exists(txn)) {
 		// No existing monitor record.
 		as_operations_add_write_int64(ops, BIN_NAME_ID, txn->id);
 	}
@@ -87,7 +87,7 @@ as_txn_get_ops_keys(as_txn* txn, const as_batch* batch, as_operations* ops, as_e
 		as_arraylist_append_bytes(&digests, &bytes);
 	}
 
-	if (txn->deadline == 0) {
+	if (! as_txn_monitor_exists(txn)) {
 		// No existing monitor record.
 		as_operations_add_write_int64(ops, BIN_NAME_ID, txn->id);
 	}
@@ -141,7 +141,7 @@ as_txn_get_ops_records(as_txn* txn, as_batch_records* records, as_operations* op
 		return AEROSPIKE_OK;
 	}
 
-	if (txn->deadline == 0) {
+	if (! as_txn_monitor_exists(txn)) {
 		// No existing monitor record.
 		as_operations_add_write_int64(ops, BIN_NAME_ID, txn->id);
 	}

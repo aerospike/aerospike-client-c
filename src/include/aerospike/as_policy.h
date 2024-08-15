@@ -138,7 +138,7 @@ extern "C" {
 //---------------------------------
 
 struct as_exp;
-struct as_tran;
+struct as_txn;
 
 /**
  * Retry Policy
@@ -530,12 +530,12 @@ typedef struct as_policy_base_s {
 	struct as_exp* filter_exp;
 	
 	/**
-	 * Multi-record transaction identifier. If set for an async command,  the source tran instance must
-	 * be allocated on the heap using as_tran_create() or as_tran_create_capacity().
+	 * Multi-record transaction identifier. If set for an async command,  the source txn instance must
+	 * be allocated on the heap using as_txn_create() or as_txn_create_capacity().
 	 *
 	 * Default: NULL
 	 */
-	struct as_tran* tran;
+	struct as_txn* txn;
 
 	/**
 	 * Use zlib compression on write or batch read commands when the command buffer size is greater
@@ -1532,7 +1532,7 @@ as_policy_base_read_init(as_policy_base* p)
 	p->max_retries = 2;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
-	p->tran = NULL;
+	p->txn = NULL;
 	p->compress = false;
 }
 
@@ -1547,7 +1547,7 @@ as_policy_base_write_init(as_policy_base* p)
 	p->max_retries = 0;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
-	p->tran = NULL;
+	p->txn = NULL;
 	p->compress = false;
 }
 
@@ -1575,7 +1575,7 @@ as_policy_base_query_init(as_policy_base* p)
 	p->max_retries = 5;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
-	p->tran = NULL;
+	p->txn = NULL;
 	p->compress = false;
 }
 

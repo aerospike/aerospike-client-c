@@ -163,7 +163,7 @@ local_free(void* memory)
 typedef size_t (*as_write_fn) (void* udata, uint8_t* buf);
 
 struct as_command_s;
-struct as_tran;
+struct as_txn;
 
 /**
  * @private
@@ -205,12 +205,12 @@ typedef struct as_command_s {
 /**
  * @private
  */
-typedef struct as_command_tran_data_s {
+typedef struct as_command_txn_data_s {
 	uint64_t version;
 	uint32_t deadline;
 	uint16_t n_fields;
 	bool send_deadline;
-} as_command_tran_data;
+} as_command_txn_data;
 
 /**
  * @private
@@ -254,7 +254,7 @@ as_command_user_key_size(const as_key* key);
 size_t
 as_command_key_size(
 	const as_policy_base* policy, as_policy_key pol_key, const as_key* key, bool send_deadline,
-	as_command_tran_data* tdata
+	as_command_txn_data* tdata
 	);
 
 /**
@@ -532,7 +532,7 @@ as_command_write_user_key(uint8_t* begin, const as_key* key);
 uint8_t*
 as_command_write_key(
 	uint8_t* p, const as_policy_base* policy, as_policy_key pol_key, const as_key* key,
-	as_command_tran_data* tdata
+	as_command_txn_data* tdata
  	);
 
 /**
@@ -660,7 +660,7 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
  */
 as_status
 as_command_parse_fields(
-	uint8_t** pp, as_error* err, as_msg* msg, struct as_tran* tran, const as_key* key, bool is_write
+	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const as_key* key, bool is_write
 	);
 
 /**

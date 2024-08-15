@@ -110,7 +110,7 @@ as_async_write_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = 0;
-	cmd->tran = policy->tran;
+	cmd->txn = policy->txn;
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
@@ -164,7 +164,7 @@ as_async_record_command_create(
 
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = replica_index;
-	cmd->tran = policy->tran;
+	cmd->txn = policy->txn;
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = latency_type;
@@ -208,7 +208,7 @@ as_async_value_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = 0;
-	cmd->tran = policy->tran;
+	cmd->txn = policy->txn;
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
@@ -249,7 +249,7 @@ as_async_info_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = 1;
 	cmd->replica_index = 0;
-	cmd->tran = NULL;
+	cmd->txn = NULL;
 	cmd->ubuf = NULL;
 	cmd->ubuf_size = 0;
 	cmd->latency_type = AS_LATENCY_TYPE_NONE;

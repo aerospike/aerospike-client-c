@@ -31,24 +31,24 @@ extern "C" {
 struct as_batch_s;
 struct as_batch_records_s;
 struct as_event_loop;
-struct as_tran;
+struct as_txn;
 
 //---------------------------------
 // Sync Functions
 //---------------------------------
 
 as_status
-as_tran_monitor_add_key(
+as_txn_monitor_add_key(
 	aerospike* as, const as_policy_base* cmd_policy, const as_key* cmd_key, as_error* err
 	);
 
 as_status
-as_tran_monitor_add_keys_batch(
+as_txn_monitor_add_keys_batch(
 	aerospike* as, const as_policy_base* cmd_policy, const struct as_batch_s* batch, as_error* err
 	);
 
 as_status
-as_tran_monitor_add_keys_records(
+as_txn_monitor_add_keys_records(
 	aerospike* as, const as_policy_base* cmd_policy, struct as_batch_records_s* records, as_error* err
 	);
 
@@ -57,15 +57,15 @@ as_tran_monitor_add_keys_records(
 //---------------------------------
 
 as_status
-as_tran_monitor_add_key_async(
-	aerospike* as, as_error* err, struct as_tran* tran, const as_policy_base* cmd_policy,
+as_txn_monitor_add_key_async(
+	aerospike* as, as_error* err, struct as_txn* txn, const as_policy_base* cmd_policy,
 	const as_key* cmd_key, as_async_record_listener listener, void* udata,
 	struct as_event_loop* event_loop
 	);
 
 as_status
-as_tran_monitor_add_keys_records_async(
-	aerospike* as, as_error* err, struct as_tran* tran, const as_policy_base* cmd_policy,
+as_txn_monitor_add_keys_records_async(
+	aerospike* as, as_error* err, struct as_txn* txn, const as_policy_base* cmd_policy,
 	struct as_batch_records_s* records, as_async_record_listener listener, void* udata,
 	as_event_loop* event_loop
 	);

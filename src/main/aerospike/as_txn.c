@@ -14,7 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <aerospike/as_tran.h>
+#include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_random.h>
 
@@ -240,7 +240,7 @@ khash_contains(as_khash* h, const uint8_t* keyd)
 	return false;
 }
 
-// This function is only called on as_tran_commit() or as_tran_abort() so it's not possible
+// This function is only called on as_txn_commit() or as_txn_abort() so it's not possible
 // to contend with other parallel khash function calls. Therfore, there are no locks.
 static void
 khash_reduce(as_khash* h, khash_reduce_fn cb, void* udata)
@@ -261,7 +261,7 @@ khash_reduce(as_khash* h, khash_reduce_fn cb, void* udata)
 }
 
 static void
-as_tran_init_all(as_tran* tran, uint32_t read_buckets, uint32_t write_buckets)
+as_txn_init_all(as_txn* txn, uint32_t read_buckets, uint32_t write_buckets)
 {
 	// An id of zero is considered invalid. Create random numbers
 	// in a loop until non-zero is returned.
@@ -271,12 +271,12 @@ as_tran_init_all(as_tran* tran, uint32_t read_buckets, uint32_t write_buckets)
 		id = cf_get_rand64();
 	}
 	
-	tran->id = id;
-	tran->ns[0] = 0;
-	tran->deadline = 0;
-	tran->roll_attempted = false;
-	khash_init(&tran->reads, read_buckets);
-	khash_init(&tran->writes, write_buckets);
+	txn->id = id;
+	txn->ns[0] = 0;
+	txn->deadline = 0;
+	txn->roll_attempted = false;
+	khash_init(&txn->reads, read_buckets);
+	khash_init(&txn->writes, write_buckets);
 }
 
 //---------------------------------
@@ -284,14 +284,14 @@ as_tran_init_all(as_tran* tran, uint32_t read_buckets, uint32_t write_buckets)
 //---------------------------------
 
 void
-as_tran_init(as_tran* tran)
+as_txn_init(as_txn* txn)
 {
-	as_tran_init_all(tran, 128, 128);
-	tran->free = false;
+	as_txn_init_all(txn, 128, 128);
+	txn->free = false;
 }
 
 void
-as_tran_init_capacity(as_tran* tran, uint32_t reads_capacity, uint32_t writes_capacity)
+as_txn_init_capacity(as_txn* txn, uint32_t reads_capacity, uint32_t writes_capacity)
 {
 	if (reads_capacity < 16) {
 		reads_capacity = 16;
@@ -302,105 +302,105 @@ as_tran_init_capacity(as_tran* tran, uint32_t reads_capacity, uint32_t writes_ca
 	}
 
 	// Double record capacity to allocate enough buckets to alleviate collisions.
-	as_tran_init_all(tran, reads_capacity * 2, writes_capacity * 2);
-	tran->free = false;
+	as_txn_init_all(txn, reads_capacity * 2, writes_capacity * 2);
+	txn->free = false;
 }
 
-as_tran*
-as_tran_create(void)
+as_txn*
+as_txn_create(void)
 {
-	as_tran* tran = cf_malloc(sizeof(as_tran));
-	as_tran_init(tran);
-	tran->free = true;
-	return tran;
+	as_txn* txn = cf_malloc(sizeof(as_txn));
+	as_txn_init(txn);
+	txn->free = true;
+	return txn;
 }
 
-as_tran*
-as_tran_create_capacity(uint32_t reads_capacity, uint32_t writes_capacity)
+as_txn*
+as_txn_create_capacity(uint32_t reads_capacity, uint32_t writes_capacity)
 {
-	as_tran* tran = cf_malloc(sizeof(as_tran));
-	as_tran_init_capacity(tran, reads_capacity, writes_capacity);
-	tran->free = true;
-	return tran;
+	as_txn* txn = cf_malloc(sizeof(as_txn));
+	as_txn_init_capacity(txn, reads_capacity, writes_capacity);
+	txn->free = true;
+	return txn;
 }
 
 void
-as_tran_destroy(as_tran* tran)
+as_txn_destroy(as_txn* txn)
 {
-	khash_destroy(&tran->reads);
-	khash_destroy(&tran->writes);
+	khash_destroy(&txn->reads);
+	khash_destroy(&txn->writes);
 	
-	if (tran->free) {
-		cf_free(tran);
+	if (txn->free) {
+		cf_free(txn);
 	}
 }
 
 void
-as_tran_on_read(as_tran* tran, const uint8_t* digest, const char* set, uint64_t version)
+as_txn_on_read(as_txn* txn, const uint8_t* digest, const char* set, uint64_t version)
 {
 	if (version != 0) {
-		khash_put(&tran->reads, digest, set, version);
+		khash_put(&txn->reads, digest, set, version);
 	}
 }
 
 uint64_t
-as_tran_get_read_version(as_tran* tran, const as_key* key)
+as_txn_get_read_version(as_txn* txn, const as_key* key)
 {
-	return khash_get_version(&tran->reads, key->digest.value);
+	return khash_get_version(&txn->reads, key->digest.value);
 }
 
 void
-as_tran_on_write(as_tran* tran, const uint8_t* digest, const char* set, uint64_t version, int rc)
+as_txn_on_write(as_txn* txn, const uint8_t* digest, const char* set, uint64_t version, int rc)
 {
 	if (version != 0) {
-		khash_put(&tran->reads, digest, set, version);
+		khash_put(&txn->reads, digest, set, version);
 	}
 	else {
 		if (rc == AEROSPIKE_OK) {
-			khash_remove(&tran->reads, digest);
-			khash_put(&tran->writes, digest, set, 0);
+			khash_remove(&txn->reads, digest);
+			khash_put(&txn->writes, digest, set, 0);
 		}
 	}
 }
 
 bool
-as_tran_writes_contain(as_tran* tran, const as_key* key)
+as_txn_writes_contain(as_txn* txn, const as_key* key)
 {
-	return khash_contains(&tran->writes, key->digest.value);
+	return khash_contains(&txn->writes, key->digest.value);
 }
 
 as_status
-as_tran_set_ns(as_tran* tran, const char* ns, as_error* err)
+as_txn_set_ns(as_txn* txn, const char* ns, as_error* err)
 {
-	if (tran->ns[0] == 0) {
-		as_strncpy(tran->ns, ns, sizeof(tran->ns));
+	if (txn->ns[0] == 0) {
+		as_strncpy(txn->ns, ns, sizeof(txn->ns));
 		return AEROSPIKE_OK;
 	}
 	
-	if (strncmp(tran->ns, ns, sizeof(tran->ns)) != 0) {
+	if (strncmp(txn->ns, ns, sizeof(txn->ns)) != 0) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Namespace must be the same for all commands in the MRT. orig: %s new: %s",
-			tran->ns, ns);
+			txn->ns, ns);
 	}
 	return AEROSPIKE_OK;
 }
 
 bool
-as_tran_set_roll_attempted(as_tran* tran)
+as_txn_set_roll_attempted(as_txn* txn)
 {
-	if (tran->roll_attempted) {
+	if (txn->roll_attempted) {
 		return false;
 	}
 	
-	tran->roll_attempted = true;
+	txn->roll_attempted = true;
 	return true;
 }
 
 void
-as_tran_clear(as_tran* tran)
+as_txn_clear(as_txn* txn)
 {
-	tran->ns[0] = 0;
-	tran->deadline = 0;
-	khash_clear(&tran->reads);
-	khash_clear(&tran->writes);
+	txn->ns[0] = 0;
+	txn->deadline = 0;
+	khash_clear(&txn->reads);
+	khash_clear(&txn->writes);
 }

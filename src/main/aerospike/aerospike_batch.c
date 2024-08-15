@@ -30,8 +30,8 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_thread_pool.h>
-#include <aerospike/as_tran.h>
-#include <aerospike/as_tran_monitor.h>
+#include <aerospike/as_txn.h>
+#include <aerospike/as_txn_monitor.h>
 #include <aerospike/as_val.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_digest.h>
@@ -161,7 +161,7 @@ typedef struct {
 	as_async_batch_listener listener;
 	void* udata;
 	as_policy_batch policy;
-} as_batch_tran;
+} as_batch_txn;
 
 //---------------------------------
 // Static Variables
@@ -195,13 +195,13 @@ static const char cluster_empty_error[] = "Batch command failed because cluster 
 //---------------------------------
 
 static as_status
-as_batch_set_tran_ns(as_tran* tran, const as_batch* batch, as_error* err)
+as_batch_set_txn_ns(as_txn* txn, const as_batch* batch, as_error* err)
 {
 	uint32_t n_keys = batch->keys.size;
 
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_key* key = &batch->keys.entries[i];
-		as_status status = as_tran_set_ns(tran, key->ns, err);
+		as_status status = as_txn_set_ns(txn, key->ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -211,14 +211,14 @@ as_batch_set_tran_ns(as_tran* tran, const as_batch* batch, as_error* err)
 }
 
 static as_status
-as_batch_records_set_tran_ns(as_tran* tran, as_batch_records* records, as_error* err)
+as_batch_records_set_txn_ns(as_txn* txn, as_batch_records* records, as_error* err)
 {
 	as_vector* list = &records->list;
 	uint32_t n_keys = records->list.size;
 
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_base_record* rec = as_vector_get(list, i);
-		as_status status = as_tran_set_ns(tran, rec->key.ns, err);
+		as_status status = as_txn_set_ns(txn, rec->key.ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -307,7 +307,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 		
 		as_batch_base_record* rec = as_vector_get(records, offset);
 
-		as_status status = as_command_parse_fields(&p, &err, msg, cmd->tran, &rec->key, rec->has_write);
+		as_status status = as_command_parse_fields(&p, &err, msg, cmd->txn, &rec->key, rec->has_write);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -349,7 +349,7 @@ static as_status
 as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
 	as_batch_task* task = cmd->udata;
-	as_tran* tran = cmd->policy->tran;
+	as_txn* txn = cmd->policy->txn;
 	bool deserialize = task->policy->deserialize;
 
 	uint8_t* p = buf;
@@ -380,7 +380,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				as_batch_task_records* btr = (as_batch_task_records*)task;
 				as_batch_base_record* rec = as_vector_get(btr->records, offset);
 
-				as_status status = as_command_parse_fields(&p, err, msg, tran, &rec->key, rec->has_write);
+				as_status status = as_command_parse_fields(&p, err, msg, txn, &rec->key, rec->has_write);
 
 				if (status != AEROSPIKE_OK) {
 					return status;
@@ -417,7 +417,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				as_batch_task_keys* btk = (as_batch_task_keys*)task;
 				as_batch_result* res = &btk->results[offset];
 
-				as_status status = as_command_parse_fields(&p, err, msg, tran, res->key, btk->base.has_write);
+				as_status status = as_command_parse_fields(&p, err, msg, txn, res->key, btk->base.has_write);
 
 				if (status != AEROSPIKE_OK) {
 					return status;
@@ -2430,7 +2430,7 @@ as_batch_command_create(
 	// cmd->replica_size = 1;
 	cmd->replica_index = rep->replica_index;
 	cmd->replica_index_sc = rep->replica_index_sc;
-	cmd->tran = policy->base.tran;
+	cmd->txn = policy->base.txn;
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
@@ -2956,7 +2956,7 @@ as_batch_retry_command_create(
 	// cmd->replica_size = 1;
 	cmd->replica_index = rep->replica_index;
 	cmd->replica_index_sc = rep->replica_index_sc;
-	cmd->tran = parent->tran;
+	cmd->txn = parent->txn;
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
@@ -3388,9 +3388,9 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 }
 
 static void
-as_batch_tran_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+as_batch_txn_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
-	as_batch_tran* bt = udata;
+	as_batch_txn* bt = udata;
 
 	if (err) {
 		bt->listener(err, bt->records, bt->udata, event_loop);
@@ -3398,7 +3398,7 @@ as_batch_tran_callback(as_error* err, as_record* rec, void* udata, as_event_loop
 		return;
 	}
 
-	// Add tran monitor keys succeeded. Run original batch write.
+	// Add txn monitor keys succeeded. Run original batch write.
 	as_status status = as_batch_records_execute_async(bt->as, err, &bt->policy, bt->records,
 		bt->listener, bt->udata, event_loop, true);
 
@@ -3423,8 +3423,8 @@ aerospike_batch_read(
 		policy = &as->config.policies.batch;
 	}
 
-	if (policy->base.tran) {
-		as_status status = as_batch_records_set_tran_ns(policy->base.tran, records, err);
+	if (policy->base.txn) {
+		as_status status = as_batch_records_set_txn_ns(policy->base.txn, records, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3446,8 +3446,8 @@ aerospike_batch_read_async(
 		policy = &as->config.policies.batch;
 	}
 
-	if (policy->base.tran) {
-		as_status status = as_batch_records_set_tran_ns(policy->base.tran, records, err);
+	if (policy->base.txn) {
+		as_status status = as_batch_records_set_txn_ns(policy->base.txn, records, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3469,8 +3469,8 @@ aerospike_batch_write(
 		policy = &as->config.policies.batch_parent_write;
 	}
 
-	if (policy->base.tran) {
-		as_status status = as_tran_monitor_add_keys_records(as, &policy->base, records, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_monitor_add_keys_records(as, &policy->base, records, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3492,9 +3492,9 @@ aerospike_batch_write_async(
 		policy = &as->config.policies.batch_parent_write;
 	}
 
-	if (policy->base.tran) {
+	if (policy->base.txn) {
 		// Add keys to MRT monitor record. Original batch write will be performed when this completes.
-		as_batch_tran* bt = cf_malloc(sizeof(as_batch_tran));
+		as_batch_txn* bt = cf_malloc(sizeof(as_batch_txn));
 		bt->as = as; // Assume "as" is either global or was allocated on the heap.
 		bt->records = records; // Already required to be allocated on the heap.
 		bt->listener = listener;
@@ -3502,8 +3502,8 @@ aerospike_batch_write_async(
 		// Since the policy is allowed to be placed on stack, it must be copied to the heap.
 		as_policy_batch_copy(policy, &bt->policy);
 
-		return as_tran_monitor_add_keys_records_async(as, err, policy->base.tran, &policy->base, records,
-			as_batch_tran_callback, bt, event_loop);
+		return as_txn_monitor_add_keys_records_async(as, err, policy->base.txn, &policy->base, records,
+			as_batch_txn_callback, bt, event_loop);
 	}
 	else {
 		// Perform batch write.
@@ -3538,8 +3538,8 @@ aerospike_batch_get(
 		policy = &as->config.policies.batch;
 	}
 	
-	if (policy->base.tran) {
-		as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
+	if (policy->base.txn) {
+		as_status status = as_batch_set_txn_ns(policy->base.txn, batch, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3571,8 +3571,8 @@ aerospike_batch_get_bins(
 		policy = &as->config.policies.batch;
 	}
 	
-	if (policy->base.tran) {
-		as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
+	if (policy->base.txn) {
+		as_status status = as_batch_set_txn_ns(policy->base.txn, batch, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3605,8 +3605,8 @@ aerospike_batch_get_ops(
 		policy = &as->config.policies.batch;
 	}
 	
-	if (policy->base.tran) {
-		as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
+	if (policy->base.txn) {
+		as_status status = as_batch_set_txn_ns(policy->base.txn, batch, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3638,8 +3638,8 @@ aerospike_batch_exists(
 		policy = &as->config.policies.batch;
 	}
 	
-	if (policy->base.tran) {
-		as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
+	if (policy->base.txn) {
+		as_status status = as_batch_set_txn_ns(policy->base.txn, batch, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3688,8 +3688,8 @@ aerospike_batch_operate(
 			policy_write = &as->config.policies.batch_write;
 		}
 
-		if (policy->base.tran) {
-			as_status status = as_tran_monitor_add_keys_batch(as, &policy->base, batch, err);
+		if (policy->base.txn) {
+			as_status status = as_txn_monitor_add_keys_batch(as, &policy->base, batch, err);
 			
 			if (status != AEROSPIKE_OK) {
 				return status;
@@ -3714,8 +3714,8 @@ aerospike_batch_operate(
 			policy = &as->config.policies.batch;
 		}
 
-		if (policy->base.tran) {
-			as_status status = as_batch_set_tran_ns(policy->base.tran, batch, err);
+		if (policy->base.txn) {
+			as_status status = as_batch_set_txn_ns(policy->base.txn, batch, err);
 
 			if (status != AEROSPIKE_OK) {
 				return status;
@@ -3754,8 +3754,8 @@ aerospike_batch_apply(
 		policy_apply = &as->config.policies.batch_apply;
 	}
 
-	if (policy->base.tran) {
-		as_status status = as_tran_monitor_add_keys_batch(as, &policy->base, batch, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_monitor_add_keys_batch(as, &policy->base, batch, err);
 		
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -3795,8 +3795,8 @@ aerospike_batch_remove(
 		policy_remove = &as->config.policies.batch_remove;
 	}
 
-	if (policy->base.tran) {
-		as_status status = as_tran_monitor_add_keys_batch(as, &policy->base, batch, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_monitor_add_keys_batch(as, &policy->base, batch, err);
 		
 		if (status != AEROSPIKE_OK) {
 			return status;

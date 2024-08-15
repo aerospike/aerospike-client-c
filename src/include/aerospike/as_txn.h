@@ -64,7 +64,7 @@ typedef struct as_khash_s {
 /**
  * Multi-record transaction (MRT). Each command in the MRT must use the same namespace.
  */
-typedef struct as_tran {
+typedef struct as_txn {
 	uint64_t id;
 	as_namespace ns;
 	as_khash reads;
@@ -72,7 +72,7 @@ typedef struct as_tran {
 	uint32_t deadline;
 	bool roll_attempted;
 	bool free;
-} as_tran;
+} as_txn;
 
 //---------------------------------
 // Functions
@@ -80,32 +80,32 @@ typedef struct as_tran {
 
 /**
  * Initialize multi-record transaction (MRT),  assign random transaction id and initialize
- * reads/writes hashmaps with default capacities. Call this function or as_tran_init_capacity(),
- * but not both. Do not use thie function for async commands (use as_tran_create() instead).
+ * reads/writes hashmaps with default capacities. Call this function or as_txn_init_capacity(),
+ * but not both. Do not use thie function for async commands (use as_txn_create() instead).
  *
- * @param tran		Multi-record transaction.
+ * @param txn		Multi-record transaction.
  */
 AS_EXTERN void
-as_tran_init(as_tran* tran);
+as_txn_init(as_txn* txn);
 
 /**
  * Initialize multi-record transaction (MRT), assign random transaction id and initialize
- * reads/writes hashmaps with given capacities. Call this function or as_tran_init(),
- * but not both. Do not use thie function for async commands (use as_tran_create_capacity() instead).
+ * reads/writes hashmaps with given capacities. Call this function or as_txn_init(),
+ * but not both. Do not use thie function for async commands (use as_txn_create_capacity() instead).
  *
- * @param tran				Multi-record transaction.
+ * @param txn				Multi-record transaction.
  * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
  * @param writes_capacity	expected number of record writes in the MRT. Minimum value is 16.
  */
 AS_EXTERN void
-as_tran_init_capacity(as_tran* tran, uint32_t reads_capacity, uint32_t writes_capacity);
+as_txn_init_capacity(as_txn* txn, uint32_t reads_capacity, uint32_t writes_capacity);
 
 /**
  * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
  * reads/writes hashmaps with default capacities.
  */
-AS_EXTERN as_tran*
-as_tran_create(void);
+AS_EXTERN as_txn*
+as_txn_create(void);
 
 /**
  * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
@@ -114,38 +114,38 @@ as_tran_create(void);
  * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
  * @param writes_capacity	expected number of record writes in the MRT. Minimum value is 16.
  */
-AS_EXTERN as_tran*
-as_tran_create_capacity(uint32_t reads_capacity, uint32_t writes_capacity);
+AS_EXTERN as_txn*
+as_txn_create_capacity(uint32_t reads_capacity, uint32_t writes_capacity);
 
 /**
  * Destroy MRT.
  */
 AS_EXTERN void
-as_tran_destroy(as_tran* tran);
+as_txn_destroy(as_txn* txn);
 
 /**
  * Process the results of a record read. For internal use only.
  */
 AS_EXTERN void
-as_tran_on_read(as_tran* tran, const uint8_t* digest, const char* set, uint64_t version);
+as_txn_on_read(as_txn* txn, const uint8_t* digest, const char* set, uint64_t version);
 
 /**
  * Get record version for a given key. For internal use only.
  */
 AS_EXTERN uint64_t
-as_tran_get_read_version(as_tran* tran, const as_key* key);
+as_txn_get_read_version(as_txn* txn, const as_key* key);
 
 /**
  * Process the results of a record write. For internal use only.
  */
 AS_EXTERN void
-as_tran_on_write(as_tran* tran, const uint8_t* digest, const char* set, uint64_t version, int rc);
+as_txn_on_write(as_txn* txn, const uint8_t* digest, const char* set, uint64_t version, int rc);
 
 /**
  * Return if writes hashmap contains the given key.
  */
 AS_EXTERN bool
-as_tran_writes_contain(as_tran* tran, const as_key* key);
+as_txn_writes_contain(as_txn* txn, const as_key* key);
 
 /**
  * Set MRT namespace only if doesn't already exist.
@@ -153,19 +153,19 @@ as_tran_writes_contain(as_tran* tran, const as_key* key);
  * For internal use only.
  */
 AS_EXTERN as_status
-as_tran_set_ns(as_tran* tran, const char* ns, as_error* err);
+as_txn_set_ns(as_txn* txn, const char* ns, as_error* err);
 
 /**
  * Verify that commit/abort is only attempted once. For internal use only.
  */
 AS_EXTERN bool
-as_tran_set_roll_attempted(as_tran* tran);
+as_txn_set_roll_attempted(as_txn* txn);
 
 /**
  * Clear MRT. Remove all tracked keys. For internal use only.
  */
 AS_EXTERN void
-as_tran_clear(as_tran* tran);
+as_txn_clear(as_txn* txn);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -157,7 +157,7 @@ typedef struct as_event_command {
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
 
-	struct as_tran* tran;
+	struct as_txn* txn;
 	uint8_t* ubuf; // Uncompressed send buffer. Used when compression is enabled.
 	uint32_t ubuf_size;
 	as_latency_type latency_type;

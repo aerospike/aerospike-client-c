@@ -25,7 +25,7 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
-#include <aerospike/as_tran.h>
+#include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_digest.h>
@@ -102,7 +102,7 @@ as_command_user_key_size(const as_key* key)
 size_t
 as_command_key_size(
 	const as_policy_base* policy, as_policy_key pol_key, const as_key* key, bool send_deadline,
-	as_command_tran_data* tdata
+	as_command_txn_data* tdata
 	)
 {
 	tdata->n_fields = 3;
@@ -110,12 +110,12 @@ as_command_key_size(
 
 	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
 	
-	if (policy->tran) {
+	if (policy->txn) {
 		size += AS_FIELD_HEADER_SIZE + sizeof(uint64_t);
 		tdata->n_fields++;
 
-		as_tran* tran = policy->tran;
-		tdata->version = as_tran_get_read_version(tran, key);
+		as_txn* txn = policy->txn;
+		tdata->version = as_txn_get_read_version(txn, key);
 
 		if (tdata->version != 0) {
 			// Version is a 7 byte integer.
@@ -123,9 +123,9 @@ as_command_key_size(
 			tdata->n_fields++;
 		}
 
-		// Store deadline in temp variable because tran->deadline could possibly change
+		// Store deadline in temp variable because txn->deadline could possibly change
 		// between buffer size estimation and buffer write.
-		tdata->deadline = tran->deadline;
+		tdata->deadline = txn->deadline;
 
 		if (send_deadline && tdata->deadline != 0) {
 			size += AS_FIELD_HEADER_SIZE + sizeof(uint32_t);
@@ -389,17 +389,17 @@ as_command_write_user_key(uint8_t* begin, const as_key* key)
 uint8_t*
 as_command_write_key(
 	uint8_t* p, const as_policy_base* policy, as_policy_key pol_key, const as_key* key,
-	as_command_tran_data* tdata
+	as_command_txn_data* tdata
 	)
 {
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
 	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
 	p = as_command_write_field_digest(p, &key->digest);
 	
-	if (policy->tran) {
-		as_tran* tran = policy->tran;
+	if (policy->txn) {
+		as_txn* txn = policy->txn;
 
-		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, tran->id);
+		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, txn->id);
 
 		if (tdata->version != 0) {
 			p = as_command_write_field_version(p, tdata->version);
@@ -1036,7 +1036,7 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 
 	uint8_t* p = buf + sizeof(as_msg);
 
-	status = as_command_parse_fields(&p, err, msg, cmd->policy->tran, cmd->key, cmd->flags == 0);
+	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1062,11 +1062,11 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 }
 
 as_status
-as_command_parse_fields(uint8_t** pp, as_error* err, as_msg* msg, as_tran* tran, const as_key* key, bool is_write)
+as_command_parse_fields(uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn, const as_key* key, bool is_write)
 {
 	uint8_t* p = *pp;
 
-	if (! tran) {
+	if (! txn) {
 		p = as_command_ignore_fields(p, msg->n_fields);
 		*pp = p;
 		return AEROSPIKE_OK;
@@ -1096,10 +1096,10 @@ as_command_parse_fields(uint8_t** pp, as_error* err, as_msg* msg, as_tran* tran,
 	}
 
 	if (is_write) {
-		as_tran_on_write(tran, key->digest.value, key->set, version, msg->result_code);
+		as_txn_on_write(txn, key->digest.value, key->set, version, msg->result_code);
 	}
 	else {
-		as_tran_on_read(tran, key->digest.value, key->set, version);
+		as_txn_on_read(txn, key->digest.value, key->set, version);
 	}
 	*pp = p;
 	return AEROSPIKE_OK;
@@ -1594,7 +1594,7 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	}
 
 	uint8_t* p = buf + sizeof(as_msg);
-	status = as_command_parse_fields(&p, err, msg, cmd->policy->tran, cmd->key, cmd->flags == 0);
+	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1671,7 +1671,7 @@ as_command_parse_success_failure(
 	}
 
 	uint8_t* p = buf + sizeof(as_msg);
-	status = as_command_parse_fields(&p, err, msg, cmd->policy->tran, cmd->key, cmd->flags == 0);
+	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;

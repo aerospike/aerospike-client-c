@@ -1731,7 +1731,7 @@ as_query_partition_execute_async(
 		cmd->flags = qe->deserialize ? AS_ASYNC_FLAGS_DESERIALIZE : 0;
 		cmd->replica_size = 1;
 		cmd->replica_index = 0;
-		cmd->tran = NULL;
+		cmd->txn = NULL;
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
@@ -2269,7 +2269,7 @@ aerospike_query_async(
 		cmd->flags = policy->deserialize ? AS_ASYNC_FLAGS_DESERIALIZE : 0;
 		cmd->replica_size = 1;
 		cmd->replica_index = 0;
-		cmd->tran = NULL;
+		cmd->txn = NULL;
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;

@@ -35,8 +35,8 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_status.h>
-#include <aerospike/as_tran.h>
-#include <aerospike/as_tran_monitor.h>
+#include <aerospike/as_txn.h>
+#include <aerospike/as_txn_monitor.h>
 #include <citrusleaf/cf_clock.h>
 
 /******************************************************************************
@@ -245,26 +245,26 @@ as_write_command_execute(
 	)
 {
 	// Execute async write command.
-	if (! cmd_policy->tran) {
+	if (! cmd_policy->txn) {
 		// Command is not run under a MRT monitor. Run original async command.
 		return as_event_command_execute(cmd, err);
 	}
 
-	as_tran* tran = cmd_policy->tran;
+	as_txn* txn = cmd_policy->txn;
 
-	if (as_tran_writes_contain(tran, key)) {
+	if (as_txn_writes_contain(txn, key)) {
 		// Transaction monitor already contains this key. Run original command.
 		return as_event_command_execute(cmd, err);
 	}
 
-	as_status status = as_tran_set_ns(tran, key->ns, err);
+	as_status status = as_txn_set_ns(txn, key->ns, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_event_command_destroy(cmd);
 		return status;
 	}
 
-	status = as_tran_monitor_add_key_async(as, err, tran, cmd_policy, key, as_write_command_callback, cmd, cmd->event_loop);
+	status = as_txn_monitor_add_key_async(as, err, txn, cmd_policy, key, as_write_command_callback, cmd, cmd->event_loop);
 
 	if (status != AEROSPIKE_OK) {
 		as_event_command_destroy(cmd);
@@ -285,8 +285,8 @@ aerospike_key_get(
 		policy = &as->config.policies.read;
 	}
 
-	if (policy->base.tran) {
-		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -301,7 +301,7 @@ aerospike_key_get(
 		return status;
 	}
 
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
@@ -338,8 +338,8 @@ aerospike_key_get_async(
 		policy = &as->config.policies.read;
 	}
 
-	if (policy->base.tran) {
-		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -357,7 +357,7 @@ aerospike_key_get_async(
 	as_read_info ri;
 	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
@@ -392,8 +392,8 @@ aerospike_key_select(
 		policy = &as->config.policies.read;
 	}
 	
-	if (policy->base.tran) {
-		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -408,7 +408,7 @@ aerospike_key_select(
 		return status;
 	}
 
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
@@ -458,8 +458,8 @@ aerospike_key_select_async(
 		policy = &as->config.policies.read;
 	}
 	
-	if (policy->base.tran) {
-		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -477,7 +477,7 @@ aerospike_key_select_async(
 	as_read_info ri;
 	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
@@ -525,8 +525,8 @@ aerospike_key_exists(
 		policy = &as->config.policies.read;
 	}
 
-	if (policy->base.tran) {
-		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -541,7 +541,7 @@ aerospike_key_exists(
 		return status;
 	}
 
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
@@ -577,8 +577,8 @@ aerospike_key_exists_async(
 		policy = &as->config.policies.read;
 	}
 	
-	if (policy->base.tran) {
-		as_status status = as_tran_set_ns(policy->base.tran, key->ns, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -596,7 +596,7 @@ aerospike_key_exists_async(
 	as_read_info ri;
 	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
@@ -626,7 +626,7 @@ typedef struct as_put_s {
 	as_record* rec;
 	as_queue* buffers;
 	size_t size;
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	uint32_t filter_size;
 	uint16_t n_bins;
 } as_put;
@@ -693,8 +693,8 @@ aerospike_key_put(
 		policy = &as->config.policies.write;
 	}
 	
-	if (policy->base.tran) {
-		as_status status = as_tran_monitor_add_key(as, &policy->base, key, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_monitor_add_key(as, &policy->base, key, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -849,8 +849,8 @@ aerospike_key_remove(
 		policy = &as->config.policies.remove;
 	}
 
-	if (policy->base.tran) {
-		as_status status = as_tran_monitor_add_key(as, &policy->base, key, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_monitor_add_key(as, &policy->base, key, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
@@ -866,7 +866,7 @@ aerospike_key_remove(
 		return status;
 	}
 
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, true, &tdata);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
@@ -911,7 +911,7 @@ aerospike_key_remove_async_ex(
 		return status;
 	}
 	
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, true, &tdata);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
@@ -955,7 +955,7 @@ typedef struct as_operate_s {
 	const as_operations* ops;
 	as_queue* buffers;
 	size_t size;
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	uint32_t filter_size;
 	uint16_t n_operations;
 	uint8_t read_attr;
@@ -1133,12 +1133,12 @@ aerospike_key_operate(
 
 	policy = oper.policy;
 	
-	if (policy->base.tran) {
+	if (policy->base.txn) {
 		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
-			status = as_tran_monitor_add_key(as, &policy->base, key, err);
+			status = as_txn_monitor_add_key(as, &policy->base, key, err);
 		}
 		else {
-			status = as_tran_set_ns(policy->base.tran, key->ns, err);
+			status = as_txn_set_ns(policy->base.txn, key->ns, err);
 		}
 
 		if (status != AEROSPIKE_OK) {
@@ -1249,8 +1249,8 @@ aerospike_key_operate_async(
 	}
 	else {
 		// Read command
-		if (policy->base.tran) {
-			status = as_tran_set_ns(policy->base.tran, key->ns, err);
+		if (policy->base.txn) {
+			status = as_txn_set_ns(policy->base.txn, key->ns, err);
 
 			if (status != AEROSPIKE_OK) {
 				as_buffers_destroy(&buffers);
@@ -1315,7 +1315,7 @@ typedef struct as_apply_s {
 	const char* function;
 	as_serializer ser;
 	as_buffer args;
-	as_command_tran_data tdata;
+	as_command_txn_data tdata;
 	uint32_t filter_size;
 	uint8_t read_attr;
 } as_apply;
@@ -1378,8 +1378,8 @@ aerospike_key_apply(
 		policy = &as->config.policies.apply;
 	}
 	
-	if (policy->base.tran) {
-		as_status status = as_tran_monitor_add_key(as, &policy->base, key, err);
+	if (policy->base.txn) {
+		as_status status = as_txn_monitor_add_key(as, &policy->base, key, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;

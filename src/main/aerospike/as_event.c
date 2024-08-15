@@ -1338,7 +1338,7 @@ as_event_command_parse_header(as_event_command* cmd)
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 
-	if (cmd->tran) {
+	if (cmd->txn) {
 		// TODO: Call parse_fields with key data.
 		/*
 		as_error err;

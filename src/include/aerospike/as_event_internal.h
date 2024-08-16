@@ -815,6 +815,14 @@ as_event_socket_retry(as_event_command* cmd)
 	return as_event_command_retry(cmd, false);
 }
 
+static inline uint8_t*
+as_event_get_ubuf(as_event_command* cmd)
+{
+	// Return saved uncompressed buffer when compression is enabled.
+	// Return command buffer when compression is not enabled.
+	return cmd->ubuf ? cmd->ubuf : (uint8_t*)cmd + cmd->write_offset;
+}
+
 static inline void
 as_event_command_destroy(as_event_command* cmd)
 {

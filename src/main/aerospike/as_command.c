@@ -1062,16 +1062,12 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 }
 
 as_status
-as_command_parse_fields(uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn, const as_key* key, bool is_write)
+as_command_parse_fields_txn(
+	uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn, const uint8_t* digest, const char* set,
+	bool is_write
+	)
 {
 	uint8_t* p = *pp;
-
-	if (! txn) {
-		p = as_command_ignore_fields(p, msg->n_fields);
-		*pp = p;
-		return AEROSPIKE_OK;
-	}
-
 	uint64_t version = 0;
 	uint32_t len;
 	uint8_t type;
@@ -1096,10 +1092,10 @@ as_command_parse_fields(uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn, c
 	}
 
 	if (is_write) {
-		as_txn_on_write(txn, key->digest.value, key->set, version, msg->result_code);
+		as_txn_on_write(txn, digest, set, version, msg->result_code);
 	}
 	else {
-		as_txn_on_read(txn, key->digest.value, key->set, version);
+		as_txn_on_read(txn, digest, set, version);
 	}
 	*pp = p;
 	return AEROSPIKE_OK;

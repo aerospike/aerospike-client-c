@@ -1332,21 +1332,79 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	as_event_error_callback(cmd, err);
 }
 
+static as_status
+as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg, uint8_t** pp)
+{
+	// The key has fallen out of scope, so the key's set and digest have to be
+	// parsed from the command's send buffer
+	uint8_t* p = as_event_get_ubuf(cmd);
+	p += AS_HEADER_SIZE;
+
+	// Field ID is located after field size.
+	// Skip namespace.
+	uint8_t field_id = *(uint8_t*)(p + sizeof(uint32_t));
+
+	if (field_id == AS_FIELD_NAMESPACE) {
+		p += cf_swap_from_be32(*(uint32_t*)p) + sizeof(uint32_t);
+	}
+
+	// Parse set.
+	field_id = *(uint8_t*)(p + sizeof(uint32_t));
+
+	if (field_id != AS_FIELD_SETNAME) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid set field id: %u", field_id);
+	}
+
+	uint32_t len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+
+	if (len >= AS_SET_MAX_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid set len: %u", len);
+	}
+
+	p += AS_FIELD_HEADER_SIZE;
+
+	as_set set;
+	memcpy(set, p, len);
+	set[len] = 0;
+	p += len;
+
+	// Parse digest.
+	field_id = *(uint8_t*)(p + sizeof(uint32_t));
+
+	if (field_id != AS_FIELD_DIGEST) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid digest field id: %u", field_id);
+	}
+
+	len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+
+	if (len != AS_DIGEST_VALUE_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid digest len: %u", len);
+	}
+
+	p += AS_FIELD_HEADER_SIZE;
+
+	as_digest_value digest;
+	memcpy(digest, p, len);
+
+	return as_command_parse_fields_txn(pp, err, msg, cmd->txn, digest, set, (cmd->flags & AS_ASYNC_FLAGS_READ) == 0);
+}
+
 bool
 as_event_command_parse_header(as_event_command* cmd)
 {
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
+	as_msg_swap_header_from_be(msg);
+	p += sizeof(as_msg);
 
 	if (cmd->txn) {
-		// TODO: Call parse_fields with key data.
-		/*
 		as_error err;
-		as_status status = as_command_parse_fields(&p, &err, msg, cmd->tran, cmd->key, (cmd->flags & AS_ASYNC_FLAGS_READ) == 0);
+		as_status status = as_event_command_parse_fields(cmd, &err, msg, &p);
 
 		if (status != AEROSPIKE_OK) {
-			return status;
-		}*/
+			as_event_response_error(cmd, &err);
+			return true;
+		}
 	}
 
 	if (msg->result_code == AEROSPIKE_OK) {
@@ -1366,12 +1424,25 @@ bool
 as_event_command_parse_result(as_event_command* cmd)
 {
 	as_error err;
+	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
-	as_status status = msg->result_code;
-
 	p += sizeof(as_msg);
+
+	if (cmd->txn) {
+		status = as_event_command_parse_fields(cmd, &err, msg, &p);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+	}
+	else {
+		p = as_command_ignore_fields(p, msg->n_fields);
+	}
+
+	status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
@@ -1382,7 +1453,6 @@ as_event_command_parse_result(as_event_command* cmd)
 				rec->gen = msg->generation;
 				rec->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 
-				p = as_command_ignore_fields(p, msg->n_fields);
 				status = as_command_parse_bins(&p, &err, rec, msg->n_ops,
 											   cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
 
@@ -1410,7 +1480,6 @@ as_event_command_parse_result(as_event_command* cmd)
 				rec.gen = msg->generation;
 				rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 				
-				p = as_command_ignore_fields(p, msg->n_fields);
 				status = as_command_parse_bins(&p, &err, &rec, msg->n_ops,
 											   cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
 
@@ -1428,7 +1497,6 @@ as_event_command_parse_result(as_event_command* cmd)
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			p = as_command_ignore_fields(p, msg->n_fields);
 			as_command_parse_udf_failure(p, &err, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
@@ -1446,18 +1514,29 @@ as_event_command_parse_result(as_event_command* cmd)
 bool
 as_event_command_parse_success_failure(as_event_command* cmd)
 {
+	as_error err;
+	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)cmd->buf;
 	as_msg_swap_header_from_be(msg);
-	as_status status = msg->result_code;
-	
 	p += sizeof(as_msg);
+
+	if (cmd->txn) {
+		status = as_event_command_parse_fields(cmd, &err, msg, &p);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+	}
+	else {
+		p = as_command_ignore_fields(p, msg->n_fields);
+	}
+
+	status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
-			p = as_command_ignore_fields(p, msg->n_fields);
-
-			as_error err;
 			as_val* val = 0;
 			status = as_command_parse_success_failure_bins(&p, &err, msg, &val);
 			
@@ -1474,15 +1553,12 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			as_error err;
-			p = as_command_ignore_fields(p, msg->n_fields);
 			as_command_parse_udf_failure(p, &err, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
 			
 		default: {
-			as_error err;
 			as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
 			as_event_response_error(cmd, &err);
 			break;

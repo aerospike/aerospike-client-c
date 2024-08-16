@@ -3053,14 +3053,6 @@ as_batch_retry_release_nodes_after_async(as_vector* bnodes)
 	as_vector_destroy(bnodes);
 }
 
-static inline uint8_t*
-as_batch_retry_get_ubuf(as_event_command* cmd)
-{
-	// Return saved uncompressed buffer when compression is enabled.
-	// Return command buffer when compression is not enabled.
-	return cmd->ubuf ? cmd->ubuf : (uint8_t*)cmd + cmd->write_offset;
-}
-
 static uint8_t*
 as_batch_retry_parse_row(uint8_t* p, uint8_t* type)
 {
@@ -3132,7 +3124,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 	// Batch offsets, read/write operations and other arguments are out of scope in async batch
 	// retry, so they must be parsed from the parent command's send buffer.
-	uint8_t* header = as_batch_retry_get_ubuf(parent);
+	uint8_t* header = as_event_get_ubuf(parent);
 	uint8_t* p = header;
 
 	p += AS_HEADER_SIZE;
@@ -3353,7 +3345,7 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 	// Set error/in_doubt in each key contained in the command.
 	// Batch offsets are out of scope, so they must be parsed
 	// from the parent command's send buffer.
-	uint8_t* p = as_batch_retry_get_ubuf(cmd);
+	uint8_t* p = as_event_get_ubuf(cmd);
 
 	p += AS_HEADER_SIZE;
 

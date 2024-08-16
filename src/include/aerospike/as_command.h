@@ -656,12 +656,36 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 
 /**
  * @private
- * Parse record fields.
+ * Skip over fields section in returned data.
+ */
+uint8_t*
+as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
+
+/**
+ * @private
+ * Parse record fields given digest/set.
  */
 as_status
+as_command_parse_fields_txn(
+	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const uint8_t* digest,
+	const char* set, bool is_write
+	);
+
+/**
+ * @private
+ * Parse record fields given key.
+ */
+static inline as_status
 as_command_parse_fields(
 	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const as_key* key, bool is_write
-	);
+	)
+{
+	if (! txn) {
+		*pp = as_command_ignore_fields(*pp, msg->n_fields);
+		return AEROSPIKE_OK;
+	}
+	return as_command_parse_fields_txn(pp, err, msg, txn, key->digest.value, key->set, is_write);
+}
 
 /**
  * @private
@@ -697,13 +721,6 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
  */
 as_status
 as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status);
-
-/**
- * @private
- * Skip over fields section in returned data.
- */
-uint8_t*
-as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
 
 /**
  * @private

@@ -758,7 +758,7 @@ as_scan_generic(
 	aerospike_scan_foreach_callback callback, void* udata, uint64_t* task_id_ptr
 	)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	as_status status = as_scan_validate(err, policy, scan);
 
 	if (status != AEROSPIKE_OK) {
@@ -875,7 +875,7 @@ as_scan_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_scan* policy, const as_scan* scan,
 	as_partition_tracker* pt, aerospike_scan_foreach_callback callback, void* udata)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1183,7 +1183,7 @@ as_scan_partition_async(
 	as_event_loop* event_loop
 	)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, scan->ns, err);
 

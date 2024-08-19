@@ -227,7 +227,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Maximum socket idle to validate connections in transactions.
+	 * Maximum socket idle to validate connections in commands.
 	 */
 	uint64_t max_socket_idle_ns_tran;
 
@@ -438,16 +438,16 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Transaction retry count. There can be multiple retries for a single transaction.
+	 * Command retry count. There can be multiple retries for a single command.
 	 * The value is cumulative and not reset per metrics interval.
 	 */
 	uint64_t retry_count;
 
 	/**
 	 * @private
-	 * Transaction count. The value is cumulative and not reset per metrics interval.
+	 * Command count. The value is cumulative and not reset per metrics interval.
 	 */
-	uint64_t tran_count;
+	uint64_t command_count;
 
 	/**
 	 * @private
@@ -610,24 +610,35 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster);
 
 /**
  * @private
- * Increment transaction count when metrics are enabled.
+ * Increment command count when metrics are enabled.
  */
 static inline void
-as_cluster_add_tran(as_cluster* cluster)
+as_cluster_add_command_count(as_cluster* cluster)
 {
 	if (cluster->metrics_enabled) {
-		as_incr_uint64(&cluster->tran_count);
+		as_incr_uint64(&cluster->command_count);
 	}
 }
 
 /**
- * @private
- * Return transaction count. The value is cumulative and not reset per metrics interval.
+ * @deprecated
+ * Return command count. The value is cumulative and not reset per metrics interval.
+ * This function is left for backwards compatibility. Use as_cluster_get_command_count() instead.
  */
 static inline uint64_t
 as_cluster_get_tran_count(const as_cluster* cluster)
 {
-	return as_load_uint64(&cluster->tran_count);
+	return as_load_uint64(&cluster->command_count);
+}
+
+/**
+ * @private
+ * Return command count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_cluster_get_command_count(const as_cluster* cluster)
+{
+	return as_load_uint64(&cluster->command_count);
 }
 
 /**
@@ -642,7 +653,7 @@ as_cluster_add_retry(as_cluster* cluster)
 
 /**
  * @private
- * Add transaction retry count. There can be multiple retries for a single transaction.
+ * Add command retry count. There can be multiple retries for a single command.
  */
 static inline void
 as_cluster_add_retries(as_cluster* cluster, uint32_t count)
@@ -652,7 +663,7 @@ as_cluster_add_retries(as_cluster* cluster, uint32_t count)
 
 /**
  * @private
- * Return transaction retry count. The value is cumulative and not reset per metrics interval.
+ * Return command retry count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
 as_cluster_get_retry_count(const as_cluster* cluster)

@@ -81,7 +81,7 @@ extern "C" {
 #define AS_MSG_INFO2_DELETE				(1 << 1) // delete record
 #define AS_MSG_INFO2_GENERATION			(1 << 2) // pay attention to the generation
 #define AS_MSG_INFO2_GENERATION_GT		(1 << 3) // apply write if new generation >= old, good for restore
-#define AS_MSG_INFO2_DURABLE_DELETE		(1 << 4) // transaction resulting in record deletion leaves tombstone (Enterprise only).
+#define AS_MSG_INFO2_DURABLE_DELETE		(1 << 4) // command resulting in record deletion leaves tombstone (Enterprise only).
 #define AS_MSG_INFO2_CREATE_ONLY		(1 << 5) // write record only if it doesn't exist
 #define AS_MSG_INFO2_RELAX_AP_LONG_QUERY (1 << 6) // treat as long query, but relax read consistency.
 #define AS_MSG_INFO2_RESPOND_ALL_OPS	(1 << 7) // return a result for every operation.
@@ -594,7 +594,7 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 
 /**
  * @private
- * Return timeout to be sent to server for single record transactions.
+ * Return timeout to be sent to server for single record commands.
  */
 static inline uint32_t
 as_command_server_timeout(const as_policy_base* policy)

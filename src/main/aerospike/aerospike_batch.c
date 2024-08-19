@@ -2096,7 +2096,7 @@ as_batch_keys_execute(
 	)
 {
 	as_cluster* cluster = as->cluster;
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	uint32_t n_keys = batch->keys.size;
 	
 	if (n_keys == 0) {
@@ -2559,7 +2559,7 @@ as_batch_records_execute(
 	)
 {
 	as_cluster* cluster = as->cluster;
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	as_vector* list = &records->list;
 	uint32_t n_keys = records->list.size;
 	
@@ -2675,7 +2675,7 @@ as_batch_records_execute_async(
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop, bool has_write
 	)
 {
-	as_cluster_add_tran(as->cluster);
+	as_cluster_add_command_count(as->cluster);
 	// Check for empty batch.
 	if (records->list.size == 0) {
 		listener(0, records, udata, event_loop);

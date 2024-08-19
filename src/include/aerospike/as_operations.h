@@ -114,7 +114,7 @@ typedef struct as_binops_s {
 /**
  * The `aerospike_key_operate()` function provides the ability to execute
  * multiple operations on a record in the database as a single atomic 
- * transaction.
+ * command.
  *
  * The `as_operations` object is used to define the operations to be performed
  * on the record.

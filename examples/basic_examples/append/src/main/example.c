@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2024 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -126,7 +126,7 @@ main(int argc, char* argv[])
 
 	// Try to apply the operations. This will fail, since we can't append a
 	// string value to an existing bin with "raw" value. Note that if any
-	// operation in the transaction is rejected, none will be applied.
+	// operation in the command is rejected, none will be applied.
 	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
 			AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE) {
 		LOG("aerospike_key_operate() returned %d - %s, expected "

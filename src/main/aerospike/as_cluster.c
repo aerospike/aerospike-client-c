@@ -1535,7 +1535,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->metrics_interval = 0;
 	cluster->metrics_latency_columns = 0;
 	cluster->metrics_latency_shift = 0;
-	cluster->tran_count = 0;
+	cluster->command_count = 0;
 	cluster->retry_count = 0;
 	cluster->delay_queue_timeout_count = 0;
 	*cluster_out = cluster;

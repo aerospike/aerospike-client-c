@@ -1309,7 +1309,7 @@ as_query_worker_new(void* data)
 static as_status
 as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 {
-	as_cluster_add_tran(task->cluster);
+	as_cluster_add_command_count(task->cluster);
 	as_status status = AEROSPIKE_OK;
 
 	if (task->query_policy && task->query_policy->fail_on_cluster_change) {
@@ -1477,7 +1477,7 @@ as_query_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
 	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1773,7 +1773,7 @@ as_query_partition_async(
 	as_event_loop* event_loop
 	)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, query->ns, err);
 

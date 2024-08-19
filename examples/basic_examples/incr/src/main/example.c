@@ -144,7 +144,7 @@ main(int argc, char* argv[])
 
 	// Try to apply the three arithmetic operations again. This will fail, since
 	// we can't increment the string value. Note that if any operation in the
-	// transaction is rejected, none will be applied.
+	// command is rejected, none will be applied.
 	if (aerospike_key_operate(&as, &err, NULL, &g_key, &ops, NULL) !=
 			AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE) {
 		LOG("aerospike_key_operate() returned %d - %s, expected "

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -87,12 +87,12 @@ typedef struct as_batch_base_record_s {
 	as_batch_type type;
 
 	/**
-	 * Does batch sub-transaction contain a write operation.
+	 * Does batch sub-command contain a write operation.
 	 */
 	bool has_write;
 
 	/**
-	 * Is it possible that the write transaction completed even though this error was generated.
+	 * Is it possible that the write command completed even though this error was generated.
 	 * This may be the case when a client error occurs (like timeout) after the command was sent
 	 * to the server.
 	 */

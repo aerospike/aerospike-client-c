@@ -228,7 +228,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_DEVICE_OVERLOAD = 18,
 	
 	/**
-	 * Record key sent with transaction did not match key stored on server.
+	 * Record key sent with command did not match key stored on server.
 	 */
 	AEROSPIKE_ERR_RECORD_KEY_MISMATCH = 19,
 	
@@ -270,7 +270,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_OP_NOT_APPLICABLE = 26,
 
 	/**
-	 * The transaction was not performed because the filter expression was
+	 * The command was not performed because the filter expression was
 	 * false.
 	 */
 	AEROSPIKE_FILTERED_OUT = 27,

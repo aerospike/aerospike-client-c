@@ -633,6 +633,17 @@ is_server_timeout(as_error* err)
 	return err->message[0];
 }
 
+static void
+as_command_prepare_error(as_command* cmd, as_error* err)
+{
+	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+
+	if (err->in_doubt && cmd->policy->txn) {
+		// TODO: Ensure not called with MRT monitor key on commit/abort!
+		as_txn_on_write_in_doubt(cmd->policy->txn, cmd->key->digest.value, cmd->key->set);
+	}
+}
+
 as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
@@ -658,7 +669,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 					"Node not found for partition %s:%u", cmd->key->ns, cmd->partition_id);
 
-				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+				as_command_prepare_error(cmd, err);
 				return err->code;
 			}
 			as_node_reserve(node);
@@ -684,7 +695,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				if (release_node) {
 					as_node_release(node);
 				}
-				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+				as_command_prepare_error(cmd, err);
 				return status;
 			}
 			goto Retry;
@@ -759,7 +770,7 @@ as_command_execute(as_command* cmd, as_error* err)
 					if (release_node) {
 						as_node_release(node);
 					}
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+					as_command_prepare_error(cmd, err);
 					return status;
 				
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
@@ -769,12 +780,12 @@ as_command_execute(as_command* cmd, as_error* err)
 						uint64_t elapsed = cf_getns() - begin;
 						as_node_add_latency(node, latency_type, elapsed);
 					}
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+					as_command_prepare_error(cmd, err);
 					break;
 
 				default:
 					as_node_add_error(node);
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+					as_command_prepare_error(cmd, err);
 					break;
 			}
 		}
@@ -866,7 +877,7 @@ Retry:
 	if (release_node) {
 		as_node_release(node);
 	}
-	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+	as_command_prepare_error(cmd, err);
 	return err->code;
 }
 

@@ -25,6 +25,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_query_validate.h>
 #include <aerospike/as_shm_cluster.h>
+#include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <pthread.h>
 
@@ -1208,6 +1209,78 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 	as_event_command_release(cmd);
 }
 
+static as_status
+as_event_command_parse_set_digest(as_event_command* cmd, as_error* err, char* set, uint8_t* digest) {
+	// The key has fallen out of scope, so the key's set and digest have to be
+	// parsed from the command's send buffer
+	uint8_t* p = as_event_get_ubuf(cmd);
+	p += AS_HEADER_SIZE;
+
+	// Field ID is located after field size.
+	// Skip namespace.
+	uint8_t field_id = *(uint8_t*)(p + sizeof(uint32_t));
+
+	if (field_id == AS_FIELD_NAMESPACE) {
+		p += cf_swap_from_be32(*(uint32_t*)p) + sizeof(uint32_t);
+	}
+
+	// Parse set.
+	field_id = *(uint8_t*)(p + sizeof(uint32_t));
+
+	if (field_id != AS_FIELD_SETNAME) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid set field id: %u", field_id);
+	}
+
+	uint32_t len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+
+	if (len >= AS_SET_MAX_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid set len: %u", len);
+	}
+
+	p += AS_FIELD_HEADER_SIZE;
+
+	memcpy(set, p, len);
+	set[len] = 0;
+	p += len;
+
+	// Parse digest.
+	field_id = *(uint8_t*)(p + sizeof(uint32_t));
+
+	if (field_id != AS_FIELD_DIGEST) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid digest field id: %u", field_id);
+	}
+
+	len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+
+	if (len != AS_DIGEST_VALUE_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid digest len: %u", len);
+	}
+
+	p += AS_FIELD_HEADER_SIZE;
+
+	memcpy(digest, p, len);
+	return AEROSPIKE_OK;
+}
+
+static void
+as_event_check_in_doubt(as_event_command* cmd, as_error* err) {
+	if (err->in_doubt && cmd->txn) {
+		as_set set;
+		as_digest_value digest;
+
+		as_status status = as_event_command_parse_set_digest(cmd, err, set, digest);
+
+		if (status != AEROSPIKE_OK) {
+			// Better to return original error and log message here.
+			as_log_error("Send buffer is corrupt");
+			return;
+		}
+
+		// TODO: Ensure not called with MRT monitor key on commit/abort!
+		as_txn_on_write_in_doubt(cmd->txn, digest, set);
+	}
+}
+
 void as_async_batch_error(as_event_command* cmd, as_error* err);
 
 void
@@ -1217,12 +1290,15 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 
 	switch (cmd->type) {
 		case AS_ASYNC_TYPE_WRITE:
+			as_event_check_in_doubt(cmd, err);
 			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);
 			break;
 		case AS_ASYNC_TYPE_RECORD:
+			as_event_check_in_doubt(cmd, err);
 			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
 			break;
 		case AS_ASYNC_TYPE_VALUE:
+			as_event_check_in_doubt(cmd, err);
 			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
 			break;
 		case AS_ASYNC_TYPE_INFO:
@@ -1335,56 +1411,14 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 static as_status
 as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg, uint8_t** pp)
 {
-	// The key has fallen out of scope, so the key's set and digest have to be
-	// parsed from the command's send buffer
-	uint8_t* p = as_event_get_ubuf(cmd);
-	p += AS_HEADER_SIZE;
-
-	// Field ID is located after field size.
-	// Skip namespace.
-	uint8_t field_id = *(uint8_t*)(p + sizeof(uint32_t));
-
-	if (field_id == AS_FIELD_NAMESPACE) {
-		p += cf_swap_from_be32(*(uint32_t*)p) + sizeof(uint32_t);
-	}
-
-	// Parse set.
-	field_id = *(uint8_t*)(p + sizeof(uint32_t));
-
-	if (field_id != AS_FIELD_SETNAME) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid set field id: %u", field_id);
-	}
-
-	uint32_t len = cf_swap_from_be32(*(uint32_t*)p) - 1;
-
-	if (len >= AS_SET_MAX_SIZE) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid set len: %u", len);
-	}
-
-	p += AS_FIELD_HEADER_SIZE;
-
 	as_set set;
-	memcpy(set, p, len);
-	set[len] = 0;
-	p += len;
-
-	// Parse digest.
-	field_id = *(uint8_t*)(p + sizeof(uint32_t));
-
-	if (field_id != AS_FIELD_DIGEST) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid digest field id: %u", field_id);
-	}
-
-	len = cf_swap_from_be32(*(uint32_t*)p) - 1;
-
-	if (len != AS_DIGEST_VALUE_SIZE) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid digest len: %u", len);
-	}
-
-	p += AS_FIELD_HEADER_SIZE;
-
 	as_digest_value digest;
-	memcpy(digest, p, len);
+
+	as_status status = as_event_command_parse_set_digest(cmd, err, set, digest);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
 
 	return as_command_parse_fields_txn(pp, err, msg, cmd->txn, digest, set, (cmd->flags & AS_ASYNC_FLAGS_READ) == 0);
 }

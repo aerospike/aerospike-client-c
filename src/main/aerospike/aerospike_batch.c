@@ -267,9 +267,15 @@ as_batch_set_error_row(uint8_t res)
 }
 
 static inline bool
-as_batch_in_doubt(bool has_write, uint32_t sent)
+as_batch_in_doubt(const as_key* key, as_txn* txn, bool has_write, uint32_t sent)
 {
-	return has_write && sent > 1;
+	if (has_write && sent > 1) {
+		if (txn) {
+			as_txn_on_write_in_doubt(txn, key->digest.value, key->set);
+		}
+		return true;
+	}
+	return false;
 }
 
 static bool
@@ -325,7 +331,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 			}
 		}
 		else if (msg->result_code == AEROSPIKE_ERR_UDF) {
-			rec->in_doubt = as_batch_in_doubt(rec->has_write, cmd->command_sent_counter);
+			rec->in_doubt = as_batch_in_doubt(&rec->key, cmd->txn, rec->has_write, cmd->command_sent_counter);
 			executor->error_row = true;
 
 			// AEROSPIKE_ERR_UDF results in "FAILURE" bin that contains an error message.
@@ -338,7 +344,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 			}
 		}
 		else if (as_batch_set_error_row(msg->result_code)) {
-			rec->in_doubt = as_batch_in_doubt(rec->has_write, cmd->command_sent_counter);
+			rec->in_doubt = as_batch_in_doubt(&rec->key, cmd->txn, rec->has_write, cmd->command_sent_counter);
 			executor->error_row = true;
 		}
 	}
@@ -396,7 +402,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					}
 				}
 				else if (msg->result_code == AEROSPIKE_ERR_UDF) {
-					rec->in_doubt = as_batch_in_doubt(rec->has_write, cmd->sent);
+					rec->in_doubt = as_batch_in_doubt(&rec->key, txn, rec->has_write, cmd->sent);
 					*task->error_row = true;
 
 					// AEROSPIKE_ERR_UDF results in "FAILURE" bin that contains an error message.
@@ -407,7 +413,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					}
 				}
 				else if (as_batch_set_error_row(msg->result_code)) {
-					rec->in_doubt = as_batch_in_doubt(rec->has_write, cmd->sent);
+					rec->in_doubt = as_batch_in_doubt(&rec->key, txn, rec->has_write, cmd->sent);
 					*task->error_row = true;
 				}
 				break;
@@ -433,7 +439,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					}
 				}
 				else if (msg->result_code == AEROSPIKE_ERR_UDF) {
-					res->in_doubt = as_batch_in_doubt(task->has_write, cmd->sent);
+					res->in_doubt = as_batch_in_doubt(res->key, txn, task->has_write, cmd->sent);
 					*task->error_row = true;
 					status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
 
@@ -442,7 +448,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					}
 				}
 				else if (as_batch_set_error_row(msg->result_code)) {
-					res->in_doubt = as_batch_in_doubt(task->has_write, cmd->sent);
+					res->in_doubt = as_batch_in_doubt(res->key, txn, task->has_write, cmd->sent);
 					*task->error_row = true;
 				}
 				break;
@@ -1630,14 +1636,23 @@ as_batch_builder_destroy(as_batch_builder* bb)
 static void
 as_batch_set_doubt_records(as_batch_task_records* btr, as_error* err)
 {
+	if (!err->in_doubt) {
+		return;
+	}
+
+	as_txn* txn = btr->base.policy->base.txn;
 	uint32_t offsets_size = btr->base.offsets.size;
 
 	for (uint32_t i = 0; i < offsets_size; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(&btr->base.offsets, i);
 		as_batch_base_record* rec = as_vector_get(btr->records, offset);
 
-		if (rec->result == AEROSPIKE_NO_RESPONSE && rec->has_write) {
-			rec->in_doubt = err->in_doubt;
+		if (rec->result == AEROSPIKE_NO_RESPONSE && rec->has_write && err->in_doubt) {
+			rec->in_doubt = true;
+
+			if (txn) {
+				as_txn_on_write_in_doubt(txn, rec->key.digest.value, rec->key.set);
+			}
 		}
 	}
 }
@@ -1645,6 +1660,11 @@ as_batch_set_doubt_records(as_batch_task_records* btr, as_error* err)
 static void
 as_batch_set_doubt_keys(as_batch_task_keys* btk, as_error* err)
 {
+	if (!err->in_doubt) {
+		return;
+	}
+
+	as_txn* txn = btk->base.policy->base.txn;
 	uint32_t offsets_size = btk->base.offsets.size;
 
 	for (uint32_t i = 0; i < offsets_size; i++) {
@@ -1652,7 +1672,11 @@ as_batch_set_doubt_keys(as_batch_task_keys* btk, as_error* err)
 		as_batch_result* res = &btk->results[offset];
 
 		if (res->result == AEROSPIKE_NO_RESPONSE) {
-			res->in_doubt = err->in_doubt;
+			res->in_doubt = true;
+
+			if (txn) {
+				as_txn_on_write_in_doubt(txn, res->key->digest.value, res->key->set);
+			}
 		}
 	}
 }

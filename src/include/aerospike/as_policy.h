@@ -1437,6 +1437,18 @@ typedef struct as_policy_admin_s {
 } as_policy_admin;
 
 /**
+ * Multi-record transaction (MRT) policy fields used to batch verify record versions on commit.
+ * Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ */
+typedef as_policy_batch as_policy_txn_verify;
+
+/**
+ * Multi-record transaction (MRT) policy fields used to batch roll forward/backward records on
+ * commit or abort. Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ */
+typedef as_policy_batch as_policy_txn_roll;
+
+/**
  * Struct of all policy values and operation policies. 
  * 
  * This is utilized by as_config to define default values for policies.
@@ -1446,27 +1458,27 @@ typedef struct as_policy_admin_s {
 typedef struct as_policies_s {
 
 	/**
-	 * The default read policy.
+	 * Default read policy.
 	 */
 	as_policy_read read;
 
 	/**
-	 * The default write policy.
+	 * Default write policy.
 	 */
 	as_policy_write write;
 
 	/**
-	 * The default operate policy.
+	 * Default operate policy.
 	 */
 	as_policy_operate operate;
 
 	/**
-	 * The default remove policy.
+	 * Default remove policy.
 	 */
 	as_policy_remove remove;
 
 	/**
-	 * The default apply policy.
+	 * Default apply policy.
 	 */
 	as_policy_apply apply;
 
@@ -1496,24 +1508,35 @@ typedef struct as_policies_s {
 	as_policy_batch_remove batch_remove;
 
 	/**
-	 * The default scan policy.
+	 * Default scan policy.
 	 */
 	as_policy_scan scan;
 
 	/**
-	 * The default query policy.
+	 * Default query policy.
 	 */
 	as_policy_query query;
 
 	/**
-	 * The default info policy.
+	 * Default info policy.
 	 */
 	as_policy_info info;
 
 	/**
-	 * The default administration policy.
+	 * Default administration policy.
 	 */
 	as_policy_admin admin;
+
+	/**
+	 * Default multi-record transaction (MRT) policy when verifying record versions in a batch.
+	 */
+	as_policy_txn_verify txn_verify;
+
+	/**
+	 * Default multi-record transaction (MRT) policy when rolling the transaction records forward (commit)
+	 * or back (abort) in a batch.
+	 */
+	as_policy_txn_roll txn_roll;
 
 } as_policies;
 
@@ -2008,6 +2031,96 @@ as_policy_admin_copy(const as_policy_admin* src, as_policy_admin* trg)
 	*trg = *src;
 }
 	
+/**
+ * Initialize as_policy_txn_verify to default values.
+ *
+ * @param p	The policy to initialize.
+ * @return	The initialized policy.
+ *
+ * @relates as_policy_txn_verify
+ */
+static inline as_policy_txn_verify*
+as_policy_txn_verify_init(as_policy_txn_verify* p)
+{
+	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	p->base.total_timeout = 10000;
+	p->base.max_retries = 5;
+	p->base.sleep_between_retries = 1000;
+	p->base.filter_exp = NULL;
+	p->base.txn = NULL;
+	p->base.compress = false;
+	p->replica = AS_POLICY_REPLICA_MASTER;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_LINEARIZE;
+	p->read_touch_ttl_percent = 0;
+	p->concurrent = false;
+	p->allow_inline = true;
+	p->allow_inline_ssd = false;
+	p->respond_all_keys = true;
+	p->send_set_name = true;
+	p->deserialize = true;
+	return p;
+}
+
+/**
+ * Copy as_policy_txn_verify values.
+ *
+ * @param src	The source policy.
+ * @param trg	The target policy.
+ *
+ * @relates as_policy_txn_verify
+ */
+static inline void
+as_policy_txn_verify_copy(const as_policy_txn_verify* src, as_policy_txn_verify* trg)
+{
+	*trg = *src;
+}
+
+/**
+ * Initialize as_policy_txn_roll_ to default values.
+ *
+ * @param p	The policy to initialize.
+ * @return	The initialized policy.
+ *
+ * @relates as_policy_txn_roll_
+ */
+static inline as_policy_txn_roll*
+as_policy_txn_roll_init(as_policy_txn_roll* p)
+{
+	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	p->base.total_timeout = 10000;
+	p->base.max_retries = 5;
+	p->base.sleep_between_retries = 1000;
+	p->base.filter_exp = NULL;
+	p->base.txn = NULL;
+	p->base.compress = false;
+	p->replica = AS_POLICY_REPLICA_MASTER;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	p->read_touch_ttl_percent = 0;
+	p->concurrent = false;
+	p->allow_inline = true;
+	p->allow_inline_ssd = false;
+	p->respond_all_keys = true;
+	p->send_set_name = true;
+	p->deserialize = true;
+	return p;
+}
+
+/**
+ * Copy as_policy_txn_roll values.
+ *
+ * @param src	The source policy.
+ * @param trg	The target policy.
+ *
+ * @relates as_policy_txn_roll
+ */
+static inline void
+as_policy_txn_roll_copy(const as_policy_txn_roll* src, as_policy_txn_roll* trg)
+{
+	*trg = *src;
+}
+
 /**
  * @private
  * Initialize as_policies.

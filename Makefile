@@ -109,6 +109,7 @@ AEROSPIKE += aerospike_key.o
 AEROSPIKE += aerospike_query.o
 AEROSPIKE += aerospike_scan.o
 AEROSPIKE += aerospike_stats.o
+AEROSPIKE += aerospike_txn.o
 AEROSPIKE += aerospike_udf.o
 AEROSPIKE += as_address.o
 AEROSPIKE += as_admin.o

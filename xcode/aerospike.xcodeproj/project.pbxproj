@@ -218,6 +218,8 @@
 		BFD033432C6E50E900D7B906 /* as_txn.h in Headers */ = {isa = PBXBuildFile; fileRef = BFD033422C6E50E900D7B906 /* as_txn.h */; };
 		BFD033452C6E514400D7B906 /* as_txn_monitor.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD033442C6E514400D7B906 /* as_txn_monitor.c */; };
 		BFD033472C6E515400D7B906 /* as_txn_monitor.h in Headers */ = {isa = PBXBuildFile; fileRef = BFD033462C6E515400D7B906 /* as_txn_monitor.h */; };
+		BFD033492C76723B00D7B906 /* aerospike_txn.h in Headers */ = {isa = PBXBuildFile; fileRef = BFD033482C76723B00D7B906 /* aerospike_txn.h */; };
+		BFD0334B2C7672D900D7B906 /* aerospike_txn.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD0334A2C7672D900D7B906 /* aerospike_txn.c */; };
 		BFD8FE7C20CF6DFC000A80F1 /* as_query_validate.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD8FE7B20CF6DFC000A80F1 /* as_query_validate.c */; };
 		BFE3C3991D6270C200AA7F20 /* as_address.h in Headers */ = {isa = PBXBuildFile; fileRef = BFE3C3981D6270C200AA7F20 /* as_address.h */; };
 		BFE3C39B1D62720800AA7F20 /* as_address.c in Sources */ = {isa = PBXBuildFile; fileRef = BFE3C39A1D62720800AA7F20 /* as_address.c */; };
@@ -443,6 +445,8 @@
 		BFD033422C6E50E900D7B906 /* as_txn.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_txn.h; path = ../src/include/aerospike/as_txn.h; sourceTree = "<group>"; };
 		BFD033442C6E514400D7B906 /* as_txn_monitor.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_txn_monitor.c; path = ../src/main/aerospike/as_txn_monitor.c; sourceTree = "<group>"; };
 		BFD033462C6E515400D7B906 /* as_txn_monitor.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_txn_monitor.h; path = ../src/include/aerospike/as_txn_monitor.h; sourceTree = "<group>"; };
+		BFD033482C76723B00D7B906 /* aerospike_txn.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_txn.h; path = ../src/include/aerospike/aerospike_txn.h; sourceTree = "<group>"; };
+		BFD0334A2C7672D900D7B906 /* aerospike_txn.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = aerospike_txn.c; path = ../src/main/aerospike/aerospike_txn.c; sourceTree = "<group>"; };
 		BFD8FE7B20CF6DFC000A80F1 /* as_query_validate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_query_validate.c; path = ../src/main/aerospike/as_query_validate.c; sourceTree = "<group>"; };
 		BFE3C3981D6270C200AA7F20 /* as_address.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_address.h; path = ../src/include/aerospike/as_address.h; sourceTree = "<group>"; };
 		BFE3C39A1D62720800AA7F20 /* as_address.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_address.c; path = ../src/main/aerospike/as_address.c; sourceTree = "<group>"; };
@@ -543,6 +547,7 @@
 				BF2AA7BC18BEBFA400E54AF3 /* aerospike_query.c */,
 				BF2AA7BD18BEBFA400E54AF3 /* aerospike_scan.c */,
 				BF1C2AE020BE089700868695 /* aerospike_stats.c */,
+				BFD0334A2C7672D900D7B906 /* aerospike_txn.c */,
 				BF2AA7BE18BEBFA400E54AF3 /* aerospike_udf.c */,
 				BF2AA7BF18BEBFA400E54AF3 /* aerospike.c */,
 				BFE3C39A1D62720800AA7F20 /* as_address.c */,
@@ -743,6 +748,7 @@
 				BF1C2ADE20BE031B00868695 /* aerospike_stats.h */,
 				BFC65B3E1C921E9E0079DF5A /* aerospike_query.h */,
 				BFC65B3F1C921E9E0079DF5A /* aerospike_scan.h */,
+				BFD033482C76723B00D7B906 /* aerospike_txn.h */,
 				BFC65B401C921E9E0079DF5A /* aerospike_udf.h */,
 				BFC65B411C921E9E0079DF5A /* aerospike.h */,
 				BFE3C3981D6270C200AA7F20 /* as_address.h */,
@@ -834,6 +840,7 @@
 				BFC65B801C921E9E0079DF5A /* as_partition.h in Headers */,
 				BFC65B7D1C921E9E0079DF5A /* as_lookup.h in Headers */,
 				BF4E4E2A1D48213700BEEF94 /* as_host.h in Headers */,
+				BFD033492C76723B00D7B906 /* aerospike_txn.h in Headers */,
 				BFC65B861C921E9E0079DF5A /* as_record.h in Headers */,
 				BFB0ED5522A72260007FEA9C /* as_cdt_ctx.h in Headers */,
 				BFC65B781C921E9E0079DF5A /* as_info.h in Headers */,
@@ -1011,6 +1018,7 @@
 				BFAF27702B6AB39100A3858B /* as_metrics.c in Sources */,
 				BFBD205918BC3436009ED931 /* mod_lua_val.c in Sources */,
 				BFBA106218B7D8B300A64E68 /* as_pair.c in Sources */,
+				BFD0334B2C7672D900D7B906 /* aerospike_txn.c in Sources */,
 				BFBA105318B7D8B300A64E68 /* as_bytes.c in Sources */,
 				BF2AA7EA18BEBFA500E54AF3 /* as_key.c in Sources */,
 				BF8EF4DD2AE1B4BA00FEEC3A /* lvm.c in Sources */,

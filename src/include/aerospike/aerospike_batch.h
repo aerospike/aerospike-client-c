@@ -49,6 +49,8 @@ extern "C" {
 #define AS_BATCH_WRITE 1
 #define AS_BATCH_APPLY 2
 #define AS_BATCH_REMOVE 3
+#define AS_BATCH_TXN_VERIFY 4
+#define AS_BATCH_TXN_ROLL 5
 
 /**
  * Batch record type. Values: AS_BATCH_READ, AS_BATCH_WRITE, AS_BATCH_APPLY or AS_BATCH_REMOVE

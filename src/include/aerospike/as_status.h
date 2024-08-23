@@ -33,6 +33,11 @@ typedef enum as_status_e {
 	 * Client Errors
 	 **************************************************************************/
 	/**
+	 * Commit or abort was already attempted.
+	 */
+	AEROSPIKE_ROLL_ALREADY_ATTEMPTED = -18,
+
+	/**
 	 * One or more keys failed in a batch.
 	 */
 	AEROSPIKE_BATCH_FAILED = -16,

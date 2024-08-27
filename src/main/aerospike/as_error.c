@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -80,6 +80,7 @@ as_error_string(as_status status)
 		CASE_ASSIGN(AEROSPIKE_MRT_BLOCKED);
 		CASE_ASSIGN(AEROSPIKE_MRT_CONFLICT);
 		CASE_ASSIGN(AEROSPIKE_MRT_EXPIRED);
+		CASE_ASSIGN(AEROSPIKE_XDR_KEY_BUSY);
 		CASE_ASSIGN(AEROSPIKE_SECURITY_NOT_SUPPORTED);
 		CASE_ASSIGN(AEROSPIKE_SECURITY_NOT_ENABLED);
 		CASE_ASSIGN(AEROSPIKE_SECURITY_SCHEME_NOT_SUPPORTED);

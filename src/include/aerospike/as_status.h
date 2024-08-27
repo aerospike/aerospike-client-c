@@ -301,6 +301,11 @@ typedef enum as_status_e {
 	AEROSPIKE_MRT_EXPIRED = 31,
 
 	/**
+	 * Write can't complete until XDR finishes shipping.
+	 */
+	AEROSPIKE_XDR_KEY_BUSY = 32,
+
+	/**
 	 * There are no more records left for query.
 	 */
 	AEROSPIKE_QUERY_END = 50,

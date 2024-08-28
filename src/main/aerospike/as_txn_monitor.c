@@ -56,8 +56,8 @@ as_txn_get_ops_single(as_txn* txn, const as_key* key, as_operations* ops)
 	as_operations_list_append(ops, BIN_NAME_DIGESTS, NULL, &lp, (as_val*)&bytes);
 }
 
-static as_status
-as_txn_get_ops_keys(as_txn* txn, const as_batch* batch, as_operations* ops, as_error* err)
+static void
+as_txn_get_ops_keys(as_txn* txn, const as_batch* batch, as_operations* ops)
 {
 	uint32_t n_keys = batch->keys.size;
 
@@ -76,12 +76,6 @@ as_txn_get_ops_keys(as_txn* txn, const as_batch* batch, as_operations* ops, as_e
 
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_key* key = &batch->keys.entries[i];
-		as_status status = as_txn_set_ns(txn, key->ns, err);
-		
-		if (status != AEROSPIKE_OK) {
-			as_arraylist_destroy(&digests);
-			return status;
-		}
 
 		as_bytes_init_wrap(&bytes, key->digest.value, AS_DIGEST_VALUE_SIZE, false);
 		as_arraylist_append_bytes(&digests, &bytes);
@@ -96,13 +90,11 @@ as_txn_get_ops_keys(as_txn* txn, const as_batch* batch, as_operations* ops, as_e
 	as_list_policy_set(&lp, AS_LIST_ORDERED, AS_LIST_WRITE_ADD_UNIQUE | AS_LIST_WRITE_NO_FAIL | AS_LIST_WRITE_PARTIAL);
 
 	as_operations_list_append_items(ops, BIN_NAME_DIGESTS, NULL, &lp, (as_list*)&digests);
-
 	// Do not destroy digests because the previous function took ownership.
-	return AEROSPIKE_OK;
 }
 
-static as_status
-as_txn_get_ops_records(as_txn* txn, as_batch_records* records, as_operations* ops, as_error* err)
+static void
+as_txn_get_ops_records(as_txn* txn, as_batch_records* records, as_operations* ops)
 {
 	as_vector* records_list = &records->list;
 	uint32_t n_keys = records->list.size;
@@ -123,12 +115,6 @@ as_txn_get_ops_records(as_txn* txn, as_batch_records* records, as_operations* op
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_base_record* rec = as_vector_get(records_list, i);
 		as_key* key = &rec->key;
-		as_status status = as_txn_set_ns(txn, key->ns, err);
-
-		if (status != AEROSPIKE_OK) {
-			as_arraylist_destroy(&digests);
-			return status;
-		}
 
 		if (rec->has_write) {
 			as_bytes_init_wrap(&bytes, key->digest.value, AS_DIGEST_VALUE_SIZE, false);
@@ -138,7 +124,7 @@ as_txn_get_ops_records(as_txn* txn, as_batch_records* records, as_operations* op
 
 	if (digests.size == 0) {
 		as_arraylist_destroy(&digests);
-		return AEROSPIKE_OK;
+		return;
 	}
 
 	if (! as_txn_monitor_exists(txn)) {
@@ -150,9 +136,7 @@ as_txn_get_ops_records(as_txn* txn, as_batch_records* records, as_operations* op
 	as_list_policy_set(&lp, AS_LIST_ORDERED, AS_LIST_WRITE_ADD_UNIQUE | AS_LIST_WRITE_NO_FAIL | AS_LIST_WRITE_PARTIAL);
 
 	as_operations_list_append_items(ops, BIN_NAME_DIGESTS, NULL, &lp, (as_list*)&digests);
-
 	// Do not destroy digests because the previous function took ownership.
-	return AEROSPIKE_OK;
 }
 
 static void
@@ -232,13 +216,9 @@ as_txn_monitor_add_keys_batch(
 	as_operations ops;
 	as_operations_inita(&ops, 2);
 
-	as_status status = as_txn_get_ops_keys(txn, batch, &ops, err);
+	as_txn_get_ops_keys(txn, batch, &ops);
 
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
-	status = as_txn_monitor_add_keys(as, txn, cmd_policy, &ops, err);
+	as_status status = as_txn_monitor_add_keys(as, txn, cmd_policy, &ops, err);
 	as_operations_destroy(&ops);
 	return status;
 }
@@ -253,11 +233,7 @@ as_txn_monitor_add_keys_records(
 	as_operations ops;
 	as_operations_inita(&ops, 2);
 
-	as_status status = as_txn_get_ops_records(txn, records, &ops, err);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
+	as_txn_get_ops_records(txn, records, &ops);
 
 	if (ops.binops.size == 0) {
 		// Readonly batch
@@ -265,7 +241,7 @@ as_txn_monitor_add_keys_records(
 		return AEROSPIKE_OK;
 	}
 
-	status = as_txn_monitor_add_keys(as, txn, cmd_policy, &ops, err);
+	as_status status = as_txn_monitor_add_keys(as, txn, cmd_policy, &ops, err);
 	as_operations_destroy(&ops);
 	return status;
 }
@@ -316,11 +292,7 @@ as_txn_monitor_add_keys_records_async(
 	as_operations ops;
 	as_operations_inita(&ops, 2);
 
-	as_status status = as_txn_get_ops_records(txn, records, &ops, err);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
+	as_txn_get_ops_records(txn, records, &ops);
 
 	if (ops.binops.size == 0) {
 		// Do not add keys for readonly batch.
@@ -329,7 +301,7 @@ as_txn_monitor_add_keys_records_async(
 		return AEROSPIKE_OK;
 	}
 
-	status = as_txn_monitor_add_keys_async(as, err, txn, cmd_policy, &ops, listener, udata, event_loop);
+	as_status status = as_txn_monitor_add_keys_async(as, err, txn, cmd_policy, &ops, listener, udata, event_loop);
 	as_operations_destroy(&ops);
 	return status;
 }

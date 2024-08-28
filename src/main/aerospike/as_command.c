@@ -115,7 +115,7 @@ as_command_key_size(
 		tdata->n_fields++;
 
 		as_txn* txn = policy->txn;
-		tdata->version = as_txn_get_read_version(txn, key);
+		tdata->version = as_txn_get_read_version(txn, key->digest.value);
 
 		if (tdata->version != 0) {
 			// Version is a 7 byte integer.

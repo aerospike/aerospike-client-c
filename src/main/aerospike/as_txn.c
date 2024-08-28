@@ -345,9 +345,9 @@ as_txn_on_read(as_txn* txn, const uint8_t* digest, const char* set, uint64_t ver
 }
 
 uint64_t
-as_txn_get_read_version(as_txn* txn, const as_key* key)
+as_txn_get_read_version(as_txn* txn, const uint8_t* digest)
 {
-	return khash_get_version(&txn->reads, key->digest.value);
+	return khash_get_version(&txn->reads, digest);
 }
 
 void

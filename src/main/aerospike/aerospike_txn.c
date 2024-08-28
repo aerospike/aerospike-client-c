@@ -17,6 +17,7 @@
 #include <aerospike/aerospike_txn.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_txn.h>
 
 //---------------------------------
@@ -32,19 +33,15 @@ typedef struct {
 // Static Functions
 //---------------------------------
 
-static inline bool
-khash_is_empty(const as_khash* h)
-{
-	// TODO: Should this be done under lock?
-	return h->n_eles == 0;
-}
-
 //---------------------------------
 // Functions
 //---------------------------------
 
 as_status
-as_txn_verify(aerospike* as, as_error* err, as_txn* txn, as_batch_listener listener, void* udata);
+as_txn_verify(aerospike* as, as_error* err, as_txn* txn);
+
+as_status
+as_txn_roll(aerospike* as, as_error* err, as_txn* txn, uint8_t txn_attr);
 
 as_status
 aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
@@ -56,17 +53,17 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 
 	as_error_reset(err);
 
-	// TODO: Create listener.
-	/*
-	as_status status = as_txn_verify(as, err, txn, listener, udata);
+	as_status status = as_txn_verify(as, err, txn);
 
-	if (status != AEROSPIKE_OK) {
-		return status;
+	if (status == AEROSPIKE_OK) {
+		uint8_t txn_attr = AS_MSG_INFO4_MRT_ROLL_FORWARD;
+		status = as_txn_roll(as, err, txn, txn_attr);
+	}
+	else {
+		// Rollback
 	}
 
-	as_policy_txn_roll* ptr = &as->config.policies.txn_roll;
-	*/
-	return AEROSPIKE_OK;
+	return status;
 }
 
 as_status

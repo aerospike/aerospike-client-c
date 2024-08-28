@@ -134,7 +134,7 @@ as_txn_on_read(as_txn* txn, const uint8_t* digest, const char* set, uint64_t ver
  * Get record version for a given key. For internal use only.
  */
 AS_EXTERN uint64_t
-as_txn_get_read_version(as_txn* txn, const as_key* key);
+as_txn_get_read_version(as_txn* txn, const uint8_t* digest);
 
 /**
  * Process the results of a record write. For internal use only.

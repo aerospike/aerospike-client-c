@@ -111,9 +111,9 @@ extern "C" {
 //   1      1     allow unavailable
 
 // MRT
-#define AS_MSG_INFO4_MRT_VERIFY_READ	(1 << 0); // Send MRT version to the server to be verified.
-#define AS_MSG_INFO4_MRT_ROLL_FORWARD	(1 << 1); // Roll forward MRT.
-#define AS_MSG_INFO4_MRT_ROLL_BACK		(1 << 2); // Roll back MRT.
+#define AS_MSG_INFO4_MRT_VERIFY_READ	(1 << 0) // Send MRT version to the server to be verified.
+#define AS_MSG_INFO4_MRT_ROLL_FORWARD	(1 << 1) // Roll forward MRT.
+#define AS_MSG_INFO4_MRT_ROLL_BACK		(1 << 2) // Roll back MRT.
 
 // Misc
 #define AS_HEADER_SIZE 30

@@ -162,7 +162,7 @@ as_txn_monitor_add_keys(
 	 )
 {
 	as_key key;
-	as_key_init_int64(&key, txn->ns, "<ERO~MRT", txn->id);
+	as_txn_monitor_init_key(txn, &key);
 
 	as_policy_operate txn_policy;
 	as_txn_policy_copy(cmd_policy, &txn_policy);
@@ -246,6 +246,41 @@ as_txn_monitor_add_keys_records(
 	return status;
 }
 
+as_status
+as_txn_monitor_mark_roll_forward(
+	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key
+	)
+{
+	as_policy_write policy;
+	as_policy_write_init(&policy);
+	policy.base.socket_timeout = base_policy->socket_timeout;
+	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.max_retries = base_policy->max_retries;
+	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
+
+	as_record rec;
+	as_record_init(&rec, 1);
+	as_record_set_bool(&rec, "fwd", true);
+
+	return aerospike_key_put(as, err, &policy, key, &rec);
+}
+
+as_status
+as_txn_monitor_remove(
+	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key
+	)
+{
+	as_policy_remove policy;
+	as_policy_remove_init(&policy);
+	policy.base.socket_timeout = base_policy->socket_timeout;
+	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.max_retries = base_policy->max_retries;
+	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
+	policy.durable_delete = true;
+
+	return aerospike_key_remove(as, err, &policy, key);
+}
+
 //---------------------------------
 // Async Functions
 //---------------------------------
@@ -257,7 +292,7 @@ as_txn_monitor_add_keys_async(
 	)
 {
 	as_key key;
-	as_key_init_int64(&key, txn->ns, "<ERO~MRT", txn->id);
+	as_txn_monitor_init_key(txn, &key);
 
 	as_policy_operate txn_policy;
 	as_txn_policy_copy(cmd_policy, &txn_policy);

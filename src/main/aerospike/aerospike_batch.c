@@ -3670,7 +3670,7 @@ as_txn_verify(aerospike* as, as_error* err, as_txn* txn)
 }
 
 as_status
-as_txn_roll(aerospike* as, as_error* err, as_txn* txn, uint8_t txn_attr)
+as_txn_roll(aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* txn, uint8_t txn_attr)
 {
 	as_khash* writes = &txn->writes;
 	uint32_t n_keys = writes->n_eles;
@@ -3707,8 +3707,6 @@ as_txn_roll(aerospike* as, as_error* err, as_txn* txn, uint8_t txn_attr)
 		}
 		row++;
 	}
-
-	as_policy_txn_roll* policy = &as->config.policies.txn_roll;
 
 	as_status status = as_batch_records_execute(as, err, policy, &records, txn, versions, NULL, false);
 	as_batch_records_destroy(&records);

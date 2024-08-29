@@ -19,29 +19,34 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_txn.h>
+#include <aerospike/as_txn_monitor.h>
 
 //---------------------------------
-// Types
-//---------------------------------
-
-typedef struct {
-	as_cluster* cluster;
-	as_txn* txn;
-} as_roll;
-
-//---------------------------------
-// Static Functions
-//---------------------------------
-
-//---------------------------------
-// Functions
+// Function Declarations
 //---------------------------------
 
 as_status
 as_txn_verify(aerospike* as, as_error* err, as_txn* txn);
 
 as_status
-as_txn_roll(aerospike* as, as_error* err, as_txn* txn, uint8_t txn_attr);
+as_txn_roll(aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* txn, uint8_t txn_attr);
+
+//---------------------------------
+// Static Functions
+//---------------------------------
+
+static void
+as_error_copy_fields(as_error* err, as_error* verify_err)
+{
+	err->func = verify_err->func;
+	err->file = verify_err->file;
+	err->line = verify_err->line;
+	err->in_doubt = verify_err->in_doubt;
+}
+
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
@@ -53,17 +58,77 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 
 	as_error_reset(err);
 
-	as_status status = as_txn_verify(as, err, txn);
+	as_policy_txn_roll* roll_policy = &as->config.policies.txn_roll;
 
-	if (status == AEROSPIKE_OK) {
-		uint8_t txn_attr = AS_MSG_INFO4_MRT_ROLL_FORWARD;
-		status = as_txn_roll(as, err, txn, txn_attr);
-	}
-	else {
-		// Rollback
+	as_key key;
+	as_txn_monitor_init_key(txn, &key);
+
+	as_error verify_err;
+	as_status status = as_txn_verify(as, &verify_err, txn);
+
+	if (status != AEROSPIKE_OK) {
+		// Verify failed. Abort.
+		as_error roll_err;
+		as_status roll_status = as_txn_roll(as, &roll_err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_BACK);
+
+		if (roll_status != AEROSPIKE_OK) {
+			as_error_update(err, status, "Txn aborted:\nVerify failed: %s\nRollback abandoned: %s",
+				verify_err.message, roll_err.message);
+			as_error_copy_fields(err, &verify_err);
+			return status;
+		}
+
+		if (as_txn_monitor_might_exist(txn)) {
+			roll_status = as_txn_monitor_remove(as, &roll_err, &roll_policy->base, &key);
+
+			if (roll_status != AEROSPIKE_OK) {
+				as_error_update(err, status, "Txn aborted:\nVerify failed: %s\nClose abandoned: %s",
+					verify_err.message, roll_err.message);
+				as_error_copy_fields(err, &verify_err);
+				return status;
+			}
+		}
+
+		as_error_update(err, status, "Txn aborted:\nVerify failed: %s", verify_err.message);
+		as_error_copy_fields(err, &verify_err);
+		return status;
 	}
 
-	return status;
+	if (as_txn_monitor_exists(txn)) {
+		status = as_txn_monitor_mark_roll_forward(as, &verify_err, &roll_policy->base, &key);
+
+		if (status != AEROSPIKE_OK) {
+			as_error_update(err, status, "Txn aborted:\nMark roll forward abandoned: %s",
+				verify_err.message);
+			as_error_copy_fields(err, &verify_err);
+			return status;
+		}
+	}
+
+	status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_FORWARD);
+
+	if (status != AEROSPIKE_OK) {
+		// The client roll has error, but the server always eventually rolls forward the MRT
+		// after as_txn_monitor_mark_roll_forward() succeeds. Therefore, return success,
+		// but leave the error message for debug/log purposes.
+		err->code = AEROSPIKE_OK;
+		return AEROSPIKE_OK;
+	}
+
+	if (as_txn_monitor_might_exist(txn)) {
+		status = as_txn_monitor_remove(as, err, &roll_policy->base, &key);
+
+		if (status != AEROSPIKE_OK) {
+			// The client remove has error, but the server always eventually removess the MRT
+			// after as_txn_monitor_mark_roll_forward() succeeds. Therefore, return success,
+			// but leave the error message for debug/log purposes.
+			err->code = AEROSPIKE_OK;
+			return AEROSPIKE_OK;
+		}
+	}
+
+	as_txn_clear(txn);
+	return AEROSPIKE_OK;
 }
 
 as_status

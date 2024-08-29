@@ -24,38 +24,21 @@ extern "C" {
 #endif
 
 //---------------------------------
-// Types
-//---------------------------------
-
-
-//---------------------------------
 // Functions
 //---------------------------------
 
 /**
- * Initialize a stack allocated aerospike instance. 
+ * Attempt to commit the given multi-record transaction. First, the expected record versions are
+ * sent to the server nodes for verification. If all nodes return success, the transaction is
+ * committed. Otherwise, the transaction is aborted.
  *
- * The config parameter can be an instance of `as_config` or `NULL`. If `NULL`,
- * then the default configuration will be used.
+ * Requires server version 8.0+
  *
- * Ownership of the as_config instance fields are transferred to the aerospike instance.
- * The user should never call as_config_destroy() directly.
+ * @param as 	Aerospike instance.
+ * @param err	Error detail structure that is populated if an error occurs.
+ * @param txn	Multi-record transaction.
  *
- * ~~~~~~~~~~{.c}
- * aerospike as;
- * aerospike_init(&as, &config);
- * ~~~~~~~~~~
- *
- * Once you are finished using the instance, then you should destroy it via the 
- * `aerospike_destroy()` function.
- *
- * @param as 		The aerospike instance to initialize.
- * @param config 	The configuration to use for the instance.
- *
- * @returns the initialized aerospike instance
- *
- * @see config for information on configuring the client.
- *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
  * @relates aerospike
  */
 AS_EXTERN as_status

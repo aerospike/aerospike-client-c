@@ -119,7 +119,7 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 		status = as_txn_monitor_remove(as, err, &roll_policy->base, &key);
 
 		if (status != AEROSPIKE_OK) {
-			// The client remove has error, but the server always eventually removess the MRT
+			// The client remove has error, but the server always eventually removes the MRT
 			// after as_txn_monitor_mark_roll_forward() succeeds. Therefore, return success,
 			// but leave the error message for debug/log purposes.
 			err->code = AEROSPIKE_OK;
@@ -137,6 +137,33 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn)
 	if (! as_txn_set_roll_attempted(txn)) {
 		return as_error_set_message(err, AEROSPIKE_ROLL_ALREADY_ATTEMPTED,
 			"Abort or commit already attempted");
+	}
+
+	as_error_reset(err);
+
+	as_policy_txn_roll* roll_policy = &as->config.policies.txn_roll;
+
+	as_status status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_BACK);
+
+	if (status != AEROSPIKE_OK) {
+		// The client roll has error, but the server always eventually aborts the MRT.
+		// Therefore, return success, but leave the error message for debug/log purposes.
+		err->code = AEROSPIKE_OK;
+		return AEROSPIKE_OK;
+	}
+
+	if (as_txn_monitor_might_exist(txn)) {
+		as_key key;
+		as_txn_monitor_init_key(txn, &key);
+
+		status = as_txn_monitor_remove(as, err, &roll_policy->base, &key);
+
+		if (status != AEROSPIKE_OK) {
+			// The client remove has error, but the server always eventually removes the MRT.
+			// Therefore, return success, but leave the error message for debug/log purposes.
+			err->code = AEROSPIKE_OK;
+			return AEROSPIKE_OK;
+		}
 	}
 	return AEROSPIKE_OK;
 }

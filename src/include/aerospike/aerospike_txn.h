@@ -44,6 +44,21 @@ extern "C" {
 AS_EXTERN as_status
 aerospike_commit(aerospike* as, as_error* err, as_txn* txn);
 
+/**
+ * Abort and rollback the given multi-record transaction.
+ *
+ * Requires server version 8.0+
+ *
+ * @param as 	Aerospike instance.
+ * @param err	Error detail structure that is populated if an error occurs.
+ * @param txn	Multi-record transaction.
+ *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
+ * @relates aerospike
+ */
+AS_EXTERN as_status
+aerospike_abort(aerospike* as, as_error* err, as_txn* txn);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

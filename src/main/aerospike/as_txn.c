@@ -28,28 +28,28 @@ typedef void (*khash_reduce_fn)(const uint8_t* keyd, const char* set, uint64_t v
 // Static Functions
 //---------------------------------
 
-static inline as_khash_row*
-get_row(const as_khash* h, const uint8_t* keyd)
+static inline as_txn_hash_row*
+get_row(const as_txn_hash* h, const uint8_t* keyd)
 {
 	return &h->table[*(uint32_t*)keyd % h->n_rows];
 }
 
 static inline void
-fill_ele(as_khash_ele* e, const uint8_t* keyd, const char* set, uint64_t version)
+fill_ele(as_txn_key* e, const uint8_t* keyd, const char* set, uint64_t version)
 {
-	memcpy(e->keyd, keyd, sizeof(e->keyd));
+	memcpy(e->digest, keyd, sizeof(e->digest));
 	as_strncpy(e->set, set, sizeof(e->set));
 	e->version = version;
 	e->next = NULL;
 }
 
 static void
-khash_init(as_khash* h, uint32_t n_rows)
+as_txn_hash_init(as_txn_hash* h, uint32_t n_rows)
 {
 	pthread_mutex_init(&h->lock, NULL);
 	h->n_eles = 0;
 	h->n_rows = n_rows;
-	h->table = (as_khash_row*)cf_malloc(n_rows * sizeof(as_khash_row));
+	h->table = (as_txn_hash_row*)cf_malloc(n_rows * sizeof(as_txn_hash_row));
 
 	for (uint32_t i = 0; i < h->n_rows; i++) {
 		h->table[i].used = false;
@@ -57,16 +57,16 @@ khash_init(as_khash* h, uint32_t n_rows)
 }
 
 static void
-khash_clear(as_khash* h)
+as_txn_hash_clear(as_txn_hash* h)
 {
-	as_khash_row* row = h->table;
+	as_txn_hash_row* row = h->table;
 
 	for (uint32_t i = 0; i < h->n_rows; i++) {
 		if (row->used) {
-			as_khash_ele* e = row->head.next;
+			as_txn_key* e = row->head.next;
 
 			while (e != NULL) {
-				as_khash_ele* t = e->next;
+				as_txn_key* t = e->next;
 				cf_free(e);
 				e = t;
 			}
@@ -79,27 +79,20 @@ khash_clear(as_khash* h)
 }
 
 static void
-khash_destroy(as_khash* h)
+as_txn_hash_destroy(as_txn_hash* h)
 {
 	if (h->n_eles > 0) {
-		khash_clear(h);
+		as_txn_hash_clear(h);
 	}
 	pthread_mutex_destroy(&h->lock);
 	cf_free(h->table);
 }
 
-static bool
-khash_is_empty(const as_khash* h)
-{
-	// TODO: Should this be done under lock?
-	return h->n_eles == 0;
-}
-
 static void
-khash_put(as_khash* h, const uint8_t* keyd, const char* set, uint64_t version)
+as_txn_hash_put(as_txn_hash* h, const uint8_t* keyd, const char* set, uint64_t version)
 {
-	as_khash_row* row = get_row(h, keyd);
-	as_khash_ele* e = &row->head;
+	as_txn_hash_row* row = get_row(h, keyd);
+	as_txn_key* e = &row->head;
 
 	pthread_mutex_lock(&h->lock);
 
@@ -113,7 +106,7 @@ khash_put(as_khash* h, const uint8_t* keyd, const char* set, uint64_t version)
 	}
 
 	do {
-		if (memcmp(keyd, e->keyd, AS_DIGEST_VALUE_SIZE) == 0) {
+		if (memcmp(keyd, e->digest, AS_DIGEST_VALUE_SIZE) == 0) {
 			e->version = version;
 			pthread_mutex_unlock(&h->lock);
 			return;
@@ -122,7 +115,7 @@ khash_put(as_khash* h, const uint8_t* keyd, const char* set, uint64_t version)
 		e = e->next;
 	} while (e != NULL);
 
-	e = (as_khash_ele*)cf_malloc(sizeof(as_khash_ele));
+	e = (as_txn_key*)cf_malloc(sizeof(as_txn_key));
 	fill_ele(e, keyd, set, version);
 	h->n_eles++;
 
@@ -134,12 +127,12 @@ khash_put(as_khash* h, const uint8_t* keyd, const char* set, uint64_t version)
 }
 
 static void
-khash_remove(as_khash* h, const uint8_t* keyd)
+as_txn_hash_remove(as_txn_hash* h, const uint8_t* keyd)
 {
-	as_khash_row* row = get_row(h, keyd);
-	as_khash_ele* e = &row->head;
-	as_khash_ele* e_prev = NULL;
-	as_khash_ele* free_e = NULL;
+	as_txn_hash_row* row = get_row(h, keyd);
+	as_txn_key* e = &row->head;
+	as_txn_key* e_prev = NULL;
+	as_txn_key* free_e = NULL;
 
 	pthread_mutex_lock(&h->lock);
 
@@ -149,7 +142,7 @@ khash_remove(as_khash* h, const uint8_t* keyd)
 	}
 
 	do {
-		if (memcmp(keyd, e->keyd, AS_DIGEST_VALUE_SIZE) == 0) {
+		if (memcmp(keyd, e->digest, AS_DIGEST_VALUE_SIZE) == 0) {
 			if (e_prev != NULL) {
 				e_prev->next = e->next;
 				free_e = e;
@@ -178,15 +171,15 @@ khash_remove(as_khash* h, const uint8_t* keyd)
 }
 
 static uint64_t
-khash_get_version(as_khash* h, const uint8_t* keyd)
+as_txn_hash_get_version(as_txn_hash* h, const uint8_t* keyd)
 {
-	as_khash_row* row = get_row(h, keyd);
+	as_txn_hash_row* row = get_row(h, keyd);
 
 	if (! row->used) {
 		return 0;
 	}
 
-	as_khash_ele* e = &row->head;
+	as_txn_key* e = &row->head;
 
 	pthread_mutex_lock(&h->lock);
 
@@ -196,7 +189,7 @@ khash_get_version(as_khash* h, const uint8_t* keyd)
 	}
 
 	do {
-		if (memcmp(keyd, e->keyd, AS_DIGEST_VALUE_SIZE) == 0) {
+		if (memcmp(keyd, e->digest, AS_DIGEST_VALUE_SIZE) == 0) {
 			uint64_t version = e->version;
 			pthread_mutex_unlock(&h->lock);
 			return version;
@@ -210,15 +203,15 @@ khash_get_version(as_khash* h, const uint8_t* keyd)
 }
 
 static bool
-khash_contains(as_khash* h, const uint8_t* keyd)
+as_txn_hash_contains(as_txn_hash* h, const uint8_t* keyd)
 {
-	as_khash_row* row = get_row(h, keyd);
+	as_txn_hash_row* row = get_row(h, keyd);
 
 	if (! row->used) {
 		return false;
 	}
 
-	as_khash_ele* e = &row->head;
+	as_txn_key* e = &row->head;
 
 	pthread_mutex_lock(&h->lock);
 
@@ -228,7 +221,7 @@ khash_contains(as_khash* h, const uint8_t* keyd)
 	}
 
 	do {
-		if (memcmp(keyd, e->keyd, AS_DIGEST_VALUE_SIZE) == 0) {
+		if (memcmp(keyd, e->digest, AS_DIGEST_VALUE_SIZE) == 0) {
 			pthread_mutex_unlock(&h->lock);
 			return true;
 		}
@@ -238,26 +231,6 @@ khash_contains(as_khash* h, const uint8_t* keyd)
 
 	pthread_mutex_unlock(&h->lock);
 	return false;
-}
-
-// This function is only called on as_txn_commit() or as_txn_abort() so it's not possible
-// to contend with other parallel khash function calls. Therfore, there are no locks.
-static void
-khash_reduce(as_khash* h, khash_reduce_fn cb, void* udata)
-{
-	as_khash_row* row = h->table;
-
-	for (uint32_t i = 0; i < h->n_rows; i++) {
-		if (row->used) {
-			as_khash_ele* e = &row->head;
-
-			do {
-				cb(e->keyd, e->set, e->version, udata);
-				e = e->next;
-			} while (e != NULL);
-		}
-		row++;
-	}
 }
 
 static void
@@ -276,8 +249,8 @@ as_txn_init_all(as_txn* txn, uint32_t read_buckets, uint32_t write_buckets)
 	txn->deadline = 0;
 	txn->monitor_in_doubt = false;
 	txn->roll_attempted = false;
-	khash_init(&txn->reads, read_buckets);
-	khash_init(&txn->writes, write_buckets);
+	as_txn_hash_init(&txn->reads, read_buckets);
+	as_txn_hash_init(&txn->writes, write_buckets);
 }
 
 //---------------------------------
@@ -328,8 +301,8 @@ as_txn_create_capacity(uint32_t reads_capacity, uint32_t writes_capacity)
 void
 as_txn_destroy(as_txn* txn)
 {
-	khash_destroy(&txn->reads);
-	khash_destroy(&txn->writes);
+	as_txn_hash_destroy(&txn->reads);
+	as_txn_hash_destroy(&txn->writes);
 	
 	if (txn->free) {
 		cf_free(txn);
@@ -340,26 +313,26 @@ void
 as_txn_on_read(as_txn* txn, const uint8_t* digest, const char* set, uint64_t version)
 {
 	if (version != 0) {
-		khash_put(&txn->reads, digest, set, version);
+		as_txn_hash_put(&txn->reads, digest, set, version);
 	}
 }
 
 uint64_t
 as_txn_get_read_version(as_txn* txn, const uint8_t* digest)
 {
-	return khash_get_version(&txn->reads, digest);
+	return as_txn_hash_get_version(&txn->reads, digest);
 }
 
 void
 as_txn_on_write(as_txn* txn, const uint8_t* digest, const char* set, uint64_t version, int rc)
 {
 	if (version != 0) {
-		khash_put(&txn->reads, digest, set, version);
+		as_txn_hash_put(&txn->reads, digest, set, version);
 	}
 	else {
 		if (rc == AEROSPIKE_OK) {
-			khash_remove(&txn->reads, digest);
-			khash_put(&txn->writes, digest, set, 0);
+			as_txn_hash_remove(&txn->reads, digest);
+			as_txn_hash_put(&txn->writes, digest, set, 0);
 		}
 	}
 }
@@ -367,14 +340,14 @@ as_txn_on_write(as_txn* txn, const uint8_t* digest, const char* set, uint64_t ve
 void
 as_txn_on_write_in_doubt(as_txn* txn, const uint8_t* digest, const char* set)
 {
-	khash_remove(&txn->reads, digest);
-	khash_put(&txn->writes, digest, set, 0);
+	as_txn_hash_remove(&txn->reads, digest);
+	as_txn_hash_put(&txn->writes, digest, set, 0);
 }
 
 bool
 as_txn_writes_contain(as_txn* txn, const as_key* key)
 {
-	return khash_contains(&txn->writes, key->digest.value);
+	return as_txn_hash_contains(&txn->writes, key->digest.value);
 }
 
 as_status
@@ -409,6 +382,27 @@ as_txn_clear(as_txn* txn)
 {
 	txn->ns[0] = 0;
 	txn->deadline = 0;
-	khash_clear(&txn->reads);
-	khash_clear(&txn->writes);
+	as_txn_hash_clear(&txn->reads);
+	as_txn_hash_clear(&txn->writes);
+}
+
+as_txn_key*
+as_txn_iter_next(as_txn_iter* iter)
+{
+	if (iter->ele) {
+		as_txn_key* tmp = iter->ele;
+		iter->ele = tmp->next;
+		return tmp;
+	}
+
+	while (iter->idx < iter->khash->n_rows) {
+		if (iter->row->used) {
+			as_txn_key* tmp = &iter->row->head;
+			iter->ele = tmp->next;
+			return tmp;
+		}
+		iter->row++;
+		iter->idx++;
+	}
+	return NULL;
 }

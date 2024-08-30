@@ -31,35 +31,32 @@ extern "C" {
 //---------------------------------
 
 /**
- * Hash map element.
- * @private
+ * Transaction key.
  */
-typedef struct as_khash_ele_s {
-	as_digest_value keyd;
+typedef struct as_txn_key {
+	as_digest_value digest;
 	char set[64];
 	uint64_t version;
-	struct as_khash_ele_s* next;
-} as_khash_ele;
+	struct as_txn_key* next;
+} as_txn_key;
 
 /**
- * Hash map row.
- * @private
+ * Transaction hash map row.
  */
-typedef struct as_khash_row_s {
+typedef struct {
 	bool used;
-	as_khash_ele head;
-} as_khash_row;
+	as_txn_key head;
+} as_txn_hash_row;
 
 /**
- * Hashmap.
- * @private
+ * Transaction hash map.
  */
-typedef struct as_khash_s {
+typedef struct {
 	pthread_mutex_t lock;
 	uint32_t n_eles;
 	uint32_t n_rows;
-	as_khash_row* table;
-} as_khash;
+	as_txn_hash_row* table;
+} as_txn_hash;
 
 /**
  * Multi-record transaction (MRT). Each command in the MRT must use the same namespace.
@@ -67,13 +64,23 @@ typedef struct as_khash_s {
 typedef struct as_txn {
 	uint64_t id;
 	as_namespace ns;
-	as_khash reads;
-	as_khash writes;
+	as_txn_hash reads;
+	as_txn_hash writes;
 	uint32_t deadline;
 	bool monitor_in_doubt;
 	bool roll_attempted;
 	bool free;
 } as_txn;
+
+/**
+ * Transaction iterator.
+ */
+typedef struct {
+	as_txn_hash* khash;
+	as_txn_hash_row* row;
+	as_txn_key* ele;
+	uint32_t idx;
+} as_txn_iter;
 
 //---------------------------------
 // Functions
@@ -125,6 +132,15 @@ AS_EXTERN void
 as_txn_destroy(as_txn* txn);
 
 /**
+ * Return read hash size.
+ */
+static inline uint32_t
+as_txn_reads_size(as_txn* txn)
+{
+	return txn->reads.n_eles;
+}
+
+/**
  * Process the results of a record read. For internal use only.
  */
 AS_EXTERN void
@@ -135,6 +151,15 @@ as_txn_on_read(as_txn* txn, const uint8_t* digest, const char* set, uint64_t ver
  */
 AS_EXTERN uint64_t
 as_txn_get_read_version(as_txn* txn, const uint8_t* digest);
+
+/**
+ * Return write hash size.
+ */
+static inline uint32_t
+as_txn_writes_size(as_txn* txn)
+{
+	return txn->writes.n_eles;
+}
 
 /**
  * Process the results of a record write. For internal use only.
@@ -191,6 +216,36 @@ as_txn_monitor_exists(as_txn* txn)
  */
 AS_EXTERN void
 as_txn_clear(as_txn* txn);
+
+/**
+ * Initialize read keys iterator.
+ */
+static inline void
+as_txn_iter_reads(as_txn_iter* iter, as_txn* txn)
+{
+	iter->khash = &txn->reads;
+	iter->row = txn->reads.table;
+	iter->ele = NULL;
+	iter->idx = 0;
+}
+
+/**
+ * Initialize write keys iterator.
+ */
+static inline void
+as_txn_iter_writes(as_txn_iter* iter, as_txn* txn)
+{
+	iter->khash = &txn->writes;
+	iter->row = txn->writes.table;
+	iter->ele = NULL;
+	iter->idx = 0;
+}
+
+/**
+ * Return next available hash element or NULL if no more elements are available.
+ */
+AS_EXTERN as_txn_key*
+as_txn_iter_next(as_txn_iter* iter);
 
 #ifdef __cplusplus
 } // end extern "C"

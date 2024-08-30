@@ -3625,8 +3625,7 @@ as_batch_txn_callback(as_error* err, as_record* rec, void* udata, as_event_loop*
 as_status
 as_txn_verify(aerospike* as, as_error* err, as_txn* txn)
 {
-	as_khash* reads = &txn->reads;
-	uint32_t n_keys = reads->n_eles;
+	uint32_t n_keys = as_txn_reads_size(txn);
 
 	if (n_keys == 0)  {
 		return AEROSPIKE_OK;
@@ -3642,23 +3641,17 @@ as_txn_verify(aerospike* as, as_error* err, as_txn* txn)
 	}
 
 	uint64_t* versions = cf_malloc(sizeof(uint64_t) * n_keys);
-	as_khash_row* row = reads->table;
+
+	as_txn_iter iter;
+	as_txn_iter_reads(&iter, txn);
+	as_txn_key* key;
 	uint32_t count = 0;
 
-	for (uint32_t i = 0; i < reads->n_rows; i++) {
-		if (row->used) {
-			as_khash_ele* e = &row->head;
-
-			do {
-				as_batch_base_record* r = (as_batch_base_record*)as_vector_reserve(&records.list);
-				r->type = AS_BATCH_TXN_VERIFY;
-				as_key_init_digest(&r->key, txn->ns, e->set, e->keyd);
-
-				versions[count++] = e->version;
-				e = e->next;
-			} while (e != NULL);
-		}
-		row++;
+	while ((key = as_txn_iter_next(&iter)) != NULL) {
+		as_batch_base_record* r = (as_batch_base_record*)as_vector_reserve(&records.list);
+		r->type = AS_BATCH_TXN_VERIFY;
+		as_key_init_digest(&r->key, txn->ns, key->set, key->digest);
+		versions[count++] = key->version;
 	}
 
 	as_policy_txn_verify* policy = &as->config.policies.txn_verify;
@@ -3672,8 +3665,7 @@ as_txn_verify(aerospike* as, as_error* err, as_txn* txn)
 as_status
 as_txn_roll(aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* txn, uint8_t txn_attr)
 {
-	as_khash* writes = &txn->writes;
-	uint32_t n_keys = writes->n_eles;
+	uint32_t n_keys = as_txn_writes_size(txn);
 
 	if (n_keys == 0)  {
 		return AEROSPIKE_OK;
@@ -3689,23 +3681,16 @@ as_txn_roll(aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* tx
 	}
 
 	uint64_t* versions = cf_malloc(sizeof(uint64_t) * n_keys);
-	as_khash_row* row = writes->table;
+	as_txn_iter iter;
+	as_txn_iter_writes(&iter, txn);
+	as_txn_key* key;
 	uint32_t count = 0;
 
-	for (uint32_t i = 0; i < writes->n_rows; i++) {
-		if (row->used) {
-			as_khash_ele* e = &row->head;
-
-			do {
-				as_batch_base_record* r = (as_batch_base_record*)as_vector_reserve(&records.list);
-				r->type = AS_BATCH_TXN_ROLL;
-				as_key_init_digest(&r->key, txn->ns, e->set, e->keyd);
-
-				versions[count++] = as_txn_get_read_version(txn, e->keyd);
-				e = e->next;
-			} while (e != NULL);
-		}
-		row++;
+	while ((key = as_txn_iter_next(&iter)) != NULL) {
+		as_batch_base_record* r = (as_batch_base_record*)as_vector_reserve(&records.list);
+		r->type = AS_BATCH_TXN_ROLL;
+		as_key_init_digest(&r->key, txn->ns, key->set, key->digest);
+		versions[count++] = as_txn_get_read_version(txn, key->digest);
 	}
 
 	as_status status = as_batch_records_execute(as, err, policy, &records, txn, versions, NULL, false);

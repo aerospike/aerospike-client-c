@@ -399,6 +399,8 @@ as_txn_iter_next(as_txn_iter* iter)
 		if (iter->row->used) {
 			as_txn_key* tmp = &iter->row->head;
 			iter->ele = tmp->next;
+			iter->row++;
+			iter->idx++;
 			return tmp;
 		}
 		iter->row++;

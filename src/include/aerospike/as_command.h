@@ -782,6 +782,13 @@ as_command_write_replica(as_policy_replica replica)
 	return (replica == AS_POLICY_REPLICA_MASTER)? replica : AS_POLICY_REPLICA_SEQUENCE;
 }
 
+/**
+ * @private
+ * Parse deadline field when adding keys to the MRT monitor record.
+ */
+as_status
+as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

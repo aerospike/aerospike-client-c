@@ -155,6 +155,12 @@ as_txn_policy_copy(const as_policy_base* src, as_policy_operate* trg)
 // Sync Functions
 //---------------------------------
 
+as_status
+as_txn_monitor_operate(
+	aerospike* as, as_error* err, as_txn* txn, const as_policy_operate* policy, const as_key* key,
+	const as_operations* ops
+	);
+
 static as_status
 as_txn_monitor_add_keys(
 	 aerospike* as, as_txn* txn, const as_policy_base* cmd_policy, as_operations* ops, as_error* err
@@ -166,14 +172,12 @@ as_txn_monitor_add_keys(
 	as_policy_operate txn_policy;
 	as_txn_policy_copy(cmd_policy, &txn_policy);
 
-	as_record* rec = NULL;
-	as_status status = aerospike_key_operate(as, err, &txn_policy, &key, ops, &rec);
+	as_status status = as_txn_monitor_operate(as, err, txn, &txn_policy, &key, ops);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
 
-	as_record_destroy(rec);
 	return status;
 }
 

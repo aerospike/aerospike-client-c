@@ -1429,3 +1429,42 @@ aerospike_key_apply_async(
 		return as_write_command_execute(as, err, &policy->base, key, cmd);
 	}
 }
+
+as_status
+as_txn_monitor_operate(
+	aerospike* as, as_error* err, as_txn* txn, const as_policy_operate* policy, const as_key* key,
+	const as_operations* ops
+	)
+{
+	uint32_t n_operations = ops->binops.size;
+
+	as_partition_info pi;
+	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
+
+	as_policy_operate policy_local;
+	as_operate oper;
+
+	status = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		return status;
+	}
+
+	policy = oper.policy;
+
+	as_command cmd;
+	as_command_init_write(&cmd, as->cluster, &policy->base, policy->replica, key, oper.size, &pi,
+		as_command_parse_deadline, txn);
+
+	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
+
+	return as_command_send(&cmd, err, compression_threshold, as_operate_write, &oper);
+}

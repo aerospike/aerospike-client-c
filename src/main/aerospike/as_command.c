@@ -1716,3 +1716,46 @@ as_command_parse_success_failure(
 	}
 	return status;
 }
+
+as_status
+as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
+{
+	printf("IN as_command_parse_deadline\n");
+	as_txn* txn = cmd->udata;
+	as_msg* msg = (as_msg*)buf;
+	as_status status = as_msg_parse(err, msg, size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	uint8_t* p = buf + sizeof(as_msg);
+	uint32_t len;
+	uint8_t type;
+
+	for (uint32_t i = 0; i < msg->n_fields; i++) {
+		len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+		p += 4;
+		type = *p++;
+
+		if (type == AS_FIELD_MRT_DEADLINE) {
+			if (len == 4) {
+				txn->deadline = cf_swap_from_le32(*(uint32_t*)p);
+				printf("DEADLINE=%u\n", txn->deadline);
+			}
+			else {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "MRT deadline field has invalid size: %u", len);
+			}
+		}
+		p += len;
+	}
+
+	status = msg->result_code;
+
+	if (msg->result_code) {
+		return as_error_update(err, status, "%s %s", as_node_get_address_string(node),
+			as_error_string(status));
+	}
+
+	return AEROSPIKE_OK;
+}

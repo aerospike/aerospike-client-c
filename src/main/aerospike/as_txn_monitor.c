@@ -144,7 +144,6 @@ as_txn_policy_copy(const as_policy_base* src, as_policy_operate* trg)
 {
 	as_policy_operate_init(trg);
 
-	trg->base.txn = src->txn;
 	trg->base.socket_timeout = src->socket_timeout;
 	trg->base.total_timeout = src->total_timeout;
 	trg->base.max_retries = src->max_retries;

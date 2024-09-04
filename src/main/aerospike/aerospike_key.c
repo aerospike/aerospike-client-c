@@ -66,6 +66,44 @@ as_key_partition_init(as_cluster* cluster, as_error* err, const as_key* key, as_
 	return as_partition_info_init(pi, cluster, err, key);
 }
 
+static as_status
+as_command_prepare_read(
+	as_cluster* cluster, as_error* err, const as_policy_base* policy, const as_key* key,
+	as_partition_info* pi
+	)
+{
+	as_status status = as_key_partition_init(cluster, err, key, pi);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	if (policy->txn) {
+		status = as_txn_set_ns(policy->txn, key->ns, err);
+	}
+
+	return status;
+}
+
+static as_status
+as_command_prepare_write(
+	aerospike* as, as_error* err, const as_policy_base* policy, const as_key* key,
+	as_partition_info* pi
+	)
+{
+	as_status status = as_key_partition_init(as->cluster, err, key, pi);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	if (policy->txn) {
+		status = as_txn_monitor_add_key(as, policy, key, err);
+	}
+
+	return status;
+}
+
 static inline void
 as_command_init_read(
 	as_command* cmd, as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica,
@@ -285,17 +323,9 @@ aerospike_key_get(
 		policy = &as->config.policies.read;
 	}
 
-	if (policy->base.txn) {
-		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -338,17 +368,9 @@ aerospike_key_get_async(
 		policy = &as->config.policies.read;
 	}
 
-	if (policy->base.txn) {
-		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -392,17 +414,9 @@ aerospike_key_select(
 		policy = &as->config.policies.read;
 	}
 	
-	if (policy->base.txn) {
-		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -458,17 +472,9 @@ aerospike_key_select_async(
 		policy = &as->config.policies.read;
 	}
 	
-	if (policy->base.txn) {
-		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -525,17 +531,9 @@ aerospike_key_exists(
 		policy = &as->config.policies.read;
 	}
 
-	if (policy->base.txn) {
-		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -577,17 +575,9 @@ aerospike_key_exists_async(
 		policy = &as->config.policies.read;
 	}
 	
-	if (policy->base.txn) {
-		as_status status = as_txn_set_ns(policy->base.txn, key->ns, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -693,18 +683,8 @@ aerospike_key_put(
 		policy = &as->config.policies.write;
 	}
 	
-	if (policy->base.txn) {
-		as_status status = as_txn_monitor_add_key(as, &policy->base, key, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-	
-	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_command_prepare_write(as, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -729,7 +709,7 @@ aerospike_key_put(
 	}
 
 	as_command cmd;
-	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, key, put.size, &pi,
+	as_command_init_write(&cmd, as->cluster, &policy->base, policy->replica, key, put.size, &pi,
 						  as_command_parse_header, NULL);
 
 	status = as_command_send(&cmd, err, compression_threshold, as_put_write, &put);
@@ -747,9 +727,8 @@ aerospike_key_put_async_ex(
 		policy = &as->config.policies.write;
 	}
 
-	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -776,7 +755,7 @@ aerospike_key_put_async_ex(
 	if (compression_threshold == 0 || (put.size <= compression_threshold)) {
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_write_command_create(
-			cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
+			as->cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
 			pipe_listener, put.size, as_event_command_parse_header, NULL, 0);
 
 		cmd->write_len = (uint32_t)as_put_write(&put, cmd->buf);
@@ -801,7 +780,7 @@ aerospike_key_put_async_ex(
 		// Allocate command with compressed upper bound.
 		size_t comp_size = as_command_compress_max_size(size);
 		as_event_command* cmd = as_async_write_command_create(
-			cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
+			as->cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
 			pipe_listener, comp_size, as_event_command_parse_header, ubuf, (uint32_t)size);
 
 		// Compress buffer and execute.
@@ -849,18 +828,8 @@ aerospike_key_remove(
 		policy = &as->config.policies.remove;
 	}
 
-	if (policy->base.txn) {
-		as_status status = as_txn_monitor_add_key(as, &policy->base, key, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
-	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_command_prepare_write(as, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -881,7 +850,7 @@ aerospike_key_remove(
 	size = as_command_write_end(buf, p);
 
 	as_command cmd;
-	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, key, size, &pi,
+	as_command_init_write(&cmd, as->cluster, &policy->base, policy->replica, key, size, &pi,
 						  as_command_parse_header, NULL);
 
 	cmd.buf = buf;
@@ -903,21 +872,20 @@ aerospike_key_remove_async_ex(
 		policy = &as->config.policies.remove;
 	}
 
-	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-	
+
 	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, true, &tdata);
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
 	as_event_command* cmd = as_async_write_command_create(
-		cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
+		as->cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
 		pipe_listener, size, as_event_command_parse_header, NULL, 0);
 
 	uint8_t* p = as_command_write_header_write(cmd->buf, &policy->base, policy->commit_level,
@@ -1106,13 +1074,11 @@ aerospike_key_operate(
 	uint32_t n_operations = ops->binops.size;
 
 	if (n_operations == 0) {
-		as_error_reset(err);
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No operations defined");
 	}
 
-	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1132,7 +1098,7 @@ aerospike_key_operate(
 	}
 
 	policy = oper.policy;
-	
+
 	if (policy->base.txn) {
 		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
 			status = as_txn_monitor_add_key(as, &policy->base, key, err);
@@ -1154,11 +1120,11 @@ aerospike_key_operate(
 	as_command cmd;
 
 	if (oper.write_attr & AS_MSG_INFO2_WRITE) {
-		as_command_init_write(&cmd, cluster, &policy->base, policy->replica, key, oper.size, &pi,
+		as_command_init_write(&cmd, as->cluster, &policy->base, policy->replica, key, oper.size, &pi,
 							  as_command_parse_result, &data);
 	}
 	else {
-		as_command_init_read(&cmd, cluster, &policy->base, policy->replica, policy->read_mode_sc, key,
+		as_command_init_read(&cmd, as->cluster, &policy->base, policy->replica, policy->read_mode_sc, key,
 							 oper.size, &pi, as_command_parse_result, &data);
 	}
 
@@ -1182,9 +1148,8 @@ aerospike_key_operate_async(
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No operations defined");
 	}
 	
-	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1212,7 +1177,7 @@ aerospike_key_operate_async(
 		if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {
 			// Send uncompressed command.
 			cmd = as_async_record_command_create(
-				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
+				as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, oper.size,
 				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE, NULL, 0);
 
@@ -1229,7 +1194,7 @@ aerospike_key_operate_async(
 			size_t comp_size = as_command_compress_max_size(size);
 
 			cmd = as_async_record_command_create(
-				cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
+				as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, comp_size,
 				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE, ubuf, (uint32_t)size);
 
@@ -1264,7 +1229,7 @@ aerospike_key_operate_async(
 			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 			cmd = as_async_record_command_create(
-				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
+				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
 				oper.size, as_event_command_parse_result, AS_LATENCY_TYPE_READ, NULL, 0);
 
@@ -1284,7 +1249,7 @@ aerospike_key_operate_async(
 			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 			cmd = as_async_record_command_create(
-				cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
+				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
 				comp_size, as_event_command_parse_result, AS_LATENCY_TYPE_READ, ubuf, (uint32_t)size);
 
@@ -1378,18 +1343,8 @@ aerospike_key_apply(
 		policy = &as->config.policies.apply;
 	}
 	
-	if (policy->base.txn) {
-		as_status status = as_txn_monitor_add_key(as, &policy->base, key, err);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
-	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_command_prepare_write(as, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1399,7 +1354,7 @@ aerospike_key_apply(
 	size_t size = as_apply_init(&ap, policy, key, module, function, arglist);
 
 	as_command cmd;
-	as_command_init_write(&cmd, cluster, &policy->base, policy->replica, key, size, &pi,
+	as_command_init_write(&cmd, as->cluster, &policy->base, policy->replica, key, size, &pi,
 						  as_command_parse_success_failure, result);
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
@@ -1423,9 +1378,8 @@ aerospike_key_apply_async(
 		policy = &as->config.policies.apply;
 	}
 	
-	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_key_partition_init(cluster, err, key, &pi);
+	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1436,7 +1390,7 @@ aerospike_key_apply_async(
 
 	if (! (policy->base.compress && size > AS_COMPRESS_THRESHOLD)) {
 		// Send uncompressed command.
-		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base, &pi,
+		as_event_command* cmd = as_async_value_command_create(as->cluster, &policy->base, &pi,
 			policy->replica, listener, udata, event_loop, pipe_listener, size,
 			as_event_command_parse_success_failure, NULL, 0);
 
@@ -1459,7 +1413,7 @@ aerospike_key_apply_async(
 		// Allocate command with compressed upper bound.
 		size_t comp_size = as_command_compress_max_size(size);
 
-		as_event_command* cmd = as_async_value_command_create(cluster, &policy->base, &pi,
+		as_event_command* cmd = as_async_value_command_create(as->cluster, &policy->base, &pi,
 			policy->replica, listener, udata, event_loop, pipe_listener, comp_size,
 			as_event_command_parse_success_failure, ubuf, (uint32_t)size);
 

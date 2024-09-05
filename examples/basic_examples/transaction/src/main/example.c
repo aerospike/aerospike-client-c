@@ -68,7 +68,7 @@ main(int argc, char* argv[])
 
 	as_error err;
 
-	LOG("aerospike_key_put: %lld", (int64_t)txn.id);
+	LOG("aerospike_key_put: %" PRId64, (int64_t)txn.id);
 
 	if (aerospike_key_put(&as, &err, &pw, &key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);

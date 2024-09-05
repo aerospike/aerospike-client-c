@@ -1834,10 +1834,6 @@ static inline void
 as_batch_builder_destroy(as_batch_builder* bb)
 {
 	as_buffers_destroy(bb->buffers);
-
-	if (bb->versions) {
-		cf_free(bb->versions);
-	}
 }
 
 static void

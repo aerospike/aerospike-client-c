@@ -262,10 +262,12 @@ as_txn_monitor_mark_roll_forward(
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 
 	as_record rec;
-	as_record_init(&rec, 1);
+	as_record_inita(&rec, 1);
 	as_record_set_bool(&rec, "fwd", true);
 
-	return aerospike_key_put(as, err, &policy, key, &rec);
+	as_status status = aerospike_key_put(as, err, &policy, key, &rec);
+	as_record_destroy(&rec);
+	return status;
 }
 
 as_status

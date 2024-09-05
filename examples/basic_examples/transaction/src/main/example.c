@@ -59,15 +59,18 @@ main(int argc, char* argv[])
 	as_policy_write_copy(&as.config.policies.write, &pw);
 	pw.base.txn = &txn;
 
+	as_key key;
+	as_key_init_int64(&key, "test", "demoset", 1);
+
 	as_record rec;
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, "a", 1234);
 
 	as_error err;
 
-	LOG("aerospike_key_put");
+	LOG("aerospike_key_put: %lld", (int64_t)txn.id);
 
-	if (aerospike_key_put(&as, &err, &pw, &g_key, &rec) != AEROSPIKE_OK) {
+	if (aerospike_key_put(&as, &err, &pw, &key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);

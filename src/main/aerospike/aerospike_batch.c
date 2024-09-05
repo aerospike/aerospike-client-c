@@ -63,6 +63,7 @@ typedef struct {
 	uint32_t versions_capacity;
 	uint16_t field_count_header;
 	uint8_t read_attr; // old batch only
+	uint8_t txn_attr;
 	bool batch_any;
 } as_batch_builder;
 
@@ -106,6 +107,7 @@ typedef struct as_batch_task_s {
 	uint8_t replica_index;
 	uint8_t replica_index_sc;
 	uint8_t type;
+	uint8_t txn_attr;
 	bool has_write;
 } as_batch_task;
 
@@ -141,6 +143,7 @@ typedef struct {
 	as_policy_replica replica;
 	as_policy_replica replica_sc;
 	as_policy_read_mode_sc read_mode_sc;
+	uint8_t txn_attr;
 	bool has_write;
 	bool error_row;
 } as_async_batch_executor;
@@ -929,7 +932,6 @@ static inline void
 as_batch_txn_size(uint64_t ver, as_batch_builder* bb, bool has_write)
 {
 	if (bb->txn) {
-		bb->size++; // Add info4 byte for MRT.  // TODO HANDLE in MRT VERIFY/ROLL only!!
 		bb->size += 8 + AS_FIELD_HEADER_SIZE;
 
 		if (ver) {
@@ -1018,13 +1020,19 @@ as_batch_remove_record_size(as_batch_builder* bb)
 }
 
 static inline void
-as_batch_txn_verify_size(uint64_t version, as_batch_builder* bb)
+as_batch_txn_verify_size(uint64_t ver, as_batch_builder* bb)
 {
 	bb->size += 1; // info4(1)
 
-	if (version != 0) {
+	if (ver != 0) {
 		bb->size += 7 + AS_FIELD_HEADER_SIZE;
 	}
+}
+
+static inline void
+as_batch_txn_roll_size(as_batch_builder* bb)
+{
+	bb->size += 1; // info4(1)
 }
 
 static void
@@ -1116,6 +1124,7 @@ as_batch_records_size_new(
 				}
 
 				case AS_BATCH_TXN_ROLL: {
+					as_batch_txn_roll_size(bb);
 					status = AEROSPIKE_OK;
 					break;
 				}
@@ -1450,7 +1459,6 @@ as_batch_write_write(
 	uint16_t n_fields, uint16_t n_ops
 	)
 {
-	// TODO: add txnAttr for MRT roll.
 	*p++ = (BATCH_MSG_INFO | BATCH_MSG_GEN | BATCH_MSG_TTL);
 	*p++ = attr->read_attr;
 	*p++ = attr->write_attr;
@@ -1464,7 +1472,7 @@ as_batch_write_write(
 }
 
 static uint8_t*
-as_batch_write_txn_verify(uint8_t* p, as_key* key, uint64_t version)
+as_batch_write_txn_verify(uint8_t* p, as_key* key, uint64_t ver)
 {
 	*p++ = (BATCH_MSG_INFO | BATCH_MSG_INFO4);
 	*p++ = (AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
@@ -1472,12 +1480,51 @@ as_batch_write_txn_verify(uint8_t* p, as_key* key, uint64_t version)
 	*p++ = AS_MSG_INFO3_SC_READ_TYPE;
 	*p++ = AS_MSG_INFO4_MRT_VERIFY_READ;
 
-	if (version) {
+	if (ver) {
 		p = as_batch_write_fields(p, key, 1, 0);
-		p = as_command_write_field_version(p, version);
+		p = as_command_write_field_version(p, ver);
 	}
 	else {
 		p = as_batch_write_fields(p, key, 0, 0);
+	}
+	return p;
+}
+
+static uint8_t*
+as_batch_write_txn_roll(uint8_t* p, as_key* key, as_txn* txn, uint64_t ver, uint8_t txn_attr)
+{
+	*p++ = (BATCH_MSG_INFO | BATCH_MSG_INFO4);
+	*p++ = 0;
+	*p++ = (AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DURABLE_DELETE);
+	*p++ = 0;
+	*p++ = txn_attr;
+
+	uint16_t n_fields = 0;
+
+	if (txn) {
+		n_fields++;
+
+		if (ver) {
+			n_fields++;
+		}
+
+		if (txn->deadline) {
+			n_fields++;
+		}
+	}
+
+	p = as_batch_write_fields(p, key, n_fields, 0);
+
+	if (txn) {
+		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, txn->id);
+
+		if (ver) {
+			p = as_command_write_field_version(p, ver);
+		}
+
+		if (txn->deadline) {
+			p = as_command_write_field_uint32_le(p, AS_FIELD_MRT_DEADLINE, txn->deadline);
+		}
 	}
 	return p;
 }
@@ -1629,7 +1676,7 @@ as_batch_records_write_new(
 				}
 
 				case AS_BATCH_TXN_ROLL: {
-					p = as_batch_write_write(p, &rec->key, txn, ver, &attr, NULL, 0, 0);
+					p = as_batch_write_txn_roll(p, &rec->key, txn, ver, bb->txn_attr);
 					break;
 				}
 			}
@@ -1854,7 +1901,8 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 		.filter_exp = policy->base.filter_exp,
 		.buffers = &buffers,
 		.txn = btr->base.txn,
-		.versions = btr->base.versions
+		.versions = btr->base.versions,
+		.txn_attr = btr->base.txn_attr
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
@@ -2493,8 +2541,8 @@ as_batch_keys_execute(
 static as_status
 as_batch_execute_sync(
 	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policies* defs,
-	as_txn* txn, uint64_t* versions, bool has_write, as_batch_replica* rep, as_vector* records, uint32_t n_keys,
-	as_vector* batch_nodes, as_command* parent, bool* error_row
+	as_txn* txn, uint64_t* versions, uint8_t txn_attr, bool has_write, as_batch_replica* rep,
+	as_vector* records, uint32_t n_keys, as_vector* batch_nodes, as_command* parent, bool* error_row
 	)
 {
 	as_status status = AEROSPIKE_OK;
@@ -2518,6 +2566,7 @@ as_batch_execute_sync(
 	btr.base.has_write = has_write;
 	btr.base.replica_index = rep->replica_index;
 	btr.base.replica_index_sc = rep->replica_index_sc;
+	btr.base.txn_attr = txn_attr;
 	btr.defs = defs;
 	btr.records = records;
 
@@ -2673,7 +2722,8 @@ as_batch_execute_async(
 		.filter_exp = policy->base.filter_exp,
 		.buffers = &buffers,
 		.txn = executor->txn,
-		.versions = executor->versions
+		.versions = executor->versions,
+		.txn_attr = executor->txn_attr
 	};
 
 	as_status status = AEROSPIKE_OK;
@@ -2767,7 +2817,8 @@ as_batch_records_cleanup(
 static as_status
 as_batch_records_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
-	as_txn* txn, uint64_t* versions, as_async_batch_executor* async_executor, bool has_write
+	as_txn* txn, uint64_t* versions, as_async_batch_executor* async_executor, uint8_t txn_attr,
+	bool has_write
 	)
 {
 	as_cluster* cluster = as->cluster;
@@ -2865,7 +2916,7 @@ as_batch_records_execute(
 	}
 	else {
 		status = as_batch_execute_sync(cluster, err, policy, &as->config.policies, txn,
-			versions, has_write, &rep, list, n_keys, &batch_nodes, NULL, &error_row);
+			versions, txn_attr, has_write, &rep, list, n_keys, &batch_nodes, NULL, &error_row);
 
 		destroy_versions(versions);
 
@@ -2885,7 +2936,7 @@ static as_status
 as_batch_records_execute_async(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records,
 	as_txn* txn, uint64_t* versions, as_async_batch_listener listener, void* udata,
-	as_event_loop* event_loop, bool has_write
+	as_event_loop* event_loop, uint8_t txn_attr, bool has_write
 	)
 {
 	as_cluster_add_command_count(as->cluster);
@@ -2905,6 +2956,7 @@ as_batch_records_execute_async(
 	be->listener = listener;
 	// replica/replica_sc are set later in as_batch_execute_async().
 	be->read_mode_sc = policy->read_mode_sc;
+	be->txn_attr = txn_attr;
 	be->has_write = has_write;
 	be->error_row = false;
 
@@ -2924,7 +2976,7 @@ as_batch_records_execute_async(
 	exec->notify = true;
 	exec->valid = true;
 
-	return as_batch_records_execute(as, err, policy, records, txn, versions, be, has_write);
+	return as_batch_records_execute(as, err, policy, records, txn, versions, be, txn_attr, has_write);
 }
 
 //---------------------------------
@@ -3017,7 +3069,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
 
 	return as_batch_execute_sync(cluster, err, task->policy, btr->defs, btr->base.txn,
-		btr->base.versions, task->has_write, &rep, list, task->n_keys, &batch_nodes, parent,
+		btr->base.versions, btr->base.txn_attr, task->has_write, &rep, list, task->n_keys, &batch_nodes, parent,
 		task->error_row);
 }
 
@@ -3614,7 +3666,7 @@ as_batch_txn_callback(as_error* err, as_record* rec, void* udata, as_event_loop*
 
 	// Add txn monitor keys succeeded. Run original batch write.
 	as_status status = as_batch_records_execute_async(bt->as, err, &bt->policy, bt->records,
-		bt->txn, bt->versions, bt->listener, bt->udata, event_loop, true);
+		bt->txn, bt->versions, bt->listener, bt->udata, event_loop, 0, true);
 
 	if (status != AEROSPIKE_OK) {
 		bt->listener(err, bt->records, bt->udata, event_loop);
@@ -3657,7 +3709,7 @@ as_txn_verify(aerospike* as, as_error* err, as_txn* txn)
 	as_policy_txn_verify* policy = &as->config.policies.txn_verify;
 
 	// Do not pass txn instance for verify.
-	as_status status = as_batch_records_execute(as, err, policy, &records, NULL, versions, NULL, false);
+	as_status status = as_batch_records_execute(as, err, policy, &records, NULL, versions, NULL, 0, false);
 	as_batch_records_destroy(&records);
 	return status;
 }
@@ -3689,11 +3741,12 @@ as_txn_roll(aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* tx
 	while ((key = as_txn_iter_next(&iter)) != NULL) {
 		as_batch_base_record* r = (as_batch_base_record*)as_vector_reserve(&records.list);
 		r->type = AS_BATCH_TXN_ROLL;
+		r->has_write = true;
 		as_key_init_digest(&r->key, txn->ns, key->set, key->digest);
 		versions[count++] = as_txn_get_read_version(txn, key->digest);
 	}
 
-	as_status status = as_batch_records_execute(as, err, policy, &records, txn, versions, NULL, false);
+	as_status status = as_batch_records_execute(as, err, policy, &records, txn, versions, NULL, txn_attr, true);
 	as_batch_records_destroy(&records);
 	return status;
 }
@@ -3724,7 +3777,7 @@ aerospike_batch_read(
 		}
 	}
 
-	return as_batch_records_execute(as, err, policy, records, txn, versions, NULL, false);
+	return as_batch_records_execute(as, err, policy, records, txn, versions, NULL, 0, false);
 }
 
 as_status
@@ -3751,7 +3804,7 @@ aerospike_batch_read_async(
 	}
 
 	return as_batch_records_execute_async(as, err, policy, records, txn, versions, listener, udata,
-		event_loop, false);
+		event_loop, 0, false);
 }
 
 as_status
@@ -3783,7 +3836,7 @@ aerospike_batch_write(
 		}
 	}
 
-	return as_batch_records_execute(as, err, policy, records, txn, versions, NULL, true);
+	return as_batch_records_execute(as, err, policy, records, txn, versions, NULL, 0, true);
 }
 
 as_status
@@ -3825,7 +3878,7 @@ aerospike_batch_write_async(
 	else {
 		// Perform batch write.
 		return as_batch_records_execute_async(as, err, policy, records, NULL, NULL, listener, udata, event_loop,
-			true);
+			0, true);
 	}
 }
 

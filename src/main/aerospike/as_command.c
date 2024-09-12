@@ -1720,7 +1720,6 @@ as_command_parse_success_failure(
 as_status
 as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
-	printf("IN as_command_parse_deadline\n");
 	as_txn* txn = cmd->udata;
 	as_msg* msg = (as_msg*)buf;
 	as_status status = as_msg_parse(err, msg, size);
@@ -1741,7 +1740,6 @@ as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t
 		if (type == AS_FIELD_MRT_DEADLINE) {
 			if (len == 4) {
 				txn->deadline = cf_swap_from_le32(*(uint32_t*)p);
-				printf("DEADLINE=%u\n", txn->deadline);
 			}
 			else {
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "MRT deadline field has invalid size: %u", len);

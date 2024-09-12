@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -24,9 +24,9 @@
 const char*
 as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_node*
 as_peers_find_local_node(as_vector* nodes, const char* name)
@@ -62,14 +62,44 @@ as_peers_find_cluster_node(as_cluster* cluster, const char* name)
 }
 
 static bool
-as_peers_find_node(as_peers* peers, as_cluster* cluster, const char* name)
+as_peers_find_node(
+	as_peers* peers, as_cluster* cluster, const char* name, as_vector* hosts,
+	as_node** replace_node
+	)
 {
 	// Check global node map for existing cluster.
 	as_node* node = as_peers_find_cluster_node(cluster, name);
 	
 	if (node) {
-		node->friends++;
-		return true;
+		// Node name found.
+		as_address* address = as_node_get_address(node);
+
+		if (node->failures == 0 || as_address_is_local((struct sockaddr*)&address->addr)) {
+			// If the node does not have cluster tend errors or is localhost,
+			// reject new peer as the IP address does not need to change.
+			node->friends++;
+			return true;
+		}
+
+		// Retrieve node's IP address and port.
+		char addr_name[AS_IP_ADDRESS_SIZE];
+		as_address_short_name((struct sockaddr*)&address->addr, addr_name, sizeof(addr_name));
+		uint16_t port = as_address_port((struct sockaddr*)&address->addr);
+
+		// Match peer hosts with node's IP address and port.
+		for (uint32_t i = 0; i < hosts->size; i++) {
+			as_host* host = as_vector_get(hosts, i);
+
+			if (strcmp(host->name, addr_name) == 0 && host->port == port) {
+				// Main node host is also the same as one of the peer hosts.
+				// Peer should not be added.
+				node->friends++;
+				return true;
+			}
+		}
+
+		// Node should be replaced with a new node same name and new IP address.
+		*replace_node = node;
 	}
 	
 	// Check local node map for this tend iteration.
@@ -77,6 +107,7 @@ as_peers_find_node(as_peers* peers, as_cluster* cluster, const char* name)
 	
 	if (node) {
 		node->friends++;
+		*replace_node = NULL;
 		return true;
 	}
 	return false;
@@ -165,6 +196,21 @@ as_peers_validate_node(
 	return validated;
 }
 
+static bool
+as_peers_validate(as_peers* peers, as_cluster* cluster, as_vector* hosts, const char* expected_name)
+{
+	for (uint32_t i = 0; i < hosts->size; i++) {
+		as_host* host = as_vector_get(hosts, i);
+
+		host->name = (char*)as_cluster_get_alternate_host(cluster, host->name);
+
+		if (as_peers_validate_node(peers, cluster, host, expected_name)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static as_status
 as_peers_expected_error(as_error* err, char expected, const char* p)
 {
@@ -186,6 +232,7 @@ as_peers_parse_host(char* p, as_host* host, char* last)
 					p++;
 					host->port = (uint16_t)strtol(p, &p, 10);
 				}
+				*last = *p;
 				return p;
 			}
 			p++;
@@ -198,6 +245,7 @@ as_peers_parse_host(char* p, as_host* host, char* last)
 			if (*p == ':') {
 				*p++ = 0;
 				host->port = (uint16_t)strtol(p, &p, 10);
+				*last = *p;
 				return p;
 			}
 			else if (*p == ',' || *p == ']') {
@@ -208,7 +256,7 @@ as_peers_parse_host(char* p, as_host* host, char* last)
 			p++;
 		}
 	}
-	return 0;
+	return NULL;
 }
 
 as_status
@@ -251,11 +299,15 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 		return AEROSPIKE_OK;
 	}
 
+	as_vector hosts;
+	as_vector_inita(&hosts, sizeof(as_host), 16);
+
 	bool peers_validated = true;
 
 	while (*p) {
 		// Parse peer
 		if (*p != '[') {
+			as_vector_destroy(&hosts);
 			return as_peers_expected_error(err, '[', p);
 		}
 		p++;
@@ -268,13 +320,6 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 				break;
 			}
 			p++;
-		}
-		
-		bool node_validated = false;
-		
-		if (as_peers_find_node(peers, cluster, node_name)) {
-			// Node already exists. Do not even try to connect to hosts.
-			node_validated = true;
 		}
 		
 		node->peers_count++;
@@ -291,49 +336,57 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 		
 		// Parse peer hosts
 		if (*p != '[') {
+			as_vector_destroy(&hosts);
 			return as_peers_expected_error(err, '[', p);
 		}
 		p++;
 		
-		while (*p) {
-			if (*p == ']') {
-				p++;
-				break;
-			}
-			
+		as_vector_clear(&hosts);
+
+		while (*p && *p != ']') {
 			// Parse host
 			as_host host = {.name = NULL, .tls_name = tls_name, .port = default_port};
 			char last = 0;
 			p = as_peers_parse_host(p, &host, &last);
-			
+
 			if (! p) {
+				as_vector_destroy(&hosts);
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid peers host: %s", host.name);
 			}
 
-			// Only add the first host that works for a node.
-			if (! node_validated) {
-				// Check global aliases for existing cluster.
-				host.name = (char*)as_cluster_get_alternate_host(cluster, host.name);
-				node_validated = as_peers_validate_node(peers, cluster, &host, node_name);
+			if (last == ']') {
+				as_vector_append(&hosts, &host);
+				break;
 			}
-			
-			if (last) {
-				*p = last;
-			}
-			
-			if (*p == ',') {
-				p++;
-			}
-			else if (*p != ']') {
+
+			if (last != ',') {
+				as_vector_destroy(&hosts);
 				return as_peers_expected_error(err, ',', p);
 			}
+
+			p++;
+			as_vector_append(&hosts, &host);
 		}
+		p++;
+
+		as_node* replace_node = NULL;
+		bool node_validated = as_peers_find_node(peers, cluster, node_name, &hosts, &replace_node);
 
 		if (! node_validated) {
-			peers_validated = false;
+			node_validated = as_peers_validate(peers, cluster, &hosts, node_name);
+
+			if (node_validated) {
+				if (replace_node) {
+					as_vector_append(&peers->nodes_to_remove, &replace_node);
+				}
+			}
+			else {
+				peers_validated = false;
+			}
 		}
 
 		if (*p != ']') {
+			as_vector_destroy(&hosts);
 			return as_peers_expected_error(err, ']', p);
 		}
 		p++;
@@ -343,13 +396,16 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 			if (peers_validated) {
 				node->peers_generation = generation;
 			}
+			as_vector_destroy(&hosts);
 			return AEROSPIKE_OK;
 		}
 		
 		if (*p != ',') {
+			as_vector_destroy(&hosts);
 			return as_peers_expected_error(err, ',', p);
 		}
 		p++;
 	}
+	as_vector_destroy(&hosts);
 	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid peers host: %s", buf);
 }

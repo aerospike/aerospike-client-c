@@ -102,7 +102,7 @@ main(int argc, char* argv[])
 
 	as_key_init_int64(&key, "test", "demoset", 3);
 
-	as_record* recp;
+	as_record* recp = NULL;
 	as_status status = aerospike_key_get(&as, &err, &pr, &key, &recp);
 
 	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {

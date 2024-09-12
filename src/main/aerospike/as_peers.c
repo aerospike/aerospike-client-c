@@ -302,7 +302,7 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 	as_vector hosts;
 	as_vector_inita(&hosts, sizeof(as_host), 16);
 
-	bool peers_validated = true;
+	bool change_peers_generation = true;
 
 	while (*p) {
 		// Parse peer
@@ -370,18 +370,16 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 		p++;
 
 		as_node* replace_node = NULL;
-		bool node_validated = as_peers_find_node(peers, cluster, node_name, &hosts, &replace_node);
+		bool node_found = as_peers_find_node(peers, cluster, node_name, &hosts, &replace_node);
 
-		if (! node_validated) {
-			node_validated = as_peers_validate(peers, cluster, &hosts, node_name);
-
-			if (node_validated) {
+		if (! node_found) {
+			if (as_peers_validate(peers, cluster, &hosts, node_name)) {
 				if (replace_node) {
 					as_vector_append(&peers->nodes_to_remove, &replace_node);
 				}
 			}
 			else {
-				peers_validated = false;
+				change_peers_generation = false;
 			}
 		}
 
@@ -393,7 +391,7 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 		
 		if (*p == ']') {
 			// Only set new peers generation if all referenced peers are added to the cluster.
-			if (peers_validated) {
+			if (change_peers_generation) {
 				node->peers_generation = generation;
 			}
 			as_vector_destroy(&hosts);

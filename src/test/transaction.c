@@ -321,6 +321,118 @@ TEST(txn_write_abort, "transaction write abort")
 	as_record_destroy(recp);
 }
 
+TEST(txn_delete, "transaction delete")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_delete");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN, 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_remove prem;
+	as_policy_remove_copy(&as->config.policies.remove, &prem);
+	prem.base.txn = &txn;
+	prem.durable_delete = true;
+
+	status = aerospike_key_remove(as, &err, &prem, &key);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	status = aerospike_commit(as, &err, &txn);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_record* recp = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &recp);
+	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	as_record_destroy(recp);
+}
+
+TEST(txn_delete_abort, "transaction delete abort")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_delete_abort");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN, 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_remove prem;
+	as_policy_remove_copy(&as->config.policies.remove, &prem);
+	prem.base.txn = &txn;
+	prem.durable_delete = true;
+
+	status = aerospike_key_remove(as, &err, &prem, &key);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	status = aerospike_abort(as, &err, &txn);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_record* recp = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &recp);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	int64_t val = as_record_get_int64(recp, BIN, -1);
+	assert_int_eq(val, 1);
+	as_record_destroy(recp);
+}
+
+TEST(txn_delete_twice, "transaction delete twice")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_delete_twice");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN, 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_remove prem;
+	as_policy_remove_copy(&as->config.policies.remove, &prem);
+	prem.base.txn = &txn;
+	prem.durable_delete = true;
+
+	status = aerospike_key_remove(as, &err, &prem, &key);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	status = aerospike_key_remove(as, &err, &prem, &key);
+	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	as_record_destroy(&rec);
+
+	status = aerospike_commit(as, &err, &txn);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_record* recp = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &recp);
+	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	as_record_destroy(recp);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -336,4 +448,7 @@ SUITE(transaction, "Transaction tests")
 	suite_add(txn_write_block);
 	suite_add(txn_write_read);
 	suite_add(txn_write_abort);
+	suite_add(txn_delete);
+	suite_add(txn_delete_abort);
+	suite_add(txn_delete_twice);
 }

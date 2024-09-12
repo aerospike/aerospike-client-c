@@ -893,7 +893,7 @@ as_batch_equals_records(
 	)
 {
 	if (! (prev && prev->type == rec->type && strcmp(prev->key.ns, rec->key.ns) == 0 &&
-		strcmp(prev->key.set, rec->key.set) == 0) && ver == ver_prev) {
+		strcmp(prev->key.set, rec->key.set) == 0 && ver == ver_prev)) {
 		return false;
 	}
 
@@ -1052,7 +1052,7 @@ as_batch_records_size_new(
 	as_policies* defs, as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
 	)
 {
-	as_batch_base_record* prev = 0;
+	as_batch_base_record* prev = NULL;
 	uint64_t ver_prev = 0;
 	as_status status;
 	uint32_t n_offsets = offsets->size;
@@ -1594,7 +1594,7 @@ as_batch_records_write_new(
 	*p++ = as_batch_get_flags(policy);
 
 	as_txn* txn = bb->txn;
-	as_batch_base_record* prev = 0;
+	as_batch_base_record* prev = NULL;
 	uint64_t ver_prev = 0;
 	as_batch_attr attr;
 

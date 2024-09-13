@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_txn.h>
 #include <aerospike/aerospike_udf.h>
@@ -724,6 +725,150 @@ TEST(txn_udf_abort, "transaction udf abort")
 	as_record_destroy(recp);
 }
 
+typedef struct {
+	int64_t expect;
+	uint32_t errors;
+} batch_data;
+
+static bool
+batch_write_cb(const as_batch_result* results, uint32_t n_keys, void* udata)
+{
+	batch_data* data = udata;
+
+	for (uint32_t i = 0; i < n_keys; i++) {
+		const as_batch_result* r = &results[i];
+
+		if (r->result != AEROSPIKE_OK) {
+			data->errors++;
+		}
+	}
+	return true;
+}
+
+static bool
+batch_read_cb(const as_batch_result* results, uint32_t n_keys, void* udata)
+{
+	batch_data* data = udata;
+
+	for (uint32_t i = 0; i < n_keys; i++) {
+		const as_batch_result* r = &results[i];
+
+		if (r->result != AEROSPIKE_OK) {
+			data->errors++;
+			continue;
+		}
+
+		int64_t rv = as_record_get_int64(&r->record, BIN, -1);
+
+		if (rv != data->expect) {
+			data->errors++;
+		}
+	}
+	return true;
+}
+
+TEST(txn_batch, "transaction batch")
+{
+	uint32_t n_keys = 10;
+
+	as_batch batch;
+	as_batch_inita(&batch, n_keys);
+	
+	for (uint32_t i = 0; i < n_keys; i++) {
+		as_key_init_int64(as_batch_keyat(&batch, i), NAMESPACE, SET, i);
+	}
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write_int64(&ops, BIN, 1);
+
+	batch_data data = {0};
+	as_error err;
+	as_status status;
+
+	status = aerospike_batch_operate(as, &err, NULL, NULL, &batch, &ops, batch_write_cb, &data);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(data.errors, 0);
+	as_operations_destroy(&ops);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_batch pb;
+	as_policy_batch_copy(&as->config.policies.batch_parent_write, &pb);
+	pb.base.txn = &txn;
+
+	as_operations_inita(&ops, 1);
+	as_operations_add_write_int64(&ops, BIN, 2);
+
+	status = aerospike_batch_operate(as, &err, &pb, NULL, &batch, &ops, batch_write_cb, &data);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(data.errors, 0);
+	as_operations_destroy(&ops);
+
+	status = aerospike_commit(as, &err, &txn);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	data.expect = 2;
+
+	status = aerospike_batch_get(as, &err, NULL, &batch, batch_read_cb, &data);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(data.errors, 0);
+
+	as_batch_destroy(&batch);
+}
+
+TEST(txn_batch_abort, "transaction batch abort")
+{
+	uint32_t n_keys = 10;
+
+	as_batch batch;
+	as_batch_inita(&batch, n_keys);
+	
+	for (uint32_t i = 0; i < n_keys; i++) {
+		as_key_init_int64(as_batch_keyat(&batch, i), NAMESPACE, SET, i);
+	}
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write_int64(&ops, BIN, 1);
+
+	batch_data data = {0};
+	as_error err;
+	as_status status;
+
+	status = aerospike_batch_operate(as, &err, NULL, NULL, &batch, &ops, batch_write_cb, &data);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(data.errors, 0);
+	as_operations_destroy(&ops);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_batch pb;
+	as_policy_batch_copy(&as->config.policies.batch_parent_write, &pb);
+	pb.base.txn = &txn;
+
+	as_operations_inita(&ops, 1);
+	as_operations_add_write_int64(&ops, BIN, 2);
+
+	status = aerospike_batch_operate(as, &err, &pb, NULL, &batch, &ops, batch_write_cb, &data);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(data.errors, 0);
+	as_operations_destroy(&ops);
+
+	status = aerospike_abort(as, &err, &txn);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	data.expect = 1;
+
+	status = aerospike_batch_get(as, &err, NULL, &batch, batch_read_cb, &data);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(data.errors, 0);
+
+	as_batch_destroy(&batch);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -748,4 +893,6 @@ SUITE(transaction, "Transaction tests")
 	suite_add(txn_operate_write_abort);
 	suite_add(txn_udf);
 	suite_add(txn_udf_abort);
+	suite_add(txn_batch);
+	suite_add(txn_batch_abort);
 }

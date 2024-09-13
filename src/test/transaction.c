@@ -17,9 +17,13 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_txn.h>
+#include <aerospike/aerospike_udf.h>
+#include <aerospike/as_arraylist.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_exp_operations.h>
+#include <aerospike/as_udf.h>
 #include "test.h"
+#include "util/udf.h"
 
 //---------------------------------
 // Global Variables
@@ -34,24 +38,53 @@ extern aerospike* as;
 #define NAMESPACE "test"
 #define SET "txn"
 #define BIN "a"
+#define LUA_FILE AS_START_DIR "src/test/lua/udf_record.lua"
+#define UDF_FILE "udf_record"
 
 //---------------------------------
 // Static Functions
 //---------------------------------
 
-/*
 static bool
 before(atf_suite* suite)
 {
+	const char * filename = UDF_FILE".lua";
+
+	as_error err;
+	as_bytes content;
+
+	info("reading: %s",LUA_FILE);
+	bool b = udf_readfile(LUA_FILE, &content);
+
+	if (! b) {
+		return false;
+	}
+
+	info("uploading: %s",filename);
+	aerospike_udf_put(as, &err, NULL, filename, AS_UDF_TYPE_LUA, &content);
+
+	if (err.code != AEROSPIKE_OK) {
+		return false;
+	}
+
+	aerospike_udf_put_wait(as, &err, NULL, filename, 100);
+	as_bytes_destroy(&content);
 	return true;
 }
 
 static bool
 after(atf_suite* suite)
 {
+	const char* filename = UDF_FILE".lua";
+	as_error err;
+
+	aerospike_udf_remove(as, &err, NULL, filename);
+
+	if (err.code != AEROSPIKE_OK) {
+		return false;
+	}
 	return true;
 }
-*/
 
 //---------------------------------
 // Test Cases
@@ -607,14 +640,98 @@ TEST(txn_operate_write_abort, "transaction operate write abort")
 	as_record_destroy(recp);
 }
 
+TEST(txn_udf, "transaction udf")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_udf");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN, 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_apply pa;
+	as_policy_apply_copy(&as->config.policies.apply, &pa);
+	pa.base.txn = &txn;
+
+	as_arraylist args;
+	as_arraylist_init(&args, 2, 0);
+	as_arraylist_append_str(&args, BIN);
+	as_arraylist_append_int64(&args, 2);
+
+	as_val* val = NULL;
+	status = aerospike_key_apply(as, &err, &pa, &key, "udf_record", "write_bin", (as_list*)&args, &val);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_val_destroy(val);
+
+	status = aerospike_commit(as, &err, &txn);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_record* recp = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &recp);
+	assert_int_eq(status, AEROSPIKE_OK);
+	int64_t rv = as_record_get_int64(recp, BIN, -1);
+	assert_int_eq(rv, 2);
+	as_record_destroy(recp);
+}
+
+TEST(txn_udf_abort, "transaction udf abort")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_udf_abort");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN, 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_apply pa;
+	as_policy_apply_copy(&as->config.policies.apply, &pa);
+	pa.base.txn = &txn;
+
+	as_arraylist args;
+	as_arraylist_init(&args, 2, 0);
+	as_arraylist_append_str(&args, BIN);
+	as_arraylist_append_int64(&args, 2);
+
+	as_val* val = NULL;
+	status = aerospike_key_apply(as, &err, &pa, &key, "udf_record", "write_bin", (as_list*)&args, &val);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_val_destroy(val);
+
+	status = aerospike_abort(as, &err, &txn);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_record* recp = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &recp);
+	assert_int_eq(status, AEROSPIKE_OK);
+	int64_t rv = as_record_get_int64(recp, BIN, -1);
+	assert_int_eq(rv, 1);
+	as_record_destroy(recp);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
 
 SUITE(transaction, "Transaction tests")
 {
-	//suite_before(before);
-	//suite_after(after);
+	suite_before(before);
+	suite_after(after);
 
 	suite_add(txn_write);
 	suite_add(txn_write_twice);
@@ -629,4 +746,6 @@ SUITE(transaction, "Transaction tests")
 	suite_add(txn_touch_abort);
 	suite_add(txn_operate_write);
 	suite_add(txn_operate_write_abort);
+	suite_add(txn_udf);
+	suite_add(txn_udf_abort);
 }

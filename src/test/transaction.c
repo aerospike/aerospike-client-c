@@ -684,6 +684,7 @@ TEST(txn_udf, "transaction udf")
 	as_val* val = NULL;
 	status = aerospike_key_apply(as, &err, &pa, &key, "udf_record", "write_bin", (as_list*)&args, &val);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_arraylist_destroy(&args);
 	as_val_destroy(val);
 
 	status = aerospike_commit(as, &err, &txn);
@@ -727,6 +728,7 @@ TEST(txn_udf_abort, "transaction udf abort")
 	as_val* val = NULL;
 	status = aerospike_key_apply(as, &err, &pa, &key, "udf_record", "write_bin", (as_list*)&args, &val);
 	assert_int_eq(status, AEROSPIKE_OK);
+	as_arraylist_destroy(&args);
 	as_val_destroy(val);
 
 	status = aerospike_abort(as, &err, &txn);

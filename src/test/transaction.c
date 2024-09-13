@@ -517,6 +517,95 @@ TEST(txn_touch_abort, "transaction touch abort")
 	as_record_destroy(recp);
 }
 
+TEST(txn_operate_write, "transaction operate write")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_operate_write");
+
+	as_record rec;
+	as_record_inita(&rec, 2);
+	as_record_set_int64(&rec, BIN, 1);
+	as_record_set_int64(&rec, "bin2", 1000);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_operate po;
+	as_policy_operate_copy(&as->config.policies.operate, &po);
+	po.base.txn = &txn;
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_add_write_int64(&ops, BIN, 2);
+	as_operations_add_read(&ops, "bin2");
+
+	as_record* recp = NULL;
+	status = aerospike_key_operate(as, &err, &po, &key, &ops, &recp);
+	assert_int_eq(status, AEROSPIKE_OK);
+	int64_t val = as_record_get_int64(recp, "bin2", -1);
+	assert_int_eq(val, 1000);
+	as_record_destroy(recp);
+
+	status = aerospike_commit(as, &err, &txn);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	recp = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &recp);
+	assert_int_eq(status, AEROSPIKE_OK);
+	val = as_record_get_int64(recp, BIN, -1);
+	assert_int_eq(val, 2);
+	as_record_destroy(recp);
+}
+
+TEST(txn_operate_write_abort, "transaction operate write abort")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_operate_write_abort");
+
+	as_record rec;
+	as_record_inita(&rec, 2);
+	as_record_set_int64(&rec, BIN, 1);
+	as_record_set_int64(&rec, "bin2", 1000);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_operate po;
+	as_policy_operate_copy(&as->config.policies.operate, &po);
+	po.base.txn = &txn;
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_add_write_int64(&ops, BIN, 2);
+	as_operations_add_read(&ops, "bin2");
+
+	as_record* recp = NULL;
+	status = aerospike_key_operate(as, &err, &po, &key, &ops, &recp);
+	assert_int_eq(status, AEROSPIKE_OK);
+	int64_t val = as_record_get_int64(recp, "bin2", -1);
+	assert_int_eq(val, 1000);
+	as_record_destroy(recp);
+
+	status = aerospike_abort(as, &err, &txn);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	recp = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &recp);
+	assert_int_eq(status, AEROSPIKE_OK);
+	val = as_record_get_int64(recp, BIN, -1);
+	assert_int_eq(val, 1);
+	as_record_destroy(recp);
+}
 
 //---------------------------------
 // Test Suite
@@ -538,4 +627,6 @@ SUITE(transaction, "Transaction tests")
 	suite_add(txn_delete_twice);
 	suite_add(txn_touch);
 	suite_add(txn_touch_abort);
+	suite_add(txn_operate_write);
+	suite_add(txn_operate_write_abort);
 }

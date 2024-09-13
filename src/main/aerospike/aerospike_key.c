@@ -1022,10 +1022,18 @@ as_operate_init(
 	as_command_set_attr_read(policy->read_mode_ap, policy->read_mode_sc, policy->base.compress,
 							 &oper->read_attr, &oper->info_attr);
 
-	oper->size += as_command_key_size(&policy->base, policy->key, key, oper->write_attr & AS_MSG_INFO2_WRITE, &oper->tdata);
+	return AEROSPIKE_OK;
+}
+
+static void
+as_operate_size(as_operate* oper)
+{
+	const as_policy_operate* policy = oper->policy;
+
+	oper->size += as_command_key_size(&policy->base, policy->key, oper->key,
+		oper->write_attr & AS_MSG_INFO2_WRITE, &oper->tdata);
 	oper->filter_size = as_command_filter_size(&policy->base, &oper->tdata.n_fields);
 	oper->size += oper->filter_size;
-	return AEROSPIKE_OK;
 }
 
 static size_t
@@ -1113,6 +1121,8 @@ aerospike_key_operate(
 		}
 	}
 
+	as_operate_size(&oper);
+
 	as_command_parse_result_data data;
 	data.record = rec;
 	data.deserialize = policy->deserialize;
@@ -1167,6 +1177,10 @@ aerospike_key_operate_async(
 		as_buffers_destroy(&buffers);
 		return status;
 	}
+
+	// TODO FIGURE OUT to call as_operate_size(&oper); in async.
+	// add size_t txn_deadline_offset; to as_record_command.
+	// Populate when finished. Do for all async write commands.
 
 	policy = oper.policy;
 
@@ -1458,6 +1472,7 @@ as_txn_monitor_operate(
 		return status;
 	}
 
+	as_operate_size(&oper);
 	policy = oper.policy;
 
 	as_command cmd;

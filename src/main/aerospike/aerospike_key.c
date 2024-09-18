@@ -39,9 +39,9 @@
 #include <aerospike/as_txn_monitor.h>
 #include <citrusleaf/cf_clock.h>
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 typedef struct as_read_info_s {
 	as_policy_replica replica;
@@ -49,9 +49,9 @@ typedef struct as_read_info_s {
 	uint8_t replica_index;
 } as_read_info;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 static inline as_status
 as_key_partition_init(as_cluster* cluster, as_error* err, const as_key* key, as_partition_info* pi)
@@ -67,7 +67,7 @@ as_key_partition_init(as_cluster* cluster, as_error* err, const as_key* key, as_
 }
 
 static as_status
-as_command_prepare_read(
+as_command_prepare(
 	as_cluster* cluster, as_error* err, const as_policy_base* policy, const as_key* key,
 	as_partition_info* pi
 	)
@@ -98,6 +98,12 @@ as_command_prepare_write(
 	}
 
 	if (policy->txn) {
+		status = as_txn_set_ns(policy->txn, key->ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
 		status = as_txn_monitor_add_key(as, policy, key, err);
 	}
 
@@ -257,7 +263,7 @@ as_write_command_notify(as_error* err, as_event_command* cmd, as_event_loop* eve
 }
 
 static void
-as_write_command_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+as_txn_monitor_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
 {
 	as_event_command* cmd = udata;
 
@@ -267,7 +273,32 @@ as_write_command_callback(as_error* err, as_record* rec, void* udata, as_event_l
 		return;
 	}
 
-	// Add tran monitor keys succeeded. Run original command.
+	if (cmd->ubuf) {
+		// Set deadline in command buffer and compress.
+		// Uncompressed size is located in the overloaded cmd->len.
+		// Deadline offset is located in the overloaded cmd->pos.
+		*(uint32_t*)(cmd->ubuf + cmd->pos) = cmd->txn->deadline;
+
+		size_t comp_size = cmd->write_len;
+		as_status status = as_command_compress(err, cmd->ubuf, cmd->len, cmd->buf, &comp_size);
+
+		if (status == AEROSPIKE_OK) {
+			cmd->write_len = (uint32_t)comp_size;
+		}
+		else {
+			as_write_command_notify(err, cmd, event_loop);
+			as_event_command_destroy(cmd);
+			return;
+		}
+	}
+	else {
+		// Set deadline in command buffer.
+		// Deadline offset is located in the overloaded cmd->pos.
+		uint8_t* buf = (uint8_t*)cmd + cmd->write_offset;
+		*(uint32_t*)(buf + cmd->pos) = cmd->txn->deadline;
+	}
+
+	// Run original command.
 	as_status status = as_event_command_execute(cmd, err);
 
 	if (status != AEROSPIKE_OK) {
@@ -277,32 +308,13 @@ as_write_command_callback(as_error* err, as_record* rec, void* udata, as_event_l
 }
 
 static as_status
-as_write_command_execute(
+as_event_command_execute_txn(
 	aerospike* as, as_error* err, const as_policy_base* cmd_policy, const as_key* key,
 	as_event_command* cmd
 	)
 {
-	// Execute async write command.
-	if (! cmd_policy->txn) {
-		// Command is not run under a MRT monitor. Run original async command.
-		return as_event_command_execute(cmd, err);
-	}
-
-	as_txn* txn = cmd_policy->txn;
-
-	if (as_txn_writes_contain(txn, key)) {
-		// Transaction monitor already contains this key. Run original command.
-		return as_event_command_execute(cmd, err);
-	}
-
-	as_status status = as_txn_set_ns(txn, key->ns, err);
-
-	if (status != AEROSPIKE_OK) {
-		as_event_command_destroy(cmd);
-		return status;
-	}
-
-	status = as_txn_monitor_add_key_async(as, err, txn, cmd_policy, key, as_write_command_callback, cmd, cmd->event_loop);
+	as_status status = as_txn_monitor_add_key_async(as, err, cmd_policy, key, as_txn_monitor_callback,
+		cmd, cmd->event_loop);
 
 	if (status != AEROSPIKE_OK) {
 		as_event_command_destroy(cmd);
@@ -310,9 +322,70 @@ as_write_command_execute(
 	return status;
 }
 
-/******************************************************************************
- * GET
- *****************************************************************************/
+static inline bool
+as_txn_key_add(as_txn* txn, const as_key* key)
+{
+	return txn && !as_txn_writes_contain(txn, key);
+}
+
+static inline as_status
+as_async_command_execute(
+	aerospike* as, as_error* err, const as_policy_base* policy, const as_key* key,
+	as_event_command* cmd, as_command_txn_data* tdata
+	)
+{
+	if (as_txn_key_add(policy->txn, key)) {
+		// Use overloaded pos to store deadline offset.
+		cmd->pos = tdata->deadline_offset;
+		return as_event_command_execute_txn(as, err, policy, key, cmd);
+	}
+	else {
+		return as_event_command_execute(cmd, err);
+	}
+}
+
+static as_status
+as_async_compress_command_execute(
+	aerospike* as, as_error* err, const as_policy_base* policy, const as_key* key,
+	as_event_command* cmd, as_command_txn_data* tdata, uint8_t* ubuf, size_t size,
+	size_t comp_size, size_t* length, size_t* comp_length
+	)
+{
+	if (as_txn_key_add(policy->txn, key)) {
+		// Delay compression until key is added to txn monitor and txn deadline is returned.
+		// Use overloaded len to store uncompressed size.
+		// Use overloaded pos to store deadline offset.
+		cmd->write_len = (uint32_t)comp_size;
+		cmd->len = (uint32_t)size;
+		cmd->pos = tdata->deadline_offset;
+		return as_event_command_execute_txn(as, err, policy, key, cmd);
+	}
+	else {
+		// Compress buffer and execute.
+		as_status status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_command_destroy(cmd);
+			return status;
+		}
+
+		cmd->write_len = (uint32_t)comp_size;
+
+		if (length != NULL) {
+			*length = size;
+		}
+
+		if (comp_length != NULL) {
+			*comp_length = comp_size;
+		}
+
+		return as_event_command_execute(cmd, err);
+	}
+}
+
+//---------------------------------
+// Read All
+//---------------------------------
 
 as_status
 aerospike_key_get(
@@ -325,7 +398,7 @@ aerospike_key_get(
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
+	as_status status = as_command_prepare(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -370,7 +443,7 @@ aerospike_key_get_async(
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
+	as_status status = as_command_prepare(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -400,9 +473,9 @@ aerospike_key_get_async(
 	return as_event_command_execute(cmd, err);
 }
 
-/******************************************************************************
- * SELECT
- *****************************************************************************/
+//---------------------------------
+// Read Selected Bins
+//---------------------------------
 
 as_status
 aerospike_key_select(
@@ -416,7 +489,7 @@ aerospike_key_select(
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
+	as_status status = as_command_prepare(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -474,7 +547,7 @@ aerospike_key_select_async(
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
+	as_status status = as_command_prepare(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -518,9 +591,9 @@ aerospike_key_select_async(
 	return as_event_command_execute(cmd, err);
 }
 
-/******************************************************************************
- * EXISTS
- *****************************************************************************/
+//---------------------------------
+// Exists
+//---------------------------------
 
 as_status
 aerospike_key_exists(
@@ -533,7 +606,7 @@ aerospike_key_exists(
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
+	as_status status = as_command_prepare(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -577,7 +650,7 @@ aerospike_key_exists_async(
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
-	as_status status = as_command_prepare_read(cluster, err, &policy->base, key, &pi);
+	as_status status = as_command_prepare(cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -606,9 +679,9 @@ aerospike_key_exists_async(
 	return as_event_command_execute(cmd, err);
 }
 
-/******************************************************************************
- * PUT
- *****************************************************************************/
+//---------------------------------
+// Put
+//---------------------------------
 
 typedef struct as_put_s {
 	const as_policy_write* policy;
@@ -728,7 +801,7 @@ aerospike_key_put_async_ex(
 	}
 
 	as_partition_info pi;
-	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
+	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -768,7 +841,7 @@ aerospike_key_put_async_ex(
 			*comp_length = cmd->write_len;
 		}
 
-		return as_write_command_execute(as, err, &policy->base, key, cmd);
+		return as_async_command_execute(as, err, &policy->base, key, cmd, &put.tdata);
 	}
 	else {
 		// Send compressed command.
@@ -783,26 +856,8 @@ aerospike_key_put_async_ex(
 			as->cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
 			pipe_listener, comp_size, as_event_command_parse_header, ubuf, (uint32_t)size);
 
-		// Compress buffer and execute.
-		status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
-		
-		if (status == AEROSPIKE_OK) {
-			cmd->write_len = (uint32_t)comp_size;
-
-			if (length != NULL) {
-				*length = size;
-			}
-
-			if (comp_length != NULL) {
-				*comp_length = comp_size;
-			}
-
-			return as_write_command_execute(as, err, &policy->base, key, cmd);
-		}
-		else {
-			as_event_command_destroy(cmd);
-			return status;
-		}
+		return as_async_compress_command_execute(as, err, &policy->base, key, cmd, &put.tdata,
+			ubuf, size, comp_size, length, comp_length);
 	}
 }
 
@@ -815,9 +870,9 @@ aerospike_key_put_async(
 	return aerospike_key_put_async_ex(as, err, policy, key, rec, listener, udata, event_loop, pipe_listener, NULL, NULL);
 }
 
-/******************************************************************************
- * REMOVE
- *****************************************************************************/
+//---------------------------------
+// Remove
+//---------------------------------
 
 as_status
 aerospike_key_remove(
@@ -873,7 +928,7 @@ aerospike_key_remove_async_ex(
 	}
 
 	as_partition_info pi;
-	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
+	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -900,7 +955,7 @@ aerospike_key_remove_async_ex(
 		*length = size;
 	}
 
-	return as_write_command_execute(as, err, &policy->base, key, cmd);
+	return as_async_command_execute(as, err, &policy->base, key, cmd, &tdata);
 }
 
 as_status
@@ -913,9 +968,9 @@ aerospike_key_remove_async(
 	return aerospike_key_remove_async_ex(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
 }
 
-/******************************************************************************
- * OPERATE
- *****************************************************************************/
+//---------------------------------
+// Operate
+//---------------------------------
 
 typedef struct as_operate_s {
 	const as_policy_operate* policy;
@@ -1086,7 +1141,7 @@ aerospike_key_operate(
 	}
 
 	as_partition_info pi;
-	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
+	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1107,13 +1162,8 @@ aerospike_key_operate(
 
 	policy = oper.policy;
 
-	if (policy->base.txn) {
-		if (oper.write_attr & AS_MSG_INFO2_WRITE) {
-			status = as_txn_monitor_add_key(as, &policy->base, key, err);
-		}
-		else {
-			status = as_txn_set_ns(policy->base.txn, key->ns, err);
-		}
+	if (policy->base.txn && (oper.write_attr & AS_MSG_INFO2_WRITE)) {
+		status = as_txn_monitor_add_key(as, &policy->base, key, err);
 
 		if (status != AEROSPIKE_OK) {
 			as_buffers_destroy(&buffers);
@@ -1159,7 +1209,7 @@ aerospike_key_operate_async(
 	}
 	
 	as_partition_info pi;
-	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
+	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1178,10 +1228,7 @@ aerospike_key_operate_async(
 		return status;
 	}
 
-	// TODO FIGURE OUT to call as_operate_size(&oper); in async.
-	// add size_t txn_deadline_offset; to as_record_command.
-	// Populate when finished. Do for all async write commands.
-
+	as_operate_size(&oper);
 	policy = oper.policy;
 
 	as_event_command* cmd;
@@ -1196,6 +1243,8 @@ aerospike_key_operate_async(
 				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE, NULL, 0);
 
 			cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
+
+			return as_async_command_execute(as, err, &policy->base, key, cmd, &oper.tdata);
 		}
 		else {
 			// Send compressed command.
@@ -1212,31 +1261,12 @@ aerospike_key_operate_async(
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, comp_size,
 				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE, ubuf, (uint32_t)size);
 
-			// Compress buffer and execute.
-			status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
-
-			if (status != AEROSPIKE_OK) {
-				as_event_command_destroy(cmd);
-				return status;
-			}
-
-			cmd->write_len = (uint32_t)comp_size;
+			return as_async_compress_command_execute(as, err, &policy->base, key, cmd, &oper.tdata,
+				ubuf, size, comp_size, NULL, NULL);
 		}
-
-		// This function will also add write keys to the MRT monitor if in a MRT.
-		return as_write_command_execute(as, err, &policy->base, key, cmd);
 	}
 	else {
 		// Read command
-		if (policy->base.txn) {
-			status = as_txn_set_ns(policy->base.txn, key->ns, err);
-
-			if (status != AEROSPIKE_OK) {
-				as_buffers_destroy(&buffers);
-				return status;
-			}
-		}
-
 		if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {
 			// Send uncompressed command.
 			as_read_info ri;
@@ -1283,9 +1313,9 @@ aerospike_key_operate_async(
 	}
 }
 
-/******************************************************************************
- * APPLY
- *****************************************************************************/
+//---------------------------------
+// Apply
+//---------------------------------
 
 typedef struct as_apply_s {
 	const as_policy_apply* policy;
@@ -1393,7 +1423,7 @@ aerospike_key_apply_async(
 	}
 	
 	as_partition_info pi;
-	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
+	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1412,7 +1442,8 @@ aerospike_key_apply_async(
 
 		as_buffer_destroy(&ap.args);
 		as_serializer_destroy(&ap.ser);
-		return as_write_command_execute(as, err, &policy->base, key, cmd);
+
+		return as_async_command_execute(as, err, &policy->base, key, cmd, &ap.tdata);
 	}
 	else {
 		// Send compressed command.
@@ -1431,16 +1462,8 @@ aerospike_key_apply_async(
 			policy->replica, listener, udata, event_loop, pipe_listener, comp_size,
 			as_event_command_parse_success_failure, ubuf, (uint32_t)size);
 
-		// Compress buffer and execute.
-		status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_command_destroy(cmd);
-			return status;
-		}
-
-		cmd->write_len = (uint32_t)comp_size;
-		return as_write_command_execute(as, err, &policy->base, key, cmd);
+		return as_async_compress_command_execute(as, err, &policy->base, key, cmd, &ap.tdata,
+			ubuf, size, comp_size, NULL, NULL);
 	}
 }
 

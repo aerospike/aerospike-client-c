@@ -107,6 +107,7 @@ as_command_key_size(
 {
 	tdata->n_fields = 3;
 	tdata->send_deadline = send_deadline;
+	tdata->deadline_offset = 0;
 
 	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
 	
@@ -123,12 +124,10 @@ as_command_key_size(
 			tdata->n_fields++;
 		}
 
-		// Store deadline in temp variable because txn->deadline could possibly change
-		// between buffer size estimation and buffer write.
-		tdata->deadline = txn->deadline;
-
-		if (send_deadline && tdata->deadline != 0) {
-			size += AS_FIELD_HEADER_SIZE + sizeof(uint32_t);
+		if (send_deadline) {
+			size += AS_FIELD_HEADER_SIZE;
+			tdata->deadline_offset = (uint32_t)size;
+			size += sizeof(uint32_t);
 			tdata->n_fields++;
 		}
 	}
@@ -405,8 +404,8 @@ as_command_write_key(
 			p = as_command_write_field_version(p, tdata->version);
 		}
 
-		if (tdata->send_deadline && tdata->deadline != 0) {
-			p = as_command_write_field_uint32_le(p, AS_FIELD_MRT_DEADLINE, tdata->deadline);
+		if (tdata->send_deadline) {
+			p = as_command_write_field_uint32_le(p, AS_FIELD_MRT_DEADLINE, txn->deadline);
 		}
 	}
 

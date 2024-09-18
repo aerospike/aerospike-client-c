@@ -193,18 +193,12 @@ as_txn_monitor_add_key(
 		return AEROSPIKE_OK;
 	}
 
-	as_status status = as_txn_set_ns(txn, cmd_key->ns, err);
-	
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
 	as_operations ops;
 	as_operations_inita(&ops, 2);
 
 	as_txn_get_ops_single(txn, cmd_key, &ops);
 
-	status = as_txn_monitor_add_keys(as, txn, cmd_policy, &ops, err);
+	as_status status = as_txn_monitor_add_keys(as, txn, cmd_policy, &ops, err);
 	as_operations_destroy(&ops);
 	return status;
 }
@@ -302,21 +296,25 @@ as_txn_monitor_add_keys_async(
 	as_policy_operate txn_policy;
 	as_txn_policy_copy(cmd_policy, &txn_policy);
 
-	return aerospike_key_operate_async(as, err, &txn_policy, &key, ops, listener, udata, event_loop, NULL);
+	return aerospike_key_operate_async(as, err, &txn_policy, &key, ops, listener, udata, event_loop,
+		NULL);
 }
 
 as_status
 as_txn_monitor_add_key_async(
-	aerospike* as, as_error* err, as_txn* txn, const as_policy_base* cmd_policy,
-	const as_key* cmd_key, as_async_record_listener listener, void* udata, as_event_loop* event_loop
+	aerospike* as, as_error* err, const as_policy_base* cmd_policy, const as_key* cmd_key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
 	// Add key to MRT monitor.
+	as_txn* txn = cmd_policy->txn;
+
 	as_operations ops;
 	as_operations_inita(&ops, 2);
 	as_txn_get_ops_single(txn, cmd_key, &ops);
 
-	as_status status = as_txn_monitor_add_keys_async(as, err, txn, cmd_policy, &ops, listener, udata, event_loop);
+	as_status status = as_txn_monitor_add_keys_async(as, err, txn, cmd_policy, &ops, listener, udata,
+		event_loop);
 	as_operations_destroy(&ops);
 	return status;
 }

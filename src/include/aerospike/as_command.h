@@ -207,7 +207,7 @@ typedef struct as_command_s {
  */
 typedef struct as_command_txn_data_s {
 	uint64_t version;
-	uint32_t deadline;
+	uint32_t deadline_offset;
 	uint16_t n_fields;
 	bool send_deadline;
 } as_command_txn_data;

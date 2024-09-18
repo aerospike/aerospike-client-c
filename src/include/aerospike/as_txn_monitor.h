@@ -68,9 +68,8 @@ as_txn_monitor_remove(
 
 as_status
 as_txn_monitor_add_key_async(
-	aerospike* as, as_error* err, as_txn* txn, const as_policy_base* cmd_policy,
-	const as_key* cmd_key, as_async_record_listener listener, void* udata,
-	struct as_event_loop* event_loop
+	aerospike* as, as_error* err, const as_policy_base* cmd_policy, const as_key* cmd_key,
+	as_async_record_listener listener, void* udata, struct as_event_loop* event_loop
 	);
 
 as_status

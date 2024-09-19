@@ -1140,20 +1140,13 @@ aerospike_key_operate(
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No operations defined");
 	}
 
-	as_partition_info pi;
-	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
 	as_queue buffers;
 	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
 
-	status = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers, err);
+	as_status status = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_buffers_destroy(&buffers);
@@ -1161,6 +1154,14 @@ aerospike_key_operate(
 	}
 
 	policy = oper.policy;
+
+	as_partition_info pi;
+	status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		return status;
+	}
 
 	if (policy->base.txn && (oper.write_attr & AS_MSG_INFO2_WRITE)) {
 		status = as_txn_monitor_add_key(as, &policy->base, key, err);
@@ -1208,20 +1209,23 @@ aerospike_key_operate_async(
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No operations defined");
 	}
 	
-	as_partition_info pi;
-	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
 	as_queue buffers;
 	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
 
-	status = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers, err);
+	as_status status = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		return status;
+	}
+
+	policy = oper.policy;
+
+	as_partition_info pi;
+	status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
 
 	if (status != AEROSPIKE_OK) {
 		as_buffers_destroy(&buffers);
@@ -1229,7 +1233,6 @@ aerospike_key_operate_async(
 	}
 
 	as_operate_size(&oper);
-	policy = oper.policy;
 
 	as_event_command* cmd;
 

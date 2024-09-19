@@ -1467,7 +1467,7 @@ as_batch_write_write(
 	p += sizeof(uint16_t);
 	*(uint32_t*)p = cf_swap_to_be32(attr->ttl);
 	p += sizeof(uint32_t);
-	p = as_batch_write_fields_all(p, key, txn, ver, attr, filter, 0, n_ops);
+	p = as_batch_write_fields_all(p, key, txn, ver, attr, filter, n_fields, n_ops);
 	return p;
 }
 

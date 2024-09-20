@@ -3747,6 +3747,73 @@ as_txn_roll(aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* tx
 	return status;
 }
 
+as_status
+as_txn_verify_async(
+	aerospike* as, as_error* err, as_txn* txn, as_async_batch_listener listener, void* udata,
+	as_event_loop* event_loop
+	)
+{
+	uint32_t n_keys = as_txn_reads_size(txn);
+
+	if (n_keys == 0)  {
+		listener(NULL, NULL, udata, event_loop);
+		return AEROSPIKE_OK;
+	}
+
+	as_batch_records* records = as_batch_records_create(n_keys);
+	uint64_t* versions = cf_malloc(sizeof(uint64_t) * n_keys);
+
+	as_txn_iter iter;
+	as_txn_iter_reads(&iter, txn);
+	as_txn_key* key;
+	uint32_t count = 0;
+
+	while ((key = as_txn_iter_next(&iter)) != NULL) {
+		as_batch_base_record* r = (as_batch_base_record*)as_vector_reserve(&records->list);
+		r->type = AS_BATCH_TXN_VERIFY;
+		as_key_init_digest(&r->key, txn->ns, key->set, key->digest);
+		versions[count++] = key->version;
+	}
+
+	as_policy_txn_verify* policy = &as->config.policies.txn_verify;
+
+	// Do not pass txn instance for verify.
+	return as_batch_records_execute_async(as, err, policy, records, NULL, versions, listener, udata,
+		event_loop, 0, false);
+}
+
+as_status
+as_txn_roll_async(
+	aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* txn, uint8_t txn_attr,
+	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	uint32_t n_keys = as_txn_writes_size(txn);
+
+	if (n_keys == 0)  {
+		listener(NULL, NULL, udata, event_loop);
+		return AEROSPIKE_OK;
+	}
+
+	as_batch_records* records = as_batch_records_create(n_keys);
+	uint64_t* versions = cf_malloc(sizeof(uint64_t) * n_keys);
+	as_txn_iter iter;
+	as_txn_iter_writes(&iter, txn);
+	as_txn_key* key;
+	uint32_t count = 0;
+
+	while ((key = as_txn_iter_next(&iter)) != NULL) {
+		as_batch_base_record* r = (as_batch_base_record*)as_vector_reserve(&records->list);
+		r->type = AS_BATCH_TXN_ROLL;
+		r->has_write = true;
+		as_key_init_digest(&r->key, txn->ns, key->set, key->digest);
+		versions[count++] = as_txn_get_read_version(txn, key->digest);
+	}
+
+	return as_batch_records_execute_async(as, err, policy, records, txn, versions, listener, udata,
+		event_loop, txn_attr, true);
+}
+
 //---------------------------------
 // Public Functions
 //---------------------------------

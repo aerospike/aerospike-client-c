@@ -343,3 +343,44 @@ as_txn_monitor_add_keys_records_async(
 	as_operations_destroy(&ops);
 	return status;
 }
+
+as_status
+as_txn_monitor_mark_roll_forward_async(
+	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_policy_write policy;
+	as_policy_write_init(&policy);
+	policy.base.socket_timeout = base_policy->socket_timeout;
+	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.max_retries = base_policy->max_retries;
+	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_bool(&rec, "fwd", true);
+
+	as_status status = aerospike_key_put_async(as, err, &policy, key, &rec, listener, udata,
+		event_loop, NULL);
+	as_record_destroy(&rec);
+	return status;
+}
+
+as_status
+as_txn_monitor_remove_async(
+	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_policy_remove policy;
+	as_policy_remove_init(&policy);
+	policy.base.socket_timeout = base_policy->socket_timeout;
+	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.max_retries = base_policy->max_retries;
+	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
+	policy.durable_delete = true;
+
+	return aerospike_key_remove_async(as, err, &policy, key, listener, udata,
+		event_loop, NULL);
+}

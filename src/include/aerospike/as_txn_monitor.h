@@ -79,6 +79,18 @@ as_txn_monitor_add_keys_records_async(
 	as_event_loop* event_loop
 	);
 
+as_status
+as_txn_monitor_mark_roll_forward_async(
+	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop
+	);
+
+as_status
+as_txn_monitor_remove_async(
+	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop
+	);
+
 //---------------------------------
 // Common Functions
 //---------------------------------

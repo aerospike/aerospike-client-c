@@ -122,9 +122,9 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 	status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_FORWARD);
 
 	if (status != AEROSPIKE_OK) {
-		// The client roll has error, but the server always eventually rolls forward the MRT
-		// after as_txn_monitor_mark_roll_forward() succeeds. Therefore, return success,
-		// but leave the error message for debug/log purposes.
+		// The client roll has error. The server will eventually roll forward the transaction
+		// after as_txn_monitor_mark_roll_forward() succeeds. Therefore, return success and
+		// leave the error message for debug/log purposes.
 		err->code = AEROSPIKE_OK;
 		return AEROSPIKE_OK;
 	}
@@ -133,9 +133,9 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 		status = as_txn_monitor_remove(as, err, &roll_policy->base, &key);
 
 		if (status != AEROSPIKE_OK) {
-			// The client remove has error, but the server always eventually removes the MRT
-			// after as_txn_monitor_mark_roll_forward() succeeds. Therefore, return success,
-			// but leave the error message for debug/log purposes.
+			// The client transaction monitor remove has error. The server will eventually remove the
+			// monitor record after as_txn_monitor_mark_roll_forward() succeeds. Therefore, return
+			// success and leave the error message for debug/log purposes.
 			err->code = AEROSPIKE_OK;
 			return AEROSPIKE_OK;
 		}
@@ -160,7 +160,7 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn)
 	as_status status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_BACK);
 
 	if (status != AEROSPIKE_OK) {
-		// The client roll has error, but the server always eventually aborts the MRT.
+		// The client roll has error. The server will eventually abort the transaction.
 		// Therefore, return success, but leave the error message for debug/log purposes.
 		err->code = AEROSPIKE_OK;
 		return AEROSPIKE_OK;
@@ -173,8 +173,8 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn)
 		status = as_txn_monitor_remove(as, err, &roll_policy->base, &key);
 
 		if (status != AEROSPIKE_OK) {
-			// The client remove has error, but the server always eventually removes the MRT.
-			// Therefore, return success, but leave the error message for debug/log purposes.
+			// The client transaction monitor remove has error. The server will eventually remove the
+			// monitor record. Therefore, return success and leave the error message for debug/log purposes.
 			err->code = AEROSPIKE_OK;
 			return AEROSPIKE_OK;
 		}
@@ -283,8 +283,8 @@ as_txn_remove_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	as_commit_data* data = udata;
 
 	if (data->verified) {
-		// Always notify success. Server will eventually remove txn monitor record
-		// if client remove failed.
+		// Notify success on transaction monitor remove. The server will eventually remove the
+		// monitor record if the client remove failed.
 		as_commit_data* data = udata;
 		as_commit_notify_success(data, event_loop);
 	}
@@ -302,7 +302,7 @@ as_txn_roll_listener(
 
 	if (err) {
 		if (data->verified) {
-			// The client roll forward has error, but the server eventually rolls forward the txn
+			// The client roll has error. The server will eventually roll forward the transaction
 			// after as_txn_monitor_mark_roll_forward_async() succeeds. Therefore, notify success.
 			as_commit_notify_success(data, event_loop);
 		}
@@ -321,8 +321,9 @@ as_txn_roll_listener(
 
 	if (status != AEROSPIKE_OK) {
 		if (data->verified) {
-			// The client remove has error, but the server eventually removes the txn monitor
-			// after as_txn_monitor_mark_roll_forward_async() succeeds. Therefore, notify success.
+			// The client transaction monitor remove has error. The server will eventually remove the
+			// monitor record after as_txn_monitor_mark_roll_forward_async() succeeds. Therefore,
+			// notify success.
 			as_commit_notify_success(data, event_loop);
 		}
 		else {
@@ -346,7 +347,7 @@ as_txn_mark_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	 	AS_MSG_INFO4_MRT_ROLL_FORWARD, as_txn_roll_listener, data, event_loop);
 
 	if (status != AEROSPIKE_OK) {
-		// The client roll forward has error, but the server eventually rolls forward the txn
+		// The client roll has error. The server will eventually roll forward the transaction
 		// after as_txn_monitor_mark_roll_forward_async() succeeds. Therefore, notify success.
 		as_commit_notify_success(data, event_loop);
 	}
@@ -417,5 +418,10 @@ aerospike_commit_async(
 	data->verify_err = NULL;
 	data->verified = false;
 
-	return as_txn_verify_async(as, err, txn, as_txn_verify_listener, data, event_loop);
+	as_status status = as_txn_verify_async(as, err, txn, as_txn_verify_listener, data, event_loop);
+
+	if (status != AEROSPIKE_OK) {
+		as_commit_data_destroy(data);
+	}
+	return status;
 }

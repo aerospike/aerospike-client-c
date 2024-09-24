@@ -59,7 +59,7 @@ as_error_copy_fields(as_error* trg, as_error* src)
 }
 
 //---------------------------------
-// Sync Functions
+// Sync Commit
 //---------------------------------
 
 as_status
@@ -145,6 +145,10 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 	return AEROSPIKE_OK;
 }
 
+//---------------------------------
+// Sync Abort
+//---------------------------------
+
 as_status
 aerospike_abort(aerospike* as, as_error* err, as_txn* txn)
 {
@@ -183,10 +187,8 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn)
 }
 
 //---------------------------------
-// Async Functions
+// Async Commit
 //---------------------------------
-
-typedef void (*as_commit_listener)(as_error* err, void* udata, as_event_loop* event_loop);
 
 typedef struct {
 	aerospike* as;
@@ -208,16 +210,16 @@ as_commit_data_destroy(as_commit_data* data)
 }
 
 static inline void
-as_commit_notify_success(as_commit_data* data, as_event_loop* event_loop)
+as_commit_notify_success(as_commit_status status, as_commit_data* data, as_event_loop* event_loop)
 {
-	data->listener(NULL, data->udata, event_loop);
+	data->listener(NULL, status, data->udata, event_loop);
 	as_commit_data_destroy(data);
 }
 
 static inline void
-as_commit_notify_error(as_error* err, as_commit_data* data, as_event_loop* event_loop)
+as_commit_notify_error(as_error* err, as_commit_status status, as_commit_data* data, as_event_loop* event_loop)
 {
-	data->listener(err, data->udata, event_loop);
+	data->listener(err, status, data->udata, event_loop);
 	as_commit_data_destroy(data);
 }
 
@@ -229,7 +231,7 @@ as_commit_notify_error_mark(as_error* err, as_commit_data* data, as_event_loop* 
 		err->message);
 
 	as_error_copy_fields(&commit_err, err);
-	as_commit_notify_error(&commit_err, data, event_loop);
+	as_commit_notify_error(&commit_err, AS_COMMIT_ROLL_FORWARD_ABANDONED, data, event_loop);
 }
 
 static void
@@ -245,7 +247,7 @@ as_commit_notify_error_verify_rollback(
 		verify_err->message, roll_err->message);
 
 	as_error_copy_fields(&commit_err, verify_err);
-	as_commit_notify_error(&commit_err, data, event_loop);
+	as_commit_notify_error(&commit_err, AS_COMMIT_ROLL_FORWARD_ABANDONED, data, event_loop);
 }
 
 static void
@@ -261,7 +263,7 @@ as_commit_notify_error_verify_close(
 		verify_err->message, close_err->message);
 
 	as_error_copy_fields(&commit_err, verify_err);
-	as_commit_notify_error(&commit_err, data, event_loop);
+	as_commit_notify_error(&commit_err, AS_COMMIT_CLOSE_ABANDONED, data, event_loop);
 }
 
 static void
@@ -274,19 +276,28 @@ as_commit_notify_error_verify(as_commit_data* data, as_event_loop* event_loop)
 		"Txn aborted:\nVerify failed: %s", verify_err->message);
 
 	as_error_copy_fields(&commit_err, verify_err);
-	as_commit_notify_error(&commit_err, data, event_loop);
+	as_commit_notify_error(&commit_err, AS_COMMIT_ROLL_FORWARD_ABANDONED, data, event_loop);
 }
 
 static void
-as_txn_remove_listener(as_error* err, void* udata, as_event_loop* event_loop)
+as_commit_remove_listener(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	as_commit_data* data = udata;
 
+	if (err) {
+		if (data->verified) {
+			// The client transaction monitor remove has error. The server will eventually remove the
+			// monitor record. Therefore, notify success.
+			as_commit_notify_success(AS_COMMIT_CLOSE_ABANDONED, data, event_loop);
+		}
+		else {
+			as_commit_notify_error_verify_close(err, data, event_loop);
+		}
+		return;
+	}
+
 	if (data->verified) {
-		// Notify success on transaction monitor remove. The server will eventually remove the
-		// monitor record if the client remove failed.
-		as_commit_data* data = udata;
-		as_commit_notify_success(data, event_loop);
+		as_commit_notify_success(AS_COMMIT_OK, data, event_loop);
 	}
 	else {
 		as_commit_notify_error_verify(data, event_loop);
@@ -294,7 +305,7 @@ as_txn_remove_listener(as_error* err, void* udata, as_event_loop* event_loop)
 }
 
 static void
-as_txn_roll_listener(
+as_commit_roll_listener(
 	as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop
 	)
 {
@@ -304,7 +315,7 @@ as_txn_roll_listener(
 		if (data->verified) {
 			// The client roll has error. The server will eventually roll forward the transaction
 			// after as_txn_monitor_mark_roll_forward_async() succeeds. Therefore, notify success.
-			as_commit_notify_success(data, event_loop);
+			as_commit_notify_success(AS_COMMIT_ROLL_FORWARD_ABANDONED, data, event_loop);
 		}
 		else {
 			as_commit_notify_error_verify_rollback(err, data, event_loop);
@@ -317,14 +328,14 @@ as_txn_roll_listener(
 
 	as_error close_err;
 	as_status status = as_txn_monitor_remove_async(data->as, &close_err, &data->roll_policy->base,
-		&key, as_txn_remove_listener, data, event_loop);
+		&key, as_commit_remove_listener, data, event_loop);
 
 	if (status != AEROSPIKE_OK) {
 		if (data->verified) {
 			// The client transaction monitor remove has error. The server will eventually remove the
 			// monitor record after as_txn_monitor_mark_roll_forward_async() succeeds. Therefore,
 			// notify success.
-			as_commit_notify_success(data, event_loop);
+			as_commit_notify_success(AS_COMMIT_CLOSE_ABANDONED, data, event_loop);
 		}
 		else {
 			as_commit_notify_error_verify_close(&close_err, data, event_loop);
@@ -333,7 +344,7 @@ as_txn_roll_listener(
 }
 
 static void
-as_txn_mark_listener(as_error* err, void* udata, as_event_loop* event_loop)
+as_commit_mark_listener(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	as_commit_data* data = udata;
 
@@ -344,17 +355,17 @@ as_txn_mark_listener(as_error* err, void* udata, as_event_loop* event_loop)
 
 	as_error roll_err;
 	as_status status = as_txn_roll_async(data->as, &roll_err, data->roll_policy, data->txn,
-	 	AS_MSG_INFO4_MRT_ROLL_FORWARD, as_txn_roll_listener, data, event_loop);
+	 	AS_MSG_INFO4_MRT_ROLL_FORWARD, as_commit_roll_listener, data, event_loop);
 
 	if (status != AEROSPIKE_OK) {
 		// The client roll has error. The server will eventually roll forward the transaction
 		// after as_txn_monitor_mark_roll_forward_async() succeeds. Therefore, notify success.
-		as_commit_notify_success(data, event_loop);
+		as_commit_notify_success(AS_COMMIT_ROLL_FORWARD_ABANDONED, data, event_loop);
 	}
 }
 
 static void
-as_txn_verify_listener(
+as_commit_verify_listener(
 	as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop
 	)
 {
@@ -367,7 +378,7 @@ as_txn_verify_listener(
 
 		as_error roll_err;
 		as_status status = as_txn_roll_async(data->as, &roll_err, data->roll_policy, data->txn,
-			AS_MSG_INFO4_MRT_ROLL_BACK, as_txn_roll_listener, data, event_loop);
+			AS_MSG_INFO4_MRT_ROLL_BACK, as_commit_roll_listener, data, event_loop);
 
 		if (status != AEROSPIKE_OK) {
 			as_commit_notify_error_verify_rollback(&roll_err, data, event_loop);
@@ -378,7 +389,7 @@ as_txn_verify_listener(
 	data->verified = true;
 
 	if (! as_txn_monitor_exists(data->txn)) {
-		as_txn_mark_listener(NULL, data, event_loop);
+		as_commit_mark_listener(NULL, data, event_loop);
 		return;
 	}
 
@@ -387,7 +398,7 @@ as_txn_verify_listener(
 
 	as_error mark_err;
 	as_status status = as_txn_monitor_mark_roll_forward_async(data->as, &mark_err,
-		&data->roll_policy->base, &key, as_txn_mark_listener, data, event_loop);
+		&data->roll_policy->base, &key, as_commit_mark_listener, data, event_loop);
 
 	if (status != AEROSPIKE_OK) {
 		as_commit_notify_error_mark(err, data, event_loop);
@@ -418,10 +429,109 @@ aerospike_commit_async(
 	data->verify_err = NULL;
 	data->verified = false;
 
-	as_status status = as_txn_verify_async(as, err, txn, as_txn_verify_listener, data, event_loop);
+	as_status status = as_txn_verify_async(as, err, txn, as_commit_verify_listener, data, event_loop);
 
 	if (status != AEROSPIKE_OK) {
 		as_commit_data_destroy(data);
+	}
+	return status;
+}
+
+//---------------------------------
+// Async Abort
+//---------------------------------
+
+typedef struct {
+	aerospike* as;
+	as_txn* txn;
+	as_policy_txn_roll* roll_policy;
+	as_abort_listener listener;
+	void* udata;
+} as_abort_data;
+
+static inline void
+as_abort_data_destroy(as_abort_data* data)
+{
+	cf_free(data);
+}
+
+static inline void
+as_abort_notify_success(as_abort_status status, as_abort_data* data, as_event_loop* event_loop)
+{
+	data->listener(NULL, status, data->udata, event_loop);
+	as_abort_data_destroy(data);
+}
+
+static void
+as_abort_remove_listener(as_error* err, void* udata, as_event_loop* event_loop)
+{
+	as_abort_data* data = udata;
+
+	if (err) {
+		// The client transaction monitor remove has error. The server will eventually remove the
+		// monitor record. Therefore, notify success.
+		as_abort_notify_success(AS_ABORT_CLOSE_ABANDONED, data, event_loop);
+		return;
+	}
+
+	as_abort_notify_success(AS_ABORT_OK, data, event_loop);
+}
+
+static void
+as_abort_roll_listener(
+	as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop
+	)
+{
+	as_abort_data* data = udata;
+
+	if (err) {
+		// The client roll has error. The server will eventually roll back the transaction.
+		// Therefore, notify success.
+		as_abort_notify_success(AS_ABORT_ROLL_BACK_ABANDONED, data, event_loop);
+		return;
+	}
+
+	as_key key;
+	as_txn_monitor_init_key(data->txn, &key);
+
+	as_error close_err;
+	as_status status = as_txn_monitor_remove_async(data->as, &close_err, &data->roll_policy->base,
+		&key, as_abort_remove_listener, data, event_loop);
+
+	if (status != AEROSPIKE_OK) {
+		// The client transaction monitor remove has error. The server will eventually remove the
+		// monitor record. Therefore, notify success.
+		as_abort_notify_success(AS_ABORT_CLOSE_ABANDONED, data, event_loop);
+	}
+}
+
+as_status
+aerospike_abort_async(
+	aerospike* as, as_error* err, as_txn* txn, as_abort_listener listener, void* udata,
+	as_event_loop* event_loop
+	)
+{
+	if (! as_txn_set_roll_attempted(txn)) {
+		return as_error_set_message(err, AEROSPIKE_ROLL_ALREADY_ATTEMPTED,
+			"Commit or abort already attempted");
+	}
+
+	event_loop = as_event_assign(event_loop);
+
+	as_error_reset(err);
+
+	as_abort_data* data = cf_malloc(sizeof(as_commit_data));
+	data->as = as;
+	data->txn = txn;
+	data->roll_policy = &as->config.policies.txn_roll;
+	data->listener = listener;
+	data->udata = udata;
+
+	as_status status = as_txn_roll_async(data->as, err, data->roll_policy, data->txn,
+		AS_MSG_INFO4_MRT_ROLL_BACK, as_abort_roll_listener, data, event_loop);
+
+	if (status != AEROSPIKE_OK) {
+		as_abort_data_destroy(data);
 	}
 	return status;
 }

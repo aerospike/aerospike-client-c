@@ -24,6 +24,86 @@ extern "C" {
 #endif
 
 //---------------------------------
+// Types
+//---------------------------------
+
+struct as_event_loop;
+
+/**
+ * Multi-record transaction commit status code.
+ */
+typedef enum {
+	/**
+	 * Commit succeeded.
+	 */
+	AS_COMMIT_OK,
+
+	/**
+	 * Client roll forward abandoned. Server will eventually commit the transaction.
+	 */
+	AS_COMMIT_ROLL_FORWARD_ABANDONED,
+
+	/**
+	 * Transaction has been rolled forward, but client transaction close was abandoned.
+	 * Server will eventually close the transaction.
+	 */
+	AS_COMMIT_CLOSE_ABANDONED
+} as_commit_status;
+
+/**
+ * Asynchronous commit listener.  This function is called once when aerospike_commit_async() completes or an
+ * error has occurred.
+ *
+ * @param err			Error structure that is populated if an error occurs. NULL on success.
+ * @param status 		Status of commit when err is NULL.
+ * @param udata 			User data that is forwarded from asynchronous command function.
+ * @param event_loop	Event loop that this command was executed on. Use this event loop when
+ *						running nested asynchronous commands when single threaded behavior is
+ *						desired for the group of commands.
+ * @relates aerospike
+ */
+typedef void (*as_commit_listener)(
+	as_error* err, as_commit_status status, void* udata, struct as_event_loop* event_loop
+	);
+
+/**
+ * Multi-record transaction abort status code.
+ */
+typedef enum {
+	/**
+	 * Abort succeeded.
+	 */
+	AS_ABORT_OK,
+
+	/**
+	 * Client roll back abandoned. Server will eventually abort the transaction.
+	 */
+	AS_ABORT_ROLL_BACK_ABANDONED,
+
+	/**
+	 * Transaction has been rolled back, but client transaction close was abandoned.
+	 * Server will eventually close the transaction.
+	 */
+	AS_ABORT_CLOSE_ABANDONED
+} as_abort_status;
+
+/**
+ * Asynchronous commit listener.  This function is called once when aerospike_abort_async() completes or an
+ * error has occurred.
+ *
+ * @param err			Error structure that is populated if an error occurs. NULL on success.
+ * @param status 		Status of abort when err is NULL.
+ * @param udata 			User data that is forwarded from asynchronous command function.
+ * @param event_loop	Event loop that this command was executed on. Use this event loop when
+ *						running nested asynchronous commands when single threaded behavior is
+ *						desired for the group of commands.
+ * @relates aerospike
+ */
+typedef void (*as_abort_listener)(
+	as_error* err, as_abort_status status, void* udata, struct as_event_loop* event_loop
+	);
+
+//---------------------------------
 // Functions
 //---------------------------------
 
@@ -58,6 +138,54 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn);
  */
 AS_EXTERN as_status
 aerospike_abort(aerospike* as, as_error* err, as_txn* txn);
+
+/**
+ * Asynchronously attempt to commit the given multi-record transaction. First, the expected record
+ * versions are sent to the server nodes for verification. If all nodes return success, the transaction
+ * is committed. Otherwise, the transaction is aborted.
+ *
+ * Requires server version 8.0+
+ *
+ * @param as 			Aerospike instance.
+ * @param err			Error detail structure that is populated if an error occurs.
+ * @param txn			Multi-record transaction.
+ * @param listener		User function to be called with command results.
+ * @param udata 			User data that is forwarded from asynchronous command function.
+ * @param event_loop	Event loop that this command was executed on. Use this event loop when
+ *						running nested asynchronous commands when single threaded behavior is
+ *						desired for the group of commands.
+ *
+ * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ * @relates aerospike
+ */
+AS_EXTERN as_status
+aerospike_commit_async(
+	aerospike* as, as_error* err, as_txn* txn, as_commit_listener listener, void* udata,
+	struct as_event_loop* event_loop
+	);
+
+/**
+ * Asynchronously abort and rollback the given multi-record transaction.
+ *
+ * Requires server version 8.0+
+ *
+ * @param as 			Aerospike instance.
+ * @param err			Error detail structure that is populated if an error occurs.
+ * @param txn			Multi-record transaction.
+ * @param listener		User function to be called with command results.
+ * @param udata 			User data that is forwarded from asynchronous command function.
+ * @param event_loop	Event loop that this command was executed on. Use this event loop when
+ *						running nested asynchronous commands when single threaded behavior is
+ *						desired for the group of commands.
+ *
+ * @return AEROSPIKE_OK if async command succesfully queued. Otherwise an error.
+ * @relates aerospike
+ */
+AS_EXTERN as_status
+aerospike_abort_async(
+	aerospike* as, as_error* err, as_txn* txn, as_abort_listener listener, void* udata,
+	struct as_event_loop* event_loop
+	);
 
 #ifdef __cplusplus
 } // end extern "C"

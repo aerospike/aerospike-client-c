@@ -20,6 +20,7 @@
 		BFB5EBE522BC26B400CE6E43 /* bit.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB5EBE422BC26B400CE6E43 /* bit.c */; };
 		BFB8A5E21D0F4DB4007B4E22 /* map_index.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB8A5E11D0F4DB4007B4E22 /* map_index.c */; };
 		BFC25E551E4E80D600FD7756 /* libcrypto.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC25E541E4E80D600FD7756 /* libcrypto.dylib */; };
+		BFC2E7682CA35F9E00263F2B /* transaction_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC2E7672CA35F9E00263F2B /* transaction_async.c */; };
 		BFC65C041C92250B0079DF5A /* aerospike_test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65BFC1C92250B0079DF5A /* aerospike_test.c */; };
 		BFC65C051C92250B0079DF5A /* test.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C011C92250B0079DF5A /* test.c */; };
 		BFC65C091C92256A0079DF5A /* batch_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C071C92256A0079DF5A /* batch_async.c */; };
@@ -105,6 +106,7 @@
 		BFB7BC6E18CAA88000F0D4A0 /* aerospike-test */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "aerospike-test"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFB8A5E11D0F4DB4007B4E22 /* map_index.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_index.c; path = ../src/test/aerospike_map/map_index.c; sourceTree = "<group>"; };
 		BFC25E541E4E80D600FD7756 /* libcrypto.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libcrypto.dylib; path = /usr/local/opt/openssl/lib/libcrypto.dylib; sourceTree = "<absolute>"; };
+		BFC2E7672CA35F9E00263F2B /* transaction_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = transaction_async.c; path = ../src/test/transaction_async.c; sourceTree = "<group>"; };
 		BFC65BFC1C92250B0079DF5A /* aerospike_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = aerospike_test.c; path = ../src/test/aerospike_test.c; sourceTree = "<group>"; };
 		BFC65BFD1C92250B0079DF5A /* aerospike_test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = aerospike_test.h; path = ../src/test/aerospike_test.h; sourceTree = "<group>"; };
 		BFC65C011C92250B0079DF5A /* test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = test.c; path = ../src/test/test.c; sourceTree = "<group>"; };
@@ -246,6 +248,7 @@
 				BFC65BFD1C92250B0079DF5A /* aerospike_test.h */,
 				BF7EBCC625D4B20800D5DFE9 /* exp_operate.c */,
 				BF5FDD6B2C937420000CACBB /* transaction.c */,
+				BFC2E7672CA35F9E00263F2B /* transaction_async.c */,
 				BF65C9C9252D33400026D9E2 /* filter_exp.c */,
 				BFC65C011C92250B0079DF5A /* test.c */,
 				BFC65C021C92250B0079DF5A /* test.h */,
@@ -506,6 +509,7 @@
 				BFC65C541C9227260079DF5A /* key_apply2.c in Sources */,
 				BFC65C571C9227260079DF5A /* key_operate.c in Sources */,
 				BFC65C581C9227260079DF5A /* key_pipeline.c in Sources */,
+				BFC2E7682CA35F9E00263F2B /* transaction_async.c in Sources */,
 				BFC65C531C9227260079DF5A /* key_apply.c in Sources */,
 				BFC65C521C9227260079DF5A /* key_apply_async.c in Sources */,
 				BFC65C461C9226E50079DF5A /* list_basics.c in Sources */,

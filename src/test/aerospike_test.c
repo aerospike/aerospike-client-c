@@ -470,6 +470,7 @@ PLAN(aerospike_test)
 	plan_add(batch_async);
 	plan_add(scan_async);
 	plan_add(query_async);
+	plan_add(transaction_async);
 #endif
 }
 

@@ -51,8 +51,8 @@ static as_monitor monitor;
 
 typedef enum {
 	PUT,
-	COMMIT,
-	GET
+	GET,
+	COMMIT
 } cmd_type;
 
 typedef struct {
@@ -201,15 +201,18 @@ commander_run_next(commander* cmdr)
 
 	switch (cmd->type) {
 		case PUT:
+			//printf("Run put\n");
 			status = put_exec(cmdr, cmd, &err);
 			break;
 
-		case COMMIT:
-			status = commit_exec(cmdr, cmd, &err);
+		case GET:
+			//printf("Run get\n");
+			status = get_exec(cmdr, cmd, &err);
 			break;
 
-		case GET:
-			status = get_exec(cmdr, cmd, &err);
+		case COMMIT:
+			//printf("Run commit\n");
+			status = commit_exec(cmdr, cmd, &err);
 			break;
 	}
 

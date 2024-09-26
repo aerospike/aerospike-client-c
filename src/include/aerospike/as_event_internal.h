@@ -263,6 +263,9 @@ bool
 as_event_command_parse_success_failure(as_event_command* cmd);
 
 bool
+as_event_command_parse_deadline(as_event_command* cmd);
+
+bool
 as_event_command_parse_info(as_event_command* cmd);
 
 void

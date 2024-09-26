@@ -284,6 +284,12 @@ as_txn_monitor_remove(
 // Async Functions
 //---------------------------------
 
+as_status
+as_txn_monitor_operate_async(
+	aerospike* as, as_error* err, as_txn* txn, const as_policy_operate* policy, const as_key* key,
+	const as_operations* ops, as_async_record_listener listener, void* udata, as_event_loop* event_loop
+	);
+
 static as_status
 as_txn_monitor_add_keys_async(
 	aerospike* as, as_error* err, as_txn* txn, const as_policy_base* cmd_policy, as_operations* ops,
@@ -296,8 +302,7 @@ as_txn_monitor_add_keys_async(
 	as_policy_operate txn_policy;
 	as_txn_policy_copy(cmd_policy, &txn_policy);
 
-	return aerospike_key_operate_async(as, err, &txn_policy, &key, ops, listener, udata, event_loop,
-		NULL);
+	return as_txn_monitor_operate_async(as, err, txn, &txn_policy, &key, ops, listener, udata, event_loop);
 }
 
 as_status

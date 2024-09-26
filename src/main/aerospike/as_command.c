@@ -1728,6 +1728,27 @@ as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t
 	}
 
 	uint8_t* p = buf + sizeof(as_msg);
+
+	status = as_command_parse_fields_deadline(&p, err, msg, txn);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = msg->result_code;
+
+	if (status != AEROSPIKE_OK) {
+		return as_error_update(err, status, "%s %s", as_node_get_address_string(node),
+			as_error_string(status));
+	}
+
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_command_parse_fields_deadline(uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn)
+{
+	uint8_t* p = *pp;
 	uint32_t len;
 	uint8_t type;
 
@@ -1747,12 +1768,6 @@ as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t
 		p += len;
 	}
 
-	status = msg->result_code;
-
-	if (msg->result_code) {
-		return as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-			as_error_string(status));
-	}
-
+	*pp = p;
 	return AEROSPIKE_OK;
 }

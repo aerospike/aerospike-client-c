@@ -784,10 +784,17 @@ as_command_write_replica(as_policy_replica replica)
 
 /**
  * @private
- * Parse deadline field when adding keys to the MRT monitor record.
+ * Parse response with deadline field when adding keys to the MRT monitor record.
  */
 as_status
 as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
+
+/**
+ * @private
+ * Parse deadline field.
+ */
+as_status
+as_command_parse_fields_deadline(uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -1602,6 +1602,36 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 }
 
 bool
+as_event_command_parse_deadline(as_event_command* cmd)
+{
+	as_error err;
+	uint8_t* p = cmd->buf + cmd->pos;
+	as_msg* msg = (as_msg*)p;
+	as_msg_swap_header_from_be(msg);
+	p += sizeof(as_msg);
+
+	as_status status = as_command_parse_fields_deadline(&p, &err, msg, cmd->txn);
+
+	if (status != AEROSPIKE_OK) {
+		as_event_response_error(cmd, &err);
+		return true;
+	}
+
+	status = msg->result_code;
+
+	if (status != AEROSPIKE_OK) {
+		as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
+		as_event_response_error(cmd, &err);
+		return true;
+	}
+
+	as_event_response_complete(cmd);
+	((as_async_record_command*)cmd)->listener(NULL, NULL, cmd->udata, cmd->event_loop);
+	as_event_command_release(cmd);
+	return true;
+}
+
+bool
 as_event_command_parse_info(as_event_command* cmd)
 {
 	uint8_t* p = cmd->buf + cmd->pos;

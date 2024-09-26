@@ -294,8 +294,7 @@ as_txn_monitor_callback(as_error* err, as_record* rec, void* udata, as_event_loo
 	else {
 		// Set deadline in command buffer.
 		// Deadline offset is located in the overloaded cmd->pos.
-		uint8_t* buf = (uint8_t*)cmd + cmd->write_offset;
-		*(uint32_t*)(buf + cmd->pos) = cmd->txn->deadline;
+		*(uint32_t*)(cmd->buf + cmd->pos) = cmd->txn->deadline;
 	}
 
 	// Run original command.
@@ -1470,6 +1469,10 @@ aerospike_key_apply_async(
 	}
 }
 
+//---------------------------------
+// Txn Monitor Operations
+//---------------------------------
+
 as_status
 as_txn_monitor_operate(
 	aerospike* as, as_error* err, as_txn* txn, const as_policy_operate* policy, const as_key* key,
@@ -1508,4 +1511,77 @@ as_txn_monitor_operate(
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
 
 	return as_command_send(&cmd, err, compression_threshold, as_operate_write, &oper);
+}
+
+as_status
+as_txn_monitor_operate_async(
+	aerospike* as, as_error* err, as_txn* txn, const as_policy_operate* policy, const as_key* key,
+	const as_operations* ops, as_async_record_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	uint32_t n_operations = ops->binops.size;
+	
+	as_partition_info pi;
+	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+	
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
+
+	as_policy_operate policy_local;
+	as_operate oper;
+
+	status = as_operate_init(&oper, as, policy, &policy_local, key, ops, &buffers, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		return status;
+	}
+
+	as_operate_size(&oper);
+	policy = oper.policy;
+
+	as_event_command* cmd;
+
+	if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {
+		// Send uncompressed command.
+		cmd = as_async_record_command_create(
+			as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
+			policy->async_heap_rec, 0, listener, udata, event_loop, NULL, oper.size,
+			as_event_command_parse_deadline, AS_LATENCY_TYPE_WRITE, NULL, 0);
+
+		cmd->txn = txn;
+		cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
+		return as_event_command_execute(cmd, err);
+	}
+	else {
+		// Send compressed command.
+		// First write uncompressed buffer.
+		size_t capacity = oper.size;
+		uint8_t* ubuf = cf_malloc(capacity);
+		size_t size = as_operate_write(&oper, ubuf);
+
+		// Allocate command with compressed upper bound.
+		size_t comp_size = as_command_compress_max_size(size);
+
+		cmd = as_async_record_command_create(
+			as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
+			policy->async_heap_rec, 0, listener, udata, event_loop, NULL, comp_size,
+			as_event_command_parse_deadline, AS_LATENCY_TYPE_WRITE, ubuf, (uint32_t)size);
+
+		// Compress buffer and execute.
+		status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_command_destroy(cmd);
+			return status;
+		}
+
+		cmd->txn = txn;
+		cmd->write_len = (uint32_t)comp_size;
+		return as_event_command_execute(cmd, err);
+	}
 }

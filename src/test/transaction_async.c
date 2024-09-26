@@ -52,7 +52,8 @@ static as_monitor monitor;
 typedef enum {
 	PUT,
 	GET,
-	COMMIT
+	COMMIT,
+	ABORT
 } cmd_type;
 
 typedef struct {
@@ -60,6 +61,7 @@ typedef struct {
 	as_key* key;
 	int64_t val;
 	cmd_type type;
+	as_status status;
 } command;
 
 typedef struct {
@@ -87,11 +89,18 @@ put_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
 }
 
 static void
+put_add_error(as_vector* cmds, as_txn* txn, as_key* key, int64_t val, as_status status)
+{
+	command cmd = {.txn = txn, .key = key, .val = val, .type = PUT, .status = status};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
 put_listener(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	commander* cmdr = udata;
 
-	if (err) {
+	if (err && err->code != cmdr->cmd->status) {
 		commander_fail(cmdr, err);
 		return;
 	}
@@ -186,6 +195,34 @@ commit_exec(commander* cmdr, command* cmd, as_error* err)
 }
 
 static void
+abort_add(as_vector* cmds, as_txn* txn)
+{
+	command cmd = {.txn = txn, .type = ABORT};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+abort_listener(
+	as_error* err, as_abort_status status, void* udata, struct as_event_loop* event_loop
+	)
+{
+	commander* cmdr = udata;
+
+	if (err) {
+		commander_fail(cmdr, err);
+		return;
+	}
+
+	commander_run_next(cmdr);
+}
+
+static as_status
+abort_exec(commander* cmdr, command* cmd, as_error* err)
+{
+	return aerospike_abort_async(as, err, cmd->txn, abort_listener, cmdr, NULL);
+}
+
+static void
 commander_run_next(commander* cmdr)
 {
 	cmdr->idx++;
@@ -213,6 +250,10 @@ commander_run_next(commander* cmdr)
 		case COMMIT:
 			//printf("Run commit\n");
 			status = commit_exec(cmdr, cmd, &err);
+			break;
+
+		case ABORT:
+			status = abort_exec(cmdr, cmd, &err);
 			break;
 	}
 
@@ -303,6 +344,85 @@ TEST(txn_async_write, "transaction async write")
 	commander_execute(&cmds, __result__);
 }
 
+TEST(txn_async_write_twice, "transaction async write twice")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_write_twice");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	put_add(&cmds, &txn, &key, 1);
+	put_add(&cmds, &txn, &key, 2);
+	commit_add(&cmds, &txn);
+	get_add(&cmds, &txn, &key, 2);
+
+	commander_execute(&cmds, __result__);
+}
+
+TEST(txn_async_write_block, "transaction async write block")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_write_block");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 5);
+
+	put_add(&cmds, NULL, &key, 1);
+	put_add(&cmds, &txn, &key, 2);
+	put_add_error(&cmds, NULL, &key, 3, AEROSPIKE_MRT_BLOCKED);
+	commit_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 2);
+
+	commander_execute(&cmds, __result__);
+}
+
+TEST(txn_async_write_read, "transaction async write read")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_write_read");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 5);
+
+	put_add(&cmds, NULL, &key, 1);
+	put_add(&cmds, &txn, &key, 2);
+	get_add(&cmds, NULL, &key, 1);
+	commit_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 2);
+
+	commander_execute(&cmds, __result__);
+}
+
+TEST(txn_async_write_abort, "transaction async write abort")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_write_abort");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 5);
+
+	put_add(&cmds, NULL, &key, 1);
+	put_add(&cmds, &txn, &key, 2);
+	get_add(&cmds, &txn, &key, 2);
+	abort_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 1);
+
+	commander_execute(&cmds, __result__);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -313,4 +433,8 @@ SUITE(transaction_async, "Async transaction tests")
 	suite_after(after);
 
 	suite_add(txn_async_write);
+	suite_add(txn_async_write_twice);
+	suite_add(txn_async_write_block);
+	suite_add(txn_async_write_read);
+	suite_add(txn_async_write_abort);
 }

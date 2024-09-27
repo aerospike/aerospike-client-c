@@ -340,6 +340,10 @@ commander_run_next(commander* cmdr)
 		case ABORT:
 			status = abort_exec(cmdr, cmd, &err);
 			break;
+
+		default:
+			status = AEROSPIKE_ERR_CLIENT;
+			break;
 	}
 
 	atf_test_result* __result__ = cmdr->result;

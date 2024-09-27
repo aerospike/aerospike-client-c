@@ -52,6 +52,7 @@ static as_monitor monitor;
 typedef enum {
 	PUT,
 	GET,
+	DELETE,
 	COMMIT,
 	ABORT
 } cmd_type;
@@ -100,8 +101,19 @@ put_listener(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	commander* cmdr = udata;
 
-	if (err && err->code != cmdr->cmd->status) {
-		commander_fail(cmdr, err);
+	if (err) {
+		if (err->code == cmdr->cmd->status) {
+			commander_run_next(cmdr);
+		}
+		else {
+			commander_fail(cmdr, err);
+		}
+		return;
+	}
+
+	if (cmdr->cmd->status != AEROSPIKE_OK) {
+		atf_test_result* __result__ = cmdr->result;
+		fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
 		return;
 	}
 
@@ -135,12 +147,30 @@ get_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
 }
 
 static void
+get_add_error(as_vector* cmds, as_txn* txn, as_key* key, as_status status)
+{
+	command cmd = {.txn = txn, .key = key, .type = GET, .status = status};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
 get_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
 {
 	commander* cmdr = udata;
 
 	if (err) {
-		commander_fail(cmdr, err);
+		if (err->code == cmdr->cmd->status) {
+			commander_run_next(cmdr);
+		}
+		else {
+			commander_fail(cmdr, err);
+		}
+		return;
+	}
+
+	if (cmdr->cmd->status != AEROSPIKE_OK) {
+		atf_test_result* __result__ = cmdr->result;
+		fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
 		return;
 	}
 
@@ -164,6 +194,60 @@ get_exec(commander* cmdr, command* cmd, as_error* err)
 	}
 
 	return aerospike_key_get_async(as, err, policy, cmd->key, get_listener, cmdr, NULL, NULL);
+}
+
+static void
+delete_add(as_vector* cmds, as_txn* txn, as_key* key)
+{
+	command cmd = {.txn = txn, .key = key, .type = DELETE};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+delete_add_error(as_vector* cmds, as_txn* txn, as_key* key, as_status status)
+{
+	command cmd = {.txn = txn, .key = key, .type = DELETE, .status = status};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+delete_listener(as_error* err, void* udata, as_event_loop* event_loop)
+{
+	commander* cmdr = udata;
+
+	if (err) {
+		if (err->code == cmdr->cmd->status) {
+			commander_run_next(cmdr);
+		}
+		else {
+			commander_fail(cmdr, err);
+		}
+		return;
+	}
+
+	if (cmdr->cmd->status != AEROSPIKE_OK) {
+		atf_test_result* __result__ = cmdr->result;
+		fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
+		return;
+	}
+
+	commander_run_next(cmdr);
+}
+
+static as_status
+delete_exec(commander* cmdr, command* cmd, as_error* err)
+{
+	as_policy_remove p;
+	as_policy_remove* policy = &as->config.policies.remove;
+
+	if (cmd->txn) {
+		as_policy_remove_copy(policy, &p);
+		p.base.txn = cmd->txn;
+		p.durable_delete = true;
+		policy = &p;
+	}
+
+	return aerospike_key_remove_async(as, err, policy, cmd->key, delete_listener, cmdr, NULL, NULL);
 }
 
 static void
@@ -238,17 +322,18 @@ commander_run_next(commander* cmdr)
 
 	switch (cmd->type) {
 		case PUT:
-			//printf("Run put\n");
 			status = put_exec(cmdr, cmd, &err);
 			break;
 
 		case GET:
-			//printf("Run get\n");
 			status = get_exec(cmdr, cmd, &err);
 			break;
 
+		case DELETE:
+			status = delete_exec(cmdr, cmd, &err);
+			break;
+
 		case COMMIT:
-			//printf("Run commit\n");
 			status = commit_exec(cmdr, cmd, &err);
 			break;
 
@@ -423,6 +508,64 @@ TEST(txn_async_write_abort, "transaction async write abort")
 	commander_execute(&cmds, __result__);
 }
 
+TEST(txn_async_delete, "transaction async delete")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_delete");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	put_add(&cmds, NULL, &key, 1);
+	delete_add(&cmds, &txn, &key);
+	commit_add(&cmds, &txn);
+	get_add_error(&cmds, NULL, &key, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	commander_execute(&cmds, __result__);
+}
+
+TEST(txn_async_delete_abort, "transaction async delete abort")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_delete_abort");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	put_add(&cmds, NULL, &key, 1);
+	delete_add(&cmds, &txn, &key);
+	abort_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 1);
+
+	commander_execute(&cmds, __result__);
+}
+
+TEST(txn_async_delete_twice, "transaction async delete twice")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_delete_twice");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 5);
+
+	put_add(&cmds, NULL, &key, 1);
+	delete_add(&cmds, &txn, &key);
+	delete_add_error(&cmds, &txn, &key, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	commit_add(&cmds, &txn);
+	get_add_error(&cmds, NULL, &key, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	commander_execute(&cmds, __result__);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -437,4 +580,7 @@ SUITE(transaction_async, "Async transaction tests")
 	suite_add(txn_async_write_block);
 	suite_add(txn_async_write_read);
 	suite_add(txn_async_write_abort);
+	suite_add(txn_async_delete);
+	suite_add(txn_async_delete_abort);
+	suite_add(txn_async_delete_twice);
 }

@@ -3778,8 +3778,13 @@ as_txn_verify_async(
 	as_policy_txn_verify* policy = &as->config.policies.txn_verify;
 
 	// Do not pass txn instance for verify.
-	return as_batch_records_execute_async(as, err, policy, records, NULL, versions, listener, udata,
-		event_loop, 0, false);
+	as_status status = as_batch_records_execute_async(as, err, policy, records, NULL, versions,
+		listener, udata, event_loop, 0, false);
+
+	if (status != AEROSPIKE_OK) {
+		as_batch_records_destroy(records);
+	}
+	return status;
 }
 
 as_status
@@ -3810,8 +3815,13 @@ as_txn_roll_async(
 		versions[count++] = as_txn_get_read_version(txn, key->digest);
 	}
 
-	return as_batch_records_execute_async(as, err, policy, records, txn, versions, listener, udata,
-		event_loop, txn_attr, true);
+	as_status status = as_batch_records_execute_async(as, err, policy, records, txn, versions,
+		listener, udata, event_loop, txn_attr, true);
+
+	if (status != AEROSPIKE_OK) {
+		as_batch_records_destroy(records);
+	}
+	return status;
 }
 
 //---------------------------------

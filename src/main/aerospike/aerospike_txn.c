@@ -309,6 +309,10 @@ as_commit_roll_listener(
 	as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop
 	)
 {
+	if (records) {
+		as_batch_records_destroy(records);
+	}
+
 	as_commit_data* data = udata;
 
 	if (err) {
@@ -369,6 +373,10 @@ as_commit_verify_listener(
 	as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop
 	)
 {
+	if (records) {
+		as_batch_records_destroy(records);
+	}
+
 	as_commit_data* data = udata;
 
 	if (err) {
@@ -482,6 +490,10 @@ as_abort_roll_listener(
 	as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop
 	)
 {
+	if (records) {
+		as_batch_records_destroy(records);
+	}
+
 	as_abort_data* data = udata;
 
 	if (err) {

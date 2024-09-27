@@ -368,11 +368,15 @@ udf_exec(commander* cmdr, command* cmd, as_error* err)
 	}
 
 	as_arraylist args;
-	as_arraylist_init(&args, 2, 0);
+	as_arraylist_inita(&args, 2);
 	as_arraylist_append_str(&args, BIN);
 	as_arraylist_append_int64(&args, cmd->val);
 
-	return aerospike_key_apply_async(as, err, policy, cmd->key, "udf_record", "write_bin", (as_list*)&args, udf_listener, cmdr, NULL, NULL);
+	as_status status = aerospike_key_apply_async(as, err, policy, cmd->key, "udf_record", "write_bin",
+		(as_list*)&args, udf_listener, cmdr, NULL, NULL);
+
+	as_arraylist_destroy(&args);
+	return status;
 }
 
 //---------------------------------

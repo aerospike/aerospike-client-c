@@ -52,6 +52,9 @@ static as_monitor monitor;
 typedef enum {
 	PUT,
 	GET,
+	OPERATE,
+	TOUCH,
+	UDF,
 	DELETE,
 	COMMIT,
 	ABORT
@@ -81,6 +84,10 @@ commander_fail(commander* cmdr, as_error* err)
 	atf_test_result* __result__ = cmdr->result;
 	fail_async(&monitor, "Error %d: %s", err->code, err->message);
 }
+
+//---------------------------------
+// Put
+//---------------------------------
 
 static void
 put_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
@@ -139,6 +146,10 @@ put_exec(commander* cmdr, command* cmd, as_error* err)
 	return aerospike_key_put_async(as, err, policy, cmd->key, &rec, put_listener, cmdr, NULL, NULL);
 }
 
+//---------------------------------
+// Get
+//---------------------------------
+
 static void
 get_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
 {
@@ -196,6 +207,178 @@ get_exec(commander* cmdr, command* cmd, as_error* err)
 	return aerospike_key_get_async(as, err, policy, cmd->key, get_listener, cmdr, NULL, NULL);
 }
 
+//---------------------------------
+// Operate
+//---------------------------------
+
+static void
+operate_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
+{
+	command cmd = {.txn = txn, .key = key, .val = val, .type = OPERATE};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+operate_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	commander* cmdr = udata;
+
+	if (err) {
+		if (err->code == cmdr->cmd->status) {
+			commander_run_next(cmdr);
+		}
+		else {
+			commander_fail(cmdr, err);
+		}
+		return;
+	}
+
+	if (cmdr->cmd->status != AEROSPIKE_OK) {
+		atf_test_result* __result__ = cmdr->result;
+		fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
+		return;
+	}
+
+	int64_t val = as_record_get_int64(record, BIN, -1);
+ 	atf_test_result* __result__ = cmdr->result;
+   	assert_int_eq_async(&monitor, val, cmdr->cmd->val);
+
+	commander_run_next(cmdr);
+}
+
+static as_status
+operate_exec(commander* cmdr, command* cmd, as_error* err)
+{
+	as_policy_operate p;
+	as_policy_operate* policy = &as->config.policies.operate;
+
+	if (cmd->txn) {
+		as_policy_operate_copy(policy, &p);
+		p.base.txn = cmd->txn;
+		policy = &p;
+	}
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_add_write_int64(&ops, BIN, 2);
+	as_operations_add_read(&ops, BIN);
+
+	return aerospike_key_operate_async(as, err, policy, cmd->key, &ops, operate_listener, cmdr, NULL, NULL);
+}
+
+//---------------------------------
+// Touch
+//---------------------------------
+
+static void
+touch_add(as_vector* cmds, as_txn* txn, as_key* key)
+{
+	command cmd = {.txn = txn, .key = key, .type = TOUCH};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+touch_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	commander* cmdr = udata;
+
+	if (err) {
+		if (err->code == cmdr->cmd->status) {
+			commander_run_next(cmdr);
+		}
+		else {
+			commander_fail(cmdr, err);
+		}
+		return;
+	}
+
+	if (cmdr->cmd->status != AEROSPIKE_OK) {
+		atf_test_result* __result__ = cmdr->result;
+		fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
+		return;
+	}
+
+	commander_run_next(cmdr);
+}
+
+static as_status
+touch_exec(commander* cmdr, command* cmd, as_error* err)
+{
+	as_policy_operate p;
+	as_policy_operate* policy = &as->config.policies.operate;
+
+	if (cmd->txn) {
+		as_policy_operate_copy(policy, &p);
+		p.base.txn = cmd->txn;
+		policy = &p;
+	}
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_touch(&ops);
+
+	return aerospike_key_operate_async(as, err, policy, cmd->key, &ops, touch_listener, cmdr, NULL, NULL);
+}
+
+//---------------------------------
+// UDF
+//---------------------------------
+
+static void
+udf_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
+{
+	command cmd = {.txn = txn, .key = key, .val = val, .type = UDF};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+udf_listener(as_error* err, as_val* val, void* udata, as_event_loop* event_loop)
+{
+	commander* cmdr = udata;
+
+	if (err) {
+		if (err->code == cmdr->cmd->status) {
+			commander_run_next(cmdr);
+		}
+		else {
+			commander_fail(cmdr, err);
+		}
+		return;
+	}
+
+	if (cmdr->cmd->status != AEROSPIKE_OK) {
+		atf_test_result* __result__ = cmdr->result;
+		fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
+		return;
+	}
+
+	commander_run_next(cmdr);
+}
+
+static as_status
+udf_exec(commander* cmdr, command* cmd, as_error* err)
+{
+	as_policy_apply p;
+	as_policy_apply* policy = &as->config.policies.apply;
+
+	if (cmd->txn) {
+		as_policy_apply_copy(policy, &p);
+		p.base.txn = cmd->txn;
+		policy = &p;
+	}
+
+	as_arraylist args;
+	as_arraylist_init(&args, 2, 0);
+	as_arraylist_append_str(&args, BIN);
+	as_arraylist_append_int64(&args, cmd->val);
+
+	return aerospike_key_apply_async(as, err, policy, cmd->key, "udf_record", "write_bin", (as_list*)&args, udf_listener, cmdr, NULL, NULL);
+}
+
+//---------------------------------
+// Delete
+//---------------------------------
+
 static void
 delete_add(as_vector* cmds, as_txn* txn, as_key* key)
 {
@@ -250,6 +433,10 @@ delete_exec(commander* cmdr, command* cmd, as_error* err)
 	return aerospike_key_remove_async(as, err, policy, cmd->key, delete_listener, cmdr, NULL, NULL);
 }
 
+//---------------------------------
+// Commit
+//---------------------------------
+
 static void
 commit_add(as_vector* cmds, as_txn* txn)
 {
@@ -277,6 +464,10 @@ commit_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	return aerospike_commit_async(as, err, cmd->txn, commit_listener, cmdr, NULL);
 }
+
+//---------------------------------
+// Abort
+//---------------------------------
 
 static void
 abort_add(as_vector* cmds, as_txn* txn)
@@ -306,6 +497,10 @@ abort_exec(commander* cmdr, command* cmd, as_error* err)
 	return aerospike_abort_async(as, err, cmd->txn, abort_listener, cmdr, NULL);
 }
 
+//---------------------------------
+// Run
+//---------------------------------
+
 static void
 commander_run_next(commander* cmdr)
 {
@@ -327,6 +522,18 @@ commander_run_next(commander* cmdr)
 
 		case GET:
 			status = get_exec(cmdr, cmd, &err);
+			break;
+
+		case OPERATE:
+			status = operate_exec(cmdr, cmd, &err);
+			break;
+
+		case TOUCH:
+			status = touch_exec(cmdr, cmd, &err);
+			break;
+
+		case UDF:
+			status = udf_exec(cmdr, cmd, &err);
 			break;
 
 		case DELETE:
@@ -362,7 +569,7 @@ commander_execute(as_vector* cmds, atf_test_result* result)
 }
 
 //---------------------------------
-// Static Functions
+// Before/After Suite
 //---------------------------------
 
 static bool
@@ -578,6 +785,126 @@ TEST(txn_async_delete_twice, "transaction async delete twice")
 	as_txn_destroy(&txn);
 }
 
+TEST(txn_async_touch, "transaction async touch")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_touch");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	put_add(&cmds, NULL, &key, 1);
+	touch_add(&cmds, &txn, &key);
+	commit_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 1);
+
+	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
+}
+
+TEST(txn_async_touch_abort, "transaction async touch abort")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_touch_abort");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	put_add(&cmds, NULL, &key, 1);
+	touch_add(&cmds, &txn, &key);
+	abort_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 1);
+
+	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
+}
+
+TEST(txn_async_operate_write, "transaction async operate write")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_operate_write");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	put_add(&cmds, NULL, &key, 1);
+	operate_add(&cmds, &txn, &key, 2);
+	commit_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 2);
+
+	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
+}
+
+TEST(txn_async_operate_write_abort, "transaction async operate write abort")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_operate_write_abort");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	put_add(&cmds, NULL, &key, 1);
+	operate_add(&cmds, &txn, &key, 2);
+	abort_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 1);
+
+	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
+}
+
+TEST(txn_async_udf, "transaction async udf")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_udf");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	put_add(&cmds, NULL, &key, 1);
+	udf_add(&cmds, &txn, &key, 2);
+	commit_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 2);
+
+	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
+}
+
+TEST(txn_async_udf_abort, "transaction async udf abort")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_udf_abort");
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	put_add(&cmds, NULL, &key, 1);
+	udf_add(&cmds, &txn, &key, 2);
+	abort_add(&cmds, &txn);
+	get_add(&cmds, NULL, &key, 1);
+
+	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -595,4 +922,10 @@ SUITE(transaction_async, "Async transaction tests")
 	suite_add(txn_async_delete);
 	suite_add(txn_async_delete_abort);
 	suite_add(txn_async_delete_twice);
+	suite_add(txn_async_touch);
+	suite_add(txn_async_touch_abort);
+	suite_add(txn_async_operate_write);
+	suite_add(txn_async_operate_write_abort);
+	suite_add(txn_async_udf);
+	suite_add(txn_async_udf_abort);
 }

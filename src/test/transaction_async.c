@@ -431,6 +431,7 @@ TEST(txn_async_write, "transaction async write")
 	get_add(&cmds, &txn, &key, 2);
 
 	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
 }
 
 TEST(txn_async_write_twice, "transaction async write twice")
@@ -450,6 +451,7 @@ TEST(txn_async_write_twice, "transaction async write twice")
 	get_add(&cmds, &txn, &key, 2);
 
 	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
 }
 
 TEST(txn_async_write_block, "transaction async write block")
@@ -470,6 +472,7 @@ TEST(txn_async_write_block, "transaction async write block")
 	get_add(&cmds, NULL, &key, 2);
 
 	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
 }
 
 TEST(txn_async_write_read, "transaction async write read")
@@ -490,6 +493,7 @@ TEST(txn_async_write_read, "transaction async write read")
 	get_add(&cmds, NULL, &key, 2);
 
 	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
 }
 
 TEST(txn_async_write_abort, "transaction async write abort")
@@ -510,6 +514,7 @@ TEST(txn_async_write_abort, "transaction async write abort")
 	get_add(&cmds, NULL, &key, 1);
 
 	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
 }
 
 TEST(txn_async_delete, "transaction async delete")
@@ -529,6 +534,7 @@ TEST(txn_async_delete, "transaction async delete")
 	get_add_error(&cmds, NULL, &key, AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
 	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
 }
 
 TEST(txn_async_delete_abort, "transaction async delete abort")
@@ -548,6 +554,7 @@ TEST(txn_async_delete_abort, "transaction async delete abort")
 	get_add(&cmds, NULL, &key, 1);
 
 	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
 }
 
 TEST(txn_async_delete_twice, "transaction async delete twice")
@@ -568,6 +575,7 @@ TEST(txn_async_delete_twice, "transaction async delete twice")
 	get_add_error(&cmds, NULL, &key, AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
 	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
 }
 
 //---------------------------------

@@ -56,6 +56,8 @@ typedef enum {
 	TOUCH,
 	UDF,
 	DELETE,
+	BATCH_READ,
+	BATCH_WRITE,
 	COMMIT,
 	ABORT
 } cmd_type;
@@ -64,6 +66,7 @@ typedef struct {
 	as_txn* txn;
 	as_key* key;
 	int64_t val;
+	uint32_t batch_size;
 	cmd_type type;
 	as_status status;
 } command;
@@ -438,6 +441,169 @@ delete_exec(commander* cmdr, command* cmd, as_error* err)
 }
 
 //---------------------------------
+// Batch Read
+//---------------------------------
+
+static void
+batch_read_add(as_vector* cmds, as_txn* txn, uint32_t batch_size, int64_t val)
+{
+	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = BATCH_READ};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+batch_read_listener(
+	as_error* err, as_batch_records* recs, void* udata, as_event_loop* event_loop
+	)
+{
+	commander* cmdr = udata;
+
+	if (err) {
+		if (err->code == cmdr->cmd->status) {
+			commander_run_next(cmdr);
+		}
+		else {
+			commander_fail(cmdr, err);
+		}
+		return;
+	}
+
+	if (cmdr->cmd->status != AEROSPIKE_OK) {
+		atf_test_result* __result__ = cmdr->result;
+		fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
+		return;
+	}
+
+ 	atf_test_result* __result__ = cmdr->result;
+
+	for (uint32_t i = 0; i < recs->list.size; i++) {
+		const as_batch_read_record* rec = as_vector_get(&recs->list, i);
+		assert_int_eq_async(&monitor, rec->result, AEROSPIKE_OK);
+
+		int64_t val = as_record_get_int64(&rec->record, BIN, -1);
+   		assert_int_eq_async(&monitor, val, cmdr->cmd->val);
+	}
+
+	commander_run_next(cmdr);
+}
+
+static as_status
+batch_read_exec(commander* cmdr, command* cmd, as_error* err)
+{
+	as_policy_batch p;
+	as_policy_batch* policy = &as->config.policies.batch;
+
+	if (cmd->txn) {
+		as_policy_batch_copy(policy, &p);
+		p.base.txn = cmd->txn;
+		policy = &p;
+	}
+
+	as_batch_records* recs = as_batch_records_create(cmd->batch_size);
+
+	for (uint32_t i = 0; i < cmd->batch_size; i++) {
+		as_batch_read_record* rec = as_batch_read_reserve(recs);
+		as_key_init_int64(&rec->key, NAMESPACE, SET, i);
+		rec->read_all_bins = true;
+	}
+
+	as_status status = aerospike_batch_read_async(as, err, policy, recs, batch_read_listener, cmdr, NULL);
+
+	if (status != AEROSPIKE_OK) {
+		as_batch_records_destroy(recs);
+	}
+	return status;
+}
+
+//---------------------------------
+// Batch Write
+//---------------------------------
+
+static void
+batch_write_add(as_vector* cmds, as_txn* txn, uint32_t batch_size, int64_t val)
+{
+	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = BATCH_WRITE};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+batch_write_listener(
+	as_error* err, as_batch_records* recs, void* udata, as_event_loop* event_loop
+	)
+{
+	commander* cmdr = udata;
+	bool success = false;
+
+	if (err) {
+		if (err->code == cmdr->cmd->status) {
+			success = true;
+		}
+		else {
+			commander_fail(cmdr, err);
+		}
+	}
+	else {
+		atf_test_result* __result__ = cmdr->result;
+
+		if (cmdr->cmd->status == AEROSPIKE_OK) {
+
+			for (uint32_t i = 0; i < recs->list.size; i++) {
+				const as_batch_write_record* rec = as_vector_get(&recs->list, i);
+				assert_int_eq_async(&monitor, rec->result, AEROSPIKE_OK);
+			}
+			success = true;
+		}
+		else {
+			fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
+		}
+	}
+
+	if (recs->list.size > 0) {
+		// Destroy heap allocated ops that is used on every batch record.
+		const as_batch_write_record* rec = as_vector_get(&recs->list, 0);
+		as_operations_destroy(rec->ops);
+	}
+	as_batch_records_destroy(recs);
+
+	if (success) {
+		commander_run_next(cmdr);
+	}
+}
+
+static as_status
+batch_write_exec(commander* cmdr, command* cmd, as_error* err)
+{
+	as_policy_batch p;
+	as_policy_batch* policy = &as->config.policies.batch_parent_write;
+
+	if (cmd->txn) {
+		as_policy_batch_copy(policy, &p);
+		p.base.txn = cmd->txn;
+		policy = &p;
+	}
+
+	as_batch_records* recs = as_batch_records_create(cmd->batch_size);
+
+	// Must allocate ops on the heap when a transaction is involved.
+	as_operations* ops = as_operations_new(1);
+	as_operations_add_write_int64(ops, BIN, cmd->val);
+
+	for (uint32_t i = 0; i < cmd->batch_size; i++) {
+		as_batch_write_record* rec = as_batch_write_reserve(recs);
+		as_key_init_int64(&rec->key, NAMESPACE, SET, i);
+		rec->ops = ops;
+	}
+
+	as_status status = aerospike_batch_write_async(as, err, policy, recs, batch_write_listener, cmdr, NULL);
+
+	if (status != AEROSPIKE_OK) {
+		as_batch_records_destroy(recs);
+		as_operations_destroy(ops);
+	}
+	return status;
+}
+
+//---------------------------------
 // Commit
 //---------------------------------
 
@@ -542,6 +708,14 @@ commander_run_next(commander* cmdr)
 
 		case DELETE:
 			status = delete_exec(cmdr, cmd, &err);
+			break;
+
+		case BATCH_READ:
+			status = batch_read_exec(cmdr, cmd, &err);
+			break;
+
+		case BATCH_WRITE:
+			status = batch_write_exec(cmdr, cmd, &err);
 			break;
 
 		case COMMIT:
@@ -909,6 +1083,44 @@ TEST(txn_async_udf_abort, "transaction async udf abort")
 	as_txn_destroy(&txn);
 }
 
+TEST(txn_async_batch, "transaction async batch")
+{
+	uint32_t batch_size = 10;
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	batch_write_add(&cmds, NULL, batch_size, 1);
+	batch_write_add(&cmds, &txn, batch_size, 2);
+	commit_add(&cmds, &txn);
+	batch_read_add(&cmds, NULL, batch_size, 2);
+
+	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
+}
+
+TEST(txn_async_batch_abort, "transaction async batch abort")
+{
+	uint32_t batch_size = 10;
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 4);
+
+	batch_write_add(&cmds, NULL, batch_size, 1);
+	batch_write_add(&cmds, &txn, batch_size, 2);
+	abort_add(&cmds, &txn);
+	batch_read_add(&cmds, NULL, batch_size, 1);
+
+	commander_execute(&cmds, __result__);
+	as_txn_destroy(&txn);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -932,4 +1144,6 @@ SUITE(transaction_async, "Async transaction tests")
 	suite_add(txn_async_operate_write_abort);
 	suite_add(txn_async_udf);
 	suite_add(txn_async_udf_abort);
+	suite_add(txn_async_batch);
+	suite_add(txn_async_batch_abort);
 }

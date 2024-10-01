@@ -62,10 +62,19 @@ as_error_copy_fields(as_error* trg, as_error* src)
 // Sync Commit
 //---------------------------------
 
+static inline void
+as_set_commit_status(as_commit_status* trg, as_commit_status src)
+{
+	if (trg) {
+		*trg = src;
+	}
+}
+
 as_status
-aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
+aerospike_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_status)
 {
 	if (! as_txn_set_roll_attempted(txn)) {
+		as_set_commit_status(commit_status, AS_COMMIT_ALREADY_ATTEMPTED);
 		return as_error_set_message(err, AEROSPIKE_ROLL_ALREADY_ATTEMPTED,
 			"Commit or abort already attempted");
 	}
@@ -82,6 +91,8 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 
 	if (status != AEROSPIKE_OK) {
 		// Verify failed. Abort.
+		as_set_commit_status(commit_status, AS_COMMIT_VERIFY_FAILED);
+
 		as_error roll_err;
 		as_status roll_status = as_txn_roll(as, &roll_err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_BACK);
 
@@ -112,6 +123,7 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 		status = as_txn_monitor_mark_roll_forward(as, &verify_err, &roll_policy->base, &key);
 
 		if (status != AEROSPIKE_OK) {
+			as_set_commit_status(commit_status, AS_COMMIT_MARK_ROLL_FORWARD_ABANDONED);
 			as_error_update(err, status, "Txn aborted:\nMark roll forward abandoned: %s",
 				verify_err.message);
 			as_error_copy_fields(err, &verify_err);
@@ -123,9 +135,10 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 
 	if (status != AEROSPIKE_OK) {
 		// The client roll has error. The server will eventually roll forward the transaction
-		// after as_txn_monitor_mark_roll_forward() succeeds. Therefore, return success and
-		// leave the error message for debug/log purposes.
-		err->code = AEROSPIKE_OK;
+		// after as_txn_monitor_mark_roll_forward() succeeds. Therefore, set commit_status and
+		// return success.
+		as_set_commit_status(commit_status, AS_COMMIT_ROLL_FORWARD_ABANDONED);
+		as_error_reset(err);
 		return AEROSPIKE_OK;
 	}
 
@@ -134,13 +147,15 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 
 		if (status != AEROSPIKE_OK) {
 			// The client transaction monitor remove has error. The server will eventually remove the
-			// monitor record after as_txn_monitor_mark_roll_forward() succeeds. Therefore, return
-			// success and leave the error message for debug/log purposes.
-			err->code = AEROSPIKE_OK;
+			// monitor record after as_txn_monitor_mark_roll_forward() succeeds. Therefore, set
+			// commit_status and return success.
+			as_set_commit_status(commit_status, AS_COMMIT_CLOSE_ABANDONED);
+			as_error_reset(err);
 			return AEROSPIKE_OK;
 		}
 	}
 
+	as_set_commit_status(commit_status, AS_COMMIT_OK);
 	as_txn_clear(txn);
 	return AEROSPIKE_OK;
 }
@@ -149,10 +164,19 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn)
 // Sync Abort
 //---------------------------------
 
+static inline void
+as_set_abort_status(as_abort_status* trg, as_abort_status src)
+{
+	if (trg) {
+		*trg = src;
+	}
+}
+
 as_status
-aerospike_abort(aerospike* as, as_error* err, as_txn* txn)
+aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_status)
 {
 	if (! as_txn_set_roll_attempted(txn)) {
+		as_set_abort_status(abort_status, AS_ABORT_ALREADY_ATTEMPTED);
 		return as_error_set_message(err, AEROSPIKE_ROLL_ALREADY_ATTEMPTED,
 			"Abort or commit already attempted");
 	}
@@ -165,8 +189,9 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn)
 
 	if (status != AEROSPIKE_OK) {
 		// The client roll has error. The server will eventually abort the transaction.
-		// Therefore, return success, but leave the error message for debug/log purposes.
-		err->code = AEROSPIKE_OK;
+		// Therefore, set abort_status and return success.
+		as_set_abort_status(abort_status, AS_ABORT_ROLL_BACK_ABANDONED);
+		as_error_reset(err);
 		return AEROSPIKE_OK;
 	}
 
@@ -178,11 +203,13 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn)
 
 		if (status != AEROSPIKE_OK) {
 			// The client transaction monitor remove has error. The server will eventually remove the
-			// monitor record. Therefore, return success and leave the error message for debug/log purposes.
-			err->code = AEROSPIKE_OK;
+			// monitor record. Therefore, set abort_status and return success.
+			as_set_abort_status(abort_status, AS_ABORT_CLOSE_ABANDONED);
+			as_error_reset(err);
 			return AEROSPIKE_OK;
 		}
 	}
+	as_set_abort_status(abort_status, AS_ABORT_OK);
 	return AEROSPIKE_OK;
 }
 
@@ -231,7 +258,7 @@ as_commit_notify_error_mark(as_error* err, as_commit_data* data, as_event_loop* 
 		err->message);
 
 	as_error_copy_fields(&commit_err, err);
-	as_commit_notify_error(&commit_err, AS_COMMIT_ROLL_FORWARD_ABANDONED, data, event_loop);
+	as_commit_notify_error(&commit_err, AS_COMMIT_MARK_ROLL_FORWARD_ABANDONED, data, event_loop);
 }
 
 static void
@@ -247,7 +274,7 @@ as_commit_notify_error_verify_rollback(
 		verify_err->message, roll_err->message);
 
 	as_error_copy_fields(&commit_err, verify_err);
-	as_commit_notify_error(&commit_err, AS_COMMIT_ROLL_FORWARD_ABANDONED, data, event_loop);
+	as_commit_notify_error(&commit_err, AS_COMMIT_VERIFY_FAILED, data, event_loop);
 }
 
 static void
@@ -263,7 +290,7 @@ as_commit_notify_error_verify_close(
 		verify_err->message, close_err->message);
 
 	as_error_copy_fields(&commit_err, verify_err);
-	as_commit_notify_error(&commit_err, AS_COMMIT_CLOSE_ABANDONED, data, event_loop);
+	as_commit_notify_error(&commit_err, AS_COMMIT_VERIFY_FAILED, data, event_loop);
 }
 
 static void
@@ -276,7 +303,7 @@ as_commit_notify_error_verify(as_commit_data* data, as_event_loop* event_loop)
 		"Txn aborted:\nVerify failed: %s", verify_err->message);
 
 	as_error_copy_fields(&commit_err, verify_err);
-	as_commit_notify_error(&commit_err, AS_COMMIT_ROLL_FORWARD_ABANDONED, data, event_loop);
+	as_commit_notify_error(&commit_err, AS_COMMIT_VERIFY_FAILED, data, event_loop);
 }
 
 static void

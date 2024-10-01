@@ -30,7 +30,6 @@
 #include <aerospike/as_monitor.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
-#include <aerospike/as_val.h>
 
 #include "example_utils.h"
 

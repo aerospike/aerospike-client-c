@@ -117,7 +117,7 @@ TEST(txn_write, "transaction write")
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -156,7 +156,7 @@ TEST(txn_write_twice, "transaction write twice")
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -202,10 +202,10 @@ TEST(txn_write_conflict, "transaction write conflict")
 	assert_int_eq(status, AEROSPIKE_MRT_BLOCKED);
 	as_record_destroy(&rec);
 
-	status = aerospike_commit(as, &err, &txn1);
+	status = aerospike_commit(as, &err, &txn1, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 
-	status = aerospike_abort(as, &err, &txn2);
+	status = aerospike_abort(as, &err, &txn2, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn1);
 	as_txn_destroy(&txn2);
@@ -251,7 +251,7 @@ TEST(txn_write_block, "transaction write block")
 	assert_int_eq(status, AEROSPIKE_MRT_BLOCKED);
 	as_record_destroy(&rec);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -298,7 +298,7 @@ TEST(txn_write_read, "transaction write read")
 	assert_int_eq(val, 1); // Should be original value.
 	as_record_destroy(recp);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -349,7 +349,7 @@ TEST(txn_write_abort, "transaction write abort")
 	assert_int_eq(val, 2);
 	as_record_destroy(recp);
 
-	status = aerospike_abort(as, &err, &txn);
+	status = aerospike_abort(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -388,7 +388,7 @@ TEST(txn_delete, "transaction delete")
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -424,7 +424,7 @@ TEST(txn_delete_abort, "transaction delete abort")
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
-	status = aerospike_abort(as, &err, &txn);
+	status = aerospike_abort(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -467,7 +467,7 @@ TEST(txn_delete_twice, "transaction delete twice")
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
 	as_record_destroy(&rec);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -507,7 +507,7 @@ TEST(txn_touch, "transaction touch")
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(recp);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -550,7 +550,7 @@ TEST(txn_touch_abort, "transaction touch abort")
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(recp);
 
-	status = aerospike_abort(as, &err, &txn);
+	status = aerospike_abort(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -597,7 +597,7 @@ TEST(txn_operate_write, "transaction operate write")
 	assert_int_eq(val, 1000);
 	as_record_destroy(recp);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -643,7 +643,7 @@ TEST(txn_operate_write_abort, "transaction operate write abort")
 	assert_int_eq(val, 1000);
 	as_record_destroy(recp);
 
-	status = aerospike_abort(as, &err, &txn);
+	status = aerospike_abort(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -687,7 +687,7 @@ TEST(txn_udf, "transaction udf")
 	as_arraylist_destroy(&args);
 	as_val_destroy(val);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -731,7 +731,7 @@ TEST(txn_udf_abort, "transaction udf abort")
 	as_arraylist_destroy(&args);
 	as_val_destroy(val);
 
-	status = aerospike_abort(as, &err, &txn);
+	status = aerospike_abort(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -824,7 +824,7 @@ TEST(txn_batch, "transaction batch")
 	assert_int_eq(data.errors, 0);
 	as_operations_destroy(&ops);
 
-	status = aerospike_commit(as, &err, &txn);
+	status = aerospike_commit(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 
@@ -876,7 +876,7 @@ TEST(txn_batch_abort, "transaction batch abort")
 	assert_int_eq(data.errors, 0);
 	as_operations_destroy(&ops);
 
-	status = aerospike_abort(as, &err, &txn);
+	status = aerospike_abort(as, &err, &txn, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_txn_destroy(&txn);
 

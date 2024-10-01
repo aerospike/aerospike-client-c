@@ -39,6 +39,22 @@ typedef enum {
 	AS_COMMIT_OK,
 
 	/**
+	 * Commit or abort already attempted.
+	 */
+	AS_COMMIT_ALREADY_ATTEMPTED,
+
+	/**
+	 * Transaction verify failed. Transaction will be aborted.
+	 */
+	AS_COMMIT_VERIFY_FAILED,
+
+	/**
+	 * Transaction mark roll forward abandoned. Transaction will be aborted when error is not in doubt.
+	 * If the error is in doubt (usually timeout), the commit is in doubt.
+	 */
+	AS_COMMIT_MARK_ROLL_FORWARD_ABANDONED,
+
+	/**
 	 * Client roll forward abandoned. Server will eventually commit the transaction.
 	 */
 	AS_COMMIT_ROLL_FORWARD_ABANDONED,
@@ -74,6 +90,11 @@ typedef enum {
 	 * Abort succeeded.
 	 */
 	AS_ABORT_OK,
+
+	/**
+	 * Abort or commit already attempted.
+	 */
+	AS_ABORT_ALREADY_ATTEMPTED,
 
 	/**
 	 * Client roll back abandoned. Server will eventually abort the transaction.
@@ -117,12 +138,14 @@ typedef void (*as_abort_listener)(
  * @param as 	Aerospike instance.
  * @param err	Error detail structure that is populated if an error occurs.
  * @param txn	Multi-record transaction.
+ * @param commit_status	Indicates success or the step in the commit process that failed.
+ *						Pass in NULL to ignore.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  * @relates aerospike
  */
 AS_EXTERN as_status
-aerospike_commit(aerospike* as, as_error* err, as_txn* txn);
+aerospike_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_status);
 
 /**
  * Abort and rollback the given multi-record transaction.
@@ -132,12 +155,14 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn);
  * @param as 	Aerospike instance.
  * @param err	Error detail structure that is populated if an error occurs.
  * @param txn	Multi-record transaction.
+ * @param abort_status	Indicates success or the step in the abort process that failed.
+ *						Pass in NULL to ignore.
  *
  * @return AEROSPIKE_OK if successful. Otherwise an error.
  * @relates aerospike
  */
 AS_EXTERN as_status
-aerospike_abort(aerospike* as, as_error* err, as_txn* txn);
+aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_status);
 
 /**
  * Asynchronously attempt to commit the given multi-record transaction. First, the expected record

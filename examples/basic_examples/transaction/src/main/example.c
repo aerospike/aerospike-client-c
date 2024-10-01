@@ -35,7 +35,7 @@ static void
 abort_txn(aerospike* as, as_txn* txn)
 {
 	as_error err;
-	as_status status = aerospike_abort(as, &err, txn);
+	as_status status = aerospike_abort(as, &err, txn, NULL);
 
 	if (status != AEROSPIKE_OK) {
 		LOG("aerospike_abort() returned %d - %s", err.code, err.message);
@@ -129,7 +129,7 @@ main(int argc, char* argv[])
 
 	LOG("Commit transaction: %" PRId64, (int64_t)txn.id);
 
-	if (aerospike_commit(&as, &err, &txn) != AEROSPIKE_OK) {
+	if (aerospike_commit(&as, &err, &txn, NULL) != AEROSPIKE_OK) {
 		LOG("aerospike_commit() returned %d - %s", err.code, err.message);
 		// Do not call aerospike_abort() when commit fails.
 		// aerospike_commit() will attempt an abort on failure.

@@ -1091,38 +1091,36 @@ TEST(txn_async_batch, "transaction async batch")
 {
 	uint32_t batch_size = 10;
 
-	as_txn txn;
-	as_txn_init(&txn);
+	as_txn* txn = as_txn_create();
 
 	as_vector cmds;
 	as_vector_inita(&cmds, sizeof(command), 4);
 
 	batch_write_add(&cmds, NULL, batch_size, 1);
-	batch_write_add(&cmds, &txn, batch_size, 2);
-	commit_add(&cmds, &txn);
+	batch_write_add(&cmds, txn, batch_size, 2);
+	commit_add(&cmds, txn);
 	batch_read_add(&cmds, NULL, batch_size, 2);
 
 	commander_execute(&cmds, __result__);
-	as_txn_destroy(&txn);
+	as_txn_destroy(txn);
 }
 
 TEST(txn_async_batch_abort, "transaction async batch abort")
 {
 	uint32_t batch_size = 10;
 
-	as_txn txn;
-	as_txn_init(&txn);
+	as_txn* txn = as_txn_create();
 
 	as_vector cmds;
 	as_vector_inita(&cmds, sizeof(command), 4);
 
 	batch_write_add(&cmds, NULL, batch_size, 1);
-	batch_write_add(&cmds, &txn, batch_size, 2);
-	abort_add(&cmds, &txn);
+	batch_write_add(&cmds, txn, batch_size, 2);
+	abort_add(&cmds, txn);
 	batch_read_add(&cmds, NULL, batch_size, 1);
 
 	commander_execute(&cmds, __result__);
-	as_txn_destroy(&txn);
+	as_txn_destroy(txn);
 }
 
 //---------------------------------

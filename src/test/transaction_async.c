@@ -457,34 +457,39 @@ batch_read_listener(
 	)
 {
 	commander* cmdr = udata;
+	bool success = false;
 
 	if (err) {
 		if (err->code == cmdr->cmd->status) {
-			commander_run_next(cmdr);
+			success = true;
 		}
 		else {
 			commander_fail(cmdr, err);
 		}
-		return;
 	}
-
-	if (cmdr->cmd->status != AEROSPIKE_OK) {
+	else {
 		atf_test_result* __result__ = cmdr->result;
-		fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
-		return;
+
+		if (cmdr->cmd->status == AEROSPIKE_OK) {
+			for (uint32_t i = 0; i < recs->list.size; i++) {
+				const as_batch_read_record* rec = as_vector_get(&recs->list, i);
+				assert_int_eq_async(&monitor, rec->result, AEROSPIKE_OK);
+
+				int64_t val = as_record_get_int64(&rec->record, BIN, -1);
+				assert_int_eq_async(&monitor, val, cmdr->cmd->val);
+			}
+			success = true;
+		}
+		else {
+			fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
+		}
 	}
 
- 	atf_test_result* __result__ = cmdr->result;
+	as_batch_records_destroy(recs);
 
-	for (uint32_t i = 0; i < recs->list.size; i++) {
-		const as_batch_read_record* rec = as_vector_get(&recs->list, i);
-		assert_int_eq_async(&monitor, rec->result, AEROSPIKE_OK);
-
-		int64_t val = as_record_get_int64(&rec->record, BIN, -1);
-   		assert_int_eq_async(&monitor, val, cmdr->cmd->val);
+	if (success) {
+		commander_run_next(cmdr);
 	}
-
-	commander_run_next(cmdr);
 }
 
 static as_status
@@ -546,7 +551,6 @@ batch_write_listener(
 		atf_test_result* __result__ = cmdr->result;
 
 		if (cmdr->cmd->status == AEROSPIKE_OK) {
-
 			for (uint32_t i = 0; i < recs->list.size; i++) {
 				const as_batch_write_record* rec = as_vector_get(&recs->list, i);
 				assert_int_eq_async(&monitor, rec->result, AEROSPIKE_OK);

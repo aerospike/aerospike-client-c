@@ -16,6 +16,7 @@
 		BF5FDD632C87863E000CACBB /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5FDD622C87863E000CACBB /* example.c */; };
 		BFBDFE7622F3A30800F585B2 /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
 		BFBDFE8922F3A3CE00F585B2 /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BF508B4622F3592D00BA4282 /* example.c */; };
+		BFC2E7762CAC76D500263F2B /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC2E7752CAC76D500263F2B /* example.c */; };
 		BFC65C891C923CEB0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
 		BFC65C9C1C923F6F0079DF5A /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
 		BFC65CAF1C9240050079DF5A /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65CAD1C923FCC0079DF5A /* example.c */; };
@@ -280,6 +281,7 @@
 		BF508B4622F3592D00BA4282 /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/async_examples/async_scan/src/main/example.c; sourceTree = "<group>"; };
 		BF5FDD622C87863E000CACBB /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../../examples/basic_examples/transaction/src/main/example.c; sourceTree = "<group>"; };
 		BFBDFE8322F3A30800F585B2 /* async_scan */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = async_scan; sourceTree = BUILT_PRODUCTS_DIR; };
+		BFC2E7752CAC76D500263F2B /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../../examples/async_examples/async_transaction/src/main/example.c; sourceTree = "<group>"; };
 		BFC65C741C9237EE0079DF5A /* put */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = put; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65C801C923A210079DF5A /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = SOURCE_ROOT; };
 		BFC65C871C923CD80079DF5A /* example_utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = example_utils.h; path = ../examples/utils/src/include/example_utils.h; sourceTree = "<group>"; };
@@ -371,6 +373,14 @@
 				BF5FDD622C87863E000CACBB /* example.c */,
 			);
 			path = transaction;
+			sourceTree = "<group>";
+		};
+		BFC2E7742CAC762E00263F2B /* async_transaction */ = {
+			isa = PBXGroup;
+			children = (
+				BFC2E7752CAC76D500263F2B /* example.c */,
+			);
+			path = async_transaction;
 			sourceTree = "<group>";
 		};
 		BFC65C641C9234A90079DF5A = {
@@ -553,6 +563,7 @@
 				BFC65DAA1C924C080079DF5A /* async_get */,
 				BFC65DAB1C924C180079DF5A /* async_query */,
 				BF508B4422F3589700BA4282 /* async_scan */,
+				BFC2E7742CAC762E00263F2B /* async_transaction */,
 			);
 			name = async_examples;
 			sourceTree = "<group>";
@@ -1155,6 +1166,7 @@
 			files = (
 				BFC65CCC1C9242120079DF5A /* example.c in Sources */,
 				BF5FDD632C87863E000CACBB /* example.c in Sources */,
+				BFC2E7762CAC76D500263F2B /* example.c in Sources */,
 				BFC65CBA1C9241AA0079DF5A /* example_utils.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

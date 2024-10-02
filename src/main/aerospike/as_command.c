@@ -1092,7 +1092,7 @@ as_command_parse_fields_txn(
 				uint64_t ver = 0;
 				memcpy(&ver, p, 7);
 				version = cf_swap_from_le64(ver);
-				version |= (1L << 63);
+				version |= (UINT64_C(1) << 63);
 			}
 			else {
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Record version field has invalid size: %u", len);

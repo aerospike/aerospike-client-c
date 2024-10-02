@@ -1060,7 +1060,7 @@ as_batch_records_size_new(
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
 		as_batch_base_record* rec = as_vector_get(records, offset);
-		long ver = bb->versions ? bb->versions[offset] : 0;
+		uint64_t ver = bb->versions ? bb->versions[offset] : 0;
 
 		bb->size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
 
@@ -1604,7 +1604,7 @@ as_batch_records_write_new(
 		p += sizeof(uint32_t);
 		
 		as_batch_base_record* rec = as_vector_get(records, offset);
-		long ver = bb->versions ? bb->versions[offset] : 0;
+		uint64_t ver = bb->versions ? bb->versions[offset] : 0;
 
 		memcpy(p, rec->key.digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;

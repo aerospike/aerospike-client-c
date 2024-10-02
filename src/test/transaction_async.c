@@ -50,16 +50,16 @@ static as_monitor monitor;
 //---------------------------------
 
 typedef enum {
-	PUT,
-	GET,
-	OPERATE,
-	TOUCH,
-	UDF,
-	DELETE,
-	BATCH_READ,
-	BATCH_WRITE,
-	COMMIT,
-	ABORT
+	CMD_PUT,
+	CMD_GET,
+	CMD_OPERATE,
+	CMD_TOUCH,
+	CMD_UDF,
+	CMD_DELETE,
+	CMD_BATCH_READ,
+	CMD_BATCH_WRITE,
+	CMD_COMMIT,
+	CMD_ABORT
 } cmd_type;
 
 typedef struct {
@@ -95,14 +95,14 @@ commander_fail(commander* cmdr, as_error* err)
 static void
 put_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
 {
-	command cmd = {.txn = txn, .key = key, .val = val, .type = PUT};
+	command cmd = {.txn = txn, .key = key, .val = val, .type = CMD_PUT};
 	as_vector_append(cmds, &cmd);
 }
 
 static void
 put_add_error(as_vector* cmds, as_txn* txn, as_key* key, int64_t val, as_status status)
 {
-	command cmd = {.txn = txn, .key = key, .val = val, .type = PUT, .status = status};
+	command cmd = {.txn = txn, .key = key, .val = val, .type = CMD_PUT, .status = status};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -156,14 +156,14 @@ put_exec(commander* cmdr, command* cmd, as_error* err)
 static void
 get_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
 {
-	command cmd = {.txn = txn, .key = key, .val = val, .type = GET};
+	command cmd = {.txn = txn, .key = key, .val = val, .type = CMD_GET};
 	as_vector_append(cmds, &cmd);
 }
 
 static void
 get_add_error(as_vector* cmds, as_txn* txn, as_key* key, as_status status)
 {
-	command cmd = {.txn = txn, .key = key, .type = GET, .status = status};
+	command cmd = {.txn = txn, .key = key, .type = CMD_GET, .status = status};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -217,7 +217,7 @@ get_exec(commander* cmdr, command* cmd, as_error* err)
 static void
 operate_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
 {
-	command cmd = {.txn = txn, .key = key, .val = val, .type = OPERATE};
+	command cmd = {.txn = txn, .key = key, .val = val, .type = CMD_OPERATE};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -276,7 +276,7 @@ operate_exec(commander* cmdr, command* cmd, as_error* err)
 static void
 touch_add(as_vector* cmds, as_txn* txn, as_key* key)
 {
-	command cmd = {.txn = txn, .key = key, .type = TOUCH};
+	command cmd = {.txn = txn, .key = key, .type = CMD_TOUCH};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -330,7 +330,7 @@ touch_exec(commander* cmdr, command* cmd, as_error* err)
 static void
 udf_add(as_vector* cmds, as_txn* txn, as_key* key, int64_t val)
 {
-	command cmd = {.txn = txn, .key = key, .val = val, .type = UDF};
+	command cmd = {.txn = txn, .key = key, .val = val, .type = CMD_UDF};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -389,14 +389,14 @@ udf_exec(commander* cmdr, command* cmd, as_error* err)
 static void
 delete_add(as_vector* cmds, as_txn* txn, as_key* key)
 {
-	command cmd = {.txn = txn, .key = key, .type = DELETE};
+	command cmd = {.txn = txn, .key = key, .type = CMD_DELETE};
 	as_vector_append(cmds, &cmd);
 }
 
 static void
 delete_add_error(as_vector* cmds, as_txn* txn, as_key* key, as_status status)
 {
-	command cmd = {.txn = txn, .key = key, .type = DELETE, .status = status};
+	command cmd = {.txn = txn, .key = key, .type = CMD_DELETE, .status = status};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -447,7 +447,7 @@ delete_exec(commander* cmdr, command* cmd, as_error* err)
 static void
 batch_read_add(as_vector* cmds, as_txn* txn, uint32_t batch_size, int64_t val)
 {
-	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = BATCH_READ};
+	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = CMD_BATCH_READ};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -527,7 +527,7 @@ batch_read_exec(commander* cmdr, command* cmd, as_error* err)
 static void
 batch_write_add(as_vector* cmds, as_txn* txn, uint32_t batch_size, int64_t val)
 {
-	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = BATCH_WRITE};
+	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = CMD_BATCH_WRITE};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -614,7 +614,7 @@ batch_write_exec(commander* cmdr, command* cmd, as_error* err)
 static void
 commit_add(as_vector* cmds, as_txn* txn)
 {
-	command cmd = {.txn = txn, .type = COMMIT};
+	command cmd = {.txn = txn, .type = CMD_COMMIT};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -646,7 +646,7 @@ commit_exec(commander* cmdr, command* cmd, as_error* err)
 static void
 abort_add(as_vector* cmds, as_txn* txn)
 {
-	command cmd = {.txn = txn, .type = ABORT};
+	command cmd = {.txn = txn, .type = CMD_ABORT};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -690,43 +690,43 @@ commander_run_next(commander* cmdr)
 	command* cmd = cmdr->cmd = as_vector_get(cmdr->cmds, cmdr->idx);
 
 	switch (cmd->type) {
-		case PUT:
+		case CMD_PUT:
 			status = put_exec(cmdr, cmd, &err);
 			break;
 
-		case GET:
+		case CMD_GET:
 			status = get_exec(cmdr, cmd, &err);
 			break;
 
-		case OPERATE:
+		case CMD_OPERATE:
 			status = operate_exec(cmdr, cmd, &err);
 			break;
 
-		case TOUCH:
+		case CMD_TOUCH:
 			status = touch_exec(cmdr, cmd, &err);
 			break;
 
-		case UDF:
+		case CMD_UDF:
 			status = udf_exec(cmdr, cmd, &err);
 			break;
 
-		case DELETE:
+		case CMD_DELETE:
 			status = delete_exec(cmdr, cmd, &err);
 			break;
 
-		case BATCH_READ:
+		case CMD_BATCH_READ:
 			status = batch_read_exec(cmdr, cmd, &err);
 			break;
 
-		case BATCH_WRITE:
+		case CMD_BATCH_WRITE:
 			status = batch_write_exec(cmdr, cmd, &err);
 			break;
 
-		case COMMIT:
+		case CMD_COMMIT:
 			status = commit_exec(cmdr, cmd, &err);
 			break;
 
-		case ABORT:
+		case CMD_ABORT:
 			status = abort_exec(cmdr, cmd, &err);
 			break;
 

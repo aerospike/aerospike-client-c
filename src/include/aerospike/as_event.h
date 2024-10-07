@@ -164,10 +164,12 @@ as_policy_event_init(as_policy_event* policy)
 }
 
 /**
- * Create new event loops with default event policy.
+ * Create new aerospike internal event loops with default event policy. These event loops are used
+ * exclusively for aerospike database commands and are not shared with the application for other
+ * tasks. If shared event loops are desired, use as_event_set_external_loop_capacity() and
+ * as_event_set_external_loop() instead.
  *
- * This method should only be called when async client commands will be used and the calling program
- * itself is not async.  If this method is used, it must be called before aerospike_connect().
+ * This function must be called before aerospike_connect().
  *
  * @param capacity	Number of event loops to create.
  * @return			Event loop array.
@@ -178,10 +180,12 @@ AS_EXTERN as_event_loop*
 as_event_create_loops(uint32_t capacity);
 
 /**
- * Create new event loops with specified event policy. 
- * 
- * This method should only be called when async client commands will be used and the calling program
- * itself is not async.  If this method is used, it must be called before aerospike_connect().
+ * Create new aerospike internal event loops with specified event policy. These event loops are used
+ * exclusively for aerospike database commands and are not shared with the application for other
+ * tasks. If shared event loops are desired, use as_event_set_external_loop_capacity() and
+ * as_set_external_event_loop() instead.
+ *
+ * This function must be called before aerospike_connect().
  *
  * @param err			The as_error to be populated if an error occurs.
  * @param policy		Event loop configuration.  Pass in NULL for default configuration.
@@ -195,12 +199,13 @@ AS_EXTERN as_status
 as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity, as_event_loop** event_loops);
 
 /**
- * Set the number of externally created event loops.  This method should be called when the
- * calling program wants to share event loops with the client.  This reduces resource usage and
+ * Set the number of aerospike external event loops.  This method should be called when the
+ * application wants to share event loops with the client.  This reduces resource usage and
  * can increase performance.
  *
- * This method is used in conjunction with as_event_set_external_loop() to fully define the
- * the external loop to the client and obtain a reference the client's event loop abstraction.
+ * This method is used in conjunction with as_event_set_external_loop() or
+ * as_set_external_event_loop() to fully define the the external loop to the client and obtain a
+ * reference to the client's event loop abstraction.
  *
  * ~~~~~~~~~~{.c}
  * struct {
@@ -238,15 +243,15 @@ AS_EXTERN bool
 as_event_set_external_loop_capacity(uint32_t capacity);
 
 /**
- * Register an external event loop with the client with default event policy.
- * 
+ * Register an aerospike external event loop with the client with default event policy.
+ *
  * This method should be called when the calling program wants to share event loops with the client.
  * This reduces resource usage and can increase performance.
  *
  * This method must be called in the same thread as the event loop that is being registered.
  *
  * This method is used in conjunction with as_event_set_external_loop_capacity() to fully define
- * the external loop to the client and obtain a reference the client's event loop abstraction.
+ * the external loop to the client and obtain a reference to the client's event loop abstraction.
  *
  * ~~~~~~~~~~{.c}
  * struct {
@@ -285,7 +290,7 @@ AS_EXTERN as_event_loop*
 as_event_set_external_loop(void* loop);
 
 /**
- * Register an external event loop with the client with specified event policy.
+ * Register an aerospike external event loop with the client with specified event policy.
  *
  * This method should be called when the calling program wants to share event loops with the client.
  * This reduces resource usage and can increase performance.
@@ -293,7 +298,7 @@ as_event_set_external_loop(void* loop);
  * This method must be called in the same thread as the event loop that is being registered.
  *
  * This method is used in conjunction with as_event_set_external_loop_capacity() to fully define
- * the external loop to the client and obtain a reference the client's event loop abstraction.
+ * the external loop to the client and obtain a reference to the client's event loop abstraction.
  *
  * ~~~~~~~~~~{.c}
  * struct {

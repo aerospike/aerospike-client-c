@@ -29,6 +29,30 @@
  * STATIC FUNCTIONS
  *****************************************************************************/
 
+static void
+as_info_decode_error(char* begin)
+{
+	// Decode base64 message in place.
+	// UDF error format: <error message>;file=<file>;line=<line>;message=<base64 message>\n
+	char* msg = strstr(begin, "message=");
+
+	if (msg) {
+		msg += 8;
+		
+		uint32_t src_len = (uint32_t)strlen(msg);
+
+		if (msg[src_len-1] == '\n') {
+			src_len--; // Ignore newline '\n' at the end
+		}
+
+		uint32_t trg_len = 0;
+		
+		if (cf_b64_validate_and_decode_in_place((uint8_t*)msg, src_len, &trg_len)) {
+			msg[trg_len] = 0;
+		}
+	}
+}
+
 static as_status
 as_info_parse_error(char* begin, char** message)
 {
@@ -60,31 +84,15 @@ as_info_parse_error(char* begin, char** message)
 		if (rc == 0) {
 			rc = AEROSPIKE_ERR_SERVER;
 		}
+
+		// Handle new error format for "udf-put" command.
+		as_info_decode_error(p);
 	}
 	else {
 		*message = begin;
 		rc = AEROSPIKE_ERR_SERVER;
 	}
 	return rc;
-}
-
-static void
-as_info_decode_error(char* begin)
-{
-	// Decode base64 message in place.
-	// UDF error format: <error message>;file=<file>;line=<line>;message=<base64 message>\n
-	char* msg = strstr(begin, "message=");
-	
-	if (msg) {
-		msg += 8;
-		
-		uint32_t src_len = (uint32_t)strlen(msg) - 1; // Ignore newline '\n' at the end
-		uint32_t trg_len = 0;
-		
-		if (cf_b64_validate_and_decode_in_place((uint8_t*)msg, src_len, &trg_len)) {
-			msg[trg_len] = 0;
-		}
-	}
 }
 
 static bool

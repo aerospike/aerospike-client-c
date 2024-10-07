@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -53,7 +53,7 @@ const as_rec_hooks map_rec_hooks = {
  * FUNCTIONS
  *****************************************************************************/
 
-as_rec * map_rec_new() {
+as_rec * map_rec_new(void) {
     as_map * m = (as_map *) as_hashmap_new(32);
     return as_rec_new(m, &map_rec_hooks);
 }

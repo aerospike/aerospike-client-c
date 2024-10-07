@@ -438,8 +438,10 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 }
 
 static void
-as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_vector* /* <as_node*> */ nodes_to_remove)
+as_cluster_find_nodes_to_remove(as_cluster* cluster, as_peers* peers)
 {
+    uint32_t refresh_count = peers->refresh_count;
+    as_vector* nodes_to_remove = &peers->nodes_to_remove;
 	as_nodes* nodes = cluster->nodes;
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -810,6 +812,7 @@ static void
 as_cluster_destroy_peers(as_peers* peers)
 {
 	as_vector_destroy(&peers->nodes);
+	as_vector_destroy(&peers->nodes_to_remove);
 
 	as_vector* invalid_hosts = &peers->invalid_hosts;
 	
@@ -860,6 +863,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 	as_error error_local;
 	as_peers peers;
 	as_vector_inita(&peers.nodes, sizeof(as_node*), 16);
+	as_vector_inita(&peers.nodes_to_remove, sizeof(as_node*), 8);
 	as_vector_inita(&peers.invalid_hosts, sizeof(as_host), 4);
 	peers.refresh_count = 0;
 	peers.gen_changed = false;
@@ -953,17 +957,13 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 			}
 
 			// Remove nodes determined by refreshed peers.
-			as_vector nodes_to_remove;
-			as_vector_inita(&nodes_to_remove, sizeof(as_node*), nodes->size);
+			as_cluster_find_nodes_to_remove(cluster, &peers);
 
-			as_cluster_find_nodes_to_remove(cluster, peers.refresh_count, &nodes_to_remove);
-			
 			// Remove nodes in a batch.
-			if (nodes_to_remove.size > 0) {
-				as_cluster_remove_nodes(cluster, &nodes_to_remove);
+			if (peers.nodes_to_remove.size > 0) {
+				as_cluster_remove_nodes(cluster, &peers.nodes_to_remove);
 				nodes = cluster->nodes;
 			}
-			as_vector_destroy(&nodes_to_remove);
 		}
 
 		// Add peer nodes to cluster.

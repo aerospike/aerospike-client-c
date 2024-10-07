@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -41,7 +41,7 @@ static const as_aerospike_hooks test_aerospike_hooks = {
  * STATIC FUNCTIONS
  *****************************************************************************/
 
-as_aerospike * test_aerospike_new() {
+as_aerospike * test_aerospike_new(void) {
     return as_aerospike_new(NULL, &test_aerospike_hooks);
 }
 

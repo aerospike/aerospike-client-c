@@ -291,9 +291,10 @@ typedef enum as_status_e {
 	AEROSPIKE_MRT_BLOCKED = 29,
 
 	/**
-	 * MRT read verify failed. Some other command changed record outside of the transaction.
+	 * MRT read version mismatch identified during commit.
+	 * Some other command changed the record outside of the transaction.
 	 */
-	AEROSPIKE_MRT_CONFLICT = 30,
+	AEROSPIKE_MRT_VERSION_MISMATCH = 30,
 
 	/**
 	 * MRT deadline reached without a successful commit or abort.

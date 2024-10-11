@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
+#include <aerospike/aerospike_key.h>
 #include <aerospike/as_async.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_error.h>
@@ -93,7 +94,7 @@ typedef struct as_batch_node_s {
 typedef struct as_batch_task_s {
 	as_node* node;
 	as_vector offsets;
-	as_cluster* cluster;
+	aerospike* as;
 	const as_policy_batch* policy;
 	as_txn* txn;
 	uint64_t* versions;
@@ -1783,7 +1784,7 @@ as_batch_command_init(
 	const as_command* parent
 	)
 {
-	cmd->cluster = task->cluster;
+	cmd->cluster = task->as->cluster;
 	cmd->policy = &policy->base;
 	cmd->node = task->node;
 	cmd->key = NULL;       // Not referenced when node set.
@@ -2211,6 +2212,252 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 }
 
 static void
+as_read_policy_copy(
+	as_policy_read* trg, const as_policy_batch* pb, const as_policy_batch_read* pbr
+	)
+{
+	trg->base = pb->base;
+	trg->key = AS_POLICY_KEY_DEFAULT;
+	trg->replica = pb->replica;
+	trg->deserialize = pb->deserialize;
+	trg->async_heap_rec = false;
+
+	if (pbr) {
+		if (pbr->filter_exp && !trg->base.filter_exp) {
+			trg->base.filter_exp = pbr->filter_exp;
+		}
+
+		trg->read_mode_ap = pbr->read_mode_ap;
+		trg->read_mode_sc = pbr->read_mode_sc;
+		trg->read_touch_ttl_percent = pbr->read_touch_ttl_percent;
+	}
+	else {
+		trg->read_mode_ap = pb->read_mode_ap;
+		trg->read_mode_sc = pb->read_mode_sc;
+		trg->read_touch_ttl_percent = pb->read_touch_ttl_percent;
+	}
+}
+
+static void
+as_operate_policy_copy_read(
+	as_policy_operate* trg, const as_policy_batch* pb, const as_policy_batch_read* pbr
+	)
+{
+	trg->base = pb->base;
+	trg->key = AS_POLICY_KEY_DEFAULT;
+	trg->replica = pb->replica;
+	trg->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
+	trg->gen = AS_POLICY_GEN_DEFAULT;
+	trg->exists = AS_POLICY_EXISTS_DEFAULT;
+	trg->ttl = 0;
+	trg->deserialize = pb->deserialize;
+	trg->durable_delete = false;
+	trg->async_heap_rec = false;
+
+	if (pbr) {
+		if (pbr->filter_exp && !trg->base.filter_exp) {
+			trg->base.filter_exp = pbr->filter_exp;
+		}
+
+		trg->read_mode_ap = pbr->read_mode_ap;
+		trg->read_mode_sc = pbr->read_mode_sc;
+		trg->read_touch_ttl_percent = pbr->read_touch_ttl_percent;
+	}
+	else {
+		trg->read_mode_ap = pb->read_mode_ap;
+		trg->read_mode_sc = pb->read_mode_sc;
+		trg->read_touch_ttl_percent = pb->read_touch_ttl_percent;
+	}
+}
+
+static void
+as_operate_policy_copy_write(
+	as_policy_operate* trg, const as_policy_batch* pb, const as_policy_batch_write* src
+	)
+{
+	trg->base = pb->base;
+
+	if (src->filter_exp && !trg->base.filter_exp) {
+		trg->base.filter_exp = src->filter_exp;
+	}
+
+	trg->key = src->key;
+	trg->replica = pb->replica;
+	trg->read_mode_ap = pb->read_mode_ap;
+	trg->read_mode_sc = pb->read_mode_sc;
+	trg->commit_level = src->commit_level;
+	trg->gen = src->gen;
+	trg->exists = src->exists;
+	trg->ttl = src->ttl;
+	trg->read_touch_ttl_percent = pb->read_touch_ttl_percent;
+	trg->deserialize = pb->deserialize;
+	trg->durable_delete = src->durable_delete;
+	trg->async_heap_rec = false;
+}
+
+static void
+as_apply_policy_copy(
+	as_policy_apply* trg, const as_policy_batch* pb, const as_policy_batch_apply* src
+	)
+{
+	trg->base = pb->base;
+
+	if (src->filter_exp && !trg->base.filter_exp) {
+		trg->base.filter_exp = src->filter_exp;
+	}
+
+	trg->key = src->key;
+	trg->replica = pb->replica;
+	trg->commit_level = src->commit_level;
+	trg->ttl = src->ttl;
+	trg->durable_delete = src->durable_delete;
+}
+
+static void
+as_remove_policy_copy(
+	as_policy_remove* trg, const as_policy_batch* pb, const as_policy_batch_remove* src
+	)
+{
+	trg->base = pb->base;
+
+	if (src->filter_exp && !trg->base.filter_exp) {
+		trg->base.filter_exp = src->filter_exp;
+	}
+
+	trg->key = src->key;
+	trg->replica = pb->replica;
+	trg->commit_level = src->commit_level;
+	trg->gen = src->gen;
+	trg->generation = src->generation;
+	trg->durable_delete = src->durable_delete;
+}
+
+as_status
+as_txn_verify_single(
+	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver
+	);
+
+static as_status
+as_single_execute(
+	as_batch_task* task, as_error* err, as_key* key, as_batch_base_record* bb, as_record* record,
+	uint32_t offset
+	)
+{
+	aerospike* as = task->as;
+	const as_policy_batch* pb = task->policy;
+
+	switch (bb->type) {
+		case AS_BATCH_READ: {
+			as_batch_read_record* br = (as_batch_read_record*)bb;
+			as_status status;
+
+			if (br->n_bin_names > 0) {
+				as_policy_read pr;
+				as_read_policy_copy(&pr, pb, br->policy);
+				status = aerospike_key_select(as, err, &pr, key, (const char**)br->bin_names, &record);
+			}
+			else if (br->ops) {
+				as_policy_operate po;
+				as_operate_policy_copy_read(&po, pb, br->policy);
+				status = aerospike_key_operate(as, err, &po, key, br->ops, &record);
+			}
+			else {
+				as_policy_read pr;
+				as_read_policy_copy(&pr, pb, br->policy);
+
+				if (br->read_all_bins) {
+					status = aerospike_key_get(as, err, &pr, key, &record);
+				}
+				else {
+					status = aerospike_key_exists(as, err, &pr, key, &record);
+				}
+			}
+			return status;
+		}
+
+		case AS_BATCH_WRITE: {
+			as_batch_write_record* bw = (as_batch_write_record*)bb;
+			const as_policy_batch_write* pbw = bw->policy ? bw->policy : &as->config.policies.batch_write;
+
+			as_policy_operate po;
+			as_operate_policy_copy_write(&po, pb, pbw);
+
+			return aerospike_key_operate(as, err, &po, key, bw->ops, &record);
+		}
+
+		case AS_BATCH_APPLY: {
+			as_batch_apply_record* ba = (as_batch_apply_record*)bb;
+			const as_policy_batch_apply* pba = ba->policy ? ba->policy : &as->config.policies.batch_apply;
+
+			as_policy_apply pa;
+			as_apply_policy_copy(&pa, pb, pba);
+
+			as_val* val = NULL;
+			as_status status = aerospike_key_apply(as, err, &pa, key, ba->module, ba->function, ba->arglist, &val);
+
+			if (status == AEROSPIKE_OK) {
+				as_record_set(record, "SUCCESS", (as_bin_value*)val);
+			}
+			else if (status == AEROSPIKE_ERR_UDF) {
+				as_record_set(record, "FAILURE", (as_bin_value*)val);
+			}
+			return status;
+		}
+
+		case AS_BATCH_REMOVE: {
+			as_batch_remove_record* br = (as_batch_remove_record*)bb;
+			const as_policy_batch_remove* pbr = br->policy ? br->policy : &as->config.policies.batch_remove;
+
+			as_policy_remove pr;
+			as_remove_policy_copy(&pr, pb, pbr);
+
+			return aerospike_key_remove(as, err, &pr, key);
+		}
+
+		case AS_BATCH_TXN_VERIFY: {
+			return as_txn_verify_single(as, err, pb, key, task->versions[offset]);
+		}
+
+		case AS_BATCH_TXN_ROLL: {
+			// TODO: Add as_txn_roll_single().
+		}
+
+		default:
+			return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", bb->type);
+	}
+}
+
+static as_status
+as_single_execute_record(as_batch_task_records* btr, as_error* err, as_vector* offsets)
+{
+	uint32_t offset = *(uint32_t*)as_vector_get(offsets, 0);
+	as_batch_base_record* rec = as_vector_get(btr->records, offset);
+
+	rec->result = as_single_execute(&btr->base, err, &rec->key, rec, &rec->record, offset);
+
+	if (rec->result != AEROSPIKE_OK && as_batch_set_error_row(rec->result)) {
+		rec->in_doubt = err->in_doubt;
+		*btr->base.error_row = true;
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_single_execute_key(as_batch_task_keys* btk, as_error* err, as_vector* offsets)
+{
+	uint32_t offset = *(uint32_t*)as_vector_get(offsets, 0);
+	as_batch_result* res = &btk->results[offset];
+
+	res->result = as_single_execute(&btk->base, err, &btk->keys[offset], btk->rec, &res->record, 0);
+
+	if (res->result != AEROSPIKE_OK && as_batch_set_error_row(res->result)) {
+		res->in_doubt = err->in_doubt;
+		*btk->base.error_row = true;
+	}
+	return AEROSPIKE_OK;
+}
+
+static void
 as_batch_worker(void* data)
 {
 	as_batch_task* task = (as_batch_task*)data;
@@ -2223,12 +2470,22 @@ as_batch_worker(void* data)
 
 	if (task->type == BATCH_TYPE_RECORDS) {
 		// Execute batch referenced in aerospike_batch_read().
-		complete_task.result = as_batch_execute_records((as_batch_task_records*)task, &err, NULL);
+		if (task->offsets.size == 1) {
+			complete_task.result = as_single_execute_record((as_batch_task_records*)task, &err, &task->offsets);
+		}
+		else {
+			complete_task.result = as_batch_execute_records((as_batch_task_records*)task, &err, NULL);
+		}
 	}
 	else {
 		// Execute batch referenced in aerospike_batch_get(), aerospike_batch_get_bins()
 		// and aerospike_batch_exists().
-		complete_task.result = as_batch_execute_keys((as_batch_task_keys*)task, &err, NULL);
+		if (task->offsets.size == 1) {
+			complete_task.result = as_single_execute_key((as_batch_task_keys*)task, &err, &task->offsets);
+		}
+		else {
+			complete_task.result = as_batch_execute_keys((as_batch_task_keys*)task, &err, NULL);
+		}
 	}
 
 	if (complete_task.result != AEROSPIKE_OK) {
@@ -2303,15 +2560,20 @@ as_batch_keys_execute_seq(
 {
 	as_status status = AEROSPIKE_OK;
 	as_error e;
+	as_status s;
 
 	for (uint32_t i = 0; i < batch_nodes->size; i++) {
 		as_batch_node* batch_node = as_vector_get(batch_nodes, i);
-		
-		btk->base.node = batch_node->node;
-		memcpy(&btk->base.offsets, &batch_node->offsets, sizeof(as_vector));
 		as_error_init(&e);
 
-		as_status s = as_batch_execute_keys(btk, &e, parent);
+		if (batch_node->offsets.size == 1) {
+			s = as_single_execute_key(btk, &e, &batch_node->offsets);
+		}
+		else {
+			btk->base.node = batch_node->node;
+			memcpy(&btk->base.offsets, &batch_node->offsets, sizeof(as_vector));
+			s = as_batch_execute_keys(btk, &e, parent);
+		}
 
 		if (s != AEROSPIKE_OK) {
 			if (btk->base.policy->respond_all_keys) {
@@ -2440,7 +2702,7 @@ as_batch_keys_execute(
 	// Initialize task.
 	as_batch_task_keys btk;
 	memset(&btk, 0, sizeof(as_batch_task_keys));
-	btk.base.cluster = cluster;
+	btk.base.as = as;
 	btk.base.policy = policy;
 	btk.base.txn = policy->base.txn;
 	btk.base.versions = versions;
@@ -2536,7 +2798,7 @@ as_batch_keys_execute(
 
 static as_status
 as_batch_execute_sync(
-	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policies* defs,
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_policies* defs,
 	as_txn* txn, uint64_t* versions, uint8_t txn_attr, bool has_write, as_batch_replica* rep,
 	as_vector* records, uint32_t n_keys, as_vector* batch_nodes, as_command* parent, bool* error_row
 	)
@@ -2548,7 +2810,7 @@ as_batch_execute_sync(
 	// Initialize task.
 	as_batch_task_records btr;
 	memset(&btr, 0, sizeof(as_batch_task_records));
-	btr.base.cluster = cluster;
+	btr.base.as = as;
 	btr.base.policy = policy;
 	btr.base.txn = txn;
 	btr.base.versions = versions;
@@ -2565,6 +2827,8 @@ as_batch_execute_sync(
 	btr.base.txn_attr = txn_attr;
 	btr.defs = defs;
 	btr.records = records;
+
+	as_cluster* cluster = as->cluster;
 
 	if (policy->concurrent && n_batch_nodes > 1 && parent == NULL) {
 		// Run batch requests in parallel in separate threads.
@@ -2616,12 +2880,17 @@ as_batch_execute_sync(
 
 		for (uint32_t i = 0; i < n_batch_nodes; i++) {
 			as_batch_node* batch_node = as_vector_get(batch_nodes, i);
-
-			btr.base.node = batch_node->node;
-			memcpy(&btr.base.offsets, &batch_node->offsets, sizeof(as_vector));
 			as_error_init(&e);
+			as_status s;
 
-			as_status s = as_batch_execute_records(&btr, &e, parent);
+			if (batch_node->offsets.size == 1) {
+				s = as_single_execute_record(&btr, &e, &batch_node->offsets);
+			}
+			else {
+				btr.base.node = batch_node->node;
+				memcpy(&btr.base.offsets, &batch_node->offsets, sizeof(as_vector));
+				s = as_batch_execute_records(&btr, &e, parent);
+			}
 
 			if (s != AEROSPIKE_OK) {
 				if (policy->respond_all_keys) {
@@ -2911,7 +3180,7 @@ as_batch_records_execute(
 			&batch_nodes, async_executor);
 	}
 	else {
-		status = as_batch_execute_sync(cluster, err, policy, &as->config.policies, txn,
+		status = as_batch_execute_sync(as, err, policy, &as->config.policies, txn,
 			versions, txn_attr, has_write, &rep, list, n_keys, &batch_nodes, NULL, &error_row);
 
 		destroy_versions(versions);
@@ -2984,7 +3253,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 {
 	as_batch_task* task = &btr->base;
 	as_vector* list = btr->records;
-	as_cluster* cluster = task->cluster;
+	as_cluster* cluster = task->as->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);
@@ -3064,7 +3333,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 	as_cluster_add_retries(cluster, batch_nodes.size);
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
 
-	return as_batch_execute_sync(cluster, err, task->policy, btr->defs, btr->base.txn,
+	return as_batch_execute_sync(task->as, err, task->policy, btr->defs, btr->base.txn,
 		btr->base.versions, btr->base.txn_attr, task->has_write, &rep, list, task->n_keys, &batch_nodes, parent,
 		task->error_row);
 }
@@ -3073,7 +3342,7 @@ static as_status
 as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 {
 	as_batch_task* task = &btk->base;
-	as_cluster* cluster = task->cluster;
+	as_cluster* cluster = task->as->cluster;
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);

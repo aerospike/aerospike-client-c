@@ -2337,6 +2337,12 @@ as_txn_verify_single(
 	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver
 	);
 
+as_status
+as_txn_roll_single(
+	aerospike* as, as_error* err, as_txn* txn, const as_policy_txn_roll* policy, const as_key* key,
+	uint64_t ver, uint8_t roll_attr
+	);
+
 static as_status
 as_single_execute(
 	as_batch_task* task, as_error* err, as_key* key, as_batch_base_record* bb, as_record* record,
@@ -2396,10 +2402,21 @@ as_single_execute(
 			as_status status = aerospike_key_apply(as, err, &pa, key, ba->module, ba->function, ba->arglist, &val);
 
 			if (status == AEROSPIKE_OK) {
+				// Create SUCCESS bin from val.
+				record->bins.capacity = 1;
+				record->bins.size = 0;
+				record->bins.entries = cf_malloc(sizeof(as_bin));
+				record->bins._free = true;
 				as_record_set(record, "SUCCESS", (as_bin_value*)val);
 			}
 			else if (status == AEROSPIKE_ERR_UDF) {
-				as_record_set(record, "FAILURE", (as_bin_value*)val);
+				// Create FAILURE bin from error message.
+				record->bins.capacity = 1;
+				record->bins.size = 0;
+				record->bins.entries = cf_malloc(sizeof(as_bin));
+				record->bins._free = true;
+				as_string* s = as_string_new_strdup(err->message);
+				as_record_set(record, "FAILURE", (as_bin_value*)s);
 			}
 			return status;
 		}
@@ -2419,7 +2436,7 @@ as_single_execute(
 		}
 
 		case AS_BATCH_TXN_ROLL: {
-			// TODO: Add as_txn_roll_single().
+			return as_txn_roll_single(as, err, task->txn, pb, key, task->versions[offset], task->txn_attr);
 		}
 
 		default:

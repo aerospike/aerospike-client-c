@@ -2220,7 +2220,7 @@ as_read_policy_copy(
 	trg->key = AS_POLICY_KEY_DEFAULT;
 	trg->replica = pb->replica;
 	trg->deserialize = pb->deserialize;
-	trg->async_heap_rec = false;
+	trg->async_heap_rec = true; // Ignored in sync commands.
 
 	if (pbr) {
 		if (pbr->filter_exp && !trg->base.filter_exp) {
@@ -2252,7 +2252,7 @@ as_operate_policy_copy_read(
 	trg->ttl = 0;
 	trg->deserialize = pb->deserialize;
 	trg->durable_delete = false;
-	trg->async_heap_rec = false;
+	trg->async_heap_rec = true; // Ignored in sync commands.
 
 	if (pbr) {
 		if (pbr->filter_exp && !trg->base.filter_exp) {
@@ -2292,7 +2292,7 @@ as_operate_policy_copy_write(
 	trg->read_touch_ttl_percent = pb->read_touch_ttl_percent;
 	trg->deserialize = pb->deserialize;
 	trg->durable_delete = src->durable_delete;
-	trg->async_heap_rec = false;
+	trg->async_heap_rec = true; // Ignored in sync commands.
 }
 
 static void
@@ -2332,6 +2332,10 @@ as_remove_policy_copy(
 	trg->durable_delete = src->durable_delete;
 }
 
+//---------------------------------
+// Sync Single Record
+//---------------------------------
+
 as_status
 as_txn_verify_single(
 	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver
@@ -2342,6 +2346,15 @@ as_txn_roll_single(
 	aerospike* as, as_error* err, as_txn* txn, const as_policy_txn_roll* policy, const as_key* key,
 	uint64_t ver, uint8_t roll_attr
 	);
+
+static void
+as_record_reset(as_record* record, uint32_t capacity)
+{
+	record->bins.capacity = capacity;
+	record->bins.size = 0;
+	record->bins.entries = cf_malloc(sizeof(as_bin) * capacity);
+	record->bins._free = true;
+}
 
 static as_status
 as_single_execute(
@@ -2403,18 +2416,12 @@ as_single_execute(
 
 			if (status == AEROSPIKE_OK) {
 				// Create SUCCESS bin from val.
-				record->bins.capacity = 1;
-				record->bins.size = 0;
-				record->bins.entries = cf_malloc(sizeof(as_bin));
-				record->bins._free = true;
+				as_record_reset(record, 1);
 				as_record_set(record, "SUCCESS", (as_bin_value*)val);
 			}
 			else if (status == AEROSPIKE_ERR_UDF) {
 				// Create FAILURE bin from error message.
-				record->bins.capacity = 1;
-				record->bins.size = 0;
-				record->bins.entries = cf_malloc(sizeof(as_bin));
-				record->bins._free = true;
+				as_record_reset(record, 1);
 				as_string* s = as_string_new_strdup(err->message);
 				as_record_set(record, "FAILURE", (as_bin_value*)s);
 			}
@@ -2473,6 +2480,252 @@ as_single_execute_key(as_batch_task_keys* btk, as_error* err, as_vector* offsets
 	}
 	return AEROSPIKE_OK;
 }
+
+//---------------------------------
+// Async Single Record
+//---------------------------------
+
+typedef struct {
+	as_async_batch_executor* executor;
+	as_batch_base_record* rec;
+} as_single_data;
+
+as_status
+as_txn_verify_single_async(
+	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop
+	);
+
+as_status
+as_txn_roll_single_async(
+	aerospike* as, as_error* err, as_txn* txn, const as_policy_txn_roll* policy, const as_key* key,
+	uint64_t ver, uint8_t roll_attr, as_async_write_listener listener, void* udata,
+	as_event_loop* event_loop
+	);
+
+static inline void
+as_single_executor_complete(as_single_data* data)
+{
+	as_event_executor_complete((as_event_executor*)data->executor);
+	cf_free(data);
+}
+
+static void
+as_single_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
+{
+	as_single_data* data = udata;
+	as_batch_base_record* rec = data->rec;
+
+	if (! err) {
+		rec->result = AEROSPIKE_OK;
+	}
+	else {
+		rec->result = err->code;
+		rec->in_doubt = err->in_doubt;
+		data->executor->error_row = true;
+	}
+	as_single_executor_complete(data);
+}
+
+static void
+as_single_record_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	as_single_data* data = udata;
+	as_batch_base_record* rec = data->rec;
+
+	if (! err) {
+		// Transfer source record to batch record.
+		// The async_heap_rec policy must be set to true for this to work.
+		rec->result = AEROSPIKE_OK;
+		rec->record.gen = record->gen;
+		rec->record.ttl = record->ttl;
+		rec->record.bins = record->bins;
+
+		// Empty bins in source record before destroying.
+		memset(&record->bins, 0, sizeof(as_bins));
+		as_record_destroy(record);
+	}
+	else {
+		rec->result = err->code;
+		rec->in_doubt = err->in_doubt;
+		data->executor->error_row = true;
+	}
+	as_single_executor_complete(data);
+}
+
+static void
+as_single_value_listener(as_error* err, as_val* val, void* udata, as_event_loop* event_loop)
+{
+	as_single_data* data = udata;
+	as_batch_base_record* rec = data->rec;
+
+	if (! err) {
+		as_val_reserve(val);
+		rec->result = AEROSPIKE_OK;
+		as_record_reset(&rec->record, 1);
+		as_record_set(&rec->record, "SUCCESS", (as_bin_value*)val);
+	}
+	else {
+		rec->result = err->code;
+		rec->in_doubt = err->in_doubt;
+		data->executor->error_row = true;
+
+		if (err->code == AEROSPIKE_ERR_UDF) {
+			as_record_reset(&rec->record, 1);
+			as_string* s = as_string_new_strdup(err->message);
+			as_record_set(&rec->record, "FAILURE", (as_bin_value*)s);
+		}
+	}
+	as_single_executor_complete(data);
+}
+
+static void
+as_txn_verify_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	as_single_data* data = udata;
+	as_batch_base_record* rec = data->rec;
+
+	if (! err) {
+		rec->result = AEROSPIKE_OK;
+	}
+	else {
+		rec->result = err->code;
+		rec->in_doubt = err->in_doubt;
+		data->executor->error_row = true;
+	}
+	as_single_executor_complete(data);
+}
+
+static void
+as_txn_roll_listener(as_error* err, void* udata, as_event_loop* event_loop)
+{
+	as_single_data* data = udata;
+	as_batch_base_record* rec = data->rec;
+
+	if (! err) {
+		rec->result = AEROSPIKE_OK;
+	}
+	else {
+		rec->result = err->code;
+		rec->in_doubt = err->in_doubt;
+		data->executor->error_row = true;
+	}
+	as_single_executor_complete(data);
+}
+
+static void
+as_single_execute_record_async(
+	aerospike* as, as_error* err, as_async_batch_executor* executor, const as_policy_batch* pb,
+	as_vector* records, as_vector* offsets
+	)
+{
+	uint32_t offset = *(uint32_t*)as_vector_get(offsets, 0);
+	as_batch_base_record* rec = as_vector_get(records, offset);
+
+	as_event_executor* exec = &executor->executor;
+
+	as_single_data* data = cf_malloc(sizeof(as_single_data));
+	data->executor = executor;
+	data->rec = rec;
+
+	as_status status;
+
+	switch (rec->type) {
+		case AS_BATCH_READ: {
+			as_batch_read_record* br = (as_batch_read_record*)rec;
+
+			if (br->n_bin_names > 0) {
+				as_policy_read pr;
+				as_read_policy_copy(&pr, pb, br->policy);
+				status = aerospike_key_select_async(as, err, &pr, &rec->key, (const char**)br->bin_names,
+					as_single_record_listener, data, exec->event_loop, NULL);
+			}
+			else if (br->ops) {
+				as_policy_operate po;
+				as_operate_policy_copy_read(&po, pb, br->policy);
+				status = aerospike_key_operate_async(as, err, &po, &rec->key, br->ops, as_single_record_listener,
+					data, exec->event_loop, NULL);
+			}
+			else {
+				as_policy_read pr;
+				as_read_policy_copy(&pr, pb, br->policy);
+
+				if (br->read_all_bins) {
+					status = aerospike_key_get_async(as, err, &pr, &rec->key, as_single_record_listener, data,
+						exec->event_loop, NULL);
+				}
+				else {
+					status = aerospike_key_exists_async(as, err, &pr, &rec->key, as_single_record_listener, data,
+						exec->event_loop, NULL);
+				}
+			}
+			break;
+		}
+
+		case AS_BATCH_WRITE: {
+			as_batch_write_record* bw = (as_batch_write_record*)rec;
+			const as_policy_batch_write* pbw = bw->policy ? bw->policy : &as->config.policies.batch_write;
+
+			as_policy_operate po;
+			as_operate_policy_copy_write(&po, pb, pbw);
+
+			status = aerospike_key_operate_async(as, err, &po, &rec->key, bw->ops, as_single_record_listener,
+				data, exec->event_loop, NULL);
+			break;
+		}
+
+		case AS_BATCH_APPLY: {
+			as_batch_apply_record* ba = (as_batch_apply_record*)rec;
+			const as_policy_batch_apply* pba = ba->policy ? ba->policy : &as->config.policies.batch_apply;
+
+			as_policy_apply pa;
+			as_apply_policy_copy(&pa, pb, pba);
+
+			status = aerospike_key_apply_async(as, err, &pa, &rec->key, ba->module, ba->function,
+				ba->arglist, as_single_value_listener, data, exec->event_loop, NULL);
+			break;
+		}
+
+		case AS_BATCH_REMOVE: {
+			as_batch_remove_record* br = (as_batch_remove_record*)rec;
+			const as_policy_batch_remove* pbr = br->policy ? br->policy : &as->config.policies.batch_remove;
+
+			as_policy_remove pr;
+			as_remove_policy_copy(&pr, pb, pbr);
+
+			status = aerospike_key_remove_async(as, err, &pr, &rec->key, as_single_write_listener, data,
+				exec->event_loop, NULL);
+			break;
+		}
+
+		case AS_BATCH_TXN_VERIFY: {
+			status = as_txn_verify_single_async(as, err, pb, &rec->key, executor->versions[offset],
+				as_txn_verify_listener, data, exec->event_loop);
+			break;
+		}
+
+		case AS_BATCH_TXN_ROLL: {
+			status = as_txn_roll_single_async(as, err, executor->txn, pb, &rec->key,
+				executor->versions[offset], executor->txn_attr, as_txn_roll_listener, data, exec->event_loop);
+			break;
+		}
+
+		default:
+			status = as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", rec->type);
+			break;
+	}
+
+	if (status != AEROSPIKE_OK) {
+		rec->result = status;
+		rec->in_doubt = false;
+		executor->error_row = true;
+		as_single_executor_complete(data);
+	}
+}
+
+//---------------------------------
+// Sync Batch Worker Threads
+//---------------------------------
 
 static void
 as_batch_worker(void* data)
@@ -2978,7 +3231,7 @@ as_batch_command_create(
 
 static as_status
 as_batch_execute_async(
-	as_cluster* cluster, as_error* err, const as_policy_batch* policy, as_policies* defs,
+	aerospike* as, as_error* err, const as_policy_batch* policy, as_policies* defs,
 	as_batch_replica* rep, as_vector* records, as_vector* batch_nodes,
 	as_async_batch_executor* executor
 	)
@@ -3012,58 +3265,64 @@ as_batch_execute_async(
 
 	for (uint32_t i = 0; i < n_batch_nodes; i++) {
 		as_batch_node* batch_node = as_vector_get(batch_nodes, i);
-		as_batch_builder_set_node(&bb, batch_node->node);
 
-		// Estimate buffer size.
-		status = as_batch_records_size(defs, records, &batch_node->offsets, &bb, err);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_executor_cancel(exec, i);
-			as_batch_release_nodes_cancel_async(batch_nodes, i);
-			break;
-		}
-
-		if (! (policy->base.compress && bb.size > AS_COMPRESS_THRESHOLD)) {
-			// Send uncompressed command.
-			as_async_batch_command* bc = as_batch_command_create(cluster, policy, rep,
-				batch_node->node, executor, bb.size, flags, NULL, 0);
-
-			as_event_command* cmd = &bc->command;
-
-			cmd->write_len = (uint32_t)as_batch_records_write(policy, defs, records,
-				&batch_node->offsets, &bb, cmd->buf);
-
-			status = as_event_command_execute(cmd, err);
+		if (batch_node->offsets.size == 1) {
+			as_single_execute_record_async(as, err, executor, policy, records, &batch_node->offsets);
 		}
 		else {
-			// Send compressed command.
-			// First write uncompressed buffer.
-			size_t capacity = bb.size;
-			uint8_t* ubuf = cf_malloc(capacity);
-			size_t size = as_batch_records_write(policy, defs, records, &batch_node->offsets, &bb,
-				ubuf);
+			as_batch_builder_set_node(&bb, batch_node->node);
 
-			// Allocate command with compressed upper bound.
-			size_t comp_size = as_command_compress_max_size(size);
-
-			as_async_batch_command* bc = as_batch_command_create(cluster, policy, rep,
-				batch_node->node, executor, comp_size, flags, ubuf, (uint32_t)size);
-
-			as_event_command* cmd = &bc->command;
-
-			// Compress buffer and execute.
-			status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
+			// Estimate buffer size.
+			status = as_batch_records_size(defs, records, &batch_node->offsets, &bb, err);
 
 			if (status != AEROSPIKE_OK) {
 				as_event_executor_cancel(exec, i);
-				// Current node not released, so start at current node.
 				as_batch_release_nodes_cancel_async(batch_nodes, i);
-				cf_free(ubuf);
-				cf_free(cmd);
 				break;
 			}
-			cmd->write_len = (uint32_t)comp_size;
-			status = as_event_command_execute(cmd, err);
+
+			if (! (policy->base.compress && bb.size > AS_COMPRESS_THRESHOLD)) {
+				// Send uncompressed command.
+				as_async_batch_command* bc = as_batch_command_create(as->cluster, policy, rep,
+					batch_node->node, executor, bb.size, flags, NULL, 0);
+
+				as_event_command* cmd = &bc->command;
+
+				cmd->write_len = (uint32_t)as_batch_records_write(policy, defs, records,
+					&batch_node->offsets, &bb, cmd->buf);
+
+				status = as_event_command_execute(cmd, err);
+			}
+			else {
+				// Send compressed command.
+				// First write uncompressed buffer.
+				size_t capacity = bb.size;
+				uint8_t* ubuf = cf_malloc(capacity);
+				size_t size = as_batch_records_write(policy, defs, records, &batch_node->offsets, &bb,
+					ubuf);
+
+				// Allocate command with compressed upper bound.
+				size_t comp_size = as_command_compress_max_size(size);
+
+				as_async_batch_command* bc = as_batch_command_create(as->cluster, policy, rep,
+					batch_node->node, executor, comp_size, flags, ubuf, (uint32_t)size);
+
+				as_event_command* cmd = &bc->command;
+
+				// Compress buffer and execute.
+				status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
+
+				if (status != AEROSPIKE_OK) {
+					as_event_executor_cancel(exec, i);
+					// Current node not released, so start at current node.
+					as_batch_release_nodes_cancel_async(batch_nodes, i);
+					cf_free(ubuf);
+					cf_free(cmd);
+					break;
+				}
+				cmd->write_len = (uint32_t)comp_size;
+				status = as_event_command_execute(cmd, err);
+			}
 		}
 
 		if (status != AEROSPIKE_OK) {
@@ -3193,7 +3452,7 @@ as_batch_records_execute(
 
 	if (async_executor) {
 		async_executor->error_row = error_row;
-		return as_batch_execute_async(cluster, err, policy, &as->config.policies, &rep, list,
+		return as_batch_execute_async(as, err, policy, &as->config.policies, &rep, list,
 			&batch_nodes, async_executor);
 	}
 	else {

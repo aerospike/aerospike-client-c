@@ -230,6 +230,9 @@ void
 as_event_batch_complete(as_event_command* cmd);
 
 void
+as_event_response_complete(as_event_command* cmd);
+
+void
 as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t command_count);
 
 void

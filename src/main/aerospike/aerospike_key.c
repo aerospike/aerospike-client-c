@@ -1587,6 +1587,10 @@ as_txn_monitor_operate_async(
 	}
 }
 
+//---------------------------------
+// Txn Verify
+//---------------------------------
+
 static as_status
 parse_result_code(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
@@ -1596,9 +1600,6 @@ parse_result_code(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, s
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-
-	uint8_t* p = buf + sizeof(as_msg);
-	p = as_command_ignore_fields(p, msg->n_fields);
 
 	if (msg->result_code) {
 		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
@@ -1652,6 +1653,83 @@ as_txn_verify_single(
 	as_command_buffer_free(buf, size);
 	return status;
 }
+
+static bool
+txn_verify_parse(as_event_command* cmd)
+{
+	uint8_t* p = cmd->buf + cmd->pos;
+	as_msg* msg = (as_msg*)p;
+	as_msg_swap_header_from_be(msg);
+	p += sizeof(as_msg);
+
+	if (msg->result_code == AEROSPIKE_OK) {
+		as_event_response_complete(cmd);
+		((as_async_record_command*)cmd)->listener(0, 0, cmd->udata, cmd->event_loop);
+		as_event_command_release(cmd);
+	}
+	else {
+		as_error err;
+		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+		as_event_response_error(cmd, &err);
+	}
+	return true;
+}
+
+as_status
+as_txn_verify_single_async(
+	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_cluster* cluster = as->cluster;
+	as_partition_info pi;
+	as_status status = as_key_partition_init(cluster, err, key, &pi);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_read_info ri;
+	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+
+	uint16_t n_fields = 4;
+	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
+	size += 7 + AS_FIELD_HEADER_SIZE; // Version field
+
+	as_event_command* cmd = as_async_record_command_create(
+		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
+		false, ri.flags, listener, udata, event_loop, NULL, size,
+		txn_verify_parse, AS_LATENCY_TYPE_READ, NULL, 0);
+
+	uint32_t timeout = as_command_server_timeout(&policy->base);
+	uint8_t* buf = cmd->buf;
+
+	buf[8] = 22;
+	buf[9] = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA;
+	buf[10] = 0;
+	buf[11] = AS_MSG_INFO3_SC_READ_TYPE;
+	buf[12] = AS_MSG_INFO4_MRT_VERIFY_READ;
+	buf[13] = 0;
+	*(uint32_t*)&buf[14] = 0;
+	*(int*)&buf[18] = 0;
+	*(uint32_t*)&buf[22] = cf_swap_to_be32(timeout);
+	*(uint16_t*)&buf[26] = cf_swap_to_be16(n_fields);
+	*(uint16_t*)&buf[28] = 0;
+
+	uint8_t* p = &buf[30];
+
+	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
+	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
+	p = as_command_write_field_digest(p, &key->digest);
+	p = as_command_write_field_version(p, ver);
+	cmd->write_len = (uint32_t)as_command_write_end(buf, p);
+
+	return as_event_command_execute(cmd, err);
+}
+
+//---------------------------------
+// Txn Roll
+//---------------------------------
 
 as_status
 as_txn_roll_single(
@@ -1715,4 +1793,86 @@ as_txn_roll_single(
 
 	as_command_buffer_free(buf, size);
 	return status;
+}
+
+static bool
+txn_roll_parse(as_event_command* cmd)
+{
+	uint8_t* p = cmd->buf + cmd->pos;
+	as_msg* msg = (as_msg*)p;
+	as_msg_swap_header_from_be(msg);
+	p += sizeof(as_msg);
+
+	if (msg->result_code == AEROSPIKE_OK) {
+		as_event_response_complete(cmd);
+		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
+		as_event_command_release(cmd);
+	}
+	else {
+		as_error err;
+		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+		as_event_response_error(cmd, &err);
+	}
+	return true;
+}
+
+as_status
+as_txn_roll_single_async(
+	aerospike* as, as_error* err, as_txn* txn, const as_policy_txn_roll* policy, const as_key* key,
+	uint64_t ver, uint8_t roll_attr, as_async_write_listener listener, void* udata,
+	as_event_loop* event_loop
+	)
+{
+	as_cluster* cluster = as->cluster;
+	as_partition_info pi;
+	as_status status = as_key_partition_init(cluster, err, key, &pi);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	uint16_t n_fields = 4;
+	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
+
+	// MRT ID
+	size += AS_FIELD_HEADER_SIZE + sizeof(uint64_t);
+
+	// MRT version
+	if (ver) {
+		size += 7 + AS_FIELD_HEADER_SIZE;
+		n_fields++;
+	}
+
+	as_event_command* cmd = as_async_write_command_create(
+		as->cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
+		NULL, size, txn_roll_parse, NULL, 0);
+
+	uint32_t timeout = as_command_server_timeout(&policy->base);
+	uint8_t* buf = cmd->buf;
+
+	buf[8] = 22;
+	buf[9] = 0;
+	buf[10] = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DURABLE_DELETE;
+	buf[11] = 0;
+	buf[12] = roll_attr;
+	buf[13] = 0;
+	*(uint32_t*)&buf[14] = 0;
+	*(int*)&buf[18] = 0;
+	*(uint32_t*)&buf[22] = cf_swap_to_be32(timeout);
+	*(uint16_t*)&buf[26] = cf_swap_to_be16(n_fields);
+	*(uint16_t*)&buf[28] = 0;
+
+	uint8_t* p = &buf[30];
+	
+	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
+	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
+	p = as_command_write_field_digest(p, &key->digest);
+	p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, txn->id);
+
+	if (ver) {
+		p = as_command_write_field_version(p, ver);
+	}
+	cmd->write_len = (uint32_t)as_command_write_end(buf, p);
+
+	return as_event_command_execute(cmd, err);
 }

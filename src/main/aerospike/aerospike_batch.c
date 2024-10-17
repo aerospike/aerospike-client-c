@@ -3287,7 +3287,7 @@ as_batch_execute_async(
 		as_batch_node* batch_node = as_vector_get(batch_nodes, i);
 
 		if (batch_node->offsets.size == 1) {
-			as_single_execute_record_async(as, err, executor, policy, records, &batch_node->offsets);
+			as_single_execute_record_async(as, err, executor, policy, records, batch_node);
 		}
 		else {
 			as_batch_builder_set_node(&bb, batch_node->node);

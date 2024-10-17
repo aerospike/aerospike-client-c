@@ -987,13 +987,22 @@ typedef struct as_operate_s {
 } as_operate;
 
 static as_status
-as_operate_set_attr(as_operate* oper, as_error* err)
+as_operate_init(
+	as_operate* oper, aerospike* as, const as_policy_operate* policy,
+	as_policy_operate* policy_local, const as_key* key, const as_operations* ops, as_queue* buffers,
+	as_error* err
+	)
 {
-	bool respond_all_ops = false;
-
+	oper->key = key;
+	oper->ops = ops;
+	oper->buffers = buffers;
+	oper->size = 0;
+	oper->n_operations = ops->binops.size;
 	oper->read_attr = 0;
 	oper->write_attr = 0;
 	oper->info_attr = 0;
+
+	bool respond_all_ops = false;
 
 	for (uint32_t i = 0; i < oper->n_operations; i++) {
 		as_binop* op = &oper->ops->binops.entries[i];
@@ -1034,32 +1043,6 @@ as_operate_set_attr(as_operate* oper, as_error* err)
 		}
 	}
 
-	// When GET_ALL is specified, RESPOND_ALL_OPS must be disabled.
-	if (respond_all_ops && !(oper->read_attr & AS_MSG_INFO1_GET_ALL)) {
-		oper->write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
-	}
-	return AEROSPIKE_OK;
-}
-
-static as_status
-as_operate_init(
-	as_operate* oper, aerospike* as, const as_policy_operate* policy,
-	as_policy_operate* policy_local, const as_key* key, const as_operations* ops, as_queue* buffers,
-	as_error* err
-	)
-{
-	oper->key = key;
-	oper->ops = ops;
-	oper->buffers = buffers;
-	oper->size = 0;
-	oper->n_operations = ops->binops.size;
-
-	as_status status = as_operate_set_attr(oper, err);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
 	if (! policy) {
 		if (oper->write_attr & AS_MSG_INFO2_WRITE) {
 			// Write operations should not retry by default.
@@ -1073,6 +1056,11 @@ as_operate_init(
 		}
 	}
 	oper->policy = policy;
+
+	// When GET_ALL is specified, RESPOND_ALL_OPS must be disabled.
+	if ((respond_all_ops || policy->respond_all_ops) && !(oper->read_attr & AS_MSG_INFO1_GET_ALL)) {
+		oper->write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
+	}
 
 	as_command_set_attr_read(policy->read_mode_ap, policy->read_mode_sc, policy->base.compress,
 							 &oper->read_attr, &oper->info_attr);
@@ -1863,7 +1851,7 @@ as_txn_roll_single_async(
 	*(uint16_t*)&buf[28] = 0;
 
 	uint8_t* p = &buf[30];
-	
+
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
 	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
 	p = as_command_write_field_digest(p, &key->digest);

@@ -2211,6 +2211,10 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	return status;
 }
 
+//---------------------------------
+// Single Record Policy Functions
+//---------------------------------
+
 static void
 as_read_policy_copy(
 	as_policy_read* trg, const as_policy_batch* pb, const as_policy_batch_read* pbr
@@ -2252,7 +2256,8 @@ as_operate_policy_copy_read(
 	trg->ttl = 0;
 	trg->deserialize = pb->deserialize;
 	trg->durable_delete = false;
-	trg->async_heap_rec = true; // Ignored in sync commands.
+	trg->async_heap_rec = true;   // Ignored in sync commands.
+	trg->respond_all_ops = false; // Not relevant for reads, since all reads return a result.
 
 	if (pbr) {
 		if (pbr->filter_exp && !trg->base.filter_exp) {
@@ -2293,6 +2298,7 @@ as_operate_policy_copy_write(
 	trg->deserialize = pb->deserialize;
 	trg->durable_delete = src->durable_delete;
 	trg->async_heap_rec = true; // Ignored in sync commands.
+	trg->respond_all_ops = true;
 }
 
 static void

@@ -2368,6 +2368,12 @@ as_single_execute(
 	uint32_t offset
 	)
 {
+	// Release task node because each single command assigns and reserves a new node.
+	// Performance might be improved if there were single command functions that accepted
+	// a pre-assigned node, but that would be a massive undertaking.
+	as_node_release(task->node);
+	task->node = NULL;
+
 	aerospike* as = task->as;
 	const as_policy_batch* pb = task->policy;
 
@@ -2458,9 +2464,9 @@ as_single_execute(
 }
 
 static as_status
-as_single_execute_record(as_batch_task_records* btr, as_error* err, as_vector* offsets)
+as_single_execute_record(as_batch_task_records* btr, as_error* err)
 {
-	uint32_t offset = *(uint32_t*)as_vector_get(offsets, 0);
+	uint32_t offset = *(uint32_t*)as_vector_get(&btr->base.offsets, 0);
 	as_batch_base_record* rec = as_vector_get(btr->records, offset);
 
 	rec->result = as_single_execute(&btr->base, err, &rec->key, rec, &rec->record, offset);
@@ -2473,9 +2479,9 @@ as_single_execute_record(as_batch_task_records* btr, as_error* err, as_vector* o
 }
 
 static as_status
-as_single_execute_key(as_batch_task_keys* btk, as_error* err, as_vector* offsets)
+as_single_execute_key(as_batch_task_keys* btk, as_error* err)
 {
-	uint32_t offset = *(uint32_t*)as_vector_get(offsets, 0);
+	uint32_t offset = *(uint32_t*)as_vector_get(&btk->base.offsets, 0);
 	as_batch_result* res = &btk->results[offset];
 
 	res->result = as_single_execute(&btk->base, err, &btk->keys[offset], btk->rec, &res->record, 0);
@@ -2622,10 +2628,16 @@ as_txn_roll_listener(as_error* err, void* udata, as_event_loop* event_loop)
 static void
 as_single_execute_record_async(
 	aerospike* as, as_error* err, as_async_batch_executor* executor, const as_policy_batch* pb,
-	as_vector* records, as_vector* offsets
+	as_vector* records, as_batch_node* batch_node
 	)
 {
-	uint32_t offset = *(uint32_t*)as_vector_get(offsets, 0);
+	// Release batch node because each single command assigns and reserves a new node.
+	// Performance might be improved if there were single command functions that accepted
+	// a pre-assigned node, but that would be a massive undertaking.
+	as_node_release(batch_node->node);
+	batch_node->node = NULL;
+
+	uint32_t offset = *(uint32_t*)as_vector_get(&batch_node->offsets, 0);
 	as_batch_base_record* rec = as_vector_get(records, offset);
 
 	as_event_executor* exec = &executor->executor;
@@ -2747,7 +2759,7 @@ as_batch_worker(void* data)
 	if (task->type == BATCH_TYPE_RECORDS) {
 		// Execute batch referenced in aerospike_batch_read().
 		if (task->offsets.size == 1) {
-			complete_task.result = as_single_execute_record((as_batch_task_records*)task, &err, &task->offsets);
+			complete_task.result = as_single_execute_record((as_batch_task_records*)task, &err);
 		}
 		else {
 			complete_task.result = as_batch_execute_records((as_batch_task_records*)task, &err, NULL);
@@ -2757,7 +2769,7 @@ as_batch_worker(void* data)
 		// Execute batch referenced in aerospike_batch_get(), aerospike_batch_get_bins()
 		// and aerospike_batch_exists().
 		if (task->offsets.size == 1) {
-			complete_task.result = as_single_execute_key((as_batch_task_keys*)task, &err, &task->offsets);
+			complete_task.result = as_single_execute_key((as_batch_task_keys*)task, &err);
 		}
 		else {
 			complete_task.result = as_batch_execute_keys((as_batch_task_keys*)task, &err, NULL);
@@ -2842,12 +2854,13 @@ as_batch_keys_execute_seq(
 		as_batch_node* batch_node = as_vector_get(batch_nodes, i);
 		as_error_init(&e);
 
+		btk->base.node = batch_node->node;
+		memcpy(&btk->base.offsets, &batch_node->offsets, sizeof(as_vector));
+
 		if (batch_node->offsets.size == 1) {
-			s = as_single_execute_key(btk, &e, &batch_node->offsets);
+			s = as_single_execute_key(btk, &e);
 		}
 		else {
-			btk->base.node = batch_node->node;
-			memcpy(&btk->base.offsets, &batch_node->offsets, sizeof(as_vector));
 			s = as_batch_execute_keys(btk, &e, parent);
 		}
 
@@ -3159,12 +3172,13 @@ as_batch_execute_sync(
 			as_error_init(&e);
 			as_status s;
 
+			btr.base.node = batch_node->node;
+			memcpy(&btr.base.offsets, &batch_node->offsets, sizeof(as_vector));
+
 			if (batch_node->offsets.size == 1) {
-				s = as_single_execute_record(&btr, &e, &batch_node->offsets);
+				s = as_single_execute_record(&btr, &e);
 			}
 			else {
-				btr.base.node = batch_node->node;
-				memcpy(&btr.base.offsets, &batch_node->offsets, sizeof(as_vector));
 				s = as_batch_execute_records(&btr, &e, parent);
 			}
 

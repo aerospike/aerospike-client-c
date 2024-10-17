@@ -2368,12 +2368,6 @@ as_single_execute(
 	uint32_t offset
 	)
 {
-	// Release task node because each single command assigns and reserves a new node.
-	// Performance might be improved if there were single command functions that accepted
-	// a pre-assigned node, but that would be a massive undertaking.
-	as_node_release(task->node);
-	task->node = NULL;
-
 	aerospike* as = task->as;
 	const as_policy_batch* pb = task->policy;
 

@@ -67,7 +67,7 @@ as_client_log_callback(as_log_level level, const char * func, const char * file,
 }
 
 static void
-usage()
+usage(void)
 {
 	fprintf(stderr, "Usage:\n");
 	fprintf(stderr, "  -h, --host <host1>[:<tlsname1>][:<port1>],...  Default: 127.0.0.1\n");

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -62,7 +62,7 @@ extern bool g_has_ttl;
  *****************************************************************************/
 
 static bool
-write_recs()
+write_recs(void)
 {
 	as_error err;
 	as_key key;

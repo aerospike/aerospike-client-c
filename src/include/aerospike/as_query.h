@@ -859,7 +859,13 @@ as_query_apply(as_query* query, const char* module, const char* function, const 
 
 /**
  * Set if records should be read in pages in conjunction with max_records policy.
- * 
+ * If true, the client will save the status of all partitions after the query completes.
+ * The partition status can be used to resume the query if terminated early by
+ * error, user callback, or max_records being reached. Use as_query_set_partitions()
+ * or as_partition_filter_set_partitions() to resume a query.
+ *
+ * The partition status will be destroyed when as_query_destroy() is called.
+ *
  * @relates as_query
  * @ingroup query_operations
  */

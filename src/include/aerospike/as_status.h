@@ -307,6 +307,16 @@ typedef enum as_status_e {
 	AEROSPIKE_XDR_KEY_BUSY = 32,
 
 	/**
+	 * MRT was already committed.
+	 */
+	AEROSPIKE_MRT_COMMITTED = 33,
+
+	/**
+	 * MRT was already aborted.
+	 */
+	AEROSPIKE_MRT_ABORTED = 34,
+
+	/**
 	 * There are no more records left for query.
 	 */
 	AEROSPIKE_QUERY_END = 50,

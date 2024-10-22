@@ -244,27 +244,6 @@ as_txn_monitor_add_keys_records(
 }
 
 as_status
-as_txn_monitor_mark_roll_forward(
-	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key
-	)
-{
-	as_policy_write policy;
-	as_policy_write_init(&policy);
-	policy.base.socket_timeout = base_policy->socket_timeout;
-	policy.base.total_timeout = base_policy->total_timeout;
-	policy.base.max_retries = base_policy->max_retries;
-	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
-
-	as_record rec;
-	as_record_inita(&rec, 1);
-	as_record_set_bool(&rec, "fwd", true);
-
-	as_status status = aerospike_key_put(as, err, &policy, key, &rec);
-	as_record_destroy(&rec);
-	return status;
-}
-
-as_status
 as_txn_monitor_remove(
 	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key
 	)

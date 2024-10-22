@@ -247,8 +247,8 @@ as_txn_init_all(as_txn* txn, uint32_t read_buckets, uint32_t write_buckets)
 	txn->id = id;
 	txn->ns[0] = 0;
 	txn->deadline = 0;
+	txn->state = AS_TXN_STATE_OPEN;
 	txn->monitor_in_doubt = false;
-	txn->roll_attempted = false;
 	as_txn_hash_init(&txn->reads, read_buckets);
 	as_txn_hash_init(&txn->writes, write_buckets);
 }
@@ -364,17 +364,6 @@ as_txn_set_ns(as_txn* txn, const char* ns, as_error* err)
 			txn->ns, ns);
 	}
 	return AEROSPIKE_OK;
-}
-
-bool
-as_txn_set_roll_attempted(as_txn* txn)
-{
-	if (txn->roll_attempted) {
-		return false;
-	}
-	
-	txn->roll_attempted = true;
-	return true;
 }
 
 void

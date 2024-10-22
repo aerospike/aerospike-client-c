@@ -53,11 +53,6 @@ as_txn_monitor_add_keys_records(
 	);
 
 as_status
-as_txn_monitor_mark_roll_forward(
-	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key
-	);
-
-as_status
 as_txn_monitor_remove(
 	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key
 	);

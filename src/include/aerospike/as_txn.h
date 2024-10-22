@@ -31,6 +31,16 @@ extern "C" {
 //---------------------------------
 
 /**
+ * Transaction state.
+ */
+typedef enum {
+	AS_TXN_STATE_OPEN,
+	AS_TXN_STATE_VERIFIED,
+	AS_TXN_STATE_COMMITTED,
+	AS_TXN_STATE_ABORTED
+} as_txn_state;
+
+/**
  * Transaction key.
  */
 typedef struct as_txn_key {
@@ -67,8 +77,8 @@ typedef struct as_txn {
 	as_txn_hash reads;
 	as_txn_hash writes;
 	uint32_t deadline;
+	as_txn_state state;
 	bool monitor_in_doubt;
-	bool roll_attempted;
 	bool free;
 } as_txn;
 
@@ -186,12 +196,6 @@ as_txn_writes_contain(as_txn* txn, const as_key* key);
  */
 AS_EXTERN as_status
 as_txn_set_ns(as_txn* txn, const char* ns, as_error* err);
-
-/**
- * Verify that commit/abort is only attempted once. For internal use only.
- */
-AS_EXTERN bool
-as_txn_set_roll_attempted(as_txn* txn);
 
 /**
  * Does MRT monitor record exist or is in doubt.

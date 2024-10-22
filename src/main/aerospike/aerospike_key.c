@@ -1473,6 +1473,69 @@ aerospike_key_apply_async(
 // Txn Monitor Operations
 //---------------------------------
 
+static as_status
+as_txn_monitor_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
+{
+	as_msg* msg = (as_msg*)buf;
+	as_status status = as_msg_parse(err, msg, size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	if (msg->result_code == AEROSPIKE_OK || msg->result_code == AEROSPIKE_MRT_COMMITTED) {
+		return AEROSPIKE_OK;
+	}
+
+	return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+}
+
+as_status
+as_txn_monitor_mark_roll_forward(
+	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key
+	)
+{
+	as_policy_write policy;
+	as_policy_write_init(&policy);
+	policy.base.socket_timeout = base_policy->socket_timeout;
+	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.max_retries = base_policy->max_retries;
+	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_bool(&rec, "fwd", true);
+
+	as_partition_info pi;
+	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
+
+	if (status != AEROSPIKE_OK) {
+		as_record_destroy(&rec);
+		return status;
+	}
+
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), rec.bins.size);
+
+	as_put put;
+	status = as_put_init(&put, &policy, key, &rec, &buffers, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		as_record_destroy(&rec);
+		return status;
+	}
+
+	as_command cmd;
+	as_command_init_write(&cmd, as->cluster, &policy.base, policy.replica, key, put.size, &pi,
+						  as_txn_monitor_parse_header, NULL);
+
+	status = as_command_send(&cmd, err, 0, as_put_write, &put);
+
+	as_record_destroy(&rec);
+	return status;
+}
+
 as_status
 as_txn_monitor_operate(
 	aerospike* as, as_error* err, as_txn* txn, const as_policy_operate* policy, const as_key* key,

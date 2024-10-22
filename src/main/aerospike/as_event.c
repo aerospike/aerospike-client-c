@@ -1002,7 +1002,7 @@ as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	}
 }
 
-static inline void
+void
 as_event_response_complete(as_event_command* cmd)
 {
 	if (cmd->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE) {

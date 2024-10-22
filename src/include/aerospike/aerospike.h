@@ -17,9 +17,9 @@
 #pragma once
 
 /** 
- * @mainpage Aerospike C Client
+ * @mainpage Introduction
  *
- * @section intro_sec Introduction
+ * @section intro_sec About the Aerospike C Client
  *
  * You can use the Aerospike C client to build C/C++ applications that store and retrieve data from an
  * Aerospike cluster. The C client is a smart client that periodically pings nodes for cluster

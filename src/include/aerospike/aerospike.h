@@ -21,9 +21,9 @@
  *
  * @section intro_sec Introduction
  *
- * The Aerospike C client allows you to build C/C++ applications to store and retrieve data from the
+ * You can use the Aerospike C client to build C/C++ applications that store and retrieve data from an
  * Aerospike cluster. The C client is a smart client that periodically pings nodes for cluster
- * status and manages interactions with the cluster.  The following functionality is supported.
+ * status and manages interactions with the cluster. The following functionality is supported:
  *
  * - Database commands
  *   - Key/Value
@@ -42,8 +42,8 @@
  * - Shared memory cluster tend state for multi-process applications
  * - TLS secure sockets
  *
- * See <a href="files.html">Files</a> for aerospike header files.<br/>
- * See <a href="classes.html">Types</a> for aerospike  types.<br/>
+ * See <a href="files.html">Files</a> for Aerospike header files.<br/>
+ * See <a href="classes.html">Data Structures </a> for Aerospike types.<br/>
  * See <a href="https://aerospike.com/developer/client/install?client=c">Developer Guide</a> for installation
  * instructions and example code.<br/>
  */

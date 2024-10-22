@@ -1525,6 +1525,76 @@ as_txn_monitor_mark_roll_forward(
 	return status;
 }
 
+static bool
+as_txn_monitor_parse_header_async(as_event_command* cmd)
+{
+	uint8_t* p = cmd->buf + cmd->pos;
+	as_msg* msg = (as_msg*)p;
+	as_msg_swap_header_from_be(msg);
+	p += sizeof(as_msg);
+
+	if (msg->result_code == AEROSPIKE_OK || msg->result_code == AEROSPIKE_MRT_COMMITTED) {
+		as_event_response_complete(cmd);
+		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
+		as_event_command_release(cmd);
+	}
+	else {
+		as_error err;
+		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+		as_event_response_error(cmd, &err);
+	}
+	return true;
+}
+
+as_status
+as_txn_monitor_mark_roll_forward_async(
+	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_policy_write policy;
+	as_policy_write_init(&policy);
+	policy.base.socket_timeout = base_policy->socket_timeout;
+	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.max_retries = base_policy->max_retries;
+	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_bool(&rec, "fwd", true);
+
+	as_partition_info pi;
+	as_status status = as_key_partition_init(as->cluster, err, key, &pi);
+
+	if (status != AEROSPIKE_OK) {
+		as_record_destroy(&rec);
+		return status;
+	}
+
+	as_queue buffers;
+	as_queue_inita(&buffers, sizeof(as_buffer), rec.bins.size);
+
+	as_put put;
+	status = as_put_init(&put, &policy, key, &rec, &buffers, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_buffers_destroy(&buffers);
+		as_record_destroy(&rec);
+		return status;
+	}
+
+	as_event_command* cmd = as_async_write_command_create(
+		as->cluster, &policy.base, &pi, policy.replica, listener, udata, event_loop,
+		NULL, put.size, as_txn_monitor_parse_header_async, NULL, 0);
+
+	cmd->write_len = (uint32_t)as_put_write(&put, cmd->buf);
+
+	status = as_async_command_execute(as, err, &policy.base, key, cmd, &put.tdata);
+	
+	as_record_destroy(&rec);
+	return status;
+}
+
 as_status
 as_txn_monitor_operate(
 	aerospike* as, as_error* err, as_txn* txn, const as_policy_operate* policy, const as_key* key,

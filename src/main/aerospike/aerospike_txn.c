@@ -29,19 +29,25 @@ as_status
 as_txn_verify(aerospike* as, as_error* err, as_txn* txn);
 
 as_status
+as_txn_verify_async(
+	aerospike* as, as_error* err, as_txn* txn, as_async_batch_listener listener, void* udata,
+	as_event_loop* event_loop
+	);
+
+as_status
 as_txn_monitor_mark_roll_forward(
 	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key
 	);
 
 as_status
-as_txn_roll(
-	aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* txn, uint8_t txn_attr
+as_txn_monitor_mark_roll_forward_async(
+	aerospike* as, as_error* err, const as_policy_base* base_policy, as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop
 	);
 
 as_status
-as_txn_verify_async(
-	aerospike* as, as_error* err, as_txn* txn, as_async_batch_listener listener, void* udata,
-	as_event_loop* event_loop
+as_txn_roll(
+	aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* txn, uint8_t txn_attr
 	);
 
 as_status

@@ -1319,12 +1319,7 @@ HTML_EXTRA_STYLESHEET  = project/doxygen-awesome.css \
 # files will be copied as-is; there are no commands or markers available.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_EXTRA_FILES       = src/apidocs/html/doxygen-awesome-darkmode-toggle.js \
-                         src/apidocs/html/doxygen-awesome-fragment-copy-button.js \
-                         src/apidocs/html/doxygen-awesome-paragraph-link.js \
-                         src/apidocs/html/doxygen-custom/toggle-alternative-theme.js \
-                         src/apidocs/html/doxygen-awesome-interactive-toc.js \
-                         src/apidocs/html/doxygen-awesome-tabs.js
+HTML_EXTRA_FILES       = 
 
 # The HTML_COLORSTYLE tag can be used to specify if the generated HTML output
 # should be rendered with a dark or light theme.

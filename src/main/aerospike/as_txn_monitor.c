@@ -172,6 +172,10 @@ as_txn_monitor_add_keys(
 	as_policy_operate txn_policy;
 	as_txn_policy_copy(cmd_policy, &txn_policy);
 
+	// Set MRT timeout via ttl when creating the MRT monitor record. The server ignores
+	// the MRT timeout field on successive MRT monitor record updates.
+	ops->ttl = txn->timeout;
+
 	as_status status = as_txn_monitor_operate(as, err, txn, &txn_policy, &key, ops);
 
 	if (status != AEROSPIKE_OK) {
@@ -280,6 +284,10 @@ as_txn_monitor_add_keys_async(
 
 	as_policy_operate txn_policy;
 	as_txn_policy_copy(cmd_policy, &txn_policy);
+
+	// Set MRT timeout via ttl when creating the MRT monitor record. The server ignores
+	// the MRT timeout field on successive MRT monitor record updates.
+	ops->ttl = txn->timeout;
 
 	return as_txn_monitor_operate_async(as, err, txn, &txn_policy, &key, ops, listener, udata, event_loop);
 }

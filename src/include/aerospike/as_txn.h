@@ -76,6 +76,7 @@ typedef struct as_txn {
 	as_namespace ns;
 	as_txn_hash reads;
 	as_txn_hash writes;
+	uint32_t timeout;
 	uint32_t deadline;
 	as_txn_state state;
 	bool monitor_in_doubt;
@@ -98,8 +99,10 @@ typedef struct {
 
 /**
  * Initialize multi-record transaction (MRT),  assign random transaction id and initialize
- * reads/writes hashmaps with default capacities. Call this function or as_txn_init_capacity(),
- * but not both. Do not use thie function for async commands (use as_txn_create() instead).
+ * reads/writes hashmaps with default capacities. The default MRT timeout is 10 seconds.
+ *
+ * Call this function or as_txn_init_capacity(), but not both. Do not use this function for async
+ * commands (use as_txn_create() instead).
  *
  * @param txn		Multi-record transaction.
  */
@@ -108,8 +111,10 @@ as_txn_init(as_txn* txn);
 
 /**
  * Initialize multi-record transaction (MRT), assign random transaction id and initialize
- * reads/writes hashmaps with given capacities. Call this function or as_txn_init(),
- * but not both. Do not use thie function for async commands (use as_txn_create_capacity() instead).
+ * reads/writes hashmaps with given capacities. The default MRT timeout is 10 seconds.
+ *
+ * Call this function or as_txn_init(), but not both. Do not use this function for async commands
+ * (use as_txn_create_capacity() instead).
  *
  * @param txn				Multi-record transaction.
  * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
@@ -120,14 +125,14 @@ as_txn_init_capacity(as_txn* txn, uint32_t reads_capacity, uint32_t writes_capac
 
 /**
  * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
- * reads/writes hashmaps with default capacities.
+ * reads/writes hashmaps with default capacities. The default MRT timeout is 10 seconds.
  */
 AS_EXTERN as_txn*
 as_txn_create(void);
 
 /**
  * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
- * reads/writes hashmaps with given capacities.
+ * reads/writes hashmaps with given capacities. The default MRT timeout is 10 seconds.
  *
  * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
  * @param writes_capacity	expected number of record writes in the MRT. Minimum value is 16.
@@ -140,6 +145,17 @@ as_txn_create_capacity(uint32_t reads_capacity, uint32_t writes_capacity);
  */
 AS_EXTERN void
 as_txn_destroy(as_txn* txn);
+
+/**
+ * Set MRT timeout in seconds. The timer starts when the MRT monitor record is created.
+ * This occurs when the first command in the MRT is executed. If the timeout is reached before
+ * an aerospike_commit() or aerospike_abort() is called, the server will expire and rollback the MRT.
+ */
+static inline void
+as_txn_set_timeout(as_txn* txn, uint32_t timeout)
+{
+	txn->timeout = timeout;
+}
 
 /**
  * Return read hash size.

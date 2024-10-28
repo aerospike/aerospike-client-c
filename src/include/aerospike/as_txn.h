@@ -80,6 +80,7 @@ typedef struct as_txn {
 	uint32_t deadline;
 	as_txn_state state;
 	bool monitor_in_doubt;
+	bool in_doubt;
 	bool free;
 } as_txn;
 

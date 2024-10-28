@@ -2042,7 +2042,7 @@ as_policy_admin_copy(const as_policy_admin* src, as_policy_admin* trg)
 static inline as_policy_txn_verify*
 as_policy_txn_verify_init(as_policy_txn_verify* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	p->base.socket_timeout = 3000;
 	p->base.total_timeout = 10000;
 	p->base.max_retries = 5;
 	p->base.sleep_between_retries = 1000;
@@ -2087,7 +2087,7 @@ as_policy_txn_verify_copy(const as_policy_txn_verify* src, as_policy_txn_verify*
 static inline as_policy_txn_roll*
 as_policy_txn_roll_init(as_policy_txn_roll* p)
 {
-	p->base.socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	p->base.socket_timeout = 3000;
 	p->base.total_timeout = 10000;
 	p->base.max_retries = 5;
 	p->base.sleep_between_retries = 1000;

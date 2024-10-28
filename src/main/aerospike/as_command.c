@@ -637,8 +637,10 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 {
 	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 
-	if (err->in_doubt && cmd->policy->txn) {
-		// TODO: Ensure not called with MRT monitor key on commit/abort!
+	// It's important that as_txn_on_write_in_doubt() is only executed for commands in a MRT,
+	// but not MRT operations (add MRT key, commit, abort). Add MRT key sets
+	// AS_COMMAND_FLAGS_MRT_MONITOR and commit/abort do not set cmd->policy->txn.
+	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_MRT_MONITOR) == 0) {
 		as_txn_on_write_in_doubt(cmd->policy->txn, cmd->key->digest.value, cmd->key->set);
 	}
 }

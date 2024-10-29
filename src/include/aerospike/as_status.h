@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -279,6 +279,11 @@ typedef enum as_status_e {
 	 * Write command loses conflict to XDR.
 	 */
 	AEROSPIKE_LOST_CONFLICT = 28,
+
+	/**
+	 * Write can't complete until XDR finishes shipping.
+	 */
+	AEROSPIKE_XDR_KEY_BUSY = 32,
 
 	/**
 	 * There are no more records left for query.

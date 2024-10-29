@@ -1826,7 +1826,7 @@ as_txn_verify_single_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		false, ri.flags, listener, udata, event_loop, NULL, size,
-		txn_verify_parse, AS_LATENCY_TYPE_READ, NULL, 0);
+		txn_verify_parse, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* buf = cmd->buf;

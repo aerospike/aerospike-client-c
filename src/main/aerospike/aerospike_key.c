@@ -268,6 +268,9 @@ as_txn_monitor_callback(as_error* err, as_record* rec, void* udata, as_event_loo
 	as_event_command* cmd = udata;
 
 	if (err) {
+		if (err->in_doubt) {
+			cmd->txn->monitor_in_doubt = true;
+		}
 		as_write_command_notify(err, cmd, event_loop);
 		as_event_command_destroy(cmd);
 		return;

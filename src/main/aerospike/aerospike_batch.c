@@ -3654,6 +3654,9 @@ as_batch_txn_callback(as_error* err, as_record* rec, void* udata, as_event_loop*
 	as_batch_txn* bt = udata;
 
 	if (err) {
+		if (err->in_doubt) {
+			bt->txn->monitor_in_doubt = true;
+		}
 		destroy_versions(bt->versions);
 		bt->listener(err, bt->records, bt->udata, event_loop);
 		cf_free(bt);

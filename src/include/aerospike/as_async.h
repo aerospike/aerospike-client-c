@@ -41,6 +41,7 @@ extern "C" {
 #define AS_ASYNC_TYPE_SCAN_PARTITION 7
 #define AS_ASYNC_TYPE_QUERY_PARTITION 8
 #define AS_ASYNC_TYPE_CONNECTOR 9
+#define AS_ASYNC_TYPE_MRT_MONITOR 10
 
 #define AS_AUTHENTICATION_MAX_SIZE 158
 
@@ -125,7 +126,7 @@ as_async_record_command_create(
 	as_policy_replica replica, uint8_t replica_index, bool deserialize, bool heap_rec,
 	uint8_t flags, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results, 
-	as_latency_type latency_type, uint8_t* ubuf, uint32_t ubuf_size
+	uint8_t type, as_latency_type latency_type, uint8_t* ubuf, uint32_t ubuf_size
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -149,7 +150,7 @@ as_async_record_command_create(
 	cmd->pipe_listener = pipe_listener;
 	cmd->buf = rcmd->space;
 	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_record_command));
-	cmd->type = AS_ASYNC_TYPE_RECORD;
+	cmd->type = type;
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = flags;

@@ -269,6 +269,9 @@ as_txn_monitor_callback(as_error* err, as_record* rec, void* udata, as_event_loo
 	as_event_command* cmd = udata;
 
 	if (err) {
+		if (err->in_doubt) {
+			cmd->txn->monitor_in_doubt = true;
+		}
 		as_write_command_notify(err, cmd, event_loop);
 		as_event_command_destroy(cmd);
 		return;
@@ -460,7 +463,7 @@ aerospike_key_get_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-		as_event_command_parse_result, AS_LATENCY_TYPE_READ, NULL, 0);
+		as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
@@ -574,7 +577,7 @@ aerospike_key_select_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-		as_event_command_parse_result, AS_LATENCY_TYPE_READ, NULL, 0);
+		as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
@@ -667,7 +670,7 @@ aerospike_key_exists_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, false, policy->async_heap_rec,
 		ri.flags, listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result,
-		AS_LATENCY_TYPE_READ, NULL, 0);
+		AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
 
 	uint8_t* p = as_command_write_header_read_header(cmd->buf, &policy->base, policy->read_mode_ap,
 		policy->read_mode_sc, policy->read_touch_ttl_percent, tdata.n_fields, 0,
@@ -1231,7 +1234,7 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, oper.size,
-				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE, NULL, 0);
+				as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_WRITE, NULL, 0);
 
 			cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
 
@@ -1250,7 +1253,7 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, comp_size,
-				as_event_command_parse_result, AS_LATENCY_TYPE_WRITE, ubuf, (uint32_t)size);
+				as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_WRITE, ubuf, (uint32_t)size);
 
 			return as_async_compress_command_execute(as, err, &policy->base, key, cmd, &oper.tdata,
 				ubuf, size, comp_size, NULL, NULL);
@@ -1266,7 +1269,7 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-				oper.size, as_event_command_parse_result, AS_LATENCY_TYPE_READ, NULL, 0);
+				oper.size, as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
 
 			cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
 		}
@@ -1286,7 +1289,7 @@ aerospike_key_operate_async(
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-				comp_size, as_event_command_parse_result, AS_LATENCY_TYPE_READ, ubuf, (uint32_t)size);
+				comp_size, as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, ubuf, (uint32_t)size);
 
 			// Compress buffer and execute.
 			status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
@@ -1629,6 +1632,7 @@ as_txn_monitor_operate(
 	as_command cmd;
 	as_command_init_write(&cmd, as->cluster, &policy->base, policy->replica, key, oper.size, &pi,
 		as_command_parse_deadline, txn);
+	cmd.flags |= AS_COMMAND_FLAGS_MRT_MONITOR;
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
 
@@ -1673,7 +1677,8 @@ as_txn_monitor_operate_async(
 		cmd = as_async_record_command_create(
 			as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 			policy->async_heap_rec, 0, listener, udata, event_loop, NULL, oper.size,
-			as_event_command_parse_deadline, AS_LATENCY_TYPE_WRITE, NULL, 0);
+			as_event_command_parse_deadline, AS_ASYNC_TYPE_MRT_MONITOR, AS_LATENCY_TYPE_WRITE,
+			NULL, 0);
 
 		cmd->txn = txn;
 		cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
@@ -1692,7 +1697,8 @@ as_txn_monitor_operate_async(
 		cmd = as_async_record_command_create(
 			as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 			policy->async_heap_rec, 0, listener, udata, event_loop, NULL, comp_size,
-			as_event_command_parse_deadline, AS_LATENCY_TYPE_WRITE, ubuf, (uint32_t)size);
+			as_event_command_parse_deadline, AS_ASYNC_TYPE_MRT_MONITOR, AS_LATENCY_TYPE_WRITE,
+			ubuf, (uint32_t)size);
 
 		// Compress buffer and execute.
 		status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);

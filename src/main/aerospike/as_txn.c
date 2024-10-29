@@ -250,6 +250,7 @@ as_txn_init_all(as_txn* txn, uint32_t read_buckets, uint32_t write_buckets)
 	txn->deadline = 0;
 	txn->state = AS_TXN_STATE_OPEN;
 	txn->monitor_in_doubt = false;
+	txn->in_doubt = false;
 	as_txn_hash_init(&txn->reads, read_buckets);
 	as_txn_hash_init(&txn->writes, write_buckets);
 }

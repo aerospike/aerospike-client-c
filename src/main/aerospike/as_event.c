@@ -1265,6 +1265,9 @@ as_event_command_parse_set_digest(as_event_command* cmd, as_error* err, char* se
 static void
 as_event_check_in_doubt(as_event_command* cmd, as_error* err) {
 	if (err->in_doubt && cmd->txn) {
+		// It's important that this logic is only executed for commands in a MRT,
+		// but not MRT operations (add MRT key, commit, abort). Add MRT key does not
+		// call this function and commit/abort do not set cmd->txn.
 		as_set set;
 		as_digest_value digest;
 
@@ -1276,7 +1279,6 @@ as_event_check_in_doubt(as_event_command* cmd, as_error* err) {
 			return;
 		}
 
-		// TODO: Ensure not called with MRT monitor key on commit/abort!
 		as_txn_on_write_in_doubt(cmd->txn, digest, set);
 	}
 }
@@ -1300,6 +1302,9 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 		case AS_ASYNC_TYPE_VALUE:
 			as_event_check_in_doubt(cmd, err);
 			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			break;
+		case AS_ASYNC_TYPE_MRT_MONITOR:
+			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
 			break;
 		case AS_ASYNC_TYPE_INFO:
 			((as_async_info_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);

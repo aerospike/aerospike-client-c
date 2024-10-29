@@ -179,6 +179,9 @@ as_txn_monitor_add_keys(
 	as_status status = as_txn_monitor_operate(as, err, txn, &txn_policy, &key, ops);
 
 	if (status != AEROSPIKE_OK) {
+		if (err->in_doubt) {
+			txn->monitor_in_doubt = true;
+		}
 		return status;
 	}
 

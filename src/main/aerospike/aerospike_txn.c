@@ -96,6 +96,20 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 		status = as_txn_monitor_mark_roll_forward(as, &local_err, &roll_policy->base, &key);
 
 		if (status != AEROSPIKE_OK) {
+			if (local_err.code == AEROSPIKE_MRT_ABORTED) {
+				txn->in_doubt = false;
+				txn->state = AS_TXN_STATE_ABORTED;
+			}
+			else if (txn->in_doubt) {
+				// The transaction was already in_doubt and just failed again,
+				// so the new error should also be in_doubt.
+				local_err.in_doubt = true;
+			}
+			else if (local_err.in_doubt) {
+				// The current error is in_doubt.
+				txn->in_doubt = true;
+			}
+
 			as_set_commit_status(commit_status, AS_COMMIT_MARK_ROLL_FORWARD_ABANDONED);
 			as_error_update(err, status, "Txn aborted:\nMark roll forward abandoned: %s",
 				local_err.message);
@@ -105,6 +119,7 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 	}
 
 	txn->state = AS_TXN_STATE_COMMITTED;
+	txn->in_doubt = false;
 
 	status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_FORWARD);
 
@@ -221,6 +236,8 @@ as_set_abort_status(as_abort_status* trg, as_abort_status src)
 as_status
 as_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_status)
 {
+	txn->state = AS_TXN_STATE_ABORTED;
+
 	as_policy_txn_roll* roll_policy = &as->config.policies.txn_roll;
 
 	as_status status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_BACK);
@@ -324,6 +341,22 @@ as_commit_notify_error(as_error* err, as_commit_status status, as_commit_data* d
 static void
 as_commit_notify_error_mark(as_error* err, as_commit_data* data, as_event_loop* event_loop)
 {
+	as_txn* txn = data->txn;
+
+	if (err->code == AEROSPIKE_MRT_ABORTED) {
+		txn->in_doubt = false;
+		txn->state = AS_TXN_STATE_ABORTED;
+	}
+	else if (txn->in_doubt) {
+		// The transaction was already in_doubt and just failed again,
+		// so the new error should also be in_doubt.
+		err->in_doubt = true;
+	}
+	else if (err->in_doubt) {
+		// The current error is in_doubt.
+		txn->in_doubt = true;
+	}
+
 	as_error commit_err;
 	as_error_update(&commit_err, err->code, "Txn aborted:\nMark roll forward abandoned: %s",
 		err->message);
@@ -456,6 +489,7 @@ as_commit_mark_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 
 	data->txn->state = AS_TXN_STATE_COMMITTED;
+	data->txn->in_doubt = false;
 
 	as_error roll_err;
 	as_status status = as_txn_roll_async(data->as, &roll_err, data->roll_policy, data->txn,

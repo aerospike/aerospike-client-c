@@ -2379,7 +2379,7 @@ as_single_execute(
 			if (br->n_bin_names > 0) {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
-				status = aerospike_key_select(as, err, &pr, key, (const char**)br->bin_names, &record);
+				status = aerospike_key_select_bins(as, err, &pr, key, (const char**)br->bin_names, br->n_bin_names, &record);
 			}
 			else if (br->ops) {
 				as_policy_operate po;
@@ -2649,8 +2649,8 @@ as_single_execute_record_async(
 			if (br->n_bin_names > 0) {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
-				status = aerospike_key_select_async(as, err, &pr, &rec->key, (const char**)br->bin_names,
-					as_single_record_listener, data, exec->event_loop, NULL);
+				status = aerospike_key_select_bins_async(as, err, &pr, &rec->key, (const char**)br->bin_names,
+					br->n_bin_names, as_single_record_listener, data, exec->event_loop, NULL);
 			}
 			else if (br->ops) {
 				as_policy_operate po;

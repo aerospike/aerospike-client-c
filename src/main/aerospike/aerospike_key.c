@@ -594,6 +594,117 @@ aerospike_key_select_async(
 	return as_event_command_execute(cmd, err);
 }
 
+as_status
+aerospike_key_select_bins(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	const char* bins[], uint32_t n_bins, as_record** rec
+	)
+{
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
+	
+	as_cluster* cluster = as->cluster;
+	as_partition_info pi;
+	as_status status = as_command_prepare(cluster, err, &policy->base, key, &pi);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_command_txn_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
+	size += filter_size;
+
+	for (int i = 0; i < n_bins; i++) {
+		status = as_command_bin_name_size(err, bins[i], &size);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
+	uint8_t* buf = as_command_buffer_init(size);
+	uint32_t timeout = as_command_server_timeout(&policy->base);
+	uint8_t* p = as_command_write_header_read(buf, &policy->base, policy->read_mode_ap,
+				policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, tdata.n_fields, n_bins,
+				AS_MSG_INFO1_READ, 0, 0);
+
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
+	p = as_command_write_filter(&policy->base, filter_size, p);
+
+	for (int i = 0; i < n_bins; i++) {
+		p = as_command_write_bin_name(p, bins[i]);
+	}
+	size = as_command_write_end(buf, p);
+
+	as_command_parse_result_data data;
+	data.record = rec;
+	data.deserialize = policy->deserialize;
+
+	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
+				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data);
+
+	as_command_buffer_free(buf, size);
+	return status;
+}
+
+as_status
+aerospike_key_select_bins_async(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
+	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	)
+{
+	if (! policy) {
+		policy = &as->config.policies.read;
+	}
+	
+	as_cluster* cluster = as->cluster;
+	as_partition_info pi;
+	as_status status = as_command_prepare(cluster, err, &policy->base, key, &pi);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+	
+	as_read_info ri;
+	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+
+	as_command_txn_data tdata;
+	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
+	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
+	size += filter_size;
+
+	for (int i = 0; i < n_bins; i++) {
+		status = as_command_bin_name_size(err, bins[i], &size);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
+	as_event_command* cmd = as_async_record_command_create(
+		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
+		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
+		as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
+
+	uint32_t timeout = as_command_server_timeout(&policy->base);
+	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
+					policy->read_mode_sc, policy->read_touch_ttl_percent, timeout, tdata.n_fields, n_bins,
+					AS_MSG_INFO1_READ, 0, 0);
+
+	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
+	p = as_command_write_filter(&policy->base, filter_size, p);
+
+	for (int i = 0; i < n_bins; i++) {
+		p = as_command_write_bin_name(p, bins[i]);
+	}
+	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
+	return as_event_command_execute(cmd, err);
+}
+
 //---------------------------------
 // Exists
 //---------------------------------

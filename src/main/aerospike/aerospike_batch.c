@@ -2227,7 +2227,7 @@ as_read_policy_copy(
 	trg->async_heap_rec = true; // Ignored in sync commands.
 
 	if (pbr) {
-		if (pbr->filter_exp && !trg->base.filter_exp) {
+		if (pbr->filter_exp) {
 			trg->base.filter_exp = pbr->filter_exp;
 		}
 
@@ -2260,7 +2260,7 @@ as_operate_policy_copy_read(
 	trg->respond_all_ops = false; // Not relevant for reads, since all reads return a result.
 
 	if (pbr) {
-		if (pbr->filter_exp && !trg->base.filter_exp) {
+		if (pbr->filter_exp) {
 			trg->base.filter_exp = pbr->filter_exp;
 		}
 
@@ -2282,7 +2282,7 @@ as_operate_policy_copy_write(
 {
 	trg->base = pb->base;
 
-	if (src->filter_exp && !trg->base.filter_exp) {
+	if (src->filter_exp) {
 		trg->base.filter_exp = src->filter_exp;
 	}
 
@@ -2308,7 +2308,7 @@ as_apply_policy_copy(
 {
 	trg->base = pb->base;
 
-	if (src->filter_exp && !trg->base.filter_exp) {
+	if (src->filter_exp) {
 		trg->base.filter_exp = src->filter_exp;
 	}
 
@@ -2326,7 +2326,7 @@ as_remove_policy_copy(
 {
 	trg->base = pb->base;
 
-	if (src->filter_exp && !trg->base.filter_exp) {
+	if (src->filter_exp) {
 		trg->base.filter_exp = src->filter_exp;
 	}
 

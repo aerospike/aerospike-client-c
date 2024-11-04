@@ -262,7 +262,7 @@ as_txn_init_all(as_txn* txn, uint32_t read_buckets, uint32_t write_buckets)
 void
 as_txn_init(as_txn* txn)
 {
-	as_txn_init_all(txn, 128, 128);
+	as_txn_init_all(txn, AS_TXN_READ_CAPACITY_DEFAULT, AS_TXN_WRITE_CAPACITY_DEFAULT);
 	txn->free = false;
 }
 

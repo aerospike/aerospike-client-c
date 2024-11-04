@@ -27,6 +27,20 @@ extern "C" {
 #endif
 
 //---------------------------------
+// Macros
+//---------------------------------
+
+/**
+ * Default number of transaction read hash buckets.
+ */
+#define AS_TXN_READ_CAPACITY_DEFAULT 128
+
+/**
+ * Default number of transaction write hash buckets.
+ */
+#define AS_TXN_WRITE_CAPACITY_DEFAULT 128
+
+//---------------------------------
 // Types
 //---------------------------------
 

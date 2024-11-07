@@ -79,6 +79,12 @@ as_command_prepare(
 	}
 
 	if (policy->txn) {
+		status = as_txn_verify_command(policy->txn, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
 		status = as_txn_set_ns(policy->txn, key->ns, err);
 	}
 
@@ -98,6 +104,12 @@ as_command_prepare_write(
 	}
 
 	if (policy->txn) {
+		status = as_txn_verify_command(policy->txn, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
 		status = as_txn_set_ns(policy->txn, key->ns, err);
 
 		if (status != AEROSPIKE_OK) {

@@ -218,12 +218,18 @@ destroy_versions(uint64_t* versions)
 static as_status
 as_batch_keys_prepare_txn(as_txn* txn, const as_batch* batch, as_error* err, uint64_t** versions_pp)
 {
+	as_status status = as_txn_verify_command(txn, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
 	uint32_t n_keys = batch->keys.size;
 	uint64_t* versions = cf_malloc(sizeof(uint64_t) * n_keys);
 
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_key* key = &batch->keys.entries[i];
-		as_status status = as_txn_set_ns(txn, key->ns, err);
+		status = as_txn_set_ns(txn, key->ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			destroy_versions(versions);
@@ -241,13 +247,19 @@ as_batch_records_prepare_txn(
 	as_txn* txn, as_batch_records* records, as_error* err, uint64_t** versions_pp
 	)
 {
+	as_status status = as_txn_verify_command(txn, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
 	as_vector* list = &records->list;
 	uint32_t n_keys = records->list.size;
 	uint64_t* versions = cf_malloc(sizeof(uint64_t) * n_keys);
 
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_base_record* rec = as_vector_get(list, i);
-		as_status status = as_txn_set_ns(txn, rec->key.ns, err);
+		status = as_txn_set_ns(txn, rec->key.ns, err);
 
 		if (status != AEROSPIKE_OK) {
 			destroy_versions(versions);

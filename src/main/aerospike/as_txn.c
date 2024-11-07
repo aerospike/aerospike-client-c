@@ -353,6 +353,16 @@ as_txn_writes_contain(as_txn* txn, const as_key* key)
 }
 
 as_status
+as_txn_verify_command(as_txn* txn, as_error* err)
+{
+	if (txn->state != AS_TXN_STATE_OPEN) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"Command not allowed in current MRT state: %d", txn->state);
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
 as_txn_set_ns(as_txn* txn, const char* ns, as_error* err)
 {
 	if (txn->ns[0] == 0) {

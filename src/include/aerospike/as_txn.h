@@ -221,6 +221,12 @@ AS_EXTERN bool
 as_txn_writes_contain(as_txn* txn, const as_key* key);
 
 /**
+ * Verify that the MRT state allows future commands.
+ */
+AS_EXTERN as_status
+as_txn_verify_command(as_txn* txn, as_error* err);
+
+/**
  * Set MRT namespace only if doesn't already exist.
  * If namespace already exists, verify new namespace is the same.
  * For internal use only.

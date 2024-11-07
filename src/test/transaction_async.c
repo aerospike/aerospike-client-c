@@ -817,7 +817,7 @@ TEST(txn_async_write, "transaction async write")
 	put_add(&cmds, NULL, &key, 1);
 	put_add(&cmds, &txn, &key, 2);
 	commit_add(&cmds, &txn);
-	get_add(&cmds, &txn, &key, 2);
+	get_add(&cmds, NULL, &key, 2);
 
 	commander_execute(&cmds, __result__);
 	as_txn_destroy(&txn);
@@ -837,7 +837,7 @@ TEST(txn_async_write_twice, "transaction async write twice")
 	put_add(&cmds, &txn, &key, 1);
 	put_add(&cmds, &txn, &key, 2);
 	commit_add(&cmds, &txn);
-	get_add(&cmds, &txn, &key, 2);
+	get_add(&cmds, NULL, &key, 2);
 
 	commander_execute(&cmds, __result__);
 	as_txn_destroy(&txn);

@@ -16,9 +16,9 @@
  */
 #include <aerospike/as_error.h>
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 #define ERR_ASSIGN(__enum) return #__enum
 
@@ -33,7 +33,6 @@ as_error_string(as_status status)
 		CASE_ASSIGN(AEROSPIKE_OK);
 		CASE_ASSIGN(AEROSPIKE_QUERY_END);
 
-		CASE_ASSIGN(AEROSPIKE_ROLL_ALREADY_ATTEMPTED);
 		CASE_ASSIGN(AEROSPIKE_BATCH_FAILED);
 		CASE_ASSIGN(AEROSPIKE_NO_RESPONSE);
 		CASE_ASSIGN(AEROSPIKE_MAX_ERROR_RATE);

@@ -629,7 +629,7 @@ aerospike_key_select_bins(
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
-	for (int i = 0; i < n_bins; i++) {
+	for (uint32_t i = 0; i < n_bins; i++) {
 		status = as_command_bin_name_size(err, bins[i], &size);
 
 		if (status != AEROSPIKE_OK) {
@@ -646,7 +646,7 @@ aerospike_key_select_bins(
 	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 
-	for (int i = 0; i < n_bins; i++) {
+	for (uint32_t i = 0; i < n_bins; i++) {
 		p = as_command_write_bin_name(p, bins[i]);
 	}
 	size = as_command_write_end(buf, p);
@@ -689,7 +689,7 @@ aerospike_key_select_bins_async(
 	uint32_t filter_size = as_command_filter_size(&policy->base, &tdata.n_fields);
 	size += filter_size;
 
-	for (int i = 0; i < n_bins; i++) {
+	for (uint32_t i = 0; i < n_bins; i++) {
 		status = as_command_bin_name_size(err, bins[i], &size);
 
 		if (status != AEROSPIKE_OK) {
@@ -710,7 +710,7 @@ aerospike_key_select_bins_async(
 	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 
-	for (int i = 0; i < n_bins; i++) {
+	for (uint32_t i = 0; i < n_bins; i++) {
 		p = as_command_write_bin_name(p, bins[i]);
 	}
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);

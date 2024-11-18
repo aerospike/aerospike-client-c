@@ -11,5 +11,6 @@ default: all
 	$(MAKE) -C map $@
 	$(MAKE) -C put $@
 	$(MAKE) -C touch $@
+	$(MAKE) -C transaction $@
 	$(MAKE) -C udf $@
 

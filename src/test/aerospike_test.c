@@ -459,6 +459,7 @@ PLAN(aerospike_test)
 	plan_add(query_geospatial);
 	plan_add(scan_basics);
 	plan_add(batch);
+	plan_add(transaction);
 
 #if AS_EVENT_LIB_DEFINED
 	plan_add(key_basics_async);
@@ -469,6 +470,7 @@ PLAN(aerospike_test)
 	plan_add(batch_async);
 	plan_add(scan_async);
 	plan_add(query_async);
+	plan_add(transaction_async);
 #endif
 }
 

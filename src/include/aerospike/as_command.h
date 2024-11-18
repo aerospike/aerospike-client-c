@@ -30,21 +30,25 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 // Command Flags
 #define AS_COMMAND_FLAGS_READ 1
 #define AS_COMMAND_FLAGS_BATCH 2
 #define AS_COMMAND_FLAGS_LINEARIZE 4
 #define AS_COMMAND_FLAGS_SPLIT_RETRY 8
+#define AS_COMMAND_FLAGS_MRT_MONITOR 16
 
 // Field IDs
 #define AS_FIELD_NAMESPACE 0
 #define AS_FIELD_SETNAME 1
 #define AS_FIELD_KEY 2
+#define AS_FIELD_RECORD_VERSION 3
 #define AS_FIELD_DIGEST 4
+#define AS_FIELD_MRT_ID 5
+#define AS_FIELD_MRT_DEADLINE 6
 #define AS_FIELD_TASK_ID 7
 #define AS_FIELD_SOCKET_TIMEOUT 9
 #define AS_FIELD_RPS 10
@@ -78,7 +82,7 @@ extern "C" {
 #define AS_MSG_INFO2_DELETE				(1 << 1) // delete record
 #define AS_MSG_INFO2_GENERATION			(1 << 2) // pay attention to the generation
 #define AS_MSG_INFO2_GENERATION_GT		(1 << 3) // apply write if new generation >= old, good for restore
-#define AS_MSG_INFO2_DURABLE_DELETE		(1 << 4) // transaction resulting in record deletion leaves tombstone (Enterprise only).
+#define AS_MSG_INFO2_DURABLE_DELETE		(1 << 4) // command resulting in record deletion leaves tombstone (Enterprise only).
 #define AS_MSG_INFO2_CREATE_ONLY		(1 << 5) // write record only if it doesn't exist
 #define AS_MSG_INFO2_RELAX_AP_LONG_QUERY (1 << 6) // treat as long query, but relax read consistency.
 #define AS_MSG_INFO2_RESPOND_ALL_OPS	(1 << 7) // return a result for every operation.
@@ -106,6 +110,11 @@ extern "C" {
 //                -------
 //   1      0     allow prole
 //   1      1     allow unavailable
+
+// MRT
+#define AS_MSG_INFO4_MRT_VERIFY_READ	(1 << 0) // Send MRT version to the server to be verified.
+#define AS_MSG_INFO4_MRT_ROLL_FORWARD	(1 << 1) // Roll forward MRT.
+#define AS_MSG_INFO4_MRT_ROLL_BACK		(1 << 2) // Roll back MRT.
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -144,9 +153,9 @@ local_free(void* memory)
  */
 #define as_command_buffer_free(_buf, _sz) if (_sz > AS_STACK_BUF_SIZE) {local_free(_buf);}
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * @private
@@ -155,6 +164,7 @@ local_free(void* memory)
 typedef size_t (*as_write_fn) (void* udata, uint8_t* buf);
 
 struct as_command_s;
+struct as_txn;
 
 /**
  * @private
@@ -172,7 +182,7 @@ typedef struct as_command_s {
 	as_cluster* cluster;
 	const as_policy_base* policy;
 	as_node* node;
-	const char* ns;
+	const as_key* key;
 	void* partition;
 	as_parse_results_fn parse_results_fn;
 	void* udata;
@@ -195,6 +205,16 @@ typedef struct as_command_s {
 
 /**
  * @private
+ */
+typedef struct as_command_txn_data_s {
+	uint64_t version;
+	uint32_t deadline_offset;
+	uint16_t n_fields;
+	bool send_deadline;
+} as_command_txn_data;
+
+/**
+ * @private
  * Data used in as_command_parse_result().
  */
 typedef struct as_command_parse_result_data_s {
@@ -202,9 +222,9 @@ typedef struct as_command_parse_result_data_s {
 	bool deserialize;
 } as_command_parse_result_data;
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * @private
@@ -233,7 +253,10 @@ as_command_user_key_size(const as_key* key);
  * Calculate size of command header plus key fields.
  */
 size_t
-as_command_key_size(as_policy_key policy, const as_key* key, uint16_t* n_fields);
+as_command_key_size(
+	const as_policy_base* policy, as_policy_key pol_key, const as_key* key, bool send_deadline,
+	as_command_txn_data* tdata
+	);
 
 /**
  * @private
@@ -425,6 +448,18 @@ as_command_write_field_uint32(uint8_t* p, uint8_t id, uint32_t val)
 
 /**
  * @private
+ * Write uint32_t field in little endian format.
+ */
+static inline uint8_t*
+as_command_write_field_uint32_le(uint8_t* p, uint8_t id, uint32_t val)
+{
+	p = as_command_write_field_header(p, id, sizeof(uint32_t));
+	*(uint32_t*)p = cf_swap_to_le32(val);
+	return p + sizeof(uint32_t);
+}
+
+/**
+ * @private
  * Write uint64_t field.
  */
 static inline uint8_t*
@@ -432,6 +467,18 @@ as_command_write_field_uint64(uint8_t* p, uint8_t id, uint64_t val)
 {
 	p = as_command_write_field_header(p, id, sizeof(uint64_t));
 	*(uint64_t*)p = cf_swap_to_be64(val);
+	return p + sizeof(uint64_t);
+}
+
+/**
+ * @private
+ * Write uint64_t field in little endian format.
+ */
+static inline uint8_t*
+as_command_write_field_uint64_le(uint8_t* p, uint8_t id, uint64_t val)
+{
+	p = as_command_write_field_header(p, id, sizeof(uint64_t));
+	*(uint64_t*)p = cf_swap_to_le64(val);
 	return p + sizeof(uint64_t);
 }
 
@@ -461,6 +508,19 @@ as_command_write_field_digest(uint8_t* p, const as_digest* val)
 
 /**
  * @private
+ * Write 7 byte record version field.
+ */
+static inline uint8_t*
+as_command_write_field_version(uint8_t* p, uint64_t ver)
+{
+	p = as_command_write_field_header(p, AS_FIELD_RECORD_VERSION, 7);
+	uint64_t v = cf_swap_to_le64(ver);
+	memcpy(p, &v, 7);
+	return p + 7;
+}
+
+/**
+ * @private
  * Write user key.
  */
 uint8_t*
@@ -471,7 +531,10 @@ as_command_write_user_key(uint8_t* begin, const as_key* key);
  * Write key structure.
  */
 uint8_t*
-as_command_write_key(uint8_t* p, as_policy_key policy, const as_key* key);
+as_command_write_key(
+	uint8_t* p, const as_policy_base* policy, as_policy_key pol_key, const as_key* key,
+	as_command_txn_data* tdata
+ 	);
 
 /**
  * @private
@@ -532,7 +595,7 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 
 /**
  * @private
- * Return timeout to be sent to server for single record transactions.
+ * Return timeout to be sent to server for single record commands.
  */
 static inline uint32_t
 as_command_server_timeout(const as_policy_base* policy)
@@ -594,6 +657,39 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 
 /**
  * @private
+ * Skip over fields section in returned data.
+ */
+uint8_t*
+as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
+
+/**
+ * @private
+ * Parse record fields given digest/set.
+ */
+as_status
+as_command_parse_fields_txn(
+	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const uint8_t* digest,
+	const char* set, bool is_write
+	);
+
+/**
+ * @private
+ * Parse record fields given key.
+ */
+static inline as_status
+as_command_parse_fields(
+	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const as_key* key, bool is_write
+	)
+{
+	if (! txn) {
+		*pp = as_command_ignore_fields(*pp, msg->n_fields);
+		return AEROSPIKE_OK;
+	}
+	return as_command_parse_fields_txn(pp, err, msg, txn, key->digest.value, key->set, is_write);
+}
+
+/**
+ * @private
  * Parse server record.  Used for reads.
  */
 as_status
@@ -626,13 +722,6 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
  */
 as_status
 as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status);
-
-/**
- * @private
- * Skip over fields section in returned data.
- */
-uint8_t*
-as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
 
 /**
  * @private
@@ -693,6 +782,20 @@ as_command_write_replica(as_policy_replica replica)
 	// Allow prole on retry when possible.
 	return (replica == AS_POLICY_REPLICA_MASTER)? replica : AS_POLICY_REPLICA_SEQUENCE;
 }
+
+/**
+ * @private
+ * Parse response with deadline field when adding keys to the MRT monitor record.
+ */
+as_status
+as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);
+
+/**
+ * @private
+ * Parse deadline field.
+ */
+as_status
+as_command_parse_fields_deadline(uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn);
 
 #ifdef __cplusplus
 } // end extern "C"

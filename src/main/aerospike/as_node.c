@@ -304,11 +304,11 @@ release_node(as_node* node)
 /**
  * Delay node release to avoid the following race condition:
  *
- * Transaction thread gets old node from partition map.
+ * Command thread gets old node from partition map.
  * Tend thread frees old node that is no longer referenced in the cluster.
- * Transaction thread tries to reserve the node that has been freed.
+ * Command thread tries to reserve the node that has been freed.
  *
- * The gap between the transaction thread node retrieval and node reserve
+ * The gap between the command thread node retrieval and node reserve
  * is just a few instructions, but the race condition could happen.
  *
  * Solve by delaying the tend thread node release until the next tend

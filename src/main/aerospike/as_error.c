@@ -16,9 +16,9 @@
  */
 #include <aerospike/as_error.h>
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 #define ERR_ASSIGN(__enum) return #__enum
 
@@ -77,7 +77,12 @@ as_error_string(as_status status)
 		CASE_ASSIGN(AEROSPIKE_ERR_OP_NOT_APPLICABLE);
 		CASE_ASSIGN(AEROSPIKE_FILTERED_OUT);
 		CASE_ASSIGN(AEROSPIKE_LOST_CONFLICT);
+		CASE_ASSIGN(AEROSPIKE_MRT_BLOCKED);
+		CASE_ASSIGN(AEROSPIKE_MRT_VERSION_MISMATCH);
+		CASE_ASSIGN(AEROSPIKE_MRT_EXPIRED);
 		CASE_ASSIGN(AEROSPIKE_XDR_KEY_BUSY);
+		CASE_ASSIGN(AEROSPIKE_MRT_COMMITTED);
+		CASE_ASSIGN(AEROSPIKE_MRT_ABORTED);
 		CASE_ASSIGN(AEROSPIKE_SECURITY_NOT_SUPPORTED);
 		CASE_ASSIGN(AEROSPIKE_SECURITY_NOT_ENABLED);
 		CASE_ASSIGN(AEROSPIKE_SECURITY_SCHEME_NOT_SUPPORTED);

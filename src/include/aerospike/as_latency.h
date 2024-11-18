@@ -36,7 +36,7 @@ typedef uint8_t as_latency_type;
 #define AS_LATENCY_TYPE_NONE 5
 
 /**
- * Latency buckets for a transaction group.
+ * Latency buckets for a command group.
  * Latency bucket counts are cumulative and not reset on each metrics snapshot interval
  */
 typedef struct as_latency_buckets_s {

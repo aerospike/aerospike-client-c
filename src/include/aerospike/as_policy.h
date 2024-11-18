@@ -138,6 +138,7 @@ extern "C" {
 //---------------------------------
 
 struct as_exp;
+struct as_txn;
 
 /**
  * Retry Policy
@@ -441,21 +442,21 @@ typedef struct as_policy_base_s {
 	 *
 	 * If socket_timeout is non-zero and the socket has been idle for at least socket_timeout,
 	 * both max_retries and total_timeout are checked.  If max_retries and total_timeout are not
-	 * exceeded, the transaction is retried.
+	 * exceeded, the command is retried.
 	 *
 	 * Default: 30000ms
 	 */
 	uint32_t socket_timeout;
 
 	/**
-	 * Total transaction timeout in milliseconds.
+	 * Total command timeout in milliseconds.
 	 *
 	 * The total_timeout is tracked on the client and sent to the server along with
-	 * the transaction in the wire protocol.  The client will most likely timeout
-	 * first, but the server also has the capability to timeout the transaction.
+	 * the command in the wire protocol.  The client will most likely timeout
+	 * first, but the server also has the capability to timeout the command.
 	 *
-	 * If total_timeout is not zero and total_timeout is reached before the transaction
-	 * completes, the transaction will return error AEROSPIKE_ERR_TIMEOUT.
+	 * If total_timeout is not zero and total_timeout is reached before the command
+	 * completes, the command will return error AEROSPIKE_ERR_TIMEOUT.
 	 * If totalTimeout is zero, there will be no total time limit.
 	 *
 	 * Default: 1000
@@ -463,14 +464,14 @@ typedef struct as_policy_base_s {
 	uint32_t total_timeout;
 
 	/**
-	 * Maximum number of retries before aborting the current transaction.
+	 * Maximum number of retries before aborting the current command.
 	 * The initial attempt is not counted as a retry.
 	 *
-	 * If max_retries is exceeded, the transaction will return error AEROSPIKE_ERR_TIMEOUT.
+	 * If max_retries is exceeded, the command will return error AEROSPIKE_ERR_TIMEOUT.
 	 *
 	 * WARNING: Database writes that are not idempotent (such as "add")
 	 * should not be retried because the write operation may be performed
-	 * multiple times if the client timed out previous transaction attempts.
+	 * multiple times if the client timed out previous command attempts.
 	 * It's important to use a distinct write policy for non-idempotent
 	 * writes which sets max_retries = 0;
 	 *
@@ -506,12 +507,12 @@ typedef struct as_policy_base_s {
 
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * ~~~~~~~~~~{.c}
 	 * as_exp_build(filter,
@@ -527,6 +528,14 @@ typedef struct as_policy_base_s {
 	 * Default: NULL
 	 */
 	struct as_exp* filter_exp;
+	
+	/**
+	 * Multi-record command identifier. If set for an async command,  the source txn instance must
+	 * be allocated on the heap using as_txn_create() or as_txn_create_capacity().
+	 *
+	 * Default: NULL
+	 */
+	struct as_txn* txn;
 
 	/**
 	 * Use zlib compression on write or batch read commands when the command buffer size is greater
@@ -641,7 +650,7 @@ typedef struct as_policy_write_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -675,7 +684,7 @@ typedef struct as_policy_write_s {
 	uint32_t compression_threshold;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -709,7 +718,7 @@ typedef struct as_policy_apply_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -727,7 +736,7 @@ typedef struct as_policy_apply_s {
 	uint32_t ttl;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -773,7 +782,7 @@ typedef struct as_policy_operate_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -832,7 +841,7 @@ typedef struct as_policy_operate_s {
 	bool deserialize;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -876,7 +885,7 @@ typedef struct as_policy_remove_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -891,7 +900,7 @@ typedef struct as_policy_remove_s {
 	uint16_t generation;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -958,7 +967,7 @@ typedef struct as_policy_batch_s {
 	 * <ul>
 	 * <li>
 	 * false: Issue batch commands sequentially.  This mode has a performance advantage for small
-	 * to medium sized batch sizes because commands can be issued in the main transaction thread.
+	 * to medium sized batch sizes because commands can be issued in the main command thread.
 	 * This is the default.
 	 * </li>
 	 * <li>
@@ -975,7 +984,7 @@ typedef struct as_policy_batch_s {
 	 * Allow batch to be processed immediately in the server's receiving thread for in-memory
 	 * namespaces. If false, the batch will always be processed in separate service threads.
 	 *
-	 * For batch transactions with smaller sized records (&lt;= 1K per record), inline
+	 * For batch commands with smaller sized records (&lt;= 1K per record), inline
 	 * processing will be significantly faster on in-memory namespaces.
 	 *
 	 * Inline processing can introduce the possibility of unfairness because the server
@@ -1048,12 +1057,12 @@ typedef struct as_policy_batch_s {
 typedef struct as_policy_batch_read_s {
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * Default: NULL
 	 */
@@ -1101,12 +1110,12 @@ typedef struct as_policy_batch_read_s {
 typedef struct as_policy_batch_write_s {
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * Default: NULL
 	 */
@@ -1119,7 +1128,7 @@ typedef struct as_policy_batch_write_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -1148,7 +1157,7 @@ typedef struct as_policy_batch_write_s {
 	uint32_t ttl;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -1165,12 +1174,12 @@ typedef struct as_policy_batch_write_s {
 typedef struct as_policy_batch_apply_s {
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * Default: NULL
 	 */
@@ -1183,7 +1192,7 @@ typedef struct as_policy_batch_apply_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -1201,7 +1210,7 @@ typedef struct as_policy_batch_apply_s {
 	uint32_t ttl;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -1218,12 +1227,12 @@ typedef struct as_policy_batch_apply_s {
 typedef struct as_policy_batch_remove_s {
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * Default: NULL
 	 */
@@ -1236,7 +1245,7 @@ typedef struct as_policy_batch_remove_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -1251,7 +1260,7 @@ typedef struct as_policy_batch_remove_s {
 	uint16_t generation;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -1379,7 +1388,7 @@ typedef struct as_policy_scan_s {
 	uint32_t ttl;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -1428,6 +1437,18 @@ typedef struct as_policy_admin_s {
 } as_policy_admin;
 
 /**
+ * Multi-record transaction (MRT) policy fields used to batch verify record versions on commit.
+ * Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ */
+typedef as_policy_batch as_policy_txn_verify;
+
+/**
+ * Multi-record transaction (MRT) policy fields used to batch roll forward/backward records on
+ * commit or abort. Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ */
+typedef as_policy_batch as_policy_txn_roll;
+
+/**
  * Struct of all policy values and operation policies. 
  * 
  * This is utilized by as_config to define default values for policies.
@@ -1437,27 +1458,27 @@ typedef struct as_policy_admin_s {
 typedef struct as_policies_s {
 
 	/**
-	 * The default read policy.
+	 * Default read policy.
 	 */
 	as_policy_read read;
 
 	/**
-	 * The default write policy.
+	 * Default write policy.
 	 */
 	as_policy_write write;
 
 	/**
-	 * The default operate policy.
+	 * Default operate policy.
 	 */
 	as_policy_operate operate;
 
 	/**
-	 * The default remove policy.
+	 * Default remove policy.
 	 */
 	as_policy_remove remove;
 
 	/**
-	 * The default apply policy.
+	 * Default apply policy.
 	 */
 	as_policy_apply apply;
 
@@ -1487,24 +1508,35 @@ typedef struct as_policies_s {
 	as_policy_batch_remove batch_remove;
 
 	/**
-	 * The default scan policy.
+	 * Default scan policy.
 	 */
 	as_policy_scan scan;
 
 	/**
-	 * The default query policy.
+	 * Default query policy.
 	 */
 	as_policy_query query;
 
 	/**
-	 * The default info policy.
+	 * Default info policy.
 	 */
 	as_policy_info info;
 
 	/**
-	 * The default administration policy.
+	 * Default administration policy.
 	 */
 	as_policy_admin admin;
+
+	/**
+	 * Default multi-record transaction (MRT) policy when verifying record versions in a batch.
+	 */
+	as_policy_txn_verify txn_verify;
+
+	/**
+	 * Default multi-record transaction (MRT) policy when rolling the transaction records forward (commit)
+	 * or back (abort) in a batch.
+	 */
+	as_policy_txn_roll txn_roll;
 
 } as_policies;
 
@@ -1523,6 +1555,7 @@ as_policy_base_read_init(as_policy_base* p)
 	p->max_retries = 2;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
+	p->txn = NULL;
 	p->compress = false;
 }
 
@@ -1537,6 +1570,7 @@ as_policy_base_write_init(as_policy_base* p)
 	p->max_retries = 0;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
+	p->txn = NULL;
 	p->compress = false;
 }
 
@@ -1564,6 +1598,7 @@ as_policy_base_query_init(as_policy_base* p)
 	p->max_retries = 5;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
+	p->txn = NULL;
 	p->compress = false;
 }
 
@@ -1996,6 +2031,96 @@ as_policy_admin_copy(const as_policy_admin* src, as_policy_admin* trg)
 	*trg = *src;
 }
 	
+/**
+ * Initialize as_policy_txn_verify to default values.
+ *
+ * @param p	The policy to initialize.
+ * @return	The initialized policy.
+ *
+ * @relates as_policy_txn_verify
+ */
+static inline as_policy_txn_verify*
+as_policy_txn_verify_init(as_policy_txn_verify* p)
+{
+	p->base.socket_timeout = 3000;
+	p->base.total_timeout = 10000;
+	p->base.max_retries = 5;
+	p->base.sleep_between_retries = 1000;
+	p->base.filter_exp = NULL;
+	p->base.txn = NULL;
+	p->base.compress = false;
+	p->replica = AS_POLICY_REPLICA_MASTER;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_LINEARIZE;
+	p->read_touch_ttl_percent = 0;
+	p->concurrent = false;
+	p->allow_inline = true;
+	p->allow_inline_ssd = false;
+	p->respond_all_keys = true;
+	p->send_set_name = true;
+	p->deserialize = true;
+	return p;
+}
+
+/**
+ * Copy as_policy_txn_verify values.
+ *
+ * @param src	The source policy.
+ * @param trg	The target policy.
+ *
+ * @relates as_policy_txn_verify
+ */
+static inline void
+as_policy_txn_verify_copy(const as_policy_txn_verify* src, as_policy_txn_verify* trg)
+{
+	*trg = *src;
+}
+
+/**
+ * Initialize as_policy_txn_roll_ to default values.
+ *
+ * @param p	The policy to initialize.
+ * @return	The initialized policy.
+ *
+ * @relates as_policy_txn_roll_
+ */
+static inline as_policy_txn_roll*
+as_policy_txn_roll_init(as_policy_txn_roll* p)
+{
+	p->base.socket_timeout = 3000;
+	p->base.total_timeout = 10000;
+	p->base.max_retries = 5;
+	p->base.sleep_between_retries = 1000;
+	p->base.filter_exp = NULL;
+	p->base.txn = NULL;
+	p->base.compress = false;
+	p->replica = AS_POLICY_REPLICA_MASTER;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	p->read_touch_ttl_percent = 0;
+	p->concurrent = false;
+	p->allow_inline = true;
+	p->allow_inline_ssd = false;
+	p->respond_all_keys = true;
+	p->send_set_name = true;
+	p->deserialize = true;
+	return p;
+}
+
+/**
+ * Copy as_policy_txn_roll values.
+ *
+ * @param src	The source policy.
+ * @param trg	The target policy.
+ *
+ * @relates as_policy_txn_roll
+ */
+static inline void
+as_policy_txn_roll_copy(const as_policy_txn_roll* src, as_policy_txn_roll* trg)
+{
+	*trg = *src;
+}
+
 /**
  * @private
  * Initialize as_policies.

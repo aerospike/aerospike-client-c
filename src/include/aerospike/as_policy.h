@@ -859,6 +859,19 @@ typedef struct as_policy_operate_s {
 	 */
 	bool async_heap_rec;
 
+	/**
+	 * Should the client return a result for every operation.
+	 *
+	 * Some operations do not return a result by default. This can make it difficult to determine the
+	 * result offset in the returned bin's result list. Setting this field to true makes it easier to identify
+	 * the desired result offset.
+	 *
+	 * This field defaults to false for older operations (basic read/write/incr/touch and list) to
+	 * preserve legacy behavior. Newer operations (map, expression, bit or HLL and batch
+	 * write operations) force respond_all_ops to be true regardless of it's initial setting.
+	 */
+	bool respond_all_ops;
+
 } as_policy_operate;
 
 /**
@@ -1699,6 +1712,7 @@ as_policy_operate_init(as_policy_operate* p)
 	p->deserialize = true;
 	p->durable_delete = false;
 	p->async_heap_rec = false;
+	p->respond_all_ops = false;
 	return p;
 }
 

@@ -114,7 +114,10 @@ typedef struct {
 
 /**
  * Initialize multi-record transaction (MRT),  assign random transaction id and initialize
- * reads/writes hashmaps with default capacities. The default MRT timeout is 10 seconds.
+ * reads/writes hashmaps with default capacities.
+ *
+ * The default client MRT timeout is zero. This means use the server configuration mrt-duration
+ * as the MRT timeout. The default mrt-duration is 10 seconds.
  *
  * Call this function or as_txn_init_capacity(), but not both. Do not use this function for async
  * commands (use as_txn_create() instead).
@@ -126,7 +129,10 @@ as_txn_init(as_txn* txn);
 
 /**
  * Initialize multi-record transaction (MRT), assign random transaction id and initialize
- * reads/writes hashmaps with given capacities. The default MRT timeout is 10 seconds.
+ * reads/writes hashmaps with given capacities.
+ *
+ * The default client MRT timeout is zero. This means use the server configuration mrt-duration
+ * as the MRT timeout. The default mrt-duration is 10 seconds.
  *
  * Call this function or as_txn_init(), but not both. Do not use this function for async commands
  * (use as_txn_create_capacity() instead).
@@ -140,14 +146,20 @@ as_txn_init_capacity(as_txn* txn, uint32_t reads_capacity, uint32_t writes_capac
 
 /**
  * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
- * reads/writes hashmaps with default capacities. The default MRT timeout is 10 seconds.
+ * reads/writes hashmaps with default capacities.
+ *
+ * The default client MRT timeout is zero. This means use the server configuration mrt-duration
+ * as the MRT timeout. The default mrt-duration is 10 seconds.
  */
 AS_EXTERN as_txn*
 as_txn_create(void);
 
 /**
  * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
- * reads/writes hashmaps with given capacities. The default MRT timeout is 10 seconds.
+ * reads/writes hashmaps with given capacities.
+ *
+ * The default client MRT timeout is zero. This means use the server configuration mrt-duration
+ * as the MRT timeout. The default mrt-duration is 10 seconds.
  *
  * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
  * @param writes_capacity	expected number of record writes in the MRT. Minimum value is 16.
@@ -165,6 +177,9 @@ as_txn_destroy(as_txn* txn);
  * Set MRT timeout in seconds. The timer starts when the MRT monitor record is created.
  * This occurs when the first command in the MRT is executed. If the timeout is reached before
  * an aerospike_commit() or aerospike_abort() is called, the server will expire and rollback the MRT.
+ *
+ * If the MRT timeout is zero, the server configuration mrt-duration is used.
+ * The default mrt-duration is 10 seconds.
  */
 static inline void
 as_txn_set_timeout(as_txn* txn, uint32_t timeout)

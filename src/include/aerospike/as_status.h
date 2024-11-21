@@ -312,6 +312,11 @@ typedef enum as_status_e {
 	AEROSPIKE_MRT_ABORTED = 34,
 
 	/**
+	 * MRT write command limit (4096) exceeded.
+	 */
+	AEROSPIKE_MRT_TOO_MANY_WRITES = 35,
+
+	/**
 	 * There are no more records left for query.
 	 */
 	AEROSPIKE_QUERY_END = 50,

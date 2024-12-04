@@ -281,40 +281,9 @@ typedef enum as_status_e {
 	AEROSPIKE_LOST_CONFLICT = 28,
 
 	/**
-	 * MRT record blocked by a different transaction.
-	 */
-	AEROSPIKE_MRT_BLOCKED = 29,
-
-	/**
-	 * MRT read version mismatch identified during commit.
-	 * Some other command changed the record outside of the transaction.
-	 */
-	AEROSPIKE_MRT_VERSION_MISMATCH = 30,
-
-	/**
-	 * MRT deadline reached without a successful commit or abort.
-	 */
-	AEROSPIKE_MRT_EXPIRED = 31,
-
-	/**
 	 * Write can't complete until XDR finishes shipping.
 	 */
 	AEROSPIKE_XDR_KEY_BUSY = 32,
-
-	/**
-	 * MRT was already committed.
-	 */
-	AEROSPIKE_MRT_COMMITTED = 33,
-
-	/**
-	 * MRT was already aborted.
-	 */
-	AEROSPIKE_MRT_ABORTED = 34,
-
-	/**
-	 * MRT write command limit (4096) exceeded.
-	 */
-	AEROSPIKE_MRT_TOO_MANY_WRITES = 35,
 
 	/**
 	 * There are no more records left for query.
@@ -442,15 +411,46 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_UDF = 100,
 
 	/**
+	 * MRT record blocked by a different transaction.
+	 */
+	AEROSPIKE_MRT_BLOCKED = 120,
+
+	/**
+	 * MRT read version mismatch identified during commit.
+	 * Some other command changed the record outside of the transaction.
+	 */
+	AEROSPIKE_MRT_VERSION_MISMATCH = 121,
+
+	/**
+	 * MRT deadline reached without a successful commit or abort.
+	 */
+	AEROSPIKE_MRT_EXPIRED = 122,
+
+	/**
+	 * MRT write command limit (4096) exceeded.
+	 */
+	AEROSPIKE_MRT_TOO_MANY_WRITES = 123,
+
+	/**
+	 * MRT was already committed.
+	 */
+	AEROSPIKE_MRT_COMMITTED = 124,
+
+	/**
+	 * MRT was already aborted.
+	 */
+	AEROSPIKE_MRT_ABORTED = 125,
+
+	/**
 	 * Batch functionality has been disabled.
 	 */
 	AEROSPIKE_ERR_BATCH_DISABLED = 150,
-	
+
 	/**
 	 * Batch max requests have been exceeded.
 	 */
 	AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED = 151,
-	
+
 	/**
 	 * All batch queues are full.
 	 */

@@ -176,16 +176,7 @@ as_txn_monitor_add_keys(
 	// the MRT timeout field on successive MRT monitor record updates.
 	ops->ttl = txn->timeout;
 
-	as_status status = as_txn_monitor_operate(as, err, txn, &txn_policy, &key, ops);
-
-	if (status != AEROSPIKE_OK) {
-		if (err->in_doubt) {
-			txn->monitor_in_doubt = true;
-		}
-		return status;
-	}
-
-	return status;
+	return as_txn_monitor_operate(as, err, txn, &txn_policy, &key, ops);
 }
 
 as_status

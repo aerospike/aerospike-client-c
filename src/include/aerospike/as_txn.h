@@ -93,7 +93,7 @@ typedef struct as_txn {
 	uint32_t timeout;
 	uint32_t deadline;
 	as_txn_state state;
-	bool monitor_in_doubt;
+	bool write_in_doubt;
 	bool in_doubt;
 	bool free;
 } as_txn;
@@ -250,12 +250,12 @@ AS_EXTERN as_status
 as_txn_set_ns(as_txn* txn, const char* ns, as_error* err);
 
 /**
- * Does MRT monitor record exist or is in doubt.
+ * Return if the MRT monitor record should be closed/deleted. For internal use only.
  */
 static inline bool
-as_txn_monitor_might_exist(as_txn* txn)
+as_txn_close_monitor(as_txn* txn)
 {
-	return txn->deadline != 0 || txn->monitor_in_doubt;
+	return txn->deadline != 0 && !txn->write_in_doubt;
 }
 
 /**

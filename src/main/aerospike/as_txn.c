@@ -249,7 +249,7 @@ as_txn_init_all(as_txn* txn, uint32_t read_buckets, uint32_t write_buckets)
 	txn->timeout = 0; // Zero means use server configuration mrt-duration.
 	txn->deadline = 0;
 	txn->state = AS_TXN_STATE_OPEN;
-	txn->monitor_in_doubt = false;
+	txn->write_in_doubt = false;
 	txn->in_doubt = false;
 	as_txn_hash_init(&txn->reads, read_buckets);
 	as_txn_hash_init(&txn->writes, write_buckets);
@@ -342,6 +342,7 @@ as_txn_on_write(as_txn* txn, const uint8_t* digest, const char* set, uint64_t ve
 void
 as_txn_on_write_in_doubt(as_txn* txn, const uint8_t* digest, const char* set)
 {
+	txn->write_in_doubt = true;
 	as_txn_hash_remove(&txn->reads, digest);
 	as_txn_hash_put(&txn->writes, digest, set, 0);
 }

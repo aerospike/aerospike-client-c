@@ -132,7 +132,7 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 		return AEROSPIKE_OK;
 	}
 
-	if (as_txn_monitor_might_exist(txn)) {
+	if (as_txn_close_monitor(txn)) {
 		status = as_txn_monitor_remove(as, err, &roll_policy->base, &key);
 
 		if (status != AEROSPIKE_OK) {
@@ -179,7 +179,7 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 		return verify_status;
 	}
 
-	if (as_txn_monitor_might_exist(txn)) {
+	if (as_txn_close_monitor(txn)) {
 		as_key key;
 		as_txn_monitor_init_key(txn, &key);
 
@@ -250,7 +250,7 @@ as_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_statu
 		return AEROSPIKE_OK;
 	}
 
-	if (as_txn_monitor_might_exist(txn)) {
+	if (as_txn_close_monitor(txn)) {
 		as_key key;
 		as_txn_monitor_init_key(txn, &key);
 

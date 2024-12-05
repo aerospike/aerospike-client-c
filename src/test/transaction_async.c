@@ -33,6 +33,7 @@
 //---------------------------------
 
 extern aerospike* as;
+extern bool g_has_sc;
 static as_monitor monitor;
 
 //---------------------------------
@@ -1129,6 +1130,11 @@ TEST(txn_async_batch_abort, "transaction async batch abort")
 
 SUITE(transaction_async, "Async transaction tests")
 {
+	// Multi-record transactions require strong consistency namespaces.
+	if (!g_has_sc) {
+		return;
+	}
+
 	suite_before(before);
 	suite_after(after);
 

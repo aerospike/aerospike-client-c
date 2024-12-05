@@ -31,6 +31,7 @@
 //---------------------------------
 
 extern aerospike* as;
+extern bool g_has_sc;
 
 //---------------------------------
 // Macros
@@ -895,6 +896,11 @@ TEST(txn_batch_abort, "transaction batch abort")
 
 SUITE(transaction, "Transaction tests")
 {
+	// Multi-record transactions require strong consistency namespaces.
+	if (!g_has_sc) {
+		return;
+	}
+
 	suite_before(before);
 	suite_after(after);
 

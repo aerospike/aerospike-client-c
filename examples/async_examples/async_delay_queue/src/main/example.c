@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2024 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -126,7 +126,7 @@ insert_records(uint32_t* counter)
 	// immediately will be placed on the delay queue.
 	//
 	// Note that g_n_keys can't be infinite because the delay queue would run out of memory.
-	// The delay queue is good for managing socket usage for short bursts of transactions.
+	// The delay queue is good for managing socket usage for short bursts of commands.
 	// A sustained imbalance of commands placed on the queue over the command processing rate
 	// will result in the delay queue becoming excessively large.
 	as_event_loop* event_loop = as_event_loop_get();

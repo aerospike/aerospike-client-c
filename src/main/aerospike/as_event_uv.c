@@ -1499,7 +1499,7 @@ as_uv_queue_close_connections(as_node* node, as_async_conn_pool* pool, as_queue*
 		
 		// In this case, connection counts are decremented before the connection is closed.
 		// This is done because the node will be invalid when the deferred connection close occurs.
-		// Since node destroy always waits till there are no node references, all transactions that
+		// Since node destroy always waits till there are no node references, all commands that
 		// referenced this node should be completed by the time this code is executed.
 		as_queue_decr_total(&pool->queue);
 	}

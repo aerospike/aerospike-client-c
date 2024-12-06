@@ -25,6 +25,7 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
+#include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_digest.h>
@@ -32,18 +33,18 @@
 #include <string.h>
 #include <zlib.h>
 
-/******************************************************************************
- * STATIC VARIABLES
- *****************************************************************************/
+//---------------------------------
+// Static Variables
+//---------------------------------
 
 // These values must line up with as_operator enum.
 static uint8_t as_protocol_types[] = {1, 2, 3, 4, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
 static uint32_t g_replica_rr = 0;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 uint8_t
 as_replica_index_any(void)
@@ -99,14 +100,41 @@ as_command_user_key_size(const as_key* key)
 }
 
 size_t
-as_command_key_size(as_policy_key policy, const as_key* key, uint16_t* n_fields)
+as_command_key_size(
+	const as_policy_base* policy, as_policy_key pol_key, const as_key* key, bool send_deadline,
+	as_command_txn_data* tdata
+	)
 {
-	*n_fields = 3;
+	tdata->n_fields = 3;
+	tdata->send_deadline = send_deadline;
+	tdata->deadline_offset = 0;
+
 	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
 	
-	if (policy == AS_POLICY_KEY_SEND && key->valuep) {
+	if (policy->txn) {
+		size += AS_FIELD_HEADER_SIZE + sizeof(uint64_t);
+		tdata->n_fields++;
+
+		as_txn* txn = policy->txn;
+		tdata->version = as_txn_get_read_version(txn, key->digest.value);
+
+		if (tdata->version != 0) {
+			// Version is a 7 byte integer.
+			size += AS_FIELD_HEADER_SIZE + 7;
+			tdata->n_fields++;
+		}
+
+		if (send_deadline) {
+			size += AS_FIELD_HEADER_SIZE;
+			tdata->deadline_offset = (uint32_t)size;
+			size += sizeof(uint32_t);
+			tdata->n_fields++;
+		}
+	}
+
+	if (pol_key == AS_POLICY_KEY_SEND && key->valuep) {
 		size += as_command_user_key_size(key);
-		(*n_fields)++;
+		tdata->n_fields++;
 	}
 	return size;
 }
@@ -358,13 +386,30 @@ as_command_write_user_key(uint8_t* begin, const as_key* key)
 }
 
 uint8_t*
-as_command_write_key(uint8_t* p, as_policy_key policy, const as_key* key)
+as_command_write_key(
+	uint8_t* p, const as_policy_base* policy, as_policy_key pol_key, const as_key* key,
+	as_command_txn_data* tdata
+	)
 {
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
 	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
 	p = as_command_write_field_digest(p, &key->digest);
 	
-	if (policy == AS_POLICY_KEY_SEND && key->valuep) {
+	if (policy->txn) {
+		as_txn* txn = policy->txn;
+
+		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, txn->id);
+
+		if (tdata->version != 0) {
+			p = as_command_write_field_version(p, tdata->version);
+		}
+
+		if (tdata->send_deadline) {
+			p = as_command_write_field_uint32_le(p, AS_FIELD_MRT_DEADLINE, txn->deadline);
+		}
+	}
+
+	if (pol_key == AS_POLICY_KEY_SEND && key->valuep) {
 		p = as_command_write_user_key(p, key);
 	}
 	return p;
@@ -587,6 +632,19 @@ is_server_timeout(as_error* err)
 	return err->message[0];
 }
 
+static void
+as_command_prepare_error(as_command* cmd, as_error* err)
+{
+	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+
+	// It's important that as_txn_on_write_in_doubt() is only executed for commands in a MRT,
+	// but not MRT operations (add MRT key, commit, abort). Add MRT key sets
+	// AS_COMMAND_FLAGS_MRT_MONITOR and commit/abort do not set cmd->policy->txn.
+	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_MRT_MONITOR) == 0) {
+		as_txn_on_write_in_doubt(cmd->policy->txn, cmd->key->digest.value, cmd->key->set);
+	}
+}
+
 as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
@@ -605,14 +663,14 @@ as_command_execute(as_command* cmd, as_error* err)
 			// node might already be destroyed on retry and is still set as the previous node.
 			// This works because the previous node is only used for pointer comparison
 			// and the previous node's contents are not examined during this call.
-			node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, node, cmd->replica,
+			node = as_partition_get_node(cmd->cluster, cmd->key->ns, cmd->partition, node, cmd->replica,
 										 cmd->replica_size, &cmd->replica_index);
 
 			if (! node) {
 				as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-					"Node not found for partition %s:%u", cmd->ns, cmd->partition_id);
+					"Node not found for partition %s:%u", cmd->key->ns, cmd->partition_id);
 
-				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+				as_command_prepare_error(cmd, err);
 				return err->code;
 			}
 			as_node_reserve(node);
@@ -638,7 +696,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				if (release_node) {
 					as_node_release(node);
 				}
-				as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+				as_command_prepare_error(cmd, err);
 				return status;
 			}
 			goto Retry;
@@ -713,7 +771,7 @@ as_command_execute(as_command* cmd, as_error* err)
 					if (release_node) {
 						as_node_release(node);
 					}
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+					as_command_prepare_error(cmd, err);
 					return status;
 				
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
@@ -723,12 +781,12 @@ as_command_execute(as_command* cmd, as_error* err)
 						uint64_t elapsed = cf_getns() - begin;
 						as_node_add_latency(node, latency_type, elapsed);
 					}
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+					as_command_prepare_error(cmd, err);
 					break;
 
 				default:
 					as_node_add_error(node);
-					as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+					as_command_prepare_error(cmd, err);
 					break;
 			}
 		}
@@ -820,7 +878,7 @@ Retry:
 	if (release_node) {
 		as_node_release(node);
 	}
-	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
+	as_command_prepare_error(cmd, err);
 	return err->code;
 }
 
@@ -988,6 +1046,14 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		return status;
 	}
 
+	uint8_t* p = buf + sizeof(as_msg);
+
+	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
 	if (msg->result_code) {
 		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
 	}
@@ -996,7 +1062,7 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 
 	if (rec) {
 		as_record* r = *rec;
-		
+
 		if (r == NULL) {
 			r = as_record_new(0);
 			*rec = r;
@@ -1004,6 +1070,46 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		r->gen = (uint16_t)msg->generation;
 		r->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_command_parse_fields_txn(
+	uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn, const uint8_t* digest, const char* set,
+	bool is_write
+	)
+{
+	uint8_t* p = *pp;
+	uint64_t version = 0;
+	uint32_t len;
+	uint8_t type;
+
+	for (uint32_t i = 0; i < msg->n_fields; i++) {
+		len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+		p += 4;
+		type = *p++;
+
+		if (type == AS_FIELD_RECORD_VERSION) {
+			if (len == 7) {
+				uint64_t ver = 0;
+				memcpy(&ver, p, 7);
+				version = cf_swap_from_le64(ver);
+				version |= (UINT64_C(1) << 63);
+			}
+			else {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Record version field has invalid size: %u", len);
+			}
+		}
+		p += len;
+	}
+
+	if (is_write) {
+		as_txn_on_write(txn, digest, set, version, msg->result_code);
+	}
+	else {
+		as_txn_on_read(txn, digest, set, version);
+	}
+	*pp = p;
 	return AEROSPIKE_OK;
 }
 
@@ -1238,8 +1344,6 @@ as_status
 as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, as_val** value)
 {
 	uint8_t* p = *pp;
-	p = as_command_ignore_fields(p, msg->n_fields);
-		
 	as_bin_name name;
 	
 	for (uint32_t i = 0; i < msg->n_ops; i++) {
@@ -1311,8 +1415,6 @@ as_command_parse_udf_error(as_error* err, as_status status, as_val* val)
 as_status
 as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status)
 {
-	p = as_command_ignore_fields(p, msg->n_fields);
-	
 	as_bin_name name;
 	
 	for (uint32_t i = 0; i < msg->n_ops; i++) {
@@ -1498,9 +1600,15 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-	status = msg->result_code;
 
 	uint8_t* p = buf + sizeof(as_msg);
+	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
@@ -1534,8 +1642,7 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 				}
 				rec->gen = msg->generation;
 				rec->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-				
-				p = as_command_ignore_fields(p, msg->n_fields);
+
 				status = as_command_parse_bins(&p, err, rec, msg->n_ops, data->deserialize);
 
 				if (status != AEROSPIKE_OK && free_on_error) {
@@ -1544,12 +1651,12 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 			}
 			break;
 		}
-			
+
 		case AEROSPIKE_ERR_UDF: {
 			status = as_command_parse_udf_failure(p, err, msg, status);
 			break;
 		}
-			
+
 		default:
 			as_error_update(err, status, "%s %s", as_node_get_address_string(node),
 							as_error_string(status));
@@ -1570,9 +1677,15 @@ as_command_parse_success_failure(
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-	status = msg->result_code;
 
 	uint8_t* p = buf + sizeof(as_msg);
+	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
@@ -1603,4 +1716,60 @@ as_command_parse_success_failure(
 			break;
 	}
 	return status;
+}
+
+as_status
+as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
+{
+	as_txn* txn = cmd->udata;
+	as_msg* msg = (as_msg*)buf;
+	as_status status = as_msg_parse(err, msg, size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	uint8_t* p = buf + sizeof(as_msg);
+
+	status = as_command_parse_fields_deadline(&p, err, msg, txn);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = msg->result_code;
+
+	if (status != AEROSPIKE_OK) {
+		return as_error_update(err, status, "%s %s", as_node_get_address_string(node),
+			as_error_string(status));
+	}
+
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_command_parse_fields_deadline(uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn)
+{
+	uint8_t* p = *pp;
+	uint32_t len;
+	uint8_t type;
+
+	for (uint32_t i = 0; i < msg->n_fields; i++) {
+		len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+		p += 4;
+		type = *p++;
+
+		if (type == AS_FIELD_MRT_DEADLINE) {
+			if (len == 4) {
+				txn->deadline = cf_swap_from_le32(*(uint32_t*)p);
+			}
+			else {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "MRT deadline field has invalid size: %u", len);
+			}
+		}
+		p += len;
+	}
+
+	*pp = p;
+	return AEROSPIKE_OK;
 }

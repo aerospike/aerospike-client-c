@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -49,6 +49,8 @@ extern "C" {
 #define AS_BATCH_WRITE 1
 #define AS_BATCH_APPLY 2
 #define AS_BATCH_REMOVE 3
+#define AS_BATCH_TXN_VERIFY 4
+#define AS_BATCH_TXN_ROLL 5
 
 /**
  * Batch record type. Values: AS_BATCH_READ, AS_BATCH_WRITE, AS_BATCH_APPLY or AS_BATCH_REMOVE
@@ -87,12 +89,12 @@ typedef struct as_batch_base_record_s {
 	as_batch_type type;
 
 	/**
-	 * Does batch sub-transaction contain a write operation.
+	 * Does batch sub-command contain a write operation.
 	 */
 	bool has_write;
 
 	/**
-	 * Is it possible that the write transaction completed even though this error was generated.
+	 * Is it possible that the write command completed even though this error was generated.
 	 * This may be the case when a client error occurs (like timeout) after the command was sent
 	 * to the server.
 	 */
@@ -146,6 +148,11 @@ typedef struct as_batch_read_record_s {
 /**
  * Batch key and read/write operations with write policy.
  *
+ * All fields must be allocated on the heap (or global) when an async batch write is run under a
+ * multi-record transaction. The reason is multi-record transactions require an extra async call
+ * to add write keys to the transaction monitor record and this extra call causes stack variables
+ * to fall out of scope before the async batch is executed.
+ *
  * @relates as_batch_base_record
  * @ingroup batch_operations
  */
@@ -171,6 +178,11 @@ typedef struct as_batch_write_record_s {
 
 /**
  * Batch UDF (user defined function) apply.
+ *
+ * All fields must be allocated on the heap (or global) when an async batch UDF is run under a
+ * multi-record transaction. The reason is multi-record transactions require an extra async call
+ * to add write keys to the transaction monitor record and this extra call causes stack variables
+ * to fall out of scope before the async batch is executed.
  *
  * @relates as_batch_base_record
  * @ingroup batch_operations
@@ -209,6 +221,11 @@ typedef struct as_batch_apply_record_s {
 
 /**
  * Batch delete operation.
+ *
+ * All fields must be allocated on the heap (or global) when an async batch remove is run under a
+ * multi-record transaction. The reason is multi-record transactions require an extra async call
+ * to add write keys to the transaction monitor record and this extra call causes stack variables
+ * to fall out of scope before the async batch is executed.
  *
  * @relates as_batch_base_record
  * @ingroup batch_operations
@@ -640,59 +657,82 @@ aerospike_batch_write(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
 	);
 
+typedef struct {
+	as_operations* ops1;
+	as_operations* ops2;
+} heap_fields;
+
 /**
  * Asynchronously read/write multiple records for specified batch keys in one batch call.
  * This method allows different sub-commands for each key in the batch.
  * The returned records are located in the same list.
  *
+ * All as_batch_record pointer fields must be allocated on the heap (or global) when an async batch
+ * write is run under a multi-record transaction. The reason is multi-record transactions require an
+ * extra async call to add write keys to the transaction monitor record and this extra call causes
+ * stack variables to fall out of scope before the async batch is executed.
+ *
  * Requires server version 6.0+
  *
  * ~~~~~~~~~~{.c}
+ * typedef struct {
+ *     as_operations* ops1;
+ *     as_operations* ops2;
+ * } heap_fields;
+ *
  * void my_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* loop)
  * {
- * 	   if (err) {
- * 	       fprintf(stderr, "Command failed: %d %s\n", err->code, err->message);
- * 	   }
- * 	   else {
- * 	       as_vector* list = &records->list;
- * 	       for (uint32_t i = 0; i < list->size; i++) {
- * 	           as_batch_base_record* r = as_vector_get(list, i);
- * 		       // Process record
- * 	       }
+ *     if (err) {
+ *         fprintf(stderr, "Command failed: %d %s\n", err->code, err->message);
  *     }
- * 	   // Must free batch records on both success and error conditions because it was created
- * 	   // before calling aerospike_batch_read_async().
- * 	   as_batch_records_destroy(records);
+ *     else {
+ *         as_vector* list = &records->list;
+ *         for (uint32_t i = 0; i < list->size; i++) {
+ *             as_batch_base_record* r = as_vector_get(list, i);
+ *             // Process record
+ *         }
+ *     }
+ *
+ *     // Must free batch records on both success and error conditions because it was created
+ *     // before calling aerospike_batch_read_async().
+ *     as_batch_records_destroy(records);
+ *
+ *     heap_fields* hf = udata;
+ *     as_operations_destroy(hf->ops1);
+ *     as_operations_destroy(hf->ops2);
+ *     free(hf);
  * }
  *
- * as_operations ops1;
- * as_operations_inita(&ops1, 2);
- * as_operations_add_write_int64(&ops1, bin1, 100);
- * as_operations_add_read(&ops1, bin2);
+ * as_operations* ops1 = as_operations_new(2);
+ * as_operations_add_write_int64(ops1, bin1, 100);
+ * as_operations_add_read(ops1, bin2);
  *
- * as_operations ops2;
- * as_operations_inita(&ops2, 2);
- * as_operations_add_write_int64(&ops1, bin3, 0);
- * as_operations_add_read(&ops2, bin4);
+ * as_operations* ops2 = as_operations_new(2);
+ * as_operations_add_write_int64(ops2, bin3, 0);
+ * as_operations_add_read(ops2, bin4);
  *
  * as_batch_records* recs = as_batch_records_create(2);
  *
  * as_batch_write_record* wr = as_batch_write_reserve(recs);
  * as_key_init_int64(&wr->key, NAMESPACE, SET, 1);
- * wr->ops = &ops1;
+ * wr->ops = ops1;
  *
  * wr = as_batch_write_reserve(recs);
  * as_key_init_int64(&wr->key, NAMESPACE, SET, 6);
- * wr->ops = &ops2;
+ * wr->ops = ops2;
  *
- * as_status status = aerospike_batch_write_async(as, &err, NULL, recs, my_listener, NULL, NULL);
+ * heap_fields* hf = malloc(sizeof(heap_fields));
+ * hf->ops1 = ops1;
+ * hf->ops2 = ops2;
  *
- * as_operations_destroy(&ops1);
- * as_operations_destroy(&ops2);
+ * as_status status = aerospike_batch_write_async(as, &err, NULL, recs, my_listener, hf, NULL);
  *
  * if (status != AEROSPIKE_OK) {
- * 	   // Must free batch records on queue error because the listener will not be called.
- * 	   as_batch_records_destroy(records);
+ *    // Must free batch records on queue error because the listener will not be called.
+ *    as_batch_records_destroy(records);
+ *    as_operations_destroy(ops1);
+ *    as_operations_destroy(ops2);
+ *    free(hf);
  * }
  * ~~~~~~~~~~
  *

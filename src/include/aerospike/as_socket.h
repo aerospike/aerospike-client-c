@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -191,7 +191,7 @@ as_socket_error_append(as_error* err, struct sockaddr* addr);
 
 /**
  * @private
- * Is socket idle within limit for transactions.
+ * Is socket idle within limit for commands.
  */
 static inline bool
 as_socket_current_tran(uint64_t last_used, uint64_t max_socket_idle_ns)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -43,9 +43,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Look up a record by key and return all bins.
@@ -126,7 +126,7 @@ aerospike_key_get_async(
 	);
 
 /**
- * Lookup a record by key, then return specified bins.
+ * Read a record's bins given the NULL terminated bins array argument.
  *
  * ~~~~~~~~~~{.c}
  * char* select[] = {"bin1", "bin2", "bin3", NULL};
@@ -164,7 +164,7 @@ aerospike_key_select(
 	);
 
 /**
- * Asynchronously lookup a record by key, then return specified bins.
+ * Asynchronously read a record's bins given the NULL terminated bins array argument.
  *
  * ~~~~~~~~~~{.c}
  * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
@@ -207,6 +207,93 @@ AS_EXTERN as_status
 aerospike_key_select_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
+	);
+
+/**
+ * Read a record's bins given the bins array argument and the n_bins count.
+ *
+ * ~~~~~~~~~~{.c}
+ * char* select[] = {"bin1", "bin2", "bin3"};
+ * 
+ * as_key key;
+ * as_key_init(&key, "ns", "set", "key");
+ * 
+ * as_record* rec = NULL;
+ * if (aerospike_key_select_bins(&as, &err, NULL, &key, select, 3, &rec) != AEROSPIKE_OK) {
+ * 	   printf("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ * }
+ * else {
+ *     as_record_destroy(rec);
+ * }
+ * ~~~~~~~~~~
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param key			The key of the record.
+ * @param bins			The array of bins to select. The array does not need a final NULL entry.
+ * @param n_bins		The count of bins to select.
+ * @param rec 			The record to be populated with the data from request. If the record pointer is
+ *						preset to NULL, the record will be created and initialized. If the record pointer
+ *						is not NULL, the record is assumed to be valid and will be reused. Either way,
+ *						the record must be preset.
+ *
+ * @return AEROSPIKE_OK if successful. Otherwise an error.
+ *
+ * @ingroup key_operations
+ */
+as_status
+aerospike_key_select_bins(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	const char* bins[], uint32_t n_bins, as_record** rec
+	);
+
+/**
+ * Asynchronously read a record's bins given the bins array argument and the n_bins count.
+ *
+ * ~~~~~~~~~~{.c}
+ * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+ * {
+ *     if (err) {
+ * 	       printf("Command failed: %d %s\n", err->code, err->message);
+ * 	       return;
+ * 	   }
+ * 	   // Process record bins
+ * 	   // Only call as_record_destroy(record) when command is successful (err == NULL) and 
+ *     // "as_policy_read.async_heap_rec" is true. Otherwise, the calling function will destroy the
+ *     // record when the listener completes.
+ * }
+ *
+ * char* select[] = {"bin1", "bin2", "bin3"};
+ *
+ * as_key key;
+ * as_key_init(&key, "ns", "set", "key");
+ *
+ * as_status status = aerospike_key_select_bins_async(&as, &err, NULL, &key, select, 3, my_listener, NULL, NULL, NULL);
+ * ~~~~~~~~~~
+ *
+ * @param as				The aerospike instance to use for this operation.
+ * @param err				The as_error to be populated if an error occurs.
+ * @param policy			The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param key				The key of the record.
+ * @param bins				The bins to select. A NULL terminated array of NULL terminated strings.
+ * @param n_bins			The count of bins to select.
+ * @param listener			User function to be called with command results.
+ * @param udata				User data to be forwarded to user callback.
+ * @param event_loop		Event loop assigned to run this command. If NULL, an event loop will be chosen by round-robin.
+ * @param pipe_listener		Enables command pipelining, if not NULL. The given callback is invoked after the current command
+ * 							has been sent to the server. This allows for issuing the next command even before receiving a
+ * 							result for the current command.
+ *
+ * @return AEROSPIKE_OK if async command successfully queued. Otherwise an error.
+ *
+ * @ingroup key_operations
+ */
+as_status
+aerospike_key_select_bins_async(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
+	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
 	);
 
 /**

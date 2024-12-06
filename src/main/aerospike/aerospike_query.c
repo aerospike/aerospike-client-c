@@ -427,6 +427,8 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 {
 	if (task->input_queue) {
 		// Parse aggregate return values.
+		*pp = as_command_ignore_fields(*pp, msg->n_fields);
+
 		as_val* val = 0;
 		as_status status = as_command_parse_success_failure_bins(pp, err, msg, &val);
 		
@@ -1125,7 +1127,7 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.cluster = task->cluster;
 	cmd.policy = policy;
 	cmd.node = task->node;
-	cmd.ns = NULL;        // Not referenced when node set.
+	cmd.key = NULL;       // Not referenced when node set.
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;
@@ -1227,7 +1229,7 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.cluster = task->cluster;
 	cmd.policy = policy;
 	cmd.node = task->node;
-	cmd.ns = NULL;        // Not referenced when node set.
+	cmd.key = NULL;       // Not referenced when node set.
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;
@@ -1307,7 +1309,7 @@ as_query_worker_new(void* data)
 static as_status
 as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 {
-	as_cluster_add_tran(task->cluster);
+	as_cluster_add_command_count(task->cluster);
 	as_status status = AEROSPIKE_OK;
 
 	if (task->query_policy && task->query_policy->fail_on_cluster_change) {
@@ -1475,7 +1477,7 @@ as_query_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
 	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1729,6 +1731,9 @@ as_query_partition_execute_async(
 		cmd->flags = qe->deserialize ? AS_ASYNC_FLAGS_DESERIALIZE : 0;
 		cmd->replica_size = 1;
 		cmd->replica_index = 0;
+		cmd->txn = NULL;
+		cmd->ubuf = NULL;
+		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
 		ee->commands[i] = cmd;
 	}
@@ -1768,7 +1773,7 @@ as_query_partition_async(
 	as_event_loop* event_loop
 	)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, query->ns, err);
 
@@ -2264,6 +2269,9 @@ aerospike_query_async(
 		cmd->flags = policy->deserialize ? AS_ASYNC_FLAGS_DESERIALIZE : 0;
 		cmd->replica_size = 1;
 		cmd->replica_index = 0;
+		cmd->txn = NULL;
+		cmd->ubuf = NULL;
+		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
 		memcpy(cmd->buf, cmd_buf, size);
 		exec->commands[i] = cmd;

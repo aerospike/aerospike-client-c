@@ -20,18 +20,23 @@
 extern "C" {
 #endif
 
-/*******************************************************************************
- * TYPES
- ******************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Status codes used as return values as as_error.code values.
  */
 typedef enum as_status_e {
+	//---------------------------------
+	// Client Errors
+	//---------------------------------
 
-	/***************************************************************************
-	 * Client Errors
-	 **************************************************************************/
+	/**
+	 * Multi-record transaction failed.
+	 */
+	AEROSPIKE_TXN_FAILED = -17,
+
 	/**
 	 * One or more keys failed in a batch.
 	 */
@@ -118,19 +123,19 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR = -1,
 
-	/***************************************************************************
-	 * Success
-	 **************************************************************************/
+	//---------------------------------
+	// Success
+	//---------------------------------
 
 	/**
 	 * Generic success.
 	 */
 	AEROSPIKE_OK = 0,
 	
-	/***************************************************************************
-	 * Server Errors
-	 **************************************************************************/
-	
+	//---------------------------------
+	// Server Errors
+	//---------------------------------
+
 	/**
 	 * Generic error returned by server.
 	 */
@@ -228,7 +233,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_DEVICE_OVERLOAD = 18,
 	
 	/**
-	 * Record key sent with transaction did not match key stored on server.
+	 * Record key sent with command did not match key stored on server.
 	 */
 	AEROSPIKE_ERR_RECORD_KEY_MISMATCH = 19,
 	
@@ -270,7 +275,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_OP_NOT_APPLICABLE = 26,
 
 	/**
-	 * The transaction was not performed because the filter expression was
+	 * The command was not performed because the filter expression was
 	 * false.
 	 */
 	AEROSPIKE_FILTERED_OUT = 27,
@@ -411,15 +416,46 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_UDF = 100,
 
 	/**
+	 * MRT record blocked by a different transaction.
+	 */
+	AEROSPIKE_MRT_BLOCKED = 120,
+
+	/**
+	 * MRT read version mismatch identified during commit.
+	 * Some other command changed the record outside of the transaction.
+	 */
+	AEROSPIKE_MRT_VERSION_MISMATCH = 121,
+
+	/**
+	 * MRT deadline reached without a successful commit or abort.
+	 */
+	AEROSPIKE_MRT_EXPIRED = 122,
+
+	/**
+	 * MRT write command limit (4096) exceeded.
+	 */
+	AEROSPIKE_MRT_TOO_MANY_WRITES = 123,
+
+	/**
+	 * MRT was already committed.
+	 */
+	AEROSPIKE_MRT_COMMITTED = 124,
+
+	/**
+	 * MRT was already aborted.
+	 */
+	AEROSPIKE_MRT_ABORTED = 125,
+
+	/**
 	 * Batch functionality has been disabled.
 	 */
 	AEROSPIKE_ERR_BATCH_DISABLED = 150,
-	
+
 	/**
 	 * Batch max requests have been exceeded.
 	 */
 	AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED = 151,
-	
+
 	/**
 	 * All batch queues are full.
 	 */
@@ -485,9 +521,9 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_QUERY = 213,
 	
-	/***************************************************************************
-	 * UDF OPERATIONS
-	 **************************************************************************/
+	//---------------------------------
+	// UDF Operations
+	//---------------------------------
 
 	/**
 	 * UDF does not exist.

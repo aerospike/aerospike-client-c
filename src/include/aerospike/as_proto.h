@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2019 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -70,7 +70,7 @@ typedef struct as_msg_s {
 /*05*/	uint8_t		result_code;
 /*06*/	uint32_t	generation;
 /*10*/	uint32_t	record_ttl;
-/*14*/	uint32_t	transaction_ttl;	// milliseconds
+/*14*/	uint32_t	transaction_ttl;	// command time to live in milliseconds
 /*18*/	uint16_t	n_fields;			// size in uint8_ts
 /*20*/	uint16_t	n_ops;				// number of operations
 /*22*/	uint8_t		data[0];			// data contains first the fields, then the ops
@@ -108,7 +108,7 @@ typedef struct as_msg_s {
 /*05*/	uint8_t		result_code;
 /*06*/	uint32_t	generation;
 /*10*/	uint32_t	record_ttl;
-/*14*/	uint32_t	transaction_ttl;
+/*14*/	uint32_t	transaction_ttl;	// command time to live in milliseconds
 /*18*/	uint16_t	n_fields;			// size in uint8_ts
 /*20*/	uint16_t	n_ops;				// number of operations
 /*22*/	uint8_t		data[0];			// data contains first the fields, then the ops

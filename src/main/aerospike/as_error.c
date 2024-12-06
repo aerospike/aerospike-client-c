@@ -16,9 +16,9 @@
  */
 #include <aerospike/as_error.h>
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 #define ERR_ASSIGN(__enum) return #__enum
 
@@ -33,6 +33,7 @@ as_error_string(as_status status)
 		CASE_ASSIGN(AEROSPIKE_OK);
 		CASE_ASSIGN(AEROSPIKE_QUERY_END);
 
+		CASE_ASSIGN(AEROSPIKE_TXN_FAILED);
 		CASE_ASSIGN(AEROSPIKE_BATCH_FAILED);
 		CASE_ASSIGN(AEROSPIKE_NO_RESPONSE);
 		CASE_ASSIGN(AEROSPIKE_MAX_ERROR_RATE);
@@ -102,6 +103,12 @@ as_error_string(as_status status)
 		CASE_ASSIGN(AEROSPIKE_NOT_WHITELISTED);
 		CASE_ASSIGN(AEROSPIKE_QUOTA_EXCEEDED);
 		CASE_ASSIGN(AEROSPIKE_ERR_UDF);
+		CASE_ASSIGN(AEROSPIKE_MRT_BLOCKED);
+		CASE_ASSIGN(AEROSPIKE_MRT_VERSION_MISMATCH);
+		CASE_ASSIGN(AEROSPIKE_MRT_EXPIRED);
+		CASE_ASSIGN(AEROSPIKE_MRT_TOO_MANY_WRITES);
+		CASE_ASSIGN(AEROSPIKE_MRT_COMMITTED);
+		CASE_ASSIGN(AEROSPIKE_MRT_ABORTED);
 		CASE_ASSIGN(AEROSPIKE_ERR_BATCH_DISABLED);
 		CASE_ASSIGN(AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED);
 		CASE_ASSIGN(AEROSPIKE_ERR_BATCH_QUEUES_FULL);

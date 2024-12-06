@@ -109,6 +109,7 @@ AEROSPIKE += aerospike_key.o
 AEROSPIKE += aerospike_query.o
 AEROSPIKE += aerospike_scan.o
 AEROSPIKE += aerospike_stats.o
+AEROSPIKE += aerospike_txn.o
 AEROSPIKE += aerospike_udf.o
 AEROSPIKE += as_address.o
 AEROSPIKE += as_admin.o
@@ -156,6 +157,8 @@ AEROSPIKE += as_scan.o
 AEROSPIKE += as_shm_cluster.o
 AEROSPIKE += as_socket.o
 AEROSPIKE += as_tls.o
+AEROSPIKE += as_txn.o
+AEROSPIKE += as_txn_monitor.o
 AEROSPIKE += as_udf.o
 AEROSPIKE += version.o
 

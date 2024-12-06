@@ -25,6 +25,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_query_validate.h>
 #include <aerospike/as_shm_cluster.h>
+#include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <pthread.h>
 
@@ -395,11 +396,7 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 			(as_event_executable)as_event_command_execute_in_loop, cmd)) {
 
 			cmd->event_loop->errors++;  // May not be in event loop thread, so not exactly accurate.
-
-			if (cmd->node) {
-				as_node_release(cmd->node);
-			}
-			cf_free(cmd);
+			as_event_command_destroy(cmd);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to queue command");
 		}
 	}
@@ -1005,7 +1002,7 @@ as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	}
 }
 
-static inline void
+void
 as_event_response_complete(as_event_command* cmd)
 {
 	if (cmd->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
@@ -1212,6 +1209,80 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 	as_event_command_release(cmd);
 }
 
+static as_status
+as_event_command_parse_set_digest(as_event_command* cmd, as_error* err, char* set, uint8_t* digest) {
+	// The key has fallen out of scope, so the key's set and digest have to be
+	// parsed from the command's send buffer
+	uint8_t* p = as_event_get_ubuf(cmd);
+	p += AS_HEADER_SIZE;
+
+	// Field ID is located after field size.
+	// Skip namespace.
+	uint8_t field_id = *(uint8_t*)(p + sizeof(uint32_t));
+
+	if (field_id == AS_FIELD_NAMESPACE) {
+		p += cf_swap_from_be32(*(uint32_t*)p) + sizeof(uint32_t);
+	}
+
+	// Parse set.
+	field_id = *(uint8_t*)(p + sizeof(uint32_t));
+
+	if (field_id != AS_FIELD_SETNAME) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid set field id: %u", field_id);
+	}
+
+	uint32_t len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+
+	if (len >= AS_SET_MAX_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid set len: %u", len);
+	}
+
+	p += AS_FIELD_HEADER_SIZE;
+
+	memcpy(set, p, len);
+	set[len] = 0;
+	p += len;
+
+	// Parse digest.
+	field_id = *(uint8_t*)(p + sizeof(uint32_t));
+
+	if (field_id != AS_FIELD_DIGEST) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid digest field id: %u", field_id);
+	}
+
+	len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+
+	if (len != AS_DIGEST_VALUE_SIZE) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid digest len: %u", len);
+	}
+
+	p += AS_FIELD_HEADER_SIZE;
+
+	memcpy(digest, p, len);
+	return AEROSPIKE_OK;
+}
+
+static void
+as_event_check_in_doubt(as_event_command* cmd, as_error* err) {
+	if (err->in_doubt && cmd->txn) {
+		// It's important that this logic is only executed for commands in a MRT,
+		// but not MRT operations (add MRT key, commit, abort). Add MRT key does not
+		// call this function and commit/abort do not set cmd->txn.
+		as_set set;
+		as_digest_value digest;
+
+		as_status status = as_event_command_parse_set_digest(cmd, err, set, digest);
+
+		if (status != AEROSPIKE_OK) {
+			// Better to return original error and log message here.
+			as_log_error("Send buffer is corrupt");
+			return;
+		}
+
+		as_txn_on_write_in_doubt(cmd->txn, digest, set);
+	}
+}
+
 void as_async_batch_error(as_event_command* cmd, as_error* err);
 
 void
@@ -1221,13 +1292,19 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 
 	switch (cmd->type) {
 		case AS_ASYNC_TYPE_WRITE:
+			as_event_check_in_doubt(cmd, err);
 			((as_async_write_command*)cmd)->listener(err, cmd->udata, cmd->event_loop);
 			break;
 		case AS_ASYNC_TYPE_RECORD:
+			as_event_check_in_doubt(cmd, err);
 			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
 			break;
 		case AS_ASYNC_TYPE_VALUE:
+			as_event_check_in_doubt(cmd, err);
 			((as_async_value_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
+			break;
+		case AS_ASYNC_TYPE_MRT_MONITOR:
+			((as_async_record_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
 			break;
 		case AS_ASYNC_TYPE_INFO:
 			((as_async_info_command*)cmd)->listener(err, 0, cmd->udata, cmd->event_loop);
@@ -1336,12 +1413,39 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	as_event_error_callback(cmd, err);
 }
 
+static as_status
+as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg, uint8_t** pp)
+{
+	as_set set;
+	as_digest_value digest;
+
+	as_status status = as_event_command_parse_set_digest(cmd, err, set, digest);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	return as_command_parse_fields_txn(pp, err, msg, cmd->txn, digest, set, (cmd->flags & AS_ASYNC_FLAGS_READ) == 0);
+}
+
 bool
 as_event_command_parse_header(as_event_command* cmd)
 {
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
-	
+	as_msg_swap_header_from_be(msg);
+	p += sizeof(as_msg);
+
+	if (cmd->txn) {
+		as_error err;
+		as_status status = as_event_command_parse_fields(cmd, &err, msg, &p);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+	}
+
 	if (msg->result_code == AEROSPIKE_OK) {
 		as_event_response_complete(cmd);
 		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
@@ -1359,12 +1463,25 @@ bool
 as_event_command_parse_result(as_event_command* cmd)
 {
 	as_error err;
+	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
-	as_status status = msg->result_code;
-
 	p += sizeof(as_msg);
+
+	if (cmd->txn) {
+		status = as_event_command_parse_fields(cmd, &err, msg, &p);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+	}
+	else {
+		p = as_command_ignore_fields(p, msg->n_fields);
+	}
+
+	status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
@@ -1375,7 +1492,6 @@ as_event_command_parse_result(as_event_command* cmd)
 				rec->gen = msg->generation;
 				rec->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 
-				p = as_command_ignore_fields(p, msg->n_fields);
 				status = as_command_parse_bins(&p, &err, rec, msg->n_ops,
 											   cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
 
@@ -1403,7 +1519,6 @@ as_event_command_parse_result(as_event_command* cmd)
 				rec.gen = msg->generation;
 				rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 				
-				p = as_command_ignore_fields(p, msg->n_fields);
 				status = as_command_parse_bins(&p, &err, &rec, msg->n_ops,
 											   cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
 
@@ -1438,16 +1553,29 @@ as_event_command_parse_result(as_event_command* cmd)
 bool
 as_event_command_parse_success_failure(as_event_command* cmd)
 {
+	as_error err;
+	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)cmd->buf;
 	as_msg_swap_header_from_be(msg);
-	as_status status = msg->result_code;
-	
 	p += sizeof(as_msg);
+
+	if (cmd->txn) {
+		status = as_event_command_parse_fields(cmd, &err, msg, &p);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+	}
+	else {
+		p = as_command_ignore_fields(p, msg->n_fields);
+	}
+
+	status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
-			as_error err;
 			as_val* val = 0;
 			status = as_command_parse_success_failure_bins(&p, &err, msg, &val);
 			
@@ -1464,19 +1592,47 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			as_error err;
 			as_command_parse_udf_failure(p, &err, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
 			
 		default: {
-			as_error err;
 			as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
 			as_event_response_error(cmd, &err);
 			break;
 		}
 	}
+	return true;
+}
+
+bool
+as_event_command_parse_deadline(as_event_command* cmd)
+{
+	as_error err;
+	uint8_t* p = cmd->buf + cmd->pos;
+	as_msg* msg = (as_msg*)p;
+	as_msg_swap_header_from_be(msg);
+	p += sizeof(as_msg);
+
+	as_status status = as_command_parse_fields_deadline(&p, &err, msg, cmd->txn);
+
+	if (status != AEROSPIKE_OK) {
+		as_event_response_error(cmd, &err);
+		return true;
+	}
+
+	status = msg->result_code;
+
+	if (status != AEROSPIKE_OK) {
+		as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
+		as_event_response_error(cmd, &err);
+		return true;
+	}
+
+	as_event_response_complete(cmd);
+	((as_async_record_command*)cmd)->listener(NULL, NULL, cmd->udata, cmd->event_loop);
+	as_event_command_release(cmd);
 	return true;
 }
 
@@ -1519,6 +1675,10 @@ as_event_command_free(as_event_command* cmd)
 
 	if (cmd->flags & AS_ASYNC_FLAGS_FREE_BUF) {
 		cf_free(cmd->buf);
+	}
+
+	if (cmd->ubuf) {
+		cf_free(cmd->ubuf);
 	}
 
 	cf_free(cmd);

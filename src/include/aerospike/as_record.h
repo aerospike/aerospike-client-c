@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -222,7 +222,7 @@ typedef struct as_record_s {
 
 /**
  * Use the applicable client policy ttl (as_policy_write, as_policy_operate, as_policy_scan,
- * as_policy_batch_write, ...). If the policy is not defined for the transaction, use the default
+ * as_policy_batch_write, ...). If the policy is not defined for the command, use the default
  * in as_config.policies.
  */
 #define AS_RECORD_CLIENT_DEFAULT_TTL 0xFFFFFFFD

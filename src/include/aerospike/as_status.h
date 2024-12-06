@@ -33,6 +33,11 @@ typedef enum as_status_e {
 	//---------------------------------
 
 	/**
+	 * Multi-record transaction failed.
+	 */
+	AEROSPIKE_TXN_FAILED = -17,
+
+	/**
 	 * One or more keys failed in a batch.
 	 */
 	AEROSPIKE_BATCH_FAILED = -16,

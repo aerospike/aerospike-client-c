@@ -164,6 +164,12 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 	}
 
 	// Verify failed. Abort.
+	if (verify_status == AEROSPIKE_BATCH_FAILED) {
+		verify_status = AEROSPIKE_TXN_FAILED;
+		verify_err.code = AEROSPIKE_TXN_FAILED;
+		as_strncpy(verify_err.message, "One or more read keys failed to verify", sizeof(verify_err.message));
+	}
+
 	txn->state = AS_TXN_STATE_ABORTED;
 	as_set_commit_status(commit_status, AS_COMMIT_VERIFY_FAILED);
 
@@ -535,6 +541,11 @@ as_commit_verify_listener(
 
 	if (err) {
 		// Verify failed. Rollback transaction.
+		if (err->code == AEROSPIKE_BATCH_FAILED) {
+			err->code = AEROSPIKE_TXN_FAILED;
+			as_strncpy(err->message, "One or more read keys failed to verify", sizeof(err->message));
+		}
+
 		data->txn->state = AS_TXN_STATE_ABORTED;
 		data->verify_err = cf_malloc(sizeof(as_error));
 		as_error_copy(data->verify_err, err);

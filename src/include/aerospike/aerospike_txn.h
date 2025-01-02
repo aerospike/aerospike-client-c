@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -42,11 +42,6 @@ typedef enum {
 	 * Transaction has already been committed.
 	 */
 	AS_COMMIT_ALREADY_COMMITTED,
-
-	/**
-	 * Transaction has already been aborted.
-	 */
-	AS_COMMIT_ALREADY_ABORTED,
 
 	/**
 	 * Transaction verify failed. Transaction will be aborted.
@@ -95,11 +90,6 @@ typedef enum {
 	 * Abort succeeded.
 	 */
 	AS_ABORT_OK,
-
-	/**
-	 * Transaction has already been committed.
-	 */
-	AS_ABORT_ALREADY_COMMITTED,
 
 	/**
 	 * Transaction has already been aborted.

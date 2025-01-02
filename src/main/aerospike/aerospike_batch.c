@@ -3909,6 +3909,10 @@ as_batch_retry_parse_row(uint8_t* p, uint8_t* type)
 			p += 3;
 		}
 		
+		if (t & BATCH_MSG_INFO4) {
+			p += 1;
+		}
+
 		if (t & BATCH_MSG_GEN) {
 			p += 2;
 		}

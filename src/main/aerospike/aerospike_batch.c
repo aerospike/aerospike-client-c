@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -3909,6 +3909,10 @@ as_batch_retry_parse_row(uint8_t* p, uint8_t* type)
 			p += 3;
 		}
 		
+		if (t & BATCH_MSG_INFO4) {
+			p += 1;
+		}
+
 		if (t & BATCH_MSG_GEN) {
 			p += 2;
 		}

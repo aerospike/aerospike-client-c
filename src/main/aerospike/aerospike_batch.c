@@ -4196,6 +4196,10 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 
 	be->error_row = true;
 
+	if (!err->in_doubt) {
+		return;
+	}
+
 	// Set error/in_doubt in each key contained in the command.
 	// Batch offsets are out of scope, so they must be parsed
 	// from the parent command's send buffer.
@@ -4225,7 +4229,7 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 		as_batch_base_record* rec = as_vector_get(records, offset);
 
 		if (rec->result == AEROSPIKE_NO_RESPONSE && rec->has_write) {
-			rec->in_doubt = err->in_doubt;
+			rec->in_doubt = true;
 		}
 
 		uint8_t type;

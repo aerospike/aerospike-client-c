@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -33,6 +33,8 @@ as_error_string(as_status status)
 		CASE_ASSIGN(AEROSPIKE_OK);
 		CASE_ASSIGN(AEROSPIKE_QUERY_END);
 
+		CASE_ASSIGN(AEROSPIKE_TXN_ALREADY_ABORTED);
+		CASE_ASSIGN(AEROSPIKE_TXN_ALREADY_COMMITTED);
 		CASE_ASSIGN(AEROSPIKE_TXN_FAILED);
 		CASE_ASSIGN(AEROSPIKE_BATCH_FAILED);
 		CASE_ASSIGN(AEROSPIKE_NO_RESPONSE);

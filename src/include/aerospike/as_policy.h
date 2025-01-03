@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -544,6 +544,8 @@ typedef struct as_policy_base_s {
 	 *
 	 * This option will increase cpu and memory usage (for extra compressed buffers), but
 	 * decrease the size of data sent over the network.
+	 *
+	 * This compression feature requires the Enterprise Edition Server.
 	 *
 	 * Default: false
 	 */

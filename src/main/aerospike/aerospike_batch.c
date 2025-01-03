@@ -237,6 +237,13 @@ as_batch_keys_prepare_txn(as_txn* txn, const as_batch* batch, as_error* err, uin
 			return status;
 		}
 
+		status = as_key_set_digest(err, key);
+
+		if (status != AEROSPIKE_OK) {
+			destroy_versions(versions);
+			return status;
+		}
+
 		versions[i] = as_txn_get_read_version(txn, key->digest.value);
 	}
 	*versions_pp = versions;
@@ -261,6 +268,13 @@ as_batch_records_prepare_txn(
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_base_record* rec = as_vector_get(list, i);
 		status = as_txn_set_ns(txn, rec->key.ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			destroy_versions(versions);
+			return status;
+		}
+
+		status = as_key_set_digest(err, &rec->key);
 
 		if (status != AEROSPIKE_OK) {
 			destroy_versions(versions);

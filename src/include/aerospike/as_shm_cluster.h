@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -300,7 +300,7 @@ as_shm_node_replace_racks(as_cluster_shm* cluster_shm, as_node* node, as_racks* 
  * @private
  * Find partition table for namespace in shared memory.
  */
-as_partition_table_shm*
+AS_EXTERN as_partition_table_shm*
 as_shm_find_partition_table(as_cluster_shm* cluster_shm, const char* ns);
 
 /**

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -237,6 +237,13 @@ as_batch_keys_prepare_txn(as_txn* txn, const as_batch* batch, as_error* err, uin
 			return status;
 		}
 
+		status = as_key_set_digest(err, key);
+
+		if (status != AEROSPIKE_OK) {
+			destroy_versions(versions);
+			return status;
+		}
+
 		versions[i] = as_txn_get_read_version(txn, key->digest.value);
 	}
 	*versions_pp = versions;
@@ -261,6 +268,13 @@ as_batch_records_prepare_txn(
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_base_record* rec = as_vector_get(list, i);
 		status = as_txn_set_ns(txn, rec->key.ns, err);
+
+		if (status != AEROSPIKE_OK) {
+			destroy_versions(versions);
+			return status;
+		}
+
+		status = as_key_set_digest(err, &rec->key);
 
 		if (status != AEROSPIKE_OK) {
 			destroy_versions(versions);
@@ -2539,8 +2553,11 @@ as_single_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
+
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+		}
 	}
 	as_single_executor_complete(data);
 }
@@ -2565,8 +2582,11 @@ as_single_record_listener(as_error* err, as_record* record, void* udata, as_even
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
+
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+		}
 	}
 	as_single_executor_complete(data);
 }
@@ -2585,13 +2605,16 @@ as_single_value_listener(as_error* err, as_val* val, void* udata, as_event_loop*
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
 
-		if (err->code == AEROSPIKE_ERR_UDF) {
-			as_record_reset(&rec->record, 1);
-			as_string* s = as_string_new_strdup(err->message);
-			as_record_set(&rec->record, "FAILURE", (as_bin_value*)s);
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+
+			if (err->code == AEROSPIKE_ERR_UDF) {
+				as_record_reset(&rec->record, 1);
+				as_string* s = as_string_new_strdup(err->message);
+				as_record_set(&rec->record, "FAILURE", (as_bin_value*)s);
+			}
 		}
 	}
 	as_single_executor_complete(data);
@@ -2608,8 +2631,11 @@ as_txn_verify_listener(as_error* err, as_record* record, void* udata, as_event_l
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
+
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+		}
 	}
 	as_single_executor_complete(data);
 }
@@ -2625,8 +2651,11 @@ as_txn_roll_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
+
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+		}
 	}
 	as_single_executor_complete(data);
 }
@@ -3909,6 +3938,10 @@ as_batch_retry_parse_row(uint8_t* p, uint8_t* type)
 			p += 3;
 		}
 		
+		if (t & BATCH_MSG_INFO4) {
+			p += 1;
+		}
+
 		if (t & BATCH_MSG_GEN) {
 			p += 2;
 		}
@@ -4178,6 +4211,10 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 
 	be->error_row = true;
 
+	if (!err->in_doubt) {
+		return;
+	}
+
 	// Set error/in_doubt in each key contained in the command.
 	// Batch offsets are out of scope, so they must be parsed
 	// from the parent command's send buffer.
@@ -4207,7 +4244,7 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 		as_batch_base_record* rec = as_vector_get(records, offset);
 
 		if (rec->result == AEROSPIKE_NO_RESPONSE && rec->has_write) {
-			rec->in_doubt = err->in_doubt;
+			rec->in_doubt = true;
 		}
 
 		uint8_t type;

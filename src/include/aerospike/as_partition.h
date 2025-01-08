@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -110,7 +110,7 @@ as_partition_tables_destroy(as_partition_tables* tables);
  * @private
  * Get partition table given namespace.
  */
-as_partition_table*
+AS_EXTERN as_partition_table*
 as_partition_tables_get(as_partition_tables* tables, const char* ns);
 	
 /**

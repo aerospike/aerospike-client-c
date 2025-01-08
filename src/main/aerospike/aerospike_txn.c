@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -222,8 +222,7 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* co
 			return AEROSPIKE_OK;
 
 		case AS_TXN_STATE_ABORTED:
-			as_set_commit_status(commit_status, AS_COMMIT_ALREADY_ABORTED);
-			return AEROSPIKE_OK;
+			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_ABORTED, "Multi-record transaction already aborted");
 	}
 }
 
@@ -286,8 +285,7 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abor
 			return as_abort(as, err, txn, abort_status);
 
 		case AS_TXN_STATE_COMMITTED:
-			as_set_abort_status(abort_status, AS_ABORT_ALREADY_COMMITTED);
-			return AEROSPIKE_OK;
+			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Multi-record transaction already committed");
 
 		case AS_TXN_STATE_ABORTED:
 			as_set_abort_status(abort_status, AS_ABORT_ALREADY_ABORTED);
@@ -613,8 +611,7 @@ aerospike_commit_async(
 			return AEROSPIKE_OK;
 
 		case AS_TXN_STATE_ABORTED:
-			listener(NULL, AS_COMMIT_ALREADY_ABORTED, udata, event_loop);
-			return AEROSPIKE_OK;
+			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_ABORTED, "Multi-record transaction already aborted");
 	}
 }
 
@@ -730,8 +727,7 @@ aerospike_abort_async(
 			return as_abort_async(as, err, txn, listener, udata, event_loop);
 
 		case AS_TXN_STATE_COMMITTED:
-			listener(NULL, AS_ABORT_ALREADY_COMMITTED, udata, event_loop);
-			return AEROSPIKE_OK;
+			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Multi-record transaction already committed");
 
 		case AS_TXN_STATE_ABORTED:
 			listener(NULL, AS_ABORT_ALREADY_ABORTED, udata, event_loop);

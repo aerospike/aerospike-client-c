@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -31,6 +31,16 @@ typedef enum as_status_e {
 	//---------------------------------
 	// Client Errors
 	//---------------------------------
+
+	/**
+	 * Multi-record transaction commit called, but the transaction was already aborted.
+	 */
+	AEROSPIKE_TXN_ALREADY_ABORTED = -19,
+
+	/**
+	 * Multi-record transaction abort called, but the transaction was already committed.
+	 */
+	AEROSPIKE_TXN_ALREADY_COMMITTED = -18,
 
 	/**
 	 * Multi-record transaction failed.

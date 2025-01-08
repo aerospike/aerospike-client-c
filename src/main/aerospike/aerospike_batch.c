@@ -2553,8 +2553,11 @@ as_single_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
+
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+		}
 	}
 	as_single_executor_complete(data);
 }
@@ -2579,8 +2582,11 @@ as_single_record_listener(as_error* err, as_record* record, void* udata, as_even
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
+
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+		}
 	}
 	as_single_executor_complete(data);
 }
@@ -2599,13 +2605,16 @@ as_single_value_listener(as_error* err, as_val* val, void* udata, as_event_loop*
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
 
-		if (err->code == AEROSPIKE_ERR_UDF) {
-			as_record_reset(&rec->record, 1);
-			as_string* s = as_string_new_strdup(err->message);
-			as_record_set(&rec->record, "FAILURE", (as_bin_value*)s);
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+
+			if (err->code == AEROSPIKE_ERR_UDF) {
+				as_record_reset(&rec->record, 1);
+				as_string* s = as_string_new_strdup(err->message);
+				as_record_set(&rec->record, "FAILURE", (as_bin_value*)s);
+			}
 		}
 	}
 	as_single_executor_complete(data);
@@ -2622,8 +2631,11 @@ as_txn_verify_listener(as_error* err, as_record* record, void* udata, as_event_l
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
+
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+		}
 	}
 	as_single_executor_complete(data);
 }
@@ -2639,8 +2651,11 @@ as_txn_roll_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 	else {
 		rec->result = err->code;
-		rec->in_doubt = err->in_doubt;
-		data->executor->error_row = true;
+
+		if (as_batch_set_error_row(err->code)) {
+			rec->in_doubt = err->in_doubt;
+			data->executor->error_row = true;
+		}
 	}
 	as_single_executor_complete(data);
 }

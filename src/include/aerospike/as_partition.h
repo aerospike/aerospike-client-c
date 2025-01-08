@@ -110,7 +110,7 @@ as_partition_tables_destroy(as_partition_tables* tables);
  * @private
  * Get partition table given namespace.
  */
-as_partition_table*
+AS_EXTERN as_partition_table*
 as_partition_tables_get(as_partition_tables* tables, const char* ns);
 	
 /**

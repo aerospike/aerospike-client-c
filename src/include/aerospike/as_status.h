@@ -457,6 +457,16 @@ typedef enum as_status_e {
 	AEROSPIKE_MRT_ABORTED = 125,
 
 	/**
+	 * This record has been locked by a previous update in this transaction.
+	 */
+	AEROSPIKE_MRT_ALREADY_LOCKED = 126,
+
+	/**
+	 * This transaction has already started. Writing to the same transaction with independent threads is unsafe.
+	 */
+	AEROSPIKE_MRT_MONITOR_EXISTS = 127,
+
+	/**
 	 * Batch functionality has been disabled.
 	 */
 	AEROSPIKE_ERR_BATCH_DISABLED = 150,

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -507,7 +507,7 @@ as_scan_command_init(
 
 		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
 				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
-				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+				policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else if (scan->apply_each.function[0]) {
 		// Background scan with UDF.
@@ -515,7 +515,7 @@ as_scan_command_init(
 
 		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
 				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
-				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+				policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {
 		// Foreground scan.

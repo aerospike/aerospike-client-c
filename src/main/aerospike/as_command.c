@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -213,8 +213,8 @@ uint8_t*
 as_command_write_header_write(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
-	uint16_t n_fields, uint16_t n_bins, bool durable_delete, uint8_t read_attr, uint8_t write_attr,
-	uint8_t info_attr
+	uint16_t n_fields, uint16_t n_bins, bool durable_delete, bool on_locking_only,
+	uint8_t read_attr, uint8_t write_attr, uint8_t info_attr
 	)
 {
 	switch (exists) {
@@ -266,6 +266,8 @@ as_command_write_header_write(
 		write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
 	}
 
+	uint8_t txn_attr = on_locking_only ? AS_MSG_INFO4_MRT_ON_LOCKING_ONLY : 0;
+
 #if defined USE_XDR
 	read_attr |= AS_MSG_INFO1_XDR;
 #endif
@@ -274,7 +276,8 @@ as_command_write_header_write(
 	cmd[9] = read_attr;
 	cmd[10] = write_attr;
 	cmd[11] = info_attr;
-	*(uint16_t*)&cmd[12] = 0;
+	cmd[12] = txn_attr;
+	cmd[13] = 0;
 	*(uint32_t*)&cmd[14] = cf_swap_to_be32(generation);
 	*(uint32_t*)&cmd[18] = cf_swap_to_be32(ttl);
 	uint32_t timeout = as_command_server_timeout(policy);

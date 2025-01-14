@@ -75,6 +75,7 @@ typedef struct {
 	uint8_t read_attr;
 	uint8_t write_attr;
 	uint8_t info_attr;
+	uint8_t txn_attr;
 	bool has_write;
 	bool send_key;
 } as_batch_attr;
@@ -996,7 +997,7 @@ as_batch_read_record_size(as_batch_read_record* rec, as_batch_builder* bb, as_er
 static as_status
 as_batch_write_record_size(as_batch_write_record* rec, as_batch_builder* bb, as_error* err)
 {
-	bb->size += 6; // gen(2) + ttl(4)
+	bb->size += 7; // gen(2) + ttl(4) + info4(1)
 
 	bool has_write = false;
 
@@ -1027,7 +1028,7 @@ as_batch_write_record_size(as_batch_write_record* rec, as_batch_builder* bb, as_
 static void
 as_batch_apply_record_size(as_batch_apply_record* rec, as_batch_builder* bb)
 {
-	bb->size += 6; // gen(2) + ttl(4)
+	bb->size += 7; // gen(2) + ttl(4) + info4(1)
 	bb->size += as_command_string_field_size(rec->module);
 	bb->size += as_command_string_field_size(rec->function);
 
@@ -1043,7 +1044,7 @@ as_batch_apply_record_size(as_batch_apply_record* rec, as_batch_builder* bb)
 static inline void
 as_batch_remove_record_size(as_batch_builder* bb)
 {
-	bb->size += 6; // gen(2) + ttl(4)
+	bb->size += 7; // gen(2) + ttl(4) + info4(1)
 }
 
 static inline void
@@ -1228,6 +1229,7 @@ as_batch_attr_read_header(as_batch_attr* attr, const as_policy_batch* p)
 		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
 		break;
 	}
+	attr->txn_attr = 0;
 	attr->ttl = p->read_touch_ttl_percent;
 	attr->gen = 0;
 	attr->has_write = false;
@@ -1261,6 +1263,7 @@ as_batch_attr_read_row(as_batch_attr* attr, const as_policy_batch_read* p)
 		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
 		break;
 	}
+	attr->txn_attr = 0;
 	attr->ttl = p->read_touch_ttl_percent;
 	attr->gen = 0;
 	attr->has_write = false;
@@ -1356,6 +1359,8 @@ as_batch_attr_write(as_batch_attr* attr, const as_policy_batch_write* p, as_oper
 	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
+
+	attr->txn_attr = p->on_locking_only ? AS_MSG_INFO4_MRT_ON_LOCKING_ONLY : 0;
 }
 
 static void
@@ -1377,6 +1382,8 @@ as_batch_attr_apply(as_batch_attr* attr, const as_policy_batch_apply* p)
 	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
+
+	attr->txn_attr = p->on_locking_only ? AS_MSG_INFO4_MRT_ON_LOCKING_ONLY : 0;
 }
 
 static void
@@ -1412,6 +1419,8 @@ as_batch_attr_remove(as_batch_attr* attr, const as_policy_batch_remove* p)
 	if (p->commit_level == AS_POLICY_COMMIT_LEVEL_MASTER) {
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
+
+	attr->txn_attr = 0;
 }
 
 static uint8_t*
@@ -1486,10 +1495,11 @@ as_batch_write_write(
 	uint16_t n_fields, uint16_t n_ops
 	)
 {
-	*p++ = (BATCH_MSG_INFO | BATCH_MSG_GEN | BATCH_MSG_TTL);
+	*p++ = (BATCH_MSG_INFO | BATCH_MSG_GEN | BATCH_MSG_TTL | BATCH_MSG_INFO4);
 	*p++ = attr->read_attr;
 	*p++ = attr->write_attr;
 	*p++ = attr->info_attr;
+	*p++ = attr->txn_attr;
 	*(uint16_t*)p = cf_swap_to_be16(attr->gen);
 	p += sizeof(uint16_t);
 	*(uint32_t*)p = cf_swap_to_be32(attr->ttl);
@@ -2282,6 +2292,7 @@ as_operate_policy_copy_read(
 	trg->ttl = 0;
 	trg->deserialize = pb->deserialize;
 	trg->durable_delete = false;
+	trg->on_locking_only = false;
 	trg->async_heap_rec = true;   // Ignored in sync commands.
 	trg->respond_all_ops = false; // Not relevant for reads, since all reads return a result.
 
@@ -2323,6 +2334,7 @@ as_operate_policy_copy_write(
 	trg->read_touch_ttl_percent = pb->read_touch_ttl_percent;
 	trg->deserialize = pb->deserialize;
 	trg->durable_delete = src->durable_delete;
+	trg->on_locking_only = src->on_locking_only;
 	trg->async_heap_rec = true; // Ignored in sync commands.
 	trg->respond_all_ops = true;
 }
@@ -2343,6 +2355,7 @@ as_apply_policy_copy(
 	trg->commit_level = src->commit_level;
 	trg->ttl = src->ttl;
 	trg->durable_delete = src->durable_delete;
+	trg->on_locking_only = src->on_locking_only;
 }
 
 static void

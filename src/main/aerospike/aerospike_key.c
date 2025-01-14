@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -854,7 +854,7 @@ as_put_write(void* udata, uint8_t* buf)
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 		policy->exists, policy->gen, rec->gen, ttl, put->tdata.n_fields, put->n_bins,
-		policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+		policy->durable_delete, policy->on_locking_only, 0, AS_MSG_INFO2_WRITE, 0);
 
 	p = as_command_write_key(p, &policy->base, policy->key, put->key, &put->tdata);
 	p = as_command_write_filter(&policy->base, put->filter_size, p);
@@ -1020,8 +1020,8 @@ aerospike_key_remove(
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
-					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
-					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
+		AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
+		policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
 
 	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -1067,8 +1067,8 @@ aerospike_key_remove_async_ex(
 		pipe_listener, size, as_event_command_parse_header, NULL, 0);
 
 	uint8_t* p = as_command_write_header_write(cmd->buf, &policy->base, policy->commit_level,
-					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
-					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
+		AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
+		policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
 
 	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -1222,8 +1222,8 @@ as_operate_write(void* udata, uint8_t* buf)
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 		policy->exists, policy->gen, ops->gen, ttl, oper->tdata.n_fields,
-		oper->n_operations, policy->durable_delete, oper->read_attr, oper->write_attr,
-		oper->info_attr);
+		oper->n_operations, policy->durable_delete, policy->on_locking_only, oper->read_attr,
+		oper->write_attr, oper->info_attr);
 
 	p = as_command_write_key(p, &policy->base, policy->key, oper->key, &oper->tdata);
 	p = as_command_write_filter(&policy->base, oper->filter_size, p);
@@ -1481,7 +1481,7 @@ as_apply_write(void* udata, uint8_t* buf)
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level, 0,
 		AS_POLICY_GEN_IGNORE, 0, policy->ttl, ap->tdata.n_fields, 0, policy->durable_delete,
-		ap->read_attr, AS_MSG_INFO2_WRITE, 0);
+		policy->on_locking_only, ap->read_attr, AS_MSG_INFO2_WRITE, 0);
 
 	p = as_command_write_key(p, &policy->base, policy->key, ap->key, &ap->tdata);
 	p = as_command_write_filter(&policy->base, ap->filter_size, p);

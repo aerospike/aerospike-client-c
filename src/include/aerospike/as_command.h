@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -112,9 +112,10 @@ extern "C" {
 //   1      1     allow unavailable
 
 // MRT
-#define AS_MSG_INFO4_MRT_VERIFY_READ	(1 << 0) // Send MRT version to the server to be verified.
-#define AS_MSG_INFO4_MRT_ROLL_FORWARD	(1 << 1) // Roll forward MRT.
-#define AS_MSG_INFO4_MRT_ROLL_BACK		(1 << 2) // Roll back MRT.
+#define AS_MSG_INFO4_MRT_VERIFY_READ		(1 << 0) // Send MRT version to the server to be verified.
+#define AS_MSG_INFO4_MRT_ROLL_FORWARD		(1 << 1) // Roll forward MRT.
+#define AS_MSG_INFO4_MRT_ROLL_BACK			(1 << 2) // Roll back MRT.
+#define AS_MSG_INFO4_MRT_ON_LOCKING_ONLY	(1 << 4) // Must be able to lock record in transaction.
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -378,8 +379,8 @@ uint8_t*
 as_command_write_header_write(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
-	uint16_t n_fields, uint16_t n_bins, bool durable_delete, uint8_t read_attr, uint8_t write_attr,
-	uint8_t info_attr
+	uint16_t n_fields, uint16_t n_bins, bool durable_delete, bool on_locking_only,
+	uint8_t read_attr, uint8_t write_attr, uint8_t info_attr
 	);
 
 /**

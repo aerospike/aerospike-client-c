@@ -121,7 +121,7 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 	txn->state = AS_TXN_STATE_COMMITTED;
 	txn->in_doubt = false;
 
-	status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_FORWARD);
+	status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_TXN_ROLL_FORWARD);
 
 	if (status != AEROSPIKE_OK) {
 		// The client roll has error. The server will eventually roll forward the transaction
@@ -176,7 +176,7 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 	as_policy_txn_roll* roll_policy = &as->config.policies.txn_roll;
 
 	as_error roll_err;
-	as_status roll_status = as_txn_roll(as, &roll_err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_BACK);
+	as_status roll_status = as_txn_roll(as, &roll_err, roll_policy, txn, AS_MSG_INFO4_TXN_ROLL_BACK);
 
 	if (roll_status != AEROSPIKE_OK) {
 		as_error_update(err, verify_status, "Txn aborted:\nVerify failed: %s\nRollback abandoned: %s",
@@ -222,7 +222,7 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* co
 			return AEROSPIKE_OK;
 
 		case AS_TXN_STATE_ABORTED:
-			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_ABORTED, "Multi-record transaction already aborted");
+			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_ABORTED, "Transaction already aborted");
 	}
 }
 
@@ -245,7 +245,7 @@ as_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_statu
 
 	as_policy_txn_roll* roll_policy = &as->config.policies.txn_roll;
 
-	as_status status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_MRT_ROLL_BACK);
+	as_status status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_TXN_ROLL_BACK);
 
 	if (status != AEROSPIKE_OK) {
 		// The client roll has error. The server will eventually abort the transaction.
@@ -285,7 +285,7 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abor
 			return as_abort(as, err, txn, abort_status);
 
 		case AS_TXN_STATE_COMMITTED:
-			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Multi-record transaction already committed");
+			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Transaction already committed");
 
 		case AS_TXN_STATE_ABORTED:
 			as_set_abort_status(abort_status, AS_ABORT_ALREADY_ABORTED);
@@ -497,7 +497,7 @@ as_commit_mark_listener(as_error* err, void* udata, as_event_loop* event_loop)
 
 	as_error roll_err;
 	as_status status = as_txn_roll_async(data->as, &roll_err, data->roll_policy, data->txn,
-	 	AS_MSG_INFO4_MRT_ROLL_FORWARD, as_commit_roll_listener, data, event_loop);
+	 	AS_MSG_INFO4_TXN_ROLL_FORWARD, as_commit_roll_listener, data, event_loop);
 
 	if (status != AEROSPIKE_OK) {
 		// The client roll has error. The server will eventually roll forward the transaction
@@ -550,7 +550,7 @@ as_commit_verify_listener(
 
 		as_error roll_err;
 		as_status status = as_txn_roll_async(data->as, &roll_err, data->roll_policy, data->txn,
-			AS_MSG_INFO4_MRT_ROLL_BACK, as_commit_roll_listener, data, event_loop);
+			AS_MSG_INFO4_TXN_ROLL_BACK, as_commit_roll_listener, data, event_loop);
 
 		if (status != AEROSPIKE_OK) {
 			as_commit_notify_error_verify_rollback(&roll_err, data, event_loop);
@@ -611,7 +611,7 @@ aerospike_commit_async(
 			return AEROSPIKE_OK;
 
 		case AS_TXN_STATE_ABORTED:
-			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_ABORTED, "Multi-record transaction already aborted");
+			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_ABORTED, "Transaction already aborted");
 	}
 }
 
@@ -703,7 +703,7 @@ as_abort_async(
 	txn->state = AS_TXN_STATE_ABORTED;
 
 	as_status status = as_txn_roll_async(data->as, err, data->roll_policy, data->txn,
-		AS_MSG_INFO4_MRT_ROLL_BACK, as_abort_roll_listener, data, event_loop);
+		AS_MSG_INFO4_TXN_ROLL_BACK, as_abort_roll_listener, data, event_loop);
 
 	if (status != AEROSPIKE_OK) {
 		as_abort_data_destroy(data);
@@ -727,7 +727,7 @@ aerospike_abort_async(
 			return as_abort_async(as, err, txn, listener, udata, event_loop);
 
 		case AS_TXN_STATE_COMMITTED:
-			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Multi-record transaction already committed");
+			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Transaction already committed");
 
 		case AS_TXN_STATE_ABORTED:
 			listener(NULL, AS_ABORT_ALREADY_ABORTED, udata, event_loop);

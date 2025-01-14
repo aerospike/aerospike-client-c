@@ -266,7 +266,7 @@ as_command_write_header_write(
 		write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
 	}
 
-	uint8_t txn_attr = on_locking_only ? AS_MSG_INFO4_MRT_ON_LOCKING_ONLY : 0;
+	uint8_t txn_attr = on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
 
 #if defined USE_XDR
 	read_attr |= AS_MSG_INFO1_XDR;
@@ -401,14 +401,14 @@ as_command_write_key(
 	if (policy->txn) {
 		as_txn* txn = policy->txn;
 
-		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, txn->id);
+		p = as_command_write_field_uint64_le(p, AS_FIELD_TXN_ID, txn->id);
 
 		if (tdata->version != 0) {
 			p = as_command_write_field_version(p, tdata->version);
 		}
 
 		if (tdata->send_deadline) {
-			p = as_command_write_field_uint32_le(p, AS_FIELD_MRT_DEADLINE, txn->deadline);
+			p = as_command_write_field_uint32_le(p, AS_FIELD_TXN_DEADLINE, txn->deadline);
 		}
 	}
 
@@ -640,10 +640,10 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 {
 	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 
-	// It's important that as_txn_on_write_in_doubt() is only executed for commands in a MRT,
-	// but not MRT operations (add MRT key, commit, abort). Add MRT key sets
-	// AS_COMMAND_FLAGS_MRT_MONITOR and commit/abort do not set cmd->policy->txn.
-	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_MRT_MONITOR) == 0) {
+	// It's important that as_txn_on_write_in_doubt() is only executed for commands in a transaction,
+	// but not transaction operations (add transaction key, commit, abort). Add transaction key sets
+	// AS_COMMAND_FLAGS_TXN_MONITOR and commit/abort do not set cmd->policy->txn.
+	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_TXN_MONITOR) == 0) {
 		as_txn_on_write_in_doubt(cmd->policy->txn, cmd->key->digest.value, cmd->key->set);
 	}
 }
@@ -1762,12 +1762,12 @@ as_command_parse_fields_deadline(uint8_t** pp, as_error* err, as_msg* msg, as_tx
 		p += 4;
 		type = *p++;
 
-		if (type == AS_FIELD_MRT_DEADLINE) {
+		if (type == AS_FIELD_TXN_DEADLINE) {
 			if (len == 4) {
 				txn->deadline = cf_swap_from_le32(*(uint32_t*)p);
 			}
 			else {
-				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "MRT deadline field has invalid size: %u", len);
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Transaction deadline field has invalid size: %u", len);
 			}
 		}
 		p += len;

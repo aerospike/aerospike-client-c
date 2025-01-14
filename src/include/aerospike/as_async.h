@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -41,7 +41,7 @@ extern "C" {
 #define AS_ASYNC_TYPE_SCAN_PARTITION 7
 #define AS_ASYNC_TYPE_QUERY_PARTITION 8
 #define AS_ASYNC_TYPE_CONNECTOR 9
-#define AS_ASYNC_TYPE_MRT_MONITOR 10
+#define AS_ASYNC_TYPE_TXN_MONITOR 10
 
 #define AS_AUTHENTICATION_MAX_SIZE 158
 

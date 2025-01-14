@@ -1360,7 +1360,7 @@ as_batch_attr_write(as_batch_attr* attr, const as_policy_batch_write* p, as_oper
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 
-	attr->txn_attr = p->on_locking_only ? AS_MSG_INFO4_MRT_ON_LOCKING_ONLY : 0;
+	attr->txn_attr = p->on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
 }
 
 static void
@@ -1383,7 +1383,7 @@ as_batch_attr_apply(as_batch_attr* attr, const as_policy_batch_apply* p)
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 
-	attr->txn_attr = p->on_locking_only ? AS_MSG_INFO4_MRT_ON_LOCKING_ONLY : 0;
+	attr->txn_attr = p->on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
 }
 
 static void
@@ -1452,14 +1452,14 @@ as_batch_write_fields_all(
 	p = as_batch_write_fields(p, key, n_fields, n_ops);
 
 	if (txn) {
-		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, txn->id);
+		p = as_command_write_field_uint64_le(p, AS_FIELD_TXN_ID, txn->id);
 
 		if (ver) {
 			p = as_command_write_field_version(p, ver);
 		}
 
 		if (attr->has_write && txn->deadline != 0) {
-			p = as_command_write_field_uint32_le(p, AS_FIELD_MRT_DEADLINE, txn->deadline);
+			p = as_command_write_field_uint32_le(p, AS_FIELD_TXN_DEADLINE, txn->deadline);
 		}
 	}
 
@@ -1515,7 +1515,7 @@ as_batch_write_txn_verify(uint8_t* p, as_key* key, uint64_t ver)
 	*p++ = (AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 	*p++ = 0;
 	*p++ = AS_MSG_INFO3_SC_READ_TYPE;
-	*p++ = AS_MSG_INFO4_MRT_VERIFY_READ;
+	*p++ = AS_MSG_INFO4_TXN_VERIFY_READ;
 
 	if (ver) {
 		p = as_batch_write_fields(p, key, 1, 0);
@@ -1553,14 +1553,14 @@ as_batch_write_txn_roll(uint8_t* p, as_key* key, as_txn* txn, uint64_t ver, uint
 	p = as_batch_write_fields(p, key, n_fields, 0);
 
 	if (txn) {
-		p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, txn->id);
+		p = as_command_write_field_uint64_le(p, AS_FIELD_TXN_ID, txn->id);
 
 		if (ver) {
 			p = as_command_write_field_version(p, ver);
 		}
 
 		if (txn->deadline) {
-			p = as_command_write_field_uint32_le(p, AS_FIELD_MRT_DEADLINE, txn->deadline);
+			p = as_command_write_field_uint32_le(p, AS_FIELD_TXN_DEADLINE, txn->deadline);
 		}
 	}
 	return p;
@@ -4266,7 +4266,7 @@ as_async_batch_error(as_event_command* cmd, as_error* err)
 }
 
 //---------------------------------
-// Private MRT Functions
+// Private Transaction Functions
 //---------------------------------
 
 static void
@@ -4555,7 +4555,7 @@ aerospike_batch_write_async(
 			return status;
 		}
 
-		// Add keys to MRT monitor record. Original batch write will be performed when this completes.
+		// Add keys to transaction monitor record. Original batch write will be performed when this completes.
 		as_batch_txn* bt = cf_malloc(sizeof(as_batch_txn));
 		bt->as = as; // Assume "as" is either global or was allocated on the heap.
 		bt->records = records; // Already required to be allocated on the heap.

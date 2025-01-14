@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2024 by Aerospike.
+ * Copyright 2008-2025 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -78,7 +78,7 @@ main(int argc, char* argv[])
 	// Connect to the aerospike database cluster.
 	example_connect_to_aerospike(&as);
 
-	// Create multi-record transaction.
+	// Create transaction.
 	as_txn* txn = as_txn_create();
 	LOG("Initialize transaction: %" PRId64, (int64_t)txn->id);
 
@@ -86,7 +86,7 @@ main(int argc, char* argv[])
 	data->event_loop = as_event_loop_get();
 	data->txn = txn;
 
-	// Run multi-record transaction.
+	// Run transaction.
 	run_transaction(data);
 
 	// Wait till commands have completed before shutting down.

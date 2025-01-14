@@ -530,7 +530,7 @@ typedef struct as_policy_base_s {
 	struct as_exp* filter_exp;
 	
 	/**
-	 * Multi-record command identifier. If set for an async command,  the source txn instance must
+	 * Transaction identifier. If set for an async command,  the source txn instance must
 	 * be allocated on the heap using as_txn_create() or as_txn_create_capacity().
 	 *
 	 * Default: NULL
@@ -1512,13 +1512,13 @@ typedef struct as_policy_admin_s {
 } as_policy_admin;
 
 /**
- * Multi-record transaction (MRT) policy fields used to batch verify record versions on commit.
+ * Transaction policy fields used to batch verify record versions on commit.
  * Used a placeholder for now as there are no additional fields beyond as_policy_batch.
  */
 typedef as_policy_batch as_policy_txn_verify;
 
 /**
- * Multi-record transaction (MRT) policy fields used to batch roll forward/backward records on
+ * Transaction policy fields used to batch roll forward/backward records on
  * commit or abort. Used a placeholder for now as there are no additional fields beyond as_policy_batch.
  */
 typedef as_policy_batch as_policy_txn_roll;
@@ -1603,12 +1603,12 @@ typedef struct as_policies_s {
 	as_policy_admin admin;
 
 	/**
-	 * Default multi-record transaction (MRT) policy when verifying record versions in a batch.
+	 * Default transaction policy when verifying record versions in a batch.
 	 */
 	as_policy_txn_verify txn_verify;
 
 	/**
-	 * Default multi-record transaction (MRT) policy when rolling the transaction records forward (commit)
+	 * Default transaction policy when rolling the transaction records forward (commit)
 	 * or back (abort) in a batch.
 	 */
 	as_policy_txn_roll txn_roll;

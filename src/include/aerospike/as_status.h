@@ -33,17 +33,17 @@ typedef enum as_status_e {
 	//---------------------------------
 
 	/**
-	 * Multi-record transaction commit called, but the transaction was already aborted.
+	 * Transaction commit called, but the transaction was already aborted.
 	 */
 	AEROSPIKE_TXN_ALREADY_ABORTED = -19,
 
 	/**
-	 * Multi-record transaction abort called, but the transaction was already committed.
+	 * Transaction abort called, but the transaction was already committed.
 	 */
 	AEROSPIKE_TXN_ALREADY_COMMITTED = -18,
 
 	/**
-	 * Multi-record transaction failed.
+	 * Transaction failed.
 	 */
 	AEROSPIKE_TXN_FAILED = -17,
 
@@ -426,33 +426,33 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_UDF = 100,
 
 	/**
-	 * MRT record blocked by a different transaction.
+	 * Transaction record blocked by a different transaction.
 	 */
 	AEROSPIKE_MRT_BLOCKED = 120,
 
 	/**
-	 * MRT read version mismatch identified during commit.
+	 * Transaction read version mismatch identified during commit.
 	 * Some other command changed the record outside of the transaction.
 	 */
 	AEROSPIKE_MRT_VERSION_MISMATCH = 121,
 
 	/**
-	 * MRT deadline reached without a successful commit or abort.
+	 * Transaction deadline reached without a successful commit or abort.
 	 */
 	AEROSPIKE_MRT_EXPIRED = 122,
 
 	/**
-	 * MRT write command limit (4096) exceeded.
+	 * Transaction write command limit (4096) exceeded.
 	 */
 	AEROSPIKE_MRT_TOO_MANY_WRITES = 123,
 
 	/**
-	 * MRT was already committed.
+	 * Transaction was already committed.
 	 */
 	AEROSPIKE_MRT_COMMITTED = 124,
 
 	/**
-	 * MRT was already aborted.
+	 * Transaction was already aborted.
 	 */
 	AEROSPIKE_MRT_ABORTED = 125,
 

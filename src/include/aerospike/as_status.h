@@ -94,7 +94,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_INVALID_NODE = -8,
 	
 	/**
-	 * Asynchronous connection error.
+	 * Max connections would be exceeded.
 	 */
 	AEROSPIKE_ERR_NO_MORE_CONNECTIONS = -7,
 
@@ -316,7 +316,7 @@ typedef enum as_status_e {
 	AEROSPIKE_SECURITY_NOT_ENABLED = 52,
 		
 	/**
-	 * Security type not supported by connected server.
+	 * Security scheme not supported
 	 */
 	AEROSPIKE_SECURITY_SCHEME_NOT_SUPPORTED = 53,
 	
@@ -356,7 +356,7 @@ typedef enum as_status_e {
 	AEROSPIKE_EXPIRED_PASSWORD = 63,
 	
 	/**
-	 * Forbidden password (e.g. recently used)
+	 * Forbidden password (e.g. recently used).
 	 */
 	AEROSPIKE_FORBIDDEN_PASSWORD = 64,
 	
@@ -401,7 +401,7 @@ typedef enum as_status_e {
 	AEROSPIKE_INVALID_QUOTA = 75,
 
 	/**
-	 * User must be authentication before performing database operations.
+	 * User must be authenticated before performing database operations.
 	 */
 	AEROSPIKE_NOT_AUTHENTICATED = 80,
 	
@@ -472,7 +472,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_BATCH_QUEUES_FULL = 152,
 
 	/**
-	 * Invalid/Unsupported GeoJSON
+	 * Invalid/Unsupported GeoJSON.
 	 */
 	AEROSPIKE_ERR_GEO_INVALID_GEOJSON = 160,
 
@@ -482,12 +482,12 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_INDEX_FOUND = 200,
 	
 	/**
-	 * Index not found
+	 * Index not found.
 	 */
 	AEROSPIKE_ERR_INDEX_NOT_FOUND = 201,
 	
 	/**
-	 * Index is out of memory
+	 * Index is out of memory.
 	 */
 	AEROSPIKE_ERR_INDEX_OOM = 202,
 	

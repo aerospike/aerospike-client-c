@@ -64,6 +64,7 @@ typedef struct {
 	uint32_t versions_capacity;
 	uint16_t field_count_header;
 	uint8_t read_attr; // old batch only
+	// This field is only valid for txn attributes that are fixed for all keys.
 	uint8_t txn_attr;
 	bool batch_any;
 } as_batch_builder;
@@ -997,6 +998,8 @@ as_batch_read_record_size(as_batch_read_record* rec, as_batch_builder* bb, as_er
 static as_status
 as_batch_write_record_size(as_batch_write_record* rec, as_batch_builder* bb, as_error* err)
 {
+	// Always account for the info4 byte even though it's rarely used. This will likely result
+	// in the command capacity being slightly larger than the actual command size.
 	bb->size += 7; // gen(2) + ttl(4) + info4(1)
 
 	bool has_write = false;
@@ -1028,6 +1031,8 @@ as_batch_write_record_size(as_batch_write_record* rec, as_batch_builder* bb, as_
 static void
 as_batch_apply_record_size(as_batch_apply_record* rec, as_batch_builder* bb)
 {
+	// Always account for the info4 byte even though it's rarely used. This will likely result
+	// in the command capacity being slightly larger than the actual command size.
 	bb->size += 7; // gen(2) + ttl(4) + info4(1)
 	bb->size += as_command_string_field_size(rec->module);
 	bb->size += as_command_string_field_size(rec->function);
@@ -1044,7 +1049,7 @@ as_batch_apply_record_size(as_batch_apply_record* rec, as_batch_builder* bb)
 static inline void
 as_batch_remove_record_size(as_batch_builder* bb)
 {
-	bb->size += 7; // gen(2) + ttl(4) + info4(1)
+	bb->size += 6; // gen(2) + ttl(4)
 }
 
 static inline void
@@ -1495,11 +1500,19 @@ as_batch_write_write(
 	uint16_t n_fields, uint16_t n_ops
 	)
 {
-	*p++ = (BATCH_MSG_INFO | BATCH_MSG_GEN | BATCH_MSG_TTL | BATCH_MSG_INFO4);
-	*p++ = attr->read_attr;
-	*p++ = attr->write_attr;
-	*p++ = attr->info_attr;
-	*p++ = attr->txn_attr;
+	if (attr->txn_attr) {
+		*p++ = (BATCH_MSG_INFO | BATCH_MSG_GEN | BATCH_MSG_TTL | BATCH_MSG_INFO4);
+		*p++ = attr->read_attr;
+		*p++ = attr->write_attr;
+		*p++ = attr->info_attr;
+		*p++ = attr->txn_attr;
+	}
+	else {
+		*p++ = (BATCH_MSG_INFO | BATCH_MSG_GEN | BATCH_MSG_TTL);
+		*p++ = attr->read_attr;
+		*p++ = attr->write_attr;
+		*p++ = attr->info_attr;
+	}
 	*(uint16_t*)p = cf_swap_to_be16(attr->gen);
 	p += sizeof(uint16_t);
 	*(uint32_t*)p = cf_swap_to_be32(attr->ttl);
@@ -2015,7 +2028,7 @@ as_batch_keys_size_new(
 		}
 		else {
 			// Size full message.
-			bb->size += 12; // repeat(1) + info(3) + ttl(4) + n_fields(2) + n_ops(2) = 12
+			bb->size += 8; // repeat(1) + info(3) + n_fields(2) + n_ops(2)
 			bb->size += as_command_string_field_size(key->ns);
 			bb->size += as_command_string_field_size(key->set);
 			as_batch_txn_size(ver, bb, attr->has_write);
@@ -2189,7 +2202,8 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 		.filter_exp = btk->attr->filter_exp ? btk->attr->filter_exp : policy->base.filter_exp,
 		.buffers = &buffers,
 		.txn = btk->base.txn,
-		.versions = btk->base.versions
+		.versions = btk->base.versions,
+		.txn_attr = btk->base.txn_attr
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
@@ -2207,7 +2221,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 		buf);
 
 	if (size > capacity) {
-		as_log_warn("Batch command buffer size %z exceeded capacity %z", size, capacity);
+		as_log_warn("Batch command buffer size %zu exceeded capacity %zu", size, capacity);
 	}
 
 	as_batch_builder_destroy(&bb);
@@ -3053,6 +3067,7 @@ as_batch_keys_execute(
 	btk.base.has_write = rec->has_write;
 	btk.base.replica_index = rep.replica_index;
 	btk.base.replica_index_sc = rep.replica_index_sc;
+	btk.base.txn_attr = attr->txn_attr;
 	btk.ns = ns;
 	btk.keys = batch->keys.entries;
 	btk.batch = batch;
@@ -3359,6 +3374,9 @@ as_batch_execute_async(
 				cmd->write_len = (uint32_t)as_batch_records_write(policy, defs, records,
 					&batch_node->offsets, &bb, cmd->buf);
 
+				if (cmd->write_len > bb.size) {
+					as_log_warn("Batch command buffer size %u exceeded capacity %zu", cmd->write_len, bb.size);
+				}
 				status = as_event_command_execute(cmd, err);
 			}
 			else {

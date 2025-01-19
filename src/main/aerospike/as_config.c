@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -57,6 +57,7 @@ as_config_init(as_config* c)
 	c->auth_mode = AS_AUTH_INTERNAL;
 	c->fail_if_not_connected = true;
 	c->use_services_alternate = false;
+	c->force_single_node = false;
 	c->rack_aware = false;
 	c->rack_id = 0;
 	c->rack_ids = NULL;

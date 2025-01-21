@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -700,6 +700,17 @@ typedef struct as_config_s {
 	 * Default: false
 	 */
 	bool use_services_alternate;
+
+	/**
+	 * For testing purposes only.  Do not modify.
+	 *
+	 * Should the aerospike instance communicate with the first seed node only
+	 * instead of using the data partition map to determine which node to send the
+	 * database command.
+	 *
+	 * Default: false
+	 */
+	bool force_single_node;
 
 	/**
 	 * Track server rack data.  This field is useful when directing read commands to 

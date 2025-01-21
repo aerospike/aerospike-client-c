@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1212,7 +1212,7 @@ as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 }
 
 as_status
-as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
+as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node)
 {
 	as_log_debug("Update partition map for node %s", as_node_get_address_string(node));
 

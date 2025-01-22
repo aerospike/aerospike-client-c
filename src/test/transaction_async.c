@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1130,7 +1130,7 @@ TEST(txn_async_batch_abort, "transaction async batch abort")
 
 SUITE(transaction_async, "Async transaction tests")
 {
-	// Multi-record transactions require strong consistency namespaces.
+	// Transactions require strong consistency namespaces.
 	if (!g_has_sc) {
 		return;
 	}

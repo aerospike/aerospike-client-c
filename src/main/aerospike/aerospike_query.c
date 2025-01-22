@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -891,7 +891,7 @@ as_query_command_init(
 
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
 			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, ttl, qb->n_fields, qb->n_ops,
-			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+			write_policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {
 		// Background query with UDF.
@@ -899,7 +899,7 @@ as_query_command_init(
 
 		p = as_command_write_header_write(cmd, base_policy, write_policy->commit_level,
 			write_policy->exists, AS_POLICY_GEN_IGNORE, 0, ttl, qb->n_fields, qb->n_ops,
-			write_policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+			write_policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 
 	// Write namespace.

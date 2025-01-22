@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -854,7 +854,7 @@ as_put_write(void* udata, uint8_t* buf)
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 		policy->exists, policy->gen, rec->gen, ttl, put->tdata.n_fields, put->n_bins,
-		policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+		policy->durable_delete, policy->on_locking_only, 0, AS_MSG_INFO2_WRITE, 0);
 
 	p = as_command_write_key(p, &policy->base, policy->key, put->key, &put->tdata);
 	p = as_command_write_filter(&policy->base, put->filter_size, p);
@@ -1020,8 +1020,8 @@ aerospike_key_remove(
 
 	uint8_t* buf = as_command_buffer_init(size);
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
-					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
-					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
+		AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
+		policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
 
 	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -1067,8 +1067,8 @@ aerospike_key_remove_async_ex(
 		pipe_listener, size, as_event_command_parse_header, NULL, 0);
 
 	uint8_t* p = as_command_write_header_write(cmd->buf, &policy->base, policy->commit_level,
-					AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
-					policy->durable_delete, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
+		AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
+		policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DELETE, 0);
 
 	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
@@ -1222,8 +1222,8 @@ as_operate_write(void* udata, uint8_t* buf)
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level,
 		policy->exists, policy->gen, ops->gen, ttl, oper->tdata.n_fields,
-		oper->n_operations, policy->durable_delete, oper->read_attr, oper->write_attr,
-		oper->info_attr);
+		oper->n_operations, policy->durable_delete, policy->on_locking_only, oper->read_attr,
+		oper->write_attr, oper->info_attr);
 
 	p = as_command_write_key(p, &policy->base, policy->key, oper->key, &oper->tdata);
 	p = as_command_write_filter(&policy->base, oper->filter_size, p);
@@ -1422,7 +1422,7 @@ aerospike_key_operate_async(
 			cmd->write_len = (uint32_t)comp_size;
 		}
 
-		// Call normal execute since readonly commands do not add keys to the MRT monitor.
+		// Call normal execute since readonly commands do not add keys to the transaction monitor.
 		return as_event_command_execute(cmd, err);
 	}
 }
@@ -1481,7 +1481,7 @@ as_apply_write(void* udata, uint8_t* buf)
 
 	uint8_t* p = as_command_write_header_write(buf, &policy->base, policy->commit_level, 0,
 		AS_POLICY_GEN_IGNORE, 0, policy->ttl, ap->tdata.n_fields, 0, policy->durable_delete,
-		ap->read_attr, AS_MSG_INFO2_WRITE, 0);
+		policy->on_locking_only, ap->read_attr, AS_MSG_INFO2_WRITE, 0);
 
 	p = as_command_write_key(p, &policy->base, policy->key, ap->key, &ap->tdata);
 	p = as_command_write_filter(&policy->base, ap->filter_size, p);
@@ -1752,7 +1752,7 @@ as_txn_monitor_operate(
 	as_command cmd;
 	as_command_init_write(&cmd, as->cluster, &policy->base, policy->replica, key, oper.size, &pi,
 		as_command_parse_deadline, txn);
-	cmd.flags |= AS_COMMAND_FLAGS_MRT_MONITOR;
+	cmd.flags |= AS_COMMAND_FLAGS_TXN_MONITOR;
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
 
@@ -1797,7 +1797,7 @@ as_txn_monitor_operate_async(
 		cmd = as_async_record_command_create(
 			as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 			policy->async_heap_rec, 0, listener, udata, event_loop, NULL, oper.size,
-			as_event_command_parse_deadline, AS_ASYNC_TYPE_MRT_MONITOR, AS_LATENCY_TYPE_WRITE,
+			as_event_command_parse_deadline, AS_ASYNC_TYPE_TXN_MONITOR, AS_LATENCY_TYPE_WRITE,
 			NULL, 0);
 
 		cmd->txn = txn;
@@ -1817,7 +1817,7 @@ as_txn_monitor_operate_async(
 		cmd = as_async_record_command_create(
 			as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 			policy->async_heap_rec, 0, listener, udata, event_loop, NULL, comp_size,
-			as_event_command_parse_deadline, AS_ASYNC_TYPE_MRT_MONITOR, AS_LATENCY_TYPE_WRITE,
+			as_event_command_parse_deadline, AS_ASYNC_TYPE_TXN_MONITOR, AS_LATENCY_TYPE_WRITE,
 			ubuf, (uint32_t)size);
 
 		// Compress buffer and execute.
@@ -1878,7 +1878,7 @@ as_txn_verify_single(
 	buf[9] = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA;
 	buf[10] = 0;
 	buf[11] = AS_MSG_INFO3_SC_READ_TYPE;
-	buf[12] = AS_MSG_INFO4_MRT_VERIFY_READ;
+	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ;
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;
 	*(int*)&buf[18] = 0;
@@ -1955,7 +1955,7 @@ as_txn_verify_single_async(
 	buf[9] = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA;
 	buf[10] = 0;
 	buf[11] = AS_MSG_INFO3_SC_READ_TYPE;
-	buf[12] = AS_MSG_INFO4_MRT_VERIFY_READ;
+	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ;
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;
 	*(int*)&buf[18] = 0;
@@ -1995,10 +1995,10 @@ as_txn_roll_single(
 	uint16_t n_fields = 4;
 	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
 
-	// MRT ID
+	// Transaction ID
 	size += AS_FIELD_HEADER_SIZE + sizeof(uint64_t);
 
-	// MRT version
+	// Transaction version
 	if (ver) {
 		size += 7 + AS_FIELD_HEADER_SIZE;
 		n_fields++;
@@ -2023,7 +2023,7 @@ as_txn_roll_single(
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
 	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
 	p = as_command_write_field_digest(p, &key->digest);
-	p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, txn->id);
+	p = as_command_write_field_uint64_le(p, AS_FIELD_TXN_ID, txn->id);
 
 	if (ver) {
 		p = as_command_write_field_version(p, ver);
@@ -2081,10 +2081,10 @@ as_txn_roll_single_async(
 	uint16_t n_fields = 4;
 	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;
 
-	// MRT ID
+	// Transaction ID
 	size += AS_FIELD_HEADER_SIZE + sizeof(uint64_t);
 
-	// MRT version
+	// Transaction version
 	if (ver) {
 		size += 7 + AS_FIELD_HEADER_SIZE;
 		n_fields++;
@@ -2114,7 +2114,7 @@ as_txn_roll_single_async(
 	p = as_command_write_field_string(p, AS_FIELD_NAMESPACE, key->ns);
 	p = as_command_write_field_string(p, AS_FIELD_SETNAME, key->set);
 	p = as_command_write_field_digest(p, &key->digest);
-	p = as_command_write_field_uint64_le(p, AS_FIELD_MRT_ID, txn->id);
+	p = as_command_write_field_uint64_le(p, AS_FIELD_TXN_ID, txn->id);
 
 	if (ver) {
 		p = as_command_write_field_version(p, ver);

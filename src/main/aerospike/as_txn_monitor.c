@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -172,8 +172,8 @@ as_txn_monitor_add_keys(
 	as_policy_operate txn_policy;
 	as_txn_policy_copy(cmd_policy, &txn_policy);
 
-	// Set MRT timeout via ttl when creating the MRT monitor record. The server ignores
-	// the MRT timeout field on successive MRT monitor record updates.
+	// Set transaction timeout via ttl when creating the transaction monitor record. The server
+	// ignores the transaction timeout field on successive transaction monitor record updates.
 	ops->ttl = txn->timeout;
 
 	return as_txn_monitor_operate(as, err, txn, &txn_policy, &key, ops);
@@ -279,8 +279,8 @@ as_txn_monitor_add_keys_async(
 	as_policy_operate txn_policy;
 	as_txn_policy_copy(cmd_policy, &txn_policy);
 
-	// Set MRT timeout via ttl when creating the MRT monitor record. The server ignores
-	// the MRT timeout field on successive MRT monitor record updates.
+	// Set transaction timeout via ttl when creating the transaction monitor record. The server
+	// ignores the transaction timeout field on successive transaction monitor record updates.
 	ops->ttl = txn->timeout;
 
 	return as_txn_monitor_operate_async(as, err, txn, &txn_policy, &key, ops, listener, udata, event_loop);
@@ -292,7 +292,7 @@ as_txn_monitor_add_key_async(
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
-	// Add key to MRT monitor.
+	// Add key to transaction monitor.
 	as_txn* txn = cmd_policy->txn;
 
 	as_operations ops;
@@ -312,7 +312,7 @@ as_txn_monitor_add_keys_records_async(
 	as_event_loop* event_loop
 	)
 {
-	// Add keys to MRT monitor.
+	// Add keys to transaction monitor.
 	as_operations ops;
 	as_operations_inita(&ops, 2);
 

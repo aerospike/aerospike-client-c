@@ -530,7 +530,7 @@ typedef struct as_policy_base_s {
 	struct as_exp* filter_exp;
 	
 	/**
-	 * Multi-record command identifier. If set for an async command,  the source txn instance must
+	 * Transaction identifier. If set for an async command,  the source txn instance must
 	 * be allocated on the heap using as_txn_create() or as_txn_create_capacity().
 	 *
 	 * Default: NULL
@@ -694,6 +694,18 @@ typedef struct as_policy_write_s {
 	 */
 	bool durable_delete;
 
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
+
 } as_policy_write;
 
 /**
@@ -745,6 +757,18 @@ typedef struct as_policy_apply_s {
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
 
 } as_policy_apply;
 
@@ -850,6 +874,18 @@ typedef struct as_policy_operate_s {
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
 
 	/**
 	 * Should as_record instance be allocated on the heap before user listener is called in
@@ -1180,6 +1216,18 @@ typedef struct as_policy_batch_write_s {
 	 */
 	bool durable_delete;
 
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
+
 } as_policy_batch_write;
 
 /**
@@ -1232,6 +1280,18 @@ typedef struct as_policy_batch_apply_s {
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
 
 } as_policy_batch_apply;
 
@@ -1452,13 +1512,13 @@ typedef struct as_policy_admin_s {
 } as_policy_admin;
 
 /**
- * Multi-record transaction (MRT) policy fields used to batch verify record versions on commit.
+ * Transaction policy fields used to batch verify record versions on commit.
  * Used a placeholder for now as there are no additional fields beyond as_policy_batch.
  */
 typedef as_policy_batch as_policy_txn_verify;
 
 /**
- * Multi-record transaction (MRT) policy fields used to batch roll forward/backward records on
+ * Transaction policy fields used to batch roll forward/backward records on
  * commit or abort. Used a placeholder for now as there are no additional fields beyond as_policy_batch.
  */
 typedef as_policy_batch as_policy_txn_roll;
@@ -1543,12 +1603,12 @@ typedef struct as_policies_s {
 	as_policy_admin admin;
 
 	/**
-	 * Default multi-record transaction (MRT) policy when verifying record versions in a batch.
+	 * Default transaction policy when verifying record versions in a batch.
 	 */
 	as_policy_txn_verify txn_verify;
 
 	/**
-	 * Default multi-record transaction (MRT) policy when rolling the transaction records forward (commit)
+	 * Default transaction policy when rolling the transaction records forward (commit)
 	 * or back (abort) in a batch.
 	 */
 	as_policy_txn_roll txn_roll;
@@ -1673,6 +1733,7 @@ as_policy_write_init(as_policy_write* p)
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->compression_threshold = AS_POLICY_COMPRESSION_THRESHOLD_DEFAULT;
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	return p;
 }
 
@@ -1713,6 +1774,7 @@ as_policy_operate_init(as_policy_operate* p)
 	p->read_touch_ttl_percent = 0;
 	p->deserialize = true;
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	p->async_heap_rec = false;
 	p->respond_all_ops = false;
 	return p;
@@ -1784,6 +1846,7 @@ as_policy_apply_init(as_policy_apply* p)
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	return p;
 }
 
@@ -1884,6 +1947,7 @@ as_policy_batch_write_init(as_policy_batch_write* p)
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	return p;
 }
 
@@ -1899,6 +1963,7 @@ as_policy_batch_apply_init(as_policy_batch_apply* p)
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	return p;
 }
 

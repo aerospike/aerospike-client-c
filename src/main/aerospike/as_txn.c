@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -358,7 +358,7 @@ as_txn_verify_command(as_txn* txn, as_error* err)
 {
 	if (txn->state != AS_TXN_STATE_OPEN) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"Command not allowed in current MRT state: %d", txn->state);
+			"Command not allowed in current transaction state: %d", txn->state);
 	}
 	return AEROSPIKE_OK;
 }
@@ -373,7 +373,7 @@ as_txn_set_ns(as_txn* txn, const char* ns, as_error* err)
 	
 	if (strncmp(txn->ns, ns, sizeof(txn->ns)) != 0) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"Namespace must be the same for all commands in the MRT. orig: %s new: %s",
+			"Namespace must be the same for all commands in the transaction. orig: %s new: %s",
 			txn->ns, ns);
 	}
 	return AEROSPIKE_OK;

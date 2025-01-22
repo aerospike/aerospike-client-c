@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -39,7 +39,7 @@ extern "C" {
 #define AS_COMMAND_FLAGS_BATCH 2
 #define AS_COMMAND_FLAGS_LINEARIZE 4
 #define AS_COMMAND_FLAGS_SPLIT_RETRY 8
-#define AS_COMMAND_FLAGS_MRT_MONITOR 16
+#define AS_COMMAND_FLAGS_TXN_MONITOR 16
 
 // Field IDs
 #define AS_FIELD_NAMESPACE 0
@@ -47,8 +47,8 @@ extern "C" {
 #define AS_FIELD_KEY 2
 #define AS_FIELD_RECORD_VERSION 3
 #define AS_FIELD_DIGEST 4
-#define AS_FIELD_MRT_ID 5
-#define AS_FIELD_MRT_DEADLINE 6
+#define AS_FIELD_TXN_ID 5
+#define AS_FIELD_TXN_DEADLINE 6
 #define AS_FIELD_TASK_ID 7
 #define AS_FIELD_SOCKET_TIMEOUT 9
 #define AS_FIELD_RPS 10
@@ -111,10 +111,11 @@ extern "C" {
 //   1      0     allow prole
 //   1      1     allow unavailable
 
-// MRT
-#define AS_MSG_INFO4_MRT_VERIFY_READ	(1 << 0) // Send MRT version to the server to be verified.
-#define AS_MSG_INFO4_MRT_ROLL_FORWARD	(1 << 1) // Roll forward MRT.
-#define AS_MSG_INFO4_MRT_ROLL_BACK		(1 << 2) // Roll back MRT.
+// Transaction
+#define AS_MSG_INFO4_TXN_VERIFY_READ		(1 << 0) // Send transaction version to the server to be verified.
+#define AS_MSG_INFO4_TXN_ROLL_FORWARD		(1 << 1) // Roll forward transaction.
+#define AS_MSG_INFO4_TXN_ROLL_BACK			(1 << 2) // Roll back transaction.
+#define AS_MSG_INFO4_TXN_ON_LOCKING_ONLY	(1 << 4) // Must be able to lock record in transaction.
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -378,8 +379,8 @@ uint8_t*
 as_command_write_header_write(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
-	uint16_t n_fields, uint16_t n_bins, bool durable_delete, uint8_t read_attr, uint8_t write_attr,
-	uint8_t info_attr
+	uint16_t n_fields, uint16_t n_bins, bool durable_delete, bool on_locking_only,
+	uint8_t read_attr, uint8_t write_attr, uint8_t info_attr
 	);
 
 /**
@@ -785,7 +786,7 @@ as_command_write_replica(as_policy_replica replica)
 
 /**
  * @private
- * Parse response with deadline field when adding keys to the MRT monitor record.
+ * Parse response with deadline field when adding keys to the transaction monitor record.
  */
 as_status
 as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size);

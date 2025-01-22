@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -149,9 +149,9 @@ typedef struct as_batch_read_record_s {
  * Batch key and read/write operations with write policy.
  *
  * All fields must be allocated on the heap (or global) when an async batch write is run under a
- * multi-record transaction. The reason is multi-record transactions require an extra async call
- * to add write keys to the transaction monitor record and this extra call causes stack variables
- * to fall out of scope before the async batch is executed.
+ * transaction. The reason is transactions require an extra async call to add write keys to the
+ * transaction monitor record and this extra call causes stack variables to fall out of scope before
+ * the async batch is executed.
  *
  * @relates as_batch_base_record
  * @ingroup batch_operations
@@ -180,9 +180,9 @@ typedef struct as_batch_write_record_s {
  * Batch UDF (user defined function) apply.
  *
  * All fields must be allocated on the heap (or global) when an async batch UDF is run under a
- * multi-record transaction. The reason is multi-record transactions require an extra async call
- * to add write keys to the transaction monitor record and this extra call causes stack variables
- * to fall out of scope before the async batch is executed.
+ * transaction. The reason is transactions require an extra async call to add write keys to the
+ * transaction monitor record and this extra call causes stack variables to fall out of scope before
+ * the async batch is executed.
  *
  * @relates as_batch_base_record
  * @ingroup batch_operations
@@ -223,9 +223,9 @@ typedef struct as_batch_apply_record_s {
  * Batch delete operation.
  *
  * All fields must be allocated on the heap (or global) when an async batch remove is run under a
- * multi-record transaction. The reason is multi-record transactions require an extra async call
- * to add write keys to the transaction monitor record and this extra call causes stack variables
- * to fall out of scope before the async batch is executed.
+ * transaction. The reason is transactions require an extra async call to add write keys to the
+ * transaction monitor record and this extra call causes stack variables to fall out of scope before
+ * the async batch is executed.
  *
  * @relates as_batch_base_record
  * @ingroup batch_operations
@@ -668,9 +668,9 @@ typedef struct {
  * The returned records are located in the same list.
  *
  * All as_batch_record pointer fields must be allocated on the heap (or global) when an async batch
- * write is run under a multi-record transaction. The reason is multi-record transactions require an
- * extra async call to add write keys to the transaction monitor record and this extra call causes
- * stack variables to fall out of scope before the async batch is executed.
+ * write is run under a transaction. The reason is transactions require an extra async call to add
+ * write keys to the transaction monitor record and this extra call causes stack variables to fall out
+ * of scope before the async batch is executed.
  *
  * Requires server version 6.0+
  *

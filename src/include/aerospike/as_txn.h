@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -83,7 +83,7 @@ typedef struct {
 } as_txn_hash;
 
 /**
- * Multi-record transaction (MRT). Each command in the MRT must use the same namespace.
+ * Transaction. Each command in the transaction must use the same namespace.
  */
 typedef struct as_txn {
 	uint64_t id;
@@ -113,72 +113,72 @@ typedef struct {
 //---------------------------------
 
 /**
- * Initialize multi-record transaction (MRT),  assign random transaction id and initialize
+ * Initialize transaction,  assign random transaction id and initialize
  * reads/writes hashmaps with default capacities.
  *
- * The default client MRT timeout is zero. This means use the server configuration mrt-duration
- * as the MRT timeout. The default mrt-duration is 10 seconds.
+ * The default client transaction timeout is zero. This means use the server configuration mrt-duration
+ * as the transaction timeout. The default mrt-duration is 10 seconds.
  *
  * Call this function or as_txn_init_capacity(), but not both. Do not use this function for async
  * commands (use as_txn_create() instead).
  *
- * @param txn		Multi-record transaction.
+ * @param txn		Transaction.
  */
 AS_EXTERN void
 as_txn_init(as_txn* txn);
 
 /**
- * Initialize multi-record transaction (MRT), assign random transaction id and initialize
+ * Initialize transaction, assign random transaction id and initialize
  * reads/writes hashmaps with given capacities.
  *
- * The default client MRT timeout is zero. This means use the server configuration mrt-duration
- * as the MRT timeout. The default mrt-duration is 10 seconds.
+ * The default client transaction timeout is zero. This means use the server configuration mrt-duration
+ * as the transaction timeout. The default mrt-duration is 10 seconds.
  *
  * Call this function or as_txn_init(), but not both. Do not use this function for async commands
  * (use as_txn_create_capacity() instead).
  *
- * @param txn				Multi-record transaction.
- * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
- * @param writes_capacity	expected number of record writes in the MRT. Minimum value is 16.
+ * @param txn				Transaction.
+ * @param reads_capacity	expected number of record reads in the transaction. Minimum value is 16.
+ * @param writes_capacity	expected number of record writes in the transaction. Minimum value is 16.
  */
 AS_EXTERN void
 as_txn_init_capacity(as_txn* txn, uint32_t reads_capacity, uint32_t writes_capacity);
 
 /**
- * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
+ * Create transaction on heap, assign random transaction id and initialize
  * reads/writes hashmaps with default capacities.
  *
- * The default client MRT timeout is zero. This means use the server configuration mrt-duration
- * as the MRT timeout. The default mrt-duration is 10 seconds.
+ * The default client transaction timeout is zero. This means use the server configuration mrt-duration
+ * as the transaction timeout. The default mrt-duration is 10 seconds.
  */
 AS_EXTERN as_txn*
 as_txn_create(void);
 
 /**
- * Create multi-record transaction (MRT) on heap, assign random transaction id and initialize
+ * Create transaction on heap, assign random transaction id and initialize
  * reads/writes hashmaps with given capacities.
  *
- * The default client MRT timeout is zero. This means use the server configuration mrt-duration
- * as the MRT timeout. The default mrt-duration is 10 seconds.
+ * The default client transaction timeout is zero. This means use the server configuration mrt-duration
+ * as the transaction timeout. The default mrt-duration is 10 seconds.
  *
- * @param reads_capacity	expected number of record reads in the MRT. Minimum value is 16.
- * @param writes_capacity	expected number of record writes in the MRT. Minimum value is 16.
+ * @param reads_capacity	expected number of record reads in the transaction. Minimum value is 16.
+ * @param writes_capacity	expected number of record writes in the transaction. Minimum value is 16.
  */
 AS_EXTERN as_txn*
 as_txn_create_capacity(uint32_t reads_capacity, uint32_t writes_capacity);
 
 /**
- * Destroy MRT.
+ * Destroy transaction.
  */
 AS_EXTERN void
 as_txn_destroy(as_txn* txn);
 
 /**
- * Set MRT timeout in seconds. The timer starts when the MRT monitor record is created.
- * This occurs when the first command in the MRT is executed. If the timeout is reached before
- * an aerospike_commit() or aerospike_abort() is called, the server will expire and rollback the MRT.
+ * Set transaction timeout in seconds. The timer starts when the transaction monitor record is created.
+ * This occurs when the first command in the transaction is executed. If the timeout is reached before
+ * an aerospike_commit() or aerospike_abort() is called, the server will expire and rollback the transaction.
  *
- * If the MRT timeout is zero, the server configuration mrt-duration is used.
+ * If the transaction timeout is zero, the server configuration mrt-duration is used.
  * The default mrt-duration is 10 seconds.
  */
 static inline void
@@ -236,13 +236,13 @@ AS_EXTERN bool
 as_txn_writes_contain(as_txn* txn, const as_key* key);
 
 /**
- * Verify that the MRT state allows future commands.
+ * Verify that the transaction state allows future commands.
  */
 AS_EXTERN as_status
 as_txn_verify_command(as_txn* txn, as_error* err);
 
 /**
- * Set MRT namespace only if doesn't already exist.
+ * Set transaction namespace only if doesn't already exist.
  * If namespace already exists, verify new namespace is the same.
  * For internal use only.
  */
@@ -250,7 +250,7 @@ AS_EXTERN as_status
 as_txn_set_ns(as_txn* txn, const char* ns, as_error* err);
 
 /**
- * Return if the MRT monitor record should be closed/deleted. For internal use only.
+ * Return if the transaction monitor record should be closed/deleted. For internal use only.
  */
 static inline bool
 as_txn_close_monitor(as_txn* txn)
@@ -259,7 +259,7 @@ as_txn_close_monitor(as_txn* txn)
 }
 
 /**
- * Does MRT monitor record exist.
+ * Does transaction monitor record exist.
  */
 static inline bool
 as_txn_monitor_exists(as_txn* txn)
@@ -268,7 +268,7 @@ as_txn_monitor_exists(as_txn* txn)
 }
 
 /**
- * Clear MRT. Remove all tracked keys. For internal use only.
+ * Clear transaction. Remove all tracked keys. For internal use only.
  */
 AS_EXTERN void
 as_txn_clear(as_txn* txn);

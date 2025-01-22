@@ -30,7 +30,7 @@ extern "C" {
 struct as_event_loop;
 
 /**
- * Multi-record transaction commit status code.
+ * Transaction commit status code.
  */
 typedef enum {
 	/**
@@ -83,7 +83,7 @@ typedef void (*as_commit_listener)(
 	);
 
 /**
- * Multi-record transaction abort status code.
+ * Transaction abort status code.
  */
 typedef enum {
 	/**
@@ -129,7 +129,7 @@ typedef void (*as_abort_listener)(
 //---------------------------------
 
 /**
- * Attempt to commit the given multi-record transaction. First, the expected record versions are
+ * Attempt to commit the given transaction. First, the expected record versions are
  * sent to the server nodes for verification. If all nodes return success, the transaction is
  * committed. Otherwise, the transaction is aborted.
  *
@@ -137,7 +137,7 @@ typedef void (*as_abort_listener)(
  *
  * @param as 	Aerospike instance.
  * @param err	Error detail structure that is populated if an error occurs.
- * @param txn	Multi-record transaction.
+ * @param txn	Transaction.
  * @param commit_status	Indicates success or the step in the commit process that failed.
  *						Pass in NULL to ignore.
  *
@@ -148,13 +148,13 @@ AS_EXTERN as_status
 aerospike_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_status);
 
 /**
- * Abort and rollback the given multi-record transaction.
+ * Abort and rollback the given transaction.
  *
  * Requires server version 8.0+
  *
  * @param as 	Aerospike instance.
  * @param err	Error detail structure that is populated if an error occurs.
- * @param txn	Multi-record transaction.
+ * @param txn	Transaction.
  * @param abort_status	Indicates success or the step in the abort process that failed.
  *						Pass in NULL to ignore.
  *
@@ -165,7 +165,7 @@ AS_EXTERN as_status
 aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_status);
 
 /**
- * Asynchronously attempt to commit the given multi-record transaction. First, the expected record
+ * Asynchronously attempt to commit the given transaction. First, the expected record
  * versions are sent to the server nodes for verification. If all nodes return success, the transaction
  * is committed. Otherwise, the transaction is aborted.
  *
@@ -173,7 +173,7 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abor
  *
  * @param as 			Aerospike instance.
  * @param err			Error detail structure that is populated if an error occurs.
- * @param txn			Multi-record transaction.
+ * @param txn			Transaction.
  * @param listener		User function to be called with command results.
  * @param udata 			User data that is forwarded from asynchronous command function.
  * @param event_loop	Event loop that this command was executed on. Use this event loop when
@@ -190,13 +190,13 @@ aerospike_commit_async(
 	);
 
 /**
- * Asynchronously abort and rollback the given multi-record transaction.
+ * Asynchronously abort and rollback the given transaction.
  *
  * Requires server version 8.0+
  *
  * @param as 			Aerospike instance.
  * @param err			Error detail structure that is populated if an error occurs.
- * @param txn			Multi-record transaction.
+ * @param txn			Transaction.
  * @param listener		User function to be called with command results.
  * @param udata 			User data that is forwarded from asynchronous command function.
  * @param event_loop	Event loop that this command was executed on. Use this event loop when

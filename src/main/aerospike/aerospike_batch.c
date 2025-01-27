@@ -2943,6 +2943,12 @@ as_batch_keys_execute_seq(
 	return status;
 }
 
+#define batch_results_init(_item_sz, _n_keys) (_n_keys > 5000) ? \
+	(as_batch_result*)cf_malloc(_item_sz * _n_keys) : \
+	(as_batch_result*)alloca(_item_sz * _n_keys)
+
+#define batch_results_free(_results, _nkeys) if (_nkeys > 5000) {cf_free(_results);}
+
 static as_status
 as_batch_keys_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
@@ -2971,9 +2977,8 @@ as_batch_keys_execute(
 		destroy_versions(versions);
 		return as_error_set_message(err, AEROSPIKE_ERR_SERVER, cluster_empty_error);
 	}
-	
-	// Allocate results array on stack.  May be an issue for huge batch.
-	as_batch_result* results = (as_batch_result*)alloca(sizeof(as_batch_read) * n_keys);
+
+	as_batch_result* results = batch_results_init(sizeof(as_batch_result), n_keys);
 
 	as_vector batch_nodes;
 	as_vector_inita(&batch_nodes, sizeof(as_batch_node), n_nodes);
@@ -3009,6 +3014,7 @@ as_batch_keys_execute(
 		
 		if (status != AEROSPIKE_OK) {
 			destroy_versions(versions);
+			batch_results_free(results, n_keys);
 			as_batch_release_nodes(&batch_nodes);
 			return status;
 		}
@@ -3045,6 +3051,7 @@ as_batch_keys_execute(
 	// Fatal if no key requests were generated on initialization.
 	if (batch_nodes.size == 0) {
 		destroy_versions(versions);
+		batch_results_free(results, n_keys);
 		return as_error_set_message(err, AEROSPIKE_BATCH_FAILED, "Nodes not found");
 	}
 
@@ -3140,6 +3147,7 @@ as_batch_keys_execute(
 		as_batch_result* br = &btk.results[i];
 		as_record_destroy(&br->record);
 	}
+	batch_results_free(results, n_keys);
 
 	if (status == AEROSPIKE_OK && error_row) {
 		return as_error_set_message(err, AEROSPIKE_BATCH_FAILED,

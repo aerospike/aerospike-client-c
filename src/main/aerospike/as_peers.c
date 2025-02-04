@@ -417,6 +417,7 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 		if (! node_found) {
 			if (as_peers_validate(peers, cluster, &hosts, node_name)) {
 				if (replace_node) {
+					as_log_info("Replace node %s %s", replace_node->name, as_node_get_address_string(replace_node));
 					as_peers_append_unique_node(&peers->nodes_to_remove, replace_node);
 				}
 			}

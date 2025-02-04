@@ -115,7 +115,8 @@ as_peers_find_node(
 				bool found_node = false;
 
 				while (as_lookup_next(&iter, &addr)) {
-					if (as_address_equals(addr, (struct sockaddr*)&address->addr)) {
+					if (as_address_equals(addr, (struct sockaddr*)&address->addr) ||
+						as_address_is_local(addr)) {
 						// Set node hostname for faster future lookups.
 						as_node_set_hostname(node, host->name);
 						node->friends++;

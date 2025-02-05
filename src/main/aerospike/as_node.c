@@ -161,8 +161,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->address6_size = 0;
 	node->addresses = cf_malloc(sizeof(as_address) * (AS_ADDRESS6_MAX));
 	as_node_add_address(node, (struct sockaddr*)&node_info->addr);
-	
-	as_vector_init(&node->aliases, sizeof(as_alias), 2);
+	node->hostname = NULL;
 
 	memcpy(&node->info_socket, &node_info->socket, sizeof(as_socket));
 	node->tls_name = node_info->host.tls_name ? cf_strdup(node_info->host.tls_name) : NULL;
@@ -248,7 +247,10 @@ as_node_destroy(as_node* node)
 
 	// Release memory.
 	cf_free(node->addresses);
-	as_vector_destroy(&node->aliases);
+
+	if (node->hostname) {
+		cf_free(node->hostname);
+	}
 
 	if (node->tls_name) {
 		cf_free(node->tls_name);
@@ -357,35 +359,13 @@ as_node_add_address(as_node* node, struct sockaddr* addr)
 }
 
 void
-as_node_add_alias(as_node* node, const char* hostname, uint16_t port)
+as_node_set_hostname(as_node* node, const char* hostname)
 {
-	as_vector* aliases = &node->aliases;
-	as_alias* alias;
-	
-	for (uint32_t i = 0; i < aliases->size; i++) {
-		alias = as_vector_get(aliases, i);
-		
-		if (strcmp(alias->name, hostname) == 0 && alias->port == port) {
-			// Already exists.
-			return;
-		}
+	if (node->hostname) {
+		cf_free(node->hostname);
 	}
-	
-	// Add new alias.
-	as_alias a;
-	
-	if (as_strncpy(a.name, hostname, sizeof(a.name))) {
-		as_log_warn("Hostname has been truncated: %s", hostname);
-	}
-	a.port = port;
-	
-	// Alias vector is currently a fixed size.
-	if (aliases->size < aliases->capacity) {
-		as_vector_append(aliases, &a);
-	}
-	else {
-		as_log_info("Failed to add node %s alias %s. Max size = %u", node->name, hostname, aliases->capacity);
-	}
+
+	node->hostname = cf_strndup(hostname, AS_HOSTNAME_SIZE);
 }
 
 static int

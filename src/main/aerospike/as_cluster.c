@@ -350,7 +350,7 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 				node = as_node_create(cluster, &node_info);
 
 				if (iter.hostname_is_alias) {
-					as_node_add_alias(node, host.name, host.port);
+					as_node_set_hostname(node, host.name);
 				}
 
 				peers->refresh_count = 0;
@@ -441,7 +441,6 @@ static void
 as_cluster_find_nodes_to_remove(as_cluster* cluster, as_peers* peers)
 {
     uint32_t refresh_count = peers->refresh_count;
-    as_vector* nodes_to_remove = &peers->nodes_to_remove;
 	as_nodes* nodes = cluster->nodes;
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -449,7 +448,7 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, as_peers* peers)
 		
 		if (! node->active) {
 			// Inactive nodes must be removed.
-			as_vector_append(nodes_to_remove, &node);
+			as_peers_append_unique_node(&peers->nodes_to_remove, node);
 			continue;
 		}
 
@@ -457,7 +456,7 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, as_peers* peers)
 			// All node info requests failed and this node had 5 consecutive failures.
 			// Remove node.  If no nodes are left, seeds will be tried in next cluster
 			// tend iteration.
-			as_vector_append(nodes_to_remove, &node);
+			as_peers_append_unique_node(&peers->nodes_to_remove, node);
 			continue;
 		}
 
@@ -470,12 +469,12 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, as_peers* peers)
 				if (node->partition_ref_count == 0) {
 					// Node doesn't have any partitions mapped to it.
 					// There is no point in keeping it in the cluster.
-					as_vector_append(nodes_to_remove, &node);
+					as_peers_append_unique_node(&peers->nodes_to_remove, node);
 				}
 			}
 			else {
 				// Node not responding. Remove it.
-				as_vector_append(nodes_to_remove, &node);
+				as_peers_append_unique_node(&peers->nodes_to_remove, node);
 			}
 		}
 	}

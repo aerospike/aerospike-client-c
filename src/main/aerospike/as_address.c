@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -78,5 +78,26 @@ as_address_short_name(struct sockaddr* addr, char* name, socklen_t size)
 
 	if (! result) {
 		*name = 0;
+	}
+}
+
+bool
+as_address_equals(struct sockaddr* addr1, struct sockaddr* addr2)
+{
+	if (addr1->sa_family != addr2->sa_family) {
+		return false;
+	}
+
+	if (addr1->sa_family == AF_INET) {
+		return memcmp(
+			&((struct sockaddr_in*)addr1)->sin_addr,
+			&((struct sockaddr_in*)addr2)->sin_addr,
+			sizeof(struct in_addr)) == 0;
+	}
+	else {
+		return memcmp(
+			&((struct sockaddr_in6*)addr1)->sin6_addr,
+			&((struct sockaddr_in6*)addr2)->sin6_addr,
+			sizeof(struct in6_addr)) == 0;
 	}
 }

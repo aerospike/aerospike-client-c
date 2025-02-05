@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -80,23 +80,6 @@ typedef struct as_address_s {
 	char name[AS_IP_ADDRESS_SIZE];
 	
 } as_address;
-	
-/**
- * @private
- * Host address alias information.
- */
-typedef struct as_alias_s {
-	/**
-	 * Hostname or IP address string representation.
-	 */
-	char name[AS_HOSTNAME_SIZE];
-	
-	/**
-	 * Socket IP port.
-	 */
-	uint16_t port;
-	
-} as_alias;
 
 /**
  * @private
@@ -270,9 +253,9 @@ typedef struct as_node_s {
 	as_address* addresses;
 	
 	/**
-	 * Array of hostnames aliases. Not thread-safe.
+	 * Optional hostname. Not thread-safe.
 	 */
-	as_vector /* <as_alias> */ aliases;
+	char* hostname;
 
 	/**
 	 * Cluster from which this node resides.
@@ -548,10 +531,10 @@ as_node_add_address(as_node* node, struct sockaddr* addr);
 
 /**
  * @private
- * Add hostname to node aliases.
+ * Set hostname.
  */
 void
-as_node_add_alias(as_node* node, const char* hostname, uint16_t port);
+as_node_set_hostname(as_node* node, const char* hostname);
 
 /**
  * Get primary socket address.

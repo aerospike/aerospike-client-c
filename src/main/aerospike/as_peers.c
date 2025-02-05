@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -69,7 +69,7 @@ as_peers_find_node(
 {
 	// Check global node map for existing cluster.
 	as_node* node = as_peers_find_cluster_node(cluster, name);
-	
+
 	if (node) {
 		// Node name found.
 		as_address* address = as_node_get_address(node);
@@ -85,26 +85,60 @@ as_peers_find_node(
 		char addr_name[AS_IP_ADDRESS_SIZE];
 		as_address_short_name((struct sockaddr*)&address->addr, addr_name, sizeof(addr_name));
 		uint16_t port = as_address_port((struct sockaddr*)&address->addr);
+		as_error err;
 
-		// Match peer hosts with node's IP address and port.
+		// Match peer hosts with node.
 		for (uint32_t i = 0; i < hosts->size; i++) {
 			as_host* host = as_vector_get(hosts, i);
 
-			if (strcmp(host->name, addr_name) == 0 && host->port == port) {
-				// Main node host is also the same as one of the peer hosts.
-				// Peer should not be added.
-				node->friends++;
-				return true;
+			if (host->port == port) {
+				// Check for IP address or hostname if it exists.
+				if (strcmp(host->name, addr_name) == 0 ||
+				   (node->hostname && strcmp(host->name, node->hostname) == 0)) {
+					// Main node host is also the same as one of the peer hosts.
+					// Peer should not be added.
+					node->friends++;
+					return true;
+				}
+
+				// Peer name might be a hostname. Get peer IP addresses and check with node IP address.
+				as_error_reset(&err);
+				as_address_iterator iter;
+				as_status status = as_lookup_host(&iter, &err, host->name, 0);
+
+				if (status != AEROSPIKE_OK) {
+					as_log_error("Invalid peer received by cluster tend: %s", host->name);
+					continue;
+				}
+
+				struct sockaddr* addr;
+				bool found_node = false;
+
+				while (as_lookup_next(&iter, &addr)) {
+					if (as_address_equals(addr, (struct sockaddr*)&address->addr) ||
+						as_address_is_local(addr)) {
+						// Set node hostname for faster future lookups.
+						as_node_set_hostname(node, host->name);
+						node->friends++;
+						found_node = true;
+						break;
+					}
+				}
+				as_lookup_end(&iter);
+
+				if (found_node) {
+					return true;
+				}
 			}
 		}
 
 		// Node should be replaced with a new node same name and new IP address.
 		*replace_node = node;
 	}
-	
+
 	// Check local node map for this tend iteration.
 	node = as_peers_find_local_node(&peers->nodes, name);
-	
+
 	if (node) {
 		node->friends++;
 		*replace_node = NULL;
@@ -138,7 +172,7 @@ as_peers_create_node(
 	as_node_create_min_connections(node);
 
 	if (is_alias) {
-		as_node_add_alias(node, host->name, host->port);
+		as_node_set_hostname(node, host->name);
 	}
 	as_vector_append(&peers->nodes, &node);
 }
@@ -259,6 +293,15 @@ as_peers_parse_host(char* p, as_host* host, char* last)
 	return NULL;
 }
 
+void
+as_peers_append_unique_node(as_vector* /* <as_node*> */ nodes, as_node* node)
+{
+	// Avoid adding duplicate nodes.
+	if (! as_peers_find_local_node(nodes, node->name)) {
+		as_vector_append(nodes, &node);
+	}
+}
+
 as_status
 as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_node* node, char* buf)
 {
@@ -375,7 +418,8 @@ as_peers_parse_peers(as_peers* peers, as_error* err, as_cluster* cluster, as_nod
 		if (! node_found) {
 			if (as_peers_validate(peers, cluster, &hosts, node_name)) {
 				if (replace_node) {
-					as_vector_append(&peers->nodes_to_remove, &replace_node);
+					as_log_info("Replace node %s %s", replace_node->name, as_node_get_address_string(replace_node));
+					as_peers_append_unique_node(&peers->nodes_to_remove, replace_node);
 				}
 			}
 			else {

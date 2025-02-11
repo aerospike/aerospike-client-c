@@ -222,6 +222,7 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* co
 			return AEROSPIKE_OK;
 
 		case AS_TXN_STATE_ABORTED:
+			as_set_commit_status(commit_status, AS_COMMIT_ALREADY_ABORTED);
 			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_ABORTED, "Transaction already aborted");
 	}
 }
@@ -285,6 +286,7 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abor
 			return as_abort(as, err, txn, abort_status);
 
 		case AS_TXN_STATE_COMMITTED:
+			as_set_abort_status(abort_status, AS_ABORT_ALREADY_COMMITTED);
 			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Transaction already committed");
 
 		case AS_TXN_STATE_ABORTED:

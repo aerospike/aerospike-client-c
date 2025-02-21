@@ -55,6 +55,8 @@
 		BF4E4E2A1D48213700BEEF94 /* as_host.h in Headers */ = {isa = PBXBuildFile; fileRef = BF4E4E291D48213700BEEF94 /* as_host.h */; };
 		BF4E4E451D50150700BEEF94 /* as_peers.c in Sources */ = {isa = PBXBuildFile; fileRef = BF4E4E441D50150700BEEF94 /* as_peers.c */; };
 		BF4E4E471D50154000BEEF94 /* as_peers.h in Headers */ = {isa = PBXBuildFile; fileRef = BF4E4E461D50154000BEEF94 /* as_peers.h */; };
+		BF4E9DEF2D6664A300A437AC /* as_config_yaml.c in Sources */ = {isa = PBXBuildFile; fileRef = BF4E9DEE2D6664A300A437AC /* as_config_yaml.c */; };
+		BF4E9DF12D66800C00A437AC /* as_config_yaml.h in Headers */ = {isa = PBXBuildFile; fileRef = BF4E9DF02D66800C00A437AC /* as_config_yaml.h */; };
 		BF5548ED19E36A7C007DDB9E /* as_log.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5548EC19E36A7C007DDB9E /* as_log.c */; };
 		BF5736441F91521400B7D323 /* as_poll.h in Headers */ = {isa = PBXBuildFile; fileRef = BF5736431F91521400B7D323 /* as_poll.h */; };
 		BF65C9C6252D299D0026D9E2 /* as_exp.h in Headers */ = {isa = PBXBuildFile; fileRef = BF65C9C5252D299D0026D9E2 /* as_exp.h */; };
@@ -280,6 +282,8 @@
 		BF4E4E291D48213700BEEF94 /* as_host.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_host.h; path = ../src/include/aerospike/as_host.h; sourceTree = "<group>"; };
 		BF4E4E441D50150700BEEF94 /* as_peers.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_peers.c; path = ../src/main/aerospike/as_peers.c; sourceTree = "<group>"; };
 		BF4E4E461D50154000BEEF94 /* as_peers.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_peers.h; path = ../src/include/aerospike/as_peers.h; sourceTree = "<group>"; };
+		BF4E9DEE2D6664A300A437AC /* as_config_yaml.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_config_yaml.c; path = ../src/main/aerospike/as_config_yaml.c; sourceTree = "<group>"; };
+		BF4E9DF02D66800C00A437AC /* as_config_yaml.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_config_yaml.h; path = ../src/include/aerospike/as_config_yaml.h; sourceTree = "<group>"; };
 		BF5548EC19E36A7C007DDB9E /* as_log.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_log.c; path = ../modules/common/src/main/aerospike/as_log.c; sourceTree = "<group>"; };
 		BF5736431F91521400B7D323 /* as_poll.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_poll.h; path = ../src/include/aerospike/as_poll.h; sourceTree = "<group>"; };
 		BF65C9C5252D299D0026D9E2 /* as_exp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_exp.h; path = ../src/include/aerospike/as_exp.h; sourceTree = "<group>"; };
@@ -560,6 +564,7 @@
 				BFBB64821905D5B500682A6E /* as_cluster.c */,
 				BF8EEB2C1A2CED34000F2B00 /* as_command.c */,
 				BF2AA7C218BEBFA400E54AF3 /* as_config.c */,
+				BF4E9DEE2D6664A300A437AC /* as_config_yaml.c */,
 				BF2AA7C318BEBFA400E54AF3 /* as_error.c */,
 				BF8EABF51BF3C2800027EF45 /* as_event_ev.c */,
 				BFCB38A61DFB764200C73D0F /* as_event_event.c */,
@@ -764,6 +769,7 @@
 				BFC65B471C921E9E0079DF5A /* as_cluster.h */,
 				BFC65B481C921E9E0079DF5A /* as_command.h */,
 				BFC65B491C921E9E0079DF5A /* as_config.h */,
+				BF4E9DF02D66800C00A437AC /* as_config_yaml.h */,
 				BFEAF6312228638E00FB4248 /* as_conn_pool.h */,
 				BFA5B20F20FD3FA4002AF0BB /* as_cpu.h */,
 				BFC65B4A1C921E9E0079DF5A /* as_error.h */,
@@ -871,6 +877,7 @@
 				BFC65B6E1C921E9E0079DF5A /* as_async_proto.h in Headers */,
 				BFA5B21020FD3FA4002AF0BB /* as_cpu.h in Headers */,
 				BFC65B711C921E9E0079DF5A /* as_bin.h in Headers */,
+				BF4E9DF12D66800C00A437AC /* as_config_yaml.h in Headers */,
 				BFC65B7E1C921E9E0079DF5A /* as_node.h in Headers */,
 				BF2BB58C2404A9B4003169F0 /* as_partition_filter.h in Headers */,
 				BFC65B751C921E9E0079DF5A /* as_error.h in Headers */,
@@ -1042,6 +1049,7 @@
 				BF2AA7DD18BEBFA500E54AF3 /* aerospike_key.c in Sources */,
 				BFBA104C18B7D8B300A64E68 /* as_aerospike.c in Sources */,
 				BFBA106418B7D8B300A64E68 /* as_result.c in Sources */,
+				BF4E9DEF2D6664A300A437AC /* as_config_yaml.c in Sources */,
 				BF2AA7F218BEBFA500E54AF3 /* as_record.c in Sources */,
 				BFBA105118B7D8B300A64E68 /* as_boolean.c in Sources */,
 				BF2669921BBB74AE00C61962 /* as_queue.c in Sources */,
@@ -1215,6 +1223,7 @@
 					/usr/local/include,
 					/usr/local/opt/openssl/include,
 					/opt/homebrew/opt/openssl/include,
+					/opt/homebrew/include,
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				OTHER_CFLAGS = "-D_DARWIN_UNLIMITED_SELECT";
@@ -1240,6 +1249,7 @@
 					/usr/local/include,
 					/usr/local/opt/openssl/include,
 					/opt/homebrew/opt/openssl/include,
+					/opt/homebrew/include,
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
 				OTHER_CFLAGS = "-D_DARWIN_UNLIMITED_SELECT";

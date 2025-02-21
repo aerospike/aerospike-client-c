@@ -10,6 +10,7 @@
 		BE9280C81E4AC521007F7DA7 /* libz.1.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = BE9280C71E4AC521007F7DA7 /* libz.1.dylib */; };
 		BF1881E028E5093F003DCB7B /* libssl.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF1881DF28E5093F003DCB7B /* libssl.a */; };
 		BF3F7D47259BDD2B0092D808 /* map_sort.c in Sources */ = {isa = PBXBuildFile; fileRef = BF3F7D46259BDD2B0092D808 /* map_sort.c */; };
+		BF4E9DF82D68F86600A437AC /* libyaml.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF4E9DF72D68F86600A437AC /* libyaml.a */; };
 		BF5D22741E69096800724AE3 /* info_helper.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5D22721E69096800724AE3 /* info_helper.c */; };
 		BF5FDD6C2C937420000CACBB /* transaction.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5FDD6B2C937420000CACBB /* transaction.c */; };
 		BF65C9CA252D33400026D9E2 /* filter_exp.c in Sources */ = {isa = PBXBuildFile; fileRef = BF65C9C9252D33400026D9E2 /* filter_exp.c */; };
@@ -92,6 +93,7 @@
 		BE9280C71E4AC521007F7DA7 /* libz.1.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.1.dylib; path = ../../../../../usr/lib/libz.1.dylib; sourceTree = "<group>"; };
 		BF1881DF28E5093F003DCB7B /* libssl.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libssl.a; path = "../../../../opt/homebrew/Cellar/openssl@3/3.0.5/lib/libssl.a"; sourceTree = "<group>"; };
 		BF3F7D46259BDD2B0092D808 /* map_sort.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_sort.c; path = ../src/test/aerospike_map/map_sort.c; sourceTree = "<group>"; };
+		BF4E9DF72D68F86600A437AC /* libyaml.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libyaml.a; path = ../../../../opt/homebrew/Cellar/libyaml/0.2.5/lib/libyaml.a; sourceTree = "<group>"; };
 		BF5D22721E69096800724AE3 /* info_helper.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = info_helper.c; path = ../src/test/util/info_helper.c; sourceTree = "<group>"; };
 		BF5D22731E69096800724AE3 /* info_helper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = info_helper.h; path = ../src/test/util/info_helper.h; sourceTree = "<group>"; };
 		BF5FDD6B2C937420000CACBB /* transaction.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = transaction.c; path = ../src/test/transaction.c; sourceTree = "<group>"; };
@@ -172,6 +174,7 @@
 				BF9750111E4EC8C900B737CF /* libev.a in Frameworks */,
 				BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */,
 				BF1881E028E5093F003DCB7B /* libssl.a in Frameworks */,
+				BF4E9DF82D68F86600A437AC /* libyaml.a in Frameworks */,
 				BFC25E551E4E80D600FD7756 /* libcrypto.dylib in Frameworks */,
 				BE9280C81E4AC521007F7DA7 /* libz.1.dylib in Frameworks */,
 			);
@@ -183,6 +186,7 @@
 		BE9280BA1E4ABCD7007F7DA7 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				BF4E9DF72D68F86600A437AC /* libyaml.a */,
 				BF1881DF28E5093F003DCB7B /* libssl.a */,
 				BF9750121E4ECA1C00B737CF /* libuv.a */,
 				BF9750101E4EC8C900B737CF /* libev.a */,
@@ -667,6 +671,7 @@
 					../modules/lua,
 					"$(OpenSSL)/lib",
 					"$(External)/lib",
+					/opt/homebrew/Cellar/libyaml/0.2.5/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";
@@ -695,6 +700,7 @@
 					../modules/lua,
 					"$(OpenSSL)/lib",
 					"$(External)/lib",
+					/opt/homebrew/Cellar/libyaml/0.2.5/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				OTHER_CFLAGS = "";

@@ -26,14 +26,14 @@ extern "C" {
 // Functions
 //---------------------------------
 
-struct as_cluster_s;
+struct aerospike_s;
 
 /**
  * @private
  * Read yaml configuration file and update cluster with new values.
  */
 AS_EXTERN as_status
-as_config_yaml_init(struct as_cluster_s* cluster, const char* path, as_error* err);
+as_config_yaml_init(struct aerospike_s* as, const char* path, as_error* err);
 
 #ifdef __cplusplus
 } // end extern "C"

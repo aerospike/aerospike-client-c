@@ -1365,6 +1365,9 @@ parse_debug(yaml_parser_t* parser)
 // Functions
 //---------------------------------
 
+void
+as_config_destroy(as_config* config);
+
 as_status
 as_config_yaml_init(aerospike* as, const char* path, as_error* err)
 {
@@ -1392,7 +1395,7 @@ as_config_yaml_init(aerospike* as, const char* path, as_error* err)
 	bool rv = as_parse_yaml(&yaml);
 
 	// TODO: Update cluster dynamically with config.
-	cf_free(config);
+	as_config_destroy(config);
 
 	yaml_parser_delete(&yaml.parser);
 	fclose(fp);

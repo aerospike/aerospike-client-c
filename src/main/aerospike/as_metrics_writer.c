@@ -59,7 +59,7 @@ as_metrics_proc_stat_mem_cpu(as_error* err, double* vm_usage, double* resident_s
 
 	// See https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html for format.
 	int matched = fscanf(proc_stat,
-		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*lu %*lu %*lu %*lu %lu %lu %*ld %*ld %*ld %*ld %*ld %*ld %llu %lu %ld",
+		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %lu %ld",
 		&utime, &stime, &starttime, &vsize, &rss);
 
 	fclose(proc_stat);

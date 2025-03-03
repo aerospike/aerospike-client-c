@@ -1396,6 +1396,7 @@ as_config_yaml_init(aerospike* as, const char* path, as_error* err)
 
 	// TODO: Update cluster dynamically with config.
 	as_config_destroy(config);
+	cf_free(config);
 
 	yaml_parser_delete(&yaml.parser);
 	fclose(fp);

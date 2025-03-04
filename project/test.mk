@@ -18,6 +18,8 @@ TEST_AEROSPIKE += policy/*.c
 TEST_AEROSPIKE += util/*.c
 TEST_AEROSPIKE += filter_exp.c
 TEST_AEROSPIKE += exp_operate.c
+TEST_AEROSPIKE += transaction.c
+TEST_AEROSPIKE += transaction_async.c
 
 TEST_SOURCE = $(wildcard $(addprefix $(SOURCE_TEST)/, $(TEST_AEROSPIKE)))
 

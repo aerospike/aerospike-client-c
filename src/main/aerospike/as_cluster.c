@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -22,6 +22,7 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
+#include <aerospike/as_metrics_writer.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_shm_cluster.h>
@@ -55,7 +56,7 @@ as_status
 as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers);
 
 as_status
-as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers);
+as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node);
 
 as_status
 as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node);
@@ -349,7 +350,7 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 				node = as_node_create(cluster, &node_info);
 
 				if (iter.hostname_is_alias) {
-					as_node_add_alias(node, host.name, host.port);
+					as_node_set_hostname(node, host.name);
 				}
 
 				peers->refresh_count = 0;
@@ -437,8 +438,9 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 }
 
 static void
-as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_vector* /* <as_node*> */ nodes_to_remove)
+as_cluster_find_nodes_to_remove(as_cluster* cluster, as_peers* peers)
 {
+    uint32_t refresh_count = peers->refresh_count;
 	as_nodes* nodes = cluster->nodes;
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -446,7 +448,7 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 		
 		if (! node->active) {
 			// Inactive nodes must be removed.
-			as_vector_append(nodes_to_remove, &node);
+			as_peers_append_unique_node(&peers->nodes_to_remove, node);
 			continue;
 		}
 
@@ -454,7 +456,7 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 			// All node info requests failed and this node had 5 consecutive failures.
 			// Remove node.  If no nodes are left, seeds will be tried in next cluster
 			// tend iteration.
-			as_vector_append(nodes_to_remove, &node);
+			as_peers_append_unique_node(&peers->nodes_to_remove, node);
 			continue;
 		}
 
@@ -467,12 +469,12 @@ as_cluster_find_nodes_to_remove(as_cluster* cluster, uint32_t refresh_count, as_
 				if (node->partition_ref_count == 0) {
 					// Node doesn't have any partitions mapped to it.
 					// There is no point in keeping it in the cluster.
-					as_vector_append(nodes_to_remove, &node);
+					as_peers_append_unique_node(&peers->nodes_to_remove, node);
 				}
 			}
 			else {
 				// Node not responding. Remove it.
-				as_vector_append(nodes_to_remove, &node);
+				as_peers_append_unique_node(&peers->nodes_to_remove, node);
 			}
 		}
 	}
@@ -555,18 +557,133 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 }
 
 static void
+as_cluster_destroy_node_metrics(as_cluster* cluster)
+{
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node_destroy_metrics(nodes->array[i]);
+	}
+	as_nodes_release(nodes);
+}
+
+as_status
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy* policy)
+{
+	bool custom_listener = policy->metrics_listeners.enable_listener != NULL;
+	
+	if (custom_listener) {
+		// Ensure all listeners and user data has been defined.
+		if (! (policy->metrics_listeners.enable_listener && policy->metrics_listeners.snapshot_listener &&
+			   policy->metrics_listeners.node_close_listener &&  policy->metrics_listeners.disable_listener &&
+			   policy->metrics_listeners.udata)) {
+			return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "All metrics listeners and udata must be defined");
+		}
+	}
+	
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	as_status status = AEROSPIKE_OK;
+
+	if (cluster->metrics_enabled) {
+		cluster->metrics_enabled = false;
+		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
+		as_cluster_destroy_node_metrics(cluster);
+
+		if (status != AEROSPIKE_OK) {
+			// Disabling old metrics should not prevent new metrics from being created.
+			// Log error and continue processing.
+			as_log_warn("Metrics disable error: %s %s", as_error_string(status), err->message);
+		}
+	}
+
+	as_error_reset(err);
+
+	if (custom_listener) {
+		// Copy listeners from policy.
+		cluster->metrics_listeners = policy->metrics_listeners;
+	}
+	else {
+		// Create default metrics writer and set cluster llsteners.
+		status = as_metrics_writer_create(err, policy, &cluster->metrics_listeners);
+		
+		if (status != AEROSPIKE_OK) {
+			pthread_mutex_unlock(&cluster->metrics_lock);
+			return status;
+		}
+	}
+	
+	cluster->metrics_interval = policy->interval;
+	cluster->metrics_latency_columns = policy->latency_columns;
+	cluster->metrics_latency_shift = policy->latency_shift;
+
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+		as_node_enable_metrics(node, policy);
+	}
+	as_nodes_release(nodes);
+
+	status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
+	
+	if (status != AEROSPIKE_OK) {
+		as_cluster_destroy_node_metrics(cluster);
+		pthread_mutex_unlock(&cluster->metrics_lock);
+		return status;
+	}
+
+	cluster->metrics_enabled = true;
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	return status;
+}
+
+as_status
+as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
+{
+	as_status status = AEROSPIKE_OK;
+	as_error_reset(err);
+
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	if (cluster->metrics_enabled) {
+		cluster->metrics_enabled = false;
+		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
+		as_cluster_destroy_node_metrics(cluster);
+	}
+
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	return status;
+}
+
+static void
 as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
 {
 	// There is no need to delete nodes from partition tables because the nodes
 	// have already been set to inactive. Further connection requests will result
 	// in an exception and a different node will be tried.
+	as_error err;
 	
 	// Set node to inactive.
 	for (uint32_t i = 0; i < nodes_to_remove->size; i++) {
 		as_node* node = as_vector_get_ptr(nodes_to_remove, i);
+		as_status status = AEROSPIKE_OK;
+
+		pthread_mutex_lock(&cluster->metrics_lock);
+
+		if (cluster->metrics_enabled) {
+			status = cluster->metrics_listeners.node_close_listener(&err, node, node->cluster->metrics_listeners.udata);
+		}
+		pthread_mutex_unlock(&cluster->metrics_lock);
+		
+		if (status != AEROSPIKE_OK) {
+			// Metrics failures should not interrupt cluster tend.
+			// Log warning and continue processing.
+			as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
+		}
 		as_node_deactivate(node);
 	}
-			
+
 	// Remove all nodes at once to avoid copying entire array multiple times.
 	as_cluster_remove_nodes_copy(cluster, nodes_to_remove);
 	
@@ -635,12 +752,12 @@ as_cluster_balance_connections(as_cluster* cluster)
 }
 
 static void
-as_cluster_reset_error_count(as_cluster* cluster)
+as_cluster_reset_error_rate(as_cluster* cluster)
 {
 	as_nodes* nodes = cluster->nodes;
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_reset_error_count(nodes->array[i]);
+		as_node_reset_error_rate(nodes->array[i]);
 	}
 }
 
@@ -656,7 +773,24 @@ as_cluster_manage(as_cluster* cluster)
 
 	// Reset connection error window for all nodes every error_rate_window tend iterations.
 	if (cluster->max_error_rate > 0 && cluster->tend_count % cluster->error_rate_window == 0) {
-		as_cluster_reset_error_count(cluster);
+		as_cluster_reset_error_rate(cluster);
+	}
+
+	// Call metrics listener every metrics_interval when enabled.
+	as_status status = AEROSPIKE_OK;
+	as_error err;
+	
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	if (cluster->metrics_enabled && cluster->tend_count % cluster->metrics_interval == 0) {
+		status = cluster->metrics_listeners.snapshot_listener(&err, cluster, cluster->metrics_listeners.udata);
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
+
+	if (status != AEROSPIKE_OK) {
+		// Metrics failures should not interrupt cluster tend.
+		// Log warning and continue processing.
+		as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
 	}
 }
 
@@ -677,6 +811,7 @@ static void
 as_cluster_destroy_peers(as_peers* peers)
 {
 	as_vector_destroy(&peers->nodes);
+	as_vector_destroy(&peers->nodes_to_remove);
 
 	as_vector* invalid_hosts = &peers->invalid_hosts;
 	
@@ -727,6 +862,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 	as_error error_local;
 	as_peers peers;
 	as_vector_inita(&peers.nodes, sizeof(as_node*), 16);
+	as_vector_inita(&peers.nodes_to_remove, sizeof(as_node*), 8);
 	as_vector_inita(&peers.invalid_hosts, sizeof(as_host), 4);
 	peers.refresh_count = 0;
 	peers.gen_changed = false;
@@ -820,17 +956,13 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 			}
 
 			// Remove nodes determined by refreshed peers.
-			as_vector nodes_to_remove;
-			as_vector_inita(&nodes_to_remove, sizeof(as_node*), nodes->size);
+			as_cluster_find_nodes_to_remove(cluster, &peers);
 
-			as_cluster_find_nodes_to_remove(cluster, peers.refresh_count, &nodes_to_remove);
-			
 			// Remove nodes in a batch.
-			if (nodes_to_remove.size > 0) {
-				as_cluster_remove_nodes(cluster, &nodes_to_remove);
+			if (peers.nodes_to_remove.size > 0) {
+				as_cluster_remove_nodes(cluster, &peers.nodes_to_remove);
 				nodes = cluster->nodes;
 			}
-			as_vector_destroy(&nodes_to_remove);
 		}
 
 		// Add peer nodes to cluster.
@@ -841,7 +973,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		}
 	}
 
-	cluster->invalid_node_count = as_peers_invalid_count(&peers);
+	cluster->invalid_node_count += as_peers_invalid_count(&peers);
 
 	// Refresh partition map when necessary.
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -852,7 +984,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		// nodes to be dropped.
 		if (node->partition_changed && node->failures == 0 && node->active &&
 		   (node->peers_count > 0 || peers.refresh_count == 1)) {
-			as_status status = as_node_refresh_partitions(cluster, &error_local, node, &peers);
+			as_status status = as_node_refresh_partitions(cluster, &error_local, node);
 			
 			if (status != AEROSPIKE_OK) {
 				as_log_warn("Node %s partition refresh failed: %s %s",
@@ -1193,6 +1325,75 @@ as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec
 	}
 }
 
+static as_status
+as_cluster_force_single_node(as_cluster* cluster, as_error* err)
+{
+	// Validate first seed.
+	as_host* host = as_vector_get(cluster->seeds, 0);
+
+	as_address_iterator iter;
+	as_status status = as_lookup_host(&iter, err, host->name, host->port);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_node_info node_info;
+	struct sockaddr* addr;
+	as_node* node = NULL;
+
+	while (as_lookup_next(&iter, &addr)) {
+		as_error_reset(err);
+		status = as_lookup_node(cluster, err, host, addr, true, &node_info);
+
+		if (status == AEROSPIKE_OK) {
+			node = as_node_create(cluster, &node_info);
+			break;
+		}
+	}
+	as_lookup_end(&iter);
+
+	if (! node) {
+		// Return last error.
+		return status;
+	}
+
+	cluster->n_partitions = 4096;
+
+	as_node_create_min_connections(node);
+
+	// Add seed and peer nodes to cluster.
+	as_vector nodes_to_add;
+	as_vector_inita(&nodes_to_add, sizeof(as_node*), 1);
+	as_vector_append(&nodes_to_add, &node);
+
+	as_cluster_add_nodes(cluster, &nodes_to_add);
+	as_vector_destroy(&nodes_to_add);
+
+	as_error_reset(err);
+	status = as_node_refresh_partitions(cluster, err, node);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	// Set partition maps for all namespaces to point to same node.
+	for (uint32_t i = 0; i < cluster->partition_tables.size; i++) {
+		as_partition_table* table = cluster->partition_tables.tables[i];
+
+		for (uint32_t j = 0; j < table->size; j++) {
+			as_partition* part = &table->partitions[j];
+
+			for (uint32_t k = 0; k < AS_MAX_REPLICATION_FACTOR; k++) {
+				part->nodes[k] = node;
+			}
+		}
+	}
+
+	cluster->valid = true;
+	return AEROSPIKE_OK;
+}
+
 as_status
 as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 {
@@ -1294,6 +1495,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	}
 	cluster->seeds = trg;
 	pthread_mutex_init(&cluster->seed_lock, NULL);
+	pthread_mutex_init(&cluster->metrics_lock, NULL);
 
 	// Initialize IP map translation if provided.
 	if (config->ip_map && config->ip_map_size > 0) {
@@ -1359,6 +1561,34 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		}
 	}
 
+	// Initialize metrics fields
+	cluster->metrics_enabled = false;
+	cluster->metrics_interval = 0;
+	cluster->metrics_latency_columns = 0;
+	cluster->metrics_latency_shift = 0;
+	cluster->command_count = 0;
+	cluster->retry_count = 0;
+	cluster->delay_queue_timeout_count = 0;
+
+	if (config->force_single_node) {
+		if (config->use_shm) {
+			as_cluster_destroy(cluster);
+			*cluster_out = 0;
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "force_single_node does not support shared memory tending");
+		}
+
+		as_status status = as_cluster_force_single_node(cluster, err);
+
+		if (status != AEROSPIKE_OK) {
+			as_cluster_destroy(cluster);
+			*cluster_out = 0;
+			return status;
+		}
+
+		*cluster_out = cluster;
+		return status;
+	}
+
 	if (config->use_shm) {
 		// Create shared memory cluster.
 		as_status status = as_shm_create(cluster, err, config);
@@ -1395,6 +1625,7 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		}
 		pthread_attr_destroy(&attr);
 	}
+
 	*cluster_out = cluster;
 	return AEROSPIKE_OK;
 }
@@ -1465,6 +1696,7 @@ as_cluster_destroy(as_cluster* cluster)
 	as_vector_destroy(seeds);
 	pthread_mutex_unlock(&cluster->seed_lock);
 	pthread_mutex_destroy(&cluster->seed_lock);
+	pthread_mutex_destroy(&cluster->metrics_lock);
 
 	// Destroy tend lock and condition.
 	pthread_mutex_destroy(&cluster->tend_lock);

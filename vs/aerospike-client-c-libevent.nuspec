@@ -2,13 +2,14 @@
 <package>
   <metadata>
     <id>aerospike-client-c-libevent</id>
-    <version>6.5.2</version>
+    <version>7.0.3</version>
     <title>Aerospike C Client with libevent</title>
     <authors>Aerospike</authors>
     <owners>Aerospike</owners>
     <license type="expression">Apache-2.0</license>
     <projectUrl>https://www.aerospike.com/download/client/c</projectUrl>
     <icon>icon.png</icon>
+    <readme>README.md</readme>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Aerospike C client library for sync and async database commands using the libevent event framework.</description>
     <copyright>Copyright 2008-2024 Aerospike, Inc.</copyright>
@@ -16,6 +17,7 @@
   </metadata>
   <files>
     <file src="icon.png" target="" />
+    <file src="README.md" target="" />
     <file src="aerospike-client-c-libevent.targets" target="build\native" />
     <file src="..\modules\common\src\include\aerospike\*.h" exclude="**\ssl_util.h" target="build\native\include\aerospike" />
     <file src="..\modules\common\src\include\citrusleaf\*.h" exclude="**\cf_crypto.h;**\cf_digest.h" target="build\native\include\citrusleaf" />

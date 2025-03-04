@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2023 by Aerospike.
+ * Copyright 2008-2024 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -476,7 +476,7 @@ example_log_callback(as_log_level level, const char * func, const char * file, u
 // Initialize asynchronous event loop
 //
 bool
-example_create_event_loop()
+example_create_event_loop(void)
 {
 #if AS_EVENT_LIB_DEFINED
 	// Initialize logging.

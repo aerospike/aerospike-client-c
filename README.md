@@ -16,14 +16,14 @@ are also included.
 
 ### Red Hat Enterprise Linux, CentOS and Amazon Linux
 
-	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
+	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool libz-devel
 
 	[Optional:]
 	$ sudo yum install gcc-c++ graphviz rpm-build 
 
 ### Fedora
 
-	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool
+	$ sudo yum install openssl-devel glibc-devel autoconf automake libtool libz-devel
 
 	[Optional:]
 	$ sudo yum install gcc-c++ graphviz rpm-build 

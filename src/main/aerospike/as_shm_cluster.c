@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -110,7 +110,7 @@ as_shm_dump_partition_tables(as_cluster_shm* cluster_shm)
 
 #if !defined(_MSC_VER)
 static size_t
-as_shm_get_max_size()
+as_shm_get_max_size(void)
 {
 #ifdef __linux__
 	char* fn = "/proc/sys/kernel/shmmax";

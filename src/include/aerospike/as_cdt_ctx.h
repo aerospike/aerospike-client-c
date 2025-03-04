@@ -211,7 +211,7 @@ as_cdt_ctx_add_list_value(as_cdt_ctx* ctx, as_val* val)
 
 /**
  * Lookup map by index offset.
- * <p>
+ *
  * If the index is negative, the resolved index starts backwards from end of list.
  * If an index is out of bounds, a parameter error will be returned.  Examples:
  * <ul>

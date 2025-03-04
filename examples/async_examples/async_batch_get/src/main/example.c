@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -210,11 +210,11 @@ batch_read_listener(as_error* err, as_batch_records* records, void* udata, as_ev
 			n_found++;
 		}
 		else if (record->result == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			// The transaction succeeded but the record doesn't exist.
+			// The command succeeded but the record doesn't exist.
 			LOG("  AEROSPIKE_ERR_RECORD_NOT_FOUND");
 		}
 		else {
-			// The transaction didn't succeed.
+			// The command didn't succeed.
 			LOG("  error %d", record->result);
 		}
 	}

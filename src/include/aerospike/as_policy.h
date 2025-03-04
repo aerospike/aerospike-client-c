@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -138,6 +138,7 @@ extern "C" {
 //---------------------------------
 
 struct as_exp;
+struct as_txn;
 
 /**
  * Retry Policy
@@ -334,24 +335,24 @@ typedef enum as_policy_read_mode_sc_e {
 
 	/**
 	 * Ensures this client will only see an increasing sequence of record versions.
-	 * Server only reads from master.  This is the default.
+	 * Client only reads from master.  This is the default.
 	 */
 	AS_POLICY_READ_MODE_SC_SESSION,
 
 	/**
-	 * Ensures ALL clients will only see an increasing sequence of record versions.
-	 * Server only reads from master.
+	 * Ensures all clients will only see an increasing sequence of record versions.
+	 * Client only reads from master.
 	 */
 	AS_POLICY_READ_MODE_SC_LINEARIZE,
 
 	/**
-	 * Server may read from master or any full (non-migrating) replica.
+	 * Client may read from master or any full (non-migrating) replica.
 	 * Increasing sequence of record versions is not guaranteed.
 	 */
 	AS_POLICY_READ_MODE_SC_ALLOW_REPLICA,
 
 	/**
-	 * Server may read from master or any full (non-migrating) replica or from unavailable
+	 * Client may read from master or any full (non-migrating) replica or from unavailable
 	 * partitions.  Increasing sequence of record versions is not guaranteed.
 	 */
 	AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE,
@@ -382,6 +383,49 @@ typedef enum as_policy_commit_level_e {
 } as_policy_commit_level;
 
 /**
+ * Expected query duration. The server treats the query in different ways depending on the expected duration.
+ * This enum is ignored for aggregation queries, background queries and server versions &lt; 6.0.
+ *
+ * @ingroup client_policies
+ */
+typedef enum as_query_duration_e {
+
+	/**
+	 * The query is expected to return more than 100 records per node. The server optimizes for a
+	 * large record set in the following ways:
+	 * <ul>
+	 * <li>Allow query to be run in multiple threads using the server's query threading configuration.</li>
+	 * <li>Do not relax read consistency for AP namespaces.</li>
+	 * <li>Add the query to the server's query monitor.</li>
+	 * <li>Do not add the overall latency to the server's latency histogram.</li>
+	 * <li>Do not allow server timeouts.</li>
+	 * </ul>
+	 */
+	AS_QUERY_DURATION_LONG,
+
+	/**
+	 * The query is expected to return less than 100 records per node. The server optimizes for a
+	 * small record set in the following ways:
+	 * <ul>
+	 * <li>Always run the query in one thread and ignore the server's query threading configuration.</li>
+	 * <li>Allow query to be inlined directly on the server's service thread.</li>
+	 * <li>Relax read consistency for AP namespaces.</li>
+	 * <li>Do not add the query to the server's query monitor.</li>
+	 * <li>Add the overall latency to the server's latency histogram.</li>
+	 * <li>Allow server timeouts. The default server timeout for a short query is 1 second.</li>
+	 * </ul>
+	 */
+	AS_QUERY_DURATION_SHORT,
+	
+	/**
+	 * Treat query as a LONG query, but relax read consistency for AP namespaces.
+	 * This value is treated exactly like LONG for server versions &lt; 7.1.
+	 */
+	AS_QUERY_DURATION_LONG_RELAX_AP
+
+} as_query_duration;
+
+/**
  * Generic policy fields shared among all policies.
  *
  * @ingroup client_policies
@@ -398,21 +442,21 @@ typedef struct as_policy_base_s {
 	 *
 	 * If socket_timeout is non-zero and the socket has been idle for at least socket_timeout,
 	 * both max_retries and total_timeout are checked.  If max_retries and total_timeout are not
-	 * exceeded, the transaction is retried.
+	 * exceeded, the command is retried.
 	 *
 	 * Default: 30000ms
 	 */
 	uint32_t socket_timeout;
 
 	/**
-	 * Total transaction timeout in milliseconds.
+	 * Total command timeout in milliseconds.
 	 *
 	 * The total_timeout is tracked on the client and sent to the server along with
-	 * the transaction in the wire protocol.  The client will most likely timeout
-	 * first, but the server also has the capability to timeout the transaction.
+	 * the command in the wire protocol.  The client will most likely timeout
+	 * first, but the server also has the capability to timeout the command.
 	 *
-	 * If total_timeout is not zero and total_timeout is reached before the transaction
-	 * completes, the transaction will return error AEROSPIKE_ERR_TIMEOUT.
+	 * If total_timeout is not zero and total_timeout is reached before the command
+	 * completes, the command will return error AEROSPIKE_ERR_TIMEOUT.
 	 * If totalTimeout is zero, there will be no total time limit.
 	 *
 	 * Default: 1000
@@ -420,14 +464,14 @@ typedef struct as_policy_base_s {
 	uint32_t total_timeout;
 
 	/**
-	 * Maximum number of retries before aborting the current transaction.
+	 * Maximum number of retries before aborting the current command.
 	 * The initial attempt is not counted as a retry.
 	 *
-	 * If max_retries is exceeded, the transaction will return error AEROSPIKE_ERR_TIMEOUT.
+	 * If max_retries is exceeded, the command will return error AEROSPIKE_ERR_TIMEOUT.
 	 *
 	 * WARNING: Database writes that are not idempotent (such as "add")
 	 * should not be retried because the write operation may be performed
-	 * multiple times if the client timed out previous transaction attempts.
+	 * multiple times if the client timed out previous command attempts.
 	 * It's important to use a distinct write policy for non-idempotent
 	 * writes which sets max_retries = 0;
 	 *
@@ -463,12 +507,12 @@ typedef struct as_policy_base_s {
 
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * ~~~~~~~~~~{.c}
 	 * as_exp_build(filter,
@@ -484,6 +528,14 @@ typedef struct as_policy_base_s {
 	 * Default: NULL
 	 */
 	struct as_exp* filter_exp;
+	
+	/**
+	 * Transaction identifier. If set for an async command,  the source txn instance must
+	 * be allocated on the heap using as_txn_create() or as_txn_create_capacity().
+	 *
+	 * Default: NULL
+	 */
+	struct as_txn* txn;
 
 	/**
 	 * Use zlib compression on write or batch read commands when the command buffer size is greater
@@ -492,6 +544,8 @@ typedef struct as_policy_base_s {
 	 *
 	 * This option will increase cpu and memory usage (for extra compressed buffers), but
 	 * decrease the size of data sent over the network.
+	 *
+	 * This compression feature requires the Enterprise Edition Server.
 	 *
 	 * Default: false
 	 */
@@ -533,6 +587,27 @@ typedef struct as_policy_read_s {
 	 */
 	as_policy_read_mode_sc read_mode_sc;
 
+	/**
+	 * Determine how record TTL (time to live) is affected on reads. When enabled, the server can
+	 * efficiently operate as a read-based LRU cache where the least recently used records are expired.
+	 * The value is expressed as a percentage of the TTL sent on the most recent write such that a read
+	 * within this interval of the record’s end of life will generate a touch.
+	 *
+	 * For example, if the most recent write had a TTL of 10 hours and read_touch_ttl_percent is set to
+	 * 80, the next read within 8 hours of the record's end of life (equivalent to 2 hours after the most
+	 * recent write) will result in a touch, resetting the TTL to another 10 hours.
+	 *
+	 * Values:
+	 * <ul>
+	 * <li> 0 : Use server config default-read-touch-ttl-pct for the record's namespace/set.</li>
+	 * <li>-1 : Do not reset record TTL on reads.</li>
+	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
+	 * </ul>
+	 *
+	 * Default: 0
+	 */
+	int read_touch_ttl_percent;
+	
 	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
@@ -577,7 +652,7 @@ typedef struct as_policy_write_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -611,13 +686,25 @@ typedef struct as_policy_write_s {
 	uint32_t compression_threshold;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
 
 } as_policy_write;
 
@@ -645,7 +732,7 @@ typedef struct as_policy_apply_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -663,13 +750,25 @@ typedef struct as_policy_apply_s {
 	uint32_t ttl;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
 
 } as_policy_apply;
 
@@ -709,7 +808,7 @@ typedef struct as_policy_operate_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -725,8 +824,9 @@ typedef struct as_policy_operate_s {
 
 	/**
 	 * The default time-to-live (expiration) of the record in seconds. This field will 
-	 * only be used if "as_operations.ttl" is set to AS_RECORD_CLIENT_DEFAULT_TTL. The
-	 * as_operations instance is passed in to operate functions along with as_policy_operate.
+	 * only be used if one or more of the  operations is a write operation and  if "as_operations.ttl"
+	 * is set to AS_RECORD_CLIENT_DEFAULT_TTL. The as_operations instance is passed in to
+	 * operate functions along with as_policy_operate.
 	 *
 	 * There are also special values that can be set in the record ttl:
 	 * <ul>
@@ -738,6 +838,27 @@ typedef struct as_policy_operate_s {
 	uint32_t ttl;
 
 	/**
+	 * Determine how record TTL (time to live) is affected on reads. When enabled, the server can
+	 * efficiently operate as a read-based LRU cache where the least recently used records are expired.
+	 * The value is expressed as a percentage of the TTL sent on the most recent write such that a read
+	 * within this interval of the record’s end of life will generate a touch.
+	 *
+	 * For example, if the most recent write had a TTL of 10 hours and read_touch_ttl_percent is set to
+	 * 80, the next read within 8 hours of the record's end of life (equivalent to 2 hours after the most
+	 * recent write) will result in a touch, resetting the TTL to another 10 hours.
+	 *
+	 * Values:
+	 * <ul>
+	 * <li> 0 : Use server config default-read-touch-ttl-pct for the record's namespace/set.</li>
+	 * <li>-1 : Do not reset record TTL on reads.</li>
+	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
+	 * </ul>
+	 *
+	 * Default: 0
+	 */
+	int read_touch_ttl_percent;
+
+	/**
 	 * Should raw bytes representing a list or map be deserialized to as_list or as_map.
 	 * Set to false for backup programs that just need access to raw bytes.
 	 *
@@ -746,13 +867,25 @@ typedef struct as_policy_operate_s {
 	bool deserialize;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
 
 	/**
 	 * Should as_record instance be allocated on the heap before user listener is called in
@@ -763,6 +896,19 @@ typedef struct as_policy_operate_s {
 	 * Default: false
 	 */
 	bool async_heap_rec;
+
+	/**
+	 * Should the client return a result for every operation.
+	 *
+	 * Some operations do not return a result by default. This can make it difficult to determine the
+	 * result offset in the returned bin's result list. Setting this field to true makes it easier to identify
+	 * the desired result offset.
+	 *
+	 * This field defaults to false for older operations (basic read/write/incr/touch and list) to
+	 * preserve legacy behavior. Newer operations (map, expression, bit or HLL and batch
+	 * write operations) force respond_all_ops to be true regardless of it's initial setting.
+	 */
+	bool respond_all_ops;
 
 } as_policy_operate;
 
@@ -790,7 +936,7 @@ typedef struct as_policy_remove_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -805,7 +951,7 @@ typedef struct as_policy_remove_s {
 	uint16_t generation;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -845,13 +991,34 @@ typedef struct as_policy_batch_s {
 	as_policy_read_mode_sc read_mode_sc;
 
 	/**
+	 * Determine how record TTL (time to live) is affected on reads. When enabled, the server can
+	 * efficiently operate as a read-based LRU cache where the least recently used records are expired.
+	 * The value is expressed as a percentage of the TTL sent on the most recent write such that a read
+	 * within this interval of the record’s end of life will generate a touch.
+	 *
+	 * For example, if the most recent write had a TTL of 10 hours and read_touch_ttl_percent is set to
+	 * 80, the next read within 8 hours of the record's end of life (equivalent to 2 hours after the most
+	 * recent write) will result in a touch, resetting the TTL to another 10 hours.
+	 *
+	 * Values:
+	 * <ul>
+	 * <li> 0 : Use server config default-read-touch-ttl-pct for the record's namespace/set.</li>
+	 * <li>-1 : Do not reset record TTL on reads.</li>
+	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
+	 * </ul>
+	 *
+	 * Default: 0
+	 */
+	int read_touch_ttl_percent;
+
+	/**
 	 * Determine if batch commands to each server are run in parallel threads.
 	 *
 	 * Values:
 	 * <ul>
 	 * <li>
 	 * false: Issue batch commands sequentially.  This mode has a performance advantage for small
-	 * to medium sized batch sizes because commands can be issued in the main transaction thread.
+	 * to medium sized batch sizes because commands can be issued in the main command thread.
 	 * This is the default.
 	 * </li>
 	 * <li>
@@ -868,7 +1035,7 @@ typedef struct as_policy_batch_s {
 	 * Allow batch to be processed immediately in the server's receiving thread for in-memory
 	 * namespaces. If false, the batch will always be processed in separate service threads.
 	 *
-	 * For batch transactions with smaller sized records (&lt;= 1K per record), inline
+	 * For batch commands with smaller sized records (&lt;= 1K per record), inline
 	 * processing will be significantly faster on in-memory namespaces.
 	 *
 	 * Inline processing can introduce the possibility of unfairness because the server
@@ -941,12 +1108,12 @@ typedef struct as_policy_batch_s {
 typedef struct as_policy_batch_read_s {
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
-	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
+	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * Default: NULL
 	 */
@@ -964,6 +1131,27 @@ typedef struct as_policy_batch_read_s {
 	 */
 	as_policy_read_mode_sc read_mode_sc;
 
+	/**
+	 * Determine how record TTL (time to live) is affected on reads. When enabled, the server can
+	 * efficiently operate as a read-based LRU cache where the least recently used records are expired.
+	 * The value is expressed as a percentage of the TTL sent on the most recent write such that a read
+	 * within this interval of the record’s end of life will generate a touch.
+	 *
+	 * For example, if the most recent write had a TTL of 10 hours and read_touch_ttl_percent is set to
+	 * 80, the next read within 8 hours of the record's end of life (equivalent to 2 hours after the most
+	 * recent write) will result in a touch, resetting the TTL to another 10 hours.
+	 *
+	 * Values:
+	 * <ul>
+	 * <li> 0 : Use server config default-read-touch-ttl-pct for the record's namespace/set.</li>
+	 * <li>-1 : Do not reset record TTL on reads.</li>
+	 * <li>1 - 100 : Reset record TTL on reads when within this percentage of the most recent write TTL.</li>
+	 * </ul>
+	 *
+	 * Default: 0
+	 */
+	int read_touch_ttl_percent;
+
 } as_policy_batch_read;
 
 /**
@@ -973,12 +1161,12 @@ typedef struct as_policy_batch_read_s {
 typedef struct as_policy_batch_write_s {
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
-	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
+	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * Default: NULL
 	 */
@@ -991,7 +1179,7 @@ typedef struct as_policy_batch_write_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -1020,13 +1208,25 @@ typedef struct as_policy_batch_write_s {
 	uint32_t ttl;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
 
 } as_policy_batch_write;
 
@@ -1037,12 +1237,12 @@ typedef struct as_policy_batch_write_s {
 typedef struct as_policy_batch_apply_s {
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * Default: NULL
 	 */
@@ -1055,7 +1255,7 @@ typedef struct as_policy_batch_apply_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -1073,13 +1273,25 @@ typedef struct as_policy_batch_apply_s {
 	uint32_t ttl;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
 	 * Default: false (do not tombstone deleted records).
 	 */
 	bool durable_delete;
+
+	/**
+	 * Execute the write command only if the record is not already locked by this transaction.
+	 * If this field is true and the record is already locked by this transaction, the command will
+	 * return AEROSPIKE_MRT_ALREADY_LOCKED.
+	 *
+	 * This field is useful for safely retrying non-idempotent writes as an alternative to simply
+	 * aborting the transaction.
+	 *
+	 * Default: false.
+	 */
+	bool on_locking_only;
 
 } as_policy_batch_apply;
 
@@ -1090,12 +1302,12 @@ typedef struct as_policy_batch_apply_s {
 typedef struct as_policy_batch_remove_s {
 	/**
 	 * Optional expression filter. If filter_exp exists and evaluates to false, the
-	 * transaction is ignored. This can be used to eliminate a client/server roundtrip
+	 * command is ignored. This can be used to eliminate a client/server roundtrip
 	 * in some cases.
 	 *
 	 * aerospike_destroy() automatically calls as_exp_destroy() on all global default 
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
-	 * on filter expressions when setting temporary transaction policies.
+	 * on filter expressions when setting temporary command policies.
 	 *
 	 * Default: NULL
 	 */
@@ -1108,7 +1320,7 @@ typedef struct as_policy_batch_remove_s {
 
 	/**
 	 * Specifies the number of replicas required to be committed successfully when writing
-	 * before returning transaction succeeded.
+	 * before returning command succeeded.
 	 */
 	as_policy_commit_level commit_level;
 
@@ -1123,7 +1335,7 @@ typedef struct as_policy_batch_remove_s {
 	uint16_t generation;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -1157,6 +1369,14 @@ typedef struct as_policy_query_s {
 	 * Algorithm used to determine target node.
 	 */
 	as_policy_replica replica;
+	
+	/**
+	 * Expected query duration. The server treats the query in different ways depending on the expected duration.
+	 * This field is ignored for aggregation queries, background queries and server versions &lt; 6.0.
+	 *
+	 * Default: AS_QUERY_DURATION_LONG
+	 */
+	as_query_duration expected_duration;
 
 	/**
 	 * Terminate query if cluster is in migration state. If the server supports partition
@@ -1175,12 +1395,20 @@ typedef struct as_policy_query_s {
 	bool deserialize;
 
 	/**
+	 * This field is deprecated and will eventually be removed. Use expected_duration instead.
+	 *
+	 * For backwards compatibility: If short_query is true, the query is treated as a short query and
+	 * expected_duration is ignored. If short_query is false, expected_duration is used
+	 * and defaults to AS_QUERY_DURATION_LONG.
+	 *
 	 * Is query expected to return less than 100 records per node.
 	 * If true, the server will optimize the query for a small record set.
 	 * This field is ignored for aggregation queries, background queries
 	 * and server versions &lt; 6.0.
 	 *
 	 * Default: false
+	 *
+	 * @deprecated Use expected_duration instead.
 	 */
 	bool short_query;
 
@@ -1235,7 +1463,7 @@ typedef struct as_policy_scan_s {
 	uint32_t ttl;
 
 	/**
-	 * If the transaction results in a record deletion, leave a tombstone for the record.
+	 * If the command results in a record deletion, leave a tombstone for the record.
 	 * This prevents deleted records from reappearing after node failures.
 	 * Valid for Aerospike Server Enterprise Edition only.
 	 *
@@ -1284,6 +1512,18 @@ typedef struct as_policy_admin_s {
 } as_policy_admin;
 
 /**
+ * Transaction policy fields used to batch verify record versions on commit.
+ * Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ */
+typedef as_policy_batch as_policy_txn_verify;
+
+/**
+ * Transaction policy fields used to batch roll forward/backward records on
+ * commit or abort. Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ */
+typedef as_policy_batch as_policy_txn_roll;
+
+/**
  * Struct of all policy values and operation policies. 
  * 
  * This is utilized by as_config to define default values for policies.
@@ -1293,27 +1533,27 @@ typedef struct as_policy_admin_s {
 typedef struct as_policies_s {
 
 	/**
-	 * The default read policy.
+	 * Default read policy.
 	 */
 	as_policy_read read;
 
 	/**
-	 * The default write policy.
+	 * Default write policy.
 	 */
 	as_policy_write write;
 
 	/**
-	 * The default operate policy.
+	 * Default operate policy.
 	 */
 	as_policy_operate operate;
 
 	/**
-	 * The default remove policy.
+	 * Default remove policy.
 	 */
 	as_policy_remove remove;
 
 	/**
-	 * The default apply policy.
+	 * Default apply policy.
 	 */
 	as_policy_apply apply;
 
@@ -1343,24 +1583,35 @@ typedef struct as_policies_s {
 	as_policy_batch_remove batch_remove;
 
 	/**
-	 * The default scan policy.
+	 * Default scan policy.
 	 */
 	as_policy_scan scan;
 
 	/**
-	 * The default query policy.
+	 * Default query policy.
 	 */
 	as_policy_query query;
 
 	/**
-	 * The default info policy.
+	 * Default info policy.
 	 */
 	as_policy_info info;
 
 	/**
-	 * The default administration policy.
+	 * Default administration policy.
 	 */
 	as_policy_admin admin;
+
+	/**
+	 * Default transaction policy when verifying record versions in a batch.
+	 */
+	as_policy_txn_verify txn_verify;
+
+	/**
+	 * Default transaction policy when rolling the transaction records forward (commit)
+	 * or back (abort) in a batch.
+	 */
+	as_policy_txn_roll txn_roll;
 
 } as_policies;
 
@@ -1379,6 +1630,7 @@ as_policy_base_read_init(as_policy_base* p)
 	p->max_retries = 2;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
+	p->txn = NULL;
 	p->compress = false;
 }
 
@@ -1393,6 +1645,7 @@ as_policy_base_write_init(as_policy_base* p)
 	p->max_retries = 0;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
+	p->txn = NULL;
 	p->compress = false;
 }
 
@@ -1420,6 +1673,7 @@ as_policy_base_query_init(as_policy_base* p)
 	p->max_retries = 5;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
+	p->txn = NULL;
 	p->compress = false;
 }
 
@@ -1439,6 +1693,7 @@ as_policy_read_init(as_policy_read* p)
 	p->replica = AS_POLICY_REPLICA_DEFAULT;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	p->read_touch_ttl_percent = 0;
 	p->deserialize = true;
 	p->async_heap_rec = false;
 	return p;
@@ -1478,6 +1733,7 @@ as_policy_write_init(as_policy_write* p)
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->compression_threshold = AS_POLICY_COMPRESSION_THRESHOLD_DEFAULT;
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	return p;
 }
 
@@ -1515,9 +1771,12 @@ as_policy_operate_init(as_policy_operate* p)
 	p->gen = AS_POLICY_GEN_DEFAULT;
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
+	p->read_touch_ttl_percent = 0;
 	p->deserialize = true;
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	p->async_heap_rec = false;
+	p->respond_all_ops = false;
 	return p;
 }
 
@@ -1587,6 +1846,7 @@ as_policy_apply_init(as_policy_apply* p)
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	return p;
 }
 
@@ -1619,6 +1879,7 @@ as_policy_batch_init(as_policy_batch* p)
 	p->replica = AS_POLICY_REPLICA_SEQUENCE;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	p->read_touch_ttl_percent = 0;
 	p->concurrent = false;
 	p->allow_inline = true;
 	p->allow_inline_ssd = false;
@@ -1668,6 +1929,7 @@ as_policy_batch_read_init(as_policy_batch_read* p)
 	p->filter_exp = NULL;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	p->read_touch_ttl_percent = 0;
 	return p;
 }
 
@@ -1685,6 +1947,7 @@ as_policy_batch_write_init(as_policy_batch_write* p)
 	p->exists = AS_POLICY_EXISTS_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	return p;
 }
 
@@ -1700,6 +1963,7 @@ as_policy_batch_apply_init(as_policy_batch_apply* p)
 	p->commit_level = AS_POLICY_COMMIT_LEVEL_DEFAULT;
 	p->ttl = 0; // AS_RECORD_DEFAULT_TTL
 	p->durable_delete = false;
+	p->on_locking_only = false;
 	return p;
 }
 
@@ -1767,6 +2031,7 @@ as_policy_query_init(as_policy_query* p)
 	as_policy_base_query_init(&p->base);
 	p->info_timeout = 10000;
 	p->replica = AS_POLICY_REPLICA_SEQUENCE;
+	p->expected_duration = AS_QUERY_DURATION_LONG;
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;
 	p->short_query = false;
@@ -1847,6 +2112,96 @@ as_policy_admin_copy(const as_policy_admin* src, as_policy_admin* trg)
 	*trg = *src;
 }
 	
+/**
+ * Initialize as_policy_txn_verify to default values.
+ *
+ * @param p	The policy to initialize.
+ * @return	The initialized policy.
+ *
+ * @relates as_policy_txn_verify
+ */
+static inline as_policy_txn_verify*
+as_policy_txn_verify_init(as_policy_txn_verify* p)
+{
+	p->base.socket_timeout = 3000;
+	p->base.total_timeout = 10000;
+	p->base.max_retries = 5;
+	p->base.sleep_between_retries = 1000;
+	p->base.filter_exp = NULL;
+	p->base.txn = NULL;
+	p->base.compress = false;
+	p->replica = AS_POLICY_REPLICA_MASTER;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_LINEARIZE;
+	p->read_touch_ttl_percent = 0;
+	p->concurrent = false;
+	p->allow_inline = true;
+	p->allow_inline_ssd = false;
+	p->respond_all_keys = true;
+	p->send_set_name = true;
+	p->deserialize = true;
+	return p;
+}
+
+/**
+ * Copy as_policy_txn_verify values.
+ *
+ * @param src	The source policy.
+ * @param trg	The target policy.
+ *
+ * @relates as_policy_txn_verify
+ */
+static inline void
+as_policy_txn_verify_copy(const as_policy_txn_verify* src, as_policy_txn_verify* trg)
+{
+	*trg = *src;
+}
+
+/**
+ * Initialize as_policy_txn_roll_ to default values.
+ *
+ * @param p	The policy to initialize.
+ * @return	The initialized policy.
+ *
+ * @relates as_policy_txn_roll_
+ */
+static inline as_policy_txn_roll*
+as_policy_txn_roll_init(as_policy_txn_roll* p)
+{
+	p->base.socket_timeout = 3000;
+	p->base.total_timeout = 10000;
+	p->base.max_retries = 5;
+	p->base.sleep_between_retries = 1000;
+	p->base.filter_exp = NULL;
+	p->base.txn = NULL;
+	p->base.compress = false;
+	p->replica = AS_POLICY_REPLICA_MASTER;
+	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
+	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;
+	p->read_touch_ttl_percent = 0;
+	p->concurrent = false;
+	p->allow_inline = true;
+	p->allow_inline_ssd = false;
+	p->respond_all_keys = true;
+	p->send_set_name = true;
+	p->deserialize = true;
+	return p;
+}
+
+/**
+ * Copy as_policy_txn_roll values.
+ *
+ * @param src	The source policy.
+ * @param trg	The target policy.
+ *
+ * @relates as_policy_txn_roll
+ */
+static inline void
+as_policy_txn_roll_copy(const as_policy_txn_roll* src, as_policy_txn_roll* trg)
+{
+	*trg = *src;
+}
+
 /**
  * @private
  * Initialize as_policies.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -434,6 +434,8 @@ as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 static inline void
 as_uv_command_start(as_event_command* cmd, uv_stream_t* stream)
 {
+	as_event_connection_complete(cmd);
+	
 	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
 		as_event_connector_success(cmd);
 		return;
@@ -640,21 +642,22 @@ as_uv_tls_try_send_pending(as_event_connection* conn)
 
 		// Put remaining buffer on heap.
 		as_uv_tls* tls = conn->tls;
-		pending -= rv;
-
-		if (pending > tls->capacity) {
-			tls->buf = cf_realloc(tls->buf, pending);
-			tls->capacity = pending;
+		tls->len = pending - rv;
+		
+		if (tls->len > tls->capacity) {
+			tls->buf = cf_realloc(tls->buf, tls->len);
+			tls->capacity = tls->len;
 		}
-		memcpy(tls->buf, buf.base + rv, buf.len - rv);
-
-		int len = pending - rv;
-		rv = BIO_read(tls->nbio, tls->buf + rv, len);
-
-		if (rv != len) {
+		
+		int unsent_len = buf.len - rv;
+		memcpy(tls->buf, buf.base + rv, unsent_len);
+		
+		int read_len = pending - buf.len;
+		rv = BIO_read(tls->nbio, tls->buf + unsent_len, read_len);
+		
+		if (rv != read_len) {
 			return -2;
 		}
-		tls->len = pending;
 		return 1;
 	}
 	return 0;
@@ -935,6 +938,8 @@ as_uv_tls_command_write_start(as_event_command* cmd)
 static inline void
 as_uv_tls_command_start(as_event_command* cmd)
 {
+	as_event_connection_complete(cmd);
+
 	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
 		as_event_connector_success(cmd);
 		return;
@@ -1494,7 +1499,7 @@ as_uv_queue_close_connections(as_node* node, as_async_conn_pool* pool, as_queue*
 		
 		// In this case, connection counts are decremented before the connection is closed.
 		// This is done because the node will be invalid when the deferred connection close occurs.
-		// Since node destroy always waits till there are no node references, all transactions that
+		// Since node destroy always waits till there are no node references, all commands that
 		// referenced this node should be completed by the time this code is executed.
 		as_queue_decr_total(&pool->queue);
 	}

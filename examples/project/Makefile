@@ -106,13 +106,6 @@ endif
 
 LD_FLAGS += -lssl -lcrypto -lpthread -lm -lz $(LINK_SUFFIX)
 
-ifeq ($(OS),Linux)
-  LD_FLAGS += -lrt -ldl
-else ifeq ($(OS),FreeBSD)
-  LD_FLAGS += -lrt
-endif
-
-LD_FLAGS += -lm -lz
 CC = cc
 
 ###############################################################################

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -41,6 +41,7 @@ extern "C" {
 #define AS_ASYNC_TYPE_SCAN_PARTITION 7
 #define AS_ASYNC_TYPE_QUERY_PARTITION 8
 #define AS_ASYNC_TYPE_CONNECTOR 9
+#define AS_ASYNC_TYPE_TXN_MONITOR 10
 
 #define AS_AUTHENTICATION_MAX_SIZE 158
 
@@ -81,7 +82,7 @@ as_async_write_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_partition_info* pi,
 	as_policy_replica replica, as_async_write_listener listener, void* udata,
 	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
-	as_event_parse_results_fn parse_results
+	as_event_parse_results_fn parse_results, uint8_t* ubuf, uint32_t ubuf_size
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -110,7 +111,12 @@ as_async_write_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = 0;
+	cmd->txn = policy->txn;
+	cmd->ubuf = ubuf;
+	cmd->ubuf_size = ubuf_size;
+	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	wcmd->listener = listener;
+	as_cluster_add_command_count(cluster);
 	return cmd;
 }
 	
@@ -119,7 +125,8 @@ as_async_record_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_partition_info* pi,
 	as_policy_replica replica, uint8_t replica_index, bool deserialize, bool heap_rec,
 	uint8_t flags, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results
+	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results, 
+	uint8_t type, as_latency_type latency_type, uint8_t* ubuf, uint32_t ubuf_size
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -143,7 +150,7 @@ as_async_record_command_create(
 	cmd->pipe_listener = pipe_listener;
 	cmd->buf = rcmd->space;
 	cmd->read_capacity = (uint32_t)(s - size - sizeof(as_async_record_command));
-	cmd->type = AS_ASYNC_TYPE_RECORD;
+	cmd->type = type;
 	cmd->proto_type = AS_MESSAGE_TYPE;
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = flags;
@@ -158,7 +165,12 @@ as_async_record_command_create(
 
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = replica_index;
+	cmd->txn = policy->txn;
+	cmd->ubuf = ubuf;
+	cmd->ubuf_size = ubuf_size;
+	cmd->latency_type = latency_type;
 	rcmd->listener = listener;
+	as_cluster_add_command_count(cluster);
 	return cmd;
 }
 
@@ -167,7 +179,7 @@ as_async_value_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_partition_info* pi,
 	as_policy_replica replica, as_async_value_listener listener, void* udata,
 	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
-	as_event_parse_results_fn parse_results
+	as_event_parse_results_fn parse_results, uint8_t* ubuf, uint32_t ubuf_size
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -197,7 +209,12 @@ as_async_value_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = 0;
+	cmd->txn = policy->txn;
+	cmd->ubuf = ubuf;
+	cmd->ubuf_size = ubuf_size;
+	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	vcmd->listener = listener;
+	as_cluster_add_command_count(cluster);
 	return cmd;
 }
 
@@ -233,7 +250,12 @@ as_async_info_command_create(
 	cmd->flags = 0;
 	cmd->replica_size = 1;
 	cmd->replica_index = 0;
+	cmd->txn = NULL;
+	cmd->ubuf = NULL;
+	cmd->ubuf_size = 0;
+	cmd->latency_type = AS_LATENCY_TYPE_NONE;
 	icmd->listener = listener;
+	as_cluster_add_command_count(node->cluster);
 	return cmd;
 }
 

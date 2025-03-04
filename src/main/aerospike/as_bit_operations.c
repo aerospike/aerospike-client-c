@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -19,27 +19,15 @@
 #include <aerospike/as_msgpack.h>
 #include <citrusleaf/alloc.h>
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 #define INT_FLAGS_SIGNED 1
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
-
-static inline void
-as_bit_pack_header(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32_t count)
-{
-	if (ctx) {
-		as_cdt_pack_ctx(pk, ctx);
-	}
-
-	as_pack_list_header(pk, ++count);
-	as_pack_uint64(pk, command);
-}
-
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static inline void
 as_bit_pack_policy(as_packer* pk, as_bit_policy* policy)
@@ -47,9 +35,9 @@ as_bit_pack_policy(as_packer* pk, as_bit_policy* policy)
 	as_pack_int64(pk, policy ? policy->flags : 0);
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 bool
 as_bit_write(
@@ -58,7 +46,7 @@ as_bit_write(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, command, 3);
+	as_cdt_pack_header(&pk, ctx, command, 3);
 	as_pack_int64(&pk, offset);
 	as_pack_uint64(&pk, size);
 	as_bit_pack_policy(&pk, policy);
@@ -73,7 +61,7 @@ as_bit_shift(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, command, 4);
+	as_cdt_pack_header(&pk, ctx, command, 4);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
 	as_pack_uint64(&pk, shift);
@@ -85,15 +73,15 @@ as_bit_shift(
 bool
 as_bit_math(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
-	uint16_t command, int bit_offset, uint32_t bit_size, int64_t value, bool sign,
+	uint16_t command, int bit_offset, uint32_t bit_size, uint64_t value, bool sign,
 	as_bit_overflow_action action
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, command, 5);
+	as_cdt_pack_header(&pk, ctx, command, 5);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
-	as_pack_int64(&pk, value);
+	as_pack_uint64(&pk, value);
 	as_bit_pack_policy(&pk, policy);
 
 	uint64_t flags = (uint64_t)action;
@@ -114,7 +102,7 @@ as_bit_byte_math(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, command, 4);
+	as_cdt_pack_header(&pk, ctx, command, 4);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
 	as_pack_bytes(&pk, value, value_size);
@@ -130,7 +118,7 @@ as_operations_bit_resize(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, AS_BIT_OP_RESIZE, 3);
+	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_RESIZE, 3);
 	as_pack_uint64(&pk, byte_size);
 	as_bit_pack_policy(&pk, policy);
 	as_pack_uint64(&pk, (uint64_t)flags);
@@ -145,7 +133,7 @@ as_operations_bit_insert(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, AS_BIT_OP_INSERT, 3);
+	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_INSERT, 3);
 	as_pack_int64(&pk, byte_offset);
 	as_pack_bytes(&pk, value, value_byte_size);
 	as_bit_pack_policy(&pk, policy);
@@ -160,7 +148,7 @@ as_operations_bit_set_int(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, AS_BIT_OP_SET_INT, 4);
+	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_SET_INT, 4);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
 	as_pack_int64(&pk, value);
@@ -176,7 +164,7 @@ as_bit_read(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, command, 2);
+	as_cdt_pack_header(&pk, ctx, command, 2);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
 	as_cdt_end(&pk);
@@ -190,7 +178,7 @@ as_bit_scan(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, command, 3);
+	as_cdt_pack_header(&pk, ctx, command, 3);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
 	as_pack_bool(&pk, value);
@@ -205,7 +193,7 @@ as_operations_bit_get_int(
 	)
 {
 	as_packer pk = as_cdt_begin();
-	as_bit_pack_header(&pk, ctx, AS_BIT_OP_GET_INT, sign ? 3 : 2);
+	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_GET_INT, sign ? 3 : 2);
 	as_pack_int64(&pk, bit_offset);
 	as_pack_uint64(&pk, bit_size);
 

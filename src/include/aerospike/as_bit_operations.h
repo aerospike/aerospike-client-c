@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -85,8 +85,8 @@ typedef enum as_bit_write_flags_e {
 	AS_BIT_WRITE_NO_FAIL = 4,
 
 	/**
-	 * Allow other valid operations to be committed if this operations is
-	 * denied due to flag constraints.
+	 * Don't fail if the bit operation would increase the blob size.
+	 * Instead, apply the bit operation without increasing the blob size.
 	 */
 	AS_BIT_WRITE_PARTIAL = 8
 } as_bit_write_flags;
@@ -195,7 +195,7 @@ as_bit_shift(
 AS_EXTERN bool
 as_bit_math(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
-	uint16_t command, int bit_offset, uint32_t bit_size, int64_t value, bool sign,
+	uint16_t command, int bit_offset, uint32_t bit_size, uint64_t value, bool sign,
 	as_bit_overflow_action action
 	);
 
@@ -499,7 +499,7 @@ as_operations_bit_rshift(
 static inline bool
 as_operations_bit_add(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
-	int bit_offset, uint32_t bit_size, int64_t value, bool sign, as_bit_overflow_action action
+	int bit_offset, uint32_t bit_size, uint64_t value, bool sign, as_bit_overflow_action action
 	)
 {
 	return as_bit_math(ops, name, ctx, policy, AS_BIT_OP_ADD, bit_offset, bit_size, value, sign, action);
@@ -526,7 +526,7 @@ as_operations_bit_add(
 static inline bool
 as_operations_bit_subtract(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_bit_policy* policy,
-	int bit_offset, uint32_t bit_size, int64_t value, bool sign, as_bit_overflow_action action
+	int bit_offset, uint32_t bit_size, uint64_t value, bool sign, as_bit_overflow_action action
 	)
 {
 	return as_bit_math(ops, name, ctx, policy, AS_BIT_OP_SUBTRACT, bit_offset, bit_size, value, sign, action);

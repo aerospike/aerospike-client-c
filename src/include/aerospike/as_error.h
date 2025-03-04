@@ -118,7 +118,7 @@ typedef struct as_error_s {
 	uint32_t line;
 
 	/**
-	 * Is it possible that the write transaction completed even though this error was generated.
+	 * Is it possible that the write command completed even though this error was generated.
 	 * This may be the case when a client error occurs (like timeout) after the command was sent
 	 * to the server.
 	 */
@@ -237,7 +237,7 @@ as_error_setallv(as_error* err, as_status code, const char * func, const char * 
 }
 
 /**
- * Set whether it is possible that the write transaction may have completed
+ * Set whether it is possible that the write command may have completed
  * even though this exception was generated.  This may be the case when a
  * client error occurs (like timeout) after the command was sent to the server.
  *

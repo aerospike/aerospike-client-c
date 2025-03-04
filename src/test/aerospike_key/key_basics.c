@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -27,6 +27,7 @@
 #include <aerospike/as_msgpack_serializer.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
@@ -40,6 +41,7 @@
 
 extern aerospike* as;
 extern bool g_enterprise_server;
+extern bool g_has_ttl;
 
 /******************************************************************************
  * MACROS
@@ -822,6 +824,59 @@ TEST(key_basics_write_empty_bin_name, "write empty bin name")
 	as_record_destroy(prec);
 }
 
+TEST(key_basics_reset_read_ttl, "reset read ttl")
+{
+	// Write initial record.
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "rrt");
+
+	// Write record with 2 second ttl.
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_str(&rec, "a", "expirevalue");
+	rec.ttl = 2;
+	
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Read the record before it expires and reset read ttl.
+	as_sleep(1000);
+	
+	as_policy_read pr;
+	as_policy_read_init(&pr);
+	pr.read_touch_ttl_percent = 80;
+	
+	as_record* prec = NULL;
+	status = aerospike_key_get(as, &err, &pr, &key, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	
+	char* s = as_record_get_str(prec, "a");
+	assert_not_null(s);
+	assert_string_eq(s, "expirevalue");
+	as_record_destroy(prec);
+
+	// Read the record again, but don't reset read ttl.
+	as_sleep(1000);
+	pr.read_touch_ttl_percent = -1;
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, &pr, &key, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	
+	s = as_record_get_str(prec, "a");
+	assert_not_null(s);
+	assert_string_eq(s, "expirevalue");
+	as_record_destroy(prec);
+
+	// Read the record after it expires, showing it's gone.
+	as_sleep(2000);
+
+	prec = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &prec);
+	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -853,5 +908,9 @@ SUITE(key_basics, "aerospike_key basic tests") {
 
 	if (g_enterprise_server) {
 		suite_add(key_basics_compression);
+	}
+	
+	if (g_has_ttl) {
+		suite_add(key_basics_reset_read_ttl);
 	}
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,36 +32,6 @@ extern uint32_t as_event_loop_size;
  *****************************************************************************/
 
 static inline void
-as_sum_init(as_conn_stats* stats)
-{
-	stats->in_pool = 0;
-	stats->in_use = 0;
-	stats->opened = 0;
-	stats->closed = 0;
-}
-
-static inline void
-as_sum_no_lock(as_async_conn_pool* pool, as_conn_stats* stats)
-{
-	// Warning: cross-thread reference without a lock.
-	int tmp = as_queue_size(&pool->queue);
-
-	// Timing issues may cause values to go negative. Adjust.
-	if (tmp < 0) {
-		tmp = 0;
-	}
-	stats->in_pool += tmp;
-	tmp = pool->queue.total - tmp;
-
-	if (tmp < 0) {
-		tmp = 0;
-	}
-	stats->in_use += tmp;
-	stats->opened += pool->opened;
-	stats->closed += pool->closed;
-}
-
-static void
 as_conn_stats_tostring(as_string_builder* sb, const char* title, as_conn_stats* cs)
 {
 	as_string_builder_append_char(sb, ' ');
@@ -110,6 +80,7 @@ aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
 
 	// cf_queue applies locks, so we are safe here.
 	stats->thread_pool_queued_tasks = cf_queue_sz(cluster->thread_pool.dispatch_queue);
+	stats->retry_count = cluster->retry_count;
 }
 
 void
@@ -134,10 +105,11 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 	as_node_reserve(node); // Released in aerospike_node_stats_destroy()
 	stats->node = node;
 	stats->error_count = as_node_get_error_count(node);
+	stats->timeout_count = as_node_get_timeout_count(node);
 
-	as_sum_init(&stats->sync);
-	as_sum_init(&stats->async);
-	as_sum_init(&stats->pipeline);
+	as_conn_stats_init(&stats->sync);
+	as_conn_stats_init(&stats->async);
+	as_conn_stats_init(&stats->pipeline);
 
 	uint32_t max = node->cluster->conn_pools_per_node;
 
@@ -160,10 +132,10 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 	if (as_event_loop_capacity > 0) {
 		for (uint32_t i = 0; i < as_event_loop_size; i++) {
 			// Regular async.
-			as_sum_no_lock(&node->async_conn_pools[i], &stats->async);
+			as_conn_stats_sum(&stats->async, &node->async_conn_pools[i]);
 
 			// Pipeline async.
-			as_sum_no_lock(&node->pipe_conn_pools[i], &stats->pipeline);
+			as_conn_stats_sum(&stats->pipeline, &node->pipe_conn_pools[i]);
 		}
 	}
 }
@@ -173,7 +145,7 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 {
 	as_string_builder sb;
 	as_string_builder_init(&sb, 4096, true);
-	as_string_builder_append(&sb, "nodes(inUse,inPool,opened,closed):");
+	as_string_builder_append(&sb, "nodes(inUse,inPool,opened,closed) error_count,timeout_count");
 	as_string_builder_append_newline(&sb);
 
 	for (uint32_t i = 0; i < stats->nodes_size; i++) {
@@ -182,9 +154,10 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		as_conn_stats_tostring(&sb, "sync", &node_stats->sync);
 		as_conn_stats_tostring(&sb, "async", &node_stats->async);
 		as_conn_stats_tostring(&sb, "pipeline", &node_stats->pipeline);
-		as_string_builder_append_newline(&sb);
-		as_string_builder_append(&sb, "error count: ");
-		as_string_builder_append_uint(&sb, node_stats->error_count);
+		as_string_builder_append_char(&sb, ' ');
+		as_string_builder_append_uint64(&sb, node_stats->error_count);
+		as_string_builder_append_char(&sb, ',');
+		as_string_builder_append_uint64(&sb, node_stats->timeout_count);
 		as_string_builder_append_newline(&sb);
 	}
 
@@ -205,5 +178,30 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		}
 		as_string_builder_append_newline(&sb);
 	}
+	
+	as_string_builder_append(&sb, "retry_count: ");
+	as_string_builder_append_uint64(&sb, stats->retry_count);
+
 	return sb.data;
+}
+
+void
+as_conn_stats_sum(as_conn_stats* stats, as_async_conn_pool* pool)
+{
+	// Warning: cross-thread reference without a lock.
+	int tmp = as_queue_size(&pool->queue);
+
+	// Timing issues may cause values to go negative. Adjust.
+	if (tmp < 0) {
+		tmp = 0;
+	}
+	stats->in_pool += tmp;
+	tmp = pool->queue.total - tmp;
+
+	if (tmp < 0) {
+		tmp = 0;
+	}
+	stats->in_use += tmp;
+	stats->opened += pool->opened;
+	stats->closed += pool->closed;
 }

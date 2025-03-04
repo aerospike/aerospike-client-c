@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2020 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1534,8 +1534,8 @@ TEST(bit_filter_call_modify_add, "Bit filter call modify add")
 			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
 				as_exp_bin_blob(BIN_NAME)),
 			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
-				as_exp_bit_add(NULL, as_exp_int(16), as_exp_uint(8),
-					as_exp_uint(1), AS_BIT_OVERFLOW_FAIL,
+				as_exp_bit_add_signed(NULL, as_exp_int(16), as_exp_uint(8),
+					as_exp_uint(1), false, AS_BIT_OVERFLOW_FAIL,
 					as_exp_bin_blob(BIN_NAME)))));
 	assert_not_null(filter2);
 
@@ -1579,8 +1579,8 @@ TEST(bit_filter_call_modify_subtract, "Bit filter call modify subtract")
 			as_exp_bit_get(as_exp_int(16), as_exp_uint(8),
 				as_exp_bin_blob(BIN_NAME)),
 			as_exp_bit_get(as_exp_int(24), as_exp_uint(8),
-				as_exp_bit_subtract(NULL, as_exp_int(24),
-					as_exp_uint(8), as_exp_uint(1), AS_BIT_OVERFLOW_FAIL,
+				as_exp_bit_subtract_signed(NULL, as_exp_int(24),
+					as_exp_uint(8), as_exp_uint(1), false, AS_BIT_OVERFLOW_FAIL,
 					as_exp_bin_blob(BIN_NAME)))));
 	assert_not_null(filter2);
 

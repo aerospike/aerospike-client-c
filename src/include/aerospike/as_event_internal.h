@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -140,6 +140,7 @@ typedef struct as_event_command {
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
+	uint64_t begin; // Used for metrics
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
 	uint32_t write_len;
@@ -155,6 +156,12 @@ typedef struct as_event_command {
 	uint8_t replica_size;
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
+
+	struct as_txn* txn;
+	uint8_t* ubuf; // Uncompressed send buffer. Used when compression is enabled.
+	uint32_t ubuf_size;
+	as_latency_type latency_type;
+	bool metrics_enabled;
 } as_event_command;
 
 typedef struct {
@@ -189,6 +196,9 @@ as_event_command_execute(as_event_command* cmd, as_error* err);
 void
 as_event_command_schedule(as_event_command* cmd);
 
+void
+as_event_connection_complete(as_event_command* cmd);
+
 bool
 as_event_proto_parse(as_event_command* cmd, as_proto* proto);
 
@@ -218,6 +228,9 @@ as_event_query_complete(as_event_command* cmd);
 
 void
 as_event_batch_complete(as_event_command* cmd);
+
+void
+as_event_response_complete(as_event_command* cmd);
 
 void
 as_event_executor_error(as_event_executor* executor, as_error* err, uint32_t command_count);
@@ -251,6 +264,9 @@ as_event_command_parse_header(as_event_command* cmd);
 
 bool
 as_event_command_parse_success_failure(as_event_command* cmd);
+
+bool
+as_event_command_parse_deadline(as_event_command* cmd);
 
 bool
 as_event_command_parse_info(as_event_command* cmd);
@@ -761,7 +777,7 @@ as_event_release_async_connection(as_event_command* cmd)
 {
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	as_event_release_connection(cmd->conn, pool);
-	as_node_incr_error_count(cmd->node);
+	as_node_incr_error_rate(cmd->node);
 }
 
 static inline void
@@ -783,7 +799,7 @@ as_event_connection_timeout(as_event_command* cmd, as_async_conn_pool* pool)
 		if (conn->watching > 0) {
 			as_event_stop_watcher(cmd, conn);
 			as_event_release_connection(conn, pool);
-			as_node_incr_error_count(cmd->node);
+			as_node_incr_error_rate(cmd->node);
 		}
 		else {
 			cf_free(conn);
@@ -805,11 +821,26 @@ as_event_socket_retry(as_event_command* cmd)
 	return as_event_command_retry(cmd, false);
 }
 
+static inline uint8_t*
+as_event_get_ubuf(as_event_command* cmd)
+{
+	// Return saved uncompressed buffer when compression is enabled.
+	// Return command buffer when compression is not enabled.
+	return cmd->ubuf ? cmd->ubuf : (uint8_t*)cmd + cmd->write_offset;
+}
+
 static inline void
 as_event_command_destroy(as_event_command* cmd)
 {
-	// Use this function to free batch/scan/query commands that were never started.
-	as_node_release(cmd->node);
+	// Use this function to free async commands that were never started.
+	if (cmd->node) {
+		as_node_release(cmd->node);
+	}
+
+	if (cmd->ubuf) {
+		cf_free(cmd->ubuf);
+	}
+
 	cf_free(cmd);
 }
 

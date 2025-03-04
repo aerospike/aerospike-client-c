@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -187,7 +187,7 @@ typedef struct as_user_s {
 	 * Current statistics by offset are:
 	 * <ul>
 	 * <li>0: read quota in records per second</li>
-	 * <li>1: single record read transaction rate (TPS)</li>
+	 * <li>1: single record read command rate (TPS)</li>
 	 * <li>2: read scan/query record per second rate (RPS)</li>
 	 * <li>3: number of limitless read scans/queries</li>
 	 * </ul>
@@ -200,7 +200,7 @@ typedef struct as_user_s {
 	 * Current statistics by offset are:
 	 * <ul>
 	 * <li>0: write quota in records per second</li>
-	 * <li>1: single record write transaction rate (TPS)</li>
+	 * <li>1: single record write command rate (TPS)</li>
 	 * <li>2: write scan/query record per second rate (RPS)</li>
 	 * <li>3: number of limitless write scans/queries</li>
 	 * </ul>

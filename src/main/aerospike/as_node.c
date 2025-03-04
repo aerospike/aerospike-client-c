@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -23,6 +23,7 @@
 #include <aerospike/as_event_internal.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_shm_cluster.h>
@@ -33,6 +34,9 @@
 
 // Replicas take ~2K per namespace, so this will cover most deployments:
 #define INFO_STACK_BUF_SIZE (16 * 1024)
+
+// Number of nanoseconds per millisecond
+#define NS_TO_MS 1000000
 
 /******************************************************************************
  * Function declarations.
@@ -91,6 +95,48 @@ as_node_create_async_pools(uint32_t min_conns_per_node, uint32_t max_conns_per_n
 	return pools;
 }
 
+static void
+as_latency_buckets_init(as_latency_buckets* latency_buckets, uint32_t latency_columns, uint32_t latency_shift)
+{
+	latency_buckets->latency_columns = latency_columns;
+	latency_buckets->latency_shift = latency_shift;
+	latency_buckets->buckets = cf_malloc(sizeof(uint64_t) * latency_columns);
+	
+	for (uint32_t i = 0; i < latency_columns; i++) {
+		as_store_uint64(&latency_buckets->buckets[i], 0);
+	}
+}
+
+static as_node_metrics*
+as_node_metrics_init(uint32_t latency_columns, uint32_t latency_shift)
+{
+	as_node_metrics* node_metrics = (as_node_metrics*)cf_malloc(sizeof(as_node_metrics));
+	uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
+	node_metrics->latency = (as_latency_buckets*)cf_malloc(sizeof(as_latency_buckets) * max_latency_type);
+
+	for (uint32_t i = 0; i < max_latency_type; i++) {
+		as_latency_buckets_init(&node_metrics->latency[i], latency_columns, latency_shift);
+	}
+	return node_metrics;
+}
+
+void
+as_node_destroy_metrics(as_node* node)
+{
+	as_node_metrics* node_metrics = node->metrics;
+	
+	if (node_metrics) {
+		uint32_t max = AS_LATENCY_TYPE_NONE;
+		
+		for (uint32_t i = 0; i < max; i++) {
+			cf_free(node_metrics->latency[i].buckets);
+		}
+		cf_free(node_metrics->latency);
+		cf_free(node_metrics);
+		node->metrics = NULL;
+	}
+}
+
 as_node*
 as_node_create(as_cluster* cluster, as_node_info* node_info)
 {
@@ -115,8 +161,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->address6_size = 0;
 	node->addresses = cf_malloc(sizeof(as_address) * (AS_ADDRESS6_MAX));
 	as_node_add_address(node, (struct sockaddr*)&node_info->addr);
-	
-	as_vector_init(&node->aliases, sizeof(as_alias), 2);
+	node->hostname = NULL;
 
 	memcpy(&node->info_socket, &node_info->socket, sizeof(as_socket));
 	node->tls_name = node_info->host.tls_name ? cf_strdup(node_info->host.tls_name) : NULL;
@@ -135,12 +180,21 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->active = true;
 	node->partition_changed = true;
 	node->rebalance_changed = cluster->rack_aware;
+	node->error_rate = 0;
+	node->error_count = 0;
+	node->timeout_count = 0;
+
+	if (cluster->metrics_enabled) {
+		node->metrics = as_node_metrics_init(cluster->metrics_latency_columns, cluster->metrics_latency_shift);
+	}
+	else {
+		node->metrics = NULL;
+	}
 
 	// Create sync connection pools.
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
 	node->sync_conns_opened = 1;
 	node->sync_conns_closed = 0;
-	node->error_count = 0;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
@@ -193,7 +247,10 @@ as_node_destroy(as_node* node)
 
 	// Release memory.
 	cf_free(node->addresses);
-	as_vector_destroy(&node->aliases);
+
+	if (node->hostname) {
+		cf_free(node->hostname);
+	}
 
 	if (node->tls_name) {
 		cf_free(node->tls_name);
@@ -210,6 +267,8 @@ as_node_destroy(as_node* node)
 	if (racks) {
 		as_racks_release(racks);
 	}
+	
+	as_node_destroy_metrics(node);
 	cf_free(node);
 }
 
@@ -247,11 +306,11 @@ release_node(as_node* node)
 /**
  * Delay node release to avoid the following race condition:
  *
- * Transaction thread gets old node from partition map.
+ * Command thread gets old node from partition map.
  * Tend thread frees old node that is no longer referenced in the cluster.
- * Transaction thread tries to reserve the node that has been freed.
+ * Command thread tries to reserve the node that has been freed.
  *
- * The gap between the transaction thread node retrieval and node reserve
+ * The gap between the command thread node retrieval and node reserve
  * is just a few instructions, but the race condition could happen.
  *
  * Solve by delaying the tend thread node release until the next tend
@@ -300,35 +359,13 @@ as_node_add_address(as_node* node, struct sockaddr* addr)
 }
 
 void
-as_node_add_alias(as_node* node, const char* hostname, uint16_t port)
+as_node_set_hostname(as_node* node, const char* hostname)
 {
-	as_vector* aliases = &node->aliases;
-	as_alias* alias;
-	
-	for (uint32_t i = 0; i < aliases->size; i++) {
-		alias = as_vector_get(aliases, i);
-		
-		if (strcmp(alias->name, hostname) == 0 && alias->port == port) {
-			// Already exists.
-			return;
-		}
+	if (node->hostname) {
+		cf_free(node->hostname);
 	}
-	
-	// Add new alias.
-	as_alias a;
-	
-	if (as_strncpy(a.name, hostname, sizeof(a.name))) {
-		as_log_warn("Hostname has been truncated: %s", hostname);
-	}
-	a.port = port;
-	
-	// Alias vector is currently a fixed size.
-	if (aliases->size < aliases->capacity) {
-		as_vector_append(aliases, &a);
-	}
-	else {
-		as_log_info("Failed to add node %s alias %s. Max size = %u", node->name, hostname, aliases->capacity);
-	}
+
+	node->hostname = cf_strndup(hostname, AS_HOSTNAME_SIZE);
 }
 
 static int
@@ -434,6 +471,12 @@ as_node_create_connection(
 	as_socket* sock
 	)
 {
+	uint64_t begin = 0;
+
+	if (node->cluster->metrics_enabled) {
+		begin = cf_getns();
+	}
+	
 	as_status status = as_node_create_socket(err, node, pool, sock, deadline_ms);
 
 	if (status) {
@@ -458,6 +501,11 @@ as_node_create_connection(
 				return status;
 			}
 		}
+	}
+
+	if (node->cluster->metrics_enabled) {
+		uint64_t elapsed = cf_getns() - begin;
+		as_node_add_latency(node, AS_LATENCY_TYPE_CONN, elapsed);
 	}
 	return AEROSPIKE_OK;
 }
@@ -635,7 +683,7 @@ as_node_balance_connections(as_node* node)
 		if (excess > 0) {
 			as_node_close_idle_connections(node, pool, excess);
 		}
-		else if (excess < 0 && as_node_valid_error_count(node)) {
+		else if (excess < 0 && as_node_valid_error_rate(node)) {
 			as_node_create_connections(node, pool, timeout_ms, -excess);
 		}
 	}
@@ -902,7 +950,7 @@ static void
 as_node_restart(as_cluster* cluster, as_node* node)
 {
 	if (cluster->max_error_rate > 0) {
-		as_node_reset_error_count(node);
+		as_node_reset_error_rate(node);
 	}
 
 	// Balance sync connections.
@@ -1144,7 +1192,7 @@ as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 }
 
 as_status
-as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
+as_node_refresh_partitions(as_cluster* cluster, as_error* err, as_node* node)
 {
 	as_log_debug("Update partition map for node %s", as_node_get_address_string(node));
 
@@ -1297,6 +1345,43 @@ as_node_parse_racks(as_cluster* cluster, as_error* err, as_node* node, char* buf
 
 	as_node_replace_racks(cluster, node, racks);
 	return AEROSPIKE_OK;
+}
+
+static uint32_t
+as_latency_buckets_get_index(as_latency_buckets* latency_buckets, uint64_t elapsed_nanos)
+{
+	// Convert nanoseconds to milliseconds.
+	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
+
+	// Round up elapsed to nearest millisecond.
+	if ((elapsed_nanos - (elapsed * NS_TO_MS)) > 0) {
+		elapsed++;
+	}
+
+	uint32_t last_bucket = latency_buckets->latency_columns - 1;
+	uint64_t limit = 1;
+
+	for (uint32_t i = 0; i < last_bucket; i++) {
+		if (elapsed <= limit) {
+			return i;
+		}
+		limit <<= latency_buckets->latency_shift;
+	}
+	return last_bucket;
+}
+
+void
+as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed)
+{
+	as_latency_buckets* latency_buckets = &node->metrics->latency[latency_type];
+	uint32_t index = as_latency_buckets_get_index(latency_buckets, elapsed);
+	as_incr_uint64(&latency_buckets->buckets[index]);
+}
+
+void
+as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
+{
+	 node->metrics = as_node_metrics_init(policy->latency_columns, policy->latency_shift);
 }
 
 static as_status

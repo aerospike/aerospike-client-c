@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -21,6 +21,7 @@
 #include <aerospike/as_conn_pool.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
+#include <aerospike/as_latency.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_queue.h>
@@ -79,23 +80,6 @@ typedef struct as_address_s {
 	char name[AS_IP_ADDRESS_SIZE];
 	
 } as_address;
-	
-/**
- * @private
- * Host address alias information.
- */
-typedef struct as_alias_s {
-	/**
-	 * Hostname or IP address string representation.
-	 */
-	char name[AS_HOSTNAME_SIZE];
-	
-	/**
-	 * Socket IP port.
-	 */
-	uint16_t port;
-	
-} as_alias;
 
 /**
  * @private
@@ -205,6 +189,13 @@ typedef struct as_async_conn_pool_s {
 
 } as_async_conn_pool;
 
+/**
+ * Node metrics latency bucket struct
+ */
+typedef struct as_node_metrics_s {
+	as_latency_buckets* latency;
+} as_node_metrics;
+
 struct as_cluster_s;
 
 /**
@@ -262,9 +253,9 @@ typedef struct as_node_s {
 	as_address* addresses;
 	
 	/**
-	 * Array of hostnames aliases. Not thread-safe.
+	 * Optional hostname. Not thread-safe.
 	 */
-	as_vector /* <as_alias> */ aliases;
+	char* hostname;
 
 	/**
 	 * Cluster from which this node resides.
@@ -298,9 +289,26 @@ typedef struct as_node_s {
 	as_racks* racks;
 
 	/**
+	 * Node metrics 
+	 */
+	as_node_metrics* metrics;
+
+	/**
 	 * Socket used exclusively for cluster tend thread info requests.
 	 */
 	as_socket info_socket;
+
+	/**
+	 * Command error count since node was initialized. If the error is retryable, multiple errors per
+	 * command may occur.
+	 */
+	uint64_t error_count;
+
+	/**
+	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * multiple timeouts per command may occur.
+	 */
+	uint64_t timeout_count;
 
 	/**
 	 * Connection queue iterator.  Not atomic by design.
@@ -320,8 +328,8 @@ typedef struct as_node_s {
 	/**
 	 * Error count for this node's error_rate_window.
 	 */
-	uint32_t error_count;
-
+	uint32_t error_rate;
+	
 	/**
 	 * Server's generation count for peers.
 	 */
@@ -431,6 +439,13 @@ as_node_destroy(as_node* node);
 
 /**
  * @private
+ * Destroy node metrics.
+ */
+void
+as_node_destroy_metrics(as_node* node);
+
+/**
+ * @private
  * Create configured minimum number of connections.
  */
 void
@@ -438,7 +453,7 @@ as_node_create_min_connections(as_node* node);
 
 /**
  * @private
- * Check if node is active from a transaction thread.
+ * Check if node is active from a command thread.
  */
 static inline bool
 as_node_is_active(const as_node* node)
@@ -516,10 +531,10 @@ as_node_add_address(as_node* node, struct sockaddr* addr);
 
 /**
  * @private
- * Add hostname to node aliases.
+ * Set hostname.
  */
 void
-as_node_add_alias(as_node* node, const char* hostname, uint16_t port);
+as_node_set_hostname(as_node* node, const char* hostname);
 
 /**
  * Get primary socket address.
@@ -636,6 +651,60 @@ as_node_signal_login(as_node* node);
  */
 bool
 as_node_has_rack(as_node* node, const char* ns, int rack_id);
+
+/**
+ * @private
+ * Record latency of type latency_type for node
+ */
+void
+as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed);
+
+struct as_metrics_policy_s;
+
+/**
+ * @private
+ * Enable metrics at the node level
+ */
+void
+as_node_enable_metrics(as_node* node, const struct as_metrics_policy_s* policy);
+
+/**
+ * Return command error count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_error_count(as_node* node)
+{
+	return as_load_uint64(&node->error_count);
+}
+
+/**
+ * Increment command error count. If the error is retryable, multiple errors per
+ * command may occur.
+ */
+static inline void
+as_node_add_error(as_node* node)
+{
+	as_incr_uint64(&node->error_count);
+}
+
+/**
+ * Return command timeout count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_timeout_count(as_node* node)
+{
+	return as_load_uint64(&node->timeout_count);
+}
+
+/**
+ * Increment command timeout count. If the timeout is retryable (ie socketTimeout),
+ * multiple timeouts per command may occur.
+ */
+static inline void
+as_node_add_timeout(as_node* node)
+{
+	as_incr_uint64(&node->timeout_count);
+}
 
 /**
  * @private

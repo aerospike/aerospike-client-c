@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -404,6 +404,71 @@ TEST(batch_async_write_complex, "Batch Async Write Complex")
 	as_monitor_wait(&monitor);
 }
 
+static void
+batch_one_record_not_found_cb(
+	as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop
+	)
+{
+	if (err) {
+		as_batch_records_destroy(records);
+	}
+	assert_success_async(&monitor, err, udata);
+
+	as_vector* list = &records->list;
+	uint32_t found = 0;
+	uint32_t not_found = 0;
+	uint32_t errors = 0;
+	
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_batch_read_record* batch = as_vector_get(list, i);
+
+		if (batch->result == AEROSPIKE_OK) {
+			found++;
+		}
+		else if (batch->result == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			not_found++;
+		}
+		else {
+			errors++;
+			error("Unexpected error(%u): %s", i, as_error_string(batch->result));
+		}
+	}
+	as_batch_records_destroy(records);
+	
+	assert_int_eq_async(&monitor, found, 0);
+	assert_int_eq_async(&monitor, not_found, 1);
+	assert_int_eq_async(&monitor, errors, 0);
+	as_monitor_notify(&monitor);
+}
+
+TEST(batch_one_record_not_found, "Batch One Record Not Found")
+{
+	int64_t k = 888888888;
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, k);
+
+	as_error err;
+	aerospike_key_remove(as, &err, NULL, &key);
+
+	as_batch_records* records = as_batch_records_create(1);
+
+	as_batch_read_record* record = as_batch_read_reserve(records);
+	as_key_init_int64(&record->key, NAMESPACE, SET, k);
+	record->read_all_bins = true;
+
+	as_monitor_begin(&monitor);
+
+	as_status status = aerospike_batch_read_async(as, &err, NULL, records, batch_one_record_not_found_cb,
+												  __result__, NULL);
+	
+	if (status != AEROSPIKE_OK) {
+		as_batch_records_destroy(records);
+	}
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -415,4 +480,5 @@ SUITE(batch_async, "aerospike batch async tests")
 	suite_add(batch_async_read_complex);
 	suite_add(batch_async_list_operate);
 	suite_add(batch_async_write_complex);
+	suite_add(batch_one_record_not_found);
 }

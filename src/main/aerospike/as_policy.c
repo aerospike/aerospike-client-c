@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2024 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,9 +17,9 @@
 #include <aerospike/as_policy.h>
 #include <aerospike/as_exp.h>
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_policies*
 as_policies_init(as_policies* p)
@@ -38,6 +38,8 @@ as_policies_init(as_policies* p)
 	as_policy_query_init(&p->query);
 	as_policy_info_init(&p->info);
 	as_policy_admin_init(&p->admin);
+	as_policy_txn_verify_init(&p->txn_verify);
+	as_policy_txn_roll_init(&p->txn_roll);
 	return p;
 }
 
@@ -56,4 +58,6 @@ as_policies_destroy(as_policies* p)
 	as_exp_destroy(p->batch_remove.filter_exp);
 	as_exp_destroy(p->scan.base.filter_exp);
 	as_exp_destroy(p->query.base.filter_exp);
+	as_exp_destroy(p->txn_verify.base.filter_exp);
+	as_exp_destroy(p->txn_roll.base.filter_exp);
 }

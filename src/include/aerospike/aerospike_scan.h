@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -429,7 +429,7 @@ aerospike_scan_partitions(
  * @param err			The as_error to be populated if an error occurs.
  * @param policy		Scan policy configuration parameters, pass in NULL for default.
  * @param scan			The scan to execute against the cluster.
- * @param scan_id		The id for the scan job.  Use NULL if the scan_id will not be used.
+ * @param scan_id		This legacy argument is ignored. scan_ids are now internally generated. Always pass in NULL.
  * @param listener		The function to be called for each record scanned.
  * @param udata			User-data to be passed to the callback.
  * @param event_loop 	Event loop assigned to run this command. If NULL, an event loop will be 
@@ -489,7 +489,7 @@ aerospike_scan_async(
  * @param err			The as_error to be populated if an error occurs.
  * @param policy		Scan policy configuration parameters, pass in NULL for default.
  * @param scan			The scan to execute against the cluster.
- * @param scan_id		The id for the scan job.  Use NULL if the scan_id will not be used.
+ * @param scan_id		This legacy argument is ignored. scan_ids are now internally generated. Always pass in NULL.
  * @param node_name		The node name to scan.
  * @param listener		The function to be called for each record scanned.
  * @param udata			User-data to be passed to the callback.

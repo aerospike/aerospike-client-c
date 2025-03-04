@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -20,18 +20,33 @@
 extern "C" {
 #endif
 
-/*******************************************************************************
- * TYPES
- ******************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Status codes used as return values as as_error.code values.
  */
 typedef enum as_status_e {
+	//---------------------------------
+	// Client Errors
+	//---------------------------------
 
-	/***************************************************************************
-	 * Client Errors
-	 **************************************************************************/
+	/**
+	 * Transaction commit called, but the transaction was already aborted.
+	 */
+	AEROSPIKE_TXN_ALREADY_ABORTED = -19,
+
+	/**
+	 * Transaction abort called, but the transaction was already committed.
+	 */
+	AEROSPIKE_TXN_ALREADY_COMMITTED = -18,
+
+	/**
+	 * Transaction failed.
+	 */
+	AEROSPIKE_TXN_FAILED = -17,
+
 	/**
 	 * One or more keys failed in a batch.
 	 */
@@ -79,7 +94,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_INVALID_NODE = -8,
 	
 	/**
-	 * Asynchronous connection error.
+	 * Max connections would be exceeded.
 	 */
 	AEROSPIKE_ERR_NO_MORE_CONNECTIONS = -7,
 
@@ -118,19 +133,19 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR = -1,
 
-	/***************************************************************************
-	 * Success
-	 **************************************************************************/
+	//---------------------------------
+	// Success
+	//---------------------------------
 
 	/**
 	 * Generic success.
 	 */
 	AEROSPIKE_OK = 0,
 	
-	/***************************************************************************
-	 * Server Errors
-	 **************************************************************************/
-	
+	//---------------------------------
+	// Server Errors
+	//---------------------------------
+
 	/**
 	 * Generic error returned by server.
 	 */
@@ -228,7 +243,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_DEVICE_OVERLOAD = 18,
 	
 	/**
-	 * Record key sent with transaction did not match key stored on server.
+	 * Record key sent with command did not match key stored on server.
 	 */
 	AEROSPIKE_ERR_RECORD_KEY_MISMATCH = 19,
 	
@@ -270,7 +285,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_OP_NOT_APPLICABLE = 26,
 
 	/**
-	 * The transaction was not performed because the filter expression was
+	 * The command was not performed because the filter expression was
 	 * false.
 	 */
 	AEROSPIKE_FILTERED_OUT = 27,
@@ -279,6 +294,11 @@ typedef enum as_status_e {
 	 * Write command loses conflict to XDR.
 	 */
 	AEROSPIKE_LOST_CONFLICT = 28,
+
+	/**
+	 * Write can't complete until XDR finishes shipping.
+	 */
+	AEROSPIKE_XDR_KEY_BUSY = 32,
 
 	/**
 	 * There are no more records left for query.
@@ -296,7 +316,7 @@ typedef enum as_status_e {
 	AEROSPIKE_SECURITY_NOT_ENABLED = 52,
 		
 	/**
-	 * Security type not supported by connected server.
+	 * Security scheme not supported
 	 */
 	AEROSPIKE_SECURITY_SCHEME_NOT_SUPPORTED = 53,
 	
@@ -336,7 +356,7 @@ typedef enum as_status_e {
 	AEROSPIKE_EXPIRED_PASSWORD = 63,
 	
 	/**
-	 * Forbidden password (e.g. recently used)
+	 * Forbidden password (e.g. recently used).
 	 */
 	AEROSPIKE_FORBIDDEN_PASSWORD = 64,
 	
@@ -381,7 +401,7 @@ typedef enum as_status_e {
 	AEROSPIKE_INVALID_QUOTA = 75,
 
 	/**
-	 * User must be authentication before performing database operations.
+	 * User must be authenticated before performing database operations.
 	 */
 	AEROSPIKE_NOT_AUTHENTICATED = 80,
 	
@@ -406,22 +426,63 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_UDF = 100,
 
 	/**
+	 * Transaction record blocked by a different transaction.
+	 */
+	AEROSPIKE_MRT_BLOCKED = 120,
+
+	/**
+	 * Transaction read version mismatch identified during commit.
+	 * Some other command changed the record outside of the transaction.
+	 */
+	AEROSPIKE_MRT_VERSION_MISMATCH = 121,
+
+	/**
+	 * Transaction deadline reached without a successful commit or abort.
+	 */
+	AEROSPIKE_MRT_EXPIRED = 122,
+
+	/**
+	 * Transaction write command limit (4096) exceeded.
+	 */
+	AEROSPIKE_MRT_TOO_MANY_WRITES = 123,
+
+	/**
+	 * Transaction was already committed.
+	 */
+	AEROSPIKE_MRT_COMMITTED = 124,
+
+	/**
+	 * Transaction was already aborted.
+	 */
+	AEROSPIKE_MRT_ABORTED = 125,
+
+	/**
+	 * This record has been locked by a previous update in this transaction.
+	 */
+	AEROSPIKE_MRT_ALREADY_LOCKED = 126,
+
+	/**
+	 * This transaction has already started. Writing to the same transaction with independent threads is unsafe.
+	 */
+	AEROSPIKE_MRT_MONITOR_EXISTS = 127,
+
+	/**
 	 * Batch functionality has been disabled.
 	 */
 	AEROSPIKE_ERR_BATCH_DISABLED = 150,
-	
+
 	/**
 	 * Batch max requests have been exceeded.
 	 */
 	AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED = 151,
-	
+
 	/**
 	 * All batch queues are full.
 	 */
 	AEROSPIKE_ERR_BATCH_QUEUES_FULL = 152,
 
 	/**
-	 * Invalid/Unsupported GeoJSON
+	 * Invalid/Unsupported GeoJSON.
 	 */
 	AEROSPIKE_ERR_GEO_INVALID_GEOJSON = 160,
 
@@ -431,12 +492,12 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_INDEX_FOUND = 200,
 	
 	/**
-	 * Index not found
+	 * Index not found.
 	 */
 	AEROSPIKE_ERR_INDEX_NOT_FOUND = 201,
 	
 	/**
-	 * Index is out of memory
+	 * Index is out of memory.
 	 */
 	AEROSPIKE_ERR_INDEX_OOM = 202,
 	
@@ -480,9 +541,9 @@ typedef enum as_status_e {
 	 */
 	AEROSPIKE_ERR_QUERY = 213,
 	
-	/***************************************************************************
-	 * UDF OPERATIONS
-	 **************************************************************************/
+	//---------------------------------
+	// UDF Operations
+	//---------------------------------
 
 	/**
 	 * UDF does not exist.

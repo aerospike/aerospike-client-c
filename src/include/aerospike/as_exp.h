@@ -22,8 +22,8 @@
  * Expression filters are applied on each applicable server record.
  * Expression filters require server version >= 5.2.0.4.
  *
- * If the filter exists and evaluates to false in a single record transaction,
- * the transaction is ignored and AEROSPIKE_FILTERED_OUT is returned as an error code.
+ * If the filter exists and evaluates to false in a single record command,
+ * the command is ignored and AEROSPIKE_FILTERED_OUT is returned as an error code.
  *
  * If the filter exists and evaluates to false in a batch record row, AEROSPIKE_FILTERED_OUT
  * is returned as a status for that record row in the batch.
@@ -31,7 +31,7 @@
  * If the filter exists and evaluates to false on a scan/query record, that record is not
  * returned.
  *
- * Expression filters can now be defined on all transactions through the transaction policy
+ * Expression filters can now be defined on all commands through the command policy
  * (as_policy_base contained in as_policy_read, as_policy_write, ...).
  *
  * Example:
@@ -1540,8 +1540,11 @@ as_exp_destroy_base64(char* base64)
  *********************************************************************************/
 
 /**
- * Conditionally select an expression from a variable number of expression pairs
- * followed by default expression action. Requires server version 5.6.0+.
+ * Conditionally select an action expression from a variable number of expression pairs
+ * followed by a default action expression. Every action expression must return the same type.
+ * The only exception is as_exp_unknown() which can be mixed with other types.
+ *
+ * Requires server version 5.6.0+.
  *
  * ~~~~~~~~~~{.c}
  * Args Format: bool exp1, action exp1, bool exp2, action exp2, ..., action-default
@@ -3081,6 +3084,29 @@ as_exp_destroy_base64(char* base64)
  * @param __policy		An as_bit_policy value.
  * @param __bit_offset	Bit index of where to start operation.
  * @param __bit_size	Number of bits to be operated on.
+ * @param __value		Integer expression for value to add.
+ * @param __signed		Boolean indicating if bits should be treated as a signed number.
+ * @param __action		as_bit_overflow_action value.
+ * @param __bin			A blob bin expression to apply this function to.
+ * @return (blob bin) resulting blob with the bytes operated on.
+ * @ingroup expression
+ */
+#define as_exp_bit_add_signed(__policy, __bit_offset, __bit_size, __value, __signed, __action, __bin) \
+		_AS_EXP_BIT_MOD_START(AS_BIT_OP_ADD, 5), \
+		__bit_offset, \
+		__bit_size, \
+		__value, \
+		as_exp_uint(__policy ? ((as_bit_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__signed ? __action | 0x01 : __action), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_bit_subtract operation.
+ * Note: integers are stored big-endian.
+ *
+ * @param __policy		An as_bit_policy value.
+ * @param __bit_offset	Bit index of where to start operation.
+ * @param __bit_size	Number of bits to be operated on.
  * @param __value		Integer expression for value to subtract.
  * @param __action		as_bit_overflow_action value.
  * @param __bin			A blob bin expression to apply this function to.
@@ -3097,7 +3123,30 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Create an expression that performs an as_operations_bit_add operation.
+ * Create an expression that performs an as_operations_bit_subtract operation.
+ * Note: integers are stored big-endian.
+ *
+ * @param __policy		An as_bit_policy value.
+ * @param __bit_offset	Bit index of where to start operation.
+ * @param __bit_size	Number of bits to be operated on.
+ * @param __value		Integer expression for value to subtract.
+ * @param __signed		Boolean indicating if bits should be treated as a signed number.
+ * @param __action		as_bit_overflow_action value.
+ * @param __bin			A blob bin expression to apply this function to.
+ * @return (blob bin) resulting blob with the bytes operated on.
+ * @ingroup expression
+ */
+#define as_exp_bit_subtract_signed(__policy, __bit_offset, __bit_size, __value, __signed, __action, __bin) \
+		_AS_EXP_BIT_MOD_START(AS_BIT_OP_SUBTRACT, 5), \
+		__bit_offset, \
+		__bit_size, \
+		__value, \
+		as_exp_uint(__policy ? ((as_bit_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__signed ? __action | 0x01 : __action), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_bit_set_int operation.
  * Note: integers are stored big-endian.
  *
  * @param __policy		An as_bit_policy value.

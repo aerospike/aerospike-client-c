@@ -346,6 +346,22 @@ typedef struct as_config_tls_s {
 } as_config_tls;
 
 /**
+ * Dynamic configuration provider. Determines how to retrieve cluster policies.
+ *
+ * @relates as_config
+ */
+typedef struct as_config_provider_s {
+
+	/**
+	 * Yaml file path. If set, cluster policies will be read from the yaml file at cluster
+	 * initialization and whenever the file changes. The policies fields in the file
+	 * override all command polocies.
+	 */
+	char yaml_path[256];
+
+} as_config_provider;
+
+/**
  * The `as_config` contains the settings for the `aerospike` client. Including
  * default policies, seed hosts in the cluster and other settings.
  *
@@ -648,6 +664,11 @@ typedef struct as_config_s {
 	 * Client policies
 	 */
 	as_policies policies;
+
+	/**
+	 * Dynamic configuration provider.
+	 */
+	as_config_provider config_provider;
 
 	/**
 	 * lua config.  This is a global config even though it's located here in cluster config.

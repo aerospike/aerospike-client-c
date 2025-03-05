@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_yaml.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
@@ -58,6 +59,15 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 
 	if (config) {
 		memcpy(&as->config, config, sizeof(as_config));
+
+		if (as->config.config_provider.yaml_path[0]) {
+			as_error err;
+			as_status status = as_config_yaml_init(&as->config, &err);
+
+			if (status != AEROSPIKE_OK) {
+				as_log_error("%s", err.message);
+			}
+		}
 	}
 	else {
 		as_config_init(&as->config);

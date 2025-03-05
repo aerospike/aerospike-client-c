@@ -1369,6 +1369,39 @@ void
 as_config_destroy(as_config* config);
 
 as_status
+as_config_yaml_init(as_config* config, as_error* err)
+{
+	const char* path = config->config_provider.yaml_path;
+	FILE* fp = fopen(path, "r");
+
+	if (!fp) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to open: %s", path);
+	}
+
+	as_yaml yaml;
+	yaml.config = config;
+
+	if (!yaml_parser_initialize(&yaml.parser)) {
+		fclose(fp);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to initialize yaml parser");
+	}
+
+	yaml_parser_set_input_file(&yaml.parser, fp);
+
+	bool rv = as_parse_yaml(&yaml);
+
+	yaml_parser_delete(&yaml.parser);
+	fclose(fp);
+
+	if (!rv) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to parse: %s\n%s",
+			path, yaml.err.message);
+	}
+	return AEROSPIKE_OK;
+}
+
+#if 0
+as_status
 as_config_yaml_init(aerospike* as, const char* path, as_error* err)
 {
 	FILE* fp = fopen(path, "r");
@@ -1407,3 +1440,4 @@ as_config_yaml_init(aerospike* as, const char* path, as_error* err)
 	}
 	return AEROSPIKE_OK;
 }
+#endif

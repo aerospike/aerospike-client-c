@@ -16,7 +16,7 @@
  */
 #pragma once 
 
-#include <aerospike/as_error.h>
+#include <aerospike/as_config.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,7 +33,7 @@ struct aerospike_s;
  * Read yaml configuration file and update cluster with new values.
  */
 AS_EXTERN as_status
-as_config_yaml_init(struct aerospike_s* as, const char* path, as_error* err);
+as_config_yaml_init(as_config* config, as_error* err);
 
 #ifdef __cplusplus
 } // end extern "C"

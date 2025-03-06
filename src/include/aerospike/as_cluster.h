@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -114,7 +114,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Nodes to be garbage collected.
+	 * Garbage collector.
 	 */
 	as_vector* /* <as_gc_item> */ gc;
 	
@@ -241,13 +241,7 @@ typedef struct as_cluster_s {
 	 * @private
 	 * Rack ids
 	 */
-	int* rack_ids;
-
-	/**
-	 * @private
-	 * Rack ids size
-	 */
-	uint32_t rack_ids_size;
+	as_vector* rack_ids;
 
 	/**
 	 * @private
@@ -775,6 +769,12 @@ as_node_put_conn_error(as_node* node, as_socket* sock)
 {
 	as_node_put_connection(node, sock);
 	as_node_incr_error_rate(node);
+}
+
+static inline as_vector*
+as_rack_ids_load(as_vector** rack_ids)
+{
+	return (as_vector*)as_load_ptr((void* const*)rack_ids);
 }
 
 #ifdef __cplusplus

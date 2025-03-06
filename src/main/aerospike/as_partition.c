@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -156,10 +156,12 @@ get_replica_rack(
 	uint32_t replica_max = replica_size;
 	uint32_t seq1 = 0;
 	uint32_t seq2 = 0;
-	uint32_t rack_max = cluster->rack_ids_size;
+	as_vector* rack_ids = as_rack_ids_load(&cluster->rack_ids);
+	int* ids = rack_ids->list;
+	uint32_t rack_max = rack_ids->size;
 
 	for (uint32_t i = 0; i < rack_max; i++) {
-		int rack_id = cluster->rack_ids[i];
+		int rack_id = ids[i];
 		uint32_t seq = (*replica_index);
 
 		for (uint32_t j = 0; j < replica_max; j++) {

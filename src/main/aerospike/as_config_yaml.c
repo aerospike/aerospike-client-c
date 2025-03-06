@@ -28,6 +28,7 @@ typedef struct {
 	yaml_parser_t parser;
 	yaml_event_t event;
 	as_config* config;
+	bool init;
 	as_error err;
 } as_yaml;
 
@@ -1220,7 +1221,7 @@ as_parse_static(as_yaml* yaml)
 	char name[256];
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
-		if (strcmp(name, "client") == 0) {
+		if (yaml->init && strcmp(name, "client") == 0) {
 			printf("client\n");
 			as_parse_static_client(yaml);
 		}
@@ -1361,83 +1362,121 @@ parse_debug(yaml_parser_t* parser)
 }
 #endif
 
+static as_status
+as_config_yaml_read(const char* path, as_config* config, bool init, as_error* err)
+{
+	as_error_reset(err);
+
+	FILE* fp = fopen(path, "r");
+
+	if (!fp) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to open: %s", path);
+	}
+
+	as_yaml yaml;
+	yaml.config = config;
+	yaml.init = init;
+
+	if (!yaml_parser_initialize(&yaml.parser)) {
+		fclose(fp);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to initialize yaml parser");
+	}
+
+	yaml_parser_set_input_file(&yaml.parser, fp);
+
+	bool rv = as_parse_yaml(&yaml);
+
+	yaml_parser_delete(&yaml.parser);
+	fclose(fp);
+
+	if (!rv) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to parse: %s\n%s",
+			path, yaml.err.message);
+	}
+	return AEROSPIKE_OK;
+}
+
+static bool
+as_rack_ids_equal(as_vector* r1, as_vector* r2)
+{
+	if (r1->size != r2->size) {
+		return false;
+	}
+
+	for (uint32_t i = 0; i < r1->size; i++) {
+		int id1 = *(int*)as_vector_get(r1, i);
+		int id2 = *(int*)as_vector_get(r2, i);
+
+		if (id1 != id2) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static void
+as_release_rack_ids(as_vector* rack_ids)
+{
+	as_vector_destroy(rack_ids);
+}
+
 //---------------------------------
 // Functions
 //---------------------------------
 
-void
-as_config_destroy(as_config* config);
-
 as_status
 as_config_yaml_init(as_config* config, as_error* err)
 {
-	const char* path = config->config_provider.yaml_path;
-	FILE* fp = fopen(path, "r");
-
-	if (!fp) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to open: %s", path);
-	}
-
-	as_yaml yaml;
-	yaml.config = config;
-
-	if (!yaml_parser_initialize(&yaml.parser)) {
-		fclose(fp);
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to initialize yaml parser");
-	}
-
-	yaml_parser_set_input_file(&yaml.parser, fp);
-
-	bool rv = as_parse_yaml(&yaml);
-
-	yaml_parser_delete(&yaml.parser);
-	fclose(fp);
-
-	if (!rv) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to parse: %s\n%s",
-			path, yaml.err.message);
-	}
-	return AEROSPIKE_OK;
+	return as_config_yaml_read(config->config_provider.yaml_path, config, true, err);
 }
 
-#if 0
+void
+as_config_destroy(as_config* config);
+
+void
+as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec);
+
 as_status
-as_config_yaml_init(aerospike* as, const char* path, as_error* err)
+as_config_yaml_update(aerospike* as, as_error* err)
 {
-	FILE* fp = fopen(path, "r");
-
-	if (!fp) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to open: %s", path);
-	}
-
-	as_yaml yaml;
-
-	if (!yaml_parser_initialize(&yaml.parser)) {
-		fclose(fp);
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to initialize yaml parser");
-	}
-
-	yaml_parser_set_input_file(&yaml.parser, fp);
-
 	as_config* config = cf_malloc(sizeof(as_config));
-	as_config_init(config);
-	// TODO: Copy config.
-	//memcpy(config, &as->config, sizeof(as_config));
-	yaml.config = config;
+	memcpy(config, &as->config, sizeof(as_config));
+	config->rack_ids = NULL;
 
-	bool rv = as_parse_yaml(&yaml);
+	as_status status = as_config_yaml_read(config->config_provider.yaml_path, config, false, err);
 
-	// TODO: Update cluster dynamically with config.
+	if (status != AEROSPIKE_OK) {
+		as_config_destroy(config);
+		cf_free(config);
+		return status;
+	}
+
+	// Apply config to cluster.
+	as_cluster* cluster = as->cluster;
+
+	cluster->max_error_rate = config->max_error_rate;
+	cluster->error_rate_window = config->error_rate_window;
+	cluster->login_timeout_ms = config->login_timeout_ms;
+	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
+	cluster->use_services_alternate = config->use_services_alternate;
+	cluster->fail_if_not_connected = config->fail_if_not_connected;
+	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
+
+	cluster->rack_aware = config->rack_aware;
+
+	if (config->rack_ids && !as_rack_ids_equal(config->rack_ids, cluster->rack_ids)) {
+		as_vector* old = cluster->rack_ids;
+
+		as_store_ptr_rls((void**)&cluster->rack_ids, config->rack_ids);
+		config->rack_ids = NULL;
+
+		as_gc_item item;
+		item.data = old;
+		item.release_fn = (as_release_fn)as_release_rack_ids;
+		as_vector_append(cluster->gc, &item);
+	}
+
 	as_config_destroy(config);
 	cf_free(config);
-
-	yaml_parser_delete(&yaml.parser);
-	fclose(fp);
-
-	if (!rv) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to parse: %s\n%s",
-			path, yaml.err.message);
-	}
 	return AEROSPIKE_OK;
 }
-#endif

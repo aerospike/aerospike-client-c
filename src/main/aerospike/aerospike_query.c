@@ -43,9 +43,9 @@
 
 extern bool as_op_is_write[];
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 #define QUERY_FOREGROUND 1
 #define QUERY_BACKGROUND 2
@@ -137,9 +137,9 @@ typedef struct as_query_builder {
 	bool is_new;
 } as_query_builder;
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static inline void
 as_query_log_iter(uint64_t parent_id, uint64_t task_id, uint32_t iter)
@@ -1926,9 +1926,41 @@ convert_query_to_scan(
 	scan->_free = query->_free;
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+static const as_policy_query*
+as_policy_query_merge(aerospike* as, const as_policy_query* src, as_policy_query* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.query;
+	}
+	else if (as->dynamic_config) {
+		as_config* config = aerospike_load_config(as);
+		as_policy_query* def = &config->policies.query;
+
+		mrg->base.socket_timeout = def->base.socket_timeout;
+		mrg->base.total_timeout = def->base.total_timeout;
+		mrg->base.max_retries = def->base.max_retries;
+		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
+		mrg->info_timeout = def->info_timeout;
+		mrg->replica = def->replica;
+		mrg->expected_duration = def->expected_duration;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->fail_on_cluster_change = src->fail_on_cluster_change;
+		mrg->deserialize = src->deserialize;
+		mrg->short_query = src->short_query;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
+//---------------------------------
+// Functions
+//---------------------------------
 
 bool
 as_async_query_should_retry(as_event_command* cmd, as_status status)
@@ -1950,9 +1982,8 @@ aerospike_query_foreach(
 
 	as_error_reset(err);
 
-	if (! policy) {
-		policy = &as->config.policies.query;
-	}
+	as_policy_query merged;
+	policy = as_policy_query_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 	as_status status;
@@ -2104,9 +2135,8 @@ aerospike_query_partitions(
 
 	as_error_reset(err);
 
-	if (! policy) {
-		policy = &as->config.policies.query;
-	}
+	as_policy_query merged;
+	policy = as_policy_query_merge(as, policy, &merged);
 
 	uint32_t n_nodes;
 	as_status status = as_cluster_validate_size(cluster, err, &n_nodes);
@@ -2148,9 +2178,8 @@ aerospike_query_async(
 
 	as_error_reset(err);
 
-	if (! policy) {
-		policy = &as->config.policies.query;
-	}
+	as_policy_query merged;
+	policy = as_policy_query_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_status status;
@@ -2327,9 +2356,8 @@ aerospike_query_partitions_async(
 
 	as_error_reset(err);
 
-	if (! policy) {
-		policy = &as->config.policies.query;
-	}
+	as_policy_query merged;
+	policy = as_policy_query_merge(as, policy, &merged);
 
 	uint32_t n_nodes;
 	as_status status = as_cluster_validate_size(cluster, err, &n_nodes);
@@ -2353,6 +2381,9 @@ aerospike_query_partitions_async(
 	return as_query_partition_async(cluster, err, policy, query, pt, listener, udata, event_loop);
 }
 
+const as_policy_write*
+as_policy_write_merge(aerospike* as, const as_policy_write* src, as_policy_write* mrg);
+
 as_status
 aerospike_query_background(
 	aerospike* as, as_error* err, const as_policy_write* policy,
@@ -2360,10 +2391,9 @@ aerospike_query_background(
 {
 	as_error_reset(err);
 	
-	if (! policy) {
-		policy = &as->config.policies.write;
-	}
-	
+	as_policy_write merged;
+	policy = as_policy_write_merge(as, policy, &merged);
+
 	if (! (query->apply.function[0] || query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Background function or ops is required");

@@ -47,22 +47,25 @@ static bool library_initialized = false;
 void
 as_config_destroy(as_config* config);
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static aerospike*
 aerospike_defaults(aerospike* as, bool free, as_config* config)
 {
 	as->_free = free;
 	as->cluster = NULL;
+	as->config = cf_malloc(sizeof(as_config));
 
 	if (config) {
-		memcpy(&as->config, config, sizeof(as_config));
+		memcpy(as->config, config, sizeof(as_config));
 
-		if (as->config.config_provider.yaml_path[0]) {
+		if (as->config->config_provider.yaml_path[0]) {
+			as->dynamic_config = true;
+
 			as_error err;
-			as_status status = as_config_yaml_init(&as->config, &err);
+			as_status status = as_config_yaml_init(as->config, &err);
 
 			if (status != AEROSPIKE_OK) {
 				as_log_error("%s", err.message);
@@ -70,14 +73,14 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 		}
 	}
 	else {
-		as_config_init(&as->config);
+		as_config_init(as->config);
 	}
 	return as;
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 aerospike_library_init(as_error* err)
@@ -165,7 +168,8 @@ aerospike_init_lua(as_config_lua* config)
  */
 void aerospike_destroy(aerospike* as)
 {
-	as_config_destroy(&as->config);
+	as_config_destroy(as->config);
+	cf_free(as->config);
 
 	if (as->_free) {
 		cf_free(as);
@@ -203,7 +207,7 @@ aerospike_connect(aerospike* as, as_error* err)
 		return AEROSPIKE_OK;
 	}
 
-	as_config* config = &as->config;
+	as_config* config = as->config;
 	as_vector* hosts = config->hosts;
 	
 	// Verify seed hosts are specified.
@@ -239,12 +243,12 @@ aerospike_connect(aerospike* as, as_error* err)
 #if !defined USE_XDR
 	// Only change global lua configuration once.
 	if (!lua_initialized) {
-		aerospike_init_lua(&as->config.lua);
+		aerospike_init_lua(&as->config->lua);
 	}
 #endif
 
 	// Create the cluster object.
-	return as_cluster_create(&as->config, err, &as->cluster);
+	return as_cluster_create(as->config, err, &as->cluster);
 }
 
 void as_event_close_cluster(as_cluster* cluster);
@@ -306,7 +310,8 @@ aerospike_truncate(
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	// Send truncate command to one node. That node will distribute the command to other nodes.
@@ -356,7 +361,8 @@ as_status
 aerospike_reload_tls_config(aerospike* as, as_error* err)
 {
 	as_error_reset(err);
-	return as_tls_config_reload(&as->config.tls, as->cluster->tls_ctx, err);
+	as_config* config = aerospike_load_config(as);
+	return as_tls_config_reload(&config->tls, as->cluster->tls_ctx, err);
 }
 
 as_status
@@ -367,7 +373,8 @@ aerospike_set_xdr_filter(
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	// Send truncate command to one node. That node will distribute the command to other nodes.
@@ -400,4 +407,3 @@ aerospike_set_xdr_filter(
 	as_node_release(node);
 	return status;
 }
-

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,9 +25,9 @@
 #include <citrusleaf/cf_b64.h>
 #include <stdlib.h>
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static void
 as_info_decode_error(char* begin)
@@ -112,9 +112,9 @@ as_info_keep_connection(as_status status)
 	}
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 as_info_command_node(
@@ -159,7 +159,8 @@ as_info_command_node_async(
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	size_t size = strlen(command);
@@ -182,7 +183,8 @@ as_info_command_random_node(aerospike* as, as_error* err, as_policy_info* policy
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	uint64_t deadline = as_socket_deadline(policy->timeout);

@@ -135,10 +135,10 @@ static as_status
 put_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_write p;
-	as_policy_write* policy = &as->config.policies.write;
+	as_policy_write* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_write_copy(policy, &p);
+		as_policy_write_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -200,10 +200,10 @@ static as_status
 get_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_read p;
-	as_policy_read* policy = &as->config.policies.read;
+	as_policy_read* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_read_copy(policy, &p);
+		as_policy_read_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -254,10 +254,10 @@ static as_status
 operate_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_operate p;
-	as_policy_operate* policy = &as->config.policies.operate;
+	as_policy_operate* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_operate_copy(policy, &p);
+		as_policy_operate_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -309,10 +309,10 @@ static as_status
 touch_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_operate p;
-	as_policy_operate* policy = &as->config.policies.operate;
+	as_policy_operate* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_operate_copy(policy, &p);
+		as_policy_operate_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -363,10 +363,10 @@ static as_status
 udf_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_apply p;
-	as_policy_apply* policy = &as->config.policies.apply;
+	as_policy_apply* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_apply_copy(policy, &p);
+		as_policy_apply_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -429,10 +429,10 @@ static as_status
 delete_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_remove p;
-	as_policy_remove* policy = &as->config.policies.remove;
+	as_policy_remove* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_remove_copy(policy, &p);
+		as_policy_remove_default(as, &p);
 		p.base.txn = cmd->txn;
 		p.durable_delete = true;
 		policy = &p;
@@ -497,10 +497,10 @@ static as_status
 batch_read_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_batch p;
-	as_policy_batch* policy = &as->config.policies.batch;
+	as_policy_batch* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_batch_copy(policy, &p);
+		as_policy_batch_parent_read_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -579,10 +579,10 @@ static as_status
 batch_write_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_batch p;
-	as_policy_batch* policy = &as->config.policies.batch_parent_write;
+	as_policy_batch* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_batch_copy(policy, &p);
+		as_policy_batch_parent_write_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}

@@ -175,7 +175,7 @@ typedef struct aerospike_s {
 	/**
 	 * Client configuration.
 	 */
-	as_config* config;
+	as_config config;
 
 	/**
 	 * Is dynamic configuration enabled. Automatically set to true if config_provider
@@ -403,7 +403,7 @@ aerospike_set_xdr_filter(
 static inline as_config*
 aerospike_load_config(aerospike* as)
 {
-	return (as_config*)as_load_ptr((void* const*)&as->config);
+	return &as->config;
 }
 
 static inline void
@@ -453,6 +453,52 @@ as_policy_batch_parent_write_default(aerospike* as, as_policy_batch* policy)
 {
 	as_config* config = aerospike_load_config(as);
 	as_policy_batch_copy(&config->policies.batch_parent_write, policy);
+}
+
+static inline void
+as_policy_batch_read_default(aerospike* as, as_policy_batch_read* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch* pb = &config->policies.batch;
+	policy->filter_exp = pb->base.filter_exp;
+	policy->read_mode_ap = pb->read_mode_ap;
+	policy->read_mode_sc = pb->read_mode_sc;
+	policy->read_touch_ttl_percent = pb->read_touch_ttl_percent;
+}
+
+static inline void
+as_policy_batch_write_default(aerospike* as, as_policy_batch_write* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	*policy = config->policies.batch_write;
+}
+
+static inline void
+as_policy_batch_apply_default(aerospike* as, as_policy_batch_apply* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	*policy = config->policies.batch_apply;
+}
+
+static inline void
+as_policy_batch_remove_default(aerospike* as, as_policy_batch_remove* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	*policy = config->policies.batch_remove;
+}
+
+static inline void
+as_policy_scan_default(aerospike* as, as_policy_scan* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_scan_copy(&config->policies.scan, policy);
+}
+
+static inline void
+as_policy_query_default(aerospike* as, as_policy_query* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_query_copy(&config->policies.query, policy);
 }
 
 #ifdef __cplusplus

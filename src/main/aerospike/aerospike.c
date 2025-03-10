@@ -56,16 +56,15 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 {
 	as->_free = free;
 	as->cluster = NULL;
-	as->config = cf_malloc(sizeof(as_config));
 
 	if (config) {
-		memcpy(as->config, config, sizeof(as_config));
+		memcpy(&as->config, config, sizeof(as_config));
 
-		if (as->config->config_provider.yaml_path[0]) {
+		if (as->config.config_provider.yaml_path[0]) {
 			as->dynamic_config = true;
 
 			as_error err;
-			as_status status = as_config_yaml_init(as->config, &err);
+			as_status status = as_config_yaml_init(&as->config, &err);
 
 			if (status != AEROSPIKE_OK) {
 				as_log_error("%s", err.message);
@@ -73,7 +72,7 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 		}
 	}
 	else {
-		as_config_init(as->config);
+		as_config_init(&as->config);
 	}
 	return as;
 }
@@ -168,8 +167,7 @@ aerospike_init_lua(as_config_lua* config)
  */
 void aerospike_destroy(aerospike* as)
 {
-	as_config_destroy(as->config);
-	cf_free(as->config);
+	as_config_destroy(&as->config);
 
 	if (as->_free) {
 		cf_free(as);
@@ -207,7 +205,7 @@ aerospike_connect(aerospike* as, as_error* err)
 		return AEROSPIKE_OK;
 	}
 
-	as_config* config = as->config;
+	as_config* config = &as->config;
 	as_vector* hosts = config->hosts;
 	
 	// Verify seed hosts are specified.
@@ -243,12 +241,12 @@ aerospike_connect(aerospike* as, as_error* err)
 #if !defined USE_XDR
 	// Only change global lua configuration once.
 	if (!lua_initialized) {
-		aerospike_init_lua(&as->config->lua);
+		aerospike_init_lua(&as->config.lua);
 	}
 #endif
 
 	// Create the cluster object.
-	return as_cluster_create(as->config, err, &as->cluster);
+	return as_cluster_create(&as->config, err, &as->cluster);
 }
 
 void as_event_close_cluster(as_cluster* cluster);

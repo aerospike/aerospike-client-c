@@ -53,6 +53,7 @@ as_config_init(as_config* c)
 	c->tend_thread_cpu = -1;
 	as_policies_init(&c->policies);
 	c->config_provider.yaml_path[0] = 0;
+	c->config_provider.config_tend_count = 60;
 	as_config_lua_init(&c->lua);
 	memset(&c->tls, 0, sizeof(as_config_tls));
 	c->auth_mode = AS_AUTH_INTERNAL;

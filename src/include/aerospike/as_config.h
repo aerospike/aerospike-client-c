@@ -359,6 +359,13 @@ typedef struct as_config_provider_s {
 	 */
 	char yaml_path[256];
 
+	/**
+	 * Check dynamic configuration file for changes after this number of cluster tend iterations.
+	 *
+	 * Default: 60
+	 */
+	uint32_t config_tend_count;
+
 } as_config_provider;
 
 /**

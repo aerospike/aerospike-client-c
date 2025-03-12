@@ -33,7 +33,6 @@ typedef struct {
 } as_yaml;
 
 typedef enum {
-	AS_POLICY_TYPE_ALL,
 	AS_POLICY_TYPE_READ,
 	AS_POLICY_TYPE_WRITE,
 	AS_POLICY_TYPE_REMOVE,
@@ -234,767 +233,379 @@ as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out)
 }
 
 static bool
-as_parse_policy_base(as_yaml* yaml, const char* name, const char* value, as_policy_type type)
+as_parse_read_mode_ap(as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_ap* read_mode_ap)
 {
-	as_policies* p = &yaml->config->policies;
+	if (strcmp(value, "ONE") == 0) {
+		*read_mode_ap = AS_POLICY_READ_MODE_AP_ONE;
+	}
+	else if (strcmp(value, "ALL") == 0) {
+		*read_mode_ap = AS_POLICY_READ_MODE_AP_ALL;
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
+		return false;
+	}
+	return true;
+}
+
+static bool
+as_parse_read_mode_sc(as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_sc* read_mode_sc)
+{
+	if (strcmp(value, "SESSION") == 0) {
+		*read_mode_sc = AS_POLICY_READ_MODE_SC_SESSION;
+	}
+	else if (strcmp(value, "LINEARIZE") == 0) {
+		*read_mode_sc = AS_POLICY_READ_MODE_SC_LINEARIZE;
+	}
+	else if (strcmp(value, "ALLOW_REPLICA") == 0) {
+		*read_mode_sc = AS_POLICY_READ_MODE_SC_ALLOW_REPLICA;
+	}
+	else if (strcmp(value, "ALLOW_UNAVAILABLE") == 0) {
+		*read_mode_sc = AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE;
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
+		return false;
+	}
+	return true;
+}
+
+static bool
+as_parse_replica(as_yaml* yaml, const char* name, const char* value, as_policy_replica* replica)
+{
+	if (strcmp(value, "MASTER") == 0) {
+		*replica = AS_POLICY_REPLICA_MASTER;
+	}
+	else if (strcmp(value, "MASTER_PROLES") == 0) {
+		*replica = AS_POLICY_REPLICA_ANY;
+	}
+	else if (strcmp(value, "SEQUENCE") == 0) {
+		*replica = AS_POLICY_REPLICA_SEQUENCE;
+	}
+	else if (strcmp(value, "PREFER_RACK") == 0) {
+		*replica = AS_POLICY_REPLICA_PREFER_RACK;
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
+		return false;
+	}
+	return true;
+}
+
+static bool
+as_parse_expected_duration(as_yaml* yaml, const char* name, const char* value, as_query_duration* expected_duration)
+{
+	if (strcmp(value, "LONG") == 0) {
+		*expected_duration = AS_QUERY_DURATION_LONG;
+	}
+	else if (strcmp(value, "SHORT") == 0) {
+		*expected_duration = AS_QUERY_DURATION_SHORT;
+	}
+	else if (strcmp(value, "LONG_RELAX_AP") == 0) {
+		*expected_duration = AS_QUERY_DURATION_LONG_RELAX_AP;
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
+		return false;
+	}
+	return true;
+}
+
+static bool
+as_parse_send_key(as_yaml* yaml, const char* name, const char* value, as_policy_key* key)
+{
+	bool send_key;
+
+	if (as_parse_bool(yaml, name, value, &send_key)) {
+		*key = send_key ? AS_POLICY_KEY_SEND : AS_POLICY_KEY_DIGEST;
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+static bool
+as_parse_max_concurrent_threads(as_yaml* yaml, const char* name, const char* value, bool* concurrent)
+{
+	uint32_t max_concurrent_threads;
+
+	if (as_parse_uint32(yaml, name, value, &max_concurrent_threads)) {
+		*concurrent = max_concurrent_threads != 1;
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+static bool
+as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* base)
+{
+	as_policy_read* policy = &base->read;
 
 	if (strcmp(name, "read_mode_ap") == 0) {
-		printf("read_mode_ap=%s\n", value);
-		as_policy_read_mode_ap read_mode_ap;
-
-		if (strcmp(value, "ONE") == 0) {
-			read_mode_ap = AS_POLICY_READ_MODE_AP_ONE;
-		}
-		else if (strcmp(value, "ALL") == 0) {
-			read_mode_ap = AS_POLICY_READ_MODE_AP_ALL;
-		}
-		else {
-			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", "read_mode_ap", value);
-			return false;
-		}
-
-		switch (type) {
-			case AS_POLICY_TYPE_ALL:
-				p->read.read_mode_ap = read_mode_ap;
-				p->operate.read_mode_ap = read_mode_ap;
-				p->batch.read_mode_ap = read_mode_ap;
-				p->txn_verify.read_mode_ap = read_mode_ap;
-				break;
-			case AS_POLICY_TYPE_READ:
-				p->read.read_mode_ap = read_mode_ap;
-				break;
-			case AS_POLICY_TYPE_OPERATE:
-				p->operate.read_mode_ap = read_mode_ap;
-				break;
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.read_mode_ap = read_mode_ap;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.read_mode_ap = read_mode_ap;
-				break;
-			default:
-				break;
-		}
+		return as_parse_read_mode_ap(yaml, name, value, &policy->read_mode_ap);
 	}
-	else if (strcmp(name, "read_mode_sc") == 0) {
-		printf("read_mode_sc=%s\n", value);
-		as_policy_read_mode_sc read_mode_sc;
 
-		if (strcmp(value, "SESSION") == 0) {
-			read_mode_sc = AS_POLICY_READ_MODE_SC_SESSION;
-		}
-		else if (strcmp(value, "LINEARIZE") == 0) {
-			read_mode_sc = AS_POLICY_READ_MODE_SC_LINEARIZE;
-		}
-		else if (strcmp(value, "ALLOW_REPLICA") == 0) {
-			read_mode_sc = AS_POLICY_READ_MODE_SC_ALLOW_REPLICA;
-		}
-		else if (strcmp(value, "ALLOW_UNAVAILABLE") == 0) {
-			read_mode_sc = AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE;
-		}
-		else {
-			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", "read_mode_sc", value);
-			return false;
-		}
-
-		switch (type) {
-			case AS_POLICY_TYPE_ALL:
-				p->read.read_mode_sc = read_mode_sc;
-				p->operate.read_mode_sc = read_mode_sc;
-				p->batch.read_mode_sc = read_mode_sc;
-				p->txn_verify.read_mode_sc = read_mode_sc;
-				break;
-			case AS_POLICY_TYPE_READ:
-				p->read.read_mode_sc = read_mode_sc;
-				break;
-			case AS_POLICY_TYPE_OPERATE:
-				p->operate.read_mode_sc = read_mode_sc;
-				break;
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.read_mode_sc = read_mode_sc;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.read_mode_sc = read_mode_sc;
-				break;
-			default:
-				break;
-		}
+	if (strcmp(name, "read_mode_sc") == 0) {
+		return as_parse_read_mode_sc(yaml, name, value, &policy->read_mode_sc);
 	}
-	else if (strcmp(name, "replica") == 0) {
-		printf("replica=%s\n", value);
-		as_policy_replica replica;
 
-		if (strcmp(value, "MASTER") == 0) {
-			replica = AS_POLICY_REPLICA_MASTER;
-		}
-		else if (strcmp(value, "MASTER_PROLES") == 0) {
-			replica = AS_POLICY_REPLICA_ANY;
-		}
-		else if (strcmp(value, "SEQUENCE") == 0) {
-			replica = AS_POLICY_REPLICA_SEQUENCE;
-		}
-		else if (strcmp(value, "PREFER_RACK") == 0) {
-			replica = AS_POLICY_REPLICA_PREFER_RACK;
-		}
-		else {
-			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", "replica", value);
-			return false;
-		}
-
-		switch (type) {
-			case AS_POLICY_TYPE_ALL:
-				p->read.replica = replica;
-				p->write.replica = replica;
-				p->operate.replica = replica;
-				p->remove.replica = replica;
-				p->apply.replica = replica;
-				p->batch.replica = replica;
-				p->batch_parent_write.replica = replica;
-				p->txn_verify.replica = replica;
-				p->txn_roll.replica = replica;
-				p->query.replica = replica;
-				p->scan.replica = replica;
-				break;
-			case AS_POLICY_TYPE_READ:
-				p->read.replica = replica;
-				break;
-			case AS_POLICY_TYPE_WRITE:
-				p->write.replica = replica;
-				break;
-			case AS_POLICY_TYPE_OPERATE:
-				p->operate.replica = replica;
-				break;
-			case AS_POLICY_TYPE_REMOVE:
-				p->remove.replica = replica;
-				break;
-			case AS_POLICY_TYPE_APPLY:
-				p->apply.replica = replica;
-				break;
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.replica = replica;
-				break;
-			case AS_POLICY_TYPE_BATCH_WRITE:
-				p->batch_parent_write.replica = replica;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.replica = replica;
-				break;
-			case AS_POLICY_TYPE_TXN_ROLL:
-				p->txn_roll.replica = replica;
-				break;
-			case AS_POLICY_TYPE_QUERY:
-				p->query.replica = replica;
-				break;
-			case AS_POLICY_TYPE_SCAN:
-				p->scan.replica = replica;
-				break;
-			default:
-				break;
-		}
+	if (strcmp(name, "replica") == 0) {
+		return as_parse_replica(yaml, name, value, &policy->replica);
 	}
-	else if (strcmp(name, "send_key") == 0) {
-		printf("send_key=%s\n", value);
-		bool send_key;
 
-		if (!as_parse_bool(yaml, name, value, &send_key)) {
-			return false;
-		}
-
-		as_policy_key key = send_key ? AS_POLICY_KEY_SEND : AS_POLICY_KEY_DIGEST;
-
-		switch (type) {
-			case AS_POLICY_TYPE_ALL:
-				p->read.key = key;
-				p->write.key = key;
-				p->operate.key = key;
-				p->remove.key = key;
-				p->apply.key = key;
-				break;
-			case AS_POLICY_TYPE_READ:
-				p->read.key = key;
-				break;
-			case AS_POLICY_TYPE_WRITE:
-				p->write.key = key;
-				break;
-			case AS_POLICY_TYPE_OPERATE:
-				p->operate.key = key;
-				break;
-			case AS_POLICY_TYPE_REMOVE:
-				p->remove.key = key;
-				break;
-			case AS_POLICY_TYPE_APPLY:
-				p->apply.key = key;
-				break;
-			default:
-				break;
-		}
+	if (strcmp(name, "socket_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
 	}
-	else if (strcmp(name, "sleep_between_retries") == 0) {
-		printf("sleep_between_retries=%s\n", value);
-		uint32_t sleep_between_retries;
 
-		if (!as_parse_uint32(yaml, name, value, &sleep_between_retries)) {
-			return false;
-		}
-
-		switch (type) {
-			case AS_POLICY_TYPE_ALL:
-				p->read.base.sleep_between_retries = sleep_between_retries;
-				p->write.base.sleep_between_retries = sleep_between_retries;
-				p->operate.base.sleep_between_retries = sleep_between_retries;
-				p->remove.base.sleep_between_retries = sleep_between_retries;
-				p->apply.base.sleep_between_retries = sleep_between_retries;
-				p->batch.base.sleep_between_retries = sleep_between_retries;
-				p->batch_parent_write.base.sleep_between_retries = sleep_between_retries;
-				p->txn_verify.base.sleep_between_retries = sleep_between_retries;
-				p->txn_roll.base.sleep_between_retries = sleep_between_retries;
-				p->query.base.sleep_between_retries = sleep_between_retries;
-				p->scan.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_READ:
-				p->read.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_WRITE:
-				p->write.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_OPERATE:
-				p->operate.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_REMOVE:
-				p->remove.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_APPLY:
-				p->apply.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_BATCH_WRITE:
-				p->batch_parent_write.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_TXN_ROLL:
-				p->txn_roll.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_QUERY:
-				p->query.base.sleep_between_retries = sleep_between_retries;
-				break;
-			case AS_POLICY_TYPE_SCAN:
-				p->scan.base.sleep_between_retries = sleep_between_retries;
-				break;
-			default:
-				break;
-		}
+	if (strcmp(name, "total_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
 	}
-	else if (strcmp(name, "socket_timeout") == 0) {
-		printf("socket_timeout=%s\n", value);
-		uint32_t socket_timeout;
 
-		if (!as_parse_uint32(yaml, name, value, &socket_timeout)) {
-			return false;
-		}
+	if (strcmp(name, "max_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+	}
 
-		switch (type) {
-			case AS_POLICY_TYPE_ALL:
-				p->read.base.socket_timeout = socket_timeout;
-				p->write.base.socket_timeout = socket_timeout;
-				p->operate.base.socket_timeout = socket_timeout;
-				p->remove.base.socket_timeout = socket_timeout;
-				p->apply.base.socket_timeout = socket_timeout;
-				p->batch.base.socket_timeout = socket_timeout;
-				p->batch_parent_write.base.socket_timeout = socket_timeout;
-				p->txn_verify.base.socket_timeout = socket_timeout;
-				p->txn_roll.base.socket_timeout = socket_timeout;
-				p->query.base.socket_timeout = socket_timeout;
-				p->scan.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_READ:
-				p->read.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_WRITE:
-				p->write.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_OPERATE:
-				p->operate.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_REMOVE:
-				p->remove.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_APPLY:
-				p->apply.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_BATCH_WRITE:
-				p->batch_parent_write.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_TXN_ROLL:
-				p->txn_roll.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_QUERY:
-				p->query.base.socket_timeout = socket_timeout;
-				break;
-			case AS_POLICY_TYPE_SCAN:
-				p->scan.base.socket_timeout = socket_timeout;
-				break;
-			default:
-				break;
-		}
+	if (strcmp(name, "sleep_between_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
 	}
-	else if (strcmp(name, "total_timeout") == 0) {
-		printf("total_timeout=%s\n", value);
-		uint32_t total_timeout;
 
-		if (!as_parse_uint32(yaml, name, value, &total_timeout)) {
-			return false;
-		}
-
-		switch (type) {
-			case AS_POLICY_TYPE_ALL:
-				p->read.base.total_timeout = total_timeout;
-				p->write.base.total_timeout = total_timeout;
-				p->operate.base.total_timeout = total_timeout;
-				p->remove.base.total_timeout = total_timeout;
-				p->apply.base.total_timeout = total_timeout;
-				p->batch.base.total_timeout = total_timeout;
-				p->batch_parent_write.base.total_timeout = total_timeout;
-				p->txn_verify.base.total_timeout = total_timeout;
-				p->txn_roll.base.total_timeout = total_timeout;
-				p->query.base.total_timeout = total_timeout;
-				p->scan.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_READ:
-				p->read.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_WRITE:
-				p->write.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_OPERATE:
-				p->operate.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_REMOVE:
-				p->remove.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_APPLY:
-				p->apply.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_BATCH_WRITE:
-				p->batch_parent_write.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_TXN_ROLL:
-				p->txn_roll.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_QUERY:
-				p->query.base.total_timeout = total_timeout;
-				break;
-			case AS_POLICY_TYPE_SCAN:
-				p->scan.base.total_timeout = total_timeout;
-				break;
-			default:
-				break;
-		}
-	}
-	else if (strcmp(name, "max_retries") == 0) {
-		printf("max_retries=%s\n", value);
-		uint32_t max_retries;
-
-		if (!as_parse_uint32(yaml, name, value, &max_retries)) {
-			return false;
-		}
-
-		switch (type) {
-			case AS_POLICY_TYPE_ALL:
-				p->read.base.max_retries = max_retries;
-				p->write.base.max_retries = max_retries;
-				p->operate.base.max_retries = max_retries;
-				p->remove.base.max_retries = max_retries;
-				p->apply.base.max_retries = max_retries;
-				p->batch.base.max_retries = max_retries;
-				p->batch_parent_write.base.max_retries = max_retries;
-				p->txn_verify.base.max_retries = max_retries;
-				p->txn_roll.base.max_retries = max_retries;
-				p->query.base.max_retries = max_retries;
-				p->scan.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_READ:
-				p->read.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_WRITE:
-				p->write.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_OPERATE:
-				p->operate.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_REMOVE:
-				p->remove.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_APPLY:
-				p->apply.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_BATCH_WRITE:
-				p->batch_parent_write.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_TXN_ROLL:
-				p->txn_roll.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_QUERY:
-				p->query.base.max_retries = max_retries;
-				break;
-			case AS_POLICY_TYPE_SCAN:
-				p->scan.base.max_retries = max_retries;
-				break;
-			default:
-				break;
-		}
-	}
-	/* Not supported in C client.
-	else if (strcmp(name, "connect_timeout") == 0) {
-		// connect_timeout not supported in the C client.
-	}
-	else if (strcmp(name, "timeout_delay") == 0) {
-		// timeout_delay not supported in the C client.
-	}
-	else if (strcmp(name, "fail_on_filtered_out") == 0) {
-		// fail_on_filtered_out not supported in the C client.
-	}
-	*/
+	// Not supported: connect_timeout, fail_on_filtered_out, timeout_delay
 	return true;
 }
 
 static bool
-as_parse_write_scalar(as_yaml* yaml, const char* name, const char* value)
+as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
-	as_policies* p = &yaml->config->policies;
+	as_policy_write* policy = &base->write;
+
+	if (strcmp(name, "replica") == 0) {
+		return as_parse_replica(yaml, name, value, &policy->replica);
+	}
+
+	if (strcmp(name, "socket_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+	}
+
+	if (strcmp(name, "total_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+	}
+
+	if (strcmp(name, "max_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+	}
+
+	if (strcmp(name, "sleep_between_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+	}
+
+	if (strcmp(name, "send_key") == 0) {
+		return as_parse_send_key(yaml, name, value, &policy->key);
+	}
 
 	if (strcmp(name, "durable_delete") == 0) {
-		printf("durable_delete=%s\n", value);
-		bool durable_delete;
-
-		if (!as_parse_bool(yaml, name, value, &durable_delete)) {
-			return false;
-		}
-
-		p->write.durable_delete = durable_delete;
+		return as_parse_bool(yaml, name, value, &policy->durable_delete);
 	}
-	else {
-		return as_parse_policy_base(yaml, name, value, AS_POLICY_TYPE_WRITE);
-	}
+
+	// Not supported: connect_timeout, fail_on_filtered_out, timeout_delay
 	return true;
 }
 
 static bool
-as_parse_write(as_yaml* yaml)
+as_parse_query(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
-	char name[256];
+	as_policy_query* policy = &base->query;
 
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
-		if (!as_parse_next(yaml)) {
-			return false;
-		}
-
-		if (yaml->event.type == YAML_SCALAR_EVENT) {
-			char* value = (char*)yaml->event.data.scalar.value;
-			bool rv = as_parse_write_scalar(yaml, name, value);
-
-			yaml_event_delete(&yaml->event);
-
-			if (!rv) {
-				return false;
-			}
-		}
-		else {
-			as_expected_error(yaml, YAML_SCALAR_EVENT);
-			yaml_event_delete(&yaml->event);
-			return false;
-		}
+	if (strcmp(name, "replica") == 0) {
+		return as_parse_replica(yaml, name, value, &policy->replica);
 	}
-	return true;
-}
 
-static bool
-as_parse_batch_scalar(as_yaml* yaml, const char* name, const char* value, as_policy_type type)
-{
-	as_policies* p = &yaml->config->policies;
-
-	if (strcmp(name, "max_concurrent_threads") == 0) {
-		// C client only supports all concurrent threads or not.
-		printf("max_concurrent_threads=%s\n", value);
-		uint32_t max_concurrent_threads;
-
-		if (!as_parse_uint32(yaml, name, value, &max_concurrent_threads)) {
-			return false;
-		}
-
-		bool concurrent = max_concurrent_threads != 1;
-
-		switch (type) {
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.concurrent = concurrent;
-				break;
-			case AS_POLICY_TYPE_BATCH_WRITE:
-				p->batch_parent_write.concurrent = concurrent;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.concurrent = concurrent;
-				break;
-			case AS_POLICY_TYPE_TXN_ROLL:
-				p->txn_roll.concurrent = concurrent;
-				break;
-			default:
-				break;
-		}
+	if (strcmp(name, "socket_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
 	}
-	else if (strcmp(name, "allow_inline") == 0) {
-		printf("allow_inline=%s\n", value);
-		bool allow_inline;
 
-		if (!as_parse_bool(yaml, name, value, &allow_inline)) {
-			return false;
-		}
-
-		switch (type) {
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.allow_inline = allow_inline;
-				break;
-			case AS_POLICY_TYPE_BATCH_WRITE:
-				p->batch_parent_write.allow_inline = allow_inline;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.allow_inline = allow_inline;
-				break;
-			case AS_POLICY_TYPE_TXN_ROLL:
-				p->txn_roll.allow_inline = allow_inline;
-				break;
-			default:
-				break;
-		}
+	if (strcmp(name, "total_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
 	}
-	else if (strcmp(name, "allow_inline_ssd") == 0) {
-		printf("allow_inline_ssd=%s\n", value);
-		bool allow_inline_ssd;
 
-		if (!as_parse_bool(yaml, name, value, &allow_inline_ssd)) {
-			return false;
-		}
-
-		switch (type) {
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.allow_inline_ssd = allow_inline_ssd;
-				break;
-			case AS_POLICY_TYPE_BATCH_WRITE:
-				p->batch_parent_write.allow_inline_ssd = allow_inline_ssd;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.allow_inline_ssd = allow_inline_ssd;
-				break;
-			case AS_POLICY_TYPE_TXN_ROLL:
-				p->txn_roll.allow_inline_ssd = allow_inline_ssd;
-				break;
-			default:
-				break;
-		}
+	if (strcmp(name, "max_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
 	}
-	else if (strcmp(name, "respond_all_keys") == 0) {
-		printf("respond_all_keys=%s\n", value);
-		bool respond_all_keys;
 
-		if (!as_parse_bool(yaml, name, value, &respond_all_keys)) {
-			return false;
-		}
-
-		switch (type) {
-			case AS_POLICY_TYPE_BATCH_READ:
-				p->batch.respond_all_keys = respond_all_keys;
-				break;
-			case AS_POLICY_TYPE_BATCH_WRITE:
-				p->batch_parent_write.respond_all_keys = respond_all_keys;
-				break;
-			case AS_POLICY_TYPE_TXN_VERIFY:
-				p->txn_verify.respond_all_keys = respond_all_keys;
-				break;
-			case AS_POLICY_TYPE_TXN_ROLL:
-				p->txn_roll.respond_all_keys = respond_all_keys;
-				break;
-			default:
-				break;
-		}
+	if (strcmp(name, "sleep_between_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
 	}
-	else {
-		return as_parse_policy_base(yaml, name, value, type);
-	}
-	return true;
-}
-
-static bool
-as_parse_batch(as_yaml* yaml, as_policy_type type)
-{
-	char name[256];
-
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
-		if (!as_parse_next(yaml)) {
-			return false;
-		}
-
-		if (yaml->event.type == YAML_SCALAR_EVENT) {
-			char* value = (char*)yaml->event.data.scalar.value;
-			bool rv = as_parse_batch_scalar(yaml, name, value, type);
-
-			yaml_event_delete(&yaml->event);
-
-			if (!rv) {
-				return false;
-			}
-		}
-		else {
-			as_expected_error(yaml, YAML_SCALAR_EVENT);
-			yaml_event_delete(&yaml->event);
-			return false;
-		}
-	}
-	return true;
-}
-
-static bool
-as_parse_query_scalar(as_yaml* yaml, const char* name, const char* value)
-{
-	as_policies* p = &yaml->config->policies;
 
 	if (strcmp(name, "info_timeout") == 0) {
-		printf("info_timeout=%s\n", value);
-		uint32_t info_timeout;
+		return as_parse_uint32(yaml, name, value, &policy->info_timeout);
+	}
 
-		if (!as_parse_uint32(yaml, name, value, &info_timeout)) {
-			return false;
-		}
+	if (strcmp(name, "expected_duration") == 0) {
+		return as_parse_expected_duration(yaml, name, value, &policy->expected_duration);
+	}
 
-		p->query.info_timeout = info_timeout;
-	}
-	else if (strcmp(name, "expected_duration") == 0) {
-		printf("expected_duration=%s\n", value);
-		as_query_duration expected_duration;
-
-		if (strcmp(value, "LONG") == 0) {
-			expected_duration = AS_QUERY_DURATION_LONG;
-		}
-		else if (strcmp(value, "SHORT") == 0) {
-			expected_duration = AS_QUERY_DURATION_SHORT;
-		}
-		else if (strcmp(value, "LONG_RELAX_AP") == 0) {
-			expected_duration = AS_QUERY_DURATION_LONG_RELAX_AP;
-		}
-		else {
-			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
-			return false;
-		}
-
-		p->query.expected_duration = expected_duration;
-	}
-	else if (strcmp(name, "include_bin_data") == 0) {
-		// Not supported in C client.
-	}
-	else if (strcmp(name, "record_queue_size") == 0) {
-		// Not supported in C client.
-	}
-	else {
-		return as_parse_policy_base(yaml, name, value, AS_POLICY_TYPE_SCAN);
-	}
+	// Not supported: connect_timeout, timeout_delay, read_mode_ap, read_mode_sc, include_bin_data
+	//                record_queue_size
 	return true;
 }
 
 static bool
-as_parse_query(as_yaml* yaml)
+as_parse_scan(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
-	char name[256];
+	as_policy_scan* policy = &base->scan;
 
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
-		if (!as_parse_next(yaml)) {
-			return false;
-		}
-
-		if (yaml->event.type == YAML_SCALAR_EVENT) {
-			char* value = (char*)yaml->event.data.scalar.value;
-			bool rv = as_parse_query_scalar(yaml, name, value);
-
-			yaml_event_delete(&yaml->event);
-
-			if (!rv) {
-				return false;
-			}
-		}
-		else {
-			as_expected_error(yaml, YAML_SCALAR_EVENT);
-			yaml_event_delete(&yaml->event);
-			return false;
-		}
+	if (strcmp(name, "replica") == 0) {
+		return as_parse_replica(yaml, name, value, &policy->replica);
 	}
+
+	if (strcmp(name, "socket_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+	}
+
+	if (strcmp(name, "total_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+	}
+
+	if (strcmp(name, "max_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+	}
+
+	if (strcmp(name, "sleep_between_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+	}
+
+	// Not supported: connect_timeout, timeout_delay, read_mode_ap, read_mode_sc, concurrent_nodes
+	//                max_concurrent_nodes
+	// concurrent_nodes is supported in as_scan, but there no policy defaults for that.
 	return true;
 }
 
 static bool
-as_parse_scan_scalar(as_yaml* yaml, const char* name, const char* value)
+as_parse_batch_shared(as_yaml* yaml, const char* name, const char* value, as_policy_batch* policy)
 {
-	if (strcmp(name, "concurrent_nodes") == 0) {
-		// Not supported in C client.
+	if (strcmp(name, "read_mode_ap") == 0) {
+		return as_parse_read_mode_ap(yaml, name, value, &policy->read_mode_ap);
 	}
-	else if (strcmp(name, "max_concurrent_nodes") == 0) {
-		// Not supported in C client.
+
+	if (strcmp(name, "read_mode_sc") == 0) {
+		return as_parse_read_mode_sc(yaml, name, value, &policy->read_mode_sc);
 	}
-	else {
-		return as_parse_policy_base(yaml, name, value, AS_POLICY_TYPE_SCAN);
+
+	if (strcmp(name, "replica") == 0) {
+		return as_parse_replica(yaml, name, value, &policy->replica);
 	}
+
+	if (strcmp(name, "socket_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+	}
+
+	if (strcmp(name, "total_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+	}
+
+	if (strcmp(name, "max_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+	}
+
+	if (strcmp(name, "sleep_between_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+	}
+
+	if (strcmp(name, "max_concurrent_threads") == 0) {
+		return as_parse_max_concurrent_threads(yaml, name, value, &policy->concurrent);
+	}
+
+	if (strcmp(name, "allow_inline") == 0) {
+		return as_parse_bool(yaml, name, value, &policy->allow_inline);
+	}
+
+	if (strcmp(name, "allow_inline_ssd") == 0) {
+		return as_parse_bool(yaml, name, value, &policy->allow_inline_ssd);
+	}
+
+	if (strcmp(name, "respond_all_keys") == 0) {
+		return as_parse_bool(yaml, name, value, &policy->respond_all_keys);
+	}
+
+	// Not supported: connect_timeout, fail_on_filtered_out, timeout_delay
 	return true;
 }
 
 static bool
-as_parse_scan(as_yaml* yaml)
+as_parse_batch_read(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
-	char name[256];
+	return as_parse_batch_shared(yaml, name, value, &base->batch);
+}
 
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
-		if (!as_parse_next(yaml)) {
-			return false;
-		}
+static bool
+as_parse_batch_write(as_yaml* yaml, const char* name, const char* value, as_policies* base)
+{
+	as_policy_batch_write* bw = &base->batch_write;
 
-		if (yaml->event.type == YAML_SCALAR_EVENT) {
-			char* value = (char*)yaml->event.data.scalar.value;
-			bool rv = as_parse_scan_scalar(yaml, name, value);
-
-			yaml_event_delete(&yaml->event);
-
-			if (!rv) {
-				return false;
-			}
-		}
-		else {
-			as_expected_error(yaml, YAML_SCALAR_EVENT);
-			yaml_event_delete(&yaml->event);
-			return false;
-		}
+	if (strcmp(name, "durable_delete") == 0) {
+		return as_parse_bool(yaml, name, value, &bw->durable_delete);
 	}
+
+	if (strcmp(name, "send_key") == 0) {
+		return as_parse_send_key(yaml, name, value, &bw->key);
+	}
+
+	return as_parse_batch_shared(yaml, name, value, &base->batch_parent_write);
+}
+
+static bool
+as_parse_batch_udf(as_yaml* yaml, const char* name, const char* value, as_policies* base)
+{
+	as_policy_batch_apply* policy = &base->batch_apply;
+
+	if (strcmp(name, "durable_delete") == 0) {
+		return as_parse_bool(yaml, name, value, &policy->durable_delete);
+	}
+
+	if (strcmp(name, "send_key") == 0) {
+		return as_parse_send_key(yaml, name, value, &policy->key);
+	}
+
 	return true;
 }
 
 static bool
-as_parse_policy(as_yaml* yaml)
+as_parse_batch_delete(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
+	as_policy_batch_remove* policy = &base->batch_remove;
+
+	if (strcmp(name, "durable_delete") == 0) {
+		return as_parse_bool(yaml, name, value, &policy->durable_delete);
+	}
+
+	if (strcmp(name, "send_key") == 0) {
+		return as_parse_send_key(yaml, name, value, &policy->key);
+	}
+
+	return true;
+}
+
+static bool
+as_parse_txn_verify(as_yaml* yaml, const char* name, const char* value, as_policies* base)
+{
+	return as_parse_batch_shared(yaml, name, value, &base->txn_verify);
+}
+
+static bool
+as_parse_txn_roll(as_yaml* yaml, const char* name, const char* value, as_policies* base)
+{
+	return as_parse_batch_shared(yaml, name, value, &base->txn_roll);
+}
+
+typedef bool (*as_parse_policy_fn) (as_yaml* yaml, const char* name, const char* value, as_policies* base);
+
+static bool
+as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
+{
+	as_policies* base = &yaml->config->policies;
+
 	if (!as_expect_event(yaml, YAML_MAPPING_START_EVENT)) {
 		return false;
 	}
@@ -1011,43 +622,7 @@ as_parse_policy(as_yaml* yaml)
 		if (yaml->event.type == YAML_SCALAR_EVENT) {
 			char* value = (char*)yaml->event.data.scalar.value;
 
-			rv = as_parse_policy_base(yaml, name, value, AS_POLICY_TYPE_ALL);
-		}
-		else if (yaml->event.type == YAML_MAPPING_START_EVENT) {
-			yaml_event_delete(&yaml->event);
-
-			if (strcmp(name, "write") == 0) {
-				printf("write\n");
-				rv = as_parse_write(yaml);
-			}
-			else if (strcmp(name, "batch") == 0) {
-				printf("batch\n");
-				rv = as_parse_batch(yaml, AS_POLICY_TYPE_BATCH_READ);
-			}
-			else if (strcmp(name, "batch_write") == 0) {
-				printf("batch_write\n");
-				rv = as_parse_batch(yaml, AS_POLICY_TYPE_BATCH_WRITE);
-			}
-			else if (strcmp(name, "txn_verify") == 0) {
-				printf("txn_verify\n");
-				rv = as_parse_batch(yaml, AS_POLICY_TYPE_TXN_VERIFY);
-			}
-			else if (strcmp(name, "txn_roll") == 0) {
-				printf("txn_roll\n");
-				rv = as_parse_batch(yaml, AS_POLICY_TYPE_TXN_ROLL);
-			}
-			else if (strcmp(name, "query") == 0) {
-				printf("query\n");
-				rv = as_parse_query(yaml);
-			}
-			else if (strcmp(name, "scan") == 0) {
-				printf("scan\n");
-				rv = as_parse_scan(yaml);
-			}
-			else {
-				as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Unknown label: %s", name);
-				rv = false;
-			}
+			rv = fn(yaml, name, value, base);
 		}
 		else {
 			as_expected_error(yaml, YAML_SCALAR_EVENT);
@@ -1081,25 +656,25 @@ as_parse_static_client(as_yaml* yaml)
 			const char* value = (const char*)yaml->event.data.scalar.value;
 			bool rv;
 
-			if (strcmp(name, "min_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->min_conns_per_node);
-				printf("min_connections_per_node=%u\n", yaml->config->min_conns_per_node);
+			if (strcmp(name, "config_tend_count") == 0) {
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->config_provider.config_tend_count);
+				printf("config_tend_count=%u\n", yaml->config->config_provider.config_tend_count);
 			}
 			else if (strcmp(name, "max_connections_per_node") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_conns_per_node);
 				printf("max_connections_per_node=%u\n", yaml->config->max_conns_per_node);
 			}
-			else if (strcmp(name, "async_min_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_min_conns_per_node);
-				printf("async_min_connections_per_node=%u\n", yaml->config->async_min_conns_per_node);
+			else if (strcmp(name, "min_connections_per_node") == 0) {
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->min_conns_per_node);
+				printf("min_connections_per_node=%u\n", yaml->config->min_conns_per_node);
 			}
 			else if (strcmp(name, "async_max_connections_per_node") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_max_conns_per_node);
 				printf("async_max_connections_per_node=%u\n", yaml->config->async_max_conns_per_node);
 			}
-			else if (strcmp(name, "timeout") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->conn_timeout_ms);
-				printf("timeout=%u\n", yaml->config->conn_timeout_ms);
+			else if (strcmp(name, "async_min_connections_per_node") == 0) {
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_min_conns_per_node);
+				printf("async_min_connections_per_node=%u\n", yaml->config->async_min_conns_per_node);
 			}
 			else {
 				rv = true; // Skip unknown scalars.
@@ -1138,7 +713,11 @@ as_parse_dynamic_client(as_yaml* yaml)
 			const char* value = (const char*)yaml->event.data.scalar.value;
 			bool rv;
 
-			if (strcmp(name, "error_rate_window") == 0) {
+			if (strcmp(name, "timeout") == 0) {
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->conn_timeout_ms);
+				printf("timeout=%u\n", yaml->config->conn_timeout_ms);
+			}
+			else if (strcmp(name, "error_rate_window") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->error_rate_window);
 				printf("error_rate_window=%u\n", yaml->config->error_rate_window);
 			}
@@ -1247,9 +826,45 @@ as_parse_dynamic(as_yaml* yaml)
 			printf("client\n");
 			as_parse_dynamic_client(yaml);
 		}
-		else if (strcmp(name, "policy") == 0) {
-			printf("policy\n");
-			as_parse_policy(yaml);
+		else if (strcmp(name, "read") == 0) {
+			printf("read\n");
+			as_parse_policy(yaml, as_parse_read);
+		}
+		else if (strcmp(name, "write") == 0) {
+			printf("write\n");
+			as_parse_policy(yaml, as_parse_write);
+		}
+		else if (strcmp(name, "query") == 0) {
+			printf("query\n");
+			as_parse_policy(yaml, as_parse_query);
+		}
+		else if (strcmp(name, "scan") == 0) {
+			printf("scan\n");
+			as_parse_policy(yaml, as_parse_scan);
+		}
+		else if (strcmp(name, "batch_read") == 0) {
+			printf("batch\n");
+			as_parse_policy(yaml, as_parse_batch_read);
+		}
+		else if (strcmp(name, "batch_write") == 0) {
+			printf("batch_write\n");
+			as_parse_policy(yaml, as_parse_batch_write);
+		}
+		else if (strcmp(name, "batch_udf") == 0) {
+			printf("batch_udf\n");
+			as_parse_policy(yaml, as_parse_batch_udf);
+		}
+		else if (strcmp(name, "batch_delete") == 0) {
+			printf("batch_delete\n");
+			as_parse_policy(yaml, as_parse_batch_delete);
+		}
+		else if (strcmp(name, "txn_verify") == 0) {
+			printf("txn_verify\n");
+			as_parse_policy(yaml, as_parse_txn_verify);
+		}
+		else if (strcmp(name, "txn_roll") == 0) {
+			printf("txn_roll\n");
+			as_parse_policy(yaml, as_parse_txn_roll);
 		}
 		else {
 			printf("Skip %s\n", name);
@@ -1363,10 +978,11 @@ parse_debug(yaml_parser_t* parser)
 #endif
 
 static as_status
-as_config_yaml_read(const char* path, as_config* config, bool init, as_error* err)
+as_config_yaml_read(as_config* config, bool init, as_error* err)
 {
 	as_error_reset(err);
 
+	const char* path = config->config_provider.yaml_path;
 	FILE* fp = fopen(path, "r");
 
 	if (!fp) {
@@ -1427,7 +1043,7 @@ as_release_rack_ids(as_vector* rack_ids)
 as_status
 as_config_yaml_init(as_config* config, as_error* err)
 {
-	return as_config_yaml_read(config->config_provider.yaml_path, config, true, err);
+	return as_config_yaml_read(config, true, err);
 }
 
 void
@@ -1439,36 +1055,36 @@ as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec
 as_status
 as_config_yaml_update(aerospike* as, as_error* err)
 {
-	as_config* config = cf_malloc(sizeof(as_config));
-	memcpy(config, &as->config, sizeof(as_config));
-	config->rack_ids = NULL;
+	// No need to be pointer.
+	as_config config;
+	memcpy(&config, &as->config, sizeof(as_config));
+	config.rack_ids = NULL;
 
-	as_status status = as_config_yaml_read(config->config_provider.yaml_path, config, false, err);
+	as_status status = as_config_yaml_read(&config, false, err);
 
 	if (status != AEROSPIKE_OK) {
-		as_config_destroy(config);
-		cf_free(config);
+		as_config_destroy(&config);
 		return status;
 	}
 
 	// Apply config to cluster.
 	as_cluster* cluster = as->cluster;
 
-	cluster->max_error_rate = config->max_error_rate;
-	cluster->error_rate_window = config->error_rate_window;
-	cluster->login_timeout_ms = config->login_timeout_ms;
-	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
-	cluster->use_services_alternate = config->use_services_alternate;
-	cluster->fail_if_not_connected = config->fail_if_not_connected;
-	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
+	cluster->max_error_rate = config.max_error_rate;
+	cluster->error_rate_window = config.error_rate_window;
+	cluster->login_timeout_ms = config.login_timeout_ms;
+	cluster->tend_interval = (config.tender_interval < 250)? 250 : config.tender_interval;
+	cluster->use_services_alternate = config.use_services_alternate;
+	cluster->fail_if_not_connected = config.fail_if_not_connected;
+	as_cluster_set_max_socket_idle(cluster, config.max_socket_idle);
 
-	cluster->rack_aware = config->rack_aware;
+	cluster->rack_aware = config.rack_aware;
 
-	if (config->rack_ids && !as_rack_ids_equal(config->rack_ids, cluster->rack_ids)) {
+	if (config.rack_ids && !as_rack_ids_equal(config.rack_ids, cluster->rack_ids)) {
 		as_vector* old = cluster->rack_ids;
 
-		as_store_ptr_rls((void**)&cluster->rack_ids, config->rack_ids);
-		config->rack_ids = NULL;
+		as_store_ptr_rls((void**)&cluster->rack_ids, config.rack_ids);
+		config.rack_ids = NULL;
 
 		as_gc_item item;
 		item.data = old;
@@ -1476,7 +1092,6 @@ as_config_yaml_update(aerospike* as, as_error* err)
 		as_vector_append(cluster->gc, &item);
 	}
 
-	as_config_destroy(config);
-	cf_free(config);
+	as_config_destroy(&config);
 	return AEROSPIKE_OK;
 }

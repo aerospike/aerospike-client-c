@@ -16,6 +16,8 @@
  */
 #include <aerospike/as_config_yaml.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_log_macros.h>
+#include <aerospike/as_string_builder.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <yaml.h>
@@ -28,23 +30,10 @@ typedef struct {
 	yaml_parser_t parser;
 	yaml_event_t event;
 	as_config* config;
-	bool init;
+	const char* name;
 	as_error err;
+	bool init;
 } as_yaml;
-
-typedef enum {
-	AS_POLICY_TYPE_READ,
-	AS_POLICY_TYPE_WRITE,
-	AS_POLICY_TYPE_REMOVE,
-	AS_POLICY_TYPE_APPLY,
-	AS_POLICY_TYPE_OPERATE,
-	AS_POLICY_TYPE_BATCH_READ,
-	AS_POLICY_TYPE_BATCH_WRITE,
-	AS_POLICY_TYPE_TXN_VERIFY,
-	AS_POLICY_TYPE_TXN_ROLL,
-	AS_POLICY_TYPE_QUERY,
-	AS_POLICY_TYPE_SCAN
-} as_policy_type;
 
 //---------------------------------
 // Static Functions
@@ -178,7 +167,7 @@ as_parse_int32(as_yaml* yaml, const char* name, const char* value, int32_t* out)
 }
 
 static bool
-as_parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out)
+parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out)
 {
     char* end = NULL;
     errno = 0;
@@ -194,7 +183,23 @@ as_parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* ou
 }
 
 static bool
-as_parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out)
+as_parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out)
+{
+	uint32_t val;
+
+	if (!parse_uint32(yaml, name, value, &val)) {
+		return false;
+	}
+
+	if (*out != val) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		*out = val;
+	}
+	return true;
+}
+
+static bool
+parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out)
 {
 	if (strcmp(value, "false") == 0) {
 		*out = false;
@@ -210,10 +215,43 @@ as_parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out)
 }
 
 static bool
+as_parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out)
+{
+	bool val;
+
+	if (!parse_bool(yaml, name, value, &val)) {
+		return false;
+	}
+
+	if (*out != val) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		*out = val;
+	}
+	return true;
+}
+
+static bool
+as_vector_int32_equal(as_vector* r1, as_vector* r2)
+{
+	if (r1->size != r2->size) {
+		return false;
+	}
+
+	for (uint32_t i = 0; i < r1->size; i++) {
+		int id1 = *(int*)as_vector_get(r1, i);
+		int id2 = *(int*)as_vector_get(r2, i);
+
+		if (id1 != id2) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool
 as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out)
 {
-	*out = as_vector_create(sizeof(int), 8);
-
+	as_vector* list = as_vector_create(sizeof(int), 8);
 	int32_t v;
 
 	while (as_prepare_scalar(yaml)) {
@@ -223,11 +261,46 @@ as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out)
 		yaml_event_delete(&yaml->event);
 
 		if (rv) {
-			as_vector_append(*out, &v);
+			as_vector_append(list, &v);
 		}
 		else {
+			as_vector_destroy(list);
 			return false;
 		}
+	}
+
+	if (!as_vector_int32_equal(*out, list)) {
+		as_string_builder sb;
+		as_string_builder_inita(&sb, 512, false);
+
+		as_string_builder_append(&sb, "Set ");
+		as_string_builder_append(&sb, yaml->name);
+		as_string_builder_append_char(&sb, '.');
+		as_string_builder_append(&sb, name);
+		as_string_builder_append(&sb, " = [");
+
+		for (uint32_t i = 0; i < list->size; i++) {
+			int id = *(int*)as_vector_get(list, i);
+
+			if (i > 0) {
+				as_string_builder_append_char(&sb, ',');
+			}
+			as_string_builder_append_int(&sb, id);
+		}
+
+		as_string_builder_append_char(&sb, ']');
+		as_log_info(sb.data);
+
+		// On init, the original config is set directly, so the old vector must be destroyed.
+		// On update, a shallow copy config is set and the original vector will be destroyed
+		// after the update succeeds.
+		if (yaml->init) {
+			as_vector_destroy(*out);
+		}
+		*out = list;
+	}
+	else {
+		as_vector_destroy(list);
 	}
 	return true;
 }
@@ -235,15 +308,22 @@ as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out)
 static bool
 as_parse_read_mode_ap(as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_ap* read_mode_ap)
 {
+	as_policy_read_mode_ap val;
+
 	if (strcmp(value, "ONE") == 0) {
-		*read_mode_ap = AS_POLICY_READ_MODE_AP_ONE;
+		val = AS_POLICY_READ_MODE_AP_ONE;
 	}
 	else if (strcmp(value, "ALL") == 0) {
-		*read_mode_ap = AS_POLICY_READ_MODE_AP_ALL;
+		val = AS_POLICY_READ_MODE_AP_ALL;
 	}
 	else {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
 		return false;
+	}
+
+	if (*read_mode_ap != val) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		*read_mode_ap = val;
 	}
 	return true;
 }
@@ -251,21 +331,28 @@ as_parse_read_mode_ap(as_yaml* yaml, const char* name, const char* value, as_pol
 static bool
 as_parse_read_mode_sc(as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_sc* read_mode_sc)
 {
+	as_policy_read_mode_sc val;
+
 	if (strcmp(value, "SESSION") == 0) {
-		*read_mode_sc = AS_POLICY_READ_MODE_SC_SESSION;
+		val = AS_POLICY_READ_MODE_SC_SESSION;
 	}
 	else if (strcmp(value, "LINEARIZE") == 0) {
-		*read_mode_sc = AS_POLICY_READ_MODE_SC_LINEARIZE;
+		val = AS_POLICY_READ_MODE_SC_LINEARIZE;
 	}
 	else if (strcmp(value, "ALLOW_REPLICA") == 0) {
-		*read_mode_sc = AS_POLICY_READ_MODE_SC_ALLOW_REPLICA;
+		val = AS_POLICY_READ_MODE_SC_ALLOW_REPLICA;
 	}
 	else if (strcmp(value, "ALLOW_UNAVAILABLE") == 0) {
-		*read_mode_sc = AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE;
+		val = AS_POLICY_READ_MODE_SC_ALLOW_UNAVAILABLE;
 	}
 	else {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
 		return false;
+	}
+
+	if (*read_mode_sc != val) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		*read_mode_sc = val;
 	}
 	return true;
 }
@@ -273,21 +360,28 @@ as_parse_read_mode_sc(as_yaml* yaml, const char* name, const char* value, as_pol
 static bool
 as_parse_replica(as_yaml* yaml, const char* name, const char* value, as_policy_replica* replica)
 {
+	as_policy_replica val;
+
 	if (strcmp(value, "MASTER") == 0) {
-		*replica = AS_POLICY_REPLICA_MASTER;
+		val = AS_POLICY_REPLICA_MASTER;
 	}
 	else if (strcmp(value, "MASTER_PROLES") == 0) {
-		*replica = AS_POLICY_REPLICA_ANY;
+		val = AS_POLICY_REPLICA_ANY;
 	}
 	else if (strcmp(value, "SEQUENCE") == 0) {
-		*replica = AS_POLICY_REPLICA_SEQUENCE;
+		val = AS_POLICY_REPLICA_SEQUENCE;
 	}
 	else if (strcmp(value, "PREFER_RACK") == 0) {
-		*replica = AS_POLICY_REPLICA_PREFER_RACK;
+		val = AS_POLICY_REPLICA_PREFER_RACK;
 	}
 	else {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
 		return false;
+	}
+
+	if (*replica != val) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		*replica = val;
 	}
 	return true;
 }
@@ -295,34 +389,49 @@ as_parse_replica(as_yaml* yaml, const char* name, const char* value, as_policy_r
 static bool
 as_parse_expected_duration(as_yaml* yaml, const char* name, const char* value, as_query_duration* expected_duration)
 {
+	as_query_duration val;
+
 	if (strcmp(value, "LONG") == 0) {
-		*expected_duration = AS_QUERY_DURATION_LONG;
+		val = AS_QUERY_DURATION_LONG;
 	}
 	else if (strcmp(value, "SHORT") == 0) {
-		*expected_duration = AS_QUERY_DURATION_SHORT;
+		val = AS_QUERY_DURATION_SHORT;
 	}
 	else if (strcmp(value, "LONG_RELAX_AP") == 0) {
-		*expected_duration = AS_QUERY_DURATION_LONG_RELAX_AP;
+		val = AS_QUERY_DURATION_LONG_RELAX_AP;
 	}
 	else {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
 		return false;
 	}
+
+	if (*expected_duration != val) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		*expected_duration = val;
+	}
 	return true;
 }
+
+#define as_str(x) #x
+#define as_xstr(x) as_str(x)
 
 static bool
 as_parse_send_key(as_yaml* yaml, const char* name, const char* value, as_policy_key* key)
 {
 	bool send_key;
 
-	if (as_parse_bool(yaml, name, value, &send_key)) {
-		*key = send_key ? AS_POLICY_KEY_SEND : AS_POLICY_KEY_DIGEST;
-		return true;
-	}
-	else {
+	if (!parse_bool(yaml, name, value, &send_key)) {
 		return false;
 	}
+
+	as_policy_key val = send_key ? AS_POLICY_KEY_SEND : AS_POLICY_KEY_DIGEST;
+
+	if (*key != val) {
+		const char* str = send_key ? as_xstr(AS_POLICY_KEY_SEND) : as_xstr(AS_POLICY_KEY_DIGEST);
+		as_log_info("Set %s.%s = %s", yaml->name, name, str);
+		*key = val;
+	}
+	return true;
 }
 
 static bool
@@ -330,19 +439,25 @@ as_parse_max_concurrent_threads(as_yaml* yaml, const char* name, const char* val
 {
 	uint32_t max_concurrent_threads;
 
-	if (as_parse_uint32(yaml, name, value, &max_concurrent_threads)) {
-		*concurrent = max_concurrent_threads != 1;
-		return true;
-	}
-	else {
+	if (!parse_uint32(yaml, name, value, &max_concurrent_threads)) {
 		return false;
 	}
+
+	bool val = max_concurrent_threads != 1;
+
+	if (*concurrent != val) {
+		const char* str = val ? "true" : "false";
+		as_log_info("Set %s.concurrent = %s", yaml->name, str);
+		*concurrent = val;
+	}
+	return true;
 }
 
 static bool
 as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_policy_read* policy = &base->read;
+	yaml->name = "read";
 
 	if (strcmp(name, "read_mode_ap") == 0) {
 		return as_parse_read_mode_ap(yaml, name, value, &policy->read_mode_ap);
@@ -372,7 +487,22 @@ as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* b
 		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
 	}
 
-	// Not supported: connect_timeout, fail_on_filtered_out, timeout_delay
+	if (strcmp(name, "connect_timeout") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "timeout_delay") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "fail_on_filtered_out") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	as_log_info("Unexpected field: %s.%s", yaml->name, name);
 	return true;
 }
 
@@ -380,6 +510,7 @@ static bool
 as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_policy_write* policy = &base->write;
+	yaml->name = "write";
 
 	if (strcmp(name, "replica") == 0) {
 		return as_parse_replica(yaml, name, value, &policy->replica);
@@ -409,7 +540,82 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 		return as_parse_bool(yaml, name, value, &policy->durable_delete);
 	}
 
-	// Not supported: connect_timeout, fail_on_filtered_out, timeout_delay
+	if (strcmp(name, "connect_timeout") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "timeout_delay") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "fail_on_filtered_out") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	as_log_info("Unexpected field: %s.%s", yaml->name, name);
+	return true;
+}
+
+static bool
+as_parse_scan(as_yaml* yaml, const char* name, const char* value, as_policies* base)
+{
+	as_policy_scan* policy = &base->scan;
+	yaml->name = "scan";
+
+	if (strcmp(name, "replica") == 0) {
+		return as_parse_replica(yaml, name, value, &policy->replica);
+	}
+
+	if (strcmp(name, "socket_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+	}
+
+	if (strcmp(name, "total_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+	}
+
+	if (strcmp(name, "max_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+	}
+
+	if (strcmp(name, "sleep_between_retries") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+	}
+
+	if (strcmp(name, "connect_timeout") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "timeout_delay") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "read_mode_ap") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "read_mode_sc") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "concurrent_nodes") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "max_concurrent_nodes") == 0) {
+		// concurrent_nodes is supported in as_scan, but there no policy defaults for that.
+		return true;
+	}
+
+	as_log_info("Unexpected field: %s.%s", yaml->name, name);
 	return true;
 }
 
@@ -417,6 +623,7 @@ static bool
 as_parse_query(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_policy_query* policy = &base->query;
+	yaml->name = "query";
 
 	if (strcmp(name, "replica") == 0) {
 		return as_parse_replica(yaml, name, value, &policy->replica);
@@ -446,39 +653,37 @@ as_parse_query(as_yaml* yaml, const char* name, const char* value, as_policies* 
 		return as_parse_expected_duration(yaml, name, value, &policy->expected_duration);
 	}
 
-	// Not supported: connect_timeout, timeout_delay, read_mode_ap, read_mode_sc, include_bin_data
-	//                record_queue_size
-	return true;
-}
-
-static bool
-as_parse_scan(as_yaml* yaml, const char* name, const char* value, as_policies* base)
-{
-	as_policy_scan* policy = &base->scan;
-
-	if (strcmp(name, "replica") == 0) {
-		return as_parse_replica(yaml, name, value, &policy->replica);
+	if (strcmp(name, "connect_timeout") == 0) {
+		// Not supported.
+		return true;
 	}
 
-	if (strcmp(name, "socket_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+	if (strcmp(name, "timeout_delay") == 0) {
+		// Not supported.
+		return true;
 	}
 
-	if (strcmp(name, "total_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+	if (strcmp(name, "read_mode_ap") == 0) {
+		// Not supported.
+		return true;
 	}
 
-	if (strcmp(name, "max_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+	if (strcmp(name, "read_mode_sc") == 0) {
+		// Not supported.
+		return true;
 	}
 
-	if (strcmp(name, "sleep_between_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+	if (strcmp(name, "include_bin_data") == 0) {
+		// Not supported.
+		return true;
 	}
 
-	// Not supported: connect_timeout, timeout_delay, read_mode_ap, read_mode_sc, concurrent_nodes
-	//                max_concurrent_nodes
-	// concurrent_nodes is supported in as_scan, but there no policy defaults for that.
+	if (strcmp(name, "record_queue_size") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	as_log_info("Unexpected field: %s.%s", yaml->name, name);
 	return true;
 }
 
@@ -529,13 +734,29 @@ as_parse_batch_shared(as_yaml* yaml, const char* name, const char* value, as_pol
 		return as_parse_bool(yaml, name, value, &policy->respond_all_keys);
 	}
 
-	// Not supported: connect_timeout, fail_on_filtered_out, timeout_delay
+	if (strcmp(name, "connect_timeout") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "timeout_delay") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	if (strcmp(name, "fail_on_filtered_out") == 0) {
+		// Not supported.
+		return true;
+	}
+
+	as_log_info("Unexpected field: %s.%s", yaml->name, name);
 	return true;
 }
 
 static bool
 as_parse_batch_read(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
+	yaml->name = "batch_read";
 	return as_parse_batch_shared(yaml, name, value, &base->batch);
 }
 
@@ -543,6 +764,7 @@ static bool
 as_parse_batch_write(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_policy_batch_write* bw = &base->batch_write;
+	yaml->name = "batch_write";
 
 	if (strcmp(name, "durable_delete") == 0) {
 		return as_parse_bool(yaml, name, value, &bw->durable_delete);
@@ -559,6 +781,7 @@ static bool
 as_parse_batch_udf(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_policy_batch_apply* policy = &base->batch_apply;
+	yaml->name = "batch_udf";
 
 	if (strcmp(name, "durable_delete") == 0) {
 		return as_parse_bool(yaml, name, value, &policy->durable_delete);
@@ -568,6 +791,7 @@ as_parse_batch_udf(as_yaml* yaml, const char* name, const char* value, as_polici
 		return as_parse_send_key(yaml, name, value, &policy->key);
 	}
 
+	as_log_info("Unexpected field: %s.%s", yaml->name, name);
 	return true;
 }
 
@@ -575,6 +799,7 @@ static bool
 as_parse_batch_delete(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_policy_batch_remove* policy = &base->batch_remove;
+	yaml->name = "batch_delete";
 
 	if (strcmp(name, "durable_delete") == 0) {
 		return as_parse_bool(yaml, name, value, &policy->durable_delete);
@@ -584,18 +809,21 @@ as_parse_batch_delete(as_yaml* yaml, const char* name, const char* value, as_pol
 		return as_parse_send_key(yaml, name, value, &policy->key);
 	}
 
+	as_log_info("Unexpected field: %s.%s", yaml->name, name);
 	return true;
 }
 
 static bool
 as_parse_txn_verify(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
+	yaml->name = "txn_verify";
 	return as_parse_batch_shared(yaml, name, value, &base->txn_verify);
 }
 
 static bool
 as_parse_txn_roll(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
+	yaml->name = "txn_roll";
 	return as_parse_batch_shared(yaml, name, value, &base->txn_roll);
 }
 
@@ -645,6 +873,8 @@ as_parse_static_client(as_yaml* yaml)
 		return false;
 	}
 
+	yaml->name = "client";
+
 	char name[256];
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
@@ -658,25 +888,21 @@ as_parse_static_client(as_yaml* yaml)
 
 			if (strcmp(name, "config_tend_count") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->config_provider.config_tend_count);
-				printf("config_tend_count=%u\n", yaml->config->config_provider.config_tend_count);
 			}
 			else if (strcmp(name, "max_connections_per_node") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_conns_per_node);
-				printf("max_connections_per_node=%u\n", yaml->config->max_conns_per_node);
 			}
 			else if (strcmp(name, "min_connections_per_node") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->min_conns_per_node);
-				printf("min_connections_per_node=%u\n", yaml->config->min_conns_per_node);
 			}
 			else if (strcmp(name, "async_max_connections_per_node") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_max_conns_per_node);
-				printf("async_max_connections_per_node=%u\n", yaml->config->async_max_conns_per_node);
 			}
 			else if (strcmp(name, "async_min_connections_per_node") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_min_conns_per_node);
-				printf("async_min_connections_per_node=%u\n", yaml->config->async_min_conns_per_node);
 			}
 			else {
+				as_log_info("Unexpected field: %s.%s", yaml->name, name);
 				rv = true; // Skip unknown scalars.
 			}
 
@@ -702,6 +928,8 @@ as_parse_dynamic_client(as_yaml* yaml)
 		return false;
 	}
 
+	yaml->name = "client";
+
 	char name[256];
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
@@ -715,41 +943,33 @@ as_parse_dynamic_client(as_yaml* yaml)
 
 			if (strcmp(name, "timeout") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->conn_timeout_ms);
-				printf("timeout=%u\n", yaml->config->conn_timeout_ms);
 			}
 			else if (strcmp(name, "error_rate_window") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->error_rate_window);
-				printf("error_rate_window=%u\n", yaml->config->error_rate_window);
 			}
 			else if (strcmp(name, "max_error_rate") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_error_rate);
-				printf("max_error_rate=%u\n", yaml->config->max_error_rate);
 			}
 			else if (strcmp(name, "login_timeout") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->login_timeout_ms);
-				printf("login_timeout=%u\n", yaml->config->login_timeout_ms);
 			}
 			else if (strcmp(name, "max_socket_idle") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_socket_idle);
-				printf("max_socket_idle=%u\n", yaml->config->max_socket_idle);
 			}
 			else if (strcmp(name, "tend_interval") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->tender_interval);
-				printf("tend_interval=%u\n", yaml->config->tender_interval);
 			}
 			else if (strcmp(name, "fail_if_not_connected") == 0) {
 				rv = as_parse_bool(yaml, name, value, &yaml->config->fail_if_not_connected);
-				printf("fail_if_not_connected=%d\n", yaml->config->fail_if_not_connected);
 			}
 			else if (strcmp(name, "use_service_alternative") == 0) {
 				rv = as_parse_bool(yaml, name, value, &yaml->config->use_services_alternate);
-				printf("use_service_alternative=%d\n", yaml->config->use_services_alternate);
 			}
 			else if (strcmp(name, "rack_aware") == 0) {
 				rv = as_parse_bool(yaml, name, value, &yaml->config->rack_aware);
-				printf("rack_aware=%d\n", yaml->config->rack_aware);
 			}
 			else {
+				as_log_info("Unexpected field: %s.%s", yaml->name, name);
 				rv = true; // Skip unknown scalars.
 			}
 
@@ -766,13 +986,9 @@ as_parse_dynamic_client(as_yaml* yaml)
 
 			if (strcmp(name, "rack_ids") == 0) {
 				rv = as_parse_vector_int32(yaml, name, &yaml->config->rack_ids);
-
-				for (uint32_t i = 0; i < yaml->config->rack_ids->size; i++) {
-					int32_t* v = as_vector_get(yaml->config->rack_ids, i);
-					printf("rack_id=%d\n", *v);
-				}
 			}
 			else {
+				as_log_info("Unexpected sequence: %s.%s", yaml->name, name);
 				as_skip_sequence(yaml);
 				rv = true;
 			}
@@ -801,11 +1017,10 @@ as_parse_static(as_yaml* yaml)
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (yaml->init && strcmp(name, "client") == 0) {
-			printf("client\n");
 			as_parse_static_client(yaml);
 		}
 		else {
-			printf("Skip %s\n", name);
+			as_log_info("Unexpected section: %s", name);
 			as_skip_mapping(yaml);
 		}
 	}
@@ -823,51 +1038,40 @@ as_parse_dynamic(as_yaml* yaml)
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (strcmp(name, "client") == 0) {
-			printf("client\n");
 			as_parse_dynamic_client(yaml);
 		}
 		else if (strcmp(name, "read") == 0) {
-			printf("read\n");
 			as_parse_policy(yaml, as_parse_read);
 		}
 		else if (strcmp(name, "write") == 0) {
-			printf("write\n");
 			as_parse_policy(yaml, as_parse_write);
 		}
 		else if (strcmp(name, "query") == 0) {
-			printf("query\n");
 			as_parse_policy(yaml, as_parse_query);
 		}
 		else if (strcmp(name, "scan") == 0) {
-			printf("scan\n");
 			as_parse_policy(yaml, as_parse_scan);
 		}
 		else if (strcmp(name, "batch_read") == 0) {
-			printf("batch\n");
 			as_parse_policy(yaml, as_parse_batch_read);
 		}
 		else if (strcmp(name, "batch_write") == 0) {
-			printf("batch_write\n");
 			as_parse_policy(yaml, as_parse_batch_write);
 		}
 		else if (strcmp(name, "batch_udf") == 0) {
-			printf("batch_udf\n");
 			as_parse_policy(yaml, as_parse_batch_udf);
 		}
 		else if (strcmp(name, "batch_delete") == 0) {
-			printf("batch_delete\n");
 			as_parse_policy(yaml, as_parse_batch_delete);
 		}
 		else if (strcmp(name, "txn_verify") == 0) {
-			printf("txn_verify\n");
 			as_parse_policy(yaml, as_parse_txn_verify);
 		}
 		else if (strcmp(name, "txn_roll") == 0) {
-			printf("txn_roll\n");
 			as_parse_policy(yaml, as_parse_txn_roll);
 		}
 		else {
-			printf("Skip %s\n", name);
+			as_log_info("Unexpected section: %s", name);
 			as_skip_mapping(yaml);
 		}
 	}
@@ -893,15 +1097,16 @@ as_parse_yaml(as_yaml* yaml)
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (strcmp(name, "static") == 0) {
-			printf("static\n");
 			as_parse_static(yaml);
 		}
 		else if (strcmp(name, "dynamic") == 0) {
-			printf("dynamic\n");
 			as_parse_dynamic(yaml);
 		}
+		else if (strcmp(name, "metadata") == 0) {
+			as_skip_mapping(yaml);
+		}
 		else {
-			printf("Skip %s\n", name);
+			as_log_info("Unexpected section: %s", name);
 			as_skip_mapping(yaml);
 		}
 	}
@@ -1012,28 +1217,155 @@ as_config_yaml_read(as_config* config, bool init, as_error* err)
 	return AEROSPIKE_OK;
 }
 
-static bool
-as_rack_ids_equal(as_vector* r1, as_vector* r2)
-{
-	if (r1->size != r2->size) {
-		return false;
-	}
-
-	for (uint32_t i = 0; i < r1->size; i++) {
-		int id1 = *(int*)as_vector_get(r1, i);
-		int id2 = *(int*)as_vector_get(r2, i);
-
-		if (id1 != id2) {
-			return false;
-		}
-	}
-	return true;
-}
+void
+as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec);
 
 static void
 as_release_rack_ids(as_vector* rack_ids)
 {
 	as_vector_destroy(rack_ids);
+}
+
+static void
+as_cluster_update(aerospike* as, as_config* config)
+{
+	as_cluster* cluster = as->cluster;
+
+	// Set original config.
+	as_config* orig = &as->config;
+	orig->max_error_rate = config->max_error_rate;
+	orig->error_rate_window = config->error_rate_window;
+	orig->login_timeout_ms = config->login_timeout_ms;
+	orig->tender_interval = config->tender_interval;
+	orig->conn_timeout_ms = config->conn_timeout_ms;
+	orig->use_services_alternate = config->use_services_alternate;
+	orig->fail_if_not_connected = config->fail_if_not_connected;
+	orig->max_socket_idle = config->max_socket_idle;
+	orig->rack_aware = config->rack_aware;
+
+	if (orig->rack_ids != config->rack_ids) {
+		// Can be destroyed now since all rack_ids access is done through
+		// cluster rack_ids and not config rack_ids.
+		as_vector_destroy(orig->rack_ids);
+		orig->rack_ids = config->rack_ids;
+	}
+
+	// Set cluster.
+	cluster->max_error_rate = config->max_error_rate;
+	cluster->error_rate_window = config->error_rate_window;
+	cluster->login_timeout_ms = (config->login_timeout_ms == 0) ? 5000 : config->login_timeout_ms;
+	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
+	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
+	cluster->use_services_alternate = config->use_services_alternate;
+	cluster->fail_if_not_connected = config->fail_if_not_connected;
+	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
+	cluster->rack_aware = config->rack_aware;
+
+	if (!as_vector_int32_equal(config->rack_ids, cluster->rack_ids)) {
+		as_vector* old = cluster->rack_ids;
+
+		// Update cluster rack_ids.
+		as_store_ptr_rls((void**)&cluster->rack_ids, config->rack_ids);
+
+		// Eventually destroy old cluster rack_ids.
+		as_gc_item item;
+		item.data = old;
+		item.release_fn = (as_release_fn)as_release_rack_ids;
+		as_vector_append(cluster->gc, &item);
+	}
+
+	// Copy new policy values to the cluster one field at a time.
+	// Do not perform memcpy because that byte protocol might temporarily
+	// corrupt multi-byte values which are being read in parallel threads.
+	as_policies* src = &config->policies;
+	as_policies* trg = &as->config.policies;
+
+	trg->read.base.socket_timeout = src->read.base.socket_timeout;
+	trg->read.base.total_timeout = src->read.base.total_timeout;
+	trg->read.base.max_retries = src->read.base.max_retries;
+	trg->read.base.sleep_between_retries = src->read.base.sleep_between_retries;
+	trg->read.read_mode_ap = src->read.read_mode_ap;
+	trg->read.read_mode_sc = src->read.read_mode_sc;
+	trg->read.replica = src->read.replica;
+
+	trg->write.base.socket_timeout = src->write.base.socket_timeout;
+	trg->write.base.total_timeout = src->write.base.total_timeout;
+	trg->write.base.max_retries = src->write.base.max_retries;
+	trg->write.base.sleep_between_retries = src->write.base.sleep_between_retries;
+	trg->write.replica = src->write.replica;
+	trg->write.durable_delete = src->write.durable_delete;
+	trg->write.key = src->write.key;
+
+	trg->scan.base.socket_timeout = src->scan.base.socket_timeout;
+	trg->scan.base.total_timeout = src->scan.base.total_timeout;
+	trg->scan.base.max_retries = src->scan.base.max_retries;
+	trg->scan.base.sleep_between_retries = src->scan.base.sleep_between_retries;
+	trg->scan.replica = src->scan.replica;
+
+	trg->query.base.socket_timeout = src->query.base.socket_timeout;
+	trg->query.base.total_timeout = src->query.base.total_timeout;
+	trg->query.base.max_retries = src->query.base.max_retries;
+	trg->query.base.sleep_between_retries = src->query.base.sleep_between_retries;
+	trg->query.replica = src->query.replica;
+	trg->query.info_timeout = src->query.info_timeout;
+	trg->query.expected_duration = src->query.expected_duration;
+
+	trg->batch.base.socket_timeout = src->batch.base.socket_timeout;
+	trg->batch.base.total_timeout = src->batch.base.total_timeout;
+	trg->batch.base.max_retries = src->batch.base.max_retries;
+	trg->batch.base.sleep_between_retries = src->batch.base.sleep_between_retries;
+	trg->batch.read_mode_ap = src->batch.read_mode_ap;
+	trg->batch.read_mode_sc = src->batch.read_mode_sc;
+	trg->batch.replica = src->batch.replica;
+	trg->batch.concurrent = src->batch.concurrent;
+	trg->batch.allow_inline = src->batch.allow_inline;
+	trg->batch.allow_inline_ssd = src->batch.allow_inline_ssd;
+	trg->batch.respond_all_keys = src->batch.respond_all_keys;
+
+	trg->batch_parent_write.base.socket_timeout = src->batch_parent_write.base.socket_timeout;
+	trg->batch_parent_write.base.total_timeout = src->batch_parent_write.base.total_timeout;
+	trg->batch_parent_write.base.max_retries = src->batch_parent_write.base.max_retries;
+	trg->batch_parent_write.base.sleep_between_retries = src->batch_parent_write.base.sleep_between_retries;
+	trg->batch_parent_write.read_mode_ap = src->batch_parent_write.read_mode_ap;
+	trg->batch_parent_write.read_mode_sc = src->batch_parent_write.read_mode_sc;
+	trg->batch_parent_write.replica = src->batch_parent_write.replica;
+	trg->batch_parent_write.concurrent = src->batch_parent_write.concurrent;
+	trg->batch_parent_write.allow_inline = src->batch_parent_write.allow_inline;
+	trg->batch_parent_write.allow_inline_ssd = src->batch_parent_write.allow_inline_ssd;
+	trg->batch_parent_write.respond_all_keys = src->batch_parent_write.respond_all_keys;
+
+	trg->batch_write.durable_delete = src->batch_write.durable_delete;
+	trg->batch_write.key = src->batch_write.key;
+
+	trg->batch_apply.durable_delete = src->batch_apply.durable_delete;
+	trg->batch_apply.key = src->batch_apply.key;
+
+	trg->batch_remove.durable_delete = src->batch_remove.durable_delete;
+	trg->batch_remove.key = src->batch_remove.key;
+
+	trg->txn_verify.base.socket_timeout = src->txn_verify.base.socket_timeout;
+	trg->txn_verify.base.total_timeout = src->txn_verify.base.total_timeout;
+	trg->txn_verify.base.max_retries = src->txn_verify.base.max_retries;
+	trg->txn_verify.base.sleep_between_retries = src->txn_verify.base.sleep_between_retries;
+	trg->txn_verify.read_mode_ap = src->txn_verify.read_mode_ap;
+	trg->txn_verify.read_mode_sc = src->txn_verify.read_mode_sc;
+	trg->txn_verify.replica = src->txn_verify.replica;
+	trg->txn_verify.concurrent = src->txn_verify.concurrent;
+	trg->txn_verify.allow_inline = src->txn_verify.allow_inline;
+	trg->txn_verify.allow_inline_ssd = src->txn_verify.allow_inline_ssd;
+	trg->txn_verify.respond_all_keys = src->txn_verify.respond_all_keys;
+
+	trg->txn_roll.base.socket_timeout = src->txn_roll.base.socket_timeout;
+	trg->txn_roll.base.total_timeout = src->txn_roll.base.total_timeout;
+	trg->txn_roll.base.max_retries = src->txn_roll.base.max_retries;
+	trg->txn_roll.base.sleep_between_retries = src->txn_roll.base.sleep_between_retries;
+	trg->txn_roll.read_mode_ap = src->txn_roll.read_mode_ap;
+	trg->txn_roll.read_mode_sc = src->txn_roll.read_mode_sc;
+	trg->txn_roll.replica = src->txn_roll.replica;
+	trg->txn_roll.concurrent = src->txn_roll.concurrent;
+	trg->txn_roll.allow_inline = src->txn_roll.allow_inline;
+	trg->txn_roll.allow_inline_ssd = src->txn_roll.allow_inline_ssd;
+	trg->txn_roll.respond_all_keys = src->txn_roll.respond_all_keys;
 }
 
 //---------------------------------
@@ -1043,55 +1375,32 @@ as_release_rack_ids(as_vector* rack_ids)
 as_status
 as_config_yaml_init(as_config* config, as_error* err)
 {
+	if (!config->rack_ids) {
+		// Add config rack_id to rack_ids so it can be compared with yaml file rack_ids.
+		config->rack_ids = as_vector_create(sizeof(int), 1);
+		as_vector_append(config->rack_ids, &config->rack_id);
+	}
+	
 	return as_config_yaml_read(config, true, err);
 }
-
-void
-as_config_destroy(as_config* config);
-
-void
-as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec);
 
 as_status
 as_config_yaml_update(aerospike* as, as_error* err)
 {
-	// No need to be pointer.
 	as_config config;
 	memcpy(&config, &as->config, sizeof(as_config));
-	config.rack_ids = NULL;
 
 	as_status status = as_config_yaml_read(&config, false, err);
 
 	if (status != AEROSPIKE_OK) {
-		as_config_destroy(&config);
+		// Destroy new rack_ids vector if changed before update fails.
+		if (config.rack_ids != as->config.rack_ids) {
+			as_vector_destroy(config.rack_ids);
+		}
 		return status;
 	}
 
-	// Apply config to cluster.
-	as_cluster* cluster = as->cluster;
-
-	cluster->max_error_rate = config.max_error_rate;
-	cluster->error_rate_window = config.error_rate_window;
-	cluster->login_timeout_ms = config.login_timeout_ms;
-	cluster->tend_interval = (config.tender_interval < 250)? 250 : config.tender_interval;
-	cluster->use_services_alternate = config.use_services_alternate;
-	cluster->fail_if_not_connected = config.fail_if_not_connected;
-	as_cluster_set_max_socket_idle(cluster, config.max_socket_idle);
-
-	cluster->rack_aware = config.rack_aware;
-
-	if (config.rack_ids && !as_rack_ids_equal(config.rack_ids, cluster->rack_ids)) {
-		as_vector* old = cluster->rack_ids;
-
-		as_store_ptr_rls((void**)&cluster->rack_ids, config.rack_ids);
-		config.rack_ids = NULL;
-
-		as_gc_item item;
-		item.data = old;
-		item.release_fn = (as_release_fn)as_release_rack_ids;
-		as_vector_append(cluster->gc, &item);
-	}
-
-	as_config_destroy(&config);
+	as_log_info("Update dynamic config");
+	as_cluster_update(as, &config);
 	return AEROSPIKE_OK;
 }

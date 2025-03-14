@@ -18,6 +18,7 @@
 
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_file.h>
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
@@ -28,9 +29,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * @private
@@ -449,11 +450,35 @@ typedef struct as_cluster_s {
 	 */
 	uint64_t delay_queue_timeout_count;
 
+	/**
+	 * @private
+	 * Aerospike configuration.
+	 */
+	as_config* config;
+
+	/**
+	 * @private
+	 * Dynamic configuration file path.
+	 */
+	char* config_file_path;
+
+	/**
+	 * @private
+	 * Dynamic configuration file status.
+	 */
+	as_file_status config_file_status;
+
+	/**
+	 * @private
+	 * Dynamic configuration interval to check for file modifications.
+	 */
+	uint32_t config_interval;
+
 } as_cluster;
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Create and initialize cluster.

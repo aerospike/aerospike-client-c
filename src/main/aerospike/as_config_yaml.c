@@ -1227,12 +1227,9 @@ as_release_rack_ids(as_vector* rack_ids)
 }
 
 static void
-as_cluster_update(aerospike* as, as_config* config)
+as_cluster_update(as_cluster* cluster, as_config* orig, as_config* config)
 {
-	as_cluster* cluster = as->cluster;
-
 	// Set original config.
-	as_config* orig = &as->config;
 	orig->max_error_rate = config->max_error_rate;
 	orig->error_rate_window = config->error_rate_window;
 	orig->login_timeout_ms = config->login_timeout_ms;
@@ -1278,7 +1275,7 @@ as_cluster_update(aerospike* as, as_config* config)
 	// Do not perform memcpy because that byte protocol might temporarily
 	// corrupt multi-byte values which are being read in parallel threads.
 	as_policies* src = &config->policies;
-	as_policies* trg = &as->config.policies;
+	as_policies* trg = &orig->policies;
 
 	trg->read.base.socket_timeout = src->read.base.socket_timeout;
 	trg->read.base.total_timeout = src->read.base.total_timeout;
@@ -1385,22 +1382,22 @@ as_config_yaml_init(as_config* config, as_error* err)
 }
 
 as_status
-as_config_yaml_update(aerospike* as, as_error* err)
+as_config_yaml_update(as_cluster* cluster, as_config* orig, as_error* err)
 {
 	as_config config;
-	memcpy(&config, &as->config, sizeof(as_config));
+	memcpy(&config, orig, sizeof(as_config));
 
 	as_status status = as_config_yaml_read(&config, false, err);
 
 	if (status != AEROSPIKE_OK) {
 		// Destroy new rack_ids vector if changed before update fails.
-		if (config.rack_ids != as->config.rack_ids) {
+		if (config.rack_ids != orig->rack_ids) {
 			as_vector_destroy(config.rack_ids);
 		}
 		return status;
 	}
 
 	as_log_info("Update dynamic config");
-	as_cluster_update(as, &config);
+	as_cluster_update(cluster, orig, &config);
 	return AEROSPIKE_OK;
 }

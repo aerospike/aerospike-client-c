@@ -16,31 +16,56 @@
  */
 #pragma once 
 
-#include <aerospike/as_config.h>
+#include <sys/stat.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 //---------------------------------
+// Types
+//---------------------------------
+
+typedef struct {
+	struct timespec timestamp;
+} as_file_status;
+
+//---------------------------------
 // Functions
 //---------------------------------
 
-struct as_cluster_s;
+static inline bool
+as_file_get_status(const char* path, as_file_status* fs)
+{
+	struct stat stats;
+	int rv = stat(path, &stats);
 
-/**
- * @private
- * Read yaml configuration file.
- */
-AS_EXTERN as_status
-as_config_yaml_init(as_config* config, as_error* err);
+	if (rv != 0) {
+		return false;
+	}
 
-/**
- * @private
- * Read yaml configuration file and update cluster with new values.
- */
-AS_EXTERN as_status
-as_config_yaml_update(struct as_cluster_s* cluster, as_config* orig, as_error* err);
+	fs->timestamp = stats.st_mtimespec;
+	return true;
+}
+
+static inline bool
+as_file_has_changed(const char* path, as_file_status* fs)
+{
+	struct stat stats;
+	int rv = stat(path, &stats);
+
+	if (rv != 0) {
+		return false;
+	}
+
+	if (stats.st_mtimespec.tv_sec > fs->timestamp.tv_sec ||
+		(stats.st_mtimespec.tv_sec == fs->timestamp.tv_sec &&
+		stats.st_mtimespec.tv_nsec > fs->timestamp.tv_nsec)) {
+		fs->timestamp = stats.st_mtimespec;
+		return true;
+	}
+	return false;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

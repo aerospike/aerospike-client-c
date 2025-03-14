@@ -230,6 +230,7 @@
 		BFEAF6322228638E00FB4248 /* as_conn_pool.h in Headers */ = {isa = PBXBuildFile; fileRef = BFEAF6312228638E00FB4248 /* as_conn_pool.h */; };
 		BFF344B01CDAC67700FD1976 /* as_map_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BFF344AF1CDAC67700FD1976 /* as_map_operations.h */; };
 		BFF344C31CEA7ACD00FD1976 /* as_list_operations.h in Headers */ = {isa = PBXBuildFile; fileRef = BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */; };
+		BFF912D42D84B3E4007373FA /* as_file.h in Headers */ = {isa = PBXBuildFile; fileRef = BFF912D32D84B3E4007373FA /* as_file.h */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -459,6 +460,7 @@
 		BFEAF6312228638E00FB4248 /* as_conn_pool.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_conn_pool.h; path = ../src/include/aerospike/as_conn_pool.h; sourceTree = "<group>"; };
 		BFF344AF1CDAC67700FD1976 /* as_map_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_map_operations.h; path = ../src/include/aerospike/as_map_operations.h; sourceTree = "<group>"; };
 		BFF344C21CEA7ACD00FD1976 /* as_list_operations.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_list_operations.h; path = ../src/include/aerospike/as_list_operations.h; sourceTree = "<group>"; };
+		BFF912D32D84B3E4007373FA /* as_file.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_file.h; path = ../src/include/aerospike/as_file.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -777,6 +779,7 @@
 				BFC65B4C1C921E9E0079DF5A /* as_event.h */,
 				BF65C9C5252D299D0026D9E2 /* as_exp.h */,
 				BF7EBCC125D4B19300D5DFE9 /* as_exp_operations.h */,
+				BFF912D32D84B3E4007373FA /* as_file.h */,
 				BF809CDA24327E9300C16F3D /* as_hll_operations.h */,
 				BF4E4E291D48213700BEEF94 /* as_host.h */,
 				BFC65B4D1C921E9E0079DF5A /* as_info.h */,
@@ -853,6 +856,7 @@
 				BFC65B7F1C921E9E0079DF5A /* as_operations.h in Headers */,
 				BFC65B6C1C921E9E0079DF5A /* aerospike.h in Headers */,
 				BFC65B881C921E9E0079DF5A /* as_shm_cluster.h in Headers */,
+				BFF912D42D84B3E4007373FA /* as_file.h in Headers */,
 				BF4E4E471D50154000BEEF94 /* as_peers.h in Headers */,
 				BFC65B7A1C921E9E0079DF5A /* as_key.h in Headers */,
 				BFC8290420C9A3AB00B12EEA /* as_query_validate.h in Headers */,

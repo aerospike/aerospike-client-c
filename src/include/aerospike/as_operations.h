@@ -24,6 +24,7 @@
  */
 
 #include <aerospike/as_bin.h>
+#include <aerospike/as_cdt_ctx.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -774,6 +775,36 @@ as_operations_add_touch(as_operations* ops);
  */
 AS_EXTERN bool
 as_operations_add_delete(as_operations* ops);
+
+typedef enum {
+	AS_CDT_SELECT_TREE = 0,
+	AS_CDT_SELECT_LEAF_LIST_VALUE = 1,
+	AS_CDT_SELECT_LEAF_MAP_VALUE = 1,
+	AS_CDT_SELECT_LEAF_MAP_KEY = 2,
+	AS_CDT_SELECT_NO_FAIL = 0x10
+} as_cdt_select_flags;
+
+/**
+ * Create CDT select operation.
+ *
+ * @return true on success. Otherwise an error occurred.
+ *
+ * @relates as_operations
+ * @ingroup cdt_operations
+ */
+AS_EXTERN bool
+as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, uint32_t flags);
+
+/**
+ * Create CDT select operation.
+ *
+ * @return true on success. Otherwise an error occurred.
+ *
+ * @relates as_operations
+ * @ingroup cdt_operations
+ */
+AS_EXTERN bool
+as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, struct as_exp* mod_exp, uint32_t flags);
 
 /******************************************************************************
  * LIST FUNCTIONS

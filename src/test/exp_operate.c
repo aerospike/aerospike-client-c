@@ -762,13 +762,13 @@ TEST(exp_merge, "exp merge")
 	as_exp_build(e, as_exp_cmp_eq(as_exp_bin_int(AString), as_exp_int(0)));
 
 	as_exp_build(eand,
- 		as_exp_and(
- 			as_exp_expr(e),
+		as_exp_and(
+			as_exp_expr(e),
 			as_exp_cmp_eq(as_exp_bin_int(DString), as_exp_int(2))));
 
 	as_exp_build(eor,
- 		as_exp_or(
- 			as_exp_expr(e),
+		as_exp_or(
+			as_exp_expr(e),
 			as_exp_cmp_eq(as_exp_bin_int(DString), as_exp_int(2))));
 
 	as_operations ops;
@@ -829,6 +829,119 @@ TEST(exp_base64, "exp base64")
 	as_exp_destroy(exp2);
 }
 
+TEST(exp_select, "exp select and apply")
+{
+	as_key keyA;
+	as_key keyB;
+	bool b = filter_prepare(&keyA, &keyB);
+	assert_true(b);
+
+	struct {
+		const char* title;
+		float price;
+	} table[] = {
+			{"Sayings of the Century", 10.45},
+			{"Sword of Honour", 20.99},
+			{"Moby Dick", 5.01},
+			{"The Lord of the Rings", 30.98},
+	};
+
+	as_arraylist list_books;
+	as_arraylist_init(&list_books, 10, 10);
+
+	for (int i = 0; i < 4; i++) {
+		as_orderedmap* book = as_orderedmap_new(2);
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"title", false),
+				(as_val*)as_string_new((char*)table[i].title, false));
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"price", false),
+				(as_val*)as_double_new(table[i].price));
+		as_arraylist_append(&list_books, (as_val*)book);
+	}
+
+	as_orderedmap map0;
+	as_orderedmap_init(&map0, 10);
+	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)"book", false), (as_val*)&list_books);
+
+	as_error err;
+	as_record *rec = as_record_new(1);
+	as_record_set_map(rec, "res1", (as_map*)&map0);
+	as_status status = aerospike_key_put(as, &err, NULL, &keyA, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get and check.
+//	status = aerospike_key_get(as, &err, NULL, &keyA, &rec);
+//	assert_int_eq(status, AEROSPIKE_OK);
+//dump_record(rec);
+//	as_record_destroy(rec);
+//	rec = NULL;
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 3);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
+	as_cdt_ctx_add_all(&ctx);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
+
+	// Select test.
+	as_exp_build(e0, as_exp_cdt_select(&ctx, AS_EXP_TYPE_LIST,
+			AS_CDT_SELECT_LEAF_MAP_VALUE, as_exp_bin_map("res1")));
+
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_exp_write(&ops, "A", e0, AS_EXP_WRITE_UPDATE_ONLY);
+
+	status = aerospike_key_operate(as, &err, NULL, &keyA, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(e0);
+
+	// Apply test.
+	as_exp_build(exp_mod,
+		as_exp_mul(as_exp_var_builtin_float(AS_EXP_BUILTIN_VALUE), as_exp_float(1.50)));
+	assert_not_null(exp_mod);
+
+	as_exp_build(e, as_exp_cdt_apply(&ctx, AS_EXP_TYPE_MAP, exp_mod, 0, as_exp_bin_map("res1")));
+
+	as_operations_init(&ops, 1);
+	as_operations_exp_write(&ops, "res1", e, AS_EXP_WRITE_UPDATE_ONLY);
+
+	status = aerospike_key_operate(as, &err, NULL, &keyA, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+//dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(exp_mod);
+	as_cdt_ctx_destroy(&ctx);
+	as_exp_destroy(e);
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &keyA, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+//dump_record(rec);
+	as_list* check_list = as_record_get_list(rec, "A");
+	assert_int_eq(as_list_size(check_list), 4);
+	assert_true(as_list_get_double(check_list, 0) < 11);
+
+	as_map* check0 = as_record_get_map(rec, "res1");
+	assert_not_null(check0);
+	as_string book;
+	as_string_init(&book, "book", false);
+	as_list* check1 = (as_list*)as_map_get(check0, (as_val*)&book);
+	assert_not_null(check1);
+	as_map* check2 = as_list_get_map(check1, 0);
+	assert_not_null(check2);
+	as_string price;
+	as_string_init(&price, "price", false);
+	as_double* check3 = (as_double*)as_map_get(check2, (as_val*)&price);
+	assert_true(as_double_get(check3) > 11);
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -852,4 +965,5 @@ SUITE(exp_operate, "filter expression tests")
 	suite_add(exp_returns_hll);
 	suite_add(exp_merge);
 	suite_add(exp_base64);
+	suite_add(exp_select);
 }

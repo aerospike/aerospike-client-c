@@ -48,6 +48,7 @@
  */
 
 #include <aerospike/as_bit_operations.h>
+#include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_hll_operations.h>
 #include <aerospike/as_list_operations.h>
 #include <aerospike/as_map_operations.h>
@@ -125,6 +126,10 @@ typedef enum {
 	_AS_EXP_CODE_BIN = 81,
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
+	_AS_EXP_CODE_RESULT_REMOVE = 100,
+
+	_AS_EXP_CODE_VAR_BUILTIN = 122,
+
 	_AS_EXP_CODE_COND = 123,
 	_AS_EXP_CODE_VAR = 124,
 	_AS_EXP_CODE_LET = 125,
@@ -151,6 +156,7 @@ typedef enum {
 	_AS_EXP_CODE_CDT_MAP_CR,
 	_AS_EXP_CODE_CDT_MAP_MOD,
 	_AS_EXP_CODE_MERGE,
+	_AS_EXP_CODE_CTX,
 
 	_AS_EXP_CODE_END_OF_VA_ARGS
 } as_exp_ops;
@@ -178,6 +184,12 @@ typedef enum {
 	AS_EXP_TYPE_AUTO,
 	AS_EXP_TYPE_ERROR
 } as_exp_type;
+
+typedef enum {
+	AS_EXP_BUILTIN_KEY = 0,
+	AS_EXP_BUILTIN_VALUE = 1,
+	AS_EXP_BUILTIN_INDEX = 2
+} as_exp_var_builtin_type;
 
 typedef struct as_exp {
 	uint32_t packed_sz;
@@ -1632,6 +1644,57 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_var(__var_name) \
 		{.op=_AS_EXP_CODE_VAR, .count=2}, _AS_EXP_VAL_RAWSTR(__var_name)
 
+/**
+ * Retrieve expression value from a built-in variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_var_builtin_map(__var_id) \
+		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
+		as_exp_int(AS_EXP_TYPE_MAP), \
+		as_exp_int(__var_id)
+
+/**
+ * Retrieve expression value from a built-in variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_var_builtin_str(__var_id) \
+		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
+		as_exp_int(AS_EXP_TYPE_STR), \
+		as_exp_int(__var_id)
+
+/**
+ * Retrieve expression value from a built-in variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_var_builtin_int(__var_id) \
+		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
+		as_exp_int(AS_EXP_TYPE_INT), \
+		as_exp_int(__var_id)
+
+/**
+ * Retrieve expression value from a built-in variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_var_builtin_float(__var_id) \
+		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
+		as_exp_int(AS_EXP_TYPE_FLOAT), \
+		as_exp_int(__var_id)
+
+/**
+ * Return a result_remove object to indicate entry deletion for cdt_apply.
+ * @return the result_remove value.
+ * @ingroup expression
+ */
+#define as_exp_result_remove() {.op=_AS_EXP_CODE_RESULT_REMOVE, .count=1}
+
 /*********************************************************************************
  * LIST MODIFY EXPRESSIONS
  *********************************************************************************/
@@ -2857,6 +2920,29 @@ as_exp_destroy_base64(char* base64)
 		_AS_EXP_MAP_START(__ctx, AS_CDT_OP_MAP_GET_BY_RANK_RANGE, 3), \
 		as_exp_int(__rtype), \
 		__rank, __count, \
+		__bin
+
+/*********************************************************************************
+ * CDT EXPRESSIONS
+ *********************************************************************************/
+
+#define as_exp_cdt_select(__ctx, __rtype, __flags, __bin) \
+		{.op=_AS_EXP_CODE_CALL, .count=5}, \
+		_AS_EXP_VAL_RTYPE(__rtype), \
+		as_exp_int(_AS_EXP_SYS_CALL_CDT), \
+		_AS_EXP_MAP_START(NULL, AS_CDT_OP_CONTEXT_SELECT, 2), \
+		{.op=_AS_EXP_CODE_CTX, .v.ctx=__ctx}, \
+		as_exp_int(__flags), \
+		__bin
+
+#define as_exp_cdt_apply(__ctx, __rtype, __mod_exp, __flags, __bin) \
+		{.op=_AS_EXP_CODE_CALL, .count=5}, \
+		_AS_EXP_VAL_RTYPE(__rtype), \
+		as_exp_int(_AS_EXP_SYS_CALL_CDT | _AS_EXP_SYS_FLAG_MODIFY_LOCAL), \
+		_AS_EXP_MAP_START(NULL, AS_CDT_OP_CONTEXT_SELECT, 3), \
+		{.op=_AS_EXP_CODE_CTX, .v.ctx=__ctx}, \
+		as_exp_int(__flags | 4), \
+		{.op=_AS_EXP_CODE_MERGE, .v.expr=__mod_exp}, \
 		__bin
 
 /*********************************************************************************

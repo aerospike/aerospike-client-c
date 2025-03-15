@@ -18,6 +18,7 @@
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include "_bin.h"
+#include <aerospike/as_exp.h>
 
 as_binop*
 as_binop_forappend(as_operations* ops, as_operator operator, const char* name);
@@ -82,19 +83,7 @@ as_cdt_pack_ctx(as_packer* pk, as_cdt_ctx* ctx)
 {
 	as_pack_list_header(pk, 3);
 	as_pack_uint64(pk, 0xff);
-	as_pack_list_header(pk, ctx->list.size * 2);
-
-	for (uint32_t i = 0; i < ctx->list.size; i++) {
-		as_cdt_ctx_item* item = as_vector_get(&ctx->list, i);
-		as_pack_uint64(pk, item->type);
-
-		if (item->type & AS_CDT_CTX_VALUE) {
-			as_pack_val(pk, item->val.pval);
-		}
-		else {
-			as_pack_int64(pk, item->val.ival);
-		}
-	}
+	as_cdt_ctx_pack(ctx, pk);
 }
 
 uint32_t
@@ -115,7 +104,13 @@ as_cdt_ctx_pack(const as_cdt_ctx* ctx, as_packer* pk)
 			return 0;
 		}
 
-		if (item->type & AS_CDT_CTX_VALUE) {
+		if (item->type == AS_CDT_CTX_EXP) {
+			if (as_pack_append(pk,
+					item->val.exp->packed, item->val.exp->packed_sz) != 0) {
+				return 0;
+			}
+		}
+		else if (item->type & AS_CDT_CTX_VALUE) {
 			if (as_pack_val(pk, item->val.pval) != 0) {
 				return 0;
 			}

@@ -19,6 +19,7 @@
 #include <aerospike/as_cdt_order.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
+//#include <aerospike/as_exp.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,6 +36,7 @@ extern "C" {
  * @ingroup base_operations
  */
 typedef enum {
+	AS_CDT_CTX_EXP = 0x04,
 	AS_CDT_CTX_LIST_INDEX = 0x10,
 	AS_CDT_CTX_LIST_RANK = 0x11,
 	AS_CDT_CTX_LIST_VALUE = 0x13,
@@ -58,6 +60,7 @@ typedef struct as_cdt_ctx_item {
 	{
 		int64_t ival;
 		as_val* pval;
+		struct as_exp* exp;
 	} val;
 } as_cdt_ctx_item;
 
@@ -298,6 +301,24 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
 	item.val.pval = val;
 	as_vector_append(&ctx->list, &item);
 }
+
+/**
+ * Add all to select ctx.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_all(as_cdt_ctx* ctx);
+
+/**
+ * Add expr to select ctx.  The ctx does NOT take ownership of exp.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_exp(as_cdt_ctx* ctx, const struct as_exp* exp);
 
 /**
  * Return exact serialized size of ctx. Return zero on error.

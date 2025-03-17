@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -507,7 +507,7 @@ as_scan_command_init(
 
 		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
 				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
-				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+				policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else if (scan->apply_each.function[0]) {
 		// Background scan with UDF.
@@ -515,7 +515,7 @@ as_scan_command_init(
 
 		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
 				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
-				policy->durable_delete, 0, AS_MSG_INFO2_WRITE, 0);
+				policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
 	}
 	else {
 		// Foreground scan.
@@ -673,7 +673,7 @@ as_scan_command_execute(as_scan_task* task)
 	cmd.cluster = task->cluster;
 	cmd.policy = &task->policy->base;
 	cmd.node = task->node;
-	cmd.ns = NULL;        // Not referenced when node set.
+	cmd.key = NULL;       // Not referenced when node set.
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_scan_parse_records;
 	cmd.udata = task;
@@ -758,7 +758,7 @@ as_scan_generic(
 	aerospike_scan_foreach_callback callback, void* udata, uint64_t* task_id_ptr
 	)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	as_status status = as_scan_validate(err, policy, scan);
 
 	if (status != AEROSPIKE_OK) {
@@ -875,7 +875,7 @@ as_scan_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_scan* policy, const as_scan* scan,
 	as_partition_tracker* pt, aerospike_scan_foreach_callback callback, void* udata)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1095,6 +1095,9 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		cmd->flags = se->deserialize_list_map ? AS_ASYNC_FLAGS_DESERIALIZE : 0;
 		cmd->replica_size = 1;
 		cmd->replica_index = 0;
+		cmd->txn = NULL;
+		cmd->ubuf = NULL;
+		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
 		ee->commands[i] = cmd;
 	}
@@ -1180,7 +1183,7 @@ as_scan_partition_async(
 	as_event_loop* event_loop
 	)
 {
-	as_cluster_add_tran(cluster);
+	as_cluster_add_command_count(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, scan->ns, err);
 

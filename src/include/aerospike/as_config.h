@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -501,7 +501,7 @@ typedef struct as_config_s {
 	uint32_t min_conns_per_node;
 
 	/**
-	 * Maximum number of synchronous connections allowed per server node.  Synchronous transactions
+	 * Maximum number of synchronous connections allowed per server node.  Synchronous commands
 	 * will go through retry logic and potentially fail with error code
 	 * "AEROSPIKE_ERR_NO_MORE_CONNECTIONS" if the maximum number of connections would be exceeded.
 	 * 
@@ -530,7 +530,7 @@ typedef struct as_config_s {
 	 * Maximum number of asynchronous (non-pipeline) connections allowed for each node.
 	 * This limit will be enforced at the node/event loop level.  If the value is 100 and 2 event
 	 * loops are created, then each node/event loop asynchronous (non-pipeline) connection pool 
-	 * will have a limit of 50. Async transactions will be rejected if the limit would be exceeded.
+	 * will have a limit of 50. Async commands will be rejected if the limit would be exceeded.
 	 * This variable is ignored if asynchronous event loops are not created.
 	 *
 	 * Default: 100
@@ -541,7 +541,7 @@ typedef struct as_config_s {
 	 * Maximum number of pipeline connections allowed for each node.
 	 * This limit will be enforced at the node/event loop level.  If the value is 100 and 2 event
 	 * loops are created, then each node/event loop pipeline connection pool will have a limit of 50. 
-	 * Async transactions will be rejected if the limit would be exceeded.
+	 * Async commands will be rejected if the limit would be exceeded.
 	 * This variable is ignored if asynchronous event loops are not created.
 	 *
 	 * Default: 64
@@ -585,7 +585,7 @@ typedef struct as_config_s {
 	 * attempt to use a socket that has already been reaped by the server.
 	 *
 	 * If server's proto-fd-idle-ms is zero (no reap), then max_socket_idle should also be zero.
-	 * Connections retrieved from a pool in transactions will not be checked for max_socket_idle
+	 * Connections retrieved from a pool in commands will not be checked for max_socket_idle
 	 * when max_socket_idle is zero.  Idle connections will still be trimmed down from peak
 	 * connections to min connections (min_conns_per_node and async_min_conns_per_node) using a
 	 * hard-coded 55 second limit in the cluster tend thread.
@@ -602,7 +602,7 @@ typedef struct as_config_s {
 	 * The counted error types are any error that causes the connection to close (socket errors
 	 * and client timeouts), server device overload and server timeouts.
 	 *
-	 * The application should backoff or reduce the transaction load until AEROSPIKE_MAX_ERROR_RATE
+	 * The application should backoff or reduce the command load until AEROSPIKE_MAX_ERROR_RATE
 	 * stops being returned.
 	 *
 	 * Default: 100
@@ -700,6 +700,17 @@ typedef struct as_config_s {
 	 * Default: false
 	 */
 	bool use_services_alternate;
+
+	/**
+	 * For testing purposes only.  Do not modify.
+	 *
+	 * Should the aerospike instance communicate with the first seed node only
+	 * instead of using the data partition map to determine which node to send the
+	 * database command.
+	 *
+	 * Default: false
+	 */
+	bool force_single_node;
 
 	/**
 	 * Track server rack data.  This field is useful when directing read commands to 

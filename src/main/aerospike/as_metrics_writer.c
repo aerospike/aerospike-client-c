@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -47,38 +47,25 @@ as_metrics_proc_stat_mem_cpu(as_error* err, double* vm_usage, double* resident_s
 	*resident_set = 0.0;
 
 	FILE* proc_stat = fopen("/proc/self/stat", "r");
+
 	if (!proc_stat) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Error calculating memory and CPU usage");
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory and CPU usage");
 	}
 
-	// dummies
-	int dummy_d;
-	char dummy_c;
-	unsigned int dummy_u;
-	long unsigned int dummy_lu;
-	long int dummy_ld;
-
-	// the fields we want
 	uint64_t utime, stime;
 	long long unsigned int starttime;
 	uint64_t vsize;
 	int64_t rss;
 
-	int matched = fscanf(proc_stat, "%d %s %c %d %d %d %d %d %u %lu %lu %lu %lu %lu %lu %ld %ld %ld %ld %ld %ld %llu %lu %ld",
-		&dummy_d, &dummy_c, &dummy_c, &dummy_d, &dummy_d, &dummy_d, &dummy_d, &dummy_d, &dummy_u, &dummy_lu, &dummy_lu, &dummy_lu, &dummy_lu,
-		&utime, &stime, &dummy_ld, &dummy_ld, &dummy_ld, &dummy_ld, &dummy_ld, &dummy_ld, &starttime, &vsize, &rss);
+	// See https://man7.org/linux/man-pages/man5/proc_pid_stat.5.html for format.
+	int matched = fscanf(proc_stat,
+		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*lu %*lu %*lu %*lu %lu %lu %*ld %*ld %*ld %*ld %*ld %*ld %llu %lu %ld",
+		&utime, &stime, &starttime, &vsize, &rss);
+
+	fclose(proc_stat);
 
 	if (matched == 0) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Error calculating memory and CPU usage");
-	}
-
-	int result = fclose(proc_stat);
-
-	if (result != 0) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Error closing /proc/self/stat");
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory and CPU usage");
 	}
 
 	int64_t page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
@@ -91,6 +78,7 @@ as_metrics_proc_stat_mem_cpu(as_error* err, double* vm_usage, double* resident_s
 
 	struct sysinfo info;
 	int success = sysinfo(&info);
+
 	if (success != 0) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Error calculating CPU usage");
@@ -375,7 +363,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	timestamp_to_string(now_str, sizeof(now_str));
 	
 	char data[512];
-	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,cpu,mem,invalidNodeCount,tranCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,errors,timeouts,latency[]] conn[inUse,inPool,opened,closed] latency(%u,%u)[type[l1,l2,l3...]]\n",
+	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,errors,timeouts,latency[]] conn[inUse,inPool,opened,closed] latency(%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, mw->latency_columns, mw->latency_shift);
 	if (rv <= 0) {
 		fclose(mw->file);
@@ -523,7 +511,7 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append_uint(&sb, cluster->invalid_node_count); // Cumulative. Not reset on each interval.
 	as_string_builder_append_char(&sb, ',');
-	as_string_builder_append_uint64(&sb, as_cluster_get_tran_count(cluster));  // Cumulative. Not reset on each interval.
+	as_string_builder_append_uint64(&sb, as_cluster_get_command_count(cluster));  // Cumulative. Not reset on each interval.
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append_uint64(&sb, as_cluster_get_retry_count(cluster)); // Cumulative. Not reset on each interval.
 	as_string_builder_append_char(&sb, ',');

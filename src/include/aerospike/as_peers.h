@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,6 +32,7 @@ extern "C" {
 
 typedef struct as_peers_s {
 	as_vector /* as_node* */ nodes;
+	as_vector /* as_node */ nodes_to_remove;
 	as_vector /* as_host */ invalid_hosts;
 	uint32_t refresh_count;
 	bool gen_changed;
@@ -46,6 +47,9 @@ struct as_node_s;
 
 struct as_node_s*
 as_peers_find_local_node(as_vector* nodes, const char* name);
+
+void
+as_peers_append_unique_node(as_vector* nodes, struct as_node_s* node);
 
 as_status
 as_peers_parse_peers(

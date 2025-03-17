@@ -25,20 +25,21 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_metrics.h>
+#include <aerospike/as_shm_cluster.h>
 
 #include "test.h"
 #include "aerospike_test.h"
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 #define TIMEOUT 1000
 #define SCRIPT_LEN_MAX 1048576
 
-/******************************************************************************
- * VARIABLES
- *****************************************************************************/
+//---------------------------------
+// Global Variables
+//---------------------------------
 
 aerospike * as = NULL;
 int g_argc = 0;
@@ -51,10 +52,11 @@ as_config_tls g_tls = {0};
 as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
 bool g_enterprise_server = false;
 bool g_has_ttl = false;
+bool g_has_sc = false;
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static bool
 as_client_log_callback(as_log_level level, const char * func, const char * file, uint32_t line, const char * fmt, ...)
@@ -382,6 +384,20 @@ static bool before(atf_plan* plan)
 	}
 	cf_free(result);
 
+	// Determine if namespace is configured as strong consistency.
+	as_cluster* cluster = as->cluster;
+	const char* ns = "test";
+
+	if (cluster->shm_info) {
+		as_cluster_shm* cluster_shm = cluster->shm_info->cluster_shm;
+		as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
+		g_has_sc = table ? table->sc_mode : false;
+	}
+	else {
+		as_partition_table* table = as_partition_tables_get(&cluster->partition_tables, ns);
+		g_has_sc = table ? table->sc_mode : false;
+	}
+
 	/*
 	// Test metrics
 	as_metrics_policy policy;
@@ -423,9 +439,9 @@ static bool after(atf_plan* plan)
 	}
 }
 
-/******************************************************************************
- * TEST PLAN
- *****************************************************************************/
+//---------------------------------
+// Test Plan
+//---------------------------------
 
 PLAN(aerospike_test)
 {
@@ -463,6 +479,7 @@ PLAN(aerospike_test)
 	plan_add(query_geospatial);
 	plan_add(scan_basics);
 	plan_add(batch);
+	plan_add(transaction);
 
 #if AS_EVENT_LIB_DEFINED
 	plan_add(key_basics_async);
@@ -473,6 +490,6 @@ PLAN(aerospike_test)
 	plan_add(batch_async);
 	plan_add(scan_async);
 	plan_add(query_async);
+	plan_add(transaction_async);
 #endif
 }
-

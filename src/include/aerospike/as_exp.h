@@ -22,8 +22,8 @@
  * Expression filters are applied on each applicable server record.
  * Expression filters require server version >= 5.2.0.4.
  *
- * If the filter exists and evaluates to false in a single record transaction,
- * the transaction is ignored and AEROSPIKE_FILTERED_OUT is returned as an error code.
+ * If the filter exists and evaluates to false in a single record command,
+ * the command is ignored and AEROSPIKE_FILTERED_OUT is returned as an error code.
  *
  * If the filter exists and evaluates to false in a batch record row, AEROSPIKE_FILTERED_OUT
  * is returned as a status for that record row in the batch.
@@ -31,7 +31,7 @@
  * If the filter exists and evaluates to false on a scan/query record, that record is not
  * returned.
  *
- * Expression filters can now be defined on all transactions through the transaction policy
+ * Expression filters can now be defined on all commands through the command policy
  * (as_policy_base contained in as_policy_read, as_policy_write, ...).
  *
  * Example:

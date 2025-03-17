@@ -368,6 +368,7 @@
     <ClInclude Include="..\..\src\include\aerospike\aerospike_query.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike_scan.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike_stats.h" />
+    <ClInclude Include="..\..\src\include\aerospike\aerospike_txn.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike_udf.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_address.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_admin.h" />
@@ -420,6 +421,8 @@
     <ClInclude Include="..\..\src\include\aerospike\as_socket.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_status.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_tls.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_txn.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_txn_monitor.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_udf.h" />
     <ClInclude Include="..\..\src\include\aerospike\version.h" />
   </ItemGroup>
@@ -526,6 +529,7 @@
     <ClCompile Include="..\..\src\main\aerospike\aerospike_query.c" />
     <ClCompile Include="..\..\src\main\aerospike\aerospike_scan.c" />
     <ClCompile Include="..\..\src\main\aerospike\aerospike_stats.c" />
+    <ClCompile Include="..\..\src\main\aerospike\aerospike_txn.c" />
     <ClCompile Include="..\..\src\main\aerospike\aerospike_udf.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_address.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_admin.c" />
@@ -572,6 +576,8 @@
     <ClCompile Include="..\..\src\main\aerospike\as_shm_cluster.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_socket.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_tls.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_txn.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_txn_monitor.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_udf.c" />
     <ClCompile Include="..\..\src\main\aerospike\version.c" />
     <ClCompile Include="..\..\src\main\aerospike\_bin.c" />

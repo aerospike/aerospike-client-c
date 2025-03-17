@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -80,23 +80,6 @@ typedef struct as_address_s {
 	char name[AS_IP_ADDRESS_SIZE];
 	
 } as_address;
-	
-/**
- * @private
- * Host address alias information.
- */
-typedef struct as_alias_s {
-	/**
-	 * Hostname or IP address string representation.
-	 */
-	char name[AS_HOSTNAME_SIZE];
-	
-	/**
-	 * Socket IP port.
-	 */
-	uint16_t port;
-	
-} as_alias;
 
 /**
  * @private
@@ -270,9 +253,9 @@ typedef struct as_node_s {
 	as_address* addresses;
 	
 	/**
-	 * Array of hostnames aliases. Not thread-safe.
+	 * Optional hostname. Not thread-safe.
 	 */
-	as_vector /* <as_alias> */ aliases;
+	char* hostname;
 
 	/**
 	 * Cluster from which this node resides.
@@ -316,14 +299,14 @@ typedef struct as_node_s {
 	as_socket info_socket;
 
 	/**
-	 * Transaction error count since node was initialized. If the error is retryable, multiple errors per
-	 * transaction may occur.
+	 * Command error count since node was initialized. If the error is retryable, multiple errors per
+	 * command may occur.
 	 */
 	uint64_t error_count;
 
 	/**
-	 * Transaction timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
-	 * multiple timeouts per transaction may occur.
+	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * multiple timeouts per command may occur.
 	 */
 	uint64_t timeout_count;
 
@@ -470,7 +453,7 @@ as_node_create_min_connections(as_node* node);
 
 /**
  * @private
- * Check if node is active from a transaction thread.
+ * Check if node is active from a command thread.
  */
 static inline bool
 as_node_is_active(const as_node* node)
@@ -548,10 +531,10 @@ as_node_add_address(as_node* node, struct sockaddr* addr);
 
 /**
  * @private
- * Add hostname to node aliases.
+ * Set hostname.
  */
 void
-as_node_add_alias(as_node* node, const char* hostname, uint16_t port);
+as_node_set_hostname(as_node* node, const char* hostname);
 
 /**
  * Get primary socket address.
@@ -686,7 +669,7 @@ void
 as_node_enable_metrics(as_node* node, const struct as_metrics_policy_s* policy);
 
 /**
- * Return transaction error count. The value is cumulative and not reset per metrics interval.
+ * Return command error count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
 as_node_get_error_count(as_node* node)
@@ -695,8 +678,8 @@ as_node_get_error_count(as_node* node)
 }
 
 /**
- * Increment transaction error count. If the error is retryable, multiple errors per
- * transaction may occur.
+ * Increment command error count. If the error is retryable, multiple errors per
+ * command may occur.
  */
 static inline void
 as_node_add_error(as_node* node)
@@ -705,7 +688,7 @@ as_node_add_error(as_node* node)
 }
 
 /**
- * Return transaction timeout count. The value is cumulative and not reset per metrics interval.
+ * Return command timeout count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
 as_node_get_timeout_count(as_node* node)
@@ -714,8 +697,8 @@ as_node_get_timeout_count(as_node* node)
 }
 
 /**
- * Increment transaction timeout count. If the timeout is retryable (ie socketTimeout),
- * multiple timeouts per transaction may occur.
+ * Increment command timeout count. If the timeout is retryable (ie socketTimeout),
+ * multiple timeouts per command may occur.
  */
 static inline void
 as_node_add_timeout(as_node* node)

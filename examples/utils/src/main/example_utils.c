@@ -541,6 +541,9 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	memcpy(&config.tls, &g_tls, sizeof(as_config_tls));
 	config.auth_mode = g_auth_mode;
 
+	strcpy(config.config_provider.yaml_path, "C:\\Users\\bnichols\\Documents\\code\\clientconfig.txt");
+	config.config_provider.config_tend_count = 20;
+
 	aerospike_init(p_as, &config);
 
 	as_error err;
@@ -553,6 +556,9 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 		aerospike_destroy(p_as);
 		exit(-1);
 	}
+
+	printf("Sleep 30 seconds\n");
+	as_sleep(30000);
 }
 
 //------------------------------------------------

@@ -1016,7 +1016,11 @@ as_parse_static(as_yaml* yaml)
 	char name[256];
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
-		if (yaml->init && strcmp(name, "client") == 0) {
+		if (! yaml->init) {
+			// Do not process static fields on a dynamic update.
+			as_skip_mapping(yaml);
+		}
+		else if (strcmp(name, "client") == 0) {
 			as_parse_static_client(yaml);
 		}
 		else {

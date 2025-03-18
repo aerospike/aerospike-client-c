@@ -34,6 +34,16 @@ typedef struct {
 // Functions
 //---------------------------------
 
+static inline struct timespec*
+as_file_get_timestamp(struct stat* stats)
+{
+#if defined(__APPLE__)
+	return &stats->st_mtimespec;
+#else
+	return &stats->st_mtim;
+#endif
+}
+
 static inline bool
 as_file_get_status(const char* path, as_file_status* fs)
 {
@@ -44,7 +54,7 @@ as_file_get_status(const char* path, as_file_status* fs)
 		return false;
 	}
 
-	fs->timestamp = stats.st_mtimespec;
+	fs->timestamp = *as_file_get_timestamp(&stats);
 	return true;
 }
 
@@ -58,10 +68,12 @@ as_file_has_changed(const char* path, as_file_status* fs)
 		return false;
 	}
 
-	if (stats.st_mtimespec.tv_sec > fs->timestamp.tv_sec ||
-		(stats.st_mtimespec.tv_sec == fs->timestamp.tv_sec &&
-		stats.st_mtimespec.tv_nsec > fs->timestamp.tv_nsec)) {
-		fs->timestamp = stats.st_mtimespec;
+	struct timespec* ts = as_file_get_timestamp(&stats);
+
+	if (ts->tv_sec > fs->timestamp.tv_sec ||
+		(ts->tv_sec == fs->timestamp.tv_sec &&
+		ts->tv_nsec > fs->timestamp.tv_nsec)) {
+		fs->timestamp = *ts;
 		return true;
 	}
 	return false;

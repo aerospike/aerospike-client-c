@@ -16,23 +16,21 @@
  */
 #pragma once 
 
+#if defined(_MSC_VER)
+#include <time.h>
+#endif
+
 #include <sys/stat.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-//---------------------------------
-// Types
-//---------------------------------
+#if !defined(_MSC_VER)
 
 typedef struct {
 	struct timespec timestamp;
 } as_file_status;
-
-//---------------------------------
-// Functions
-//---------------------------------
 
 static inline struct timespec*
 as_file_get_timestamp(struct stat* stats)
@@ -78,6 +76,47 @@ as_file_has_changed(const char* path, as_file_status* fs)
 	}
 	return false;
 }
+
+#else
+
+typedef struct {
+	time_t timestamp;
+} as_file_status;
+
+static inline bool
+as_file_get_status(const char* path, as_file_status* fs)
+{
+	struct _stat stats;
+	int rv = _stat(path, &stats);
+
+	if (rv != 0) {
+		return false;
+	}
+
+	fs->timestamp = stats.st_mtime;
+	return true;
+}
+
+static inline bool
+as_file_has_changed(const char* path, as_file_status* fs)
+{
+	struct _stat stats;
+	int rv = _stat(path, &stats);
+
+	if (rv != 0) {
+		return false;
+	}
+
+	time_t ts = stats.st_mtime;
+
+	if (ts > fs->timestamp) {
+		fs->timestamp = ts;
+		return true;
+	}
+	return false;
+}
+
+#endif
 
 #ifdef __cplusplus
 } // end extern "C"

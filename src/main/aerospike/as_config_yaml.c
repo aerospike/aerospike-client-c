@@ -1265,8 +1265,17 @@ as_cluster_update(as_cluster* cluster, as_config* orig, as_config* config)
 	if (!as_vector_int32_equal(config->rack_ids, cluster->rack_ids)) {
 		as_vector* old = cluster->rack_ids;
 
+		// Make full copy of rack_ids
+		uint32_t max = config->rack_ids->size;
+		as_vector* rack_ids = as_vector_create(sizeof(int), max);
+
+		for (uint32_t i = 0; i < max; i++) {
+			int id = *(int*)as_vector_get(config->rack_ids, i);
+			as_vector_append(rack_ids, &id);
+		}
+
 		// Update cluster rack_ids.
-		as_store_ptr_rls((void**)&cluster->rack_ids, config->rack_ids);
+		as_store_ptr_rls((void**)&cluster->rack_ids, rack_ids);
 
 		// Eventually destroy old cluster rack_ids.
 		as_gc_item item;

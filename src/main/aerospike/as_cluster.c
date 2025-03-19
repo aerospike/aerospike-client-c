@@ -18,7 +18,7 @@
 #include <aerospike/as_address.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_command.h>
-#include <aerospike/as_config_yaml.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_cpu.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
@@ -796,7 +796,7 @@ as_cluster_manage(as_cluster* cluster)
 
 	if (cluster->config_file_path && cluster->tend_count % cluster->config_interval == 0) {
 		if (as_file_has_changed(cluster->config_file_path, &cluster->config_file_status)) {
-			status = as_config_yaml_update(cluster, cluster->config, &err);
+			status = as_config_file_update(cluster, cluster->config, &err);
 
 			if (status != AEROSPIKE_OK) {
 				as_log_warn("Dynamic configuration error: %s", err.message);

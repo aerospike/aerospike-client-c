@@ -22,25 +22,21 @@
 extern "C" {
 #endif
 
-//---------------------------------
-// Functions
-//---------------------------------
-
 struct as_cluster_s;
 
 /**
  * @private
- * Read yaml configuration file.
+ * Read dynamic configuration file and populate config. Call this function before creating the cluster.
  */
 AS_EXTERN as_status
-as_config_yaml_init(as_config* config, as_error* err);
+as_config_file_init(as_config* config, as_error* err);
 
 /**
  * @private
- * Read yaml configuration file and update cluster with new values.
+ * Read dynamic configuration file and update cluster with new values.
  */
 AS_EXTERN as_status
-as_config_yaml_update(struct as_cluster_s* cluster, as_config* orig, as_error* err);
+as_config_file_update(struct as_cluster_s* cluster, as_config* orig, as_error* err);
 
 #ifdef __cplusplus
 } // end extern "C"

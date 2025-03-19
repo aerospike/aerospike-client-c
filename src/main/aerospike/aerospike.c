@@ -16,7 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
-#include <aerospike/as_config_yaml.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
@@ -64,7 +64,7 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 			as->dynamic_config = true;
 
 			as_error err;
-			as_status status = as_config_yaml_init(&as->config, &err);
+			as_status status = as_config_file_init(&as->config, &err);
 
 			if (status != AEROSPIKE_OK) {
 				as_log_error("%s", err.message);

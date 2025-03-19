@@ -1096,6 +1096,19 @@ as_config_provider_set_path(as_config* config, const char* path)
 }
 
 /**
+ * Set dynamic configuration file path and file modification check interval.
+ * The interval is the number of cluster tend iterations.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_provider_set(as_config* config, const char* path, uint32_t interval)
+{
+	as_config_provider_set_path(config, path);
+	config->config_provider.interval = interval;
+}
+
+/**
  * Add rack id to list of server racks in order of preference. Only add racks that
  * are close to the client rack. Do not add racks that are far away from the client.
  * The client will still direct commands to far away racks if nodes on closer racks are not

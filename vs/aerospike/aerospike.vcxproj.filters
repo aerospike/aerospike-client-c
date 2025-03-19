@@ -513,7 +513,7 @@
     <ClInclude Include="..\..\src\include\aerospike\aerospike_txn.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\include\aerospike\as_config_yaml.h">
+    <ClInclude Include="..\..\src\include\aerospike\as_config_file.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -980,7 +980,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_txn_monitor.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\main\aerospike\as_config_yaml.c">
+    <ClCompile Include="..\..\src\main\aerospike\as_config_file.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

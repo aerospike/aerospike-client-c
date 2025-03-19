@@ -391,7 +391,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_cluster.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_command.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_config.h" />
-    <ClInclude Include="..\..\src\include\aerospike\as_config_yaml.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_config_file.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_conn_pool.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_cpu.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_error.h" />
@@ -550,7 +550,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_cluster.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_command.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_config.c" />
-    <ClCompile Include="..\..\src\main\aerospike\as_config_yaml.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_config_file.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_error.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event_event.c" />

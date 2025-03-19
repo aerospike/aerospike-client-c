@@ -886,8 +886,8 @@ as_parse_static_client(as_yaml* yaml)
 			const char* value = (const char*)yaml->event.data.scalar.value;
 			bool rv;
 
-			if (strcmp(name, "config_tend_count") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->config_provider.config_tend_count);
+			if (strcmp(name, "config_interval") == 0) {
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->config_provider.interval);
 			}
 			else if (strcmp(name, "max_connections_per_node") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_conns_per_node);
@@ -1191,7 +1191,7 @@ as_config_yaml_read(as_config* config, bool init, as_error* err)
 {
 	as_error_reset(err);
 
-	const char* path = config->config_provider.yaml_path;
+	const char* path = config->config_provider.path;
 	FILE* fp = fopen(path, "r");
 
 	if (!fp) {

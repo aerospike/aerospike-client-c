@@ -1585,9 +1585,11 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 	cluster->config = config;
 
-	if (config->config_provider.yaml_path[0]) {
-		cluster->config_file_path = cf_strdup(config->config_provider.yaml_path);
-		cluster->config_interval = config->config_provider.config_tend_count;
+	if (config->config_provider.path) {
+		// Heap allocated path continues to be owned by as->config.config_provider
+		// Make a reference copy here.
+		cluster->config_file_path = config->config_provider.path;
+		cluster->config_interval = config->config_provider.interval;
 
 		if (!as_file_get_status(cluster->config_file_path, &cluster->config_file_status)) {
 			as_log_warn("Failed to read: %s", cluster->config_file_path);
@@ -1734,13 +1736,12 @@ as_cluster_destroy(as_cluster* cluster)
 	// Do not free cluster name because as->config owns it.
 	// cf_free(cluster->cluster_name);
 
+	// Do not free config_file_path name because as->config owns it.
+	// cf_free(cluster->config_file_path);
+
 	if (cluster->tls_ctx) {
 		as_tls_context_destroy(cluster->tls_ctx);
 		cf_free(cluster->tls_ctx);
-	}
-
-	if (cluster->config_file_path) {
-		cf_free(cluster->config_file_path);
 	}
 
 #if defined(_MSC_VER)

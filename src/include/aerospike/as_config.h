@@ -353,18 +353,21 @@ typedef struct as_config_tls_s {
 typedef struct as_config_provider_s {
 
 	/**
-	 * Yaml file path. If set, cluster policies will be read from the yaml file at cluster
+	 * Dynamic configuration file path. If set, cluster policies will be read from the yaml file at cluster
 	 * initialization and whenever the file changes. The policies fields in the file
-	 * override all command polocies.
+	 * override all command policies.
+	 *
+	 * Use as_config_provider_set_path() to set this field.
+	 * Default: NULL
 	 */
-	char yaml_path[256];
+	char* path;
 
 	/**
 	 * Check dynamic configuration file for changes after this number of cluster tend iterations.
 	 *
 	 * Default: 60
 	 */
-	uint32_t config_tend_count;
+	uint32_t interval;
 
 } as_config_provider;
 
@@ -1080,6 +1083,17 @@ as_config_tls_set_certstring(as_config* config, const char* certstring)
  */
 AS_EXTERN void
 as_config_tls_add_host(as_config* config, const char* address, const char* tls_name, uint16_t port);
+
+/**
+ * Set dynamic configuration file path.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_provider_set_path(as_config* config, const char* path)
+{
+	as_config_set_string(&config->config_provider.path, path);
+}
 
 /**
  * Add rack id to list of server racks in order of preference. Only add racks that

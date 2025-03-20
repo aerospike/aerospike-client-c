@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,12 +16,7 @@
  */
 #pragma once
 
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <aerospike/aerospike.h>
 #include <aerospike/as_error.h>
-#include <aerospike/as_string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,9 +26,9 @@ extern "C" {
 // Types
 //---------------------------------
 
-struct as_policy_metrics_s;
 struct as_node_s;
 struct as_cluster_s;
+struct aerospike_s;
 
 /**
  * Callbacks for metrics listener operations.
@@ -139,6 +134,14 @@ typedef struct as_metrics_policy_s {
 	 * Default: 1
 	 */
 	uint32_t latency_shift;
+
+	/**
+	 * @private
+	 * Should metrics be started as part of dynamic configuration. If aerospike_enable_metrics()
+	 * is called, metrics will automaticallly be enabled and this field is ignored.
+	 * For internal use only.
+	 */
+	bool enable;
 } as_metrics_policy;
 
 //---------------------------------
@@ -178,13 +181,13 @@ as_metrics_policy_set_listeners(
  * Enable extended periodic cluster and node latency metrics.
  */
 AS_EXTERN as_status
-aerospike_enable_metrics(aerospike* as, as_error* err, as_metrics_policy* policy);
+aerospike_enable_metrics(struct aerospike_s* as, as_error* err, as_metrics_policy* policy);
 
 /**
  * Disable extended periodic cluster and node latency metrics.
  */
 AS_EXTERN as_status
-aerospike_disable_metrics(aerospike* as, as_error* err);
+aerospike_disable_metrics(struct aerospike_s* as, as_error* err);
 
 #ifdef __cplusplus
 } // end extern "C"

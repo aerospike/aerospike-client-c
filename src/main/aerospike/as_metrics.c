@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_metrics.h>
+#include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_node.h>
@@ -49,4 +50,5 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->metrics_listeners.node_close_listener = NULL;
 	policy->metrics_listeners.disable_listener = NULL;
 	policy->metrics_listeners.udata = NULL;
+	policy->enable = false;
 }

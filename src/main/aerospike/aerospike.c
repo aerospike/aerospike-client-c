@@ -246,7 +246,19 @@ aerospike_connect(aerospike* as, as_error* err)
 #endif
 
 	// Create the cluster object.
-	return as_cluster_create(&as->config, err, &as->cluster);
+	status = as_cluster_create(&as->config, err, &as->cluster);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	// Dynamic configuration allows metrics to be enabled from a file.
+	if (as->config.policies.metrics.enable) {
+		as_log_info("Enable metrics");
+		status = aerospike_enable_metrics(as, err, &as->config.policies.metrics);
+	}
+
+	return status;
 }
 
 void as_event_close_cluster(as_cluster* cluster);

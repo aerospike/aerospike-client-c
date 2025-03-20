@@ -827,6 +827,28 @@ as_parse_txn_roll(as_yaml* yaml, const char* name, const char* value, as_policie
 	return as_parse_batch_shared(yaml, name, value, &base->txn_roll);
 }
 
+static bool
+as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies* base)
+{
+	as_metrics_policy* policy = &base->metrics;
+	yaml->name = "metrics_policy";
+
+	if (strcmp(name, "enable") == 0) {
+		return as_parse_bool(yaml, name, value, &policy->enable);
+	}
+
+	if (strcmp(name, "latency_columns") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->latency_columns);
+	}
+
+	if (strcmp(name, "latency_shift") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->latency_shift);
+	}
+
+	as_log_info("Unexpected field: %s.%s", yaml->name, name);
+	return true;
+}
+
 typedef bool (*as_parse_policy_fn) (as_yaml* yaml, const char* name, const char* value, as_policies* base);
 
 static bool
@@ -1074,6 +1096,9 @@ as_parse_dynamic(as_yaml* yaml)
 		else if (strcmp(name, "txn_roll") == 0) {
 			as_parse_policy(yaml, as_parse_txn_roll);
 		}
+		else if (strcmp(name, "metrics_policy") == 0) {
+			as_parse_policy(yaml, as_parse_metrics);
+		}
 		else {
 			as_log_info("Unexpected section: %s", name);
 			as_skip_mapping(yaml);
@@ -1230,8 +1255,8 @@ as_release_rack_ids(as_vector* rack_ids)
 	as_vector_destroy(rack_ids);
 }
 
-static void
-as_cluster_update(as_cluster* cluster, as_config* orig, as_config* config)
+static as_status
+as_cluster_update(as_cluster* cluster, as_config* orig, as_config* config, as_error* err)
 {
 	// Set original config.
 	orig->max_error_rate = config->max_error_rate;
@@ -1376,6 +1401,28 @@ as_cluster_update(as_cluster* cluster, as_config* orig, as_config* config)
 	trg->txn_roll.allow_inline = src->txn_roll.allow_inline;
 	trg->txn_roll.allow_inline_ssd = src->txn_roll.allow_inline_ssd;
 	trg->txn_roll.respond_all_keys = src->txn_roll.respond_all_keys;
+
+	trg->metrics.latency_columns = src->metrics.latency_columns;
+	trg->metrics.latency_shift = src->metrics.latency_shift;
+	trg->metrics.enable = src->metrics.enable;
+
+	if (trg->metrics.enable) {
+		if (cluster->metrics_enabled) {
+			cluster->metrics_latency_columns = trg->metrics.latency_columns;
+			cluster->metrics_latency_shift = trg->metrics.latency_shift;
+		}
+		else {
+			as_log_info("Enable metrics");
+			return as_cluster_enable_metrics(err, cluster, &trg->metrics);
+		}
+	}
+	else {
+		if (cluster->metrics_enabled) {
+			as_log_info("Disable metrics");
+			return as_cluster_disable_metrics(err, cluster);
+		}
+	}
+	return AEROSPIKE_OK;
 }
 
 //---------------------------------
@@ -1411,6 +1458,5 @@ as_config_file_update(as_cluster* cluster, as_config* orig, as_error* err)
 	}
 
 	as_log_info("Update dynamic config");
-	as_cluster_update(cluster, orig, &config);
-	return AEROSPIKE_OK;
+	return as_cluster_update(cluster, orig, &config, err);
 }

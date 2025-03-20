@@ -54,6 +54,7 @@
  */
 
 #include <aerospike/as_std.h>
+#include <aerospike/as_metrics.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -1612,6 +1613,11 @@ typedef struct as_policies_s {
 	 * or back (abort) in a batch.
 	 */
 	as_policy_txn_roll txn_roll;
+
+	/**
+	 * Default metrics policy.
+	 */
+	as_metrics_policy metrics;
 
 } as_policies;
 

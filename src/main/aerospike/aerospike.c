@@ -56,6 +56,7 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 {
 	as->_free = free;
 	as->cluster = NULL;
+	as->dynamic_config = false;
 
 	if (config) {
 		memcpy(&as->config, config, sizeof(as_config));

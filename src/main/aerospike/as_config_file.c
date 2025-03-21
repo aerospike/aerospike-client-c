@@ -831,7 +831,7 @@ static bool
 as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_metrics_policy* policy = &base->metrics;
-	yaml->name = "metrics_policy";
+	yaml->name = "metrics";
 
 	if (strcmp(name, "enable") == 0) {
 		return as_parse_bool(yaml, name, value, &policy->enable);
@@ -1096,7 +1096,7 @@ as_parse_dynamic(as_yaml* yaml)
 		else if (strcmp(name, "txn_roll") == 0) {
 			as_parse_policy(yaml, as_parse_txn_roll);
 		}
-		else if (strcmp(name, "metrics_policy") == 0) {
+		else if (strcmp(name, "metrics") == 0) {
 			as_parse_policy(yaml, as_parse_metrics);
 		}
 		else {

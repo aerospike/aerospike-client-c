@@ -57,6 +57,7 @@
 
 typedef struct {
 	size_t size;
+	as_policies* defs;
 	as_exp* filter_exp;
 	as_queue* buffers;
 	as_txn* txn;
@@ -67,6 +68,7 @@ typedef struct {
 	// This field is only valid for txn attributes that are fixed for all keys.
 	uint8_t txn_attr;
 	bool batch_any;
+	bool dynamic_config;
 } as_batch_builder;
 
 typedef struct {
@@ -890,34 +892,42 @@ as_batch_equals_read(as_batch_read_record* prev, as_batch_read_record* rec)
 }
 
 static inline bool
-as_batch_equals_write(as_policies* defs, as_batch_write_record* prev, as_batch_write_record* rec)
+as_batch_equals_write(as_batch_builder* bb, as_batch_write_record* prev, as_batch_write_record* rec)
 {
-	const as_policy_batch_write* pbw = rec->policy ? rec->policy : &defs->batch_write;
-	
-	return prev->ops == rec->ops && prev->policy == rec->policy && pbw->key == AS_POLICY_KEY_DIGEST;
+	if (!(prev->ops == rec->ops && prev->policy == rec->policy)) {
+		return false;
+	}
+
+	as_policy_key key = (rec->policy && !bb->dynamic_config)? rec->policy->key : bb->defs->batch_write.key;
+	return key == AS_POLICY_KEY_DIGEST;
 }
 
 static inline bool
-as_batch_equals_apply(as_policies* defs, as_batch_apply_record* prev, as_batch_apply_record* rec)
+as_batch_equals_apply(as_batch_builder* bb, as_batch_apply_record* prev, as_batch_apply_record* rec)
 {
-	const as_policy_batch_apply* pba = rec->policy ? rec->policy : &defs->batch_apply;
+	if (!(prev->function == rec->function && prev->arglist == rec->arglist &&
+		  prev->module == rec->module && prev->policy == rec->policy)) {
+		return false;
+	}
 
-	return prev->function == rec->function && prev->arglist == rec->arglist &&
-		   prev->module == rec->module && prev->policy == rec->policy &&
-		   pba->key == AS_POLICY_KEY_DIGEST;
+	as_policy_key key = (rec->policy && !bb->dynamic_config)? rec->policy->key : bb->defs->batch_apply.key;
+	return key == AS_POLICY_KEY_DIGEST;
 }
 
 static inline bool
-as_batch_equals_remove(as_policies* defs, as_batch_remove_record* prev, as_batch_remove_record* rec)
+as_batch_equals_remove(as_batch_builder* bb, as_batch_remove_record* prev, as_batch_remove_record* rec)
 {
-	const as_policy_batch_remove* pbr = rec->policy ? rec->policy : &defs->batch_remove;
+	if (!(prev->policy == rec->policy)) {
+		return false;
+	}
 
-	return prev->policy == rec->policy && pbr->key == AS_POLICY_KEY_DIGEST;
+	as_policy_key key = (rec->policy && !bb->dynamic_config)? rec->policy->key : bb->defs->batch_remove.key;
+	return key == AS_POLICY_KEY_DIGEST;
 }
 
 static bool
 as_batch_equals_records(
-	as_policies* defs, as_batch_base_record* prev, as_batch_base_record* rec, uint64_t ver,
+	as_batch_builder* bb, as_batch_base_record* prev, as_batch_base_record* rec, uint64_t ver,
 	uint64_t ver_prev
 	)
 {
@@ -931,13 +941,13 @@ as_batch_equals_records(
 		return as_batch_equals_read((as_batch_read_record*)prev, (as_batch_read_record*)rec);
 
 	case AS_BATCH_WRITE:
-		return as_batch_equals_write(defs, (as_batch_write_record*)prev, (as_batch_write_record*)rec);
+		return as_batch_equals_write(bb, (as_batch_write_record*)prev, (as_batch_write_record*)rec);
 
 	case AS_BATCH_APPLY:
-		return as_batch_equals_apply(defs, (as_batch_apply_record*)prev, (as_batch_apply_record*)rec);
+		return as_batch_equals_apply(bb, (as_batch_apply_record*)prev, (as_batch_apply_record*)rec);
 
 	case AS_BATCH_REMOVE:
-		return as_batch_equals_remove(defs, (as_batch_remove_record*)prev, (as_batch_remove_record*)rec);
+		return as_batch_equals_remove(bb, (as_batch_remove_record*)prev, (as_batch_remove_record*)rec);
 
 	case AS_BATCH_TXN_VERIFY:
 	case AS_BATCH_TXN_ROLL:
@@ -1082,7 +1092,7 @@ as_batch_size_fields(as_key* key, as_exp* filter_exp, as_policy_key key_policy, 
 
 static as_status
 as_batch_records_size_new(
-	as_policies* defs, as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
+	as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
 	)
 {
 	as_batch_base_record* prev = NULL;
@@ -1097,7 +1107,7 @@ as_batch_records_size_new(
 
 		bb->size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
 
-		if (as_batch_equals_records(defs, prev, rec, ver, ver_prev)) {
+		if (as_batch_equals_records(bb, prev, rec, ver, ver_prev)) {
 			// Can set repeat flag to save space.
 			bb->size++;
 		}
@@ -1123,18 +1133,38 @@ as_batch_records_size_new(
 			
 				case AS_BATCH_WRITE: {
 					as_batch_write_record* bw = (as_batch_write_record*)rec;
-					const as_policy_batch_write* pbw = bw->policy ? bw->policy : &defs->batch_write;
-					
-					as_batch_size_fields(key, pbw->filter_exp, pbw->key, bb);
+					as_exp* filter_exp;
+					as_policy_key send_key;
+
+					if (bw->policy) {
+						filter_exp = bw->policy->filter_exp;
+						send_key = bb->dynamic_config ? bb->defs->batch_write.key : bw->policy->key;
+					}
+					else {
+						filter_exp = bb->defs->batch_write.filter_exp;
+						send_key = bb->defs->batch_write.key;
+					}
+
+					as_batch_size_fields(key, filter_exp, send_key, bb);
 					status = as_batch_write_record_size(bw, bb, err);
 					break;
 				}
 			
 				case AS_BATCH_APPLY: {
 					as_batch_apply_record* ba = (as_batch_apply_record*)rec;
-					const as_policy_batch_apply* pba = ba->policy ? ba->policy : &defs->batch_apply;
+					as_exp* filter_exp;
+					as_policy_key send_key;
 
-					as_batch_size_fields(key, pba->filter_exp, pba->key, bb);
+					if (ba->policy) {
+						filter_exp = ba->policy->filter_exp;
+						send_key = bb->dynamic_config ? bb->defs->batch_apply.key : ba->policy->key;
+					}
+					else {
+						filter_exp = bb->defs->batch_apply.filter_exp;
+						send_key = bb->defs->batch_apply.key;
+					}
+
+					as_batch_size_fields(key, filter_exp, send_key, bb);
 					as_batch_apply_record_size(ba, bb);
 					status = AEROSPIKE_OK;
 					break;
@@ -1142,9 +1172,19 @@ as_batch_records_size_new(
 			
 				case AS_BATCH_REMOVE: {
 					as_batch_remove_record* brm = (as_batch_remove_record*)rec;
-					const as_policy_batch_remove* pbr = brm->policy ? brm->policy : &defs->batch_remove;
+					as_exp* filter_exp;
+					as_policy_key send_key;
 
-					as_batch_size_fields(key, pbr->filter_exp, pbr->key, bb);
+					if (brm->policy) {
+						filter_exp = brm->policy->filter_exp;
+						send_key = bb->dynamic_config ? bb->defs->batch_remove.key : brm->policy->key;
+					}
+					else {
+						filter_exp = bb->defs->batch_remove.filter_exp;
+						send_key = bb->defs->batch_remove.key;
+					}
+
+					as_batch_size_fields(key, filter_exp, send_key, bb);
 					as_batch_remove_record_size(bb);
 					status = AEROSPIKE_OK;
 					break;
@@ -1194,13 +1234,13 @@ as_batch_init_size(as_batch_builder* bb)
 
 static as_status
 as_batch_records_size(
-	as_policies* defs, as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
+	as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
 	)
 {
 	as_batch_init_size(bb);
 
 	if (bb->batch_any) {
-		return as_batch_records_size_new(defs, records, offsets, bb, err);
+		return as_batch_records_size_new(records, offsets, bb, err);
 	}
 	else {
 		return as_batch_records_size_old(records, offsets, bb, err);
@@ -1300,7 +1340,10 @@ as_batch_attr_read_adjust(as_batch_attr* attr, bool read_all_bins)
 }
 
 static void
-as_batch_attr_write(as_batch_attr* attr, const as_policy_batch_write* p, as_operations* ops)
+as_batch_attr_write(
+	as_batch_attr* attr, as_operations* ops, const as_policy_batch_write* p,
+	as_policy_key policy_key, bool durable_delete
+)
 {
 	attr->filter_exp = p->filter_exp;
 	attr->read_attr = 0;
@@ -1324,7 +1367,7 @@ as_batch_attr_write(as_batch_attr* attr, const as_policy_batch_write* p, as_oper
 	attr->ttl = (ops->ttl == AS_RECORD_CLIENT_DEFAULT_TTL && p)? p->ttl : ops->ttl;
 	attr->gen = 0;
 	attr->has_write = true;
-	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
+	attr->send_key = (policy_key == AS_POLICY_KEY_SEND);
 
 	switch (p->gen) {
 	default:
@@ -1357,7 +1400,7 @@ as_batch_attr_write(as_batch_attr* attr, const as_policy_batch_write* p, as_oper
 		break;
 	}
 
-	if (p->durable_delete) {
+	if (durable_delete) {
 		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
 	}
 
@@ -1369,7 +1412,9 @@ as_batch_attr_write(as_batch_attr* attr, const as_policy_batch_write* p, as_oper
 }
 
 static void
-as_batch_attr_apply(as_batch_attr* attr, const as_policy_batch_apply* p)
+as_batch_attr_apply(
+	as_batch_attr* attr, const as_policy_batch_apply* p, as_policy_key policy_key, bool durable_delete
+	)
 {
 	attr->filter_exp = p->filter_exp;
 	attr->read_attr = 0;
@@ -1378,9 +1423,9 @@ as_batch_attr_apply(as_batch_attr* attr, const as_policy_batch_apply* p)
 	attr->ttl = p->ttl;
 	attr->gen = 0;
 	attr->has_write = true;
-	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
+	attr->send_key = (policy_key == AS_POLICY_KEY_SEND);
 
-	if (p->durable_delete) {
+	if (durable_delete) {
 		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
 	}
 
@@ -1392,7 +1437,9 @@ as_batch_attr_apply(as_batch_attr* attr, const as_policy_batch_apply* p)
 }
 
 static void
-as_batch_attr_remove(as_batch_attr* attr, const as_policy_batch_remove* p)
+as_batch_attr_remove(
+	as_batch_attr* attr, const as_policy_batch_remove* p, as_policy_key policy_key, bool durable_delete
+	)
 {
 	attr->filter_exp = p->filter_exp;
 	attr->read_attr = 0;
@@ -1401,7 +1448,7 @@ as_batch_attr_remove(as_batch_attr* attr, const as_policy_batch_remove* p)
 	attr->ttl = 0;
 	attr->gen = 0;
 	attr->has_write = true;
-	attr->send_key = (p->key == AS_POLICY_KEY_SEND);
+	attr->send_key = (policy_key == AS_POLICY_KEY_SEND);
 
 	switch (p->gen) {
 	default:
@@ -1417,7 +1464,7 @@ as_batch_attr_remove(as_batch_attr* attr, const as_policy_batch_remove* p)
 		break;
 	}
 
-	if (p->durable_delete) {
+	if (durable_delete) {
 		attr->write_attr |= AS_MSG_INFO2_DURABLE_DELETE;
 	}
 
@@ -1630,7 +1677,7 @@ as_batch_write_udf(
 
 static size_t
 as_batch_records_write_new(
-	const as_policy_batch* policy, as_policies* defs, as_vector* records, as_vector* offsets, as_batch_builder* bb,
+	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
 	uint8_t* cmd
 	)
 {
@@ -1659,7 +1706,7 @@ as_batch_records_write_new(
 		memcpy(p, rec->key.digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 		
-		if (as_batch_equals_records(defs, prev, rec, ver, ver_prev)) {
+		if (as_batch_equals_records(bb, prev, rec, ver, ver_prev)) {
 			// Can set repeat flag to save space.
 			*p++ = BATCH_MSG_REPEAT;
 		}
@@ -1694,9 +1741,29 @@ as_batch_records_write_new(
 
 				case AS_BATCH_WRITE: {
 					as_batch_write_record* bw = (as_batch_write_record*)rec;
-					const as_policy_batch_write* pbw = bw->policy ? bw->policy : &defs->batch_write;
+					const as_policy_batch_write* pbw;
+					as_policy_key send_key;
+					bool durable_delete;
 
-					as_batch_attr_write(&attr, pbw, bw->ops);
+					if (bw->policy) {
+						pbw = bw->policy;
+
+						if (bb->dynamic_config) {
+							send_key = bb->defs->batch_write.key;
+							durable_delete = bb->defs->batch_write.durable_delete;
+						}
+						else {
+							send_key = pbw->key;
+							durable_delete = pbw->durable_delete;
+						}
+					}
+					else {
+						pbw = &bb->defs->batch_write;
+						send_key = pbw->key;
+						durable_delete = pbw->durable_delete;
+					}
+
+					as_batch_attr_write(&attr, bw->ops, pbw, send_key, durable_delete);
 					p = as_batch_write_operations(p, &bw->key, txn, ver, &attr, attr.filter_exp, bw->ops,
 						bb->buffers);
 					break;
@@ -1704,18 +1771,58 @@ as_batch_records_write_new(
 
 				case AS_BATCH_APPLY: {
 					as_batch_apply_record* ba = (as_batch_apply_record*)rec;
-					const as_policy_batch_apply* pba = ba->policy ? ba->policy : &defs->batch_apply;
+					const as_policy_batch_apply* pba;
+					as_policy_key send_key;
+					bool durable_delete;
 
-					as_batch_attr_apply(&attr, pba);
+					if (ba->policy) {
+						pba = ba->policy;
+
+						if (bb->dynamic_config) {
+							send_key = bb->defs->batch_apply.key;
+							durable_delete = bb->defs->batch_apply.durable_delete;
+						}
+						else {
+							send_key = pba->key;
+							durable_delete = pba->durable_delete;
+						}
+					}
+					else {
+						pba = &bb->defs->batch_apply;
+						send_key = pba->key;
+						durable_delete = pba->durable_delete;
+					}
+
+					as_batch_attr_apply(&attr, pba, send_key, durable_delete);
 					p = as_batch_write_udf(p, &ba->key, txn, ver, ba, &attr, attr.filter_exp, bb->buffers);
 					break;
 				}
 
 				case AS_BATCH_REMOVE: {
 					as_batch_remove_record* brm = (as_batch_remove_record*)rec;
-					const as_policy_batch_remove* pbr = brm->policy ? brm->policy : &defs->batch_remove;
+					const as_policy_batch_remove* pbr;
+					as_policy_key send_key;
+					bool durable_delete;
 
-					as_batch_attr_remove(&attr, pbr);
+					if (brm->policy) {
+						pbr = brm->policy;
+
+						if (bb->dynamic_config) {
+							send_key = bb->defs->batch_remove.key;
+							durable_delete = bb->defs->batch_remove.durable_delete;
+						}
+						else {
+							send_key = pbr->key;
+							durable_delete = pbr->durable_delete;
+						}
+					}
+					else {
+						pbr = &bb->defs->batch_remove;
+						send_key = pbr->key;
+						durable_delete = pbr->durable_delete;
+					}
+
+					as_batch_attr_remove(&attr, pbr, send_key, durable_delete);
 					p = as_batch_write_write(p, &brm->key, txn, ver, &attr, attr.filter_exp, 0, 0);
 					break;
 				}
@@ -1739,12 +1846,12 @@ as_batch_records_write_new(
 
 static inline size_t
 as_batch_records_write(
-	const as_policy_batch* policy, as_policies* defs, as_vector* records, as_vector* offsets, as_batch_builder* bb,
+	const as_policy_batch* policy, as_vector* records, as_vector* offsets, as_batch_builder* bb,
 	uint8_t* cmd
 	)
 {
 	if (bb->batch_any) {
-		return as_batch_records_write_new(policy, defs, records, offsets, bb, cmd);
+		return as_batch_records_write_new(policy, records, offsets, bb, cmd);
 	}
 	else {
 		return as_batch_records_write_old(policy, records, offsets, bb, cmd);
@@ -1944,16 +2051,18 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
 	as_batch_builder bb = {
+		.defs = btr->defs,
 		.filter_exp = policy->base.filter_exp,
 		.buffers = &buffers,
 		.txn = btr->base.txn,
 		.versions = btr->base.versions,
-		.txn_attr = btr->base.txn_attr
+		.txn_attr = btr->base.txn_attr,
+		.dynamic_config = btr->base.as->dynamic_config
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
 
-	as_status status = as_batch_records_size(btr->defs, btr->records, &task->offsets, &bb, err);
+	as_status status = as_batch_records_size(btr->records, &task->offsets, &bb, err);
 
 	if (status != AEROSPIKE_OK) {
 		as_batch_builder_destroy(&bb);
@@ -1963,8 +2072,8 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	// Write command
 	size_t capacity = bb.size;
 	uint8_t* buf = as_command_buffer_init(capacity);
-	size_t size = as_batch_records_write(policy, btr->defs, btr->records, &task->offsets, &bb, buf);
-	
+	size_t size = as_batch_records_write(policy, btr->records, &task->offsets, &bb, buf);
+
 	if (size > capacity) {
 		as_log_warn("Batch command buffer size %zu exceeded capacity %zu", size, capacity);
 	}
@@ -2192,6 +2301,7 @@ as_batch_keys_write(
 static as_status
 as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent)
 {
+	as_config* config = aerospike_load_config(btk->base.as);
 	as_batch_task* task = &btk->base;
 	const as_policy_batch* policy = task->policy;
 
@@ -2199,11 +2309,13 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
 	as_batch_builder bb = {
+		.defs = &config->policies,
 		.filter_exp = btk->attr->filter_exp ? btk->attr->filter_exp : policy->base.filter_exp,
 		.buffers = &buffers,
 		.txn = btk->base.txn,
 		.versions = btk->base.versions,
-		.txn_attr = btk->base.txn_attr
+		.txn_attr = btk->base.txn_attr,
+		.dynamic_config = btk->base.as->dynamic_config
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
@@ -3351,7 +3463,6 @@ as_batch_execute_async(
 	)
 {
 	as_config* config = aerospike_load_config(as);
-	as_policies* defs = &config->policies;
 
 	uint32_t n_batch_nodes = batch_nodes->size;
 	as_event_executor* exec = &executor->executor;
@@ -3371,11 +3482,13 @@ as_batch_execute_async(
 	as_queue_inita(&buffers, sizeof(as_buffer), 8);
 
 	as_batch_builder bb = {
+		.defs = &config->policies,
 		.filter_exp = policy->base.filter_exp,
 		.buffers = &buffers,
 		.txn = executor->txn,
 		.versions = executor->versions,
-		.txn_attr = executor->txn_attr
+		.txn_attr = executor->txn_attr,
+		.dynamic_config = as->dynamic_config
 	};
 
 	as_status status = AEROSPIKE_OK;
@@ -3390,7 +3503,7 @@ as_batch_execute_async(
 			as_batch_builder_set_node(&bb, batch_node->node);
 
 			// Estimate buffer size.
-			status = as_batch_records_size(defs, records, &batch_node->offsets, &bb, err);
+			status = as_batch_records_size(records, &batch_node->offsets, &bb, err);
 
 			if (status != AEROSPIKE_OK) {
 				as_event_executor_cancel(exec, i);
@@ -3405,8 +3518,8 @@ as_batch_execute_async(
 
 				as_event_command* cmd = &bc->command;
 
-				cmd->write_len = (uint32_t)as_batch_records_write(policy, defs, records,
-					&batch_node->offsets, &bb, cmd->buf);
+				cmd->write_len = (uint32_t)as_batch_records_write(policy, records, &batch_node->offsets, &bb,
+					cmd->buf);
 
 				if (cmd->write_len > bb.size) {
 					as_log_warn("Batch command buffer size %u exceeded capacity %zu", cmd->write_len, bb.size);
@@ -3418,8 +3531,7 @@ as_batch_execute_async(
 				// First write uncompressed buffer.
 				size_t capacity = bb.size;
 				uint8_t* ubuf = cf_malloc(capacity);
-				size_t size = as_batch_records_write(policy, defs, records, &batch_node->offsets, &bb,
-					ubuf);
+				size_t size = as_batch_records_write(policy, records, &batch_node->offsets, &bb, ubuf);
 
 				// Allocate command with compressed upper bound.
 				size_t comp_size = as_command_compress_max_size(size);
@@ -4984,7 +5096,7 @@ aerospike_batch_operate(
 		};
 
 		as_batch_attr attr;
-		as_batch_attr_write(&attr, policy_write, ops);
+		as_batch_attr_write(&attr, ops, policy_write, policy_write->key, policy_write->durable_delete);
 
 		return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 			listener, udata);
@@ -5060,7 +5172,7 @@ aerospike_batch_apply(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_apply(&attr, policy_apply);
+	as_batch_attr_apply(&attr, policy_apply, policy_apply->key, policy_apply->durable_delete);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 		listener, udata);
@@ -5105,7 +5217,7 @@ aerospike_batch_remove(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_remove(&attr, policy_remove);
+	as_batch_attr_remove(&attr, policy_remove, policy_remove->key, policy_remove->durable_delete);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 		listener, udata);

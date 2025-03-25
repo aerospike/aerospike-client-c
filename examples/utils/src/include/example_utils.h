@@ -99,7 +99,7 @@ void example_remove_test_records(aerospike* p_as);
 bool example_register_udf(aerospike* p_as, const char* filename);
 bool example_remove_udf(aerospike* p_as, const char* filename);
 bool example_create_integer_index(aerospike* p_as, const char* set, const char* bin, const char* index);
-bool example_create_exp_index(aerospike* p_as, const char* set, const char* index);
+bool example_create_exp_index(aerospike* p_as, const char* set, const char* index, as_exp* exp);
 bool example_create_2dsphere_index(aerospike* p_as, const char* bin, const char* index);
 void example_remove_index(aerospike* p_as, const char* index);
 void example_dump_record(const as_record* p_rec);

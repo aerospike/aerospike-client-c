@@ -102,9 +102,9 @@ main(int argc, char* argv[])
 	// care of destroying all the query's member objects if necessary. However
 	// using as_query_where_inita() does avoid internal heap usage.
 	as_query_where_inita(&query, 1);
-	as_query_where_with_index_name(&query, CAMPAIGN_INDEX_NAME, as_integer_range(300, 10000));
+	as_query_where_with_exp(&query, NULL, exp, as_integer_range(300, 10000));
 
-	LOG("executing query: where exp_campaign between 300 and 10000");
+	LOG("executing query: where exp_campaign between 300 and 400");
 
 	as_error err;
 
@@ -156,7 +156,7 @@ query_cb(const as_val* p_val, void* udata)
 
 	uint32_t* n_responses = (uint32_t*)udata;
 
-	as_aaf_int32(n_responses, 1);
+	as_aaf_uint32(n_responses, 1);
 
 	//	LOG("query callback returned record:");
 //	example_dump_record(p_rec);

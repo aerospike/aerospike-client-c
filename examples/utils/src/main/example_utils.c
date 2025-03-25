@@ -825,17 +825,14 @@ example_create_integer_index(aerospike* p_as, const char* set, const char* bin, 
 // Create an expression secondary index
 //
 bool
-example_create_exp_index(aerospike* p_as, const char* set, const char* index)
+example_create_exp_index(aerospike* p_as, const char* set, const char* index, as_exp* exp)
 {
 	as_error err;
 	as_index_task task;
 
-	as_exp_build(expr, as_exp_add(as_exp_bin_int("campaign1"),
-			as_exp_bin_int("campaign2"), as_exp_bin_int("campaign3")));
-
 	as_status status = aerospike_index_create_ctx_exp(p_as, &err, &task, NULL,
 			g_namespace, set, NULL, index, AS_INDEX_TYPE_DEFAULT,
-			AS_INDEX_NUMERIC, NULL, expr);
+			AS_INDEX_NUMERIC, NULL, exp);
 
 	switch (status) {
 		case AEROSPIKE_OK:

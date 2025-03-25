@@ -709,8 +709,13 @@ as_query_command_size(
 		qb->size += AS_FIELD_HEADER_SIZE;
 		filter_size++;  // Add byte for num filters.
 
-		// bin name size(1) + particle type size(1) + begin particle size(4) + end particle size(4) = 10
-		filter_size += (uint32_t)strlen(pred->bin) + 10;
+		if (pred->bin[0] != '\0') {
+			// bin name size(1) +  bin name length
+			filter_size += 1 + (uint32_t)strlen(pred->bin);
+		}
+		
+		// particle type size(1) + begin particle size(4) + end particle size(4) = 9
+		filter_size += 9;
 		
 		switch (pred->type) {
 			case AS_PREDICATE_EQUAL:
@@ -761,13 +766,18 @@ as_query_command_size(
 				n_fields++;
 			}
 		}
+		
+		if (pred->exp) {
+			qb->size += AS_FIELD_HEADER_SIZE + pred->exp->packed_sz;
+			n_fields++;
+		}
 
 		if (pred->ctx) {
 			qb->size += AS_FIELD_HEADER_SIZE + pred->ctx_size;
 			n_fields++;
 		}
 
-		if (pred->index_name[0]) {
+		if (pred->index_name[0] != '\0') {
 			qb->size += as_command_string_field_size(pred->index_name);
 			n_fields++;
 		}
@@ -943,13 +953,15 @@ as_query_command_init(
 		p = as_command_write_field_header(p, AS_FIELD_INDEX_RANGE, qb->filter_size);
 		*p++ = (uint8_t)1;  // Only one filter is allowed by the server.
 
-		// Write bin name, but do not transfer null byte.
-		uint8_t* len_ptr = p++;
-		uint8_t* s = (uint8_t*)pred->bin;
-		while (*s) {
-			*p++ = *s++;
+		if (pred->bin[0] != '\0') {
+			// Write bin name, but do not transfer null byte.
+			uint8_t* len_ptr = p++;
+			uint8_t* s = (uint8_t*)pred->bin;
+			while (*s) {
+				*p++ = *s++;
+			}
+			*len_ptr = (uint8_t)(s - (uint8_t*)pred->bin);
 		}
-		*len_ptr = (uint8_t)(s - (uint8_t*)pred->bin);
 		
 		// Write particle type and range values.
 		switch (pred->type) {
@@ -1016,8 +1028,12 @@ as_query_command_init(
 			p += as_cdt_ctx_pack(pred->ctx, &pk);
 		}
 
-		if (pred->index_name[0]) {
+		if (pred->index_name[0] != '\0') {
 			p = as_command_write_field_string(p, AS_FIELD_INDEX_NAME, pred->index_name);
+		}
+
+		if (pred->exp != NULL) {
+			p = as_exp_write_index(pred->exp, p);
 		}
 	}
 

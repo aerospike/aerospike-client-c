@@ -401,6 +401,15 @@ as_exp_write(as_exp* exp, uint8_t* ptr)
 	return ptr += exp->packed_sz;
 }
 
+uint8_t*
+as_exp_write_index(as_exp* exp, uint8_t* ptr)
+{
+	ptr = as_command_write_field_header(ptr, AS_FIELD_INDEX_EXPRESSION, 
+			exp->packed_sz);
+	memcpy(ptr, exp->packed, exp->packed_sz);
+	return ptr += exp->packed_sz;
+}
+
 int64_t
 as_exp_get_ctx_type(const as_cdt_ctx* ctx, as_exp_type default_type)
 {

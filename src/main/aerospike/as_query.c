@@ -204,14 +204,27 @@ as_query_where_init(as_query* query, uint16_t n)
 
 static bool
 as_query_where_internal(
-	as_query* query, const char* bin, const char* index_name, as_cdt_ctx* ctx,
-	as_predicate_type type, as_index_type itype, as_index_datatype dtype,
-	va_list ap
+	as_query* query, const char* bin, const char* index_name, as_exp* exp, 
+	as_cdt_ctx* ctx, as_predicate_type type, as_index_type itype, 
+	as_index_datatype dtype, va_list ap
 	)
 {
 	// TODO: (varun) bin name compulsory? (even though fake?)
 	// test preconditions
-	if (! query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE) {
+
+	if (! query) {
+		return false;
+	}
+
+	if (bin != NULL && strlen(bin) >= AS_BIN_NAME_MAX_SIZE) {
+		return false;
+	}
+
+	if (index_name != NULL && strlen(index_name) >= AS_INDEX_NAME_MAX_SIZE) {
+		return false;
+	}
+
+	if (index_name == NULL && bin == NULL && exp == NULL) {
 		return false;
 	}
 
@@ -226,11 +239,22 @@ as_query_where_internal(
 	if (index_name != NULL) {
 		strcpy(p->index_name, index_name);
 	}
+	else {
+		strcpy(p->index_name, "");
+	}
 
-	strcpy(p->bin, bin);
+	if (bin != NULL) {
+		strcpy(p->bin, bin);
+	}
+	else {
+		strcpy(p->bin, "");
+	}
+
 	p->type = type;
 	p->dtype = dtype;
 	p->itype = itype;
+	p->exp = exp; // TODO: take care of it for query based on expression.
+	p->exp_free = false;
 	p->ctx = ctx;
 	p->ctx_free = false; // Default to false to preserve legacy behavior.
 
@@ -297,7 +321,22 @@ as_query_where(
 	va_list ap;
 	va_start(ap, dtype);
 
-	bool rv = as_query_where_internal(query, bin, NULL, NULL, type, itype, dtype, ap);
+	bool rv = as_query_where_internal(query, bin, NULL, NULL, NULL, type, itype, dtype, ap);
+
+	va_end(ap);
+	return rv;
+}
+
+bool
+as_query_where_with_exp(
+	as_query* query, const char* index_name, as_exp* exp, as_predicate_type type,
+	as_index_type itype, as_index_datatype dtype, ...
+	)
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_internal(query, NULL, index_name, exp, NULL, type, itype, dtype, ap);
 
 	va_end(ap);
 	return rv;
@@ -312,7 +351,7 @@ as_query_where_with_ctx(
 	va_list ap;
 	va_start(ap, dtype);
 
-	bool rv = as_query_where_internal(query, bin, NULL, ctx, type, itype, dtype, ap);
+	bool rv = as_query_where_internal(query, bin, NULL, NULL, ctx, type, itype, dtype, ap);
 
 	va_end(ap);
 	return rv;
@@ -327,7 +366,7 @@ as_query_where_with_index_name(
 	va_list ap;
 	va_start(ap, dtype);
 
-	bool rv = as_query_where_internal(query, "<dummy>", index_name, NULL, type, itype, dtype, ap);
+	bool rv = as_query_where_internal(query, NULL, index_name, NULL, NULL, type, itype, dtype, ap);
 
 	va_end(ap);
 	return rv;

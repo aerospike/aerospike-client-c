@@ -133,11 +133,11 @@ aerospike_index_create_ctx_exp(
 //	as_string_builder_append_char(&sb, ',');
 //	as_string_builder_append(&sb, dtype_string);
 
-	as_string_builder_append(&sb, ";keytype=");
+	as_string_builder_append(&sb, ";type=");
 	as_string_builder_append(&sb, dtype_string);
 
 	if (bin_name != NULL) {
-		as_string_builder_append(&sb, ";binname=");
+		as_string_builder_append(&sb, ";bin=");
 		as_string_builder_append(&sb, bin_name);
 	}
 

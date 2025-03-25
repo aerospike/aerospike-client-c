@@ -217,6 +217,16 @@ typedef struct as_predicate_s {
 	as_bin_name bin;
 
 	/**
+	 * The exp to query. Use as_query_where_with_exp() to set.
+	 */
+	struct as_exp* exp;
+
+	/**
+	 * Should exp be destroyed on as_query_destroy(). Default: false.
+	 */
+	bool exp_free;
+
+	/**
 	 * The CDT context to query. Use as_query_where_with_ctx() to set.
 	 */
 	struct as_cdt_ctx* ctx;
@@ -793,6 +803,13 @@ AS_EXTERN bool
 as_query_where(
 	as_query* query, const char * bin, as_predicate_type type, as_index_type itype,
 	as_index_datatype dtype, ...
+	);
+
+
+bool
+as_query_where_with_exp(
+	as_query* query, const char* index_name, as_exp* exp, as_predicate_type type,
+	as_index_type itype, as_index_datatype dtype, ...
 	);
 
 /**

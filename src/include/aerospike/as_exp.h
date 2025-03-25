@@ -214,6 +214,7 @@ AS_EXTERN as_exp* as_exp_compile(as_exp_entry* table, uint32_t n);
 AS_EXTERN char* as_exp_compile_b64(as_exp* exp);
 AS_EXTERN void as_exp_destroy_b64(char* b64);
 AS_EXTERN uint8_t* as_exp_write(as_exp* exp, uint8_t* ptr);
+AS_EXTERN uint8_t* as_exp_write_index(as_exp* exp, uint8_t* ptr);
 AS_EXTERN int64_t as_exp_get_ctx_type(const as_cdt_ctx* ctx, as_exp_type default_type);
 AS_EXTERN int64_t as_exp_get_list_type(as_exp_type default_type, as_list_return_type rtype, bool is_multi);
 AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype, bool is_multi);

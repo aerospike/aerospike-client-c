@@ -78,6 +78,7 @@ typedef struct {
 	command* cmd;
 	atf_test_result* result;
 	int idx;
+	as_error err_orig;
 } commander;
 
 static void
@@ -621,6 +622,33 @@ batch_apply_add(as_vector* cmds, as_txn* txn, uint32_t batch_size, int64_t val)
 }
 
 static void
+batch_apply_cleanup(as_batch_records* recs)
+{
+	if (recs->list.size > 0) {
+		// Destroy heap allocated arglist that is used on every batch record.
+		const as_batch_apply_record* rec = as_vector_get(&recs->list, 0);
+		as_arraylist_destroy((as_arraylist*)rec->arglist);
+		cf_free((as_policy_batch_apply*)rec->policy);
+	}
+	as_batch_records_destroy(recs);
+}
+
+static void
+abort_on_error_listener(
+	as_error* err, as_abort_status status, void* udata, struct as_event_loop* event_loop
+	)
+{
+	commander* cmdr = udata;
+
+	if (err) {
+		printf("Abort failed: %d - %s\n", err->code, err->message);
+	}
+
+	// Fail with original error.
+	commander_fail(cmdr, &cmdr->err_orig);
+}
+
+static void
 batch_apply_listener(
 	as_error* err, as_batch_records* recs, void* udata, as_event_loop* event_loop
 	)
@@ -634,10 +662,12 @@ batch_apply_listener(
 	}
 
 	if (err) {
-		if (err->code == cmdr->cmd->status) {
-			success = true;
-		}
-		else {
+		batch_apply_cleanup(recs);
+		as_error_copy(&cmdr->err_orig, err);
+		as_status status = aerospike_abort_async(as, err, cmdr->cmd->txn, abort_on_error_listener, cmdr, NULL);
+
+		if (status != AEROSPIKE_OK) {
+			printf("Abort failed: %d - %s\n", err->code, err->message);
 			commander_fail(cmdr, err);
 		}
 	}
@@ -654,15 +684,9 @@ batch_apply_listener(
 		else {
 			fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
 		}
-	}
 
-	if (recs->list.size > 0) {
-		// Destroy heap allocated arglist that is used on every batch record.
-		const as_batch_apply_record* rec = as_vector_get(&recs->list, 0);
-		as_arraylist_destroy((as_arraylist*)rec->arglist);
-		cf_free((as_policy_batch_apply*)rec->policy);
+		batch_apply_cleanup(recs);
 	}
-	as_batch_records_destroy(recs);
 
 	if (success) {
 		commander_run_next(cmdr);
@@ -694,7 +718,7 @@ batch_apply_exec(commander* cmdr, command* cmd, as_error* err)
 
 	for (uint32_t i = 0; i < cmd->batch_size; i++) {
 		as_batch_apply_record* rec = as_batch_apply_reserve(recs);
-		as_key_init_int64(&rec->key, NAMESPACE, SET, i);
+		as_key_init_int64(&rec->key, NAMESPACE, SET, i + 20);
 		rec->policy = pba;
 		rec->module = "udf_record";
 		rec->function = "write_bin";
@@ -704,9 +728,7 @@ batch_apply_exec(commander* cmdr, command* cmd, as_error* err)
 	as_status status = aerospike_batch_write_async(as, err, policy, recs, batch_apply_listener, cmdr, NULL);
 
 	if (status != AEROSPIKE_OK) {
-		as_batch_records_destroy(recs);
-		as_arraylist_destroy(args);
-		cf_free(pba);
+		batch_apply_cleanup(recs);
 	}
 	return status;
 }
@@ -852,7 +874,12 @@ commander_execute(as_vector* cmds, atf_test_result* result)
 {
 	as_monitor_begin(&monitor);
 
-	commander c = {.cmds = cmds, .result = result, .idx = -1};
+	commander c;
+	c.cmds = cmds;
+	c.cmd = NULL;
+	c.result = result;
+	c.idx = -1;
+	as_error_init(&c.err_orig);
 	commander_run_next(&c);
 
 	as_monitor_wait(&monitor);

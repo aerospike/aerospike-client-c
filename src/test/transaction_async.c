@@ -674,14 +674,14 @@ batch_apply_listener(
 	bool success = false;
 
 	if (err) {
-		batch_apply_cleanup(recs);
-
 		if (cmdr->cmd->status != AEROSPIKE_OK) {
 			for (uint32_t i = 0; i < recs->list.size; i++) {
 				const as_batch_apply_record* rec = as_vector_get(&recs->list, i);
 				assert_int_eq_async(&monitor, rec->result, cmdr->cmd->status);
 			}
 		}
+		batch_apply_cleanup(recs);
+
 		as_error_copy(&cmdr->err_orig, err);
 		as_status status = aerospike_abort_async(as, err, cmdr->cmd->txn, abort_on_error_listener, cmdr, NULL);
 

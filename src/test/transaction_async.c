@@ -611,13 +611,23 @@ batch_write_exec(commander* cmdr, command* cmd, as_error* err)
 }
 
 //---------------------------------
-// Batch Apply
+// Batch Apply with on_locking_only
 //---------------------------------
 
 static void
 batch_apply_add(as_vector* cmds, as_txn* txn, uint32_t batch_size, int64_t val)
 {
 	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = CMD_BATCH_APPLY};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+batch_apply_add_error(
+	as_vector* cmds, as_txn* txn, uint32_t batch_size, int64_t val, as_status status
+	)
+{
+	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = CMD_BATCH_APPLY,
+		.status = status};
 	as_vector_append(cmds, &cmd);
 }
 
@@ -641,11 +651,17 @@ abort_on_error_listener(
 	commander* cmdr = udata;
 
 	if (err) {
-		printf("Abort failed: %d - %s\n", err->code, err->message);
+		warn("Abort failed: %d - %s\n", err->code, err->message);
 	}
 
-	// Fail with original error.
-	commander_fail(cmdr, &cmdr->err_orig);
+	if (cmdr->cmd->status == AEROSPIKE_OK) {
+		// Error was not expected. Fail with original error.
+		commander_fail(cmdr, &cmdr->err_orig);
+	}
+	else {
+		// Error was expected. run next command.
+		commander_run_next(cmdr);
+	}
 }
 
 static void
@@ -654,26 +670,27 @@ batch_apply_listener(
 	)
 {
 	commander* cmdr = udata;
+	atf_test_result* __result__ = cmdr->result;
 	bool success = false;
-
-	for (uint32_t i = 0; i < recs->list.size; i++) {
-		const as_batch_apply_record* rec = as_vector_get(&recs->list, i);
-		printf("result[%u]=%d\n", i, rec->result);
-	}
 
 	if (err) {
 		batch_apply_cleanup(recs);
+
+		if (cmdr->cmd->status != AEROSPIKE_OK) {
+			for (uint32_t i = 0; i < recs->list.size; i++) {
+				const as_batch_apply_record* rec = as_vector_get(&recs->list, i);
+				assert_int_eq_async(&monitor, rec->result, cmdr->cmd->status);
+			}
+		}
 		as_error_copy(&cmdr->err_orig, err);
 		as_status status = aerospike_abort_async(as, err, cmdr->cmd->txn, abort_on_error_listener, cmdr, NULL);
 
 		if (status != AEROSPIKE_OK) {
-			printf("Abort failed: %d - %s\n", err->code, err->message);
+			warn("Abort failed: %d - %s\n", err->code, err->message);
 			commander_fail(cmdr, err);
 		}
 	}
 	else {
-		atf_test_result* __result__ = cmdr->result;
-
 		if (cmdr->cmd->status == AEROSPIKE_OK) {
 			for (uint32_t i = 0; i < recs->list.size; i++) {
 				const as_batch_apply_record* rec = as_vector_get(&recs->list, i);
@@ -1260,16 +1277,16 @@ TEST(txn_async_batch_abort, "transaction async batch abort")
 
 TEST(txn_async_batch_apply, "transaction async batch apply")
 {
+	// Test on_locking_only in async batch apply.
 	uint32_t batch_size = 2;
 
 	as_txn* txn = as_txn_create();
 
 	as_vector cmds;
-	as_vector_inita(&cmds, sizeof(command), 3);
+	as_vector_inita(&cmds, sizeof(command), 2);
 
 	batch_apply_add(&cmds, txn, batch_size, 1);
-	batch_apply_add(&cmds, txn, batch_size, 2);
-	commit_add(&cmds, txn);
+	batch_apply_add_error(&cmds, txn, batch_size, 2, AEROSPIKE_MRT_ALREADY_LOCKED);
 
 	commander_execute(&cmds, __result__);
 	as_txn_destroy(txn);

@@ -46,7 +46,7 @@
 //
 
 const char TEST_INDEX_NAME[] = "test-bin-index";
-const char CAMPAIGN_INDEX_NAME[] = "exp-campaign";
+const char DIGEST_MODULO_INDEX_NAME[] = "exp-digest-modulo";
 
 const char PAGE_INDEX_NAME[] = "page-index";
 const char PAGE_BIN_INT[] = "binint";
@@ -61,7 +61,7 @@ void cleanup(aerospike* p_as);
 bool insert_records(aerospike* p_as);
 
 //==========================================================
-// SIMPLE QUERY Examples
+// exp-digest-modulo EXP QUERY Examples
 //
 
 int
@@ -78,26 +78,27 @@ main(int argc, char* argv[])
 
 	// Start clean.
 	example_remove_test_records(&as);
-	example_remove_index(&as, CAMPAIGN_INDEX_NAME);
+	example_remove_index(&as, DIGEST_MODULO_INDEX_NAME);
 
 	insert_records(&as);
 
-	as_exp_build(exp, as_exp_add(as_exp_bin_int("campaign1"),
-			as_exp_bin_int("campaign2"), as_exp_bin_int("campaign3")));
+	as_exp_build(exp, as_exp_cond(as_exp_cmp_eq(as_exp_digest_modulo(100), as_exp_int(1)), as_exp_int(1), as_exp_unknown()));
 
 	// Create an expression index.
-	if (! example_create_exp_index(&as, g_set, CAMPAIGN_INDEX_NAME, exp)) {
+	if (! example_create_exp_index(&as, g_set, DIGEST_MODULO_INDEX_NAME, exp)) {
 		cleanup(&as);
 		exit(-1);
 	}
 
-	// Create an as_query object.
+	LOG("creating si: exp-digest-modulo where digest_modulo(100) == 1 ");
+
 	as_query query;
 	as_query_init(&query, g_namespace, g_set);
-	as_query_where_inita(&query, 1);
-	as_query_where_with_exp(&query, NULL, exp, as_integer_range(300, 10000));
 
-	LOG("executing query: where exp_campaign between 300 and 10000");
+	as_query_where_inita(&query, 1);
+	as_query_where_with_exp(&query, NULL, exp, as_integer_equals(1));
+
+	LOG("executing query: where exp-digest-modulo equals 1");
 
 	as_error err;
 
@@ -122,7 +123,7 @@ main(int argc, char* argv[])
 	// Cleanup and disconnect from the database cluster.
 	cleanup(&as);
 
-	LOG("query with expression example successfully completed");
+	LOG("exp-digest-modulo query example successfully completed");
 	return 0;
 }
 
@@ -152,7 +153,7 @@ query_cb(const as_val* p_val, void* udata)
 	as_aaf_uint32(n_responses, 1);
 
 	//	LOG("query callback returned record:");
-//	example_dump_record(p_rec);
+	example_dump_record(p_rec);
 
 	return true;
 }
@@ -173,16 +174,11 @@ cleanup(aerospike* p_as)
 bool
 insert_records(aerospike* p_as)
 {
-	// Create an as_record object with one (integer value) bin. By using
-	// as_record_inita(), we won't need to destroy the record if we only set
-	// bins using as_record_set_int64().
 	as_record rec;
 	as_record_inita(&rec, 3);
 
 	uint32_t n_keys = 10000;
 
-	// Re-using rec, write records into the database such that each record's key
-	// and (test-bin) value is based on the loop index.
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_error err;
 

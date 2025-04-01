@@ -709,9 +709,11 @@ as_query_command_size(
 		qb->size += AS_FIELD_HEADER_SIZE;
 		filter_size++;  // Add byte for num filters.
 
+		filter_size += 1; // always send bin name length even if its zero
+
 		if (pred->bin[0] != '\0') {
 			// bin name size(1) +  bin name length
-			filter_size += 1 + (uint32_t)strlen(pred->bin);
+			filter_size += (uint32_t)strlen(pred->bin);
 		}
 		
 		// particle type size(1) + begin particle size(4) + end particle size(4) = 9
@@ -953,14 +955,18 @@ as_query_command_init(
 		p = as_command_write_field_header(p, AS_FIELD_INDEX_RANGE, qb->filter_size);
 		*p++ = (uint8_t)1;  // Only one filter is allowed by the server.
 
+		uint8_t* len_ptr = p++;
+
 		if (pred->bin[0] != '\0') {
 			// Write bin name, but do not transfer null byte.
-			uint8_t* len_ptr = p++;
 			uint8_t* s = (uint8_t*)pred->bin;
 			while (*s) {
 				*p++ = *s++;
 			}
 			*len_ptr = (uint8_t)(s - (uint8_t*)pred->bin);
+		}
+		else {
+			*len_ptr = 0;
 		}
 		
 		// Write particle type and range values.

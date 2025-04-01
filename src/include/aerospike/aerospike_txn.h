@@ -44,6 +44,11 @@ typedef enum {
 	AS_COMMIT_ALREADY_COMMITTED,
 
 	/**
+	 * Transaction has already been aborted.
+	 */
+	AS_COMMIT_ALREADY_ABORTED,
+
+	/**
 	 * Transaction verify failed. Transaction will be aborted.
 	 */
 	AS_COMMIT_VERIFY_FAILED,
@@ -95,6 +100,11 @@ typedef enum {
 	 * Transaction has already been aborted.
 	 */
 	AS_ABORT_ALREADY_ABORTED,
+
+	/**
+	 * Transaction has already been committed.
+	 */
+	AS_ABORT_ALREADY_COMMITTED,
 
 	/**
 	 * Client roll back abandoned. Server will eventually abort the transaction.

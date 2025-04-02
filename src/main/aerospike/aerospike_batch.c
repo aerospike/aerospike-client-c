@@ -4601,11 +4601,12 @@ as_batch_txn_callback(as_error* err, as_record* rec, void* udata, as_event_loop*
 	}
 
 	// Add txn monitor keys succeeded. Run original batch write.
-	as_status status = as_batch_records_execute_async(bt->as, err, &bt->policy, bt->records,
+	as_error e;
+	as_status status = as_batch_records_execute_async(bt->as, &e, &bt->policy, bt->records,
 		bt->txn, bt->versions, bt->listener, bt->udata, event_loop, 0, true);
 
 	if (status != AEROSPIKE_OK) {
-		bt->listener(err, bt->records, bt->udata, event_loop);
+		bt->listener(&e, bt->records, bt->udata, event_loop);
 	}
 	cf_free(bt);
 }

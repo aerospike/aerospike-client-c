@@ -53,7 +53,7 @@ as_config_init(as_config* c)
 	c->tend_thread_cpu = -1;
 	as_policies_init(&c->policies);
 	c->config_provider.path = NULL;
-	c->config_provider.interval = 60;
+	c->config_provider.interval = AS_CONFIG_PROVIDER_INTERVAL_DEFAULT;
 	as_config_lua_init(&c->lua);
 	memset(&c->tls, 0, sizeof(as_config_tls));
 	c->auth_mode = AS_AUTH_INTERNAL;

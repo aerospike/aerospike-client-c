@@ -60,6 +60,11 @@ extern "C" {
  */
 #define AS_PASSWORD_SIZE 64
 
+/**
+ * Default  number of cluster tend iterations between checks for dynamic configuration file changes.
+ */
+#define AS_CONFIG_PROVIDER_INTERVAL_DEFAULT 60
+
 //---------------------------------
 // Types
 //---------------------------------

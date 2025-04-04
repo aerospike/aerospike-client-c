@@ -2651,17 +2651,21 @@ as_single_execute_record(as_batch_task_records* btr, as_error* err)
 
 	as_status status = as_single_execute(&btr->base, err, &rec->key, rec, &rec->record, offset);
 
-	if (status != AEROSPIKE_OK) {
+	if (status == AEROSPIKE_OK) {
+		rec->result = AEROSPIKE_OK;
+	}
+	else {
+		if (as_batch_set_error_row(status)) {
+			rec->in_doubt = err->in_doubt;
+			*btr->base.error_row = true;
+		}
+
 		// Only server generated errors should change key specific result.
 		// This is done to be consistent with batch results when batch node
 		// command contains multiple keys.
 		if (status > AEROSPIKE_OK && status != AEROSPIKE_ERR_TIMEOUT) {
 			rec->result = status;
-		}
-
-		if (as_batch_set_error_row(status)) {
-			rec->in_doubt = err->in_doubt;
-			*btr->base.error_row = true;
+			status = AEROSPIKE_OK;
 		}
 	}
 	return status;
@@ -2675,17 +2679,21 @@ as_single_execute_key(as_batch_task_keys* btk, as_error* err)
 
 	as_status status = as_single_execute(&btk->base, err, &btk->keys[offset], btk->rec, &res->record, 0);
 
-	if (status != AEROSPIKE_OK) {
+	if (status == AEROSPIKE_OK) {
+		res->result = AEROSPIKE_OK;
+	}
+	else {
+		if (as_batch_set_error_row(status)) {
+			res->in_doubt = err->in_doubt;
+			*btk->base.error_row = true;
+		}
+
 		// Only server generated errors should change key specific result.
 		// This is done to be consistent with batch results when batch node
 		// command contains multiple keys.
 		if (status > AEROSPIKE_OK && status != AEROSPIKE_ERR_TIMEOUT) {
 			res->result = status;
-		}
-
-		if (as_batch_set_error_row(status)) {
-			res->in_doubt = err->in_doubt;
-			*btk->base.error_row = true;
+			status = AEROSPIKE_OK;
 		}
 	}
 	return status;
@@ -2728,6 +2736,32 @@ as_single_executor_error(as_error* err, as_single_data* data)
 }
 
 static void
+as_single_handle_error(as_batch_base_record* rec, as_single_data* data, as_error* err)
+{
+	if (as_batch_set_error_row(err->code)) {
+		rec->in_doubt = err->in_doubt;
+		data->executor->error_row = true;
+
+		if (err->code == AEROSPIKE_ERR_UDF) {
+			as_record_reset(&rec->record, 1);
+			as_string* s = as_string_new_strdup(err->message);
+			as_record_set(&rec->record, "FAILURE", (as_bin_value*)s);
+		}
+	}
+
+	// Only server generated errors should change key specific result.
+	// This is done to be consistent with batch results when batch node
+	// command contains multiple keys.
+	if (err->code > AEROSPIKE_OK && err->code != AEROSPIKE_ERR_TIMEOUT) {
+		rec->result = err->code;
+		as_single_executor_complete(data);
+	}
+	else {
+		as_single_executor_error(err, data);
+	}
+}
+
+static void
 as_single_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	as_single_data* data = udata;
@@ -2738,18 +2772,7 @@ as_single_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 		as_single_executor_complete(data);
 	}
 	else {
-		// Only server generated errors should change key specific result.
-		// This is done to be consistent with batch results when batch node
-		// command contains multiple keys.
-		if (err->code > AEROSPIKE_OK && err->code != AEROSPIKE_ERR_TIMEOUT) {
-			rec->result = err->code;
-		}
-
-		if (as_batch_set_error_row(err->code)) {
-			rec->in_doubt = err->in_doubt;
-			data->executor->error_row = true;
-		}
-		as_single_executor_error(err, data);
+		as_single_handle_error(rec, data, err);
 	}
 }
 
@@ -2773,18 +2796,7 @@ as_single_record_listener(as_error* err, as_record* record, void* udata, as_even
 		as_single_executor_complete(data);
 	}
 	else {
-		// Only server generated errors should change key specific result.
-		// This is done to be consistent with batch results when batch node
-		// command contains multiple keys.
-		if (err->code > AEROSPIKE_OK && err->code != AEROSPIKE_ERR_TIMEOUT) {
-			rec->result = err->code;
-		}
-
-		if (as_batch_set_error_row(err->code)) {
-			rec->in_doubt = err->in_doubt;
-			data->executor->error_row = true;
-		}
-		as_single_executor_error(err, data);
+		as_single_handle_error(rec, data, err);
 	}
 }
 
@@ -2802,24 +2814,7 @@ as_single_value_listener(as_error* err, as_val* val, void* udata, as_event_loop*
 		as_single_executor_complete(data);
 	}
 	else {
-		// Only server generated errors should change key specific result.
-		// This is done to be consistent with batch results when batch node
-		// command contains multiple keys.
-		if (err->code > AEROSPIKE_OK && err->code != AEROSPIKE_ERR_TIMEOUT) {
-			rec->result = err->code;
-		}
-
-		if (as_batch_set_error_row(err->code)) {
-			rec->in_doubt = err->in_doubt;
-			data->executor->error_row = true;
-
-			if (err->code == AEROSPIKE_ERR_UDF) {
-				as_record_reset(&rec->record, 1);
-				as_string* s = as_string_new_strdup(err->message);
-				as_record_set(&rec->record, "FAILURE", (as_bin_value*)s);
-			}
-		}
-		as_single_executor_error(err, data);
+		as_single_handle_error(rec, data, err);
 	}
 }
 

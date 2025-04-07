@@ -166,6 +166,17 @@ as_parse_int32(as_yaml* yaml, const char* name, const char* value, int32_t* out)
 	return true;
 }
 
+static inline void
+as_assign_uint32(
+	const char* section, const char* name, const char* value, uint32_t src, uint32_t* trg
+	)
+{
+	if (*trg != src) {
+		as_log_info("Set %s.%s = %s", section, name, value);
+		*trg = src;
+	}
+}
+
 static bool
 parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out)
 {
@@ -191,11 +202,19 @@ as_parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* ou
 		return false;
 	}
 
-	if (*out != val) {
-		as_log_info("Set %s.%s = %s", yaml->name, name, value);
-		*out = val;
-	}
+	as_assign_uint32(yaml->name, name, value, val, out);
 	return true;
+}
+
+static inline void
+as_assign_bool(
+	const char* section, const char* name, const char* value, bool src, bool* trg
+	)
+{
+	if (*trg != src) {
+		as_log_info("Set %s.%s = %s", section, name, value);
+		*trg = src;
+	}
 }
 
 static bool
@@ -223,10 +242,7 @@ as_parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out)
 		return false;
 	}
 
-	if (*out != val) {
-		as_log_info("Set %s.%s = %s", yaml->name, name, value);
-		*out = val;
-	}
+	as_assign_bool(yaml->name, name, value, val, out);
 	return true;
 }
 
@@ -305,8 +321,22 @@ as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out)
 	return true;
 }
 
+static inline void
+as_assign_read_mode_ap(
+	const char* section, const char* name, const char* value, as_policy_read_mode_ap src,
+	as_policy_read_mode_ap* trg
+	)
+{
+	if (*trg != src) {
+		as_log_info("Set %s.%s = %s", section, name, value);
+		*trg = src;
+	}
+}
+
 static bool
-as_parse_read_mode_ap(as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_ap* read_mode_ap)
+as_parse_read_mode_ap(
+	as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_ap* read_mode_ap
+	)
 {
 	as_policy_read_mode_ap val;
 
@@ -321,11 +351,20 @@ as_parse_read_mode_ap(as_yaml* yaml, const char* name, const char* value, as_pol
 		return false;
 	}
 
-	if (*read_mode_ap != val) {
-		as_log_info("Set %s.%s = %s", yaml->name, name, value);
-		*read_mode_ap = val;
-	}
+	as_assign_read_mode_ap(yaml->name, name, value, val, read_mode_ap);
 	return true;
+}
+
+static inline void
+as_assign_read_mode_sc(
+	const char* section, const char* name, const char* value, as_policy_read_mode_sc src,
+	as_policy_read_mode_sc* trg
+	)
+{
+	if (*trg != src) {
+		as_log_info("Set %s.%s = %s", section, name, value);
+		*trg = src;
+	}
 }
 
 static bool
@@ -350,11 +389,20 @@ as_parse_read_mode_sc(as_yaml* yaml, const char* name, const char* value, as_pol
 		return false;
 	}
 
-	if (*read_mode_sc != val) {
-		as_log_info("Set %s.%s = %s", yaml->name, name, value);
-		*read_mode_sc = val;
-	}
+	as_assign_read_mode_sc(yaml->name, name, value, val, read_mode_sc);
 	return true;
+}
+
+static inline void
+as_assign_replica(
+	const char* section, const char* name, const char* value, as_policy_replica src,
+	as_policy_replica* trg
+	)
+{
+	if (*trg != src) {
+		as_log_info("Set %s.%s = %s", section, name, value);
+		*trg = src;
+	}
 }
 
 static bool
@@ -379,10 +427,7 @@ as_parse_replica(as_yaml* yaml, const char* name, const char* value, as_policy_r
 		return false;
 	}
 
-	if (*replica != val) {
-		as_log_info("Set %s.%s = %s", yaml->name, name, value);
-		*replica = val;
-	}
+	as_assign_replica(yaml->name, name, value, val, replica);
 	return true;
 }
 
@@ -415,6 +460,18 @@ as_parse_expected_duration(as_yaml* yaml, const char* name, const char* value, a
 #define as_str(x) #x
 #define as_xstr(x) as_str(x)
 
+static void
+as_assign_send_key(
+	const char* section, const char* name, const char* value, as_policy_key src, as_policy_key* trg
+	)
+{
+	if (*trg != src) {
+		const char* str = (src == AS_POLICY_KEY_SEND) ? as_xstr(AS_POLICY_KEY_SEND) : as_xstr(AS_POLICY_KEY_DIGEST);
+		as_log_info("Set %s.%s = %s", section, name, str);
+		*trg = src;
+	}
+}
+
 static bool
 as_parse_send_key(as_yaml* yaml, const char* name, const char* value, as_policy_key* key)
 {
@@ -426,11 +483,7 @@ as_parse_send_key(as_yaml* yaml, const char* name, const char* value, as_policy_
 
 	as_policy_key val = send_key ? AS_POLICY_KEY_SEND : AS_POLICY_KEY_DIGEST;
 
-	if (*key != val) {
-		const char* str = send_key ? as_xstr(AS_POLICY_KEY_SEND) : as_xstr(AS_POLICY_KEY_DIGEST);
-		as_log_info("Set %s.%s = %s", yaml->name, name, str);
-		*key = val;
-	}
+	as_assign_send_key(yaml->name, name, value, val, key);
 	return true;
 }
 
@@ -459,12 +512,25 @@ as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* b
 	as_policy_read* policy = &base->read;
 	yaml->name = "read";
 
+	// The dynamic configuration file schema contains a read policy, but the C client
+	// has as_policy_read and as_policy_operate. The file read policy must be applied
+	// to all of these policies.
+	const char* operate_section = "operate";
+
 	if (strcmp(name, "read_mode_ap") == 0) {
-		return as_parse_read_mode_ap(yaml, name, value, &policy->read_mode_ap);
+		if (!as_parse_read_mode_ap(yaml, name, value, &policy->read_mode_ap)) {
+			return false;
+		}
+		as_assign_read_mode_ap(operate_section, name, value, policy->read_mode_ap, &base->operate.read_mode_ap);
+		return true;
 	}
 
 	if (strcmp(name, "read_mode_sc") == 0) {
-		return as_parse_read_mode_sc(yaml, name, value, &policy->read_mode_sc);
+		if (!as_parse_read_mode_sc(yaml, name, value, &policy->read_mode_sc)) {
+			return false;
+		}
+		as_assign_read_mode_sc(operate_section, name, value, policy->read_mode_sc, &base->operate.read_mode_sc);
+		return true;
 	}
 
 	if (strcmp(name, "replica") == 0) {
@@ -512,32 +578,81 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	as_policy_write* policy = &base->write;
 	yaml->name = "write";
 
+	// The dynamic configuration file schema contains a write policy, but the C client
+	// has as_policy_write, as_policy_operate, as_policy_remove and as_policy_apply.
+	// The file write policy must be applied to all of these policies.
+	const char* operate_section = "operate";
+	const char* apply_section = "apply";
+	const char* remove_section = "remove";
+
 	if (strcmp(name, "replica") == 0) {
-		return as_parse_replica(yaml, name, value, &policy->replica);
+		if (!as_parse_replica(yaml, name, value, &policy->replica)) {
+			return false;
+		}
+		as_assign_replica(operate_section, name, value, policy->replica, &base->operate.replica);
+		as_assign_replica(apply_section, name, value, policy->replica, &base->apply.replica);
+		as_assign_replica(remove_section, name, value, policy->replica, &base->remove.replica);
+		return true;
 	}
 
 	if (strcmp(name, "socket_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+		if (!as_parse_uint32(yaml, name, value, &policy->base.socket_timeout)) {
+			return false;
+		}
+		as_assign_uint32(operate_section, name, value, policy->base.socket_timeout, &base->operate.base.socket_timeout);
+		as_assign_uint32(apply_section, name, value, policy->base.socket_timeout, &base->apply.base.socket_timeout);
+		as_assign_uint32(remove_section, name, value, policy->base.socket_timeout, &base->remove.base.socket_timeout);
+		return true;
 	}
 
 	if (strcmp(name, "total_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+		if (!as_parse_uint32(yaml, name, value, &policy->base.total_timeout)) {
+			return false;
+		}
+		as_assign_uint32(operate_section, name, value, policy->base.total_timeout, &base->operate.base.total_timeout);
+		as_assign_uint32(apply_section, name, value, policy->base.total_timeout, &base->apply.base.total_timeout);
+		as_assign_uint32(remove_section, name, value, policy->base.total_timeout, &base->remove.base.total_timeout);
+		return true;
 	}
 
 	if (strcmp(name, "max_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+		if (!as_parse_uint32(yaml, name, value, &policy->base.max_retries)) {
+			return false;
+		}
+		as_assign_uint32(operate_section, name, value, policy->base.max_retries, &base->operate.base.max_retries);
+		as_assign_uint32(apply_section, name, value, policy->base.max_retries, &base->apply.base.max_retries);
+		as_assign_uint32(remove_section, name, value, policy->base.max_retries, &base->remove.base.max_retries);
+		return true;
 	}
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+		if (!as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries)) {
+			return false;
+		}
+		as_assign_uint32(operate_section, name, value, policy->base.sleep_between_retries, &base->operate.base.max_retries);
+		as_assign_uint32(apply_section, name, value, policy->base.sleep_between_retries, &base->apply.base.max_retries);
+		as_assign_uint32(remove_section, name, value, policy->base.sleep_between_retries, &base->remove.base.max_retries);
+		return true;
 	}
 
 	if (strcmp(name, "send_key") == 0) {
-		return as_parse_send_key(yaml, name, value, &policy->key);
+		if (!as_parse_send_key(yaml, name, value, &policy->key)) {
+			return false;
+		}
+		as_assign_send_key(operate_section, name, value, policy->key, &base->operate.key);
+		as_assign_send_key(apply_section, name, value, policy->key, &base->apply.key);
+		as_assign_send_key(remove_section, name, value, policy->key, &base->remove.key);
+		return true;
 	}
 
 	if (strcmp(name, "durable_delete") == 0) {
-		return as_parse_bool(yaml, name, value, &policy->durable_delete);
+		if (!as_parse_bool(yaml, name, value, &policy->durable_delete)) {
+			return false;
+		}
+		as_assign_bool(operate_section, name, value, policy->durable_delete, &base->operate.durable_delete);
+		as_assign_bool(apply_section, name, value, policy->durable_delete, &base->apply.durable_delete);
+		as_assign_bool(remove_section, name, value, policy->durable_delete, &base->remove.durable_delete);
+		return true;
 	}
 
 	if (strcmp(name, "connect_timeout") == 0) {
@@ -1330,6 +1445,32 @@ as_cluster_update(as_cluster* cluster, as_config* orig, as_config* config, as_er
 	trg->write.replica = src->write.replica;
 	trg->write.durable_delete = src->write.durable_delete;
 	trg->write.key = src->write.key;
+
+	trg->operate.base.socket_timeout = src->operate.base.socket_timeout;
+	trg->operate.base.total_timeout = src->operate.base.total_timeout;
+	trg->operate.base.max_retries = src->operate.base.max_retries;
+	trg->operate.base.sleep_between_retries = src->operate.base.sleep_between_retries;
+	trg->operate.replica = src->operate.replica;
+	trg->operate.durable_delete = src->operate.durable_delete;
+	trg->operate.key = src->operate.key;
+	trg->operate.read_mode_ap = src->operate.read_mode_ap;
+	trg->operate.read_mode_sc = src->operate.read_mode_sc;
+
+	trg->apply.base.socket_timeout = src->apply.base.socket_timeout;
+	trg->apply.base.total_timeout = src->apply.base.total_timeout;
+	trg->apply.base.max_retries = src->apply.base.max_retries;
+	trg->apply.base.sleep_between_retries = src->apply.base.sleep_between_retries;
+	trg->apply.replica = src->apply.replica;
+	trg->apply.durable_delete = src->apply.durable_delete;
+	trg->apply.key = src->apply.key;
+
+	trg->remove.base.socket_timeout = src->remove.base.socket_timeout;
+	trg->remove.base.total_timeout = src->remove.base.total_timeout;
+	trg->remove.base.max_retries = src->remove.base.max_retries;
+	trg->remove.base.sleep_between_retries = src->remove.base.sleep_between_retries;
+	trg->remove.replica = src->remove.replica;
+	trg->remove.durable_delete = src->remove.durable_delete;
+	trg->remove.key = src->remove.key;
 
 	trg->scan.base.socket_timeout = src->scan.base.socket_timeout;
 	trg->scan.base.total_timeout = src->scan.base.total_timeout;

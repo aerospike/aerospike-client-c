@@ -363,7 +363,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	timestamp_to_string(now_str, sizeof(now_str));
 	
 	char data[512];
-	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,errors,timeouts,latency[]] conn[inUse,inPool,opened,closed] latency(%u,%u)[type[l1,l2,l3...]]\n",
+	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,errors,timeouts,keyBusy,latency[]] conn[inUse,inPool,opened,closed] latency(%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, mw->latency_columns, mw->latency_shift);
 	if (rv <= 0) {
 		fclose(mw->file);
@@ -455,6 +455,8 @@ as_metrics_write_node(as_metrics_writer* mw, as_string_builder* sb, struct as_no
 	as_string_builder_append_uint64(sb, as_node_get_error_count(node));
 	as_string_builder_append_char(sb, ',');
 	as_string_builder_append_uint64(sb, as_node_get_timeout_count(node));
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint64(sb, as_node_get_key_busy_count(node));
 	as_string_builder_append(sb, ",[");
 
 	as_node_metrics* node_metrics = node->metrics;

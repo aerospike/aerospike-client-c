@@ -311,6 +311,11 @@ typedef struct as_node_s {
 	uint64_t timeout_count;
 
 	/**
+	 * Command key busy error count since node was initialized.
+	 */
+	uint64_t key_busy_count;
+
+	/**
 	 * Connection queue iterator.  Not atomic by design.
 	 */
 	uint32_t conn_iter;
@@ -704,6 +709,24 @@ static inline void
 as_node_add_timeout(as_node* node)
 {
 	as_incr_uint64(&node->timeout_count);
+}
+
+/**
+ * Return command key busy error count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_key_busy_count(as_node* node)
+{
+	return as_load_uint64(&node->key_busy_count);
+}
+
+/**
+ * Increment command key busy error count.
+ */
+static inline void
+as_node_add_key_busy(as_node* node)
+{
+	as_incr_uint64(&node->key_busy_count);
 }
 
 /**

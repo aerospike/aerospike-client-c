@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -98,6 +98,11 @@ typedef struct as_node_stats_s {
 	 * multiple timeouts per command may occur.
 	 */
 	uint64_t timeout_count;
+
+	/**
+	 * Command key busy error count since node was initialized.
+	 */
+	uint64_t key_busy_count;
 
 } as_node_stats;
 

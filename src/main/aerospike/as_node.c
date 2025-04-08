@@ -183,6 +183,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->error_rate = 0;
 	node->error_count = 0;
 	node->timeout_count = 0;
+	node->key_busy_count = 0;
 
 	if (cluster->metrics_enabled) {
 		node->metrics = as_node_metrics_init(cluster->metrics_latency_columns, cluster->metrics_latency_shift);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -106,6 +106,7 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 	stats->node = node;
 	stats->error_count = as_node_get_error_count(node);
 	stats->timeout_count = as_node_get_timeout_count(node);
+	stats->key_busy_count = as_node_get_key_busy_count(node);
 
 	as_conn_stats_init(&stats->sync);
 	as_conn_stats_init(&stats->async);
@@ -145,7 +146,7 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 {
 	as_string_builder sb;
 	as_string_builder_init(&sb, 4096, true);
-	as_string_builder_append(&sb, "nodes(inUse,inPool,opened,closed) error_count,timeout_count");
+	as_string_builder_append(&sb, "nodes(inUse,inPool,opened,closed) error_count,timeout_count,key_busy_count");
 	as_string_builder_append_newline(&sb);
 
 	for (uint32_t i = 0; i < stats->nodes_size; i++) {
@@ -158,6 +159,8 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 		as_string_builder_append_uint64(&sb, node_stats->error_count);
 		as_string_builder_append_char(&sb, ',');
 		as_string_builder_append_uint64(&sb, node_stats->timeout_count);
+		as_string_builder_append_char(&sb, ',');
+		as_string_builder_append_uint64(&sb, node_stats->key_busy_count);
 		as_string_builder_append_newline(&sb);
 	}
 

@@ -787,6 +787,11 @@ as_command_execute(as_command* cmd, as_error* err)
 					as_command_prepare_error(cmd, err);
 					break;
 
+				case AEROSPIKE_ERR_RECORD_BUSY:
+					as_node_add_key_busy(node);
+					as_command_prepare_error(cmd, err);
+					break;
+
 				default:
 					as_node_add_error(node);
 					as_command_prepare_error(cmd, err);

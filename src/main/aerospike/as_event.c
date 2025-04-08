@@ -1405,6 +1405,11 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 			as_event_put_connection(cmd, pool);
 			break;
 
+		case AEROSPIKE_ERR_RECORD_BUSY:
+			as_node_add_key_busy(cmd->node);
+			as_event_put_connection(cmd, pool);
+			break;
+
 		default:
 			as_node_add_error(cmd->node);
 			as_event_put_connection(cmd, pool);

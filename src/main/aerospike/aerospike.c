@@ -256,7 +256,9 @@ aerospike_connect(aerospike* as, as_error* err)
 	// Dynamic configuration allows metrics to be enabled from a file.
 	if (as->config.policies.metrics.enable) {
 		as_log_info("Enable metrics");
-		status = aerospike_enable_metrics(as, err, &as->config.policies.metrics);
+		// Call as_cluster_enable_metrics() instead of aerospike_enable_metrics() to avoid
+		// the uneccessary policy merge with the default metrics policy.
+		status = as_cluster_enable_metrics(err, as->cluster, &as->config.policies.metrics);
 	}
 
 	return status;

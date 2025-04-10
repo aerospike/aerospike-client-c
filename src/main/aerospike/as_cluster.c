@@ -569,7 +569,7 @@ as_cluster_destroy_node_metrics(as_cluster* cluster)
 }
 
 as_status
-as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy* policy)
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
 {
 	bool custom_listener = policy->metrics_listeners.enable_listener != NULL;
 	

@@ -501,6 +501,13 @@ as_policy_query_default(aerospike* as, as_policy_query* policy)
 	as_policy_query_copy(&config->policies.query, policy);
 }
 
+static inline void
+as_metrics_policy_default(aerospike* as, as_metrics_policy* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	*policy = config->policies.metrics;
+}
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

@@ -1092,6 +1092,9 @@ as_config_tls_add_host(as_config* config, const char* address, const char* tls_n
 /**
  * Set dynamic configuration file path.
  *
+ * An altenate way to set the path is to set environment variable AEROSPIKE_CLIENT_CONFIG_URL
+ * before running the application.
+ *
  * @relates as_config
  */
 static inline void

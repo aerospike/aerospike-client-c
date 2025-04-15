@@ -60,20 +60,38 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 
 	if (config) {
 		memcpy(&as->config, config, sizeof(as_config));
-
-		if (as->config.config_provider.path) {
-			as->dynamic_config = true;
-
-			as_error err;
-			as_status status = as_config_file_init(&as->config, &err);
-
-			if (status != AEROSPIKE_OK) {
-				as_log_error("%s", err.message);
-			}
-		}
 	}
 	else {
 		as_config_init(&as->config);
+	}
+
+    char* url = getenv("AEROSPIKE_CLIENT_CONFIG_URL");
+
+    if (url) {
+		// Environment variable takes precedence over original
+		// config path.
+		char* path;
+
+		if (strncmp(url, "file://", 7) == 0) {
+			path = url + 7;
+		}
+		else {
+			path = url;
+		}
+
+		// Set config path from environment variable.
+		as_config_provider_set_path(&as->config, path);
+	}
+
+	if (as->config.config_provider.path) {
+		as->dynamic_config = true;
+
+		as_error err;
+		as_status status = as_config_file_init(&as->config, &err);
+
+		if (status != AEROSPIKE_OK) {
+			as_log_error("%s", err.message);
+		}
 	}
 	return as;
 }

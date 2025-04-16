@@ -181,7 +181,7 @@ as_metrics_policy_set_listeners(
  * Enable extended periodic cluster and node latency metrics.
  */
 AS_EXTERN as_status
-aerospike_enable_metrics(struct aerospike_s* as, as_error* err, as_metrics_policy* policy);
+aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics_policy* policy);
 
 /**
  * Disable extended periodic cluster and node latency metrics.

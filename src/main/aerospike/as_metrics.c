@@ -22,12 +22,45 @@
 #include <aerospike/as_string_builder.h>
 
 //---------------------------------
+// Static Functions
+//---------------------------------
+
+static const as_metrics_policy*
+as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_policy* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.metrics;
+	}
+	else if (as->dynamic_config) {
+		as_config* config = aerospike_load_config(as);
+		as_metrics_policy* def = &config->policies.metrics;
+
+		mrg->latency_columns = def->latency_columns;
+		mrg->latency_shift = def->latency_shift;
+		mrg->enable = def->enable;
+
+		mrg->metrics_listeners = src->metrics_listeners;
+		as_strncpy(mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));
+		mrg->report_size_limit = src->report_size_limit;
+		mrg->interval = src->interval;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
+//---------------------------------
 // Functions
 //---------------------------------
 
 as_status
-aerospike_enable_metrics(aerospike* as, as_error* err, as_metrics_policy* policy)
+aerospike_enable_metrics(aerospike* as, as_error* err, const as_metrics_policy* policy)
 {
+	as_metrics_policy merged;
+	policy = as_metrics_policy_merge(as, policy, &merged);
+
 	return as_cluster_enable_metrics(err, as->cluster, policy);
 }
 

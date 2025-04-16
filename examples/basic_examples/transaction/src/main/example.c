@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2024 by Aerospike.
+ * Copyright 2008-2025 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -105,7 +105,7 @@ run_commands(aerospike* as, as_txn* txn)
 	printf("Write record\n");
 
 	as_policy_write pw;
-	as_policy_write_copy(&as->config.policies.write, &pw);
+	as_policy_write_default(as, &pw);
 	pw.base.txn = txn;
 
 	as_key key;
@@ -126,7 +126,7 @@ run_commands(aerospike* as, as_txn* txn)
 	printf("Write more records in a batch\n");
 
 	as_policy_batch pb;
-	as_policy_batch_copy(&as->config.policies.batch_parent_write, &pb);
+	as_policy_batch_parent_write_default(as, &pb);
 	pb.base.txn = txn;
 
 	as_operations ops;
@@ -152,7 +152,7 @@ run_commands(aerospike* as, as_txn* txn)
 	printf("Read record\n");
 
 	as_policy_read pr;
-	as_policy_read_copy(&as->config.policies.read, &pr);
+	as_policy_read_default(as, &pr);
 	pr.base.txn = txn;
 
 	as_key_init_int64(&key, g_namespace, g_set, 3);
@@ -169,7 +169,7 @@ run_commands(aerospike* as, as_txn* txn)
 	printf("Delete record\n");
 
 	as_policy_remove prem;
-	as_policy_remove_copy(&as->config.policies.remove, &prem);
+	as_policy_remove_default(as, &prem);
 	prem.base.txn = txn;
 	prem.durable_delete = true; // Required when deleting records in a transaction.
 

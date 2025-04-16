@@ -399,14 +399,46 @@ as_async_compress_command_execute(
 // Read All
 //---------------------------------
 
+static const as_policy_read*
+as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.read;
+	}
+	else if (as->dynamic_config) {
+		as_config* config = aerospike_load_config(as);
+		as_policy_read* def = &config->policies.read;
+
+		mrg->base.socket_timeout = def->base.socket_timeout;
+		mrg->base.total_timeout = def->base.total_timeout;
+		mrg->base.max_retries = def->base.max_retries;
+		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
+		mrg->key = def->key;
+		mrg->replica = def->replica;
+		mrg->read_mode_ap = def->read_mode_ap;
+		mrg->read_mode_sc = def->read_mode_sc;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
+		mrg->deserialize = src->deserialize;
+		mrg->async_heap_rec = src->async_heap_rec;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
 as_status
 aerospike_key_get(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -449,9 +481,8 @@ aerospike_key_get_async(
 	as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -495,9 +526,8 @@ aerospike_key_select(
 	const char* bins[], as_record** rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -553,9 +583,8 @@ aerospike_key_select_async(
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -609,9 +638,8 @@ aerospike_key_select_bins(
 	const char* bins[], uint32_t n_bins, as_record** rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -666,9 +694,8 @@ aerospike_key_select_bins_async(
 	as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -723,9 +750,8 @@ aerospike_key_exists(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -767,9 +793,8 @@ aerospike_key_exists_async(
 	as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -870,15 +895,49 @@ as_put_write(void* udata, uint8_t* buf)
 	return as_command_write_end(buf, p);
 }
 
+const as_policy_write*
+as_policy_write_merge(aerospike* as, const as_policy_write* src, as_policy_write* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.write;
+	}
+	else if (as->dynamic_config) {
+		as_config* config = aerospike_load_config(as);
+		as_policy_write* def = &config->policies.write;
+
+		mrg->base.socket_timeout = def->base.socket_timeout;
+		mrg->base.total_timeout = def->base.total_timeout;
+		mrg->base.max_retries = def->base.max_retries;
+		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
+		mrg->key = def->key;
+		mrg->replica = def->replica;
+		mrg->durable_delete = def->durable_delete;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->commit_level = src->commit_level;
+		mrg->gen = src->gen;
+		mrg->exists = src->exists;
+		mrg->ttl = src->ttl;
+		mrg->compression_threshold = src->compression_threshold;
+		mrg->on_locking_only = src->on_locking_only;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
 as_status
 aerospike_key_put(
 	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.write;
-	}
-	
+	as_policy_write merged;
+	policy = as_policy_write_merge(as, policy, &merged);
+
 	as_partition_info pi;
 	as_status status = as_command_prepare_write(as, err, &policy->base, key, &pi);
 
@@ -919,9 +978,8 @@ aerospike_key_put_async_ex(
 	size_t* length, size_t* comp_length
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.write;
-	}
+	as_policy_write merged;
+	policy = as_policy_write_merge(as, policy, &merged);
 
 	as_partition_info pi;
 	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
@@ -997,14 +1055,45 @@ aerospike_key_put_async(
 // Remove
 //---------------------------------
 
+static const as_policy_remove*
+as_policy_remove_merge(aerospike* as, const as_policy_remove* src, as_policy_remove* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.remove;
+	}
+	else if (as->dynamic_config) {
+		as_config* config = aerospike_load_config(as);
+		as_policy_remove* def = &config->policies.remove;
+
+		mrg->base.socket_timeout = def->base.socket_timeout;
+		mrg->base.total_timeout = def->base.total_timeout;
+		mrg->base.max_retries = def->base.max_retries;
+		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
+		mrg->key = def->key;
+		mrg->replica = def->replica;
+		mrg->durable_delete = def->durable_delete;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->commit_level = src->commit_level;
+		mrg->gen = src->gen;
+		mrg->generation = src->generation;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
 as_status
 aerospike_key_remove(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.remove;
-	}
+	as_policy_remove merged;
+	policy = as_policy_remove_merge(as, policy, &merged);
 
 	as_partition_info pi;
 	as_status status = as_command_prepare_write(as, err, &policy->base, key, &pi);
@@ -1046,9 +1135,8 @@ aerospike_key_remove_async_ex(
 	as_pipe_listener pipe_listener, size_t* length
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.remove;
-	}
+	as_policy_remove merged;
+	policy = as_policy_remove_merge(as, policy, &merged);
 
 	as_partition_info pi;
 	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
@@ -1167,17 +1255,48 @@ as_operate_init(
 	}
 
 	if (! policy) {
+		as_config* config = aerospike_load_config(as);
+
 		if (oper->write_attr & AS_MSG_INFO2_WRITE) {
 			// Write operations should not retry by default.
-			policy = &as->config.policies.operate;
+			policy = &config->policies.operate;
 		}
 		else {
 			// Read operations should retry by default.
-			as_policy_operate_copy(&as->config.policies.operate, policy_local);
+			as_policy_operate_copy(&config->policies.operate, policy_local);
 			policy_local->base.max_retries = 2;
 			policy = policy_local;
 		}
 	}
+	else if (as->dynamic_config) {
+		as_config* config = aerospike_load_config(as);
+		as_policy_operate* def = &config->policies.operate;
+
+		policy_local->base.socket_timeout = def->base.socket_timeout;
+		policy_local->base.total_timeout = def->base.total_timeout;
+		policy_local->base.max_retries = def->base.max_retries;
+		policy_local->base.sleep_between_retries = def->base.sleep_between_retries;
+		policy_local->key = def->key;
+		policy_local->replica = def->replica;
+		policy_local->read_mode_ap = def->read_mode_ap;
+		policy_local->read_mode_sc = def->read_mode_sc;
+		policy_local->durable_delete = def->durable_delete;
+
+		policy_local->base.filter_exp = policy->base.filter_exp;
+		policy_local->base.txn = policy->base.txn;
+		policy_local->base.compress = policy->base.compress;
+		policy_local->commit_level = policy->commit_level;
+		policy_local->gen = policy->gen;
+		policy_local->exists = policy->exists;
+		policy_local->ttl = policy->ttl;
+		policy_local->read_touch_ttl_percent = policy->read_touch_ttl_percent;
+		policy_local->deserialize = policy->deserialize;
+		policy_local->on_locking_only = policy->on_locking_only;
+		policy_local->async_heap_rec = policy->async_heap_rec;
+		policy_local->respond_all_ops = policy->respond_all_ops;
+		policy = policy_local;
+	}
+
 	oper->policy = policy;
 
 	// When GET_ALL is specified, RESPOND_ALL_OPS must be disabled.
@@ -1431,6 +1550,39 @@ aerospike_key_operate_async(
 // Apply
 //---------------------------------
 
+static const as_policy_apply*
+as_policy_apply_merge(aerospike* as, const as_policy_apply* src, as_policy_apply* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.apply;
+	}
+	else if (as->dynamic_config) {
+		as_config* config = aerospike_load_config(as);
+		as_policy_apply* def = &config->policies.apply;
+
+		mrg->base.socket_timeout = def->base.socket_timeout;
+		mrg->base.total_timeout = def->base.total_timeout;
+		mrg->base.max_retries = def->base.max_retries;
+		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
+		mrg->key = def->key;
+		mrg->replica = def->replica;
+		mrg->durable_delete = def->durable_delete;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->commit_level = src->commit_level;
+		mrg->ttl = src->ttl;
+		mrg->on_locking_only = src->on_locking_only;
+
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
 typedef struct as_apply_s {
 	const as_policy_apply* policy;
 	const as_key* key;
@@ -1497,10 +1649,9 @@ aerospike_key_apply(
 	const char* module, const char* function, as_list* arglist, as_val** result
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.apply;
-	}
-	
+	as_policy_apply merged;
+	policy = as_policy_apply_merge(as, policy, &merged);
+
 	as_partition_info pi;
 	as_status status = as_command_prepare_write(as, err, &policy->base, key, &pi);
 
@@ -1532,9 +1683,8 @@ aerospike_key_apply_async(
 	as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.apply;
-	}
+	as_policy_apply merged;
+	policy = as_policy_apply_merge(as, policy, &merged);
 	
 	as_partition_info pi;
 	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);

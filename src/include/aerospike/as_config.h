@@ -60,6 +60,11 @@ extern "C" {
  */
 #define AS_PASSWORD_SIZE 64
 
+/**
+ * Default  number of cluster tend iterations between checks for dynamic configuration file changes.
+ */
+#define AS_CONFIG_PROVIDER_INTERVAL_DEFAULT 60
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -344,6 +349,32 @@ typedef struct as_config_tls_s {
 	bool for_login_only;
 
 } as_config_tls;
+
+/**
+ * Dynamic configuration provider. Determines how to retrieve cluster policies.
+ *
+ * @relates as_config
+ */
+typedef struct as_config_provider_s {
+
+	/**
+	 * Dynamic configuration file path. If set, cluster policies will be read from the yaml file at cluster
+	 * initialization and whenever the file changes. The policies fields in the file
+	 * override all command policies.
+	 *
+	 * Use as_config_provider_set_path() to set this field.
+	 * Default: NULL
+	 */
+	char* path;
+
+	/**
+	 * Check dynamic configuration file for changes after this number of cluster tend iterations.
+	 *
+	 * Default: 60
+	 */
+	uint32_t interval;
+
+} as_config_provider;
 
 /**
  * The `as_config` contains the settings for the `aerospike` client. Including
@@ -648,6 +679,11 @@ typedef struct as_config_s {
 	 * Client policies
 	 */
 	as_policies policies;
+
+	/**
+	 * Dynamic configuration provider.
+	 */
+	as_config_provider config_provider;
 
 	/**
 	 * lua config.  This is a global config even though it's located here in cluster config.
@@ -1052,6 +1088,33 @@ as_config_tls_set_certstring(as_config* config, const char* certstring)
  */
 AS_EXTERN void
 as_config_tls_add_host(as_config* config, const char* address, const char* tls_name, uint16_t port);
+
+/**
+ * Set dynamic configuration file path.
+ *
+ * An altenate way to set the path is to set environment variable AEROSPIKE_CLIENT_CONFIG_URL
+ * before running the application.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_provider_set_path(as_config* config, const char* path)
+{
+	as_config_set_string(&config->config_provider.path, path);
+}
+
+/**
+ * Set dynamic configuration file path and file modification check interval.
+ * The interval is the number of cluster tend iterations.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_provider_set(as_config* config, const char* path, uint32_t interval)
+{
+	as_config_provider_set_path(config, path);
+	config->config_provider.interval = interval;
+}
 
 /**
  * Add rack id to list of server racks in order of preference. Only add racks that

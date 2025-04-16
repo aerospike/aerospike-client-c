@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,15 +25,15 @@
 #include <citrusleaf/cf_clock.h>
 #include <string.h>
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t size, as_vector* list);
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 // Commands
 #define AUTHENTICATE 0
@@ -78,9 +78,9 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define RESULT_CODE 9
 #define DEFAULT_TIMEOUT 60000  // one minute
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static uint8_t*
 as_admin_write_header(uint8_t* p, uint8_t command, uint8_t field_count)
@@ -221,12 +221,19 @@ as_admin_send(
 	return as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
 }
 
+static uint32_t
+as_policy_admin_get_timeout(aerospike* as)
+{
+	as_config* config = aerospike_load_config(as);
+	return config->policies.admin.timeout;
+}
+
 static as_status
 as_admin_execute(
 	aerospike* as, as_error* err, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end
 	)
 {
-	uint32_t timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	uint32_t timeout_ms = (policy)? policy->timeout : as_policy_admin_get_timeout(as);
 	if (timeout_ms == 0) {
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
@@ -339,7 +346,7 @@ as_admin_read_list(
 	as_admin_parse_fn parse_fn, as_vector* list
 	)
 {
-	int timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	int timeout_ms = (policy)? policy->timeout : as_policy_admin_get_timeout(as);
 	if (timeout_ms <= 0) {
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
@@ -380,9 +387,9 @@ as_admin_read_list(
 	return status;
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 as_cluster_login(
@@ -956,9 +963,9 @@ aerospike_set_quotas(
 	return as_admin_execute(as, err, policy, buffer, p);
 }
 
-/******************************************************************************
- * QUERY USERS
- *****************************************************************************/
+//---------------------------------
+// Query Users
+//---------------------------------
 
 static uint8_t*
 as_parse_users_roles(uint8_t* p, as_user** user_out)
@@ -1203,9 +1210,9 @@ as_users_destroy(as_user** users, int users_size)
 	cf_free(users);
 }
 
-/******************************************************************************
- * QUERY ROLES
- *****************************************************************************/
+//---------------------------------
+// Query Roles
+//---------------------------------
 
 static uint8_t*
 as_privileges_parse(uint8_t* p, as_role** role_out)

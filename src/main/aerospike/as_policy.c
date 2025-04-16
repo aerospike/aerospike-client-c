@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -40,6 +40,7 @@ as_policies_init(as_policies* p)
 	as_policy_admin_init(&p->admin);
 	as_policy_txn_verify_init(&p->txn_verify);
 	as_policy_txn_roll_init(&p->txn_roll);
+	as_metrics_policy_init(&p->metrics);
 	return p;
 }
 

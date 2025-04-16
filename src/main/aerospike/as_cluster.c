@@ -18,6 +18,7 @@
 #include <aerospike/as_address.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_cpu.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
@@ -37,17 +38,17 @@
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 
-/******************************************************************************
- * Globals
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern uint32_t as_event_loop_capacity;
 extern bool as_event_single_thread;
 uint32_t as_cluster_count = 0;
 
-/******************************************************************************
- * Function declarations
- *****************************************************************************/
+//---------------------------------
+// Function Declarations
+//---------------------------------
 
 as_status
 as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers);
@@ -64,9 +65,9 @@ as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node);
 void
 as_event_balance_connections(as_cluster* cluster);
 
-/******************************************************************************
- * Functions
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 static inline void
 set_nodes(as_cluster* cluster, as_nodes* nodes)
@@ -568,7 +569,7 @@ as_cluster_destroy_node_metrics(as_cluster* cluster)
 }
 
 as_status
-as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy* policy)
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
 {
 	bool custom_listener = policy->metrics_listeners.enable_listener != NULL;
 	
@@ -791,6 +792,16 @@ as_cluster_manage(as_cluster* cluster)
 		// Metrics failures should not interrupt cluster tend.
 		// Log warning and continue processing.
 		as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
+	}
+
+	if (cluster->config_file_path && cluster->tend_count % cluster->config_interval == 0) {
+		if (as_file_has_changed(cluster->config_file_path, &cluster->config_file_status)) {
+			status = as_config_file_update(cluster, cluster->config, &err);
+
+			if (status != AEROSPIKE_OK) {
+				as_log_warn("Dynamic configuration error: %s", err.message);
+			}
+		}
 	}
 }
 
@@ -1472,15 +1483,17 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->fail_if_not_connected = config->fail_if_not_connected;
 
 	if (config->rack_ids) {
-		cluster->rack_ids_size = config->rack_ids->size;
-		size_t sz = sizeof(int) * config->rack_ids->size;
-		cluster->rack_ids = cf_malloc(sz);
-		memcpy(cluster->rack_ids, config->rack_ids->list, sz);
+		uint32_t max = config->rack_ids->size;
+		cluster->rack_ids = as_vector_create(sizeof(int), max);
+
+		for (uint32_t i = 0; i < max; i++) {
+			int id = *(int*)as_vector_get(config->rack_ids, i);
+			as_vector_append(cluster->rack_ids, &id);
+		}
 	}
 	else {
-		cluster->rack_ids_size = 1;
-		cluster->rack_ids = cf_malloc(sizeof(int));
-		cluster->rack_ids[0] = config->rack_id;
+		cluster->rack_ids = as_vector_create(sizeof(int), 1);
+		as_vector_append(cluster->rack_ids, &config->rack_id);
 	}
 
 	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
@@ -1569,6 +1582,19 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->command_count = 0;
 	cluster->retry_count = 0;
 	cluster->delay_queue_timeout_count = 0;
+
+	cluster->config = config;
+
+	if (config->config_provider.path) {
+		// Heap allocated path continues to be owned by as->config.config_provider
+		// Make a reference copy here.
+		cluster->config_file_path = config->config_provider.path;
+		cluster->config_interval = config->config_provider.interval;
+
+		if (!as_file_get_status(cluster->config_file_path, &cluster->config_file_status)) {
+			as_log_warn("Failed to read: %s", cluster->config_file_path);
+		}
+	}
 
 	if (config->force_single_node) {
 		if (config->use_shm) {
@@ -1684,7 +1710,7 @@ as_cluster_destroy(as_cluster* cluster)
 	}
 
 	// Destroy racks.
-	cf_free(cluster->rack_ids);
+	as_vector_destroy(cluster->rack_ids);
 
 	// Destroy seeds.
 	pthread_mutex_lock(&cluster->seed_lock);
@@ -1709,6 +1735,9 @@ as_cluster_destroy(as_cluster* cluster)
 
 	// Do not free cluster name because as->config owns it.
 	// cf_free(cluster->cluster_name);
+
+	// Do not free config_file_path name because as->config owns it.
+	// cf_free(cluster->config_file_path);
 
 	if (cluster->tls_ctx) {
 		as_tls_context_destroy(cluster->tls_ctx);

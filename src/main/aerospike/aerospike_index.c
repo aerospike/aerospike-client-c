@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,9 +25,9 @@
 #include <citrusleaf/cf_b64.h>
 #include <stdlib.h>
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 aerospike_index_create_ctx(
@@ -39,7 +39,8 @@ aerospike_index_create_ctx(
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	const char* dtype_string;

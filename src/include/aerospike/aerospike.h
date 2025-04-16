@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -175,6 +175,13 @@ typedef struct aerospike_s {
 	 * Client configuration.
 	 */
 	as_config config;
+
+	/**
+	 * Is dynamic configuration enabled. Automatically set to true if config_provider
+	 * is set in as_config at startup. If true, configuration can be loaded after cluster
+	 * initialization and some default policies take precedence over passed in policies.
+	 */
+	bool dynamic_config;
 
 	/**
 	* @private
@@ -391,6 +398,114 @@ aerospike_set_xdr_filter(
 	aerospike* as, as_error* err, as_policy_info* policy, const char* dc, const char* ns,
 	const char* filter_b64
 	);
+
+static inline as_config*
+aerospike_load_config(aerospike* as)
+{
+	return &as->config;
+}
+
+static inline void
+as_policy_read_default(aerospike* as, as_policy_read* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_read_copy(&config->policies.read, policy);
+}
+
+static inline void
+as_policy_write_default(aerospike* as, as_policy_write* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_write_copy(&config->policies.write, policy);
+}
+
+static inline void
+as_policy_operate_default(aerospike* as, as_policy_operate* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_operate_copy(&config->policies.operate, policy);
+}
+
+static inline void
+as_policy_apply_default(aerospike* as, as_policy_apply* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_apply_copy(&config->policies.apply, policy);
+}
+
+static inline void
+as_policy_remove_default(aerospike* as, as_policy_remove* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_remove_copy(&config->policies.remove, policy);
+}
+
+static inline void
+as_policy_batch_parent_read_default(aerospike* as, as_policy_batch* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch_copy(&config->policies.batch, policy);
+}
+
+static inline void
+as_policy_batch_parent_write_default(aerospike* as, as_policy_batch* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch_copy(&config->policies.batch_parent_write, policy);
+}
+
+static inline void
+as_policy_batch_read_default(aerospike* as, as_policy_batch_read* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch* pb = &config->policies.batch;
+	policy->filter_exp = pb->base.filter_exp;
+	policy->read_mode_ap = pb->read_mode_ap;
+	policy->read_mode_sc = pb->read_mode_sc;
+	policy->read_touch_ttl_percent = pb->read_touch_ttl_percent;
+}
+
+static inline void
+as_policy_batch_write_default(aerospike* as, as_policy_batch_write* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	*policy = config->policies.batch_write;
+}
+
+static inline void
+as_policy_batch_apply_default(aerospike* as, as_policy_batch_apply* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	*policy = config->policies.batch_apply;
+}
+
+static inline void
+as_policy_batch_remove_default(aerospike* as, as_policy_batch_remove* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	*policy = config->policies.batch_remove;
+}
+
+static inline void
+as_policy_scan_default(aerospike* as, as_policy_scan* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_scan_copy(&config->policies.scan, policy);
+}
+
+static inline void
+as_policy_query_default(aerospike* as, as_policy_query* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	as_policy_query_copy(&config->policies.query, policy);
+}
+
+static inline void
+as_metrics_policy_default(aerospike* as, as_metrics_policy* policy)
+{
+	as_config* config = aerospike_load_config(as);
+	*policy = config->policies.metrics;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

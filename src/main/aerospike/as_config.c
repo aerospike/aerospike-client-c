@@ -22,9 +22,9 @@
 #include <ctype.h>
 #include <stdlib.h>
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_config*
 as_config_init(as_config* c)
@@ -52,6 +52,8 @@ as_config_init(as_config* c)
 	c->thread_pool_size = 16;
 	c->tend_thread_cpu = -1;
 	as_policies_init(&c->policies);
+	c->config_provider.path = NULL;
+	c->config_provider.interval = AS_CONFIG_PROVIDER_INTERVAL_DEFAULT;
 	as_config_lua_init(&c->lua);
 	memset(&c->tls, 0, sizeof(as_config_tls));
 	c->auth_mode = AS_AUTH_INTERNAL;
@@ -91,6 +93,10 @@ as_config_destroy(as_config* config) {
 
 	if (config->cluster_name) {
 		cf_free(config->cluster_name);
+	}
+
+	if (config->config_provider.path) {
+		cf_free(config->config_provider.path);
 	}
 
 	as_policies_destroy(&config->policies);

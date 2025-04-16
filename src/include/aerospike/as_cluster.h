@@ -618,7 +618,7 @@ as_partition_shm_get_node(
  * Enable the collection of metrics
  */
 as_status
-as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy* policy);
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy);
 
 /**
  * @private

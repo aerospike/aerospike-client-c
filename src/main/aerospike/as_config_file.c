@@ -1327,11 +1327,10 @@ parse_debug(yaml_parser_t* parser)
 #endif
 
 static as_status
-as_config_file_read(as_config* config, bool init, as_error* err)
+as_config_file_read(as_config* config, const char* path, bool init, as_error* err)
 {
 	as_error_reset(err);
 
-	const char* path = config->config_provider.path;
 	FILE* fp = fopen(path, "r");
 
 	if (!fp) {
@@ -1579,7 +1578,7 @@ as_config_file_init(as_config* config, as_error* err)
 		as_vector_append(config->rack_ids, &config->rack_id);
 	}
 	
-	return as_config_file_read(config, true, err);
+	return as_config_file_read(config, config->config_provider.path, true, err);
 }
 
 as_status
@@ -1588,7 +1587,7 @@ as_config_file_update(as_cluster* cluster, as_config* orig, as_error* err)
 	as_config config;
 	memcpy(&config, orig, sizeof(as_config));
 
-	as_status status = as_config_file_read(&config, false, err);
+	as_status status = as_config_file_read(&config, cluster->config_file_path, false, err);
 
 	if (status != AEROSPIKE_OK) {
 		// Destroy new rack_ids vector if changed before update fails.

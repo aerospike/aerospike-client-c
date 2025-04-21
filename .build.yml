@@ -2,24 +2,24 @@ name: aerospike-client-c
 
 container:
   - base:
-      - docker.qe.aerospike.com/build/aerospike-client-c:rhel-8
-      - docker.qe.aerospike.com/build/aerospike-client-c:rhel-9
-      - docker.qe.aerospike.com/build/aerospike-client-c:amazonlinux-2023
-      - docker.qe.aerospike.com/build/aerospike-client-c:debian-11
-      - docker.qe.aerospike.com/build/aerospike-client-c:debian-12
+      # - docker.qe.aerospike.com/build/aerospike-client-c:rhel-8
+      # - docker.qe.aerospike.com/build/aerospike-client-c:rhel-9
+      # - docker.qe.aerospike.com/build/aerospike-client-c:amazonlinux-2023
+      # - docker.qe.aerospike.com/build/aerospike-client-c:debian-11
+      # - docker.qe.aerospike.com/build/aerospike-client-c:debian-12
       - docker.qe.aerospike.com/build/aerospike-client-c:debian-13
-      - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-20.04
-      - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-22.04
-      - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-24.04
-      - docker.qe.aerospike.com/build/aerospike-client-c:arm-rhel-8
-      - docker.qe.aerospike.com/build/aerospike-client-c:arm-rhel-9
-      - docker.qe.aerospike.com/build/aerospike-client-c:arm-amazonlinux-2023 
-      - docker.qe.aerospike.com/build/aerospike-client-c:arm-debian-11
-      - docker.qe.aerospike.com/build/aerospike-client-c:arm-debian-12
-      - docker.qe.aerospike.com/build/aerospike-client-c:arm-debian-13
-      - docker.qe.aerospike.com/build/aerospike-client-c:arm-ubuntu-20.04
-      - docker.qe.aerospike.com/build/aerospike-client-c:arm-ubuntu-22.04
-      - docker.qe.aerospike.com/build/aerospike-client-c:arm-ubuntu-24.04
+      # - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-20.04
+      # - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-22.04
+      # - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-24.04
+      # - docker.qe.aerospike.com/build/aerospike-client-c:arm-rhel-8
+      # - docker.qe.aerospike.com/build/aerospike-client-c:arm-rhel-9
+      # - docker.qe.aerospike.com/build/aerospike-client-c:arm-amazonlinux-2023 
+      # - docker.qe.aerospike.com/build/aerospike-client-c:arm-debian-11
+      # - docker.qe.aerospike.com/build/aerospike-client-c:arm-debian-12
+      # - docker.qe.aerospike.com/build/aerospike-client-c:arm-debian-13
+      # - docker.qe.aerospike.com/build/aerospike-client-c:arm-ubuntu-20.04
+      # - docker.qe.aerospike.com/build/aerospike-client-c:arm-ubuntu-22.04
+      # - docker.qe.aerospike.com/build/aerospike-client-c:arm-ubuntu-24.04
 
 build:
   - name: default

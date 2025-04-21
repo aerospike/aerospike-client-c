@@ -188,7 +188,9 @@ void aerospike_destroy(aerospike* as)
 	as_config_destroy(&as->config);
 
 	if (as->config_orig) {
-		// TODO: How destroy as->config_orig?
+		// Do not call as_config_destroy() since config_orig is
+		// a shallow copy of as->config and as->config owns
+		// the fields.
 		cf_free(as->config_orig);
 	}
 

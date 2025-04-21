@@ -125,8 +125,7 @@ as_config_file_update(struct aerospike_s* as, as_error* err);
 static inline void
 as_field_set(uint8_t* bitmap, uint32_t offset)
 {
-	// TODO TEST.
-	bitmap[offset >> 3] |= 1 << (offset & 7);
+	bitmap[offset >> 3] |= (1 << (offset & 7));
 }
 
 /**
@@ -135,8 +134,7 @@ as_field_set(uint8_t* bitmap, uint32_t offset)
 static inline bool
 as_field_is_set(uint8_t* bitmap, uint32_t offset)
 {
-	// TODO TEST.
-	return (bitmap[offset >> 3] & (1 << (offset & 7))) >> (offset & 7);
+	return bitmap[offset >> 3] & (1 << (offset & 7));
 }
 
 #ifdef __cplusplus

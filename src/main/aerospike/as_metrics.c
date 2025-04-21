@@ -17,6 +17,7 @@
 #include <aerospike/as_metrics.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_string_builder.h>
@@ -32,13 +33,17 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.metrics;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_metrics_policy* def = &config->policies.metrics;
+		as_metrics_policy* cfg = &config->policies.metrics;
 
-		mrg->latency_columns = def->latency_columns;
-		mrg->latency_shift = def->latency_shift;
-		mrg->enable = def->enable;
+		mrg->latency_columns = as_field_is_set(bitmap, AS_METRICS_LATENCY_COLUMNS)?
+			cfg->latency_columns : src->latency_columns;
+		mrg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
+			cfg->latency_shift : src->latency_shift;
+		mrg->enable = as_field_is_set(bitmap, AS_METRICS_ENABLE)?
+			cfg->enable : src->enable;
 
 		mrg->metrics_listeners = src->metrics_listeners;
 		as_strncpy(mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));

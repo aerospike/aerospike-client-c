@@ -173,21 +173,26 @@ typedef struct aerospike_s {
 	struct as_cluster_s* cluster;
 
 	/**
-	 * Client configuration.
+	 * Client configuration. Dynamic configuration can periodically update this field.
 	 */
 	as_config config;
 
 	/**
-	 * Is dynamic configuration enabled. Automatically set to true if config_provider
-	 * is set in as_config at startup. If true, configuration can be loaded after cluster
-	 * initialization and some default policies take precedence over passed in policies.
+	 * Original client configuration provided by the user. Populated when dynamic
+	 * configuration is enabled.
 	 */
-	bool dynamic_config;
+	as_config* config_orig;
 
 	/**
-	* @private
-	* If true, then aerospike_destroy() will free this instance.
-	*/
+	 * @private
+	 * Bitmap of fields that were set by dynamic configuration.
+	 */
+	uint8_t* config_bitmap;
+
+	/**
+	 * @private
+	 * If true, then aerospike_destroy() will free this instance.
+	 */
 	bool _free;
 
 } aerospike;

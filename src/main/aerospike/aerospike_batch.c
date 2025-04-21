@@ -19,6 +19,7 @@
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_async.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_key.h>
@@ -58,6 +59,7 @@
 typedef struct {
 	size_t size;
 	as_policies* defs;
+	uint8_t* config_bitmap;
 	as_exp* filter_exp;
 	as_queue* buffers;
 	as_txn* txn;
@@ -68,7 +70,6 @@ typedef struct {
 	// This field is only valid for txn attributes that are fixed for all keys.
 	uint8_t txn_attr;
 	bool batch_any;
-	bool dynamic_config;
 } as_batch_builder;
 
 typedef struct {
@@ -898,7 +899,19 @@ as_batch_equals_write(as_batch_builder* bb, as_batch_write_record* prev, as_batc
 		return false;
 	}
 
-	as_policy_key key = (rec->policy && !bb->dynamic_config)? rec->policy->key : bb->defs->batch_write.key;
+	as_policy_key key;
+
+	if (!rec->policy) {
+		key = bb->defs->batch_write.key;
+	}
+	else if (bb->config_bitmap) {
+		key = as_field_is_set(bb->config_bitmap, AS_BATCH_WRITE_SEND_KEY)?
+			bb->defs->batch_write.key : rec->policy->key;
+	}
+	else {
+		key = rec->policy->key;
+	}
+
 	return key == AS_POLICY_KEY_DIGEST;
 }
 
@@ -910,7 +923,19 @@ as_batch_equals_apply(as_batch_builder* bb, as_batch_apply_record* prev, as_batc
 		return false;
 	}
 
-	as_policy_key key = (rec->policy && !bb->dynamic_config)? rec->policy->key : bb->defs->batch_apply.key;
+	as_policy_key key;
+
+	if (!rec->policy) {
+		key = bb->defs->batch_apply.key;
+	}
+	else if (bb->config_bitmap) {
+		key = as_field_is_set(bb->config_bitmap, AS_BATCH_UDF_SEND_KEY)?
+			bb->defs->batch_apply.key : rec->policy->key;
+	}
+	else {
+		key = rec->policy->key;
+	}
+
 	return key == AS_POLICY_KEY_DIGEST;
 }
 
@@ -921,7 +946,19 @@ as_batch_equals_remove(as_batch_builder* bb, as_batch_remove_record* prev, as_ba
 		return false;
 	}
 
-	as_policy_key key = (rec->policy && !bb->dynamic_config)? rec->policy->key : bb->defs->batch_remove.key;
+	as_policy_key key;
+
+	if (!rec->policy) {
+		key = bb->defs->batch_remove.key;
+	}
+	else if (bb->config_bitmap) {
+		key = as_field_is_set(bb->config_bitmap, AS_BATCH_DELETE_SEND_KEY)?
+			bb->defs->batch_remove.key : rec->policy->key;
+	}
+	else {
+		key = rec->policy->key;
+	}
+
 	return key == AS_POLICY_KEY_DIGEST;
 }
 
@@ -1138,7 +1175,14 @@ as_batch_records_size_new(
 
 					if (bw->policy) {
 						filter_exp = bw->policy->filter_exp;
-						send_key = bb->dynamic_config ? bb->defs->batch_write.key : bw->policy->key;
+
+						if (bb->config_bitmap) {
+							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_WRITE_SEND_KEY)?
+								bb->defs->batch_write.key : bw->policy->key;
+						}
+						else {
+							send_key = bw->policy->key;
+						}
 					}
 					else {
 						filter_exp = bb->defs->batch_write.filter_exp;
@@ -1149,7 +1193,7 @@ as_batch_records_size_new(
 					status = as_batch_write_record_size(bw, bb, err);
 					break;
 				}
-			
+
 				case AS_BATCH_APPLY: {
 					as_batch_apply_record* ba = (as_batch_apply_record*)rec;
 					as_exp* filter_exp;
@@ -1157,7 +1201,14 @@ as_batch_records_size_new(
 
 					if (ba->policy) {
 						filter_exp = ba->policy->filter_exp;
-						send_key = bb->dynamic_config ? bb->defs->batch_apply.key : ba->policy->key;
+
+						if (bb->config_bitmap) {
+							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_UDF_SEND_KEY)?
+								bb->defs->batch_apply.key : ba->policy->key;
+						}
+						else {
+							send_key = ba->policy->key;
+						}
 					}
 					else {
 						filter_exp = bb->defs->batch_apply.filter_exp;
@@ -1177,7 +1228,14 @@ as_batch_records_size_new(
 
 					if (brm->policy) {
 						filter_exp = brm->policy->filter_exp;
-						send_key = bb->dynamic_config ? bb->defs->batch_remove.key : brm->policy->key;
+
+						if (bb->config_bitmap) {
+							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_DELETE_SEND_KEY)?
+								bb->defs->batch_remove.key : brm->policy->key;
+						}
+						else {
+							send_key = brm->policy->key;
+						}
 					}
 					else {
 						filter_exp = bb->defs->batch_remove.filter_exp;
@@ -1748,9 +1806,11 @@ as_batch_records_write_new(
 					if (bw->policy) {
 						pbw = bw->policy;
 
-						if (bb->dynamic_config) {
-							send_key = bb->defs->batch_write.key;
-							durable_delete = bb->defs->batch_write.durable_delete;
+						if (bb->config_bitmap) {
+							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_WRITE_SEND_KEY)?
+								bb->defs->batch_write.key : pbw->key;
+							durable_delete = as_field_is_set(bb->config_bitmap, AS_BATCH_WRITE_DURABLE_DELETE)?
+								bb->defs->batch_write.durable_delete : pbw->durable_delete;
 						}
 						else {
 							send_key = pbw->key;
@@ -1778,9 +1838,11 @@ as_batch_records_write_new(
 					if (ba->policy) {
 						pba = ba->policy;
 
-						if (bb->dynamic_config) {
-							send_key = bb->defs->batch_apply.key;
-							durable_delete = bb->defs->batch_apply.durable_delete;
+						if (bb->config_bitmap) {
+							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_UDF_SEND_KEY)?
+								bb->defs->batch_apply.key : pba->key;
+							durable_delete = as_field_is_set(bb->config_bitmap, AS_BATCH_UDF_DURABLE_DELETE)?
+								bb->defs->batch_apply.durable_delete : pba->durable_delete;
 						}
 						else {
 							send_key = pba->key;
@@ -1807,9 +1869,11 @@ as_batch_records_write_new(
 					if (brm->policy) {
 						pbr = brm->policy;
 
-						if (bb->dynamic_config) {
-							send_key = bb->defs->batch_remove.key;
-							durable_delete = bb->defs->batch_remove.durable_delete;
+						if (bb->config_bitmap) {
+							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_DELETE_SEND_KEY)?
+								bb->defs->batch_remove.key : pbr->key;
+							durable_delete = as_field_is_set(bb->config_bitmap, AS_BATCH_DELETE_DURABLE_DELETE)?
+								bb->defs->batch_remove.durable_delete : pbr->durable_delete;
 						}
 						else {
 							send_key = pbr->key;
@@ -2052,12 +2116,12 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 
 	as_batch_builder bb = {
 		.defs = btr->defs,
+		.config_bitmap = btr->base.as->config_bitmap,
 		.filter_exp = policy->base.filter_exp,
 		.buffers = &buffers,
 		.txn = btr->base.txn,
 		.versions = btr->base.versions,
-		.txn_attr = btr->base.txn_attr,
-		.dynamic_config = btr->base.as->dynamic_config
+		.txn_attr = btr->base.txn_attr
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
@@ -2310,12 +2374,12 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 
 	as_batch_builder bb = {
 		.defs = &config->policies,
+		.config_bitmap = btk->base.as->config_bitmap,
 		.filter_exp = btk->attr->filter_exp ? btk->attr->filter_exp : policy->base.filter_exp,
 		.buffers = &buffers,
 		.txn = btk->base.txn,
 		.versions = btk->base.versions,
 		.txn_attr = btk->base.txn_attr,
-		.dynamic_config = btk->base.as->dynamic_config
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
@@ -3521,12 +3585,12 @@ as_batch_execute_async(
 
 	as_batch_builder bb = {
 		.defs = &config->policies,
+		.config_bitmap = as->config_bitmap,
 		.filter_exp = policy->base.filter_exp,
 		.buffers = &buffers,
 		.txn = executor->txn,
 		.versions = executor->versions,
-		.txn_attr = executor->txn_attr,
-		.dynamic_config = as->dynamic_config
+		.txn_attr = executor->txn_attr
 	};
 
 	as_status status = AEROSPIKE_OK;
@@ -4477,21 +4541,33 @@ as_policy_batch_parent_read_merge(aerospike* as, const as_policy_batch* src, as_
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.batch;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_batch* def = &config->policies.batch;
+		as_policy_batch* cfg = &config->policies.batch;
 
-		mrg->base.socket_timeout = def->base.socket_timeout;
-		mrg->base.total_timeout = def->base.total_timeout;
-		mrg->base.max_retries = def->base.max_retries;
-		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
-		mrg->replica = def->replica;
-		mrg->read_mode_ap = def->read_mode_ap;
-		mrg->read_mode_sc = def->read_mode_sc;
-		mrg->concurrent = def->concurrent;
-		mrg->allow_inline = def->allow_inline;
-		mrg->allow_inline_ssd = def->allow_inline_ssd;
-		mrg->respond_all_keys = def->respond_all_keys;
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->replica = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->read_mode_ap = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_READ_MODE_AP)?
+			cfg->read_mode_ap : src->read_mode_ap;
+		mrg->read_mode_sc = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_READ_MODE_SC)?
+			cfg->read_mode_sc : src->read_mode_sc;
+		mrg->concurrent = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_CONCURRENT)?
+			cfg->concurrent : src->concurrent;
+		mrg->allow_inline = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_ALLOW_INLINE)?
+			cfg->allow_inline : src->allow_inline;
+		mrg->allow_inline_ssd = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_ALLOW_INLINE_SSD)?
+			cfg->allow_inline_ssd : src->allow_inline_ssd;
+		mrg->respond_all_keys = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_RESPOND_ALL_KEYS)?
+			cfg->respond_all_keys : src->respond_all_keys;
 
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
@@ -4513,21 +4589,33 @@ as_policy_batch_parent_write_merge(aerospike* as, const as_policy_batch* src, as
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.batch_parent_write;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_batch* def = &config->policies.batch_parent_write;
+		as_policy_batch* cfg = &config->policies.batch_parent_write;
 
-		mrg->base.socket_timeout = def->base.socket_timeout;
-		mrg->base.total_timeout = def->base.total_timeout;
-		mrg->base.max_retries = def->base.max_retries;
-		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
-		mrg->replica = def->replica;
-		mrg->read_mode_ap = def->read_mode_ap;
-		mrg->read_mode_sc = def->read_mode_sc;
-		mrg->concurrent = def->concurrent;
-		mrg->allow_inline = def->allow_inline;
-		mrg->allow_inline_ssd = def->allow_inline_ssd;
-		mrg->respond_all_keys = def->respond_all_keys;
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->replica = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->read_mode_ap = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_READ_MODE_AP)?
+			cfg->read_mode_ap : src->read_mode_ap;
+		mrg->read_mode_sc = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_READ_MODE_SC)?
+			cfg->read_mode_sc : src->read_mode_sc;
+		mrg->concurrent = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_CONCURRENT)?
+			cfg->concurrent : src->concurrent;
+		mrg->allow_inline = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_ALLOW_INLINE)?
+			cfg->allow_inline : src->allow_inline;
+		mrg->allow_inline_ssd = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_ALLOW_INLINE_SSD)?
+			cfg->allow_inline_ssd : src->allow_inline_ssd;
+		mrg->respond_all_keys = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_RESPOND_ALL_KEYS)?
+			cfg->respond_all_keys : src->respond_all_keys;
 
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
@@ -4549,12 +4637,15 @@ as_policy_batch_write_merge(aerospike* as, const as_policy_batch_write* src, as_
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.batch_write;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_batch_write* def = &config->policies.batch_write;
+		as_policy_batch_write* cfg = &config->policies.batch_write;
 
-		mrg->key = def->key;
-		mrg->durable_delete = def->durable_delete;
+		mrg->key = as_field_is_set(bitmap, AS_BATCH_WRITE_SEND_KEY)?
+			cfg->key : src->key;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_BATCH_WRITE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
 
 		mrg->filter_exp = src->filter_exp;
 		mrg->commit_level = src->commit_level;
@@ -4562,7 +4653,6 @@ as_policy_batch_write_merge(aerospike* as, const as_policy_batch_write* src, as_
 		mrg->exists = src->exists;
 		mrg->ttl = src->ttl;
 		mrg->on_locking_only = src->on_locking_only;
-
 		return mrg;
 	}
 	else {
@@ -4577,18 +4667,20 @@ as_policy_batch_apply_merge(aerospike* as, const as_policy_batch_apply* src, as_
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.batch_apply;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_batch_apply* def = &config->policies.batch_apply;
+		as_policy_batch_apply* cfg = &config->policies.batch_apply;
 
-		mrg->key = def->key;
-		mrg->durable_delete = def->durable_delete;
+		mrg->key = as_field_is_set(bitmap, AS_BATCH_UDF_SEND_KEY)?
+			cfg->key : src->key;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_BATCH_UDF_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
 
 		mrg->filter_exp = src->filter_exp;
 		mrg->commit_level = src->commit_level;
 		mrg->ttl = src->ttl;
 		mrg->on_locking_only = src->on_locking_only;
-
 		return mrg;
 	}
 	else {
@@ -4603,18 +4695,20 @@ as_policy_batch_remove_merge(aerospike* as, const as_policy_batch_remove* src, a
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.batch_remove;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_batch_remove* def = &config->policies.batch_remove;
+		as_policy_batch_remove* cfg = &config->policies.batch_remove;
 
-		mrg->key = def->key;
-		mrg->durable_delete = def->durable_delete;
+		mrg->key = as_field_is_set(bitmap, AS_BATCH_DELETE_SEND_KEY)?
+			cfg->key : src->key;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_BATCH_DELETE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
 
 		mrg->filter_exp = src->filter_exp;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->generation = src->generation;
-
 		return mrg;
 	}
 	else {

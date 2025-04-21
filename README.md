@@ -1,5 +1,5 @@
 # Aerospike C Client
-
+..
 The Aerospike C client provides a C interface for interacting with the 
 [Aerospike](http://aerospike.com) Database.  The client can be built on
 64-bit distributions of Linux, MacOS or Windows. Unit tests and examples

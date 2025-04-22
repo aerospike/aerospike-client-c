@@ -128,7 +128,8 @@ de|ub)
   echo ddd
   sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rev/g" -e "s/@ARCH@/$arch/g" < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
   fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix"_"$rev"-"$platform"_"$arch.deb
-  ;;
+  echo eee  
+;;
 
 ma)
   arch=`uname -m`

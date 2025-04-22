@@ -119,9 +119,13 @@ el|fc|am)
 de|ub)
   arch=`dpkg-architecture -qDEB_HOST_ARCH`
   os=`uname -s`-`uname -m`
+  echo aaa
   CreatePackage usr opt $os
+  echo bbb
   mkdir -p $buildDir/DEBIAN
+  echo ccc
   install -m 755 deb/postinst.client $buildDir/DEBIAN/postinst
+  echo ddd
   sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rev/g" -e "s/@ARCH@/$arch/g" < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
   fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix"_"$rev"-"$platform"_"$arch.deb
   ;;

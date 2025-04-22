@@ -253,6 +253,13 @@ as_parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out, uin
 static bool
 as_vector_int32_equal(as_vector* r1, as_vector* r2)
 {
+	if (r1 == NULL) {
+		return r2 == NULL;
+	}
+	else if (r2 == NULL) {
+		return false;
+	}
+
 	if (r1->size != r2->size) {
 		return false;
 	}
@@ -289,39 +296,30 @@ as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out, uint32_t
 		}
 	}
 
-	if (!as_vector_int32_equal(*out, list)) {
-		as_string_builder sb;
-		as_string_builder_inita(&sb, 512, false);
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 512, false);
 
-		as_string_builder_append(&sb, "Set ");
-		as_string_builder_append(&sb, yaml->name);
-		as_string_builder_append_char(&sb, '.');
-		as_string_builder_append(&sb, name);
-		as_string_builder_append(&sb, " = [");
+	as_string_builder_append(&sb, "Set ");
+	as_string_builder_append(&sb, yaml->name);
+	as_string_builder_append_char(&sb, '.');
+	as_string_builder_append(&sb, name);
+	as_string_builder_append(&sb, " = [");
 
-		for (uint32_t i = 0; i < list->size; i++) {
-			int id = *(int*)as_vector_get(list, i);
+	for (uint32_t i = 0; i < list->size; i++) {
+		int id = *(int*)as_vector_get(list, i);
 
-			if (i > 0) {
-				as_string_builder_append_char(&sb, ',');
-			}
-			as_string_builder_append_int(&sb, id);
+		if (i > 0) {
+			as_string_builder_append_char(&sb, ',');
 		}
-
-		as_string_builder_append_char(&sb, ']');
-		as_log_info(sb.data);
-
-		// On init, the original config is set directly, so the old vector must be destroyed.
-		// On update, a shallow copy config is set and the original vector will be destroyed
-		// after the update succeeds.
-		if (yaml->init) {
-			as_vector_destroy(*out);
-		}
-		*out = list;
+		as_string_builder_append_int(&sb, id);
 	}
-	else {
-		as_vector_destroy(list);
-	}
+
+	as_string_builder_append_char(&sb, ']');
+	as_log_info(sb.data);
+
+	// Original vector will still exist and will be restored if
+	// there is an error while parsing the file.
+	*out = list;
 
 	as_field_set(yaml->bitmap, field);
 	return true;
@@ -972,6 +970,80 @@ as_parse_txn_roll(as_yaml* yaml, const char* name, const char* value, as_policie
 }
 
 static bool
+as_parse_labels(as_yaml* yaml, as_metrics_policy* policy, uint32_t field)
+{
+	// Original labels will still exist and they will be restored if
+	// there is an error while parsing the file.
+	policy->labels = NULL;
+
+	char name[256];
+	char value[256];
+
+	while (true) {
+		if (!as_parse_next(yaml)) {
+			break;
+		}
+
+		if (yaml->event.type == YAML_SEQUENCE_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+
+			as_string_builder sb;
+			as_string_builder_inita(&sb, 512, false);
+
+			as_string_builder_append(&sb, "Set ");
+			as_string_builder_append(&sb, yaml->name);
+			as_string_builder_append_char(&sb, '.');
+			as_string_builder_append(&sb, "labels");
+			as_string_builder_append(&sb, " = [");
+
+			as_vector* list = policy->labels;
+
+			for (uint32_t i = 0; i < list->size; i++) {
+				as_metrics_label* label = as_vector_get(list, i);
+
+				if (i > 0) {
+					as_string_builder_append_char(&sb, ',');
+				}
+				as_string_builder_append_char(&sb, '{');
+				as_string_builder_append(&sb, label->name);
+				as_string_builder_append_char(&sb, ',');
+				as_string_builder_append(&sb, label->value);
+				as_string_builder_append_char(&sb, '}');
+			}
+
+			as_string_builder_append_char(&sb, ']');
+			as_log_info(sb.data);
+			as_field_set(yaml->bitmap, field);
+			return true;
+		}
+		else if (yaml->event.type != YAML_MAPPING_START_EVENT) {
+			as_expected_error(yaml, YAML_MAPPING_START_EVENT);
+			yaml_event_delete(&yaml->event);
+			break;
+		}
+
+		yaml_event_delete(&yaml->event);
+
+		if (!as_parse_scalar(yaml, name, sizeof(name))) {
+			break;
+		}
+
+		if (!as_parse_scalar(yaml, value, sizeof(value))) {
+			break;
+		}
+
+		as_metrics_policy_add_label(policy, name, value);
+
+		if (!as_expect_event(yaml, YAML_MAPPING_END_EVENT)) {
+			break;
+		}
+	}
+
+	as_metrics_policy_destroy_labels(policy);
+	return false;
+}
+
+static bool
 as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_metrics_policy* policy = &base->metrics;
@@ -987,6 +1059,10 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 
 	if (strcmp(name, "latency_shift") == 0) {
 		return as_parse_uint32(yaml, name, value, &policy->latency_shift, AS_METRICS_LATENCY_SHIFT);
+	}
+
+	if (strcmp(name, "labels") == 0) {
+		return as_parse_labels(yaml, policy, AS_METRICS_LABELS);
 	}
 
 	as_log_info("Unexpected field: %s.%s", yaml->name, name);
@@ -1017,13 +1093,17 @@ as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
 			char* value = (char*)yaml->event.data.scalar.value;
 
 			rv = fn(yaml, name, value, base);
+			yaml_event_delete(&yaml->event);
+		}
+		else if (yaml->event.type == YAML_SEQUENCE_START_EVENT) {
+			yaml_event_delete(&yaml->event);
+			rv = fn(yaml, name, "", base);
 		}
 		else {
 			as_expected_error(yaml, YAML_SCALAR_EVENT);
+			yaml_event_delete(&yaml->event);
 			rv = false;
 		}
-
-		yaml_event_delete(&yaml->event);
 
 		if (!rv) {
 			return rv;
@@ -1180,18 +1260,23 @@ as_parse_static(as_yaml* yaml)
 	}
 
 	char name[256];
+	bool rv;
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (! yaml->init) {
 			// Do not process static fields on a dynamic update.
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
 		}
 		else if (strcmp(name, "client") == 0) {
-			as_parse_static_client(yaml);
+			rv = as_parse_static_client(yaml);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
+		}
+
+		if (!rv) {
+			return false;
 		}
 	}
 	return true;
@@ -1205,47 +1290,52 @@ as_parse_dynamic(as_yaml* yaml)
 	}
 
 	char name[256];
+	bool rv;
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (strcmp(name, "client") == 0) {
-			as_parse_dynamic_client(yaml);
+			rv = as_parse_dynamic_client(yaml);
 		}
 		else if (strcmp(name, "read") == 0) {
-			as_parse_policy(yaml, as_parse_read);
+			rv = as_parse_policy(yaml, as_parse_read);
 		}
 		else if (strcmp(name, "write") == 0) {
-			as_parse_policy(yaml, as_parse_write);
+			rv = as_parse_policy(yaml, as_parse_write);
 		}
 		else if (strcmp(name, "query") == 0) {
-			as_parse_policy(yaml, as_parse_query);
+			rv = as_parse_policy(yaml, as_parse_query);
 		}
 		else if (strcmp(name, "scan") == 0) {
-			as_parse_policy(yaml, as_parse_scan);
+			rv = as_parse_policy(yaml, as_parse_scan);
 		}
 		else if (strcmp(name, "batch_read") == 0) {
-			as_parse_policy(yaml, as_parse_batch_read);
+			rv = as_parse_policy(yaml, as_parse_batch_read);
 		}
 		else if (strcmp(name, "batch_write") == 0) {
-			as_parse_policy(yaml, as_parse_batch_write);
+			rv = as_parse_policy(yaml, as_parse_batch_write);
 		}
 		else if (strcmp(name, "batch_udf") == 0) {
-			as_parse_policy(yaml, as_parse_batch_udf);
+			rv = as_parse_policy(yaml, as_parse_batch_udf);
 		}
 		else if (strcmp(name, "batch_delete") == 0) {
-			as_parse_policy(yaml, as_parse_batch_delete);
+			rv = as_parse_policy(yaml, as_parse_batch_delete);
 		}
 		else if (strcmp(name, "txn_verify") == 0) {
-			as_parse_policy(yaml, as_parse_txn_verify);
+			rv = as_parse_policy(yaml, as_parse_txn_verify);
 		}
 		else if (strcmp(name, "txn_roll") == 0) {
-			as_parse_policy(yaml, as_parse_txn_roll);
+			rv = as_parse_policy(yaml, as_parse_txn_roll);
 		}
 		else if (strcmp(name, "metrics") == 0) {
-			as_parse_policy(yaml, as_parse_metrics);
+			rv = as_parse_policy(yaml, as_parse_metrics);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
+		}
+
+		if (!rv) {
+			return false;
 		}
 	}
 	return true;
@@ -1267,23 +1357,27 @@ as_parse_yaml(as_yaml* yaml)
 	}
 
 	char name[256];
+	bool rv;
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (strcmp(name, "static") == 0) {
-			as_parse_static(yaml);
+			rv = as_parse_static(yaml);
 		}
 		else if (strcmp(name, "dynamic") == 0) {
-			as_parse_dynamic(yaml);
+			rv = as_parse_dynamic(yaml);
 		}
 		else if (strcmp(name, "metadata") == 0) {
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
+		}
+
+		if (!rv) {
+			return false;
 		}
 	}
-
 	return true;
 }
 
@@ -1292,7 +1386,6 @@ as_parse_yaml(as_yaml* yaml)
 static bool
 parse_debug(yaml_parser_t* parser)
 {
-	char name[256];
 	yaml_event_t event;
 	bool valid = true;
 
@@ -1380,6 +1473,7 @@ as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init
 	yaml_parser_set_input_file(&yaml.parser, fp);
 
 	bool rv = as_parse_yaml(&yaml);
+	//bool rv = parse_debug(&yaml.parser);
 
 	yaml_parser_delete(&yaml.parser);
 	fclose(fp);
@@ -1635,6 +1729,18 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->metrics.latency_columns : orig->metrics.latency_columns;
 	trg->metrics.latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
 		src->metrics.latency_shift : orig->metrics.latency_shift;
+
+	if (as_field_is_set(bitmap, AS_METRICS_LABELS)) {
+		if (trg->metrics.labels != src->metrics.labels) {
+			as_metrics_policy_set_labels(&trg->metrics, src->metrics.labels);
+			src->metrics.labels = NULL;
+		}
+	}
+	else {
+		if (trg->metrics.labels != orig->metrics.labels) {
+			as_metrics_policy_copy_labels(&trg->metrics, orig->metrics.labels);
+		}
+	}
 }
 
 static as_status
@@ -1754,7 +1860,22 @@ as_config_file_init(aerospike* as, as_error* err)
 		as_vector_append(config->rack_ids, &config->rack_id);
 	}
 	
-	return as_config_file_read(as, config, as->config_bitmap, true, err);
+	as_status status = as_config_file_read(as, config, as->config_bitmap, true, err);
+
+	if (status != AEROSPIKE_OK) {
+		// Destroy vectors if changed before update fails.
+		if (config->rack_ids != as->config_orig->rack_ids) {
+			as_vector_destroy(config->rack_ids);
+		}
+
+		if (config->policies.metrics.labels != as->config_orig->policies.metrics.labels) {
+			as_metrics_policy_destroy_labels(&config->policies.metrics);
+		}
+
+		// Restore original config.
+		memcpy(&as->config, as->config_orig, sizeof(as_config));
+	}
+	return status;
 }
 
 as_status
@@ -1765,15 +1886,23 @@ as_config_file_update(aerospike* as, as_error* err)
 	as_config config;
 	memcpy(&config, current, sizeof(as_config));
 
+	// Start with empty vectors.
+	config.rack_ids = NULL;
+	config.policies.metrics.labels = NULL;
+
 	uint8_t bitmap[AS_CONFIG_BITMAP_SIZE];
 	memset(bitmap, 0, AS_CONFIG_BITMAP_SIZE);
 
 	as_status status = as_config_file_read(as, &config, bitmap, false, err);
 
 	if (status != AEROSPIKE_OK) {
-		// Destroy new rack_ids vector if changed before update fails.
-		if (config.rack_ids != current->rack_ids) {
+		// Destroy vectors if changed before update fails.
+		if (config.rack_ids) {
 			as_vector_destroy(config.rack_ids);
+		}
+
+		if (config.policies.metrics.labels) {
+			as_metrics_policy_destroy_labels(&config.policies.metrics);
 		}
 		return status;
 	}

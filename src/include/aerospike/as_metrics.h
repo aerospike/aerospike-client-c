@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_error.h>
+#include <aerospike/as_vector.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -72,6 +73,14 @@ typedef struct as_metrics_listeners_s {
 } as_metrics_listeners;
 
 /**
+ * Metrics label that is applied when exporting metrics.
+ */
+typedef struct {
+	char* name;
+	char* value;
+} as_metrics_label;
+
+/**
  * Client periodic metrics configuration.
  */
 typedef struct as_metrics_policy_s {
@@ -83,7 +92,15 @@ typedef struct as_metrics_policy_s {
 	 * The listener could be overridden to send the metrics snapshot directly to OpenTelemetry.
 	 */
 	as_metrics_listeners metrics_listeners;
-	
+
+	/**
+	 * List of name/value labels that is applied when exporting metrics.
+	 * Do not set directly. Use multiple as_metrics_add_label() calls to add labels.
+	 *
+	 * Default: NULL
+	 */
+	as_vector* labels;
+
 	/**
 	 * Directory path to write metrics log files for listeners that write logs.
 	 *
@@ -149,13 +166,53 @@ typedef struct as_metrics_policy_s {
 //---------------------------------
 
 /**
- * Initalize metrics policy
+ * Initalize metrics policy.
  */
 AS_EXTERN void
 as_metrics_policy_init(as_metrics_policy* policy);
 
 /**
- * Initalize metrics policy
+ * Destroy metrics policy labels.
+ */
+AS_EXTERN void
+as_metrics_policy_destroy_labels(as_metrics_policy* policy);
+
+/**
+ * Destroy metrics policy.
+ */
+static inline void
+as_metrics_policy_destroy(as_metrics_policy* policy)
+{
+	as_metrics_policy_destroy_labels(policy);
+}
+
+/**
+ * Add label that will be applied when exporting metrics.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_metrics_policy mp;
+ * as_metrics_policy_init(&mp);
+ * as_metrics_policy_add_label(&mp, "region", "us-west");
+ * as_metrics_policy_add_label(&mp, "zone", "usw1-az3");
+ * ~~~~~~~~~~
+ */
+AS_EXTERN void
+as_metrics_policy_add_label(as_metrics_policy* policy, const char* name, const char* value);
+
+/**
+ * Copy all metrics labels. Previous labels will be destroyed.
+ */
+void
+as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels);
+
+/**
+ * Set all metrics labels. Previous labels will be destroyed.
+ */
+AS_EXTERN void
+as_metrics_policy_set_labels(as_metrics_policy* policy, as_vector* labels);
+
+/**
+ * Set output directory path for metrics files.
  */
 static inline void
 as_metrics_policy_set_report_dir(as_metrics_policy* policy, const char* report_dir)
@@ -163,6 +220,9 @@ as_metrics_policy_set_report_dir(as_metrics_policy* policy, const char* report_d
 	as_strncpy(policy->report_dir, report_dir, sizeof(policy->report_dir));
 }
 
+/**
+ * Set metrics listeners.
+ */
 static inline void
 as_metrics_policy_set_listeners(
 	as_metrics_policy* policy, as_metrics_enable_listener enable,

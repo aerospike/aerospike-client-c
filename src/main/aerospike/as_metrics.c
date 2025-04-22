@@ -38,6 +38,8 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 		as_config* config = aerospike_load_config(as);
 		as_metrics_policy* cfg = &config->policies.metrics;
 
+		mrg->labels = as_field_is_set(bitmap, AS_METRICS_LABELS)?
+			cfg->labels : src->labels;
 		mrg->latency_columns = as_field_is_set(bitmap, AS_METRICS_LATENCY_COLUMNS)?
 			cfg->latency_columns : src->latency_columns;
 		mrg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
@@ -78,6 +80,7 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 void
 as_metrics_policy_init(as_metrics_policy* policy)
 {
+	policy->labels = NULL;
 	policy->report_size_limit = 0;
 	as_strncpy(policy->report_dir, ".", sizeof(policy->report_dir));
 	policy->interval = 30;
@@ -89,4 +92,56 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->metrics_listeners.disable_listener = NULL;
 	policy->metrics_listeners.udata = NULL;
 	policy->enable = false;
+}
+
+void
+as_metrics_policy_destroy_labels(as_metrics_policy* policy)
+{
+	as_vector* labels = policy->labels;
+
+	if (labels) {
+		for (uint32_t i = 0; i < labels->size; i++) {
+			as_metrics_label* label = as_vector_get(labels, i);
+			cf_free(label->name);
+			cf_free(label->value);
+		}
+		as_vector_destroy(labels);
+		policy->labels = NULL;
+	}
+}
+
+void
+as_metrics_policy_set_labels(as_metrics_policy* policy, as_vector* labels)
+{
+	as_metrics_policy_destroy_labels(policy);
+	policy->labels = labels;
+}
+
+void
+as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels)
+{
+	as_metrics_policy_destroy_labels(policy);
+
+	if (labels) {
+		policy->labels = as_vector_create(sizeof(as_metrics_label), labels->size);
+
+		for (uint32_t i = 0; i < labels->size; i++) {
+			as_metrics_label* label = as_vector_get(labels, i);
+			as_metrics_policy_add_label(policy, label->name, label->value);
+		}
+	}
+}
+
+void
+as_metrics_policy_add_label(as_metrics_policy* policy, const char* name, const char* value)
+{
+	if (!policy->labels) {
+		policy->labels = as_vector_create(sizeof(as_metrics_label), 8);
+	}
+
+	as_metrics_label label;
+	label.name = cf_strdup(name);
+	label.value = cf_strdup(value);
+
+	as_vector_append(policy->labels, &label);
 }

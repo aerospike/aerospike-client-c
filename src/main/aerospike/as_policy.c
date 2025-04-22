@@ -61,4 +61,5 @@ as_policies_destroy(as_policies* p)
 	as_exp_destroy(p->query.base.filter_exp);
 	as_exp_destroy(p->txn_verify.base.filter_exp);
 	as_exp_destroy(p->txn_roll.base.filter_exp);
+	as_metrics_policy_destroy(&p->metrics);
 }

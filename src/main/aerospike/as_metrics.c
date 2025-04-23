@@ -58,6 +58,19 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 	}
 }
 
+static void
+as_destroy_labels(as_vector* labels)
+{
+	if (labels) {
+		for (uint32_t i = 0; i < labels->size; i++) {
+			as_metrics_label* label = as_vector_get(labels, i);
+			cf_free(label->name);
+			cf_free(label->value);
+		}
+		as_vector_destroy(labels);
+	}
+}
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -109,39 +122,37 @@ as_metrics_policy_destroy(as_metrics_policy* policy)
 void
 as_metrics_policy_destroy_labels(as_metrics_policy* policy)
 {
-	as_vector* labels = policy->labels;
-
-	if (labels) {
-		for (uint32_t i = 0; i < labels->size; i++) {
-			as_metrics_label* label = as_vector_get(labels, i);
-			cf_free(label->name);
-			cf_free(label->value);
-		}
-		as_vector_destroy(labels);
-		policy->labels = NULL;
-	}
+	as_destroy_labels(policy->labels);
+	policy->labels = NULL;
 }
 
 void
 as_metrics_policy_set_labels(as_metrics_policy* policy, as_vector* labels)
 {
-	as_metrics_policy_destroy_labels(policy);
+	as_vector* old = policy->labels;
 	policy->labels = labels;
+	as_destroy_labels(old);
 }
 
 void
 as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels)
 {
-	as_metrics_policy_destroy_labels(policy);
+	as_vector* list = NULL;
 
 	if (labels) {
-		policy->labels = as_vector_create(sizeof(as_metrics_label), labels->size);
+		list = as_vector_create(sizeof(as_metrics_label), labels->size);
 
 		for (uint32_t i = 0; i < labels->size; i++) {
 			as_metrics_label* label = as_vector_get(labels, i);
-			as_metrics_policy_add_label(policy, label->name, label->value);
+
+			as_metrics_label tmp;
+			tmp.name = cf_strdup(label->name);
+			tmp.value = cf_strdup(label->value);
+
+			as_vector_append(list, &tmp);
 		}
 	}
+	as_metrics_policy_set_labels(policy, list);
 }
 
 void
@@ -161,9 +172,11 @@ as_metrics_policy_add_label(as_metrics_policy* policy, const char* name, const c
 void
 as_metrics_policy_set_application_id(as_metrics_policy* policy, const char* application_id)
 {
-	if (policy->application_id) {
-		cf_free(policy->application_id);
-	}
+	char* old = policy->application_id;
 
 	policy->application_id = application_id ? cf_strdup(application_id) : NULL;
+
+	if (old) {
+		cf_free(old);
+	}
 }

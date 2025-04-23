@@ -102,6 +102,16 @@ typedef struct as_metrics_policy_s {
 	as_vector* labels;
 
 	/**
+	 * Application identifier that is applied when exporting metrics. If this field is NULL,
+	 * as_config.user will be used as the application_id when exporting metrics.
+	 *
+	 * Do not set directly. Use as_metrics_policy_set_application_id() to set this field.
+	 *
+	 * Default: NULL
+	 */
+	char* application_id;
+
+	/**
 	 * Directory path to write metrics log files for listeners that write logs.
 	 *
 	 * Default: . (current directory)
@@ -172,19 +182,16 @@ AS_EXTERN void
 as_metrics_policy_init(as_metrics_policy* policy);
 
 /**
+ * Destroy metrics policy.
+ */
+AS_EXTERN void
+as_metrics_policy_destroy(as_metrics_policy* policy);
+
+/**
  * Destroy metrics policy labels.
  */
 AS_EXTERN void
 as_metrics_policy_destroy_labels(as_metrics_policy* policy);
-
-/**
- * Destroy metrics policy.
- */
-static inline void
-as_metrics_policy_destroy(as_metrics_policy* policy)
-{
-	as_metrics_policy_destroy_labels(policy);
-}
 
 /**
  * Add label that will be applied when exporting metrics.
@@ -202,7 +209,7 @@ as_metrics_policy_add_label(as_metrics_policy* policy, const char* name, const c
 /**
  * Copy all metrics labels. Previous labels will be destroyed.
  */
-void
+AS_EXTERN void
 as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels);
 
 /**
@@ -210,6 +217,12 @@ as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels);
  */
 AS_EXTERN void
 as_metrics_policy_set_labels(as_metrics_policy* policy, as_vector* labels);
+
+/**
+ * Set application identifier that will be applied when exporting metrics.
+ */
+AS_EXTERN void
+as_metrics_policy_set_application_id(as_metrics_policy* policy, const char* application_id);
 
 /**
  * Set output directory path for metrics files.

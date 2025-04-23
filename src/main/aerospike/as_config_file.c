@@ -250,6 +250,25 @@ as_parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out, uin
 	return true;
 }
 
+static inline void
+as_assign_string(const char* section, const char* name, char* src, char** trg)
+{
+	if (*trg == NULL || strcmp(*trg, src) != 0) {
+		as_log_info("Set %s.%s = %s", section, name, src);
+		*trg = src;
+	}
+}
+
+static bool
+as_parse_string(as_yaml* yaml, const char* name, const char* value, char** out, uint32_t field)
+{
+	char* val = cf_strdup(value);
+
+	as_assign_string(yaml->name, name, val, out);
+	as_field_set(yaml->bitmap, field);
+	return true;
+}
+
 static bool
 as_vector_int32_equal(as_vector* r1, as_vector* r2)
 {
@@ -1061,6 +1080,10 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 		return as_parse_uint32(yaml, name, value, &policy->latency_shift, AS_METRICS_LATENCY_SHIFT);
 	}
 
+	if (strcmp(name, "application_id") == 0) {
+		return as_parse_string(yaml, name, value, &policy->application_id, AS_METRICS_APP_ID);
+	}
+
 	if (strcmp(name, "labels") == 0) {
 		return as_parse_labels(yaml, policy, AS_METRICS_LABELS);
 	}
@@ -1730,6 +1753,18 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->metrics.latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
 		src->metrics.latency_shift : orig->metrics.latency_shift;
 
+	if (as_field_is_set(bitmap, AS_METRICS_APP_ID)) {
+		if (trg->metrics.application_id != src->metrics.application_id) {
+			trg->metrics.application_id = src->metrics.application_id;
+			src->metrics.application_id = NULL;
+		}
+	}
+	else {
+		if (trg->metrics.application_id != orig->metrics.application_id) {
+			trg->metrics.application_id = strdup(orig->metrics.application_id);
+		}
+	}
+
 	if (as_field_is_set(bitmap, AS_METRICS_LABELS)) {
 		if (trg->metrics.labels != src->metrics.labels) {
 			as_metrics_policy_set_labels(&trg->metrics, src->metrics.labels);
@@ -1863,9 +1898,13 @@ as_config_file_init(aerospike* as, as_error* err)
 	as_status status = as_config_file_read(as, config, as->config_bitmap, true, err);
 
 	if (status != AEROSPIKE_OK) {
-		// Destroy vectors if changed before update fails.
+		// Destroy heap allocated fields if changed before update fails.
 		if (config->rack_ids != as->config_orig->rack_ids) {
 			as_vector_destroy(config->rack_ids);
+		}
+
+		if (config->policies.metrics.application_id != as->config_orig->policies.metrics.application_id) {
+			cf_free(config->policies.metrics.application_id);
 		}
 
 		if (config->policies.metrics.labels != as->config_orig->policies.metrics.labels) {
@@ -1888,6 +1927,7 @@ as_config_file_update(aerospike* as, as_error* err)
 
 	// Start with empty vectors.
 	config.rack_ids = NULL;
+	config.policies.metrics.application_id = NULL;
 	config.policies.metrics.labels = NULL;
 
 	uint8_t bitmap[AS_CONFIG_BITMAP_SIZE];
@@ -1896,9 +1936,13 @@ as_config_file_update(aerospike* as, as_error* err)
 	as_status status = as_config_file_read(as, &config, bitmap, false, err);
 
 	if (status != AEROSPIKE_OK) {
-		// Destroy vectors if changed before update fails.
+		// Destroy heap allocated fields if changed before update fails.
 		if (config.rack_ids) {
 			as_vector_destroy(config.rack_ids);
+		}
+
+		if (config.policies.metrics.application_id) {
+			cf_free(config.policies.metrics.application_id);
 		}
 
 		if (config.policies.metrics.labels) {

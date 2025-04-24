@@ -1765,13 +1765,13 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	// Probably need to use cluster->metrics_lock.
 	if (as_field_is_set(bitmap, AS_METRICS_APP_ID)) {
 		if (trg->metrics.app_id != src->metrics.app_id) {
-			trg->metrics.app_id = src->metrics.app_id;
+			as_metrics_policy_assign_app_id(&trg->metrics, src->metrics.app_id);
 			src->metrics.app_id = NULL;
 		}
 	}
 	else {
 		if (trg->metrics.app_id != orig->metrics.app_id) {
-			trg->metrics.app_id = strdup(orig->metrics.app_id);
+			as_metrics_policy_set_app_id(&trg->metrics, orig->metrics.app_id);
 		}
 	}
 

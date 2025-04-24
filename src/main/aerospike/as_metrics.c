@@ -180,3 +180,15 @@ as_metrics_policy_set_app_id(as_metrics_policy* policy, const char* app_id)
 		cf_free(old);
 	}
 }
+
+void
+as_metrics_policy_assign_app_id(as_metrics_policy* policy, char* app_id)
+{
+	char* old = policy->app_id;
+
+	policy->app_id = app_id;
+
+	if (old) {
+		cf_free(old);
+	}
+}

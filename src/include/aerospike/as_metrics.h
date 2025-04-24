@@ -225,6 +225,13 @@ AS_EXTERN void
 as_metrics_policy_set_app_id(as_metrics_policy* policy, const char* app_id);
 
 /**
+ * Transfer ownership of heap allocated app_id to metrics.
+ * app_id must be heap allocated.  For internal use only.
+ */
+AS_EXTERN void
+as_metrics_policy_assign_app_id(as_metrics_policy* policy, char* app_id);
+
+/**
  * Set output directory path for metrics files.
  */
 static inline void

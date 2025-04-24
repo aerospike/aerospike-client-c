@@ -270,22 +270,30 @@ as_parse_string(as_yaml* yaml, const char* name, const char* value, char** out, 
 }
 
 static bool
-as_vector_int32_equal(as_vector* r1, as_vector* r2)
+as_rack_ids_equal(as_cluster* c1, as_config* c2)
 {
-	if (r1 == NULL) {
-		return r2 == NULL;
+	// Cluster racks_ids will never be NULL.
+	// Config rack_ids can be NULL and rack_id exists.
+	if (c2->rack_ids == NULL) {
+		if (c1->rack_ids->size == 1) {
+			int rack_id = *(int*)as_vector_get(c1->rack_ids, 0);
+			return rack_id == c2->rack_id;
+		}
+		else {
+			return false;
+		}
 	}
-	else if (r2 == NULL) {
+
+	as_vector* v1 = c1->rack_ids;
+	as_vector* v2 = c2->rack_ids;
+
+	if (v1->size != v2->size) {
 		return false;
 	}
 
-	if (r1->size != r2->size) {
-		return false;
-	}
-
-	for (uint32_t i = 0; i < r1->size; i++) {
-		int id1 = *(int*)as_vector_get(r1, i);
-		int id2 = *(int*)as_vector_get(r2, i);
+	for (uint32_t i = 0; i < v1->size; i++) {
+		int id1 = *(int*)as_vector_get(v1, i);
+		int id2 = *(int*)as_vector_get(v2, i);
 
 		if (id1 != id2) {
 			return false;
@@ -1835,7 +1843,7 @@ as_cluster_update(
 	cluster->use_services_alternate = config->use_services_alternate;
 	cluster->rack_aware = config->rack_aware;
 
-	if (!as_vector_int32_equal(cluster->rack_ids, config->rack_ids)) {
+	if (!as_rack_ids_equal(cluster, config)) {
 		as_vector* old = cluster->rack_ids;
 		as_vector* rack_ids;
 
@@ -1890,13 +1898,6 @@ as_config_file_init(aerospike* as, as_error* err)
 	memset(as->config_bitmap, 0, AS_CONFIG_BITMAP_SIZE);
 
 	as_config* config = &as->config;
-
-	if (!config->rack_ids) {
-		// Add config rack_id to rack_ids so it can be compared with yaml file rack_ids.
-		config->rack_ids = as_vector_create(sizeof(int), 1);
-		as_vector_append(config->rack_ids, &config->rack_id);
-	}
-	
 	as_status status = as_config_file_read(as, config, as->config_bitmap, true, err);
 
 	if (status != AEROSPIKE_OK) {

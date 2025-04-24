@@ -1080,8 +1080,8 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 		return as_parse_uint32(yaml, name, value, &policy->latency_shift, AS_METRICS_LATENCY_SHIFT);
 	}
 
-	if (strcmp(name, "application_id") == 0) {
-		return as_parse_string(yaml, name, value, &policy->application_id, AS_METRICS_APP_ID);
+	if (strcmp(name, "app_id") == 0) {
+		return as_parse_string(yaml, name, value, &policy->app_id, AS_METRICS_APP_ID);
 	}
 
 	if (strcmp(name, "labels") == 0) {
@@ -1753,15 +1753,17 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->metrics.latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
 		src->metrics.latency_shift : orig->metrics.latency_shift;
 
+	// TODO Handle concurrency issue when app_id and labels are actually used in metrics.
+	// Probably need to use cluster->metrics_lock.
 	if (as_field_is_set(bitmap, AS_METRICS_APP_ID)) {
-		if (trg->metrics.application_id != src->metrics.application_id) {
-			trg->metrics.application_id = src->metrics.application_id;
-			src->metrics.application_id = NULL;
+		if (trg->metrics.app_id != src->metrics.app_id) {
+			trg->metrics.app_id = src->metrics.app_id;
+			src->metrics.app_id = NULL;
 		}
 	}
 	else {
-		if (trg->metrics.application_id != orig->metrics.application_id) {
-			trg->metrics.application_id = strdup(orig->metrics.application_id);
+		if (trg->metrics.app_id != orig->metrics.app_id) {
+			trg->metrics.app_id = strdup(orig->metrics.app_id);
 		}
 	}
 
@@ -1903,8 +1905,8 @@ as_config_file_init(aerospike* as, as_error* err)
 			as_vector_destroy(config->rack_ids);
 		}
 
-		if (config->policies.metrics.application_id != as->config_orig->policies.metrics.application_id) {
-			cf_free(config->policies.metrics.application_id);
+		if (config->policies.metrics.app_id != as->config_orig->policies.metrics.app_id) {
+			cf_free(config->policies.metrics.app_id);
 		}
 
 		if (config->policies.metrics.labels != as->config_orig->policies.metrics.labels) {
@@ -1927,7 +1929,7 @@ as_config_file_update(aerospike* as, as_error* err)
 
 	// Start with empty vectors.
 	config.rack_ids = NULL;
-	config.policies.metrics.application_id = NULL;
+	config.policies.metrics.app_id = NULL;
 	config.policies.metrics.labels = NULL;
 
 	uint8_t bitmap[AS_CONFIG_BITMAP_SIZE];
@@ -1941,8 +1943,8 @@ as_config_file_update(aerospike* as, as_error* err)
 			as_vector_destroy(config.rack_ids);
 		}
 
-		if (config.policies.metrics.application_id) {
-			cf_free(config.policies.metrics.application_id);
+		if (config.policies.metrics.app_id) {
+			cf_free(config.policies.metrics.app_id);
 		}
 
 		if (config.policies.metrics.labels) {

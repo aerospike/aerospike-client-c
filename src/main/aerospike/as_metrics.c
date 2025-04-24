@@ -94,7 +94,7 @@ void
 as_metrics_policy_init(as_metrics_policy* policy)
 {
 	policy->labels = NULL;
-	policy->application_id = NULL;
+	policy->app_id = NULL;
 	policy->report_size_limit = 0;
 	as_strncpy(policy->report_dir, ".", sizeof(policy->report_dir));
 	policy->interval = 30;
@@ -113,9 +113,9 @@ as_metrics_policy_destroy(as_metrics_policy* policy)
 {
 	as_metrics_policy_destroy_labels(policy);
 
-	if (policy->application_id) {
-		cf_free(policy->application_id);
-		policy->application_id = NULL;
+	if (policy->app_id) {
+		cf_free(policy->app_id);
+		policy->app_id = NULL;
 	}
 }
 
@@ -170,11 +170,11 @@ as_metrics_policy_add_label(as_metrics_policy* policy, const char* name, const c
 }
 
 void
-as_metrics_policy_set_application_id(as_metrics_policy* policy, const char* application_id)
+as_metrics_policy_set_app_id(as_metrics_policy* policy, const char* app_id)
 {
-	char* old = policy->application_id;
+	char* old = policy->app_id;
 
-	policy->application_id = application_id ? cf_strdup(application_id) : NULL;
+	policy->app_id = app_id ? cf_strdup(app_id) : NULL;
 
 	if (old) {
 		cf_free(old);

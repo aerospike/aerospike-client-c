@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -57,7 +57,7 @@
  *
  * Code examples:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // bin = {key1=11, key2=22, key3=33}
  * // Set map value to 11 for map key "key2".
  * as_operations ops;
@@ -75,11 +75,11 @@
  * // bin result = {key1=11, key2=11, key3=33}
  * as_operations_destroy(&ops);
  * as_record_destroy(rec);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Nested CDT operations are supported by optional context (as_cdt_ctx):
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // bin = {key1={key11=9,key12=4}, key2={key21=3,key22=5}}
  * // Set map value to 11 for map key "key21" inside of map key "key2".
  * as_cdt_ctx ctx;
@@ -103,7 +103,7 @@
  * // bin result = {key1={key11=9,key12=4},key2={key21=11,key22=5}}
  * as_operations_destroy(&ops);
  * as_record_destroy(rec);
- * ~~~~~~~~~~
+ * @endcode
  */
 
 #include <aerospike/as_cdt_order.h>
@@ -261,7 +261,7 @@ typedef enum as_map_return_type_e {
 	/**
 	 * Invert meaning of map command and return values.  For example:
 	 *
-	 * ~~~~~~~~~~{.c}
+	 * @code
 	 * as_operations ops;
 	 * as_operations_inita(&ops, 1);
 	 *
@@ -271,7 +271,7 @@ typedef enum as_map_return_type_e {
 	 * as_record* rec = NULL;
 	 * as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
 	 * as_operations_destroy(&ops);
-	 * ~~~~~~~~~~
+	 * @endcode
 	 *
 	 * With AS_MAP_RETURN_INVERTED enabled, the keys outside of the specified key range will be
 	 * removed and returned.

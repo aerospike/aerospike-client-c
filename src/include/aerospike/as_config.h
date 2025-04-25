@@ -385,10 +385,10 @@ typedef struct as_config_provider_s {
  * Before using as_config, you must first initialize it. This will setup the 
  * default values.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Once initialized, you can populate the values.
  *
@@ -397,9 +397,9 @@ typedef struct as_config_provider_s {
  * The client will require at least one seed host defined in the 
  * configuration. The seed host is defined in `as_config.hosts`. 
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config_add_host(&config, "127.0.0.1", 3000);
- * ~~~~~~~~~~
+ * @endcode
  *
  * The client will iterate over the list until it connects with one of the hosts.
  *
@@ -428,9 +428,9 @@ typedef struct as_config_provider_s {
  * to `aerospike_key_put()`, then you may find it beneficial to set the global
  * `as_policy_write` in `as_policies.write`, which all write operations will use.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * config.policies.write.key = AS_POLICY_KEY_SEND;
- * ~~~~~~~~~~
+ * @endcode
  *
  * Global operation policies:
  * - as_policies.read
@@ -449,9 +449,9 @@ typedef struct as_config_provider_s {
  * which allows you to define a path to where the client library will look for
  * Lua files for processing.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * strcpy(config.mod_lua.user_path, "/home/me/lua");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Never call as_config_destroy() directly because ownership of config fields
  * is transferred to aerospike in aerospike_init() or aerospike_new().
@@ -693,7 +693,7 @@ typedef struct as_config_s {
 	 * A better method for initializing lua configuration is to leave this field alone and
 	 * instead call aerospike_init_lua():
 	 *
-	 * ~~~~~~~~~~{.c}
+	 * @code
 	 * // Get default global lua configuration.
 	 * as_config_lua lua;
 	 * as_config_lua_init(&lua);
@@ -704,7 +704,7 @@ typedef struct as_config_s {
 	 *
 	 * // Initialize global lua configuration.
 	 * aerospike_init_lua(&lua);
-	 * ~~~~~~~~~~
+	 * @endcode
 	 */
 	as_config_lua lua;
 
@@ -837,11 +837,11 @@ typedef struct as_config_s {
  * You should do this to ensure the configuration has valid values, before 
  * populating it with custom options.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * as_config_add_host(&config, "127.0.0.1", 3000);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @relates as_config
  */
@@ -852,20 +852,20 @@ as_config_init(as_config* config);
  * Add seed host(s) from a string with format: hostname1[:tlsname1][:port1],...
  * Hostname may also be an IP address in the following formats.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * IPv4: xxx.xxx.xxx.xxx
  * IPv6: [xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx]
  * IPv6: [xxxx::xxxx]
- * ~~~~~~~~~~
+ * @endcode
  *
  * The host addresses will be copied.
  * The caller is responsible for the original string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * as_config_add_hosts(&config, "host1,host2:3010,192.168.20.1:3020,[2001::1000]:3030", 3000);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */
@@ -877,11 +877,11 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
  * The host address will be copied.
  * The caller is responsible for the original address string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * as_config_add_host(&config, "127.0.0.1", 3000);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */
@@ -900,11 +900,11 @@ as_config_clear_hosts(as_config* config);
  * User authentication for servers with restricted access.  The password will be stored by the
  * client and sent to server in hashed format.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * 	as_config config;
  * 	as_config_init(&config);
  * 	as_config_set_user(&config, "charlie", "mypassword");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */
@@ -1078,11 +1078,11 @@ as_config_tls_set_certstring(as_config* config, const char* certstring)
  * The host address and TLS name will be copied.
  * The caller is responsible for the original address string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * as_config_tls_add_host(&config, "127.0.0.1", "node1.test.org", 3000);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */
@@ -1125,7 +1125,7 @@ as_config_provider_set(as_config* config, const char* path, uint32_t interval)
  * rack_aware, AS_POLICY_REPLICA_PREFER_RACK and server rack configuration must also be
  * set to enable this functionality.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * // Rack 4 is where the client machine is located.
@@ -1134,7 +1134,7 @@ as_config_provider_set(as_config* config, const char* path, uint32_t interval)
  * as_config_add_rack_id(&config, 2);
  * // All other racks are far enough away that they are equally not preferred, so do not include
  * // them here.
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -126,10 +126,10 @@ typedef union as_key_value_u {
  * - as_key_init_raw() - Initialize the key with byte array.
  * - as_key_init_value() - Initialize the key with an as_key_value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init(&key, "ns", "set", "key");
- * ~~~~~~~~~~
+ * @endcode
  * 
  * For heap allocated as_key, you should use the following functions
  * to allocate and initialize the value on the heap.
@@ -140,18 +140,18 @@ typedef union as_key_value_u {
  * - as_key_new_raw() - Initialize the key with byte array.
  * - as_key_new_value() - Initialize the key with an as_key_value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key* key = as_key_new("ns", "set", "key");
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Destruction
  *
  * When you no longer require an instance of as_key, you should release the
  * key and associated resources via as_key_destroy().
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key_destroy(key);
- * ~~~~~~~~~~
+ * @endcode
  *
  * This function should be used on both stack and heap allocated keys.
  *
@@ -221,10 +221,10 @@ typedef struct as_key_s {
 /**
  * Initialize a stack allocated as_key to a NULL-terminated string value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init(&key, "ns", "set", "key");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key via
  * this function.
@@ -244,10 +244,10 @@ as_key_init(as_key* key, const char* ns, const char* set, const char* value);
 /**
  * Initialize a stack allocated as_key to a int64_t value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init_int64(&key, "ns", "set", 123);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key.
  *
@@ -266,10 +266,10 @@ as_key_init_int64(as_key* key, const char* ns, const char* set, int64_t value);
 /**
  * Initialize a stack allocated as_key to a NULL-terminated string value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init_strp(&key, "ns", "set", stdup("key"), true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key.
  *
@@ -289,10 +289,10 @@ as_key_init_strp(as_key* key, const char* ns, const char* set, const char* value
 /**
  * Initialize a stack allocated as_key to a NULL-terminated string value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init_str(&key, "ns", "set", "key");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key.
  *
@@ -314,7 +314,7 @@ as_key_init_str(as_key* key, const char* ns, const char* set, const char* value)
 /**
  * Initialize a stack allocated as_key to bytes array.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t * rgb = (uint8_t *) malloc(3);
  * rgb[0] = 255;
  * rgb[1] = 255;
@@ -322,7 +322,7 @@ as_key_init_str(as_key* key, const char* ns, const char* set, const char* value)
  * 
  * as_key key;
  * as_key_init_rawp(&key, "ns", "set", rgb, 3, true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key.
  *
@@ -343,12 +343,12 @@ as_key_init_rawp(as_key* key, const char* ns, const char* set, const uint8_t* va
 /**
  * Initialize a stack allocated as_key to bytes array.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t rgb[3] = {254,254,120};
  * 
  * as_key key;
  * as_key_init_raw(&key, "ns", "set", rgb, 3);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key.
  *
@@ -371,12 +371,12 @@ as_key_init_raw(as_key* key, const char* ns, const char* set, const uint8_t* val
 /**
  * Initialize a stack allocated as_key with a digest.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_digest_value digest = {0};
  * 
  * as_key key;
  * as_key_init_digest(&key, "ns", "set", digest);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key.
  * 
@@ -395,13 +395,13 @@ as_key_init_digest(as_key* key, const char* ns, const char* set, const as_digest
 /**
  * Initialize a stack allocated as_key to an as_key_value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_string str;
  * as_string_init(&str, "abc", false);
  * 
  * as_key key;
  * as_key_init_value(&key, "ns", "set", (as_key_value *) str);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key.
  *
@@ -420,9 +420,9 @@ as_key_init_value(as_key* key, const char* ns, const char* set, const as_key_val
 /**
  * Creates and initializes a heap allocated as_key to a NULL-terminated string value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key* key = as_key_new("ns", "set", "key");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key via
  * this function.
@@ -441,9 +441,9 @@ as_key_new(const char* ns, const char* set, const char* value);
 /**
  * Creates and initializes a heap allocated as_key to a int64_t value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key* key = as_key_new_int64("ns", "set", 123);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key via
  * this function.
@@ -462,9 +462,9 @@ as_key_new_int64(const char* ns, const char* set, int64_t value);
 /**
  * Creates and initializes a heap allocated as_key to a NULL-terminated string value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key* key = as_key_new_strp("ns", "set", strdup("key"), true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key via
  * this function.
@@ -484,9 +484,9 @@ as_key_new_strp(const char* ns, const char* set, const char* value, bool free);
 /**
  * Creates and initializes a heap allocated as_key to a NULL-terminated string value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key* key = as_key_new_str("ns", "set", "key");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key via
  * this function.
@@ -508,14 +508,14 @@ as_key_new_str(const char* ns, const char* set, const char* value)
 /**
  * Creates and initializes a heap allocated as_key to a byte array.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t * rgb = (uint8_t *) malloc(3);
  * rgb[0] = 255;
  * rgb[1] = 255;
  * rgb[3] = 255;
  * 
  * as_key* key = as_key_new_rawp("ns", "set", rgb, 3, true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key via
  * this function.
@@ -536,11 +536,11 @@ as_key_new_rawp(const char* ns, const char* set, const uint8_t* value, uint32_t 
 /**
  * Creates and initializes a heap allocated as_key to a byte array.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t rgb[3] = {254,254,120};
  * 
  * as_key* key = as_key_new_raw("ns", "set", rgb, 3);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key via
  * this function.
@@ -563,11 +563,11 @@ as_key_new_raw(const char* ns, const char* set, const uint8_t* value, uint32_t s
 /**
  * Creates and initializes a heap allocated as_key with a digest.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_digest_value digest = {0};
  * 
  * as_key* key = as_key_new_digest("ns", "set", digest);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key via
  * this function.
@@ -586,12 +586,12 @@ as_key_new_digest(const char* ns, const char* set, const as_digest_value digest)
 /**
  * Creates and initializes a heap allocated as_key to a an as_key_value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_string str;
  * as_string_init(&str, "abc", false);
  * 
  * as_key* key = as_key_new_value("ns", "set", (as_key_value *) str);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use as_key_destroy() to release resources allocated to as_key via
  * this function.
@@ -610,9 +610,9 @@ as_key_new_value(const char* ns, const char* set, const as_key_value* value);
 /**
  * Destory the as_key, releasing resources.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key_destroy(key);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param key The as_key to destroy.
  *
@@ -627,9 +627,9 @@ as_key_destroy(as_key* key);
  * The digest is computed the first time function is called. Subsequent calls
  * will return the previously calculated value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_digest * digest = as_key_digest(key);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param key The key to get the digest for.
  *

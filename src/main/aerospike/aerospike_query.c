@@ -21,6 +21,7 @@
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_log_macros.h>
@@ -1933,17 +1934,25 @@ as_policy_query_merge(aerospike* as, const as_policy_query* src, as_policy_query
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.query;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_query* def = &config->policies.query;
+		as_policy_query* cfg = &config->policies.query;
 
-		mrg->base.socket_timeout = def->base.socket_timeout;
-		mrg->base.total_timeout = def->base.total_timeout;
-		mrg->base.max_retries = def->base.max_retries;
-		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
-		mrg->info_timeout = def->info_timeout;
-		mrg->replica = def->replica;
-		mrg->expected_duration = def->expected_duration;
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_QUERY_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_QUERY_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_QUERY_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_QUERY_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->info_timeout = as_field_is_set(bitmap, AS_QUERY_INFO_TIMEOUT)?
+			cfg->info_timeout : src->info_timeout;
+		mrg->replica = as_field_is_set(bitmap, AS_QUERY_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->expected_duration = as_field_is_set(bitmap, AS_QUERY_EXPECTED_DURATION)?
+			cfg->expected_duration : src->expected_duration;
 
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -207,7 +207,7 @@ as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity,
  * as_set_external_event_loop() to fully define the the external loop to the client and obtain a
  * reference to the client's event loop abstraction.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * struct {
  * 	   pthread_t thread;
  * 	   struct ev_loop* loop;
@@ -232,7 +232,7 @@ as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity,
  * 	   struct my_loop* myloop = &loops[i];
  * 	   return pthread_create(&myloop->thread, NULL, my_loop_worker_thread, myloop) == 0;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param capacity	Number of externally created event loops.
  * @return			True if all external loops were initialized.
@@ -253,7 +253,7 @@ as_event_set_external_loop_capacity(uint32_t capacity);
  * This method is used in conjunction with as_event_set_external_loop_capacity() to fully define
  * the external loop to the client and obtain a reference to the client's event loop abstraction.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * struct {
  *     pthread_t thread;
  * 	   struct ev_loop* loop;
@@ -278,7 +278,7 @@ as_event_set_external_loop_capacity(uint32_t capacity);
  * 	   struct my_loop* myloop = &loops[i];
  * 	   return pthread_create(&myloop->thread, NULL, my_loop_worker_thread, myloop) == 0;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param loop		External event loop.
  * @return			Client's generic event loop abstraction that is used in client async commands.
@@ -300,7 +300,7 @@ as_event_set_external_loop(void* loop);
  * This method is used in conjunction with as_event_set_external_loop_capacity() to fully define
  * the external loop to the client and obtain a reference to the client's event loop abstraction.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * struct {
  *     pthread_t thread;
  * 	   struct ev_loop* loop;
@@ -335,7 +335,7 @@ as_event_set_external_loop(void* loop);
  * 	   struct my_loop* myloop = &loops[i];
  * 	   return pthread_create(&myloop->thread, NULL, my_loop_worker_thread, myloop) == 0;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param err			The as_error to be populated if an error occurs.
  * @param policy		Event loop configuration.  Pass in NULL for default configuration.
@@ -429,16 +429,16 @@ as_event_loop_get_queue_size(as_event_loop* event_loop)
  * The shutdown sequence is slightly different for internal and external event loops.
  *
  * Internal:
- * ~~~~~~~~~~{.c}
+ * @code
  * as_event_close_loops();
- * ~~~~~~~~~~
+ * @endcode
  *
  * External:
- * ~~~~~~~~~~{.c}
+ * @code
  * as_event_close_loops();
  * Join on external loop threads.
  * as_event_destroy_loops();
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return		True if event loop close was successful.  If false, as_event_destroy_loops() should
  * 				not be called.

@@ -56,7 +56,8 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 {
 	as->_free = free;
 	as->cluster = NULL;
-	as->dynamic_config = false;
+	as->config_orig = NULL;
+	as->config_bitmap = NULL;
 
 	if (config) {
 		memcpy(&as->config, config, sizeof(as_config));
@@ -84,10 +85,8 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 	}
 
 	if (as->config.config_provider.path) {
-		as->dynamic_config = true;
-
 		as_error err;
-		as_status status = as_config_file_init(&as->config, &err);
+		as_status status = as_config_file_init(as, &err);
 
 		if (status != AEROSPIKE_OK) {
 			as_log_error("%s", err.message);
@@ -188,6 +187,17 @@ void aerospike_destroy(aerospike* as)
 {
 	as_config_destroy(&as->config);
 
+	if (as->config_orig) {
+		// Do not call as_config_destroy() since config_orig is
+		// a shallow copy of as->config and as->config owns
+		// the fields.
+		cf_free(as->config_orig);
+	}
+
+	if (as->config_bitmap) {
+		cf_free(as->config_bitmap);
+	}
+
 	if (as->_free) {
 		cf_free(as);
 	}
@@ -265,7 +275,7 @@ aerospike_connect(aerospike* as, as_error* err)
 #endif
 
 	// Create the cluster object.
-	status = as_cluster_create(&as->config, err, &as->cluster);
+	status = as_cluster_create(as, err);
 
 	if (status != AEROSPIKE_OK) {
 		return status;

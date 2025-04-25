@@ -92,11 +92,11 @@ struct as_cluster_s;
  * 
  * At least one seed host must be defined.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * as_config_add_host(&config, "127.0.0.1", 3000);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Once connected to a host in the cluster, then client will gather information
  * about the cluster, including all other nodes in the cluster. So, all that
@@ -118,20 +118,20 @@ struct as_cluster_s;
  * The following uses a stack allocated aerospike instance and initializes it
  * with aerospike_init():
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * aerospike as;
  * aerospike_init(&as, &config);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * ## Connecting
  *
  * The client will be connected if `aerospike_connect()` completes successfully:
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * if (aerospike_connect(&as, &err) != AEROSPIKE_OK) {
  *   fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * The `err` parameter will be populated if an error occurs. See as_error for more information
  * on error handling.
@@ -148,18 +148,18 @@ struct as_cluster_s;
  * When the connection to the database is not longer required, then the 
  * connection to the cluster can be closed via `aerospike_close()`:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * aerospike_close(&as, &err);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Destruction
  *
  * When the client is not longer required, the client and its resources should 
  * be releases via `aerospike_destroy()`:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * aerospike_destroy(&as);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @ingroup client_objects
  */
@@ -172,21 +172,26 @@ typedef struct aerospike_s {
 	struct as_cluster_s* cluster;
 
 	/**
-	 * Client configuration.
+	 * Client configuration. Dynamic configuration can periodically update this field.
 	 */
 	as_config config;
 
 	/**
-	 * Is dynamic configuration enabled. Automatically set to true if config_provider
-	 * is set in as_config at startup. If true, configuration can be loaded after cluster
-	 * initialization and some default policies take precedence over passed in policies.
+	 * Original client configuration provided by the user. Populated when dynamic
+	 * configuration is enabled.
 	 */
-	bool dynamic_config;
+	as_config* config_orig;
 
 	/**
-	* @private
-	* If true, then aerospike_destroy() will free this instance.
-	*/
+	 * @private
+	 * Bitmap of fields that were set by dynamic configuration.
+	 */
+	uint8_t* config_bitmap;
+
+	/**
+	 * @private
+	 * If true, then aerospike_destroy() will free this instance.
+	 */
 	bool _free;
 
 } aerospike;
@@ -204,10 +209,10 @@ typedef struct aerospike_s {
  * Ownership of the as_config instance fields are transferred to the aerospike instance.
  * The user should never call as_config_destroy() directly.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * aerospike as;
  * aerospike_init(&as, &config);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Once you are finished using the instance, then you should destroy it via the 
  * `aerospike_destroy()` function.
@@ -230,9 +235,9 @@ aerospike_init(aerospike* as, as_config* config);
  * Ownership of the as_config instance fields are transferred to the aerospike instance.
  * The user should never call as_config_destroy() directly.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * aerospike* as = aerospike_new(&config);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Once you are finished using the instance, then you should destroy it via the 
  * `aerospike_destroy()` function.
@@ -261,9 +266,9 @@ aerospike_init_lua(as_config_lua* config);
 /**
  * Destroy the aerospike instance and associated resources.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * aerospike_destroy(&as);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as 		The aerospike instance to destroy
  *
@@ -275,9 +280,9 @@ aerospike_destroy(aerospike* as);
 /**
  * Connect an aerospike instance to the cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * aerospike_connect(&as, &err);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Once you are finished using the connection, then you must close it via
  * the `aerospike_close()` function.
@@ -297,9 +302,9 @@ aerospike_connect(aerospike* as, as_error* err);
 /**
  * Close connections to the cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * aerospike_close(&as, &err);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as 		The aerospike instance to disconnect from a cluster.
  * @param err 		If an error occurs, the err will be populated.
@@ -314,9 +319,9 @@ aerospike_close(aerospike* as, as_error* err);
 /**
  * Is cluster connected to any server nodes.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool connected = aerospike_cluster_is_connected(&as);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as 		The aerospike instance to check.
  *

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -36,9 +36,9 @@ extern "C" {
 /**
  * Filter on string bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where(query, "bin1", as_string_equals("abc"));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_query
  * @ingroup query_operations
@@ -49,10 +49,10 @@ extern "C" {
  * Filter on blob bins.
  * Requires server version 7.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // as_blob_equals(uint8_t* bytes, uint32_t size, bool free)
  * as_query_where(query, "bin1", as_blob_equals(bytes, size, true));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_query
  * @ingroup query_operations
@@ -62,9 +62,9 @@ extern "C" {
 /**
  * Filter on integer bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where(query, "bin1", as_integer_equals(123));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_query
  * @ingroup query_operations
@@ -74,9 +74,9 @@ extern "C" {
 /**
  * Ranger filter on integer bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where(query, "bin1", as_integer_range(1,100));
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @relates as_query
  * @ingroup query_operations
@@ -86,9 +86,9 @@ extern "C" {
 /**
  * Range filter on list/map elements.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where(query, "bin1", as_range(LIST,NUMERIC,1,100));
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @relates as_query
  * @ingroup query_operations
@@ -98,9 +98,9 @@ extern "C" {
 /**
  * Contains filter on list/map elements.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where(query, "bin1", as_contains(LIST,STRING,"val"));
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @relates as_query
  * @ingroup query_operations
@@ -111,10 +111,10 @@ extern "C" {
  * Contains blob filter on list/map elements.
  * Requires server version 7.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // as_blob_contains(type, uint8_t* bytes, uint32_t size, bool free)
  * as_query_where(query, "bin1", as_blob_equals(LIST, bytes, size, true));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_query
  * @ingroup query_operations
@@ -124,9 +124,9 @@ extern "C" {
 /**
  * Filter specified type on bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where(query, "bin1", as_equals(NUMERIC,5));
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @relates as_query
  * @ingroup query_operations
@@ -136,9 +136,9 @@ extern "C" {
 /**
  * Within filter on GEO bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where(query, "bin1", as_geo_within(region));
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @relates as_query
  * @ingroup query_operations
@@ -148,9 +148,9 @@ extern "C" {
 /**
  * Contains filter on GEO bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where(query, "bin1", as_geo_contains(region));
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @relates as_query
  * @ingroup query_operations
@@ -365,28 +365,28 @@ typedef struct as_query_predicates_s {
  * it will return a pointer to the initialized as_query. Otherwise, NULL 
  * is returned.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query query;
  * as_query_init(&query, "namespace", "set");
- * ~~~~~~~~~~
+ * @endcode
  *
  * as_query_new() should be used to allocate and initialize a heap allocated
  * as_query. It will allocate the as_query, then initialized it with the 
  * given namespace and set. On success, it will return a pointer to the 
  * initialized as_query. Otherwise, NULL is returned.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query* query = as_query_new("namespace", "set");
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Destruction
  *
  * When you are finished with the as_query, you can destroy it and associated
  * resources:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_destroy(query);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Usage
  *
@@ -396,10 +396,10 @@ typedef struct as_query_predicates_s {
  *
  * as_query_select() is used to specify the bins to be selected by the query.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_select(query, "bin1");
  * as_query_select(query, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Before adding bins to select, the select structure must be initialized via
  * either:
@@ -410,11 +410,11 @@ typedef struct as_query_predicates_s {
  *
  * A complete example using as_query_select_inita()
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_select_inita(query, 2);
  * as_query_select(query, "bin1");
  * as_query_select(query, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Predicates on Bins
  *
@@ -423,9 +423,9 @@ typedef struct as_query_predicates_s {
  * **Note:** Currently, a single where predicate is supported. To do more advanced filtering,
  * you will want to use a UDF to process the result set on the server.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where(query, "bin1", as_string_equals("abc"));
- * ~~~~~~~~~~
+ * @endcode
  *
  * The predicates that you can apply to a bin include:
  * - as_string_equals() - Test for string equality.
@@ -441,10 +441,10 @@ typedef struct as_query_predicates_s {
  *
  * A complete example using as_query_where_inita():
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where_inita(query, 1);
  * as_query_where(query, "bin1", as_string_equals("abc"));
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Applying a UDF to Query Results
  *
@@ -452,9 +452,9 @@ typedef struct as_query_predicates_s {
  *
  * To define the UDF for the query, use as_query_apply().
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_apply(query, "udf_module", "udf_function", arglist);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @ingroup query_operations
  */
@@ -579,10 +579,10 @@ typedef struct as_query_s {
 /**
  * Initialize a stack allocated as_query.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query query;
  * as_query_init(&query, "test", "demo");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param query 	The query to initialize.
  * @param ns 		The namespace to query.
@@ -599,9 +599,9 @@ as_query_init(as_query* query, const char* ns, const char* set);
 /**
  * Create and initialize a new heap allocated as_query.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query* query = as_query_new("test", "demo");
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param ns 		The namespace to query.
  * @param set 		The set to query.
@@ -632,11 +632,11 @@ as_query_destroy(as_query* query);
  *
  * For heap allocation, use `as_query_select_init()`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_select_inita(&query, 2);
  * as_query_select(&query, "bin1");
  * as_query_select(&query, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param __query	The query to initialize.
  * @param __n		The number of bins to allocate.
@@ -661,11 +661,11 @@ as_query_destroy(as_query* query);
  * 
  * For stack allocation, use `as_query_select_inita()`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_select_init(&query, 2);
  * as_query_select(&query, "bin1");
  * as_query_select(&query, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param query		The query to initialize.
  * @param n			The number of bins to allocate.
@@ -684,11 +684,11 @@ as_query_select_init(as_query* query, uint16_t n);
  * You have to ensure as_query.select has sufficient capacity, prior to 
  * adding a bin. If capacity is sufficient then false is returned.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_select_init(&query, 2);
  * as_query_select(&query, "bin1");
  * as_query_select(&query, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param query		The query to modify.
  * @param bin 		The name of the bin to select.
@@ -709,10 +709,10 @@ as_query_select(as_query* query, const char * bin);
  *
  * For heap allocation, use `as_query_where_init()`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where_inita(&query, 1);
  * as_query_where(&query, "bin1", as_string_equals("abc"));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __query	The query to initialize.
  * @param __n		The number of as_predicate to allocate.
@@ -739,10 +739,10 @@ as_query_select(as_query* query, const char * bin);
  *
  * For stack allocation, use `as_query_where_inita()`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where_init(&query, 1);
  * as_query_where(&query, "bin1", as_integer_equals(123));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param query	The query to initialize.
  * @param n		The number of as_predicate to allocate.
@@ -765,12 +765,12 @@ as_query_where_init(as_query* query, uint16_t n);
  * on the heap, the caller is responsible for freeing the string after the query
  * has been executed.  as_query_destroy() will not free this string predicate.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_where_init(&query, 3);
  * as_query_where(&query, "bin1", as_string_equals("abc"));
  * as_query_where(&query, "bin1", as_integer_equals(123));
  * as_query_where(&query, "bin1", as_integer_range(0,123));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param query		The query add the predicate to.
  * @param bin		The name of the bin the predicate will apply to.
@@ -800,7 +800,7 @@ as_query_where(
  * on the heap, the caller is responsible for freeing the string after the query
  * has been executed.  as_query_destroy() will not free this string predicate.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_cdt_ctx ctx;
  * as_cdt_ctx_init(&ctx, 1);
  * as_cdt_ctx_add_list_rank(&ctx, -1);
@@ -808,7 +808,7 @@ as_query_where(
  * as_query_where_with_ctx(&query, "bin1", &ctx, as_string_equals("abc"));
  * as_query_where_with_ctx(&query, "bin1", &ctx, as_integer_equals(123));
  * as_query_where_with_ctx(&query, "bin1", &ctx, as_integer_range(0,123));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param query		The query add the predicate to.
  * @param bin		The name of the bin the predicate will apply to.
@@ -836,9 +836,9 @@ as_query_where_with_ctx(
 /**
  * Apply a function to the results of the query.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_apply(&query, "my_module", "my_function", NULL);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param query			The query to apply the function to.
  * @param module		The module containing the function to invoke.

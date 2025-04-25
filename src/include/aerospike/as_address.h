@@ -40,10 +40,10 @@ extern "C" {
  * Convert socket address (including port) to a string.
  *
  * Formats:
- * ~~~~~~~~~~{.c}
+ * @code
  * IPv4: xxx.xxx.xxx.xxx:<port>
  * IPv6: [xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx]:<port>
- * ~~~~~~~~~~
+ * @endcode
  */
 AS_EXTERN void
 as_address_name(struct sockaddr* addr, char* name, socklen_t size);
@@ -53,10 +53,10 @@ as_address_name(struct sockaddr* addr, char* name, socklen_t size);
  * Convert socket address to a string without brackets or a port.
  *
  * Formats:
- * ~~~~~~~~~~{.c}
+ * @code
  * IPv4: xxx.xxx.xxx.xxx
  * IPv6: xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx
- * ~~~~~~~~~~
+ * @endcode
  */
 AS_EXTERN void
 as_address_short_name(struct sockaddr* addr, char* name, socklen_t size);

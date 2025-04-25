@@ -794,9 +794,11 @@ as_cluster_manage(as_cluster* cluster)
 		as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
 	}
 
-	if (cluster->config_file_path && cluster->tend_count % cluster->config_interval == 0) {
-		if (as_file_has_changed(cluster->config_file_path, &cluster->config_file_status)) {
-			status = as_config_file_update(cluster, cluster->config, &err);
+	const char* path = cluster->as->config.config_provider.path;
+
+	if (path && cluster->tend_count % cluster->config_interval == 0) {
+		if (as_file_has_changed(path, &cluster->config_file_status)) {
+			status = as_config_file_update(cluster->as, &err);
 
 			if (status != AEROSPIKE_OK) {
 				as_log_warn("Dynamic configuration error: %s", err.message);
@@ -1406,8 +1408,10 @@ as_cluster_force_single_node(as_cluster* cluster, as_error* err)
 }
 
 as_status
-as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
+as_cluster_create(aerospike* as, as_error* err)
 {
+	as_config* config = &as->config;
+
 	if (config->min_conns_per_node > config->max_conns_per_node) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid connection range: %u - %u",
 			config->min_conns_per_node, config->max_conns_per_node);
@@ -1424,7 +1428,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		pass_hash = cf_malloc(AS_PASSWORD_HASH_SIZE);
 
 		if (! as_password_get_constant_hash(config->password, pass_hash)) {
-			*cluster_out = NULL;
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to hash password");
 		}
 	}
@@ -1548,7 +1551,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to initialize thread pool of size %u: %d",
 				config->thread_pool_size, rc);
 		as_cluster_destroy(cluster);
-		*cluster_out = 0;
 		return status;
 	}
 
@@ -1560,7 +1562,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 	}
@@ -1569,7 +1570,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 			as_status status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"TLS is required for external or PKI authentication");
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 	}
@@ -1583,23 +1583,21 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->retry_count = 0;
 	cluster->delay_queue_timeout_count = 0;
 
-	cluster->config = config;
+	cluster->as = as;
 
 	if (config->config_provider.path) {
 		// Heap allocated path continues to be owned by as->config.config_provider
 		// Make a reference copy here.
-		cluster->config_file_path = config->config_provider.path;
 		cluster->config_interval = config->config_provider.interval;
 
-		if (!as_file_get_status(cluster->config_file_path, &cluster->config_file_status)) {
-			as_log_warn("Failed to read: %s", cluster->config_file_path);
+		if (!as_file_get_status(config->config_provider.path, &cluster->config_file_status)) {
+			as_log_warn("Failed to read: %s", config->config_provider.path);
 		}
 	}
 
 	if (config->force_single_node) {
 		if (config->use_shm) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "force_single_node does not support shared memory tending");
 		}
 
@@ -1607,11 +1605,9 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
-
-		*cluster_out = cluster;
+		as->cluster = cluster;
 		return status;
 	}
 
@@ -1621,7 +1617,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 	}
@@ -1631,7 +1626,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 		// Run cluster tend thread.
@@ -1646,13 +1640,12 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 			status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s", strerror(errno));
 			pthread_attr_destroy(&attr);
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 		pthread_attr_destroy(&attr);
 	}
 
-	*cluster_out = cluster;
+	as->cluster = cluster;
 	return AEROSPIKE_OK;
 }
 

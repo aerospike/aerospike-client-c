@@ -183,11 +183,11 @@ aerospike_cluster_stats(struct as_cluster_s* cluster, as_cluster_stats* stats);
 /**
  * Retrieve aerospike client instance statistics.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_cluster_stats stats;
  * aerospike_stats(&as, &stats);
  * aerospike_stats_destroy(&stats);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as		The aerospike instance.
  * @param stats		The statistics summary for specified client instance.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -47,7 +47,7 @@ extern "C" {
 /**
  * List the UDF files in the cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_udf_files files;
  * as_udf_files_init(&files, 0);
  * 
@@ -63,7 +63,7 @@ extern "C" {
  * }
  * 
  * as_udf_files_destroy(&files);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -82,7 +82,7 @@ aerospike_udf_list(
 /**
  * Get specified UDF file from the cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_udf_file file;
  * as_udf_file_init(&file);
  * 
@@ -97,7 +97,7 @@ aerospike_udf_list(
  * }
  * 
  * as_udf_file_destroy(&file);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -120,7 +120,7 @@ aerospike_udf_get(
  * Put a UDF file into the cluster.  This function will return before the put is completed on
  * all nodes.  Use aerospike_udf_put_wait() when need to wait for completion.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bytes content;
  * as_bytes_init(&content);
  * ...
@@ -130,7 +130,7 @@ aerospike_udf_get(
  * }
  * 
  * as_bytes_destroy(&content);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -152,7 +152,7 @@ aerospike_udf_put(
 /**
  * Wait for asynchronous udf put to complete using given polling interval.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bytes content;
  * as_bytes_init(&content);
  *
@@ -160,7 +160,7 @@ aerospike_udf_put(
  *     aerospike_udf_put_wait(&as, &err, NULL, "my.lua", 0);
  * }
  * as_bytes_destroy(&content);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -182,11 +182,11 @@ aerospike_udf_put_wait(
  * Remove a UDF file from the cluster. This function will return before the remove is completed on
  * all nodes.  Use aerospike_udf_remove_wait() when need to wait for completion.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * if (aerospike_udf_remove(&as, &err, NULL, "my.lua") != AEROSPIKE_OK) {
  *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -205,11 +205,11 @@ aerospike_udf_remove(
 /**
  * Wait for asynchronous udf remove to complete using given polling interval.
  *
- * ~~~~~~~~~~{.c} *
+ * @code *
  * if (aerospike_udf_remove(&as, &err, NULL, "my.lua") == AEROSPIKE_OK) {
  *     aerospike_udf_remove_wait(&as, &err, NULL, "my.lua", 0);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.

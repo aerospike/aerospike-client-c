@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -78,12 +78,12 @@ typedef struct as_cdt_ctx {
 /**
  * Initialize a stack allocated nested CDT context list.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * Lookup last list in list of lists.
  * as_cdt_ctx ctx;
  * as_cdt_ctx_inita(&ctx, 1);
  * as_cdt_ctx_add_list_index(&ctx, -1);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Call as_cdt_ctx_destroy() when done with the context list if any context levels contain
  * a heap allocated as_val instance.  If in doubt, call as_cdt_ctx_destroy().

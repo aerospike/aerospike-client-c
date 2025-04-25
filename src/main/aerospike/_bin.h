@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,12 +32,12 @@
  * Initializes a stack allocated `as_bins` (__bins) and allocates `__capacity`
  * number of entries on the stack.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bins bins;
  * as_bins_init(&bins, 2);
  * as_bins_append(&bins, "bin1", as_integer_new(123));
  * as_bins_append(&bins, "bin2", as_integer_new(456));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bins		The `as_bins *` to initialize.
  * @param __capacity	The number of `as_bins.entries` to allocate on the stack.
@@ -55,10 +55,10 @@
 /**
  * Intializes an `as_bin` with the given name and value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin bin;
  * as_bin_init(&bin, "bin1", as_integer_new(123));
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_bin_destroy()` to free the resources allocated by this function.
  *
@@ -74,10 +74,10 @@ as_bin_init(as_bin* bin, const char* name, as_bin_value* value);
 /**
  * Initialize a stack allocated `as_bin` to a bool value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin bin;
  * as_bin_init_bool(&key, "abc", true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
  *
@@ -92,10 +92,10 @@ as_bin_init_bool(as_bin* bin, const char* name, bool value);
 /**
  * Initialize a stack allocated `as_bin` to a int64_t value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin bin;
  * as_bin_init_int64(&key, "abc", 123);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
  *
@@ -110,10 +110,10 @@ as_bin_init_int64(as_bin* bin, const char* name, int64_t value);
 /**
  * Initialize a stack allocated `as_bin` to a double value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin bin;
  * as_bin_init_double(&key, "abc", 123.456);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
  *
@@ -128,10 +128,10 @@ as_bin_init_double(as_bin* bin, const char* name, double value);
 /**
  * Initialize a stack allocated `as_bin` to a NULL-terminated string value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin bin;
  * as_bin_init_str(&key, "abc", "def", false);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
  *
@@ -147,10 +147,10 @@ as_bin_init_str(as_bin* bin, const char* name, const char* value, bool free);
 /**
  * Initialize a stack allocated `as_bin` to a NULL-terminated GeoJSON string value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin bin;
  * as_bin_init_geojson(&key, "abc", "def", false);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
  *
@@ -166,12 +166,12 @@ as_bin_init_geojson(as_bin* bin, const char* name, const char* value, bool free)
 /**
  * Initialize a stack allocated `as_key` to a raw bytes value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t rgb[3] = {254,254,120};
  *
  * as_bin bin;
  * as_bin_init_raw(&key, "abc", rgb, 3, false);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
  *
@@ -187,10 +187,10 @@ as_bin_init_raw(as_bin* bin, const char* name, const uint8_t* value, uint32_t si
 /**
  * Initialize a stack allocated `as_key` to a an `as_key_value`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin bin;
  * as_bin_init_nil(&key, "abc");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_bin_destroy()` to release resources allocated to `as_bin`.
  *
@@ -205,9 +205,9 @@ as_bin_init_nil(as_bin* bin, const char* name);
 /**
  * Destroy the given `as_bin` and associated resources.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin_destroy(bin);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param bin The `as_bin` to destroy.
  */
@@ -222,12 +222,12 @@ as_bin_destroy(as_bin* bin);
  * Intializes a stack allocated `as_bins`. The capacity specifies the number 
  * of `as_bins.entries` to allocate on the heap. 
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bins bins;
  * as_bins_init(&bins, 2);
  * as_bins_append(&bins, "bin1", as_integer_new(123));
  * as_bins_append(&bins, "bin2", as_integer_new(456));
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_bins_destroy()` to free the resources allocated by this function.
  *
@@ -242,9 +242,9 @@ as_bins_init(as_bins* bins, uint16_t capacity);
 /**
  * Destroy the `as_bins` and associated resources.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bins_destroy(bins);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param bins 	The `as_bins` to destroy.
  */

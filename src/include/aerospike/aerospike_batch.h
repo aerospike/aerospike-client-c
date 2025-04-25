@@ -284,11 +284,11 @@ typedef as_batch_records as_batch_read_records;
  * `results` argument is on the stack and is only available within the context
  * of the listener. To use the data outside of the listener, copy the data.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool my_listener(const as_batch_result* results, uint32_t n, void* udata) {
  *     return true;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param results		The results from the batch request.
  * @param n				The number of results from the batch request.
@@ -505,7 +505,7 @@ as_batch_read_destroy(as_batch_records* records)
  * This method allows different namespaces/bins to be requested for each key in the batch.
  * The returned records are located in the same batch array.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch_records records;
  * as_batch_records_inita(&records, 10);
  *
@@ -525,7 +525,7 @@ as_batch_read_destroy(as_batch_records* records)
  * as_status status = aerospike_batch_read(as, &err, NULL, &records);
  * // process results
  * as_batch_records_destroy(&records);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as		Aerospike cluster instance.
  * @param err		Error detail structure that is populated if an error occurs.
@@ -546,7 +546,7 @@ aerospike_batch_read(
  * This method allows different namespaces/bins to be requested for each key in the batch.
  * The returned records are located in the same batch array.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* loop)
  * {
  * 	   if (err) {
@@ -586,7 +586,7 @@ aerospike_batch_read(
  * 	   // Must free batch records on queue error because the listener will not be called.
  * 	   as_batch_records_destroy(records);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -615,7 +615,7 @@ aerospike_batch_read_async(
  *
  * Requires server version 6.0+
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations ops1;
  * as_operations_inita(&ops1, 1);
  * as_operations_add_write_int64(&ops1, "bin1", 100);
@@ -641,7 +641,7 @@ aerospike_batch_read_async(
  * as_operations_destroy(&ops1);
  * as_operations_destroy(&ops2);
  * as_batch_records_destroy(&recs);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as		Aerospike cluster instance.
  * @param err		Error detail structure that is populated if an error occurs.
@@ -674,7 +674,7 @@ typedef struct {
  *
  * Requires server version 6.0+
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * typedef struct {
  *     as_operations* ops1;
  *     as_operations* ops2;
@@ -734,7 +734,7 @@ typedef struct {
  *    as_operations_destroy(ops2);
  *    free(hf);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -759,7 +759,7 @@ aerospike_batch_write_async(
 /**
  * Look up multiple records by key, then return all bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch batch;
  * as_batch_inita(&batch, 3);
  * 
@@ -770,7 +770,7 @@ aerospike_batch_write_async(
  * as_status status = aerospike_batch_get(as, &err, NULL, &batch, listener, NULL);
  * // process results
  * as_batch_destroy(&batch);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -791,7 +791,7 @@ aerospike_batch_get(
 /**
  * Look up multiple records by key, then return specified bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch batch;
  * as_batch_inita(&batch, 3);
  *
@@ -804,7 +804,7 @@ aerospike_batch_get(
  * as_status status = aerospike_batch_get_bins(as, &err, NULL, &batch, bin_filters, 2, listener, NULL);
  * // process results
  * as_batch_destroy(&batch);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -827,7 +827,7 @@ aerospike_batch_get_bins(
 /**
  * Look up multiple records by key, then return results from specified read operations.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch batch;
  * as_batch_inita(&batch, 3);
  *
@@ -843,7 +843,7 @@ aerospike_batch_get_bins(
  * // process results
  * as_batch_destroy(&batch);
  * as_operations_destroy(&ops);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -865,7 +865,7 @@ aerospike_batch_get_ops(
 /**
  * Test whether multiple records exist in the cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch batch;
  * as_batch_inita(&batch, 3);
  * 
@@ -876,7 +876,7 @@ aerospike_batch_get_ops(
  * as_status status = aerospike_batch_exists(as, &err, NULL, &batch, listener, NULL);
  * // process results
  * as_batch_destroy(&batch);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -898,7 +898,7 @@ aerospike_batch_exists(
  * Perform read/write operations on multiple keys.
  * Requires server version 6.0+
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_integer val;
  * as_integer_init(&val, 100);
  *
@@ -919,7 +919,7 @@ aerospike_batch_exists(
  * // process results
  * as_operations_destroy(&ops);
  * as_batch_destroy(&batch);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -944,7 +944,7 @@ aerospike_batch_operate(
  * Apply UDF (user defined function) on multiple keys.
  * Requires server version 6.0+
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_arraylist args;
  * as_arraylist_init(&args, 2, 0);
  * as_arraylist_append_str(&args, "s1");
@@ -964,7 +964,7 @@ aerospike_batch_operate(
  * as_arraylist_destroy(&args);
  * as_operations_destroy(&ops);
  * as_batch_destroy(&batch);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -992,7 +992,7 @@ aerospike_batch_apply(
  * Remove multiple records.
  * Requires server version 6.0+
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch batch;
  * as_batch_inita(&batch, 3);
  * 
@@ -1003,7 +1003,7 @@ aerospike_batch_apply(
  * as_status status = aerospike_batch_remove(as, &err, NULL, NULL, &batch, listener, NULL);
  * // process results
  * as_batch_destroy(&batch);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.

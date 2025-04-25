@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -132,9 +132,9 @@ typedef struct as_bins_s {
 /**
  * Get the name of the bin.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * char * name = as_bin_get_name(bin);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param bin 	The bin to get the name of.
  *
@@ -151,9 +151,9 @@ as_bin_get_name(const as_bin* bin)
 /**
  * Get the value of the bin.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin_value val = as_bin_get_value(bin);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param bin 	The bin to get the value of.
  *
@@ -170,9 +170,9 @@ as_bin_get_value(const as_bin* bin)
 /**
  * Get the type for the value of the bin.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_val_t type = as_bin_get_type(bin);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param bin 	The bin to get value's type.
  *

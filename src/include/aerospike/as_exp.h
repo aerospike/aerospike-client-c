@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -35,7 +35,7 @@
  * (as_policy_base contained in as_policy_read, as_policy_write, ...).
  *
  * Example:
- * ~~~~~~~~~~{.c}
+ * @code
  * as_exp_build(filter,
  *   as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)));
  *
@@ -44,7 +44,7 @@
  * p.filter_exp = filter;
  * ...
  * as_exp_destroy(filter);
- * ~~~~~~~~~~
+ * @endcode
  */
 
 #include <aerospike/as_bit_operations.h>
@@ -270,7 +270,7 @@ as_exp_destroy_base64(char* base64)
  * AS_EXP_READ_NO_FAIL.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // If var("v") (bin("balance") - 100.0) is greater that or equal to 0.0 then
  * // return var("v") else fail operation.
  * as_exp_build(expression,
@@ -280,7 +280,7 @@ as_exp_destroy_base64(char* base64)
  *         as_exp_cond(
  *             as_exp_ge(as_exp_var("v"), as_exp_float(0)), as_exp_var("v"),
  *             as_exp_unknown())));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (unknown value)
  * @ingroup expression
@@ -378,11 +378,11 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns the key as an integer. Returns 'unknown' if
  * the key is not an integer.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Integer record key >= 10000
  * as_exp_build(expression,
  *     as_exp_cmp_ge(as_exp_key_int(), as_exp_int(10000)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value) Integer value of the key if the key is an integer.
  * @ingroup expression
@@ -394,11 +394,11 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns the key as an string. Returns 'unknown' if
  * the key is not a string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // String record key == "aaa"
  * as_exp_build(expression,
  *     as_exp_cmp_eq(as_exp_key_str(), as_exp_str("aaa")));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (string value) String value of the key if the key is a string.
  * @ingroup expression
@@ -410,12 +410,12 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns the key as an blob. Returns 'unknown' if
  * the key is not an blob.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Blob record key <= { 0x65, 0x65 }
  * uint8_t val[] = {0x65, 0x65}
  * as_exp_build(expression,
  *     as_exp_cmp_le(as_exp_key_blob(), as_exp_bytes(val, sizeof(val))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (blob value) Blob value of the key if the key is a blob.
  * @ingroup expression
@@ -428,10 +428,10 @@ as_exp_destroy_base64(char* base64)
  * data as a boolean expression. This would occur when "as_policy_write.key" is
  * AS_POLICY_KEY_SEND on record write.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Key exists in record meta data
  * as_exp_build(expression, as_exp_key_exists());
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (boolean value) True if the record has a stored key, false otherwise.
  * @ingroup expression
@@ -448,10 +448,10 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns a bin as a boolean value. Returns 'unknown'
  * if the bin is not a boolean.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Check if the value in bin "a" is true.
  * as_exp_build(expression, as_exp_bin_bool("a"));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (boolean bin)
@@ -466,11 +466,11 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns a bin as a signed integer. Returns 'unknown'
  * if the bin is not an integer.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Integer bin "a" == 200
  * as_exp_build(expression,
  *     as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(200)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (integer bin)
@@ -485,11 +485,11 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns a bin as a float. Returns 'unknown' if the bin
  * is not an float.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Float bin "a" >= 2.71
  * as_exp_build(expression,
  *     as_exp_cmp_ge(as_exp_bin_int("a"), as_exp_float(2.71)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (float bin)
@@ -504,11 +504,11 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns a bin as a string. Returns 'unknown' if the
  * bin is not an string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // String bin "a" == "b"
  * as_exp_build(expression,
  *     as_exp_cmp_eq(as_exp_bin_str("a"), as_exp_str("b")));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (string bin)
@@ -523,12 +523,12 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns a bin as a blob. Returns 'unknown' if the bin
  * is not an blob.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Integer bin "a" == { 0x65, 0x65 }
  * uint8_t val[] = {0x65, 0x65}
  * as_exp_build(expression,
  *     as_exp_cmp_eq(as_exp_bin_blob("a"), as_exp_bytes(val, sizeof(val))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (blob bin)
@@ -543,11 +543,11 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns a bin as a geojson. Returns 'unknown' if the
  * bin is not geojson.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // GeoJSON bin "a" contained by GeoJSON bin "b"
  * as_exp_build(expression,
  *     as_exp_cmp_geo(as_exp_bin_geo("a"), as_exp_bin_geo("b")));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (geojson bin)
@@ -562,14 +562,14 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns a bin as a list. Returns 'unknown' if the bin
  * is not an list.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // List bin "a" contains at least one item == "abc"
  * as_exp_build(filter,
  *     as_exp_cmp_gt(
  *         as_exp_list_get_by_value(NULL, AS_LIST_RETURN_COUNT,
  *             as_exp_str("abc"), as_exp_bin_list("a")),
  *         as_exp_int(0)));
-  * ~~~~~~~~~~
+  * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (list bin)
@@ -584,12 +584,12 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns a bin as a map. Returns 'unknown' if the bin
  * is not an map.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Map bin "a" size > 7.
  * as_exp_build(expression,
  *     as_exp_cmp_gt(as_exp_map_size(NULL, as_exp_bin_map("a")),
  *     as_exp_int(7)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (map bin)
@@ -604,12 +604,12 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns a bin as a HyperLogLog (hll). Returns
  * 'unknown' if the bin is not a HyperLogLog (hll).
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // HLL bin "a" have an hll_count > 1000000
  * as_exp_build(expression,
  *     as_exp_cmp_gt(as_exp_hll_get_count(AS_BIN_HLL("a")),
  *          as_exp_int(1000000)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (hll bin)
@@ -623,10 +623,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create expression that returns if bin of specified name exists.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Bin "a" exists in record.
  * as_exp_build(expression, as_exp_bin_exists("a"));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (boolean value) True if the bin exists, false otherwise.
@@ -638,11 +638,11 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create expression that returns the type of a bin as a integer.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // bin "a" == type.string
  * as_exp_build(expression,
  *     as_exp_cmp_eq(as_exp_bin_type("a"), as_exp_int(AS_BYTES_STRING)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (integer value) returns the bin_type as an as_bytes_type.
@@ -660,11 +660,11 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns record set name string. This expression usually
  * evaluates quickly because record meta data is cached in memory.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Record set name == "myset"
  * as_exp_build(expression,
  *     as_exp_cmp_eq(as_exp_set_name(), as_exp_str("myset")));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (string value) Name of the set this record belongs to.
  * @ingroup expression
@@ -678,11 +678,11 @@ as_exp_destroy_base64(char* base64)
  * Requires server version 7.0+. This expression replaces as_exp_device_size() and
  * as_exp_memory_size().
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Record size >= 100 KB
  * as_exp_build(expression,
  * 		as_exp_cmp_ge(as_exp_record_size(), as_exp_int(100 * 1024)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value) Uncompressed size of the record.
  * @ingroup expression
@@ -697,11 +697,11 @@ as_exp_destroy_base64(char* base64)
  * This expression should only be used for server versions less than 7.0. Use
  * as_exp_record_size() for server version 7.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Record device size >= 100 KB
  * as_exp_build(expression,
  * 		as_exp_cmp_ge(as_exp_device_size(), as_exp_int(100 * 1024)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value) Uncompressed storage size of the record.
  * @ingroup expression
@@ -712,11 +712,11 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns record last update time expressed as 64 bit
  * integer nanoseconds since 1970-01-01 epoch.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Record last update time >= 2020-01-15
  * as_exp_build(expression,
  * 		as_exp_cmp_ge(as_exp_last_update(), as_exp_uint(1577836800)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value) When the record was last updated.
  * @ingroup expression
@@ -728,12 +728,12 @@ as_exp_destroy_base64(char* base64)
  * This expression usually evaluates quickly because record meta data is cached
  * in memory.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Record last updated more than 2 hours ago
  * as_exp_build(expression,
  *     as_exp_cmp_gt(as_exp_since_update(),
  *         as_exp_int(2 * 60 * 60 * 1000)))
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value) Number of milliseconds since last updated.
  * @ingroup expression
@@ -744,13 +744,13 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns record expiration time expressed as 64 bit
  * integer nanoseconds since 1970-01-01 epoch.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Record expires on 2021-01-01
  * as_exp_build(expression,
  *     as_exp_and(
  *         as_exp_cmp_ge(as_exp_void_time(), as_exp_int(1609459200)),
  *         as_exp_cmp_lt(as_exp_void_time(), as_exp_int(1609545600))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value) Expiration time in nanoseconds since 1970-01-01.
  * @ingroup expression
@@ -761,11 +761,11 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns record expiration time (time to live) in integer
  * seconds.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Record expires in less than 1 hour
  * as_exp_build(expression,
  *     as_exp_cmp_lt(as_exp_ttl(), as_exp_int(60 * 60)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value) Number of seconds till the record will expire,
  *                         returns -1 if the record never expires.
@@ -783,10 +783,10 @@ as_exp_destroy_base64(char* base64)
  * work with normal filtering of records because the tombstone record will be filtered
  * out before this expression is evaluated.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Deleted records that are in tombstone state.
  * as_exp_build(expression, as_exp_is_tombstone());
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (boolean value) True if the record is a tombstone, false otherwise.
  * @ingroup expression
@@ -802,11 +802,11 @@ as_exp_destroy_base64(char* base64)
  * Requires server version between 5.3 inclusive and 7.0 exclusive.
  * Use as_exp_record_size() for server version 7.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Record memory size >= 100 KB
  * as_exp_build(expression,
  * 		as_exp_cmp_ge(as_exp_memory_size(), as_exp_int(100 * 1024)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value) memory size of the record.
  * @ingroup expression
@@ -816,11 +816,11 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create expression that returns record digest modulo as integer.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Records that have digest(key) % 3 == 1
  * as_exp_build(expression,
  * 		as_exp_cmp_eq(as_exp_digest_modulo(3), as_exp_int(1)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __mod			Divisor used to divide the digest to get a remainder.
  * @return (integer value) Value in range 0 and mod (exclusive)..
@@ -837,10 +837,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create equals (==) expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Integer bin "a" == 11.
  * as_exp_build(expression, as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(11)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __left			left expression in comparison.
  * @param __right			right expression in comparison.
@@ -853,11 +853,11 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create not equal (!=) expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Integer bin "a" != 13.
  * as_exp_build(expression, as_exp_cmp_ne(as_exp_bin_int("a"), as_exp_int(13)));
 
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __left			left expression in comparison.
  * @param __right			right expression in comparison.
@@ -870,10 +870,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create a greater than (>) expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Integer bin "a" > 8.
  * as_exp_build(expression, as_exp_cmp_gt(as_exp_bin_int("a"), as_exp_int(8)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __left			left expression in comparison.
  * @param __right			right expression in comparison.
@@ -886,10 +886,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create a greater than or equals (>=) expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Integer bin "a" >= 88.
  * as_exp_build(expression, as_exp_cmp_ge(as_exp_bin_int("a"), as_exp_int(88)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __left			left expression in comparison.
  * @param __right			right expression in comparison.
@@ -902,10 +902,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create a less than (<) expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Integer bin "a" < 1000.
  * as_exp_build(expression, as_exp_cmp_lt(as_exp_bin_int("a"), as_exp_int(1000)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __left			left expression in comparison.
  * @param __right			right expression in comparison.
@@ -918,10 +918,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create a less than or equals (<=) expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Integer bin "a" <= 1.
  * as_exp_build(expression, as_exp_cmp_le(as_exp_bin_int("a"), as_exp_int(1)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __left			left expression in comparison.
  * @param __right			right expression in comparison.
@@ -935,12 +935,12 @@ as_exp_destroy_base64(char* base64)
  * Create expression that performs a regex match on a string bin or value
  * expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Select string bin "a" that starts with "prefix" and ends with "suffix".
  * // Ignore case and do not match newline.
  * as_exp_build(expression,
  *     as_exp_cmp_regex(REG_ICASE | REG_NEWLINE, as_exp_str("prefix.*suffix"), as_exp_bin_str("a")));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __options			POSIX regex flags defined in regex.h.
  * @param __regex_str		POSIX regex string.
@@ -956,11 +956,11 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create a point within region or region contains point expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Geo bin "point" is within geo bin "region".
  * as_exp_build(expression,
  *     as_exp_cmp_geo(as_exp_bin_geo("point"), as_exp_bin_geo("region")));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __left			left expression in comparison.
  * @param __right			right expression in comparison.
@@ -977,13 +977,13 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create "not" (!) operator expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // ! (a == 0 || a == 10)
  * as_exp_build(expression,
  *     as_exp_not(as_exp_or(
  *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)),
  *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)))));
-  * ~~~~~~~~~~
+  * @endcode
  *
  * @param __expr			Boolean expression to negate.
  * @return (boolean value)
@@ -994,7 +994,7 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create "and" (&&) operator that applies to a variable number of expressions.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // (a > 5 || a == 0) && b < 3
  * as_exp_build(expression,
  *     as_exp_and(
@@ -1002,7 +1002,7 @@ as_exp_destroy_base64(char* base64)
  *             as_exp_cmp_gt(as_exp_bin_int("a"), as_exp_int(5)),
  *             as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)))
  *         as_exp_cmp_lt(as_exp_bin_int("b"), as_exp_int(3))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of boolean expressions.
  * @return (boolean value)
@@ -1014,13 +1014,13 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create "or" (||) operator that applies to a variable number of expressions.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a == 0 || b == 0
  * as_exp_build(expression,
  *     as_exp_or(
  *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)),
  *         as_exp_cmp_eq(as_exp_bin_int("b"), as_exp_int(0))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of boolean expressions.
  * @return (boolean value)
@@ -1033,13 +1033,13 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns true if only one of the expressions are true.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // exclusive(a == 0, b == 0)
  * as_exp_build(expression,
  *     as_exp_exclusive(
  *         as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(0)),
  *         as_exp_cmp_eq(as_exp_bin_int("b"), as_exp_int(0))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of boolean expressions.
  * @return (boolean value)
@@ -1058,13 +1058,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must be the same type (integer or float).
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a + b + c == 10
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_add(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
  *         as_exp_int(10)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of integer or float expressions.
  * @return (integer or float value)
@@ -1080,13 +1080,13 @@ as_exp_destroy_base64(char* base64)
  * argument. All arguments must resolve to the same type (integer or float).
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a - b - c > 10
  * as_exp_build(expression,
  *     as_exp_cmp_gt(
  *         as_exp_sub(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
  *         as_exp_int(10)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of integer or float expressions.
  * @return (integer or float value)
@@ -1101,13 +1101,13 @@ as_exp_destroy_base64(char* base64)
  * that argument. All arguments must resolve to the same type (integer or float).
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a * b * c < 100
  * as_exp_build(expression,
  *     as_exp_cmp_lt(
  *         as_exp_mul(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
  *         as_exp_int(100)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of integer or float expressions.
  * @return (integer or float value)
@@ -1123,13 +1123,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must resolve to the same type (integer or float).
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a / b / c == 1
  * as_exp_build(expression,
  *     as_exp_cmp_gt(
  *         as_exp_div(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
  *         as_exp_int(1)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of integer or float expressions.
  * @return (integer or float value)
@@ -1143,13 +1143,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must resolve to floats.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // pow(a, 2.0) == 4.0
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_pow(as_exp_bin_float("a"), as_exp_float(2.0)),
  *         as_exp_float(4.0)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __base		Base value.
  * @param __exponent	Exponent value.
@@ -1164,13 +1164,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must resolve to floats.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // log(a, 2) == 4.0
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_log(as_exp_bin_float("a"), as_exp_float(2.0)),
  *         as_exp_float(4.0)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __num			Number.
  * @param __base		Base value.
@@ -1185,13 +1185,13 @@ as_exp_destroy_base64(char* base64)
  * divided by "denominator". All arguments must resolve to integers.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a % 10 == 0
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_mod(as_exp_bin_int("a"), as_exp_int(10)),
  *         as_exp_int(0)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value)
  * @ingroup expression
@@ -1204,13 +1204,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must resolve to integer or float.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // abs(a) == 1
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_abs(as_exp_bin_int("a")),
  *         as_exp_int(1)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (number value)
  * @ingroup expression
@@ -1222,13 +1222,13 @@ as_exp_destroy_base64(char* base64)
  * Create expression that rounds a floating point number down to the closest integer value.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // floor(2.95) == 2.0
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_floor(as_exp_float(2.95)),
  *         as_exp_float(2.0)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __num			Floating point value to round down.
  * @return (float-value)
@@ -1241,13 +1241,13 @@ as_exp_destroy_base64(char* base64)
  * Create expression that rounds a floating point number up to the closest integer value.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // ceil(2.15) == 3.0
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_ceil(as_exp_float(2.15)),
  *         as_exp_float(3.0)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __num			Floating point value to round up.
  * @return (integer-value)
@@ -1260,13 +1260,13 @@ as_exp_destroy_base64(char* base64)
  * Create expression that converts a float to an integer.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // int(2.5) == 2
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_to_int(as_exp_float(2.5)),
  *         as_exp_int(2)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __num			Integer to convert to a float
  * @return (float-value)
@@ -1279,13 +1279,13 @@ as_exp_destroy_base64(char* base64)
  * Create expression that converts an integer to a float.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // float(2) == 2.0
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_to_float(as_exp_int(2)),
  *         as_exp_int(2.0)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __num			Integer to convert to a float
  * @return (float-value)
@@ -1299,13 +1299,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must resolve to integers.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a & 0xff == 0x11
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_int_and(as_exp_bin_int("a"), as_exp_int(0xff)),
  *         as_exp_int(0x11)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of integer expressions.
  * @return (integer value)
@@ -1319,13 +1319,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must resolve to integers.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a | 0x10 != 0
  * as_exp_build(expression,
  *     as_exp_cmp_ne(
  *         as_exp_int_or(as_exp_bin_int("a"), as_exp_int(0x10)),
  *         as_exp_int(0)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of integer expressions.
  * @return (integer value)
@@ -1339,13 +1339,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must resolve to integers.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a ^ b == 16
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_int_xor(as_exp_bin_int("a"), as_exp_bin_int("b")),
  *         as_exp_int(16)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of integer expressions.
  * @return (integer value)
@@ -1358,13 +1358,13 @@ as_exp_destroy_base64(char* base64)
  * Create integer "not" (~) operator.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // ~a == 7
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_int_not(as_exp_bin_int("a")),
  *         as_exp_int(7)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __expr		Integer expression.
  * @return (integer value)
@@ -1377,13 +1377,13 @@ as_exp_destroy_base64(char* base64)
  * Create integer "left shift" (<<) operator.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a << 8 > 0xff
  * as_exp_build(expression,
  *     as_exp_cmp_gt(
  *         as_exp_int_lshift(as_exp_bin_int("a"), as_exp_int(8)),
  *         as_exp_int(0xff)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __value		Integer expression.
  * @param __shift		Number of bits to shift by.
@@ -1397,13 +1397,13 @@ as_exp_destroy_base64(char* base64)
  * Create integer "logical right shift" (>>>) operator.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a >>> 8 > 0xff
  * as_exp_build(expression,
  *     as_exp_cmp_gt(
  *         as_exp_int_rshift(as_exp_bin_int("a"), as_exp_int(8)),
  *         as_exp_int(0xff)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __value		Integer expression.
  * @param __shift		Number of bits to shift by.
@@ -1417,13 +1417,13 @@ as_exp_destroy_base64(char* base64)
  * Create integer "arithmetic right shift" (>>) operator.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a >> 8 > 0xff
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_int_arshift(as_exp_bin_int("a"), as_exp_int(8)),
  *         as_exp_int(0xff)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __value		Integer expression.
  * @param __shift		Number of bits to shift by.
@@ -1437,13 +1437,13 @@ as_exp_destroy_base64(char* base64)
  * Create expression that returns count of integer bits that are set to 1.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // count(a) == 4
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_int_count(as_exp_bin_int("a")),
  *         as_exp_int(4)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value)
  * @ingroup expression
@@ -1459,13 +1459,13 @@ as_exp_destroy_base64(char* base64)
  * value 1. If "search" is false it will search for bit value 0.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // lscan(a, true) == 4
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_int_lscan(as_exp_bin_int("a"), as_exp_bool(true)),
  *         as_exp_int(4)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value)
  * @ingroup expression
@@ -1481,13 +1481,13 @@ as_exp_destroy_base64(char* base64)
  * value 1. If "search" is false it will search for bit value 0.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // rscan(a, true) == 4
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_int_rscan(as_exp_bin_int("a"), as_exp_bool(true)),
  *         as_exp_int(4)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return (integer value)
  * @ingroup expression
@@ -1500,13 +1500,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must be the same type (integer or float).
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // min(a, b, c) > 0
  * as_exp_build(expression,
  *     as_exp_cmp_gt(
  *         as_exp_min(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
  *         as_exp_int(0)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of integer or float expressions.
  * @return (integer or float value)
@@ -1520,13 +1520,13 @@ as_exp_destroy_base64(char* base64)
  * All arguments must be the same type (integer or float).
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // max(a, b, c) > 100
  * as_exp_build(expression,
  *     as_exp_cmp_eq(
  *         as_exp_max(as_exp_bin_int("a"), as_exp_bin_int("b"), as_exp_bin_int("c")),
  *         as_exp_int(100)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of integer or float expressions.
  * @return (integer or float value)
@@ -1546,7 +1546,7 @@ as_exp_destroy_base64(char* base64)
  *
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * Args Format: bool exp1, action exp1, bool exp2, action exp2, ..., action-default
  *
  * // Apply operator based on type and test if greater than 100
@@ -1561,7 +1561,7 @@ as_exp_destroy_base64(char* base64)
  *                 as_exp_mul(as_exp_bin_int("val1"), as_exp_bin_int("val2")),
  *             as_exp_int(-1)),
  *         as_exp_int(100)));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @return first action expression where bool expression is true or action-default.
  * @ingroup expression
@@ -1573,14 +1573,14 @@ as_exp_destroy_base64(char* base64)
  * Define variables and expressions in scope.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // 5 < a < 10
  * as_exp_build(expression,
  *     as_exp_let(as_exp_def("x", as_exp_bin_int("a")),
  *         as_exp_and(
  *             as_exp_lt(as_exp_int(5), as_exp_var("x")),
  *             as_exp_lt(as_exp_var("x"), as_exp_int(10)))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ...			Variable number of as_exp_def followed by a scoped
  *  expression.
@@ -1595,14 +1595,14 @@ as_exp_destroy_base64(char* base64)
  * Assign variable to an expression that can be accessed later.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // 5 < a < 10
  * as_exp_build(expression,
  *     as_exp_let(as_exp_def("x", as_exp_bin_int("a")),
  *         as_exp_and(
  *             as_exp_lt(as_exp_int(5), as_exp_var("x")),
  *             as_exp_lt(as_exp_var("x"), as_exp_int(10)))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __var_name		Variable name.
  * @param __expr			The variable is set to the result of __expr.
@@ -1616,14 +1616,14 @@ as_exp_destroy_base64(char* base64)
  * Retrieve expression value from a variable.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // 5 < a < 10
  * as_exp_build(expression,
  *     as_exp_let(as_exp_def("x", as_exp_bin_int("a")),
  *         as_exp_and(
  *             as_exp_lt(as_exp_int(5), as_exp_var("x")),
  *             as_exp_lt(as_exp_var("x"), as_exp_int(10)))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __var_name		Variable name.
  * @return value stored in variable.
@@ -3473,14 +3473,14 @@ as_exp_destroy_base64(char* base64)
  * Useful for storing common precompiled expressions and then reusing
  * these expressions as part of a greater expression.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Merge precompiled expression into new expression.
  * as_exp_build(expr, as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(200)));
  * as_exp_build(merged,
  *		as_exp_and(
  *			as_exp_expr(expr), 
  *			as_exp_cmp_eq(as_exp_bin_int("b"), as_exp_int(100))));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __e	Pre-compiled expression.
  * @ingroup expression
@@ -3495,13 +3495,13 @@ as_exp_destroy_base64(char* base64)
 /**
  * Declare and build an expression variable.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a == 10
  * as_exp_build(expression,
  *     as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)));
  * ...
  * as_exp_destroy(expression);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __name			Name of the variable to hold the expression
  * @ingroup expression
@@ -3516,13 +3516,13 @@ as_exp_destroy_base64(char* base64)
 /**
  * Declare and build an base64 packed expression variable.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // a == 10
  * as_exp_build_b64(expression,
  *     as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)));
  * ...
  * as_exp_destroy_b64(expression);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __name			Name of the variable to hold the expression
  * @ingroup expression

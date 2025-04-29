@@ -32,15 +32,26 @@
 #include <aerospike/as_tls.h>
 #include <citrusleaf/cf_byte_order.h>
 
+//---------------------------------
+// Macros
+//---------------------------------
+
 // Replicas take ~2K per namespace, so this will cover most deployments:
 #define INFO_STACK_BUF_SIZE (16 * 1024)
 
 // Number of nanoseconds per millisecond
 #define NS_TO_MS 1000000
 
-/******************************************************************************
- * Function declarations.
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
+
+// NONE namespace for latency metrics without a namespace.
+static const char* as_ns_none = "NONE";
+
+//---------------------------------
+// Function declarations
+//---------------------------------
 
 const char*
 as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
@@ -56,9 +67,9 @@ as_event_node_balance_connections(as_cluster* cluster, as_node* node);
 
 extern uint32_t as_event_loop_capacity;
 
-/******************************************************************************
- * Functions.
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 static inline as_racks*
 as_racks_load(as_racks** racks)
@@ -107,32 +118,28 @@ as_latency_buckets_init(as_latency_buckets* latency_buckets, uint32_t latency_co
 	}
 }
 
-static as_node_metrics*
-as_node_metrics_init(uint32_t latency_columns, uint32_t latency_shift)
+static inline void
+as_node_metrics_init(as_node* node)
 {
-	as_node_metrics* node_metrics = (as_node_metrics*)cf_malloc(sizeof(as_node_metrics));
-	uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
-	node_metrics->latency = (as_latency_buckets*)cf_malloc(sizeof(as_latency_buckets) * max_latency_type);
-
-	for (uint32_t i = 0; i < max_latency_type; i++) {
-		as_latency_buckets_init(&node_metrics->latency[i], latency_columns, latency_shift);
-	}
-	return node_metrics;
+	node->metrics = cf_calloc(AS_MAX_NAMESPACES, sizeof(as_ns_metrics));
+	node->metrics_size = 0;
 }
 
 void
 as_node_destroy_metrics(as_node* node)
 {
-	as_node_metrics* node_metrics = node->metrics;
-	
-	if (node_metrics) {
-		uint32_t max = AS_LATENCY_TYPE_NONE;
-		
-		for (uint32_t i = 0; i < max; i++) {
-			cf_free(node_metrics->latency[i].buckets);
+	if (node->metrics) {
+		as_ns_metrics* metrics = node->metrics;
+		uint8_t max = node->metrics_size;
+
+		for (uint8_t i = 0; i < max; i++) {
+			for (uint8_t j = 0; j < AS_LATENCY_TYPE_NONE; j++) {
+				cf_free(metrics->latency[j].buckets);
+			}
+			cf_free(metrics->latency);
+			metrics++;
 		}
-		cf_free(node_metrics->latency);
-		cf_free(node_metrics);
+		cf_free(node->metrics);
 		node->metrics = NULL;
 	}
 }
@@ -186,7 +193,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->key_busy_count = 0;
 
 	if (cluster->metrics_enabled) {
-		node->metrics = as_node_metrics_init(cluster->metrics_latency_columns, cluster->metrics_latency_shift);
+		as_node_metrics_init(node);
 	}
 	else {
 		node->metrics = NULL;
@@ -468,7 +475,7 @@ as_node_create_socket(
 
 static as_status
 as_node_create_connection(
-	as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_conn_pool* pool,
+	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms, as_conn_pool* pool,
 	as_socket* sock
 	)
 {
@@ -506,7 +513,13 @@ as_node_create_connection(
 
 	if (node->cluster->metrics_enabled) {
 		uint64_t elapsed = cf_getns() - begin;
-		as_node_add_latency(node, AS_LATENCY_TYPE_CONN, elapsed);
+
+		// Namespace will be NULL for some connection creation (like create min connections).
+		// Use a NONE namespace for these connections.
+		if (!ns) {
+			ns = as_ns_none;
+		}
+		as_node_add_latency(node, ns, AS_LATENCY_TYPE_CONN, elapsed);
 	}
 	return AEROSPIKE_OK;
 }
@@ -521,7 +534,7 @@ as_node_create_connections(as_node* node, as_conn_pool* pool, uint32_t timeout_m
 	// Create sync connections.
 	while (count > 0) {
 		uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-		status = as_node_create_connection(&err, node, 0, deadline_ms, pool, &sock);
+		status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, pool, &sock);
 
 		if (status != AEROSPIKE_OK) {
 			as_log_debug("Failed to create min connections: %d %s", err.code, err.message);
@@ -554,7 +567,7 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 
 	as_socket sock;
 	as_error err;
-	as_status status = as_node_create_connection(&err, node, 0, deadline_ms, NULL, &sock);
+	as_status status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, NULL, &sock);
 
 	if (status == AEROSPIKE_OK) {
 		as_node_close_socket(node, &sock);
@@ -564,7 +577,10 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 }
 
 as_status
-as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_socket* sock)
+as_node_get_connection(
+	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
+	as_socket* sock
+	)
 {
 	as_conn_pool* pools = node->sync_conn_pools;
 	as_cluster* cluster = node->cluster;
@@ -610,7 +626,7 @@ as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, ui
 		else if (as_conn_pool_incr(pool)) {
 			// Socket not found and queue has available slot.
 			// Create new connection.
-			as_status status = as_node_create_connection(err, node, socket_timeout, deadline_ms,
+			as_status status = as_node_create_connection(err, node, ns, socket_timeout, deadline_ms,
 														 pool, sock);
 
 			if (status != AEROSPIKE_OK) {
@@ -1371,18 +1387,79 @@ as_latency_buckets_get_index(as_latency_buckets* latency_buckets, uint64_t elaps
 	return last_bucket;
 }
 
-void
-as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed)
+static inline as_ns_metrics*
+as_node_find_namespace(as_node* node, const char* ns)
 {
-	as_latency_buckets* latency_buckets = &node->metrics->latency[latency_type];
-	uint32_t index = as_latency_buckets_get_index(latency_buckets, elapsed);
-	as_incr_uint64(&latency_buckets->buckets[index]);
+	as_ns_metrics* metrics = node->metrics;
+	uint8_t max = node->metrics_size;
+
+	for (uint8_t i = 0; i < max; i++) {
+		// Use reference equality for performance. The passed in namespace comes from the cluster
+		// partition_tables which only allows new namespaces to be added and never modifies or
+		// removes existing namespaces.
+		if (metrics->ns == ns) {
+			return metrics;
+		}
+		metrics++;
+	}
+	return NULL;
+}
+
+static as_ns_metrics*
+as_node_append_metrics(as_node* node, const char* ns)
+{
+	// Must create new namespace metrics under lock.
+	as_cluster* cluster = node->cluster;
+
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	if (node->metrics_size >= AS_MAX_NAMESPACES) {
+		pthread_mutex_unlock(&cluster->metrics_lock);
+		return NULL;
+	}
+
+	// Lookup again under lock.
+	as_ns_metrics* metrics = as_node_find_namespace(node, ns);
+
+	if (!metrics) {
+		metrics = &node->metrics[node->metrics_size];
+		metrics->ns = ns;
+
+		uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
+		metrics->latency = cf_malloc(sizeof(as_latency_buckets) * max_latency_type);
+
+		for (uint32_t i = 0; i < max_latency_type; i++) {
+			as_latency_buckets_init(&metrics->latency[i], cluster->metrics_latency_columns, cluster->metrics_latency_shift);
+		}
+		node->metrics_size++;
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	return metrics;
+}
+
+void
+as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type, uint64_t elapsed)
+{
+	as_ns_metrics* metrics = as_node_find_namespace(node, ns);
+
+	if (!metrics) {
+		metrics = as_node_append_metrics(node, ns);
+
+		if (!metrics) {
+			as_log_error("Latency discarded. Max namespaces reached: %u", AS_MAX_NAMESPACES);
+			return;
+		}
+	}
+
+	as_latency_buckets* buckets = &metrics->latency[latency_type];
+	uint32_t index = as_latency_buckets_get_index(buckets, elapsed);
+	as_incr_uint64(&buckets->buckets[index]);
 }
 
 void
 as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 {
-	 node->metrics = as_node_metrics_init(policy->latency_columns, policy->latency_shift);
+	as_node_metrics_init(node);
 }
 
 static as_status

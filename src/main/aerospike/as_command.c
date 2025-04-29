@@ -666,12 +666,12 @@ as_command_execute(as_command* cmd, as_error* err)
 			// node might already be destroyed on retry and is still set as the previous node.
 			// This works because the previous node is only used for pointer comparison
 			// and the previous node's contents are not examined during this call.
-			node = as_partition_get_node(cmd->cluster, cmd->key->ns, cmd->partition, node, cmd->replica,
+			node = as_partition_get_node(cmd->cluster, cmd->ns, cmd->partition, node, cmd->replica,
 										 cmd->replica_size, &cmd->replica_index);
 
 			if (! node) {
 				as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-					"Node not found for partition %s:%u", cmd->key->ns, cmd->partition_id);
+					"Node not found for partition %s:%u", cmd->ns, cmd->partition_id);
 
 				as_command_prepare_error(cmd, err);
 				return err->code;
@@ -691,8 +691,8 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 		
 		as_socket socket;
-		status = as_node_get_connection(err, node, cmd->socket_timeout, cmd->deadline_ms, &socket);
-		
+		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout, cmd->deadline_ms, &socket);
+
 		if (status != AEROSPIKE_OK) {
 			// Do not retry on server error response such as invalid user/password.
 			if (status > 0 && status != AEROSPIKE_ERR_TIMEOUT) {
@@ -728,7 +728,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		if (status == AEROSPIKE_OK) {
 			if (latency_type != AS_LATENCY_TYPE_NONE) {
 				uint64_t elapsed = cf_getns() - begin;
-				as_node_add_latency(node, latency_type, elapsed);
+				as_node_add_latency(node, cmd->ns, latency_type, elapsed);
 			}
 			
 			// Reset error code if retry had occurred.
@@ -782,7 +782,7 @@ as_command_execute(as_command* cmd, as_error* err)
 					// Add latency metrics instead.
 					if (latency_type != AS_LATENCY_TYPE_NONE) {
 						uint64_t elapsed = cf_getns() - begin;
-						as_node_add_latency(node, latency_type, elapsed);
+						as_node_add_latency(node, cmd->ns, latency_type, elapsed);
 					}
 					as_command_prepare_error(cmd, err);
 					break;

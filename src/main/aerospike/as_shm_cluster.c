@@ -44,9 +44,9 @@
 #include <sys/sysctl.h>
 #endif
 
-/******************************************************************************
- * DECLARATIONS
- ******************************************************************************/
+//---------------------------------
+// Function declarations
+//---------------------------------
 
 as_status
 as_cluster_init(as_cluster* cluster, as_error* err);
@@ -72,9 +72,9 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 void
 as_cluster_manage(as_cluster* cluster);
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 // Note on why shared memory robust mutex locks were not used:
 //
@@ -361,7 +361,7 @@ static as_status
 as_shm_reset_racks_node(as_cluster* cluster, as_error* err, as_node* node)
 {
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
-	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &node->info_socket);
+	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &node->info_socket);
 
 	if (status != AEROSPIKE_OK) {
 		return status;

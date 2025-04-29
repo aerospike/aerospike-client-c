@@ -675,6 +675,7 @@ as_scan_command_execute(as_scan_task* task)
 	cmd.policy = &task->policy->base;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
+	cmd.ns = NULL;        // Not referenced when node set.
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_scan_parse_records;
 	cmd.udata = task;

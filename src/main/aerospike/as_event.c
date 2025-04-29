@@ -29,9 +29,9 @@
 #include <citrusleaf/alloc.h>
 #include <pthread.h>
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 // Use pointer comparison for performance.  If portability becomes an issue, use
 // "pthread_equal(event_loop->thread, pthread_self())" instead.
@@ -41,9 +41,9 @@
 #define as_in_event_loop(_t1) ((_t1).p == pthread_self().p)
 #endif
 
-/******************************************************************************
- * GLOBALS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 as_event_loop* as_event_loops = 0;
 as_event_loop* as_event_loop_current = 0;
@@ -58,9 +58,9 @@ static pthread_mutex_t as_event_lock = PTHREAD_MUTEX_INITIALIZER;
 as_status aerospike_library_init(as_error* err);
 int as_batch_retry_async(as_event_command* cmd, bool timeout);
 
-/******************************************************************************
- * PUBLIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 static as_status
 as_event_validate_policy(as_error* err, as_policy_event* policy)
@@ -356,9 +356,9 @@ as_event_destroy_loops(void)
 	}
 }
 
-/******************************************************************************
- * PRIVATE FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Private Functions
+//---------------------------------
 
 static void as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd);
 static void as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd);
@@ -583,7 +583,7 @@ static inline void
 as_event_add_latency(as_event_command* cmd, as_latency_type type)
 {
 	uint64_t elapsed = cf_getns() - cmd->begin;
-	as_node_add_latency(cmd->node, type, elapsed);
+	as_node_add_latency(cmd->node, cmd->ns, type, elapsed);
 }
 
 void
@@ -1694,9 +1694,9 @@ as_event_command_free(as_event_command* cmd)
 	}
 }
 
-/******************************************************************************
- * CONNECTION CREATE
- *****************************************************************************/
+//---------------------------------
+// Connection Create
+//---------------------------------
 
 typedef struct {
 	as_monitor* monitor;
@@ -1960,9 +1960,9 @@ create_connections(as_event_loop* event_loop, as_node* node, as_async_conn_pool*
 	connector_create_commands(event_loop, cs);
 }
 
-/******************************************************************************
- * CONNECTION BALANCE
- *****************************************************************************/
+//---------------------------------
+// Connection Balance
+//---------------------------------
 
 typedef struct {
 	as_cluster* cluster;
@@ -2121,9 +2121,9 @@ as_event_node_balance_connections(as_cluster* cluster, as_node* node)
 	as_monitor_destroy(&bs.monitor);
 }
 
-/******************************************************************************
- * CLUSTER CLOSE
- *****************************************************************************/
+//---------------------------------
+// Cluster Close
+//---------------------------------
 
 typedef struct {
 	as_monitor* monitor;

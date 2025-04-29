@@ -36,9 +36,9 @@
 extern "C" {
 #endif
 	
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
  * Maximum size (including NULL byte) of a hostname.
@@ -61,9 +61,9 @@ extern "C" {
 #define AS_ADDRESS4_MAX 4
 #define AS_ADDRESS6_MAX 8
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Socket address information.
@@ -192,9 +192,10 @@ typedef struct as_async_conn_pool_s {
 /**
  * Node metrics latency bucket struct
  */
-typedef struct as_node_metrics_s {
+typedef struct {
+	const char* ns;
 	as_latency_buckets* latency;
-} as_node_metrics;
+} as_ns_metrics;
 
 struct as_cluster_s;
 
@@ -289,11 +290,6 @@ typedef struct as_node_s {
 	as_racks* racks;
 
 	/**
-	 * Node metrics 
-	 */
-	as_node_metrics* metrics;
-
-	/**
 	 * Socket used exclusively for cluster tend thread info requests.
 	 */
 	as_socket info_socket;
@@ -366,6 +362,16 @@ typedef struct as_node_s {
 	uint32_t index;
 	
 	/**
+	 * Node/Namespace metrics.
+	 */
+	as_ns_metrics* metrics;
+
+	/**
+	 * Number of metrics namespace entries.
+	 */
+	uint8_t metrics_size;
+
+	/**
 	 * Should user login to avoid session expiration.
 	 */
 	uint8_t perform_login;
@@ -424,9 +430,9 @@ typedef struct as_node_info_s {
 
 } as_node_info;
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * @private
@@ -571,7 +577,10 @@ as_node_authenticate_connection(struct as_cluster_s* cluster, uint64_t deadline_
  * Get a connection to the given node from pool and validate.  Return 0 on success.
  */
 as_status
-as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_socket* sock);
+as_node_get_connection(
+	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
+	as_socket* sock
+	);
 
 /**
  * @private
@@ -662,7 +671,7 @@ as_node_has_rack(as_node* node, const char* ns, int rack_id);
  * Record latency of type latency_type for node
  */
 void
-as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed);
+as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type, uint64_t elapsed);
 
 struct as_metrics_policy_s;
 

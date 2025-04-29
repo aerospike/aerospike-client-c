@@ -2008,7 +2008,7 @@ as_batch_command_init(
 	cmd->policy = &policy->base;
 	cmd->node = task->node;
 	cmd->key = NULL;       // Not referenced when node set.
-	cmd->ns = NULL;        // Not referenced when node set.
+	cmd->ns = NULL;
 	cmd->partition = NULL; // Not referenced when node set.
 	cmd->parse_results_fn = as_batch_parse_records;
 	cmd->udata = task;

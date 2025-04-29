@@ -294,6 +294,20 @@ as_partition_tables_get(as_partition_tables* tables, const char* ns)
 	return NULL;
 }
 
+const char*
+as_partition_tables_get_ns(as_cluster* cluster, const char* ns)
+{
+	if (cluster->shm_info) {
+		as_cluster_shm* cluster_shm = cluster->shm_info->cluster_shm;
+		as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
+		return table ? table->ns : NULL;
+	}
+	else {
+		as_partition_table* table = as_partition_tables_get(&cluster->partition_tables, ns);
+		return table ? table->ns : NULL;
+	}
+}
+
 static inline void
 force_replicas_refresh(as_node* node)
 {

@@ -46,8 +46,8 @@
 // Globals
 //---------------------------------
 
-// NONE namespace for latency metrics without a namespace.
-static const char* as_ns_none = "NONE";
+// Empty string namespace for latency metrics without a namespace.
+static const char* as_ns_empty = "";
 
 //---------------------------------
 // Function declarations
@@ -1437,7 +1437,7 @@ as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type,
 	// Namespace will be NULL for batch and creating min connections.
 	// Use a NONE namespace for these connections.
 	if (!ns) {
-		ns = as_ns_none;
+		ns = as_ns_empty;
 	}
 
 	as_ns_metrics* metrics = as_node_find_namespace(node, ns);

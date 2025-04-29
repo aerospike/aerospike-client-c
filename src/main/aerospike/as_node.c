@@ -513,12 +513,6 @@ as_node_create_connection(
 
 	if (node->cluster->metrics_enabled) {
 		uint64_t elapsed = cf_getns() - begin;
-
-		// Namespace will be NULL for some connection creation (like create min connections).
-		// Use a NONE namespace for these connections.
-		if (!ns) {
-			ns = as_ns_none;
-		}
 		as_node_add_latency(node, ns, AS_LATENCY_TYPE_CONN, elapsed);
 	}
 	return AEROSPIKE_OK;
@@ -1440,6 +1434,12 @@ as_node_append_metrics(as_node* node, const char* ns)
 void
 as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type, uint64_t elapsed)
 {
+	// Namespace will be NULL for batch and creating min connections.
+	// Use a NONE namespace for these connections.
+	if (!ns) {
+		ns = as_ns_none;
+	}
+
 	as_ns_metrics* metrics = as_node_find_namespace(node, ns);
 
 	if (!metrics) {

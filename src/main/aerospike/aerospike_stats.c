@@ -104,9 +104,21 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 {
 	as_node_reserve(node); // Released in aerospike_node_stats_destroy()
 	stats->node = node;
-	stats->error_count = as_node_get_error_count(node);
-	stats->timeout_count = as_node_get_timeout_count(node);
-	stats->key_busy_count = as_node_get_key_busy_count(node);
+
+	// Sum node/namespace counts to node.
+	stats->error_count = 0;
+	stats->timeout_count = 0;
+	stats->key_busy_count = 0;
+
+	as_ns_metrics** array = node->metrics;
+	uint8_t max_ns = node->metrics_size;
+
+	for (uint32_t i = 0; i < max_ns; i++) {
+		as_ns_metrics* metrics = array[i];
+		stats->error_count += as_node_get_error_count(metrics);
+		stats->timeout_count += as_node_get_timeout_count(metrics);
+		stats->key_busy_count += as_node_get_key_busy_count(metrics);
+	}
 
 	as_conn_stats_init(&stats->sync);
 	as_conn_stats_init(&stats->async);

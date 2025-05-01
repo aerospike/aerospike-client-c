@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -34,6 +34,7 @@ typedef uint8_t as_latency_type;
 #define AS_LATENCY_TYPE_BATCH 3
 #define AS_LATENCY_TYPE_QUERY 4
 #define AS_LATENCY_TYPE_NONE 5
+#define AS_LATENCY_TYPE_MAX 5
 
 /**
  * Latency buckets for a command group.
@@ -41,6 +42,7 @@ typedef uint8_t as_latency_type;
  */
 typedef struct as_latency_buckets_s {
 	uint64_t* buckets;
+	as_spinlock lock;
 	uint32_t latency_shift;
 	uint32_t latency_columns;
 } as_latency_buckets;
@@ -48,12 +50,6 @@ typedef struct as_latency_buckets_s {
 //---------------------------------
 // Functions
 //---------------------------------
-
-static inline uint64_t
-as_latency_get_bucket(as_latency_buckets* buckets, uint32_t i)
-{
-	return as_load_uint64(&buckets->buckets[i]);
-}
 
 /**
  * Convert latency_type to string version for printing to the output file

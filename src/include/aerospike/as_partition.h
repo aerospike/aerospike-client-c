@@ -29,10 +29,15 @@ extern "C" {
 //---------------------------------
 
 /**
- * If the server removes then adds namespaces, the client may contain more
- * than the server max of 32.
+ * Maximum server namespaces.
  */
-#define AS_MAX_NAMESPACES 128
+#define AS_MAX_NAMESPACES 32
+
+/**
+ * Maximum metrics namespaces. This includes an extra empty namespace for metrics that are not
+ * bound to a namespace.
+ */
+#define AS_MAX_METRICS_NAMESPACES 33
 
 /**
  * Maximum namespace size including null byte.  Effective maximum length is 31.

@@ -823,7 +823,7 @@ as_event_socket_timeout(as_event_command* cmd)
 		return;
 	}
 
-	as_node_add_timeout(cmd->node);
+	as_node_add_timeout(cmd->node, cmd->ns);
 
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, true);
@@ -890,7 +890,7 @@ void
 as_event_total_timeout(as_event_command* cmd)
 {
 	// Node should not be null at this point.
-	as_node_add_timeout(cmd->node);
+	as_node_add_timeout(cmd->node, cmd->ns);
 	
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, false);
@@ -1374,7 +1374,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	switch (err->code) {
 		case AEROSPIKE_ERR_CLUSTER:
 		case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-			as_node_add_error(cmd->node);
+			as_node_add_error(cmd->node, cmd->ns);
 			as_node_incr_error_rate(cmd->node);
 			as_event_put_connection(cmd, pool);
 			break;
@@ -1386,13 +1386,13 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
-			as_node_add_error(cmd->node);
+			as_node_add_error(cmd->node, cmd->ns);
 			as_node_incr_error_rate(cmd->node);
 			as_event_release_connection(cmd->conn, pool);
 			break;
 		
 		case AEROSPIKE_ERR_TIMEOUT:
-			as_node_add_timeout(cmd->node);
+			as_node_add_timeout(cmd->node, cmd->ns);
 			as_event_put_connection(cmd, pool);
 			break;
 			
@@ -1406,12 +1406,12 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 			break;
 
 		case AEROSPIKE_ERR_RECORD_BUSY:
-			as_node_add_key_busy(cmd->node);
+			as_node_add_key_busy(cmd->node, cmd->ns);
 			as_event_put_connection(cmd, pool);
 			break;
 
 		default:
-			as_node_add_error(cmd->node);
+			as_node_add_error(cmd->node, cmd->ns);
 			as_event_put_connection(cmd, pool);
 			break;
 	}

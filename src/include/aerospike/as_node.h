@@ -190,11 +190,36 @@ typedef struct as_async_conn_pool_s {
 } as_async_conn_pool;
 
 /**
- * Node metrics latency bucket struct
+ * Namespace metrics.
  */
 typedef struct {
+	/**
+	 * Namespace.
+	 */
 	const char* ns;
-	as_latency_buckets* latency;
+
+	/**
+	 * Command error count since node was initialized. If the error is retryable, multiple errors per
+	 * command may occur.
+	 */
+	uint64_t error_count;
+
+	/**
+	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * multiple timeouts per command may occur.
+	 */
+	uint64_t timeout_count;
+
+	/**
+	 * Command key busy error count since node was initialized.
+	 */
+	uint64_t key_busy_count;
+
+	/**
+	 * Latency histograms.
+	 */
+	as_latency_buckets latency[AS_LATENCY_TYPE_MAX];
+
 } as_ns_metrics;
 
 struct as_cluster_s;
@@ -295,23 +320,6 @@ typedef struct as_node_s {
 	as_socket info_socket;
 
 	/**
-	 * Command error count since node was initialized. If the error is retryable, multiple errors per
-	 * command may occur.
-	 */
-	uint64_t error_count;
-
-	/**
-	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
-	 * multiple timeouts per command may occur.
-	 */
-	uint64_t timeout_count;
-
-	/**
-	 * Command key busy error count since node was initialized.
-	 */
-	uint64_t key_busy_count;
-
-	/**
 	 * Connection queue iterator.  Not atomic by design.
 	 */
 	uint32_t conn_iter;
@@ -364,7 +372,7 @@ typedef struct as_node_s {
 	/**
 	 * Node/Namespace metrics.
 	 */
-	as_ns_metrics* metrics;
+	as_ns_metrics** metrics;
 
 	/**
 	 * Number of metrics namespace entries.
@@ -447,13 +455,6 @@ as_node_create(struct as_cluster_s* cluster, as_node_info* node_info);
  */
 AS_EXTERN void
 as_node_destroy(as_node* node);
-
-/**
- * @private
- * Destroy node metrics.
- */
-void
-as_node_destroy_metrics(as_node* node);
 
 /**
  * @private
@@ -686,57 +687,48 @@ as_node_enable_metrics(as_node* node, const struct as_metrics_policy_s* policy);
  * Return command error count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
-as_node_get_error_count(as_node* node)
+as_node_get_error_count(as_ns_metrics* metrics)
 {
-	return as_load_uint64(&node->error_count);
+	return as_load_uint64(&metrics->error_count);
 }
 
 /**
  * Increment command error count. If the error is retryable, multiple errors per
  * command may occur.
  */
-static inline void
-as_node_add_error(as_node* node)
-{
-	as_incr_uint64(&node->error_count);
-}
+void
+as_node_add_error(as_node* node, const char* ns);
 
 /**
  * Return command timeout count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
-as_node_get_timeout_count(as_node* node)
+as_node_get_timeout_count(as_ns_metrics* metrics)
 {
-	return as_load_uint64(&node->timeout_count);
+	return as_load_uint64(&metrics->timeout_count);
 }
 
 /**
  * Increment command timeout count. If the timeout is retryable (ie socketTimeout),
  * multiple timeouts per command may occur.
  */
-static inline void
-as_node_add_timeout(as_node* node)
-{
-	as_incr_uint64(&node->timeout_count);
-}
+void
+as_node_add_timeout(as_node* node, const char* ns);
 
 /**
  * Return command key busy error count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
-as_node_get_key_busy_count(as_node* node)
+as_node_get_key_busy_count(as_ns_metrics* metrics)
 {
-	return as_load_uint64(&node->key_busy_count);
+	return as_load_uint64(&metrics->key_busy_count);
 }
 
 /**
  * Increment command key busy error count.
  */
-static inline void
-as_node_add_key_busy(as_node* node)
-{
-	as_incr_uint64(&node->key_busy_count);
-}
+void
+as_node_add_key_busy(as_node* node, const char* ns);
 
 /**
  * @private

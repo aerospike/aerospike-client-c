@@ -106,44 +106,6 @@ as_node_create_async_pools(uint32_t min_conns_per_node, uint32_t max_conns_per_n
 	return pools;
 }
 
-static void
-as_latency_buckets_init(as_latency_buckets* latency_buckets, uint32_t latency_columns, uint32_t latency_shift)
-{
-	latency_buckets->latency_columns = latency_columns;
-	latency_buckets->latency_shift = latency_shift;
-	latency_buckets->buckets = cf_malloc(sizeof(uint64_t) * latency_columns);
-	
-	for (uint32_t i = 0; i < latency_columns; i++) {
-		as_store_uint64(&latency_buckets->buckets[i], 0);
-	}
-}
-
-static inline void
-as_node_metrics_init(as_node* node)
-{
-	node->metrics = cf_calloc(AS_MAX_NAMESPACES, sizeof(as_ns_metrics));
-	node->metrics_size = 0;
-}
-
-void
-as_node_destroy_metrics(as_node* node)
-{
-	if (node->metrics) {
-		as_ns_metrics* metrics = node->metrics;
-		uint8_t max = node->metrics_size;
-
-		for (uint8_t i = 0; i < max; i++) {
-			for (uint8_t j = 0; j < AS_LATENCY_TYPE_NONE; j++) {
-				cf_free(metrics->latency[j].buckets);
-			}
-			cf_free(metrics->latency);
-			metrics++;
-		}
-		cf_free(node->metrics);
-		node->metrics = NULL;
-	}
-}
-
 as_node*
 as_node_create(as_cluster* cluster, as_node_info* node_info)
 {
@@ -188,16 +150,8 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->partition_changed = true;
 	node->rebalance_changed = cluster->rack_aware;
 	node->error_rate = 0;
-	node->error_count = 0;
-	node->timeout_count = 0;
-	node->key_busy_count = 0;
-
-	if (cluster->metrics_enabled) {
-		as_node_metrics_init(node);
-	}
-	else {
-		node->metrics = NULL;
-	}
+	node->metrics_size = 0;
+	node->metrics = cf_calloc(AS_MAX_METRICS_NAMESPACES, sizeof(as_ns_metrics*));
 
 	// Create sync connection pools.
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
@@ -229,6 +183,23 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 
 	node->pipe_conn_pools = as_node_create_async_pools(0, cluster->pipe_max_conns_per_node);
 	return node;
+}
+
+static void
+as_node_destroy_metrics(as_node* node)
+{
+	as_ns_metrics** array = node->metrics;
+	uint8_t max = node->metrics_size;
+
+	for (uint8_t i = 0; i < max; i++) {
+		as_ns_metrics* metrics = array[i];
+
+		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+			cf_free(metrics->latency[j].buckets);
+		}
+		cf_free(metrics);
+	}
+	cf_free(array);
 }
 
 void
@@ -1358,43 +1329,48 @@ as_node_parse_racks(as_cluster* cluster, as_error* err, as_node* node, char* buf
 	return AEROSPIKE_OK;
 }
 
-static uint32_t
-as_latency_buckets_get_index(as_latency_buckets* latency_buckets, uint64_t elapsed_nanos)
+void
+as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 {
-	// Convert nanoseconds to milliseconds.
-	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
+	// This function is always called under cluster->metrics_lock.
+	as_ns_metrics** array = node->metrics;
+	uint8_t max = node->metrics_size;
 
-	// Round up elapsed to nearest millisecond.
-	if ((elapsed_nanos - (elapsed * NS_TO_MS)) > 0) {
-		elapsed++;
-	}
+	for (uint8_t i = 0; i < max; i++) {
+		as_ns_metrics* metrics = array[i];
 
-	uint32_t last_bucket = latency_buckets->latency_columns - 1;
-	uint64_t limit = 1;
+		// Initialize latency buckets.
+		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+			as_latency_buckets* latency = &metrics->latency[j];
+			uint64_t* buckets = cf_calloc(policy->latency_columns, sizeof(uint64_t));
 
-	for (uint32_t i = 0; i < last_bucket; i++) {
-		if (elapsed <= limit) {
-			return i;
+			as_spinlock_lock(&latency->lock);
+			uint64_t* old = latency->buckets;
+			latency->buckets = buckets;
+			latency->latency_columns = policy->latency_columns;
+			latency->latency_shift = policy->latency_shift;
+			as_spinlock_unlock(&latency->lock);
+
+			cf_free(old);
 		}
-		limit <<= latency_buckets->latency_shift;
 	}
-	return last_bucket;
 }
 
 static inline as_ns_metrics*
 as_node_find_namespace(as_node* node, const char* ns)
 {
-	as_ns_metrics* metrics = node->metrics;
+	as_ns_metrics** array = node->metrics;
 	uint8_t max = node->metrics_size;
 
 	for (uint8_t i = 0; i < max; i++) {
+		as_ns_metrics* metrics = array[i];
+
 		// Use reference equality for performance. The passed in namespace comes from the cluster
 		// partition_tables which only allows new namespaces to be added and never modifies or
 		// removes existing namespaces.
 		if (metrics->ns == ns) {
 			return metrics;
 		}
-		metrics++;
 	}
 	return NULL;
 }
@@ -1402,12 +1378,13 @@ as_node_find_namespace(as_node* node, const char* ns)
 static as_ns_metrics*
 as_node_append_metrics(as_node* node, const char* ns)
 {
-	// Must create new namespace metrics under lock.
 	as_cluster* cluster = node->cluster;
 
+	// Must create new namespace metrics under lock.
 	pthread_mutex_lock(&cluster->metrics_lock);
 
-	if (node->metrics_size >= AS_MAX_NAMESPACES) {
+	if (node->metrics_size >= AS_MAX_METRICS_NAMESPACES) {
+		as_log_error("Metric discarded. Max namespaces reached: %u", AS_MAX_METRICS_NAMESPACES);
 		pthread_mutex_unlock(&cluster->metrics_lock);
 		return NULL;
 	}
@@ -1416,26 +1393,38 @@ as_node_append_metrics(as_node* node, const char* ns)
 	as_ns_metrics* metrics = as_node_find_namespace(node, ns);
 
 	if (!metrics) {
-		metrics = &node->metrics[node->metrics_size];
+		metrics = cf_malloc(sizeof(as_ns_metrics));
 		metrics->ns = ns;
+		metrics->error_count = 0;
+		metrics->timeout_count = 0;
+		metrics->key_busy_count = 0;
 
-		uint32_t max_latency_type = AS_LATENCY_TYPE_NONE;
-		metrics->latency = cf_malloc(sizeof(as_latency_buckets) * max_latency_type);
+		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+			as_latency_buckets* latency = &metrics->latency[i];
 
-		for (uint32_t i = 0; i < max_latency_type; i++) {
-			as_latency_buckets_init(&metrics->latency[i], cluster->metrics_latency_columns, cluster->metrics_latency_shift);
+			as_spinlock_init(&latency->lock);
+
+			if (cluster->metrics_enabled) {
+				latency->latency_columns = cluster->metrics_latency_columns;
+				latency->latency_shift = cluster->metrics_latency_shift;
+				latency->buckets = cf_calloc(cluster->metrics_latency_columns, sizeof(uint64_t));
+			}
+			else {
+				latency->latency_columns = 1;
+				latency->latency_shift = 1;
+				latency->buckets = cf_calloc(1, sizeof(uint64_t));
+			}
 		}
-		node->metrics_size++;
+		node->metrics[node->metrics_size++] = metrics;
 	}
 	pthread_mutex_unlock(&cluster->metrics_lock);
 	return metrics;
 }
 
-void
-as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type, uint64_t elapsed)
+static as_ns_metrics*
+as_node_prepare_metrics(as_node* node, const char* ns)
 {
 	// Namespace will be NULL for batch and creating min connections.
-	// Use a NONE namespace for these connections.
 	if (!ns) {
 		ns = as_ns_empty;
 	}
@@ -1444,22 +1433,84 @@ as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type,
 
 	if (!metrics) {
 		metrics = as_node_append_metrics(node, ns);
-
-		if (!metrics) {
-			as_log_error("Latency discarded. Max namespaces reached: %u", AS_MAX_NAMESPACES);
-			return;
-		}
 	}
+	return metrics;
+}
 
-	as_latency_buckets* buckets = &metrics->latency[latency_type];
-	uint32_t index = as_latency_buckets_get_index(buckets, elapsed);
-	as_incr_uint64(&buckets->buckets[index]);
+static inline uint32_t
+as_latency_buckets_get_index(as_latency_buckets* latency, uint64_t elapsed)
+{
+	uint32_t last_bucket = latency->latency_columns - 1;
+	uint64_t limit = 1;
+
+	for (uint32_t i = 0; i < last_bucket; i++) {
+		if (elapsed <= limit) {
+			return i;
+		}
+		limit <<= latency->latency_shift;
+	}
+	return last_bucket;
 }
 
 void
-as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
+as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type, uint64_t elapsed_nanos)
 {
-	as_node_metrics_init(node);
+	as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
+
+	if (!metrics) {
+		return;
+	}
+
+	// Convert nanoseconds to milliseconds.
+	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
+
+	// Round up elapsed to nearest millisecond.
+	if ((elapsed_nanos - (elapsed * NS_TO_MS)) > 0) {
+		elapsed++;
+	}
+
+	as_latency_buckets* latency = &metrics->latency[latency_type];
+
+	as_spinlock_lock(&latency->lock);
+	uint32_t index = as_latency_buckets_get_index(latency, elapsed);
+	latency->buckets[index]++;
+	as_spinlock_unlock(&latency->lock);
+}
+
+void
+as_node_add_error(as_node* node, const char* ns)
+{
+	as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
+
+	if (!metrics) {
+		return;
+	}
+
+	as_incr_uint64(&metrics->error_count);
+}
+
+void
+as_node_add_timeout(as_node* node, const char* ns)
+{
+	as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
+
+	if (!metrics) {
+		return;
+	}
+
+	as_incr_uint64(&metrics->timeout_count);
+}
+
+void
+as_node_add_key_busy(as_node* node, const char* ns)
+{
+	as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
+
+	if (!metrics) {
+		return;
+	}
+
+	as_incr_uint64(&metrics->key_busy_count);
 }
 
 static as_status

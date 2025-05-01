@@ -743,17 +743,17 @@ as_command_execute(as_command* cmd, as_error* err)
 			switch (status) {
 				case AEROSPIKE_ERR_CLUSTER:
 				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-					as_node_add_error(node);
+					as_node_add_error(node, cmd->ns);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
 				case AEROSPIKE_ERR_CONNECTION:
-					as_node_add_error(node);
+					as_node_add_error(node, cmd->ns);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
-					as_node_add_timeout(node);
+					as_node_add_timeout(node, cmd->ns);
 					
 					if (is_server_timeout(err)) {
 						as_node_put_conn_error(node, &socket);
@@ -769,7 +769,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
-					as_node_add_error(node);
+					as_node_add_error(node, cmd->ns);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					if (release_node) {
 						as_node_release(node);
@@ -788,12 +788,12 @@ as_command_execute(as_command* cmd, as_error* err)
 					break;
 
 				case AEROSPIKE_ERR_RECORD_BUSY:
-					as_node_add_key_busy(node);
+					as_node_add_key_busy(node, cmd->ns);
 					as_command_prepare_error(cmd, err);
 					break;
 
 				default:
-					as_node_add_error(node);
+					as_node_add_error(node, cmd->ns);
 					as_command_prepare_error(cmd, err);
 					break;
 			}

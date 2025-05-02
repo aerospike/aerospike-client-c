@@ -210,6 +210,47 @@ as_parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* ou
 }
 
 static inline void
+as_assign_uint8(
+	const char* section, const char* name, const char* value, uint8_t src, uint8_t* trg
+	)
+{
+	if (*trg != src) {
+		as_log_info("Set %s.%s = %s", section, name, value);
+		*trg = src;
+	}
+}
+
+static bool
+parse_uint8(as_yaml* yaml, const char* name, const char* value, uint8_t* out)
+{
+    char* end = NULL;
+    errno = 0;
+	unsigned long v = strtoul(value, &end, 10);
+
+	if (end == value || (errno != 0) || v > 255) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint8 for %s: %s", name, value);
+		return false;
+	}
+
+	*out = (uint8_t)v;
+	return true;
+}
+
+static bool
+as_parse_uint8(as_yaml* yaml, const char* name, const char* value, uint8_t* out, uint32_t field)
+{
+	uint8_t val;
+
+	if (!parse_uint8(yaml, name, value, &val)) {
+		return false;
+	}
+
+	as_assign_uint8(yaml->name, name, value, val, out);
+	as_field_set(yaml->bitmap, field);
+	return true;
+}
+
+static inline void
 as_assign_bool(
 	const char* section, const char* name, const char* value, bool src, bool* trg
 	)
@@ -1081,11 +1122,11 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 	}
 
 	if (strcmp(name, "latency_columns") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->latency_columns, AS_METRICS_LATENCY_COLUMNS);
+		return as_parse_uint8(yaml, name, value, &policy->latency_columns, AS_METRICS_LATENCY_COLUMNS);
 	}
 
 	if (strcmp(name, "latency_shift") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->latency_shift, AS_METRICS_LATENCY_SHIFT);
+		return as_parse_uint8(yaml, name, value, &policy->latency_shift, AS_METRICS_LATENCY_SHIFT);
 	}
 
 	if (strcmp(name, "app_id") == 0) {

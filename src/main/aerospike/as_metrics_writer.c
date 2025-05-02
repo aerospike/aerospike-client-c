@@ -425,25 +425,23 @@ as_metrics_write_conn(as_metrics_writer* mw, as_string_builder* sb, const struct
 static void
 as_metrics_write_latencies(as_string_builder* sb, as_ns_metrics* metrics)
 {
-	for (uint32_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
 		if (i > 0) {
 			as_string_builder_append_char(sb, ',');
 		}
 		as_string_builder_append(sb, as_latency_type_to_string(i));
 		as_string_builder_append_char(sb, '[');
 
-		as_latency_buckets* latency = &metrics->latency[i];
+		as_latency* latency = as_latency_reserve(metrics->latency[i]);
 
-		as_spinlock_lock(&latency->lock);
-
-		for (uint32_t j = 0; j < latency->latency_columns; j++) {
+		for (uint8_t j = 0; j < latency->size; j++) {
 			if (j > 0) {
 				as_string_builder_append_char(sb, ',');
 			}
-			as_string_builder_append_uint64(sb, latency->buckets[j]);
+			as_string_builder_append_uint64(sb, as_latency_get_bucket(latency, j));
 		}
 
-		as_spinlock_unlock(&latency->lock);
+		as_latency_release(latency);
 		as_string_builder_append_char(sb, ']');
 	}
 }

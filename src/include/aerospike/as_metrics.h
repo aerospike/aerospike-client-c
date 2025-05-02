@@ -144,7 +144,7 @@ typedef struct as_metrics_policy_s {
 	 *
 	 * Default: 7
 	 */
-	uint32_t latency_columns;
+	uint8_t latency_columns;
 
 	/**
 	 * Power of 2 multiple between each range bucket in latency histograms starting at column 3. The bucket units
@@ -160,7 +160,7 @@ typedef struct as_metrics_policy_s {
 	 *
 	 * Default: 1
 	 */
-	uint32_t latency_shift;
+	uint8_t latency_shift;
 
 	/**
 	 * @private

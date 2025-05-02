@@ -218,7 +218,7 @@ typedef struct {
 	/**
 	 * Latency histograms.
 	 */
-	as_latency_buckets latency[AS_LATENCY_TYPE_MAX];
+	as_latency* latency[AS_LATENCY_TYPE_MAX];
 
 } as_ns_metrics;
 

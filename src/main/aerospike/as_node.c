@@ -195,7 +195,7 @@ as_node_destroy_metrics(as_node* node)
 		as_ns_metrics* metrics = array[i];
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			cf_free(metrics->latency[j].buckets);
+			cf_free(metrics->latency[j]);
 		}
 		cf_free(metrics);
 	}
@@ -1329,6 +1329,16 @@ as_node_parse_racks(as_cluster* cluster, as_error* err, as_node* node, char* buf
 	return AEROSPIKE_OK;
 }
 
+/**
+ * Use non-inline function for garbarge collector function pointer reference.
+ * Forward to inlined release.
+ */
+static inline void
+release_latency(as_latency* latency)
+{
+	as_latency_release(latency);
+}
+
 void
 as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 {
@@ -1341,17 +1351,30 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 
 		// Initialize latency buckets.
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			as_latency_buckets* latency = &metrics->latency[j];
-			uint64_t* buckets = cf_calloc(policy->latency_columns, sizeof(uint64_t));
+			as_latency* latency = metrics->latency[j];
 
-			as_spinlock_lock(&latency->lock);
-			uint64_t* old = latency->buckets;
-			latency->buckets = buckets;
-			latency->latency_columns = policy->latency_columns;
-			latency->latency_shift = policy->latency_shift;
-			as_spinlock_unlock(&latency->lock);
+			if (policy->latency_columns == latency->size && policy->latency_shift == latency->shift) {
+				// Initialize existing latency histogram.
+				for (uint8_t k = 0; k < latency->size; k++) {
+					as_store_uint64(&latency->buckets[k], 0);
+				}
+			}
+			else {
+				// Create new latency histogram.
+				as_latency* latency_old = latency;
+				latency = cf_calloc(1, sizeof(as_latency) + (sizeof(uint64_t) * policy->latency_columns));
+				latency->ref_count = 1;
+				latency->shift = policy->latency_shift;
+				latency->size = policy->latency_columns;
 
-			cf_free(old);
+				as_store_ptr_rls((void**)&metrics->latency[j], latency);
+
+				// Put old latency on garbage collector stack.
+				as_gc_item item;
+				item.data = latency_old;
+				item.release_fn = (as_release_fn)release_latency;
+				as_vector_append(node->cluster->gc, &item);
+			}
 		}
 	}
 }
@@ -1399,21 +1422,24 @@ as_node_append_metrics(as_node* node, const char* ns)
 		metrics->timeout_count = 0;
 		metrics->key_busy_count = 0;
 
+		uint8_t latency_columns;
+		uint8_t latency_shift;
+
+		if (cluster->metrics_enabled) {
+			latency_columns = cluster->metrics_latency_columns;
+			latency_shift = cluster->metrics_latency_shift;
+		}
+		else {
+			latency_columns = 1;
+			latency_shift = 1;
+		}
+
 		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
-			as_latency_buckets* latency = &metrics->latency[i];
-
-			as_spinlock_init(&latency->lock);
-
-			if (cluster->metrics_enabled) {
-				latency->latency_columns = cluster->metrics_latency_columns;
-				latency->latency_shift = cluster->metrics_latency_shift;
-				latency->buckets = cf_calloc(cluster->metrics_latency_columns, sizeof(uint64_t));
-			}
-			else {
-				latency->latency_columns = 1;
-				latency->latency_shift = 1;
-				latency->buckets = cf_calloc(1, sizeof(uint64_t));
-			}
+			as_latency* latency = cf_calloc(1, sizeof(as_latency) + (sizeof(uint64_t) * latency_columns));
+			latency->ref_count = 1;
+			latency->shift = latency_shift;
+			latency->size = latency_columns;
+			metrics->latency[i] = latency;
 		}
 		node->metrics[node->metrics_size++] = metrics;
 	}
@@ -1437,17 +1463,17 @@ as_node_prepare_metrics(as_node* node, const char* ns)
 	return metrics;
 }
 
-static inline uint32_t
-as_latency_buckets_get_index(as_latency_buckets* latency, uint64_t elapsed)
+static inline uint8_t
+as_latency_get_index(as_latency* latency, uint64_t elapsed)
 {
-	uint32_t last_bucket = latency->latency_columns - 1;
 	uint64_t limit = 1;
+	uint8_t last_bucket = latency->size - 1;
 
-	for (uint32_t i = 0; i < last_bucket; i++) {
+	for (uint8_t i = 0; i < last_bucket; i++) {
 		if (elapsed <= limit) {
 			return i;
 		}
-		limit <<= latency->latency_shift;
+		limit <<= latency->shift;
 	}
 	return last_bucket;
 }
@@ -1469,12 +1495,12 @@ as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type,
 		elapsed++;
 	}
 
-	as_latency_buckets* latency = &metrics->latency[latency_type];
+	as_latency* latency = as_latency_reserve(metrics->latency[latency_type]);
 
-	as_spinlock_lock(&latency->lock);
-	uint32_t index = as_latency_buckets_get_index(latency, elapsed);
-	latency->buckets[index]++;
-	as_spinlock_unlock(&latency->lock);
+	uint8_t index = as_latency_get_index(latency, elapsed);
+	as_incr_uint64(&latency->buckets[index]);
+
+	as_latency_release(latency);
 }
 
 void

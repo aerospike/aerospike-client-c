@@ -257,6 +257,12 @@ as_metrics_policy_set_listeners(
 	policy->metrics_listeners.udata = udata;
 }
 
+AS_EXTERN as_vector*
+as_metrics_labels_copy(as_vector* labels);
+
+AS_EXTERN void
+as_metrics_labels_destroy(as_vector* labels);
+
 /**
  * Enable extended periodic cluster and node latency metrics.
  */

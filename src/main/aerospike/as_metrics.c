@@ -58,19 +58,6 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 	}
 }
 
-static void
-as_destroy_labels(as_vector* labels)
-{
-	if (labels) {
-		for (uint32_t i = 0; i < labels->size; i++) {
-			as_metrics_label* label = as_vector_get(labels, i);
-			cf_free(label->name);
-			cf_free(label->value);
-		}
-		as_vector_destroy(labels);
-	}
-}
-
 //---------------------------------
 // Functions
 //---------------------------------
@@ -120,9 +107,22 @@ as_metrics_policy_destroy(as_metrics_policy* policy)
 }
 
 void
+as_metrics_labels_destroy(as_vector* labels)
+{
+	if (labels) {
+		for (uint32_t i = 0; i < labels->size; i++) {
+			as_metrics_label* label = as_vector_get(labels, i);
+			cf_free(label->name);
+			cf_free(label->value);
+		}
+		as_vector_destroy(labels);
+	}
+}
+
+void
 as_metrics_policy_destroy_labels(as_metrics_policy* policy)
 {
-	as_destroy_labels(policy->labels);
+	as_metrics_labels_destroy(policy->labels);
 	policy->labels = NULL;
 }
 
@@ -131,11 +131,11 @@ as_metrics_policy_set_labels(as_metrics_policy* policy, as_vector* labels)
 {
 	as_vector* old = policy->labels;
 	policy->labels = labels;
-	as_destroy_labels(old);
+	as_metrics_labels_destroy(old);
 }
 
-void
-as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels)
+as_vector*
+as_metrics_labels_copy(as_vector* labels)
 {
 	as_vector* list = NULL;
 
@@ -152,6 +152,13 @@ as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels)
 			as_vector_append(list, &tmp);
 		}
 	}
+	return list;
+}
+
+void
+as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels)
+{
+	as_vector* list = as_metrics_labels_copy(labels);
 	as_metrics_policy_set_labels(policy, list);
 }
 

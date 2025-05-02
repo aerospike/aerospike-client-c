@@ -363,7 +363,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	timestamp_to_string(now_str, sizeof(now_str));
 	
 	char data[512];
-	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed] namespace[name,errors,timeouts,keyBusy,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
+	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed] namespace[name,errors,timeouts,keyBusy,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, mw->latency_columns, mw->latency_shift);
 	if (rv <= 0) {
 		fclose(mw->file);
@@ -504,7 +504,7 @@ static as_status
 as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* cluster)
 {
 	char* cluster_name = cluster->cluster_name;
-	
+
 	if (cluster_name == NULL) {
 		cluster_name = "";
 	}
@@ -524,6 +524,30 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 	as_string_builder_append(&sb, " cluster[");
 	as_string_builder_append(&sb, cluster_name);
 	as_string_builder_append_char(&sb, ',');
+
+	if (mw->app_id) {
+		as_string_builder_append(&sb, mw->app_id);
+	}
+
+	as_string_builder_append(&sb, ",[");
+	as_vector* labels = mw->labels;
+
+	if (labels) {
+		for (uint32_t i = 0; i < labels->size; i++) {
+			as_metrics_label* label = as_vector_get(labels, i);
+
+			if (i > 0) {
+				as_string_builder_append_char(&sb, ',');
+			}
+			as_string_builder_append_char(&sb, '[');
+			as_string_builder_append(&sb, label->name);
+			as_string_builder_append_char(&sb, ',');
+			as_string_builder_append(&sb, label->value);
+			as_string_builder_append_char(&sb, ']');
+		}
+	}
+
+	as_string_builder_append(&sb, "],");
 	as_string_builder_append_int(&sb, cpu_load);
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append_int(&sb, mem);
@@ -539,6 +563,7 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* loop = &as_event_loops[i];
+
 		if (i > 0) {
 			as_string_builder_append_char(&sb, ',');
 		}
@@ -573,6 +598,8 @@ static void
 as_metrics_writer_destroy(as_metrics_writer* mw)
 {
 	fclose(mw->file);
+	as_metrics_labels_destroy(mw->labels);
+	cf_free(mw->app_id);
 	cf_free(mw);
 }
 
@@ -590,6 +617,8 @@ as_metrics_writer_create(as_error* err, const as_metrics_policy* policy, as_metr
 
 	as_metrics_writer* mw = cf_calloc(1, sizeof(as_metrics_writer));
 	as_strncpy(mw->report_dir, policy->report_dir, sizeof(mw->report_dir));
+	mw->labels = as_metrics_labels_copy(policy->labels);
+	mw->app_id = policy->app_id ? cf_strdup(policy->app_id) : NULL;
 	mw->max_size = policy->report_size_limit;
 	mw->latency_columns = policy->latency_columns;
 	mw->latency_shift = policy->latency_shift;

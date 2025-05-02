@@ -42,6 +42,8 @@ extern "C" {
 typedef struct as_metrics_writer_s {
 	char report_dir[256];
 	FILE* file;
+	as_vector* labels;
+	char* app_id;
 	uint64_t max_size;
 	uint64_t size;
 	uint8_t latency_columns;

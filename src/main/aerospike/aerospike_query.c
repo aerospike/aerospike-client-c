@@ -1233,6 +1233,7 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.policy = policy;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
+	cmd.ns = as_partition_tables_get_ns(task->cluster, task->query->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;

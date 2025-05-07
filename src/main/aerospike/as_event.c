@@ -436,7 +436,6 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	cmd->conn = NULL;
 	cmd->proto_type_rcv = 0;
 	cmd->event_state = &cmd->cluster->event_state[event_loop->index];
-	cmd->metrics_enabled = cmd->cluster->metrics_enabled;
 
 	if (cmd->event_state->closed) {
 		as_error err;
@@ -583,13 +582,13 @@ static inline void
 as_event_add_latency(as_event_command* cmd, as_latency_type type)
 {
 	uint64_t elapsed = cf_getns() - cmd->begin;
-	as_node_add_latency(cmd->node, cmd->ns, type, elapsed);
+	as_node_add_latency(cmd->metrics, type, elapsed);
 }
 
 void
 as_event_connection_complete(as_event_command* cmd)
 {
-	if (cmd->metrics_enabled) {
+	if (cmd->metrics) {
 		as_event_add_latency(cmd, AS_LATENCY_TYPE_CONN);
 	}
 }
@@ -640,8 +639,16 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		return;
 	}
 
-	if (cmd->metrics_enabled) {
-		cmd->begin = cf_getns();
+	cmd->metrics = NULL;
+	cmd->bytes_in = 0;
+	cmd->bytes_out = 0;
+
+	if (cmd->cluster->metrics_enabled) {
+		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->begin = cf_getns();
+		}
 	}
 
 	if (cmd->pipe_listener) {
@@ -823,7 +830,7 @@ as_event_socket_timeout(as_event_command* cmd)
 		return;
 	}
 
-	as_node_add_timeout(cmd->node, cmd->ns);
+	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, true);
@@ -849,7 +856,7 @@ as_event_delay_timeout(as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_QUEUE_ERROR;
 
-	if (cmd->metrics_enabled) {
+	if (cmd->cluster->metrics_enabled) {
 		as_cluster_add_delay_queue_timeout(cmd->cluster);
 	}
 
@@ -890,7 +897,7 @@ void
 as_event_total_timeout(as_event_command* cmd)
 {
 	// Node should not be null at this point.
-	as_node_add_timeout(cmd->node, cmd->ns);
+	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 	
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, false);
@@ -903,6 +910,22 @@ as_event_total_timeout(as_event_command* cmd)
 	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
 					cmd->iteration + 1, as_node_get_address_string(cmd->node));
 	as_event_error_callback(cmd, &err);
+}
+
+bool
+as_event_socket_retry(as_event_command* cmd)
+{
+	if (cmd->metrics) {
+		as_node_add_metrics(cmd->metrics, cmd->bytes_in, cmd->bytes_out);
+	}
+
+	if (cmd->pipe_listener) {
+		return false;
+	}
+
+	as_event_stop_watcher(cmd, cmd->conn);
+	as_event_release_async_connection(cmd);
+	return as_event_command_retry(cmd, false);
 }
 
 bool
@@ -1005,10 +1028,14 @@ as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 void
 as_event_response_complete(as_event_command* cmd)
 {
-	if (cmd->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-		as_event_add_latency(cmd, cmd->latency_type);
+	if (cmd->metrics) {
+		as_node_add_metrics(cmd->metrics, cmd->bytes_in, cmd->bytes_out);
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			as_event_add_latency(cmd, cmd->latency_type);
+		}
 	}
-	
+
 	if (cmd->pipe_listener != NULL) {
 		as_pipe_response_complete(cmd);
 		return;
@@ -1367,14 +1394,18 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	// Release resources, make callback and free command.
 	as_event_timer_stop(cmd);
 	as_event_stop_watcher(cmd, cmd->conn);
-	
+
+	if (cmd->metrics) {
+		as_node_add_metrics(cmd->metrics, cmd->bytes_in, cmd->bytes_out);
+	}
+
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 
 	// Close socket on errors that can leave unread data in socket.
 	switch (err->code) {
 		case AEROSPIKE_ERR_CLUSTER:
 		case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-			as_node_add_error(cmd->node, cmd->ns);
+			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
 			as_event_put_connection(cmd, pool);
 			break;
@@ -1386,32 +1417,32 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
-			as_node_add_error(cmd->node, cmd->ns);
+			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
 			as_event_release_connection(cmd->conn, pool);
 			break;
 		
 		case AEROSPIKE_ERR_TIMEOUT:
-			as_node_add_timeout(cmd->node, cmd->ns);
+			as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 			
 		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 			// Do not increment error count on record not found.
 			// Add latency metrics instead.
-			if (cmd->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			if (cmd->metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 				as_event_add_latency(cmd, cmd->latency_type);
 			}
 			as_event_put_connection(cmd, pool);
 			break;
 
 		case AEROSPIKE_ERR_RECORD_BUSY:
-			as_node_add_key_busy(cmd->node, cmd->ns);
+			as_node_add_key_busy(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 
 		default:
-			as_node_add_error(cmd->node, cmd->ns);
+			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 	}

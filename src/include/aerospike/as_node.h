@@ -199,6 +199,16 @@ typedef struct {
 	const char* ns;
 
 	/**
+	 * Bytes received from the server.
+	 */
+	uint64_t bytes_in;
+
+	/**
+	 * Bytes sent to the server.
+	 */
+	uint64_t bytes_out;
+
+	/**
 	 * Command error count since node was initialized. If the error is retryable, multiple errors per
 	 * command may occur.
 	 */
@@ -669,10 +679,24 @@ as_node_has_rack(as_node* node, const char* ns, int rack_id);
 
 /**
  * @private
+ * Return as_ns_metrics for specified node and namespace.
+ */
+as_ns_metrics*
+as_node_prepare_metrics(as_node* node, const char* ns);
+
+/**
+ * @private
+ * Add basic command metrics to node/namespace.
+ */
+void
+as_node_add_metrics(as_ns_metrics* metrics, uint64_t bytes_in, uint64_t bytes_out);
+
+/**
+ * @private
  * Record latency of type latency_type for node
  */
 void
-as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type, uint64_t elapsed);
+as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
 
 struct as_metrics_policy_s;
 
@@ -682,6 +706,24 @@ struct as_metrics_policy_s;
  */
 void
 as_node_enable_metrics(as_node* node, const struct as_metrics_policy_s* policy);
+
+/**
+ * Return bytes received from the server. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_bytes_in(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->bytes_in);
+}
+
+/**
+ * Return bytes sent to the server. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_bytes_out(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->bytes_out);
+}
 
 /**
  * Return command error count. The value is cumulative and not reset per metrics interval.
@@ -697,7 +739,7 @@ as_node_get_error_count(as_ns_metrics* metrics)
  * command may occur.
  */
 void
-as_node_add_error(as_node* node, const char* ns);
+as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * Return command timeout count. The value is cumulative and not reset per metrics interval.
@@ -713,7 +755,7 @@ as_node_get_timeout_count(as_ns_metrics* metrics)
  * multiple timeouts per command may occur.
  */
 void
-as_node_add_timeout(as_node* node, const char* ns);
+as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * Return command key busy error count. The value is cumulative and not reset per metrics interval.
@@ -728,7 +770,7 @@ as_node_get_key_busy_count(as_ns_metrics* metrics)
  * Increment command key busy error count.
  */
 void
-as_node_add_key_busy(as_node* node, const char* ns);
+as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private

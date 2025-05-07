@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -39,10 +39,10 @@ struct as_uv_tls;
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
-	
+//---------------------------------
+// Types
+//---------------------------------
+
 #define AS_ASYNC_STATE_UNREGISTERED 0
 #define AS_ASYNC_STATE_REGISTERED 1
 #define AS_ASYNC_STATE_DELAY_QUEUE 2
@@ -133,6 +133,7 @@ typedef struct as_event_command {
 	as_cluster* cluster;
 	as_node* node;
 	const char* ns;
+	as_ns_metrics* metrics;
 	void* partition;  // as_partition* or as_partition_shm*
 	void* udata;
 	as_event_parse_results_fn parse_results;
@@ -160,8 +161,9 @@ typedef struct as_event_command {
 	struct as_txn* txn;
 	uint8_t* ubuf; // Uncompressed send buffer. Used when compression is enabled.
 	uint32_t ubuf_size;
+	uint32_t bytes_in;
+	uint32_t bytes_out;
 	as_latency_type latency_type;
-	bool metrics_enabled;
 } as_event_command;
 
 typedef struct {
@@ -186,9 +188,9 @@ typedef struct as_event_executor {
 	bool valid;
 } as_event_executor;
 
-/******************************************************************************
- * COMMON FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Common Functions
+//---------------------------------
 
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err);
@@ -216,6 +218,9 @@ as_event_socket_timeout(as_event_command* cmd);
 
 void
 as_event_total_timeout(as_event_command* cmd);
+
+bool
+as_event_socket_retry(as_event_command* cmd);
 
 bool
 as_event_command_retry(as_event_command* cmd, bool timeout);
@@ -283,9 +288,9 @@ as_event_create_connections(as_node* node, as_async_conn_pool* pools);
 void
 as_event_close_cluster(as_cluster* cluster);
 
-/******************************************************************************
- * IMPLEMENTATION SPECIFIC FUNCTIONS
- *****************************************************************************/
+//----------------------------------
+// Implementation Specific Functions
+//----------------------------------
 
 bool
 as_event_create_loop(as_event_loop* event_loop);
@@ -309,9 +314,9 @@ as_event_connect(as_event_command* cmd, as_async_conn_pool* pool);
 void
 as_event_node_destroy(as_node* node);
 
-/******************************************************************************
- * LIBEV INLINE FUNCTIONS
- *****************************************************************************/
+//----------------------------------
+// Libev Inline Functions
+//----------------------------------
 
 #if defined(AS_USE_LIBEV)
 
@@ -401,9 +406,9 @@ as_event_command_release(as_event_command* cmd)
 	as_event_command_free(cmd);
 }
 
-/******************************************************************************
- * LIBUV INLINE FUNCTIONS
- *****************************************************************************/
+//----------------------------------
+// Libuv Inline Functions
+//----------------------------------
 
 #elif defined(AS_USE_LIBUV)
 
@@ -507,9 +512,9 @@ as_event_command_release(as_event_command* cmd)
 	}
 }
 
-/******************************************************************************
- * LIBEVENT INLINE FUNCTIONS
- *****************************************************************************/
+//----------------------------------
+// Libevent Inline Functions
+//----------------------------------
 
 #elif defined(AS_USE_LIBEVENT)
 
@@ -602,9 +607,9 @@ as_event_command_release(as_event_command* cmd)
 	as_event_command_free(cmd);
 }
 
-/******************************************************************************
- * EVENT_LIB NOT DEFINED INLINE FUNCTIONS
- *****************************************************************************/
+//---------------------------------------
+// EVENT_LIB Not Defined Inline Functions
+//---------------------------------------
 
 #else
 
@@ -673,9 +678,9 @@ as_event_command_release(as_event_command* cmd)
 
 #endif
 	
-/******************************************************************************
- * COMMON INLINE FUNCTIONS
- *****************************************************************************/
+//---------------------------------------
+// Common Inline Functions
+//---------------------------------------
 
 static inline as_event_loop*
 as_event_assign(as_event_loop* event_loop)
@@ -807,18 +812,6 @@ as_event_connection_timeout(as_event_command* cmd, as_async_conn_pool* pool)
 			pool->closed++;
 		}
 	}
-}
-
-static inline bool
-as_event_socket_retry(as_event_command* cmd)
-{
-	if (cmd->pipe_listener) {
-		return false;
-	}
-
-	as_event_stop_watcher(cmd, cmd->conn);
-	as_event_release_async_connection(cmd);
-	return as_event_command_retry(cmd, false);
 }
 
 static inline uint8_t*

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -29,17 +29,17 @@
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 
-/******************************************************************************
- * GLOBALS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern int as_event_send_buffer_size;
 extern int as_event_recv_buffer_size;
 extern bool as_event_threads_created;
 
-/******************************************************************************
- * LIBEV FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Libev Functions
+//---------------------------------
 
 #if defined(AS_USE_LIBEV)
 
@@ -207,6 +207,7 @@ as_ev_write(as_event_command* cmd)
 			if (rv > 0) {
 				as_ev_watch_write(cmd);
 				cmd->pos += rv;
+				cmd->bytes_out += rv;
 				continue;
 			}
 			else if (rv == -1) {
@@ -242,6 +243,7 @@ as_ev_write(as_event_command* cmd)
 #endif
 			if (bytes > 0) {
 				cmd->pos += bytes;
+				cmd->bytes_out += bytes;
 				continue;
 			}
 		
@@ -291,6 +293,7 @@ as_ev_read(as_event_command* cmd)
 			if (rv > 0) {
 				as_ev_watch_read(cmd);
 				cmd->pos += rv;
+				cmd->bytes_in += rv;
 				continue;
 			}
 			else if (rv == -1) {
@@ -323,6 +326,7 @@ as_ev_read(as_event_command* cmd)
 		
 			if (bytes > 0) {
 				cmd->pos += bytes;
+				cmd->bytes_in += bytes;
 				continue;
 			}
 		

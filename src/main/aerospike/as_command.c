@@ -54,10 +54,10 @@ as_replica_index_any(void)
 }
 
 static as_status
-as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node);
+as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in);
 
 static as_status
-as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node);
+as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in);
 
 as_status
 as_batch_retry(as_command* cmd, as_error* err);
@@ -654,7 +654,6 @@ as_command_execute(as_command* cmd, as_error* err)
 	as_node* node = NULL;
 	as_status status;
 	bool release_node;
-	as_latency_type latency_type = cmd->cluster->metrics_enabled ? cmd->latency_type : AS_LATENCY_TYPE_NONE;
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
@@ -685,11 +684,18 @@ as_command_execute(as_command* cmd, as_error* err)
 			goto Retry;
 		}
 
+		as_ns_metrics* metrics = NULL;
 		uint64_t begin = 0;
-		if (latency_type != AS_LATENCY_TYPE_NONE) {
-			begin = cf_getns();
+		uint64_t bytes_in = 0;
+
+		if (cmd->cluster->metrics_enabled) {
+			metrics = as_node_prepare_metrics(node, cmd->ns);
+
+			if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+				begin = cf_getns();
+			}
 		}
-		
+
 		as_socket socket;
 		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout, cmd->deadline_ms, &socket);
 
@@ -719,41 +725,49 @@ as_command_execute(as_command* cmd, as_error* err)
 
 		// Parse results returned by server.
 		if (cmd->node) {
-			status = as_command_read_messages(err, cmd, &socket, node);
+			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in);
 		}
 		else {
-			status = as_command_read_message(err, cmd, &socket, node);
+			status = as_command_read_message(err, cmd, &socket, node, &bytes_in);
 		}
 
 		if (status == AEROSPIKE_OK) {
-			if (latency_type != AS_LATENCY_TYPE_NONE) {
-				uint64_t elapsed = cf_getns() - begin;
-				as_node_add_latency(node, cmd->ns, latency_type, elapsed);
+			if (metrics) {
+				as_node_add_metrics(metrics, bytes_in, cmd->buf_size);
+
+				if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+					uint64_t elapsed = cf_getns() - begin;
+					as_node_add_latency(metrics, cmd->latency_type, elapsed);
+				}
 			}
-			
+
 			// Reset error code if retry had occurred.
 			if (cmd->iteration > 0) {
 				as_error_reset(err);
 			}
 		}
 		else {
+			if (metrics) {
+				as_node_add_metrics(metrics, bytes_in, cmd->buf_size);
+			}
+
 			err->code = status;
 
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
 				case AEROSPIKE_ERR_CLUSTER:
 				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-					as_node_add_error(node, cmd->ns);
+					as_node_add_error(node, cmd->ns, metrics);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
 				case AEROSPIKE_ERR_CONNECTION:
-					as_node_add_error(node, cmd->ns);
+					as_node_add_error(node, cmd->ns, metrics);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
-					as_node_add_timeout(node, cmd->ns);
+					as_node_add_timeout(node, cmd->ns, metrics);
 					
 					if (is_server_timeout(err)) {
 						as_node_put_conn_error(node, &socket);
@@ -769,7 +783,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
-					as_node_add_error(node, cmd->ns);
+					as_node_add_error(node, cmd->ns, metrics);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					if (release_node) {
 						as_node_release(node);
@@ -780,20 +794,20 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 					// Do not increment error count on record not found.
 					// Add latency metrics instead.
-					if (latency_type != AS_LATENCY_TYPE_NONE) {
+					if (metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 						uint64_t elapsed = cf_getns() - begin;
-						as_node_add_latency(node, cmd->ns, latency_type, elapsed);
+						as_node_add_latency(metrics, cmd->latency_type, elapsed);
 					}
 					as_command_prepare_error(cmd, err);
 					break;
 
 				case AEROSPIKE_ERR_RECORD_BUSY:
-					as_node_add_key_busy(node, cmd->ns);
+					as_node_add_key_busy(node, cmd->ns, metrics);
 					as_command_prepare_error(cmd, err);
 					break;
 
 				default:
-					as_node_add_error(node, cmd->ns);
+					as_node_add_error(node, cmd->ns, metrics);
 					as_command_prepare_error(cmd, err);
 					break;
 			}
@@ -891,7 +905,7 @@ Retry:
 }
 
 static as_status
-as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node)
+as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in)
 {
 	size_t capacity = 0;
 	uint8_t* buf = NULL;
@@ -911,6 +925,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 			break;
 		}
 
+		*bytes_in += sizeof(as_proto);
 		status = as_proto_parse(err, &proto);
 
 		if (status != AEROSPIKE_OK) {
@@ -938,6 +953,8 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 			break;
 		}
 		
+		*bytes_in += size;
+
 		if (proto.type == AS_MESSAGE_TYPE) {
 			status = cmd->parse_results_fn(err, cmd, node, buf, size);
 		}
@@ -981,7 +998,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 }
 
 static as_status
-as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node)
+as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in)
 {
 	as_proto proto;
 	as_status status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto),
@@ -990,7 +1007,8 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
-	
+
+	*bytes_in += sizeof(as_proto);
 	status = as_proto_parse(err, &proto);
 
 	if (status != AEROSPIKE_OK) {
@@ -1010,6 +1028,8 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 		as_command_buffer_free(buf, size);
 		return status;
 	}
+
+	*bytes_in += size;
 
 	if (proto.type == AS_MESSAGE_TYPE) {
 		status = cmd->parse_results_fn(err, cmd, node, buf, size);

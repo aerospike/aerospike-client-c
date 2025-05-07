@@ -484,7 +484,8 @@ as_node_create_connection(
 
 	if (node->cluster->metrics_enabled) {
 		uint64_t elapsed = cf_getns() - begin;
-		as_node_add_latency(node, ns, AS_LATENCY_TYPE_CONN, elapsed);
+		as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
+		as_node_add_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
 	}
 	return AEROSPIKE_OK;
 }
@@ -1418,6 +1419,8 @@ as_node_append_metrics(as_node* node, const char* ns)
 	if (!metrics) {
 		metrics = cf_malloc(sizeof(as_ns_metrics));
 		metrics->ns = ns;
+		metrics->bytes_in = 0;
+		metrics->bytes_out = 0;
 		metrics->error_count = 0;
 		metrics->timeout_count = 0;
 		metrics->key_busy_count = 0;
@@ -1447,7 +1450,7 @@ as_node_append_metrics(as_node* node, const char* ns)
 	return metrics;
 }
 
-static as_ns_metrics*
+as_ns_metrics*
 as_node_prepare_metrics(as_node* node, const char* ns)
 {
 	// Namespace will be NULL for batch and creating min connections.
@@ -1479,14 +1482,15 @@ as_latency_get_index(as_latency* latency, uint64_t elapsed)
 }
 
 void
-as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type, uint64_t elapsed_nanos)
+as_node_add_metrics(as_ns_metrics* metrics, uint64_t bytes_in, uint64_t bytes_out)
 {
-	as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
+	as_add_uint64(&metrics->bytes_in, bytes_in);
+	as_add_uint64(&metrics->bytes_out, bytes_out);
+}
 
-	if (!metrics) {
-		return;
-	}
-
+void
+as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
+{
 	// Convert nanoseconds to milliseconds.
 	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
 
@@ -1504,38 +1508,44 @@ as_node_add_latency(as_node* node, const char* ns, as_latency_type latency_type,
 }
 
 void
-as_node_add_error(as_node* node, const char* ns)
+as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
-	as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
-
+	// Error counts are always on. If metrics not enabled, still increment count.
 	if (!metrics) {
-		return;
-	}
+		metrics = as_node_prepare_metrics(node, ns);
 
+		if (!metrics) {
+			return;
+		}
+	}
 	as_incr_uint64(&metrics->error_count);
 }
 
 void
-as_node_add_timeout(as_node* node, const char* ns)
+as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
-	as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
-
+	// Timeout counts are always on. If metrics not enabled, still increment count.
 	if (!metrics) {
-		return;
-	}
+		metrics = as_node_prepare_metrics(node, ns);
 
+		if (!metrics) {
+			return;
+		}
+	}
 	as_incr_uint64(&metrics->timeout_count);
 }
 
 void
-as_node_add_key_busy(as_node* node, const char* ns)
+as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
-	as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
-
+	// Key busy counts are always on. If metrics not enabled, still increment count.
 	if (!metrics) {
-		return;
-	}
+		metrics = as_node_prepare_metrics(node, ns);
 
+		if (!metrics) {
+			return;
+		}
+	}
 	as_incr_uint64(&metrics->key_busy_count);
 }
 

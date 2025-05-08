@@ -453,9 +453,6 @@ typedef struct as_config_provider_s {
  * strcpy(config.mod_lua.user_path, "/home/me/lua");
  * @endcode
  *
- * Never call as_config_destroy() directly because ownership of config fields
- * is transferred to aerospike in aerospike_init() or aerospike_new().
- *
  * @ingroup client_objects
  */
 typedef struct as_config_s {
@@ -860,6 +857,17 @@ typedef struct as_config_s {
  */
 AS_EXTERN as_config*
 as_config_init(as_config* config);
+
+/**
+ * Destroy configuration.
+ *
+ * Do not call as_config_destroy() after calling aerospike_init() or aerospike_new() because
+ * ownership of config fields is transferred to the aerospike instance.
+ *
+ * @relates as_config
+ */
+AS_EXTERN void
+as_config_destroy(as_config* config);
 
 /**
  * Add seed host(s) from a string with format: hostname1[:tlsname1][:port1],...

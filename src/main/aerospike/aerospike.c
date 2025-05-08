@@ -44,9 +44,6 @@ static bool lua_initialized = false;
 static bool library_initialized = false;
 #endif
 
-void
-as_config_destroy(as_config* config);
-
 //---------------------------------
 // Static Functions
 //---------------------------------

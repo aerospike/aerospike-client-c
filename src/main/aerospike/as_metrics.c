@@ -65,16 +65,28 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 as_status
 aerospike_enable_metrics(aerospike* as, as_error* err, const as_metrics_policy* policy)
 {
+	as_cluster* cluster = as->cluster;
+
+	pthread_mutex_lock(&cluster->metrics_lock);
+
 	as_metrics_policy merged;
 	policy = as_metrics_policy_merge(as, policy, &merged);
 
-	return as_cluster_enable_metrics(err, as->cluster, policy);
+	as_status status = as_cluster_enable_metrics(err, cluster, policy);
+
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	return status;
 }
 
 as_status
 aerospike_disable_metrics(aerospike* as, as_error* err)
 {
-	return as_cluster_disable_metrics(err, as->cluster);
+	as_cluster* cluster = as->cluster;
+
+	pthread_mutex_lock(&cluster->metrics_lock);
+	as_status status = as_cluster_disable_metrics(err, cluster);
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	return status;
 }
 
 void

@@ -1795,38 +1795,70 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->txn_roll.respond_all_keys = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_RESPOND_ALL_KEYS)?
 		src->txn_roll.respond_all_keys : orig->txn_roll.respond_all_keys;
 
-	trg->metrics.enable = as_field_is_set(bitmap, AS_METRICS_ENABLE)?
-		src->metrics.enable : orig->metrics.enable;
-	trg->metrics.latency_columns = as_field_is_set(bitmap, AS_METRICS_LATENCY_COLUMNS)?
-		src->metrics.latency_columns : orig->metrics.latency_columns;
-	trg->metrics.latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
-		src->metrics.latency_shift : orig->metrics.latency_shift;
+}
 
-	// TODO Handle concurrency issue when app_id and labels are actually used in metrics.
-	// Probably need to use cluster->metrics_lock.
+static as_status
+as_cluster_update_metrics(
+	as_cluster* cluster, as_error* err, as_metrics_policy* orig, as_metrics_policy* src,
+	as_metrics_policy* trg, uint8_t* bitmap
+	)
+{
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	trg->enable = as_field_is_set(bitmap, AS_METRICS_ENABLE)?
+		src->enable : orig->enable;
+	trg->latency_columns = as_field_is_set(bitmap, AS_METRICS_LATENCY_COLUMNS)?
+		src->latency_columns : orig->latency_columns;
+	trg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
+		src->latency_shift : orig->latency_shift;
+
 	if (as_field_is_set(bitmap, AS_METRICS_APP_ID)) {
-		if (trg->metrics.app_id != src->metrics.app_id) {
-			as_metrics_policy_assign_app_id(&trg->metrics, src->metrics.app_id);
-			src->metrics.app_id = NULL;
+		if (trg->app_id != src->app_id) {
+			as_metrics_policy_assign_app_id(trg, src->app_id);
+			src->app_id = NULL;
 		}
 	}
 	else {
-		if (trg->metrics.app_id != orig->metrics.app_id) {
-			as_metrics_policy_set_app_id(&trg->metrics, orig->metrics.app_id);
+		if (trg->app_id != orig->app_id) {
+			as_metrics_policy_set_app_id(trg, orig->app_id);
 		}
 	}
 
 	if (as_field_is_set(bitmap, AS_METRICS_LABELS)) {
-		if (trg->metrics.labels != src->metrics.labels) {
-			as_metrics_policy_set_labels(&trg->metrics, src->metrics.labels);
-			src->metrics.labels = NULL;
+		if (trg->labels != src->labels) {
+			as_metrics_policy_set_labels(trg, src->labels);
+			src->labels = NULL;
 		}
 	}
 	else {
-		if (trg->metrics.labels != orig->metrics.labels) {
-			as_metrics_policy_copy_labels(&trg->metrics, orig->metrics.labels);
+		if (trg->labels != orig->labels) {
+			as_metrics_policy_copy_labels(trg, orig->labels);
 		}
 	}
+
+	as_status status = AEROSPIKE_OK;
+
+	if (trg->enable) {
+		// TODO Check all metrics policy fields to see if metrics
+		// need to be restarted.
+		if (cluster->metrics_enabled) {
+			cluster->metrics_latency_columns = trg->latency_columns;
+			cluster->metrics_latency_shift = trg->latency_shift;
+		}
+		else {
+			as_log_info("Enable metrics");
+			status = as_cluster_enable_metrics(err, cluster, trg);
+		}
+	}
+	else {
+		if (cluster->metrics_enabled) {
+			as_log_info("Disable metrics");
+			status = as_cluster_disable_metrics(err, cluster);
+		}
+	}
+
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	return status;
 }
 
 static as_status
@@ -1902,25 +1934,12 @@ as_cluster_update(
 	}
 
 	as_cluster_update_policies(&orig->policies, &src->policies, &config->policies, bitmap);
-	memcpy(as->config_bitmap, bitmap, sizeof(AS_CONFIG_BITMAP_SIZE));
 
-	if (config->policies.metrics.enable) {
-		if (cluster->metrics_enabled) {
-			cluster->metrics_latency_columns = config->policies.metrics.latency_columns;
-			cluster->metrics_latency_shift = config->policies.metrics.latency_shift;
-		}
-		else {
-			as_log_info("Enable metrics");
-			return as_cluster_enable_metrics(err, cluster, &config->policies.metrics);
-		}
-	}
-	else {
-		if (cluster->metrics_enabled) {
-			as_log_info("Disable metrics");
-			return as_cluster_disable_metrics(err, cluster);
-		}
-	}
-	return AEROSPIKE_OK;
+	as_status status = as_cluster_update_metrics(cluster, err, &orig->policies.metrics,
+		&src->policies.metrics, &config->policies.metrics, bitmap);
+
+	memcpy(as->config_bitmap, bitmap, sizeof(AS_CONFIG_BITMAP_SIZE));
+	return status;
 }
 
 //---------------------------------

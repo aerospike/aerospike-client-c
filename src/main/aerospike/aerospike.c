@@ -283,7 +283,11 @@ aerospike_connect(aerospike* as, as_error* err)
 		as_log_info("Enable metrics");
 		// Call as_cluster_enable_metrics() instead of aerospike_enable_metrics() to avoid
 		// the uneccessary policy merge with the default metrics policy.
-		status = as_cluster_enable_metrics(err, as->cluster, &as->config.policies.metrics);
+		as_cluster* cluster = as->cluster;
+
+		pthread_mutex_lock(&cluster->metrics_lock);
+		status = as_cluster_enable_metrics(err, cluster, &as->config.policies.metrics);
+		pthread_mutex_unlock(&cluster->metrics_lock);
 	}
 
 	return status;

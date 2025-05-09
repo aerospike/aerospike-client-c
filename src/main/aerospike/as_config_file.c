@@ -1817,9 +1817,12 @@ as_cluster_update_metrics(
 	if (as_field_is_set(bitmap, AS_METRICS_APP_ID)) {
 		if (strcmp(trg->app_id, src->app_id) != 0) {
 			as_metrics_policy_assign_app_id(trg, src->app_id);
-			src->app_id = NULL;
 			enable_metrics = true;
 		}
+		else {
+			cf_free(src->app_id);
+		}
+		src->app_id = NULL;
 	}
 	else {
 		if (strcmp(trg->app_id, orig->app_id) != 0) {
@@ -1831,9 +1834,12 @@ as_cluster_update_metrics(
 	if (as_field_is_set(bitmap, AS_METRICS_LABELS)) {
 		if (!as_metrics_labels_equal(trg->labels, src->labels)) {
 			as_metrics_policy_set_labels(trg, src->labels);
-			src->labels = NULL;
 			enable_metrics = true;
 		}
+		else {
+			as_metrics_labels_destroy(src->labels);
+		}
+		src->labels = NULL;
 	}
 	else {
 		if (!as_metrics_labels_equal(trg->labels, orig->labels)) {

@@ -260,6 +260,9 @@ as_metrics_policy_set_listeners(
 AS_EXTERN as_vector*
 as_metrics_labels_copy(as_vector* labels);
 
+AS_EXTERN bool
+as_metrics_labels_equal(as_vector* labels1, as_vector* labels2);
+
 AS_EXTERN void
 as_metrics_labels_destroy(as_vector* labels);
 

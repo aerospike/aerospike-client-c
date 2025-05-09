@@ -1805,6 +1805,8 @@ as_cluster_update_metrics(
 {
 	pthread_mutex_lock(&cluster->metrics_lock);
 
+	bool enable_metrics = false;
+
 	trg->enable = as_field_is_set(bitmap, AS_METRICS_ENABLE)?
 		src->enable : orig->enable;
 	trg->latency_columns = as_field_is_set(bitmap, AS_METRICS_LATENCY_COLUMNS)?
@@ -1813,39 +1815,42 @@ as_cluster_update_metrics(
 		src->latency_shift : orig->latency_shift;
 
 	if (as_field_is_set(bitmap, AS_METRICS_APP_ID)) {
-		if (trg->app_id != src->app_id) {
+		if (strcmp(trg->app_id, src->app_id) != 0) {
 			as_metrics_policy_assign_app_id(trg, src->app_id);
 			src->app_id = NULL;
+			enable_metrics = true;
 		}
 	}
 	else {
-		if (trg->app_id != orig->app_id) {
+		if (strcmp(trg->app_id, orig->app_id) != 0) {
 			as_metrics_policy_set_app_id(trg, orig->app_id);
+			enable_metrics = true;
 		}
 	}
 
 	if (as_field_is_set(bitmap, AS_METRICS_LABELS)) {
-		if (trg->labels != src->labels) {
+		if (!as_metrics_labels_equal(trg->labels, src->labels)) {
 			as_metrics_policy_set_labels(trg, src->labels);
 			src->labels = NULL;
+			enable_metrics = true;
 		}
 	}
 	else {
-		if (trg->labels != orig->labels) {
+		if (!as_metrics_labels_equal(trg->labels, orig->labels)) {
 			as_metrics_policy_copy_labels(trg, orig->labels);
+			enable_metrics = true;
 		}
 	}
 
 	as_status status = AEROSPIKE_OK;
 
 	if (trg->enable) {
-		// TODO Check all metrics policy fields to see if metrics
-		// need to be restarted.
-		if (cluster->metrics_enabled) {
-			cluster->metrics_latency_columns = trg->latency_columns;
-			cluster->metrics_latency_shift = trg->latency_shift;
+		if (!cluster->metrics_enabled || !(cluster->metrics_latency_columns == trg->latency_columns &&
+			  cluster->metrics_latency_shift == trg->latency_shift)) {
+			enable_metrics = true;
 		}
-		else {
+
+		if (enable_metrics) {
 			as_log_info("Enable metrics");
 			status = as_cluster_enable_metrics(err, cluster, trg);
 		}
@@ -1934,12 +1939,10 @@ as_cluster_update(
 	}
 
 	as_cluster_update_policies(&orig->policies, &src->policies, &config->policies, bitmap);
-
-	as_status status = as_cluster_update_metrics(cluster, err, &orig->policies.metrics,
-		&src->policies.metrics, &config->policies.metrics, bitmap);
-
 	memcpy(as->config_bitmap, bitmap, sizeof(AS_CONFIG_BITMAP_SIZE));
-	return status;
+
+	return as_cluster_update_metrics(cluster, err, &orig->policies.metrics,
+		&src->policies.metrics, &config->policies.metrics, bitmap);
 }
 
 //---------------------------------

@@ -167,6 +167,35 @@ as_metrics_labels_copy(as_vector* labels)
 	return list;
 }
 
+bool
+as_metrics_labels_equal(as_vector* labels1, as_vector* labels2)
+{
+	if (labels1 == NULL) {
+		return labels2 == NULL;
+	}
+	else if (labels2 == NULL) {
+		return false;
+	}
+
+	if (labels1->size != labels2->size) {
+		return false;
+	}
+
+	for (uint32_t i = 0; i < labels1->size; i++) {
+		as_metrics_label* label1 = as_vector_get(labels1, i);
+		as_metrics_label* label2 = as_vector_get(labels2, i);
+
+		if (strcmp(label1->name, label2->name) != 0) {
+			return false;
+		}
+
+		if (strcmp(label1->value, label2->value) != 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
 void
 as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels)
 {

@@ -3259,7 +3259,7 @@ as_batch_keys_execute(
 		status = as_batch_get_node(cluster, key, &rep, rec->has_write, NULL, &node);
 
 		if (status != AEROSPIKE_OK) {
-			rec->result = status;
+			result->result = status;
 			error_row = true;
 			continue;
 		}
@@ -3287,8 +3287,12 @@ as_batch_keys_execute(
 	// Fatal if no key requests were generated on initialization.
 	if (batch_nodes.size == 0) {
 		destroy_versions(versions);
+
+		if (listener) {
+			listener(results, n_keys, udata);
+		}
 		batch_results_free(results, n_keys);
-		return as_error_set_message(err, AEROSPIKE_BATCH_FAILED, "Nodes not found");
+		return as_error_set_message(err, AEROSPIKE_BATCH_FAILED, "Batch failed");
 	}
 
 	uint32_t error_mutex = 0;
@@ -3782,7 +3786,7 @@ as_batch_records_execute(
 	// Fatal if no key requests were generated on initialization.
 	if (batch_nodes.size == 0) {
 		as_batch_records_cleanup(versions, async_executor, NULL);
-		return as_error_set_message(err, AEROSPIKE_BATCH_FAILED, "Nodes not found");
+		return as_error_set_message(err, AEROSPIKE_BATCH_FAILED, "Batch failed");
 	}
 
 	if (async_executor) {

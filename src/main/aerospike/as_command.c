@@ -686,7 +686,6 @@ as_command_execute(as_command* cmd, as_error* err)
 
 		as_ns_metrics* metrics = NULL;
 		uint64_t begin = 0;
-		uint64_t bytes_in = 0;
 
 		if (cmd->cluster->metrics_enabled) {
 			metrics = as_node_prepare_metrics(node, cmd->ns);
@@ -723,6 +722,12 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 		cmd->sent++;
 
+		if (metrics) {
+			as_node_add_bytes_out(metrics, cmd->buf_size);
+		}
+
+		uint64_t bytes_in = 0;
+
 		// Parse results returned by server.
 		if (cmd->node) {
 			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in);
@@ -731,14 +736,14 @@ as_command_execute(as_command* cmd, as_error* err)
 			status = as_command_read_message(err, cmd, &socket, node, &bytes_in);
 		}
 
-		if (status == AEROSPIKE_OK) {
-			if (metrics) {
-				as_node_add_metrics(metrics, bytes_in, cmd->buf_size);
+		if (metrics) {
+			as_node_add_bytes_in(metrics, bytes_in);
+		}
 
-				if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-					uint64_t elapsed = cf_getns() - begin;
-					as_node_add_latency(metrics, cmd->latency_type, elapsed);
-				}
+		if (status == AEROSPIKE_OK) {
+			if (metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+				uint64_t elapsed = cf_getns() - begin;
+				as_node_add_latency(metrics, cmd->latency_type, elapsed);
 			}
 
 			// Reset error code if retry had occurred.
@@ -747,10 +752,6 @@ as_command_execute(as_command* cmd, as_error* err)
 			}
 		}
 		else {
-			if (metrics) {
-				as_node_add_metrics(metrics, bytes_in, cmd->buf_size);
-			}
-
 			err->code = status;
 
 			// Close socket on errors that can leave unread data in socket.

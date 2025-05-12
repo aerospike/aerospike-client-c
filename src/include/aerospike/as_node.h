@@ -686,13 +686,6 @@ as_node_prepare_metrics(as_node* node, const char* ns);
 
 /**
  * @private
- * Add basic command metrics to node/namespace.
- */
-void
-as_node_add_metrics(as_ns_metrics* metrics, uint64_t bytes_in, uint64_t bytes_out);
-
-/**
- * @private
  * Record latency of type latency_type for node
  */
 void
@@ -708,12 +701,30 @@ void
 as_node_enable_metrics(as_node* node, const struct as_metrics_policy_s* policy);
 
 /**
+ * Add bytes received metrics to node/namespace.
+ */
+static inline void
+as_node_add_bytes_in(as_ns_metrics* metrics, uint64_t bytes_in)
+{
+	as_add_uint64(&metrics->bytes_in, bytes_in);
+}
+
+/**
  * Return bytes received from the server. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
 as_node_get_bytes_in(as_ns_metrics* metrics)
 {
 	return as_load_uint64(&metrics->bytes_in);
+}
+
+/**
+ * Add bytes sent metrics to node/namespace.
+ */
+static inline void
+as_node_add_bytes_out(as_ns_metrics* metrics, uint64_t bytes_out)
+{
+	as_add_uint64(&metrics->bytes_out, bytes_out);
 }
 
 /**

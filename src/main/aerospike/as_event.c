@@ -916,7 +916,8 @@ bool
 as_event_socket_retry(as_event_command* cmd)
 {
 	if (cmd->metrics) {
-		as_node_add_metrics(cmd->metrics, cmd->bytes_in, cmd->bytes_out);
+		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
+		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
 	}
 
 	if (cmd->pipe_listener) {
@@ -1029,7 +1030,8 @@ void
 as_event_response_complete(as_event_command* cmd)
 {
 	if (cmd->metrics) {
-		as_node_add_metrics(cmd->metrics, cmd->bytes_in, cmd->bytes_out);
+		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
+		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
 
 		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 			as_event_add_latency(cmd, cmd->latency_type);
@@ -1396,7 +1398,8 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	as_event_stop_watcher(cmd, cmd->conn);
 
 	if (cmd->metrics) {
-		as_node_add_metrics(cmd->metrics, cmd->bytes_in, cmd->bytes_out);
+		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
+		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
 	}
 
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];

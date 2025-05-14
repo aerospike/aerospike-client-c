@@ -220,7 +220,7 @@ as_admin_send(
 	
 	as_status status = as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
 
-	if (status == AEROSPIKE_OK && node->cluster->metrics_enabled) {
+	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
 
 		if (metrics) {
@@ -238,7 +238,7 @@ as_admin_receive(
 {
 	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
 
-	if (status == AEROSPIKE_OK && node->cluster->metrics_enabled) {
+	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
 
 		if (metrics) {

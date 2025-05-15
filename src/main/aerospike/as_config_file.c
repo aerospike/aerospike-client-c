@@ -1006,68 +1006,44 @@ as_parse_labels(as_yaml* yaml, as_metrics_policy* policy, uint32_t field)
 	char name[256];
 	char value[256];
 
-	while (true) {
-		if (!as_parse_next(yaml)) {
-			break;
-		}
-
-		if (yaml->event.type == YAML_SEQUENCE_END_EVENT) {
-			yaml_event_delete(&yaml->event);
-
-			as_string_builder sb;
-			as_string_builder_inita(&sb, 512, false);
-
-			as_string_builder_append(&sb, "Set ");
-			as_string_builder_append(&sb, yaml->name);
-			as_string_builder_append_char(&sb, '.');
-			as_string_builder_append(&sb, "labels");
-			as_string_builder_append(&sb, " = [");
-
-			as_vector* list = policy->labels;
-
-			for (uint32_t i = 0; i < list->size; i++) {
-				as_metrics_label* label = as_vector_get(list, i);
-
-				if (i > 0) {
-					as_string_builder_append_char(&sb, ',');
-				}
-				as_string_builder_append_char(&sb, '{');
-				as_string_builder_append(&sb, label->name);
-				as_string_builder_append_char(&sb, ',');
-				as_string_builder_append(&sb, label->value);
-				as_string_builder_append_char(&sb, '}');
-			}
-
-			as_string_builder_append_char(&sb, ']');
-			as_log_info(sb.data);
-			as_field_set(yaml->bitmap, field);
-			return true;
-		}
-		else if (yaml->event.type != YAML_MAPPING_START_EVENT) {
-			as_expected_error(yaml, YAML_MAPPING_START_EVENT);
-			yaml_event_delete(&yaml->event);
-			break;
-		}
-
-		yaml_event_delete(&yaml->event);
-
-		if (!as_parse_scalar(yaml, name, sizeof(name))) {
-			break;
-		}
-
+	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (!as_parse_scalar(yaml, value, sizeof(value))) {
-			break;
+			as_metrics_policy_destroy_labels(policy);
+			return false;
 		}
-
 		as_metrics_policy_add_label(policy, name, value);
+	}
 
-		if (!as_expect_event(yaml, YAML_MAPPING_END_EVENT)) {
-			break;
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 512, false);
+
+	as_string_builder_append(&sb, "Set ");
+	as_string_builder_append(&sb, yaml->name);
+	as_string_builder_append_char(&sb, '.');
+	as_string_builder_append(&sb, "labels");
+	as_string_builder_append(&sb, " = [");
+
+	as_vector* list = policy->labels;
+
+	if (list) {
+		for (uint32_t i = 0; i < list->size; i++) {
+			as_metrics_label* label = as_vector_get(list, i);
+
+			if (i > 0) {
+				as_string_builder_append_char(&sb, ',');
+			}
+			as_string_builder_append_char(&sb, '{');
+			as_string_builder_append(&sb, label->name);
+			as_string_builder_append_char(&sb, ',');
+			as_string_builder_append(&sb, label->value);
+			as_string_builder_append_char(&sb, '}');
 		}
 	}
 
-	as_metrics_policy_destroy_labels(policy);
-	return false;
+	as_string_builder_append_char(&sb, ']');
+	as_log_info(sb.data);
+	as_field_set(yaml->bitmap, field);
+	return true;
 }
 
 static bool
@@ -1120,20 +1096,33 @@ as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
 
 		bool rv;
 
-		if (yaml->event.type == YAML_SCALAR_EVENT) {
-			char* value = (char*)yaml->event.data.scalar.value;
+		switch (yaml->event.type) {
+			case YAML_SCALAR_EVENT: {
+				char* value = (char*)yaml->event.data.scalar.value;
 
-			rv = fn(yaml, name, value, base);
-			yaml_event_delete(&yaml->event);
-		}
-		else if (yaml->event.type == YAML_SEQUENCE_START_EVENT) {
-			yaml_event_delete(&yaml->event);
-			rv = fn(yaml, name, "", base);
-		}
-		else {
-			as_expected_error(yaml, YAML_SCALAR_EVENT);
-			yaml_event_delete(&yaml->event);
-			rv = false;
+				rv = fn(yaml, name, value, base);
+				yaml_event_delete(&yaml->event);
+				break;
+			}
+
+			case YAML_SEQUENCE_START_EVENT: {
+				yaml_event_delete(&yaml->event);
+				rv = fn(yaml, name, "", base);
+				break;
+			}
+
+			case YAML_MAPPING_START_EVENT: {
+				yaml_event_delete(&yaml->event);
+				rv = fn(yaml, name, "", base);
+				break;
+			}
+
+			default: {
+				as_expected_error(yaml, YAML_SCALAR_EVENT);
+				yaml_event_delete(&yaml->event);
+				rv = false;
+				break;
+			}
 		}
 
 		if (!rv) {

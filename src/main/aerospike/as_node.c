@@ -870,13 +870,20 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		return 0;
 	}
 	
+	as_ns_metrics* metrics = (node->cluster->metrics_enabled)? as_node_prepare_metrics(node, NULL) : NULL;
+
+	if (metrics) {
+		as_node_add_bytes_out(metrics, write_size);
+	}
+
 	// Reuse the buffer, read the response - first 8 bytes contains body size.
 	if (as_socket_read_deadline(err, sock, node, stack_buf, sizeof(as_proto), 0, deadline_ms) != AEROSPIKE_OK) {
 		return 0;
 	}
-	
+
 	proto = (as_proto*)stack_buf;
 
+	uint64_t bytes_in = sizeof(as_proto);
 	as_status status = as_proto_parse_type(err, proto, AS_INFO_MESSAGE_TYPE);
 
 	if (status) {
@@ -908,6 +915,11 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		return 0;
 	}
 	
+	if (metrics) {
+		bytes_in += proto_sz;
+		as_node_add_bytes_in(metrics, bytes_in);
+	}
+
 	// Null-terminate the response body and return it.
 	rbuf[proto_sz] = 0;
 	return rbuf;
@@ -1479,13 +1491,6 @@ as_latency_get_index(as_latency* latency, uint64_t elapsed)
 		limit <<= latency->shift;
 	}
 	return last_bucket;
-}
-
-void
-as_node_add_metrics(as_ns_metrics* metrics, uint64_t bytes_in, uint64_t bytes_out)
-{
-	as_add_uint64(&metrics->bytes_in, bytes_in);
-	as_add_uint64(&metrics->bytes_out, bytes_out);
 }
 
 void

@@ -218,7 +218,34 @@ as_admin_send(
 	uint64_t proto = (len - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_ADMIN_MESSAGE_TYPE << 48);
 	*(uint64_t*)buffer = cf_swap_to_be64(proto);
 	
-	return as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
+	as_status status = as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
+
+	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
+		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
+
+		if (metrics) {
+			as_node_add_bytes_out(metrics, len);
+		}
+	}
+	return status;
+}
+
+static inline as_status
+as_admin_receive(
+	as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint64_t len,
+	uint32_t socket_timeout, uint64_t deadline_ms
+	)
+{
+	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
+
+	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
+		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
+
+		if (metrics) {
+			as_node_add_bytes_in(metrics, len);
+		}
+	}
+	return status;
 }
 
 static uint32_t
@@ -260,9 +287,9 @@ as_admin_execute(
 		as_node_release(node);
 		return status;
 	}
-	
-	status = as_socket_read_deadline(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms);
-	
+
+	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms);
+
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
 		as_node_release(node);
@@ -293,9 +320,8 @@ as_admin_read_blocks(
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0,
-										 deadline_ms);
-		
+		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms);
+
 		if (status) {
 			break;
 		}
@@ -317,7 +343,7 @@ as_admin_read_blocks(
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, 0, deadline_ms);
+			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms);
 			
 			if (status) {
 				break;
@@ -423,7 +449,7 @@ as_cluster_login(
 		return status;
 	}
 
-	status = as_socket_read_deadline(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms);
+	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms);
 
 	if (status) {
 		return status;
@@ -456,7 +482,7 @@ as_cluster_login(
 	}
 
 	// Read remaining message bytes in group
-	status = as_socket_read_deadline(err, sock, NULL, buffer, receive_size, 0, deadline_ms);
+	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms);
 
 	if (status) {
 		return status;
@@ -555,7 +581,7 @@ as_authenticate(
 		return status;
 	}
 
-	status = as_socket_read_deadline(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms);
+	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms);
 	
 	if (status) {
 		return status;

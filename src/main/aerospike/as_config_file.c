@@ -1073,11 +1073,11 @@ as_parse_labels(as_yaml* yaml, as_metrics_policy* policy, uint32_t field)
 			if (i > 0) {
 				as_string_builder_append_char(&sb, ',');
 			}
-			as_string_builder_append_char(&sb, '{');
+			as_string_builder_append_char(&sb, '[');
 			as_string_builder_append(&sb, label->name);
 			as_string_builder_append_char(&sb, ',');
 			as_string_builder_append(&sb, label->value);
-			as_string_builder_append_char(&sb, '}');
+			as_string_builder_append_char(&sb, ']');
 		}
 	}
 

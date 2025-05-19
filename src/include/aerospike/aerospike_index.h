@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -130,7 +130,7 @@ struct as_cdt_ctx;
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_cdt_ctx ctx;
  * as_cdt_ctx_init(&ctx, 1);
  * as_cdt_ctx_add_list_rank(&ctx, -1);
@@ -139,7 +139,7 @@ struct as_cdt_ctx;
  *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, &ctx) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -170,13 +170,13 @@ aerospike_index_create_ctx(
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_index_task task;
  * if (aerospike_index_create_complex(&as, &err, &task, NULL, "test", "demo", "bin1",
  *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }
-* ~~~~~~~~~~
+* @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -211,13 +211,13 @@ aerospike_index_create_complex(
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_index_task task;
  * if (aerospike_index_create(&as, &err, &task, NULL, "test", "demo", "bin1", 
  * 	   "idx_test_demo_bin1", AS_INDEX_NUMERIC) == AEROSPIKE_OK) {
  * 	   aerospike_index_create_wait(&err, &task, 0);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -261,11 +261,11 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 /**
  * Removes (drops) a secondary index.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * if (aerospike_index_remove(&as, &err, NULL, "test", idx_test_demo_bin1") != AEROSPIKE_OK) {
  *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.

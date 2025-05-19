@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -77,14 +77,14 @@ typedef struct as_binop_s {
 /**
  * Sequence of operations.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations ops;
  * as_operations_inita(&ops, 2);
  * as_operations_add_incr(&ops, "bin1", 123);
  * as_operations_add_append_str(&ops, "bin2", "abc");
  * ...
  * as_operations_destroy(&ops);
- * ~~~~~~~~~~
+ * @endcode
  */
 typedef struct as_binops_s {
 
@@ -131,28 +131,28 @@ typedef struct as_binops_s {
  * accepts a pointer to the stack allocated as_operations and the number of
  * operations to be added.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations ops;
  * as_operations_inita(&ops, 2);
- * ~~~~~~~~~~
+ * @endcode
  *
  * as_operations_init() is a function that initializes a stack allocated 
  * as_operations. It differes from as_operations_inita() in that it allocates
  * the internal array of operations on the heap. It accepts a pointer to the 
  * stack allocated as_operations and the number of operations to be added.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations ops;
  * as_operations_init(&ops, 2);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * as_operations_new() is a function that will allocate a new as_operations
  * on the heap. It will also allocate the internal array of operation on the 
  * heap.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations* ops = as_operations_new(2);
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you no longer need the as_operations, you can release the resources
  * allocated to it via as_operations_destroy().
@@ -162,9 +162,9 @@ typedef struct as_binops_s {
  * When you no longer require an as_operations, you should call 
  * `as_operations_destroy()` to release it and associated resources.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations_destroy(ops);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Usage
  *
@@ -183,16 +183,16 @@ typedef struct as_binops_s {
  *
  * The following appends a "abc" to bin "bin1".
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations_add_append_str(ops, "bin1", "abc");
- * ~~~~~~~~~~
+ * @endcode
  * 
  * There is also a prepend operation, which will add the string
  * to the beginning of the bin's current value.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations_add_prepend_str(ops, "bin1", "abc");
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Modifying a Byte Array
  *
@@ -201,18 +201,18 @@ typedef struct as_binops_s {
  *
  * The following appends a 4 byte sequence to bin "bin1".
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t raw[4] = { 1, 2, 3, 4 };
  * as_operations_add_append_raw(ops, "bin1", raw, 4);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * There is also a prepend operation, which will add the bytes
  * to the beginning of the bin's current value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t raw[4] = { 1, 2, 3, 4 };
  * as_operations_add_prepend_raw(ops, "bin1", raw, 4);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Increment an Integer
  *
@@ -220,9 +220,9 @@ typedef struct as_binops_s {
  *
  * The following increments the value in bin "bin1" by 4.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations_add_incr(ops, "bin1", 4);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * ### Write a Value
  *
@@ -230,9 +230,9 @@ typedef struct as_binops_s {
  *
  * The following writes a string "xyz" to "bin1".
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations_add_write_str(ops, "bin1", "xyz");
- * ~~~~~~~~~~
+ * @endcode
  * 
  * ### Read a Value
  *
@@ -241,9 +241,9 @@ typedef struct as_binops_s {
  *
  * The following reads the value of "bin1"
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations_add_read(ops, "bin1");
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Touch a Record
  *
@@ -252,9 +252,9 @@ typedef struct as_binops_s {
  *
  * The following touches a record.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations_add_touch(ops);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @ingroup base_operations
  */
@@ -299,12 +299,12 @@ typedef struct as_operations_s {
  * Initializes a stack allocated `as_operations` (as_operations) and allocates
  * `__nops` number of entries on the stack.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations ops;
  * as_operations_inita(&ops, 2);
  * as_operations_add_incr(&ops, "bin1", 123);
  * as_operations_add_append_str(&ops, "bin2", "abc");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param __ops		The `as_operations *` to initialize.
  * @param __nops	The number of `as_binops.entries` to allocate on the stack.
@@ -328,12 +328,12 @@ typedef struct as_operations_s {
 /**
  * Intializes a stack allocated `as_operations`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations ops;
  * as_operations_init(&ops, 2);
  * as_operations_add_incr(&ops, "bin1", 123);
  * as_operations_add_append_str(&ops, "bin2", "abc");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_operations_destroy()` to free the resources allocated to the
  * `as_operations`.
@@ -352,11 +352,11 @@ as_operations_init(as_operations* ops, uint16_t nops);
 /**
  * Create and initialize a heap allocated `as_operations`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations ops = as_operations_new(2);
  * as_operations_add_incr(ops, "bin1", 123);
  * as_operations_add_append_str(ops, "bin2", "abc");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Use `as_operations_destroy()` to free the resources allocated to the
  * `as_operations`.
@@ -374,9 +374,9 @@ as_operations_new(uint16_t nops);
 /**
  * Destroy an `as_operations` and release associated resources.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_operations_destroy(binops);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param ops 	The `as_operations` to destroy.
  *

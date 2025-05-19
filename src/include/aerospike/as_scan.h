@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -149,28 +149,28 @@ typedef struct as_scan_bins_s {
  * it will return a pointer to the initialized as_scan. Otherwise, NULL 
  * is returned.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan scan;
  * as_scan_init(&scan, "namespace", "set");
- * ~~~~~~~~~~
+ * @endcode
  *
  * as_scan_new() should be used to allocate and initialize a heap allocated
  * as_scan. It will allocate the as_scan, then initialized it with the 
  * given namespace and set. On success, it will return a pointer to the 
  * initialized as_scan. Otherwise, NULL is returned.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan* scan = as_scan_new("namespace", "set");
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Destruction
  *
  * When you are finished with the as_scan, you can destroy it and associated
  * resources:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_destroy(scan);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Usage
  *
@@ -182,10 +182,10 @@ typedef struct as_scan_bins_s {
  * If a scan specifies bins to be selected, then only those bins will be 
  * returned. If no bins are selected, then all bins will be returned.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_select(query, "bin1");
  * as_scan_select(query, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * Before adding bins to select, the select structure must be initialized via
  * either:
@@ -196,35 +196,35 @@ typedef struct as_scan_bins_s {
  *
  * A complete example using as_scan_select_inita()
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_select_inita(query, 2);
  * as_scan_select(query, "bin1");
  * as_scan_select(query, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Returning only meta data
  *
  * A scan can return only record meta data, and exclude bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_set_nobins(scan, true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Scan nodes in parallel
  *
  * A scan can be made to scan all the nodes in parallel
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_set_concurrent(scan, true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Scan a Percentage of Records
  *
  * A scan can define the percentage of record in the cluster to be scaned.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_set_percent(scan, 100);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Scan a Priority
  *
@@ -236,9 +236,9 @@ typedef struct as_scan_bins_s {
  * - `AS_SCAN_PRIORITY_MEDIUM`
  * - `AS_SCAN_PRIORITY_HIGH`
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_set_priority(scan, AS_SCAN_PRIORITY_LOW);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ### Applying a UDF to each Record Scanned
  *
@@ -246,9 +246,9 @@ typedef struct as_scan_bins_s {
  *
  * To define the UDF for the scan, use as_scan_apply_each().
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_apply_each(scan, "udf_module", "udf_function", arglist);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @ingroup scan_operations
  */
@@ -360,10 +360,10 @@ typedef struct as_scan_s {
 /**
  * Initializes a scan.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan scan;
  * as_scan_init(&scan, "test", "demo");
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you no longer require the scan, you should release the scan and 
  * related resources via `as_scan_destroy()`.
@@ -383,9 +383,9 @@ as_scan_init(as_scan* scan, const char* ns, const char* set);
 /**
  * Create and initializes a new scan on the heap.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan* scan = as_scan_new("test","demo");
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you no longer require the scan, you should release the scan and 
  * related resources via `as_scan_destroy()`.
@@ -404,9 +404,9 @@ as_scan_new(const char* ns, const char* set);
 /**
  * Releases all resources allocated to the scan.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_destroy(scan);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_scan
  * @ingroup scan_operations
@@ -423,11 +423,11 @@ as_scan_destroy(as_scan* scan);
  *
  * For heap allocation, use `as_scan_select_init()`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_select_inita(&scan, 2);
  * as_scan_select(&scan, "bin1");
  * as_scan_select(&scan, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param __scan	The scan to initialize.
  * @param __n		The number of bins to allocate.
@@ -452,11 +452,11 @@ as_scan_destroy(as_scan* scan);
  * 
  * For stack allocation, use `as_scan_select_inita()`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_select_init(&scan, 2);
  * as_scan_select(&scan, "bin1");
  * as_scan_select(&scan, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param scan	The scan to initialize.
  * @param n		The number of bins to allocate.
@@ -475,11 +475,11 @@ as_scan_select_init(as_scan* scan, uint16_t n);
  * You have to ensure as_scan.select has sufficient capacity, prior to 
  * adding a bin. If capacity is insufficient then false is returned.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_select_init(&scan, 2);
  * as_scan_select(&scan, "bin1");
  * as_scan_select(&scan, "bin2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param scan 	The scan to modify.
  * @param bin 	The name of the bin to select.
@@ -499,9 +499,9 @@ as_scan_select(as_scan* scan, const char * bin);
 /**
  * Do not return bins. This will only return the metadata for the records.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_set_nobins(&q, true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param scan 			The scan to set the priority on.
  * @param nobins		If true, then do not return bins.
@@ -517,9 +517,9 @@ as_scan_set_nobins(as_scan* scan, bool nobins);
 /**
  * Scan all the nodes in prallel
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_set_concurrent(&q, true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param scan 			The scan to set the concurrency on.
  * @param concurrent	If true, scan all the nodes in parallel
@@ -539,7 +539,7 @@ as_scan_set_concurrent(as_scan* scan, bool concurrent);
 /**
  * Apply a UDF to each record scanned on the server.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_arraylist arglist;
  * as_arraylist_init(&arglist, 2, 0);
  * as_arraylist_append_int64(&arglist, 1);
@@ -548,7 +548,7 @@ as_scan_set_concurrent(as_scan* scan, bool concurrent);
  * as_scan_apply_each(&q, "module", "func", (as_list *) &arglist);
  *
  * as_arraylist_destroy(&arglist);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param scan 			The scan to apply the UDF to.
  * @param module 		The module containing the function to execute.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -52,25 +52,25 @@ extern "C" {
  *
  * To initialize an as_record_iterator on the stack:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_iterator it;
  * as_record_iterator_init(&it, record);
- * ~~~~~~~~~~
+ * @endcode
  *
  * To initialize an as_record_iterator on the heap:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_iterator * it as_record_iterator_new(record);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Destruction 
  *
  * When you no longer require the iterator, you should release it and 
  * associated resource via as_record_iterator_destroy():
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_iterator_destroy(it);
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Usage
  *
@@ -82,17 +82,17 @@ extern "C" {
  * as_record_iterator_has_next(), which returns true if there are more bins,
  * or false if there are no more bins. 
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_iterator_has_next(&it);
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you are sure there are more bins, then you will use 
  * as_record_iterator_next() to read the next bin. If there are no bins 
  * available, then NULL is returned.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin* bin = as_record_iterator_next(&it);
- * ~~~~~~~~~~
+ * @endcode
  *
  * If  as_record_iterator_next() returns a bin, then you can use the following
  * functions to get information about the bin:
@@ -104,13 +104,13 @@ extern "C" {
  * Most often, a traversal is performed in a while loop. The following is a 
  * simple example:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * while ( as_record_iterator_has_next(&it) ) {
  * 	   as_bin* bin = as_record_iterator_next(&it);
  * 	   char* name = as_bin_get_name(bin);
  * 	   as_val* value = (as_val*) as_bin_get_value(bin);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_record
  */
@@ -142,7 +142,7 @@ typedef struct as_record_iterator_s {
  * Create and initialize a heap allocated as_record_iterator for the 
  * specified record.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_iterator * it = as_record_iterator_new(rec);
  *
  * while (as_record_iterator_has_next(&it)) {
@@ -150,7 +150,7 @@ typedef struct as_record_iterator_s {
  * }
  *
  * as_record_iterator_destroy(&it);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param record 	The record to iterate over.
  *
@@ -164,7 +164,7 @@ as_record_iterator_new(const as_record* record);
 /**
  * Initializes a stack allocated as_record_iterator for the specified record.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_iterator it;
  * as_record_iterator_init(&it, rec);
  * 
@@ -173,7 +173,7 @@ as_record_iterator_new(const as_record* record);
  * }
  *
  * as_record_iterator_destroy(&it);
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you are finished using the `as_record` instance, you should release the 
  * resources allocated to it by calling `as_record_destroy()`.

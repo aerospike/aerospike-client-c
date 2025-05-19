@@ -407,13 +407,13 @@ typedef struct as_cluster_s {
 	 * Power of 2 multiple between each range bucket in latency histograms starting at column 3. The bucket units
 	 * are in milliseconds. The first 2 buckets are "<=1ms" and ">1ms". Examples:
 	 * 
-	 * ~~~~~~~~~~{.c}
+	 * @code
 	 * // latencyColumns=7 latencyShift=1
 	 * <=1ms >1ms >2ms >4ms >8ms >16ms >32ms
 	 *
 	 * // latencyColumns=5 latencyShift=3
 	 * <=1ms >1ms >8ms >64ms >512ms
-	 * ~~~~~~~~~~
+	 * @endcode
 	 * 
 	 * This is set using as_policy_metrics.
 	 */

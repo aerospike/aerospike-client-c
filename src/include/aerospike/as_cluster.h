@@ -452,15 +452,9 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Aerospike configuration.
+	 * Aerospike back pointer.
 	 */
-	as_config* config;
-
-	/**
-	 * @private
-	 * Dynamic configuration file path.
-	 */
-	char* config_file_path;
+	struct aerospike_s* as;
 
 	/**
 	 * @private
@@ -476,6 +470,8 @@ typedef struct as_cluster_s {
 
 } as_cluster;
 
+struct aerospike_s;
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -484,7 +480,7 @@ typedef struct as_cluster_s {
  * Create and initialize cluster.
  */
 as_status
-as_cluster_create(as_config* config, as_error* err, as_cluster** cluster);
+as_cluster_create(struct aerospike_s* as, as_error* err);
 
 /**
  * Close all connections and release memory associated with cluster.

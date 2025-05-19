@@ -20,6 +20,7 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_buffer.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_exp.h>
@@ -406,22 +407,30 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.read;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_read* def = &config->policies.read;
+		as_policy_read* cfg = &config->policies.read;
 
-		mrg->base.socket_timeout = def->base.socket_timeout;
-		mrg->base.total_timeout = def->base.total_timeout;
-		mrg->base.max_retries = def->base.max_retries;
-		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
-		mrg->key = def->key;
-		mrg->replica = def->replica;
-		mrg->read_mode_ap = def->read_mode_ap;
-		mrg->read_mode_sc = def->read_mode_sc;
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_READ_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_READ_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_READ_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_READ_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->replica = as_field_is_set(bitmap, AS_READ_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->read_mode_ap = as_field_is_set(bitmap, AS_READ_READ_MODE_AP)?
+			cfg->read_mode_ap : src->read_mode_ap;
+		mrg->read_mode_sc = as_field_is_set(bitmap, AS_READ_READ_MODE_SC)?
+			cfg->read_mode_sc : src->read_mode_sc;
 
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->key = src->key;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->deserialize = src->deserialize;
 		mrg->async_heap_rec = src->async_heap_rec;
@@ -902,17 +911,25 @@ as_policy_write_merge(aerospike* as, const as_policy_write* src, as_policy_write
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.write;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_write* def = &config->policies.write;
+		as_policy_write* cfg = &config->policies.write;
 
-		mrg->base.socket_timeout = def->base.socket_timeout;
-		mrg->base.total_timeout = def->base.total_timeout;
-		mrg->base.max_retries = def->base.max_retries;
-		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
-		mrg->key = def->key;
-		mrg->replica = def->replica;
-		mrg->durable_delete = def->durable_delete;
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
+		mrg->key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+			cfg->key : src->key;
 
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
@@ -1062,17 +1079,25 @@ as_policy_remove_merge(aerospike* as, const as_policy_remove* src, as_policy_rem
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.remove;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_remove* def = &config->policies.remove;
+		as_policy_remove* cfg = &config->policies.remove;
 
-		mrg->base.socket_timeout = def->base.socket_timeout;
-		mrg->base.total_timeout = def->base.total_timeout;
-		mrg->base.max_retries = def->base.max_retries;
-		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
-		mrg->key = def->key;
-		mrg->replica = def->replica;
-		mrg->durable_delete = def->durable_delete;
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+			cfg->key : src->key;
+		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
 
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
@@ -1197,6 +1222,66 @@ typedef struct as_operate_s {
 	uint8_t info_attr;
 } as_operate;
 
+const as_policy_operate*
+as_policy_operate_merge(aerospike* as, bool is_write, const as_policy_operate* src, as_policy_operate* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+
+		if (is_write) {
+			// Write operations should not retry by default.
+			return &config->policies.operate;
+		}
+		else {
+			// Read operations should retry by default.
+			as_policy_operate_copy(&config->policies.operate, mrg);
+			mrg->base.max_retries = 2;
+			return mrg;
+		}
+	}
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+		as_config* config = aerospike_load_config(as);
+		as_policy_operate* cfg = &config->policies.operate;
+
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+			cfg->key : src->key;
+		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->read_mode_ap = as_field_is_set(bitmap, AS_READ_READ_MODE_AP)?
+			cfg->read_mode_ap : src->read_mode_ap;
+		mrg->read_mode_sc = as_field_is_set(bitmap, AS_READ_READ_MODE_SC)?
+			cfg->read_mode_sc : src->read_mode_sc;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->commit_level = src->commit_level;
+		mrg->gen = src->gen;
+		mrg->exists = src->exists;
+		mrg->ttl = src->ttl;
+		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
+		mrg->deserialize = src->deserialize;
+		mrg->on_locking_only = src->on_locking_only;
+		mrg->async_heap_rec = src->async_heap_rec;
+		mrg->respond_all_ops = src->respond_all_ops;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
 static as_status
 as_operate_init(
 	as_operate* oper, aerospike* as, const as_policy_operate* policy,
@@ -1254,50 +1339,8 @@ as_operate_init(
 		}
 	}
 
-	if (! policy) {
-		as_config* config = aerospike_load_config(as);
-
-		if (oper->write_attr & AS_MSG_INFO2_WRITE) {
-			// Write operations should not retry by default.
-			policy = &config->policies.operate;
-		}
-		else {
-			// Read operations should retry by default.
-			as_policy_operate_copy(&config->policies.operate, policy_local);
-			policy_local->base.max_retries = 2;
-			policy = policy_local;
-		}
-	}
-	else if (as->dynamic_config) {
-		as_config* config = aerospike_load_config(as);
-		as_policy_operate* def = &config->policies.operate;
-
-		policy_local->base.socket_timeout = def->base.socket_timeout;
-		policy_local->base.total_timeout = def->base.total_timeout;
-		policy_local->base.max_retries = def->base.max_retries;
-		policy_local->base.sleep_between_retries = def->base.sleep_between_retries;
-		policy_local->key = def->key;
-		policy_local->replica = def->replica;
-		policy_local->read_mode_ap = def->read_mode_ap;
-		policy_local->read_mode_sc = def->read_mode_sc;
-		policy_local->durable_delete = def->durable_delete;
-
-		policy_local->base.filter_exp = policy->base.filter_exp;
-		policy_local->base.txn = policy->base.txn;
-		policy_local->base.compress = policy->base.compress;
-		policy_local->commit_level = policy->commit_level;
-		policy_local->gen = policy->gen;
-		policy_local->exists = policy->exists;
-		policy_local->ttl = policy->ttl;
-		policy_local->read_touch_ttl_percent = policy->read_touch_ttl_percent;
-		policy_local->deserialize = policy->deserialize;
-		policy_local->on_locking_only = policy->on_locking_only;
-		policy_local->async_heap_rec = policy->async_heap_rec;
-		policy_local->respond_all_ops = policy->respond_all_ops;
-		policy = policy_local;
-	}
-
-	oper->policy = policy;
+	bool is_write = (oper->write_attr & AS_MSG_INFO2_WRITE)? true : false;
+	policy = oper->policy = as_policy_operate_merge(as, is_write, policy, policy_local);
 
 	// When GET_ALL is specified, RESPOND_ALL_OPS must be disabled.
 	if ((respond_all_ops || policy->respond_all_ops) && !(oper->read_attr & AS_MSG_INFO1_GET_ALL)) {
@@ -1557,17 +1600,25 @@ as_policy_apply_merge(aerospike* as, const as_policy_apply* src, as_policy_apply
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.apply;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_apply* def = &config->policies.apply;
+		as_policy_apply* cfg = &config->policies.apply;
 
-		mrg->base.socket_timeout = def->base.socket_timeout;
-		mrg->base.total_timeout = def->base.total_timeout;
-		mrg->base.max_retries = def->base.max_retries;
-		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
-		mrg->key = def->key;
-		mrg->replica = def->replica;
-		mrg->durable_delete = def->durable_delete;
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+			cfg->key : src->key;
+		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
 
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
@@ -1575,7 +1626,6 @@ as_policy_apply_merge(aerospike* as, const as_policy_apply* src, as_policy_apply
 		mrg->commit_level = src->commit_level;
 		mrg->ttl = src->ttl;
 		mrg->on_locking_only = src->on_locking_only;
-
 		return mrg;
 	}
 	else {

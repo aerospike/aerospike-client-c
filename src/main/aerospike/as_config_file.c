@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_config_file.h>
+#include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_string_builder.h>
@@ -29,6 +30,7 @@
 typedef struct {
 	yaml_parser_t parser;
 	yaml_event_t event;
+	uint8_t* bitmap;
 	as_config* config;
 	const char* name;
 	as_error err;
@@ -194,7 +196,7 @@ parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out)
 }
 
 static bool
-as_parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out)
+as_parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out, uint32_t field)
 {
 	uint32_t val;
 
@@ -203,6 +205,7 @@ as_parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* ou
 	}
 
 	as_assign_uint32(yaml->name, name, value, val, out);
+	as_field_set(yaml->bitmap, field);
 	return true;
 }
 
@@ -234,7 +237,7 @@ parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out)
 }
 
 static bool
-as_parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out)
+as_parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out, uint32_t field)
 {
 	bool val;
 
@@ -243,19 +246,54 @@ as_parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out)
 	}
 
 	as_assign_bool(yaml->name, name, value, val, out);
+	as_field_set(yaml->bitmap, field);
+	return true;
+}
+
+static inline void
+as_assign_string(const char* section, const char* name, char* src, char** trg)
+{
+	if (*trg == NULL || strcmp(*trg, src) != 0) {
+		as_log_info("Set %s.%s = %s", section, name, src);
+		*trg = src;
+	}
+}
+
+static bool
+as_parse_string(as_yaml* yaml, const char* name, const char* value, char** out, uint32_t field)
+{
+	char* val = cf_strdup(value);
+
+	as_assign_string(yaml->name, name, val, out);
+	as_field_set(yaml->bitmap, field);
 	return true;
 }
 
 static bool
-as_vector_int32_equal(as_vector* r1, as_vector* r2)
+as_rack_ids_equal(as_cluster* c1, as_config* c2)
 {
-	if (r1->size != r2->size) {
+	// Cluster racks_ids will never be NULL.
+	// Config rack_ids can be NULL and rack_id exists.
+	if (c2->rack_ids == NULL) {
+		if (c1->rack_ids->size == 1) {
+			int rack_id = *(int*)as_vector_get(c1->rack_ids, 0);
+			return rack_id == c2->rack_id;
+		}
+		else {
+			return false;
+		}
+	}
+
+	as_vector* v1 = c1->rack_ids;
+	as_vector* v2 = c2->rack_ids;
+
+	if (v1->size != v2->size) {
 		return false;
 	}
 
-	for (uint32_t i = 0; i < r1->size; i++) {
-		int id1 = *(int*)as_vector_get(r1, i);
-		int id2 = *(int*)as_vector_get(r2, i);
+	for (uint32_t i = 0; i < v1->size; i++) {
+		int id1 = *(int*)as_vector_get(v1, i);
+		int id2 = *(int*)as_vector_get(v2, i);
 
 		if (id1 != id2) {
 			return false;
@@ -265,7 +303,7 @@ as_vector_int32_equal(as_vector* r1, as_vector* r2)
 }
 
 static bool
-as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out)
+as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out, uint32_t field)
 {
 	as_vector* list = as_vector_create(sizeof(int), 8);
 	int32_t v;
@@ -285,39 +323,32 @@ as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out)
 		}
 	}
 
-	if (!as_vector_int32_equal(*out, list)) {
-		as_string_builder sb;
-		as_string_builder_inita(&sb, 512, false);
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 512, false);
 
-		as_string_builder_append(&sb, "Set ");
-		as_string_builder_append(&sb, yaml->name);
-		as_string_builder_append_char(&sb, '.');
-		as_string_builder_append(&sb, name);
-		as_string_builder_append(&sb, " = [");
+	as_string_builder_append(&sb, "Set ");
+	as_string_builder_append(&sb, yaml->name);
+	as_string_builder_append_char(&sb, '.');
+	as_string_builder_append(&sb, name);
+	as_string_builder_append(&sb, " = [");
 
-		for (uint32_t i = 0; i < list->size; i++) {
-			int id = *(int*)as_vector_get(list, i);
+	for (uint32_t i = 0; i < list->size; i++) {
+		int id = *(int*)as_vector_get(list, i);
 
-			if (i > 0) {
-				as_string_builder_append_char(&sb, ',');
-			}
-			as_string_builder_append_int(&sb, id);
+		if (i > 0) {
+			as_string_builder_append_char(&sb, ',');
 		}
-
-		as_string_builder_append_char(&sb, ']');
-		as_log_info(sb.data);
-
-		// On init, the original config is set directly, so the old vector must be destroyed.
-		// On update, a shallow copy config is set and the original vector will be destroyed
-		// after the update succeeds.
-		if (yaml->init) {
-			as_vector_destroy(*out);
-		}
-		*out = list;
+		as_string_builder_append_int(&sb, id);
 	}
-	else {
-		as_vector_destroy(list);
-	}
+
+	as_string_builder_append_char(&sb, ']');
+	as_log_info(sb.data);
+
+	// Original vector will still exist and will be restored if
+	// there is an error while parsing the file.
+	*out = list;
+
+	as_field_set(yaml->bitmap, field);
 	return true;
 }
 
@@ -335,7 +366,8 @@ as_assign_read_mode_ap(
 
 static bool
 as_parse_read_mode_ap(
-	as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_ap* read_mode_ap
+	as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_ap* read_mode_ap,
+	uint32_t field
 	)
 {
 	as_policy_read_mode_ap val;
@@ -352,6 +384,7 @@ as_parse_read_mode_ap(
 	}
 
 	as_assign_read_mode_ap(yaml->name, name, value, val, read_mode_ap);
+	as_field_set(yaml->bitmap, field);
 	return true;
 }
 
@@ -368,7 +401,10 @@ as_assign_read_mode_sc(
 }
 
 static bool
-as_parse_read_mode_sc(as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_sc* read_mode_sc)
+as_parse_read_mode_sc(
+	as_yaml* yaml, const char* name, const char* value, as_policy_read_mode_sc* read_mode_sc,
+	uint32_t field
+	)
 {
 	as_policy_read_mode_sc val;
 
@@ -390,6 +426,7 @@ as_parse_read_mode_sc(as_yaml* yaml, const char* name, const char* value, as_pol
 	}
 
 	as_assign_read_mode_sc(yaml->name, name, value, val, read_mode_sc);
+	as_field_set(yaml->bitmap, field);
 	return true;
 }
 
@@ -406,7 +443,9 @@ as_assign_replica(
 }
 
 static bool
-as_parse_replica(as_yaml* yaml, const char* name, const char* value, as_policy_replica* replica)
+as_parse_replica(
+	as_yaml* yaml, const char* name, const char* value, as_policy_replica* replica, uint32_t field
+	)
 {
 	as_policy_replica val;
 
@@ -428,11 +467,15 @@ as_parse_replica(as_yaml* yaml, const char* name, const char* value, as_policy_r
 	}
 
 	as_assign_replica(yaml->name, name, value, val, replica);
+	as_field_set(yaml->bitmap, field);
 	return true;
 }
 
 static bool
-as_parse_expected_duration(as_yaml* yaml, const char* name, const char* value, as_query_duration* expected_duration)
+as_parse_expected_duration(
+	as_yaml* yaml, const char* name, const char* value, as_query_duration* expected_duration,
+	uint32_t field
+	)
 {
 	as_query_duration val;
 
@@ -454,6 +497,8 @@ as_parse_expected_duration(as_yaml* yaml, const char* name, const char* value, a
 		as_log_info("Set %s.%s = %s", yaml->name, name, value);
 		*expected_duration = val;
 	}
+
+	as_field_set(yaml->bitmap, field);
 	return true;
 }
 
@@ -473,7 +518,9 @@ as_assign_send_key(
 }
 
 static bool
-as_parse_send_key(as_yaml* yaml, const char* name, const char* value, as_policy_key* key)
+as_parse_send_key(
+	as_yaml* yaml, const char* name, const char* value, as_policy_key* key, uint32_t field
+	)
 {
 	bool send_key;
 
@@ -484,11 +531,14 @@ as_parse_send_key(as_yaml* yaml, const char* name, const char* value, as_policy_
 	as_policy_key val = send_key ? AS_POLICY_KEY_SEND : AS_POLICY_KEY_DIGEST;
 
 	as_assign_send_key(yaml->name, name, value, val, key);
+	as_field_set(yaml->bitmap, field);
 	return true;
 }
 
 static bool
-as_parse_max_concurrent_threads(as_yaml* yaml, const char* name, const char* value, bool* concurrent)
+as_parse_max_concurrent_threads(
+	as_yaml* yaml, const char* name, const char* value, bool* concurrent, uint32_t field
+	)
 {
 	uint32_t max_concurrent_threads;
 
@@ -503,6 +553,8 @@ as_parse_max_concurrent_threads(as_yaml* yaml, const char* name, const char* val
 		as_log_info("Set %s.concurrent = %s", yaml->name, str);
 		*concurrent = val;
 	}
+
+	as_field_set(yaml->bitmap, field);
 	return true;
 }
 
@@ -518,7 +570,7 @@ as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* b
 	const char* operate_section = "operate";
 
 	if (strcmp(name, "read_mode_ap") == 0) {
-		if (!as_parse_read_mode_ap(yaml, name, value, &policy->read_mode_ap)) {
+		if (!as_parse_read_mode_ap(yaml, name, value, &policy->read_mode_ap, AS_READ_READ_MODE_AP)) {
 			return false;
 		}
 		as_assign_read_mode_ap(operate_section, name, value, policy->read_mode_ap, &base->operate.read_mode_ap);
@@ -526,7 +578,7 @@ as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* b
 	}
 
 	if (strcmp(name, "read_mode_sc") == 0) {
-		if (!as_parse_read_mode_sc(yaml, name, value, &policy->read_mode_sc)) {
+		if (!as_parse_read_mode_sc(yaml, name, value, &policy->read_mode_sc, AS_READ_READ_MODE_SC)) {
 			return false;
 		}
 		as_assign_read_mode_sc(operate_section, name, value, policy->read_mode_sc, &base->operate.read_mode_sc);
@@ -534,23 +586,23 @@ as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* b
 	}
 
 	if (strcmp(name, "replica") == 0) {
-		return as_parse_replica(yaml, name, value, &policy->replica);
+		return as_parse_replica(yaml, name, value, &policy->replica, AS_READ_REPLICA);
 	}
 
 	if (strcmp(name, "socket_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout, AS_READ_SOCKET_TIMEOUT);
 	}
 
 	if (strcmp(name, "total_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout, AS_READ_TOTAL_TIMEOUT);
 	}
 
 	if (strcmp(name, "max_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries, AS_READ_MAX_RETRIES);
 	}
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_READ_SLEEP_BETWEEN_RETRIES);
 	}
 
 	if (strcmp(name, "connect_timeout") == 0) {
@@ -586,7 +638,7 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	const char* remove_section = "remove";
 
 	if (strcmp(name, "replica") == 0) {
-		if (!as_parse_replica(yaml, name, value, &policy->replica)) {
+		if (!as_parse_replica(yaml, name, value, &policy->replica, AS_WRITE_REPLICA)) {
 			return false;
 		}
 		as_assign_replica(operate_section, name, value, policy->replica, &base->operate.replica);
@@ -596,7 +648,7 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	}
 
 	if (strcmp(name, "socket_timeout") == 0) {
-		if (!as_parse_uint32(yaml, name, value, &policy->base.socket_timeout)) {
+		if (!as_parse_uint32(yaml, name, value, &policy->base.socket_timeout, AS_WRITE_SOCKET_TIMEOUT)) {
 			return false;
 		}
 		as_assign_uint32(operate_section, name, value, policy->base.socket_timeout, &base->operate.base.socket_timeout);
@@ -606,7 +658,7 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	}
 
 	if (strcmp(name, "total_timeout") == 0) {
-		if (!as_parse_uint32(yaml, name, value, &policy->base.total_timeout)) {
+		if (!as_parse_uint32(yaml, name, value, &policy->base.total_timeout, AS_WRITE_TOTAL_TIMEOUT)) {
 			return false;
 		}
 		as_assign_uint32(operate_section, name, value, policy->base.total_timeout, &base->operate.base.total_timeout);
@@ -616,7 +668,7 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	}
 
 	if (strcmp(name, "max_retries") == 0) {
-		if (!as_parse_uint32(yaml, name, value, &policy->base.max_retries)) {
+		if (!as_parse_uint32(yaml, name, value, &policy->base.max_retries, AS_WRITE_MAX_RETRIES)) {
 			return false;
 		}
 		as_assign_uint32(operate_section, name, value, policy->base.max_retries, &base->operate.base.max_retries);
@@ -626,7 +678,7 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	}
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
-		if (!as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries)) {
+		if (!as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_WRITE_SLEEP_BETWEEN_RETRIES)) {
 			return false;
 		}
 		as_assign_uint32(operate_section, name, value, policy->base.sleep_between_retries, &base->operate.base.max_retries);
@@ -636,7 +688,7 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	}
 
 	if (strcmp(name, "send_key") == 0) {
-		if (!as_parse_send_key(yaml, name, value, &policy->key)) {
+		if (!as_parse_send_key(yaml, name, value, &policy->key, AS_WRITE_SEND_KEY)) {
 			return false;
 		}
 		as_assign_send_key(operate_section, name, value, policy->key, &base->operate.key);
@@ -646,7 +698,7 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	}
 
 	if (strcmp(name, "durable_delete") == 0) {
-		if (!as_parse_bool(yaml, name, value, &policy->durable_delete)) {
+		if (!as_parse_bool(yaml, name, value, &policy->durable_delete, AS_WRITE_DURABLE_DELETE)) {
 			return false;
 		}
 		as_assign_bool(operate_section, name, value, policy->durable_delete, &base->operate.durable_delete);
@@ -681,23 +733,23 @@ as_parse_scan(as_yaml* yaml, const char* name, const char* value, as_policies* b
 	yaml->name = "scan";
 
 	if (strcmp(name, "replica") == 0) {
-		return as_parse_replica(yaml, name, value, &policy->replica);
+		return as_parse_replica(yaml, name, value, &policy->replica, AS_SCAN_REPLICA);
 	}
 
 	if (strcmp(name, "socket_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout, AS_SCAN_SOCKET_TIMEOUT);
 	}
 
 	if (strcmp(name, "total_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout, AS_SCAN_TOTAL_TIMEOUT);
 	}
 
 	if (strcmp(name, "max_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries, AS_SCAN_MAX_RETRIES);
 	}
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_SCAN_SLEEP_BETWEEN_RETRIES);
 	}
 
 	if (strcmp(name, "connect_timeout") == 0) {
@@ -741,31 +793,31 @@ as_parse_query(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	yaml->name = "query";
 
 	if (strcmp(name, "replica") == 0) {
-		return as_parse_replica(yaml, name, value, &policy->replica);
+		return as_parse_replica(yaml, name, value, &policy->replica, AS_QUERY_REPLICA);
 	}
 
 	if (strcmp(name, "socket_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout, AS_QUERY_SOCKET_TIMEOUT);
 	}
 
 	if (strcmp(name, "total_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout, AS_QUERY_TOTAL_TIMEOUT);
 	}
 
 	if (strcmp(name, "max_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries, AS_QUERY_MAX_RETRIES);
 	}
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_QUERY_SLEEP_BETWEEN_RETRIES);
 	}
 
 	if (strcmp(name, "info_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->info_timeout);
+		return as_parse_uint32(yaml, name, value, &policy->info_timeout, AS_QUERY_INFO_TIMEOUT);
 	}
 
 	if (strcmp(name, "expected_duration") == 0) {
-		return as_parse_expected_duration(yaml, name, value, &policy->expected_duration);
+		return as_parse_expected_duration(yaml, name, value, &policy->expected_duration, AS_QUERY_EXPECTED_DURATION);
 	}
 
 	if (strcmp(name, "connect_timeout") == 0) {
@@ -803,50 +855,52 @@ as_parse_query(as_yaml* yaml, const char* name, const char* value, as_policies* 
 }
 
 static bool
-as_parse_batch_shared(as_yaml* yaml, const char* name, const char* value, as_policy_batch* policy)
+as_parse_batch_shared(
+	as_yaml* yaml, const char* name, const char* value, as_policy_batch* policy, uint32_t offset
+	)
 {
 	if (strcmp(name, "read_mode_ap") == 0) {
-		return as_parse_read_mode_ap(yaml, name, value, &policy->read_mode_ap);
+		return as_parse_read_mode_ap(yaml, name, value, &policy->read_mode_ap, offset + AS_BATCH_READ_MODE_AP);
 	}
 
 	if (strcmp(name, "read_mode_sc") == 0) {
-		return as_parse_read_mode_sc(yaml, name, value, &policy->read_mode_sc);
+		return as_parse_read_mode_sc(yaml, name, value, &policy->read_mode_sc, offset + AS_BATCH_READ_MODE_SC);
 	}
 
 	if (strcmp(name, "replica") == 0) {
-		return as_parse_replica(yaml, name, value, &policy->replica);
+		return as_parse_replica(yaml, name, value, &policy->replica, offset + AS_BATCH_REPLICA);
 	}
 
 	if (strcmp(name, "socket_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout);
+		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout, offset + AS_BATCH_SOCKET_TIMEOUT);
 	}
 
 	if (strcmp(name, "total_timeout") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout);
+		return as_parse_uint32(yaml, name, value, &policy->base.total_timeout, offset + AS_BATCH_TOTAL_TIMEOUT);
 	}
 
 	if (strcmp(name, "max_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.max_retries);
+		return as_parse_uint32(yaml, name, value, &policy->base.max_retries, offset + AS_BATCH_MAX_RETRIES);
 	}
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries);
+		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, offset + AS_BATCH_SLEEP_BETWEEN_RETRIES);
 	}
 
 	if (strcmp(name, "max_concurrent_threads") == 0) {
-		return as_parse_max_concurrent_threads(yaml, name, value, &policy->concurrent);
+		return as_parse_max_concurrent_threads(yaml, name, value, &policy->concurrent, offset + AS_BATCH_CONCURRENT);
 	}
 
 	if (strcmp(name, "allow_inline") == 0) {
-		return as_parse_bool(yaml, name, value, &policy->allow_inline);
+		return as_parse_bool(yaml, name, value, &policy->allow_inline, offset + AS_BATCH_ALLOW_INLINE);
 	}
 
 	if (strcmp(name, "allow_inline_ssd") == 0) {
-		return as_parse_bool(yaml, name, value, &policy->allow_inline_ssd);
+		return as_parse_bool(yaml, name, value, &policy->allow_inline_ssd, offset + AS_BATCH_ALLOW_INLINE_SSD);
 	}
 
 	if (strcmp(name, "respond_all_keys") == 0) {
-		return as_parse_bool(yaml, name, value, &policy->respond_all_keys);
+		return as_parse_bool(yaml, name, value, &policy->respond_all_keys, offset + AS_BATCH_RESPOND_ALL_KEYS);
 	}
 
 	if (strcmp(name, "connect_timeout") == 0) {
@@ -872,7 +926,7 @@ static bool
 as_parse_batch_read(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	yaml->name = "batch_read";
-	return as_parse_batch_shared(yaml, name, value, &base->batch);
+	return as_parse_batch_shared(yaml, name, value, &base->batch, AS_BATCH_PARENT_READ);
 }
 
 static bool
@@ -882,14 +936,14 @@ as_parse_batch_write(as_yaml* yaml, const char* name, const char* value, as_poli
 	yaml->name = "batch_write";
 
 	if (strcmp(name, "durable_delete") == 0) {
-		return as_parse_bool(yaml, name, value, &bw->durable_delete);
+		return as_parse_bool(yaml, name, value, &bw->durable_delete, AS_BATCH_WRITE_DURABLE_DELETE);
 	}
 
 	if (strcmp(name, "send_key") == 0) {
-		return as_parse_send_key(yaml, name, value, &bw->key);
+		return as_parse_send_key(yaml, name, value, &bw->key, AS_BATCH_WRITE_SEND_KEY);
 	}
 
-	return as_parse_batch_shared(yaml, name, value, &base->batch_parent_write);
+	return as_parse_batch_shared(yaml, name, value, &base->batch_parent_write, AS_BATCH_PARENT_WRITE);
 }
 
 static bool
@@ -899,11 +953,11 @@ as_parse_batch_udf(as_yaml* yaml, const char* name, const char* value, as_polici
 	yaml->name = "batch_udf";
 
 	if (strcmp(name, "durable_delete") == 0) {
-		return as_parse_bool(yaml, name, value, &policy->durable_delete);
+		return as_parse_bool(yaml, name, value, &policy->durable_delete, AS_BATCH_UDF_DURABLE_DELETE);
 	}
 
 	if (strcmp(name, "send_key") == 0) {
-		return as_parse_send_key(yaml, name, value, &policy->key);
+		return as_parse_send_key(yaml, name, value, &policy->key, AS_BATCH_UDF_SEND_KEY);
 	}
 
 	as_log_info("Unexpected field: %s.%s", yaml->name, name);
@@ -917,11 +971,11 @@ as_parse_batch_delete(as_yaml* yaml, const char* name, const char* value, as_pol
 	yaml->name = "batch_delete";
 
 	if (strcmp(name, "durable_delete") == 0) {
-		return as_parse_bool(yaml, name, value, &policy->durable_delete);
+		return as_parse_bool(yaml, name, value, &policy->durable_delete, AS_BATCH_DELETE_DURABLE_DELETE);
 	}
 
 	if (strcmp(name, "send_key") == 0) {
-		return as_parse_send_key(yaml, name, value, &policy->key);
+		return as_parse_send_key(yaml, name, value, &policy->key, AS_BATCH_DELETE_SEND_KEY);
 	}
 
 	as_log_info("Unexpected field: %s.%s", yaml->name, name);
@@ -932,14 +986,64 @@ static bool
 as_parse_txn_verify(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	yaml->name = "txn_verify";
-	return as_parse_batch_shared(yaml, name, value, &base->txn_verify);
+	return as_parse_batch_shared(yaml, name, value, &base->txn_verify, AS_TXN_VERIFY);
 }
 
 static bool
 as_parse_txn_roll(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	yaml->name = "txn_roll";
-	return as_parse_batch_shared(yaml, name, value, &base->txn_roll);
+	return as_parse_batch_shared(yaml, name, value, &base->txn_roll, AS_TXN_ROLL);
+}
+
+static bool
+as_parse_labels(as_yaml* yaml, as_metrics_policy* policy, uint32_t field)
+{
+	// Original labels will still exist and they will be restored if
+	// there is an error while parsing the file.
+	policy->labels = NULL;
+
+	char name[256];
+	char value[256];
+
+	while (as_parse_scalar(yaml, name, sizeof(name))) {
+		if (!as_parse_scalar(yaml, value, sizeof(value))) {
+			as_metrics_policy_destroy_labels(policy);
+			return false;
+		}
+		as_metrics_policy_add_label(policy, name, value);
+	}
+
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 512, false);
+
+	as_string_builder_append(&sb, "Set ");
+	as_string_builder_append(&sb, yaml->name);
+	as_string_builder_append_char(&sb, '.');
+	as_string_builder_append(&sb, "labels");
+	as_string_builder_append(&sb, " = [");
+
+	as_vector* list = policy->labels;
+
+	if (list) {
+		for (uint32_t i = 0; i < list->size; i++) {
+			as_metrics_label* label = as_vector_get(list, i);
+
+			if (i > 0) {
+				as_string_builder_append_char(&sb, ',');
+			}
+			as_string_builder_append_char(&sb, '{');
+			as_string_builder_append(&sb, label->name);
+			as_string_builder_append_char(&sb, ',');
+			as_string_builder_append(&sb, label->value);
+			as_string_builder_append_char(&sb, '}');
+		}
+	}
+
+	as_string_builder_append_char(&sb, ']');
+	as_log_info(sb.data);
+	as_field_set(yaml->bitmap, field);
+	return true;
 }
 
 static bool
@@ -949,15 +1053,23 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 	yaml->name = "metrics";
 
 	if (strcmp(name, "enable") == 0) {
-		return as_parse_bool(yaml, name, value, &policy->enable);
+		return as_parse_bool(yaml, name, value, &policy->enable, AS_METRICS_ENABLE);
 	}
 
 	if (strcmp(name, "latency_columns") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->latency_columns);
+		return as_parse_uint32(yaml, name, value, &policy->latency_columns, AS_METRICS_LATENCY_COLUMNS);
 	}
 
 	if (strcmp(name, "latency_shift") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->latency_shift);
+		return as_parse_uint32(yaml, name, value, &policy->latency_shift, AS_METRICS_LATENCY_SHIFT);
+	}
+
+	if (strcmp(name, "app_id") == 0) {
+		return as_parse_string(yaml, name, value, &policy->app_id, AS_METRICS_APP_ID);
+	}
+
+	if (strcmp(name, "labels") == 0) {
+		return as_parse_labels(yaml, policy, AS_METRICS_LABELS);
 	}
 
 	as_log_info("Unexpected field: %s.%s", yaml->name, name);
@@ -984,17 +1096,34 @@ as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
 
 		bool rv;
 
-		if (yaml->event.type == YAML_SCALAR_EVENT) {
-			char* value = (char*)yaml->event.data.scalar.value;
+		switch (yaml->event.type) {
+			case YAML_SCALAR_EVENT: {
+				char* value = (char*)yaml->event.data.scalar.value;
 
-			rv = fn(yaml, name, value, base);
-		}
-		else {
-			as_expected_error(yaml, YAML_SCALAR_EVENT);
-			rv = false;
-		}
+				rv = fn(yaml, name, value, base);
+				yaml_event_delete(&yaml->event);
+				break;
+			}
 
-		yaml_event_delete(&yaml->event);
+			case YAML_SEQUENCE_START_EVENT: {
+				yaml_event_delete(&yaml->event);
+				rv = fn(yaml, name, "", base);
+				break;
+			}
+
+			case YAML_MAPPING_START_EVENT: {
+				yaml_event_delete(&yaml->event);
+				rv = fn(yaml, name, "", base);
+				break;
+			}
+
+			default: {
+				as_expected_error(yaml, YAML_SCALAR_EVENT);
+				yaml_event_delete(&yaml->event);
+				rv = false;
+				break;
+			}
+		}
 
 		if (!rv) {
 			return rv;
@@ -1024,19 +1153,19 @@ as_parse_static_client(as_yaml* yaml)
 			bool rv;
 
 			if (strcmp(name, "config_interval") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->config_provider.interval);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->config_provider.interval, AS_CONFIG_INTERVAL);
 			}
 			else if (strcmp(name, "max_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_conns_per_node);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_conns_per_node, AS_MAX_CONNS_PER_NODE);
 			}
 			else if (strcmp(name, "min_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->min_conns_per_node);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->min_conns_per_node, AS_MIN_CONNS_PER_NODE);
 			}
 			else if (strcmp(name, "async_max_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_max_conns_per_node);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_max_conns_per_node, AS_ASYNC_MAX_CONNS_PER_NODE);
 			}
 			else if (strcmp(name, "async_min_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_min_conns_per_node);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_min_conns_per_node, AS_ASYNC_MIN_CONNS_PER_NODE);
 			}
 			else {
 				as_log_info("Unexpected field: %s.%s", yaml->name, name);
@@ -1079,31 +1208,31 @@ as_parse_dynamic_client(as_yaml* yaml)
 			bool rv;
 
 			if (strcmp(name, "timeout") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->conn_timeout_ms);
-			}
-			else if (strcmp(name, "error_rate_window") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->error_rate_window);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->conn_timeout_ms, AS_TEND_TIMEOUT);
 			}
 			else if (strcmp(name, "max_error_rate") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_error_rate);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_error_rate, AS_MAX_ERROR_RATE);
+			}
+			else if (strcmp(name, "error_rate_window") == 0) {
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->error_rate_window, AS_ERROR_RATE_WINDOW);
 			}
 			else if (strcmp(name, "login_timeout") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->login_timeout_ms);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->login_timeout_ms, AS_LOGIN_TIMEOUT);
 			}
 			else if (strcmp(name, "max_socket_idle") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_socket_idle);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_socket_idle, AS_MAX_SOCKET_IDLE);
 			}
 			else if (strcmp(name, "tend_interval") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->tender_interval);
+				rv = as_parse_uint32(yaml, name, value, &yaml->config->tender_interval, AS_TEND_INTERVAL);
 			}
 			else if (strcmp(name, "fail_if_not_connected") == 0) {
-				rv = as_parse_bool(yaml, name, value, &yaml->config->fail_if_not_connected);
+				rv = as_parse_bool(yaml, name, value, &yaml->config->fail_if_not_connected, AS_FAIL_IF_NOT_CONNECTED);
 			}
 			else if (strcmp(name, "use_service_alternative") == 0) {
-				rv = as_parse_bool(yaml, name, value, &yaml->config->use_services_alternate);
+				rv = as_parse_bool(yaml, name, value, &yaml->config->use_services_alternate, AS_USE_SERVICE_ALTERNATIVE);
 			}
 			else if (strcmp(name, "rack_aware") == 0) {
-				rv = as_parse_bool(yaml, name, value, &yaml->config->rack_aware);
+				rv = as_parse_bool(yaml, name, value, &yaml->config->rack_aware, AS_RACK_AWARE);
 			}
 			else {
 				as_log_info("Unexpected field: %s.%s", yaml->name, name);
@@ -1122,7 +1251,7 @@ as_parse_dynamic_client(as_yaml* yaml)
 			bool rv;
 
 			if (strcmp(name, "rack_ids") == 0) {
-				rv = as_parse_vector_int32(yaml, name, &yaml->config->rack_ids);
+				rv = as_parse_vector_int32(yaml, name, &yaml->config->rack_ids, AS_RACK_IDS);
 			}
 			else {
 				as_log_info("Unexpected sequence: %s.%s", yaml->name, name);
@@ -1151,18 +1280,23 @@ as_parse_static(as_yaml* yaml)
 	}
 
 	char name[256];
+	bool rv;
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (! yaml->init) {
 			// Do not process static fields on a dynamic update.
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
 		}
 		else if (strcmp(name, "client") == 0) {
-			as_parse_static_client(yaml);
+			rv = as_parse_static_client(yaml);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
+		}
+
+		if (!rv) {
+			return false;
 		}
 	}
 	return true;
@@ -1176,47 +1310,52 @@ as_parse_dynamic(as_yaml* yaml)
 	}
 
 	char name[256];
+	bool rv;
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (strcmp(name, "client") == 0) {
-			as_parse_dynamic_client(yaml);
+			rv = as_parse_dynamic_client(yaml);
 		}
 		else if (strcmp(name, "read") == 0) {
-			as_parse_policy(yaml, as_parse_read);
+			rv = as_parse_policy(yaml, as_parse_read);
 		}
 		else if (strcmp(name, "write") == 0) {
-			as_parse_policy(yaml, as_parse_write);
+			rv = as_parse_policy(yaml, as_parse_write);
 		}
 		else if (strcmp(name, "query") == 0) {
-			as_parse_policy(yaml, as_parse_query);
+			rv = as_parse_policy(yaml, as_parse_query);
 		}
 		else if (strcmp(name, "scan") == 0) {
-			as_parse_policy(yaml, as_parse_scan);
+			rv = as_parse_policy(yaml, as_parse_scan);
 		}
 		else if (strcmp(name, "batch_read") == 0) {
-			as_parse_policy(yaml, as_parse_batch_read);
+			rv = as_parse_policy(yaml, as_parse_batch_read);
 		}
 		else if (strcmp(name, "batch_write") == 0) {
-			as_parse_policy(yaml, as_parse_batch_write);
+			rv = as_parse_policy(yaml, as_parse_batch_write);
 		}
 		else if (strcmp(name, "batch_udf") == 0) {
-			as_parse_policy(yaml, as_parse_batch_udf);
+			rv = as_parse_policy(yaml, as_parse_batch_udf);
 		}
 		else if (strcmp(name, "batch_delete") == 0) {
-			as_parse_policy(yaml, as_parse_batch_delete);
+			rv = as_parse_policy(yaml, as_parse_batch_delete);
 		}
 		else if (strcmp(name, "txn_verify") == 0) {
-			as_parse_policy(yaml, as_parse_txn_verify);
+			rv = as_parse_policy(yaml, as_parse_txn_verify);
 		}
 		else if (strcmp(name, "txn_roll") == 0) {
-			as_parse_policy(yaml, as_parse_txn_roll);
+			rv = as_parse_policy(yaml, as_parse_txn_roll);
 		}
 		else if (strcmp(name, "metrics") == 0) {
-			as_parse_policy(yaml, as_parse_metrics);
+			rv = as_parse_policy(yaml, as_parse_metrics);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
+		}
+
+		if (!rv) {
+			return false;
 		}
 	}
 	return true;
@@ -1238,23 +1377,27 @@ as_parse_yaml(as_yaml* yaml)
 	}
 
 	char name[256];
+	bool rv;
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (strcmp(name, "static") == 0) {
-			as_parse_static(yaml);
+			rv = as_parse_static(yaml);
 		}
 		else if (strcmp(name, "dynamic") == 0) {
-			as_parse_dynamic(yaml);
+			rv = as_parse_dynamic(yaml);
 		}
 		else if (strcmp(name, "metadata") == 0) {
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			as_skip_mapping(yaml);
+			rv = as_skip_mapping(yaml);
+		}
+
+		if (!rv) {
+			return false;
 		}
 	}
-
 	return true;
 }
 
@@ -1263,7 +1406,6 @@ as_parse_yaml(as_yaml* yaml)
 static bool
 parse_debug(yaml_parser_t* parser)
 {
-	char name[256];
 	yaml_event_t event;
 	bool valid = true;
 
@@ -1327,10 +1469,11 @@ parse_debug(yaml_parser_t* parser)
 #endif
 
 static as_status
-as_config_file_read(as_config* config, const char* path, bool init, as_error* err)
+as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init, as_error* err)
 {
 	as_error_reset(err);
 
+	const char* path = as->config.config_provider.path;
 	FILE* fp = fopen(path, "r");
 
 	if (!fp) {
@@ -1338,6 +1481,7 @@ as_config_file_read(as_config* config, const char* path, bool init, as_error* er
 	}
 
 	as_yaml yaml;
+	yaml.bitmap = bitmap;
 	yaml.config = config;
 	yaml.init = init;
 
@@ -1349,6 +1493,7 @@ as_config_file_read(as_config* config, const char* path, bool init, as_error* er
 	yaml_parser_set_input_file(&yaml.parser, fp);
 
 	bool rv = as_parse_yaml(&yaml);
+	//bool rv = parse_debug(&yaml.parser);
 
 	yaml_parser_delete(&yaml.parser);
 	fclose(fp);
@@ -1369,49 +1514,330 @@ as_release_rack_ids(as_vector* rack_ids)
 	as_vector_destroy(rack_ids);
 }
 
-static as_status
-as_cluster_update(as_cluster* cluster, as_config* orig, as_config* config, as_error* err)
+static void
+as_rack_ids_copy(as_vector* src, as_vector** trg)
 {
-	// Set original config.
-	orig->max_error_rate = config->max_error_rate;
-	orig->error_rate_window = config->error_rate_window;
-	orig->login_timeout_ms = config->login_timeout_ms;
-	orig->tender_interval = config->tender_interval;
-	orig->conn_timeout_ms = config->conn_timeout_ms;
-	orig->use_services_alternate = config->use_services_alternate;
-	orig->fail_if_not_connected = config->fail_if_not_connected;
-	orig->max_socket_idle = config->max_socket_idle;
-	orig->rack_aware = config->rack_aware;
+	as_vector* rack_ids = as_vector_create(sizeof(int), src->size);
 
-	if (orig->rack_ids != config->rack_ids) {
-		// Can be destroyed now since all rack_ids access is done through
-		// cluster rack_ids and not config rack_ids.
-		as_vector_destroy(orig->rack_ids);
-		orig->rack_ids = config->rack_ids;
+	for (uint32_t i = 0; i < src->size; i++) {
+		int id = *(int*)as_vector_get(src, i);
+		as_vector_append(rack_ids, &id);
+	}
+	*trg = rack_ids;
+}
+
+static void
+as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg, uint8_t* bitmap)
+{
+	// Copy new policy values to the cluster one field at a time.
+	trg->read.base.socket_timeout = as_field_is_set(bitmap, AS_READ_SOCKET_TIMEOUT)?
+		src->read.base.socket_timeout : orig->read.base.socket_timeout;
+	trg->read.base.total_timeout = as_field_is_set(bitmap, AS_READ_TOTAL_TIMEOUT)?
+		src->read.base.total_timeout : orig->read.base.total_timeout;
+	trg->read.base.max_retries = as_field_is_set(bitmap, AS_READ_MAX_RETRIES)?
+		src->read.base.max_retries : orig->read.base.max_retries;
+	trg->read.base.sleep_between_retries = as_field_is_set(bitmap, AS_READ_SLEEP_BETWEEN_RETRIES)?
+		src->read.base.sleep_between_retries : orig->read.base.sleep_between_retries;
+	trg->read.read_mode_ap = as_field_is_set(bitmap, AS_READ_READ_MODE_AP)?
+		src->read.read_mode_ap : orig->read.read_mode_ap;
+	trg->read.read_mode_sc = as_field_is_set(bitmap, AS_READ_READ_MODE_SC)?
+		src->read.read_mode_sc : orig->read.read_mode_sc;
+	trg->read.replica = as_field_is_set(bitmap, AS_READ_REPLICA)?
+		src->read.replica : orig->read.replica;
+
+	trg->write.base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+		src->write.base.socket_timeout : orig->write.base.socket_timeout;
+	trg->write.base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+		src->write.base.total_timeout : orig->write.base.total_timeout;
+	trg->write.base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+		src->write.base.max_retries : orig->write.base.max_retries;
+	trg->write.base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+		src->write.base.sleep_between_retries : orig->write.base.sleep_between_retries;
+	trg->write.replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+		src->write.replica : orig->write.replica;
+	trg->write.durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+		src->write.durable_delete : orig->write.durable_delete;
+	trg->write.key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+		src->write.key : orig->write.key;
+
+	trg->operate.base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+		src->operate.base.socket_timeout : orig->operate.base.socket_timeout;
+	trg->operate.base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+		src->operate.base.total_timeout : orig->operate.base.total_timeout;
+	trg->operate.base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+		src->operate.base.max_retries : orig->operate.base.max_retries;
+	trg->operate.base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+		src->operate.base.sleep_between_retries : orig->operate.base.sleep_between_retries;
+	trg->operate.replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+		src->operate.replica : orig->operate.replica;
+	trg->operate.durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+		src->operate.durable_delete : orig->operate.durable_delete;
+	trg->operate.key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+		src->operate.key : orig->operate.key;
+	trg->operate.read_mode_ap = as_field_is_set(bitmap, AS_READ_READ_MODE_AP)?
+		src->operate.read_mode_ap : orig->operate.read_mode_ap;
+	trg->operate.read_mode_sc = as_field_is_set(bitmap, AS_READ_READ_MODE_SC)?
+		src->operate.read_mode_sc : orig->operate.read_mode_sc;
+
+	trg->apply.base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+		src->apply.base.socket_timeout : orig->apply.base.socket_timeout;
+	trg->apply.base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+		src->apply.base.total_timeout : orig->apply.base.total_timeout;
+	trg->apply.base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+		src->apply.base.max_retries : orig->apply.base.max_retries;
+	trg->apply.base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+		src->apply.base.sleep_between_retries : orig->apply.base.sleep_between_retries;
+	trg->apply.replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+		src->apply.replica : orig->apply.replica;
+	trg->apply.durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+		src->apply.durable_delete : orig->apply.durable_delete;
+	trg->apply.key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+		src->apply.key : orig->apply.key;
+
+	trg->remove.base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+		src->remove.base.socket_timeout : orig->remove.base.socket_timeout;
+	trg->remove.base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+		src->remove.base.total_timeout : orig->remove.base.total_timeout;
+	trg->remove.base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+		src->remove.base.max_retries : orig->remove.base.max_retries;
+	trg->remove.base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+		src->remove.base.sleep_between_retries : orig->remove.base.sleep_between_retries;
+	trg->remove.replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+		src->remove.replica : orig->remove.replica;
+	trg->remove.durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+		src->remove.durable_delete : orig->remove.durable_delete;
+	trg->remove.key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+		src->remove.key : orig->remove.key;
+
+	trg->scan.base.socket_timeout = as_field_is_set(bitmap, AS_SCAN_SOCKET_TIMEOUT)?
+		src->scan.base.socket_timeout : orig->scan.base.socket_timeout;
+	trg->scan.base.total_timeout = as_field_is_set(bitmap, AS_SCAN_TOTAL_TIMEOUT)?
+		src->scan.base.total_timeout : orig->scan.base.total_timeout;
+	trg->scan.base.max_retries = as_field_is_set(bitmap, AS_SCAN_MAX_RETRIES)?
+		src->scan.base.max_retries : orig->scan.base.max_retries;
+	trg->scan.base.sleep_between_retries = as_field_is_set(bitmap, AS_SCAN_SLEEP_BETWEEN_RETRIES)?
+		src->scan.base.sleep_between_retries : orig->scan.base.sleep_between_retries;
+	trg->scan.replica = as_field_is_set(bitmap, AS_SCAN_REPLICA)?
+		src->scan.replica : orig->scan.replica;
+
+	trg->query.base.socket_timeout = as_field_is_set(bitmap, AS_QUERY_SOCKET_TIMEOUT)?
+		src->query.base.socket_timeout : orig->query.base.socket_timeout;
+	trg->query.base.total_timeout = as_field_is_set(bitmap, AS_QUERY_TOTAL_TIMEOUT)?
+		src->query.base.total_timeout : orig->query.base.total_timeout;
+	trg->query.base.max_retries = as_field_is_set(bitmap, AS_QUERY_MAX_RETRIES)?
+		src->query.base.max_retries : orig->query.base.max_retries;
+	trg->query.base.sleep_between_retries = as_field_is_set(bitmap, AS_QUERY_SLEEP_BETWEEN_RETRIES)?
+		src->query.base.sleep_between_retries : orig->query.base.sleep_between_retries;
+	trg->query.replica = as_field_is_set(bitmap, AS_QUERY_REPLICA)?
+		src->query.replica : orig->query.replica;
+	trg->query.info_timeout = as_field_is_set(bitmap, AS_QUERY_INFO_TIMEOUT)?
+		src->query.info_timeout : orig->query.info_timeout;
+	trg->query.expected_duration = as_field_is_set(bitmap, AS_QUERY_EXPECTED_DURATION)?
+		src->query.expected_duration : orig->query.expected_duration;
+
+	trg->batch.base.socket_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_SOCKET_TIMEOUT)?
+		src->batch.base.socket_timeout : orig->batch.base.socket_timeout;
+	trg->batch.base.total_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_TOTAL_TIMEOUT)?
+		src->batch.base.total_timeout : orig->batch.base.total_timeout;
+	trg->batch.base.max_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_MAX_RETRIES)?
+		src->batch.base.max_retries : orig->batch.base.max_retries;
+	trg->batch.base.sleep_between_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
+		src->batch.base.sleep_between_retries : orig->batch.base.sleep_between_retries;
+	trg->batch.read_mode_ap = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_READ_MODE_AP)?
+		src->batch.read_mode_ap : orig->batch.read_mode_ap;
+	trg->batch.read_mode_sc = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_READ_MODE_SC)?
+		src->batch.read_mode_sc : orig->batch.read_mode_sc;
+	trg->batch.replica = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_REPLICA)?
+		src->batch.replica : orig->batch.replica;
+	trg->batch.concurrent = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_CONCURRENT)?
+		src->batch.concurrent : orig->batch.concurrent;
+	trg->batch.allow_inline = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_ALLOW_INLINE)?
+		src->batch.allow_inline : orig->batch.allow_inline;
+	trg->batch.allow_inline_ssd = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_ALLOW_INLINE_SSD)?
+		src->batch.allow_inline_ssd : orig->batch.allow_inline_ssd;
+	trg->batch.respond_all_keys = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_RESPOND_ALL_KEYS)?
+		src->batch.respond_all_keys : orig->batch.respond_all_keys;
+
+	trg->batch_parent_write.base.socket_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_SOCKET_TIMEOUT)?
+		src->batch_parent_write.base.socket_timeout : orig->batch_parent_write.base.socket_timeout;
+	trg->batch_parent_write.base.total_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_TOTAL_TIMEOUT)?
+		src->batch_parent_write.base.total_timeout : orig->batch_parent_write.base.total_timeout;
+	trg->batch_parent_write.base.max_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_MAX_RETRIES)?
+		src->batch_parent_write.base.max_retries : orig->batch_parent_write.base.max_retries;
+	trg->batch_parent_write.base.sleep_between_retries =
+		as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
+		src->batch_parent_write.base.sleep_between_retries : orig->batch_parent_write.base.sleep_between_retries;
+	trg->batch_parent_write.read_mode_ap = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_READ_MODE_AP)?
+		src->batch_parent_write.read_mode_ap : orig->batch_parent_write.read_mode_ap;
+	trg->batch_parent_write.read_mode_sc = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_READ_MODE_SC)?
+		src->batch_parent_write.read_mode_sc : orig->batch_parent_write.read_mode_sc;
+	trg->batch_parent_write.replica = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_REPLICA)?
+		src->batch_parent_write.replica : orig->batch_parent_write.replica;
+	trg->batch_parent_write.concurrent = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_CONCURRENT)?
+		src->batch_parent_write.concurrent : orig->batch_parent_write.concurrent;
+	trg->batch_parent_write.allow_inline = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_ALLOW_INLINE)?
+		src->batch_parent_write.allow_inline : orig->batch_parent_write.allow_inline;
+	trg->batch_parent_write.allow_inline_ssd = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_ALLOW_INLINE_SSD)?
+		src->batch_parent_write.allow_inline_ssd : orig->batch_parent_write.allow_inline_ssd;
+	trg->batch_parent_write.respond_all_keys = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_RESPOND_ALL_KEYS)?
+		src->batch_parent_write.respond_all_keys : orig->batch_parent_write.respond_all_keys;
+
+	trg->batch_write.durable_delete = as_field_is_set(bitmap, AS_BATCH_WRITE_DURABLE_DELETE)?
+		src->batch_write.durable_delete : orig->batch_write.durable_delete;
+	trg->batch_write.key = as_field_is_set(bitmap, AS_BATCH_WRITE_SEND_KEY)?
+		src->batch_write.key : orig->batch_write.key;
+
+	trg->batch_apply.durable_delete = as_field_is_set(bitmap, AS_BATCH_UDF_DURABLE_DELETE)?
+		src->batch_apply.durable_delete : orig->batch_apply.durable_delete;
+	trg->batch_apply.key = as_field_is_set(bitmap, AS_BATCH_UDF_SEND_KEY)?
+		src->batch_apply.key : orig->batch_apply.key;
+
+	trg->batch_remove.durable_delete = as_field_is_set(bitmap, AS_BATCH_DELETE_DURABLE_DELETE)?
+		src->batch_remove.durable_delete : orig->batch_remove.durable_delete;
+	trg->batch_remove.key = as_field_is_set(bitmap, AS_BATCH_DELETE_SEND_KEY)?
+		src->batch_remove.key : orig->batch_remove.key;
+
+	trg->txn_verify.base.socket_timeout = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_SOCKET_TIMEOUT)?
+		src->txn_verify.base.socket_timeout : orig->txn_verify.base.socket_timeout;
+	trg->txn_verify.base.total_timeout = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_TOTAL_TIMEOUT)?
+		src->txn_verify.base.total_timeout : orig->txn_verify.base.total_timeout;
+	trg->txn_verify.base.max_retries = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_MAX_RETRIES)?
+		src->txn_verify.base.max_retries : orig->txn_verify.base.max_retries;
+	trg->txn_verify.base.sleep_between_retries = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
+		src->txn_verify.base.sleep_between_retries : orig->txn_verify.base.sleep_between_retries;
+	trg->txn_verify.read_mode_ap = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_READ_MODE_AP)?
+		src->txn_verify.read_mode_ap : orig->txn_verify.read_mode_ap;
+	trg->txn_verify.read_mode_sc = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_READ_MODE_SC)?
+		src->txn_verify.read_mode_sc : orig->txn_verify.read_mode_sc;
+	trg->txn_verify.replica = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_REPLICA)?
+		src->txn_verify.replica : orig->txn_verify.replica;
+	trg->txn_verify.concurrent = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_CONCURRENT)?
+		src->txn_verify.concurrent : orig->txn_verify.concurrent;
+	trg->txn_verify.allow_inline = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_ALLOW_INLINE)?
+		src->txn_verify.allow_inline : orig->txn_verify.allow_inline;
+	trg->txn_verify.allow_inline_ssd = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_ALLOW_INLINE_SSD)?
+		src->txn_verify.allow_inline_ssd : orig->txn_verify.allow_inline_ssd;
+	trg->txn_verify.respond_all_keys = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_RESPOND_ALL_KEYS)?
+		src->txn_verify.respond_all_keys : orig->txn_verify.respond_all_keys;
+
+	trg->txn_roll.base.socket_timeout = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_SOCKET_TIMEOUT)?
+		src->txn_roll.base.socket_timeout : orig->txn_roll.base.socket_timeout;
+	trg->txn_roll.base.total_timeout = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_TOTAL_TIMEOUT)?
+		src->txn_roll.base.total_timeout : orig->txn_roll.base.total_timeout;
+	trg->txn_roll.base.max_retries = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_MAX_RETRIES)?
+		src->txn_roll.base.max_retries : orig->txn_roll.base.max_retries;
+	trg->txn_roll.base.sleep_between_retries = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
+		src->txn_roll.base.sleep_between_retries : orig->txn_roll.base.sleep_between_retries;
+	trg->txn_roll.read_mode_ap = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_READ_MODE_AP)?
+		src->txn_roll.read_mode_ap : orig->txn_roll.read_mode_ap;
+	trg->txn_roll.read_mode_sc = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_READ_MODE_SC)?
+		src->txn_roll.read_mode_sc : orig->txn_roll.read_mode_sc;
+	trg->txn_roll.replica = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_REPLICA)?
+		src->txn_roll.replica : orig->txn_roll.replica;
+	trg->txn_roll.concurrent = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_CONCURRENT)?
+		src->txn_roll.concurrent : orig->txn_roll.concurrent;
+	trg->txn_roll.allow_inline = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_ALLOW_INLINE)?
+		src->txn_roll.allow_inline : orig->txn_roll.allow_inline;
+	trg->txn_roll.allow_inline_ssd = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_ALLOW_INLINE_SSD)?
+		src->txn_roll.allow_inline_ssd : orig->txn_roll.allow_inline_ssd;
+	trg->txn_roll.respond_all_keys = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_RESPOND_ALL_KEYS)?
+		src->txn_roll.respond_all_keys : orig->txn_roll.respond_all_keys;
+
+	trg->metrics.enable = as_field_is_set(bitmap, AS_METRICS_ENABLE)?
+		src->metrics.enable : orig->metrics.enable;
+	trg->metrics.latency_columns = as_field_is_set(bitmap, AS_METRICS_LATENCY_COLUMNS)?
+		src->metrics.latency_columns : orig->metrics.latency_columns;
+	trg->metrics.latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
+		src->metrics.latency_shift : orig->metrics.latency_shift;
+
+	// TODO Handle concurrency issue when app_id and labels are actually used in metrics.
+	// Probably need to use cluster->metrics_lock.
+	if (as_field_is_set(bitmap, AS_METRICS_APP_ID)) {
+		if (trg->metrics.app_id != src->metrics.app_id) {
+			as_metrics_policy_assign_app_id(&trg->metrics, src->metrics.app_id);
+			src->metrics.app_id = NULL;
+		}
+	}
+	else {
+		if (trg->metrics.app_id != orig->metrics.app_id) {
+			as_metrics_policy_set_app_id(&trg->metrics, orig->metrics.app_id);
+		}
+	}
+
+	if (as_field_is_set(bitmap, AS_METRICS_LABELS)) {
+		if (trg->metrics.labels != src->metrics.labels) {
+			as_metrics_policy_set_labels(&trg->metrics, src->metrics.labels);
+			src->metrics.labels = NULL;
+		}
+	}
+	else {
+		if (trg->metrics.labels != orig->metrics.labels) {
+			as_metrics_policy_copy_labels(&trg->metrics, orig->metrics.labels);
+		}
+	}
+}
+
+static as_status
+as_cluster_update(
+	aerospike* as, as_config* orig, as_config* src, uint8_t* bitmap, as_error* err
+	)
+{
+	// Set config.
+	as_config* config = &as->config;
+
+	config->conn_timeout_ms = as_field_is_set(bitmap, AS_TEND_TIMEOUT)?
+		src->conn_timeout_ms : orig->conn_timeout_ms;
+	config->max_error_rate = as_field_is_set(bitmap, AS_MAX_ERROR_RATE)?
+		src->max_error_rate : orig->max_error_rate;
+	config->error_rate_window = as_field_is_set(bitmap, AS_ERROR_RATE_WINDOW)?
+		src->error_rate_window : orig->error_rate_window;
+	config->login_timeout_ms = as_field_is_set(bitmap, AS_LOGIN_TIMEOUT)?
+		src->login_timeout_ms : orig->login_timeout_ms;
+	config->max_socket_idle = as_field_is_set(bitmap, AS_MAX_SOCKET_IDLE)?
+		src->max_socket_idle : orig->max_socket_idle;
+	config->tender_interval = as_field_is_set(bitmap, AS_TEND_INTERVAL)?
+		src->tender_interval : orig->tender_interval;
+	config->fail_if_not_connected = as_field_is_set(bitmap, AS_FAIL_IF_NOT_CONNECTED)?
+		src->fail_if_not_connected : orig->fail_if_not_connected;
+	config->use_services_alternate = as_field_is_set(bitmap, AS_USE_SERVICE_ALTERNATIVE)?
+		src->use_services_alternate : orig->use_services_alternate;
+	config->rack_aware = as_field_is_set(bitmap, AS_RACK_AWARE)?
+		src->rack_aware : orig->rack_aware;
+
+	if (as_field_is_set(bitmap, AS_RACK_IDS)) {
+		if (config->rack_ids != src->rack_ids) {
+			// Can be destroyed now since all rack_ids access is done through
+			// cluster rack_ids and not config rack_ids.
+			as_vector_destroy(config->rack_ids);
+			config->rack_ids = src->rack_ids;
+		}
+	}
+	else {
+		if (config->rack_ids != orig->rack_ids) {
+			as_vector_destroy(config->rack_ids);
+			as_rack_ids_copy(orig->rack_ids, &config->rack_ids);
+		}
 	}
 
 	// Set cluster.
+	as_cluster* cluster = as->cluster;
+
+	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
 	cluster->max_error_rate = config->max_error_rate;
 	cluster->error_rate_window = config->error_rate_window;
 	cluster->login_timeout_ms = (config->login_timeout_ms == 0) ? 5000 : config->login_timeout_ms;
-	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
-	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
-	cluster->use_services_alternate = config->use_services_alternate;
-	cluster->fail_if_not_connected = config->fail_if_not_connected;
 	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
+	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
+	cluster->fail_if_not_connected = config->fail_if_not_connected;
+	cluster->use_services_alternate = config->use_services_alternate;
 	cluster->rack_aware = config->rack_aware;
 
-	if (!as_vector_int32_equal(config->rack_ids, cluster->rack_ids)) {
+	if (!as_rack_ids_equal(cluster, config)) {
 		as_vector* old = cluster->rack_ids;
+		as_vector* rack_ids;
 
-		// Make full copy of rack_ids
-		uint32_t max = config->rack_ids->size;
-		as_vector* rack_ids = as_vector_create(sizeof(int), max);
-
-		for (uint32_t i = 0; i < max; i++) {
-			int id = *(int*)as_vector_get(config->rack_ids, i);
-			as_vector_append(rack_ids, &id);
-		}
+		// Make full copy of rack_ids;
+		as_rack_ids_copy(config->rack_ids, &rack_ids);
 
 		// Update cluster rack_ids.
 		as_store_ptr_rls((void**)&cluster->rack_ids, rack_ids);
@@ -1423,137 +1849,17 @@ as_cluster_update(as_cluster* cluster, as_config* orig, as_config* config, as_er
 		as_vector_append(cluster->gc, &item);
 	}
 
-	// Copy new policy values to the cluster one field at a time.
-	// Do not perform memcpy because that byte protocol might temporarily
-	// corrupt multi-byte values which are being read in parallel threads.
-	as_policies* src = &config->policies;
-	as_policies* trg = &orig->policies;
+	as_cluster_update_policies(&orig->policies, &src->policies, &config->policies, bitmap);
+	memcpy(as->config_bitmap, bitmap, sizeof(AS_CONFIG_BITMAP_SIZE));
 
-	trg->read.base.socket_timeout = src->read.base.socket_timeout;
-	trg->read.base.total_timeout = src->read.base.total_timeout;
-	trg->read.base.max_retries = src->read.base.max_retries;
-	trg->read.base.sleep_between_retries = src->read.base.sleep_between_retries;
-	trg->read.read_mode_ap = src->read.read_mode_ap;
-	trg->read.read_mode_sc = src->read.read_mode_sc;
-	trg->read.replica = src->read.replica;
-
-	trg->write.base.socket_timeout = src->write.base.socket_timeout;
-	trg->write.base.total_timeout = src->write.base.total_timeout;
-	trg->write.base.max_retries = src->write.base.max_retries;
-	trg->write.base.sleep_between_retries = src->write.base.sleep_between_retries;
-	trg->write.replica = src->write.replica;
-	trg->write.durable_delete = src->write.durable_delete;
-	trg->write.key = src->write.key;
-
-	trg->operate.base.socket_timeout = src->operate.base.socket_timeout;
-	trg->operate.base.total_timeout = src->operate.base.total_timeout;
-	trg->operate.base.max_retries = src->operate.base.max_retries;
-	trg->operate.base.sleep_between_retries = src->operate.base.sleep_between_retries;
-	trg->operate.replica = src->operate.replica;
-	trg->operate.durable_delete = src->operate.durable_delete;
-	trg->operate.key = src->operate.key;
-	trg->operate.read_mode_ap = src->operate.read_mode_ap;
-	trg->operate.read_mode_sc = src->operate.read_mode_sc;
-
-	trg->apply.base.socket_timeout = src->apply.base.socket_timeout;
-	trg->apply.base.total_timeout = src->apply.base.total_timeout;
-	trg->apply.base.max_retries = src->apply.base.max_retries;
-	trg->apply.base.sleep_between_retries = src->apply.base.sleep_between_retries;
-	trg->apply.replica = src->apply.replica;
-	trg->apply.durable_delete = src->apply.durable_delete;
-	trg->apply.key = src->apply.key;
-
-	trg->remove.base.socket_timeout = src->remove.base.socket_timeout;
-	trg->remove.base.total_timeout = src->remove.base.total_timeout;
-	trg->remove.base.max_retries = src->remove.base.max_retries;
-	trg->remove.base.sleep_between_retries = src->remove.base.sleep_between_retries;
-	trg->remove.replica = src->remove.replica;
-	trg->remove.durable_delete = src->remove.durable_delete;
-	trg->remove.key = src->remove.key;
-
-	trg->scan.base.socket_timeout = src->scan.base.socket_timeout;
-	trg->scan.base.total_timeout = src->scan.base.total_timeout;
-	trg->scan.base.max_retries = src->scan.base.max_retries;
-	trg->scan.base.sleep_between_retries = src->scan.base.sleep_between_retries;
-	trg->scan.replica = src->scan.replica;
-
-	trg->query.base.socket_timeout = src->query.base.socket_timeout;
-	trg->query.base.total_timeout = src->query.base.total_timeout;
-	trg->query.base.max_retries = src->query.base.max_retries;
-	trg->query.base.sleep_between_retries = src->query.base.sleep_between_retries;
-	trg->query.replica = src->query.replica;
-	trg->query.info_timeout = src->query.info_timeout;
-	trg->query.expected_duration = src->query.expected_duration;
-
-	trg->batch.base.socket_timeout = src->batch.base.socket_timeout;
-	trg->batch.base.total_timeout = src->batch.base.total_timeout;
-	trg->batch.base.max_retries = src->batch.base.max_retries;
-	trg->batch.base.sleep_between_retries = src->batch.base.sleep_between_retries;
-	trg->batch.read_mode_ap = src->batch.read_mode_ap;
-	trg->batch.read_mode_sc = src->batch.read_mode_sc;
-	trg->batch.replica = src->batch.replica;
-	trg->batch.concurrent = src->batch.concurrent;
-	trg->batch.allow_inline = src->batch.allow_inline;
-	trg->batch.allow_inline_ssd = src->batch.allow_inline_ssd;
-	trg->batch.respond_all_keys = src->batch.respond_all_keys;
-
-	trg->batch_parent_write.base.socket_timeout = src->batch_parent_write.base.socket_timeout;
-	trg->batch_parent_write.base.total_timeout = src->batch_parent_write.base.total_timeout;
-	trg->batch_parent_write.base.max_retries = src->batch_parent_write.base.max_retries;
-	trg->batch_parent_write.base.sleep_between_retries = src->batch_parent_write.base.sleep_between_retries;
-	trg->batch_parent_write.read_mode_ap = src->batch_parent_write.read_mode_ap;
-	trg->batch_parent_write.read_mode_sc = src->batch_parent_write.read_mode_sc;
-	trg->batch_parent_write.replica = src->batch_parent_write.replica;
-	trg->batch_parent_write.concurrent = src->batch_parent_write.concurrent;
-	trg->batch_parent_write.allow_inline = src->batch_parent_write.allow_inline;
-	trg->batch_parent_write.allow_inline_ssd = src->batch_parent_write.allow_inline_ssd;
-	trg->batch_parent_write.respond_all_keys = src->batch_parent_write.respond_all_keys;
-
-	trg->batch_write.durable_delete = src->batch_write.durable_delete;
-	trg->batch_write.key = src->batch_write.key;
-
-	trg->batch_apply.durable_delete = src->batch_apply.durable_delete;
-	trg->batch_apply.key = src->batch_apply.key;
-
-	trg->batch_remove.durable_delete = src->batch_remove.durable_delete;
-	trg->batch_remove.key = src->batch_remove.key;
-
-	trg->txn_verify.base.socket_timeout = src->txn_verify.base.socket_timeout;
-	trg->txn_verify.base.total_timeout = src->txn_verify.base.total_timeout;
-	trg->txn_verify.base.max_retries = src->txn_verify.base.max_retries;
-	trg->txn_verify.base.sleep_between_retries = src->txn_verify.base.sleep_between_retries;
-	trg->txn_verify.read_mode_ap = src->txn_verify.read_mode_ap;
-	trg->txn_verify.read_mode_sc = src->txn_verify.read_mode_sc;
-	trg->txn_verify.replica = src->txn_verify.replica;
-	trg->txn_verify.concurrent = src->txn_verify.concurrent;
-	trg->txn_verify.allow_inline = src->txn_verify.allow_inline;
-	trg->txn_verify.allow_inline_ssd = src->txn_verify.allow_inline_ssd;
-	trg->txn_verify.respond_all_keys = src->txn_verify.respond_all_keys;
-
-	trg->txn_roll.base.socket_timeout = src->txn_roll.base.socket_timeout;
-	trg->txn_roll.base.total_timeout = src->txn_roll.base.total_timeout;
-	trg->txn_roll.base.max_retries = src->txn_roll.base.max_retries;
-	trg->txn_roll.base.sleep_between_retries = src->txn_roll.base.sleep_between_retries;
-	trg->txn_roll.read_mode_ap = src->txn_roll.read_mode_ap;
-	trg->txn_roll.read_mode_sc = src->txn_roll.read_mode_sc;
-	trg->txn_roll.replica = src->txn_roll.replica;
-	trg->txn_roll.concurrent = src->txn_roll.concurrent;
-	trg->txn_roll.allow_inline = src->txn_roll.allow_inline;
-	trg->txn_roll.allow_inline_ssd = src->txn_roll.allow_inline_ssd;
-	trg->txn_roll.respond_all_keys = src->txn_roll.respond_all_keys;
-
-	trg->metrics.latency_columns = src->metrics.latency_columns;
-	trg->metrics.latency_shift = src->metrics.latency_shift;
-	trg->metrics.enable = src->metrics.enable;
-
-	if (trg->metrics.enable) {
+	if (config->policies.metrics.enable) {
 		if (cluster->metrics_enabled) {
-			cluster->metrics_latency_columns = trg->metrics.latency_columns;
-			cluster->metrics_latency_shift = trg->metrics.latency_shift;
+			cluster->metrics_latency_columns = config->policies.metrics.latency_columns;
+			cluster->metrics_latency_shift = config->policies.metrics.latency_shift;
 		}
 		else {
 			as_log_info("Enable metrics");
-			return as_cluster_enable_metrics(err, cluster, &trg->metrics);
+			return as_cluster_enable_metrics(err, cluster, &config->policies.metrics);
 		}
 	}
 	else {
@@ -1570,33 +1876,73 @@ as_cluster_update(as_cluster* cluster, as_config* orig, as_config* config, as_er
 //---------------------------------
 
 as_status
-as_config_file_init(as_config* config, as_error* err)
+as_config_file_init(aerospike* as, as_error* err)
 {
-	if (!config->rack_ids) {
-		// Add config rack_id to rack_ids so it can be compared with yaml file rack_ids.
-		config->rack_ids = as_vector_create(sizeof(int), 1);
-		as_vector_append(config->rack_ids, &config->rack_id);
+	// Make shallow copy of the original user config.
+	as->config_orig = cf_malloc(sizeof(as_config));
+	memcpy(as->config_orig, &as->config, sizeof(as_config));
+
+	// Initialize field bitmap.
+	as->config_bitmap = cf_malloc(AS_CONFIG_BITMAP_SIZE);
+	memset(as->config_bitmap, 0, AS_CONFIG_BITMAP_SIZE);
+
+	as_config* config = &as->config;
+	as_status status = as_config_file_read(as, config, as->config_bitmap, true, err);
+
+	if (status != AEROSPIKE_OK) {
+		// Destroy heap allocated fields if changed before update fails.
+		if (config->rack_ids != as->config_orig->rack_ids) {
+			as_vector_destroy(config->rack_ids);
+		}
+
+		if (config->policies.metrics.app_id != as->config_orig->policies.metrics.app_id) {
+			cf_free(config->policies.metrics.app_id);
+		}
+
+		if (config->policies.metrics.labels != as->config_orig->policies.metrics.labels) {
+			as_metrics_policy_destroy_labels(&config->policies.metrics);
+		}
+
+		// Restore original config.
+		memcpy(&as->config, as->config_orig, sizeof(as_config));
 	}
-	
-	return as_config_file_read(config, config->config_provider.path, true, err);
+	return status;
 }
 
 as_status
-as_config_file_update(as_cluster* cluster, as_config* orig, as_error* err)
+as_config_file_update(aerospike* as, as_error* err)
 {
-	as_config config;
-	memcpy(&config, orig, sizeof(as_config));
+	as_config* current = &as->config;
 
-	as_status status = as_config_file_read(&config, cluster->config_file_path, false, err);
+	as_config config;
+	memcpy(&config, current, sizeof(as_config));
+
+	// Start with empty vectors.
+	config.rack_ids = NULL;
+	config.policies.metrics.app_id = NULL;
+	config.policies.metrics.labels = NULL;
+
+	uint8_t bitmap[AS_CONFIG_BITMAP_SIZE];
+	memset(bitmap, 0, AS_CONFIG_BITMAP_SIZE);
+
+	as_status status = as_config_file_read(as, &config, bitmap, false, err);
 
 	if (status != AEROSPIKE_OK) {
-		// Destroy new rack_ids vector if changed before update fails.
-		if (config.rack_ids != orig->rack_ids) {
+		// Destroy heap allocated fields if changed before update fails.
+		if (config.rack_ids) {
 			as_vector_destroy(config.rack_ids);
+		}
+
+		if (config.policies.metrics.app_id) {
+			cf_free(config.policies.metrics.app_id);
+		}
+
+		if (config.policies.metrics.labels) {
+			as_metrics_policy_destroy_labels(&config.policies.metrics);
 		}
 		return status;
 	}
 
 	as_log_info("Update dynamic config");
-	return as_cluster_update(cluster, orig, &config, err);
+	return as_cluster_update(as, as->config_orig, &config, bitmap, err);
 }

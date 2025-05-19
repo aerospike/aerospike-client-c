@@ -18,6 +18,7 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_async.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_job.h>
 #include <aerospike/as_key.h>
@@ -1271,15 +1272,21 @@ as_policy_scan_merge(aerospike* as, const as_policy_scan* src, as_policy_scan* m
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.scan;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_policy_scan* def = &config->policies.scan;
+		as_policy_scan* cfg = &config->policies.scan;
 
-		mrg->base.socket_timeout = def->base.socket_timeout;
-		mrg->base.total_timeout = def->base.total_timeout;
-		mrg->base.max_retries = def->base.max_retries;
-		mrg->base.sleep_between_retries = def->base.sleep_between_retries;
-		mrg->replica = def->replica;
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_SCAN_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_SCAN_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_SCAN_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_SCAN_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->replica = as_field_is_set(bitmap, AS_SCAN_REPLICA)?
+			cfg->replica : src->replica;
 
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;

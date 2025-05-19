@@ -17,6 +17,7 @@
 #include <aerospike/as_metrics.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_string_builder.h>
@@ -32,13 +33,19 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 		as_config* config = aerospike_load_config(as);
 		return &config->policies.metrics;
 	}
-	else if (as->dynamic_config) {
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
 		as_config* config = aerospike_load_config(as);
-		as_metrics_policy* def = &config->policies.metrics;
+		as_metrics_policy* cfg = &config->policies.metrics;
 
-		mrg->latency_columns = def->latency_columns;
-		mrg->latency_shift = def->latency_shift;
-		mrg->enable = def->enable;
+		mrg->labels = as_field_is_set(bitmap, AS_METRICS_LABELS)?
+			cfg->labels : src->labels;
+		mrg->latency_columns = as_field_is_set(bitmap, AS_METRICS_LATENCY_COLUMNS)?
+			cfg->latency_columns : src->latency_columns;
+		mrg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
+			cfg->latency_shift : src->latency_shift;
+		mrg->enable = as_field_is_set(bitmap, AS_METRICS_ENABLE)?
+			cfg->enable : src->enable;
 
 		mrg->metrics_listeners = src->metrics_listeners;
 		as_strncpy(mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));
@@ -48,6 +55,19 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 	}
 	else {
 		return src;
+	}
+}
+
+static void
+as_destroy_labels(as_vector* labels)
+{
+	if (labels) {
+		for (uint32_t i = 0; i < labels->size; i++) {
+			as_metrics_label* label = as_vector_get(labels, i);
+			cf_free(label->name);
+			cf_free(label->value);
+		}
+		as_vector_destroy(labels);
 	}
 }
 
@@ -73,6 +93,8 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 void
 as_metrics_policy_init(as_metrics_policy* policy)
 {
+	policy->labels = NULL;
+	policy->app_id = NULL;
 	policy->report_size_limit = 0;
 	as_strncpy(policy->report_dir, ".", sizeof(policy->report_dir));
 	policy->interval = 30;
@@ -84,4 +106,89 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->metrics_listeners.disable_listener = NULL;
 	policy->metrics_listeners.udata = NULL;
 	policy->enable = false;
+}
+
+void
+as_metrics_policy_destroy(as_metrics_policy* policy)
+{
+	as_metrics_policy_destroy_labels(policy);
+
+	if (policy->app_id) {
+		cf_free(policy->app_id);
+		policy->app_id = NULL;
+	}
+}
+
+void
+as_metrics_policy_destroy_labels(as_metrics_policy* policy)
+{
+	as_destroy_labels(policy->labels);
+	policy->labels = NULL;
+}
+
+void
+as_metrics_policy_set_labels(as_metrics_policy* policy, as_vector* labels)
+{
+	as_vector* old = policy->labels;
+	policy->labels = labels;
+	as_destroy_labels(old);
+}
+
+void
+as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels)
+{
+	as_vector* list = NULL;
+
+	if (labels) {
+		list = as_vector_create(sizeof(as_metrics_label), labels->size);
+
+		for (uint32_t i = 0; i < labels->size; i++) {
+			as_metrics_label* label = as_vector_get(labels, i);
+
+			as_metrics_label tmp;
+			tmp.name = cf_strdup(label->name);
+			tmp.value = cf_strdup(label->value);
+
+			as_vector_append(list, &tmp);
+		}
+	}
+	as_metrics_policy_set_labels(policy, list);
+}
+
+void
+as_metrics_policy_add_label(as_metrics_policy* policy, const char* name, const char* value)
+{
+	if (!policy->labels) {
+		policy->labels = as_vector_create(sizeof(as_metrics_label), 8);
+	}
+
+	as_metrics_label label;
+	label.name = cf_strdup(name);
+	label.value = cf_strdup(value);
+
+	as_vector_append(policy->labels, &label);
+}
+
+void
+as_metrics_policy_set_app_id(as_metrics_policy* policy, const char* app_id)
+{
+	char* old = policy->app_id;
+
+	policy->app_id = app_id ? cf_strdup(app_id) : NULL;
+
+	if (old) {
+		cf_free(old);
+	}
+}
+
+void
+as_metrics_policy_assign_app_id(as_metrics_policy* policy, char* app_id)
+{
+	char* old = policy->app_id;
+
+	policy->app_id = app_id;
+
+	if (old) {
+		cf_free(old);
+	}
 }

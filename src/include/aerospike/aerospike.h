@@ -62,6 +62,7 @@
  * @defgroup aerospike_t Client Types
  */
 
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_log.h>
@@ -112,8 +113,8 @@ struct as_cluster_s;
  * - aerospike_init() — Initialize a stack allocated aerospike instance.
  * - aerospike_new() — Create and initialize a heap allocated aerospike instance.
  *
- * Once initialized, the ownership of the as_config instance fields are transferred 
- * to the aerospike instance.  The user should never call as_config_destroy() directly.
+ * Once initialized, ownership of as_config instance fields is transferred to the aerospike
+ * instance.  The user should not call as_config_destroy() after this point.
  *
  * The following uses a stack allocated aerospike instance and initializes it
  * with aerospike_init():
@@ -172,21 +173,26 @@ typedef struct aerospike_s {
 	struct as_cluster_s* cluster;
 
 	/**
-	 * Client configuration.
+	 * Client configuration. Dynamic configuration can periodically update this field.
 	 */
 	as_config config;
 
 	/**
-	 * Is dynamic configuration enabled. Automatically set to true if config_provider
-	 * is set in as_config at startup. If true, configuration can be loaded after cluster
-	 * initialization and some default policies take precedence over passed in policies.
+	 * Original client configuration provided by the user. Populated when dynamic
+	 * configuration is enabled.
 	 */
-	bool dynamic_config;
+	as_config* config_orig;
 
 	/**
-	* @private
-	* If true, then aerospike_destroy() will free this instance.
-	*/
+	 * @private
+	 * Bitmap of fields that were set by dynamic configuration.
+	 */
+	uint8_t* config_bitmap;
+
+	/**
+	 * @private
+	 * If true, then aerospike_destroy() will free this instance.
+	 */
 	bool _free;
 
 } aerospike;
@@ -200,9 +206,6 @@ typedef struct aerospike_s {
  *
  * The config parameter can be an instance of `as_config` or `NULL`. If `NULL`,
  * then the default configuration will be used.
- *
- * Ownership of the as_config instance fields are transferred to the aerospike instance.
- * The user should never call as_config_destroy() directly.
  *
  * ~~~~~~~~~~{.c}
  * aerospike as;
@@ -226,9 +229,6 @@ aerospike_init(aerospike* as, as_config* config);
 
 /**
  * Creates a new heap allocated aerospike instance.
- *
- * Ownership of the as_config instance fields are transferred to the aerospike instance.
- * The user should never call as_config_destroy() directly.
  *
  * ~~~~~~~~~~{.c}
  * aerospike* as = aerospike_new(&config);

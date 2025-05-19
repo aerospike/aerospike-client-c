@@ -1783,7 +1783,6 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->txn_roll.allow_inline_ssd : orig->txn_roll.allow_inline_ssd;
 	trg->txn_roll.respond_all_keys = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_RESPOND_ALL_KEYS)?
 		src->txn_roll.respond_all_keys : orig->txn_roll.respond_all_keys;
-
 }
 
 static as_status

@@ -546,6 +546,9 @@ aerospike_batch_read(
  * This method allows different namespaces/bins to be requested for each key in the batch.
  * The returned records are located in the same batch array.
  *
+ * All record operations must be read operations. If the batch policy is NULL, the default batch
+ * read policy (as_config.policies.batch) is used.
+ *
  * @code
  * void my_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* loop)
  * {
@@ -671,6 +674,10 @@ typedef struct {
  * write is run under a transaction. The reason is transactions require an extra async call to add
  * write keys to the transaction monitor record and this extra call causes stack variables to fall out
  * of scope before the async batch is executed.
+ *
+ * At least one record operation should be a write operation. Read operations can be mixed with
+ * write operations. If the batch policy is NULL, the default batch write policy
+ * (as_config.policies.batch_parent_write) is used.
  *
  * Requires server version 6.0+
  *

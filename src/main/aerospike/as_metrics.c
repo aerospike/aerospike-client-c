@@ -73,7 +73,7 @@ aerospike_enable_metrics(aerospike* as, as_error* err, const as_metrics_policy* 
 		as_field_is_set(as->config_bitmap, AS_METRICS_ENABLE) &&
 		!as->config.policies.metrics.enable) {
 		pthread_mutex_unlock(&cluster->metrics_lock);
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+		return as_error_set_message(err, AEROSPIKE_METRICS_CONFLICT,
 			"Metrics can not be enabled by this function when metrics is disabled by dynamic configuration");
 	}
 
@@ -97,7 +97,7 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 		as_field_is_set(as->config_bitmap, AS_METRICS_ENABLE) &&
 		as->config.policies.metrics.enable) {
 		pthread_mutex_unlock(&cluster->metrics_lock);
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+		return as_error_set_message(err, AEROSPIKE_METRICS_CONFLICT,
 			"Metrics can not be disabled by this function when metrics is enabled by dynamic configuration");
 	}
 

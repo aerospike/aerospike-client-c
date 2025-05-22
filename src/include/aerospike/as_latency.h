@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_atomic.h>
+#include <citrusleaf/alloc.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,25 +35,53 @@ typedef uint8_t as_latency_type;
 #define AS_LATENCY_TYPE_BATCH 3
 #define AS_LATENCY_TYPE_QUERY 4
 #define AS_LATENCY_TYPE_NONE 5
+#define AS_LATENCY_TYPE_MAX 5
 
 /**
- * Latency buckets for a command group.
- * Latency bucket counts are cumulative and not reset on each metrics snapshot interval
+ * Latency histogram for a command group.
+ * Latency histogram counts are cumulative and not reset on each metrics snapshot interval
  */
-typedef struct as_latency_buckets_s {
-	uint64_t* buckets;
-	uint32_t latency_shift;
-	uint32_t latency_columns;
-} as_latency_buckets;
+typedef struct as_latency_s {
+	uint32_t ref_count;
+	uint8_t shift;
+	uint8_t size;
+	uint64_t buckets[];
+} as_latency;
 
 //---------------------------------
 // Functions
 //---------------------------------
 
-static inline uint64_t
-as_latency_get_bucket(as_latency_buckets* buckets, uint32_t i)
+/**
+ * Reserver latency histogram.
+ */
+static inline as_latency*
+as_latency_reserve(as_latency* latency)
 {
-	return as_load_uint64(&buckets->buckets[i]);
+	as_latency* lat = (as_latency*)as_load_ptr((void* const*)&latency);
+	as_incr_uint32(&lat->ref_count);
+	return lat;
+}
+
+/**
+ * Release latency histogram.
+ */
+static inline void
+as_latency_release(as_latency* latency)
+{
+	if (as_aaf_uint32_rls(&latency->ref_count, -1) == 0) {
+		as_fence_acq();
+		cf_free(latency);
+	}
+}
+
+/**
+ * Retrieve specified bucket using atomics.
+ */
+static inline uint64_t
+as_latency_get_bucket(as_latency* latency, uint32_t index)
+{
+	return as_load_uint64(&latency->buckets[index]);
 }
 
 /**

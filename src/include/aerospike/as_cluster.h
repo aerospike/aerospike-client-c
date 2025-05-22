@@ -390,17 +390,9 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Number of cluster tend iterations between metrics notification events. One tend iteration
-	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
-	 * nodes. This is set using as_policy_metrics.
-	 */
-	uint32_t metrics_interval;
-
-	/**
-	 * @private
 	 * Number of elapsed time range buckets in latency histograms. This is set using as_policy_metrics.
 	 */
-	uint32_t metrics_latency_columns;
+	uint8_t metrics_latency_columns;
 
 	/**
 	 * @private
@@ -417,7 +409,15 @@ typedef struct as_cluster_s {
 	 * 
 	 * This is set using as_policy_metrics.
 	 */
-	uint32_t metrics_latency_shift;
+	uint8_t metrics_latency_shift;
+
+	/**
+	 * @private
+	 * Number of cluster tend iterations between metrics notification events. One tend iteration
+	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
+	 * nodes. This is set using as_policy_metrics.
+	 */
+	uint32_t metrics_interval;
 
 	/**
 	 * @private

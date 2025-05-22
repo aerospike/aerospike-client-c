@@ -99,6 +99,11 @@ typedef struct as_node_stats_s {
 	 */
 	uint64_t timeout_count;
 
+	/**
+	 * Command key busy error count since node was initialized.
+	 */
+	uint64_t key_busy_count;
+
 } as_node_stats;
 
 /**

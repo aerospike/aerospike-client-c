@@ -33,6 +33,12 @@ static char as_dir_sep = '/';
 #endif
 
 //---------------------------------
+// Globals
+//---------------------------------
+
+extern char* aerospike_client_version;
+
+//---------------------------------
 // Linux Static Functions
 //---------------------------------
 
@@ -363,7 +369,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	timestamp_to_string(now_str, sizeof(now_str));
 	
 	char data[512];
-	int rv = snprintf(data, sizeof(data), "%s header(1) cluster[name,cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,errors,timeouts,latency[]] conn[inUse,inPool,opened,closed] latency(%u,%u)[type[l1,l2,l3...]]\n",
+	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, mw->latency_columns, mw->latency_shift);
 	if (rv <= 0) {
 		fclose(mw->file);
@@ -423,6 +429,30 @@ as_metrics_write_conn(as_metrics_writer* mw, as_string_builder* sb, const struct
 }
 
 static void
+as_metrics_write_latencies(as_string_builder* sb, as_ns_metrics* metrics)
+{
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		if (i > 0) {
+			as_string_builder_append_char(sb, ',');
+		}
+		as_string_builder_append(sb, as_latency_type_to_string(i));
+		as_string_builder_append_char(sb, '[');
+
+		as_latency* latency = as_latency_reserve(metrics->latency[i]);
+
+		for (uint8_t j = 0; j < latency->size; j++) {
+			if (j > 0) {
+				as_string_builder_append_char(sb, ',');
+			}
+			as_string_builder_append_uint64(sb, as_latency_get_bucket(latency, j));
+		}
+
+		as_latency_release(latency);
+		as_string_builder_append_char(sb, ']');
+	}
+}
+
+static void
 as_metrics_write_node(as_metrics_writer* mw, as_string_builder* sb, struct as_node_s* node)
 {
 	as_string_builder_append_char(sb, '[');
@@ -450,32 +480,31 @@ as_metrics_write_node(as_metrics_writer* mw, as_string_builder* sb, struct as_no
 	as_string_builder_append_char(sb, ',');
 	as_metrics_get_node_async_conn_stats(node, &async);
 	as_metrics_write_conn(mw, sb, &async);
-	as_string_builder_append_char(sb, ',');
-
-	as_string_builder_append_uint64(sb, as_node_get_error_count(node));
-	as_string_builder_append_char(sb, ',');
-	as_string_builder_append_uint64(sb, as_node_get_timeout_count(node));
 	as_string_builder_append(sb, ",[");
 
-	as_node_metrics* node_metrics = node->metrics;
-	uint32_t max = AS_LATENCY_TYPE_NONE;
+	as_ns_metrics** array = node->metrics;
+	uint8_t max = node->metrics_size;
 
 	for (uint32_t i = 0; i < max; i++) {
+		as_ns_metrics* metrics = array[i];
+
 		if (i > 0) {
 			as_string_builder_append_char(sb, ',');
 		}
-		as_string_builder_append(sb, as_latency_type_to_string(i));
-		as_string_builder_append_char(sb, '[');
 
-		as_latency_buckets* buckets = &node_metrics->latency[i];
-		uint32_t bucket_max = buckets->latency_columns;
-
-		for (uint32_t j = 0; j < bucket_max; j++) {
-			if (j > 0) {
-				as_string_builder_append_char(sb, ',');
-			}
-			as_string_builder_append_uint64(sb, as_latency_get_bucket(buckets, j));
-		}
+		as_string_builder_append(sb, metrics->ns);
+		as_string_builder_append_char(sb, ',');
+		as_string_builder_append_uint64(sb, as_node_get_error_count(metrics));
+		as_string_builder_append_char(sb, ',');
+		as_string_builder_append_uint64(sb, as_node_get_timeout_count(metrics));
+		as_string_builder_append_char(sb, ',');
+		as_string_builder_append_uint64(sb, as_node_get_key_busy_count(metrics));
+		as_string_builder_append_char(sb, ',');
+		as_string_builder_append_uint64(sb, as_node_get_bytes_in(metrics));
+		as_string_builder_append_char(sb, ',');
+		as_string_builder_append_uint64(sb, as_node_get_bytes_out(metrics));
+		as_string_builder_append(sb, ",[");
+		as_metrics_write_latencies(sb, metrics);
 		as_string_builder_append_char(sb, ']');
 	}
 	as_string_builder_append(sb, "]]");
@@ -485,7 +514,7 @@ static as_status
 as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* cluster)
 {
 	char* cluster_name = cluster->cluster_name;
-	
+
 	if (cluster_name == NULL) {
 		cluster_name = "";
 	}
@@ -505,6 +534,34 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 	as_string_builder_append(&sb, " cluster[");
 	as_string_builder_append(&sb, cluster_name);
 	as_string_builder_append_char(&sb, ',');
+	as_string_builder_append(&sb, "C");
+	as_string_builder_append_char(&sb, ',');
+	as_string_builder_append(&sb, aerospike_client_version);
+	as_string_builder_append_char(&sb, ',');
+
+	if (mw->app_id) {
+		as_string_builder_append(&sb, mw->app_id);
+	}
+
+	as_string_builder_append(&sb, ",[");
+	as_vector* labels = mw->labels;
+
+	if (labels) {
+		for (uint32_t i = 0; i < labels->size; i++) {
+			as_metrics_label* label = as_vector_get(labels, i);
+
+			if (i > 0) {
+				as_string_builder_append_char(&sb, ',');
+			}
+			as_string_builder_append_char(&sb, '[');
+			as_string_builder_append(&sb, label->name);
+			as_string_builder_append_char(&sb, ',');
+			as_string_builder_append(&sb, label->value);
+			as_string_builder_append_char(&sb, ']');
+		}
+	}
+
+	as_string_builder_append(&sb, "],");
 	as_string_builder_append_int(&sb, cpu_load);
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append_int(&sb, mem);
@@ -520,6 +577,7 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* loop = &as_event_loops[i];
+
 		if (i > 0) {
 			as_string_builder_append_char(&sb, ',');
 		}
@@ -554,6 +612,8 @@ static void
 as_metrics_writer_destroy(as_metrics_writer* mw)
 {
 	fclose(mw->file);
+	as_metrics_labels_destroy(mw->labels);
+	cf_free(mw->app_id);
 	cf_free(mw);
 }
 
@@ -571,6 +631,8 @@ as_metrics_writer_create(as_error* err, const as_metrics_policy* policy, as_metr
 
 	as_metrics_writer* mw = cf_calloc(1, sizeof(as_metrics_writer));
 	as_strncpy(mw->report_dir, policy->report_dir, sizeof(mw->report_dir));
+	mw->labels = as_metrics_labels_copy(policy->labels);
+	mw->app_id = policy->app_id ? cf_strdup(policy->app_id) : NULL;
 	mw->max_size = policy->report_size_limit;
 	mw->latency_columns = policy->latency_columns;
 	mw->latency_shift = policy->latency_shift;

@@ -144,7 +144,7 @@ typedef struct as_metrics_policy_s {
 	 *
 	 * Default: 7
 	 */
-	uint32_t latency_columns;
+	uint8_t latency_columns;
 
 	/**
 	 * Power of 2 multiple between each range bucket in latency histograms starting at column 3. The bucket units
@@ -160,7 +160,7 @@ typedef struct as_metrics_policy_s {
 	 *
 	 * Default: 1
 	 */
-	uint32_t latency_shift;
+	uint8_t latency_shift;
 
 	/**
 	 * @private
@@ -256,6 +256,15 @@ as_metrics_policy_set_listeners(
 	policy->metrics_listeners.snapshot_listener = snapshot;
 	policy->metrics_listeners.udata = udata;
 }
+
+AS_EXTERN as_vector*
+as_metrics_labels_copy(as_vector* labels);
+
+AS_EXTERN bool
+as_metrics_labels_equal(as_vector* labels1, as_vector* labels2);
+
+AS_EXTERN void
+as_metrics_labels_destroy(as_vector* labels);
 
 /**
  * Enable extended periodic cluster and node latency metrics.

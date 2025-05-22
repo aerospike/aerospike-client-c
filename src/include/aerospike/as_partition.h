@@ -24,15 +24,20 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
- * If the server removes then adds namespaces, the client may contain more
- * than the server max of 32.
+ * Maximum server namespaces.
  */
-#define AS_MAX_NAMESPACES 128
+#define AS_MAX_NAMESPACES 32
+
+/**
+ * Maximum metrics namespaces. This includes an extra empty namespace for metrics that are not
+ * bound to a namespace.
+ */
+#define AS_MAX_METRICS_NAMESPACES 33
 
 /**
  * Maximum namespace size including null byte.  Effective maximum length is 31.
@@ -44,9 +49,10 @@ extern "C" {
  */
 #define AS_MAX_REPLICATION_FACTOR 3
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
+
 struct as_node_s;
 struct as_cluster_s;
 struct as_error_s;
@@ -95,9 +101,9 @@ typedef struct as_partition_info_s {
 	bool sc_mode;
 } as_partition_info;
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * @private
@@ -112,7 +118,14 @@ as_partition_tables_destroy(as_partition_tables* tables);
  */
 AS_EXTERN as_partition_table*
 as_partition_tables_get(as_partition_tables* tables, const char* ns);
-	
+
+/**
+ * @private
+ * Get global partition table namespace given local namespace.
+ */
+AS_EXTERN const char*
+as_partition_tables_get_ns(struct as_cluster_s* cluster, const char* ns);
+
 /**
  * @private
  * Return partition ID given digest.

@@ -1129,6 +1129,8 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.policy = policy;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
+	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	cmd.ns = as_partition_tables_get_ns(task->cluster, task->query->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;
@@ -1231,6 +1233,7 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.policy = policy;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
+	cmd.ns = as_partition_tables_get_ns(task->cluster, task->query->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;
@@ -1611,6 +1614,9 @@ as_query_partition_execute_async(
 	as_event_executor* ee = &qe->executor;
 	uint32_t n_nodes = pt->node_parts.size;
 
+	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	const char*	global_ns = as_partition_tables_get_ns(qe->cluster, qe->executor.ns);
+
 	for (uint32_t i = 0; i < n_nodes; i++) {
 		as_node_partitions* np = as_vector_get(&pt->node_parts, i);
 
@@ -1719,7 +1725,7 @@ as_query_partition_execute_async(
 		// Reserve node because as_event_command_free() will release node
 		// on command completion.
 		as_node_reserve(cmd->node);
-		cmd->ns = NULL;
+		cmd->ns = global_ns;
 		cmd->partition = NULL;
 		cmd->udata = qe;  // Overload udata to be the executor.
 		cmd->parse_results = as_query_parse_records_async;
@@ -2279,6 +2285,9 @@ aerospike_query_async(
 	// read to reuse buffer.
 	size_t s = (sizeof(as_async_query_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 
+	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	const char* global_ns = as_partition_tables_get_ns(cluster, query->ns);
+
 	// Create all query commands.
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_async_query_command* qcmd = cf_malloc(s);
@@ -2293,7 +2302,7 @@ aerospike_query_async(
 		cmd->event_loop = exec->event_loop;
 		cmd->cluster = cluster;
 		cmd->node = nodes->array[i];
-		cmd->ns = NULL;
+		cmd->ns = global_ns;
 		cmd->partition = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_query_parse_records_async;

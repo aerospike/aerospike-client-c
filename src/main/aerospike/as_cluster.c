@@ -557,22 +557,11 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	as_vector_append(cluster->gc, &item);
 }
 
-static void
-as_cluster_destroy_node_metrics(as_cluster* cluster)
-{
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_destroy_metrics(nodes->array[i]);
-	}
-	as_nodes_release(nodes);
-}
-
 as_status
 as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
 {
 	bool custom_listener = policy->metrics_listeners.enable_listener != NULL;
-	
+
 	if (custom_listener) {
 		// Ensure all listeners and user data has been defined.
 		if (! (policy->metrics_listeners.enable_listener && policy->metrics_listeners.snapshot_listener &&
@@ -581,15 +570,12 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_p
 			return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "All metrics listeners and udata must be defined");
 		}
 	}
-	
-	pthread_mutex_lock(&cluster->metrics_lock);
 
 	as_status status = AEROSPIKE_OK;
 
 	if (cluster->metrics_enabled) {
 		cluster->metrics_enabled = false;
 		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
-		as_cluster_destroy_node_metrics(cluster);
 
 		if (status != AEROSPIKE_OK) {
 			// Disabling old metrics should not prevent new metrics from being created.
@@ -609,11 +595,10 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_p
 		status = as_metrics_writer_create(err, policy, &cluster->metrics_listeners);
 		
 		if (status != AEROSPIKE_OK) {
-			pthread_mutex_unlock(&cluster->metrics_lock);
 			return status;
 		}
 	}
-	
+
 	cluster->metrics_interval = policy->interval;
 	cluster->metrics_latency_columns = policy->latency_columns;
 	cluster->metrics_latency_shift = policy->latency_shift;
@@ -629,13 +614,10 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_p
 	status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
 	
 	if (status != AEROSPIKE_OK) {
-		as_cluster_destroy_node_metrics(cluster);
-		pthread_mutex_unlock(&cluster->metrics_lock);
 		return status;
 	}
 
 	cluster->metrics_enabled = true;
-	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
 }
 
@@ -645,15 +627,11 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 	as_status status = AEROSPIKE_OK;
 	as_error_reset(err);
 
-	pthread_mutex_lock(&cluster->metrics_lock);
-
 	if (cluster->metrics_enabled) {
 		cluster->metrics_enabled = false;
 		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
-		as_cluster_destroy_node_metrics(cluster);
 	}
 
-	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
 }
 

@@ -62,7 +62,6 @@
  * @defgroup aerospike_t Client Types
  */
 
-#include <aerospike/as_atomic.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_log.h>

@@ -184,6 +184,7 @@ typedef struct as_command_s {
 	const as_policy_base* policy;
 	as_node* node;
 	const as_key* key;
+	const char* ns;
 	void* partition;
 	as_parse_results_fn parse_results_fn;
 	void* udata;

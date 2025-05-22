@@ -135,6 +135,7 @@ as_command_init_read(
 	cmd->policy = policy;
 	cmd->node = NULL;
 	cmd->key = key;
+	cmd->ns = pi->ns;
 	cmd->partition = pi->partition;
 	cmd->parse_results_fn = fn;
 	cmd->udata = udata;
@@ -196,6 +197,7 @@ as_command_init_write(
 	cmd->policy = policy;
 	cmd->node = NULL;
 	cmd->key = key;
+	cmd->ns = pi->ns;
 	cmd->partition = pi->partition;
 	cmd->parse_results_fn = fn;
 	cmd->udata = udata;

@@ -308,8 +308,13 @@ aerospike_close(aerospike* as, as_error* err)
 	
 	if (cluster) {
 		if (cluster->metrics_enabled) {
-			as_status status = aerospike_disable_metrics(as, err);
-			
+			// Call as_cluster_disable_metrics() instead of aerospike_disable_metrics() to avoid
+			// the unwanted dynamic config enabled denial. On aerospike_close(), the metrics
+			// must be closed.
+			pthread_mutex_lock(&cluster->metrics_lock);
+			as_status status = as_cluster_disable_metrics(err, cluster);
+			pthread_mutex_unlock(&cluster->metrics_lock);
+
 			if (status != AEROSPIKE_OK) {
 				as_log_warn("Metrics error: %s %s", as_error_string(status), err->message);
 				as_error_reset(err);

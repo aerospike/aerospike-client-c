@@ -320,7 +320,7 @@ as_event_write(as_event_command* cmd)
 #endif
 			if (bytes > 0) {
 				cmd->pos += bytes;
-				cmd->bytes_out += rv;
+				cmd->bytes_out += bytes;
 				continue;
 			}
 		
@@ -406,7 +406,7 @@ as_event_read(as_event_command* cmd)
 
 			if (bytes > 0) {
 				cmd->pos += bytes;
-				cmd->bytes_in += rv;
+				cmd->bytes_in += bytes;
 				continue;
 			}
 		

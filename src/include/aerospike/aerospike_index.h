@@ -51,9 +51,15 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
+
+#define AS_INDEX_NAME_MAX_SIZE 64
+
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Index Type
@@ -98,7 +104,7 @@ typedef struct as_index_task_s {
 	/**
 	 * The name of the index.
 	 */
-	char name[64];
+	char name[AS_INDEX_NAME_MAX_SIZE];
 
 	/**
 	 * Maximum time in milliseconds to wait for info command to return create index status.
@@ -119,10 +125,11 @@ typedef struct as_index_task_s {
 } as_index_task;
 
 struct as_cdt_ctx;
+struct as_exp;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Create secondary index given collection type, data type and context.
@@ -162,6 +169,45 @@ aerospike_index_create_ctx(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
 	const char* set, const char* bin_name, const char* index_name, as_index_type itype,
 	as_index_datatype dtype, struct as_cdt_ctx* ctx
+	);
+
+/**
+ * Create secondary index on an expression.
+ *
+ * This asynchronous server call will return before the command is complete.
+ * The user can optionally wait for command completion by using a task instance.
+ *
+ * @code
+ * as_exp_build(exp, as_exp_add(as_exp_bin_int("a"), as_exp_bin_int("b")));
+ *
+ * as_index_task task;
+ * if (aerospike_index_create_ctx(&as, &err, &task, NULL, "test", "demo",
+ *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, exp) == AEROSPIKE_OK) {
+ *     aerospike_index_create_wait(&err, &task, 0);
+ * }
+ * as_exp_destroy(exp);
+ * @endcode
+ *
+ * @param as			The aerospike instance to use for this operation.
+ * @param err			The as_error to be populated if an error occurs.
+ * @param task			The optional task data used to poll for completion.
+ * @param policy		The policy to use for this operation. If NULL, then the default policy will be used.
+ * @param ns			The namespace to be indexed.
+ * @param set			The set to be indexed.
+ * @param index_name	The name of the index.
+ * @param itype			The type of index, default or complex type.
+ * @param dtype			The data type of index, string or integer.
+ * @param exp			The expression to be indexed.
+ *
+ * @return AEROSPIKE_OK if successful. Return AEROSPIKE_ERR_INDEX_FOUND if index exists. Otherwise an error.
+ *
+ * @ingroup index_operations
+ */
+AS_EXTERN as_status
+aerospike_index_create_exp(
+	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
+	const char* set, const char* index_name, as_index_type itype, as_index_datatype dtype,
+	struct as_exp* exp
 	);
 
 /**
@@ -283,9 +329,9 @@ aerospike_index_remove(
 	const char* ns, const char* index_name
 	);
 
-/******************************************************************************
- * DEPRECATED FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Deprecated Functions
+//---------------------------------
 
 /**
  * Create a new secondary index on an integer bin.

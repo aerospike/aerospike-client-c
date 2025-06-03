@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,6 +17,7 @@
 #include <aerospike/as_query.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_cdt_internal.h>
+#include <aerospike/as_exp.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_operations.h>
@@ -104,6 +105,10 @@ as_query_destroy(as_query* query)
 				cf_free(pred->ctx);
 			}
 
+			if (pred->exp && pred->exp_free) {
+				as_exp_destroy(pred->exp);
+			}
+
 			switch (pred->dtype) {
 				case AS_INDEX_GEO2DSPHERE:
 				case AS_INDEX_STRING:
@@ -166,7 +171,7 @@ as_query_select_init(as_query* query, uint16_t n)
 }
 
 bool
-as_query_select(as_query* query, const char * bin)
+as_query_select(as_query* query, const char* bin)
 {
 	// test preconditions
 	if ( !query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE ) {
@@ -203,43 +208,10 @@ as_query_where_init(as_query* query, uint16_t n)
 }
 
 static bool
-as_query_where_internal(
-	as_query* query, const char* bin, as_cdt_ctx* ctx, as_predicate_type type, as_index_type itype,
-	as_index_datatype dtype, va_list ap
+as_query_where_predicate(
+	as_predicate* p, as_predicate_type type, as_index_datatype dtype, va_list ap
 	)
 {
-	// test preconditions
-	if (! query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE) {
-		return false;
-	}
-
-	// insufficient capacity
-	if (query->where.size >= query->where.capacity) {
-		return false;
-	}
-
-	as_predicate* p = &query->where.entries[query->where.size++];
-	bool status = true;
-
-	strcpy(p->bin, bin);
-	p->type = type;
-	p->dtype = dtype;
-	p->itype = itype;
-	p->ctx = ctx;
-	p->ctx_free = false; // Default to false to preserve legacy behavior.
-
-	if (ctx) {
-		as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
-		p->ctx_size = as_cdt_ctx_pack(ctx, &pk);
-
-		if (p->ctx_size == 0) {
-			return false;
-		}
-	}
-	else {
-		p->ctx_size = 0;
-	}
-
 	switch (type) {
 	case AS_PREDICATE_EQUAL:
 		switch (dtype) {
@@ -259,8 +231,7 @@ as_query_where_internal(
 				break;
 
 			default:
-				status = false;
-				break;
+				return false;
 		}
 		break;
 
@@ -274,17 +245,61 @@ as_query_where_internal(
 			p->value.string_val._free = false;
 		}
 		else {
-			status = false;
+			return false;
 		}
 		break;
 	}
 
-	return status;
+	return true;
+}
+
+static bool
+as_query_where_internal(
+	as_query* query, const char* bin, as_cdt_ctx* ctx, as_predicate_type type, as_index_type itype,
+	as_index_datatype dtype, va_list ap
+	)
+{
+	// test preconditions
+	if (! query || !bin || strlen(bin) >= AS_BIN_NAME_MAX_SIZE) {
+		return false;
+	}
+
+	// insufficient capacity
+	if (query->where.size >= query->where.capacity) {
+		return false;
+	}
+
+	as_predicate* p = &query->where.entries[query->where.size++];
+
+	p->index_name[0] = 0;
+	as_strncpy(p->bin, bin, sizeof(p->bin));
+	p->type = type;
+	p->dtype = dtype;
+	p->itype = itype;
+	p->ctx = ctx;
+	p->ctx_free = false; // Default to false to preserve legacy behavior.
+
+	if (ctx) {
+		as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
+		p->ctx_size = as_cdt_ctx_pack(ctx, &pk);
+
+		if (p->ctx_size == 0) {
+			return false;
+		}
+	}
+	else {
+		p->ctx_size = 0;
+	}
+
+	p->exp = NULL;
+	p->exp_free = false;
+
+	return as_query_where_predicate(p, type, dtype, ap);
 }
 
 bool
 as_query_where(
-	as_query* query, const char * bin, as_predicate_type type, as_index_type itype,
+	as_query* query, const char* bin, as_predicate_type type, as_index_type itype,
 	as_index_datatype dtype, ...
 	)
 {
@@ -307,6 +322,71 @@ as_query_where_with_ctx(
 	va_start(ap, dtype);
 
 	bool rv = as_query_where_internal(query, bin, ctx, type, itype, dtype, ap);
+
+	va_end(ap);
+	return rv;
+}
+
+static bool
+as_query_where_index_name(
+	as_query* query, const char* index_name, as_exp* exp, as_predicate_type type, as_index_type itype,
+	as_index_datatype dtype, va_list ap
+	)
+{
+	if (! query) {
+		return false;
+	}
+
+	if (query->where.size >= query->where.capacity) {
+		return false;
+	}
+
+	as_predicate* p = &query->where.entries[query->where.size++];
+
+	if (index_name) {
+		as_strncpy(p->index_name, index_name, sizeof(p->index_name));
+	}
+	else {
+		p->index_name[0] = 0;
+	}
+	p->bin[0] = 0;
+	p->type = type;
+	p->dtype = dtype;
+	p->itype = itype;
+	p->ctx = NULL;
+	p->ctx_free = false;
+	p->ctx_size = 0;
+	p->exp = exp;
+	p->exp_free = false;
+
+	return as_query_where_predicate(p, type, dtype, ap);
+}
+
+bool
+as_query_where_with_index_name(
+	as_query* query, const char* index_name, as_predicate_type type, as_index_type itype,
+	as_index_datatype dtype, ...
+	)
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_index_name(query, index_name, NULL, type, itype, dtype, ap);
+
+	va_end(ap);
+	return rv;
+}
+
+bool
+as_query_where_with_exp(
+	as_query* query, const char* index_name, as_exp* exp, as_predicate_type type, as_index_type itype,
+	as_index_datatype dtype, ...
+	)
+{
+	va_list ap;
+	va_start(ap, dtype);
+
+	bool rv = as_query_where_index_name(query, index_name, exp, type, itype, dtype, ap);
 
 	va_end(ap);
 	return rv;
@@ -344,12 +424,21 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 
 	for (uint16_t i = 0; i < query->where.size; i++) {
 		as_predicate* pred = &query->where.entries[i];
+		as_pack_string(&pk, pred->index_name);
 		as_pack_string(&pk, pred->bin);
 
 		if (pred->ctx) {
 			as_pack_bool(&pk, true);
 			uint32_t size = as_cdt_ctx_pack(pred->ctx, &pk);
 			as_pack_uint64(&pk, size);
+		}
+		else {
+			as_pack_bool(&pk, false);
+		}
+
+		if (pred->exp) {
+			as_pack_bool(&pk, true);
+			as_pack_bytes(&pk, pred->exp->packed, pred->exp->packed_sz);
 		}
 		else {
 			as_pack_bool(&pk, false);
@@ -538,7 +627,13 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 			pred->ctx = NULL;
 			pred->ctx_size = 0;
 			pred->ctx_free = false;
+			pred->exp = NULL;
+			pred->exp_free = false;
 			free_pred_val = false;
+
+			if (! as_unpack_str_init(&pk, pred->index_name, AS_INDEX_NAME_MAX_SIZE)) {
+				goto HandleError;
+			}
 
 			if (! as_unpack_str_init(&pk, pred->bin, AS_BIN_NAME_MAX_SIZE)) {
 				goto HandleError;
@@ -561,6 +656,29 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 				}
 
 				pred->ctx_size = (uint32_t)uval;
+			}
+
+			if (as_unpack_boolean(&pk, &b) != 0) {
+				goto HandleError;
+			}
+
+			if (b) {
+				uint8_t* tmp;
+				uint32_t tmp_size;
+
+				if (! as_unpack_bytes_new(&pk, &tmp, &tmp_size, 4096)) {
+					goto HandlePredError;
+				}
+
+				// Do not copy bytes type that precedes tmp buffer.
+				uint8_t* tmp2 = tmp + 1;
+				tmp_size--;
+
+				pred->exp = cf_malloc(sizeof(as_exp) + tmp_size);
+				pred->exp->packed_sz = tmp_size;
+				memcpy(pred->exp->packed, tmp2, tmp_size);
+				pred->exp_free = true;
+				cf_free(tmp);
 			}
 
 			if (as_unpack_int64(&pk, &ival) != 0) {
@@ -838,6 +956,11 @@ HandlePredError:
 		pred->ctx = NULL;
 	}
 
+	if (pred->exp) {
+		as_exp_destroy(pred->exp);
+		pred->exp = NULL;
+	}
+
 	if (free_pred_val) {
 		switch (pred->dtype) {
 			case AS_INDEX_GEO2DSPHERE:
@@ -929,6 +1052,10 @@ as_query_compare(as_query* q1, as_query* q2) {
 		as_predicate* p1 = &q1->where.entries[i];
 		as_predicate* p2 = &q2->where.entries[i];
 
+		if (strcmp(p1->index_name, p2->index_name) != 0) {
+			as_cmp_error();
+		}
+
 		if (strcmp(p1->bin, p2->bin) != 0) {
 			as_cmp_error();
 		}
@@ -969,6 +1096,25 @@ as_query_compare(as_query* q1, as_query* q2) {
 						as_cmp_error();
 					}
 				}
+			}
+		}
+
+		/* exp_free may be different.
+		if (p1->exp_free != p2->exp_free) {
+			as_cmp_error();
+		}
+		*/
+
+		as_exp* exp1 = p1->exp;
+		as_exp* exp2 = p2->exp;
+
+		if (exp1 != exp2) {
+			if (exp1->packed_sz != exp2->packed_sz) {
+				as_cmp_error();
+			}
+
+			if (memcmp(exp1->packed, exp2->packed, exp1->packed_sz) != 0) {
+				as_cmp_error();
 			}
 		}
 

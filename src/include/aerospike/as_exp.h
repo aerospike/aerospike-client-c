@@ -59,9 +59,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 typedef enum {
 	_AS_EXP_CODE_UNKNOWN = 0,
@@ -206,21 +206,22 @@ typedef struct {
 	} v;
 } as_exp_entry;
 
-/*********************************************************************************
- * PRIVATE FUNCTIONS
- *********************************************************************************/
+//---------------------------------
+// Private Functions
+//---------------------------------
 
 AS_EXTERN as_exp* as_exp_compile(as_exp_entry* table, uint32_t n);
 AS_EXTERN char* as_exp_compile_b64(as_exp* exp);
 AS_EXTERN void as_exp_destroy_b64(char* b64);
 AS_EXTERN uint8_t* as_exp_write(as_exp* exp, uint8_t* ptr);
+AS_EXTERN uint8_t* as_exp_write_index(as_exp* exp, uint8_t* ptr);
 AS_EXTERN int64_t as_exp_get_ctx_type(const as_cdt_ctx* ctx, as_exp_type default_type);
 AS_EXTERN int64_t as_exp_get_list_type(as_exp_type default_type, as_list_return_type rtype, bool is_multi);
 AS_EXTERN int64_t as_exp_get_map_type(as_exp_type type, as_map_return_type rtype, bool is_multi);
 
-/*********************************************************************************
- * PUBLIC FUNCTIONS
- *********************************************************************************/
+//---------------------------------
+// Public Functions
+//---------------------------------
 
 /**
  * Encode expression to null-terminated base64 string.
@@ -260,9 +261,9 @@ as_exp_destroy_base64(char* base64)
 	as_exp_destroy_b64(base64);
 }
 
-/*********************************************************************************
- * VALUE EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Value Expressions
+//---------------------------------
 
 /**
  * Create an 'unknown' value. Used to intentionally fail an expression.
@@ -370,9 +371,9 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_wildcard() as_exp_val(&as_cmp_wildcard)
 
-/*********************************************************************************
- * KEY EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Key Expressions
+//---------------------------------
 
 /**
  * Create expression that returns the key as an integer. Returns 'unknown' if
@@ -438,9 +439,9 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_key_exist() {.op=_AS_EXP_CODE_KEY_EXIST, .count=1}
 
-/*********************************************************************************
- * BIN EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Bin Expressions
+//---------------------------------
 
 #define _AS_EXP_VAL_RAWSTR(__val) {.op=_AS_EXP_CODE_VAL_RAWSTR, .v.str_val=__val}
 
@@ -652,9 +653,9 @@ as_exp_destroy_base64(char* base64)
 		{.op=_AS_EXP_CODE_BIN_TYPE, .count=2}, \
 		_AS_EXP_VAL_RAWSTR(__bin_name)
 
-/*********************************************************************************
- * METADATA EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Metadata Expressions
+//---------------------------------
 
 /**
  * Create expression that returns record set name string. This expression usually
@@ -830,9 +831,9 @@ as_exp_destroy_base64(char* base64)
 		{.op=_AS_EXP_CODE_DIGEST_MODULO, .count=2}, \
 		as_exp_int(__mod)
 
-/*********************************************************************************
- * COMPARISON EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Comparison Expressions
+//---------------------------------
 
 /**
  * Create equals (==) expression.
@@ -970,9 +971,9 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_cmp_geo(__left, __right) \
 		{.op=_AS_EXP_CODE_CMP_GEO, .count=3}, __left, __right
 
-/*********************************************************************************
- * LOGICAL EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Logical Expressions
+//---------------------------------
 
 /**
  * Create "not" (!) operator expression.
@@ -1048,9 +1049,9 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_exclusive(...) {.op=_AS_EXP_CODE_EXCLUSIVE}, __VA_ARGS__, \
 		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
 
-/*********************************************************************************
- * ARITHMETIC EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Arithmetic Expressions
+//---------------------------------
 
 /**
  * Create "add" (+) operator that applies to a variable number of expressions.
@@ -1535,9 +1536,9 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_max(...) {.op=_AS_EXP_CODE_MAX}, __VA_ARGS__, \
 		{.op=_AS_EXP_CODE_END_OF_VA_ARGS}
 
-/*********************************************************************************
- * FLOW CONTROL AND VARIABLE EXPRESSIONS
- *********************************************************************************/
+//--------------------------------------
+// Flow Control and Variable Expressions
+//--------------------------------------
 
 /**
  * Conditionally select an action expression from a variable number of expression pairs
@@ -1632,9 +1633,9 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_var(__var_name) \
 		{.op=_AS_EXP_CODE_VAR, .count=2}, _AS_EXP_VAL_RAWSTR(__var_name)
 
-/*********************************************************************************
- * LIST MODIFY EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// List Modify Expressions
+//---------------------------------
 
 #define _AS_EXP_VAL_RTYPE(__val) {.op=_AS_EXP_CODE_VAL_RTYPE, .v.int_val=__val}
 
@@ -1954,9 +1955,9 @@ as_exp_destroy_base64(char* base64)
 		__rank, __count, \
 		__bin
 
-/*********************************************************************************
- * LIST READ EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// List Read Expressions
+//---------------------------------
 
 #define _AS_EXP_CDT_LIST_READ(__type, __rtype, __is_multi) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
@@ -2186,9 +2187,9 @@ as_exp_destroy_base64(char* base64)
 		__rank, __count, \
 		__bin
 
-/*********************************************************************************
- * MAP MODIFY EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Map Modify Expressions
+//---------------------------------
 
 #define _AS_EXP_MAP_MOD(__ctx, __pol, __op, __param, __extra_param) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
@@ -2528,9 +2529,9 @@ as_exp_destroy_base64(char* base64)
 		__rank, __count, \
 		__bin
 
-/*********************************************************************************
- * MAP READ EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Map Read Expressions
+//---------------------------------
 
 #define _AS_EXP_MAP_READ(__type__, __rtype, __is_multi) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
@@ -2859,9 +2860,9 @@ as_exp_destroy_base64(char* base64)
 		__rank, __count, \
 		__bin
 
-/*********************************************************************************
- * BIT MODIFY EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Bit Modify Expressions
+//---------------------------------
 
 #define _AS_EXP_BIT_MOD() \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
@@ -3165,9 +3166,9 @@ as_exp_destroy_base64(char* base64)
 		as_exp_uint(__policy ? ((as_bit_policy*)(__policy))->flags : 0), \
 		__bin
 
-/*********************************************************************************
- * BIT READ EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// Bit Read Expressions
+//---------------------------------
 
 #define _AS_EXP_BIT_READ(__rtype) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
@@ -3260,9 +3261,9 @@ as_exp_destroy_base64(char* base64)
 		as_exp_int(__sign ? 1 : 0), \
 		__bin
 
-/*********************************************************************************
- * HLL MODIFY EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// HLL Modify Expressions
+//---------------------------------
 
 #define _AS_EXP_HLL_MOD() \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
@@ -3362,9 +3363,9 @@ as_exp_destroy_base64(char* base64)
 		as_exp_int(__policy == NULL ? 0 : ((as_hll_policy*)__policy)->flags), \
 		__bin
 
-/*********************************************************************************
- * HLL READ EXPRESSIONS
- *********************************************************************************/
+//---------------------------------
+// HLL Read Expressions
+//---------------------------------
 
 #define _AS_EXP_HLL_READ(__rtype) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
@@ -3464,9 +3465,9 @@ as_exp_destroy_base64(char* base64)
 		__list, \
 		__bin
 
-/*********************************************************************************
- * EXPRESSION MERGE
- *********************************************************************************/
+//---------------------------------
+// Expression Merge
+//---------------------------------
 
 /**
  * Merge precompiled expression into a new expression tree.
@@ -3488,9 +3489,9 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_expr(__e) \
 	{.op=_AS_EXP_CODE_MERGE, .v.expr=__e}
 
-/*********************************************************************************
- * EXPRESSION BUILDERS
- *********************************************************************************/
+//---------------------------------
+// Expression Builders
+//---------------------------------
 
 /**
  * Declare and build an expression variable.

@@ -205,6 +205,10 @@ typedef enum as_predicate_type_e {
  * for the predicate.
  */
 typedef struct as_predicate_s {
+	/**
+	 * Index name
+	 */
+	char index_name[AS_INDEX_NAME_MAX_SIZE];
 
 	/**
 	 * Bin to apply the predicate to
@@ -225,6 +229,16 @@ typedef struct as_predicate_s {
 	 * Should ctx be destroyed on as_query_destroy(). Default: false.
 	 */
 	bool ctx_free;
+
+	/**
+	 * Query expression. Use as_query_where_with_exp() to set.
+	 */
+	struct as_exp* exp;
+
+	/**
+	 * Should exp be destroyed on as_query_destroy(). Default: false.
+	 */
+	bool exp_free;
 
 	/**
 	 * The predicate type, dictates which values to use from the union
@@ -698,7 +712,7 @@ as_query_select_init(as_query* query, uint16_t n);
  * @ingroup query_operations
  */
 AS_EXTERN bool
-as_query_select(as_query* query, const char * bin);
+as_query_select(as_query* query, const char* bin);
 
 //---------------------------------
 // Where Functions
@@ -710,6 +724,8 @@ as_query_select(as_query* query, const char * bin);
  * For heap allocation, use `as_query_where_init()`.
  *
  * @code
+ * as_query query;
+ * as_query_init(&query, ns, set);
  * as_query_where_inita(&query, 1);
  * as_query_where(&query, "bin1", as_string_equals("abc"));
  * @endcode
@@ -740,6 +756,8 @@ as_query_select(as_query* query, const char * bin);
  * For stack allocation, use `as_query_where_inita()`.
  *
  * @code
+ * as_query query;
+ * as_query_init(&query, ns, set);
  * as_query_where_init(&query, 1);
  * as_query_where(&query, "bin1", as_integer_equals(123));
  * @endcode
@@ -758,14 +776,17 @@ as_query_where_init(as_query* query, uint16_t n);
 /**
  * Add a predicate to the query.
  *
- * You have to ensure as_query.where has sufficient capacity, prior to
+ * You have to ensure the.where clause has sufficient capacity, prior to
  * adding a predicate. If capacity is insufficient then false is returned.
+ * Capacity is set in as_query_where_init() or as_query_where_inita().
  *
  * String predicates are not owned by as_query.  If the string is allocated
  * on the heap, the caller is responsible for freeing the string after the query
  * has been executed.  as_query_destroy() will not free this string predicate.
  *
  * @code
+ * as_query query;
+ * as_query_init(&query, ns, set);
  * as_query_where_init(&query, 3);
  * as_query_where(&query, "bin1", as_string_equals("abc"));
  * as_query_where(&query, "bin1", as_integer_equals(123));
@@ -786,15 +807,16 @@ as_query_where_init(as_query* query, uint16_t n);
  */
 AS_EXTERN bool
 as_query_where(
-	as_query* query, const char * bin, as_predicate_type type, as_index_type itype,
+	as_query* query, const char* bin, as_predicate_type type, as_index_type itype,
 	as_index_datatype dtype, ...
 	);
 
 /**
  * Add a predicate and context to the query.
  *
- * You have to ensure as_query.where has sufficient capacity, prior to
+ * You have to ensure the.where clause has sufficient capacity, prior to
  * adding a predicate. If capacity is insufficient then false is returned.
+ * Capacity is set in as_query_where_init() or as_query_where_inita().
  *
  * String predicates are not owned by as_query.  If the string is allocated
  * on the heap, the caller is responsible for freeing the string after the query
@@ -804,6 +826,9 @@ as_query_where(
  * as_cdt_ctx ctx;
  * as_cdt_ctx_init(&ctx, 1);
  * as_cdt_ctx_add_list_rank(&ctx, -1);
+ *
+ * as_query query;
+ * as_query_init(&query, ns, set);
  * as_query_where_init(&query, 3);
  * as_query_where_with_ctx(&query, "bin1", &ctx, as_string_equals("abc"));
  * as_query_where_with_ctx(&query, "bin1", &ctx, as_integer_equals(123));
@@ -826,6 +851,82 @@ as_query_where(
 AS_EXTERN bool
 as_query_where_with_ctx(
 	as_query* query, const char* bin, struct as_cdt_ctx* ctx, as_predicate_type type,
+	as_index_type itype, as_index_datatype dtype, ...
+	);
+
+/**
+ * Add a query with index name predicate to the query.
+ *
+ * You have to ensure the.where clause has sufficient capacity, prior to
+ * adding a predicate. If capacity is insufficient then false is returned.
+ * Capacity is set in as_query_where_init() or as_query_where_inita().
+ *
+ * String predicates are not owned by as_query.  If the string is allocated
+ * on the heap, the caller is responsible for freeing the string after the query
+ * has been executed.  as_query_destroy() will not free this string predicate.
+ *
+ * @code
+ * as_query query;
+ * as_query_init(&query, ns, set);
+ * as_query_where_init(&query, 1);
+ * as_query_where_with_index_name(&query, "index1", as_string_equals("abc"));
+ * @endcode
+ *
+ * @param query			The query add the predicate to.
+ * @param index_name	The name of the index.
+ * @param type			The type of predicate.
+ * @param itype			The type of index.
+ * @param dtype			The underlying data type that the index is based on.
+ * @param ... 			The values for the predicate.
+ *
+ * @return On success, true. Otherwise an error occurred.
+ *
+ * @relates as_query
+ * @ingroup query_operations
+ */
+AS_EXTERN bool
+as_query_where_with_index_name(
+	as_query* query, const char* index_name, as_predicate_type type, as_index_type itype,
+	as_index_datatype dtype, ...
+	);
+
+/**
+ * Add a query with an expression predicate to the query.
+ *
+ * You have to ensure the.where clause has sufficient capacity, prior to
+ * adding a predicate. If capacity is insufficient then false is returned.
+ * Capacity is set in as_query_where_init() or as_query_where_inita().
+ *
+ * String predicates are not owned by as_query.  If the string is allocated
+ * on the heap, the caller is responsible for freeing the string after the query
+ * has been executed.  as_query_destroy() will not free this string predicate.
+ *
+ * @code
+ * as_exp_build(exp, as_exp_add(as_exp_bin_int("campaign1"),
+ *     as_exp_bin_int("campaign2"), as_exp_bin_int("campaign3")));
+ *
+ * as_query query;
+ * as_query_init(&query, ns, set);
+ * as_query_where_init(&query, 1);
+ * as_query_where_with_exp(&query, NULL, exp, as_integer_range(300, 10000));
+ * @endcode
+ *
+ * @param query			The query add the predicate to.
+ * @param index_name	The name of the index.
+ * @param exp			The expression.
+ * @param type			The type of predicate.
+ * @param itype			The type of index.
+ * @param dtype			The underlying data type that the index is based on.
+ * @param ... 			The values for the predicate.
+ *
+ * @return On success, true. Otherwise an error occurred.
+ *
+ * @relates as_query
+ * @ingroup query_operations
+ */
+AS_EXTERN bool
+as_query_where_with_exp(
+	as_query* query, const char* index_name, struct as_exp* exp, as_predicate_type type,
 	as_index_type itype, as_index_datatype dtype, ...
 	);
 

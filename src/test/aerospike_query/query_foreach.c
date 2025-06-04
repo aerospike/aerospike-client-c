@@ -1899,6 +1899,7 @@ TEST(query_expression, "query expression")
 	status = aerospike_query_foreach(as, &err, NULL, &query_resume, query_foreach_count_callback, &count);
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(count, 11);
+	as_query_destroy(&query_resume);
 }
 
 //---------------------------------

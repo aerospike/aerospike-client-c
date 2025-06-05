@@ -125,6 +125,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	strcpy(node->name, node_info->name);
 	node->session = node_info->session;
 	node->features = node_info->features;
+	node->version = node_info->version;
 	node->address_index = (node_info->addr.ss_family == AF_INET) ? 0 : AS_ADDRESS4_MAX;
 	node->address4_size = 0;
 	node->address6_size = 0;

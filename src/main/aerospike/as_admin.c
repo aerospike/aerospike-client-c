@@ -256,8 +256,9 @@ as_policy_admin_get_timeout(aerospike* as)
 }
 
 static as_status
-as_admin_execute(
-	aerospike* as, as_error* err, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end
+as_admin_execute_node(
+	aerospike* as, as_node* node, as_error* err, const as_policy_admin* policy, uint8_t* buffer,
+	uint8_t* end
 	)
 {
 	uint32_t timeout_ms = (policy)? policy->timeout : as_policy_admin_get_timeout(as);
@@ -265,18 +266,11 @@ as_admin_execute(
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-	as_cluster* cluster = as->cluster;
-	as_node* node = as_node_get_random(cluster);
-	
-	if (! node) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
-	}
-	
+
 	as_socket socket;
 	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket);
 
 	if (status) {
-		as_node_release(node);
 		return status;
 	}
 
@@ -284,7 +278,6 @@ as_admin_execute(
 	
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
-		as_node_release(node);
 		return status;
 	}
 
@@ -292,18 +285,32 @@ as_admin_execute(
 
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
-		as_node_release(node);
 		return status;
 	}
 	
 	as_node_put_connection(node, &socket);
-	as_node_release(node);
-	
+
 	status = buffer[RESULT_CODE];
 	
 	if (status) {
 		return as_error_set_message(err, status, as_error_string(status));
 	}
+	return status;
+}
+
+static inline as_status
+as_admin_execute(
+	aerospike* as, as_error* err, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end
+	)
+{
+	as_node* node = as_node_get_random(as->cluster);
+	
+	if (! node) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node");
+	}
+
+	as_status status = as_admin_execute_node(as, node, err, policy, buffer, end);
+	as_node_release(node);
 	return status;
 }
 
@@ -381,7 +388,7 @@ as_admin_read_list(
 	as_node* node = as_node_get_random(cluster);
 	
 	if (! node) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node");
 	}
 
 	as_socket socket;
@@ -632,6 +639,58 @@ aerospike_create_user(
 	p = as_admin_write_field_string(p, PASSWORD, hash);
 	p = as_admin_write_roles(p, roles, roles_size);
 	return as_admin_execute(as, err, policy, buffer, p);
+}
+
+as_status
+aerospike_create_pki_user(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user,
+	const char** roles, int roles_size
+	)
+{
+	as_node* node = as_node_get_random(as->cluster);
+	
+	if (! node) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node");
+	}
+
+	as_version min = {8, 1, 0, 0};
+
+	if (as_version_compare(&node->version, &min) < 0) {
+		char ver_str[32], min_str[32];
+		as_version_to_string(&node->version, ver_str, sizeof(ver_str));
+		as_version_to_string(&min, min_str, sizeof(min_str));
+		as_node_release(node);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Node version %s is less than required minimum version %s", ver_str, min_str);
+	}
+
+	as_error_reset(err);
+
+	int len = (int)strlen(user);
+
+	if (len >= AS_USER_SIZE) {
+		as_node_release(node);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Max user length %d exceeded: %d",
+							   AS_USER_SIZE - 1, len)
+	}
+
+	char hash[AS_PASSWORD_HASH_SIZE];
+
+	// nopassword is a special keyword used by server versions 8.1+ to indicate that password
+	// authentication is not allowed.
+	as_password_get_constant_hash("nopassword", hash);
+
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+	
+	p = as_admin_write_header(p, CREATE_USER, 3);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_field_string(p, PASSWORD, hash);
+	p = as_admin_write_roles(p, roles, roles_size);
+
+	as_status status = as_admin_execute_node(as, node, err, policy, buffer, p);
+	as_node_release(node);
+	return status;
 }
 
 as_status

@@ -420,6 +420,14 @@ as_admin_read_list(
 	return status;
 }
 
+static void
+as_admin_modify_password_error(as_status status, as_error* err)
+{
+	if (status == AEROSPIKE_FORBIDDEN_PASSWORD) {
+		as_strncpy(err->message, "PKI user password not changeable", sizeof(err->message));
+	}
+}
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -743,8 +751,11 @@ aerospike_set_password(
 	p = as_admin_write_field_string(p, PASSWORD, hash);
 	int status = as_admin_execute(as, err, policy, buffer, p);
 	
-	if (status == 0) {
+	if (status == AEROSPIKE_OK) {
 		as_cluster_change_password(as->cluster, user, password, hash);
+	}
+	else {
+		as_admin_modify_password_error(status, err);
 	}
 	return status;
 }
@@ -789,8 +800,11 @@ aerospike_change_password(
 	p = as_admin_write_field_string(p, PASSWORD, hash);
 	int status = as_admin_execute(as, err, policy, buffer, p);
 	
-	if (status == 0) {
+	if (status == AEROSPIKE_OK) {
 		as_cluster_change_password(as->cluster, user, password, hash);
+	}
+	else {
+		as_admin_modify_password_error(status, err);
 	}
 	return status;
 }

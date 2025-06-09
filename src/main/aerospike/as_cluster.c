@@ -1402,11 +1402,19 @@ as_cluster_create(aerospike* as, as_error* err)
 
 	char* pass_hash = NULL;
 
-	if (*(config->user) && config->auth_mode != AS_AUTH_PKI) {
-		pass_hash = cf_malloc(AS_PASSWORD_HASH_SIZE);
+	if (*(config->user)) {
+	 	if (config->auth_mode == AS_AUTH_PKI) {
+			if (*(config->password)) {
+				return as_error_set_message(err, AEROSPIKE_FORBIDDEN_PASSWORD,
+					"Password authentication is disabled for PKI-only users");
+			}
+		}
+		else {
+			pass_hash = cf_malloc(AS_PASSWORD_HASH_SIZE);
 
-		if (! as_password_get_constant_hash(config->password, pass_hash)) {
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to hash password");
+			if (! as_password_get_constant_hash(config->password, pass_hash)) {
+				return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to hash password");
+			}
 		}
 	}
 

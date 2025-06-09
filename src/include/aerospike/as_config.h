@@ -921,6 +921,9 @@ as_config_clear_hosts(as_config* config);
  * User authentication for servers with restricted access.  The password will be stored by the
  * client and sent to server in hashed format.
  *
+ * If the server is enforcing PKI authentication, the password must an empty string (""). The
+ * recommend function for PKI authentication is as_config_set_pki_user().
+ *
  * @code
  * 	as_config config;
  * 	as_config_init(&config);
@@ -931,6 +934,21 @@ as_config_clear_hosts(as_config* config);
  */
 AS_EXTERN bool
 as_config_set_user(as_config* config, const char* user, const char* password);
+
+/**
+ * User authentication for servers enforcing PKI. PKI users are authenticated via TLS and
+ * a certificate instead of a password.
+ *
+ * @code
+ * 	as_config config;
+ * 	as_config_init(&config);
+ * 	as_config_set_pki_user(&config, "charlie");
+ * @endcode
+ *
+ * @relates as_config
+ */
+AS_EXTERN bool
+as_config_set_pki_user(as_config* config, const char* user);
 
 /**
  * Free existing string if not null and copy value to string.

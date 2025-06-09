@@ -346,6 +346,20 @@ as_config_set_user(as_config* config, const char* user, const char* password)
 	}
 }
 
+bool
+as_config_set_pki_user(as_config* config, const char* user)
+{
+	if (user && *user) {
+		if (as_strncpy(config->user, user, sizeof(config->user))) {
+			return false;
+		}
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
 void
 as_config_add_rack_id(as_config* config, int rack_id)
 {

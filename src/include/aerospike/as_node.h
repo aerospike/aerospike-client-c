@@ -26,6 +26,7 @@
 #include <aerospike/as_partition.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_vector.h>
+#include <aerospike/as_version.h>
 
 #if !defined(_MSC_VER)
 #include <netinet/in.h>
@@ -259,6 +260,11 @@ typedef struct as_node_s {
 	uint32_t features;
 
 	/**
+	 * Node version.
+	 */
+	as_version version;
+
+	/**
 	 * TLS certificate name (needed for TLS only, NULL otherwise).
 	 */
 	char* tls_name;
@@ -445,6 +451,11 @@ typedef struct as_node_info_s {
 	 * Authentication session.
 	 */
 	as_session* session;
+
+	/**
+	 * Node version.
+	 */
+	as_version version;
 
 } as_node_info;
 

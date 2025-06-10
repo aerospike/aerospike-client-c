@@ -433,6 +433,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_txn.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_txn_monitor.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_udf.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_version.h" />
     <ClInclude Include="..\..\src\include\aerospike\version.h" />
   </ItemGroup>
   <ItemGroup>
@@ -589,6 +590,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_txn.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_txn_monitor.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_udf.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_version.c" />
     <ClCompile Include="..\..\src\main\aerospike\version.c" />
     <ClCompile Include="..\..\src\main\aerospike\_bin.c" />
   </ItemGroup>

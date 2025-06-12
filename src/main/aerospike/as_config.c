@@ -33,6 +33,7 @@ as_config_init(as_config* c)
 	memset(c->user, 0, sizeof(c->user));
 	memset(c->password, 0, sizeof(c->password));
 	c->cluster_name = NULL;
+	c->app_id = NULL;
 	c->event_callback = NULL;
 	c->event_callback_udata = NULL;
 	c->ip_map = NULL;
@@ -93,6 +94,10 @@ as_config_destroy(as_config* config) {
 
 	if (config->cluster_name) {
 		cf_free(config->cluster_name);
+	}
+
+	if (config->app_id) {
+		cf_free(config->app_id);
 	}
 
 	if (config->config_provider.path) {

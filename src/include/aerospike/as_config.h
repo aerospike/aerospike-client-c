@@ -478,10 +478,19 @@ typedef struct as_config_s {
 	 * seed nodes belong to the expected cluster on startup.  If not, the client will refuse
 	 * to add the node to the client's view of the cluster.
 	 *
+	 * Use as_config_set_cluster_name() to set this field.
+	 *
 	 * Default: NULL
 	 */
 	char* cluster_name;
 	
+	/**
+	 * Application identifier. Use as_config_set_app_id() to set this field.
+	 *
+	 * Default: NULL
+	 */
+	char* app_id;
+
 	/**
 	 * Cluster event function that will be called when nodes are added/removed from the cluster.
 	 *
@@ -947,6 +956,17 @@ static inline void
 as_config_set_cluster_name(as_config* config, const char* cluster_name)
 {
 	as_config_set_string(&config->cluster_name, cluster_name);
+}
+
+/**
+ * Set application identifier.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_set_app_id(as_config* config, const char* app_id)
+{
+	as_config_set_string(&config->app_id, app_id);
 }
 
 /**

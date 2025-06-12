@@ -102,16 +102,6 @@ typedef struct as_metrics_policy_s {
 	as_vector* labels;
 
 	/**
-	 * Application identifier that is applied when exporting metrics. If this field is NULL,
-	 * as_config.user will be used as the app_id when exporting metrics.
-	 *
-	 * Do not set directly. Use as_metrics_policy_set_app_id() to set this field.
-	 *
-	 * Default: NULL
-	 */
-	char* app_id;
-
-	/**
 	 * Directory path to write metrics log files for listeners that write logs.
 	 *
 	 * Default: . (current directory)
@@ -217,12 +207,6 @@ as_metrics_policy_copy_labels(as_metrics_policy* policy, as_vector* labels);
  */
 AS_EXTERN void
 as_metrics_policy_set_labels(as_metrics_policy* policy, as_vector* labels);
-
-/**
- * Set application identifier that will be applied when exporting metrics.
- */
-AS_EXTERN void
-as_metrics_policy_set_app_id(as_metrics_policy* policy, const char* app_id);
 
 /**
  * Transfer ownership of heap allocated app_id to metrics.

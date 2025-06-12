@@ -539,8 +539,8 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 	as_string_builder_append(&sb, aerospike_client_version);
 	as_string_builder_append_char(&sb, ',');
 
-	if (mw->app_id) {
-		as_string_builder_append(&sb, mw->app_id);
+	if (cluster->app_id) {
+		as_string_builder_append(&sb, cluster->app_id);
 	}
 
 	as_string_builder_append(&sb, ",[");
@@ -613,7 +613,6 @@ as_metrics_writer_destroy(as_metrics_writer* mw)
 {
 	fclose(mw->file);
 	as_metrics_labels_destroy(mw->labels);
-	cf_free(mw->app_id);
 	cf_free(mw);
 }
 
@@ -632,7 +631,6 @@ as_metrics_writer_create(as_error* err, const as_metrics_policy* policy, as_metr
 	as_metrics_writer* mw = cf_calloc(1, sizeof(as_metrics_writer));
 	as_strncpy(mw->report_dir, policy->report_dir, sizeof(mw->report_dir));
 	mw->labels = as_metrics_labels_copy(policy->labels);
-	mw->app_id = policy->app_id ? cf_strdup(policy->app_id) : NULL;
 	mw->max_size = policy->report_size_limit;
 	mw->latency_columns = policy->latency_columns;
 	mw->latency_shift = policy->latency_shift;

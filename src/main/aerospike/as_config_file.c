@@ -1105,10 +1105,6 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 		return as_parse_uint8(yaml, name, value, &policy->latency_shift, AS_METRICS_LATENCY_SHIFT);
 	}
 
-	if (strcmp(name, "app_id") == 0) {
-		return as_parse_string(yaml, name, value, &policy->app_id, AS_METRICS_APP_ID);
-	}
-
 	if (strcmp(name, "labels") == 0) {
 		return as_parse_labels(yaml, policy, AS_METRICS_LABELS);
 	}
@@ -1248,7 +1244,10 @@ as_parse_dynamic_client(as_yaml* yaml)
 			const char* value = (const char*)yaml->event.data.scalar.value;
 			bool rv;
 
-			if (strcmp(name, "timeout") == 0) {
+			if (strcmp(name, "app_id") == 0) {
+				rv = as_parse_string(yaml, name, value, &yaml->config->app_id, AS_APP_ID);
+			}
+			else if (strcmp(name, "timeout") == 0) {
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->conn_timeout_ms, AS_TEND_TIMEOUT);
 			}
 			else if (strcmp(name, "max_error_rate") == 0) {
@@ -1802,23 +1801,6 @@ as_cluster_update_metrics(
 	trg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
 		src->latency_shift : orig->latency_shift;
 
-	if (as_field_is_set(bitmap, AS_METRICS_APP_ID)) {
-		if (strcmp(trg->app_id, src->app_id) != 0) {
-			as_metrics_policy_assign_app_id(trg, src->app_id);
-			enable_metrics = true;
-		}
-		else {
-			cf_free(src->app_id);
-		}
-		src->app_id = NULL;
-	}
-	else {
-		if (strcmp(trg->app_id, orig->app_id) != 0) {
-			as_metrics_policy_set_app_id(trg, orig->app_id);
-			enable_metrics = true;
-		}
-	}
-
 	if (as_field_is_set(bitmap, AS_METRICS_LABELS)) {
 		if (!as_metrics_labels_equal(trg->labels, src->labels)) {
 			as_metrics_policy_set_labels(trg, src->labels);
@@ -1860,14 +1842,27 @@ as_cluster_update_metrics(
 	return status;
 }
 
+static bool
+as_str_eq(const char* s1, const char* s2)
+{
+	if (s1 == NULL) {
+		return s2 == NULL;
+	}
+	else if (s2 == NULL) {
+		return false;
+	}
+	return strcmp(s1, s2) == 0;
+}
+
 static as_status
 as_cluster_update(
 	aerospike* as, as_config* orig, as_config* src, uint8_t* bitmap, as_error* err
 	)
 {
-	// Set config.
 	as_config* config = &as->config;
+	as_cluster* cluster = as->cluster;
 
+	// Set config.
 	config->conn_timeout_ms = as_field_is_set(bitmap, AS_TEND_TIMEOUT)?
 		src->conn_timeout_ms : orig->conn_timeout_ms;
 	config->max_error_rate = as_field_is_set(bitmap, AS_MAX_ERROR_RATE)?
@@ -1902,9 +1897,34 @@ as_cluster_update(
 		}
 	}
 
-	// Set cluster.
-	as_cluster* cluster = as->cluster;
+	if (as_field_is_set(bitmap, AS_APP_ID)) {
+		if (!as_str_eq(config->app_id, src->app_id)) {
+			// app_id is referenced in metrics and user agent on tend connection.
+			// metrics is covered under the metrics lock.
+			// user agent is referenced is on the tend thread, so an extra lock is not necessary.
+			pthread_mutex_lock(&cluster->metrics_lock);
+			char* old = config->app_id;
+			config->app_id = src->app_id;
+			cluster->app_id = config->app_id;
+			cf_free(old);
+			pthread_mutex_unlock(&cluster->metrics_lock);
+		}
+		else {
+			cf_free(src->app_id);
+		}
+	}
+	else {
+		if (!as_str_eq(config->app_id, orig->app_id)) {
+			pthread_mutex_lock(&cluster->metrics_lock);
+			char* old = config->app_id;
+			config->app_id = orig->app_id ? cf_strdup(orig->app_id) : NULL;
+			cluster->app_id = config->app_id;
+			cf_free(old);
+			pthread_mutex_unlock(&cluster->metrics_lock);
+		}
+	}
 
+	// Set cluster.
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
 	cluster->max_error_rate = config->max_error_rate;
 	cluster->error_rate_window = config->error_rate_window;
@@ -1963,8 +1983,8 @@ as_config_file_init(aerospike* as, as_error* err)
 			as_vector_destroy(config->rack_ids);
 		}
 
-		if (config->policies.metrics.app_id != as->config_orig->policies.metrics.app_id) {
-			cf_free(config->policies.metrics.app_id);
+		if (config->app_id != as->config_orig->app_id) {
+			cf_free(config->app_id);
 		}
 
 		if (config->policies.metrics.labels != as->config_orig->policies.metrics.labels) {
@@ -1986,8 +2006,8 @@ as_config_file_update(aerospike* as, as_error* err)
 	memcpy(&config, current, sizeof(as_config));
 
 	// Start with empty vectors.
+	config.app_id = NULL;
 	config.rack_ids = NULL;
-	config.policies.metrics.app_id = NULL;
 	config.policies.metrics.labels = NULL;
 
 	uint8_t bitmap[AS_CONFIG_BITMAP_SIZE];
@@ -2001,8 +2021,8 @@ as_config_file_update(aerospike* as, as_error* err)
 			as_vector_destroy(config.rack_ids);
 		}
 
-		if (config.policies.metrics.app_id) {
-			cf_free(config.policies.metrics.app_id);
+		if (config.app_id) {
+			cf_free(config.app_id);
 		}
 
 		if (config.policies.metrics.labels) {

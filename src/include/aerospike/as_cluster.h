@@ -150,6 +150,11 @@ typedef struct as_cluster_s {
 	char* cluster_name;
 	
 	/**
+	 * Application identifier.  May be null.
+	 */
+	char* app_id;
+
+	/**
 	 * Cluster event function that will be called when nodes are added/removed from the cluster.
 	 */
 	as_cluster_event_callback event_callback;

@@ -1446,9 +1446,10 @@ as_cluster_create(aerospike* as, as_error* err)
 		}
 	}
 
-	// Heap allocated cluster_name continues to be owned by as->config.
+	// Heap allocated cluster_name/app_id continue to be owned by as->config.
 	// Make a reference copy here.
 	cluster->cluster_name = config->cluster_name;
+	cluster->app_id = config->app_id;
 	cluster->event_callback = config->event_callback;
 	cluster->event_callback_udata = config->event_callback_udata;
 
@@ -1712,6 +1713,9 @@ as_cluster_destroy(as_cluster* cluster)
 
 	// Do not free cluster name because as->config owns it.
 	// cf_free(cluster->cluster_name);
+
+	// Do not free app_id because as->config owns it.
+	// cf_free(cluster->app_id);
 
 	// Do not free config_file_path name because as->config owns it.
 	// cf_free(cluster->config_file_path);

@@ -1386,8 +1386,12 @@ aerospike_scan_foreach(
 	}
 
 	as_partition_tracker pt;
-	as_partition_tracker_init_nodes(&pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, n_nodes);
+	status = as_partition_tracker_init_nodes(&pt, cluster, &policy->base, policy->max_records,
+		policy->replica, &scan->parts_all, scan->paginate, n_nodes, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
 
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 
@@ -1424,8 +1428,13 @@ aerospike_scan_node(
 	}
 
 	as_partition_tracker pt;
-	as_partition_tracker_init_node(&pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, node);
+	status = as_partition_tracker_init_node(&pt, cluster, &policy->base, policy->max_records,
+		policy->replica, &scan->parts_all, scan->paginate, node, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_node_release(node);
+		return status;
+	}
 
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 
@@ -1500,8 +1509,12 @@ aerospike_scan_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	as_partition_tracker_init_nodes(pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, n_nodes);
+	status = as_partition_tracker_init_nodes(pt, cluster, &policy->base, policy->max_records,
+		policy->replica, &scan->parts_all, scan->paginate, n_nodes, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
 
 	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
 }
@@ -1532,8 +1545,12 @@ aerospike_scan_node_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	as_partition_tracker_init_node(pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, node);
+	status = as_partition_tracker_init_node(pt, cluster, &policy->base, policy->max_records,
+		policy->replica, &scan->parts_all, scan->paginate, node, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_node_release(node);
+	}
 
 	status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata,
 									 event_loop);

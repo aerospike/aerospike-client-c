@@ -2031,8 +2031,12 @@ aerospike_query_foreach(
 		}
 
 		as_partition_tracker pt;
-		as_partition_tracker_init_nodes(&pt, cluster, &policy->base, query->max_records,
-			policy->replica, &query->parts_all, query->paginate, n_nodes);
+		status = as_partition_tracker_init_nodes(&pt, cluster, &policy->base, query->max_records,
+			policy->replica, &query->parts_all, query->paginate, n_nodes, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 
 		status = as_query_partitions(cluster, err, policy, query, &pt, callback, udata);
 
@@ -2227,8 +2231,13 @@ aerospike_query_async(
 		}
 
 		as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-		as_partition_tracker_init_nodes(pt, cluster, &policy->base, query->max_records,
-			policy->replica, &query->parts_all, query->paginate, n_nodes);
+		status = as_partition_tracker_init_nodes(pt, cluster, &policy->base, query->max_records,
+			policy->replica, &query->parts_all, query->paginate, n_nodes, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
 		return as_query_partition_async(cluster, err, policy, query, pt, listener, udata, event_loop);
 	}
 

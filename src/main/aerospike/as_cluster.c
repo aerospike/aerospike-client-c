@@ -773,8 +773,9 @@ as_cluster_manage(as_cluster* cluster)
 	}
 
 	const char* path = cluster->as->config.config_provider.path;
+	uint32_t config_interval = cluster->config_interval / cluster->tend_interval;
 
-	if (path && cluster->tend_count % cluster->config_interval == 0) {
+	if (path && cluster->tend_count % config_interval == 0) {
 		if (as_file_has_changed(path, &cluster->config_file_status)) {
 			status = as_config_file_update(cluster->as, &err);
 
@@ -1390,6 +1391,17 @@ as_cluster_create(aerospike* as, as_error* err)
 {
 	as_config* config = &as->config;
 
+	if (config->tender_interval < AS_TEND_INTERVAL_MIN) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Invalid tend interval: %u. min value: %u", config->tender_interval, AS_TEND_INTERVAL_MIN);
+	}
+
+	if (config->config_provider.interval < config->tender_interval) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Dynamic config interval %u must be greater or equal to the tend interval %u",
+			config->config_provider.interval, config->tender_interval);
+	}
+
 	if (config->min_conns_per_node > config->max_conns_per_node) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid connection range: %u - %u",
 			config->min_conns_per_node, config->max_conns_per_node);
@@ -1456,7 +1468,7 @@ as_cluster_create(aerospike* as, as_error* err)
 	// Initialize cluster tend and node parameters
 	cluster->max_error_rate = config->max_error_rate;
 	cluster->error_rate_window = config->error_rate_window;
-	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
+	cluster->tend_interval = config->tender_interval;
 	cluster->min_conns_per_node = config->min_conns_per_node;
 	cluster->max_conns_per_node = config->max_conns_per_node;
 	cluster->async_min_conns_per_node = config->async_min_conns_per_node;

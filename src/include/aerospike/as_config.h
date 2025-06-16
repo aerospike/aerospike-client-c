@@ -61,9 +61,14 @@ extern "C" {
 #define AS_PASSWORD_SIZE 64
 
 /**
- * Default  number of cluster tend iterations between checks for dynamic configuration file changes.
+ * Minimum tend interval in milliseconds.
  */
-#define AS_CONFIG_PROVIDER_INTERVAL_DEFAULT 60
+#define AS_TEND_INTERVAL_MIN 250
+
+/**
+ * Default interval in milliseconds between dynamic configuration check for file modifications.
+ */
+#define AS_CONFIG_PROVIDER_INTERVAL_DEFAULT 60000
 
 //---------------------------------
 // Types
@@ -368,9 +373,10 @@ typedef struct as_config_provider_s {
 	char* path;
 
 	/**
-	 * Check dynamic configuration file for changes after this number of cluster tend iterations.
+	 * Interval in milliseconds between dynamic configuration check for file modifications.
+	 * The value must be greater than or equal to the tend interval.
 	 *
-	 * Default: 60
+	 * Default: 60000
 	 */
 	uint32_t interval;
 

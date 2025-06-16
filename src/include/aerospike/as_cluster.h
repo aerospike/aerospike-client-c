@@ -469,7 +469,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Dynamic configuration interval to check for file modifications.
+	 * Milliseconds between dynamic configuration check for file modifications.
 	 */
 	uint32_t config_interval;
 

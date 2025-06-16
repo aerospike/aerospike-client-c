@@ -160,7 +160,7 @@ as_parse_int32(as_yaml* yaml, const char* name, const char* value, int32_t* out)
 	long v = strtol(value, &end, 10);
 
 	if (end == value || (errno != 0)) {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid int for %s: %s", name, value);
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid int %s: %s", name, value);
 		return false;
 	}
 
@@ -180,14 +180,22 @@ as_assign_uint32(
 }
 
 static bool
-parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out)
+parse_uint32(
+	as_yaml* yaml, const char* name, const char* value, uint32_t min, uint32_t max, uint32_t* out
+	)
 {
     char* end = NULL;
     errno = 0;
 	unsigned long v = strtoul(value, &end, 10);
 
 	if (end == value || (errno != 0)) {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint for %s: %s", name, value);
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint %s: %s", name, value);
+		return false;
+	}
+
+	if (v < min || v > max) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint %s: %s. valid range: %u - %u",
+			name, value, min, max);
 		return false;
 	}
 
@@ -196,11 +204,28 @@ parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out)
 }
 
 static bool
+as_parse_uint32_range(
+	as_yaml* yaml, const char* name, const char* value, uint32_t min, uint32_t max, uint32_t* out,
+	uint32_t field
+	)
+{
+	uint32_t val;
+
+	if (!parse_uint32(yaml, name, value, min, max, &val)) {
+		return false;
+	}
+
+	as_assign_uint32(yaml->name, name, value, val, out);
+	as_field_set(yaml->bitmap, field);
+	return true;
+}
+
+static bool
 as_parse_uint32(as_yaml* yaml, const char* name, const char* value, uint32_t* out, uint32_t field)
 {
 	uint32_t val;
 
-	if (!parse_uint32(yaml, name, value, &val)) {
+	if (!parse_uint32(yaml, name, value, 0, UINT32_MAX, &val)) {
 		return false;
 	}
 
@@ -228,7 +253,7 @@ parse_uint8(as_yaml* yaml, const char* name, const char* value, uint8_t* out)
 	unsigned long v = strtoul(value, &end, 10);
 
 	if (end == value || (errno != 0) || v > 255) {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint8 for %s: %s", name, value);
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint8 %s: %s", name, value);
 		return false;
 	}
 
@@ -271,7 +296,7 @@ parse_bool(as_yaml* yaml, const char* name, const char* value, bool* out)
 		*out = true;
 	}
 	else {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid bool for %s: %s", name, value);
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid bool %s: %s", name, value);
 		return false;
 	}
 	return true;
@@ -583,7 +608,7 @@ as_parse_max_concurrent_threads(
 {
 	uint32_t max_concurrent_threads;
 
-	if (!parse_uint32(yaml, name, value, &max_concurrent_threads)) {
+	if (!parse_uint32(yaml, name, value, 0, UINT32_MAX, &max_concurrent_threads)) {
 		return false;
 	}
 
@@ -1263,7 +1288,8 @@ as_parse_dynamic_client(as_yaml* yaml)
 				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_socket_idle, AS_MAX_SOCKET_IDLE);
 			}
 			else if (strcmp(name, "tend_interval") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->tender_interval, AS_TEND_INTERVAL);
+				rv = as_parse_uint32_range(yaml, name, value, AS_TEND_INTERVAL_MIN, UINT32_MAX,
+					&yaml->config->tender_interval, AS_TEND_INTERVAL);
 			}
 			else if (strcmp(name, "fail_if_not_connected") == 0) {
 				rv = as_parse_bool(yaml, name, value, &yaml->config->fail_if_not_connected, AS_FAIL_IF_NOT_CONNECTED);
@@ -1882,6 +1908,12 @@ as_cluster_update(
 	config->rack_aware = as_field_is_set(bitmap, AS_RACK_AWARE)?
 		src->rack_aware : orig->rack_aware;
 
+	if (cluster->config_interval < config->tender_interval) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Dynamic config interval %u must be greater or equal to the tend interval %u",
+			cluster->config_interval, config->tender_interval);
+	}
+
 	if (as_field_is_set(bitmap, AS_RACK_IDS)) {
 		if (config->rack_ids != src->rack_ids) {
 			// Can be destroyed now since all rack_ids access is done through
@@ -1930,7 +1962,7 @@ as_cluster_update(
 	cluster->error_rate_window = config->error_rate_window;
 	cluster->login_timeout_ms = (config->login_timeout_ms == 0) ? 5000 : config->login_timeout_ms;
 	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
-	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
+	cluster->tend_interval = config->tender_interval;
 	cluster->fail_if_not_connected = config->fail_if_not_connected;
 	cluster->use_services_alternate = config->use_services_alternate;
 	cluster->rack_aware = config->rack_aware;

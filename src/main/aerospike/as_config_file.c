@@ -52,7 +52,7 @@ as_parse_next(as_yaml* yaml)
 }
 
 static bool
-as_parse_skip_value(as_yaml* yaml);
+as_skip_section(as_yaml* yaml);
 
 static bool
 as_skip_value(as_yaml* yaml)
@@ -82,7 +82,7 @@ as_skip_value(as_yaml* yaml)
 		case YAML_SEQUENCE_START_EVENT:
 			yaml_event_delete(&yaml->event);
 
-			while (as_parse_skip_value(yaml)) {
+			while (as_skip_section(yaml)) {
 			}
 			return true;
 
@@ -97,7 +97,7 @@ as_skip_value(as_yaml* yaml)
 }
 
 static bool
-as_parse_skip_value(as_yaml* yaml)
+as_skip_section(as_yaml* yaml)
 {
 	if (!as_parse_next(yaml)) {
 		return false;
@@ -113,7 +113,7 @@ as_parse_skip_value(as_yaml* yaml)
 static void
 as_skip_sequence(as_yaml* yaml)
 {
-	while (as_parse_skip_value(yaml)) {
+	while (as_skip_section(yaml)) {
 	}
 }
 
@@ -1369,14 +1369,14 @@ as_parse_static(as_yaml* yaml)
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (! yaml->init) {
 			// Do not process static fields on a dynamic update.
-			rv = as_parse_skip_value(yaml);
+			rv = as_skip_section(yaml);
 		}
 		else if (strcmp(name, "client") == 0) {
 			rv = as_parse_static_client(yaml);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			rv = as_parse_skip_value(yaml);
+			rv = as_skip_section(yaml);
 		}
 
 		if (!rv) {
@@ -1435,7 +1435,7 @@ as_parse_dynamic(as_yaml* yaml)
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			rv = as_parse_skip_value(yaml);
+			rv = as_skip_section(yaml);
 		}
 
 		if (!rv) {
@@ -1476,7 +1476,7 @@ as_parse_yaml(as_yaml* yaml)
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			rv = as_parse_skip_value(yaml);
+			rv = as_skip_section(yaml);
 		}
 
 		if (!rv) {

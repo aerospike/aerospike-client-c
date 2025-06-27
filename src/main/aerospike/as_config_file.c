@@ -41,37 +41,6 @@ typedef struct {
 // Static Functions
 //---------------------------------
 
-static bool
-as_skip_value(as_yaml* yaml)
-{
-	if (!yaml_parser_parse(&yaml->parser, &yaml->event)) {
-		return false;
-	}
-
-	if (yaml->event.type == YAML_SCALAR_EVENT) {
-		yaml_event_delete(&yaml->event);
-		return true;
-	}
-	else if (yaml->event.type == YAML_SEQUENCE_START_EVENT) {
-		yaml_event_delete(&yaml->event);
-
-		while (as_skip_value(yaml)) {
-		}
-		return true;
-	}
-	else {
-		yaml_event_delete(&yaml->event);
-		return false;
-	}
-}
-
-static void
-as_skip_sequence(as_yaml* yaml)
-{
-	while (as_skip_value(yaml)) {
-	}
-}
-
 static inline bool
 as_parse_next(as_yaml* yaml)
 {
@@ -80,6 +49,72 @@ as_parse_next(as_yaml* yaml)
 		return false;
 	}
 	return true;
+}
+
+static bool
+as_skip_section(as_yaml* yaml);
+
+static bool
+as_skip_value(as_yaml* yaml)
+{
+	switch (yaml->event.type) {
+		case YAML_MAPPING_START_EVENT:
+			yaml_event_delete(&yaml->event);
+
+			// Parse name/value pairs.
+			while (as_parse_next(yaml)) {
+				if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+					yaml_event_delete(&yaml->event);
+					break;
+				}
+				yaml_event_delete(&yaml->event);
+
+				if (!as_parse_next(yaml)) {
+					return false;
+				}
+
+				if (!as_skip_value(yaml)) {
+					return false;
+				}
+			}
+			return true;
+
+		case YAML_SEQUENCE_START_EVENT:
+			yaml_event_delete(&yaml->event);
+
+			while (as_skip_section(yaml)) {
+			}
+			return true;
+
+		case YAML_SCALAR_EVENT:
+			yaml_event_delete(&yaml->event);
+			return true;
+
+		default:
+			yaml_event_delete(&yaml->event);
+			return false;
+	}
+}
+
+static bool
+as_skip_section(as_yaml* yaml)
+{
+	if (!as_parse_next(yaml)) {
+		return false;
+	}
+
+	if (!as_skip_value(yaml)) {
+		return false;
+	}
+
+	return true;
+}
+
+static void
+as_skip_sequence(as_yaml* yaml)
+{
+	while (as_skip_section(yaml)) {
+	}
 }
 
 static inline void
@@ -132,23 +167,6 @@ as_parse_scalar(as_yaml* yaml, char* out, int size)
 
 	as_strncpy(out, (const char*)yaml->event.data.scalar.value, size);
 	yaml_event_delete(&yaml->event);
-	return true;
-}
-
-static bool
-as_skip_mapping(as_yaml* yaml)
-{
-	if (!as_expect_event(yaml, YAML_MAPPING_START_EVENT)) {
-		return false;
-	}
-
-	char name[256];
-
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
-		if (!as_skip_value(yaml)) {
-			return false;
-		}
-	}
 	return true;
 }
 
@@ -1351,14 +1369,14 @@ as_parse_static(as_yaml* yaml)
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (! yaml->init) {
 			// Do not process static fields on a dynamic update.
-			rv = as_skip_mapping(yaml);
+			rv = as_skip_section(yaml);
 		}
 		else if (strcmp(name, "client") == 0) {
 			rv = as_parse_static_client(yaml);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			rv = as_skip_mapping(yaml);
+			rv = as_skip_section(yaml);
 		}
 
 		if (!rv) {
@@ -1417,7 +1435,7 @@ as_parse_dynamic(as_yaml* yaml)
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			rv = as_skip_mapping(yaml);
+			rv = as_skip_section(yaml);
 		}
 
 		if (!rv) {
@@ -1446,18 +1464,19 @@ as_parse_yaml(as_yaml* yaml)
 	bool rv;
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
-		if (strcmp(name, "static") == 0) {
+		if (strcmp(name, "version") == 0) {
+			char version[256];
+			rv = as_parse_scalar(yaml, version, sizeof(version));
+		}
+		else if (strcmp(name, "static") == 0) {
 			rv = as_parse_static(yaml);
 		}
 		else if (strcmp(name, "dynamic") == 0) {
 			rv = as_parse_dynamic(yaml);
 		}
-		else if (strcmp(name, "metadata") == 0) {
-			rv = as_skip_mapping(yaml);
-		}
 		else {
 			as_log_info("Unexpected section: %s", name);
-			rv = as_skip_mapping(yaml);
+			rv = as_skip_section(yaml);
 		}
 
 		if (!rv) {

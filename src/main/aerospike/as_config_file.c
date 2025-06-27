@@ -1375,7 +1375,7 @@ as_parse_static(as_yaml* yaml)
 			rv = as_parse_static_client(yaml);
 		}
 		else {
-			as_log_info("Unexpected name: %s", name);
+			as_log_info("Unexpected section: %s", name);
 			rv = as_parse_skip_value(yaml);
 		}
 
@@ -1434,7 +1434,7 @@ as_parse_dynamic(as_yaml* yaml)
 			rv = as_parse_policy(yaml, as_parse_metrics);
 		}
 		else {
-			as_log_info("Unexpected name: %s", name);
+			as_log_info("Unexpected section: %s", name);
 			rv = as_parse_skip_value(yaml);
 		}
 
@@ -1475,7 +1475,7 @@ as_parse_yaml(as_yaml* yaml)
 			rv = as_parse_dynamic(yaml);
 		}
 		else {
-			as_log_info("Unexpected name: %s", name);
+			as_log_info("Unexpected section: %s", name);
 			rv = as_parse_skip_value(yaml);
 		}
 

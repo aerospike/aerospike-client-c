@@ -1446,6 +1446,22 @@ as_parse_dynamic(as_yaml* yaml)
 }
 
 static bool
+as_parse_version(as_yaml* yaml)
+{
+	char version[256];
+
+	if (!as_parse_scalar(yaml, version, sizeof(version))) {
+		return false;
+	}
+
+	if (strcmp(version, "1.0.0") != 0) {
+		// Log warning and continue parsing on version mismatch.
+		as_log_warn("Unexpected dynamic config file version: %s expected: 1.0.0", version);
+	}
+	return true;
+}
+
+static bool
 as_parse_yaml(as_yaml* yaml)
 {
 	if (!as_expect_event(yaml, YAML_STREAM_START_EVENT)) {
@@ -1465,8 +1481,7 @@ as_parse_yaml(as_yaml* yaml)
 
 	while (as_parse_scalar(yaml, name, sizeof(name))) {
 		if (strcmp(name, "version") == 0) {
-			char version[256];
-			rv = as_parse_scalar(yaml, version, sizeof(version));
+			rv = as_parse_version(yaml);
 		}
 		else if (strcmp(name, "static") == 0) {
 			rv = as_parse_static(yaml);

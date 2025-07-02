@@ -30,6 +30,7 @@
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_tls.h>
+#include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_byte_order.h>
 
 //---------------------------------
@@ -45,6 +46,9 @@
 //---------------------------------
 // Globals
 //---------------------------------
+
+// Client version.
+extern char* aerospike_client_version;
 
 // Empty string namespace for latency metrics without a namespace.
 static const char* as_ns_empty = "";
@@ -106,6 +110,57 @@ as_node_create_async_pools(uint32_t min_conns_per_node, uint32_t max_conns_per_n
 	return pools;
 }
 
+static bool
+as_node_send_user_agent(as_node* node)
+{
+	as_version min = {8, 1, 0, 0};
+
+	if (as_version_compare(&node->version, &min) < 0) {
+		node->retry_user_agent = false;
+		return true;
+	}
+
+	as_cluster* cluster = node->cluster;
+	const char* app_id = cluster->app_id;
+
+	if (!app_id) {
+		app_id = cluster->user;
+
+		if (!app_id) {
+			app_id = "not-set";
+		}
+	}
+
+	char agent[512];
+	snprintf(agent, sizeof(agent), "1,c-%s,%s", aerospike_client_version, app_id);
+
+	uint32_t len = (uint32_t)strlen(agent);
+	uint32_t encoded_len = cf_b64_encoded_len(len);
+	char* b64 = alloca(encoded_len + 1);
+
+	cf_b64_encode((uint8_t*)agent, len, b64);
+	b64[encoded_len] = 0;
+
+	size_t size = encoded_len + 64;
+	char* cmd = alloca(size);
+	snprintf(cmd, size, "user-agent-set:value=%s", b64);
+
+	as_error err;
+	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
+	char* response;
+	as_status status = as_info_command(&err, &node->info_socket, node, cmd, true, deadline_ms, 0, &response);
+
+	if (status != AEROSPIKE_OK) {
+		node->retry_user_agent = true;
+		as_log_warn("user-agent-set failed: %d - %s", err.code, err.message)
+		return false;
+	}
+
+	node->retry_user_agent = false;
+	cf_free(response);
+	return true;
+}
+
 as_node*
 as_node_create(as_cluster* cluster, as_node_info* node_info)
 {
@@ -159,6 +214,8 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conns_opened = 1;
 	node->sync_conns_closed = 0;
 	node->conn_iter = 0;
+
+	as_node_send_user_agent(node);
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
 	uint32_t rem_min = cluster->min_conns_per_node - (min * cluster->conn_pools_per_node);
@@ -836,6 +893,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 			}
 		}
 		node->info_socket = sock;
+		as_node_send_user_agent(node);
 	}
 	else {
 		if (cluster->auth_enabled && as_node_should_login(node)) {
@@ -845,6 +903,10 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 				as_node_close_socket(node, &node->info_socket);
 				return status;
 			}
+		}
+
+		if (node->retry_user_agent) {
+			as_node_send_user_agent(node);
 		}
 	}
 	return status;

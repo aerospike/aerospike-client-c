@@ -415,6 +415,11 @@ typedef struct as_node_s {
 	 */
 	bool rebalance_changed;
 
+	/**
+	 * Should user-agent-set info command be retried.
+	 */
+	bool retry_user_agent;
+
 } as_node;
 
 /**

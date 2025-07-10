@@ -1396,7 +1396,7 @@ as_cluster_create(aerospike* as, as_error* err)
 			"Invalid tend interval: %u. min value: %u", config->tender_interval, AS_TEND_INTERVAL_MIN);
 	}
 
-	if (config->config_provider.interval < config->tender_interval) {
+	if (config->config_provider.path && config->config_provider.interval < config->tender_interval) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Dynamic config interval %u must be greater or equal to the tend interval %u",
 			config->config_provider.interval, config->tender_interval);

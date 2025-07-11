@@ -1732,9 +1732,12 @@ as_event_command_free(as_event_command* cmd)
 // Connection Create
 //---------------------------------
 
+#define AS_CONNECTOR_SINGLE 0
+#define AS_CONNECTOR_WAIT 1
+#define AS_CONNECTOR_NO_WAIT 2
+
 typedef struct {
-	as_monitor* monitor;
-	uint32_t* loop_count;
+	void* parent;
 	as_node* node;
 	as_async_conn_pool* pool;
 	uint32_t conn_start;
@@ -1742,8 +1745,19 @@ typedef struct {
 	uint32_t conn_max;
 	uint32_t concur_max;
 	uint32_t timeout_ms;
+	uint8_t type;
 	bool error;
 } connector_shared;
+
+typedef struct {
+	as_monitor monitor;
+	uint32_t loop_count;
+} connector_shared_wait;
+
+typedef struct {
+	connector_shared* array;
+	uint32_t loop_count;
+} connector_shared_nowait;
 
 typedef struct {
 	as_event_command command;
@@ -1754,23 +1768,53 @@ static void
 connector_execute_command(as_event_loop* event_loop, connector_shared* cs);
 
 static inline void
-connector_release(as_monitor* monitor, uint32_t* loop_count)
+connector_shared_wait_release(connector_shared_wait* csw)
 {
-	if (as_aaf_uint32_rls(loop_count, -1) == 0) {
-		as_monitor_notify(monitor);
+	if (as_aaf_uint32_rls(&csw->loop_count, -1) == 0) {
+		as_monitor_notify(&csw->monitor);
+	}
+}
+
+static inline void
+connector_shared_nowait_release(connector_shared_nowait* csnw)
+{
+	if (as_aaf_uint32_rls(&csnw->loop_count, -1) == 0) {
+		cf_free(csnw->array);
+		cf_free(csnw);
 	}
 }
 
 static void
 connector_complete(connector_shared* cs)
 {
-	if (cs->monitor) {
-		// Initial connector is allocated on stack.
-		connector_release(cs->monitor, cs->loop_count);
-	}
-	else {
-		// Balance connector is allocated on heap.
-		cf_free(cs);
+	switch (cs->type) {
+		case AS_CONNECTOR_SINGLE:
+			// Called from create_connections().
+			// There is no parent array. Free the single heap allocated connector.
+			cf_free(cs);
+			break;
+
+		case AS_CONNECTOR_WAIT: {
+			// Called from create_connections_wait().
+			// There is a parent array, but it's allocated on the stack.
+			// Call as_monitor_notify() when all connector_shared items
+			// are complete.
+			connector_shared_wait* csw = cs->parent;
+			connector_shared_wait_release(csw);
+			break;
+		}
+
+		case AS_CONNECTOR_NO_WAIT: {
+			// Called from create_connections_nowait().
+			// Free heap allocated parent array when all connector_shared
+			// items are complete.
+			connector_shared_nowait* csnw = cs->parent;
+			connector_shared_nowait_release(csnw);
+			break;
+		}
+
+		default:
+			break;
 	}
 }
 
@@ -1876,44 +1920,51 @@ connector_create_commands(as_event_loop* event_loop, connector_shared* cs)
 static void
 create_connections_wait(as_node* node, as_async_conn_pool* pools)
 {
-	as_monitor monitor;
-	as_monitor_init(&monitor);
-
 	uint32_t loop_max = as_event_loop_size;
-	uint32_t loop_count = loop_max;
 	uint32_t max_concurrent = 20 / loop_max + 1;
 	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
 
-	connector_shared* list = alloca(sizeof(connector_shared) * loop_max);
+	connector_shared* array = alloca(sizeof(connector_shared) * loop_max);
+
+	connector_shared_wait* csw = alloca(sizeof(connector_shared_wait));
+	as_monitor_init(&csw->monitor);
+	csw->loop_count = loop_max;
+
+	uint32_t queued = 0;
 
 	for (uint32_t i = 0; i < loop_max; i++) {
 		as_async_conn_pool* pool = &pools[i];
 		uint32_t min_size = pool->min_size;
 
 		if (min_size > 0) {
-			connector_shared* cs = &list[i];
-			cs->monitor = &monitor;
-			cs->loop_count = &loop_count;
+			connector_shared* cs = &array[i];
+			cs->parent = csw;
 			cs->node = node;
 			cs->pool = pool;
 			cs->conn_count = 0;
 			cs->conn_max = min_size;
 			cs->concur_max = (min_size >= max_concurrent)? max_concurrent : min_size;
 			cs->timeout_ms = timeout_ms;
+			cs->type = AS_CONNECTOR_WAIT;
 			cs->error = false;
 
-			if (!as_event_execute(&as_event_loops[i],
-				(as_event_executable)connector_create_commands, cs)) {
+			if (as_event_execute(&as_event_loops[i], (as_event_executable)connector_create_commands, cs)) {
+				queued++;
+			}
+			else {
 				as_log_error("Failed to queue connector");
-				connector_release(&monitor, &loop_count);
+				connector_shared_wait_release(csw);
 			}
 		}
 		else {
-			connector_release(&monitor, &loop_count);
+			connector_shared_wait_release(csw);
 		}
 	}
-	as_monitor_wait(&monitor);
-	as_monitor_destroy(&monitor);
+
+	if (queued > 0) {
+		as_monitor_wait(&csw->monitor);
+	}
+	as_monitor_destroy(&csw->monitor);
 }
 
 static void
@@ -1923,27 +1974,32 @@ create_connections_nowait(as_node* node, as_async_conn_pool* pools)
 	uint32_t max_concurrent = 20 / loop_max + 1;
 	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
 
-	connector_shared* list = cf_malloc(sizeof(connector_shared) * loop_max);
+	connector_shared* array = cf_malloc(sizeof(connector_shared) * loop_max);
+
+	connector_shared_nowait* csnw = cf_malloc(sizeof(connector_shared_nowait));
+	csnw->array = array;
+	csnw->loop_count = loop_max;
 
 	for (uint32_t i = 0; i < loop_max; i++) {
 		as_async_conn_pool* pool = &pools[i];
 		uint32_t min_size = pool->min_size;
 
 		if (min_size > 0) {
-			connector_shared* cs = &list[i];
-			cs->monitor = NULL;
-			cs->loop_count = NULL;
+			connector_shared* cs = &array[i];
+			cs->parent = csnw;
 			cs->node = node;
 			cs->pool = pool;
 			cs->conn_count = 0;
 			cs->conn_max = min_size;
 			cs->concur_max = (min_size >= max_concurrent)? max_concurrent : min_size;
 			cs->timeout_ms = timeout_ms;
+			cs->type = AS_CONNECTOR_NO_WAIT;
 			cs->error = false;
 
 			if (!as_event_execute(&as_event_loops[i],
 				(as_event_executable)connector_create_commands, cs)) {
 				as_log_error("Failed to queue connector");
+				connector_shared_nowait_release(csnw);
 			}
 		}
 	}
@@ -1981,14 +2037,14 @@ static void
 create_connections(as_event_loop* event_loop, as_node* node, as_async_conn_pool* pool, int count)
 {
 	connector_shared* cs = cf_malloc(sizeof(connector_shared));
-	cs->monitor = NULL;
-	cs->loop_count = NULL;
+	cs->parent = NULL;
 	cs->node = node;
 	cs->pool = pool;
 	cs->conn_count = 0;
 	cs->conn_max = count;
 	cs->concur_max = 1;
 	cs->timeout_ms = node->cluster->conn_timeout_ms;
+	cs->type = AS_CONNECTOR_SINGLE;
 	cs->error = false;
 
 	connector_create_commands(event_loop, cs);

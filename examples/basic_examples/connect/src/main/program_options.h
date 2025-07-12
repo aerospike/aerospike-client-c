@@ -2,11 +2,16 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 
 typedef struct program_options_s {
 	char *   hostname;
 	uint16_t port;
+	bool	 tls_options_given;
+	char *   cafile;
+	char *   cert_file;
+	char *   key_file;
 } program_options;
 
 
@@ -21,23 +26,32 @@ enum {
 
 	OPT_HOST = 'r',
 	OPT_PORT = 'p',
+
+	OPT_CAFILE = 'a',
+	OPT_CERTFILE = 'c',
+	OPT_KEYFILE = 'k',
 };
 
 
 static const struct option longopts[] = {
-	{"help", no_argument,       NULL, OPT_HELP},
-	{"host", required_argument, NULL, OPT_HOST},
-	{"port", required_argument, NULL, OPT_PORT},
-	{NULL,   0,                 NULL, 0},
+	{"help",      no_argument,       NULL, OPT_HELP},
+	{"host",      required_argument, NULL, OPT_HOST},
+	{"port",      required_argument, NULL, OPT_PORT},
+	{"ca-file",   required_argument, NULL, OPT_CAFILE},
+	{"cert-file", required_argument, NULL, OPT_CERTFILE},
+	{"key-file",  required_argument, NULL, OPT_KEYFILE},
+	{NULL,        0,                 NULL, 0},
 };
 
 
-static const char *optstring = "h?r:p:";
+static const char *optstring = "h?r:p:a:c:k:";
 
 
 void
 program_options_init(program_options *po) {
 	if(po) {
+		memset(po, 0, sizeof(program_options));
+
 		po->hostname = "127.0.0.1";
 		po->port = 3000;
 	}
@@ -50,7 +64,11 @@ print_usage(const char *cmdname) {
 	       "-r|--host <remote host> "
 	       "-p|--port <port>\n\n", cmdname);
 	printf("where [options] can be one or more of:\n");
-	printf("  -?,-h  --help  Displays this message and quits.\n");
+	printf("  -?,-h  --help              Displays this message and quits.\n");
+	printf("  -a     --ca-file <path>    Gives path to CA Certificate file\n");
+	printf("  -c     --cert-file <path>  Gives path to TLS certificate file\n");
+	printf("  -k     --key-file <path>   Gives path to TLS key file\n");
+	printf("\nNote that -a, -c, and -k must be specified for TLS to work.\n");
 }
 
 
@@ -90,15 +108,34 @@ program_options_parse(program_options *po, int argc, char *argv[]) {
 			}
 
 			if(!((0 <= p) && (p < 65536))) {
-				fprintf(stderr, "Port must fall between 0 and 65535 inclusive.\n");
+				fprintf(stderr,
+				        "Port must fall between 0 "
+				        "and 65535 inclusive.\n");
 				exit(EXIT_FAILURE);
 			}
 
 			po->port = (uint16_t)p;
 			break;
+
+		case OPT_CAFILE:
+			po->cafile = optarg;
+			break;
+
+		case OPT_CERTFILE:
+			po->cert_file = optarg;
+			break;
+
+		case OPT_KEYFILE:
+			po->key_file = optarg;
+			break;
 		}
 	}
+
+	// Set tls_options_given only if all three of the TLS
+	// parameters are set.
+	po->tls_options_given = po->cafile &&
+	                        po->cert_file &&
+	                        po->key_file;
 }
 
 #endif
-

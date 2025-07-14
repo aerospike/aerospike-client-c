@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_config.h>
 #include <aerospike/as_password.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_string.h>
 #include <aerospike/mod_lua_config.h>
@@ -394,4 +395,21 @@ as_auth_mode_from_string(as_auth_mode* auth, const char* str)
 	}
 
 	return false;
+}
+
+void
+as_config_massage_error_rate(as_config* config)
+{
+	if (config->max_error_rate == 0 || config->error_rate_window == 0 ||
+		((config->max_error_rate - 1) / config->error_rate_window >= 100)) {
+		uint32_t mer = config->max_error_rate;
+		uint32_t erw = config->error_rate_window;
+
+		config->max_error_rate = 100;
+		config->error_rate_window = 1;
+
+		as_log_warn(
+			"Invalid max_error_rate/error_rate_window: %u %u. Please ensure ratio between max_error_rate and error_rate_window cannot exceed 100 or be less than 1. We reset your max_error_rate and error_rate_window to default values for you: %u %u",
+			mer, erw, config->max_error_rate, config->error_rate_window);
+	}
 }

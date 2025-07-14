@@ -1942,6 +1942,8 @@ as_cluster_update(
 	config->rack_aware = as_field_is_set(bitmap, AS_RACK_AWARE)?
 		src->rack_aware : orig->rack_aware;
 
+	as_config_massage_error_rate(config);
+
 	if (cluster->config_interval < config->tender_interval) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Dynamic config interval %u must be greater or equal to the tend interval %u",
@@ -1992,14 +1994,25 @@ as_cluster_update(
 
 	// Set cluster.
 	cluster->conn_timeout_ms = (config->conn_timeout_ms == 0) ? 1000 : config->conn_timeout_ms;
-	cluster->max_error_rate = config->max_error_rate;
-	cluster->error_rate_window = config->error_rate_window;
 	cluster->login_timeout_ms = (config->login_timeout_ms == 0) ? 5000 : config->login_timeout_ms;
 	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
 	cluster->tend_interval = config->tender_interval;
 	cluster->fail_if_not_connected = config->fail_if_not_connected;
 	cluster->use_services_alternate = config->use_services_alternate;
 	cluster->rack_aware = config->rack_aware;
+	cluster->error_rate_window = config->error_rate_window;
+
+	if (cluster->max_error_rate != config->max_error_rate) {
+		cluster->max_error_rate = config->max_error_rate;
+
+		// Update max_error_rate for all nodes.
+		as_nodes* nodes = as_nodes_reserve(cluster);
+		for (uint32_t i = 0; i < nodes->size; i++) {
+			as_node* node = nodes->array[i];
+			node->max_error_rate = config->max_error_rate;
+		}
+		as_nodes_release(nodes);
+	}
 
 	if (!as_rack_ids_equal(cluster, config)) {
 		as_vector* old = cluster->rack_ids;

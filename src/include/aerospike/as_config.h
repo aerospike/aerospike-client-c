@@ -1194,6 +1194,13 @@ as_config_add_rack_id(as_config* config, int rack_id);
 AS_EXTERN bool
 as_auth_mode_from_string(as_auth_mode* auth, const char* str);
 
+/**
+ * @private
+ * Validate and modify max_error_rate and error_rate_window if not within bounds.
+ */
+void
+as_config_massage_error_rate(as_config* config);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

@@ -739,40 +739,7 @@ as_partition_get_node(
 static inline void
 as_node_incr_error_rate(as_node* node)
 {
-	if (node->cluster->max_error_rate > 0) {
-		as_incr_uint32(&node->error_rate);
-	}
-}
-
-/**
- * @private
- * Reset node's error count.
- */
-static inline void
-as_node_reset_error_rate(as_node* node)
-{
-	as_store_uint32(&node->error_rate, 0);
-}
-
-/**
- * @private
- * Get node's error count.
- */
-static inline uint32_t
-as_node_get_error_rate(as_node* node)
-{
-	return as_load_uint32(&node->error_rate);
-}
-
-/**
- * @private
- * Validate node's error count.
- */
-static inline bool
-as_node_valid_error_rate(as_node* node)
-{
-	uint32_t max = node->cluster->max_error_rate;
-	return max == 0 || max >= as_load_uint32(&node->error_rate);
+	as_incr_uint32(&node->error_rate);
 }
 
 /**

@@ -354,7 +354,12 @@ typedef struct as_node_s {
 	 * Error count for this node's error_rate_window.
 	 */
 	uint32_t error_rate;
-	
+
+	/**
+	 * Max errors per node per error_rate_window.
+	 */
+	uint32_t max_error_rate;
+
 	/**
 	 * Server's generation count for peers.
 	 */
@@ -404,7 +409,7 @@ typedef struct as_node_s {
 	 * Is node currently active.
 	 */
 	uint8_t active;
-	
+
 	/**
 	 * Did partition change in current cluster tend.
 	 */
@@ -798,6 +803,30 @@ as_node_get_key_busy_count(as_ns_metrics* metrics)
  */
 void
 as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * @private
+ * Validate node's error rate.
+ */
+bool
+as_node_valid_error_rate(as_node* node);
+
+/**
+ * @private
+ * Reset node's error count.
+ */
+void
+as_node_reset_error_rate(as_node* node);
+
+/**
+ * @private
+ * Get node's error count.
+ */
+static inline uint32_t
+as_node_get_error_rate(as_node* node)
+{
+	return as_load_uint32(&node->error_rate);
+}
 
 /**
  * @private

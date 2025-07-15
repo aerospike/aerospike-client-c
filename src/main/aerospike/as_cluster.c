@@ -751,7 +751,7 @@ as_cluster_manage(as_cluster* cluster)
 	}
 
 	// Reset connection error window for all nodes every error_rate_window tend iterations.
-	if (cluster->max_error_rate > 0 && cluster->tend_count % cluster->error_rate_window == 0) {
+	if (cluster->tend_count % cluster->error_rate_window == 0) {
 		as_cluster_reset_error_rate(cluster);
 	}
 
@@ -1411,6 +1411,8 @@ as_cluster_create(aerospike* as, as_error* err)
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid async connection range: %u - %u",
 			config->async_min_conns_per_node, config->async_max_conns_per_node);
 	}
+
+	as_config_massage_error_rate(config);
 
 	char* pass_hash = NULL;
 

@@ -206,6 +206,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->partition_changed = true;
 	node->rebalance_changed = cluster->rack_aware;
 	node->error_rate = 0;
+	node->max_error_rate = cluster->max_error_rate;
 	node->metrics_size = 0;
 	node->metrics = cf_calloc(AS_MAX_METRICS_NAMESPACES, sizeof(as_ns_metrics*));
 
@@ -1007,15 +1008,40 @@ as_node_verify_name(as_error* err, as_node* node, const char* name)
 static void
 as_node_restart(as_cluster* cluster, as_node* node)
 {
-	if (cluster->max_error_rate > 0) {
-		as_node_reset_error_rate(node);
-	}
+	as_node_reset_error_rate(node);
 
 	// Balance sync connections.
 	as_node_balance_connections(node);
 
 	if (as_event_loop_capacity > 0 && !as_event_single_thread) {
 		as_event_node_balance_connections(cluster, node);
+	}
+}
+
+bool
+as_node_valid_error_rate(as_node* node)
+{
+	return as_load_uint32(&node->error_rate) <= node->max_error_rate;
+}
+
+void
+as_node_reset_error_rate(as_node* node)
+{
+	if (as_node_valid_error_rate(node)) {
+		as_store_uint32(&node->error_rate, 0);
+		// Reset max_error_rate to cluster max_error_rate.
+		node->max_error_rate = node->cluster->max_error_rate;
+	}
+	else {
+		// Error rate was breached. Next error rate trigger is half.
+		as_store_uint32(&node->error_rate, 0);
+
+		if (node->max_error_rate >= 2) {
+			node->max_error_rate /= 2;
+		}
+		else {
+			node->max_error_rate = 1;
+		}
 	}
 }
 

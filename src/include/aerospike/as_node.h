@@ -411,11 +411,6 @@ typedef struct as_node_s {
 	uint8_t active;
 
 	/**
-	 * Was max_error_rate breached.
-	 */
-	uint8_t error_rate_breached;
-
-	/**
 	 * Did partition change in current cluster tend.
 	 */
 	bool partition_changed;

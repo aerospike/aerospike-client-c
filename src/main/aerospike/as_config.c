@@ -411,7 +411,7 @@ as_config_massage_error_rate(as_config* config)
 		config->error_rate_window = 1;
 
 		as_log_warn(
-			"Invalid circuit breaker configuration: max_error_rate=%u, error_rate_window=%u, ratio=%.2f. The ratio (max_error_rate/error_rate_window) must be between 1 and 100. Resetting to defaults: max_error_rate=%u and error_rate_window=%u.",
+			"Invalid circuit breaker configuration: max_error_rate: %u, error_rate_window: %u, ratio: %.2f. The ratio (max_error_rate/error_rate_window) must be between 1 and 100. Resetting to defaults - max_error_rate: %u and error_rate_window: %u",
 			mer, erw, ratio, config->max_error_rate, config->error_rate_window);
 	}
 }

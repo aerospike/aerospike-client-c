@@ -1026,7 +1026,7 @@ as_node_valid_error_rate(as_node* node)
 		return true;
 	}
 
-	as_store_uint8(&node->error_rate_breached, 1);
+	as_cas_uint8(&node->error_rate_breached, 0, 1);
 	return false;
 }
 

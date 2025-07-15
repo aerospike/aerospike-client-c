@@ -1419,7 +1419,7 @@ as_cluster_create(aerospike* as, as_error* err)
 	if (config->auth_mode == AS_AUTH_PKI) {
 		if (*(config->password)) {
 			return as_error_set_message(err, AEROSPIKE_FORBIDDEN_PASSWORD,
-				"Password authentication is disabled for PKI-only users");
+				"Password authentication is disabled for PKI-only users. Please authenticate using your certificate.");
 		}
 	}
 	else if (*(config->user)) {

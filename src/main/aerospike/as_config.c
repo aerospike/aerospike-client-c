@@ -261,6 +261,7 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
 			
 			if (more) {
 				if (! isdigit(*p)) {
+					cf_free(host.name);
 					return false;
 				}
 				host.port = (uint16_t)strtol(p, (char**)&p, 10);
@@ -270,6 +271,7 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
 						p++;
 					}
 					else {
+						cf_free(host.name);
 						return false;
 					}
 				}
@@ -280,6 +282,7 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
 					host.port = (uint16_t)strtol(begin, &q, 10);
 					
 					if (*q && *q != ',') {
+						cf_free(host.name);
 						return false;
 					}
 				}

@@ -780,19 +780,22 @@ as_scan_generic(
 
 	// Initialize task.
 	uint32_t error_mutex = 0;
-	as_scan_task task;
-	task.np = NULL;
-	task.pt = NULL;
-	task.cluster = cluster;
-	task.policy = policy;
-	task.scan = scan;
-	task.callback = callback;
-	task.udata = udata;
-	task.err = err;
-	task.error_mutex = &error_mutex;
-	task.task_id = task_id;
-	task.cluster_key = cluster_key;
-	task.first = true;
+	as_scan_task task = {
+		.node = NULL,
+		.np = NULL,
+		.pt = NULL,
+		.cluster = cluster,
+		.policy = policy,
+		.scan = scan,
+		.callback = callback,
+		.udata = udata,
+		.err = err,
+		.complete_q = NULL,
+		.error_mutex = &error_mutex,
+		.task_id = task_id,
+		.cluster_key = cluster_key,
+		.first = true
+	};
 
 	if (scan->concurrent) {
 		uint32_t n_wait_nodes = nodes->size;
@@ -899,18 +902,21 @@ as_scan_partitions(
 
 		// Initialize task.
 		uint32_t error_mutex = 0;
-		as_scan_task task;
-		task.pt = pt;
-		task.cluster = cluster;
-		task.policy = policy;
-		task.scan = scan;
-		task.callback = callback;
-		task.udata = udata;
-		task.err = err;
-		task.error_mutex = &error_mutex;
-		task.task_id = task_id;
-		task.cluster_key = 0;
-		task.first = false;
+		as_scan_task task = {
+			.node = NULL,
+			.np = NULL,
+			.pt = pt,
+			.cluster = cluster,
+			.policy = policy,
+			.scan = scan,
+			.callback = callback,
+			.udata = udata,
+			.err = err,
+			.error_mutex = &error_mutex,
+			.task_id = task_id,
+			.cluster_key = 0,
+			.first = false
+		};
 
 		if (scan->concurrent && n_nodes > 1) {
 			uint32_t n_wait_nodes = n_nodes;

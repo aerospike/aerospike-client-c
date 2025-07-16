@@ -924,7 +924,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		const char* increase_msg = "You can increase shared memory size by: sysctl -w kern.sysv.shmmax=<new_size>";
 #endif
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Shared memory max %zu has been exceeded with latest shared memory request of size %zu. %s",
+			"Shared memory max %zu has been exceeded with latest shared memory request of size %u. %s",
 			max, size, increase_msg);
 	}
 	else {

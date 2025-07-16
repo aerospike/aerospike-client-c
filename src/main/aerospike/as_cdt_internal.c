@@ -122,11 +122,11 @@ as_cdt_ctx_pack(const as_cdt_ctx* ctx, as_packer* pk)
 bool
 as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operator op_type)
 {
-	as_bytes* bytes = as_bytes_new_wrap(pk->buffer, pk->offset, true);
 	as_binop* binop = as_binop_forappend(ops, op_type, name);
 	if (! binop) {
 		return false;
 	}
+	as_bytes* bytes = as_bytes_new_wrap(pk->buffer, pk->offset, true);
 	as_bin_init(&binop->bin, name, (as_bin_value*)bytes);
 	return true;
 }

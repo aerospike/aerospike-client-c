@@ -608,7 +608,6 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 
 	// Unpack where
 	as_predicate* pred = NULL;
-	bool free_pred_val = false;
 	bool b = false;
 
 	if (as_unpack_uint64(&pk, &uval) != 0) {
@@ -629,7 +628,6 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 			pred->ctx_free = false;
 			pred->exp = NULL;
 			pred->exp_free = false;
-			free_pred_val = false;
 
 			if (! as_unpack_str_init(&pk, pred->index_name, AS_INDEX_NAME_MAX_SIZE)) {
 				goto HandleError;
@@ -719,7 +717,6 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 								goto HandlePredError;
 							}
 							pred->value.string_val._free = true;
-							free_pred_val = true;
 							break;
 
 						case AS_INDEX_NUMERIC:
@@ -734,7 +731,6 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 								goto HandlePredError;
 							}
 							pred->value.blob_val._free = true;
-							free_pred_val = true;
 							break;
 
 						default:
@@ -757,7 +753,6 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 							goto HandlePredError;
 						}
 						pred->value.string_val._free = true;
-						free_pred_val = true;
 					}
 					break;
 
@@ -959,25 +954,6 @@ HandlePredError:
 	if (pred->exp) {
 		as_exp_destroy(pred->exp);
 		pred->exp = NULL;
-	}
-
-	if (free_pred_val) {
-		switch (pred->dtype) {
-			case AS_INDEX_GEO2DSPHERE:
-			case AS_INDEX_STRING:
-				cf_free(pred->value.string_val.string);
-				pred->value.string_val.string = NULL;
-				break;
-
-			case AS_INDEX_BLOB:
-				cf_free(pred->value.blob_val.bytes);
-				pred->value.blob_val.bytes = NULL;
-				pred->value.blob_val.bytes_size = 0;
-				break;
-
-			default:
-				break;
-		}
 	}
 
 HandleError:

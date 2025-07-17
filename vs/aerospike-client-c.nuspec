@@ -12,7 +12,7 @@
     <readme>README.md</readme>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>Aerospike C client library for synchronous database commands.</description>
-    <copyright>Copyright 2008-2024 Aerospike, Inc.</copyright>
+    <copyright>Copyright 2008-2025 Aerospike, Inc.</copyright>
     <tags>Aerospike database C client native</tags>
   </metadata>
   <files>
@@ -29,25 +29,36 @@
     <file src="x64\Release\aerospike.lib" target="build\native\lib\x64\Release" />
     <file src="x64\Release\aerospike.dll" target="build\native\lib\x64\Release" />
 
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\pthread.h" target="build\native\include" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\sched.h" target="build\native\include" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\include\_ptw32.h" target="build\native\include" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.dll" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\libeay32.pdb" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\lua51.dll" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\lua51.pdb" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\pthreadVC2d.lib" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\pthreadVC2d.dll" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\pthreadVC2d.pdb" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\ssleay32.dll" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\ssleay32.pdb" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\zlibd.dll" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Debug\zlibd.pdb" target="build\native\lib\x64\Debug" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\libeay32.dll" target="build\native\lib\x64\Release" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\lua51.dll" target="build\native\lib\x64\Release" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\pthreadVC2.lib" target="build\native\lib\x64\Release" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\pthreadVC2.dll" target="build\native\lib\x64\Release" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\ssleay32.dll" target="build\native\lib\x64\Release" />
-    <file src="packages\aerospike-client-c-dependencies.*\build\native\lib\x64\Release\zlib.dll" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\include\pthread.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\include\sched.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\include\_ptw32.h" target="build\native\include" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\lib\x64\Debug\pthreadVC2d.lib" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\lib\x64\Debug\pthreadVC2d.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\lib\x64\Debug\pthreadVC2d.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\lib\x64\Debug\zlibd.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\lib\x64\Debug\zlibd.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\lib\x64\Release\pthreadVC2.lib" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\lib\x64\Release\pthreadVC2.dll" target="build\native\lib\x64\Release" />
+    <file src="packages\aerospike-client-c-dependencies.1.0.3\build\native\lib\x64\Release\zlib.dll" target="build\native\lib\x64\Release" />
+
+    <file src="packages\openssl-native.3.0.16\runtimes\win-x64\native\libcrypto-3-x64.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\openssl-native.3.0.16\runtimes\win-x64\native\libcrypto-3-x64.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\openssl-native.3.0.16\runtimes\win-x64\native\libssl-3-x64.dll" target="build\native\lib\x64\Debug" />
+    <file src="packages\openssl-native.3.0.16\runtimes\win-x64\native\libssl-3-x64.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\openssl-native.3.0.16\runtimes\win-x64\native\libcrypto-3-x64.dll" target="build\native\lib\x64\Release" />
+    <file src="packages\openssl-native.3.0.16\runtimes\win-x64\native\libssl-3-x64.dll" target="build\native\lib\x64\Release" />
+
+    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Debug\lua.lib" target="build\native\lib\x64\Debug" />
+    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Debug\lua_lib.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Debug\lua_static.lib" target="build\native\lib\x64\Debug" />
+    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Debug\lua_static.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Release\lua.lib" target="build\native\lib\x64\Release" />
+    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Release\lua_lib.pdb" target="build\native\lib\x64\Release" />
+    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Release\lua_static.lib" target="build\native\lib\x64\Release" />
+    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Release\lua_static.pdb" target="build\native\lib\x64\Release" />
+
+    <file src="packages\libyaml.0.2.5.12\build\native\lib\v142\x64\Debug\yaml.lib" target="build\native\lib\x64\Debug" />
+    <file src="packages\libyaml.0.2.5.12\build\native\lib\v142\x64\Debug\yaml.pdb" target="build\native\lib\x64\Debug" />
+    <file src="packages\libyaml.0.2.5.12\build\native\lib\v142\x64\Release\yaml.lib" target="build\native\lib\x64\Release" />
   </files>
 </package>

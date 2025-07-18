@@ -71,6 +71,13 @@ extern "C" {
 #define AS_POLICY_SOCKET_TIMEOUT_DEFAULT 30000
 
 /**
+ * Default socket read timeout delay value
+ * 
+ * @ingroup client_policies
+ */
+#define AS_POLICY_SOCKET_READ_TIMEOUT_DELAY_DEFAULT 0
+
+/**
  * Default total timeout value
  *
  * @ingroup client_policies
@@ -551,6 +558,25 @@ typedef struct as_policy_base_s {
 	 */
 	bool compress;
 
+	/**
+	 * Number of milliseconds to wait after a socket read times out before closing the socket for
+	 * good.  If set to zero, this feature will be disabled.
+	 * 
+	 * If, upon performing a database operation, the host finds the socket it was using timing out
+	 * while reading, the client will receive a timeout error.  However, we don't always want to
+	 * close that socket right away; doing so introduces unwanted latencies.  It might be possible
+	 * to recover the socket, thus saving the socket for future re-use.
+	 * 
+	 * The socket will be closed only if it could not be successfully recovered within `timeout_delay`
+	 * milliseconds of the original timeout.  If this is set to zero, the socket may be closed right
+	 * away, effectively disabling this feature.
+	 * 
+	 * Please note that this feature only applies to sockets being read; write timeouts are not
+	 * affected by this setting.
+	 * 
+	 * Default: 0
+	 */
+	uint32_t timeout_delay;
 } as_policy_base;
 
 /**
@@ -1627,6 +1653,7 @@ as_policy_base_read_init(as_policy_base* p)
 {
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	p->timeout_delay = AS_POLICY_SOCKET_READ_TIMEOUT_DELAY_DEFAULT;
 	p->max_retries = 2;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
@@ -1642,6 +1669,7 @@ as_policy_base_write_init(as_policy_base* p)
 {
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	p->timeout_delay = AS_POLICY_SOCKET_READ_TIMEOUT_DELAY_DEFAULT;
 	p->max_retries = 0;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
@@ -1669,6 +1697,7 @@ static inline void
 as_policy_base_query_init(as_policy_base* p)
 {
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
+	p->timeout_delay = AS_POLICY_SOCKET_READ_TIMEOUT_DELAY_DEFAULT;
 	p->total_timeout = 0;
 	p->max_retries = 5;
 	p->sleep_between_retries = 0;

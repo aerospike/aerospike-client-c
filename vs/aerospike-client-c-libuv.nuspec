@@ -61,13 +61,11 @@
     <file src="packages\openssl-native.3.0.16\runtimes\win-x64\native\libssl-3-x64.dll" target="build\native\lib\x64\Release" />
 
     <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Debug\lua.lib" target="build\native\lib\x64\Debug" />
+    <file src="packages\lua.5.4.6\build\native\bin\x64\v143\Debug\lua.dll" target="build\native\lib\x64\Debug" />
     <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Debug\lua_lib.pdb" target="build\native\lib\x64\Debug" />
-    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Debug\lua_static.lib" target="build\native\lib\x64\Debug" />
-    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Debug\lua_static.pdb" target="build\native\lib\x64\Debug" />
     <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Release\lua.lib" target="build\native\lib\x64\Release" />
+    <file src="packages\lua.5.4.6\build\native\bin\x64\v143\Release\lua.dll" target="build\native\lib\x64\Release" />
     <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Release\lua_lib.pdb" target="build\native\lib\x64\Release" />
-    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Release\lua_static.lib" target="build\native\lib\x64\Release" />
-    <file src="packages\lua.5.4.6\build\native\lib\x64\v143\Release\lua_static.pdb" target="build\native\lib\x64\Release" />
 
     <file src="packages\libyaml.0.2.5.12\build\native\lib\v142\x64\Debug\yaml.lib" target="build\native\lib\x64\Debug" />
     <file src="packages\libyaml.0.2.5.12\build\native\lib\v142\x64\Debug\yaml.pdb" target="build\native\lib\x64\Debug" />

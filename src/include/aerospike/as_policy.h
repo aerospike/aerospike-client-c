@@ -1,5 +1,4 @@
 /*
-*
  * Copyright 2008-2025 Aerospike, Inc.
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.

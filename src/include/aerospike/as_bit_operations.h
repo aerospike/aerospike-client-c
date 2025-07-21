@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -27,7 +27,7 @@
  *
  * Code examples:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // Set bitmap bin.
  * as_operations ops;
  * as_operations_inita(&ops, 1);
@@ -39,7 +39,7 @@
  * aerospike_key_operate(&as, &err, NULL, &key, &ops, &rec);
  * as_operations_destroy(&ops);
  * as_record_destroy(rec);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Bit operations on bitmap items nested in lists/maps are not currently
  * supported by the server.  The as_cdt_ctx argument in bit operations must

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -62,7 +62,7 @@ typedef bool (*aerospike_info_foreach_callback)(const as_error* err, const as_no
 /**
  * Send an info request to a specific server node. The response must be freed by the caller on success.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * char* res = NULL;
  * if (aerospike_info_node(&as, &err, NULL, node, "info", &res) != AEROSPIKE_OK) {
  * 	   // handle error
@@ -71,7 +71,7 @@ typedef bool (*aerospike_info_foreach_callback)(const as_error* err, const as_no
  * 	   // handle response
  * 	   free(res);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -94,7 +94,7 @@ aerospike_info_node(
 /**
  * Asynchronously send an info request to a specific server node.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, char* response, void* udata, as_event_loop* event_loop)
  * {
  *     if (err) {
@@ -106,7 +106,7 @@ aerospike_info_node(
  * }
  *
  * aerospike_info_node_async(&as, &err, NULL, node, "info", my_listener, NULL, NULL);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -134,7 +134,7 @@ aerospike_info_node_async(
 /**
  * Send an info request to a specific host. The response must be freed by the caller on success.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * char* res = NULL;
  * if (aerospike_info_host(&as, &err, NULL, "127.0.0.1", 3000, "info", &res) != AEROSPIKE_OK) {
  * 	   // handle error
@@ -144,7 +144,7 @@ aerospike_info_node_async(
  * 	   free(res);
  * 	   res = NULL;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * This function does not support TLS nor the new user authentication protocol.
  *
@@ -172,7 +172,7 @@ aerospike_info_host(
 /**
  * Send an info request to a specific socket address. The response must be freed by the caller on success.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * char* res = NULL;
  * if (aerospike_info_socket_address(&as, &err, NULL, &sa_in, "info", &res) != AEROSPIKE_OK) {
  * 	   // handle error
@@ -182,7 +182,7 @@ aerospike_info_host(
  * 	   free(res);
  * 	   res = NULL;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * This function does not support TLS, IPv6 nor the new user authentication protocol.
  *
@@ -211,7 +211,7 @@ aerospike_info_socket_address(
  * node in the cluster.  Repeat until the node request succeeds. The response must be freed by
  * the caller on success.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * char* res = NULL;
  * if (aerospike_info_any(&as, &err, NULL, "info", &res) != AEROSPIKE_OK) {
  * 	   // handle error
@@ -221,7 +221,7 @@ aerospike_info_socket_address(
  * 	   free(res);
  * 	   res = NULL;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -242,19 +242,19 @@ aerospike_info_any(
 /**
  * Send an info request to the entire cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * if (aerospike_info_foreach(&as, &err, NULL, "info", callback, NULL) != AEROSPIKE_OK) {
  * 	   // handle error
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * The callback takes a response string. The caller should not free this string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_error* err, const as_node * node, const char* req, char* res, void* udata) {
  * 	   // handle response
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.

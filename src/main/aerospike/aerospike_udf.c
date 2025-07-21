@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -27,9 +27,9 @@
 #include <citrusleaf/cf_crypto.h>
 #include <stdio.h>
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 typedef struct as_udf_file_ptr_s {
 	char* name;
@@ -39,9 +39,9 @@ typedef struct as_udf_file_ptr_s {
 
 char* as_udf_type_str[] = {"LUA", 0};
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 static void
 as_udf_parse_file(const char* token, char* p, as_udf_file_ptr* ptr)
@@ -70,7 +70,8 @@ aerospike_udf_list(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	char* response = 0;
@@ -171,7 +172,8 @@ aerospike_udf_get(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 		
 	char command[512];
@@ -264,7 +266,8 @@ aerospike_udf_put(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 		
 	as_string filename_string;
@@ -343,7 +346,8 @@ aerospike_udf_put_wait(
 	)
 {
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	char filter[256];
@@ -371,7 +375,8 @@ aerospike_udf_remove(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 	
 	char command[512];
@@ -421,7 +426,8 @@ aerospike_udf_remove_wait(
 	)
 {
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	char filter[256];

@@ -56,8 +56,10 @@ extern "C" {
 #define AS_FIELD_DIGEST_ARRAY 12
 #define AS_FIELD_MAX_RECORDS 13
 #define AS_FIELD_BVAL_ARRAY 15
+#define AS_FIELD_INDEX_NAME 21
 #define AS_FIELD_INDEX_RANGE 22
 #define AS_FIELD_INDEX_CONTEXT 23
+#define AS_FIELD_INDEX_EXPRESSION 24
 #define AS_FIELD_INDEX_TYPE 26
 #define AS_FIELD_UDF_PACKAGE_NAME 30
 #define AS_FIELD_UDF_FUNCTION 31
@@ -184,6 +186,7 @@ typedef struct as_command_s {
 	const as_policy_base* policy;
 	as_node* node;
 	const as_key* key;
+	const char* ns;
 	void* partition;
 	as_parse_results_fn parse_results_fn;
 	void* udata;

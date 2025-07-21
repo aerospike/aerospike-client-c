@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
@@ -43,18 +44,17 @@ static bool lua_initialized = false;
 static bool library_initialized = false;
 #endif
 
-void
-as_config_destroy(as_config* config);
-
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static aerospike*
 aerospike_defaults(aerospike* as, bool free, as_config* config)
 {
 	as->_free = free;
 	as->cluster = NULL;
+	as->config_orig = NULL;
+	as->config_bitmap = NULL;
 
 	if (config) {
 		memcpy(&as->config, config, sizeof(as_config));
@@ -62,12 +62,39 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 	else {
 		as_config_init(&as->config);
 	}
+
+    char* url = getenv("AEROSPIKE_CLIENT_CONFIG_URL");
+
+    if (url) {
+		// Environment variable takes precedence over original
+		// config path.
+		char* path;
+
+		if (strncmp(url, "file://", 7) == 0) {
+			path = url + 7;
+		}
+		else {
+			path = url;
+		}
+
+		// Set config path from environment variable.
+		as_config_provider_set_path(&as->config, path);
+	}
+
+	if (as->config.config_provider.path) {
+		as_error err;
+		as_status status = as_config_file_init(as, &err);
+
+		if (status != AEROSPIKE_OK) {
+			as_log_error("%s", err.message);
+		}
+	}
 	return as;
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 aerospike_library_init(as_error* err)
@@ -157,6 +184,17 @@ void aerospike_destroy(aerospike* as)
 {
 	as_config_destroy(&as->config);
 
+	if (as->config_orig) {
+		// Do not call as_config_destroy() since config_orig is
+		// a shallow copy of as->config and as->config owns
+		// the fields.
+		cf_free(as->config_orig);
+	}
+
+	if (as->config_bitmap) {
+		cf_free(as->config_bitmap);
+	}
+
 	if (as->_free) {
 		cf_free(as);
 	}
@@ -234,7 +272,25 @@ aerospike_connect(aerospike* as, as_error* err)
 #endif
 
 	// Create the cluster object.
-	return as_cluster_create(&as->config, err, &as->cluster);
+	status = as_cluster_create(as, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	// Dynamic configuration allows metrics to be enabled from a file.
+	if (as->config.policies.metrics.enable) {
+		as_log_info("Enable metrics");
+		// Call as_cluster_enable_metrics() instead of aerospike_enable_metrics() to avoid
+		// the uneccessary policy merge with the default metrics policy.
+		as_cluster* cluster = as->cluster;
+
+		pthread_mutex_lock(&cluster->metrics_lock);
+		status = as_cluster_enable_metrics(err, cluster, &as->config.policies.metrics);
+		pthread_mutex_unlock(&cluster->metrics_lock);
+	}
+
+	return status;
 }
 
 void as_event_close_cluster(as_cluster* cluster);
@@ -252,8 +308,13 @@ aerospike_close(aerospike* as, as_error* err)
 	
 	if (cluster) {
 		if (cluster->metrics_enabled) {
-			as_status status = aerospike_disable_metrics(as, err);
-			
+			// Call as_cluster_disable_metrics() instead of aerospike_disable_metrics() to avoid
+			// the unwanted dynamic config enabled denial. On aerospike_close(), the metrics
+			// must be closed.
+			pthread_mutex_lock(&cluster->metrics_lock);
+			as_status status = as_cluster_disable_metrics(err, cluster);
+			pthread_mutex_unlock(&cluster->metrics_lock);
+
 			if (status != AEROSPIKE_OK) {
 				as_log_warn("Metrics error: %s %s", as_error_string(status), err->message);
 				as_error_reset(err);
@@ -296,7 +357,8 @@ aerospike_truncate(
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	// Send truncate command to one node. That node will distribute the command to other nodes.
@@ -346,7 +408,8 @@ as_status
 aerospike_reload_tls_config(aerospike* as, as_error* err)
 {
 	as_error_reset(err);
-	return as_tls_config_reload(&as->config.tls, as->cluster->tls_ctx, err);
+	as_config* config = aerospike_load_config(as);
+	return as_tls_config_reload(&config->tls, as->cluster->tls_ctx, err);
 }
 
 as_status
@@ -357,7 +420,8 @@ aerospike_set_xdr_filter(
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	// Send truncate command to one node. That node will distribute the command to other nodes.
@@ -390,4 +454,3 @@ aerospike_set_xdr_filter(
 	as_node_release(node);
 	return status;
 }
-

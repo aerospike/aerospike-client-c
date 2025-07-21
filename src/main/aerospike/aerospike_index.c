@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -18,6 +18,7 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_exp.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_string_builder.h>
@@ -25,21 +26,22 @@
 #include <citrusleaf/cf_b64.h>
 #include <stdlib.h>
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
-as_status
-aerospike_index_create_ctx(
+static as_status
+aerospike_index_create_private(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
 	const char* set, const char* bin_name, const char* index_name, as_index_type itype,
-	as_index_datatype dtype, as_cdt_ctx* ctx
+	as_index_datatype dtype, as_cdt_ctx* ctx, as_exp* exp
 	)
 {
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	const char* dtype_string;
@@ -93,36 +95,52 @@ aerospike_index_create_ctx(
 	as_string_builder_append(&sb, ";indexname=");
 	as_string_builder_append(&sb, index_name);
 
-	if (ctx) {
-		as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
+	if (exp) {
+		char* b64 = as_exp_to_base64(exp);
 
-		if (as_cdt_ctx_pack(ctx, &pk) == 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to pack ctx");
-		}
-
-		char* context = cf_malloc(pk.offset);
-		uint32_t b64_sz = cf_b64_encoded_len(pk.offset);
-
-		char* b64 = cf_malloc(b64_sz + 1);
-		pk.buffer = (uint8_t*)context;
-		pk.offset = 0;
-		as_cdt_ctx_pack(ctx, &pk);
-		cf_b64_encode(pk.buffer, pk.offset, b64);
-		b64[b64_sz] = 0;
-		cf_free(context);
-
-		as_string_builder_append(&sb, ";context=");
+		as_string_builder_append(&sb, ";exp=");
 		as_string_builder_append(&sb, b64);
 		cf_free(b64);
+
+		as_string_builder_append(&sb, ";indextype=");
+		as_string_builder_append(&sb, itype_string);
+
+		as_string_builder_append(&sb, ";type=");
+		as_string_builder_append(&sb, dtype_string);
+	}
+	else {
+		if (ctx) {
+			as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
+
+			if (as_cdt_ctx_pack(ctx, &pk) == 0) {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to pack ctx");
+			}
+
+			char* context = cf_malloc(pk.offset);
+			uint32_t b64_sz = cf_b64_encoded_len(pk.offset);
+
+			char* b64 = cf_malloc(b64_sz + 1);
+			pk.buffer = (uint8_t*)context;
+			pk.offset = 0;
+			as_cdt_ctx_pack(ctx, &pk);
+			cf_b64_encode(pk.buffer, pk.offset, b64);
+			b64[b64_sz] = 0;
+			cf_free(context);
+
+			as_string_builder_append(&sb, ";context=");
+			as_string_builder_append(&sb, b64);
+			cf_free(b64);
+		}
+
+		as_string_builder_append(&sb, ";indextype=");
+		as_string_builder_append(&sb, itype_string);
+
+		as_string_builder_append(&sb, ";indexdata=");
+		as_string_builder_append(&sb, bin_name);
+		as_string_builder_append_char(&sb, ',');
+		as_string_builder_append(&sb, dtype_string);
 	}
 
-	as_string_builder_append(&sb, ";indextype=");
-	as_string_builder_append(&sb, itype_string);
-
-	as_string_builder_append(&sb, ";indexdata=");
-	as_string_builder_append(&sb, bin_name);
-	as_string_builder_append_char(&sb, ',');
-	as_string_builder_append(&sb, dtype_string);
 	as_string_builder_append_newline(&sb);
 
 	if (sb.length + 1 >= sb.capacity) {
@@ -203,6 +221,31 @@ aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* p
 	task->done = true;
 	as_nodes_release(nodes);
 	return AEROSPIKE_OK;
+}
+
+//---------------------------------
+// Functions
+//---------------------------------
+
+as_status
+aerospike_index_create_ctx(
+	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
+	const char* set, const char* bin_name, const char* index_name, as_index_type itype,
+	as_index_datatype dtype, as_cdt_ctx* ctx
+	)
+{
+	return aerospike_index_create_private(as, err, task, policy, ns, set, bin_name, index_name, itype,
+		dtype, ctx, NULL);
+}
+
+as_status
+aerospike_index_create_exp(
+	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
+	const char* set, const char* index_name, as_index_type itype, as_index_datatype dtype, as_exp* exp
+	)
+{
+	return aerospike_index_create_private(as, err, task, policy, ns, set, NULL, index_name, itype,
+		dtype, NULL, exp);
 }
 
 as_status

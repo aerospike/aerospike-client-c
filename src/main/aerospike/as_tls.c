@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -523,30 +523,73 @@ Error:
 	return false;
 }
 
-static bool
-as_tls_load_key_str(SSL_CTX* ctx, char* key_str, const char* key_pw)
+static as_status
+as_tls_read_private_key(as_tls_context* ctx, BIO* bio, const char* password, as_error* err)
 {
-	BIO* key_bio = BIO_new_mem_buf(key_str, -1);
+	EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, NULL, password_cb, (void*)password);
 
-	if (key_bio == NULL) {
-		return false;
-	}
+	if (!pkey) {
+		unsigned long errcode = ERR_get_error();
 
-	EVP_PKEY* pkey = PEM_read_bio_PrivateKey(key_bio, NULL, password_cb, (void*)key_pw);
-
-	BIO_vfree(key_bio);
-
-	if (pkey == NULL) {
-		if (ERR_GET_REASON(ERR_peek_error()) == EVP_R_BAD_DECRYPT) {
-			as_log_warn("Invalid password for key string");
+		if (ERR_GET_REASON(errcode) == PEM_R_BAD_PASSWORD_READ) {
+			if (password == NULL) {
+				return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+					"Private key password is required: %u", errcode);
+			}
+			else {
+				return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+					"Private key password is invalid: %u", errcode);
+			}
 		}
-		return false;
+
+		if (ERR_GET_REASON(errcode) == EVP_R_BAD_DECRYPT) {
+			return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+				"Failed to decrypt private key: %u", errcode);
+		}
+
+		char errbuf[1024];
+        ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
+		return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+			"PEM_read_bio_PrivateKey failed: %s", errbuf);
 	}
 
-	int rv = SSL_CTX_use_PrivateKey(ctx, pkey);
+	ctx->pkey = pkey;
+	int rv = SSL_CTX_use_PrivateKey(ctx->ssl_ctx, pkey);
 
-	EVP_PKEY_free(pkey);
-	return rv == 1;
+	if (rv != 1) {
+		return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+			"SSL_CTX_use_PrivateKey failed: %d", rv);
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_tls_read_private_key_string(as_config_tls* tlscfg, as_tls_context* ctx, as_error* err)
+{
+	BIO* bio = BIO_new_mem_buf(tlscfg->keystring, -1);
+
+	if (!bio) {
+		return as_error_set_message(err, AEROSPIKE_ERR_TLS_ERROR, "BIO_new_mem_buf failed");
+	}
+
+	as_status status = as_tls_read_private_key(ctx, bio, tlscfg->keyfile_pw, err);
+	BIO_free(bio);
+	return status;
+}
+
+static as_status
+as_tls_read_private_key_file(as_config_tls* tlscfg, as_tls_context* ctx, as_error* err)
+{
+	BIO* bio = BIO_new_file(tlscfg->keyfile, "r");
+
+	if (!bio) {
+		return as_error_update(err, AEROSPIKE_ERR_TLS_ERROR,
+			"Failed to open key file %s: %s", tlscfg->keyfile);
+	}
+
+	as_status status = as_tls_read_private_key(ctx, bio, tlscfg->keyfile_pw, err);
+	BIO_free(bio);
+	return status;
 }
 
 as_status
@@ -693,62 +736,17 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 	}
 
 	if (tlscfg->keyfile) {
-		bool ok = false;
-		FILE *fh = fopen(tlscfg->keyfile, "r");
+		as_status status = as_tls_read_private_key_file(tlscfg, ctx, errp);
 
-		if (fh == NULL) {
-			as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
-					"failed to open key file %s: %s", tlscfg->keyfile,
-					strerror(errno));
-		}
-		else {
-			EVP_PKEY *pkey = PEM_read_PrivateKey(fh, NULL, password_cb,
-					tlscfg->keyfile_pw);
-
-			if (pkey == NULL) {
-				unsigned long errcode = ERR_get_error();
-
-				if (ERR_GET_REASON(errcode) == PEM_R_BAD_PASSWORD_READ) {
-					if (tlscfg->keyfile_pw == NULL) {
-						as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
-								"key file %s requires a password",
-								tlscfg->keyfile);
-					}
-					else {
-						as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
-								"password for key file %s too long",
-								tlscfg->keyfile);
-					}
-				}
-				else if (ERR_GET_REASON(errcode) == EVP_R_BAD_DECRYPT) {
-					as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
-							"invalid password for key file %s",
-							tlscfg->keyfile);
-				}
-				else {
-					char errbuf[1024];
-					ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
-					as_error_update(errp, AEROSPIKE_ERR_TLS_ERROR,
-							"PEM_read_PrivateKey failed: %s", errbuf);
-				}
-			}
-			else {
-				ctx->pkey = pkey;
-				SSL_CTX_use_PrivateKey(ctx->ssl_ctx, pkey);
-				ok = true;
-			}
-
-			fclose(fh);
-		}
-
-		if (!ok) {
-			return AEROSPIKE_ERR_TLS_ERROR;
+		if (status != AEROSPIKE_OK) {
+			return status;
 		}
 	}
 	else if (tlscfg->keystring) {
-		if (! as_tls_load_key_str(ctx->ssl_ctx, tlscfg->keystring, tlscfg->keyfile_pw)) {
-			return as_error_set_message(errp, AEROSPIKE_ERR_TLS_ERROR,
-				"Failed to load private key from keystring");
+		as_status status = as_tls_read_private_key_string(tlscfg, ctx, errp);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
 		}
 	}
 

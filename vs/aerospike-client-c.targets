@@ -10,13 +10,13 @@
   <ItemDefinitionGroup Condition="'$(UseDebugLibraries)' == 'true'">
     <Link>
       <AdditionalLibraryDirectories>$(MSBuildThisFileDirectory)lib\x64\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-	  <AdditionalDependencies>aerospike.lib;%(AdditionalDependencies)</AdditionalDependencies>
+	  <AdditionalDependencies>aerospike.lib;pthreadVC2d.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(UseDebugLibraries)' == 'false'">
     <Link>
       <AdditionalLibraryDirectories>$(MSBuildThisFileDirectory)lib\x64\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-	  <AdditionalDependencies>aerospike.lib;%(AdditionalDependencies)</AdditionalDependencies>
+	  <AdditionalDependencies>aerospike.lib;pthreadVC2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Target Name="AfterBuild">

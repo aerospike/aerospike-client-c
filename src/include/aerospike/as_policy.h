@@ -54,6 +54,7 @@
  */
 
 #include <aerospike/as_std.h>
+#include <aerospike/as_metrics.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -514,7 +515,7 @@ typedef struct as_policy_base_s {
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary command policies.
 	 *
-	 * ~~~~~~~~~~{.c}
+	 * @code
 	 * as_exp_build(filter,
 	 *   as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)));
 	 *
@@ -523,7 +524,7 @@ typedef struct as_policy_base_s {
 	 * p.filter_exp = filter;
 	 * ...
 	 * as_exp_destroy(filter);
-	 * ~~~~~~~~~~
+	 * @endcode
 	 *
 	 * Default: NULL
 	 */
@@ -1514,12 +1515,16 @@ typedef struct as_policy_admin_s {
 /**
  * Transaction policy fields used to batch verify record versions on commit.
  * Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ *
+ * @ingroup client_policies
  */
 typedef as_policy_batch as_policy_txn_verify;
 
 /**
  * Transaction policy fields used to batch roll forward/backward records on
  * commit or abort. Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ *
+ * @ingroup client_policies
  */
 typedef as_policy_batch as_policy_txn_roll;
 
@@ -1612,6 +1617,11 @@ typedef struct as_policies_s {
 	 * or back (abort) in a batch.
 	 */
 	as_policy_txn_roll txn_roll;
+
+	/**
+	 * Default metrics policy.
+	 */
+	as_metrics_policy metrics;
 
 } as_policies;
 

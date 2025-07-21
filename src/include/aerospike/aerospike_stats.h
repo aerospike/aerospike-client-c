@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -99,6 +99,11 @@ typedef struct as_node_stats_s {
 	 */
 	uint64_t timeout_count;
 
+	/**
+	 * Command key busy error count since node was initialized.
+	 */
+	uint64_t key_busy_count;
+
 } as_node_stats;
 
 /**
@@ -178,11 +183,11 @@ aerospike_cluster_stats(struct as_cluster_s* cluster, as_cluster_stats* stats);
 /**
  * Retrieve aerospike client instance statistics.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_cluster_stats stats;
  * aerospike_stats(&as, &stats);
  * aerospike_stats_destroy(&stats);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as		The aerospike instance.
  * @param stats		The statistics summary for specified client instance.

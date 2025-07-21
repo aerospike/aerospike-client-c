@@ -38,15 +38,15 @@
 #include "../test.h"
 #include "../util/udf.h"
 
-/******************************************************************************
- * GLOBAL VARS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern aerospike* as;
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 #define NAMESPACE "test"
 #define SET "query_bg"
@@ -57,9 +57,9 @@ extern aerospike* as;
 static char module[] = "udf_record";
 static char bin1[] = "bin1";
 
-/******************************************************************************
- * TEST CASES
- *****************************************************************************/
+//---------------------------------
+// Test Cases
+//---------------------------------
 
 static bool
 before(atf_suite* suite)
@@ -358,7 +358,8 @@ TEST(batch_udf_default_key_send, "Batch default key send")
 	// It's not a good idea to configure cluster default policies after the
 	// cluster has been initialized, but this default policy feature still
 	// needs to be tested. Reset at the end of the test.
-	as->config.policies.batch_apply.key = AS_POLICY_KEY_SEND;
+	as_config* config = aerospike_load_config(as);
+	config->policies.batch_apply.key = AS_POLICY_KEY_SEND;
 
 	as_batch_records recs;
 	as_batch_records_init(&recs, 2);
@@ -385,7 +386,7 @@ TEST(batch_udf_default_key_send, "Batch default key send")
 	as_status status = aerospike_batch_write(as, &err, NULL, &recs);
 
 	// Reset key send default policy.
-	as->config.policies.batch_apply.key = AS_POLICY_KEY_DIGEST;
+	config->policies.batch_apply.key = AS_POLICY_KEY_DIGEST;
 
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(bar->result, AEROSPIKE_OK);
@@ -421,9 +422,9 @@ TEST(batch_udf_default_key_send, "Batch default key send")
 	as_batch_records_destroy(&recs);
 }
 
-/******************************************************************************
- * TEST SUITE
- *****************************************************************************/
+//---------------------------------
+// Test Suite
+//---------------------------------
 
 SUITE(udf_record, "aerospike udf record tests")
 {

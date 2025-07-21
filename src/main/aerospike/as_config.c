@@ -16,15 +16,16 @@
  */
 #include <aerospike/as_config.h>
 #include <aerospike/as_password.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_string.h>
 #include <aerospike/mod_lua_config.h>
 #include <ctype.h>
 #include <stdlib.h>
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_config*
 as_config_init(as_config* c)
@@ -33,6 +34,7 @@ as_config_init(as_config* c)
 	memset(c->user, 0, sizeof(c->user));
 	memset(c->password, 0, sizeof(c->password));
 	c->cluster_name = NULL;
+	c->app_id = NULL;
 	c->event_callback = NULL;
 	c->event_callback_udata = NULL;
 	c->ip_map = NULL;
@@ -52,6 +54,8 @@ as_config_init(as_config* c)
 	c->thread_pool_size = 16;
 	c->tend_thread_cpu = -1;
 	as_policies_init(&c->policies);
+	c->config_provider.path = NULL;
+	c->config_provider.interval = AS_CONFIG_PROVIDER_INTERVAL_DEFAULT;
 	as_config_lua_init(&c->lua);
 	memset(&c->tls, 0, sizeof(as_config_tls));
 	c->auth_mode = AS_AUTH_INTERNAL;
@@ -91,6 +95,14 @@ as_config_destroy(as_config* config) {
 
 	if (config->cluster_name) {
 		cf_free(config->cluster_name);
+	}
+
+	if (config->app_id) {
+		cf_free(config->app_id);
+	}
+
+	if (config->config_provider.path) {
+		cf_free(config->config_provider.path);
 	}
 
 	as_policies_destroy(&config->policies);
@@ -249,6 +261,7 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
 			
 			if (more) {
 				if (! isdigit(*p)) {
+					cf_free(host.name);
 					return false;
 				}
 				host.port = (uint16_t)strtol(p, (char**)&p, 10);
@@ -258,6 +271,7 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
 						p++;
 					}
 					else {
+						cf_free(host.name);
 						return false;
 					}
 				}
@@ -268,6 +282,7 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
 					host.port = (uint16_t)strtol(begin, &q, 10);
 					
 					if (*q && *q != ',') {
+						cf_free(host.name);
 						return false;
 					}
 				}
@@ -383,4 +398,23 @@ as_auth_mode_from_string(as_auth_mode* auth, const char* str)
 	}
 
 	return false;
+}
+
+void
+as_config_massage_error_rate(as_config* config)
+{
+	double ratio = (config->error_rate_window == 0)? 0.0 :
+		((double)config->max_error_rate / (double)config->error_rate_window);
+
+	if (! (ratio >= 1.0 - 0.000001 && ratio <= 100.0 + 0.000001)) {
+		uint32_t mer = config->max_error_rate;
+		uint32_t erw = config->error_rate_window;
+
+		config->max_error_rate = 100;
+		config->error_rate_window = 1;
+
+		as_log_warn(
+			"Invalid circuit breaker configuration: max_error_rate: %u, error_rate_window: %u, ratio: %.2f. The ratio (max_error_rate/error_rate_window) must be between 1 and 100. Resetting to defaults - max_error_rate: %u and error_rate_window: %u",
+			mer, erw, ratio, config->max_error_rate, config->error_rate_window);
+	}
 }

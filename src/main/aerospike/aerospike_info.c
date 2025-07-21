@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -28,9 +28,9 @@
 #include <aerospike/as_socket.h>
 #include <citrusleaf/alloc.h>
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 aerospike_info_node(
@@ -41,7 +41,8 @@ aerospike_info_node(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	uint64_t deadline = as_socket_deadline(policy->timeout);
@@ -57,7 +58,8 @@ aerospike_info_host(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 		
 	as_address_iterator iter;
@@ -101,7 +103,8 @@ aerospike_info_socket_address(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 	
 	uint64_t deadline = as_socket_deadline(policy->timeout);
@@ -116,7 +119,8 @@ aerospike_info_any(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 	
 	as_status status = AEROSPIKE_ERR_CLUSTER;
@@ -154,7 +158,8 @@ aerospike_info_foreach(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 	
 	as_status status = AEROSPIKE_ERR_CLUSTER;

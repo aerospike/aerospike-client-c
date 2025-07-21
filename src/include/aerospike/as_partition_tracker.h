@@ -67,6 +67,7 @@ typedef struct as_partition_tracker_s {
 	uint32_t sleep_between_retries;
 	uint32_t socket_timeout;
 	uint32_t total_timeout;
+	uint32_t timeout_delay;
 	uint32_t max_retries;
 	uint32_t iteration;
 	bool check_max;

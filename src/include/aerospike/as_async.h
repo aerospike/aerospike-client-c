@@ -92,6 +92,7 @@ as_async_write_command_create(
 	as_async_write_command* wcmd = (as_async_write_command*)cmd;
 	cmd->total_deadline = policy->total_timeout;
 	cmd->socket_timeout = policy->socket_timeout;
+	cmd->timeout_delay = policy->timeout_delay;
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
 	cmd->replica = as_command_write_replica(replica);
@@ -137,6 +138,7 @@ as_async_record_command_create(
 	as_async_record_command* rcmd = (as_async_record_command*)cmd;
 	cmd->total_deadline = policy->total_timeout;
 	cmd->socket_timeout = policy->socket_timeout;
+	cmd->timeout_delay = policy->timeout_delay;
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
 	cmd->replica = replica;
@@ -190,6 +192,7 @@ as_async_value_command_create(
 	as_async_value_command* vcmd = (as_async_value_command*)cmd;
 	cmd->total_deadline = policy->total_timeout;
 	cmd->socket_timeout = policy->socket_timeout;
+	cmd->timeout_delay = policy->timeout_delay;
 	cmd->max_retries = policy->max_retries;
 	cmd->iteration = 0;
 	cmd->replica = as_command_write_replica(replica);
@@ -231,6 +234,7 @@ as_async_info_command_create(
 	as_async_info_command* icmd = (as_async_info_command*)cmd;
 	cmd->total_deadline = policy->timeout;
 	cmd->socket_timeout = policy->timeout;
+	cmd->timeout_delay = 0;
 	cmd->max_retries = 1;
 	cmd->iteration = 0;
 	cmd->replica = AS_POLICY_REPLICA_MASTER;

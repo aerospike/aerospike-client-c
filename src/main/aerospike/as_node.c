@@ -47,6 +47,9 @@
 // Globals
 //---------------------------------
 
+// Client language
+char* aerospike_client_language = "c";
+
 // Client version.
 extern char* aerospike_client_version;
 
@@ -132,7 +135,7 @@ as_node_send_user_agent(as_node* node)
 	}
 
 	char agent[512];
-	snprintf(agent, sizeof(agent), "1,c-%s,%s", aerospike_client_version, app_id);
+	snprintf(agent, sizeof(agent), "1,%s-%s,%s", aerospike_client_language, aerospike_client_version, app_id);
 
 	uint32_t len = (uint32_t)strlen(agent);
 	uint32_t encoded_len = cf_b64_encoded_len(len);

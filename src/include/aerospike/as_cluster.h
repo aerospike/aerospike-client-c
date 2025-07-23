@@ -500,7 +500,6 @@ struct aerospike_s;
 //---------------------------------
 // Functions
 //---------------------------------
-
 /**
  * Create and initialize cluster.
  */
@@ -729,6 +728,16 @@ static inline uint64_t
 as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
 {
 	return as_load_uint64(&cluster->delay_queue_timeout_count);
+}
+
+/**
+ * @private
+ * Get a count of the number of sockets currently waiting for timeout recovery.
+ * This is determined directly from the queue itself.
+ */
+static inline uint32_t
+as_cluster_count_sockets_in_timeout_recovery(as_cluster *cluster) {
+	return as_queue_mt_size(&cluster->timeout_recovery_queue);
 }
 
 /**

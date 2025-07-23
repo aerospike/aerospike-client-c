@@ -26,6 +26,7 @@
 #include <aerospike/as_metrics_writer.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_peers.h>
+#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
@@ -841,6 +842,32 @@ as_cluster_init_error(as_vector* invalid_hosts, as_error* err)
 	return err->code;
 }
 
+static void
+as_cluster_tend_recovery_queue(as_cluster *cluster, as_error *err) {
+	as_socket *socket;
+
+	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
+	// because if we did, and we have a socket which doesn't fully drain this tend
+	// cycle, then when we go to push it back onto the queue's tail, we'll just re-
+	// pop it if the queue would otherwise be empty.  This creates an infinite loop.
+	//
+	// For this reason, we must query the size, and just iterate for that many pops.
+	// Anything else that comes up in the meantime, or if we end up having to re-queue
+	// a socket, won't hurt us.  Plus, it guarantees that we process each socket
+	// at most once.
+
+	uint32_t queue_size = as_queue_mt_size(&cluster->timeout_recovery_queue);
+	while (queue_size > 0) {
+		if(as_queue_mt_pop(&cluster->timeout_recovery_queue, &socket, AS_QUEUE_NOWAIT)) {
+			// temporary behavior -- work is still in progress on real implementation!
+			// But this should be good enough to start running local tests with.
+			as_socket_close(socket);
+		}
+
+		--queue_size;
+	}
+}
+
 /**
  * Check health of all nodes in the cluster.
  */
@@ -1009,6 +1036,8 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		// Update shared memory to notify prole tenders to rebalance (retrieve racks info).
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
+
+	as_cluster_tend_recovery_queue(cluster, err);
 
 	as_cluster_destroy_peers(&peers);
 	as_cluster_manage(cluster);
@@ -1525,7 +1554,7 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->auth_mode = config->auth_mode;
 
 	if (! as_queue_mt_init(&cluster->timeout_recovery_queue,
-		                   sizeof(as_socket), config->min_conns_per_node)) {
+		                   sizeof(as_socket *), config->min_conns_per_node)) {
 		cf_free(cluster);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Unable to initialize socket timeout recovery queue");
@@ -1756,6 +1785,20 @@ as_cluster_destroy(as_cluster* cluster)
 	else {
 		pthread_mutex_unlock(&cluster->tend_lock);
 	}
+
+	// Flush and destroy the timeout recovery queue.
+
+	uint32_t rq_size = as_queue_mt_size(&cluster->timeout_recovery_queue);
+	while (rq_size > 0) {
+		as_socket *socket;
+
+		if(as_queue_mt_pop(&cluster->timeout_recovery_queue, &socket, AS_QUEUE_NOWAIT)) {
+			as_socket_close(socket);
+		}
+
+		--rq_size;
+	}
+	as_queue_mt_destroy(&cluster->timeout_recovery_queue);
 
 	// Shutdown thread pool.
 	int rc = as_thread_pool_destroy(&cluster->thread_pool);

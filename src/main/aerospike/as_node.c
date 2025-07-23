@@ -1032,19 +1032,19 @@ as_node_reset_error_rate(as_node* node)
 {
 	if (as_node_valid_error_rate(node)) {
 		as_store_uint32(&node->error_rate, 0);
-		// Reset max_error_rate to cluster max_error_rate.
-		node->max_error_rate = node->cluster->max_error_rate;
+
+		// Double max_error_rate until cluster max_error_rate is reached.
+		if (node->max_error_rate != node->cluster->max_error_rate) {
+			uint32_t max = node->max_error_rate * 2;
+			node->max_error_rate = (max <= node->cluster->max_error_rate)?
+				max : node->cluster->max_error_rate;
+		}
 	}
 	else {
 		// Error rate was breached. Next error rate trigger is half.
 		as_store_uint32(&node->error_rate, 0);
-
-		if (node->max_error_rate >= 2) {
-			node->max_error_rate /= 2;
-		}
-		else {
-			node->max_error_rate = 1;
-		}
+		node->max_error_rate = (node->max_error_rate >= 4)?
+			node->max_error_rate / 2 : 1;
 	}
 }
 

@@ -1524,6 +1524,13 @@ as_cluster_create(aerospike* as, as_error* err)
 	memset(cluster, 0, sizeof(as_cluster));
 	cluster->auth_mode = config->auth_mode;
 
+	if (! as_queue_mt_init(&cluster->timeout_recovery_queue,
+		                   sizeof(as_socket), config->min_conns_per_node)) {
+		cf_free(cluster);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Unable to initialize socket timeout recovery queue");
+	}
+
 	if (config->auth_mode == AS_AUTH_PKI) {
 		cluster->auth_enabled = true;
 	}

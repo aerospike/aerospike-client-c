@@ -23,6 +23,7 @@
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_thread_pool.h>
 
 #ifdef __cplusplus
@@ -484,6 +485,13 @@ typedef struct as_cluster_s {
 	 * Milliseconds between dynamic configuration check for file modifications.
 	 */
 	uint32_t config_interval;
+
+	/**
+	 * @private
+	 * Queue of sockets that have experienced read timeouts.  This queue is to be
+	 * processed by the tend thread.
+	 */
+	as_queue_mt timeout_recovery_queue;
 
 } as_cluster;
 

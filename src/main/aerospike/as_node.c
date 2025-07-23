@@ -48,10 +48,10 @@
 //---------------------------------
 
 // Client language
-char* aerospike_client_language = "c";
+AS_EXTERN char* aerospike_client_language = "c";
 
 // Client version.
-extern char* aerospike_client_version;
+AS_EXTERN extern char* aerospike_client_version;
 
 // Empty string namespace for latency metrics without a namespace.
 static const char* as_ns_empty = "";

@@ -234,6 +234,13 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Queue of sockets that have experienced read timeouts.  This queue is to be
+	 * processed by the tend thread.
+	 */
+	as_queue_mt recover_queue;
+
+	/**
+	 * @private
 	 * Maximum socket idle to validate connections in commands.
 	 */
 	uint64_t max_socket_idle_ns_tran;
@@ -486,13 +493,6 @@ typedef struct as_cluster_s {
 	 */
 	uint32_t config_interval;
 
-	/**
-	 * @private
-	 * Queue of sockets that have experienced read timeouts.  This queue is to be
-	 * processed by the tend thread.
-	 */
-	as_queue_mt timeout_recovery_queue;
-
 } as_cluster;
 
 struct aerospike_s;
@@ -736,8 +736,8 @@ as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
  * This is determined directly from the queue itself.
  */
 static inline uint32_t
-as_cluster_count_sockets_in_timeout_recovery(as_cluster *cluster) {
-	return as_queue_mt_size(&cluster->timeout_recovery_queue);
+as_cluster_recover_queue_size(as_cluster* cluster) {
+	return as_queue_mt_size(&cluster->recover_queue);
 }
 
 /**

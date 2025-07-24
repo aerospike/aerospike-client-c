@@ -180,7 +180,7 @@ typedef struct as_cluster_stats_s {
 	/**
 	 * Count of sync sockets currently in timeout recovery.
 	 */
-	uint32_t sockets_in_timeout_recovery;
+	uint32_t recover_queue_size;
 } as_cluster_stats;
 
 struct as_cluster_s;

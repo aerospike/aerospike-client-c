@@ -843,7 +843,7 @@ as_cluster_init_error(as_vector* invalid_hosts, as_error* err)
 }
 
 static void
-as_cluster_tend_recovery_queue(as_cluster *cluster, as_error *err) {
+as_cluster_tend_recovery_queue(as_cluster* cluster, as_error* err) {
 	as_socket *socket;
 
 	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
@@ -856,9 +856,9 @@ as_cluster_tend_recovery_queue(as_cluster *cluster, as_error *err) {
 	// a socket, won't hurt us.  Plus, it guarantees that we process each socket
 	// at most once.
 
-	uint32_t queue_size = as_queue_mt_size(&cluster->timeout_recovery_queue);
+	uint32_t queue_size = as_queue_mt_size(&cluster->recover_queue);
 	while (queue_size > 0) {
-		if(as_queue_mt_pop(&cluster->timeout_recovery_queue, &socket, AS_QUEUE_NOWAIT)) {
+		if(as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
 			// temporary behavior -- work is still in progress on real implementation!
 			// But this should be good enough to start running local tests with.
 			as_socket_close(socket);
@@ -1553,13 +1553,6 @@ as_cluster_create(aerospike* as, as_error* err)
 	memset(cluster, 0, sizeof(as_cluster));
 	cluster->auth_mode = config->auth_mode;
 
-	if (! as_queue_mt_init(&cluster->timeout_recovery_queue,
-		                   sizeof(as_socket *), config->min_conns_per_node)) {
-		cf_free(cluster);
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Unable to initialize socket timeout recovery queue");
-	}
-
 	if (config->auth_mode == AS_AUTH_PKI) {
 		cluster->auth_enabled = true;
 	}
@@ -1653,7 +1646,15 @@ as_cluster_create(aerospike* as, as_error* err)
 
 	// Initialize garbage collection array.
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
-	
+
+	// Initialize the timeout delay recovery queue.
+	if (! as_queue_mt_init(&cluster->recover_queue,
+		                   sizeof(as_socket *), config->min_conns_per_node)) {
+		cf_free(cluster);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Unable to initialize socket timeout recovery queue");
+	}
+
 	// Initialize thread pool.
 	int rc = as_thread_pool_init(&cluster->thread_pool, config->thread_pool_size);
 
@@ -1788,17 +1789,17 @@ as_cluster_destroy(as_cluster* cluster)
 
 	// Flush and destroy the timeout recovery queue.
 
-	uint32_t rq_size = as_queue_mt_size(&cluster->timeout_recovery_queue);
+	uint32_t rq_size = as_queue_mt_size(&cluster->recover_queue);
 	while (rq_size > 0) {
 		as_socket *socket;
 
-		if(as_queue_mt_pop(&cluster->timeout_recovery_queue, &socket, AS_QUEUE_NOWAIT)) {
+		if(as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
 			as_socket_close(socket);
 		}
 
 		--rq_size;
 	}
-	as_queue_mt_destroy(&cluster->timeout_recovery_queue);
+	as_queue_mt_destroy(&cluster->recover_queue);
 
 	// Shutdown thread pool.
 	int rc = as_thread_pool_destroy(&cluster->thread_pool);

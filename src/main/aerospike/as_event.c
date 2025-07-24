@@ -795,6 +795,79 @@ as_event_decompress(as_event_command* cmd)
 	return true;
 }
 
+//---------------------------------
+// Connection Recover
+//---------------------------------
+
+typedef struct {
+	as_event_command command;
+	uint8_t space[];
+} as_recover_command;
+
+static bool
+as_event_recover_parse_results(as_event_command* cmd)
+{
+	printf("IN as_event_recover_parse_results\n");
+	as_event_response_complete(cmd);
+	as_event_command_release(cmd);
+	return true;
+}
+
+void
+as_event_conn_abort(as_event_command* cmd)
+{
+	printf("IN as_event_conn_abort\n");
+	// The caller handles cleanup on errors.
+	// TODO: Delete?
+}
+
+bool
+as_event_recover_conn(as_event_command* orig)
+{
+	printf("IN as_event_recover_conn\n");
+	as_event_command* cmd = cf_malloc(sizeof(as_recover_command) + orig->read_capacity);
+
+	// Copy original command to a new connection drain command.
+	memcpy(cmd, orig, sizeof(as_event_command));
+	orig->conn = NULL;
+
+	// Copy buffer contents.
+	cmd->buf = ((uint8_t*)cmd) + sizeof(as_recover_command);
+
+	if (orig->pos > 0) {
+		memcpy(cmd->buf, orig->buf, orig->pos);
+	}
+
+	cmd->type = AS_ASYNC_TYPE_CONN_RECOVER;
+	cmd->txn = NULL;
+	cmd->ubuf = NULL;
+	cmd->ubuf_size = 0;
+	cmd->parse_results = as_event_recover_parse_results;
+	cmd->max_retries = 0;
+	cmd->event_loop->pending++;
+	cmd->event_state->pending++;
+
+	as_node_reserve(cmd->node);
+	as_event_timer_once(cmd, cmd->timeout_delay);
+	cmd->timeout_delay = 0;
+	return true;
+}
+
+static bool
+as_event_recover_connection(as_event_command* cmd)
+{
+	if (cmd->timeout_delay > 0) {
+		switch (cmd->state) {
+			case AS_ASYNC_STATE_AUTH_READ_HEADER:
+			case AS_ASYNC_STATE_AUTH_READ_BODY:
+			case AS_ASYNC_STATE_COMMAND_READ_HEADER:
+			case AS_ASYNC_STATE_COMMAND_READ_BODY:
+				return as_event_recover_conn(cmd);
+		}
+	}
+	return false;
+}
+
 void
 as_event_socket_timeout(as_event_command* cmd)
 {
@@ -837,8 +910,10 @@ as_event_socket_timeout(as_event_command* cmd)
 		return;
 	}
 
-	// Node should not be null at this point.
-	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	if (!as_event_recover_connection(cmd)) {
+		// Node should not be null at this point.
+		as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	}
 
 	if (! as_event_command_retry(cmd, true)) {
 		as_event_timer_stop(cmd);
@@ -887,8 +962,14 @@ as_event_process_timer(as_event_command* cmd)
 			break;
 
 		default:
-			// Total timeout.
-			as_event_total_timeout(cmd);
+			if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
+				// Abort connection recovery.
+				as_event_conn_abort(cmd);
+			}
+			else {
+				// Total timeout normal commands.
+				as_event_total_timeout(cmd);
+			}
 			break;
 	}
 }
@@ -898,13 +979,15 @@ as_event_total_timeout(as_event_command* cmd)
 {
 	// Node should not be null at this point.
 	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
-	
+
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, false);
 		return;
 	}
 
-	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	if (!as_event_recover_connection(cmd)) {
+		as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	}
 
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
@@ -1344,6 +1427,9 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 		case AS_ASYNC_TYPE_BATCH:
 			as_async_batch_error(cmd, err);
 			as_event_executor_error(cmd->udata, err, 1);
+			break;
+		case AS_ASYNC_TYPE_CONN_RECOVER:
+			as_event_conn_abort(cmd);
 			break;
 		default:
 			// Handle command that is part of a group (scan, query).

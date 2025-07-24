@@ -1238,7 +1238,10 @@
 					/opt/homebrew/include,
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				OTHER_CFLAGS = "-D_DARWIN_UNLIMITED_SELECT";
+				OTHER_CFLAGS = (
+					"-D_DARWIN_UNLIMITED_SELECT",
+					"-DAS_USE_LIBEV",
+				);
 				OTHER_LDFLAGS = "-L/usr/local/lib";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -1264,7 +1267,10 @@
 					/opt/homebrew/include,
 				);
 				LIBRARY_SEARCH_PATHS = "$(inherited)";
-				OTHER_CFLAGS = "-D_DARWIN_UNLIMITED_SELECT";
+				OTHER_CFLAGS = (
+					"-D_DARWIN_UNLIMITED_SELECT",
+					"-DAS_USE_LIBEV",
+				);
 				OTHER_LDFLAGS = "-L/usr/local/lib";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};

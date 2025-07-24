@@ -85,7 +85,7 @@ aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
 	// cf_queue applies locks, so we are safe here.
 	stats->thread_pool_queued_tasks = cf_queue_sz(cluster->thread_pool.dispatch_queue);
 	stats->retry_count = cluster->retry_count;
-	stats->sockets_in_timeout_recovery = as_cluster_count_sockets_in_timeout_recovery(cluster);
+	stats->recover_queue_size = as_cluster_recover_queue_size(cluster);
 }
 
 void

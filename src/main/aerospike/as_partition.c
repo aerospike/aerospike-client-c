@@ -220,13 +220,16 @@ as_partition_reg_get_node(
 		case AS_POLICY_REPLICA_MASTER:
 			return get_replica_master(p);
 
+		case AS_POLICY_REPLICA_PREFER_RACK:
+			return get_replica_rack(cluster, ns, p, prev_node, replica_size, replica_index);
+
+		// The remaining replica algorithms use replica_index as the starting point
+		// and iterate till a valid node is found.
 		default:
 		case AS_POLICY_REPLICA_ANY:
 		case AS_POLICY_REPLICA_SEQUENCE:
+		case AS_POLICY_REPLICA_RANDOM:
 			return get_replica_sequence(p, replica_size, replica_index);
-
-		case AS_POLICY_REPLICA_PREFER_RACK:
-			return get_replica_rack(cluster, ns, p, prev_node, replica_size, replica_index);
 	}
 }
 

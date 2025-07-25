@@ -83,7 +83,7 @@ aerospike_index_create_private(
 	}
 
 	as_string_builder sb;
-	as_string_builder_inita(&sb, 4096, false);
+	as_string_builder_inita(&sb, 16384, false);
 	as_string_builder_append(&sb, "sindex-create:ns=");
 	as_string_builder_append(&sb, ns);
 

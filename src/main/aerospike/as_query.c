@@ -379,14 +379,14 @@ as_query_where_with_index_name(
 
 bool
 as_query_where_with_exp(
-	as_query* query, const char* index_name, as_exp* exp, as_predicate_type type, as_index_type itype,
+	as_query* query, as_exp* exp, as_predicate_type type, as_index_type itype,
 	as_index_datatype dtype, ...
 	)
 {
 	va_list ap;
 	va_start(ap, dtype);
 
-	bool rv = as_query_where_index_name(query, index_name, exp, type, itype, dtype, ap);
+	bool rv = as_query_where_index_name(query, NULL, exp, type, itype, dtype, ap);
 
 	va_end(ap);
 	return rv;

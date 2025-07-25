@@ -40,17 +40,37 @@
 // These values must line up with as_operator enum.
 static uint8_t as_protocol_types[] = {1, 2, 3, 4, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
-static uint32_t g_replica_rr = 0;
-
 //---------------------------------
 // Functions
 //---------------------------------
 
 uint8_t
-as_replica_index_any(void)
+as_replica_index_init_read(as_cluster* cluster, as_policy_replica replica)
 {
-	uint32_t seq = as_faa_uint32(&g_replica_rr, 1);
-	return (uint8_t)(seq % AS_MAX_REPLICATION_FACTOR);
+	switch (replica) {
+		case AS_POLICY_REPLICA_ANY: {
+			uint32_t index = as_faa_uint32(&cluster->replica_index_any, 1);
+			return (uint8_t)(index % AS_MAX_REPLICATION_FACTOR);
+		}
+
+		case AS_POLICY_REPLICA_RANDOM: {
+			uint32_t index = as_faa_uint32(&cluster->replica_index_random, 1);
+			return (uint8_t)(index % AS_MAX_REPLICATION_FACTOR);
+		}
+
+		default:
+			return 0;
+	}
+}
+
+uint8_t
+as_replica_index_init_write(as_cluster* cluster, as_policy_replica replica)
+{
+	if (replica == AS_POLICY_REPLICA_RANDOM) {
+		uint32_t index = as_faa_uint32(&cluster->replica_index_random, 1);
+		return (uint8_t)(index % AS_MAX_REPLICATION_FACTOR);
+	}
+	return 0;
 }
 
 static as_status

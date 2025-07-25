@@ -1871,7 +1871,7 @@ TEST(query_expression, "query expression")
 	as_query q;
 	as_query_init(&q, NAMESPACE, set);
 	as_query_where_inita(&q, 1);
-	as_query_where_with_exp(&q, NULL, exp, as_integer_range(220, 230));
+	as_query_where_with_exp(&q, exp, as_integer_range(220, 230));
 
 	status = aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
 	assert_int_eq(status, AEROSPIKE_OK);

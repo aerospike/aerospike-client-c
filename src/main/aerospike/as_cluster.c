@@ -1182,18 +1182,22 @@ as_cluster_init(as_cluster* cluster, as_error* err)
 as_node*
 as_node_get_random(as_cluster* cluster)
 {
+	// Must handle concurrency with other threads.
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t size = nodes->size;
 
-	for (uint32_t i = 0; i < size; i++) {
-		// Must handle concurrency with other threads.
+	if (size > 0) {
 		uint32_t index = as_faa_uint32(&cluster->node_index, 1);
-		as_node* node = nodes->array[index % size];
 
-		if (as_node_is_active(node)) {
-			as_node_reserve(node);
-			as_nodes_release(nodes);
-			return node;
+		for (uint32_t i = 0; i < size; i++) {
+			as_node* node = nodes->array[index % size];
+
+			if (as_node_is_active(node)) {
+				as_node_reserve(node);
+				as_nodes_release(nodes);
+				return node;
+			}
+			index++;
 		}
 	}
 	as_nodes_release(nodes);

@@ -111,7 +111,7 @@ as_async_write_command_create(
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
-	cmd->replica_index = 0;
+	cmd->replica_index = as_replica_index_init_write(cluster, cmd->replica);
 	cmd->txn = policy->txn;
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
@@ -211,7 +211,7 @@ as_async_value_command_create(
 	cmd->state = AS_ASYNC_STATE_UNREGISTERED;
 	cmd->flags = 0;
 	cmd->replica_size = pi->replica_size;
-	cmd->replica_index = 0;
+	cmd->replica_index = as_replica_index_init_write(cluster, cmd->replica);
 	cmd->txn = policy->txn;
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;

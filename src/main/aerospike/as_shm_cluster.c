@@ -675,14 +675,17 @@ as_partition_shm_get_node(
 		case AS_POLICY_REPLICA_MASTER:
 			return as_shm_get_replica_master(p, local_nodes);
 
-		default:
-		case AS_POLICY_REPLICA_ANY:
-		case AS_POLICY_REPLICA_SEQUENCE:
-			return as_shm_get_replica_sequence(local_nodes, p, replica_size, replica_index);
-
 		case AS_POLICY_REPLICA_PREFER_RACK:
 			return as_shm_get_replica_rack(cluster, local_nodes, ns, p, prev_node, replica_size,
 				replica_index);
+
+		// The remaining replica algorithms use replica_index as the starting point
+		// and iterate till a valid node is found.
+		default:
+		case AS_POLICY_REPLICA_ANY:
+		case AS_POLICY_REPLICA_SEQUENCE:
+		case AS_POLICY_REPLICA_RANDOM:
+			return as_shm_get_replica_sequence(local_nodes, p, replica_size, replica_index);
 	}
 }
 

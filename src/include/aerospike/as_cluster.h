@@ -323,9 +323,21 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Random node index.
+	 * Random node index counter.
 	 */
 	uint32_t node_index;
+
+	/**
+	 * @private
+	 * AS_POLICY_REPLICA_ANY index counter.
+	 */
+	uint32_t replica_index_any;
+
+	/**
+	 * @private
+	 * AS_POLICY_REPLICA_RANDOM index counter.
+	 */
+	uint32_t replica_index_random;
 
 	/**
 	 * @private

@@ -545,6 +545,9 @@ as_parse_replica(
 	else if (strcmp(value, "PREFER_RACK") == 0) {
 		val = AS_POLICY_REPLICA_PREFER_RACK;
 	}
+	else if (strcmp(value, "RANDOM") == 0) {
+		val = AS_POLICY_REPLICA_RANDOM;
+	}
 	else {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s", name, value);
 		return false;

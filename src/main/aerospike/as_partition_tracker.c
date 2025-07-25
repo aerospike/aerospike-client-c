@@ -74,6 +74,11 @@ tracker_init(
 	uint16_t part_count, const as_digest* digest, as_error* err
 	)
 {
+	if (replica == AS_POLICY_REPLICA_RANDOM) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid replica: AS_POLICY_REPLICA_RANDOM");
+	}
+
 	as_partitions_status* resume = *pp_resume;
 
 	if (! resume) {

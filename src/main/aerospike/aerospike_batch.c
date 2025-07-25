@@ -1923,18 +1923,20 @@ as_batch_records_write(
 }
 
 static void
-as_batch_replica_init(as_batch_replica* rep, const as_policy_batch* policy, bool has_write)
+as_batch_replica_init(
+	as_cluster* cluster, as_batch_replica* rep, const as_policy_batch* policy, bool has_write
+	)
 {
 	if (has_write) {
 		rep->replica = as_command_write_replica(policy->replica);
 		rep->replica_sc = rep->replica;
-		rep->replica_index = 0;
-		rep->replica_index_sc = 0;
+		rep->replica_index = as_replica_index_init_write(cluster, rep->replica);
+		rep->replica_index_sc = rep->replica_index;
 		return;
 	}
 
 	rep->replica = policy->replica;
-	rep->replica_index = as_replica_index_init_read(rep->replica);
+	rep->replica_index = as_replica_index_init_read(cluster, rep->replica);
 
 	switch (policy->read_mode_sc) {
 		case AS_POLICY_READ_MODE_SC_SESSION:
@@ -3232,7 +3234,7 @@ as_batch_keys_execute(
 	}
 
 	as_batch_replica rep;
-	as_batch_replica_init(&rep, policy, rec->has_write);
+	as_batch_replica_init(cluster, &rep, policy, rec->has_write);
 
 	bool error_row = false;
 
@@ -3735,7 +3737,7 @@ as_batch_records_execute(
 	}
 	
 	as_batch_replica rep;
-	as_batch_replica_init(&rep, policy, has_write);
+	as_batch_replica_init(cluster, &rep, policy, has_write);
 
 	bool error_row = false;
 

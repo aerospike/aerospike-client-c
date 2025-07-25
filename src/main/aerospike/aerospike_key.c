@@ -168,7 +168,7 @@ as_command_init_read(
 		cmd->flags = AS_COMMAND_FLAGS_READ;
 	}
 	cmd->replica_size = pi->replica_size;
-	cmd->replica_index = as_replica_index_init_read(cmd->replica);
+	cmd->replica_index = as_replica_index_init_read(cluster, cmd->replica);
 }
 
 static inline as_status
@@ -206,14 +206,15 @@ as_command_init_write(
 	cmd->flags = 0;
 	cmd->replica = as_command_write_replica(replica);
 	cmd->replica_size = pi->replica_size;
-	cmd->replica_index = 0;
+	cmd->replica_index = as_replica_index_init_write(cluster, cmd->replica);
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	as_cluster_add_command_count(cluster);
 }
 
 static inline void
 as_event_command_init_read(
-	as_policy_replica replica, as_policy_read_mode_sc read_mode_sc, bool sc_mode, as_read_info* ri
+	as_cluster* cluster, as_policy_replica replica, as_policy_read_mode_sc read_mode_sc, bool sc_mode,
+	as_read_info* ri
 	)
 {
 	if (sc_mode) {
@@ -240,7 +241,7 @@ as_event_command_init_read(
 		ri->flags =  AS_ASYNC_FLAGS_READ;
 	}
 
-	ri->replica_index = as_replica_index_init_read(ri->replica);
+	ri->replica_index = as_replica_index_init_read(cluster, ri->replica);
 }
 
 static inline uint32_t
@@ -506,7 +507,7 @@ aerospike_key_get_async(
 	}
 
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
@@ -608,7 +609,7 @@ aerospike_key_select_async(
 	}
 	
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
@@ -719,7 +720,7 @@ aerospike_key_select_bins_async(
 	}
 	
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
@@ -818,7 +819,7 @@ aerospike_key_exists_async(
 	}
 	
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
@@ -1556,7 +1557,7 @@ aerospike_key_operate_async(
 		if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {
 			// Send uncompressed command.
 			as_read_info ri;
-			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+			as_event_command_init_read(as->cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
@@ -1576,7 +1577,7 @@ aerospike_key_operate_async(
 			size_t comp_size = as_command_compress_max_size(size);
 
 			as_read_info ri;
-			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+			as_event_command_init_read(as->cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
@@ -2149,7 +2150,7 @@ as_txn_verify_single_async(
 	}
 
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	uint16_t n_fields = 4;
 	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;

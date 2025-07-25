@@ -306,7 +306,20 @@ typedef enum as_policy_replica_e {
 	 * as_config.rack_aware, as_config.rack_id or as_config.rack_ids, and server rack 
 	 * configuration must also be set to enable this functionality.
 	 */
-	AS_POLICY_REPLICA_PREFER_RACK
+	AS_POLICY_REPLICA_PREFER_RACK,
+
+	/**
+	 * Distribute reads and writes across all nodes in cluster in round-robin fashion.
+	 *
+	 * This option is useful on reads when the replication factor equals the number
+	 * of nodes in the cluster and the overhead of requesting proles is not desired.
+	 *
+	 * This option could temporarily be useful on writes when the client can't connect
+	 * to a node, but that node is reachable via a proxy from a different node.
+	 *
+	 * This option can also be used to test server proxies.
+	 */
+	AS_POLICY_REPLICA_RANDOM
 
 } as_policy_replica;
 

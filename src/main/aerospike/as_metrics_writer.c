@@ -36,7 +36,7 @@ static char as_dir_sep = '/';
 // Globals
 //---------------------------------
 
-extern char* aerospike_client_version;
+AS_EXTERN extern char* aerospike_client_version;
 
 //---------------------------------
 // Linux Static Functions

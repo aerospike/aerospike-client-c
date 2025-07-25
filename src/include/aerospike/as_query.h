@@ -908,11 +908,10 @@ as_query_where_with_index_name(
  * as_query query;
  * as_query_init(&query, ns, set);
  * as_query_where_init(&query, 1);
- * as_query_where_with_exp(&query, NULL, exp, as_integer_range(300, 10000));
+ * as_query_where_with_exp(&query, exp, as_integer_range(300, 10000));
  * @endcode
  *
  * @param query			The query add the predicate to.
- * @param index_name	The name of the index.
  * @param exp			The expression.
  * @param type			The type of predicate.
  * @param itype			The type of index.
@@ -926,7 +925,7 @@ as_query_where_with_index_name(
  */
 AS_EXTERN bool
 as_query_where_with_exp(
-	as_query* query, const char* index_name, struct as_exp* exp, as_predicate_type type,
+	as_query* query, struct as_exp* exp, as_predicate_type type,
 	as_index_type itype, as_index_datatype dtype, ...
 	);
 

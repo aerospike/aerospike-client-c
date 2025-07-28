@@ -605,15 +605,6 @@ as_command_send(
 	cmd->buf = as_command_buffer_init(capacity);
 	cmd->buf_size = write_fn(udata, cmd->buf);
 	
-	fprintf(stderr, "Sending command (uncompressed-size: %zu):\n\t", cmd->buf_size);
-	for (size_t i = 0; i < cmd->buf_size; i++) {
-		fprintf(stderr, "%02x", cmd->buf[i]);
-	}
-	fprintf(stderr, "\n");
-
-	// Apply fuzzing to the command buffer before sending
-	fuzz(cmd);
-
 	if (comp_threshold > 0 && cmd->buf_size > comp_threshold) {
 		// Compress command.
 		size_t comp_capacity = as_command_compress_max_size(cmd->buf_size);
@@ -715,6 +706,16 @@ as_command_execute(as_command* cmd, as_error* err)
 			goto Retry;
 		}
 		
+		// Debug output and fuzzing for as_command_execute path (used by get operations)
+		fprintf(stderr, "Sending command via as_command_execute (uncompressed-size: %zu):\n\t", cmd->buf_size);
+		for (size_t i = 0; i < cmd->buf_size; i++) {
+			fprintf(stderr, "%02x", cmd->buf[i]);
+		}
+		fprintf(stderr, "\n");
+
+		// Apply fuzzing to the command buffer before sending
+		fuzz(cmd);
+
 		// Send command.
 		status = as_socket_write_deadline(err, &socket, node, cmd->buf, cmd->buf_size,
 										  cmd->socket_timeout, cmd->deadline_ms);

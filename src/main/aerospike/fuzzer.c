@@ -14,24 +14,33 @@ static bool g_fuzz_initialized = false;
 // Initialize the fuzzer (seed random number generator and check env vars)
 static void fuzz_init(void) {
     if (!g_fuzz_initialized) {
+        fprintf(stderr, "Fuzzer: initializing...\n");
         srand((unsigned int)time(NULL));
         
         // Check environment variables for configuration
         const char* fuzz_enable = getenv("AEROSPIKE_FUZZ_ENABLE");
+        fprintf(stderr, "Fuzzer: AEROSPIKE_FUZZ_ENABLE = '%s'\n", fuzz_enable ? fuzz_enable : "NULL");
         if (fuzz_enable && (strcmp(fuzz_enable, "1") == 0 || strcmp(fuzz_enable, "true") == 0)) {
             g_fuzz_enabled = true;
             fprintf(stderr, "Fuzzer: ENABLED via environment variable\n");
+        } else {
+            fprintf(stderr, "Fuzzer: NOT enabled via environment variable\n");
         }
         
         const char* fuzz_prob = getenv("AEROSPIKE_FUZZ_PROBABILITY");
+        fprintf(stderr, "Fuzzer: AEROSPIKE_FUZZ_PROBABILITY = '%s'\n", fuzz_prob ? fuzz_prob : "NULL");
         if (fuzz_prob) {
             double prob = atof(fuzz_prob);
             if (prob >= 0.0 && prob <= 1.0) {
                 g_fuzz_probability = prob;
                 fprintf(stderr, "Fuzzer: probability set to %.3f via environment variable\n", g_fuzz_probability);
+            } else {
+                fprintf(stderr, "Fuzzer: invalid probability value: %f\n", prob);
             }
         }
         
+        fprintf(stderr, "Fuzzer: initialization complete, enabled=%s, probability=%.3f\n", 
+                g_fuzz_enabled ? "true" : "false", g_fuzz_probability);
         g_fuzz_initialized = true;
     }
 }
@@ -54,11 +63,29 @@ void fuzz_set_probability(double probability) {
 }
 
 void fuzz(as_command* cmd) {
+    fprintf(stderr, "Fuzzer: fuzz() called, enabled=%s, cmd=%p\n", 
+            g_fuzz_enabled ? "true" : "false", (void*)cmd);
+    
     if (!g_fuzz_enabled || !cmd || !cmd->buf || cmd->buf_size == 0) {
+        if (!g_fuzz_enabled) {
+            fprintf(stderr, "Fuzzer: not enabled\n");
+        }
+        if (!cmd) {
+            fprintf(stderr, "Fuzzer: cmd is null\n");
+        }
+        if (cmd && !cmd->buf) {
+            fprintf(stderr, "Fuzzer: cmd->buf is null\n");
+        }
+        if (cmd && cmd->buf_size == 0) {
+            fprintf(stderr, "Fuzzer: cmd->buf_size is 0\n");
+        }
         return;
     }
     
     fuzz_init();
+    
+    fprintf(stderr, "Fuzzer: proceeding with fuzzing, buf_size=%zu, probability=%.3f\n", 
+            cmd->buf_size, g_fuzz_probability);
     
     size_t mutations = 0;
     

@@ -124,6 +124,9 @@ void fuzz(as_command* cmd) {
             if (cmd->buf[i] != original) {
                 mutations++;
             }
+            else {
+                fprintf(stderr, "Fuzzer: no mutation, strategy=%d\n", strategy);
+            }
         }
     }
     

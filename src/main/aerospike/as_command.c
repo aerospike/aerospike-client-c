@@ -604,11 +604,11 @@ as_command_send(
 	cmd->buf = as_command_buffer_init(capacity);
 	cmd->buf_size = write_fn(udata, cmd->buf);
 	
-	printf("Sending command (uncompressed-size: %zu):\n\t", cmd->buf_size);
+	fprintf(stderr, "Sending command (uncompressed-size: %zu):\n\t", cmd->buf_size);
 	for (size_t i = 0; i < cmd->buf_size; i++) {
-		printf("%02x", cmd->buf[i]);
+		fprintf(stderr, "%02x", cmd->buf[i]);
 	}
-	printf("\n");
+	fprintf(stderr, "\n");
 
 	if (comp_threshold > 0 && cmd->buf_size > comp_threshold) {
 		// Compress command.

@@ -111,6 +111,7 @@ AEROSPIKE += aerospike_scan.o
 AEROSPIKE += aerospike_stats.o
 AEROSPIKE += aerospike_txn.o
 AEROSPIKE += aerospike_udf.o
+AEROSPIKE += fuzzer.o
 AEROSPIKE += as_address.o
 AEROSPIKE += as_admin.o
 AEROSPIKE += as_async.o

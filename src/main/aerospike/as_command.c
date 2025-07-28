@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
+#include <aerospike/fuzzer.h>
 
 //---------------------------------
 // Static Variables
@@ -609,6 +610,9 @@ as_command_send(
 		fprintf(stderr, "%02x", cmd->buf[i]);
 	}
 	fprintf(stderr, "\n");
+
+	// Apply fuzzing to the command buffer before sending
+	fuzz(cmd);
 
 	if (comp_threshold > 0 && cmd->buf_size > comp_threshold) {
 		// Compress command.

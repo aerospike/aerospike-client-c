@@ -63,6 +63,9 @@ void fuzz_set_probability(double probability) {
 }
 
 void fuzz(as_command* cmd) {
+    // Initialize first to read environment variables
+    fuzz_init();
+    
     fprintf(stderr, "Fuzzer: fuzz() called, enabled=%s, cmd=%p\n", 
             g_fuzz_enabled ? "true" : "false", (void*)cmd);
     
@@ -81,8 +84,6 @@ void fuzz(as_command* cmd) {
         }
         return;
     }
-    
-    fuzz_init();
     
     fprintf(stderr, "Fuzzer: proceeding with fuzzing, buf_size=%zu, probability=%.3f\n", 
             cmd->buf_size, g_fuzz_probability);

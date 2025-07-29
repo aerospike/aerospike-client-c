@@ -11,22 +11,25 @@ static bool g_fuzz_enabled = false;
 static double g_fuzz_probability = 0.01;  // 1% chance by default
 static bool g_fuzz_initialized = false;
 
+static bool fuzzing_enabled(void){
+    const char* fuzz_enable = getenv("AEROSPIKE_FUZZ_ENABLE");
+    if(!fuzz_enable) {
+        fprintf(stderr, "Fuzzer: AEROSPIKE_FUZZ_ENABLE is not set\n");
+        return false;
+    }
+    if(strcmp(fuzz_enable, "1") == 0 || strcmp(fuzz_enable, "true") == 0) {
+        return true;
+    }
+    return false;
+}
+
 // Initialize the fuzzer (seed random number generator and check env vars)
 static void fuzz_init(void) {
     if (!g_fuzz_initialized) {
         fprintf(stderr, "Fuzzer: initializing...\n");
         srand((unsigned int)time(NULL));
-        
+
         // Check environment variables for configuration
-        const char* fuzz_enable = getenv("AEROSPIKE_FUZZ_ENABLE");
-        fprintf(stderr, "Fuzzer: AEROSPIKE_FUZZ_ENABLE = '%s'\n", fuzz_enable ? fuzz_enable : "NULL");
-        if (fuzz_enable && (strcmp(fuzz_enable, "1") == 0 || strcmp(fuzz_enable, "true") == 0)) {
-            g_fuzz_enabled = true;
-            fprintf(stderr, "Fuzzer: ENABLED via environment variable\n");
-        } else {
-            fprintf(stderr, "Fuzzer: NOT enabled via environment variable\n");
-        }
-        
         const char* fuzz_prob = getenv("AEROSPIKE_FUZZ_PROBABILITY");
         fprintf(stderr, "Fuzzer: AEROSPIKE_FUZZ_PROBABILITY = '%s'\n", fuzz_prob ? fuzz_prob : "NULL");
         if (fuzz_prob) {
@@ -38,7 +41,8 @@ static void fuzz_init(void) {
                 fprintf(stderr, "Fuzzer: invalid probability value: %f\n", prob);
             }
         }
-        
+        g_fuzz_enabled = fuzzing_enabled();
+
         fprintf(stderr, "Fuzzer: initialization complete, enabled=%s, probability=%.3f\n", 
                 g_fuzz_enabled ? "true" : "false", g_fuzz_probability);
         g_fuzz_initialized = true;
@@ -65,10 +69,11 @@ void fuzz_set_probability(double probability) {
 void fuzz(as_command* cmd) {
     // Initialize first to read environment variables
     fuzz_init();
-    
-    fprintf(stderr, "Fuzzer: fuzz() called, enabled=%s, cmd=%p\n", 
-            g_fuzz_enabled ? "true" : "false", (void*)cmd);
-    
+    g_fuzz_enabled = fuzzing_enabled();
+
+    fprintf(stderr, "Fuzzer: fuzz() called, enabled=%s\n", 
+            g_fuzz_enabled ? "true" : "false");
+
     if (!g_fuzz_enabled || !cmd || !cmd->buf || cmd->buf_size == 0) {
         if (!g_fuzz_enabled) {
             fprintf(stderr, "Fuzzer: not enabled\n");
@@ -91,7 +96,7 @@ void fuzz(as_command* cmd) {
     size_t mutations = 0;
     
     // Iterate through the buffer and potentially fuzz each byte
-    for (size_t i = 0; i < cmd->buf_size; i++) {
+    for (size_t i = 8; i < cmd->buf_size; i++) {
         // Check if we should fuzz this byte based on probability
         double random_val = (double)rand() / RAND_MAX;
         if (random_val < g_fuzz_probability) {
@@ -124,13 +129,10 @@ void fuzz(as_command* cmd) {
             if (cmd->buf[i] != original) {
                 mutations++;
             }
-            else {
-                fprintf(stderr, "Fuzzer: no mutation, strategy=%d\n", strategy);
-            }
         }
     }
     
     if (mutations > 0) {
         fprintf(stderr, "Fuzzer: mutated %zu bytes in %zu byte buffer\n", mutations, cmd->buf_size);
     }
-} 
+}

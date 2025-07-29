@@ -21,6 +21,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_partition_tracker.h>
+#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_sleep.h>
@@ -794,7 +795,15 @@ as_command_execute(as_command* cmd, as_error* err)
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
-						as_node_close_conn_error(node, &socket, socket.pool);
+						// The socket has already been removed from its pool by way of
+						// the as_node_get_connection() function above.  All we need to do
+						// is add it to the recovery queue, and continue processing the timeout
+						// as we otherwise would.
+						if (! as_queue_mt_push(&cmd->cluster->recovery_queue, &socket)) {
+							// Queue insertion failed, most likely due to out of memory.
+							// Abort timeout recovery and just close the socket.
+							as_node_close_conn_error(node, &socket, socket.pool);
+						}
 					}
 					goto Retry;
 
@@ -1015,6 +1024,9 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 	}
 	as_command_buffer_free(buf, capacity);
 	as_command_buffer_free(buf2, capacity2);
+
+// if socket timed out, here is where we would queue it onto the recovery queue.
+
 	return status;
 }
 

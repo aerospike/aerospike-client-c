@@ -26,6 +26,7 @@
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_queue.h>
+#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>

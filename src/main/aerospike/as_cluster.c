@@ -1649,7 +1649,7 @@ as_cluster_create(aerospike* as, as_error* err)
 
 	// Initialize the timeout delay recovery queue.
 	if (! as_queue_mt_init(&cluster->recover_queue,
-		                   sizeof(as_socket *), config->min_conns_per_node)) {
+		                   sizeof(as_socket), config->min_conns_per_node)) {
 		cf_free(cluster);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Unable to initialize socket timeout recovery queue");
@@ -1791,10 +1791,10 @@ as_cluster_destroy(as_cluster* cluster)
 
 	uint32_t rq_size = as_queue_mt_size(&cluster->recover_queue);
 	while (rq_size > 0) {
-		as_socket *socket;
+		as_socket socket;
 
 		if(as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
-			as_socket_close(socket);
+			as_socket_close(&socket);
 		}
 
 		--rq_size;

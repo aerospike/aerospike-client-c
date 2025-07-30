@@ -799,7 +799,7 @@ as_command_execute(as_command* cmd, as_error* err)
 						// the as_node_get_connection() function above.  All we need to do
 						// is add it to the recovery queue, and continue processing the timeout
 						// as we otherwise would.
-						if (! as_queue_mt_push(&cmd->cluster->recovery_queue, &socket)) {
+						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &socket)) {
 							// Queue insertion failed, most likely due to out of memory.
 							// Abort timeout recovery and just close the socket.
 							as_node_close_conn_error(node, &socket, socket.pool);

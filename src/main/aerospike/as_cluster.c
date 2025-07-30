@@ -843,7 +843,7 @@ as_cluster_init_error(as_vector* invalid_hosts, as_error* err)
 }
 
 static void
-as_cluster_tend_recovery_queue(as_cluster* cluster, as_error* err) {
+as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err) {
 	as_socket *socket;
 
 	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
@@ -1037,7 +1037,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
 
-	as_cluster_tend_recovery_queue(cluster, err);
+	as_cluster_tend_recover_queue(cluster, err);
 
 	as_cluster_destroy_peers(&peers);
 	as_cluster_manage(cluster);

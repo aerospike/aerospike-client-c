@@ -493,11 +493,6 @@ typedef struct as_cluster_s {
 	 */
 	uint32_t config_interval;
 
-	/**
-	 * Queue of sockets currently involved with timeout recovery, for sync commands.
-	 */
-	as_queue_mt recovery_queue;
-
 } as_cluster;
 
 struct aerospike_s;

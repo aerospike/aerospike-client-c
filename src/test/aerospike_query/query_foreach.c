@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -49,16 +49,16 @@
 #include "../util/udf.h"
 #include "../util/consumer_stream.h"
 
-/******************************************************************************
- * GLOBAL VARS
- *****************************************************************************/
+//---------------------------------
+// Global Variables
+//---------------------------------
 
 extern aerospike * as;
 static uint64_t g_epochns;
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 #define LUA_FILE AS_START_DIR "src/test/lua/client_stream_simple.lua"
 #define UDF_FILE "client_stream_simple"
@@ -70,9 +70,11 @@ static uint64_t g_epochns;
 bool namespace_has_persistence = false;
 bool namespace_in_memory = false;
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+void example_dump_record(const as_record* p_rec);
+
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 /**
  * Creates 100 records and 9 indexes.
@@ -446,6 +448,8 @@ query_foreach_count_callback(const as_val* v, void* udata)
 	}
 	else {
 		as_incr_uint32(count);
+		//as_record* rec = as_record_fromval(v);
+		//example_dump_record(rec);
 	}
 	return true;
 }
@@ -1809,9 +1813,98 @@ TEST(query_blob_list_index, "query blob list index")
 	as_query_destroy(&q);
 }
 
-/******************************************************************************
- * TEST SUITE
- *****************************************************************************/
+TEST(query_expression, "query expression")
+{
+	const char* set = "campaign";
+	uint32_t n_keys = 50;
+	as_error err;
+	as_status status;
+
+	for (uint32_t i = 0; i < n_keys; i++) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, set, (int64_t)(i + 600000));
+
+		status = aerospike_key_remove(as, &err, NULL, &key);
+		assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+	}
+
+	as_record rec;
+	as_record_inita(&rec, 3);
+
+	for (uint32_t i = 0; i < n_keys; i++) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, set, (int64_t)(i + 600000));
+
+		as_record_set_int64(&rec, "campaign1", i);
+		as_record_set_int64(&rec, "campaign2", 100);
+		as_record_set_int64(&rec, "campaign3", 100);
+
+		status = aerospike_key_put(as, &err, NULL, &key, &rec);
+		assert_int_eq(status, AEROSPIKE_OK);
+	}
+	as_record_destroy(&rec);
+
+	as_exp_build(exp, as_exp_add(as_exp_bin_int("campaign1"),
+		as_exp_bin_int("campaign2"), as_exp_bin_int("campaign3")));
+
+	as_index_task task;
+
+	status = aerospike_index_create_exp(as, &err, &task, NULL, NAMESPACE, set, "exp_index",
+		AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, exp);
+
+	switch (status) {
+		case AEROSPIKE_OK:
+			status = aerospike_index_create_wait(&err, &task, 0);
+			assert_int_eq(status, AEROSPIKE_OK);
+			break;
+
+		case AEROSPIKE_ERR_INDEX_FOUND:
+			break;
+
+		default:
+			assert_int_eq(status, AEROSPIKE_OK); // Guaranteed to fail.
+			break;
+	}
+
+	uint32_t count = 0;
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, set);
+	as_query_where_inita(&q, 1);
+	as_query_where_with_exp(&q, exp, as_integer_range(220, 230));
+
+	status = aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(count, 11);
+
+	// Serialize query to bytes.
+	uint32_t bytes_size;
+	uint8_t* bytes;
+	bool rv = as_query_to_bytes(&q, &bytes, &bytes_size);
+	assert_true(rv);
+
+	// Create new query from bytes.
+	as_query query_resume;
+	rv = as_query_from_bytes(&query_resume, bytes, bytes_size);
+	assert_true(rv);
+	free(bytes);
+
+	rv = as_query_compare(&q, &query_resume);
+	assert_true(rv);
+
+	as_exp_destroy(exp);
+	as_query_destroy(&q);
+
+	count = 0;
+	status = aerospike_query_foreach(as, &err, NULL, &query_resume, query_foreach_count_callback, &count);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(count, 11);
+	as_query_destroy(&query_resume);
+}
+
+//---------------------------------
+// Test Suite
+//---------------------------------
 
 SUITE(query_foreach, "aerospike_query_foreach tests")
 {
@@ -1895,4 +1988,5 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_map_ctx_is_string);
 	suite_add(query_blob_index);
 	suite_add(query_blob_list_index);
+	suite_add(query_expression);
 }

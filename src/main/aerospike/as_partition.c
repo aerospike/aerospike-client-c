@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -156,10 +156,12 @@ get_replica_rack(
 	uint32_t replica_max = replica_size;
 	uint32_t seq1 = 0;
 	uint32_t seq2 = 0;
-	uint32_t rack_max = cluster->rack_ids_size;
+	as_vector* rack_ids = as_rack_ids_load(&cluster->rack_ids);
+	int* ids = rack_ids->list;
+	uint32_t rack_max = rack_ids->size;
 
 	for (uint32_t i = 0; i < rack_max; i++) {
-		int rack_id = cluster->rack_ids[i];
+		int rack_id = ids[i];
 		uint32_t seq = (*replica_index);
 
 		for (uint32_t j = 0; j < replica_max; j++) {
@@ -218,13 +220,16 @@ as_partition_reg_get_node(
 		case AS_POLICY_REPLICA_MASTER:
 			return get_replica_master(p);
 
+		case AS_POLICY_REPLICA_PREFER_RACK:
+			return get_replica_rack(cluster, ns, p, prev_node, replica_size, replica_index);
+
+		// The remaining replica algorithms use replica_index as the starting point
+		// and iterate till a valid node is found.
 		default:
 		case AS_POLICY_REPLICA_ANY:
 		case AS_POLICY_REPLICA_SEQUENCE:
+		case AS_POLICY_REPLICA_RANDOM:
 			return get_replica_sequence(p, replica_size, replica_index);
-
-		case AS_POLICY_REPLICA_PREFER_RACK:
-			return get_replica_rack(cluster, ns, p, prev_node, replica_size, replica_index);
 	}
 }
 
@@ -290,6 +295,20 @@ as_partition_tables_get(as_partition_tables* tables, const char* ns)
 		}
 	}
 	return NULL;
+}
+
+const char*
+as_partition_tables_get_ns(as_cluster* cluster, const char* ns)
+{
+	if (cluster->shm_info) {
+		as_cluster_shm* cluster_shm = cluster->shm_info->cluster_shm;
+		as_partition_table_shm* table = as_shm_find_partition_table(cluster_shm, ns);
+		return table ? table->ns : NULL;
+	}
+	else {
+		as_partition_table* table = as_partition_tables_get(&cluster->partition_tables, ns);
+		return table ? table->ns : NULL;
+	}
 }
 
 static inline void

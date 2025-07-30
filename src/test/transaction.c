@@ -109,7 +109,7 @@ TEST(txn_write, "transaction write")
 	as_txn_init(&txn);
 
 	as_policy_write pw;
-	as_policy_write_copy(&as->config.policies.write, &pw);
+	as_policy_write_default(as, &pw);
 	pw.base.txn = &txn;
 
 	as_record_set_int64(&rec, BIN, 2);
@@ -137,7 +137,7 @@ TEST(txn_write_twice, "transaction write twice")
 	as_txn_init(&txn);
 
 	as_policy_write pw;
-	as_policy_write_copy(&as->config.policies.write, &pw);
+	as_policy_write_default(as, &pw);
 	pw.base.txn = &txn;
 
 	as_key key;
@@ -179,11 +179,11 @@ TEST(txn_write_conflict, "transaction write conflict")
 	as_txn_init(&txn2);
 
 	as_policy_write pw1;
-	as_policy_write_copy(&as->config.policies.write, &pw1);
+	as_policy_write_default(as, &pw1);
 	pw1.base.txn = &txn1;
 
 	as_policy_write pw2;
-	as_policy_write_copy(&as->config.policies.write, &pw2);
+	as_policy_write_default(as, &pw2);
 	pw2.base.txn = &txn2;
 
 	as_key key;
@@ -237,7 +237,7 @@ TEST(txn_write_block, "transaction write block")
 	as_txn_init(&txn);
 
 	as_policy_write pw;
-	as_policy_write_copy(&as->config.policies.write, &pw);
+	as_policy_write_default(as, &pw);
 	pw.base.txn = &txn;
 
 	as_record_set_int64(&rec, BIN, 2);
@@ -282,7 +282,7 @@ TEST(txn_write_read, "transaction write read")
 	as_txn_init(&txn);
 
 	as_policy_write pw;
-	as_policy_write_copy(&as->config.policies.write, &pw);
+	as_policy_write_default(as, &pw);
 	pw.base.txn = &txn;
 
 	as_record_set_int64(&rec, BIN, 2);
@@ -329,7 +329,7 @@ TEST(txn_write_abort, "transaction write abort")
 	as_txn_init(&txn);
 
 	as_policy_write pw;
-	as_policy_write_copy(&as->config.policies.write, &pw);
+	as_policy_write_default(as, &pw);
 	pw.base.txn = &txn;
 
 	as_record_set_int64(&rec, BIN, 2);
@@ -339,7 +339,7 @@ TEST(txn_write_abort, "transaction write abort")
 	as_record_destroy(&rec);
 
 	as_policy_read pr;
-	as_policy_read_copy(&as->config.policies.read, &pr);
+	as_policy_read_default(as, &pr);
 	pr.base.txn = &txn;
 
 	as_record* recp = NULL;
@@ -381,7 +381,7 @@ TEST(txn_delete, "transaction delete")
 	as_txn_init(&txn);
 
 	as_policy_remove prem;
-	as_policy_remove_copy(&as->config.policies.remove, &prem);
+	as_policy_remove_default(as, &prem);
 	prem.base.txn = &txn;
 	prem.durable_delete = true;
 
@@ -417,7 +417,7 @@ TEST(txn_delete_abort, "transaction delete abort")
 	as_txn_init(&txn);
 
 	as_policy_remove prem;
-	as_policy_remove_copy(&as->config.policies.remove, &prem);
+	as_policy_remove_default(as, &prem);
 	prem.base.txn = &txn;
 	prem.durable_delete = true;
 
@@ -456,7 +456,7 @@ TEST(txn_delete_twice, "transaction delete twice")
 	as_txn_init(&txn);
 
 	as_policy_remove prem;
-	as_policy_remove_copy(&as->config.policies.remove, &prem);
+	as_policy_remove_default(as, &prem);
 	prem.base.txn = &txn;
 	prem.durable_delete = true;
 
@@ -496,7 +496,7 @@ TEST(txn_touch, "transaction touch")
 	as_txn_init(&txn);
 
 	as_policy_operate po;
-	as_policy_operate_copy(&as->config.policies.operate, &po);
+	as_policy_operate_default(as, &po);
 	po.base.txn = &txn;
 
 	as_operations ops;
@@ -539,7 +539,7 @@ TEST(txn_touch_abort, "transaction touch abort")
 	as_txn_init(&txn);
 
 	as_policy_operate po;
-	as_policy_operate_copy(&as->config.policies.operate, &po);
+	as_policy_operate_default(as, &po);
 	po.base.txn = &txn;
 
 	as_operations ops;
@@ -583,7 +583,7 @@ TEST(txn_operate_write, "transaction operate write")
 	as_txn_init(&txn);
 
 	as_policy_operate po;
-	as_policy_operate_copy(&as->config.policies.operate, &po);
+	as_policy_operate_default(as, &po);
 	po.base.txn = &txn;
 
 	as_operations ops;
@@ -629,7 +629,7 @@ TEST(txn_operate_write_abort, "transaction operate write abort")
 	as_txn_init(&txn);
 
 	as_policy_operate po;
-	as_policy_operate_copy(&as->config.policies.operate, &po);
+	as_policy_operate_default(as, &po);
 	po.base.txn = &txn;
 
 	as_operations ops;
@@ -674,7 +674,7 @@ TEST(txn_udf, "transaction udf")
 	as_txn_init(&txn);
 
 	as_policy_apply pa;
-	as_policy_apply_copy(&as->config.policies.apply, &pa);
+	as_policy_apply_default(as, &pa);
 	pa.base.txn = &txn;
 
 	as_arraylist args;
@@ -718,7 +718,7 @@ TEST(txn_udf_abort, "transaction udf abort")
 	as_txn_init(&txn);
 
 	as_policy_apply pa;
-	as_policy_apply_copy(&as->config.policies.apply, &pa);
+	as_policy_apply_default(as, &pa);
 	pa.base.txn = &txn;
 
 	as_arraylist args;
@@ -814,7 +814,7 @@ TEST(txn_batch, "transaction batch")
 	as_txn_init(&txn);
 
 	as_policy_batch pb;
-	as_policy_batch_copy(&as->config.policies.batch_parent_write, &pb);
+	as_policy_batch_parent_write_default(as, &pb);
 	pb.base.txn = &txn;
 
 	as_operations_inita(&ops, 1);
@@ -866,7 +866,7 @@ TEST(txn_batch_abort, "transaction batch abort")
 	as_txn_init(&txn);
 
 	as_policy_batch pb;
-	as_policy_batch_copy(&as->config.policies.batch_parent_write, &pb);
+	as_policy_batch_parent_write_default(as, &pb);
 	pb.base.txn = &txn;
 
 	as_operations_inita(&ops, 1);

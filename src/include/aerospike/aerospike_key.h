@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -50,7 +50,7 @@ extern "C" {
 /**
  * Look up a record by key and return all bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init(&key, "ns", "set", "key");
  * 
@@ -61,7 +61,7 @@ extern "C" {
  * else {
  * 	   as_record_destroy(rec);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -84,7 +84,7 @@ aerospike_key_get(
 /**
  * Asynchronously look up a record by key and return all bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  *     if (err) {
@@ -101,7 +101,7 @@ aerospike_key_get(
  * as_key_init(&key, "ns", "set", "key");
  *
  * as_status status = aerospike_key_get_async(&as, &err, NULL, &key, my_listener, NULL, NULL, NULL);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as				The aerospike instance to use for this operation.
  * @param err				The as_error to be populated if an error occurs.
@@ -128,7 +128,7 @@ aerospike_key_get_async(
 /**
  * Read a record's bins given the NULL terminated bins array argument.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * char* select[] = {"bin1", "bin2", "bin3", NULL};
  * 
  * as_key key;
@@ -141,7 +141,7 @@ aerospike_key_get_async(
  * else {
  *     as_record_destroy(rec);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -166,7 +166,7 @@ aerospike_key_select(
 /**
  * Asynchronously read a record's bins given the NULL terminated bins array argument.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  *     if (err) {
@@ -185,7 +185,7 @@ aerospike_key_select(
  * as_key_init(&key, "ns", "set", "key");
  *
  * as_status status = aerospike_key_select_async(&as, &err, NULL, &key, select, my_listener, NULL, NULL, NULL);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as				The aerospike instance to use for this operation.
  * @param err				The as_error to be populated if an error occurs.
@@ -212,7 +212,7 @@ aerospike_key_select_async(
 /**
  * Read a record's bins given the bins array argument and the n_bins count.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * char* select[] = {"bin1", "bin2", "bin3"};
  * 
  * as_key key;
@@ -225,7 +225,7 @@ aerospike_key_select_async(
  * else {
  *     as_record_destroy(rec);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -251,7 +251,7 @@ aerospike_key_select_bins(
 /**
  * Asynchronously read a record's bins given the bins array argument and the n_bins count.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  *     if (err) {
@@ -270,7 +270,7 @@ aerospike_key_select_bins(
  * as_key_init(&key, "ns", "set", "key");
  *
  * as_status status = aerospike_key_select_bins_async(&as, &err, NULL, &key, select, 3, my_listener, NULL, NULL, NULL);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as				The aerospike instance to use for this operation.
  * @param err				The as_error to be populated if an error occurs.
@@ -300,7 +300,7 @@ aerospike_key_select_bins_async(
  * Check if a record exists in the cluster via its key. The record's metadata 
  * will be populated if the record exists.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init(&key, "ns", "set", "key");
  * 
@@ -317,7 +317,7 @@ aerospike_key_select_bins_async(
  * 	       printf("Record doesn't exist.");
  * 	   }
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -341,7 +341,7 @@ aerospike_key_exists(
  * Asynchronously check if a record exists in the cluster via its key. The record's metadata
  * will be populated if the record exists.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  * 	   if (err) {
@@ -363,7 +363,7 @@ aerospike_key_exists(
  * as_key_init(&key, "ns", "set", "key");
  *
  * as_status status = aerospike_key_exists_async(&as, &err, NULL, &key, my_listener, NULL, NULL, NULL);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as				The aerospike instance to use for this operation.
  * @param err				The as_error to be populated if an error occurs.
@@ -390,7 +390,7 @@ aerospike_key_exists_async(
 /**
  * Store a record in the cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init(&key, "ns", "set", "key");
  *
@@ -403,7 +403,7 @@ aerospike_key_exists_async(
  * 	   printf("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_record_destroy(&rec);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -423,7 +423,7 @@ aerospike_key_put(
 /**
  * Asynchronously store a record in the cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, void* udata, as_event_loop* event_loop)
  * {
  * 	   if (err) {
@@ -443,7 +443,7 @@ aerospike_key_put(
  *
  * as_status status = aerospike_key_put_async(&as, &err, NULL, &key, &rec, my_listener, NULL, NULL, NULL);
  * as_record_destroy(&rec);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as				The aerospike instance to use for this operation.
  * @param err				The as_error to be populated if an error occurs.
@@ -470,14 +470,14 @@ aerospike_key_put_async(
 /**
  * Remove a record from the cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init(&key, "ns", "set", "key");
  *
  * if (aerospike_key_remove(&as, &err, NULL, &key) != AEROSPIKE_OK) {
  * 	   printf("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -496,7 +496,7 @@ aerospike_key_remove(
 /**
  * Asynchronously remove a record from the cluster.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, void* udata, as_event_loop* event_loop)
  * {
  * 	   if (err) {
@@ -510,7 +510,7 @@ aerospike_key_remove(
  * as_key_init(&key, "ns", "set", "key");
  *
  * as_status status = aerospike_key_remove(&as, &err, NULL, &key, my_listener, NULL, NULL, NULL);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as				The aerospike instance to use for this operation.
  * @param err				The as_error to be populated if an error occurs.
@@ -537,7 +537,7 @@ aerospike_key_remove_async(
 /**
  * Lookup a record by key, then perform specified operations.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init(&key, "ns", "set", "key");
  *
@@ -556,7 +556,7 @@ aerospike_key_remove_async(
  * 	   as_record_destroy(rec);
  * }
  * as_operations_destroy(&ops);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -578,7 +578,7 @@ aerospike_key_operate(
 /**
  * Asynchronously lookup a record by key, then perform specified operations.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  * 	   if (err) {
@@ -602,7 +602,7 @@ aerospike_key_operate(
  *
  * as_status status = aerospike_key_operate(&as, &err, NULL, &key, &ops, my_listener, NULL, NULL, NULL);
  * as_operations_destroy(&ops);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as				The aerospike instance to use for this operation.
  * @param err				The as_error to be populated if an error occurs.
@@ -629,7 +629,7 @@ aerospike_key_operate_async(
 /**
  * Lookup a record by key, then apply the UDF.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_key key;
  * as_key_init(&key, "ns", "set", "key");
  *
@@ -648,7 +648,7 @@ aerospike_key_operate_async(
  * }
  * 
  * as_arraylist_destroy(&args);
- * ~~~~~~~~~~
+ * @endcode
  *
  *
  * @param as			The aerospike instance to use for this operation.
@@ -673,7 +673,7 @@ aerospike_key_apply(
 /**
  * Asynchronously lookup a record by key, then apply the UDF.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * void my_listener(as_error* err, as_val* val, void* udata, as_event_loop* event_loop)
  * {
  * 	   if (err) {
@@ -695,7 +695,7 @@ aerospike_key_apply(
  *
  * as_status status = aerospike_key_apply(&as, &err, NULL, &key, "math", "add", &args, my_listener, NULL, NULL, NULL);
  * as_arraylist_destroy(&args);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as				The aerospike instance to use for this operation.
  * @param err				The as_error to be populated if an error occurs.

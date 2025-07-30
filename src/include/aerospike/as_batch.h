@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -108,12 +108,12 @@ typedef as_batch_result as_batch_read;
  *
  * For heap allocation, use `as_batch_new()`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch batch;
  * as_batch_inita(&batch, 2);
  * as_key_init(as_batch_get(&batch, 0), "ns", "set", "key1");
  * as_key_init(as_batch_get(&batch, 1), "ns", "set", "key2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * When the batch is no longer needed, then use as_batch_destroy() to
  * release the batch and associated resources.
@@ -142,11 +142,11 @@ typedef as_batch_result as_batch_read;
  * Create and initialize a heap allocated as_batch capable of storing
  * `capacity` keys.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch* batch = as_batch_new(2);
  * as_key_init(as_batch_get(batch, 0), "ns", "set", "key1");
  * as_key_init(as_batch_get(batch, 1), "ns", "set", "key2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * When the batch is no longer needed, then use as_batch_destroy() to
  * release the batch and associated resources.
@@ -162,12 +162,12 @@ as_batch_new(uint32_t size);
 /**
  * Initialize a stack allocated as_batch capable of storing `capacity` keys.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch batch;
  * as_batch_init(&batch, 2);
  * as_key_init(as_batch_get(&batch, 0), "ns", "set", "key1");
  * as_key_init(as_batch_get(&batch, 1), "ns", "set", "key2");
- * ~~~~~~~~~~
+ * @endcode
  *
  * When the batch is no longer needed, then use as_batch_destroy() to
  * release the batch and associated resources.
@@ -184,9 +184,9 @@ as_batch_init(as_batch* batch, uint32_t size);
 /**
  * Destroy the batch of keys.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_batch_destroy(batch);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param batch 	The batch to release.
  *

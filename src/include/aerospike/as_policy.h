@@ -54,6 +54,7 @@
  */
 
 #include <aerospike/as_std.h>
+#include <aerospike/as_metrics.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -298,7 +299,20 @@ typedef enum as_policy_replica_e {
 	 * as_config.rack_aware, as_config.rack_id or as_config.rack_ids, and server rack 
 	 * configuration must also be set to enable this functionality.
 	 */
-	AS_POLICY_REPLICA_PREFER_RACK
+	AS_POLICY_REPLICA_PREFER_RACK,
+
+	/**
+	 * Distribute reads and writes across all nodes in cluster in round-robin fashion.
+	 *
+	 * This option is useful on reads when the replication factor equals the number
+	 * of nodes in the cluster and the overhead of requesting proles is not desired.
+	 *
+	 * This option could temporarily be useful on writes when the client can't connect
+	 * to a node, but that node is reachable via a proxy from a different node.
+	 *
+	 * This option can also be used to test server proxies.
+	 */
+	AS_POLICY_REPLICA_RANDOM
 
 } as_policy_replica;
 
@@ -514,7 +528,7 @@ typedef struct as_policy_base_s {
 	 * policy filter expression instances. The user is responsible for calling as_exp_destroy()
 	 * on filter expressions when setting temporary command policies.
 	 *
-	 * ~~~~~~~~~~{.c}
+	 * @code
 	 * as_exp_build(filter,
 	 *   as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(10)));
 	 *
@@ -523,7 +537,7 @@ typedef struct as_policy_base_s {
 	 * p.filter_exp = filter;
 	 * ...
 	 * as_exp_destroy(filter);
-	 * ~~~~~~~~~~
+	 * @endcode
 	 *
 	 * Default: NULL
 	 */
@@ -1514,12 +1528,16 @@ typedef struct as_policy_admin_s {
 /**
  * Transaction policy fields used to batch verify record versions on commit.
  * Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ *
+ * @ingroup client_policies
  */
 typedef as_policy_batch as_policy_txn_verify;
 
 /**
  * Transaction policy fields used to batch roll forward/backward records on
  * commit or abort. Used a placeholder for now as there are no additional fields beyond as_policy_batch.
+ *
+ * @ingroup client_policies
  */
 typedef as_policy_batch as_policy_txn_roll;
 
@@ -1612,6 +1630,11 @@ typedef struct as_policies_s {
 	 * or back (abort) in a batch.
 	 */
 	as_policy_txn_roll txn_roll;
+
+	/**
+	 * Default metrics policy.
+	 */
+	as_metrics_policy metrics;
 
 } as_policies;
 

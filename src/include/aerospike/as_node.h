@@ -26,6 +26,7 @@
 #include <aerospike/as_partition.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_vector.h>
+#include <aerospike/as_version.h>
 
 #if !defined(_MSC_VER)
 #include <netinet/in.h>
@@ -36,9 +37,9 @@
 extern "C" {
 #endif
 	
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
  * Maximum size (including NULL byte) of a hostname.
@@ -61,9 +62,9 @@ extern "C" {
 #define AS_ADDRESS4_MAX 4
 #define AS_ADDRESS6_MAX 8
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Socket address information.
@@ -190,11 +191,47 @@ typedef struct as_async_conn_pool_s {
 } as_async_conn_pool;
 
 /**
- * Node metrics latency bucket struct
+ * Namespace metrics.
  */
-typedef struct as_node_metrics_s {
-	as_latency_buckets* latency;
-} as_node_metrics;
+typedef struct {
+	/**
+	 * Namespace.
+	 */
+	const char* ns;
+
+	/**
+	 * Bytes received from the server.
+	 */
+	uint64_t bytes_in;
+
+	/**
+	 * Bytes sent to the server.
+	 */
+	uint64_t bytes_out;
+
+	/**
+	 * Command error count since node was initialized. If the error is retryable, multiple errors per
+	 * command may occur.
+	 */
+	uint64_t error_count;
+
+	/**
+	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * multiple timeouts per command may occur.
+	 */
+	uint64_t timeout_count;
+
+	/**
+	 * Command key busy error count since node was initialized.
+	 */
+	uint64_t key_busy_count;
+
+	/**
+	 * Latency histograms.
+	 */
+	as_latency* latency[AS_LATENCY_TYPE_MAX];
+
+} as_ns_metrics;
 
 struct as_cluster_s;
 
@@ -221,6 +258,11 @@ typedef struct as_node_s {
 	 * Features supported by server.  Stored in bitmap.
 	 */
 	uint32_t features;
+
+	/**
+	 * Node version.
+	 */
+	as_version version;
 
 	/**
 	 * TLS certificate name (needed for TLS only, NULL otherwise).
@@ -289,26 +331,9 @@ typedef struct as_node_s {
 	as_racks* racks;
 
 	/**
-	 * Node metrics 
-	 */
-	as_node_metrics* metrics;
-
-	/**
 	 * Socket used exclusively for cluster tend thread info requests.
 	 */
 	as_socket info_socket;
-
-	/**
-	 * Command error count since node was initialized. If the error is retryable, multiple errors per
-	 * command may occur.
-	 */
-	uint64_t error_count;
-
-	/**
-	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
-	 * multiple timeouts per command may occur.
-	 */
-	uint64_t timeout_count;
 
 	/**
 	 * Connection queue iterator.  Not atomic by design.
@@ -329,7 +354,12 @@ typedef struct as_node_s {
 	 * Error count for this node's error_rate_window.
 	 */
 	uint32_t error_rate;
-	
+
+	/**
+	 * Max errors per node per error_rate_window.
+	 */
+	uint32_t max_error_rate;
+
 	/**
 	 * Server's generation count for peers.
 	 */
@@ -361,6 +391,16 @@ typedef struct as_node_s {
 	uint32_t index;
 	
 	/**
+	 * Node/Namespace metrics.
+	 */
+	as_ns_metrics** metrics;
+
+	/**
+	 * Number of metrics namespace entries.
+	 */
+	uint8_t metrics_size;
+
+	/**
 	 * Should user login to avoid session expiration.
 	 */
 	uint8_t perform_login;
@@ -369,7 +409,7 @@ typedef struct as_node_s {
 	 * Is node currently active.
 	 */
 	uint8_t active;
-	
+
 	/**
 	 * Did partition change in current cluster tend.
 	 */
@@ -379,6 +419,11 @@ typedef struct as_node_s {
 	 * Did rebalance generation change in current cluster tend.
 	 */
 	bool rebalance_changed;
+
+	/**
+	 * Should user-agent-set info command be retried.
+	 */
+	bool retry_user_agent;
 
 } as_node;
 
@@ -417,11 +462,16 @@ typedef struct as_node_info_s {
 	 */
 	as_session* session;
 
+	/**
+	 * Node version.
+	 */
+	as_version version;
+
 } as_node_info;
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * @private
@@ -436,13 +486,6 @@ as_node_create(struct as_cluster_s* cluster, as_node_info* node_info);
  */
 AS_EXTERN void
 as_node_destroy(as_node* node);
-
-/**
- * @private
- * Destroy node metrics.
- */
-void
-as_node_destroy_metrics(as_node* node);
 
 /**
  * @private
@@ -566,7 +609,10 @@ as_node_authenticate_connection(struct as_cluster_s* cluster, uint64_t deadline_
  * Get a connection to the given node from pool and validate.  Return 0 on success.
  */
 as_status
-as_node_get_connection(as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_socket* sock);
+as_node_get_connection(
+	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
+	as_socket* sock
+	);
 
 /**
  * @private
@@ -654,10 +700,17 @@ as_node_has_rack(as_node* node, const char* ns, int rack_id);
 
 /**
  * @private
+ * Return as_ns_metrics for specified node and namespace.
+ */
+as_ns_metrics*
+as_node_prepare_metrics(as_node* node, const char* ns);
+
+/**
+ * @private
  * Record latency of type latency_type for node
  */
 void
-as_node_add_latency(as_node* node, as_latency_type latency_type, uint64_t elapsed);
+as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
 
 struct as_metrics_policy_s;
 
@@ -669,41 +722,110 @@ void
 as_node_enable_metrics(as_node* node, const struct as_metrics_policy_s* policy);
 
 /**
+ * Add bytes received metrics to node/namespace.
+ */
+static inline void
+as_node_add_bytes_in(as_ns_metrics* metrics, uint64_t bytes_in)
+{
+	as_add_uint64(&metrics->bytes_in, bytes_in);
+}
+
+/**
+ * Return bytes received from the server. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_bytes_in(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->bytes_in);
+}
+
+/**
+ * Add bytes sent metrics to node/namespace.
+ */
+static inline void
+as_node_add_bytes_out(as_ns_metrics* metrics, uint64_t bytes_out)
+{
+	as_add_uint64(&metrics->bytes_out, bytes_out);
+}
+
+/**
+ * Return bytes sent to the server. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_bytes_out(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->bytes_out);
+}
+
+/**
  * Return command error count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
-as_node_get_error_count(as_node* node)
+as_node_get_error_count(as_ns_metrics* metrics)
 {
-	return as_load_uint64(&node->error_count);
+	return as_load_uint64(&metrics->error_count);
 }
 
 /**
  * Increment command error count. If the error is retryable, multiple errors per
  * command may occur.
  */
-static inline void
-as_node_add_error(as_node* node)
-{
-	as_incr_uint64(&node->error_count);
-}
+void
+as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * Return command timeout count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
-as_node_get_timeout_count(as_node* node)
+as_node_get_timeout_count(as_ns_metrics* metrics)
 {
-	return as_load_uint64(&node->timeout_count);
+	return as_load_uint64(&metrics->timeout_count);
 }
 
 /**
  * Increment command timeout count. If the timeout is retryable (ie socketTimeout),
  * multiple timeouts per command may occur.
  */
-static inline void
-as_node_add_timeout(as_node* node)
+void
+as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * Return command key busy error count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_key_busy_count(as_ns_metrics* metrics)
 {
-	as_incr_uint64(&node->timeout_count);
+	return as_load_uint64(&metrics->key_busy_count);
+}
+
+/**
+ * Increment command key busy error count.
+ */
+void
+as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * @private
+ * Validate node's error rate.
+ */
+bool
+as_node_valid_error_rate(as_node* node);
+
+/**
+ * @private
+ * Reset node's error count.
+ */
+void
+as_node_reset_error_rate(as_node* node);
+
+/**
+ * @private
+ * Get node's error count.
+ */
+static inline uint32_t
+as_node_get_error_rate(as_node* node)
+{
+	return as_load_uint32(&node->error_rate);
 }
 
 /**

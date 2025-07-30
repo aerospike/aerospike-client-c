@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -40,26 +40,26 @@
  * namespace and "demo" set. We will add a where predicate on "bin2", on which
  * we have already created a secondary index. 
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query query;
  * as_query_init(&query, "test", "demo");
  *
  * as_query_where_init(&query, 1);
  * as_query_where(&query, "bin2", as_integer_equals(100));
- * ~~~~~~~~~~
+ * @endcode
  *
  * Now that we have a query defined, we want to execute it using 
  * aerospike_query_foreach().
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * if (aerospike_query_foreach(&as, &err, NULL, &query, callback, NULL) != AEROSPIKE_OK) {
  *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * The callback provided to the function above is implemented as:
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_val* val, void* udata)
  * {
  *     if (!val) {
@@ -71,13 +71,13 @@
  *     // Do not call as_record_destroy() because the calling function will do that for you.
  *     return true;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you are finished with the query, you should destroy the resources allocated to it.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query_destroy(&query);
- * ~~~~~~~~~~
+ * @endcode
  */
 
 #include <aerospike/aerospike.h>
@@ -105,7 +105,7 @@ extern "C" {
  *
  * A regular foreground query always returns as_record instances:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_val* val, void* udata)
  * {
  *     if (!val) {
@@ -117,12 +117,12 @@ extern "C" {
  *     // Do not call as_record_destroy() because the calling function will do that for you.
  *     return true;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * An aggregation query using a UDF returns as_val instances. The as_val type depends on
  * what the UDF returns:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_val* val, void* udata)
  * {
  *     if (!val) {
@@ -139,7 +139,7 @@ extern "C" {
  *     // Process integer
  *     return true;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param val 			The value received from the query.
  * @param udata 		User-data provided to the calling function.
@@ -177,7 +177,7 @@ typedef bool (*as_async_query_record_listener)(
  * Multiple threads will likely be calling the callback in parallel. Therefore,
  * your callback implementation should be thread safe.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_val* val, void* udata)
  * {
  *     if (!val) {
@@ -199,7 +199,7 @@ typedef bool (*as_async_query_record_listener)(
  *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -222,7 +222,7 @@ aerospike_query_foreach(
  * in parallel. Therefore, your callback implementation should be thread safe.
  * Requires server version 6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_val* val, void* udata)
  * {
  *     if (!val) {
@@ -247,7 +247,7 @@ aerospike_query_foreach(
  *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -270,7 +270,7 @@ aerospike_query_partitions(
  * Asynchronously execute a query and call the listener function for each result item.
  * Standard queries are supported, but aggregation queries are not supported in async mode.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  *     if (err) {
@@ -297,7 +297,7 @@ aerospike_query_partitions(
  *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -322,7 +322,7 @@ aerospike_query_async(
  * aggregation queries are not supported in async mode.
  * Requires server version 6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  *     if (err) {
@@ -353,7 +353,7 @@ aerospike_query_async(
  *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.
@@ -380,7 +380,7 @@ aerospike_query_partitions_async(
  * the client. This asynchronous server call will return before the command is complete. The user
  * can optionally wait for command completion.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_query query;
  * as_query_init(&query, "test", "demo");
  * as_query_select(&query, "bin1");
@@ -395,7 +395,7 @@ aerospike_query_partitions_async(
  *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_query_destroy(&query);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			Aerospike cluster instance.
  * @param err			Error detail structure that is populated if an error occurs.

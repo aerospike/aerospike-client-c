@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 # Set version in version.h and version.c.
 
 if [ $# -lt 1 ]
@@ -12,19 +12,35 @@ version=$1
 cd `dirname $0`
 
 # Write version.h
-echo $version | awk -F. '{
-	split($3,b,"-");
-	printf("// Version format: MNNPPBBBB\n");
-	printf("// M: major\n");
-	printf("// N: minor\n");
-	printf("// P: patch\n");
-	printf("// B: build id\n");
-	printf("#define AEROSPIKE_CLIENT_VERSION %d%02d%02d%04dL\n", $1, $2, b[1], b[2]);
-	printf("\nextern char* aerospike_client_version;\n");
-}' > ../src/include/aerospike/version.h
+ver=`echo $version | awk -F. '{printf("%d%02d%02d%04dL\n", $1, $2, $3, $4)}'`
+fn=../src/include/aerospike/version.h
+tmp=/tmp/version.h
+
+awk '{
+	if ($2 == "AEROSPIKE_CLIENT_VERSION") {
+    printf("#define AEROSPIKE_CLIENT_VERSION %s\n", "'$ver'");	
+	}
+  else {
+  	print $0;
+  }
+}' < $fn > $tmp
+
+mv $tmp $fn
 
 # Write version.c
-echo 'char* aerospike_client_version = "'$version'";' > ../src/main/aerospike/version.c
+fn=../src/main/aerospike/version.c
+tmp=/tmp/version.c
+
+awk '{
+	if ($3 == "aerospike_client_version") {
+    printf("AS_EXTERN char* aerospike_client_version = \"%s\";\n", "'$version'");	
+	}
+  else {
+  	print $0;
+  }
+}' < $fn > $tmp
+
+mv $tmp $fn
 
 # Update windows nuspec version.
 for fn in ../vs/*.nuspec

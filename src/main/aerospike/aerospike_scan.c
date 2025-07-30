@@ -18,6 +18,7 @@
 #include <aerospike/aerospike_info.h>
 #include <aerospike/as_async.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_job.h>
 #include <aerospike/as_key.h>
@@ -34,9 +35,9 @@
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_queue.h>
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 typedef struct as_scan_task_s {
 	as_node* node;
@@ -99,9 +100,9 @@ typedef struct as_scan_builder {
 	uint16_t n_fields;
 } as_scan_builder;
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static inline void
 as_scan_log_iter(uint64_t parent_id, uint64_t task_id, uint32_t iter)
@@ -674,6 +675,8 @@ as_scan_command_execute(as_scan_task* task)
 	cmd.policy = &task->policy->base;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
+	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	cmd.ns = as_partition_tables_get_ns(task->cluster, task->scan->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_scan_parse_records;
 	cmd.udata = task;
@@ -777,19 +780,22 @@ as_scan_generic(
 
 	// Initialize task.
 	uint32_t error_mutex = 0;
-	as_scan_task task;
-	task.np = NULL;
-	task.pt = NULL;
-	task.cluster = cluster;
-	task.policy = policy;
-	task.scan = scan;
-	task.callback = callback;
-	task.udata = udata;
-	task.err = err;
-	task.error_mutex = &error_mutex;
-	task.task_id = task_id;
-	task.cluster_key = cluster_key;
-	task.first = true;
+	as_scan_task task = {
+		.node = NULL,
+		.np = NULL,
+		.pt = NULL,
+		.cluster = cluster,
+		.policy = policy,
+		.scan = scan,
+		.callback = callback,
+		.udata = udata,
+		.err = err,
+		.complete_q = NULL,
+		.error_mutex = &error_mutex,
+		.task_id = task_id,
+		.cluster_key = cluster_key,
+		.first = true
+	};
 
 	if (scan->concurrent) {
 		uint32_t n_wait_nodes = nodes->size;
@@ -896,18 +902,21 @@ as_scan_partitions(
 
 		// Initialize task.
 		uint32_t error_mutex = 0;
-		as_scan_task task;
-		task.pt = pt;
-		task.cluster = cluster;
-		task.policy = policy;
-		task.scan = scan;
-		task.callback = callback;
-		task.udata = udata;
-		task.err = err;
-		task.error_mutex = &error_mutex;
-		task.task_id = task_id;
-		task.cluster_key = 0;
-		task.first = false;
+		as_scan_task task = {
+			.node = NULL,
+			.np = NULL,
+			.pt = pt,
+			.cluster = cluster,
+			.policy = policy,
+			.scan = scan,
+			.callback = callback,
+			.udata = udata,
+			.err = err,
+			.error_mutex = &error_mutex,
+			.task_id = task_id,
+			.cluster_key = 0,
+			.first = false
+		};
 
 		if (scan->concurrent && n_nodes > 1) {
 			uint32_t n_wait_nodes = n_nodes;
@@ -996,6 +1005,9 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 	as_event_executor* ee = &se->executor;
 	uint32_t n_nodes = pt->node_parts.size;
 
+	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	const char*	global_ns = as_partition_tables_get_ns(se->cluster, se->executor.ns);
+
 	for (uint32_t i = 0; i < n_nodes; i++) {
 		as_node_partitions* np = as_vector_get(&pt->node_parts, i);
 		uint32_t parts_full_size = np->parts_full.size * 2;
@@ -1082,7 +1094,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		// Reserve node because as_event_command_free() will release node
 		// on command completion.
 		as_node_reserve(cmd->node);
-		cmd->ns = NULL;
+		cmd->ns = global_ns;
 		cmd->partition = NULL;
 		cmd->udata = se;  // Overload udata to be the executor.
 		cmd->parse_results = as_scan_parse_records_async;
@@ -1260,9 +1272,50 @@ as_scan_partition_async(
 	return as_scan_partition_execute_async(se, pt, err);
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Scan Policy
+//---------------------------------
+
+static const as_policy_scan*
+as_policy_scan_merge(aerospike* as, const as_policy_scan* src, as_policy_scan* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.scan;
+	}
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+		as_config* config = aerospike_load_config(as);
+		as_policy_scan* cfg = &config->policies.scan;
+
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_SCAN_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_SCAN_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_SCAN_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_SCAN_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->replica = as_field_is_set(bitmap, AS_SCAN_REPLICA)?
+			cfg->replica : src->replica;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->max_records = src->max_records;
+		mrg->records_per_second = src->records_per_second;
+		mrg->ttl = src->ttl;
+		mrg->durable_delete = src->durable_delete;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
+//---------------------------------
+// Functions
+//---------------------------------
 
 bool
 as_async_scan_should_retry(as_event_command* cmd, as_status status)
@@ -1278,9 +1331,8 @@ aerospike_scan_background(
 	uint64_t* scan_id
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.scan;
-	}
+	as_policy_scan merged;
+	policy = as_policy_scan_merge(as, policy, &merged);
 
 	return as_scan_generic(as->cluster, err, policy, scan, 0, 0, scan_id);
 }
@@ -1328,9 +1380,8 @@ aerospike_scan_foreach(
 	aerospike_scan_foreach_callback callback, void* udata
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.scan;
-	}
+	as_policy_scan merged;
+	policy = as_policy_scan_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 	uint32_t n_nodes;
@@ -1341,8 +1392,12 @@ aerospike_scan_foreach(
 	}
 
 	as_partition_tracker pt;
-	as_partition_tracker_init_nodes(&pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, n_nodes);
+	status = as_partition_tracker_init_nodes(&pt, cluster, &policy->base, policy->max_records,
+		policy->replica, &scan->parts_all, scan->paginate, n_nodes, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
 
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 
@@ -1359,9 +1414,8 @@ aerospike_scan_node(
 	const char* node_name, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.scan;
-	}
+	as_policy_scan merged;
+	policy = as_policy_scan_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 
@@ -1380,8 +1434,13 @@ aerospike_scan_node(
 	}
 
 	as_partition_tracker pt;
-	as_partition_tracker_init_node(&pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, node);
+	status = as_partition_tracker_init_node(&pt, cluster, &policy->base, policy->max_records,
+		policy->replica, &scan->parts_all, scan->paginate, node, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_node_release(node);
+		return status;
+	}
 
 	status = as_scan_partitions(cluster, err, policy, scan, &pt, callback, udata);
 
@@ -1401,9 +1460,8 @@ aerospike_scan_partitions(
 {
 	as_cluster* cluster = as->cluster;
 
-	if (! policy) {
-		policy = &as->config.policies.scan;
-	}
+	as_policy_scan merged;
+	policy = as_policy_scan_merge(as, policy, &merged);
 
 	uint32_t n_nodes;
 	as_status status = as_scan_partitions_validate(cluster, err, policy, scan, &n_nodes);
@@ -1439,9 +1497,8 @@ aerospike_scan_async(
 	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.scan;
-	}
+	as_policy_scan merged;
+	policy = as_policy_scan_merge(as, policy, &merged);
 
 	as_status status = as_scan_validate(err, policy, scan);
 
@@ -1458,8 +1515,12 @@ aerospike_scan_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	as_partition_tracker_init_nodes(pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, n_nodes);
+	status = as_partition_tracker_init_nodes(pt, cluster, &policy->base, policy->max_records,
+		policy->replica, &scan->parts_all, scan->paginate, n_nodes, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
 
 	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
 }
@@ -1471,9 +1532,8 @@ aerospike_scan_node_async(
 	as_event_loop* event_loop
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.scan;
-	}
+	as_policy_scan merged;
+	policy = as_policy_scan_merge(as, policy, &merged);
 
 	as_status status = as_scan_validate(err, policy, scan);
 
@@ -1491,8 +1551,12 @@ aerospike_scan_node_async(
 	}
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-	as_partition_tracker_init_node(pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, node);
+	status = as_partition_tracker_init_node(pt, cluster, &policy->base, policy->max_records,
+		policy->replica, &scan->parts_all, scan->paginate, node, err);
+
+	if (status != AEROSPIKE_OK) {
+		as_node_release(node);
+	}
 
 	status = as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata,
 									 event_loop);
@@ -1511,9 +1575,8 @@ aerospike_scan_partitions_async(
 {
 	as_cluster* cluster = as->cluster;
 
-	if (! policy) {
-		policy = &as->config.policies.scan;
-	}
+	as_policy_scan merged;
+	policy = as_policy_scan_merge(as, policy, &merged);
 
 	uint32_t n_nodes;
 	as_status status = as_scan_partitions_validate(cluster, err, policy, scan, &n_nodes);

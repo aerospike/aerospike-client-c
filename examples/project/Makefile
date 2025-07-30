@@ -104,7 +104,7 @@ ifeq ($(EVENT_LIB),libevent)
   LD_FLAGS += -levent_core -levent_pthreads
 endif
 
-LD_FLAGS += -lssl -lcrypto -lpthread -lm -lz $(LINK_SUFFIX)
+LD_FLAGS += -lssl -lcrypto -lpthread -lyaml -lm -lz $(LINK_SUFFIX)
 
 CC = cc
 

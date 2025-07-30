@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -42,10 +42,11 @@ extern "C" {
 typedef struct as_metrics_writer_s {
 	char report_dir[256];
 	FILE* file;
+	as_vector* labels;
 	uint64_t max_size;
 	uint64_t size;
-	uint32_t latency_columns;
-	uint32_t latency_shift;
+	uint8_t latency_columns;
+	uint8_t latency_shift;
 #ifdef _MSC_VER
 	FILETIME prev_process_times_kernel;
 	FILETIME prev_system_times_kernel;

@@ -21,6 +21,7 @@
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_log_macros.h>
@@ -43,9 +44,9 @@
 
 extern bool as_op_is_write[];
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 #define QUERY_FOREGROUND 1
 #define QUERY_BACKGROUND 2
@@ -137,9 +138,9 @@ typedef struct as_query_builder {
 	bool is_new;
 } as_query_builder;
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static inline void
 as_query_log_iter(uint64_t parent_id, uint64_t task_id, uint32_t iter)
@@ -766,6 +767,16 @@ as_query_command_size(
 			qb->size += AS_FIELD_HEADER_SIZE + pred->ctx_size;
 			n_fields++;
 		}
+
+		if (pred->index_name[0]) {
+			qb->size += as_command_string_field_size(pred->index_name);
+			n_fields++;
+		}
+
+		if (pred->exp) {
+			qb->size += AS_FIELD_HEADER_SIZE + pred->exp->packed_sz;
+			n_fields++;
+		}
 	}
 
 	// Estimate aggregation/background function size.
@@ -1010,6 +1021,14 @@ as_query_command_init(
 
 			p += as_cdt_ctx_pack(pred->ctx, &pk);
 		}
+
+		if (pred->index_name[0]) {
+			p = as_command_write_field_string(p, AS_FIELD_INDEX_NAME, pred->index_name);
+		}
+
+		if (pred->exp) {
+			p = as_exp_write_index(pred->exp, p);
+		}
 	}
 
 	// Write aggregation/background function.
@@ -1128,6 +1147,8 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.policy = policy;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
+	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	cmd.ns = as_partition_tables_get_ns(task->cluster, task->query->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;
@@ -1230,6 +1251,7 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.policy = policy;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
+	cmd.ns = as_partition_tables_get_ns(task->cluster, task->query->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
 	cmd.udata = task;
@@ -1610,6 +1632,9 @@ as_query_partition_execute_async(
 	as_event_executor* ee = &qe->executor;
 	uint32_t n_nodes = pt->node_parts.size;
 
+	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	const char*	global_ns = as_partition_tables_get_ns(qe->cluster, qe->executor.ns);
+
 	for (uint32_t i = 0; i < n_nodes; i++) {
 		as_node_partitions* np = as_vector_get(&pt->node_parts, i);
 
@@ -1718,7 +1743,7 @@ as_query_partition_execute_async(
 		// Reserve node because as_event_command_free() will release node
 		// on command completion.
 		as_node_reserve(cmd->node);
-		cmd->ns = NULL;
+		cmd->ns = global_ns;
 		cmd->partition = NULL;
 		cmd->udata = qe;  // Overload udata to be the executor.
 		cmd->parse_results = as_query_parse_records_async;
@@ -1926,9 +1951,49 @@ convert_query_to_scan(
 	scan->_free = query->_free;
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+static const as_policy_query*
+as_policy_query_merge(aerospike* as, const as_policy_query* src, as_policy_query* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.query;
+	}
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+		as_config* config = aerospike_load_config(as);
+		as_policy_query* cfg = &config->policies.query;
+
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_QUERY_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_QUERY_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_QUERY_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_QUERY_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->info_timeout = as_field_is_set(bitmap, AS_QUERY_INFO_TIMEOUT)?
+			cfg->info_timeout : src->info_timeout;
+		mrg->replica = as_field_is_set(bitmap, AS_QUERY_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->expected_duration = as_field_is_set(bitmap, AS_QUERY_EXPECTED_DURATION)?
+			cfg->expected_duration : src->expected_duration;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->fail_on_cluster_change = src->fail_on_cluster_change;
+		mrg->deserialize = src->deserialize;
+		mrg->short_query = src->short_query;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
+//---------------------------------
+// Functions
+//---------------------------------
 
 bool
 as_async_query_should_retry(as_event_command* cmd, as_status status)
@@ -1950,9 +2015,8 @@ aerospike_query_foreach(
 
 	as_error_reset(err);
 
-	if (! policy) {
-		policy = &as->config.policies.query;
-	}
+	as_policy_query merged;
+	policy = as_policy_query_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 	as_status status;
@@ -1967,8 +2031,12 @@ aerospike_query_foreach(
 		}
 
 		as_partition_tracker pt;
-		as_partition_tracker_init_nodes(&pt, cluster, &policy->base, query->max_records,
-			policy->replica, &query->parts_all, query->paginate, n_nodes);
+		status = as_partition_tracker_init_nodes(&pt, cluster, &policy->base, query->max_records,
+			policy->replica, &query->parts_all, query->paginate, n_nodes, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 
 		status = as_query_partitions(cluster, err, policy, query, &pt, callback, udata);
 
@@ -2104,9 +2172,8 @@ aerospike_query_partitions(
 
 	as_error_reset(err);
 
-	if (! policy) {
-		policy = &as->config.policies.query;
-	}
+	as_policy_query merged;
+	policy = as_policy_query_merge(as, policy, &merged);
 
 	uint32_t n_nodes;
 	as_status status = as_cluster_validate_size(cluster, err, &n_nodes);
@@ -2148,9 +2215,8 @@ aerospike_query_async(
 
 	as_error_reset(err);
 
-	if (! policy) {
-		policy = &as->config.policies.query;
-	}
+	as_policy_query merged;
+	policy = as_policy_query_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_status status;
@@ -2165,8 +2231,13 @@ aerospike_query_async(
 		}
 
 		as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
-		as_partition_tracker_init_nodes(pt, cluster, &policy->base, query->max_records,
-			policy->replica, &query->parts_all, query->paginate, n_nodes);
+		status = as_partition_tracker_init_nodes(pt, cluster, &policy->base, query->max_records,
+			policy->replica, &query->parts_all, query->paginate, n_nodes, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
 		return as_query_partition_async(cluster, err, policy, query, pt, listener, udata, event_loop);
 	}
 
@@ -2241,6 +2312,9 @@ aerospike_query_async(
 	// read to reuse buffer.
 	size_t s = (sizeof(as_async_query_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 
+	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	const char* global_ns = as_partition_tables_get_ns(cluster, query->ns);
+
 	// Create all query commands.
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_async_query_command* qcmd = cf_malloc(s);
@@ -2255,7 +2329,7 @@ aerospike_query_async(
 		cmd->event_loop = exec->event_loop;
 		cmd->cluster = cluster;
 		cmd->node = nodes->array[i];
-		cmd->ns = NULL;
+		cmd->ns = global_ns;
 		cmd->partition = NULL;
 		cmd->udata = executor;  // Overload udata to be the executor.
 		cmd->parse_results = as_query_parse_records_async;
@@ -2327,9 +2401,8 @@ aerospike_query_partitions_async(
 
 	as_error_reset(err);
 
-	if (! policy) {
-		policy = &as->config.policies.query;
-	}
+	as_policy_query merged;
+	policy = as_policy_query_merge(as, policy, &merged);
 
 	uint32_t n_nodes;
 	as_status status = as_cluster_validate_size(cluster, err, &n_nodes);
@@ -2353,6 +2426,9 @@ aerospike_query_partitions_async(
 	return as_query_partition_async(cluster, err, policy, query, pt, listener, udata, event_loop);
 }
 
+const as_policy_write*
+as_policy_write_merge(aerospike* as, const as_policy_write* src, as_policy_write* mrg);
+
 as_status
 aerospike_query_background(
 	aerospike* as, as_error* err, const as_policy_write* policy,
@@ -2360,10 +2436,9 @@ aerospike_query_background(
 {
 	as_error_reset(err);
 	
-	if (! policy) {
-		policy = &as->config.policies.write;
-	}
-	
+	as_policy_write merged;
+	policy = as_policy_write_merge(as, policy, &merged);
+
 	if (! (query->apply.function[0] || query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Background function or ops is required");

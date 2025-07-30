@@ -20,6 +20,7 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_buffer.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_exp.h>
@@ -134,6 +135,7 @@ as_command_init_read(
 	cmd->policy = policy;
 	cmd->node = NULL;
 	cmd->key = key;
+	cmd->ns = pi->ns;
 	cmd->partition = pi->partition;
 	cmd->parse_results_fn = fn;
 	cmd->udata = udata;
@@ -166,7 +168,7 @@ as_command_init_read(
 		cmd->flags = AS_COMMAND_FLAGS_READ;
 	}
 	cmd->replica_size = pi->replica_size;
-	cmd->replica_index = as_replica_index_init_read(cmd->replica);
+	cmd->replica_index = as_replica_index_init_read(cluster, cmd->replica);
 }
 
 static inline as_status
@@ -195,6 +197,7 @@ as_command_init_write(
 	cmd->policy = policy;
 	cmd->node = NULL;
 	cmd->key = key;
+	cmd->ns = pi->ns;
 	cmd->partition = pi->partition;
 	cmd->parse_results_fn = fn;
 	cmd->udata = udata;
@@ -203,14 +206,15 @@ as_command_init_write(
 	cmd->flags = 0;
 	cmd->replica = as_command_write_replica(replica);
 	cmd->replica_size = pi->replica_size;
-	cmd->replica_index = 0;
+	cmd->replica_index = as_replica_index_init_write(cluster, cmd->replica);
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	as_cluster_add_command_count(cluster);
 }
 
 static inline void
 as_event_command_init_read(
-	as_policy_replica replica, as_policy_read_mode_sc read_mode_sc, bool sc_mode, as_read_info* ri
+	as_cluster* cluster, as_policy_replica replica, as_policy_read_mode_sc read_mode_sc, bool sc_mode,
+	as_read_info* ri
 	)
 {
 	if (sc_mode) {
@@ -237,7 +241,7 @@ as_event_command_init_read(
 		ri->flags =  AS_ASYNC_FLAGS_READ;
 	}
 
-	ri->replica_index = as_replica_index_init_read(ri->replica);
+	ri->replica_index = as_replica_index_init_read(cluster, ri->replica);
 }
 
 static inline uint32_t
@@ -399,14 +403,54 @@ as_async_compress_command_execute(
 // Read All
 //---------------------------------
 
+static const as_policy_read*
+as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.read;
+	}
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+		as_config* config = aerospike_load_config(as);
+		as_policy_read* cfg = &config->policies.read;
+
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_READ_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_READ_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_READ_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_READ_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->replica = as_field_is_set(bitmap, AS_READ_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->read_mode_ap = as_field_is_set(bitmap, AS_READ_READ_MODE_AP)?
+			cfg->read_mode_ap : src->read_mode_ap;
+		mrg->read_mode_sc = as_field_is_set(bitmap, AS_READ_READ_MODE_SC)?
+			cfg->read_mode_sc : src->read_mode_sc;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->key = src->key;
+		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
+		mrg->deserialize = src->deserialize;
+		mrg->async_heap_rec = src->async_heap_rec;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
 as_status
 aerospike_key_get(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -449,9 +493,8 @@ aerospike_key_get_async(
 	as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -462,7 +505,7 @@ aerospike_key_get_async(
 	}
 
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
@@ -495,9 +538,8 @@ aerospike_key_select(
 	const char* bins[], as_record** rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -553,9 +595,8 @@ aerospike_key_select_async(
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -566,7 +607,7 @@ aerospike_key_select_async(
 	}
 	
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
@@ -609,9 +650,8 @@ aerospike_key_select_bins(
 	const char* bins[], uint32_t n_bins, as_record** rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -666,9 +706,8 @@ aerospike_key_select_bins_async(
 	as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -679,7 +718,7 @@ aerospike_key_select_bins_async(
 	}
 	
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
@@ -723,9 +762,8 @@ aerospike_key_exists(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -767,9 +805,8 @@ aerospike_key_exists_async(
 	as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.read;
-	}
+	as_policy_read merged;
+	policy = as_policy_read_merge(as, policy, &merged);
 	
 	as_cluster* cluster = as->cluster;
 	as_partition_info pi;
@@ -780,7 +817,7 @@ aerospike_key_exists_async(
 	}
 	
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	as_command_txn_data tdata;
 	size_t size = as_command_key_size(&policy->base, policy->key, key, false, &tdata);
@@ -870,15 +907,57 @@ as_put_write(void* udata, uint8_t* buf)
 	return as_command_write_end(buf, p);
 }
 
+const as_policy_write*
+as_policy_write_merge(aerospike* as, const as_policy_write* src, as_policy_write* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.write;
+	}
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+		as_config* config = aerospike_load_config(as);
+		as_policy_write* cfg = &config->policies.write;
+
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
+		mrg->key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+			cfg->key : src->key;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->commit_level = src->commit_level;
+		mrg->gen = src->gen;
+		mrg->exists = src->exists;
+		mrg->ttl = src->ttl;
+		mrg->compression_threshold = src->compression_threshold;
+		mrg->on_locking_only = src->on_locking_only;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
 as_status
 aerospike_key_put(
 	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.write;
-	}
-	
+	as_policy_write merged;
+	policy = as_policy_write_merge(as, policy, &merged);
+
 	as_partition_info pi;
 	as_status status = as_command_prepare_write(as, err, &policy->base, key, &pi);
 
@@ -919,9 +998,8 @@ aerospike_key_put_async_ex(
 	size_t* length, size_t* comp_length
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.write;
-	}
+	as_policy_write merged;
+	policy = as_policy_write_merge(as, policy, &merged);
 
 	as_partition_info pi;
 	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
@@ -997,14 +1075,53 @@ aerospike_key_put_async(
 // Remove
 //---------------------------------
 
+static const as_policy_remove*
+as_policy_remove_merge(aerospike* as, const as_policy_remove* src, as_policy_remove* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.remove;
+	}
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+		as_config* config = aerospike_load_config(as);
+		as_policy_remove* cfg = &config->policies.remove;
+
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+			cfg->key : src->key;
+		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->commit_level = src->commit_level;
+		mrg->gen = src->gen;
+		mrg->generation = src->generation;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
 as_status
 aerospike_key_remove(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.remove;
-	}
+	as_policy_remove merged;
+	policy = as_policy_remove_merge(as, policy, &merged);
 
 	as_partition_info pi;
 	as_status status = as_command_prepare_write(as, err, &policy->base, key, &pi);
@@ -1046,9 +1163,8 @@ aerospike_key_remove_async_ex(
 	as_pipe_listener pipe_listener, size_t* length
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.remove;
-	}
+	as_policy_remove merged;
+	policy = as_policy_remove_merge(as, policy, &merged);
 
 	as_partition_info pi;
 	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
@@ -1109,6 +1225,66 @@ typedef struct as_operate_s {
 	uint8_t info_attr;
 } as_operate;
 
+const as_policy_operate*
+as_policy_operate_merge(aerospike* as, bool is_write, const as_policy_operate* src, as_policy_operate* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+
+		if (is_write) {
+			// Write operations should not retry by default.
+			return &config->policies.operate;
+		}
+		else {
+			// Read operations should retry by default.
+			as_policy_operate_copy(&config->policies.operate, mrg);
+			mrg->base.max_retries = 2;
+			return mrg;
+		}
+	}
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+		as_config* config = aerospike_load_config(as);
+		as_policy_operate* cfg = &config->policies.operate;
+
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+			cfg->key : src->key;
+		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->read_mode_ap = as_field_is_set(bitmap, AS_READ_READ_MODE_AP)?
+			cfg->read_mode_ap : src->read_mode_ap;
+		mrg->read_mode_sc = as_field_is_set(bitmap, AS_READ_READ_MODE_SC)?
+			cfg->read_mode_sc : src->read_mode_sc;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->commit_level = src->commit_level;
+		mrg->gen = src->gen;
+		mrg->exists = src->exists;
+		mrg->ttl = src->ttl;
+		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
+		mrg->deserialize = src->deserialize;
+		mrg->on_locking_only = src->on_locking_only;
+		mrg->async_heap_rec = src->async_heap_rec;
+		mrg->respond_all_ops = src->respond_all_ops;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
+
 static as_status
 as_operate_init(
 	as_operate* oper, aerospike* as, const as_policy_operate* policy,
@@ -1166,19 +1342,8 @@ as_operate_init(
 		}
 	}
 
-	if (! policy) {
-		if (oper->write_attr & AS_MSG_INFO2_WRITE) {
-			// Write operations should not retry by default.
-			policy = &as->config.policies.operate;
-		}
-		else {
-			// Read operations should retry by default.
-			as_policy_operate_copy(&as->config.policies.operate, policy_local);
-			policy_local->base.max_retries = 2;
-			policy = policy_local;
-		}
-	}
-	oper->policy = policy;
+	bool is_write = (oper->write_attr & AS_MSG_INFO2_WRITE)? true : false;
+	policy = oper->policy = as_policy_operate_merge(as, is_write, policy, policy_local);
 
 	// When GET_ALL is specified, RESPOND_ALL_OPS must be disabled.
 	if ((respond_all_ops || policy->respond_all_ops) && !(oper->read_attr & AS_MSG_INFO1_GET_ALL)) {
@@ -1384,7 +1549,7 @@ aerospike_key_operate_async(
 		if (! (policy->base.compress && oper.size > AS_COMPRESS_THRESHOLD)) {
 			// Send uncompressed command.
 			as_read_info ri;
-			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+			as_event_command_init_read(as->cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
@@ -1404,7 +1569,7 @@ aerospike_key_operate_async(
 			size_t comp_size = as_command_compress_max_size(size);
 
 			as_read_info ri;
-			as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+			as_event_command_init_read(as->cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
@@ -1430,6 +1595,46 @@ aerospike_key_operate_async(
 //---------------------------------
 // Apply
 //---------------------------------
+
+static const as_policy_apply*
+as_policy_apply_merge(aerospike* as, const as_policy_apply* src, as_policy_apply* mrg)
+{
+	if (!src) {
+		as_config* config = aerospike_load_config(as);
+		return &config->policies.apply;
+	}
+	else if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+		as_config* config = aerospike_load_config(as);
+		as_policy_apply* cfg = &config->policies.apply;
+
+		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
+			cfg->base.socket_timeout : src->base.socket_timeout;
+		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
+			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.max_retries = as_field_is_set(bitmap, AS_WRITE_MAX_RETRIES)?
+			cfg->base.max_retries : src->base.max_retries;
+		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
+			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
+			cfg->key : src->key;
+		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
+			cfg->replica : src->replica;
+		mrg->durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
+			cfg->durable_delete : src->durable_delete;
+
+		mrg->base.filter_exp = src->base.filter_exp;
+		mrg->base.txn = src->base.txn;
+		mrg->base.compress = src->base.compress;
+		mrg->commit_level = src->commit_level;
+		mrg->ttl = src->ttl;
+		mrg->on_locking_only = src->on_locking_only;
+		return mrg;
+	}
+	else {
+		return src;
+	}
+}
 
 typedef struct as_apply_s {
 	const as_policy_apply* policy;
@@ -1497,10 +1702,9 @@ aerospike_key_apply(
 	const char* module, const char* function, as_list* arglist, as_val** result
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.apply;
-	}
-	
+	as_policy_apply merged;
+	policy = as_policy_apply_merge(as, policy, &merged);
+
 	as_partition_info pi;
 	as_status status = as_command_prepare_write(as, err, &policy->base, key, &pi);
 
@@ -1532,9 +1736,8 @@ aerospike_key_apply_async(
 	as_pipe_listener pipe_listener
 	)
 {
-	if (! policy) {
-		policy = &as->config.policies.apply;
-	}
+	as_policy_apply merged;
+	policy = as_policy_apply_merge(as, policy, &merged);
 	
 	as_partition_info pi;
 	as_status status = as_command_prepare(as->cluster, err, &policy->base, key, &pi);
@@ -1937,7 +2140,7 @@ as_txn_verify_single_async(
 	}
 
 	as_read_info ri;
-	as_event_command_init_read(policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
+	as_event_command_init_read(cluster, policy->replica, policy->read_mode_sc, pi.sc_mode, &ri);
 
 	uint16_t n_fields = 4;
 	size_t size = strlen(key->ns) + strlen(key->set) + sizeof(cf_digest) + 45;

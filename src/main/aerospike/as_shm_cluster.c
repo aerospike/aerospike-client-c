@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -44,9 +44,9 @@
 #include <sys/sysctl.h>
 #endif
 
-/******************************************************************************
- * DECLARATIONS
- ******************************************************************************/
+//---------------------------------
+// Function declarations
+//---------------------------------
 
 as_status
 as_cluster_init(as_cluster* cluster, as_error* err);
@@ -72,9 +72,9 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 void
 as_cluster_manage(as_cluster* cluster);
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 // Note on why shared memory robust mutex locks were not used:
 //
@@ -361,7 +361,7 @@ static as_status
 as_shm_reset_racks_node(as_cluster* cluster, as_error* err, as_node* node)
 {
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
-	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &node->info_socket);
+	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &node->info_socket);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -587,10 +587,12 @@ as_shm_get_replica_rack(
 	uint32_t replica_max = replica_size;
 	uint32_t seq1 = 0;
 	uint32_t seq2 = 0;
-	uint32_t rack_max = cluster->rack_ids_size;
+	as_vector* rack_ids = as_rack_ids_load(&cluster->rack_ids);
+	int* ids = rack_ids->list;
+	uint32_t rack_max = rack_ids->size;
 
 	for (uint32_t i = 0; i < rack_max; i++) {
-		int search_id = cluster->rack_ids[i];
+		int search_id = ids[i];
 		uint32_t seq = (*replica_index);
 
 		for (uint32_t j = 0; j < replica_max; j++, seq++) {
@@ -673,14 +675,17 @@ as_partition_shm_get_node(
 		case AS_POLICY_REPLICA_MASTER:
 			return as_shm_get_replica_master(p, local_nodes);
 
-		default:
-		case AS_POLICY_REPLICA_ANY:
-		case AS_POLICY_REPLICA_SEQUENCE:
-			return as_shm_get_replica_sequence(local_nodes, p, replica_size, replica_index);
-
 		case AS_POLICY_REPLICA_PREFER_RACK:
 			return as_shm_get_replica_rack(cluster, local_nodes, ns, p, prev_node, replica_size,
 				replica_index);
+
+		// The remaining replica algorithms use replica_index as the starting point
+		// and iterate till a valid node is found.
+		default:
+		case AS_POLICY_REPLICA_ANY:
+		case AS_POLICY_REPLICA_SEQUENCE:
+		case AS_POLICY_REPLICA_RANDOM:
+			return as_shm_get_replica_sequence(local_nodes, p, replica_size, replica_index);
 	}
 }
 
@@ -922,7 +927,7 @@ as_shm_create(as_cluster* cluster, as_error* err, as_config* config)
 		const char* increase_msg = "You can increase shared memory size by: sysctl -w kern.sysv.shmmax=<new_size>";
 #endif
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Shared memory max %zu has been exceeded with latest shared memory request of size %zu. %s",
+			"Shared memory max %zu has been exceeded with latest shared memory request of size %u. %s",
 			max, size, increase_msg);
 	}
 	else {

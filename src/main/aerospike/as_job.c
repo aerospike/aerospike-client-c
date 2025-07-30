@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -21,9 +21,9 @@
 #include <citrusleaf/alloc.h>
 #include <stdlib.h>
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static char*
 as_find_next(char* p)
@@ -114,9 +114,9 @@ as_job_process(char* response, as_job_info* info)
 	}
 }
 
-/******************************************************************************
- * PUBLIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 aerospike_job_wait(
@@ -147,7 +147,8 @@ aerospike_job_info(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	char cmd1[128];

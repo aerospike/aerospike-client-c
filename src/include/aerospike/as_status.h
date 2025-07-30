@@ -33,6 +33,11 @@ typedef enum as_status_e {
 	//---------------------------------
 
 	/**
+	 * There is a conflict between metrics enable/disable and dynamic configuration metrics.
+	 */
+	AEROSPIKE_METRICS_CONFLICT = -20,
+
+	/**
 	 * Transaction commit called, but the transaction was already aborted.
 	 */
 	AEROSPIKE_TXN_ALREADY_ABORTED = -19,

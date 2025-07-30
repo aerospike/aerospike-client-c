@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 Aerospike, Inc.
+ * Copyright 2021-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -397,6 +397,14 @@ uint8_t*
 as_exp_write(as_exp* exp, uint8_t* ptr)
 {
 	ptr = as_command_write_field_header(ptr, AS_FIELD_FILTER, exp->packed_sz);
+	memcpy(ptr, exp->packed, exp->packed_sz);
+	return ptr += exp->packed_sz;
+}
+
+uint8_t*
+as_exp_write_index(as_exp* exp, uint8_t* ptr)
+{
+	ptr = as_command_write_field_header(ptr, AS_FIELD_INDEX_EXPRESSION, exp->packed_sz);
 	memcpy(ptr, exp->packed, exp->packed_sz);
 	return ptr += exp->packed_sz;
 }

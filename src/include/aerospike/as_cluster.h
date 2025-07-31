@@ -500,6 +500,7 @@ struct aerospike_s;
 //---------------------------------
 // Functions
 //---------------------------------
+
 /**
  * Create and initialize cluster.
  */

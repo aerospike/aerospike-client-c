@@ -22,7 +22,6 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_latency.h>
-#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_queue.h>

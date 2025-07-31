@@ -808,64 +808,67 @@ static bool
 as_event_recover_parse_results(as_event_command* cmd)
 {
 	printf("IN as_event_recover_parse_results\n");
+	// TODO: Handle batch/scan/query as well.
 	as_event_response_complete(cmd);
 	as_event_command_release(cmd);
 	return true;
 }
 
 void
-as_event_conn_abort(as_event_command* cmd)
+as_event_recover_abort(as_event_command* cmd)
 {
-	printf("IN as_event_conn_abort\n");
-	// The caller handles cleanup on errors.
-	// TODO: Delete?
-}
-
-bool
-as_event_recover_conn(as_event_command* orig)
-{
-	printf("IN as_event_recover_conn\n");
-	as_event_command* cmd = cf_malloc(sizeof(as_recover_command) + orig->read_capacity);
-
-	// Copy original command to a new connection drain command.
-	memcpy(cmd, orig, sizeof(as_event_command));
-	orig->conn = NULL;
-
-	// Copy buffer contents.
-	cmd->buf = ((uint8_t*)cmd) + sizeof(as_recover_command);
-
-	if (orig->pos > 0) {
-		memcpy(cmd->buf, orig->buf, orig->pos);
-	}
-
-	cmd->type = AS_ASYNC_TYPE_CONN_RECOVER;
-	cmd->txn = NULL;
-	cmd->ubuf = NULL;
-	cmd->ubuf_size = 0;
-	cmd->parse_results = as_event_recover_parse_results;
-	cmd->max_retries = 0;
-	cmd->event_loop->pending++;
-	cmd->event_state->pending++;
-
-	as_node_reserve(cmd->node);
-	as_event_timer_once(cmd, cmd->timeout_delay);
-	cmd->timeout_delay = 0;
-	return true;
+	printf("IN as_event_recover_abort\n");
+	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	as_event_command_release(cmd);
 }
 
 static bool
 as_event_recover_connection(as_event_command* cmd)
 {
-	if (cmd->timeout_delay > 0) {
-		switch (cmd->state) {
-			case AS_ASYNC_STATE_AUTH_READ_HEADER:
-			case AS_ASYNC_STATE_AUTH_READ_BODY:
-			case AS_ASYNC_STATE_COMMAND_READ_HEADER:
-			case AS_ASYNC_STATE_COMMAND_READ_BODY:
-				return as_event_recover_conn(cmd);
-		}
+	if (cmd->timeout_delay == 0) {
+		return false;
 	}
-	return false;
+
+	switch (cmd->state) {
+		case AS_ASYNC_STATE_AUTH_READ_HEADER:  // TODO: Handle.
+		case AS_ASYNC_STATE_AUTH_READ_BODY:    // TODO: Handle.
+		case AS_ASYNC_STATE_COMMAND_READ_HEADER:
+		case AS_ASYNC_STATE_COMMAND_READ_BODY: // TODO: Handle.
+			break;
+
+		default:
+			return false;
+	}
+
+	printf("IN as_event_recover_conn\n");
+	as_event_command* recover = cf_malloc(sizeof(as_recover_command) + cmd->read_capacity);
+
+	// Copy original command to a new connection drain command.
+	memcpy(recover, cmd, sizeof(as_event_command));
+	cmd->conn = NULL;
+
+	// Copy buffer contents.
+	recover->buf = ((uint8_t*)recover) + sizeof(as_recover_command);
+
+	if (cmd->pos > 0) {
+		memcpy(recover->buf, cmd->buf, cmd->pos);
+	}
+
+	recover->type = AS_ASYNC_TYPE_CONN_RECOVER;
+	recover->txn = NULL;
+	recover->ubuf = NULL;
+	recover->ubuf_size = 0;
+	recover->parse_results = as_event_recover_parse_results;
+	recover->max_retries = 0;
+	recover->event_loop->pending++;
+	recover->event_state->pending++;
+	recover->timeout_delay = 0;
+
+	as_node_reserve(recover->node);
+
+	// Schedule timeout for connection recovery.
+	as_event_timer_once(recover, cmd->timeout_delay);
+	return true;
 }
 
 void
@@ -964,7 +967,7 @@ as_event_process_timer(as_event_command* cmd)
 		default:
 			if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
 				// Abort connection recovery.
-				as_event_conn_abort(cmd);
+				as_event_recover_abort(cmd);
 			}
 			else {
 				// Total timeout normal commands.
@@ -1429,7 +1432,8 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 			as_event_executor_error(cmd->udata, err, 1);
 			break;
 		case AS_ASYNC_TYPE_CONN_RECOVER:
-			as_event_conn_abort(cmd);
+			// There is no listener in connection recovery.
+			printf("AS_ASYNC_TYPE_CONN_RECOVER error\n");
 			break;
 		default:
 			// Handle command that is part of a group (scan, query).

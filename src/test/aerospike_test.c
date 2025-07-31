@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -345,7 +345,18 @@ static bool before(atf_plan* plan)
 
 	cf_free(result);
 
-	if (aerospike_info_any(as, &err, NULL, "get-config:context=namespace;id=test", &result)
+	as_version min = {8, 1, 0, 0};
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	as_version server_version = (nodes->size > 0)? nodes->array[0]->version : min;
+	as_nodes_release(nodes);
+
+	const char* ns_field_name = (as_version_compare(&server_version, &min) >= 0)?
+		"namespace" : "id";
+
+	char command[1024];
+	snprintf(command, sizeof(command), "get-config:context=namespace;%s=test", ns_field_name);
+
+	if (aerospike_info_any(as, &err, NULL, command, &result)
 		!= AEROSPIKE_OK) {
 		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
 		aerospike_close(as, &err);

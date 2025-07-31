@@ -27,7 +27,7 @@ extern "C" {
 // N: minor
 // P: patch
 // B: build id
-#define AEROSPIKE_CLIENT_VERSION 700040000L
+#define AEROSPIKE_CLIENT_VERSION 701000000L
 
 AS_EXTERN extern char* aerospike_client_version;
 

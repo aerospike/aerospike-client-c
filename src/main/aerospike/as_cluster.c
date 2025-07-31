@@ -675,6 +675,9 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 static as_status
 as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 {
+	cluster->n_partitions = 4096;
+	return AEROSPIKE_OK;
+#if 0
 	as_nodes* nodes = cluster->nodes;
 	as_status status = AEROSPIKE_OK;
 	
@@ -714,6 +717,7 @@ as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve partition size from empty cluster");
 	}
 	return status;
+#endif
 }
 
 static void

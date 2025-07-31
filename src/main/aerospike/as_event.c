@@ -845,6 +845,8 @@ as_event_recover_connection(as_event_command* cmd)
 
 	// Copy original command to a new connection drain command.
 	memcpy(recover, cmd, sizeof(as_event_command));
+	as_async_connection* conn = (as_async_connection*)recover->conn;
+	conn->cmd = recover;
 	cmd->conn = NULL;
 
 	// Copy buffer contents.

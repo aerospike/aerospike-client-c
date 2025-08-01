@@ -866,6 +866,10 @@ as_event_recover_connection(as_event_command* cmd)
 	recover->event_state->pending++;
 	recover->timeout_delay = 0;
 
+	// Socket write variables should never be referenced when in a read state.
+	recover->write_offset = (uint32_t)sizeof(as_recover_command);
+	recover->write_len = 0;
+
 	as_node_reserve(recover->node);
 
 	// Schedule timeout for connection recovery.

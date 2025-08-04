@@ -190,13 +190,6 @@ typedef struct aerospike_s {
 
 	/**
 	 * @private
-	 * If pending, the aerospike instance is scheduled to be destroyed after
-	 * pending async commands are completed.
-	 */
-	bool pending;
-
-	/**
-	 * @private
 	 * If true, then aerospike_destroy() will free this instance.
 	 */
 	bool _free;

@@ -54,7 +54,6 @@ aerospike_defaults(aerospike* as, bool free, as_config* config)
 	as->cluster = NULL;
 	as->config_orig = NULL;
 	as->config_bitmap = NULL;
-	as->pending = false;
 	as->_free = free;
 
 	if (config) {
@@ -208,10 +207,10 @@ aerospike_destroy_internal(aerospike* as)
 void
 aerospike_destroy(aerospike* as)
 {
-	// The client is waiting for pending async commands to complete.
-	// When complete, aerospike_destroy() is automatically called, so
-	// return here.
-	if (as->pending) {
+	if (as_event_loop_size > 0 && !as_event_single_thread) {
+		// The client is waiting for pending async commands to complete.
+		// When complete, aerospike_destroy() is automatically called, so
+		// return here.
 		return;
 	}
 
@@ -341,7 +340,6 @@ aerospike_close(aerospike* as, as_error* err)
 		
 		if (as_event_loop_size > 0 && !as_event_single_thread) {
 			// Async configurations will attempt to wait till pending async commands have completed.
-			as->pending = true;
 			as_event_close_cluster(as);
 		}
 		else {

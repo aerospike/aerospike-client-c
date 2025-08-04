@@ -287,7 +287,7 @@ void
 as_event_create_connections(as_node* node, as_async_conn_pool* pools);
 
 void
-as_event_close_cluster(as_cluster* cluster);
+as_event_close_cluster(aerospike* as);
 
 //----------------------------------
 // Implementation Specific Functions

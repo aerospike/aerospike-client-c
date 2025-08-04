@@ -1,11 +1,13 @@
 #include <aerospike/fuzzer.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_proto.h>
+#include <citrusleaf/cf_byte_order.h>
 #include <stdlib.h>
 #include <time.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+#include <inttypes.h>
 
 // Global fuzzer state
 static bool g_fuzz_enabled = false;
@@ -78,24 +80,85 @@ static void fuzz_init(void) {
 
 #define print_err(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 
-void parse_cmd(as_command* cmd){
-    as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
-    as_msg* msg = &proto_msg->m;
-    fprintf(stderr, "---DEBUG--- in parse_cmd:\n");
-    print_err("Parsing msg:");
-    print_err("info1: %d\n", msg->info1);
-    print_err("info2: %d\n", msg->info2);
-    print_err("info3: %d\n", msg->info3);
-    print_err("info4: %d\n", msg->unused);
-    print_err("result_code: %d\n", msg->result_code);
-    print_err("generation: %d\n", msg->generation);
-    print_err("record_ttl: %d\n", msg->record_ttl);
-    print_err("transaction_ttl: %d\n", msg->transaction_ttl);
-    print_err("n_fields: %d\n", msg->n_fields);
-    print_err("n_ops: %d\n", msg->n_ops);
-    print_err("data: %s\n", msg->data);
+void parse_cmd_data(as_msg* msg){
+    // as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
+    // as_msg msg = proto_msg->m;
+    fprintf(stderr, "---DEBUG--- in parse_cmd_data:\n");
+    uint8_t* data = msg + sizeof(as_msg);
+    for (size_t i = 0; i < msg->n_fields; i++) {
+        as_msg_field* field = (as_msg_field*) data;
+
+        uint32_t field_sz = cf_swap_from_be32(field->field_sz);
+        print_err("field[%zu]: type=%u, size=%u\n", i, field->type, field_sz);
+        
+        // field_sz includes the type byte, so data size is field_sz - 1
+        uint8_t* field_data = field->data;
+        for (size_t j = 0; j < field_sz - 1; j++) {
+            print_err("%02x ", field_data[j]);
+        }
+        print_err("\n");
+
+        // Advance past the entire field: 4-byte size + field_sz bytes (which includes type + data)
+        data += sizeof(uint32_t) + field_sz;
+    }
+    for (size_t i = 0; i < msg->n_ops; i++) {
+        print_err("TODO: print op %d\n", i);
+        // as_msg_op* op = (as_msg_op*) data;
+        // print_err("op[%zu]: %u\n", i, op->op);
+        // data += op->op_sz;
+    }
+
+    // as_op* ops = (as_op*) msg->ops;
+    // for (size_t i = 0; i < msg->n_ops; i++) {
+    //     print_err("op[%zu]: %u\n", i, ops[i].op);
+    // }
 }
 
+void parse_cmd(as_command* cmd){
+    as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
+    as_msg tmp = proto_msg->m;
+    as_msg* msg = &tmp;
+
+    as_msg_swap_header_from_be(msg);
+    // msg->n_fields = cf_swap_from_be16(msg->n_fields);
+    // msg->n_ops = cf_swap_from_be16(msg->n_ops);
+    // msg->generation = cf_swap_from_be32(msg->generation);
+    // msg->record_ttl = cf_swap_from_be32(msg->record_ttl);
+    // msg->transaction_ttl = cf_swap_from_be32(msg->transaction_ttl);
+
+    fprintf(stderr, "---DEBUG--- in parse_cmd:\n");
+    print_err("Parsing msg:\n");
+    print_err("info1: %u\n", msg->info1);
+    print_err("info2: %u\n", msg->info2);
+    print_err("info3: %u\n", msg->info3);
+    print_err("info4: %u\n", msg->unused);
+    print_err("result_code: %u\n", msg->result_code);
+    print_err("generation: %" PRIu32 "\n", msg->generation);
+    print_err("record_ttl: %" PRIu32 "\n", msg->record_ttl);
+    print_err("transaction_ttl: %" PRIu32 "\n", msg->transaction_ttl);
+    print_err("n_fields: %u\n", msg->n_fields);
+    print_err("n_ops: %u\n", msg->n_ops);
+    size_t data_sz = cmd->buf_size - sizeof(as_proto_msg);
+    print_err("data: [binary data, %zu bytes available]\n", data_sz);
+
+    for (size_t i = 0; i < data_sz; i++) {
+        print_err("%02x ", cmd->buf[i]);
+    }
+    print_err("\n");
+    // print the data
+    parse_cmd_data(msg);
+    // print_err("data: [");
+    // for (size_t i = 0; i < cmd->buf_size; i++) {
+    //     print_err("%02x ", cmd->buf[i]);
+    // }
+    // print_err("]\n");
+}
+
+void parse_ops(as_command* cmd){
+    as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
+    as_msg* msg = &proto_msg->m;
+
+}
 
 void fuzz(as_command* cmd) {
     parse_cmd(cmd);
@@ -198,7 +261,7 @@ void fuzz_infos(uint8_t* infos){
 
 }
 
-void fuzz_misc(u_int8_t) {
+void fuzz_misc(u_int8_t other) {
     // fields between info & data:
         // uint8_t result_code;
         // uint32_t generation;

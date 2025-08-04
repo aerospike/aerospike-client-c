@@ -14,6 +14,24 @@ struct as_command_s;
  */
 void fuzz(struct as_command_s* cmd);
 
+
+
+typedef struct as_msg_field_s {
+	uint32_t field_sz; // includes type
+	uint8_t type;
+	uint8_t data[0];
+} __attribute__((__packed__)) as_msg_field;
+
+typedef struct as_msg_op_s {
+	uint32_t op_sz; // includes everything past this
+	uint8_t op;
+	uint8_t particle_type;
+	uint8_t has_lut: 1;
+	uint8_t unused_flags: 7;
+	uint8_t name_sz;
+	uint8_t name[0];
+	// Note - optional metadata (lut) and op value follows name.
+} __attribute__((__packed__)) as_msg_op;
 // /**
 //  * Enable/disable fuzzing globally
 //  * 

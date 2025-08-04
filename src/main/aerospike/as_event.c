@@ -57,6 +57,7 @@ static pthread_mutex_t as_event_lock = PTHREAD_MUTEX_INITIALIZER;
 
 as_status aerospike_library_init(as_error* err);
 int as_batch_retry_async(as_event_command* cmd, bool timeout);
+void aerospike_destroy_internal(aerospike* as);
 
 //---------------------------------
 // Functions
@@ -2217,6 +2218,7 @@ as_event_node_balance_connections(as_cluster* cluster, as_node* node)
 
 typedef struct {
 	as_monitor* monitor;
+	aerospike* as;
 	as_cluster* cluster;
 	uint32_t event_loop_count;
 } as_event_close_state;
@@ -2231,6 +2233,7 @@ as_event_close_cluster_event_loop(
 	if (as_aaf_uint32_rls(&state->event_loop_count, -1) == 0) {
 		as_fence_acq();
 		as_cluster_destroy(state->cluster);
+		aerospike_destroy_internal(state->as);
 
 		if (state->monitor) {
 			as_monitor_notify(state->monitor);
@@ -2262,7 +2265,7 @@ as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state
 }
 
 void
-as_event_close_cluster(as_cluster* cluster)
+as_event_close_cluster(aerospike* as)
 {
 	if (as_event_loop_size == 0) {
 		return;
@@ -2277,7 +2280,8 @@ as_event_close_cluster(as_cluster* cluster)
 
 	as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
 	state->monitor = monitor;
-	state->cluster = cluster;
+	state->as = as;
+	state->cluster = as->cluster;
 	state->event_loop_count = as_event_loop_size;
 
 	// Send cluster close notification to async event loops.

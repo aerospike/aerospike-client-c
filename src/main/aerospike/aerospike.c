@@ -347,8 +347,8 @@ aerospike_close(aerospike* as, as_error* err)
 		else {
 			// Close sync only configurations immediately.
 			as_cluster_destroy(cluster);
+			as->cluster = NULL;
 		}
-		as->cluster = NULL;
 	}
 	return err->code;
 }

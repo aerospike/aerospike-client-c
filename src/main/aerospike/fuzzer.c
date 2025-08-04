@@ -83,8 +83,8 @@ static void fuzz_init(void) {
 void parse_cmd_data(as_msg* msg){
     // as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
     // as_msg msg = proto_msg->m;
-    fprintf(stderr, "---DEBUG--- in parse_cmd_data:\n");
-    uint8_t* data = msg + sizeof(as_msg);
+    fprintf(stderr, "---DEBUG--- in parse_cmd_data --\n");
+    uint8_t* data = msg->data;
     for (size_t i = 0; i < msg->n_fields; i++) {
         as_msg_field* field = (as_msg_field*) data;
 
@@ -101,11 +101,29 @@ void parse_cmd_data(as_msg* msg){
         // Advance past the entire field: 4-byte size + field_sz bytes (which includes type + data)
         data += sizeof(uint32_t) + field_sz;
     }
+    // now data points to the first byte of the ops
     for (size_t i = 0; i < msg->n_ops; i++) {
-        print_err("TODO: print op %d\n", i);
-        // as_msg_op* op = (as_msg_op*) data;
-        // print_err("op[%zu]: %u\n", i, op->op);
-        // data += op->op_sz;
+        as_msg_op* op = (as_msg_op*) data;
+        uint32_t op_sz = cf_swap_from_be32(op->op_sz);
+        print_err("op[%zu]: op_sz=%u, op=%u, particle_type=%u, has_lut=%u, name_sz=%u, name=", 
+                        i, op_sz, op->op, op->particle_type, op->has_lut, op->name_sz);
+        for (size_t j = 0; j < op->name_sz; j++) {
+            print_err("%c ", op->name[j]);
+        }   
+        print_err("\n");
+
+        print_err("op value:\n");
+        
+        // FIXME: not getting output for op value
+        for (uint8_t* op_data = op->name + op->name_sz, 
+                        stop = data + op_sz; 
+                        op_data < stop; ++op_data) {
+            print_err("%c", (char)*op_data);
+        }
+        print_err("\n");
+
+        // Advance past the entire op: 4-byte size + op_sz bytes (which includes everything past this)
+        data += op_sz + sizeof(uint32_t);
     }
 
     // as_op* ops = (as_op*) msg->ops;
@@ -114,12 +132,20 @@ void parse_cmd_data(as_msg* msg){
     // }
 }
 
+void copy_be_msg_to_host(as_msg* src, as_msg* dest, size_t sz){
+    memcpy(dest, src, sz);
+    as_msg_swap_header_from_be(dest);
+}
+
 void parse_cmd(as_command* cmd){
     as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
-    as_msg tmp = proto_msg->m;
-    as_msg* msg = &tmp;
+    // as_msg tmp = proto_msg->m;
+    // as_msg* msg = &tmp;
 
-    as_msg_swap_header_from_be(msg);
+    as_msg* msg = malloc(cmd->buf_size - 8);
+    copy_be_msg_to_host(&proto_msg->m, msg, cmd->buf_size - 8);
+    // as_msg_swap_header_from_be(msg);
+
     // msg->n_fields = cf_swap_from_be16(msg->n_fields);
     // msg->n_ops = cf_swap_from_be16(msg->n_ops);
     // msg->generation = cf_swap_from_be32(msg->generation);
@@ -141,10 +167,16 @@ void parse_cmd(as_command* cmd){
     size_t data_sz = cmd->buf_size - sizeof(as_proto_msg);
     print_err("data: [binary data, %zu bytes available]\n", data_sz);
 
-    for (size_t i = 0; i < data_sz; i++) {
+    for (size_t i = 30; i < 30 +data_sz; i++) {
         print_err("%02x ", cmd->buf[i]);
     }
     print_err("\n");
+    
+    for (size_t i = 0; i < data_sz; i++) {
+        print_err("%02x ", msg->data[i]);
+    }
+    print_err("\n");
+        
     // print the data
     parse_cmd_data(msg);
     // print_err("data: [");
@@ -269,4 +301,8 @@ void fuzz_misc(u_int8_t other) {
         // uint32_t transaction_ttl;
         // uint16_t n_fields;
         // uint16_t n_ops;
+}
+
+void fuzz_expr(uint8_t* expr){
+
 }

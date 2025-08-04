@@ -51,10 +51,11 @@ static bool library_initialized = false;
 static aerospike*
 aerospike_defaults(aerospike* as, bool free, as_config* config)
 {
-	as->_free = free;
 	as->cluster = NULL;
 	as->config_orig = NULL;
 	as->config_bitmap = NULL;
+	as->pending = false;
+	as->_free = free;
 
 	if (config) {
 		memcpy(&as->config, config, sizeof(as_config));
@@ -180,7 +181,8 @@ aerospike_init_lua(as_config_lua* config)
 /**
  * Destroy the aerospike instance
  */
-void aerospike_destroy(aerospike* as)
+void
+aerospike_destroy_internal(aerospike* as)
 {
 	as_config_destroy(&as->config);
 
@@ -198,6 +200,22 @@ void aerospike_destroy(aerospike* as)
 	if (as->_free) {
 		cf_free(as);
 	}
+}
+
+/**
+ * Destroy the aerospike instance
+ */
+void
+aerospike_destroy(aerospike* as)
+{
+	// The client is waiting for pending async commands to complete.
+	// When complete, aerospike_destroy() is automatically called, so
+	// return here.
+	if (as->pending) {
+		return;
+	}
+
+	aerospike_destroy_internal(as);
 }
 
 /**
@@ -293,7 +311,7 @@ aerospike_connect(aerospike* as, as_error* err)
 	return status;
 }
 
-void as_event_close_cluster(as_cluster* cluster);
+void as_event_close_cluster(aerospike* as);
 
 /**
  * Close connections to the cluster
@@ -323,7 +341,8 @@ aerospike_close(aerospike* as, as_error* err)
 		
 		if (as_event_loop_size > 0 && !as_event_single_thread) {
 			// Async configurations will attempt to wait till pending async commands have completed.
-			as_event_close_cluster(cluster);
+			as->pending = true;
+			as_event_close_cluster(as);
 		}
 		else {
 			// Close sync only configurations immediately.

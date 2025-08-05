@@ -805,36 +805,53 @@ typedef struct {
 	uint8_t space[];
 } as_recover_command;
 
-static bool
-as_event_recover_parse_results(as_event_command* cmd)
+void
+as_event_recover_success(as_event_command* cmd)
 {
-	printf("IN as_event_recover_parse_results\n");
-	// TODO: Handle batch/scan/query as well.
+	printf("IN as_event_recover_success\n");
 	as_event_response_complete(cmd);
 	as_event_command_release(cmd);
-	return true;
+	// TOOD: Add conns_recovered to metrics.
 }
 
 void
 as_event_recover_abort(as_event_command* cmd)
 {
 	printf("IN as_event_recover_abort\n");
+	// TOOD: Add conns_aborted to metrics.
+}
+
+void
+as_event_recover_timeout(as_event_command* cmd)
+{
+	printf("IN as_event_recover_timeout\n");
+	as_event_recover_abort(cmd);
 	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
 	as_event_command_release(cmd);
 }
 
 static bool
+as_event_recover_parse_results(as_event_command* cmd)
+{
+	printf("IN as_event_recover_parse_results\n");
+	// TODO: Handle batch/scan/query as well.
+	as_event_recover_success(cmd);
+	return true;
+}
+
+static bool
 as_event_recover_connection(as_event_command* cmd)
 {
+	// TODO: Handle batch/scan/query.
 	if (cmd->timeout_delay == 0) {
 		return false;
 	}
 
 	switch (cmd->state) {
-		case AS_ASYNC_STATE_AUTH_READ_HEADER:  // TODO: Handle.
-		case AS_ASYNC_STATE_AUTH_READ_BODY:    // TODO: Handle.
+		case AS_ASYNC_STATE_AUTH_READ_HEADER:
+		case AS_ASYNC_STATE_AUTH_READ_BODY:
 		case AS_ASYNC_STATE_COMMAND_READ_HEADER:
-		case AS_ASYNC_STATE_COMMAND_READ_BODY: // TODO: Handle.
+		case AS_ASYNC_STATE_COMMAND_READ_BODY:
 			break;
 
 		default:
@@ -974,7 +991,7 @@ as_event_process_timer(as_event_command* cmd)
 		default:
 			if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
 				// Abort connection recovery.
-				as_event_recover_abort(cmd);
+				as_event_recover_timeout(cmd);
 			}
 			else {
 				// Total timeout normal commands.
@@ -1439,8 +1456,7 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 			as_event_executor_error(cmd->udata, err, 1);
 			break;
 		case AS_ASYNC_TYPE_CONN_RECOVER:
-			// There is no listener in connection recovery.
-			printf("AS_ASYNC_TYPE_CONN_RECOVER error\n");
+			as_event_recover_abort(cmd);
 			break;
 		default:
 			// Handle command that is part of a group (scan, query).

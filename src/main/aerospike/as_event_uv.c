@@ -443,6 +443,11 @@ as_uv_command_start(as_event_command* cmd, uv_stream_t* stream)
 		return;
 	}
 
+	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
+		as_event_recover_success(cmd);
+		return;
+	}
+
 	as_uv_command_write_start(cmd, stream);
 }
 
@@ -950,6 +955,11 @@ as_uv_tls_command_start(as_event_command* cmd)
 
 	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
 		as_event_connector_success(cmd);
+		return;
+	}
+
+	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
+		as_event_recover_success(cmd);
 		return;
 	}
 

@@ -9,11 +9,32 @@
 #include <string.h>
 #include <inttypes.h>
 
+#define print_err(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
+
+
+#define FUZZ_AS_MSG        (1 << 15)
+#define FUZZ_AS_MSG_COMP   (1 << 14) // Not supported yet
+#define FUZZ_INFO          (1 << 13) // Not supported yet
+#define FUZZ_ADMIN_SEC     (1 << 12) // Not supported yet
+
+// Subflags under FUZZ_AS_MSG
+#define FUZZ_OPS           (1 << 11)
+#define FUZZ_FIELDS        (1 << 10)
+#define FUZZ_OP_COUNT      (1 << 9)
+#define FUZZ_FIELD_CT      (1 << 8)
+#define FUZZ_TXN_TTLS      (1 << 7)
+#define FUZZ_REC_TTLS      (1 << 6)
+#define FUZZ_GENS          (1 << 5)
+#define FUZZ_INFO4         (1 << 4)
+#define FUZZ_INFO1         (1 << 1)
+#define FUZZ_PROTO_SZ      (1 << 0)
+
+
 // Global fuzzer state
 static bool g_fuzz_enabled = false;
 static double g_fuzz_probability = 0.01;  // 1% chance by default
 static bool g_fuzz_initialized = false;
-
+static uint16_t g_fuzz_control_bus = 0x0;
 
 /**
  * Check if fuzzing is enabled by checking the environment variable
@@ -34,6 +55,50 @@ static bool fuzzing_enabled(void){
 }
 
 
+uint16_t get_fuzz_ctrl_flags() {
+    const char* env = getenv("AEROSPIKE_FUZZ_CTRL");
+    if (!env) {
+        return 0;
+    }
+
+    // Read the env var as hex or decimal (auto-detect)
+    return (uint16_t)strtoul(env, NULL, 0);
+}
+
+
+void check_fuzzing_flags(uint16_t flags) {
+    if (flags & FUZZ_AS_MSG) {
+        printf("FUZZ: as_msg enabled\n");
+
+        if (flags & FUZZ_OPS)        printf("  - fuzz ops\n");
+        if (flags & FUZZ_FIELDS)     printf("  - fuzz fields\n");
+        if (flags & FUZZ_OP_COUNT)   printf("  - fuzz op_count\n");
+        if (flags & FUZZ_FIELD_CT)   printf("  - fuzz field_ct\n");
+        if (flags & FUZZ_TXN_TTLS)   printf("  - fuzz txn_TTLs\n");
+        if (flags & FUZZ_REC_TTLS)   printf("  - fuzz rec_TTLs\n");
+        if (flags & FUZZ_GENS)       printf("  - fuzz gens\n");
+        if (flags & FUZZ_INFO4)      printf("  - fuzz info4\n");
+        if (flags & FUZZ_INFO1)      printf("  - fuzz info1\n");
+        if (flags & FUZZ_PROTO_SZ)   printf("  - fuzz proto.sz\n");
+    }
+
+    if (flags & FUZZ_AS_MSG_COMP) {
+        printf("FUZZ: as_msg_comp is set (not supported yet)\n");
+        // If supported later:
+        // Decompress message and reuse lower 12 bits to fuzz similarly
+    }
+
+    if (flags & FUZZ_INFO) {
+        printf("FUZZ: info fuzzing is set (not supported yet)\n");
+    }
+
+    if (flags & FUZZ_ADMIN_SEC) {
+        printf("FUZZ: admin/security fuzzing is set (not supported yet)\n");
+    }
+}
+
+
+
 /**
  * Initialize the fuzzer 
  *  - seed PRNG and set globals based on env vars:
@@ -44,47 +109,32 @@ static void fuzz_init(void) {
     if (!g_fuzz_initialized) {
         fprintf(stderr, "Fuzzer: initializing...\n");
         srand((unsigned int)time(NULL));
+        g_fuzz_control_bus = get_fuzz_ctrl_flags();
 
         // Check environment variables for configuration
-        const char* fuzz_prob = getenv("AEROSPIKE_FUZZ_PROBABILITY");
-        fprintf(stderr, "Fuzzer: AEROSPIKE_FUZZ_PROBABILITY = '%s'\n", fuzz_prob ? fuzz_prob : "NULL");
-        if (fuzz_prob) {
-            double prob = atof(fuzz_prob);
-            if (prob >= 0.0 && prob <= 1.0) {
-                g_fuzz_probability = prob;
-                fprintf(stderr, "Fuzzer: probability set to %.3f via environment variable\n", g_fuzz_probability);
-            } else {
-                fprintf(stderr, "Fuzzer: invalid probability value: %f\n", prob);
-            }
-        }
+        // const char* fuzz_prob = getenv("AEROSPIKE_FUZZ_PROBABILITY");
+        // fprintf(stderr, "Fuzzer: AEROSPIKE_FUZZ_PROBABILITY = '%s'\n", fuzz_prob ? fuzz_prob : "NULL");
+        // if (fuzz_prob) {
+        //     double prob = atof(fuzz_prob);
+        //     if (prob >= 0.0 && prob <= 1.0) {
+        //         g_fuzz_probability = prob;
+        //         fprintf(stderr, "Fuzzer: probability set to %.3f via environment variable\n", g_fuzz_probability);
+        //     } else {
+        //         fprintf(stderr, "Fuzzer: invalid probability value: %f\n", prob);
+        //     }
+        // }
         g_fuzz_initialized = true;
     }
 }
 
-// void fuzz_set_enabled(bool enabled) {
-//     g_fuzz_enabled = enabled;
-//     if (enabled) {
-//         fuzz_init();
-//         fprintf(stderr, "Fuzzer: ENABLED (probability: %.3f)\n", g_fuzz_probability);
-//     } else {
-//         fprintf(stderr, "Fuzzer: DISABLED\n");
-//     }
-// }
-
-// void fuzz_set_probability(double probability) {
-//     if (probability < 0.0) probability = 0.0;
-//     if (probability > 1.0) probability = 1.0;
-//     g_fuzz_probability = probability;
-//     fprintf(stderr, "Fuzzer: probability set to %.3f\n", g_fuzz_probability);
-// }
-
-#define print_err(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
 
 void parse_cmd_data(as_msg* msg){
     // as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
     // as_msg msg = proto_msg->m;
     fprintf(stderr, "---DEBUG--- in parse_cmd_data --\n");
     uint8_t* data = msg->data;
+
+    // Parse fields
     for (size_t i = 0; i < msg->n_fields; i++) {
         as_msg_field* field = (as_msg_field*) data;
 
@@ -100,8 +150,9 @@ void parse_cmd_data(as_msg* msg){
 
         // Advance past the entire field: 4-byte size + field_sz bytes (which includes type + data)
         data += sizeof(uint32_t) + field_sz;
-    }
-    // now data points to the first byte of the ops
+    } // now data points to the first byte of the ops
+
+    // Parse ops
     for (size_t i = 0; i < msg->n_ops; i++) {
         as_msg_op* op = (as_msg_op*) data;
         uint32_t op_sz = cf_swap_from_be32(op->op_sz);
@@ -113,23 +164,16 @@ void parse_cmd_data(as_msg* msg){
         print_err("\n");
 
         print_err("op value:\n");
-        
-        // FIXME: not getting output for op value
         for (uint8_t* op_data = op->name + op->name_sz, 
-                        stop = data + op_sz; 
-                        op_data < stop; ++op_data) {
-            print_err("%c", (char)*op_data);
-        }
+                        stop = data + sizeof(uint32_t) + op_sz; 
+                        op_data < stop; ++op_data)
+            print_err("%02x ", *op_data);
+
         print_err("\n");
 
         // Advance past the entire op: 4-byte size + op_sz bytes (which includes everything past this)
         data += op_sz + sizeof(uint32_t);
     }
-
-    // as_op* ops = (as_op*) msg->ops;
-    // for (size_t i = 0; i < msg->n_ops; i++) {
-    //     print_err("op[%zu]: %u\n", i, ops[i].op);
-    // }
 }
 
 void copy_be_msg_to_host(as_msg* src, as_msg* dest, size_t sz){
@@ -229,7 +273,8 @@ void fuzz(as_command* cmd) {
         if (random_val < g_fuzz_probability) {
             uint8_t original = cmd->buf[i];
 
-            // Choose a fuzzing strategy (randomly)
+            // Dont choose zero-out strategy if the byte is already zero
+            int num_strategies = cmd->buf[i] ? 4 : 3;
             int strategy = rand() % 4;
 
             switch (strategy) {

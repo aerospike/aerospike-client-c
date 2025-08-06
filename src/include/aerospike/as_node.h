@@ -188,6 +188,16 @@ typedef struct as_async_conn_pool_s {
 	 */
 	uint32_t closed;
 
+	/**
+	 * Total async connections recovered by draining connections when a socket read timeout occurs.
+	 */
+	uint32_t recovered;
+
+	/**
+	 * Total async connections aborted after connection drain failed when a socket read timeout occurs.
+	 */
+	uint32_t aborted;
+
 } as_async_conn_pool;
 
 /**
@@ -349,6 +359,16 @@ typedef struct as_node_s {
 	 * Total sync connections closed.
 	 */
 	uint32_t sync_conns_closed;
+
+	/**
+	 * Total sync connections recovered by draining connections when a socket read timeout occurs.
+	 */
+	uint32_t sync_conns_recovered;
+
+	/**
+	 * Total sync connections aborted after connection drain failed when a socket read timeout occurs.
+	 */
+	uint32_t sync_conns_aborted;
 
 	/**
 	 * Error count for this node's error_rate_window.
@@ -635,6 +655,26 @@ as_node_close_socket(as_node* node, as_socket* sock)
 {
 	as_socket_close(sock);
 	as_incr_uint32(&node->sync_conns_closed);
+}
+
+/**
+ * @private
+ * Increment `sync_conns_recovered`.
+ */
+static inline void
+as_node_incr_sync_conns_recovered(as_node* node)
+{
+	as_incr_uint32(&node->sync_conns_recovered);
+}
+
+/**
+ * @private
+ * Increment `sync_conns_aborted`.
+ */
+static inline void
+as_node_incr_sync_conns_aborted(as_node* node)
+{
+	as_incr_uint32(&node->sync_conns_aborted);
 }
 
 /**

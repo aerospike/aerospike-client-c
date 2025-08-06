@@ -369,7 +369,7 @@ as_metrics_open_writer(as_metrics_writer* mw, as_error* err)
 	timestamp_to_string(now_str, sizeof(now_str));
 	
 	char data[512];
-	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
+	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, mw->latency_columns, mw->latency_shift);
 	if (rv <= 0) {
 		fclose(mw->file);
@@ -404,6 +404,8 @@ as_metrics_get_node_sync_conn_stats(const struct as_node_s* node, struct as_conn
 	}
 	sync->opened = node->sync_conns_opened;
 	sync->closed = node->sync_conns_closed;
+	sync->recovered = node->sync_conns_recovered;
+	sync->aborted = node->sync_conns_aborted;
 }
 
 static void
@@ -426,6 +428,10 @@ as_metrics_write_conn(as_metrics_writer* mw, as_string_builder* sb, const struct
 	as_string_builder_append_uint(sb, stats->opened); // Cumulative. Not reset on each interval.
 	as_string_builder_append_char(sb, ',');
 	as_string_builder_append_uint(sb, stats->closed); // Cumulative. Not reset on each interval.
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint(sb, stats->recovered); // Cumulative. Not reset on each interval.
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint(sb, stats->aborted); // Cumulative. Not reset on each interval.
 }
 
 static void

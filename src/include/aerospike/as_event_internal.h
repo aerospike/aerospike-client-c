@@ -749,6 +749,8 @@ as_async_conn_pool_init(as_async_conn_pool* pool, uint32_t min_size, uint32_t ma
 	pool->limit = max_size;
 	pool->opened = 0;
 	pool->closed = 0;
+	pool->recovered = 0;
+	pool->aborted = 0;
 }
 
 static inline bool

@@ -845,8 +845,9 @@ static void
 as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 {
 	as_socket socket;
-	as_error err;
 	const int TMPBUF_SIZE = 4096;
+	const int SOCKET_TIMEOUT = 10;
+	const int NO_DEADLINE = 0;
 	uint8_t tmpbuf[TMPBUF_SIZE];
 
 	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
@@ -862,14 +863,16 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 	uint32_t queue_size = as_queue_mt_size(&cluster->recover_queue);
 	while (queue_size > 0) {
 		if (as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
-			as_socket_read_deadline(&err, &socket, node, tmpbuf, TMPBUF_SIZE, socket_timeout, deadline);
-			switch (err.status) {
+			as_node* node; // declaration here to silence compiler warning about declaration-after-label C23 extension.
+
+			as_socket_read_deadline(err, &socket, NULL, tmpbuf, TMPBUF_SIZE, SOCKET_TIMEOUT, NO_DEADLINE);
+			switch (err->code) {
 			case AEROSPIKE_OK:
 				// We have drained the socket, so put it back into the connection pool.
 				// If we can't do that for some reason, however, discard the socket.
 				// Note that as_node_put_connection() takes care of socket disposal in the
 				// event of an error.
-				as_node* node = as_node_get_random(cluster);
+				node = as_node_get_random(cluster);
 				as_node_put_connection(node, &socket);
 				as_node_release(node);
 				break;
@@ -882,7 +885,7 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 				as_queue_mt_push(&cluster->recover_queue, &socket);
 				break;
 
-			case default:
+			default:
 				// Something unexpected has gone wrong; close the socket.
 				as_socket_close(&socket);
 				break;

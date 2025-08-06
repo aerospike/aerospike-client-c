@@ -811,14 +811,17 @@ as_event_recover_success(as_event_command* cmd)
 	printf("IN as_event_recover_success\n");
 	as_event_response_complete(cmd);
 	as_event_command_release(cmd);
-	// TOOD: Add conns_recovered to metrics.
+
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	pool->recovered++;
 }
 
 void
 as_event_recover_abort(as_event_command* cmd)
 {
 	printf("IN as_event_recover_abort\n");
-	// TOOD: Add conns_aborted to metrics.
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	pool->aborted++;
 }
 
 void

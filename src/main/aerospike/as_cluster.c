@@ -844,7 +844,10 @@ as_cluster_init_error(as_vector* invalid_hosts, as_error* err)
 static void
 as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 {
-	as_socket *socket;
+	as_socket socket;
+	as_error err;
+	const int TMPBUF_SIZE = 4096;
+	uint8_t tmpbuf[TMPBUF_SIZE];
 
 	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
 	// because if we did, and we have a socket which doesn't fully drain this tend
@@ -859,9 +862,31 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 	uint32_t queue_size = as_queue_mt_size(&cluster->recover_queue);
 	while (queue_size > 0) {
 		if (as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
-			// temporary behavior -- work is still in progress on real implementation!
-			// But this should be good enough to start running local tests with.
-			as_socket_close(socket);
+			as_socket_read_deadline(&err, &socket, node, tmpbuf, TMPBUF_SIZE, socket_timeout, deadline);
+			switch (err.status) {
+			case AEROSPIKE_OK:
+				// We have drained the socket, so put it back into the connection pool.
+				// If we can't do that for some reason, however, discard the socket.
+				// Note that as_node_put_connection() takes care of socket disposal in the
+				// event of an error.
+				as_node* node = as_node_get_random(cluster);
+				as_node_put_connection(node, &socket);
+				as_node_release(node);
+				break;
+
+			case AEROSPIKE_ERR_TIMEOUT:
+				// We timed out while trying to drain the socket.  This doesn't necessarily
+				// mean that we failed to drain anything at all, though.  We'll just collect
+				// the rest of the data the next time the tend thread runs through its cycle.
+				// So, put the socket back onto the recover queue.
+				as_queue_mt_push(&cluster->recover_queue, &socket);
+				break;
+
+			case default:
+				// Something unexpected has gone wrong; close the socket.
+				as_socket_close(&socket);
+				break;
+			}
 		}
 
 		--queue_size;

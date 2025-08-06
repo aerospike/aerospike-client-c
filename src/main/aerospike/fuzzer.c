@@ -9,8 +9,12 @@
 #include <string.h>
 #include <inttypes.h>
 
+#define DEBUG_FUZZER 1
+#ifdef DEBUG_FUZZER
 #define print_err(fmt, ...) fprintf(stderr, fmt, ##__VA_ARGS__)
-
+#else
+#define print_err(fmt, ...) {}
+#endif
 
 #define FUZZ_AS_MSG        (1 << 15)
 #define FUZZ_AS_MSG_COMP   (1 << 14) // Not supported yet
@@ -129,8 +133,6 @@ static void fuzz_init(void) {
 
 
 void parse_cmd_data(as_msg* msg){
-    // as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
-    // as_msg msg = proto_msg->m;
     fprintf(stderr, "---DEBUG--- in parse_cmd_data --\n");
     uint8_t* data = msg->data;
 
@@ -176,25 +178,17 @@ void parse_cmd_data(as_msg* msg){
     }
 }
 
+
 void copy_be_msg_to_host(as_msg* src, as_msg* dest, size_t sz){
     memcpy(dest, src, sz);
     as_msg_swap_header_from_be(dest);
 }
 
+
 void parse_cmd(as_command* cmd){
     as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
-    // as_msg tmp = proto_msg->m;
-    // as_msg* msg = &tmp;
-
     as_msg* msg = malloc(cmd->buf_size - 8);
     copy_be_msg_to_host(&proto_msg->m, msg, cmd->buf_size - 8);
-    // as_msg_swap_header_from_be(msg);
-
-    // msg->n_fields = cf_swap_from_be16(msg->n_fields);
-    // msg->n_ops = cf_swap_from_be16(msg->n_ops);
-    // msg->generation = cf_swap_from_be32(msg->generation);
-    // msg->record_ttl = cf_swap_from_be32(msg->record_ttl);
-    // msg->transaction_ttl = cf_swap_from_be32(msg->transaction_ttl);
 
     fprintf(stderr, "---DEBUG--- in parse_cmd:\n");
     print_err("Parsing msg:\n");
@@ -223,12 +217,9 @@ void parse_cmd(as_command* cmd){
         
     // print the data
     parse_cmd_data(msg);
-    // print_err("data: [");
-    // for (size_t i = 0; i < cmd->buf_size; i++) {
-    //     print_err("%02x ", cmd->buf[i]);
-    // }
-    // print_err("]\n");
+    free(msg);
 }
+
 
 void parse_ops(as_command* cmd){
     as_proto_msg* proto_msg = (as_proto_msg*) cmd->buf;
@@ -236,8 +227,11 @@ void parse_ops(as_command* cmd){
 
 }
 
+
+// Component Entry Point
 void fuzz(as_command* cmd) {
-    parse_cmd(cmd);
+    if (DEBUG_FUZZER) parse_cmd(cmd);
+
     g_fuzz_enabled = fuzzing_enabled();
     fprintf(stderr, "Fuzzer: fuzz() called, enabled=%s\n", 
             g_fuzz_enabled ? "true" : "false");
@@ -274,7 +268,7 @@ void fuzz(as_command* cmd) {
             uint8_t original = cmd->buf[i];
 
             // Dont choose zero-out strategy if the byte is already zero
-            int num_strategies = cmd->buf[i] ? 4 : 3;
+            int num_strategies = original ? 4 : 3;
             int strategy = rand() % 4;
 
             switch (strategy) {
@@ -314,6 +308,14 @@ void fuzz(as_command* cmd) {
         fprintf(stderr, "Fuzzer: mutated %zu bytes in %zu byte buffer\n", mutations, cmd->buf_size);
     }
 }
+
+
+void fuzz_bytes(uint8_t* bytes, size_t sz){
+    for (size_t i = 0; i < sz; i++) {
+        
+    }
+}
+
 
 
 /**

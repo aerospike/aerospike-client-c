@@ -217,6 +217,8 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
 	node->sync_conns_opened = 1;
 	node->sync_conns_closed = 0;
+	node->sync_conns_recovered = 0;
+	node->sync_conns_aborted = 0;
 	node->conn_iter = 0;
 
 	as_node_send_user_agent(node);

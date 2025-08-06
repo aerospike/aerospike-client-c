@@ -809,11 +809,11 @@ void
 as_event_recover_success(as_event_command* cmd)
 {
 	printf("IN as_event_recover_success\n");
-	as_event_response_complete(cmd);
-	as_event_command_release(cmd);
-
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	pool->recovered++;
+
+	as_event_response_complete(cmd);
+	as_event_command_release(cmd);
 }
 
 void

@@ -803,6 +803,7 @@ as_command_execute(as_command* cmd, as_error* err)
 							// Queue insertion failed, most likely due to out of memory.
 							// Abort timeout recovery and just close the socket.
 							as_node_close_conn_error(node, &socket, socket.pool);
+							as_node_incr_sync_conns_aborted(node);
 						}
 					}
 					goto Retry;

@@ -680,8 +680,10 @@ as_node_incr_sync_conns_aborted(as_node* node)
 /**
  * @private
  * Put connection back into pool.
+ *
+ * Answers true if successful; false if not.
  */
-static inline void
+static inline bool
 as_node_put_connection(as_node* node, as_socket* sock)
 {
 	// Save pool.
@@ -693,7 +695,10 @@ as_node_put_connection(as_node* node, as_socket* sock)
 	// Put into pool.
 	if (! as_conn_pool_push_head(pool, sock)) {
 		as_node_close_connection(node, sock, pool);
+		return false;
 	}
+
+	return true;
 }
 
 /**

@@ -864,6 +864,7 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 	while (queue_size > 0) {
 		if (as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
 			as_node* node; // declaration here to silence compiler warning about declaration-after-label C23 extension.
+			node = as_node_get_random(cluster);
 
 			as_socket_read_deadline(err, &socket, NULL, tmpbuf, TMPBUF_SIZE, SOCKET_TIMEOUT, NO_DEADLINE);
 			switch (err->code) {
@@ -872,9 +873,11 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 				// If we can't do that for some reason, however, discard the socket.
 				// Note that as_node_put_connection() takes care of socket disposal in the
 				// event of an error.
-				node = as_node_get_random(cluster);
-				as_node_put_connection(node, &socket);
-				as_node_release(node);
+				if (as_node_put_connection(node, &socket)) {
+					as_node_incr_sync_conns_recovered(node);
+				} else {
+					as_node_incr_sync_conns_aborted(node);
+				}
 				break;
 
 			case AEROSPIKE_ERR_TIMEOUT:
@@ -888,8 +891,11 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 			default:
 				// Something unexpected has gone wrong; close the socket.
 				as_socket_close(&socket);
+				as_node_incr_sync_conns_aborted(node);
 				break;
 			}
+
+			as_node_release(node);
 		}
 
 		--queue_size;

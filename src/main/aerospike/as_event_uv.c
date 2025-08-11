@@ -444,7 +444,7 @@ as_uv_command_start(as_event_command* cmd, uv_stream_t* stream)
 	}
 
 	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
-		as_event_recover_success(cmd);
+		as_event_recover_auth(cmd);
 		return;
 	}
 
@@ -959,7 +959,7 @@ as_uv_tls_command_start(as_event_command* cmd)
 	}
 
 	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
-		as_event_recover_success(cmd);
+		as_event_recover_auth(cmd);
 		return;
 	}
 

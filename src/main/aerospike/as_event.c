@@ -58,6 +58,9 @@ static pthread_mutex_t as_event_lock = PTHREAD_MUTEX_INITIALIZER;
 as_status aerospike_library_init(as_error* err);
 int as_batch_retry_async(as_event_command* cmd, bool timeout);
 void aerospike_destroy_internal(aerospike* as);
+static void as_event_recover_abort(as_event_command* cmd);
+static bool as_event_recover_connection(as_event_command* cmd);
+static void as_event_recover_timeout(as_event_command* cmd);
 
 //---------------------------------
 // Functions
@@ -793,108 +796,6 @@ as_event_decompress(as_event_command* cmd)
 	cmd->pos = sizeof(as_proto);
 	cmd->read_capacity = cmd->len;
 	cmd->flags |= AS_ASYNC_FLAGS_FREE_BUF;
-	return true;
-}
-
-//---------------------------------
-// Connection Recover
-//---------------------------------
-
-typedef struct {
-	as_event_command command;
-	uint8_t space[];
-} as_recover_command;
-
-void
-as_event_recover_success(as_event_command* cmd)
-{
-	printf("IN as_event_recover_success\n");
-	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
-	pool->recovered++;
-
-	as_event_response_complete(cmd);
-	as_event_command_release(cmd);
-}
-
-void
-as_event_recover_abort(as_event_command* cmd)
-{
-	printf("IN as_event_recover_abort\n");
-	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
-	pool->aborted++;
-}
-
-void
-as_event_recover_timeout(as_event_command* cmd)
-{
-	printf("IN as_event_recover_timeout\n");
-	as_event_recover_abort(cmd);
-	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
-	as_event_command_release(cmd);
-}
-
-static bool
-as_event_recover_parse_results(as_event_command* cmd)
-{
-	printf("IN as_event_recover_parse_results\n");
-	// TODO: Handle batch/scan/query as well.
-	as_event_recover_success(cmd);
-	return true;
-}
-
-static bool
-as_event_recover_connection(as_event_command* cmd)
-{
-	// TODO: Handle batch/scan/query.
-	if (cmd->timeout_delay == 0) {
-		return false;
-	}
-
-	switch (cmd->state) {
-		case AS_ASYNC_STATE_AUTH_READ_HEADER:
-		case AS_ASYNC_STATE_AUTH_READ_BODY:
-		case AS_ASYNC_STATE_COMMAND_READ_HEADER:
-		case AS_ASYNC_STATE_COMMAND_READ_BODY:
-			break;
-
-		default:
-			return false;
-	}
-
-	printf("IN as_event_recover_conn\n");
-	as_event_command* recover = cf_malloc(sizeof(as_recover_command) + cmd->read_capacity);
-
-	// Copy original command to a new connection drain command.
-	memcpy(recover, cmd, sizeof(as_event_command));
-	as_async_connection* conn = (as_async_connection*)recover->conn;
-	conn->cmd = recover;
-	cmd->conn = NULL;
-
-	// Copy buffer contents.
-	recover->buf = ((uint8_t*)recover) + sizeof(as_recover_command);
-
-	if (cmd->pos > 0) {
-		memcpy(recover->buf, cmd->buf, cmd->pos);
-	}
-
-	recover->type = AS_ASYNC_TYPE_CONN_RECOVER;
-	recover->txn = NULL;
-	recover->ubuf = NULL;
-	recover->ubuf_size = 0;
-	recover->parse_results = as_event_recover_parse_results;
-	recover->max_retries = 0;
-	recover->event_loop->pending++;
-	recover->event_state->pending++;
-	recover->timeout_delay = 0;
-
-	// Socket write variables should never be referenced when in a read state.
-	recover->write_offset = (uint32_t)sizeof(as_recover_command);
-	recover->write_len = 0;
-
-	as_node_reserve(recover->node);
-
-	// Schedule timeout for connection recovery.
-	as_event_timer_once(recover, cmd->timeout_delay);
 	return true;
 }
 
@@ -2325,6 +2226,181 @@ as_event_node_balance_connections(as_cluster* cluster, as_node* node)
 	// completes.
 	as_monitor_wait(&bs.monitor);
 	as_monitor_destroy(&bs.monitor);
+}
+
+//---------------------------------
+// Connection Recover
+//---------------------------------
+
+typedef struct {
+	as_event_command command;
+	uint8_t space[];
+} as_recover_command;
+
+static void
+as_event_recover_success(as_event_command* cmd)
+{
+	printf("IN as_event_recover_success\n");
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	pool->recovered++;
+
+	as_event_response_complete(cmd);
+	as_event_command_release(cmd);
+}
+
+static void
+as_event_recover_abort(as_event_command* cmd)
+{
+	printf("IN as_event_recover_abort\n");
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	pool->aborted++;
+}
+
+static void
+as_event_recover_timeout(as_event_command* cmd)
+{
+	printf("IN as_event_recover_timeout\n");
+	as_event_recover_abort(cmd);
+	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	as_event_command_release(cmd);
+}
+
+void
+as_event_recover_auth(as_event_command* cmd)
+{
+	printf("IN as_event_recover_auth\n");
+	// There is no need to drain the socket because that actual command was not sent.
+	// Put authenticated connection back into the pool and complete the recovery command.
+	as_event_recover_success(cmd);
+}
+
+static bool
+as_event_recover_parse_single(as_event_command* cmd)
+{
+	printf("IN as_event_recover_parse_single\n");
+	// Socket data has been read into a buffer and there is no need to parse that buffer further.
+	// Put connection back into the pool and complete the recovery command.
+	as_event_recover_success(cmd);
+	return true;
+}
+
+static bool
+as_event_recover_parse_multi(as_event_command* cmd)
+{
+	printf("IN as_event_recover_parse_multi\n");
+	if (cmd->len < sizeof(as_msg)) {
+		// Use error code that results in the connection being closed.
+		// as_event_response_error() will eventually call as_event_recover_abort().
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "Corrupt multi-command message");
+		as_event_response_error(cmd, &err);
+		return true;
+	}
+
+	// Find last message in the buffer.
+	uint8_t* p = cmd->buf + cmd->len - sizeof(as_msg);
+	as_msg* msg = (as_msg*)p;
+
+	// Swap not necessary since all referenced fields are either single byte or the field
+	// is only checked for zero.
+	// as_msg_swap_header_from_be(msg);
+
+	// Check for last indicator. Also, check fields for zero to ensure this really is
+	// the last record with the last bit set. Other records would have set at least one of
+	// those fields.
+	if ((msg->info3 & AS_MSG_INFO3_LAST) && msg->n_fields == 0 && msg->n_ops == 0 &&
+		msg->generation == 0 && msg->record_ttl == 0 && msg->transaction_ttl == 0) {
+		as_event_recover_success(cmd);
+		return true;
+	}
+	return false;
+}
+
+static bool
+as_event_recover_connection(as_event_command* cmd)
+{
+	// TODO: Handle compression.
+	if (cmd->timeout_delay == 0) {
+		return false;
+	}
+
+	printf("IN as_event_recover_conn\n");
+
+	switch (cmd->state) {
+		case AS_ASYNC_STATE_AUTH_READ_HEADER:
+		case AS_ASYNC_STATE_AUTH_READ_BODY:
+		case AS_ASYNC_STATE_COMMAND_READ_HEADER:
+		case AS_ASYNC_STATE_COMMAND_READ_BODY:
+			break;
+
+		default:
+			as_event_recover_abort(cmd);
+			return false;
+	}
+
+	as_event_parse_results_fn parse_results;
+
+	switch (cmd->type) {
+		case AS_ASYNC_TYPE_WRITE:
+		case AS_ASYNC_TYPE_RECORD:
+		case AS_ASYNC_TYPE_VALUE:
+		case AS_ASYNC_TYPE_TXN_MONITOR:
+			parse_results = as_event_recover_parse_single;
+			break;
+
+		case AS_ASYNC_TYPE_BATCH:
+		case AS_ASYNC_TYPE_SCAN:
+		case AS_ASYNC_TYPE_SCAN_PARTITION:
+		case AS_ASYNC_TYPE_QUERY:
+		case AS_ASYNC_TYPE_QUERY_PARTITION:
+			parse_results = as_event_recover_parse_multi;
+			break;
+
+		//TODO: Handle info commands?
+		//case AS_ASYNC_TYPE_INFO:
+		//	break;
+
+		default:
+			as_event_recover_abort(cmd);
+			return false;
+	}
+
+	as_event_command* recover = cf_malloc(sizeof(as_recover_command) + cmd->read_capacity);
+
+	// Copy original command to a new connection drain command.
+	memcpy(recover, cmd, sizeof(as_event_command));
+	as_async_connection* conn = (as_async_connection*)recover->conn;
+	conn->cmd = recover;
+	cmd->conn = NULL;
+
+	// Copy buffer contents.
+	recover->buf = ((uint8_t*)recover) + sizeof(as_recover_command);
+
+	if (cmd->pos > 0) {
+		memcpy(recover->buf, cmd->buf, cmd->pos);
+	}
+
+	recover->type = AS_ASYNC_TYPE_CONN_RECOVER;
+	recover->txn = NULL;
+	recover->ubuf = NULL;
+	recover->ubuf_size = 0;
+
+
+	recover->parse_results = parse_results;
+	recover->max_retries = 0;
+	recover->event_loop->pending++;
+	recover->event_state->pending++;
+	recover->timeout_delay = 0;
+
+	// Socket write variables should never be referenced when in a read state.
+	recover->write_offset = (uint32_t)sizeof(as_recover_command);
+	recover->write_len = 0;
+
+	as_node_reserve(recover->node);
+
+	// Schedule timeout for connection recovery.
+	as_event_timer_once(recover, cmd->timeout_delay);
+	return true;
 }
 
 //---------------------------------

@@ -484,7 +484,7 @@ as_event_command_start(as_event_command* cmd)
 	}
 
 	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
-		as_event_recover_success(cmd);
+		as_event_recover_auth(cmd);
 		return AS_EVENT_COMMAND_DONE;
 	}
 

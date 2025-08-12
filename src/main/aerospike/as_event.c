@@ -2306,10 +2306,14 @@ as_event_recover_parse_multi(as_event_command* cmd)
 	// as_msg_swap_header_from_be(msg);
 
 	// Check for last indicator. Also, check fields for zero to ensure this really is
-	// the last record with the last bit set. Other records would have set at least one of
+	// the last record with the last bit set. Other records should have set at least one of
 	// those fields.
-	if ((msg->info3 & AS_MSG_INFO3_LAST) && msg->n_fields == 0 && msg->n_ops == 0 &&
-		msg->generation == 0 && msg->record_ttl == 0 && msg->transaction_ttl == 0) {
+	// TODO: There is a small risk that a non-last record has the same data signature.
+	// Should really check first record. If first record not last, then parse through to the last
+	// record and then check that.
+	if (msg->info3 == AS_MSG_INFO3_LAST && msg->header_sz == sizeof(as_msg) && msg->info1 == 0 &&
+		msg->info2 == 0 && msg->unused == 0 && msg->generation == 0 && msg->record_ttl == 0 &&
+		msg->transaction_ttl == 0 && msg->n_fields == 0 && msg->n_ops == 0) {
 		as_event_recover_success(cmd);
 		return true;
 	}
@@ -2319,7 +2323,6 @@ as_event_recover_parse_multi(as_event_command* cmd)
 static bool
 as_event_recover_connection(as_event_command* cmd)
 {
-	// TODO: Handle compression.
 	if (cmd->timeout_delay == 0) {
 		return false;
 	}
@@ -2384,8 +2387,6 @@ as_event_recover_connection(as_event_command* cmd)
 	recover->txn = NULL;
 	recover->ubuf = NULL;
 	recover->ubuf_size = 0;
-
-
 	recover->parse_results = parse_results;
 	recover->max_retries = 0;
 	recover->event_loop->pending++;

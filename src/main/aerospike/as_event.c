@@ -2298,34 +2298,21 @@ static bool
 as_event_recover_parse_multi(as_event_command* cmd)
 {
 	printf("IN as_event_recover_parse_multi\n");
-	if (cmd->len < sizeof(as_msg)) {
-		// Use error code that results in the connection being closed.
-		// as_event_response_error() will eventually call as_event_recover_abort().
-		as_error err;
-		as_error_set_message(&err, AEROSPIKE_ERR_CLIENT_ABORT, "Corrupt multi-command message");
-		as_event_response_error(cmd, &err);
-		return true;
-	}
+	uint8_t* p = cmd->buf + cmd->pos;
+	uint8_t* end = cmd->buf + cmd->len;
+	
+	while (p < end) {
+		as_msg* msg = (as_msg*)p;
+		as_msg_swap_header_from_be(msg);
+		p += sizeof(as_msg);
+		
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			as_event_recover_success(cmd);
+			return true;
+		}
 
-	// Find last message in the buffer.
-	uint8_t* p = cmd->buf + cmd->len - sizeof(as_msg);
-	as_msg* msg = (as_msg*)p;
-
-	// Swap not necessary since all referenced fields are either single byte or the field
-	// is only checked for zero.
-	// as_msg_swap_header_from_be(msg);
-
-	// Check for last indicator. Also, check fields for zero to ensure this really is
-	// the last record with the last bit set. Other records should have set at least one of
-	// those fields.
-	// TODO: There is a small risk that a non-last record has the same data signature.
-	// Should really check first record. If first record not last, then parse through to the last
-	// record and then check that.
-	if (msg->info3 == AS_MSG_INFO3_LAST && msg->header_sz == sizeof(as_msg) && msg->info1 == 0 &&
-		msg->info2 == 0 && msg->unused == 0 && msg->generation == 0 && msg->record_ttl == 0 &&
-		msg->transaction_ttl == 0 && msg->n_fields == 0 && msg->n_ops == 0) {
-		as_event_recover_success(cmd);
-		return true;
+		p = as_command_ignore_fields(p, msg->n_fields);
+		p = as_command_ignore_bins(p, msg->n_ops);
 	}
 	return false;
 }

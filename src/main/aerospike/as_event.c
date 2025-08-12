@@ -2241,9 +2241,11 @@ static void
 as_event_recover_success(as_event_command* cmd)
 {
 	printf("IN as_event_recover_success\n");
+	// Update metrics.
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	pool->recovered++;
 
+	// Put connection back into the pool and complete the recovery command.
 	as_event_response_complete(cmd);
 	as_event_command_release(cmd);
 }
@@ -2252,6 +2254,7 @@ static void
 as_event_recover_abort(as_event_command* cmd)
 {
 	printf("IN as_event_recover_abort\n");
+	// Update metrics.
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	pool->aborted++;
 }
@@ -2270,8 +2273,16 @@ as_event_recover_auth(as_event_command* cmd)
 {
 	printf("IN as_event_recover_auth\n");
 	// There is no need to drain the socket because that actual command was not sent.
-	// Put authenticated connection back into the pool and complete the recovery command.
 	as_event_recover_success(cmd);
+}
+
+static bool
+as_event_recover_parse_info(as_event_command* cmd)
+{
+	printf("IN as_event_recover_parse_info\n");
+	// Socket data has been read into a buffer and there is no need to parse that buffer further.
+	as_event_recover_success(cmd);
+	return true;
 }
 
 static bool
@@ -2279,7 +2290,6 @@ as_event_recover_parse_single(as_event_command* cmd)
 {
 	printf("IN as_event_recover_parse_single\n");
 	// Socket data has been read into a buffer and there is no need to parse that buffer further.
-	// Put connection back into the pool and complete the recovery command.
 	as_event_recover_success(cmd);
 	return true;
 }
@@ -2359,9 +2369,9 @@ as_event_recover_connection(as_event_command* cmd)
 			parse_results = as_event_recover_parse_multi;
 			break;
 
-		//TODO: Handle info commands?
-		//case AS_ASYNC_TYPE_INFO:
-		//	break;
+		case AS_ASYNC_TYPE_INFO:
+			parse_results = as_event_recover_parse_info;
+			break;
 
 		default:
 			as_event_recover_abort(cmd);

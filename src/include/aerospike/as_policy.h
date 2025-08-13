@@ -1526,6 +1526,12 @@ typedef struct as_policy_info_s {
 	uint32_t timeout;
 
 	/**
+	 * Number of milliseconds to wait after a socket read times out before closing the socket for
+	 * good. If set to zero, this feature will be disabled.
+	 */
+	uint32_t timeout_delay;
+
+	/**
 	 * Send request without any further processing.
 	 */
 	bool send_as_is;
@@ -2116,6 +2122,7 @@ static inline as_policy_info*
 as_policy_info_init(as_policy_info* p)
 {
 	p->timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	p->timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
 	p->send_as_is = true;
 	p->check_bounds	= true;
 	return p;

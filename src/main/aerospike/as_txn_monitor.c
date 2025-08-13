@@ -146,6 +146,7 @@ as_txn_policy_copy(const as_policy_base* src, as_policy_operate* trg)
 
 	trg->base.socket_timeout = src->socket_timeout;
 	trg->base.total_timeout = src->total_timeout;
+	trg->base.timeout_delay = src->timeout_delay;
 	trg->base.max_retries = src->max_retries;
 	trg->base.sleep_between_retries = src->sleep_between_retries;
 	trg->base.compress = src->compress;
@@ -250,6 +251,7 @@ as_txn_monitor_remove(
 	as_policy_remove_init(&policy);
 	policy.base.socket_timeout = base_policy->socket_timeout;
 	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.timeout_delay = base_policy->timeout_delay;
 	policy.base.max_retries = base_policy->max_retries;
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 	policy.durable_delete = true;
@@ -340,6 +342,7 @@ as_txn_monitor_remove_async(
 	as_policy_remove_init(&policy);
 	policy.base.socket_timeout = base_policy->socket_timeout;
 	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.timeout_delay = base_policy->timeout_delay;
 	policy.base.max_retries = base_policy->max_retries;
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 	policy.durable_delete = true;

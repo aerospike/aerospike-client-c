@@ -498,8 +498,8 @@ typedef struct as_policy_base_s {
 	 * away, effectively disabling this feature.
 	 * 
 	 * Please note that this feature only applies to sockets being read; write timeouts are not
-	 * affected by this setting.
-	 * 
+	 * affected by this setting. Also, this feature does not apply to pipeline connections.
+	 *
 	 * Default: 0
 	 */
 	uint32_t timeout_delay;

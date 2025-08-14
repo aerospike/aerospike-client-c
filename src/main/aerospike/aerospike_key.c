@@ -1824,6 +1824,7 @@ as_txn_monitor_mark_roll_forward(
 	as_policy_write_init(&policy);
 	policy.base.socket_timeout = base_policy->socket_timeout;
 	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.timeout_delay = base_policy->timeout_delay;
 	policy.base.max_retries = base_policy->max_retries;
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 
@@ -1892,6 +1893,7 @@ as_txn_monitor_mark_roll_forward_async(
 	as_policy_write_init(&policy);
 	policy.base.socket_timeout = base_policy->socket_timeout;
 	policy.base.total_timeout = base_policy->total_timeout;
+	policy.base.timeout_delay = base_policy->timeout_delay;
 	policy.base.max_retries = base_policy->max_retries;
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 

@@ -482,10 +482,14 @@ as_event_command_start(as_event_command* cmd)
 		as_event_connector_success(cmd);
 		return AS_EVENT_COMMAND_DONE;
 	}
-	else {
-		as_event_command_write_start(cmd);
-		return AS_EVENT_READ_COMPLETE;
+
+	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
+		as_event_recover_auth(cmd);
+		return AS_EVENT_COMMAND_DONE;
 	}
+
+	as_event_command_write_start(cmd);
+	return AS_EVENT_READ_COMPLETE;
 }
 
 static inline void

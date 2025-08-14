@@ -287,6 +287,9 @@ void
 as_event_create_connections(as_node* node, as_async_conn_pool* pools);
 
 void
+as_event_recover_auth(as_event_command* cmd);
+
+void
 as_event_close_cluster(aerospike* as);
 
 //----------------------------------

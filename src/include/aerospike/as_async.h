@@ -42,6 +42,7 @@ extern "C" {
 #define AS_ASYNC_TYPE_QUERY_PARTITION 8
 #define AS_ASYNC_TYPE_CONNECTOR 9
 #define AS_ASYNC_TYPE_TXN_MONITOR 10
+#define AS_ASYNC_TYPE_CONN_RECOVER 11
 
 #define AS_AUTHENTICATION_MAX_SIZE 158
 
@@ -234,7 +235,7 @@ as_async_info_command_create(
 	as_async_info_command* icmd = (as_async_info_command*)cmd;
 	cmd->total_deadline = policy->timeout;
 	cmd->socket_timeout = policy->timeout;
-	cmd->timeout_delay = 0;
+	cmd->timeout_delay = policy->timeout_delay;
 	cmd->max_retries = 1;
 	cmd->iteration = 0;
 	cmd->replica = AS_POLICY_REPLICA_MASTER;

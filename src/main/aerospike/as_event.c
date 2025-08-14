@@ -2240,7 +2240,6 @@ typedef struct {
 static void
 as_event_recover_success(as_event_command* cmd)
 {
-	printf("IN as_event_recover_success\n");
 	// Update metrics.
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	pool->recovered++;
@@ -2253,7 +2252,6 @@ as_event_recover_success(as_event_command* cmd)
 static void
 as_event_recover_abort(as_event_command* cmd)
 {
-	printf("IN as_event_recover_abort\n");
 	// Update metrics.
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	pool->aborted++;
@@ -2262,7 +2260,6 @@ as_event_recover_abort(as_event_command* cmd)
 static void
 as_event_recover_timeout(as_event_command* cmd)
 {
-	printf("IN as_event_recover_timeout\n");
 	as_event_recover_abort(cmd);
 	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
 	as_event_command_release(cmd);
@@ -2271,7 +2268,6 @@ as_event_recover_timeout(as_event_command* cmd)
 void
 as_event_recover_auth(as_event_command* cmd)
 {
-	printf("IN as_event_recover_auth\n");
 	// There is no need to drain the socket because that actual command was not sent.
 	as_event_recover_success(cmd);
 }
@@ -2279,7 +2275,6 @@ as_event_recover_auth(as_event_command* cmd)
 static bool
 as_event_recover_parse_info(as_event_command* cmd)
 {
-	printf("IN as_event_recover_parse_info\n");
 	// Socket data has been read into a buffer and there is no need to parse that buffer further.
 	as_event_recover_success(cmd);
 	return true;
@@ -2288,7 +2283,6 @@ as_event_recover_parse_info(as_event_command* cmd)
 static bool
 as_event_recover_parse_single(as_event_command* cmd)
 {
-	printf("IN as_event_recover_parse_single\n");
 	// Socket data has been read into a buffer and there is no need to parse that buffer further.
 	as_event_recover_success(cmd);
 	return true;
@@ -2297,7 +2291,6 @@ as_event_recover_parse_single(as_event_command* cmd)
 static bool
 as_event_recover_parse_multi(as_event_command* cmd)
 {
-	printf("IN as_event_recover_parse_multi\n");
 	uint8_t* p = cmd->buf + cmd->pos;
 	uint8_t* end = cmd->buf + cmd->len;
 	
@@ -2323,8 +2316,6 @@ as_event_recover_connection(as_event_command* cmd)
 	if (cmd->timeout_delay == 0) {
 		return false;
 	}
-
-	printf("IN as_event_recover_conn\n");
 
 	switch (cmd->state) {
 		case AS_ASYNC_STATE_AUTH_READ_HEADER:

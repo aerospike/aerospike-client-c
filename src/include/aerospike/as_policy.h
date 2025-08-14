@@ -2184,6 +2184,7 @@ as_policy_txn_verify_init(as_policy_txn_verify* p)
 {
 	p->base.socket_timeout = 3000;
 	p->base.total_timeout = 10000;
+	p->base.timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
 	p->base.max_retries = 5;
 	p->base.sleep_between_retries = 1000;
 	p->base.filter_exp = NULL;
@@ -2229,6 +2230,7 @@ as_policy_txn_roll_init(as_policy_txn_roll* p)
 {
 	p->base.socket_timeout = 3000;
 	p->base.total_timeout = 10000;
+	p->base.timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
 	p->base.max_retries = 5;
 	p->base.sleep_between_retries = 1000;
 	p->base.filter_exp = NULL;

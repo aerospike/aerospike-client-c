@@ -661,12 +661,10 @@ aerospike_create_pki_user(
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node");
 	}
 
-	as_version min = {8, 1, 0, 0};
-
-	if (as_version_compare(&node->version, &min) < 0) {
+	if (as_version_compare(&node->version, &as_server_version_8_1) < 0) {
 		char ver_str[32], min_str[32];
 		as_version_to_string(&node->version, ver_str, sizeof(ver_str));
-		as_version_to_string(&min, min_str, sizeof(min_str));
+		as_version_to_string(&as_server_version_8_1, min_str, sizeof(min_str));
 		as_node_release(node);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Node version %s is less than required minimum version %s", ver_str, min_str);

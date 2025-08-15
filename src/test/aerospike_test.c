@@ -345,12 +345,11 @@ static bool before(atf_plan* plan)
 
 	cf_free(result);
 
-	as_version min = {8, 1, 0, 0};
 	as_nodes* nodes = as_nodes_reserve(as->cluster);
-	as_version server_version = (nodes->size > 0)? nodes->array[0]->version : min;
+	as_version server_version = (nodes->size > 0)? nodes->array[0]->version : as_server_version_8_1;
 	as_nodes_release(nodes);
 
-	const char* ns_field_name = (as_version_compare(&server_version, &min) >= 0)?
+	const char* ns_field_name = (as_version_compare(&server_version, &as_server_version_8_1) >= 0)?
 		"namespace" : "id";
 
 	char command[1024];

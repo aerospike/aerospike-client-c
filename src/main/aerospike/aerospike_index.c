@@ -82,6 +82,12 @@ aerospike_index_create_private(
 		}
 	}
 
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (!node) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "as_node_get_random() failed");
+	}
+
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 16384, false);
 	as_string_builder_append(&sb, "sindex-create:ns=");
@@ -113,6 +119,7 @@ aerospike_index_create_private(
 			as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
 
 			if (as_cdt_ctx_pack(ctx, &pk) == 0) {
+				as_node_release(node);
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to pack ctx");
 			}
 
@@ -135,21 +142,31 @@ aerospike_index_create_private(
 		as_string_builder_append(&sb, ";indextype=");
 		as_string_builder_append(&sb, itype_string);
 
-		as_string_builder_append(&sb, ";indexdata=");
-		as_string_builder_append(&sb, bin_name);
-		as_string_builder_append_char(&sb, ',');
-		as_string_builder_append(&sb, dtype_string);
+		if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
+			as_string_builder_append(&sb, ";bin=");
+			as_string_builder_append(&sb, bin_name);
+			as_string_builder_append(&sb, ";type=");
+			as_string_builder_append(&sb, dtype_string);
+		}
+		else {
+			as_string_builder_append(&sb, ";indexdata=");
+			as_string_builder_append(&sb, bin_name);
+			as_string_builder_append_char(&sb, ',');
+			as_string_builder_append(&sb, dtype_string);
+		}
 	}
 
 	as_string_builder_append_newline(&sb);
 
 	if (sb.length + 1 >= sb.capacity) {
+		as_node_release(node);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index create buffer overflow: %d",
 			sb.length);
 	}
 
 	char* response = NULL;
-	as_status status = aerospike_info_any(as, err, policy, sb.data, &response);
+	as_status status = aerospike_info_node(as, err, policy, node, sb.data, &response);
+	as_node_release(node);
 
 	if (status != AEROSPIKE_OK) {
 		return status;

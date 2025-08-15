@@ -30,6 +30,13 @@
 // Static Functions
 //---------------------------------
 
+static inline const char*
+as_get_ns_name(as_node* node)
+{
+	return (as_version_compare(&node->version, &as_server_version_8_1) >= 0) ?
+		"namespace" : "ns";
+}
+
 static as_status
 aerospike_index_create_private(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
@@ -90,7 +97,9 @@ aerospike_index_create_private(
 
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 16384, false);
-	as_string_builder_append(&sb, "sindex-create:ns=");
+	as_string_builder_append(&sb, "sindex-create:");
+	as_string_builder_append(&sb, as_get_ns_name(node));
+	as_string_builder_append_char(&sb, '=');
 	as_string_builder_append(&sb, ns);
 
 	if (set) {
@@ -323,16 +332,26 @@ aerospike_index_remove(
 {
 	as_error_reset(err);
 	
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (!node) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "as_node_get_random() failed");
+	}
+
+	const char* ns_name = as_get_ns_name(node);
 	char command[1024];
-	int count = snprintf(command, sizeof(command), "sindex-delete:ns=%s;indexname=%s", ns, index_name);
-	
+
+	int count = snprintf(command, sizeof(command), "sindex-delete:%s=%s;indexname=%s",
+		ns_name, ns, index_name);
+
 	if (++count >= sizeof(command)) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index remove buffer overflow: %d", count);
 	}
 	
 	char* response = NULL;
-	as_status status = aerospike_info_any(as, err, policy, command, &response);
-	
+	as_status status = aerospike_info_node(as, err, policy, node, command, &response);
+	as_node_release(node);
+
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}

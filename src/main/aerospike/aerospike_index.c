@@ -168,10 +168,22 @@ aerospike_index_create_private(
 	return status;
 }
 
+void
+aerospike_index_stat_command(as_node* node, as_index_task* task, char* command, size_t command_size)
+{
+	if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
+		snprintf(command, command_size, "sindex-stat:namespace=%s;indexname=%s", task->ns, task->name);
+	}
+	else {
+		snprintf(command, command_size, "sindex/%s/%s", task->ns, task->name);
+	}
+}
+
 static as_status
-aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* policy, char* command)
+aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* policy)
 {
 	// Index is not done if any node reports percent completed < 100.
+	char command[1024];
 	as_nodes* nodes = as_nodes_reserve(task->as->cluster);
 
 	if (nodes->size == 0) {
@@ -181,7 +193,9 @@ aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* p
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
-		
+
+		aerospike_index_stat_command(node, task, command, sizeof(command));
+
 		char* response = NULL;
 		as_status status = aerospike_info_node(task->as, err, policy, node, command, &response);
 
@@ -257,12 +271,9 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 	
 	as_policy_info policy;
 	policy.timeout = task->socket_timeout;
-	policy.send_as_is = false;
+	policy.send_as_is = true;
 	policy.check_bounds = true;
-	
-	char command[1024];
-	snprintf(command, sizeof(command), "sindex/%s/%s" , task->ns, task->name);
-	
+
 	if (! interval_ms) {
 		interval_ms = 1000;
 	}
@@ -273,7 +284,7 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 		// Sleep first to give task a chance to complete.
 		as_sleep(interval_ms);
 
-		as_status status = aerospike_index_get_status(task, err, &policy, command);
+		as_status status = aerospike_index_get_status(task, err, &policy);
 
 		if (status != AEROSPIKE_OK || task->done) {
 			return status;

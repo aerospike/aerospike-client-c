@@ -539,6 +539,9 @@ typedef struct as_config_s {
 	 * min_conns_per_node is greater than zero.  Reaping connections can defeat the purpose
 	 * of keeping connections in reserve for a future burst of activity.
 	 *
+	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
+	 * the server will stop automatically reaping based on socket idle timeouts.
+	 *
 	 * Default: 0
 	 */
 	uint32_t min_conns_per_node;
@@ -564,6 +567,9 @@ typedef struct as_config_s {
 	 * Server proto-fd-idle-ms and client max_socket_idle should be set to zero (no reap) if
 	 * async_min_conns_per_node is greater than zero.  Reaping connections can defeat the purpose
 	 * of keeping connections in reserve for a future burst of activity.
+	 *
+	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
+	 * the server will stop automatically reaping based on socket idle timeouts.
 	 *
 	 * Default: 0
 	 */
@@ -632,6 +638,9 @@ typedef struct as_config_s {
 	 * when max_socket_idle is zero.  Idle connections will still be trimmed down from peak
 	 * connections to min connections (min_conns_per_node and async_min_conns_per_node) using a
 	 * hard-coded 55 second limit in the cluster tend thread.
+	 *
+	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
+	 * the server will stop automatically reaping based on socket idle timeouts.
 	 *
 	 * Default: 0 seconds
 	 */

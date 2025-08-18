@@ -1394,6 +1394,68 @@ as_cluster_force_single_node(as_cluster* cluster, as_error* err)
 	return AEROSPIKE_OK;
 }
 
+static as_status
+as_validate_timeout_delay(as_error* err, uint32_t timeout_delay, const char* id)
+{
+	if (timeout_delay == 0 || timeout_delay >= 3000) {
+		return AEROSPIKE_OK;
+	}
+
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+		"Invalid %s timeout_delay: %u valid values are 0 or >= 1000",
+			id, timeout_delay);
+}
+
+static as_status
+as_cluster_validate_timeout_delay(as_error* err, as_policies* p)
+{
+	if (as_validate_timeout_delay(err, p->read.base.timeout_delay, "read") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->write.base.timeout_delay, "write") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->operate.base.timeout_delay, "operate") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->apply.base.timeout_delay, "apply") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->remove.base.timeout_delay, "remove") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->scan.base.timeout_delay, "scan") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->query.base.timeout_delay, "query") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->batch.base.timeout_delay, "batch_read") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->batch_parent_write.base.timeout_delay, "batch_write") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->txn_verify.base.timeout_delay, "txn_verify") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->txn_roll.base.timeout_delay, "txn_roll") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	return AEROSPIKE_OK;
+}
+
 as_status
 as_cluster_create(aerospike* as, as_error* err)
 {
@@ -1418,6 +1480,10 @@ as_cluster_create(aerospike* as, as_error* err)
 	if (config->async_min_conns_per_node > config->async_max_conns_per_node) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid async connection range: %u - %u",
 			config->async_min_conns_per_node, config->async_max_conns_per_node);
+	}
+
+	if (as_cluster_validate_timeout_delay(err, &config->policies) != AEROSPIKE_OK) {
+		return err->code;
 	}
 
 	as_config_massage_error_rate(config);

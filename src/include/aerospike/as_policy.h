@@ -83,7 +83,7 @@ extern "C" {
  * 
  * @ingroup client_policies
  */
-#define AS_POLICY_TIMEOUT_DELAY_DEFAULT 0
+#define AS_POLICY_TIMEOUT_DELAY_DEFAULT 3000
 
 /**
  * Default value for compression threshold
@@ -500,7 +500,7 @@ typedef struct as_policy_base_s {
 	 * Please note that this feature only applies to sockets being read; write timeouts are not
 	 * affected by this setting. Also, this feature does not apply to pipeline connections.
 	 *
-	 * Default: 0
+	 * Default: 3000
 	 */
 	uint32_t timeout_delay;
 
@@ -1522,22 +1522,30 @@ typedef struct as_policy_info_s {
 
 	/**
 	 * Maximum time in milliseconds to wait for the operation to complete.
+	 *
+	 * Default: 1000
 	 */
 	uint32_t timeout;
 
 	/**
 	 * Number of milliseconds to wait after a socket read times out before closing the socket for
 	 * good. If set to zero, this feature will be disabled.
+	 *
+	 * Default: 3000
 	 */
 	uint32_t timeout_delay;
 
 	/**
 	 * Send request without any further processing.
+	 *
+	 * Default: true
 	 */
 	bool send_as_is;
 
 	/**
 	 * Ensure the request is within allowable size limits.
+	 *
+	 * Default: true
 	 */
 	bool check_bounds;
 	

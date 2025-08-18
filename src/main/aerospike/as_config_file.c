@@ -646,6 +646,26 @@ as_parse_max_concurrent_threads(
 }
 
 static bool
+as_parse_timeout_delay(as_yaml* yaml, const char* name, const char* value, uint32_t* out, uint32_t field)
+{
+	uint32_t val;
+
+	if (!parse_uint32(yaml, name, value, 0, UINT32_MAX, &val)) {
+		return false;
+	}
+
+	if (val > 0 && val < 1000) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid %s: %s. valid values are 0 or >= 1000", name, value);
+		return false;
+	}
+
+	as_assign_uint32(yaml->name, name, value, val, out);
+	as_field_set(yaml->bitmap, field);
+	return true;
+}
+
+static bool
 as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_policy_read* policy = &base->read;
@@ -685,7 +705,7 @@ as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* b
 	}
 
 	if (strcmp(name, "timeout_delay") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.timeout_delay, AS_READ_TIMEOUT_DELAY);
+		return as_parse_timeout_delay(yaml, name, value, &policy->base.timeout_delay, AS_READ_TIMEOUT_DELAY);
 	}
 
 	if (strcmp(name, "max_retries") == 0) {
@@ -754,7 +774,7 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	}
 
 	if (strcmp(name, "timeout_delay") == 0) {
-		if (!as_parse_uint32(yaml, name, value, &policy->base.timeout_delay, AS_WRITE_TIMEOUT_DELAY)) {
+		if (!as_parse_timeout_delay(yaml, name, value, &policy->base.timeout_delay, AS_WRITE_TIMEOUT_DELAY)) {
 			return false;
 		}
 		as_assign_uint32(operate_section, name, value, policy->base.timeout_delay, &base->operate.base.timeout_delay);
@@ -836,7 +856,7 @@ as_parse_scan(as_yaml* yaml, const char* name, const char* value, as_policies* b
 	}
 
 	if (strcmp(name, "timeout_delay") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.timeout_delay, AS_SCAN_TIMEOUT_DELAY);
+		return as_parse_timeout_delay(yaml, name, value, &policy->base.timeout_delay, AS_SCAN_TIMEOUT_DELAY);
 	}
 
 	if (strcmp(name, "max_retries") == 0) {
@@ -885,7 +905,7 @@ as_parse_query(as_yaml* yaml, const char* name, const char* value, as_policies* 
 	}
 
 	if (strcmp(name, "timeout_delay") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.timeout_delay, AS_QUERY_TIMEOUT_DELAY);
+		return as_parse_timeout_delay(yaml, name, value, &policy->base.timeout_delay, AS_QUERY_TIMEOUT_DELAY);
 	}
 
 	if (strcmp(name, "max_retries") == 0) {
@@ -949,7 +969,7 @@ as_parse_batch_shared(
 	}
 
 	if (strcmp(name, "timeout_delay") == 0) {
-		return as_parse_uint32(yaml, name, value, &policy->base.timeout_delay, offset + AS_BATCH_TIMEOUT_DELAY);
+		return as_parse_timeout_delay(yaml, name, value, &policy->base.timeout_delay, offset + AS_BATCH_TIMEOUT_DELAY);
 	}
 
 	if (strcmp(name, "max_retries") == 0) {

@@ -32,6 +32,8 @@ connect_to_aerospike(aerospike* as, program_options *po, as_error *err) {
 		as_config_tls_set_cafile(&config, po->cafile);
 		as_config_tls_set_certfile(&config, po->cert_file);
 		as_config_tls_set_keyfile(&config, po->key_file);
+
+		config.tls.enable = true;
 	}
 
 	aerospike_init(as, &config);

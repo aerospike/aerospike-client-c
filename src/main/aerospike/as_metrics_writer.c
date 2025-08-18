@@ -36,6 +36,7 @@ static char as_dir_sep = '/';
 // Globals
 //---------------------------------
 
+AS_EXTERN extern char* aerospike_client_language;
 AS_EXTERN extern char* aerospike_client_version;
 
 //---------------------------------
@@ -534,7 +535,7 @@ as_metrics_write_cluster(as_error* err, as_metrics_writer* mw, as_cluster* clust
 	as_string_builder_append(&sb, " cluster[");
 	as_string_builder_append(&sb, cluster_name);
 	as_string_builder_append_char(&sb, ',');
-	as_string_builder_append(&sb, "C");
+	as_string_builder_append(&sb, aerospike_client_language);
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append(&sb, aerospike_client_version);
 	as_string_builder_append_char(&sb, ',');

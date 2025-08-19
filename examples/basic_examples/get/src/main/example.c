@@ -54,6 +54,7 @@ main(int argc, char* argv[])
 {
 	// Parse command line arguments.
 	if (! example_get_opts(argc, argv, EXAMPLE_BASIC_OPTS)) {
+                goto fail;
 		exit(-1);
 	}
 
@@ -74,6 +75,7 @@ main(int argc, char* argv[])
 		LOG("aerospike_key_get() returned %d - %s, expected "
 				"AEROSPIKE_ERR_RECORD_NOT_FOUND", err.code, err.message);
 		as_record_destroy(p_rec);
+                goto fail;
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -83,6 +85,7 @@ main(int argc, char* argv[])
 
 	// Write a record to the database so we can demonstrate read success.
 	if (! write_record(&as)) {
+                goto fail;
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -90,6 +93,7 @@ main(int argc, char* argv[])
 	// Read the (whole) test record from the database.
 	if (aerospike_key_get(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_get() returned %d - %s", err.code, err.message);
+                goto fail;
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -107,6 +111,7 @@ main(int argc, char* argv[])
 	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_1_3, &p_rec) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_select() returned %d - %s", err.code, err.message);
+                goto fail;
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -125,6 +130,7 @@ main(int argc, char* argv[])
 	if (aerospike_key_select(&as, &err, NULL, &g_key, bins_5, &p_rec) !=
 			AEROSPIKE_OK) {
 		LOG("aerospike_key_select() returned %d - %s", err.code, err.message);
+                goto fail;
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -142,6 +148,7 @@ main(int argc, char* argv[])
 	// Use aerospike_key_exists() to get only record metadata.
 	if (aerospike_key_exists(&as, &err, NULL, &g_key, &p_rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_exists() returned %d - %s", err.code, err.message);
+                goto fail;
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -157,6 +164,11 @@ main(int argc, char* argv[])
 	LOG("get example successfully completed");
 
 	return 0;
+
+fail:
+        sleep(30);
+        example_cleanup(&as);
+        return -1;
 }
 
 

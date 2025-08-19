@@ -30,6 +30,13 @@
 // Static Functions
 //---------------------------------
 
+static inline const char*
+as_get_ns_name(as_node* node)
+{
+	return (as_version_compare(&node->version, &as_server_version_8_1) >= 0) ?
+		"namespace" : "ns";
+}
+
 static as_status
 aerospike_index_create_private(
 	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy, const char* ns,
@@ -82,9 +89,17 @@ aerospike_index_create_private(
 		}
 	}
 
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (!node) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "as_node_get_random() failed");
+	}
+
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 16384, false);
-	as_string_builder_append(&sb, "sindex-create:ns=");
+	as_string_builder_append(&sb, "sindex-create:");
+	as_string_builder_append(&sb, as_get_ns_name(node));
+	as_string_builder_append_char(&sb, '=');
 	as_string_builder_append(&sb, ns);
 
 	if (set) {
@@ -113,6 +128,7 @@ aerospike_index_create_private(
 			as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
 
 			if (as_cdt_ctx_pack(ctx, &pk) == 0) {
+				as_node_release(node);
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to pack ctx");
 			}
 
@@ -135,21 +151,31 @@ aerospike_index_create_private(
 		as_string_builder_append(&sb, ";indextype=");
 		as_string_builder_append(&sb, itype_string);
 
-		as_string_builder_append(&sb, ";indexdata=");
-		as_string_builder_append(&sb, bin_name);
-		as_string_builder_append_char(&sb, ',');
-		as_string_builder_append(&sb, dtype_string);
+		if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
+			as_string_builder_append(&sb, ";bin=");
+			as_string_builder_append(&sb, bin_name);
+			as_string_builder_append(&sb, ";type=");
+			as_string_builder_append(&sb, dtype_string);
+		}
+		else {
+			as_string_builder_append(&sb, ";indexdata=");
+			as_string_builder_append(&sb, bin_name);
+			as_string_builder_append_char(&sb, ',');
+			as_string_builder_append(&sb, dtype_string);
+		}
 	}
 
 	as_string_builder_append_newline(&sb);
 
 	if (sb.length + 1 >= sb.capacity) {
+		as_node_release(node);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index create buffer overflow: %d",
 			sb.length);
 	}
 
 	char* response = NULL;
-	as_status status = aerospike_info_any(as, err, policy, sb.data, &response);
+	as_status status = aerospike_info_node(as, err, policy, node, sb.data, &response);
+	as_node_release(node);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -168,10 +194,22 @@ aerospike_index_create_private(
 	return status;
 }
 
+void
+aerospike_index_stat_command(as_node* node, as_index_task* task, char* command, size_t command_size)
+{
+	if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
+		snprintf(command, command_size, "sindex-stat:namespace=%s;indexname=%s", task->ns, task->name);
+	}
+	else {
+		snprintf(command, command_size, "sindex/%s/%s", task->ns, task->name);
+	}
+}
+
 static as_status
-aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* policy, char* command)
+aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* policy)
 {
 	// Index is not done if any node reports percent completed < 100.
+	char command[1024];
 	as_nodes* nodes = as_nodes_reserve(task->as->cluster);
 
 	if (nodes->size == 0) {
@@ -181,7 +219,9 @@ aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* p
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
-		
+
+		aerospike_index_stat_command(node, task, command, sizeof(command));
+
 		char* response = NULL;
 		as_status status = aerospike_info_node(task->as, err, policy, node, command, &response);
 
@@ -257,12 +297,9 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 	
 	as_policy_info policy;
 	policy.timeout = task->socket_timeout;
-	policy.send_as_is = false;
+	policy.send_as_is = true;
 	policy.check_bounds = true;
-	
-	char command[1024];
-	snprintf(command, sizeof(command), "sindex/%s/%s" , task->ns, task->name);
-	
+
 	if (! interval_ms) {
 		interval_ms = 1000;
 	}
@@ -273,7 +310,7 @@ aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interva
 		// Sleep first to give task a chance to complete.
 		as_sleep(interval_ms);
 
-		as_status status = aerospike_index_get_status(task, err, &policy, command);
+		as_status status = aerospike_index_get_status(task, err, &policy);
 
 		if (status != AEROSPIKE_OK || task->done) {
 			return status;
@@ -295,16 +332,26 @@ aerospike_index_remove(
 {
 	as_error_reset(err);
 	
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (!node) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "as_node_get_random() failed");
+	}
+
+	const char* ns_name = as_get_ns_name(node);
 	char command[1024];
-	int count = snprintf(command, sizeof(command), "sindex-delete:ns=%s;indexname=%s", ns, index_name);
-	
+
+	int count = snprintf(command, sizeof(command), "sindex-delete:%s=%s;indexname=%s",
+		ns_name, ns, index_name);
+
 	if (++count >= sizeof(command)) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Index remove buffer overflow: %d", count);
 	}
 	
 	char* response = NULL;
-	as_status status = aerospike_info_any(as, err, policy, command, &response);
-	
+	as_status status = aerospike_info_node(as, err, policy, node, command, &response);
+	as_node_release(node);
+
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}

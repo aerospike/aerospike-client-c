@@ -365,7 +365,7 @@ typedef struct as_cluster_s {
 	
 	/**
 	 * @private
-	 * If "services-alternate" should be used instead of "services"
+	 * If alternate services info commands should be used.
 	 */
 	bool use_services_alternate;
 	

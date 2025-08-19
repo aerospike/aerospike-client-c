@@ -696,7 +696,9 @@ as_exp_destroy_base64(char* base64)
  * because record meta data is cached in memory.
  *
  * This expression should only be used for server versions less than 7.0. Use
- * as_exp_record_size() for server version 7.0+.
+ * `as_exp_record_size()` for server version 7.0+.
+ *
+ * @deprecated Use `as_exp_record_size()` instead.
  *
  * @code
  * // Record device size >= 100 KB
@@ -801,7 +803,9 @@ as_exp_destroy_base64(char* base64)
  * in memory.
  *
  * Requires server version between 5.3 inclusive and 7.0 exclusive.
- * Use as_exp_record_size() for server version 7.0+.
+ * Use `as_exp_record_size()` for server version 7.0+.
+ *
+ * @deprecated Use `as_exp_record_size()` instead.
  *
  * @code
  * // Record memory size >= 100 KB

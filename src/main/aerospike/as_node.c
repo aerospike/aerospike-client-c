@@ -116,9 +116,7 @@ as_node_create_async_pools(uint32_t min_conns_per_node, uint32_t max_conns_per_n
 static bool
 as_node_send_user_agent(as_node* node)
 {
-	as_version min = {8, 1, 0, 0};
-
-	if (as_version_compare(&node->version, &min) < 0) {
+	if (as_version_compare(&node->version, &as_server_version_8_1) < 0) {
 		node->retry_user_agent = false;
 		return true;
 	}

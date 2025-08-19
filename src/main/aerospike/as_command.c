@@ -34,9 +34,6 @@
 #include <string.h>
 #include <zlib.h>
 
-// DEBUG
-#define LOG(...) { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); fflush(stderr); }
-
 //---------------------------------
 // Static Variables
 //---------------------------------
@@ -679,12 +676,8 @@ as_command_execute(as_command* cmd, as_error* err)
 	as_status status;
 	bool release_node;
 
-        LOG("ENTERING as_command_execute()");
-
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
-                LOG("-------C"); // DEBUG
-
 		if (cmd->node) {
 			node = cmd->node;
 			release_node = false;
@@ -781,7 +774,6 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 		else {
 			err->code = status;
-                        LOG("ERROR HAPPENED: %d", status);      // DEBUG
 
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
@@ -800,11 +792,9 @@ as_command_execute(as_command* cmd, as_error* err)
 					as_node_add_timeout(node, cmd->ns, metrics);
 					
 					if (is_server_timeout(err)) {
-						LOG("is_server_timeout(err) == TRUE; should add logic heere??"); // DEBUG
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
-						LOG("is_server_timeout(err) == FALSE"); // DEBUG
 						// The socket has already been removed from its pool by way of
 						// the as_node_get_connection() function above.  All we need to do
 						// is add it to the recovery queue, and continue processing the timeout
@@ -815,7 +805,6 @@ as_command_execute(as_command* cmd, as_error* err)
 							as_node_close_conn_error(node, &socket, socket.pool);
 							as_node_incr_sync_conns_aborted(node);
 						}
-						LOG("as_queue_mt_push() succeeded; socket pushed onto recover_queue"); // DEBUG
 					}
 					goto Retry;
 
@@ -855,8 +844,6 @@ as_command_execute(as_command* cmd, as_error* err)
 			}
 		}
 		
-                LOG("-------A");        // DEBUG
-
 		// Put connection back in pool.
 		as_node_put_connection(node, &socket);
 		
@@ -867,8 +854,6 @@ as_command_execute(as_command* cmd, as_error* err)
 		return status;
 
 Retry:
-                LOG("-------B");    // DEBUG
-
 		// Check if max retries reached.
 		if (++cmd->iteration > cmd->max_retries) {
 			break;

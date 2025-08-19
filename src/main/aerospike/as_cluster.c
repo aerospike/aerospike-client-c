@@ -38,9 +38,6 @@
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 
-// DEBUG
-#define LOG(...) { fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); fflush(stderr); }
-
 //---------------------------------
 // Globals
 //---------------------------------
@@ -853,8 +850,6 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 	const int NO_DEADLINE = 0;
 	uint8_t tmpbuf[TMPBUF_SIZE];
 
-	LOG("as_cluster_tend_recover_queue invoked");	// DEBUG
-
 	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
 	// because if we did, and we have a socket which doesn't fully drain this tend
 	// cycle, then when we go to push it back onto the queue's tail, we'll just re-
@@ -871,13 +866,9 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 			as_node* node; // declaration here to silence compiler warning about declaration-after-label C23 extension.
 			node = as_node_get_random(cluster);
 
-			LOG(".. recover_queue size > 0 and popped");	// DEBUG
-
 			as_socket_read_deadline(err, &socket, NULL, tmpbuf, TMPBUF_SIZE, SOCKET_TIMEOUT, NO_DEADLINE);
 			switch (err->code) {
 			case AEROSPIKE_OK:
-				LOG(".. .. Socket successfully drained");	// DEBUG
-
 				// We have drained the socket, so put it back into the connection pool.
 				// If we can't do that for some reason, however, discard the socket.
 				// Note that as_node_put_connection() takes care of socket disposal in the
@@ -890,7 +881,6 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 				break;
 
 			case AEROSPIKE_ERR_TIMEOUT:
-				LOG(".. .. Socket still timing out");	// DEBUG
 				// We timed out while trying to drain the socket.  This doesn't necessarily
 				// mean that we failed to drain anything at all, though.  We'll just collect
 				// the rest of the data the next time the tend thread runs through its cycle.
@@ -899,7 +889,6 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 				break;
 
 			default:
-				LOG(".. .. Dunno, giving up.");	// DEBUG
 				// Something unexpected has gone wrong; close the socket.
 				as_socket_close(&socket);
 				as_node_incr_sync_conns_aborted(node);
@@ -1846,7 +1835,6 @@ as_cluster_destroy(as_cluster* cluster)
 	// Flush and destroy the timeout recovery queue.
 	uint32_t rq_size = as_queue_mt_size(&cluster->recover_queue);
 	while (rq_size > 0) {
-		LOG("popping recovery_queue; flushing and closing socket"); // DEBUG
 		as_socket socket;
 
 		if (as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {

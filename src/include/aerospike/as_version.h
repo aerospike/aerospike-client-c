@@ -70,6 +70,7 @@ AS_EXTERN int
 as_version_compare(const as_version* ver1, const as_version* ver2);
 
 AS_EXTERN extern as_version as_server_version_8_1;
+AS_EXTERN extern as_version as_server_version_8_1_1;
 
 #ifdef __cplusplus
 } // end extern "C"

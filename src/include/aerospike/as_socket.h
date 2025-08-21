@@ -90,7 +90,7 @@ typedef struct as_socket_s {
 	as_tls_context* ctx;
 	const char* tls_name;
 	struct ssl_st* ssl;
-	size_t pos;
+	size_t offset;
 } as_socket;
 
 /**

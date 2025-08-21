@@ -426,7 +426,7 @@ as_socket_read_deadline(
 	as_poll poll;
 	as_poll_init(&poll, sock->fd);
 
-	sock->pos = 0;
+	sock->offset = 0;
 
 	as_status status = AEROSPIKE_OK;
 	uint32_t timeout;
@@ -458,13 +458,13 @@ as_socket_read_deadline(
 
 		if (rv > 0) {
 #if !defined(_MSC_VER)
-			int r_bytes = (int)read(sock->fd, buf + sock->pos, buf_len - sock->pos);
+			int r_bytes = (int)read(sock->fd, buf + sock->offset, buf_len - sock->offset);
 #else
-			int r_bytes = (int)recv(sock->fd, buf + sock->pos, (int)(buf_len - sock->pos), 0);
+			int r_bytes = (int)recv(sock->fd, buf + sock->offset, (int)(buf_len - sock->offset), 0);
 #endif
 
 			if (r_bytes > 0) {
-				sock->pos += r_bytes;
+				sock->offset += r_bytes;
 			}
 			else if (r_bytes == 0) {
 				// We believe this means that the server has closed this socket.
@@ -496,7 +496,7 @@ as_socket_read_deadline(
 	
 		//try++;
 	
-	} while (sock->pos < buf_len);
+	} while (sock->offset < buf_len);
 
 	as_poll_destroy(&poll);
 	return status;

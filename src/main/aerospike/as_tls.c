@@ -1173,13 +1173,13 @@ as_tls_read(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, ui
 {
 	uint8_t* buf = (uint8_t*)bufp;
 
-	sock->pos = 0;
+	sock->offset = 0;
 
 	while (true) {
-		int rv = SSL_read(sock->ssl, buf + sock->pos, (int)(len - sock->pos));
+		int rv = SSL_read(sock->ssl, buf + sock->offset, (int)(len - sock->offset));
 		if (rv > 0) {
-			sock->pos += rv;
-			if (sock->pos >= len) {
+			sock->offset += rv;
+			if (sock->offset >= len) {
 				return 0;
 			}
 		}

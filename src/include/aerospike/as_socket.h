@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -90,6 +90,7 @@ typedef struct as_socket_s {
 	as_tls_context* ctx;
 	const char* tls_name;
 	struct ssl_st* ssl;
+	size_t pos;
 } as_socket;
 
 /**

@@ -2,6 +2,7 @@
 	path = modules/common
 	url = https://github.com/aerospike/aerospike-common
 	ignore = dirty
+    branch = CLIENT-3691-add-debug-logging-to-as_thread_pool_destroy
 [submodule "modules/mod-lua"]
 	path = modules/mod-lua
 	url = https://github.com/aerospike/aerospike-mod-lua

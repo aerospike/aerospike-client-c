@@ -982,12 +982,12 @@ as_command_read_messages(as_error* err, as_timeout_ctx** context, as_command* cm
 		if (size > capacity) {
                         if (buf) {
                                 cf_rc_releaseandfree(buf);
-                                capacity = (size + 16383) & ~16383; // Round up in 16KB increments.
-                                buf = cf_rc_alloc(capacity);
-                                if (! buf) {
-                                        status = AEROSPIKE_ERR_CLIENT;
-                                        break;
-                                }
+                        }
+                        capacity = (size + 16383) & ~16383; // Round up in 16KB increments.
+                        buf = cf_rc_alloc(capacity);
+                        if (! buf) {
+                                status = AEROSPIKE_ERR_CLIENT;
+                                break;
                         }
 		}
 		
@@ -1009,7 +1009,6 @@ as_command_read_messages(as_error* err, as_timeout_ctx** context, as_command* cm
 		}
 		else if (proto->type == AS_COMPRESSED_MESSAGE_TYPE) {
 			status = as_compressed_size_parse(err, buf, &size2);
-
 			if (status != AEROSPIKE_OK) {
 				break;
 			}
@@ -1027,7 +1026,6 @@ as_command_read_messages(as_error* err, as_timeout_ctx** context, as_command* cm
 			}
 
 			status = as_proto_decompress(err, buf2, size2, buf, size);
-
 			if (status != AEROSPIKE_OK) {
 				break;
 			}

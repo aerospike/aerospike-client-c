@@ -960,7 +960,7 @@ as_command_read_messages(as_error* err, as_timeout_ctx** context, as_command* cm
 		
 		if (status != AEROSPIKE_OK) {
                         if (status == AEROSPIKE_ERR_TIMEOUT) {
-                                as_timeout_ctx_set(context, (uint8_t*)proto, sizeof(as_proto), sock->offset, State_Read_Proto);
+                                as_timeout_ctx_set(context, (uint8_t*)proto, sizeof(as_proto), sock->offset, AS_READ_STATE_PROTO);
                         }
 			break;
 		}
@@ -997,7 +997,7 @@ as_command_read_messages(as_error* err, as_timeout_ctx** context, as_command* cm
 		
 		if (status != AEROSPIKE_OK) {
                         if (status == AEROSPIKE_ERR_TIMEOUT) {
-                                as_timeout_ctx_set(context, buf, size, sock->offset, State_Read_CmdBuffer);
+                                as_timeout_ctx_set(context, buf, size, sock->offset, AS_READ_STATE_CMDBUF);
                         }
 			break;
 		}
@@ -1081,7 +1081,7 @@ as_command_read_message(as_error* err, as_timeout_ctx** context, as_command* cmd
 	status = as_socket_read_deadline(err, sock, node, (uint8_t*)proto, sizeof(as_proto), cmd->socket_timeout, cmd->deadline_ms);
 	if (status != AEROSPIKE_OK) {
 		if (status == AEROSPIKE_ERR_TIMEOUT) {
-			as_timeout_ctx_set(context, (uint8_t*)proto, sizeof(as_proto), sock->offset, State_Read_Proto);
+			as_timeout_ctx_set(context, (uint8_t*)proto, sizeof(as_proto), sock->offset, AS_READ_STATE_PROTO);
 		}
 		goto done;
 	}
@@ -1106,7 +1106,7 @@ as_command_read_message(as_error* err, as_timeout_ctx** context, as_command* cmd
 	status = as_socket_read_deadline(err, sock, node, buf, size, cmd->socket_timeout, cmd->deadline_ms);
 	if (status != AEROSPIKE_OK) {
 		if (status == AEROSPIKE_ERR_TIMEOUT) {
-			as_timeout_ctx_set(context, buf, size, sock->offset, State_Read_CmdBuffer);
+			as_timeout_ctx_set(context, buf, size, sock->offset, AS_READ_STATE_CMDBUF);
 		}
 		goto done;
 	}

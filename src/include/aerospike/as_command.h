@@ -231,8 +231,8 @@ typedef struct as_command_parse_result_data_s {
  * The socket state when a read timeout occurs.
  */
 typedef enum as_read_state_e {
-	State_Read_Proto,
-	State_Read_CmdBuffer,
+	AS_READ_STATE_PROTO,
+	AS_READ_STATE_CMDBUF,
 } as_read_state;
 
 /**

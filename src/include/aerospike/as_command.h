@@ -867,7 +867,7 @@ as_timeout_ctx_clear(as_timeout_ctx **context) {
  * @return true if the allocation succeeded; false otherwise.
  */
 static inline bool
-as_timeout_ctx_set(as_timeout_ctx** context, uint8_t *buffer, uint32_t cap, uint32_t offset, uint8_t state) {
+as_timeout_ctx_set(as_timeout_ctx** context, uint8_t* buffer, uint32_t cap, uint32_t offset, uint8_t state) {
 	if (context) {
 		// Assume we're going to fail and default the output to NULL.
 		*context = NULL;

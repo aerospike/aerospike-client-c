@@ -26,6 +26,7 @@
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_queue.h>
+#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
@@ -506,6 +507,8 @@ as_node_create_socket(
 	return AEROSPIKE_OK;
 }
 
+#define DEBUG(...) {fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); fflush(stderr);}
+
 static as_status
 as_node_create_connection(
 	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms, as_conn_pool* pool,
@@ -528,17 +531,39 @@ as_node_create_connection(
 	as_cluster* cluster = node->cluster;
 
 	if (cluster->auth_enabled) {
+                DEBUG("!- cluster->auth_enabled");
 		// Must reserve session because not called from cluster tend thread.
 		as_session* session = as_session_load(&node->session);
 
 		if (session) {
+                        DEBUG("! !- session");
+			// Defaults to true to preserve default, non-timeout-recovery-related behavior.
+			bool should_close_socket = true;
+
 			as_incr_uint32(&session->ref_count);
 			status = as_authenticate(cluster, err, sock, node, session, socket_timeout, deadline_ms);
 			as_session_release(session);
 
+                        DEBUG("! ! !- status = %d", status);
+			if (status == AEROSPIKE_ERR_TIMEOUT) {
+                                DEBUG("! ! !- AEROSPIKE_ERR_TIMEOUT");
+				if (! as_queue_mt_push(&cluster->recover_queue, sock)) {
+                                        DEBUG("! ! ! !- as_queue_mt_push() = 0");
+					as_node_incr_sync_conns_aborted(node);
+				}
+				else {
+                                        DEBUG("! ! ! !- as_queue_mt_push() != 0");
+					// Socket successfully queued; let's not close the socket yet.
+					should_close_socket = false;
+				}
+			}
+
 			if (status) {
 				as_node_signal_login(node);
-				as_node_close_socket(node, sock);
+				if (should_close_socket) {
+                                        DEBUG("! ! ! !- closing socket");
+					as_node_close_socket(node, sock);
+				}
 				return status;
 			}
 		}
@@ -663,7 +688,7 @@ as_node_get_connection(
 			return status;
 		}
 		else {
-			// Socket not found and queue is full.  Try another queue.
+			// Socket not found and queue is full.	Try another queue.
 			as_conn_pool_decr(pool);
 
 			if (backward) {

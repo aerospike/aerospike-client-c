@@ -21,6 +21,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_partition_tracker.h>
+#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_sleep.h>
@@ -74,10 +75,10 @@ as_replica_index_init_write(as_cluster* cluster, as_policy_replica replica)
 }
 
 static as_status
-as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in);
+as_command_read_messages(as_error* err, as_timeout_ctx** context, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in);
 
 static as_status
-as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in);
+as_command_read_message(as_error* err, as_timeout_ctx** context, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in);
 
 as_status
 as_batch_retry(as_command* cmd, as_error* err);
@@ -750,10 +751,10 @@ as_command_execute(as_command* cmd, as_error* err)
 
 		// Parse results returned by server.
 		if (cmd->node) {
-			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in);
+			status = as_command_read_messages(err, NULL, cmd, &socket, node, &bytes_in);
 		}
 		else {
-			status = as_command_read_message(err, cmd, &socket, node, &bytes_in);
+			status = as_command_read_message(err, NULL, cmd, &socket, node, &bytes_in);
 		}
 
 		if (metrics) {
@@ -794,7 +795,16 @@ as_command_execute(as_command* cmd, as_error* err)
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
-						as_node_close_conn_error(node, &socket, socket.pool);
+						// The socket has already been removed from its pool by way of
+						// the as_node_get_connection() function above.  All we need to do
+						// is add it to the recovery queue, and continue processing the timeout
+						// as we otherwise would.
+						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &socket)) {
+							// Queue insertion failed, most likely due to out of memory.
+							// Abort timeout recovery and just close the socket.
+							as_node_close_conn_error(node, &socket, socket.pool);
+							as_node_incr_sync_conns_aborted(node);
+						}
 					}
 					goto Retry;
 
@@ -926,7 +936,7 @@ Retry:
 }
 
 static as_status
-as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in)
+as_command_read_messages(as_error* err, as_timeout_ctx** context, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in)
 {
 	size_t capacity = 0;
 	uint8_t* buf = NULL;
@@ -934,26 +944,35 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 	size_t capacity2 = 0;
 	uint8_t* buf2 = NULL;
 	size_t size2;
-	as_proto proto;
+	as_proto* proto;
 	as_status status;
+
+        proto = (as_proto*)cf_rc_alloc(sizeof(as_proto));
+        if (! proto) {
+                status = AEROSPIKE_ERR_CLIENT;
+                goto done;
+        }
 
 	while (true) {
 		// Read header
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto),
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)proto, sizeof(as_proto),
 										 cmd->socket_timeout, cmd->deadline_ms);
 		
 		if (status != AEROSPIKE_OK) {
+                        if (status == AEROSPIKE_ERR_TIMEOUT) {
+                                as_timeout_ctx_set(context, (uint8_t*)proto, sizeof(as_proto), sock->offset, State_Read_Proto);
+                        }
 			break;
 		}
 
 		*bytes_in += sizeof(as_proto);
-		status = as_proto_parse(err, &proto);
+		status = as_proto_parse(err, proto);
 
 		if (status != AEROSPIKE_OK) {
 			break;
 		}
 
-		size = proto.sz;
+		size = proto->sz;
 
 		if (size == 0) {
 			continue;
@@ -961,9 +980,15 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 
 		// Prepare buffer
 		if (size > capacity) {
-			as_command_buffer_free(buf, capacity);
-			capacity = (size + 16383) & ~16383; // Round up in 16KB increments.
-			buf = as_command_buffer_init(capacity);
+                        if (buf) {
+                                cf_rc_releaseandfree(buf);
+                        }
+                        capacity = (size + 16383) & ~16383; // Round up in 16KB increments.
+                        buf = cf_rc_alloc(capacity);
+                        if (! buf) {
+                                status = AEROSPIKE_ERR_CLIENT;
+                                break;
+                        }
 		}
 		
 		// Read remaining message bytes in group
@@ -971,29 +996,36 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 										 cmd->deadline_ms);
 		
 		if (status != AEROSPIKE_OK) {
+                        if (status == AEROSPIKE_ERR_TIMEOUT) {
+                                as_timeout_ctx_set(context, buf, size, sock->offset, State_Read_CmdBuffer);
+                        }
 			break;
 		}
 		
 		*bytes_in += size;
 
-		if (proto.type == AS_MESSAGE_TYPE) {
+		if (proto->type == AS_MESSAGE_TYPE) {
 			status = cmd->parse_results_fn(err, cmd, node, buf, size);
 		}
-		else if (proto.type == AS_COMPRESSED_MESSAGE_TYPE) {
+		else if (proto->type == AS_COMPRESSED_MESSAGE_TYPE) {
 			status = as_compressed_size_parse(err, buf, &size2);
-
 			if (status != AEROSPIKE_OK) {
 				break;
 			}
 
 			if (size2 > capacity2) {
-				as_command_buffer_free(buf2, capacity2);
+                                if (buf2) {
+                                        cf_rc_releaseandfree(buf2);
+                                }
 				capacity2 = (size2 + 16383) & ~16383; // Round up in 16KB increments.
-				buf2 = as_command_buffer_init(capacity2);
+                                buf2 = cf_rc_alloc(capacity2);
+                                if (! buf2) {
+                                        status = AEROSPIKE_ERR_CLIENT;
+                                        break;
+                                }
 			}
 
 			status = as_proto_decompress(err, buf2, size2, buf, size);
-
 			if (status != AEROSPIKE_OK) {
 				break;
 			}
@@ -1002,7 +1034,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 										   size2 - sizeof(as_proto));
 		}
 		else {
-			status = as_proto_type_error(err, &proto, AS_MESSAGE_TYPE);
+			status = as_proto_type_error(err, proto, AS_MESSAGE_TYPE);
 			break;
 		}
 
@@ -1013,76 +1045,109 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 			break;
 		}
 	}
-	as_command_buffer_free(buf, capacity);
-	as_command_buffer_free(buf2, capacity2);
+
+done:
+        if (buf2) {
+                cf_rc_releaseandfree(buf2);
+        }
+
+        if (buf) {
+                cf_rc_releaseandfree(buf);
+        }
+
+        if (proto) {
+                cf_rc_releaseandfree(proto);
+        }
+
 	return status;
 }
 
+
 static as_status
-as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in)
+as_command_read_message(as_error* err, as_timeout_ctx** context, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in)
 {
-	as_proto proto;
-	as_status status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto),
-											   cmd->socket_timeout, cmd->deadline_ms);
+	uint8_t* buf = NULL;	// squelch compiler warnings for use-before-initialization
+	uint8_t* buf2 = NULL;
+	as_status status;
 
-	if (status != AEROSPIKE_OK) {
-		return status;
+	// By default, assume we have no context to communicate.
+	as_timeout_ctx_clear(context);
+
+	as_proto* proto = cf_rc_alloc(sizeof(as_proto));
+	if (! proto) {
+		status = AEROSPIKE_ERR_CLIENT;
+		goto done;
 	}
-
+	status = as_socket_read_deadline(err, sock, node, (uint8_t*)proto, sizeof(as_proto), cmd->socket_timeout, cmd->deadline_ms);
+	if (status != AEROSPIKE_OK) {
+		if (status == AEROSPIKE_ERR_TIMEOUT) {
+			as_timeout_ctx_set(context, (uint8_t*)proto, sizeof(as_proto), sock->offset, State_Read_Proto);
+		}
+		goto done;
+	}
 	*bytes_in += sizeof(as_proto);
-	status = as_proto_parse(err, &proto);
 
+	status = as_proto_parse(err, proto);
 	if (status != AEROSPIKE_OK) {
-		return status;
+		goto done;
 	}
 
-	size_t size = proto.sz;
-
+	size_t size = proto->sz;
 	if (size == 0) {
-		return as_proto_size_error(err, size);
+		status = as_proto_size_error(err, size);
+		goto done;
 	}
 
-	uint8_t* buf = as_command_buffer_init(size);
+	buf = (uint8_t *)cf_rc_alloc(size);
+	if (! buf) {
+		status = AEROSPIKE_ERR_CLIENT;
+		goto done;
+	}
 	status = as_socket_read_deadline(err, sock, node, buf, size, cmd->socket_timeout, cmd->deadline_ms);
-
 	if (status != AEROSPIKE_OK) {
-		as_command_buffer_free(buf, size);
-		return status;
+		if (status == AEROSPIKE_ERR_TIMEOUT) {
+			as_timeout_ctx_set(context, buf, size, sock->offset, State_Read_CmdBuffer);
+		}
+		goto done;
 	}
-
 	*bytes_in += size;
 
-	if (proto.type == AS_MESSAGE_TYPE) {
+	if (proto->type == AS_MESSAGE_TYPE) {
 		status = cmd->parse_results_fn(err, cmd, node, buf, size);
-		as_command_buffer_free(buf, size);
-		return status;
+		goto done;
 	}
-	else if (proto.type == AS_COMPRESSED_MESSAGE_TYPE) {
+	else if (proto->type == AS_COMPRESSED_MESSAGE_TYPE) {
 		size_t size2;
+
 		status = as_compressed_size_parse(err, buf, &size2);
-
 		if (status != AEROSPIKE_OK) {
-			as_command_buffer_free(buf, size);
-			return status;
+			goto done;
 		}
 
-		uint8_t* buf2 = as_command_buffer_init(size2);
+		buf2 = (uint8_t*)cf_rc_alloc(size2);
+		if (! buf2) {
+			status = AEROSPIKE_ERR_CLIENT;
+			goto done;
+		}
 		status = as_proto_decompress(err, buf2, size2, buf, size);
-		as_command_buffer_free(buf, size);
-
 		if (status != AEROSPIKE_OK) {
-			as_command_buffer_free(buf2, size2);
-			return status;
+			goto done;
 		}
-		status = cmd->parse_results_fn(err, cmd, node, buf2 + sizeof(as_proto),
-									   size2 - sizeof(as_proto));
-		as_command_buffer_free(buf2, size2);
-		return status;
+
+		status = cmd->parse_results_fn(err, cmd, node, buf2 + sizeof(as_proto), size2 - sizeof(as_proto));
+		goto done;
 	}
 	else {
-		as_command_buffer_free(buf, size);
-		return as_proto_type_error(err, &proto, AS_MESSAGE_TYPE);
+		status = as_proto_type_error(err, proto, AS_MESSAGE_TYPE);
+		goto done;
 	}
+
+done:
+	if (buf2) cf_rc_releaseandfree(buf2);
+	if (buf) cf_rc_releaseandfree(buf);
+	if (proto) cf_rc_releaseandfree(proto);
+
+	return status;
 }
 
 as_status

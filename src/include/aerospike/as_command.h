@@ -70,53 +70,53 @@ extern "C" {
 #define AS_FIELD_FILTER 43
 
 // Message info1 bits
-#define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
+#define AS_MSG_INFO1_READ			(1 << 0) // contains a read operation
 #define AS_MSG_INFO1_GET_ALL			(1 << 1) // get all bins, period
 #define AS_MSG_INFO1_SHORT_QUERY		(1 << 2) // short query
 #define AS_MSG_INFO1_BATCH_INDEX		(1 << 3) // batch
-#define AS_MSG_INFO1_XDR				(1 << 4) // operation is being performed by XDR
+#define AS_MSG_INFO1_XDR			(1 << 4) // operation is being performed by XDR
 #define AS_MSG_INFO1_GET_NOBINDATA		(1 << 5) // do not get information about bins and its data
-#define AS_MSG_INFO1_READ_MODE_AP_ALL	(1 << 6) // read mode all for AP namespaces.
-#define AS_MSG_INFO1_COMPRESS_RESPONSE	(1 << 7) // tell server to compress it's response.
+#define AS_MSG_INFO1_READ_MODE_AP_ALL		(1 << 6) // read mode all for AP namespaces.
+#define AS_MSG_INFO1_COMPRESS_RESPONSE		(1 << 7) // tell server to compress it's response.
 
 // Message info2 bits
-#define AS_MSG_INFO2_WRITE				(1 << 0) // contains a write semantic
-#define AS_MSG_INFO2_DELETE				(1 << 1) // delete record
+#define AS_MSG_INFO2_WRITE			(1 << 0) // contains a write semantic
+#define AS_MSG_INFO2_DELETE			(1 << 1) // delete record
 #define AS_MSG_INFO2_GENERATION			(1 << 2) // pay attention to the generation
 #define AS_MSG_INFO2_GENERATION_GT		(1 << 3) // apply write if new generation >= old, good for restore
 #define AS_MSG_INFO2_DURABLE_DELETE		(1 << 4) // command resulting in record deletion leaves tombstone (Enterprise only).
 #define AS_MSG_INFO2_CREATE_ONLY		(1 << 5) // write record only if it doesn't exist
-#define AS_MSG_INFO2_RELAX_AP_LONG_QUERY (1 << 6) // treat as long query, but relax read consistency.
-#define AS_MSG_INFO2_RESPOND_ALL_OPS	(1 << 7) // return a result for every operation.
+#define AS_MSG_INFO2_RELAX_AP_LONG_QUERY	(1 << 6) // treat as long query, but relax read consistency.
+#define AS_MSG_INFO2_RESPOND_ALL_OPS		(1 << 7) // return a result for every operation.
 
 // Message info3 bits
-#define AS_MSG_INFO3_LAST				(1 << 0) // this is the last of a multi-part message
-#define AS_MSG_INFO3_COMMIT_MASTER  	(1 << 1) // write commit level - bit 0
+#define AS_MSG_INFO3_LAST			(1 << 0) // this is the last of a multi-part message
+#define AS_MSG_INFO3_COMMIT_MASTER		(1 << 1) // write commit level - bit 0
 // On send: Do not return partition done in scan/query.
 // On receive: Specified partition is done in scan/query.
-#define AS_MSG_INFO3_PARTITION_DONE  	(1 << 2)
+#define AS_MSG_INFO3_PARTITION_DONE		(1 << 2)
 #define AS_MSG_INFO3_UPDATE_ONLY		(1 << 3) // update existing record only, do not create new record
-#define AS_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4) // completely replace existing record, or create new record
+#define AS_MSG_INFO3_CREATE_OR_REPLACE		(1 << 4) // completely replace existing record, or create new record
 #define AS_MSG_INFO3_REPLACE_ONLY		(1 << 5) // completely replace existing record, do not create new record
 #define AS_MSG_INFO3_SC_READ_TYPE		(1 << 6) // see below
 #define AS_MSG_INFO3_SC_READ_RELAX		(1 << 7) // see below
 // Interpret SC_READ bits in info3.
 //
 // RELAX   TYPE
-//                strict
-//                ------
-//   0      0     sequential (default)
-//   0      1     linearize
+//		  strict
+//		  ------
+//   0	    0	  sequential (default)
+//   0	    1	  linearize
 //
-//                relaxed
-//                -------
-//   1      0     allow prole
-//   1      1     allow unavailable
+//		  relaxed
+//		  -------
+//   1	    0	  allow prole
+//   1	    1	  allow unavailable
 
 // Transaction
 #define AS_MSG_INFO4_TXN_VERIFY_READ		(1 << 0) // Send transaction version to the server to be verified.
 #define AS_MSG_INFO4_TXN_ROLL_FORWARD		(1 << 1) // Roll forward transaction.
-#define AS_MSG_INFO4_TXN_ROLL_BACK			(1 << 2) // Roll back transaction.
+#define AS_MSG_INFO4_TXN_ROLL_BACK		(1 << 2) // Roll back transaction.
 #define AS_MSG_INFO4_TXN_ON_LOCKING_ONLY	(1 << 4) // Must be able to lock record in transaction.
 
 // Misc
@@ -225,6 +225,45 @@ typedef struct as_command_parse_result_data_s {
 	as_record** record;
 	bool deserialize;
 } as_command_parse_result_data;
+
+/**
+ * @private
+ * The socket state when a read timeout occurs.
+ */
+typedef enum as_read_state_e {
+	State_Read_Proto,
+	State_Read_CmdBuffer,
+} as_read_state;
+
+/**
+ * @private
+ * When a socket read timeout occurs, this structure records
+ * the context in which it happened.
+ */
+
+typedef struct as_timeout_ctx_s {
+	/**
+	 * Points to a reference counted buffer of length `capacity`.
+	 * Dispose of the buffer using cf_rc_releaseandfree().
+	 */
+	uint8_t* buffer_rc;
+
+	/**
+	 * The number of bytes total in the buffer above.
+	 */
+	uint32_t capacity;
+
+	/**
+	 * When draining a socket, the received data will be placed
+	 * starting at this byte offset.
+	 */
+	uint32_t offset;
+
+	/**
+	 * What state the socket was in when the timeout happened.
+	 */
+	as_read_state state;
+} as_timeout_ctx;
 
 //---------------------------------
 // Functions
@@ -538,7 +577,7 @@ uint8_t*
 as_command_write_key(
 	uint8_t* p, const as_policy_base* policy, as_policy_key pol_key, const as_key* key,
 	as_command_txn_data* tdata
- 	);
+	);
 
 /**
  * @private
@@ -795,6 +834,69 @@ as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t
  */
 as_status
 as_command_parse_fields_deadline(uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn);
+
+/**
+ * @private
+ * Nulls out a timeout context pointer.  If the context pointer wasn't NULL to start with,
+ * it will release the referenced context.  Passing NULL is acceptable; in this case, this
+ * procedure does nothing.
+ */
+static inline void
+as_timeout_ctx_clear(as_timeout_ctx **context) {
+	if (context) {
+		as_timeout_ctx* ctx = *context;
+
+		if (ctx) {
+			if (ctx->buffer_rc) {
+				cf_rc_releaseandfree(ctx->buffer_rc);
+			}
+			cf_rc_releaseandfree(ctx);
+		}
+
+		*context = NULL;
+	}
+}
+
+/**
+ * @private
+ * Initializes an as_timeout_ctx instance with relevant data.  The supplied buffer, if any, must be
+ * allocated with cf_rc_alloc().  The buffer is reserved when initializing the timeout context.  
+ *
+ * If the supplied context pointer is NULL, then nothing happens, and true is returned.
+ *
+ * @return true if the allocation succeeded; false otherwise.
+ */
+static inline bool
+as_timeout_ctx_set(as_timeout_ctx** context, uint8_t *buffer, uint32_t cap, uint32_t offset, uint8_t state) {
+	if (context) {
+		// Assume we're going to fail and default the output to NULL.
+		*context = NULL;
+
+		as_timeout_ctx* ctx = cf_rc_alloc(sizeof(as_timeout_ctx));
+		if (ctx) {
+			// Allocation successful; reserve the buffer because we're creating a new reference
+			// to it.
+			if (buffer) {
+				cf_rc_reserve(buffer);
+			}
+			ctx->buffer_rc = buffer;
+			ctx->capacity = cap;
+			ctx->offset = offset;
+			ctx->state = state;
+
+			*context = ctx;
+			return true;
+		}
+
+		// If we're here, then context is non-NULL but we weren't able to create a new context.
+		// This is an out of memory condition, so return false.
+		return false;
+	}
+
+	// If no context pointer is provided, then bypass context logic completely.
+	// This is an automatic success, since we weren't asked to do anything.
+	return true;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

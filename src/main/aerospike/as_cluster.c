@@ -841,6 +841,67 @@ as_cluster_init_error(as_vector* invalid_hosts, as_error* err)
 	return err->code;
 }
 
+static void
+as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
+{
+	as_socket socket;
+	const int TMPBUF_SIZE = 4096;
+	const int SOCKET_TIMEOUT = 10;
+	const int NO_DEADLINE = 0;
+	uint8_t tmpbuf[TMPBUF_SIZE];
+
+	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
+	// because if we did, and we have a socket which doesn't fully drain this tend
+	// cycle, then when we go to push it back onto the queue's tail, we'll just re-
+	// pop it if the queue would otherwise be empty.  This creates an infinite loop.
+	//
+	// For this reason, we must query the size, and just iterate for that many pops.
+	// Anything else that comes up in the meantime, or if we end up having to re-queue
+	// a socket, won't hurt us.  Plus, it guarantees that we process each socket
+	// at most once.
+
+	uint32_t queue_size = as_queue_mt_size(&cluster->recover_queue);
+	while (queue_size > 0) {
+		if (as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
+			as_node* node; // declaration here to silence compiler warning about declaration-after-label C23 extension.
+			node = as_node_get_random(cluster);
+
+			as_socket_read_deadline(err, &socket, NULL, tmpbuf, TMPBUF_SIZE, SOCKET_TIMEOUT, NO_DEADLINE);
+			switch (err->code) {
+			case AEROSPIKE_OK:
+				// We have drained the socket, so put it back into the connection pool.
+				// If we can't do that for some reason, however, discard the socket.
+				// Note that as_node_put_connection() takes care of socket disposal in the
+				// event of an error.
+				if (as_node_put_connection(node, &socket)) {
+					as_node_incr_sync_conns_recovered(node);
+				} else {
+					as_node_incr_sync_conns_aborted(node);
+				}
+				break;
+
+			case AEROSPIKE_ERR_TIMEOUT:
+				// We timed out while trying to drain the socket.  This doesn't necessarily
+				// mean that we failed to drain anything at all, though.  We'll just collect
+				// the rest of the data the next time the tend thread runs through its cycle.
+				// So, put the socket back onto the recover queue.
+				as_queue_mt_push(&cluster->recover_queue, &socket);
+				break;
+
+			default:
+				// Something unexpected has gone wrong; close the socket.
+				as_socket_close(&socket);
+				as_node_incr_sync_conns_aborted(node);
+				break;
+			}
+
+			as_node_release(node);
+		}
+
+		--queue_size;
+	}
+}
+
 /**
  * Check health of all nodes in the cluster.
  */
@@ -1009,6 +1070,8 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		// Update shared memory to notify prole tenders to rebalance (retrieve racks info).
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
+
+	as_cluster_tend_recover_queue(cluster, err);
 
 	as_cluster_destroy_peers(&peers);
 	as_cluster_manage(cluster);
@@ -1613,7 +1676,15 @@ as_cluster_create(aerospike* as, as_error* err)
 
 	// Initialize garbage collection array.
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
-	
+
+	// Initialize the timeout delay recovery queue.
+	if (! as_queue_mt_init(&cluster->recover_queue,
+		                   sizeof(as_socket), config->min_conns_per_node)) {
+		as_cluster_destroy(cluster);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Unable to initialize socket timeout recovery queue");
+	}
+
 	// Initialize thread pool.
 	int rc = as_thread_pool_init(&cluster->thread_pool, config->thread_pool_size);
 
@@ -1757,6 +1828,19 @@ as_cluster_destroy(as_cluster* cluster)
 	as_cluster_gc(cluster->gc);
 	as_vector_destroy(cluster->gc);
 		
+	// Flush and destroy the timeout recovery queue.
+	uint32_t rq_size = as_queue_mt_size(&cluster->recover_queue);
+	while (rq_size > 0) {
+		as_socket socket;
+
+		if (as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
+			as_socket_close(&socket);
+		}
+
+		--rq_size;
+	}
+	as_queue_mt_destroy(&cluster->recover_queue);
+
 	// Destroy partition tables.
 	as_partition_tables_destroy(&cluster->partition_tables);
 

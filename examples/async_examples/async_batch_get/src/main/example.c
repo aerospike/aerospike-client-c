@@ -176,9 +176,16 @@ batch_read(as_event_loop* event_loop)
 		record->read_all_bins = true;
 	}
 
+	as_policy_batch p;
+	as_policy_batch_init(&p);
+	p.base.total_timeout = 3000;
+	p.base.socket_timeout = 1;
+	p.base.timeout_delay = 3000;
+	p.base.max_retries = 1;
+
 	// Read these keys.
 	as_error err;
-	if (aerospike_batch_read_async(&as, &err, NULL, records, batch_read_listener, NULL, event_loop)
+	if (aerospike_batch_read_async(&as, &err, &p, records, batch_read_listener, NULL, event_loop)
 		!= AEROSPIKE_OK) {
 		batch_read_listener(&err, records, NULL, event_loop);
 	}

@@ -68,7 +68,7 @@ const int DEFAULT_PORT = 3000;
 const char DEFAULT_NAMESPACE[] = "test";
 const char DEFAULT_SET[] = "eg-set";
 const char DEFAULT_KEY_STR[] = "eg-key";
-const uint32_t DEFAULT_NUM_KEYS = 20;
+const uint32_t DEFAULT_NUM_KEYS = 10000;
 
 const char SHORT_OPTS_BASIC[] = "h:p:U:P::n:s:k:";
 const struct option LONG_OPTS_BASIC[] = {

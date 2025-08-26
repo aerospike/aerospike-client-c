@@ -2372,6 +2372,7 @@ as_event_recover_connection(as_event_command* cmd)
 	}
 
 	recover->type = AS_ASYNC_TYPE_CONN_RECOVER;
+	recover->flags = cmd->flags & AS_ASYNC_FLAGS_READ;
 	recover->txn = NULL;
 	recover->ubuf = NULL;
 	recover->ubuf_size = 0;

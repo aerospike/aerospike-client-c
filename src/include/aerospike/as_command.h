@@ -847,10 +847,12 @@ as_timeout_ctx_clear(as_timeout_ctx **context) {
 		as_timeout_ctx* ctx = *context;
 
 		if (ctx) {
-			if (ctx->buffer_rc) {
-				cf_rc_releaseandfree(ctx->buffer_rc);
+			if (! cf_rc_release(ctx)) {
+				if (ctx->buffer_rc) {
+					cf_rc_releaseandfree(ctx->buffer_rc);
+				}
+				cf_rc_free(ctx);
 			}
-			cf_rc_releaseandfree(ctx);
 		}
 
 		*context = NULL;

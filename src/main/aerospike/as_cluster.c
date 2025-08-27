@@ -1402,7 +1402,7 @@ as_validate_timeout_delay(as_error* err, uint32_t timeout_delay, const char* id)
 	}
 
 	return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-		"Invalid %s timeout_delay: %u valid values are 0 or >= 1000",
+		"Invalid %s timeout_delay: %u valid values are 0 or >= 3000",
 			id, timeout_delay);
 }
 
@@ -1450,6 +1450,10 @@ as_cluster_validate_timeout_delay(as_error* err, as_policies* p)
 	}
 
 	if (as_validate_timeout_delay(err, p->txn_roll.base.timeout_delay, "txn_roll") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->info.timeout_delay, "info") != AEROSPIKE_OK) {
 		return err->code;
 	}
 

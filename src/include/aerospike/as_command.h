@@ -234,6 +234,8 @@ typedef enum as_read_state_e {
         AS_READ_STATE_NONE,
 	AS_READ_STATE_PROTO,
 	AS_READ_STATE_DETAIL,
+        AS_READ_STATE_AUTH_HEADER,
+        AS_READ_STATE_COMPLETE,
 } as_read_state;
 
 /**

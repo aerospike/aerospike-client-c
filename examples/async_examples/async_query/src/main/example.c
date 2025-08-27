@@ -182,17 +182,17 @@ run_query(as_event_loop* event_loop)
 	as_query query;
 	as_query_init(&query, g_namespace, g_set);
 
-	// Generate an as_query.where condition. Note that as_query_destroy() takes
-	// care of destroying all the query's member objects if necessary. However
-	// using as_query_where_inita() does avoid internal heap usage.
-	as_query_where_inita(&query, 1);
-	as_query_where(&query, "test-bin", as_integer_equals(7));
+	as_policy_query p;
+	as_policy_query_init(&p);
+	p.base.socket_timeout = 1;
+	p.base.timeout_delay = 15000;
+    p.base.max_retries = 10;
 
-	LOG("executing query: where test-bin = 7");
+	LOG("executing query");
 
 	// Execute the query.
 	as_error err;
-	if (aerospike_query_async(&as, &err, NULL, &query, query_listener, NULL, event_loop) != AEROSPIKE_OK) {
+	if (aerospike_query_async(&as, &err, &p, &query, query_listener, NULL, event_loop) != AEROSPIKE_OK) {
 		query_listener(&err, NULL, NULL, event_loop);
 	}
 

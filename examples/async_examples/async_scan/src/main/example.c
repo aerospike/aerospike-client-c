@@ -218,7 +218,9 @@ run_scan(as_event_loop* event_loop)
 
 	as_policy_scan p;
 	as_policy_scan_init(&p);
-	p.base.socket_timeout = 5000;
+	p.base.socket_timeout = 1;
+	p.base.timeout_delay = 15000;
+    p.base.max_retries = 10;
 
 	// Execute the scan.
 	as_error err;

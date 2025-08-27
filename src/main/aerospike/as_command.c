@@ -14,8 +14,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <aerospike/as_command.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_command.h>
+#include <aerospike/as_conn_recover.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
@@ -750,7 +751,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		uint64_t bytes_in = 0;
 
 		// Parse results returned by server.
-                as_timeout_ctx timeout_context = { 0, };
+		as_timeout_ctx timeout_context = { 0, };
 
 		if (cmd->node) {
 			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in, &timeout_context);
@@ -758,10 +759,6 @@ as_command_execute(as_command* cmd, as_error* err)
 		else {
 			status = as_command_read_message(err, cmd, &socket, node, &bytes_in, &timeout_context);
 		}
-
-                if (timeout_context.state != AS_READ_STATE_NONE) {
-                        fprintf(stderr, "ASCMD001 timeout_context updated\n");
-                }
 
 		if (metrics) {
 			as_node_add_bytes_in(metrics, bytes_in);
@@ -801,10 +798,11 @@ as_command_execute(as_command* cmd, as_error* err)
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
-                                                // TODO: instead of pushing socket, push the timeout context.
-                                                // We may need a larger structure with more fields.  See Java
-                                                // code.
-						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &socket)) {
+						as_conn_recover* cr = as_conn_recover_new(
+							&timeout_context,
+						);
+
+						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {
 							// Queue insertion failed, most likely due to out of memory.
 							// Abort timeout recovery and just close the socket.
 							as_node_close_conn_error(node, &socket, socket.pool);

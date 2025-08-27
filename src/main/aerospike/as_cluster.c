@@ -14,11 +14,12 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <aerospike/as_cluster.h>
 #include <aerospike/as_address.h>
 #include <aerospike/as_admin.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
 #include <aerospike/as_config_file.h>
+#include <aerospike/as_conn_recover.h>
 #include <aerospike/as_cpu.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
@@ -28,8 +29,8 @@
 #include <aerospike/as_peers.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
-#include <aerospike/as_string.h>
 #include <aerospike/as_string_builder.h>
+#include <aerospike/as_string.h>
 #include <aerospike/as_thread.h>
 #include <aerospike/as_tls.h>
 #include <aerospike/as_vector.h>
@@ -1683,7 +1684,7 @@ as_cluster_create(aerospike* as, as_error* err)
 
 	// Initialize the timeout delay recovery queue.
 	if (! as_queue_mt_init(&cluster->recover_queue,
-		                   sizeof(as_socket), config->min_conns_per_node)) {
+		                   sizeof(as_conn_recover*), config->min_conns_per_node)) {
 		as_cluster_destroy(cluster);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Unable to initialize socket timeout recovery queue");
@@ -1835,10 +1836,10 @@ as_cluster_destroy(as_cluster* cluster)
 	// Flush and destroy the timeout recovery queue.
 	uint32_t rq_size = as_queue_mt_size(&cluster->recover_queue);
 	while (rq_size > 0) {
-		as_socket socket;
+		as_conn_recover* cr;
 
-		if (as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
-			as_socket_close(&socket);
+		if (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
+			as_conn_recover_release(cr);
 		}
 
 		--rq_size;

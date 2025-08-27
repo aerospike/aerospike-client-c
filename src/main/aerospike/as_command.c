@@ -798,9 +798,11 @@ as_command_execute(as_command* cmd, as_error* err)
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
+                                                uint32_t timeout_delay = 0;
+
 						as_conn_recover* cr = as_conn_recover_new(
 							&timeout_context,
-                                                        timeout_delay, // TODO: How to discover this?
+                                                        timeout_delay,
                                                         true
 						);
 

@@ -21,7 +21,7 @@
 // Functions
 //---------------------------------
 
-static inline as_conn_recover*
+as_conn_recover*
 as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single)
 {
         if (! self) {
@@ -52,7 +52,7 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
                                 as_conn_recover_abort(self);
                                 return self;
                         }
-                        self->length = as_conn_recover_get_buffer_size(self) - (self->offset - 8);
+                        self->length = as_conn_recover_get_proto_size(self) - (self->offset - 8);
                         self->offset = 0;
                         self->state = AS_READ_STATE_DETAIL;
                 }
@@ -66,10 +66,13 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
                 self->length = is_single ? 8 : 12;
 
                 if (self->offset >= self->length) {
-                        as_conn_recover_parse_proto(self);
+                        if (! as_conn_recover_parse_proto(self)) {
+                                as_conn_recover_abort(self);
+                                return self;
+                        }
                 }
                 else if (self->offset > 0) {
-                        as_conn_copy_header_buffer(self);
+                        as_conn_recover_copy_header_buffer(self);
                 }
                 break;
 

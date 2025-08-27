@@ -44,6 +44,7 @@ typedef struct as_conn_recover_s {
         uint32_t      timeout_delay;
         bool          is_single;
         bool          check_return_code;
+        bool          last_group;
         uint8_t*      header_buf;
         uint32_t      length;
 } as_conn_recover;
@@ -56,7 +57,7 @@ typedef struct as_conn_recover_s {
  * @private
  * Initialize a connection recover record on the stack or on the heap.
  */
-static inline as_conn_recover*
+as_conn_recover*
 as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single);
 
 /**
@@ -134,6 +135,45 @@ static inline uint64_t
 as_conn_recover_get_proto_size(as_conn_recover* self) {
         return ((as_proto*)self->buffer_rc)->sz;
 }
+
+/**
+ * @private
+ * "Parse" an as_proto object (in the buffer_rc buffer) to further initialize the as_conn_recover instance.
+ * Answers false if an error occurred.
+ */
+static inline bool
+as_conn_recover_parse_proto(as_conn_recover* self) {
+        as_proto* proto = (as_proto*)self->buffer_rc;
+
+        if (! self->is_single) {
+                if (proto->type == AS_COMPRESSED_MESSAGE_TYPE) {
+                        // Do not recover connections with compressed data b/c
+                        // that would require saving large buffers with associated
+                        // state and performing decompression just to drain the
+                        // connection.
+
+                        return false;
+                }
+
+                // WARNING: The following code assumes multi-record responses
+                // always end with a separate proto that only contains one header
+                // with the info3 last group bit.  This is always true for batch
+                // and scan, but query does not conform.  Therefore, connection
+                // recovery for queries will likely fail.
+
+                uint8_t info3 = self->buffer_rc[self->length - 1];
+                if (info3 & AS_MSG_INFO3_LAST) {
+                        self->last_group = true;
+                }
+        }
+
+        self->length = proto->sz - (self->offset - 8);
+        self->offset = 0;
+        self->state = AS_READ_STATE_DETAIL;
+
+        return true;
+}
+
 
 #ifdef __cplusplus
 } // end extern "C"

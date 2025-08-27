@@ -231,8 +231,9 @@ typedef struct as_command_parse_result_data_s {
  * The socket state when a read timeout occurs.
  */
 typedef enum as_read_state_e {
+        AS_READ_STATE_NONE,
 	AS_READ_STATE_PROTO,
-	AS_READ_STATE_CMDBUF,
+	AS_READ_STATE_DETAIL,
 } as_read_state;
 
 /**
@@ -837,67 +838,22 @@ as_command_parse_fields_deadline(uint8_t** pp, as_error* err, as_msg* msg, struc
 
 /**
  * @private
- * Nulls out a timeout context pointer.  If the context pointer wasn't NULL to start with,
- * it will release the referenced context.  Passing NULL is acceptable; in this case, this
- * procedure does nothing.
- */
-static inline void
-as_timeout_ctx_clear(as_timeout_ctx **context) {
-	if (context) {
-		as_timeout_ctx* ctx = *context;
-
-		if (ctx) {
-			if (! cf_rc_release(ctx)) {
-				if (ctx->buffer_rc) {
-					cf_rc_releaseandfree(ctx->buffer_rc);
-				}
-				cf_rc_free(ctx);
-			}
-		}
-
-		*context = NULL;
-	}
-}
-
-/**
- * @private
  * Initializes an as_timeout_ctx instance with relevant data.  The supplied buffer, if any, must be
- * allocated with cf_rc_alloc().  The buffer is reserved when initializing the timeout context.  
+ * allocated with cf_rc_alloc().  The buffer will already be reserved when cf_rc_alloc() returns the
+ * pointer, and does not need to be reserved again unless you create additional references to it.
  *
  * If the supplied context pointer is NULL, then nothing happens, and true is returned.
  *
  * @return true if the allocation succeeded; false otherwise.
  */
-static inline bool
-as_timeout_ctx_set(as_timeout_ctx** context, uint8_t* buffer, uint32_t cap, uint32_t offset, uint8_t state) {
+static inline void
+as_timeout_ctx_set(as_timeout_ctx* context, uint8_t* buffer, uint32_t cap, uint32_t offset, uint8_t state) {
 	if (context) {
-		// Assume we're going to fail and default the output to NULL.
-		*context = NULL;
-
-		as_timeout_ctx* ctx = cf_rc_alloc(sizeof(as_timeout_ctx));
-		if (ctx) {
-			// Allocation successful; reserve the buffer because we're creating a new reference
-			// to it.
-			if (buffer) {
-				cf_rc_reserve(buffer);
-			}
-			ctx->buffer_rc = buffer;
-			ctx->capacity = cap;
-			ctx->offset = offset;
-			ctx->state = state;
-
-			*context = ctx;
-			return true;
-		}
-
-		// If we're here, then context is non-NULL but we weren't able to create a new context.
-		// This is an out of memory condition, so return false.
-		return false;
-	}
-
-	// If no context pointer is provided, then bypass context logic completely.
-	// This is an automatic success, since we weren't asked to do anything.
-	return true;
+                context->buffer_rc = buffer;
+                context->capacity = cap;
+                context->offset = offset;
+                context->state = state;
+        }
 }
 
 #ifdef __cplusplus

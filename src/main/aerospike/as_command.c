@@ -75,10 +75,10 @@ as_replica_index_init_write(as_cluster* cluster, as_policy_replica replica)
 }
 
 static as_status
-as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx** context);
+as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx* context);
 
 static as_status
-as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx** context);
+as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx* context);
 
 as_status
 as_batch_retry(as_command* cmd, as_error* err);
@@ -750,12 +750,18 @@ as_command_execute(as_command* cmd, as_error* err)
 		uint64_t bytes_in = 0;
 
 		// Parse results returned by server.
+                as_timeout_ctx timeout_context = { 0, };
+
 		if (cmd->node) {
-			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in, NULL);
+			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in, &timeout_context);
 		}
 		else {
-			status = as_command_read_message(err, cmd, &socket, node, &bytes_in, NULL);
+			status = as_command_read_message(err, cmd, &socket, node, &bytes_in, &timeout_context);
 		}
+
+                if (timeout_context.state != AS_READ_STATE_NONE) {
+                        fprintf(stderr, "ASCMD001 timeout_context updated\n");
+                }
 
 		if (metrics) {
 			as_node_add_bytes_in(metrics, bytes_in);
@@ -795,10 +801,9 @@ as_command_execute(as_command* cmd, as_error* err)
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
-						// The socket has already been removed from its pool by way of
-						// the as_node_get_connection() function above.  All we need to do
-						// is add it to the recovery queue, and continue processing the timeout
-						// as we otherwise would.
+                                                // TODO: instead of pushing socket, push the timeout context.
+                                                // We may need a larger structure with more fields.  See Java
+                                                // code.
 						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &socket)) {
 							// Queue insertion failed, most likely due to out of memory.
 							// Abort timeout recovery and just close the socket.
@@ -843,7 +848,7 @@ as_command_execute(as_command* cmd, as_error* err)
 					break;
 			}
 		}
-		
+
 		// Put connection back in pool.
 		as_node_put_connection(node, &socket);
 		
@@ -936,7 +941,7 @@ Retry:
 }
 
 static as_status
-as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx** context)
+as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx* context)
 {
 	size_t capacity = 0;
 	uint8_t* buf = NULL;
@@ -946,8 +951,6 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 	size_t size2;
 	as_proto proto;
 	as_status status;
-
-	as_timeout_ctx_clear(context);
 
 	while (true) {
 		// Read header
@@ -1005,7 +1008,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 				}
 				memcpy(heaped_buf, buf, capacity);
 
-				as_timeout_ctx_set(context, heaped_buf, size, sock->offset, AS_READ_STATE_CMDBUF);
+				as_timeout_ctx_set(context, heaped_buf, size, sock->offset, AS_READ_STATE_DETAIL);
 			}
 			break;
 		}
@@ -1056,13 +1059,11 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 
 
 static as_status
-as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx** context)
+as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx* context)
 {
 	as_proto proto;
 	as_status status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto),
 						   cmd->socket_timeout, cmd->deadline_ms);
-
-	as_timeout_ctx_clear(context);
 
 	if (status != AEROSPIKE_OK) {
 		if (status == AEROSPIKE_ERR_TIMEOUT) {
@@ -1099,7 +1100,7 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 				return AEROSPIKE_ERR_CLIENT;
 			}
 			memcpy(heaped_buf, buf, size);
-			as_timeout_ctx_set(context, heaped_buf, size, sock->offset, AS_READ_STATE_CMDBUF);
+			as_timeout_ctx_set(context, heaped_buf, size, sock->offset, AS_READ_STATE_DETAIL);
 		}
 
 		as_command_buffer_free(buf, size);

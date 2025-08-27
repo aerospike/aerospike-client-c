@@ -800,6 +800,8 @@ as_command_execute(as_command* cmd, as_error* err)
 					else {
 						as_conn_recover* cr = as_conn_recover_new(
 							&timeout_context,
+                                                        timeout_delay, // TODO: How to discover this?
+                                                        true
 						);
 
 						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {

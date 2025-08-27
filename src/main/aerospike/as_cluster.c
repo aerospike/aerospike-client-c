@@ -845,12 +845,6 @@ as_cluster_init_error(as_vector* invalid_hosts, as_error* err)
 static void
 as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 {
-	as_socket socket;
-	const int TMPBUF_SIZE = 4096;
-	const int SOCKET_TIMEOUT = 10;
-	const int NO_DEADLINE = 0;
-	uint8_t tmpbuf[TMPBUF_SIZE];
-
 	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
 	// because if we did, and we have a socket which doesn't fully drain this tend
 	// cycle, then when we go to push it back onto the queue's tail, we'll just re-
@@ -863,40 +857,23 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 
 	uint32_t queue_size = as_queue_mt_size(&cluster->recover_queue);
 	while (queue_size > 0) {
-		if (as_queue_mt_pop(&cluster->recover_queue, &socket, AS_QUEUE_NOWAIT)) {
-			as_node* node; // declaration here to silence compiler warning about declaration-after-label C23 extension.
-			node = as_node_get_random(cluster);
+                as_conn_recover* cr;
 
-			as_socket_read_deadline(err, &socket, NULL, tmpbuf, TMPBUF_SIZE, SOCKET_TIMEOUT, NO_DEADLINE);
-			switch (err->code) {
-			case AEROSPIKE_OK:
-				// We have drained the socket, so put it back into the connection pool.
-				// If we can't do that for some reason, however, discard the socket.
-				// Note that as_node_put_connection() takes care of socket disposal in the
-				// event of an error.
-				if (as_node_put_connection(node, &socket)) {
-					as_node_incr_sync_conns_recovered(node);
-				} else {
-					as_node_incr_sync_conns_aborted(node);
-				}
-				break;
+		if (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
+                        if (as_conn_recover_try_drain(cr)) {
+                                // connection successfully drained and recovered.
+                                // Or, at least, aborted in a meaningful way such that
+                                // we don't need to re-queue the connection recovery record.
 
-			case AEROSPIKE_ERR_TIMEOUT:
-				// We timed out while trying to drain the socket.  This doesn't necessarily
-				// mean that we failed to drain anything at all, though.  We'll just collect
-				// the rest of the data the next time the tend thread runs through its cycle.
-				// So, put the socket back onto the recover queue.
-				as_queue_mt_push(&cluster->recover_queue, &socket);
-				break;
+                                as_conn_recover_release(cr);
+                        }
+                        else {
+                                // connection needs to be re-queued for later draining
+                                // TODO: Ask: we just popped the cr off this queue, will
+                                // there ever be a case where requeueing the cr will fail?
 
-			default:
-				// Something unexpected has gone wrong; close the socket.
-				as_socket_close(&socket);
-				as_node_incr_sync_conns_aborted(node);
-				break;
-			}
-
-			as_node_release(node);
+                                as_queue_mt_push(&cluster->recover_queue, &cr);
+                        }
 		}
 
 		--queue_size;

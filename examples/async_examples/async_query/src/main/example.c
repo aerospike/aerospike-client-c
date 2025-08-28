@@ -184,6 +184,7 @@ run_query(as_event_loop* event_loop)
 
 	as_policy_query p;
 	as_policy_query_init(&p);
+	p.base.total_timeout = 0;
 	p.base.socket_timeout = 1;
 	p.base.timeout_delay = 15000;
     p.base.max_retries = 10;

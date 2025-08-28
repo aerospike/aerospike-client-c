@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -64,9 +64,9 @@ as_socket_is_error(int e)
 
 bool as_socket_stop_on_interrupt = false;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 void
 as_socket_init(as_socket* sock)
@@ -426,7 +426,8 @@ as_socket_read_deadline(
 	as_poll poll;
 	as_poll_init(&poll, sock->fd);
 
-	size_t pos = 0;
+	sock->offset = 0;
+
 	as_status status = AEROSPIKE_OK;
 	uint32_t timeout;
 	//int try = 0;
@@ -457,13 +458,13 @@ as_socket_read_deadline(
 
 		if (rv > 0) {
 #if !defined(_MSC_VER)
-			int r_bytes = (int)read(sock->fd, buf + pos, buf_len - pos);
+			int r_bytes = (int)read(sock->fd, buf + sock->offset, buf_len - sock->offset);
 #else
-			int r_bytes = (int)recv(sock->fd, buf + pos, (int)(buf_len - pos), 0);
+			int r_bytes = (int)recv(sock->fd, buf + sock->offset, (int)(buf_len - sock->offset), 0);
 #endif
 
 			if (r_bytes > 0) {
-				pos += r_bytes;
+				sock->offset += r_bytes;
 			}
 			else if (r_bytes == 0) {
 				// We believe this means that the server has closed this socket.
@@ -495,7 +496,7 @@ as_socket_read_deadline(
 	
 		//try++;
 	
-	} while (pos < buf_len);
+	} while (sock->offset < buf_len);
 
 	as_poll_destroy(&poll);
 	return status;

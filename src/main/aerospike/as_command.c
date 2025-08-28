@@ -753,7 +753,8 @@ as_command_execute(as_command* cmd, as_error* err)
 		// Parse results returned by server.
 		as_timeout_ctx timeout_context = { 0, };
 
-		if (cmd->node) {
+                bool is_single = cmd->node == NULL;
+		if (! is_single) {
 			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in, &timeout_context);
 		}
 		else {
@@ -798,12 +799,12 @@ as_command_execute(as_command* cmd, as_error* err)
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
-                                                uint32_t timeout_delay = 0;
-
+                                                as_node_reserve(node);
 						as_conn_recover* cr = as_conn_recover_new(
 							&timeout_context,
-                                                        timeout_delay,
-                                                        true
+                                                        cmd->policy->timeout_delay,
+                                                        is_single,
+                                                        node
 						);
 
 						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {

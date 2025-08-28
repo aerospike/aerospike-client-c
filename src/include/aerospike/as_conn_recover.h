@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_command.h>
+#include <aerospike/as_node.h>
 #include <citrusleaf/alloc.h>
 
 #ifdef __cplusplus
@@ -47,6 +48,7 @@ typedef struct as_conn_recover_s {
         bool          last_group;
         uint8_t*      header_buf;
         uint32_t      length;
+        as_node*      node;
 } as_conn_recover;
 
 /******************************************************************************
@@ -58,7 +60,8 @@ typedef struct as_conn_recover_s {
  * Initialize a connection recover record on the stack or on the heap.
  */
 as_conn_recover*
-as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single);
+as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
+                     as_node* node);
 
 /**
  * @private
@@ -66,11 +69,12 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
  * Use as_conn_recover_release() to dispose of the recover record.
  */
 static inline as_conn_recover*
-as_conn_recover_new(as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single)
+as_conn_recover_new(as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
+                    as_node* node)
 {
         return as_conn_recover_init(
                 (as_conn_recover*)cf_rc_alloc(sizeof(as_conn_recover)),
-                timeout_ctx, timeout_delay, is_single);
+                timeout_ctx, timeout_delay, is_single, node);
 }
 
 /**
@@ -88,6 +92,11 @@ as_conn_recover_release(as_conn_recover* self)
                 if (self->header_buf) {
                         cf_rc_releaseandfree(self->header_buf);
                 }
+
+                if (self->node) {
+                        as_node_release(self->node);
+                        self->node = NULL;
+                }
         }
 }
 
@@ -100,7 +109,7 @@ static inline bool
 as_conn_recover_try_drain(as_conn_recover* self)
 {
         // TODO: fill this out from Java reference; move to as_conn_recover.c
-        return false;
+        return true;
 }
 
 /**

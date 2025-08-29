@@ -63,6 +63,13 @@ extern "C" {
 #define AS_ADDRESS6_MAX 8
 
 //---------------------------------
+// Globals
+//---------------------------------
+
+AS_EXTERN extern char* aerospike_client_language;
+AS_EXTERN extern char* aerospike_client_version;
+
+//---------------------------------
 // Types
 //---------------------------------
 

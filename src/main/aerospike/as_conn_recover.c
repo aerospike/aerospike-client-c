@@ -23,7 +23,7 @@
 
 as_conn_recover*
 as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
-                     as_node* node, as_socket* socket)
+                     as_node* node, as_socket* socket, uint32_t socket_timeout, uint64_t deadline_ns)
 {
         if (! self) {
                 return self;
@@ -42,6 +42,8 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
         as_node_reserve(node);
         self->node = node;
         self->socket = *socket;
+        self->socket_timeout = socket_timeout;
+        self->deadline = deadline_ns;
 
         switch(self->state) {
         case AS_READ_STATE_AUTH_HEADER:
@@ -86,19 +88,61 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
                 break;
         }
 
-        // TODO: conn.updateLastUsed(); // Updates connection timestamp.
-        // TODO: conn.setTimeout(1); // I think this sets a future timeout on this connection to 1ms.
+        self->socket.last_used = cf_getns();
+        self->socket_timeout = 1; // millisecond
 
         return self;
 }
 
 
 static void
-as_conn_recover_drain_header(as_conn_recover* self, bool* must_abort, bool* timeout_exception) {
+as_conn_recover_drain_detail(as_conn_recover* self, bool* must_abort, bool* timeout_exception) {
 }
 
 static void
-as_conn_recover_drain_detail(as_conn_recover* self, bool* must_abort, bool* timeout_exception) {
+as_conn_recover_drain_header(as_conn_recover* self, bool* must_abort, bool* timeout_exception) {
+        bool started_with_buffer_rc = (self->offset == 0);
+        uint8_t* b = (started_with_buffer_rc) ? self->buffer_rc : self->header_buf;
+
+        while (true) {
+                as_error err;
+
+                as_status status = as_socket_read_deadline(&err, &self->socket, self->node, b, self->length, self->socket_timeout, self->deadline);
+                if (status != AEROSPIKE_OK) {
+                        if (status == AEROSPIKE_ERR_TIMEOUT) {
+                                *timeout_exception = true;
+                        }
+                        else {
+                                *must_abort = true;
+                        }
+
+                        return;
+                }
+                // socket offset set to 0 in read_deadline, and is incremented as the read completes.
+                // Thus, at end of call, socket offset = total number of bytes read.
+                self->offset += self->socket.offset;
+
+                if (self->offset >= self->length) {
+                        break;
+                }
+
+                if (started_with_buffer_rc) {
+                        as_conn_recover_copy_header_buffer(self);
+                        b = self->header_buf;
+                }
+        }
+
+        if (self->check_return_code) {
+                if (b[self->length - 1] != 0) {
+                        *must_abort = true;
+                        return;
+                }
+        }
+
+        if (! as_conn_recover_parse_proto(self)) {
+                *must_abort = true;
+                return;
+        }
 }
 
 

@@ -51,6 +51,8 @@ typedef struct as_conn_recover_s {
         uint32_t      length;
         as_node*      node;
         as_socket     socket;
+        uint32_t      socket_timeout;
+        uint64_t      deadline;
 } as_conn_recover;
 
 /******************************************************************************
@@ -63,7 +65,7 @@ typedef struct as_conn_recover_s {
  */
 as_conn_recover*
 as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
-                     as_node* node, as_socket* socket);
+                     as_node* node, as_socket* socket, uint32_t socket_timeout, uint64_t deadline_ns);
 
 /**
  * @private
@@ -72,11 +74,12 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
  */
 static inline as_conn_recover*
 as_conn_recover_new(as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
-                    as_node* node, as_socket* socket)
+                    as_node* node, as_socket* socket, uint32_t socket_timeout, uint64_t deadline_ns)
 {
         return as_conn_recover_init(
                 (as_conn_recover*)cf_rc_alloc(sizeof(as_conn_recover)),
-                timeout_ctx, timeout_delay, is_single, node, socket);
+                timeout_ctx, timeout_delay, is_single, node, socket,
+                socket_timeout, deadline_ns);
 }
 
 /**

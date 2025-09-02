@@ -123,7 +123,9 @@ typedef struct as_event_command {
 #else
 #endif
 	uint64_t total_deadline;
+	uint32_t connect_timeout;
 	uint32_t socket_timeout;
+	uint32_t timeout_delay;
 	uint32_t max_retries;
 	uint32_t iteration;
 	as_policy_replica replica;
@@ -142,7 +144,6 @@ typedef struct as_event_command {
 	
 	uint8_t* buf;
 	uint64_t begin; // Used for metrics
-	uint32_t timeout_delay;
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
 	uint32_t write_len;

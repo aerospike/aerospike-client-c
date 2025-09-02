@@ -1084,6 +1084,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		size = as_command_write_end(cmd->buf, p);
 
 		cmd->total_deadline = pt->total_timeout;
+		cmd->connect_timeout = pt->connect_timeout;
 		cmd->socket_timeout = pt->socket_timeout;
 		cmd->timeout_delay = pt->timeout_delay;
 		cmd->max_retries = 0;
@@ -1289,6 +1290,8 @@ as_policy_scan_merge(aerospike* as, const as_policy_scan* src, as_policy_scan* m
 		as_config* config = aerospike_load_config(as);
 		as_policy_scan* cfg = &config->policies.scan;
 
+		mrg->base.connect_timeout = as_field_is_set(bitmap, AS_SCAN_CONNECT_TIMEOUT)?
+			cfg->base.connect_timeout : src->base.connect_timeout;
 		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_SCAN_SOCKET_TIMEOUT)?
 			cfg->base.socket_timeout : src->base.socket_timeout;
 		mrg->base.total_timeout = as_field_is_set(bitmap, AS_SCAN_TOTAL_TIMEOUT)?

@@ -92,6 +92,7 @@ as_async_write_command_create(
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_write_command* wcmd = (as_async_write_command*)cmd;
 	cmd->total_deadline = policy->total_timeout;
+	cmd->connect_timeout = policy->connect_timeout;
 	cmd->socket_timeout = policy->socket_timeout;
 	cmd->timeout_delay = policy->timeout_delay;
 	cmd->max_retries = policy->max_retries;
@@ -138,6 +139,7 @@ as_async_record_command_create(
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_record_command* rcmd = (as_async_record_command*)cmd;
 	cmd->total_deadline = policy->total_timeout;
+	cmd->connect_timeout = policy->connect_timeout;
 	cmd->socket_timeout = policy->socket_timeout;
 	cmd->timeout_delay = policy->timeout_delay;
 	cmd->max_retries = policy->max_retries;
@@ -192,6 +194,7 @@ as_async_value_command_create(
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_value_command* vcmd = (as_async_value_command*)cmd;
 	cmd->total_deadline = policy->total_timeout;
+	cmd->connect_timeout = policy->connect_timeout;
 	cmd->socket_timeout = policy->socket_timeout;
 	cmd->timeout_delay = policy->timeout_delay;
 	cmd->max_retries = policy->max_retries;
@@ -234,6 +237,7 @@ as_async_info_command_create(
 	as_event_command* cmd = (as_event_command*)cf_malloc(s);
 	as_async_info_command* icmd = (as_async_info_command*)cmd;
 	cmd->total_deadline = policy->timeout;
+	cmd->connect_timeout = 0;
 	cmd->socket_timeout = policy->timeout;
 	cmd->timeout_delay = policy->timeout_delay;
 	cmd->max_retries = 1;

@@ -97,6 +97,22 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
 
 static void
 as_conn_recover_drain_detail(as_conn_recover* self, bool* must_abort, bool* timeout_exception) {
+        uint32_t remainder = self->length - self->offset;
+        uint32_t length = (remainder <= self->length) ? remainder : self->length;
+
+        // The as_socket_read_deadline() function includes a while loop that will ensure we read as much as we can.
+        as_error err;
+        as_status status = as_socket_read_deadline(&err, &self->socket, self->node, self->buffer_rc, length, self->socket_timeout, self->deadline);
+        if (status != AEROSPIKE_OK) {
+                if (status == AEROSPIKE_ERR_TIMEOUT) {
+                        *timeout_exception = true;
+                }
+                else {
+                        *must_abort = true;
+                }
+                return;
+        }
+        self->offset += self->socket.offset;
 }
 
 static void

@@ -860,7 +860,7 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
                 as_conn_recover* cr;
 
 		if (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
-                        if (as_conn_recover_try_drain(cr)) {
+                        if (as_conn_recover_drain(cr)) {
                                 // connection successfully drained and recovered.
                                 // Or, at least, aborted in a meaningful way such that
                                 // we don't need to re-queue the connection recovery record.

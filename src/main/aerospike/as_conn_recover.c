@@ -22,7 +22,8 @@
 //---------------------------------
 
 as_conn_recover*
-as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single)
+as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
+                     as_node* node, as_socket* socket)
 {
         if (! self) {
                 return self;
@@ -38,6 +39,9 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
         self->timeout_delay = timeout_delay;
         self->is_single = is_single;
         self->check_return_code = false;
+        as_node_reserve(node);
+        self->node = node;
+        self->socket = *socket;
 
         switch(self->state) {
         case AS_READ_STATE_AUTH_HEADER:
@@ -86,5 +90,95 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
         // TODO: conn.setTimeout(1); // I think this sets a future timeout on this connection to 1ms.
 
         return self;
+}
+
+
+static void
+as_conn_recover_drain_header(as_conn_recover* self, bool* must_abort, bool* timeout_exception) {
+}
+
+static void
+as_conn_recover_drain_detail(as_conn_recover* self, bool* must_abort, bool* timeout_exception) {
+}
+
+
+static bool
+as_conn_recover_try_drain(as_conn_recover* self, bool *must_abort, bool *timeout_exception) {
+        bool connection_drained = false;
+
+        if (self->is_single) {
+                if (self->state == AS_READ_STATE_PROTO) {
+                        as_conn_recover_drain_header(self, must_abort, timeout_exception);
+                        if (*must_abort || *timeout_exception) {
+                                goto exception;
+                        }
+                }
+
+                as_conn_recover_drain_detail(self, must_abort, timeout_exception);
+                if (*must_abort || *timeout_exception) {
+                        goto exception;
+                }
+
+                as_conn_recover_recover(self);
+
+                connection_drained = true;
+        }
+        else {
+                while (true) {
+                        if (self->state == AS_READ_STATE_PROTO) {
+                                as_conn_recover_drain_header(self, must_abort, timeout_exception);
+                                if (*must_abort || *timeout_exception) {
+                                        goto exception;
+                                }
+                        }
+                        as_conn_recover_drain_detail(self, must_abort, timeout_exception);
+                        if (*must_abort || *timeout_exception) {
+                                goto exception;
+                        }
+
+                        if (self->last_group) {
+                                break;
+                        }
+
+                        self->length = 12;
+                        self->offset = 0;
+                        self->state = AS_READ_STATE_PROTO;
+                }
+                as_conn_recover_recover(self);
+                connection_drained = true;
+        }
+
+exception:
+        return connection_drained;
+}
+
+
+bool
+as_conn_recover_drain(as_conn_recover* self)
+{
+        bool must_abort = false;
+        bool timeout_exception = false;
+
+        bool connection_drained = as_conn_recover_try_drain(self, &must_abort, &timeout_exception);
+
+        if (timeout_exception) {
+                uint64_t current_time_ns = cf_getns();
+
+                if (current_time_ns - self->socket.last_used >= self->timeout_delay * 1000) {
+                        // Forcibly close the connection.
+                        must_abort = true;
+                }
+                else {
+                        // Put back on queue for later draining.
+                        return false;
+                }
+        }
+
+        if (must_abort) {
+                as_conn_recover_abort(self);
+                return true;
+        }
+
+        return connection_drained;
 }
 

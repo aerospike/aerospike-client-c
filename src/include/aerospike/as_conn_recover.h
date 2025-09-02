@@ -18,6 +18,7 @@
 
 #include <aerospike/as_command.h>
 #include <aerospike/as_node.h>
+#include <aerospike/as_socket.h>
 #include <citrusleaf/alloc.h>
 
 #ifdef __cplusplus
@@ -49,6 +50,7 @@ typedef struct as_conn_recover_s {
         uint8_t*      header_buf;
         uint32_t      length;
         as_node*      node;
+        as_socket     socket;
 } as_conn_recover;
 
 /******************************************************************************
@@ -61,7 +63,7 @@ typedef struct as_conn_recover_s {
  */
 as_conn_recover*
 as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
-                     as_node* node);
+                     as_node* node, as_socket* socket);
 
 /**
  * @private
@@ -70,11 +72,11 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
  */
 static inline as_conn_recover*
 as_conn_recover_new(as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
-                    as_node* node)
+                    as_node* node, as_socket* socket)
 {
         return as_conn_recover_init(
                 (as_conn_recover*)cf_rc_alloc(sizeof(as_conn_recover)),
-                timeout_ctx, timeout_delay, is_single, node);
+                timeout_ctx, timeout_delay, is_single, node, socket);
 }
 
 /**
@@ -102,15 +104,11 @@ as_conn_recover_release(as_conn_recover* self)
 
 /**
  * @private
- * Attempt to drain a connection.  Answer true if there is no further
- * need to re-queue the connection recovery record; false otherwise.
+ * Attempt to drain a connection.  Answer true if successfully drained;
+ * false otherwise.
  */
-static inline bool
-as_conn_recover_try_drain(as_conn_recover* self)
-{
-        // TODO: fill this out from Java reference; move to as_conn_recover.c
-        return true;
-}
+bool
+as_conn_recover_drain(as_conn_recover* self);
 
 /**
  * @private
@@ -183,6 +181,16 @@ as_conn_recover_parse_proto(as_conn_recover* self) {
         return true;
 }
 
+/**
+ * @private
+ * Mark a connection as fully recovered and put it back into rotation.
+ */
+static inline void
+as_conn_recover_recover(as_conn_recover* self) {
+        // as_node_put_connection() updates the last_used field of the socket for us.
+        as_node_put_connection(self->node, &self->socket);
+        self->state = AS_READ_STATE_COMPLETE;
+}
 
 #ifdef __cplusplus
 } // end extern "C"

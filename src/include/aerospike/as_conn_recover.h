@@ -50,9 +50,25 @@ typedef struct as_conn_recover_s {
         uint8_t*      header_buf;
         uint32_t      length;
         as_node*      node;
+
+        /**
+         * @private
+         * The socket to be recovered.  This structure is considered read-only,
+         * side-effects of using the socket notwithstanding.
+         */
         as_socket     socket;
+
         uint32_t      socket_timeout;
         uint64_t      deadline;
+
+        /**
+         * @private
+         * Records the most recent time when the socket was used.  Although the socket
+         * has a last_used field within it, it overlaps with a pool pointer, which we
+         * need to recover the socket.  This field is used while the socket is being
+         * recovered instead.
+         */
+        uint64_t      socket_last_used;
 } as_conn_recover;
 
 /******************************************************************************

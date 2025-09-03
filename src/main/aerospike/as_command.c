@@ -807,7 +807,7 @@ as_command_execute(as_command* cmd, as_error* err)
                                                         node,
                                                         &socket,
                                                         cmd->socket_timeout,
-                                                        cmd->deadline_ms * 1000000      // deadline in nanoseconds
+                                                        cmd->deadline_ms * (1000 * 1000)      // deadline in nanoseconds
 						);
 
 						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {

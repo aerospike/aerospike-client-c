@@ -88,7 +88,7 @@ as_conn_recover_init(as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_
                 break;
         }
 
-        self->socket.last_used = cf_getns();
+        self->socket_last_used = cf_getns();
         self->socket_timeout = 1; // millisecond
 
         return self;
@@ -224,7 +224,7 @@ as_conn_recover_drain(as_conn_recover* self)
         if (timeout_exception) {
                 uint64_t current_time_ns = cf_getns();
 
-                if (current_time_ns - self->socket.last_used >= self->timeout_delay * 1000) {
+                if (current_time_ns - self->socket_last_used >= self->timeout_delay * 1000) {
                         // Forcibly close the connection.
                         must_abort = true;
                 }

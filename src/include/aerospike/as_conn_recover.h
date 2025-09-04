@@ -149,6 +149,7 @@ as_conn_recover_copy_header_buffer(as_conn_recover* self)
 static inline void
 as_conn_recover_abort(as_conn_recover* self) {
         self->state = AS_READ_STATE_COMPLETE;
+        as_node_incr_sync_conns_aborted(self->node);
         // TODO: node.closeConnection(conn); // close the socket and update abort metrics
 }
 
@@ -208,6 +209,7 @@ static inline void
 as_conn_recover_recover(as_conn_recover* self) {
         // as_node_put_connection() updates the last_used field of the socket for us.
         as_node_put_connection(self->node, &self->socket);
+        as_node_incr_sync_conns_recovered(self->node);
         self->state = AS_READ_STATE_COMPLETE;
 }
 

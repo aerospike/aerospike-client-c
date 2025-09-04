@@ -150,7 +150,7 @@ static inline void
 as_conn_recover_abort(as_conn_recover* self) {
         self->state = AS_READ_STATE_COMPLETE;
         as_node_incr_sync_conns_aborted(self->node);
-        // TODO: node.closeConnection(conn); // close the socket and update abort metrics
+        as_node_close_conn_error(self->node, &self->socket, self->socket.pool);
 }
 
 /**

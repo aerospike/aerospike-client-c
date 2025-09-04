@@ -1660,8 +1660,12 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
 
 	// Initialize the timeout delay recovery queue.
+        // 
+        // The +1 avoids a divide-by-zero fault when config->min_conns_per_node = 0.
+        // This guarantees that the queue always has at least one empty slot, even if no
+        // connections currently exists.
 	if (! as_queue_mt_init(&cluster->recover_queue,
-		                   sizeof(as_conn_recover*), config->min_conns_per_node)) {
+		                   sizeof(as_conn_recover*), config->min_conns_per_node + 1)) {
 		as_cluster_destroy(cluster);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Unable to initialize socket timeout recovery queue");

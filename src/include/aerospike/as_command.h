@@ -24,6 +24,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_timeout_ctx.h>
 #include <citrusleaf/cf_byte_order.h>
 
 #ifdef __cplusplus
@@ -225,48 +226,6 @@ typedef struct as_command_parse_result_data_s {
 	as_record** record;
 	bool deserialize;
 } as_command_parse_result_data;
-
-/**
- * @private
- * The socket state when a read timeout occurs.
- */
-typedef enum as_read_state_e {
-        AS_READ_STATE_NONE,
-	AS_READ_STATE_PROTO,
-	AS_READ_STATE_DETAIL,
-        AS_READ_STATE_AUTH_HEADER,
-        AS_READ_STATE_COMPLETE,
-} as_read_state;
-
-/**
- * @private
- * When a socket read timeout occurs, this structure records
- * the context in which it happened.
- */
-
-typedef struct as_timeout_ctx_s {
-	/**
-	 * Points to a reference counted buffer of length `capacity`.
-	 * Dispose of the buffer using cf_rc_releaseandfree().
-	 */
-	uint8_t* buffer_rc;
-
-	/**
-	 * The number of bytes total in the buffer above.
-	 */
-	uint32_t capacity;
-
-	/**
-	 * When draining a socket, the received data will be placed
-	 * starting at this byte offset.
-	 */
-	uint32_t offset;
-
-	/**
-	 * What state the socket was in when the timeout happened.
-	 */
-	as_read_state state;
-} as_timeout_ctx;
 
 //---------------------------------
 // Functions
@@ -837,26 +796,6 @@ as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t
  */
 as_status
 as_command_parse_fields_deadline(uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn);
-
-/**
- * @private
- * Initializes an as_timeout_ctx instance with relevant data.  The supplied buffer, if any, must be
- * allocated with cf_rc_alloc().  The buffer will already be reserved when cf_rc_alloc() returns the
- * pointer, and does not need to be reserved again unless you create additional references to it.
- *
- * If the supplied context pointer is NULL, then nothing happens, and true is returned.
- *
- * @return true if the allocation succeeded; false otherwise.
- */
-static inline void
-as_timeout_ctx_set(as_timeout_ctx* context, uint8_t* buffer, uint32_t cap, uint32_t offset, uint8_t state) {
-	if (context) {
-                context->buffer_rc = buffer;
-                context->capacity = cap;
-                context->offset = offset;
-                context->state = state;
-        }
-}
 
 #ifdef __cplusplus
 } // end extern "C"

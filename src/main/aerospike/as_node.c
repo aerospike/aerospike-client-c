@@ -606,8 +606,7 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 
 as_status
 as_node_get_connection(
-	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
-	as_socket* sock
+	as_error* err, as_node* node, as_command* cmd, uint64_t deadline_ms, as_socket* sock
 	)
 {
 	as_conn_pool* pools = node->sync_conn_pools;
@@ -654,8 +653,27 @@ as_node_get_connection(
 		else if (as_conn_pool_incr(pool)) {
 			// Socket not found and queue has available slot.
 			// Create new connection.
-			as_status status = as_node_create_connection(err, node, ns, socket_timeout, deadline_ms,
-														 pool, sock);
+			as_status status;
+
+			if (cmd) {
+				uint32_t connect_timeout = cmd->policy->connect_timeout;
+
+				if (connect_timeout > 0) {
+					uint64_t start = cf_getms();
+					uint64_t deadline = start + connect_timeout;
+
+					status = as_node_create_connection(err, node, cmd->ns, connect_timeout, deadline, pool, sock);
+
+					// Add connection creation time to command deadline.
+					cmd->deadline_ms += (cf_getms() - start);
+				}
+				else {
+					status = as_node_create_connection(err, node, cmd->ns, cmd->socket_timeout, deadline_ms, pool, sock);
+				}
+			}
+			else {
+				status = as_node_create_connection(err, node, NULL, 0, deadline_ms, pool, sock);
+			}
 
 			if (status != AEROSPIKE_OK) {
 				as_conn_pool_decr(pool);

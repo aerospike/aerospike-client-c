@@ -716,7 +716,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		as_socket socket;
-		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout, cmd->deadline_ms, &socket);
+		status = as_node_get_connection(err, node, cmd, cmd->deadline_ms, &socket);
 
 		if (status != AEROSPIKE_OK) {
 			// Do not retry on server error response such as invalid user/password.

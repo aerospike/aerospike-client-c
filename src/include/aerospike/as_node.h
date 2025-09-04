@@ -489,6 +489,8 @@ typedef struct as_node_info_s {
 
 } as_node_info;
 
+struct as_command_s;
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -630,8 +632,7 @@ as_node_authenticate_connection(struct as_cluster_s* cluster, uint64_t deadline_
  */
 as_status
 as_node_get_connection(
-	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
-	as_socket* sock
+	as_error* err, as_node* node, struct as_command_s* cmd, uint64_t deadline_ms, as_socket* sock
 	);
 
 /**

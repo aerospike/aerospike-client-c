@@ -26,6 +26,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_timeout_ctx.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -491,7 +492,7 @@ as_cluster_login(
 as_status
 as_authenticate(
 	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, struct as_node_s* node,
-	struct as_session_s* session, uint32_t socket_timeout, uint64_t deadline_ms
+	struct as_session_s* session, uint32_t socket_timeout, uint64_t deadline_ms, as_timeout_ctx* timeout_context
 	);
 
 /**

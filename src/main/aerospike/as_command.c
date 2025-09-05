@@ -676,6 +676,7 @@ as_command_execute(as_command* cmd, as_error* err)
 	as_node* node = NULL;
 	as_status status;
 	bool release_node;
+        as_timeout_ctx timeout_context = { 0, };
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
@@ -718,8 +719,9 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		as_socket socket;
-		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout, cmd->deadline_ms, &socket);
+		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout, cmd->deadline_ms, &socket, &timeout_context);
 
+                bool is_single = cmd->node == NULL;
 		if (status != AEROSPIKE_OK) {
 			// Do not retry on server error response such as invalid user/password.
 			if (status > 0 && status != AEROSPIKE_ERR_TIMEOUT) {
@@ -729,6 +731,28 @@ as_command_execute(as_command* cmd, as_error* err)
 				as_command_prepare_error(cmd, err);
 				return status;
 			}
+
+                        if (status == AEROSPIKE_ERR_TIMEOUT) {
+                                as_node_add_timeout(node, cmd->ns, metrics);
+                                as_node_reserve(node);
+                                as_conn_recover* cr = as_conn_recover_new(
+                                        &timeout_context,
+                                        cmd->policy->timeout_delay,
+                                        is_single,
+                                        node,
+                                        &socket,
+                                        cmd->socket_timeout,
+                                        cmd->deadline_ms * (1000 * 1000)      // deadline in nanoseconds
+                                );
+
+                                if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {
+                                        // Queue insertion failed, most likely due to out of memory.
+                                        // Abort timeout recovery and just close the socket.
+                                        as_node_close_conn_error(node, &socket, socket.pool);
+                                        as_node_incr_sync_conns_aborted(node);
+                                }
+                        }
+
 			goto Retry;
 		}
 		
@@ -751,9 +775,6 @@ as_command_execute(as_command* cmd, as_error* err)
 		uint64_t bytes_in = 0;
 
 		// Parse results returned by server.
-		as_timeout_ctx timeout_context = { 0, };
-
-                bool is_single = cmd->node == NULL;
 		if (! is_single) {
 			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in, &timeout_context);
 		}

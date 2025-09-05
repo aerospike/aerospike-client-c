@@ -869,9 +869,6 @@ as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
                         }
                         else {
                                 // connection needs to be re-queued for later draining
-                                // TODO: Ask: we just popped the cr off this queue, will
-                                // there ever be a case where requeueing the cr will fail?
-
                                 as_queue_mt_push(&cluster->recover_queue, &cr);
                         }
 		}

@@ -512,7 +512,7 @@ as_node_create_socket(
 static as_status
 as_node_create_connection(
 	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms, as_conn_pool* pool,
-	as_socket* sock
+	as_socket* sock, as_timeout_ctx *timeout_context
 	)
 {
 	uint64_t begin = 0;
@@ -541,7 +541,7 @@ as_node_create_connection(
 			bool should_close_socket = true;
 
 			as_incr_uint32(&session->ref_count);
-			status = as_authenticate(cluster, err, sock, node, session, socket_timeout, deadline_ms);
+			status = as_authenticate(cluster, err, sock, node, session, socket_timeout, deadline_ms, timeout_context);
 			as_session_release(session);
 
                         DEBUG("! ! !- status = %d", status);
@@ -587,7 +587,7 @@ as_node_create_connections(as_node* node, as_conn_pool* pool, uint32_t timeout_m
 	// Create sync connections.
 	while (count > 0) {
 		uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-		status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, pool, &sock);
+		status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, pool, &sock, NULL);
 
 		if (status != AEROSPIKE_OK) {
 			as_log_debug("Failed to create min connections: %d %s", err.code, err.message);
@@ -620,7 +620,7 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 
 	as_socket sock;
 	as_error err;
-	as_status status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, NULL, &sock);
+	as_status status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, NULL, &sock, NULL);
 
 	if (status == AEROSPIKE_OK) {
 		as_node_close_socket(node, &sock);
@@ -632,7 +632,7 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 as_status
 as_node_get_connection(
 	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
-	as_socket* sock
+	as_socket* sock, as_timeout_ctx* timeout_context
 	)
 {
 	as_conn_pool* pools = node->sync_conn_pools;
@@ -679,8 +679,7 @@ as_node_get_connection(
 		else if (as_conn_pool_incr(pool)) {
 			// Socket not found and queue has available slot.
 			// Create new connection.
-			as_status status = as_node_create_connection(err, node, ns, socket_timeout, deadline_ms,
-														 pool, sock);
+			as_status status = as_node_create_connection(err, node, ns, socket_timeout, deadline_ms, pool, sock, timeout_context);
 
 			if (status != AEROSPIKE_OK) {
 				as_conn_pool_decr(pool);
@@ -907,7 +906,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 				}
 			}
 			else {
-				status = as_authenticate(cluster, err, &sock, node, node->session, 0, deadline_ms);
+				status = as_authenticate(cluster, err, &sock, node, node->session, 0, deadline_ms, NULL);
 
 				if (status != AEROSPIKE_OK) {
 					// Authentication failed.

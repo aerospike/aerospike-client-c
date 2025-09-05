@@ -233,10 +233,20 @@ as_admin_send(
 static inline as_status
 as_admin_receive(
 	as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint64_t len,
-	uint32_t socket_timeout, uint64_t deadline_ms
+	uint32_t socket_timeout, uint64_t deadline_ms, as_timeout_ctx *timeout_context
 	)
 {
 	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
+
+        if (timeout_context && status == AEROSPIKE_ERR_TIMEOUT) {
+                uint8_t* heaped_buf = cf_rc_alloc(len);
+                if (! heaped_buf) {
+                        status = AEROSPIKE_ERR_CLIENT;
+                        return status;
+                }
+                memcpy(heaped_buf, buffer, len);
+                as_timeout_ctx_set(timeout_context, heaped_buf, len, sock->offset, AS_READ_STATE_AUTH_HEADER);
+        }
 
 	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
@@ -281,7 +291,7 @@ as_admin_execute_node(
 		return status;
 	}
 
-	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms);
+	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms, NULL);
 
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
@@ -327,7 +337,7 @@ as_admin_read_blocks(
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms);
+		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms, NULL);
 
 		if (status) {
 			break;
@@ -350,7 +360,7 @@ as_admin_read_blocks(
 			}
 			
 			// Read remaining message bytes in group
-			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms);
+			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms, NULL);
 			
 			if (status) {
 				break;
@@ -464,7 +474,7 @@ as_cluster_login(
 		return status;
 	}
 
-	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms);
+	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms, NULL);
 
 	if (status) {
 		return status;
@@ -497,7 +507,7 @@ as_cluster_login(
 	}
 
 	// Read remaining message bytes in group
-	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms);
+	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms, NULL);
 
 	if (status) {
 		return status;
@@ -574,7 +584,7 @@ as_authenticate_set(as_cluster* cluster, as_session* session, uint8_t* buffer)
 as_status
 as_authenticate(
 	as_cluster* cluster, as_error* err, as_socket* sock, as_node* node, as_session* session,
-	uint32_t socket_timeout, uint64_t deadline_ms
+	uint32_t socket_timeout, uint64_t deadline_ms, as_timeout_ctx *timeout_context
 	)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -596,7 +606,7 @@ as_authenticate(
 		return status;
 	}
 
-	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms);
+	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms, timeout_context);
 	
 	if (status) {
 		return status;

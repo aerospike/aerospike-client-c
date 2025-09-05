@@ -163,7 +163,7 @@ as_conn_recover_drain_header(as_conn_recover* self, bool* must_abort, bool* time
 
 
 static bool
-as_conn_recover_try_drain(as_conn_recover* self, bool *must_abort, bool *timeout_exception) {
+as_conn_recover_try_drain(as_conn_recover* self, bool* must_abort, bool* timeout_exception) {
         bool connection_drained = false;
 
         if (self->is_single) {

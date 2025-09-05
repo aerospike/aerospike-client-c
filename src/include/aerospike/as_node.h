@@ -632,7 +632,7 @@ as_node_authenticate_connection(struct as_cluster_s* cluster, uint64_t deadline_
 as_status
 as_node_get_connection(
 	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
-	as_socket* sock, as_timeout_ctx *timer_context
+	as_socket* sock, as_timeout_ctx* timer_context
 	);
 
 /**

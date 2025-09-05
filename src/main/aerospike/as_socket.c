@@ -299,7 +299,7 @@ as_socket_validate_fd(as_socket_fd fd)
 
 as_status
 as_socket_write_deadline(
-	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len,
+	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf, size_t buf_len,
 	uint32_t socket_timeout, uint64_t deadline
 	)
 {
@@ -402,7 +402,7 @@ as_socket_write_deadline(
 
 as_status
 as_socket_read_deadline(
-	as_error* err, as_socket* sock, as_node* node, uint8_t *buf, size_t buf_len,
+	as_error* err, as_socket* sock, as_node* node, uint8_t* buf, size_t buf_len,
 	uint32_t socket_timeout, uint64_t deadline
 	)
 {

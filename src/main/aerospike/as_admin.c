@@ -233,7 +233,7 @@ as_admin_send(
 static inline as_status
 as_admin_receive(
 	as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint64_t len,
-	uint32_t socket_timeout, uint64_t deadline_ms, as_timeout_ctx *timeout_context
+	uint32_t socket_timeout, uint64_t deadline_ms, as_timeout_ctx* timeout_context
 	)
 {
 	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
@@ -584,7 +584,7 @@ as_authenticate_set(as_cluster* cluster, as_session* session, uint8_t* buffer)
 as_status
 as_authenticate(
 	as_cluster* cluster, as_error* err, as_socket* sock, as_node* node, as_session* session,
-	uint32_t socket_timeout, uint64_t deadline_ms, as_timeout_ctx *timeout_context
+	uint32_t socket_timeout, uint64_t deadline_ms, as_timeout_ctx* timeout_context
 	)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];

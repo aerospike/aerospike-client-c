@@ -406,20 +406,26 @@ as_socket_read_deadline(
 	uint32_t socket_timeout, uint64_t deadline
 	)
 {
+        fprintf(stderr, "ASRDL001 as_socket_read_deadline() entered\n");
 	if (sock->ctx) {
+                fprintf(stderr, "ASRDL003 sock->ctx non-null\n");
 		as_status status = AEROSPIKE_OK;
 		int rv = as_tls_read(sock, buf, buf_len, socket_timeout, deadline);
+                fprintf(stderr, "ASRDL004 as_tls_read() -> %d\n", rv);
 
 		if (rv < 0) {
+                        fprintf(stderr, "ASRDL005 TLS read error\n");
 			status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "TLS read error", rv);
 		}
 		else if (rv == 1) {
+                        fprintf(stderr, "ASRDL006 TLS read timeout\n");
 			// Do not set error string to avoid affecting performance.
 			// Calling functions usually retry, so the error string is
 			// not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
 			err->message[0] = 0;
 		}
+                fprintf(stderr, "ASRDL007 as_socket_read_deadline() leaving\n");
 		return status;
 	}
 
@@ -434,9 +440,11 @@ as_socket_read_deadline(
 
 	do {
 		if (deadline > 0) {
+                        fprintf(stderr, "ASRDL010 Deadline > 0\n");
 			uint64_t now = cf_getms();
 
 			if (now >= deadline) {
+                                fprintf(stderr, "ASRDL011 However, now > deadline, so timing out.\n");
 				// Timeout.  Do not set error string to avoid affecting performance.
 				// Calling functions usually retry, so the error string is not used anyway.
 				status = err->code = AEROSPIKE_ERR_TIMEOUT;
@@ -445,9 +453,11 @@ as_socket_read_deadline(
 			}
 
 			timeout = (uint32_t)(deadline - now);
+                        fprintf(stderr, "ASRDL012 timeout = %ld\n (code says this is unsigned, but are we really?)\n", timeout);
 
 			if (socket_timeout > 0 && socket_timeout < timeout) {
 				timeout = socket_timeout;
+                                fprintf(stderr, "ASRDL013 Overriding timeout = %d\n", timeout);
 			}
 		}
 		else {
@@ -455,6 +465,7 @@ as_socket_read_deadline(
 		}
 
 		int rv = as_poll_socket(&poll, sock->fd, timeout, true);
+                fprintf(stderr, "as_poll_socket() -> %d\n", rv);
 
 		if (rv > 0) {
 #if !defined(_MSC_VER)
@@ -462,24 +473,31 @@ as_socket_read_deadline(
 #else
 			int r_bytes = (int)recv(sock->fd, buf + sock->offset, (int)(buf_len - sock->offset), 0);
 #endif
+                        fprintf(stderr, "ASRDL014 read/recv() -> %d\n", r_bytes);
 
 			if (r_bytes > 0) {
 				sock->offset += r_bytes;
+                                fprintf(stderr, "ASRDL015 setting sock->offset = %u\n", sock->offset);
 			}
 			else if (r_bytes == 0) {
 				// We believe this means that the server has closed this socket.
+                                fprintf(stderr, "ASRDL016 r_bytes = %d\n", r_bytes);
+                                fprintf(stderr, "ASRDL... C comment asks, \"Might indicate the server closed the connection?\"\n");
 				status = as_error_set_message(err, AEROSPIKE_ERR_CONNECTION, "Bad file descriptor");
 				break;
 			}
 			else {
 				int e = as_last_error();
+                                fprintf(stderr, "ASRDL017 Socket read error? r_bytes = %d, errno = %d\n", r_bytes, e);
 				if (as_socket_is_error(e)) {
+                                        fprintf(stderr, "ASRDL018 as_socket_is_error() says yup.\n");
 					status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket read error", e);
 					break;
 				}
 			}
 		}
 		else if (rv == 0) {
+                        fprintf(stderr, "ASRDL020 poll timeout\n");
 			// Timeout.  Do not set error string to avoid affecting performance.
 			// Calling functions usually retry, so the error string is not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
@@ -488,6 +506,7 @@ as_socket_read_deadline(
 		}
 		else if (rv == -1) {
 			int e = as_last_error();
+                        fprintf(stderr, "ASRDL030 poll error: errno = %d\n", e);
 			if (e != AS_EINTR || as_socket_stop_on_interrupt) {
 				status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "Socket read error", e);
 				break;
@@ -498,6 +517,8 @@ as_socket_read_deadline(
 	
 	} while (sock->offset < buf_len);
 
+        fprintf(stderr, "ASRDL040 Escaped while loop\n");
 	as_poll_destroy(&poll);
+        fprintf(stderr, "ASRDL002 as_socket_read_deadline() left normally\n");
 	return status;
 }

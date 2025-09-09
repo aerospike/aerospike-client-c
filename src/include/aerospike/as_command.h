@@ -24,7 +24,6 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
-#include <aerospike/as_timeout_ctx.h>
 #include <citrusleaf/cf_byte_order.h>
 
 #ifdef __cplusplus
@@ -71,53 +70,53 @@ extern "C" {
 #define AS_FIELD_FILTER 43
 
 // Message info1 bits
-#define AS_MSG_INFO1_READ			(1 << 0) // contains a read operation
+#define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
 #define AS_MSG_INFO1_GET_ALL			(1 << 1) // get all bins, period
 #define AS_MSG_INFO1_SHORT_QUERY		(1 << 2) // short query
 #define AS_MSG_INFO1_BATCH_INDEX		(1 << 3) // batch
-#define AS_MSG_INFO1_XDR			(1 << 4) // operation is being performed by XDR
+#define AS_MSG_INFO1_XDR				(1 << 4) // operation is being performed by XDR
 #define AS_MSG_INFO1_GET_NOBINDATA		(1 << 5) // do not get information about bins and its data
-#define AS_MSG_INFO1_READ_MODE_AP_ALL		(1 << 6) // read mode all for AP namespaces.
-#define AS_MSG_INFO1_COMPRESS_RESPONSE		(1 << 7) // tell server to compress it's response.
+#define AS_MSG_INFO1_READ_MODE_AP_ALL	(1 << 6) // read mode all for AP namespaces.
+#define AS_MSG_INFO1_COMPRESS_RESPONSE	(1 << 7) // tell server to compress it's response.
 
 // Message info2 bits
-#define AS_MSG_INFO2_WRITE			(1 << 0) // contains a write semantic
-#define AS_MSG_INFO2_DELETE			(1 << 1) // delete record
+#define AS_MSG_INFO2_WRITE				(1 << 0) // contains a write semantic
+#define AS_MSG_INFO2_DELETE				(1 << 1) // delete record
 #define AS_MSG_INFO2_GENERATION			(1 << 2) // pay attention to the generation
 #define AS_MSG_INFO2_GENERATION_GT		(1 << 3) // apply write if new generation >= old, good for restore
 #define AS_MSG_INFO2_DURABLE_DELETE		(1 << 4) // command resulting in record deletion leaves tombstone (Enterprise only).
 #define AS_MSG_INFO2_CREATE_ONLY		(1 << 5) // write record only if it doesn't exist
 #define AS_MSG_INFO2_RELAX_AP_LONG_QUERY	(1 << 6) // treat as long query, but relax read consistency.
-#define AS_MSG_INFO2_RESPOND_ALL_OPS		(1 << 7) // return a result for every operation.
+#define AS_MSG_INFO2_RESPOND_ALL_OPS	(1 << 7) // return a result for every operation.
 
 // Message info3 bits
-#define AS_MSG_INFO3_LAST			(1 << 0) // this is the last of a multi-part message
+#define AS_MSG_INFO3_LAST				(1 << 0) // this is the last of a multi-part message
 #define AS_MSG_INFO3_COMMIT_MASTER		(1 << 1) // write commit level - bit 0
 // On send: Do not return partition done in scan/query.
 // On receive: Specified partition is done in scan/query.
 #define AS_MSG_INFO3_PARTITION_DONE		(1 << 2)
 #define AS_MSG_INFO3_UPDATE_ONLY		(1 << 3) // update existing record only, do not create new record
-#define AS_MSG_INFO3_CREATE_OR_REPLACE		(1 << 4) // completely replace existing record, or create new record
+#define AS_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4) // completely replace existing record, or create new record
 #define AS_MSG_INFO3_REPLACE_ONLY		(1 << 5) // completely replace existing record, do not create new record
 #define AS_MSG_INFO3_SC_READ_TYPE		(1 << 6) // see below
 #define AS_MSG_INFO3_SC_READ_RELAX		(1 << 7) // see below
 // Interpret SC_READ bits in info3.
 //
 // RELAX   TYPE
-//		  strict
-//		  ------
-//   0	    0	  sequential (default)
-//   0	    1	  linearize
+//				  strict
+//				  ------
+//   0		0	  sequential (default)
+//   0		1	  linearize
 //
-//		  relaxed
-//		  -------
-//   1	    0	  allow prole
-//   1	    1	  allow unavailable
+//				  relaxed
+//				  -------
+//   1		0	  allow prole
+//   1		1	  allow unavailable
 
 // Transaction
 #define AS_MSG_INFO4_TXN_VERIFY_READ		(1 << 0) // Send transaction version to the server to be verified.
 #define AS_MSG_INFO4_TXN_ROLL_FORWARD		(1 << 1) // Roll forward transaction.
-#define AS_MSG_INFO4_TXN_ROLL_BACK		(1 << 2) // Roll back transaction.
+#define AS_MSG_INFO4_TXN_ROLL_BACK			(1 << 2) // Roll back transaction.
 #define AS_MSG_INFO4_TXN_ON_LOCKING_ONLY	(1 << 4) // Must be able to lock record in transaction.
 
 // Misc

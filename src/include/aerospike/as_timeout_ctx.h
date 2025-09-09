@@ -31,11 +31,11 @@ extern "C" {
  * The socket state when a read timeout occurs.
  */
 typedef enum as_read_state_e {
-        AS_READ_STATE_NONE,
+	AS_READ_STATE_NONE,
 	AS_READ_STATE_PROTO,
 	AS_READ_STATE_DETAIL,
-        AS_READ_STATE_AUTH_HEADER,
-        AS_READ_STATE_COMPLETE,
+	AS_READ_STATE_AUTH_HEADER,
+	AS_READ_STATE_COMPLETE,
 } as_read_state;
 
 /**
@@ -74,22 +74,26 @@ typedef struct as_timeout_ctx_s {
 
 /**
  * @private
- * Initializes an as_timeout_ctx instance with relevant data.  The supplied buffer, if any, must be
- * allocated with cf_rc_alloc().  The buffer will already be reserved when cf_rc_alloc() returns the
- * pointer, and does not need to be reserved again unless you create additional references to it.
+ * Initializes an as_timeout_ctx instance with relevant data.  The supplied
+ * buffer, if any, must be allocated with cf_rc_alloc().  The buffer will
+ * already be reserved when cf_rc_alloc() returns the pointer, and does not
+ * need to be reserved again unless you create additional references to it.
  *
- * If the supplied context pointer is NULL, then nothing happens, and true is returned.
+ * If the supplied context pointer is NULL, then nothing happens, and true
+ * is returned.
  *
  * @return true if the allocation succeeded; false otherwise.
  */
 static inline void
-as_timeout_ctx_set(as_timeout_ctx* context, uint8_t* buffer, uint32_t cap, uint32_t offset, uint8_t state) {
+as_timeout_ctx_set(as_timeout_ctx* context, uint8_t* buffer, uint32_t cap,
+		uint32_t offset, uint8_t state)
+{
 	if (context) {
-                context->buffer_rc = buffer;
-                context->capacity = cap;
-                context->offset = offset;
-                context->state = state;
-        }
+		context->buffer_rc = buffer;
+		context->capacity = cap;
+		context->offset = offset;
+		context->state = state;
+	}
 }
 
 #ifdef __cplusplus

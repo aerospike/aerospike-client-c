@@ -737,7 +737,8 @@ as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
  * This is determined directly from the queue itself.
  */
 static inline uint32_t
-as_cluster_recover_queue_size(as_cluster* cluster) {
+as_cluster_recover_queue_size(as_cluster* cluster)
+{
 	return as_queue_mt_size(&cluster->recover_queue);
 }
 

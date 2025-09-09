@@ -26,7 +26,6 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
-#include <aerospike/as_timeout_ctx.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -460,7 +459,8 @@ as_role_destroy(as_role* role);
  */
 AS_EXTERN as_status
 aerospike_query_roles(
-	aerospike* as, as_error* err, const as_policy_admin* policy, as_role*** roles, int* roles_size
+	aerospike* as, as_error* err, const as_policy_admin* policy,
+	as_role*** roles, int* roles_size
 	);
 
 /**
@@ -473,6 +473,7 @@ as_roles_destroy(as_role** roles, int roles_size);
 struct as_cluster_s;
 struct as_node_info_s;
 struct as_session_s;
+struct as_timeout_ctx_s;
 
 /**
  * @private
@@ -480,8 +481,8 @@ struct as_session_s;
  */
 as_status
 as_cluster_login(
-	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, uint64_t deadline_ms,
-	struct as_node_info_s* node_info
+	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock,
+	uint64_t deadline_ms, struct as_node_info_s* node_info
 	);
 
 /**
@@ -491,8 +492,10 @@ as_cluster_login(
  */
 as_status
 as_authenticate(
-	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, struct as_node_s* node,
-	struct as_session_s* session, uint32_t socket_timeout, uint64_t deadline_ms, as_timeout_ctx* timeout_context
+	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock,
+	struct as_node_s* node, struct as_session_s* session,
+	uint32_t socket_timeout, uint64_t deadline_ms,
+	struct as_timeout_ctx_s* timeout_context
 	);
 
 /**
@@ -500,7 +503,8 @@ as_authenticate(
  * Write authentication command to buffer.  Return buffer length.
  */
 uint32_t
-as_authenticate_set(struct as_cluster_s* cluster, struct as_session_s* session, uint8_t* buffer);
+as_authenticate_set(struct as_cluster_s* cluster, struct as_session_s* session,
+                    uint8_t* buffer);
 
 #ifdef __cplusplus
 } // end extern "C"

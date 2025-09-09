@@ -103,57 +103,47 @@ static void
 as_conn_recover_drain_detail(as_conn_recover* self, bool* must_abort,
 		bool* timeout_exception)
 {
-	fprintf(stderr, "ASDDT001 as_conn_recover_drain_detail entered\n");
 	uint32_t remainder = self->length - self->offset;
 	uint32_t length = (remainder <= self->length) ? remainder : self->length;
 
-	// The as_socket_read_deadline() function includes a while loop that will ensure we read as much as we can.
+	// The as_socket_read_deadline() function includes a while loop that will
+	// ensure we read as much as we can.
 	as_error err;
-	fprintf(stderr, "ASDDT003 Attempting to call as_socket_read_deadline(%p, %d, %p, %p, %lu, %lu, %u)\n", &err, &self->socket, self->node, self->buffer_rc, length, self->socket_timeout, self->deadline);
 	as_status status = as_socket_read_deadline(
 			&err, &self->socket, self->node, self->buffer_rc, length,
 			self->socket_timeout, self->deadline);
 	if (status != AEROSPIKE_OK) {
 		if (status == AEROSPIKE_ERR_TIMEOUT) {
-			fprintf(stderr, "ASDDT004 Timeout detected\n");
 			*timeout_exception = true;
 		}
 		else {
-			fprintf(stderr, "ASDDT005 Other error detected: %d\n", status);
 			*must_abort = true;
 		}
-		fprintf(stderr, "ASDDT006 as_conn_recover_drain_detail left abnormally\n");
 		return;
 	}
 	self->offset += self->socket.offset;
-	fprintf(stderr, "ASDDT002 as_conn_recover_drain_detail left normally\n");
 }
 
 static void
 as_conn_recover_drain_header(as_conn_recover* self, bool* must_abort, bool* timeout_exception)
 {
-	fprintf(stderr, "ASDHD001 as_conn_recover_drain_header entered\n");
 	bool started_with_buffer_rc = (self->offset == 0);
 	uint8_t* b = (started_with_buffer_rc) ? self->buffer_rc : self->header_buf;
 
 	while (true) {
 		as_error err;
 
-		fprintf(stderr, "ASDHD010 as_socket_read_deadline(%p, %p, %p, %p, %lu, %lu, %lu\n", &err, &self->socket, self->node, b, self->length, self->socket_timeout, self->deadline);
 		as_status status = as_socket_read_deadline(
 				&err, &self->socket, self->node, b, self->length,
 				self->socket_timeout, self->deadline);
 		if (status != AEROSPIKE_OK) {
 			if (status == AEROSPIKE_ERR_TIMEOUT) {
-				fprintf(stderr, "ASDHD011 Timeout detected\n");
 				*timeout_exception = true;
 			}
 			else {
-				fprintf(stderr, "ASDHD012 Other error detected: %d\n", status);
 				*must_abort = true;
 			}
 
-			fprintf(stderr, "ASDHD013 as_conn_recover_drain_header() left abnormally\n");
 			return;
 		}
 		// socket offset set to 0 in read_deadline, and is incremented as the read completes.
@@ -161,7 +151,6 @@ as_conn_recover_drain_header(as_conn_recover* self, bool* must_abort, bool* time
 		self->offset += self->socket.offset;
 
 		if (self->offset >= self->length) {
-			fprintf(stderr, "ASDHD014 offset >= length\n");
 			break;
 		}
 
@@ -172,21 +161,16 @@ as_conn_recover_drain_header(as_conn_recover* self, bool* must_abort, bool* time
 	}
 
 	if (self->check_return_code) {
-		fprintf(stderr, "ASDHD005 check_return_code is true\n");
 		if (b[self->length - 1] != 0) {
-			fprintf(stderr, "ASDHD006 INFO3 byte found to be nonzero; must abort\n");
 			*must_abort = true;
 			return;
 		}
 	}
 
-	fprintf(stderr, "ASDHD004 Attempt to process proto\n");
 	if (! as_conn_recover_parse_proto(self)) {
-		fprintf(stderr, "ASDHD003 Parsing proto failed; must abort.\n");
 		*must_abort = true;
 		return;
 	}
-	fprintf(stderr, "ASDHD002 as_conn_recover_drain_header left fallthrough\n");
 }
 
 
@@ -194,52 +178,39 @@ static bool
 as_conn_recover_try_drain(as_conn_recover* self, bool* must_abort,
 		bool* timeout_exception)
 {
-	fprintf(stderr, "ASTDR001 as_conn_recover_try_drain() entered\n");
 	bool connection_drained = false;
 
 	if (self->is_single) {
-		fprintf(stderr, "ASTDR003 is_single is true\n");
 		if (self->state == AS_READ_STATE_PROTO) {
-			fprintf(stderr, "ASTDR004 attempting to drain proto header\n");
 			as_conn_recover_drain_header(self, must_abort, timeout_exception);
 			if (*must_abort || *timeout_exception) {
-				fprintf(stderr, "ASTDR005 Exception detected: abort=%d timeout=%d\n", *must_abort, *timeout_exception);
 				goto exception;
 			}
 		}
 
-		fprintf(stderr, "ASTDR006 Attempting to drain \"detail\"\n");
 		as_conn_recover_drain_detail(self, must_abort, timeout_exception);
 		if (*must_abort || *timeout_exception) {
-			fprintf(stderr, "ASTDR007 Exception detected: abort=%d timeout=%d\n", *must_abort, *timeout_exception);
 			goto exception;
 		}
 
-		fprintf(stderr, "ASTDR008 Attempting to mark connection as recovered\n");
 		as_conn_recover_recover(self);
 
 		connection_drained = true;
 	}
 	else {
-		fprintf(stderr, "ASTDR010 is_single is false\n");
 		while (true) {
 			if (self->state == AS_READ_STATE_PROTO) {
-				fprintf(stderr, "ASTDR011 Attempting to drain proto header\n");
 				as_conn_recover_drain_header(self, must_abort, timeout_exception);
 				if (*must_abort || *timeout_exception) {
-					fprintf(stderr, "ASTDR012 Exception detected: abort=%d timeout=%d\n", *must_abort, *timeout_exception);
 					goto exception;
 				}
 			}
-			fprintf(stderr, "ASTDR013 Attempting to drain detail\n");
 			as_conn_recover_drain_detail(self, must_abort, timeout_exception);
 			if (*must_abort || *timeout_exception) {
 				goto exception;
-				fprintf(stderr, "ASTDR014 Exception detected: abort=%d timeout=%d\n", *must_abort, *timeout_exception);
 			}
 
 			if (self->last_group) {
-				fprintf(stderr, "ASTDR015 Last in the group; exiting loop.\n");
 				break;
 			}
 
@@ -247,13 +218,11 @@ as_conn_recover_try_drain(as_conn_recover* self, bool* must_abort,
 			self->offset = 0;
 			self->state = AS_READ_STATE_PROTO;
 		}
-		fprintf(stderr, "ASTDR016 Attempting to mark connection as recovered\n");
 		as_conn_recover_recover(self);
 		connection_drained = true;
 	}
 
 exception:
-	fprintf(stderr, "ASTDR002 as_conn_recover_try_drain() left\n");
 	return connection_drained;
 }
 
@@ -261,8 +230,6 @@ exception:
 bool
 as_conn_recover_drain(as_conn_recover* self)
 {
-	fprintf(stderr, "ASRCV001 as_conn_recover_drain() called\n");
-
 	bool must_abort = false;
 	bool timeout_exception = false;
 
@@ -270,28 +237,23 @@ as_conn_recover_drain(as_conn_recover* self)
 			as_conn_recover_try_drain(self, &must_abort, &timeout_exception);
 
 	if (timeout_exception) {
-		fprintf(stderr, "ASRCV006 Timeout exception detected from try_drain()\n");
 		uint64_t current_time_ns = cf_getns();
 
 		if (current_time_ns - self->socket_last_used >= self->timeout_delay * 1000) {
 			// Forcibly close the connection.
-			fprintf(stderr, "ASRCV005 We are forcibly closing connection due to timeout expiry\n");
 			must_abort = true;
 		}
 		else {
 			// Put back on queue for later draining.
-			fprintf(stderr, "ASRCV004 as_conn_recover_drain() left\n");
 			return false;
 		}
 	}
 
 	if (must_abort) {
 		as_conn_recover_abort(self);
-		fprintf(stderr, "ASRCV003 as_conn_recover_drain() left\n");
 		return true;
 	}
 
-	fprintf(stderr, "ASRCV002 as_conn_recover_drain() left\n");
 	return connection_drained;
 }
 

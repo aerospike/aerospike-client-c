@@ -203,6 +203,14 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 	
 	as_string_builder_append(&sb, "retry_count: ");
 	as_string_builder_append_uint64(&sb, stats->retry_count);
+	as_string_builder_append_newline(&sb);
+
+	as_string_builder_append(&sb, "thread_pool_queued_tasks: ");
+	as_string_builder_append_uint(&sb, stats->thread_pool_queued_tasks);
+	as_string_builder_append_newline(&sb);
+
+	as_string_builder_append(&sb, "recover_queue_size: ");
+	as_string_builder_append_uint(&sb, stats->recover_queue_size);
 
 	return sb.data;
 }

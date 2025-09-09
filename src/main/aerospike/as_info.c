@@ -123,7 +123,8 @@ as_info_command_node(
 	)
 {
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, NULL);
+	as_status status = as_node_get_connection(
+			err, node, NULL, 0, deadline_ms, &socket, NULL);
 
 	if (status != AEROSPIKE_OK) {
 		return status;

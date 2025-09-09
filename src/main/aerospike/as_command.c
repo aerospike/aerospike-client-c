@@ -76,10 +76,14 @@ as_replica_index_init_write(as_cluster* cluster, as_policy_replica replica)
 }
 
 static as_status
-as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx* context);
+as_command_read_messages(
+		as_error* err, as_command* cmd, as_socket* sock, as_node* node,
+		uint64_t* bytes_in, as_timeout_ctx* context);
 
 static as_status
-as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx* context);
+as_command_read_message(
+		as_error* err, as_command* cmd, as_socket* sock, as_node* node,
+		uint64_t* bytes_in, as_timeout_ctx* context);
 
 as_status
 as_batch_retry(as_command* cmd, as_error* err);
@@ -676,7 +680,7 @@ as_command_execute(as_command* cmd, as_error* err)
 	as_node* node = NULL;
 	as_status status;
 	bool release_node;
-        as_timeout_ctx timeout_context = { 0, };
+	as_timeout_ctx timeout_context = { 0, };
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
@@ -719,9 +723,10 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		as_socket socket;
-		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout, cmd->deadline_ms, &socket, &timeout_context);
+		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout,
+				cmd->deadline_ms, &socket, &timeout_context);
 
-                bool is_single = cmd->node == NULL;
+		bool is_single = cmd->node == NULL;
 		if (status != AEROSPIKE_OK) {
 			// Do not retry on server error response such as invalid user/password.
 			if (status > 0 && status != AEROSPIKE_ERR_TIMEOUT) {
@@ -732,26 +737,26 @@ as_command_execute(as_command* cmd, as_error* err)
 				return status;
 			}
 
-                        if (status == AEROSPIKE_ERR_TIMEOUT) {
-                                as_node_add_timeout(node, cmd->ns, metrics);
-                                as_node_reserve(node);
-                                as_conn_recover* cr = as_conn_recover_new(
-                                        &timeout_context,
-                                        cmd->policy->timeout_delay,
-                                        is_single,
-                                        node,
-                                        &socket,
-                                        cmd->socket_timeout,
-                                        cmd->deadline_ms * (1000 * 1000)      // deadline in nanoseconds
-                                );
+			if (status == AEROSPIKE_ERR_TIMEOUT) {
+				as_node_add_timeout(node, cmd->ns, metrics);
+				as_node_reserve(node);
+				as_conn_recover* cr = as_conn_recover_new(
+						&timeout_context,
+						cmd->policy->timeout_delay,
+						is_single,
+						node,
+						&socket,
+						cmd->socket_timeout,
+						cmd->deadline_ms * (1000 * 1000)      // deadline in nanoseconds
+				);
 
-                                if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {
-                                        // Queue insertion failed, most likely due to out of memory.
-                                        // Abort timeout recovery and just close the socket.
-                                        as_node_close_conn_error(node, &socket, socket.pool);
-                                        as_node_incr_sync_conns_aborted(node);
-                                }
-                        }
+				if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {
+					// Queue insertion failed, most likely due to out of memory.
+					// Abort timeout recovery and just close the socket.
+					as_node_close_conn_error(node, &socket, socket.pool);
+					as_node_incr_sync_conns_aborted(node);
+				}
+			}
 
 			goto Retry;
 		}
@@ -776,10 +781,12 @@ as_command_execute(as_command* cmd, as_error* err)
 
 		// Parse results returned by server.
 		if (! is_single) {
-			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in, &timeout_context);
+			status = as_command_read_messages(
+					err, cmd, &socket, node, &bytes_in, &timeout_context);
 		}
 		else {
-			status = as_command_read_message(err, cmd, &socket, node, &bytes_in, &timeout_context);
+			status = as_command_read_message(
+					err, cmd, &socket, node, &bytes_in, &timeout_context);
 		}
 
 		if (metrics) {
@@ -820,15 +827,15 @@ as_command_execute(as_command* cmd, as_error* err)
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
-                                                as_node_reserve(node);
+						as_node_reserve(node);
 						as_conn_recover* cr = as_conn_recover_new(
-							&timeout_context,
-                                                        cmd->policy->timeout_delay,
-                                                        is_single,
-                                                        node,
-                                                        &socket,
-                                                        cmd->socket_timeout,
-                                                        cmd->deadline_ms * (1000 * 1000)      // deadline in nanoseconds
+								&timeout_context,
+								cmd->policy->timeout_delay,
+								is_single,
+								node,
+								&socket,
+								cmd->socket_timeout,
+								cmd->deadline_ms * (1000 * 1000)      // deadline in nanoseconds
 						);
 
 						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {
@@ -968,7 +975,9 @@ Retry:
 }
 
 static as_status
-as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx* context)
+as_command_read_messages(
+		as_error* err, as_command* cmd, as_socket* sock, as_node* node,
+		uint64_t* bytes_in, as_timeout_ctx* context)
 {
 	size_t capacity = 0;
 	uint8_t* buf = NULL;
@@ -993,7 +1002,9 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 				}
 				*heaped_proto = proto;
 
-				as_timeout_ctx_set(context, (uint8_t*)heaped_proto, sizeof(as_proto), sock->offset, AS_READ_STATE_PROTO);
+				as_timeout_ctx_set(
+						context, (uint8_t*)heaped_proto, sizeof(as_proto),
+						sock->offset, AS_READ_STATE_PROTO);
 			}
 			break;
 		}
@@ -1035,7 +1046,8 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 				}
 				memcpy(heaped_buf, buf, capacity);
 
-				as_timeout_ctx_set(context, heaped_buf, size, sock->offset, AS_READ_STATE_DETAIL);
+				as_timeout_ctx_set(context, heaped_buf, size, sock->offset,
+						AS_READ_STATE_DETAIL);
 			}
 			break;
 		}
@@ -1047,6 +1059,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 		}
 		else if (proto.type == AS_COMPRESSED_MESSAGE_TYPE) {
 			status = as_compressed_size_parse(err, buf, &size2);
+
 			if (status != AEROSPIKE_OK) {
 				break;
 			}
@@ -1058,6 +1071,7 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 			}
 
 			status = as_proto_decompress(err, buf2, size2, buf, size);
+
 			if (status != AEROSPIKE_OK) {
 				break;
 			}
@@ -1086,11 +1100,14 @@ as_command_read_messages(as_error* err, as_command* cmd, as_socket* sock, as_nod
 
 
 static as_status
-as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node* node, uint64_t* bytes_in, as_timeout_ctx* context)
+as_command_read_message(
+		as_error* err, as_command* cmd, as_socket* sock, as_node* node,
+		uint64_t* bytes_in, as_timeout_ctx* context)
 {
 	as_proto proto;
-	as_status status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto),
-						   cmd->socket_timeout, cmd->deadline_ms);
+	as_status status = as_socket_read_deadline(err, sock, node,
+			(uint8_t*)&proto, sizeof(as_proto),
+			cmd->socket_timeout, cmd->deadline_ms);
 
 	if (status != AEROSPIKE_OK) {
 		if (status == AEROSPIKE_ERR_TIMEOUT) {
@@ -1100,19 +1117,21 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 			}
 			*heaped_proto = proto;
 
-			as_timeout_ctx_set(context, (uint8_t*)heaped_proto, sizeof(as_proto), sock->offset, AS_READ_STATE_PROTO);
+			as_timeout_ctx_set(context, (uint8_t*)heaped_proto,
+					sizeof(as_proto), sock->offset, AS_READ_STATE_PROTO);
 		}
 		return status;
 	}
 
 	*bytes_in += sizeof(as_proto);
-
 	status = as_proto_parse(err, &proto);
+
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
 
 	size_t size = proto.sz;
+
 	if (size == 0) {
 		return as_proto_size_error(err, size);
 	}
@@ -1156,8 +1175,8 @@ as_command_read_message(as_error* err, as_command* cmd, as_socket* sock, as_node
 			as_command_buffer_free(buf2, size2);
 			return status;
 		}
-
-		status = cmd->parse_results_fn(err, cmd, node, buf2 + sizeof(as_proto), size2 - sizeof(as_proto));
+		status = cmd->parse_results_fn(err, cmd, node, buf2 + sizeof(as_proto),
+				size2 - sizeof(as_proto));
 		as_command_buffer_free(buf2, size2);
 		return status;
 	}

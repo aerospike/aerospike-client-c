@@ -846,31 +846,32 @@ static void
 as_cluster_tend_recover_queue(as_cluster* cluster, as_error* err)
 {
 	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
-	// because if we did, and we have a socket which doesn't fully drain this tend
-	// cycle, then when we go to push it back onto the queue's tail, we'll just re-
-	// pop it if the queue would otherwise be empty.  This creates an infinite loop.
+	// because if we did, and we have a socket which doesn't fully drain this
+	// tend cycle, then when we go to push it back onto the queue's tail, we'll
+	// just re- pop it if the queue would otherwise be empty.  This creates an
+	// infinite loop.
 	//
-	// For this reason, we must query the size, and just iterate for that many pops.
-	// Anything else that comes up in the meantime, or if we end up having to re-queue
-	// a socket, won't hurt us.  Plus, it guarantees that we process each socket
-	// at most once.
+	// For this reason, we must query the size, and just iterate for that many
+	// pops.  Anything else that comes up in the meantime, or if we end up
+	// having to re-queue a socket, won't hurt us.  Plus, it guarantees that we
+	// process each socket at most once.
 
 	uint32_t queue_size = as_queue_mt_size(&cluster->recover_queue);
 	while (queue_size > 0) {
-                as_conn_recover* cr;
+		as_conn_recover* cr;
 
 		if (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
-                        if (as_conn_recover_drain(cr)) {
-                                // connection successfully drained and recovered.
-                                // Or, at least, aborted in a meaningful way such that
-                                // we don't need to re-queue the connection recovery record.
+			if (as_conn_recover_drain(cr)) {
+				// connection successfully drained and recovered.
+				// Or, at least, aborted in a meaningful way such that
+				// we don't need to re-queue the connection recovery record.
 
-                                as_conn_recover_release(cr);
-                        }
-                        else {
-                                // connection needs to be re-queued for later draining
-                                as_queue_mt_push(&cluster->recover_queue, &cr);
-                        }
+				as_conn_recover_release(cr);
+			}
+			else {
+				// connection needs to be re-queued for later draining
+				as_queue_mt_push(&cluster->recover_queue, &cr);
+			}
 		}
 
 		--queue_size;
@@ -1657,15 +1658,15 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
 
 	// Initialize the timeout delay recovery queue.
-        // 
-        // The +1 avoids a divide-by-zero fault when config->min_conns_per_node = 0.
-        // This guarantees that the queue always has at least one empty slot, even if no
-        // connections currently exists.
+	// 
+	// The +1 avoids a divide-by-zero fault when config->min_conns_per_node =
+	// 0.  This guarantees that the queue always has at least one empty slot,
+	// even if no minimum connections setting currently exists.
 	if (! as_queue_mt_init(&cluster->recover_queue,
-		                   sizeof(as_conn_recover*), config->min_conns_per_node + 1)) {
+			sizeof(as_conn_recover*), config->min_conns_per_node + 1)) {
 		as_cluster_destroy(cluster);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-			"Unable to initialize socket timeout recovery queue");
+		"Unable to initialize socket timeout recovery queue");
 	}
 
 	// Initialize thread pool.

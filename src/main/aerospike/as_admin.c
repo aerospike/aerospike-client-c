@@ -21,6 +21,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_timeout_ctx.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 #include <string.h>
@@ -236,17 +237,19 @@ as_admin_receive(
 	uint32_t socket_timeout, uint64_t deadline_ms, as_timeout_ctx* timeout_context
 	)
 {
-	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
+	as_status status = as_socket_read_deadline(err, sock, node, buffer, len,
+			socket_timeout, deadline_ms);
 
-        if (timeout_context && status == AEROSPIKE_ERR_TIMEOUT) {
-                uint8_t* heaped_buf = cf_rc_alloc(len);
-                if (! heaped_buf) {
-                        status = AEROSPIKE_ERR_CLIENT;
-                        return status;
-                }
-                memcpy(heaped_buf, buffer, len);
-                as_timeout_ctx_set(timeout_context, heaped_buf, len, sock->offset, AS_READ_STATE_AUTH_HEADER);
-        }
+	if (timeout_context && status == AEROSPIKE_ERR_TIMEOUT) {
+		uint8_t* heaped_buf = cf_rc_alloc(len);
+		if (! heaped_buf) {
+			status = AEROSPIKE_ERR_CLIENT;
+			return status;
+		}
+		memcpy(heaped_buf, buffer, len);
+		as_timeout_ctx_set(timeout_context, heaped_buf, len, sock->offset,
+				AS_READ_STATE_AUTH_HEADER);
+	}
 
 	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);

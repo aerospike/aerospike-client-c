@@ -204,7 +204,7 @@ as_event_command_schedule(as_event_command* cmd);
 void
 as_event_set_timeout(as_event_command* cmd);
 
-void
+bool
 as_event_connection_complete(as_event_command* cmd);
 
 bool
@@ -736,12 +736,6 @@ as_event_set_auth_parse_header(as_event_command* cmd)
 static inline void
 as_event_set_write(as_event_command* cmd)
 {
-	if (cmd->connect_timeout > 0) {
-		// Restore command timeout.
-		as_event_timer_stop(cmd);
-		cmd->total_deadline = cf_getms() + cmd->total_timeout;
-		as_event_set_timeout(cmd);
-	}
 	cmd->len = cmd->write_len;
 	cmd->pos = 0;
 }

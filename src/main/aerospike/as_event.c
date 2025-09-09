@@ -570,6 +570,7 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	cmd->conn = &conn->base;
 
 	if (cmd->connect_timeout > 0) {
+		printf("ADD CONNECT TIMER\n");
 		as_event_timer_stop(cmd);
 		as_event_timer_once(cmd, cmd->connect_timeout);
 	}
@@ -583,12 +584,34 @@ as_event_add_latency(as_event_command* cmd, as_latency_type type)
 	as_node_add_latency(cmd->metrics, type, elapsed);
 }
 
-void
+bool
 as_event_connection_complete(as_event_command* cmd)
 {
 	if (cmd->metrics) {
 		as_event_add_latency(cmd, AS_LATENCY_TYPE_CONN);
 	}
+
+	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
+		as_event_connector_success(cmd);
+		return true;
+	}
+
+	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
+		as_event_recover_auth(cmd);
+		return true;
+	}
+
+	if (cmd->connect_timeout > 0) {
+		// Restore command timeout.
+		printf("RESTORE TIMEOUT\n");
+		as_event_timer_stop(cmd);
+
+		if (cmd->total_timeout > 0) {
+			cmd->total_deadline = cf_getms() + cmd->total_timeout;
+		}
+		as_event_set_timeout(cmd);
+	}
+	return false;
 }
 
 static void
@@ -894,6 +917,7 @@ as_event_process_timer(as_event_command* cmd)
 
 		case AS_ASYNC_STATE_CONNECT:
 			if (cmd->connect_timeout > 0) {
+				printf("CONNECT TIMEOUT\n");
 				as_event_retry_timeout(cmd);
 			}
 			else {

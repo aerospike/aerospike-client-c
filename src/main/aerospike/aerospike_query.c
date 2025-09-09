@@ -1732,7 +1732,7 @@ as_query_partition_execute_async(
 		p += qe->cmd_size_post;
 		size = as_command_write_end(cmd->buf, p);
 
-		cmd->total_deadline = pt->total_timeout;
+		cmd->total_timeout = pt->total_timeout;
 		cmd->connect_timeout = pt->connect_timeout;
 		cmd->socket_timeout = pt->socket_timeout;
 		cmd->timeout_delay = pt->timeout_delay;
@@ -2327,7 +2327,7 @@ aerospike_query_async(
 		qcmd->np = NULL;
 
 		as_event_command* cmd = &qcmd->command;
-		cmd->total_deadline = policy->base.total_timeout;
+		cmd->total_timeout = policy->base.total_timeout;
 		cmd->connect_timeout = policy->base.connect_timeout;
 		cmd->socket_timeout = policy->base.socket_timeout;
 		cmd->timeout_delay = policy->base.timeout_delay;

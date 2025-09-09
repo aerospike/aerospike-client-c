@@ -1083,7 +1083,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		p += se->cmd_size_post;
 		size = as_command_write_end(cmd->buf, p);
 
-		cmd->total_deadline = pt->total_timeout;
+		cmd->total_timeout = pt->total_timeout;
 		cmd->connect_timeout = pt->connect_timeout;
 		cmd->socket_timeout = pt->socket_timeout;
 		cmd->timeout_delay = pt->timeout_delay;

@@ -239,8 +239,8 @@ as_socket_deadline(uint32_t timeout_ms)
  */
 as_status
 as_socket_write_deadline(
-	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf,
-	size_t buf_len, uint32_t socket_timeout, uint64_t deadline
+	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf, size_t buf_len,
+	uint32_t socket_timeout, uint64_t deadline
 	);
 
 /**
@@ -250,8 +250,8 @@ as_socket_write_deadline(
  */
 as_status
 as_socket_read_deadline(
-	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf,
-	size_t buf_len, uint32_t socket_timeout, uint64_t deadline
+	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf, size_t buf_len,
+	uint32_t socket_timeout, uint64_t deadline
 	);
 
 #ifdef __cplusplus

@@ -14,6 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+#include <aerospike/as_node.h>
 #include <aerospike/as_address.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_atomic.h>
@@ -23,7 +24,6 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_metrics.h>
-#include <aerospike/as_node.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_queue_mt.h>
 #include <aerospike/as_queue.h>
@@ -626,9 +626,9 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 
 as_status
 as_node_get_connection(
-		as_error* err, as_node* node, const char* ns, uint32_t socket_timeout,
-		uint64_t deadline_ms, as_socket* sock, as_timeout_ctx* timeout_context
-		)
+	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
+	as_socket* sock, as_timeout_ctx* timeout_context
+	)
 {
 	as_conn_pool* pools = node->sync_conn_pools;
 	as_cluster* cluster = node->cluster;
@@ -674,9 +674,8 @@ as_node_get_connection(
 		else if (as_conn_pool_incr(pool)) {
 			// Socket not found and queue has available slot.
 			// Create new connection.
-			as_status status = as_node_create_connection(
-					err, node, ns, socket_timeout, deadline_ms, pool, sock,
-					timeout_context);
+			as_status status = as_node_create_connection(err, node, ns, socket_timeout, deadline_ms, pool,
+				sock, timeout_context);
 
 			if (status != AEROSPIKE_OK) {
 				as_conn_pool_decr(pool);
@@ -684,7 +683,7 @@ as_node_get_connection(
 			return status;
 		}
 		else {
-			// Socket not found and queue is full.	Try another queue.
+			// Socket not found and queue is full. Try another queue.
 			as_conn_pool_decr(pool);
 
 			if (backward) {
@@ -903,9 +902,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 				}
 			}
 			else {
-				status = as_authenticate(
-						cluster, err, &sock, node, node->session, 0,
-						deadline_ms, NULL);
+				status = as_authenticate(cluster, err, &sock, node, node->session, 0, deadline_ms, NULL);
 
 				if (status != AEROSPIKE_OK) {
 					// Authentication failed.

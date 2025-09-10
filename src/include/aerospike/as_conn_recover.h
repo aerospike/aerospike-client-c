@@ -26,55 +26,55 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * @private
  * Record a connection which has gone into a timeout state, and which we should
- * attempt to recover.	A recovered connection saves us the overhead of having
+ * attempt to recover. A recovered connection saves us the overhead of having
  * to close and re-open a TCP connection.
  *
  * As connections need recovery, they are queued onto an as_cluster structure.
  * See as_cluster for more information.
  */
 typedef struct as_conn_recover_s {
-	uint8_t*          buffer_rc;
-	uint32_t          capacity;
-	uint32_t          offset;
-	as_read_state     state;
-	uint32_t          timeout_delay;
-	bool              is_single;
-	bool              check_return_code;
-	bool              last_group;
-	uint8_t*          header_buf;
-	uint32_t          length;
-	as_node*          node;
+	uint8_t* buffer_rc;
+	uint32_t capacity;
+	uint32_t offset;
+	as_read_state state;
+	uint32_t timeout_delay;
+	bool is_single;
+	bool check_return_code;
+	bool last_group;
+	uint8_t* header_buf;
+	uint32_t length;
+	as_node* node;
 
 	/**
 	 * @private
-	 * The socket to be recovered.	This structure is considered read-only,
+	 * The socket to be recovered. This structure is considered read-only,
 	 * side-effects of using the socket notwithstanding.
 	 */
-	as_socket         socket;
+	as_socket socket;
 
-	uint32_t          socket_timeout;
-	uint64_t          deadline;
+	uint32_t socket_timeout;
+	uint64_t deadline;
 
 	/**
 	 * @private
-	 * Records the most recent time when the socket was used.  Although the socket
+	 * Records the most recent time when the socket was used. Although the socket
 	 * has a last_used field within it, it overlaps with a pool pointer, which we
-	 * need to recover the socket.	This field is used while the socket is being
+	 * need to recover the socket. This field is used while the socket is being
 	 * recovered instead.
 	 */
-	uint64_t          socket_last_used;
+	uint64_t socket_last_used;
 } as_conn_recover;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * @private
@@ -82,10 +82,9 @@ typedef struct as_conn_recover_s {
  */
 as_conn_recover*
 as_conn_recover_init(
-		as_conn_recover* self, as_timeout_ctx* timeout_ctx,
-		uint32_t timeout_delay, bool is_single, as_node* node,
-		as_socket* socket, uint32_t socket_timeout,
-		uint64_t deadline_ns);
+	as_conn_recover* self, as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
+	as_node* node, as_socket* socket, uint32_t socket_timeout, uint64_t deadline_ns
+	);
 
 /**
  * @private
@@ -94,9 +93,9 @@ as_conn_recover_init(
  */
 static inline as_conn_recover*
 as_conn_recover_new(
-		as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single,
-		as_node* node, as_socket* socket, uint32_t socket_timeout,
-		uint64_t deadline_ns)
+	as_timeout_ctx* timeout_ctx, uint32_t timeout_delay, bool is_single, as_node* node,
+	as_socket* socket, uint32_t socket_timeout, uint64_t deadline_ns
+	)
 {
 	return as_conn_recover_init(
 		(as_conn_recover*)cf_rc_alloc(sizeof(as_conn_recover)),
@@ -200,7 +199,7 @@ as_conn_recover_parse_proto(as_conn_recover* self) {
 		}
 	}
 
-	self->length = proto->sz - (self->offset - 8);
+	self->length = (uint32_t)proto->sz - (self->offset - 8);
 	self->offset = 0;
 	self->state = AS_READ_STATE_DETAIL;
 

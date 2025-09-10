@@ -729,26 +729,18 @@ as_command_execute(as_command* cmd, as_error* err)
 			&socket, &timeout_context);
 
 		if (status != AEROSPIKE_OK) {
-			// Do not retry on server error response such as invalid user/password.
-			if (status > 0 && status != AEROSPIKE_ERR_TIMEOUT) {
-				if (is_single) {
-					as_node_release(node);
-				}
-				as_command_prepare_error(cmd, err);
-				return status;
-			}
-
 			if (status == AEROSPIKE_ERR_TIMEOUT) {
 				as_node_add_timeout(node, cmd->ns, metrics);
 				as_node_reserve(node);
+
 				as_conn_recover* cr = as_conn_recover_new(
-						&timeout_context,
-						cmd->policy->timeout_delay,
-						is_single,
-						node,
-						&socket,
-						cmd->socket_timeout,
-						cmd->deadline_ms * (1000 * 1000)      // deadline in nanoseconds
+					&timeout_context,
+					cmd->policy->timeout_delay,
+					is_single,
+					node,
+					&socket,
+					cmd->socket_timeout,
+					cmd->deadline_ms * (1000 * 1000) // deadline in nanoseconds
 				);
 
 				if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {
@@ -758,7 +750,14 @@ as_command_execute(as_command* cmd, as_error* err)
 					as_node_incr_sync_conns_aborted(node);
 				}
 			}
-
+			else if (status > 0) {
+				// Do not retry on server error response such as invalid user/password.
+				if (is_single) {
+					as_node_release(node);
+				}
+				as_command_prepare_error(cmd, err);
+				return status;
+			}
 			goto Retry;
 		}
 		

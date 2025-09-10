@@ -14,7 +14,6 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
 #include <aerospike/as_conn_recover.h>
 
 //---------------------------------
@@ -60,8 +59,7 @@ as_conn_recover_init(
 				as_conn_recover_abort(self);
 				return self;
 			}
-			self->length =
-					as_conn_recover_get_proto_size(self) - (self->offset - 8);
+			self->length = (uint32_t)as_conn_recover_get_proto_size(self) - (self->offset - 8);
 			self->offset = 0;
 			self->state = AS_READ_STATE_DETAIL;
 		}

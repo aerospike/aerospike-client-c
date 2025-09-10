@@ -14,8 +14,8 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+#pragma once
 
-#pragma once 
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -43,7 +43,6 @@ typedef enum as_read_state_e {
  * When a socket read timeout occurs, this structure records
  * the context in which it happened.
  */
-
 typedef struct as_timeout_ctx_s {
 	/**
 	 * Points to a reference counted buffer of length `capacity`.
@@ -85,13 +84,14 @@ typedef struct as_timeout_ctx_s {
  * @return true if the allocation succeeded; false otherwise.
  */
 static inline void
-as_timeout_ctx_set(as_timeout_ctx* context, uint8_t* buffer, uint32_t cap,
-		uint32_t offset, uint8_t state)
+as_timeout_ctx_set(
+	as_timeout_ctx* context, uint8_t* buffer, size_t cap, size_t offset, uint8_t state
+	)
 {
 	if (context) {
 		context->buffer_rc = buffer;
-		context->capacity = cap;
-		context->offset = offset;
+		context->capacity = (uint32_t)cap;
+		context->offset = (uint32_t)offset;
 		context->state = state;
 	}
 }
@@ -99,4 +99,3 @@ as_timeout_ctx_set(as_timeout_ctx* context, uint8_t* buffer, uint32_t cap,
 #ifdef __cplusplus
 } // end extern "C"
 #endif
-

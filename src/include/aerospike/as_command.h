@@ -86,15 +86,15 @@ extern "C" {
 #define AS_MSG_INFO2_GENERATION_GT		(1 << 3) // apply write if new generation >= old, good for restore
 #define AS_MSG_INFO2_DURABLE_DELETE		(1 << 4) // command resulting in record deletion leaves tombstone (Enterprise only).
 #define AS_MSG_INFO2_CREATE_ONLY		(1 << 5) // write record only if it doesn't exist
-#define AS_MSG_INFO2_RELAX_AP_LONG_QUERY	(1 << 6) // treat as long query, but relax read consistency.
+#define AS_MSG_INFO2_RELAX_AP_LONG_QUERY (1 << 6) // treat as long query, but relax read consistency.
 #define AS_MSG_INFO2_RESPOND_ALL_OPS	(1 << 7) // return a result for every operation.
 
 // Message info3 bits
 #define AS_MSG_INFO3_LAST				(1 << 0) // this is the last of a multi-part message
-#define AS_MSG_INFO3_COMMIT_MASTER		(1 << 1) // write commit level - bit 0
+#define AS_MSG_INFO3_COMMIT_MASTER  	(1 << 1) // write commit level - bit 0
 // On send: Do not return partition done in scan/query.
 // On receive: Specified partition is done in scan/query.
-#define AS_MSG_INFO3_PARTITION_DONE		(1 << 2)
+#define AS_MSG_INFO3_PARTITION_DONE  	(1 << 2)
 #define AS_MSG_INFO3_UPDATE_ONLY		(1 << 3) // update existing record only, do not create new record
 #define AS_MSG_INFO3_CREATE_OR_REPLACE	(1 << 4) // completely replace existing record, or create new record
 #define AS_MSG_INFO3_REPLACE_ONLY		(1 << 5) // completely replace existing record, do not create new record
@@ -103,15 +103,15 @@ extern "C" {
 // Interpret SC_READ bits in info3.
 //
 // RELAX   TYPE
-//				  strict
-//				  ------
-//   0		0	  sequential (default)
-//   0		1	  linearize
+//                strict
+//                ------
+//   0      0     sequential (default)
+//   0      1     linearize
 //
-//				  relaxed
-//				  -------
-//   1		0	  allow prole
-//   1		1	  allow unavailable
+//                relaxed
+//                -------
+//   1      0     allow prole
+//   1      1     allow unavailable
 
 // Transaction
 #define AS_MSG_INFO4_TXN_VERIFY_READ		(1 << 0) // Send transaction version to the server to be verified.
@@ -538,7 +538,7 @@ uint8_t*
 as_command_write_key(
 	uint8_t* p, const as_policy_base* policy, as_policy_key pol_key, const as_key* key,
 	as_command_txn_data* tdata
-	);
+ 	);
 
 /**
  * @private

@@ -680,15 +680,15 @@ as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
 	as_node* node = NULL;
-	as_status status;
-	bool release_node;
 	as_timeout_ctx timeout_context = {0};
+	as_status status;
+	bool is_single;
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
 		if (cmd->node) {
 			node = cmd->node;
-			release_node = false;
+			is_single = false;
 		}
 		else {
 			// node might already be destroyed on retry and is still set as the previous node.
@@ -705,7 +705,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				return err->code;
 			}
 			as_node_reserve(node);
-			release_node = true;
+			is_single = true;
 		}
 
 		if (! as_node_valid_error_rate(node)) {
@@ -728,11 +728,10 @@ as_command_execute(as_command* cmd, as_error* err)
 		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout, cmd->deadline_ms,
 			&socket, &timeout_context);
 
-		bool is_single = cmd->node == NULL;
 		if (status != AEROSPIKE_OK) {
 			// Do not retry on server error response such as invalid user/password.
 			if (status > 0 && status != AEROSPIKE_ERR_TIMEOUT) {
-				if (release_node) {
+				if (is_single) {
 					as_node_release(node);
 				}
 				as_command_prepare_error(cmd, err);
@@ -855,7 +854,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_CLIENT:
 					as_node_add_error(node, cmd->ns, metrics);
 					as_node_close_conn_error(node, &socket, socket.pool);
-					if (release_node) {
+					if (is_single) {
 						as_node_release(node);
 					}
 					as_command_prepare_error(cmd, err);
@@ -885,9 +884,9 @@ as_command_execute(as_command* cmd, as_error* err)
 
 		// Put connection back in pool.
 		as_node_put_connection(node, &socket);
-		
+
 		// Release resources.
-		if (release_node) {
+		if (is_single) {
 			as_node_release(node);
 		}
 		return status;
@@ -936,7 +935,7 @@ Retry:
 		}
 
 		// Prepare for retry.
-		if (release_node) {
+		if (is_single) {
 			as_node_release(node);
 		}
 
@@ -967,7 +966,7 @@ Retry:
 			as_node_get_address_string(node));
 	}
 
-	if (release_node) {
+	if (is_single) {
 		as_node_release(node);
 	}
 	as_command_prepare_error(cmd, err);

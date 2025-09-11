@@ -123,6 +123,8 @@ as_conn_recover_release(as_conn_recover* self)
 			as_node_release(self->node);
 			self->node = NULL;
 		}
+
+		cf_rc_free(self);
 	}
 }
 

@@ -32,7 +32,6 @@ as_conn_recover_init(
 
 	memset(self, 0, sizeof(as_conn_recover));
 
-	cf_rc_reserve(timeout_ctx->buffer_rc);
 	self->buffer_rc = timeout_ctx->buffer_rc;
 	self->capacity = timeout_ctx->capacity;
 	self->offset = timeout_ctx->offset;

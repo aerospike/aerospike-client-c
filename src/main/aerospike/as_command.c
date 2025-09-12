@@ -731,8 +731,6 @@ as_command_execute(as_command* cmd, as_error* err)
 		if (status != AEROSPIKE_OK) {
 			if (status == AEROSPIKE_ERR_TIMEOUT) {
 				as_node_add_timeout(node, cmd->ns, metrics);
-				as_node_reserve(node);
-
 				as_conn_recover* cr = as_conn_recover_new(
 					&timeout_context,
 					cmd->policy->timeout_delay,
@@ -825,7 +823,6 @@ as_command_execute(as_command* cmd, as_error* err)
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
-						as_node_reserve(node);
 						as_conn_recover* cr = as_conn_recover_new(
 								&timeout_context,
 								cmd->policy->timeout_delay,

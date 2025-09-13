@@ -748,6 +748,7 @@ as_cluster_reset_error_rate(as_cluster* cluster)
 static void
 as_cluster_tend_recover_queue(as_cluster* cluster)
 {
+	fprintf(stderr, "ASTRQ001 as_cluster_tend_recover_queue() entered\n");
 	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
 	// because if we did, and we have a socket which doesn't fully drain this
 	// tend cycle, then when we go to push it back onto the queue's tail, we'll
@@ -760,11 +761,14 @@ as_cluster_tend_recover_queue(as_cluster* cluster)
 	// process each socket at most once.
 
 	uint32_t queue_size = as_queue_mt_size(&cluster->recover_queue);
+	fprintf(stderr, "ASTRQ003 queue_size = %d\n", queue_size);
 	while (queue_size > 0) {
 		as_conn_recover* cr;
 
 		if (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
+			fprintf(stderr, "ASTRQ004 Queue pop successful; attempting to drain\n");
 			if (as_conn_recover_drain(cr)) {
+				fprintf(stderr, "ASTRQ005 Drain succeeded; freeing as_conn_recover_release\n");
 				// connection successfully drained and recovered.
 				// Or, at least, aborted in a meaningful way such that
 				// we don't need to re-queue the connection recovery record.
@@ -772,6 +776,7 @@ as_cluster_tend_recover_queue(as_cluster* cluster)
 				as_conn_recover_release(cr);
 			}
 			else {
+				fprintf(stderr, "ASTRQ006 Drain failed; putting the as_conn_recover_release back on the release_queue\n");
 				// connection needs to be re-queued for later draining
 				as_queue_mt_push(&cluster->recover_queue, &cr);
 			}
@@ -779,6 +784,7 @@ as_cluster_tend_recover_queue(as_cluster* cluster)
 
 		--queue_size;
 	}
+	fprintf(stderr, "ASTRQ002 as_cluster_tend_recover_queue() left normally\n");
 }
 
 void

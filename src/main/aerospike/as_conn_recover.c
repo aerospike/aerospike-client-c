@@ -175,39 +175,52 @@ static bool
 as_conn_recover_try_drain(as_conn_recover* self, bool* must_abort,
 		bool* timeout_exception)
 {
+	fprintf(stderr, "ASDRN001 as_conn_recover_try_drain() entered\n");
 	bool connection_drained = false;
 
 	if (self->is_single) {
+		fprintf(stderr, "ASDRN003 is_single = true\n");
 		if (self->state == AS_READ_STATE_PROTO) {
+			fprintf(stderr, "ASDRN004 Attempting to drain proto\n");
 			as_conn_recover_drain_header(self, must_abort, timeout_exception);
 			if (*must_abort || *timeout_exception) {
+				fprintf(stderr, "ASDRN005 Exception detected; abort=%d timeout=%d\n", *must_abort, *timeout_exception);
 				goto exception;
 			}
 		}
 
+		fprintf(stderr, "ASDRN006 Attempting to drain detail\n");
 		as_conn_recover_drain_detail(self, must_abort, timeout_exception);
 		if (*must_abort || *timeout_exception) {
+			fprintf(stderr, "ASDRN007 Exception detected; abort=%d timeout=%d\n", *must_abort, *timeout_exception);
 			goto exception;
 		}
 
+		fprintf(stderr, "ASDRN008 Marking connection as recovered\n");
 		as_conn_recover_recover(self);
 
 		connection_drained = true;
 	}
 	else {
+		fprintf(stderr, "ASDRN010 is_single = false\n");
 		while (true) {
 			if (self->state == AS_READ_STATE_PROTO) {
+				fprintf(stderr, "ASDRN011 About to drain proto header\n");
 				as_conn_recover_drain_header(self, must_abort, timeout_exception);
 				if (*must_abort || *timeout_exception) {
+					fprintf(stderr, "ASDRN012 Exception: abort=%d timeout=%d\n", *must_abort, *timeout_exception);
 					goto exception;
 				}
 			}
+			fprintf(stderr, "ASDRN013 About to drain detail\n");
 			as_conn_recover_drain_detail(self, must_abort, timeout_exception);
 			if (*must_abort || *timeout_exception) {
+				fprintf(stderr, "ASDRN013 Exception: abort=%d timeout=%d\n", *must_abort, *timeout_exception);
 				goto exception;
 			}
 
 			if (self->last_group) {
+				fprintf(stderr, "ASDRN014 Last in the group; breaking out of loop.\n");
 				break;
 			}
 
@@ -215,11 +228,13 @@ as_conn_recover_try_drain(as_conn_recover* self, bool* must_abort,
 			self->offset = 0;
 			self->state = AS_READ_STATE_PROTO;
 		}
+		fprintf(stderr, "ASDRN015 Marking connection as recovered\n");
 		as_conn_recover_recover(self);
 		connection_drained = true;
 	}
 
 exception:
+	fprintf(stderr, "ASDRN002 as_conn_recover_try_drain() left with result %d\n", connection_drained);
 	return connection_drained;
 }
 
@@ -230,27 +245,33 @@ as_conn_recover_drain(as_conn_recover* self)
 	bool must_abort = false;
 	bool timeout_exception = false;
 
+	fprintf(stderr, "ASDRN030 as_conn_recover_drain() entered\n");
 	bool connection_drained =
 			as_conn_recover_try_drain(self, &must_abort, &timeout_exception);
 
 	if (timeout_exception) {
+		fprintf(stderr, "ASDRN034 Timeout happened\n");
 		uint64_t current_time_ns = cf_getns();
 
 		if (current_time_ns - self->socket_last_used >= self->timeout_delay * 1000) {
+			fprintf(stderr, "ASDRN032 Connection outlasted timeout delay; forcibly closing connection\n");
 			// Forcibly close the connection.
 			must_abort = true;
 		}
 		else {
+			fprintf(stderr, "ASDRN033 Putting connection back onto queue for later draining\n");
 			// Put back on queue for later draining.
 			return false;
 		}
 	}
 
 	if (must_abort) {
+		fprintf(stderr, "ASDRN035 Abort happened; aborting connection\n");
 		as_conn_recover_abort(self);
 		return true;
 	}
 
+	fprintf(stderr, "ASDRN030 as_conn_recover_drain() leaving with %d\n", connection_drained);
 	return connection_drained;
 }
 

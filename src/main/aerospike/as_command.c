@@ -684,13 +684,16 @@ as_command_execute(as_command* cmd, as_error* err)
 	as_status status;
 	bool is_single;
 
+	fprintf(stderr, "ASEXE001 as_command_execute() entered\n");
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
 		if (cmd->node) {
+			fprintf(stderr, "ASEXE061 Getting node from command\n");
 			node = cmd->node;
 			is_single = false;
 		}
 		else {
+			fprintf(stderr, "ASEXE062 Get another node from partition\n");
 			// node might already be destroyed on retry and is still set as the previous node.
 			// This works because the previous node is only used for pointer comparison
 			// and the previous node's contents are not examined during this call.
@@ -701,14 +704,18 @@ as_command_execute(as_command* cmd, as_error* err)
 				as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 					"Node not found for partition %s:%u", cmd->ns, cmd->partition_id);
 
+				fprintf(stderr, "ASEXE064 Node not found for partition\n");
 				as_command_prepare_error(cmd, err);
+				fprintf(stderr, "ASEXE065 as_command_execute() leaving with status %d\n", err->code);
 				return err->code;
 			}
+			fprintf(stderr, "ASEXE063 Reserving node\n");
 			as_node_reserve(node);
 			is_single = true;
 		}
 
 		if (! as_node_valid_error_rate(node)) {
+			fprintf(stderr, "ASEXE060 Max error rate exceeded; retrying\n");
 			status = as_error_set_message(err, AEROSPIKE_MAX_ERROR_RATE, "Max error rate exceeded");
 			goto Retry;
 		}
@@ -724,12 +731,14 @@ as_command_execute(as_command* cmd, as_error* err)
 			}
 		}
 
+		fprintf(stderr, "ASEXE057 Getting a connection\n");
 		as_socket socket;
 		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout, cmd->deadline_ms,
 			&socket, &timeout_context);
 
 		if (status != AEROSPIKE_OK) {
 			if (status == AEROSPIKE_ERR_TIMEOUT) {
+				fprintf(stderr, "ASEXE050 Timeout while authenticating a new connection\n");
 				as_node_add_timeout(node, cmd->ns, metrics);
 				as_conn_recover* cr = as_conn_recover_new(
 					&timeout_context,
@@ -741,9 +750,12 @@ as_command_execute(as_command* cmd, as_error* err)
 					cmd->deadline_ms * (1000 * 1000) // deadline in nanoseconds
 				);
 
+				fprintf(stderr, "ASEXE051 Queueing as_conn_recover_s onto recover_queue\n");
+				fprintf(stderr, "ASEXE055 Shouldn't we check for null here?\n");
 				if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {
 					// Queue insertion failed, most likely due to out of memory.
 					// Abort timeout recovery and just close the socket.
+					fprintf(stderr, "ASEXE052 Failed!  Aborting connection\n");
 					as_node_close_conn_error(node, &socket, socket.pool);
 					as_node_incr_sync_conns_aborted(node);
 				}
@@ -751,21 +763,26 @@ as_command_execute(as_command* cmd, as_error* err)
 			else if (status > 0) {
 				// Do not retry on server error response such as invalid user/password.
 				if (is_single) {
+					fprintf(stderr, "ASEXE054 is_single = true; releasing node\n");
 					as_node_release(node);
 				}
 				as_command_prepare_error(cmd, err);
+				fprintf(stderr, "ASEXE055 as_command_execute() returning with status %d\n", status);
 				return status;
 			}
+			fprintf(stderr, "ASEXE056 Retrying\n");
 			goto Retry;
 		}
 		
 		// Send command.
 		status = as_socket_write_deadline(err, &socket, node, cmd->buf, cmd->buf_size,
 										  cmd->socket_timeout, cmd->deadline_ms);
-		
+		fprintf(stderr, "ASEXE040 as_socket_write_deadline() = %d\n", status);
+
 		if (status != AEROSPIKE_OK) {
 			// Socket errors are considered temporary anomalies.  Retry.
 			// Close socket to flush out possible garbage.	Do not put back in pool.
+			fprintf(stderr, "ASEXE041 Socket error; close connection, flag error, and retry.\n");
 			as_node_close_conn_error(node, &socket, socket.pool);
 			goto Retry;
 		}
@@ -780,9 +797,11 @@ as_command_execute(as_command* cmd, as_error* err)
 		// Parse results returned by server.
 		if (is_single) {
 			status = as_command_read_message(err, cmd, &socket, node, &bytes_in, &timeout_context);
+			fprintf(stderr, "ASEXE031 as_command_read_message() = %d\n", status);
 		}
 		else {
 			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in, &timeout_context);
+			fprintf(stderr, "ASEXE032 as_command_read_messages() = %d\n", status);
 		}
 
 		if (metrics) {
@@ -807,22 +826,27 @@ as_command_execute(as_command* cmd, as_error* err)
 			switch (status) {
 				case AEROSPIKE_ERR_CLUSTER:
 				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
+					fprintf(stderr, "ASEXE023 flagging error, NOT closing socket, putting it back into rotation\n");
 					as_node_add_error(node, cmd->ns, metrics);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
 				case AEROSPIKE_ERR_CONNECTION:
+					fprintf(stderr, "ASEXE024 flagging error, closing socket\n");
 					as_node_add_error(node, cmd->ns, metrics);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
+					fprintf(stderr, "ASEXE025 Timeout!\n");
 					as_node_add_timeout(node, cmd->ns, metrics);
 					
 					if (is_server_timeout(err)) {
+						fprintf(stderr, "ASEXE026 It's a server timeout, so put connection back and flag error in metrics\n");
 						as_node_put_conn_error(node, &socket);
 					}
 					else {
+						fprintf(stderr, "ASEXE027 Allocating as_conn_recover_s\n");
 						as_conn_recover* cr = as_conn_recover_new(
 								&timeout_context,
 								cmd->policy->timeout_delay,
@@ -833,13 +857,16 @@ as_command_execute(as_command* cmd, as_error* err)
 								cmd->deadline_ms * (1000 * 1000)      // deadline in nanoseconds
 						);
 
+						fprintf(stderr, "ASEXE028 Queueing it into recover_queue\n");
 						if (! as_queue_mt_push(&cmd->cluster->recover_queue, &cr)) {
 							// Queue insertion failed, most likely due to out of memory.
 							// Abort timeout recovery and just close the socket.
+							fprintf(stderr, "ASEXE029 Failed; close connection and record the abort in metrics\n");
 							as_node_close_conn_error(node, &socket, socket.pool);
 							as_node_incr_sync_conns_aborted(node);
 						}
 					}
+					fprintf(stderr, "ASEXE02A Going to retry.\n");
 					goto Retry;
 
 				case AEROSPIKE_NOT_AUTHENTICATED:
@@ -848,15 +875,19 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
+					fprintf(stderr, "ASEXE02B Closing connection and flagging error\n");
 					as_node_add_error(node, cmd->ns, metrics);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					if (is_single) {
+						fprintf(stderr, "ASEXE02C is_single = true; releasing node\n");
 						as_node_release(node);
 					}
 					as_command_prepare_error(cmd, err);
+					fprintf(stderr, "ASEXE02D returning with status %d\n", status);
 					return status;
 				
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
+					fprintf(stderr, "ASEXE02E Record not found; adding to latency metrics instead of error count\n");
 					// Do not increment error count on record not found.
 					// Add latency metrics instead.
 					if (metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
@@ -867,11 +898,13 @@ as_command_execute(as_command* cmd, as_error* err)
 					break;
 
 				case AEROSPIKE_ERR_RECORD_BUSY:
+					fprintf(stderr, "ASEXE02F Record busy; flag error\n");
 					as_node_add_key_busy(node, cmd->ns, metrics);
 					as_command_prepare_error(cmd, err);
 					break;
 
 				default:
+					fprintf(stderr, "ASEXE030 Unknown case; flag error\n");
 					as_node_add_error(node, cmd->ns, metrics);
 					as_command_prepare_error(cmd, err);
 					break;
@@ -880,9 +913,11 @@ as_command_execute(as_command* cmd, as_error* err)
 
 		// Put connection back in pool.
 		as_node_put_connection(node, &socket);
+		fprintf(stderr, "ASEXE021 Putting connection back in pool\n");
 
 		// Release resources.
 		if (is_single) {
+			fprintf(stderr, "ASEXE020 is_single = true; releasing node\n");
 			as_node_release(node);
 		}
 		return status;
@@ -890,6 +925,7 @@ as_command_execute(as_command* cmd, as_error* err)
 Retry:
 		// Check if max retries reached.
 		if (++cmd->iteration > cmd->max_retries) {
+			fprintf(stderr, "ASEXE018 Loop iteration greater than max retries; breaking loop\n");
 			break;
 		}
 
@@ -902,6 +938,7 @@ Retry:
 			(status != AEROSPIKE_ERR_TIMEOUT && status != AEROSPIKE_ERR_NO_MORE_CONNECTIONS &&
 			 status != AEROSPIKE_MAX_ERROR_RATE)
 			)) {
+			fprintf(stderr, "ASEXE016 Unsure what this chunk of code means, but it seems significant.  Logging.\n");
 			// Note: SC session read will ignore this setting because it uses master only.
 			cmd->replica_index++;
 
@@ -910,21 +947,26 @@ Retry:
 		}
 		else {
 			// Sleep as defined because target node is not likely to change.
+			fprintf(stderr, "ASEXE017 Unsure what this chunk of code means, but it seems significant.  Logging.\n");
 			sleep_between_retries = cmd->policy->sleep_between_retries;
 		}
 
 		if (cmd->deadline_ms > 0) {
 			// Check for total timeout.
 			int64_t remaining = cmd->deadline_ms - cf_getms() - sleep_between_retries;
+			fprintf(stderr, "ASEXE013 Deadline > 0; ms remaining = %ld\n", remaining);
 
 			if (remaining <= 0) {
+				fprintf(stderr, "ASEXE... remaining < 0; breaking loop\n");
 				break;
 			}
 
 			if (remaining < cmd->total_timeout) {
+				fprintf(stderr, "ASEXE014 remaining < total_timeout; adjusting total_timeout\n");
 				cmd->total_timeout = (uint32_t)remaining;
 
 				if (cmd->socket_timeout > cmd->total_timeout) {
+					fprintf(stderr, "ASEXE015 adjusting socket_timeout\n");
 					cmd->socket_timeout = cmd->total_timeout;
 				}
 			}
@@ -932,11 +974,13 @@ Retry:
 
 		// Prepare for retry.
 		if (is_single) {
+			fprintf(stderr, "ASEXE012 is_single = true; therefore releasing node.\n");
 			as_node_release(node);
 		}
 
 		if (sleep_between_retries > 0) {
 			// Sleep before trying again.
+			fprintf(stderr, "ASEXE011 Sleeping before trying again\n");
 			as_sleep(sleep_between_retries);
 		}
 
@@ -944,6 +988,7 @@ Retry:
 			status = as_batch_retry(cmd, err);
 
 			if (status != AEROSPIKE_USE_NORMAL_RETRY) {
+				fprintf(stderr, "ASEXE010 status != AEROSPIKE_USE_NORMAL_RETRY; leaving abnormally: %d\n", status);
 				return status;
 			}
 		}
@@ -951,11 +996,18 @@ Retry:
 		as_cluster_add_retry(cmd->cluster);
 	}
 
+	fprintf(stderr, "ASEXE007 Retries have been exhausted.\n");
 	// Retries have been exhausted.
 	// Fill in timeout stats if timeout occurred.
 	if (err->code == AEROSPIKE_ERR_TIMEOUT) {
 		// Server timeouts have a message.  Client timeouts do not have a message.
 		const char* type = is_server_timeout(err)? "Server" : "Client";
+		if (is_server_timeout(err)) {
+			fprintf(stderr, "ASEXE004 Server timeout!\n");
+		}
+		else {
+			fprintf(stderr, "ASEXE005 Client timeout\n");
+		}
 		as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
 			"%s timeout: socket=%u total=%u iterations=%u lastNode=%s",
 			type, cmd->policy->socket_timeout, cmd->policy->total_timeout, cmd->iteration,
@@ -963,9 +1015,11 @@ Retry:
 	}
 
 	if (is_single) {
+		fprintf(stderr, "ASEXE003 Releasing node\n");
 		as_node_release(node);
 	}
 	as_command_prepare_error(cmd, err);
+	fprintf(stderr, "ASEXE002 as_command_execute() left with status %d\n", err->code);
 	return err->code;
 }
 
@@ -1098,14 +1152,17 @@ as_command_read_message(
 	as_timeout_ctx* context
 	)
 {
+	fprintf(stderr, "ASRDM001 as_command_read_message() called\n");
 	as_proto proto;
 	as_status status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto),
 		cmd->socket_timeout, cmd->deadline_ms);
 
 	if (status != AEROSPIKE_OK) {
 		if (status == AEROSPIKE_ERR_TIMEOUT) {
+			fprintf(stderr, "ASRDM002 Timeout reading socket for proto; alloc'ing heaped proto\n");
 			as_proto* heaped_proto = (as_proto*)cf_rc_alloc(sizeof(as_proto));
 			if (! heaped_proto) {
+				fprintf(stderr, "ASRDM003 as_command_read_message() left abnormally; OOM\n");
 				return AEROSPIKE_ERR_CLIENT;
 			}
 			*heaped_proto = proto;
@@ -1113,19 +1170,24 @@ as_command_read_message(
 			as_timeout_ctx_set(context, (uint8_t*)heaped_proto,
 					sizeof(as_proto), sock->offset, AS_READ_STATE_PROTO);
 		}
+		fprintf(stderr, "ASRDM004 as_command_read_message() left w/ status = %d\n", status);
 		return status;
 	}
+	fprintf(stderr, "ASRDM005 as_command_read_message() read proto OK\n");
 
 	*bytes_in += sizeof(as_proto);
 	status = as_proto_parse(err, &proto);
 
 	if (status != AEROSPIKE_OK) {
+		fprintf(stderr, "ASRDM006 as_proto_parse() failed to parse proto: %d\n", status);
 		return status;
 	}
 
 	size_t size = proto.sz;
+	fprintf(stderr, "ASRDM007 proto.sz = %ld\n", size);
 
 	if (size == 0) {
+		fprintf(stderr, "ASRDM008 as_command_read_message() leaving w/ non-zero status\n");
 		return as_proto_size_error(err, size);
 	}
 
@@ -1134,8 +1196,11 @@ as_command_read_message(
 
 	if (status != AEROSPIKE_OK) {
 		if (status == AEROSPIKE_ERR_TIMEOUT) {
+			fprintf(stderr, "ASRDM010 Timeout error reading the message detail\n");
 			uint8_t* heaped_buf = cf_rc_alloc(size);
 			if (! heaped_buf) {
+				fprintf(stderr, "ASRDM011 OOM when copying buffer into new buf on the heap\n");
+				fprintf(stderr, "ASRDM... as_command_read_message() left abnormally\n");
 				as_command_buffer_free(buf, size);
 				return AEROSPIKE_ERR_CLIENT;
 			}
@@ -1144,8 +1209,10 @@ as_command_read_message(
 		}
 
 		as_command_buffer_free(buf, size);
+		fprintf(stderr, "ASRDM012 as_command_read_message() left abnormally\n");
 		return status;
 	}
+	fprintf(stderr, "ASRDM013 as_socket_read_deadline() grabbed detail OK\n");
 
 	*bytes_in += size;
 
@@ -1155,6 +1222,7 @@ as_command_read_message(
 		return status;
 	}
 	else if (proto.type == AS_COMPRESSED_MESSAGE_TYPE) {
+		fprintf(stderr, "ASRDM014 Compressed message payload detected\n");
 		size_t size2;
 		status = as_compressed_size_parse(err, buf, &size2);
 
@@ -1168,6 +1236,8 @@ as_command_read_message(
 		as_command_buffer_free(buf, size);
 
 		if (status != AEROSPIKE_OK) {
+			fprintf(stderr, "ASRDM015 Failed to decompress payload: %d\n", status);
+			fprintf(stderr, "ASRDM... Returning abnormally\n");
 			as_command_buffer_free(buf2, size2);
 			return status;
 		}
@@ -1177,6 +1247,8 @@ as_command_read_message(
 		return status;
 	}
 	else {
+		fprintf(stderr, "ASRDM016 Unknown proto.type field: %d\n", proto.type);
+		fprintf(stderr, "ASRDM... Returning abnormally\n");
 		as_command_buffer_free(buf, size);
 		return as_proto_type_error(err, &proto, AS_MESSAGE_TYPE);
 	}

@@ -113,11 +113,10 @@ as_conn_recover_read(as_conn_recover* self, uint8_t* buf, size_t len)
 	}
 
 	as_error err;
-	as_socket_context ctx = {}; // Disable recursive connection recovery.
 
 	// Read available data. The socket should not block because the peek has indicated that
 	// those bytes are available.
-	as_status status = as_socket_read_deadline(&err, &self->socket, self->node, buf, len, 5, 0, &ctx);
+	as_status status = as_socket_read_deadline(&err, &self->socket, self->node, buf, len, 5, 0, NULL);
 
 	if (status != AEROSPIKE_OK) {
 		return -1;

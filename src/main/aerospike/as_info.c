@@ -122,9 +122,8 @@ as_info_command_node(
 	char** response
 	)
 {
-	as_socket_context ctx = {}; // Disable connection recovery.
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, &ctx);
+	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, NULL);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -301,9 +300,8 @@ as_info_command(
 	}
 
 	// Read response
-	as_socket_context ctx = {}; // Disable connection recovery.
 	as_proto header;
-	status = as_socket_read_deadline(err, sock, node, (uint8_t*)&header, sizeof(as_proto), 0, deadline_ms, &ctx);
+	status = as_socket_read_deadline(err, sock, node, (uint8_t*)&header, sizeof(as_proto), 0, deadline_ms, NULL);
 
 	if (status) {
 		return status;
@@ -323,7 +321,7 @@ as_info_command(
 			// Reuse command buffer.
 			int read_len = 100;
 			uint8_t* buf = alloca(read_len + 1);
-			status = as_socket_read_deadline(err, sock, node, buf, read_len, 0, deadline_ms, &ctx);
+			status = as_socket_read_deadline(err, sock, node, buf, read_len, 0, deadline_ms, NULL);
 
 			if (status) {
 				return status;
@@ -341,7 +339,7 @@ as_info_command(
 		}
 		
 		char* response = cf_malloc(header.sz + 1);
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)response, header.sz, 0, deadline_ms, &ctx);
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)response, header.sz, 0, deadline_ms, NULL);
 
 		if (status) {
 			cf_free(response);

@@ -402,15 +402,17 @@ as_socket_write_deadline(
 	return status;
 }
 
+static inline bool
+as_socket_recoverable(as_socket_context* ctx, as_node* node)
+{
+	return ctx && ctx->timeout_delay > 0 && node;
+}
+
 static void
 as_socket_recover(
 	as_socket* sock, as_socket_context* ctx, as_node* node, uint8_t* buf, size_t buf_len
 	)
 {
-	if (ctx->timeout_delay == 0 || node == NULL) {
-		return;
-	}
-
 	as_conn_recover* recover = as_conn_recover_create(sock, ctx, node, buf, buf_len);
 
 	if (!recover) {
@@ -444,7 +446,10 @@ as_socket_read_deadline(
 			// not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
 			err->message[0] = 0;
-			as_socket_recover(sock, ctx, node, buf, buf_len);
+
+			if (as_socket_recoverable(ctx, node)) {
+				as_socket_recover(sock, ctx, node, buf, buf_len);
+			}
 		}
 		return status;
 	}
@@ -466,8 +471,11 @@ as_socket_read_deadline(
 				// Calling functions usually retry, so the error string is not used anyway.
 				status = err->code = AEROSPIKE_ERR_TIMEOUT;
 				err->message[0] = 0;
-				ctx->offset = pos;
-				as_socket_recover(sock, ctx, node, buf, buf_len);
+
+				if (as_socket_recoverable(ctx, node)) {
+					ctx->offset = pos;
+					as_socket_recover(sock, ctx, node, buf, buf_len);
+				}
 				break;
 			}
 
@@ -511,8 +519,11 @@ as_socket_read_deadline(
 			// Calling functions usually retry, so the error string is not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
 			err->message[0] = 0;
-			ctx->offset = pos;
-			as_socket_recover(sock, ctx, node, buf, buf_len);
+
+			if (as_socket_recoverable(ctx, node)) {
+				ctx->offset = pos;
+				as_socket_recover(sock, ctx, node, buf, buf_len);
+			}
 			break;
 		}
 		else if (rv == -1) {

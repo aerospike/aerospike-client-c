@@ -947,10 +947,8 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		as_node_add_bytes_out(metrics, write_size);
 	}
 
-	as_socket_context ctx = {}; // Disable connection recovery.
-
 	// Reuse the buffer, read the response - first 8 bytes contains body size.
-	if (as_socket_read_deadline(err, sock, node, stack_buf, sizeof(as_proto), 0, deadline_ms, &ctx) != AEROSPIKE_OK) {
+	if (as_socket_read_deadline(err, sock, node, stack_buf, sizeof(as_proto), 0, deadline_ms, NULL) != AEROSPIKE_OK) {
 		return 0;
 	}
 
@@ -981,7 +979,7 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	}
 	
 	// Read the response body.
-	if (as_socket_read_deadline(err, sock, node, rbuf, proto_sz, 0, deadline_ms, &ctx) != AEROSPIKE_OK) {
+	if (as_socket_read_deadline(err, sock, node, rbuf, proto_sz, 0, deadline_ms, NULL) != AEROSPIKE_OK) {
 		if (rbuf != stack_buf) {
 			cf_free(rbuf);
 		}

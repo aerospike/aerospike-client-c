@@ -1200,7 +1200,7 @@ as_tls_read(
 			switch (sslerr) {
 			case SSL_ERROR_WANT_READ:
 				rv = wait_socket(sock->fd, socket_timeout, deadline, true);
-				if (rv != 0) {
+				if (rv != 0 && ctx) {
 					ctx->offset = pos;
 					return rv;
 				}
@@ -1208,7 +1208,7 @@ as_tls_read(
 				break;
 			case SSL_ERROR_WANT_WRITE:
 				rv = wait_socket(sock->fd, socket_timeout, deadline, false);
-				if (rv != 0) {
+				if (rv != 0 && ctx) {
 					ctx->offset = pos;
 					return rv;
 				}

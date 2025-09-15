@@ -43,9 +43,9 @@ typedef struct as_conn_recover_s {
 	as_node* node;
 	uint8_t* header_buf;
 	uint64_t deadline_ns;
+	size_t length;
+	size_t offset;
 	as_read_state state;
-	uint32_t length;
-	uint32_t offset;
 	bool is_single;
 	bool check_return_code;
 	bool last_group;

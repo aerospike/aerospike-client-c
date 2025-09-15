@@ -29,10 +29,10 @@ as_conn_recover_copy_header_buffer(as_conn_recover* self, uint8_t* buf)
 	memcpy(self->header_buf, buf, self->offset);
 }
 
-static inline uint32_t
+static inline size_t
 as_conn_recover_get_proto_size(uint8_t* buf)
 {
-	return (uint32_t)((as_proto*)buf)->sz;
+	return (size_t)((as_proto*)buf)->sz;
 }
 
 /**
@@ -65,7 +65,7 @@ as_conn_recover_parse_proto(as_conn_recover* self, uint8_t* buf)
 		}
 	}
 
-	self->length = (uint32_t)proto->sz - (self->offset - 8);
+	self->length = proto->sz - (self->offset - 8);
 	self->offset = 0;
 	self->state = AS_READ_STATE_DETAIL;
 	return true;
@@ -231,7 +231,7 @@ as_conn_recover_create(
 	self->socket = *socket;
 	as_node_reserve(node);
 	self->node = node;
-	self->offset = (uint32_t)ctx->offset;
+	self->offset = ctx->offset;
 	self->state = ctx->state;
 	self->is_single = ctx->is_single;
 	self->check_return_code = false;
@@ -276,7 +276,7 @@ as_conn_recover_create(
 
 	case AS_READ_STATE_DETAIL:
 	default:
-		self->length = (uint32_t)buf_len;
+		self->length = buf_len;
 		break;
 	}
 

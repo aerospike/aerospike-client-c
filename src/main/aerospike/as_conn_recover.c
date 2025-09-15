@@ -17,34 +17,224 @@
 #include <aerospike/as_conn_recover.h>
 
 //---------------------------------
+// Static Functions
+//---------------------------------
+
+static inline void
+as_conn_recover_copy_header_buffer(as_conn_recover* self, uint8_t* buf)
+{
+	if (! self->header_buf) {
+		self->header_buf = cf_malloc(self->length);
+	}
+	memcpy(self->header_buf, buf, self->offset);
+}
+
+static inline uint32_t
+as_conn_recover_get_proto_size(uint8_t* buf)
+{
+	return (uint32_t)((as_proto*)buf)->sz;
+}
+
+/**
+ * @private
+ * "Parse" an as_proto object (in the buffer_rc buffer) to further initialize
+ * the as_conn_recover instance.  Answers false if an error occurred.
+ */
+static bool
+as_conn_recover_parse_proto(as_conn_recover* self, uint8_t* buf)
+{
+	as_proto* proto = (as_proto*)buf;
+
+	if (! self->is_single) {
+		// The last group trailer will never be compressed.
+		if (proto->type == AS_COMPRESSED_MESSAGE_TYPE) {
+			// Do not recover connections with compressed data because that would
+			// require saving large buffers with associated state and performing decompression
+			// just to drain the connection.
+			return false;
+		}
+
+		// Warning: The following code assumes multi-record responses always end with a separate proto
+		// that only contains one header with the info3 last group bit. This is always true for batch
+		// and scan, but query does not conform. Therefore, connection recovery for queries will
+		// likely fail.
+		uint8_t info3 = buf[self->length - 1];
+
+		if (info3 & AS_MSG_INFO3_LAST) {
+			self->last_group = true;
+		}
+	}
+
+	self->length = (uint32_t)proto->sz - (self->offset - 8);
+	self->offset = 0;
+	self->state = AS_READ_STATE_DETAIL;
+	return true;
+}
+
+static void
+as_conn_recover_abort(as_conn_recover* self)
+{
+	as_node_incr_sync_conns_aborted(self->node);
+	as_node_close_conn_error(self->node, &self->socket, self->socket.pool);
+	self->state = AS_READ_STATE_COMPLETE;
+}
+
+/**
+ * @private
+ * Mark a connection as fully recovered and put it back into rotation.
+ */
+static void
+as_conn_recover_recover(as_conn_recover* self)
+{
+	// as_node_put_connection() updates the last_used field of the socket for us.
+	as_node_put_connection(self->node, &self->socket);
+	as_node_incr_sync_conns_recovered(self->node);
+	self->state = AS_READ_STATE_COMPLETE;
+}
+
+static size_t
+as_conn_recover_read(as_conn_recover* self, uint8_t* buf, size_t len)
+{
+	// Peek into socket.
+	size_t avail = as_socket_validate_fd(self->socket.fd);
+
+	if (avail < 0) {
+		// Socket connection is broken.
+		return -1;
+	}
+
+	if (avail == 0) {
+		// No data is available to drain.
+		return avail;
+	}
+
+	if (len > avail) {
+		len = avail;
+	}
+
+	as_error err;
+	as_socket_context ctx = {}; // Disable recursive connection recovery.
+
+	// Read available data. The socket should not block because the peek has indicated that
+	// those bytes are available.
+	as_status status = as_socket_read_deadline(&err, &self->socket, self->node, buf, len, 5, 0, &ctx);
+
+	if (status != AEROSPIKE_OK) {
+		return -1;
+	}
+	return len;
+}
+
+static int
+as_conn_recover_drain_header(as_conn_recover* self)
+{
+	uint8_t* buf;
+	bool on_heap;
+
+	if (self->offset == 0) {
+		buf = alloca(self->length);
+		on_heap = false;
+	}
+	else {
+		buf = self->header_buf;
+		on_heap = true;
+	}
+
+	size_t len = as_conn_recover_read(self, buf, self->length - self->offset);
+
+	if (len < 0) {
+		return -1;
+	}
+
+	self->offset += len;
+
+	if (self->offset < self->length) {
+		// Drain not complete.
+		if (! on_heap) {
+			// Convert to heap allocated header buf.
+			as_conn_recover_copy_header_buffer(self, buf);
+		}
+		return 0; // Drain header not complete.
+	}
+
+	// Header drained.
+	if (self->check_return_code) {
+		if (buf[self->length - 1] != 0) {
+			return -1;
+		}
+	}
+
+	if (! as_conn_recover_parse_proto(self, buf)) {
+		return -1;
+	}
+
+	return 1; // Drain header complete.
+}
+
+static int
+as_conn_recover_drain_detail(as_conn_recover* self)
+{
+	size_t rem = self->length - self->offset;
+	size_t max = 16 * 1024;
+	uint8_t* buf = alloca(max);
+
+	while (rem > 0) {
+		size_t req_size = (rem < max) ? rem : max;
+		size_t len = as_conn_recover_read(self, buf, req_size);
+
+		if (len < 0) {
+			return -1;
+		}
+
+		if (len == 0) {
+			return 0; // Drain detail not complete.
+		}
+
+		self->offset += len;
+		rem = self->length - self->offset;
+	}
+	return 1; // Drain detail complete.
+}
+
+static bool
+as_conn_recover_error(as_conn_recover* self, int rv)
+{
+	if (rv < 0) {
+		as_conn_recover_abort(self);
+		return true;
+	}
+
+	if (rv == 0) {
+		if (cf_getns() < self->deadline_ns) {
+			return false;
+		}
+		else {
+			as_conn_recover_abort(self);
+			return true;
+		}
+	}
+	return true;
+}
+
+//---------------------------------
 // Functions
 //---------------------------------
 
 as_conn_recover*
-as_conn_recover_init(
-		as_conn_recover* self, as_timeout_ctx* timeout_ctx,
-		uint32_t timeout_delay, bool is_single, as_node* node,
-		as_socket* socket, uint32_t socket_timeout, uint64_t deadline_ns)
+as_conn_recover_create(
+	as_socket* socket, as_socket_context* ctx, as_node* node, uint8_t* buf, size_t buf_len
+	)
 {
-	if (! self) {
-		return self;
-	}
+	as_conn_recover* self = cf_malloc(sizeof(as_conn_recover));
 
 	memset(self, 0, sizeof(as_conn_recover));
-
-	cf_rc_reserve(timeout_ctx->buffer_rc);
-	self->buffer_rc = timeout_ctx->buffer_rc;
-	self->capacity = timeout_ctx->capacity;
-	self->offset = timeout_ctx->offset;
-	self->state = timeout_ctx->state;
-	self->timeout_delay = timeout_delay;
-	self->is_single = is_single;
-	self->check_return_code = false;
+	self->socket = *socket;
 	as_node_reserve(node);
 	self->node = node;
-	self->socket = *socket;
-	self->socket_timeout = socket_timeout;
-	self->deadline = deadline_ns;
+	self->offset = (uint32_t)ctx->offset;
+	self->state = ctx->state;
+	self->is_single = ctx->is_single;
+	self->check_return_code = false;
 
 	switch(self->state) {
 	case AS_READ_STATE_AUTH_HEADER:
@@ -54,158 +244,91 @@ as_conn_recover_init(
 		self->state = AS_READ_STATE_PROTO;
 
 		if (self->offset >= self->length) {
-			if (timeout_ctx->buffer_rc[self->length - 1] != 0) {
-				// Auth failed.
-				as_conn_recover_abort(self);
-				return self;
+			if (buf[self->length - 1] != 0) {
+				// Authentication failed.
+				as_conn_recover_destroy(self);
+				return NULL;
 			}
-			self->length = (uint32_t)as_conn_recover_get_proto_size(self) - (self->offset - 8);
+			self->length = as_conn_recover_get_proto_size(buf) - (self->offset - 8);
 			self->offset = 0;
 			self->state = AS_READ_STATE_DETAIL;
 		}
 		else if (self->offset > 0) {
-			as_conn_recover_copy_header_buffer(self);
+			as_conn_recover_copy_header_buffer(self, buf);
 		}
 		break;
 
 	case AS_READ_STATE_PROTO:
-		// For multi-record responses, adjust length to cover last group info3
-		// bit at offset 11.
-		self->length = is_single ? 8 : 12;
+		// Extend header length to 12 for multi-record responses to include
+		// last group info3 bit at offset 11.
+		self->length = self->is_single ? 8 : 12;
 
 		if (self->offset >= self->length) {
-			if (! as_conn_recover_parse_proto(self)) {
-				as_conn_recover_abort(self);
-				return self;
+			if (! as_conn_recover_parse_proto(self, buf)) {
+				as_conn_recover_destroy(self);
+				return NULL;
 			}
 		}
 		else if (self->offset > 0) {
-			as_conn_recover_copy_header_buffer(self);
+			as_conn_recover_copy_header_buffer(self, buf);
 		}
 		break;
 
 	case AS_READ_STATE_DETAIL:
 	default:
-		self->length = timeout_ctx->capacity;
+		self->length = (uint32_t)buf_len;
 		break;
 	}
 
-	self->socket_last_used = cf_getns();
-	self->socket_timeout = 1; // millisecond
-
+	self->deadline_ns = cf_getns() + (ctx->timeout_delay * 1000 * 1000);
 	return self;
 }
 
-
-static void
-as_conn_recover_drain_detail(as_conn_recover* self, bool* must_abort,
-		bool* timeout_exception)
+void
+as_conn_recover_destroy(as_conn_recover* self)
 {
-	uint32_t remainder = self->length - self->offset;
-	uint32_t length = (remainder <= self->length) ? remainder : self->length;
-
-	// The as_socket_read_deadline() function includes a while loop that will
-	// ensure we read as much as we can.
-	as_error err;
-	as_status status = as_socket_read_deadline(
-			&err, &self->socket, self->node, self->buffer_rc, length,
-			self->socket_timeout, self->deadline);
-	if (status != AEROSPIKE_OK) {
-		if (status == AEROSPIKE_ERR_TIMEOUT) {
-			*timeout_exception = true;
-		}
-		else {
-			*must_abort = true;
-		}
-		return;
+	if (self->header_buf) {
+		cf_free(self->header_buf);
 	}
-	self->offset += self->socket.offset;
+	as_node_release(self->node);
+	cf_free(self);
 }
 
-static void
-as_conn_recover_drain_header(as_conn_recover* self, bool* must_abort, bool* timeout_exception)
+bool
+as_conn_recover_drain(as_conn_recover* self)
 {
-	bool started_with_buffer_rc = (self->offset == 0);
-	uint8_t* b = (started_with_buffer_rc) ? self->buffer_rc : self->header_buf;
-
-	while (true) {
-		as_error err;
-
-		as_status status = as_socket_read_deadline(
-				&err, &self->socket, self->node, b, self->length,
-				self->socket_timeout, self->deadline);
-		if (status != AEROSPIKE_OK) {
-			if (status == AEROSPIKE_ERR_TIMEOUT) {
-				*timeout_exception = true;
-			}
-			else {
-				*must_abort = true;
-			}
-
-			return;
-		}
-		// socket offset set to 0 in read_deadline, and is incremented as the read completes.
-		// Thus, at end of call, socket offset = total number of bytes read.
-		self->offset += self->socket.offset;
-
-		if (self->offset >= self->length) {
-			break;
-		}
-
-		if (started_with_buffer_rc) {
-			as_conn_recover_copy_header_buffer(self);
-			b = self->header_buf;
-		}
-	}
-
-	if (self->check_return_code) {
-		if (b[self->length - 1] != 0) {
-			*must_abort = true;
-			return;
-		}
-	}
-
-	if (! as_conn_recover_parse_proto(self)) {
-		*must_abort = true;
-		return;
-	}
-}
-
-
-static bool
-as_conn_recover_try_drain(as_conn_recover* self, bool* must_abort,
-		bool* timeout_exception)
-{
-	bool connection_drained = false;
+	int rv;
 
 	if (self->is_single) {
 		if (self->state == AS_READ_STATE_PROTO) {
-			as_conn_recover_drain_header(self, must_abort, timeout_exception);
-			if (*must_abort || *timeout_exception) {
-				goto exception;
+			rv = as_conn_recover_drain_header(self);
+
+			if (rv <= 0) {
+				return as_conn_recover_error(self, rv);
 			}
 		}
 
-		as_conn_recover_drain_detail(self, must_abort, timeout_exception);
-		if (*must_abort || *timeout_exception) {
-			goto exception;
+		rv = as_conn_recover_drain_detail(self);
+
+		if (rv <= 0) {
+			return as_conn_recover_error(self, rv);
 		}
-
 		as_conn_recover_recover(self);
-
-		connection_drained = true;
 	}
 	else {
 		while (true) {
 			if (self->state == AS_READ_STATE_PROTO) {
-				as_conn_recover_drain_header(self, must_abort, timeout_exception);
-				if (*must_abort || *timeout_exception) {
-					goto exception;
+				rv = as_conn_recover_drain_header(self);
+
+				if (rv <= 0) {
+					return as_conn_recover_error(self, rv);
 				}
 			}
-			as_conn_recover_drain_detail(self, must_abort, timeout_exception);
-			if (*must_abort || *timeout_exception) {
-				goto exception;
+
+			rv = as_conn_recover_drain_detail(self);
+
+			if (rv <= 0) {
+				return as_conn_recover_error(self, rv);
 			}
 
 			if (self->last_group) {
@@ -217,41 +340,6 @@ as_conn_recover_try_drain(as_conn_recover* self, bool* must_abort,
 			self->state = AS_READ_STATE_PROTO;
 		}
 		as_conn_recover_recover(self);
-		connection_drained = true;
 	}
-
-exception:
-	return connection_drained;
+	return true;
 }
-
-
-bool
-as_conn_recover_drain(as_conn_recover* self)
-{
-	bool must_abort = false;
-	bool timeout_exception = false;
-
-	bool connection_drained =
-			as_conn_recover_try_drain(self, &must_abort, &timeout_exception);
-
-	if (timeout_exception) {
-		uint64_t current_time_ns = cf_getns();
-
-		if (current_time_ns - self->socket_last_used >= self->timeout_delay * 1000) {
-			// Forcibly close the connection.
-			must_abort = true;
-		}
-		else {
-			// Put back on queue for later draining.
-			return false;
-		}
-	}
-
-	if (must_abort) {
-		as_conn_recover_abort(self);
-		return true;
-	}
-
-	return connection_drained;
-}
-

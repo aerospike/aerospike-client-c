@@ -15,6 +15,8 @@
  * the License.
  */
 #include <aerospike/as_socket.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_conn_recover.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_poll.h>
@@ -400,15 +402,38 @@ as_socket_write_deadline(
 	return status;
 }
 
+static void
+as_socket_recover(
+	as_socket* sock, as_socket_context* ctx, as_node* node, uint8_t* buf, size_t buf_len
+	)
+{
+	if (ctx->timeout_delay == 0 || node == NULL) {
+		return;
+	}
+
+	as_conn_recover* recover = as_conn_recover_create(sock, ctx, node, buf, buf_len);
+
+	if (!recover) {
+		return;
+	}
+
+	if (as_queue_mt_push(&ctx->cluster->recover_queue, &recover)) {
+		ctx->in_recovery = true;
+	}
+	else {
+		as_conn_recover_destroy(recover);
+	}
+}
+
 as_status
 as_socket_read_deadline(
 	as_error* err, as_socket* sock, as_node* node, uint8_t* buf, size_t buf_len,
-	uint32_t socket_timeout, uint64_t deadline
+	uint32_t socket_timeout, uint64_t deadline, as_socket_context* ctx
 	)
 {
 	if (sock->ctx) {
 		as_status status = AEROSPIKE_OK;
-		int rv = as_tls_read(sock, buf, buf_len, socket_timeout, deadline);
+		int rv = as_tls_read(sock, buf, buf_len, socket_timeout, deadline, ctx);
 
 		if (rv < 0) {
 			status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "TLS read error", rv);
@@ -419,6 +444,7 @@ as_socket_read_deadline(
 			// not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
 			err->message[0] = 0;
+			as_socket_recover(sock, ctx, node, buf, buf_len);
 		}
 		return status;
 	}
@@ -426,8 +452,7 @@ as_socket_read_deadline(
 	as_poll poll;
 	as_poll_init(&poll, sock->fd);
 
-	sock->offset = 0;
-
+	uint32_t pos = 0;
 	as_status status = AEROSPIKE_OK;
 	uint32_t timeout;
 	//int try = 0;
@@ -441,6 +466,8 @@ as_socket_read_deadline(
 				// Calling functions usually retry, so the error string is not used anyway.
 				status = err->code = AEROSPIKE_ERR_TIMEOUT;
 				err->message[0] = 0;
+				ctx->offset = pos;
+				as_socket_recover(sock, ctx, node, buf, buf_len);
 				break;
 			}
 
@@ -458,13 +485,13 @@ as_socket_read_deadline(
 
 		if (rv > 0) {
 #if !defined(_MSC_VER)
-			int r_bytes = (int)read(sock->fd, buf + sock->offset, buf_len - sock->offset);
+			int r_bytes = (int)read(sock->fd, buf + pos, buf_len - pos);
 #else
-			int r_bytes = (int)recv(sock->fd, buf + sock->offset, (int)(buf_len - sock->offset), 0);
+			int r_bytes = (int)recv(sock->fd, buf + pos, (int)(buf_len - pos), 0);
 #endif
 
 			if (r_bytes > 0) {
-				sock->offset += r_bytes;
+				pos += r_bytes;
 			}
 			else if (r_bytes == 0) {
 				// We believe this means that the server has closed this socket.
@@ -484,6 +511,8 @@ as_socket_read_deadline(
 			// Calling functions usually retry, so the error string is not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
 			err->message[0] = 0;
+			ctx->offset = pos;
+			as_socket_recover(sock, ctx, node, buf, buf_len);
 			break;
 		}
 		else if (rv == -1) {
@@ -496,7 +525,7 @@ as_socket_read_deadline(
 	
 		//try++;
 	
-	} while (sock->offset < buf_len);
+	} while (pos < buf_len);
 
 	as_poll_destroy(&poll);
 	return status;

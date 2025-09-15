@@ -56,6 +56,32 @@ extern "C" {
 
 struct ssl_ctx_st;
 struct evp_pkey_st;
+struct as_cluster_s;
+
+/**
+ * @private
+ * The socket state when a read timeout occurs.
+ */
+typedef enum as_read_state_e {
+	AS_READ_STATE_NONE,
+	AS_READ_STATE_PROTO,
+	AS_READ_STATE_DETAIL,
+	AS_READ_STATE_AUTH_HEADER,
+	AS_READ_STATE_COMPLETE,
+} as_read_state;
+
+/**
+ * When a socket read timeout occurs, this structure records
+ * the context in which it happened.
+ */
+typedef struct as_socket_context_s {
+	struct as_cluster_s* cluster;
+	size_t offset;
+	uint32_t timeout_delay;
+	as_read_state state;
+	bool is_single;
+	bool in_recovery;
+} as_socket_context;
 
 /**
  * This structure holds TLS context which can be shared (read-only)
@@ -90,7 +116,6 @@ typedef struct as_socket_s {
 	as_tls_context* ctx;
 	const char* tls_name;
 	struct ssl_st* ssl;
-	size_t offset;
 } as_socket;
 
 /**
@@ -213,7 +238,7 @@ as_socket_current_trim(uint64_t last_used, uint64_t max_socket_idle_ns)
 /**
  * @private
  * Peek for socket connection status using underlying fd.
- *  Needed to support libuv.
+ * Needed to support libuv.
  *
  * @return   0 : socket is connected, but no data available.
  * 		> 0 : byte size of data available.
@@ -251,7 +276,7 @@ as_socket_write_deadline(
 as_status
 as_socket_read_deadline(
 	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf, size_t buf_len,
-	uint32_t socket_timeout, uint64_t deadline
+	uint32_t socket_timeout, uint64_t deadline, as_socket_context* ctx
 	);
 
 #ifdef __cplusplus

@@ -758,18 +758,15 @@ as_cluster_tend_recover_queue(as_cluster* cluster)
 	// pops.  Anything else that comes up in the meantime, or if we end up
 	// having to re-queue a socket, won't hurt us.  Plus, it guarantees that we
 	// process each socket at most once.
-
 	uint32_t queue_size = as_queue_mt_size(&cluster->recover_queue);
+
 	while (queue_size > 0) {
 		as_conn_recover* cr;
 
 		if (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
 			if (as_conn_recover_drain(cr)) {
-				// connection successfully drained and recovered.
-				// Or, at least, aborted in a meaningful way such that
-				// we don't need to re-queue the connection recovery record.
-
-				as_conn_recover_release(cr);
+				// Connection has either been drained or aborted and closed.
+				as_conn_recover_destroy(cr);
 			}
 			else {
 				// connection needs to be re-queued for later draining
@@ -1813,15 +1810,9 @@ as_cluster_destroy(as_cluster* cluster)
 	as_vector_destroy(cluster->gc);
 		
 	// Flush and destroy the timeout recovery queue.
-	uint32_t rq_size = as_queue_mt_size(&cluster->recover_queue);
-	while (rq_size > 0) {
-		as_conn_recover* cr;
-
-		if (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
-			as_conn_recover_release(cr);
-		}
-
-		--rq_size;
+	as_conn_recover* cr;
+	while (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
+		as_conn_recover_destroy(cr);
 	}
 	as_queue_mt_destroy(&cluster->recover_queue);
 

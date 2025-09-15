@@ -28,18 +28,6 @@ extern "C" {
 
 /**
  * @private
- * The socket state when a read timeout occurs.
- */
-typedef enum as_read_state_e {
-	AS_READ_STATE_NONE,
-	AS_READ_STATE_PROTO,
-	AS_READ_STATE_DETAIL,
-	AS_READ_STATE_AUTH_HEADER,
-	AS_READ_STATE_COMPLETE,
-} as_read_state;
-
-/**
- * @private
  * When a socket read timeout occurs, this structure records
  * the context in which it happened.
  */

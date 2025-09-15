@@ -122,7 +122,6 @@
 		BFAF27702B6AB39100A3858B /* as_metrics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFAF276F2B6AB39100A3858B /* as_metrics.c */; };
 		BFB0ED5522A72260007FEA9C /* as_cdt_ctx.h in Headers */ = {isa = PBXBuildFile; fileRef = BFB0ED5422A72260007FEA9C /* as_cdt_ctx.h */; };
 		BFB1CB522E6B6B2A006171E9 /* as_conn_recover.h in Headers */ = {isa = PBXBuildFile; fileRef = BFB1CB512E6B6B2A006171E9 /* as_conn_recover.h */; };
-		BFB1CB562E6B6BA6006171E9 /* as_timeout_ctx.h in Headers */ = {isa = PBXBuildFile; fileRef = BFB1CB552E6B6BA6006171E9 /* as_timeout_ctx.h */; };
 		BFB1CB582E6B6C02006171E9 /* as_conn_recover.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB1CB572E6B6C02006171E9 /* as_conn_recover.c */; };
 		BFB8A5D81D0F3F77007B4E22 /* as_tls.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB8A5D71D0F3F77007B4E22 /* as_tls.c */; };
 		BFB8A5DA1D0F3F9E007B4E22 /* as_tls.h in Headers */ = {isa = PBXBuildFile; fileRef = BFB8A5D91D0F3F9E007B4E22 /* as_tls.h */; };
@@ -355,7 +354,6 @@
 		BFAF276F2B6AB39100A3858B /* as_metrics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_metrics.c; path = ../src/main/aerospike/as_metrics.c; sourceTree = "<group>"; };
 		BFB0ED5422A72260007FEA9C /* as_cdt_ctx.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_cdt_ctx.h; path = ../src/include/aerospike/as_cdt_ctx.h; sourceTree = "<group>"; };
 		BFB1CB512E6B6B2A006171E9 /* as_conn_recover.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = as_conn_recover.h; path = ../src/include/aerospike/as_conn_recover.h; sourceTree = SOURCE_ROOT; };
-		BFB1CB552E6B6BA6006171E9 /* as_timeout_ctx.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = as_timeout_ctx.h; path = ../src/include/aerospike/as_timeout_ctx.h; sourceTree = SOURCE_ROOT; };
 		BFB1CB572E6B6C02006171E9 /* as_conn_recover.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = as_conn_recover.c; path = ../src/main/aerospike/as_conn_recover.c; sourceTree = SOURCE_ROOT; };
 		BFB8A5D71D0F3F77007B4E22 /* as_tls.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_tls.c; path = ../src/main/aerospike/as_tls.c; sourceTree = "<group>"; };
 		BFB8A5D91D0F3F9E007B4E22 /* as_tls.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_tls.h; path = ../src/include/aerospike/as_tls.h; sourceTree = "<group>"; };
@@ -823,7 +821,6 @@
 				BFC65B5D1C921E9E0079DF5A /* as_shm_cluster.h */,
 				BFC65B5E1C921E9E0079DF5A /* as_socket.h */,
 				BFC65B5F1C921E9E0079DF5A /* as_status.h */,
-				BFB1CB552E6B6BA6006171E9 /* as_timeout_ctx.h */,
 				BFB8A5D91D0F3F9E007B4E22 /* as_tls.h */,
 				BFD033422C6E50E900D7B906 /* as_txn.h */,
 				BFD033462C6E515400D7B906 /* as_txn_monitor.h */,
@@ -846,7 +843,6 @@
 				BFC65B8B1C921E9E0079DF5A /* as_udf.h in Headers */,
 				BFC65B811C921E9E0079DF5A /* as_pipe.h in Headers */,
 				BF94A3BD2B86A87800295885 /* as_latency.h in Headers */,
-				BFB1CB562E6B6BA6006171E9 /* as_timeout_ctx.h in Headers */,
 				BF32146F23E8F630004A7E19 /* as_partition_tracker.h in Headers */,
 				BF457A8622B1AC6600409D04 /* as_bit_operations.h in Headers */,
 				BFC65B761C921E9E0079DF5A /* as_event_internal.h in Headers */,

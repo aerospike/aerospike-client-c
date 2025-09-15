@@ -30,7 +30,6 @@
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
-#include <aerospike/as_timeout_ctx.h>
 #include <aerospike/as_tls.h>
 #include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_byte_order.h>

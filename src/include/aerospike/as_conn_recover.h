@@ -19,7 +19,6 @@
 #include <aerospike/as_command.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_socket.h>
-#include <aerospike/as_timeout_ctx.h>
 #include <citrusleaf/alloc.h>
 
 #ifdef __cplusplus

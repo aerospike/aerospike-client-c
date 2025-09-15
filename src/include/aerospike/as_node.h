@@ -66,9 +66,6 @@ extern "C" {
 // Types
 //---------------------------------
 
-struct as_timeout_ctx_s;
-
-
 /**
  * Socket address information.
  */

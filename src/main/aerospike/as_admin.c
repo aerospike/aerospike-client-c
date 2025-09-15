@@ -21,7 +21,6 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_status.h>
-#include <aerospike/as_timeout_ctx.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 #include <string.h>

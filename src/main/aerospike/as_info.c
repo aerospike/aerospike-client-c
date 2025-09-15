@@ -122,8 +122,9 @@ as_info_command_node(
 	char** response
 	)
 {
+	as_socket_context ctx = {}; // Disable connection recovery.
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, NULL);
+	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, &ctx);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -341,7 +342,7 @@ as_info_command(
 		
 		char* response = cf_malloc(header.sz + 1);
 		status = as_socket_read_deadline(err, sock, node, (uint8_t*)response, header.sz, 0, deadline_ms, &ctx);
-		
+
 		if (status) {
 			cf_free(response);
 			*values = 0;

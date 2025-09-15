@@ -267,9 +267,10 @@ as_admin_execute_node(
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
+	as_socket_context ctx = {}; // Disable connection recovery.
 
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, NULL);
+	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, &ctx);
 
 	if (status) {
 		return status;
@@ -281,8 +282,6 @@ as_admin_execute_node(
 		as_node_close_conn_error(node, &socket, socket.pool);
 		return status;
 	}
-
-	as_socket_context ctx = {}; // Disable connection recovery.
 
 	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms, &ctx);
 
@@ -320,18 +319,17 @@ as_admin_execute(
 static as_status
 as_admin_read_blocks(
 	as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, as_admin_parse_fn parse_fn,
-	as_vector* list
+	as_vector* list, as_socket_context* ctx
 	)
 {
 	as_status status = AEROSPIKE_OK;
 	uint8_t* buf = 0;
 	size_t capacity = 0;
-	as_socket_context ctx = {}; // Disable connection recovery.
 
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms, &ctx);
+		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms, ctx);
 
 		if (status) {
 			break;
@@ -354,7 +352,7 @@ as_admin_read_blocks(
 			}
 			
 			// Read remaining message bytes in group
-			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms, &ctx);
+			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms, ctx);
 
 			if (status) {
 				break;
@@ -395,9 +393,10 @@ as_admin_read_list(
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node");
 	}
 
+	as_socket_context ctx = {}; // Disable connection recovery.
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, NULL);
-	
+	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, &ctx);
+
 	if (status) {
 		as_node_release(node);
 		return status;
@@ -411,7 +410,7 @@ as_admin_read_list(
 		return status;
 	}
 	
-	status = as_admin_read_blocks(err, &socket, node, deadline_ms, parse_fn, list);
+	status = as_admin_read_blocks(err, &socket, node, deadline_ms, parse_fn, list, &ctx);
 	
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);

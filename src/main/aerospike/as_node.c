@@ -948,7 +948,7 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		as_node_add_bytes_out(metrics, write_size);
 	}
 
-	as_socket_context ctx = {.timeout_delay = 0}; // Disable connection recovery.
+	as_socket_context ctx = {}; // Disable connection recovery.
 
 	// Reuse the buffer, read the response - first 8 bytes contains body size.
 	if (as_socket_read_deadline(err, sock, node, stack_buf, sizeof(as_proto), 0, deadline_ms, &ctx) != AEROSPIKE_OK) {

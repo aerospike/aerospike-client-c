@@ -283,7 +283,7 @@ as_admin_execute_node(
 		return status;
 	}
 
-	as_socket_context ctx = {.timeout_delay = 0}; // Disable connection recovery.
+	as_socket_context ctx = {}; // Disable connection recovery.
 
 	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms, &ctx);
 
@@ -327,7 +327,7 @@ as_admin_read_blocks(
 	as_status status = AEROSPIKE_OK;
 	uint8_t* buf = 0;
 	size_t capacity = 0;
-	as_socket_context ctx = {.timeout_delay = 0}; // Disable connection recovery.
+	as_socket_context ctx = {}; // Disable connection recovery.
 
 	while (true) {
 		// Read header
@@ -469,7 +469,7 @@ as_cluster_login(
 		return status;
 	}
 
-	as_socket_context ctx = {.timeout_delay = 0}; // Disable connection recovery.
+	as_socket_context ctx = {}; // Disable connection recovery.
 
 	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms, &ctx);
 

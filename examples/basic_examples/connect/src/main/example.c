@@ -16,8 +16,6 @@ typedef struct program_options_s {
 	uint16_t port;
 	bool tls_options_given;
 	char* cafile;
-	char* cert_file;
-	char* key_file;
 	char* tls_name;
 } program_options;
 
@@ -30,8 +28,6 @@ enum {
 	OPT_HOST = 'r',
 	OPT_PORT = 'p',
 	OPT_CAFILE = 'a',
-	OPT_CERTFILE = 'c',
-	OPT_KEYFILE = 'k',
 	OPT_TLS_NAME = 't',
 };
 
@@ -40,13 +36,11 @@ static const struct option longopts[] = {
 	{"host",         required_argument, NULL, OPT_HOST},
 	{"port",         required_argument, NULL, OPT_PORT},
 	{"ca-file",      required_argument, NULL, OPT_CAFILE},
-	{"cert-file",    required_argument, NULL, OPT_CERTFILE},
-	{"key-file",     required_argument, NULL, OPT_KEYFILE},
 	{"cluster-name", required_argument, NULL, OPT_TLS_NAME},
 	{NULL,           0,                 NULL, 0},
 };
 
-static const char* optstring = "h?r:p:a:c:k:t:";
+static const char* optstring = "h?r:p:a:t:";
 
 static void
 program_options_init(program_options* po)
@@ -123,14 +117,6 @@ program_options_parse(program_options* po, int argc, char* argv[])
 			po->cafile = strdup(optarg);
 			break;
 
-		case OPT_CERTFILE:
-			po->cert_file = strdup(optarg);
-			break;
-
-		case OPT_KEYFILE:
-			po->key_file = strdup(optarg);
-			break;
-
 		case OPT_TLS_NAME:
 			po->tls_name = strdup(optarg);
 			break;
@@ -141,6 +127,8 @@ program_options_parse(program_options* po, int argc, char* argv[])
 	// are given.
 	po->tls_options_given = po->cafile && po->tls_name;
 }
+
+////// Example Code
 
 void
 check_error(const char* operation, as_error* err)
@@ -169,8 +157,6 @@ connect_to_aerospike(aerospike* as, program_options* po, as_error* err)
 		config.tls.enable = true;
 
 		as_config_tls_set_cafile(&config, po->cafile);
-		as_config_tls_set_certfile(&config, po->cert_file);
-		as_config_tls_set_keyfile(&config, po->key_file);
 
 		// After discovering the complete set of hosts in the cluster,
 		// we need to configure each of them with the TLS name we wish
@@ -201,8 +187,6 @@ main(int argc, char* argv[])
 	if (po.tls_options_given) {
 		printf(" using TLS with the following settings:\n");
 		printf("    CA File: %s\n", po.cafile);
-		printf("  CERT File: %s\n", po.cert_file);
-		printf("   KEY File: %s\n", po.key_file);
 		printf("   TLS Name: %s\n", po.tls_name);
 	}
 	else {

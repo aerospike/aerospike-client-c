@@ -871,7 +871,7 @@ as_tls_config_reload(as_config_tls* tlscfg, as_tls_context* ctx,
 int
 as_tls_wrap(as_tls_context* ctx, as_socket* sock, const char* tls_name)
 {
-	sock->ctx = ctx;
+	sock->tls = ctx;
 	sock->tls_name = tls_name;
 
 	pthread_mutex_lock(&ctx->lock);
@@ -911,7 +911,7 @@ as_tls_set_context_name(struct ssl_st* ssl, as_tls_context* ctx, const char* tls
 static void
 log_session_info(as_socket* sock)
 {
-	if (! sock->ctx->log_session_info)
+	if (! sock->tls->log_session_info)
 		return;
 	
 	SSL_CIPHER const* cipher = SSL_get_current_cipher(sock->ssl);
@@ -1118,7 +1118,7 @@ as_tls_read_pending(as_socket* sock)
 	// Return the number of pending bytes in the TLS encryption
 	// buffer.  If we aren't using TLS return 0.
 	//
-	return sock->ctx ? SSL_pending(sock->ssl) : 0;
+	return sock->tls ? SSL_pending(sock->ssl) : 0;
 }
 
 int

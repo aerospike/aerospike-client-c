@@ -597,7 +597,6 @@ as_authenticate(
 		return status;
 	}
 
-	ctx->state = AS_READ_STATE_AUTH_HEADER;
 	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms, ctx);
 
 	if (status) {

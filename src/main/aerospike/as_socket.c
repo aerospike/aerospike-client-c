@@ -139,7 +139,7 @@ as_socket_create_fd(int family, as_socket_fd* fdp)
 }
 
 int
-as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* tls_name)
+as_socket_create(as_socket* sock, int family, as_tls_context* tls, const char* tls_name)
 {
 	as_socket_fd fd;
 	int rv = as_socket_create_fd(family, &fd);
@@ -148,14 +148,16 @@ as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* t
 		return rv;
 	}
 	
-	if (! as_socket_wrap(sock, family, fd, ctx, tls_name)) {
+	if (! as_socket_wrap(sock, family, fd, tls, tls_name)) {
 		return -5;
 	}
 	return 0;
 }
 
 bool
-as_socket_wrap(as_socket* sock, int family, as_socket_fd fd, as_tls_context* ctx, const char* tls_name)
+as_socket_wrap(
+	as_socket* sock, int family, as_socket_fd fd, as_tls_context* tls, const char* tls_name
+	)
 {
 	sock->fd = fd;
 #if !defined(_MSC_VER)
@@ -163,15 +165,15 @@ as_socket_wrap(as_socket* sock, int family, as_socket_fd fd, as_tls_context* ctx
 #endif
 	sock->last_used = 0;
 
-	if (ctx) {
-		if (as_tls_wrap(ctx, sock, tls_name) < 0) {
+	if (tls) {
+		if (as_tls_wrap(tls, sock, tls_name) < 0) {
 			as_close(sock->fd);
 			sock->fd = -1;
 			return false;
 		}
 	}
 	else {
-		sock->ctx = NULL;
+		sock->tls = NULL;
 		sock->tls_name = NULL;
 		sock->ssl = NULL;
 	}
@@ -187,7 +189,7 @@ as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadlin
 		return false;
 	}
 
-	if (sock->ctx) {
+	if (sock->tls) {
 		if (as_tls_connect(sock, deadline_ms)) {
 			return false;
 		}
@@ -196,10 +198,13 @@ as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadlin
 }
 
 as_status
-as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name, uint64_t deadline_ms)
+as_socket_create_and_connect(
+	as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* tls, const char* tls_name,
+	uint64_t deadline_ms
+	)
 {
 	// Create the socket.
-	int rv = as_socket_create(sock, addr->sa_family, ctx, tls_name);
+	int rv = as_socket_create(sock, addr->sa_family, tls, tls_name);
 	
 	if (rv < 0) {
 		char name[AS_IP_ADDRESS_SIZE];
@@ -220,7 +225,7 @@ as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* ad
 void
 as_socket_close(as_socket* sock)
 {
-	if (sock->ctx) {
+	if (sock->tls) {
 		SSL_shutdown(sock->ssl);
 		shutdown(sock->fd, SHUT_RDWR);
 		SSL_free(sock->ssl);
@@ -233,7 +238,9 @@ as_socket_close(as_socket* sock)
 }
 
 as_status
-as_socket_error(as_socket_fd fd, as_node* node, as_error* err, as_status status, const char* msg, int code)
+as_socket_error(
+	as_socket_fd fd, as_node* node, as_error* err, as_status status, const char* msg, int code
+	)
 {
 	if (node) {
 		// Print code, address and local port when node present.
@@ -305,7 +312,7 @@ as_socket_write_deadline(
 	uint32_t socket_timeout, uint64_t deadline
 	)
 {
-	if (sock->ctx) {
+	if (sock->tls) {
 		as_status status = AEROSPIKE_OK;
 		int rv = as_tls_write(sock, buf, buf_len, socket_timeout, deadline);
 
@@ -433,7 +440,7 @@ as_socket_read_deadline(
 	uint32_t socket_timeout, uint64_t deadline, as_socket_context* ctx
 	)
 {
-	if (sock->ctx) {
+	if (sock->tls) {
 		as_status status = AEROSPIKE_OK;
 		int rv = as_tls_read(sock, buf, buf_len, socket_timeout, deadline, ctx);
 

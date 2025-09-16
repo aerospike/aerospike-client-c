@@ -113,7 +113,7 @@ typedef struct as_socket_s {
 		struct as_conn_pool_s* pool; // Used when sync socket is active.
 		uint64_t last_used; // Last used nano timestamp. Used when socket in pool.
 	};
-	as_tls_context* ctx;
+	as_tls_context* tls;
 	const char* tls_name;
 	struct ssl_st* ssl;
 } as_socket;
@@ -123,9 +123,9 @@ typedef struct as_socket_s {
  * Return true if TLS context exists and not TLS login only.
  */
 static inline bool
-as_socket_use_tls(as_tls_context* ctx)
+as_socket_use_tls(as_tls_context* tls)
 {
-	return (ctx && !ctx->for_login_only);
+	return (tls && !tls->for_login_only);
 }
 	
 /**
@@ -133,9 +133,9 @@ as_socket_use_tls(as_tls_context* ctx)
  * Return TLS context only if exists and not for login only.
  */
 static inline as_tls_context*
-as_socket_get_tls_context(as_tls_context* ctx)
+as_socket_get_tls_context(as_tls_context* tls)
 {
-	return (ctx && !ctx->for_login_only) ? ctx : NULL;
+	return (tls && !tls->for_login_only) ? tls : NULL;
 }
 	
 /**
@@ -160,7 +160,7 @@ as_socket_create_fd(int family, as_socket_fd* fdp);
  * Return zero on success.
  */
 int
-as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* tls_name);
+as_socket_create(as_socket* sock, int family, as_tls_context* tls, const char* tls_name);
 
 /**
  * @private
@@ -168,7 +168,9 @@ as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* t
  * Family should be AF_INET or AF_INET6.
  */
 bool
-as_socket_wrap(as_socket* sock, int family, as_socket_fd fd, as_tls_context* ctx, const char* tls_name);
+as_socket_wrap(
+	as_socket* sock, int family, as_socket_fd fd, as_tls_context* tls, const char* tls_name
+	);
 
 /**
  * @private
@@ -192,7 +194,10 @@ as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadlin
  * Create non-blocking socket and connect.
  */
 as_status
-as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name, uint64_t deadline_ms);
+as_socket_create_and_connect(
+	as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* tls, const char* tls_name,
+	uint64_t deadline_ms
+	);
 
 /**
  * @private
@@ -206,7 +211,9 @@ as_socket_close(as_socket* sock);
  * Create error message for socket error.
  */
 as_status
-as_socket_error(as_socket_fd fd, struct as_node_s* node, as_error* err, as_status status, const char* msg, int code);
+as_socket_error(
+	as_socket_fd fd, struct as_node_s* node, as_error* err, as_status status, const char* msg, int code
+	);
 
 /**
  * @private

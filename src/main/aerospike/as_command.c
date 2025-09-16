@@ -728,6 +728,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		as_socket socket;
+		ctx.state = AS_READ_STATE_AUTH_HEADER;
 		status = as_node_get_connection(err, node, cmd->ns, cmd->socket_timeout, cmd->deadline_ms,
 			&socket, &ctx);
 

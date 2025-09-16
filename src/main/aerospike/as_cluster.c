@@ -1390,7 +1390,7 @@ as_cluster_force_single_node(as_cluster* cluster, as_error* err)
 		}
 	}
 
-	cluster->valid = true;
+	cluster->valid = false;
 	return AEROSPIKE_OK;
 }
 

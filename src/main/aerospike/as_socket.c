@@ -552,22 +552,33 @@ as_socket_read_deadline(
 int
 as_socket_read_non_blocking(as_socket* sock, uint8_t* buf, size_t buf_len)
 {
-	// TODO: Support as_tls_read_non_blocking().
-#if defined(__linux__) 
-	int rv = (int)recv(sock->fd, (void*)buf, buf_len, MSG_DONTWAIT | MSG_NOSIGNAL);
-#elif defined(_MSC_VER)
-	// Windows sockets are initialized to non-blocking mode in as_socket_create_fd().
-	// Use regular recv call without any flags.
-	int rv = recv(sock->fd, (void*)buf, (int)buf_len, 0);
-#else
-	int rv = (int)recv(sock->fd, (void*)buf, buf_len, MSG_DONTWAIT);
-#endif
-
-	if (rv < 0) {
-		// Return zero if valid and no data available.
-		return (errno == EWOULDBLOCK || errno == EAGAIN) ? 0 : -1;
+	if (sock->tls) {
+		return as_tls_read_non_blocking(sock, buf, buf_len);
 	}
 
-	// Return bytes read.
-	return (rv > 0) ? rv : -1;
+	size_t pos = 0;
+
+	do {
+#if defined(__linux__)
+		int rv = (int)recv(sock->fd, (void*)buf + pos, buf_len - pos, MSG_DONTWAIT | MSG_NOSIGNAL);
+#elif defined(_MSC_VER)
+		// Windows sockets are initialized to non-blocking mode in as_socket_create_fd().
+		// Use regular recv call without any flags.
+		int rv = recv(sock->fd, (void*)buf + pos, (int)(buf_len - pos), 0);
+#else
+		int rv = (int)recv(sock->fd, (void*)buf + pos, buf_len - pos, MSG_DONTWAIT);
+#endif
+
+		if (rv > 0) {
+			pos += rv;
+		}
+		else if (rv == 0) {
+			return -1;
+		}
+		else {
+			return (errno == EWOULDBLOCK || errno == EAGAIN) ? (int)pos : -1;
+		}
+	} while (pos < buf_len);
+
+	return (int)pos;
 }

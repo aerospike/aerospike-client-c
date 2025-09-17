@@ -1245,6 +1245,42 @@ as_tls_read(
 }
 
 int
+as_tls_read_non_blocking(as_socket* sock, void* bufp, size_t len)
+{
+	uint8_t* buf = (uint8_t*)bufp;
+	int pos = 0;
+
+	while (true) {
+		int rv = SSL_read(sock->ssl, buf + pos, (int)(len - pos));
+		if (rv > 0) {
+			pos += rv;
+			if (pos >= len) {
+				return pos;
+			}
+		}
+		else {
+			int sslerr;
+			// Avoid the expensive call to SSL_get_error() in the most common case.
+			BIO* bio = SSL_get_rbio(sock->ssl);
+			if (SSL_want_read(sock->ssl) && BIO_should_read(bio) && BIO_should_retry(bio)) {
+				sslerr = SSL_ERROR_WANT_READ;
+			}
+			else {
+				sslerr = SSL_get_error(sock->ssl, rv);
+			}
+
+			switch (sslerr) {
+			case SSL_ERROR_WANT_READ:
+			case SSL_ERROR_WANT_WRITE:
+				return pos;
+			default:
+				return -1;
+			}
+		}
+	}
+}
+
+int
 as_tls_write_once(as_socket* sock, void* buf, size_t len)
 {
 	int rv = SSL_write(sock->ssl, buf, (int)len);

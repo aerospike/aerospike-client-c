@@ -65,6 +65,7 @@ as_conn_recover_parse_proto(as_conn_recover* self, uint8_t* buf)
 		}
 	}
 
+	as_proto_swap_from_be(proto);
 	self->length = proto->sz - (self->offset - 8);
 	self->offset = 0;
 	self->state = AS_READ_STATE_DETAIL;

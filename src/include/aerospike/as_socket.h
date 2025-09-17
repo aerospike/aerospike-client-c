@@ -247,9 +247,9 @@ as_socket_current_trim(uint64_t last_used, uint64_t max_socket_idle_ns)
  * Peek for socket connection status using underlying fd.
  * Needed to support libuv.
  *
- * @return   0 : socket is connected, but no data available.
- * 		> 0 : byte size of data available.
- * 		< 0 : socket is invalid.
+ * @return `0 : socket is connected, but no data available.`
+ * 		`> 0 : socket buffer contains available bytes.`
+ * 		`< 0 : socket is invalid.`
  */
 int
 as_socket_validate_fd(as_socket_fd fd);
@@ -285,6 +285,15 @@ as_socket_read_deadline(
 	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf, size_t buf_len,
 	uint32_t socket_timeout, uint64_t deadline, as_socket_context* ctx
 	);
+
+/**
+ * @private
+ * Non-blocking socket read.
+ *
+ * @return Number of bytes read. If the socket is invalid, return -1.
+ */
+int
+as_socket_read_non_blocking(as_socket* sock, uint8_t* buf, size_t buf_len);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -69,12 +69,14 @@ as_conn_recover_parse_proto(as_conn_recover* self, uint8_t* buf)
 	self->length = proto->sz - (self->offset - 8);
 	self->offset = 0;
 	self->state = AS_READ_STATE_DETAIL;
+	printf("DETAIL SIZE %zd\n", self->length);
 	return true;
 }
 
 static void
 as_conn_recover_abort(as_conn_recover* self)
 {
+	printf("CONN ABORTED\n");
 	as_node_incr_sync_conns_aborted(self->node);
 	as_node_close_conn_error(self->node, &self->socket, self->socket.pool);
 	self->state = AS_READ_STATE_COMPLETE;
@@ -87,42 +89,11 @@ as_conn_recover_abort(as_conn_recover* self)
 static void
 as_conn_recover_recover(as_conn_recover* self)
 {
+	printf("CONN RECOVERED\n");
 	// as_node_put_connection() updates the last_used field of the socket for us.
 	as_node_put_connection(self->node, &self->socket);
 	as_node_incr_sync_conns_recovered(self->node);
 	self->state = AS_READ_STATE_COMPLETE;
-}
-
-static size_t
-as_conn_recover_read(as_conn_recover* self, uint8_t* buf, size_t len)
-{
-	// Peek into socket.
-	size_t avail = as_socket_validate_fd(self->socket.fd);
-
-	if (avail < 0) {
-		// Socket connection is broken.
-		return -1;
-	}
-
-	if (avail == 0) {
-		// No data is available to drain.
-		return avail;
-	}
-
-	if (len > avail) {
-		len = avail;
-	}
-
-	as_error err;
-
-	// Read available data. The socket should not block because the peek has indicated that
-	// those bytes are available.
-	as_status status = as_socket_read_deadline(&err, &self->socket, self->node, buf, len, 5, 0, NULL);
-
-	if (status != AEROSPIKE_OK) {
-		return -1;
-	}
-	return len;
 }
 
 static int
@@ -140,7 +111,9 @@ as_conn_recover_drain_header(as_conn_recover* self)
 		on_heap = true;
 	}
 
-	size_t len = as_conn_recover_read(self, buf, self->length - self->offset);
+	int len = as_socket_read_non_blocking(&self->socket, buf, self->length - self->offset);
+
+	printf("DRAIN HEADER %d\n", len);
 
 	if (len < 0) {
 		return -1;
@@ -180,7 +153,10 @@ as_conn_recover_drain_detail(as_conn_recover* self)
 
 	while (rem > 0) {
 		size_t req_size = (rem < max) ? rem : max;
-		size_t len = as_conn_recover_read(self, buf, req_size);
+		printf("DRAIN REQ %zd\n", req_size);
+		int len = as_socket_read_non_blocking(&self->socket, buf, req_size);
+
+		printf("DRAIN DETAIL %d\n", len);
 
 		if (len < 0) {
 			return -1;
@@ -225,6 +201,7 @@ as_conn_recover_create(
 	as_socket* socket, as_socket_context* ctx, as_node* node, uint8_t* buf, size_t buf_len
 	)
 {
+	printf("ATTEMPT CONN RECOVER\n");
 	as_conn_recover* self = cf_malloc(sizeof(as_conn_recover));
 
 	memset(self, 0, sizeof(as_conn_recover));
@@ -297,6 +274,7 @@ as_conn_recover_destroy(as_conn_recover* self)
 bool
 as_conn_recover_drain(as_conn_recover* self)
 {
+	printf("DRAIN CONN\n");
 	int rv;
 
 	if (self->is_single) {

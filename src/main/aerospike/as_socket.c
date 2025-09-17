@@ -548,3 +548,22 @@ as_socket_read_deadline(
 	as_poll_destroy(&poll);
 	return status;
 }
+
+int
+as_socket_read_non_blocking(as_socket* sock, uint8_t* buf, size_t buf_len)
+{
+	// TODO: Support as_tls_read_non_blocking().
+#if defined(__linux__)
+	ssize_t rv = recv(sock->fd, (void*)buf, buf_len, MSG_DONTWAIT | MSG_NOSIGNAL);
+#else
+	ssize_t rv = recv(sock->fd, (void*)buf, buf_len, MSG_DONTWAIT);
+#endif
+
+	if (rv < 0) {
+		// Return zero if valid and no data available.
+		return (errno == EWOULDBLOCK || errno == EAGAIN) ? 0 : -1;
+	}
+
+	// Return bytes read.
+	return (rv > 0) ? (int)rv : -1;
+}

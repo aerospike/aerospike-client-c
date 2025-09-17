@@ -553,10 +553,14 @@ int
 as_socket_read_non_blocking(as_socket* sock, uint8_t* buf, size_t buf_len)
 {
 	// TODO: Support as_tls_read_non_blocking().
-#if defined(__linux__)
-	ssize_t rv = recv(sock->fd, (void*)buf, buf_len, MSG_DONTWAIT | MSG_NOSIGNAL);
+#if defined(__linux__) 
+	int rv = (int)recv(sock->fd, (void*)buf, buf_len, MSG_DONTWAIT | MSG_NOSIGNAL);
+#elif defined(_MSC_VER)
+	// Windows sockets are initialized to non-blocking mode in as_socket_create_fd().
+	// Use regular recv call without any flags.
+	int rv = recv(sock->fd, (void*)buf, (int)buf_len, 0);
 #else
-	ssize_t rv = recv(sock->fd, (void*)buf, buf_len, MSG_DONTWAIT);
+	int rv = (int)recv(sock->fd, (void*)buf, buf_len, MSG_DONTWAIT);
 #endif
 
 	if (rv < 0) {
@@ -565,5 +569,5 @@ as_socket_read_non_blocking(as_socket* sock, uint8_t* buf, size_t buf_len)
 	}
 
 	// Return bytes read.
-	return (rv > 0) ? (int)rv : -1;
+	return (rv > 0) ? rv : -1;
 }

@@ -8,8 +8,6 @@
 
 #include <aerospike/aerospike.h>
 
-////// Parse Command Line Arguments
-
 // The result of parsing arguments from the CLI.
 typedef struct program_options_s {
 	char* hostname;
@@ -24,15 +22,16 @@ typedef struct program_options_s {
 
 enum {
 	OPT_DONE = -1,
-	OPT_HELP = 'h',
-	OPT_HOST = 'r',
+	OPT_USAGE = 'u',
+	OPT_HOST = 'h',
 	OPT_PORT = 'p',
 	OPT_CAFILE = 'a',
 	OPT_TLS_NAME = 't',
 };
 
 static const struct option longopts[] = {
-	{"help",         no_argument,       NULL, OPT_HELP},
+	{"help",         no_argument,       NULL, OPT_USAGE},
+	{"usage",        no_argument,       NULL, OPT_USAGE},
 	{"host",         required_argument, NULL, OPT_HOST},
 	{"port",         required_argument, NULL, OPT_PORT},
 	{"ca-file",      required_argument, NULL, OPT_CAFILE},
@@ -40,7 +39,7 @@ static const struct option longopts[] = {
 	{NULL,           0,                 NULL, 0},
 };
 
-static const char* optstring = "h?r:p:a:t:";
+static const char* optstring = "u?h:p:a:t:";
 
 static void
 program_options_init(program_options* po)
@@ -57,13 +56,11 @@ static void
 print_usage(const char* cmdname)
 {
 	printf("%s [options] "
-	       "-r|--host <remote host> "
+	       "-h|--host <remote host> "
 	       "-p|--port <port>\n\n", cmdname);
 	printf("where [options] can be one or more of:\n");
-	printf("  -?,-h  --help              Displays this message and quits.\n");
+	printf("  -?,-u  --help, --usage     Displays this message and quits.\n");
 	printf("  -a     --ca-file <path>    Gives path to CA Certificate file\n");
-	printf("  -c     --cert-file <path>  Gives path to TLS certificate file\n");
-	printf("  -k     --key-file <path>   Gives path to TLS key file\n");
 	printf("  -t     --tls-name <name>   Gives the TLS cluster name\n");
 	printf("\nNote that, at a minimum, -a and -t must be specified for "
 	       "TLS to work.\n");
@@ -87,7 +84,7 @@ program_options_parse(program_options* po, int argc, char* argv[])
 			break;
 
 		case '?':
-		case OPT_HELP:
+		case OPT_USAGE:
 			print_usage(argv[0]);
 			exit(EXIT_SUCCESS);
 
@@ -127,8 +124,6 @@ program_options_parse(program_options* po, int argc, char* argv[])
 	// are given.
 	po->tls_options_given = po->cafile && po->tls_name;
 }
-
-////// Example Code
 
 void
 check_error(const char* operation, as_error* err)

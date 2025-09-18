@@ -560,13 +560,13 @@ as_socket_read_non_blocking(as_socket* sock, uint8_t* buf, size_t buf_len)
 
 	do {
 #if defined(__linux__)
-		int rv = (int)recv(sock->fd, (void*)buf + pos, buf_len - pos, MSG_DONTWAIT | MSG_NOSIGNAL);
+		int rv = (int)recv(sock->fd, buf + pos, buf_len - pos, MSG_DONTWAIT | MSG_NOSIGNAL);
 #elif defined(_MSC_VER)
 		// Windows sockets are initialized to non-blocking mode in as_socket_create_fd().
 		// Use regular recv call without any flags.
-		int rv = recv(sock->fd, (void*)buf + pos, (int)(buf_len - pos), 0);
+		int rv = recv(sock->fd, buf + pos, (int)(buf_len - pos), 0);
 #else
-		int rv = (int)recv(sock->fd, (void*)buf + pos, buf_len - pos, MSG_DONTWAIT);
+		int rv = (int)recv(sock->fd, buf + pos, buf_len - pos, MSG_DONTWAIT);
 #endif
 
 		if (rv > 0) {

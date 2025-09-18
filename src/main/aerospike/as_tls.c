@@ -171,10 +171,14 @@ wait_socket(as_socket_fd fd, uint32_t socket_timeout, uint64_t deadline, bool re
 			break;
 		}
 
+		if (rv == 0) {
+			rv = 1;  // timeout
+			break;
+		}
+
 		if (rv < 0) {
 			break;  // error
 		}
-		// rv == 0 timeout.  continue in case timed out before real timeout.
 	}
 
 	as_poll_destroy(&poll);

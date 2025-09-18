@@ -659,12 +659,52 @@ as_node_close_socket(as_node* node, as_socket* sock)
 
 /**
  * @private
+ * Return `sync_conns_opened`.
+ */
+static inline uint32_t
+as_node_get_sync_conns_opened(const as_node* node)
+{
+	return as_load_uint32(&node->sync_conns_opened);
+}
+
+/**
+ * @private
+ * Return `sync_conns_closed`.
+ */
+static inline uint32_t
+as_node_get_sync_conns_closed(const as_node* node)
+{
+	return as_load_uint32(&node->sync_conns_closed);
+}
+
+/**
+ * @private
+ * Return `sync_conns_recovered`.
+ */
+static inline uint32_t
+as_node_get_sync_conns_recovered(const as_node* node)
+{
+	return as_load_uint32(&node->sync_conns_recovered);
+}
+
+/**
+ * @private
  * Increment `sync_conns_recovered`.
  */
 static inline void
 as_node_incr_sync_conns_recovered(as_node* node)
 {
 	as_incr_uint32(&node->sync_conns_recovered);
+}
+
+/**
+ * @private
+ * Return `sync_conns_aborted`.
+ */
+static inline uint32_t
+as_node_get_sync_conns_aborted(const as_node* node)
+{
+	return as_load_uint32(&node->sync_conns_aborted);
 }
 
 /**

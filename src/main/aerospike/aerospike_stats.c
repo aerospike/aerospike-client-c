@@ -143,10 +143,10 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 		stats->sync.in_pool += in_pool;
 		stats->sync.in_use += total - in_pool;
 	}
-	stats->sync.opened = node->sync_conns_opened;
-	stats->sync.closed = node->sync_conns_closed;
-	stats->sync.recovered = node->sync_conns_recovered;
-	stats->sync.aborted = node->sync_conns_aborted;
+	stats->sync.opened = as_node_get_sync_conns_opened(node);
+	stats->sync.closed = as_node_get_sync_conns_closed(node);
+	stats->sync.recovered = as_node_get_sync_conns_recovered(node);
+	stats->sync.aborted = as_node_get_sync_conns_aborted(node);
 
 	// Async connection summary.
 	if (as_event_loop_capacity > 0) {

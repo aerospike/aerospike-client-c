@@ -177,6 +177,10 @@ typedef struct as_cluster_stats_s {
 	 */
 	uint32_t thread_pool_queued_tasks;
 
+	/**
+	 * Count of sync sockets currently in timeout recovery.
+	 */
+	uint32_t recover_queue_size;
 } as_cluster_stats;
 
 struct as_cluster_s;

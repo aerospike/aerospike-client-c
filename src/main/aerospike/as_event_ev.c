@@ -201,7 +201,7 @@ as_ev_write(as_event_command* cmd)
 {
 	uint8_t* buf = (uint8_t*)cmd + cmd->write_offset;
 
-	if (cmd->conn->socket.ctx) {
+	if (cmd->conn->socket.tls) {
 		do {
 			int rv = as_tls_write_once(&cmd->conn->socket, buf + cmd->pos, cmd->len - cmd->pos);
 			if (rv > 0) {
@@ -287,7 +287,7 @@ as_ev_read(as_event_command* cmd)
 {
 	cmd->flags |= AS_ASYNC_FLAGS_EVENT_RECEIVED;
 
-	if (cmd->conn->socket.ctx) {
+	if (cmd->conn->socket.tls) {
 		do {
 			int rv = as_tls_read_once(&cmd->conn->socket, cmd->buf + cmd->pos, cmd->len - cmd->pos);
 			if (rv > 0) {

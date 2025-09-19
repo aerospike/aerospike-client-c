@@ -1529,7 +1529,8 @@ typedef struct as_policy_info_s {
 
 	/**
 	 * Number of milliseconds to wait after a socket read times out before closing the socket for
-	 * good. If set to zero, this feature will be disabled.
+	 * good. If set to zero, this feature will be disabled. This field is supported for async info
+	 * commands and ignored by sync info commands.
 	 *
 	 * Default: 3000
 	 */

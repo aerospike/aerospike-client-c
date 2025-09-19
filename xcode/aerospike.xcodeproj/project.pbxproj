@@ -121,6 +121,8 @@
 		BFAF276E2B6AB36A00A3858B /* as_metrics.h in Headers */ = {isa = PBXBuildFile; fileRef = BFAF276D2B6AB36A00A3858B /* as_metrics.h */; };
 		BFAF27702B6AB39100A3858B /* as_metrics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFAF276F2B6AB39100A3858B /* as_metrics.c */; };
 		BFB0ED5522A72260007FEA9C /* as_cdt_ctx.h in Headers */ = {isa = PBXBuildFile; fileRef = BFB0ED5422A72260007FEA9C /* as_cdt_ctx.h */; };
+		BFB1CB522E6B6B2A006171E9 /* as_conn_recover.h in Headers */ = {isa = PBXBuildFile; fileRef = BFB1CB512E6B6B2A006171E9 /* as_conn_recover.h */; };
+		BFB1CB582E6B6C02006171E9 /* as_conn_recover.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB1CB572E6B6C02006171E9 /* as_conn_recover.c */; };
 		BFB8A5D81D0F3F77007B4E22 /* as_tls.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB8A5D71D0F3F77007B4E22 /* as_tls.c */; };
 		BFB8A5DA1D0F3F9E007B4E22 /* as_tls.h in Headers */ = {isa = PBXBuildFile; fileRef = BFB8A5D91D0F3F9E007B4E22 /* as_tls.h */; };
 		BFBA04A91947AA8400F9924E /* cf_random.c in Sources */ = {isa = PBXBuildFile; fileRef = BFBA04A81947AA8400F9924E /* cf_random.c */; };
@@ -351,6 +353,8 @@
 		BFAF276D2B6AB36A00A3858B /* as_metrics.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_metrics.h; path = ../src/include/aerospike/as_metrics.h; sourceTree = "<group>"; };
 		BFAF276F2B6AB39100A3858B /* as_metrics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_metrics.c; path = ../src/main/aerospike/as_metrics.c; sourceTree = "<group>"; };
 		BFB0ED5422A72260007FEA9C /* as_cdt_ctx.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_cdt_ctx.h; path = ../src/include/aerospike/as_cdt_ctx.h; sourceTree = "<group>"; };
+		BFB1CB512E6B6B2A006171E9 /* as_conn_recover.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = as_conn_recover.h; path = ../src/include/aerospike/as_conn_recover.h; sourceTree = SOURCE_ROOT; };
+		BFB1CB572E6B6C02006171E9 /* as_conn_recover.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = as_conn_recover.c; path = ../src/main/aerospike/as_conn_recover.c; sourceTree = SOURCE_ROOT; };
 		BFB8A5D71D0F3F77007B4E22 /* as_tls.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_tls.c; path = ../src/main/aerospike/as_tls.c; sourceTree = "<group>"; };
 		BFB8A5D91D0F3F9E007B4E22 /* as_tls.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_tls.h; path = ../src/include/aerospike/as_tls.h; sourceTree = "<group>"; };
 		BFBA04A81947AA8400F9924E /* cf_random.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = cf_random.c; path = ../modules/common/src/main/citrusleaf/cf_random.c; sourceTree = "<group>"; };
@@ -571,6 +575,7 @@
 				BF8EEB2C1A2CED34000F2B00 /* as_command.c */,
 				BF2AA7C218BEBFA400E54AF3 /* as_config.c */,
 				BF88520E2D8B4CB50076DFEC /* as_config_file.c */,
+				BFB1CB572E6B6C02006171E9 /* as_conn_recover.c */,
 				BF2AA7C318BEBFA400E54AF3 /* as_error.c */,
 				BF8EABF51BF3C2800027EF45 /* as_event_ev.c */,
 				BFCB38A61DFB764200C73D0F /* as_event_event.c */,
@@ -778,6 +783,7 @@
 				BFC65B491C921E9E0079DF5A /* as_config.h */,
 				BF88520C2D8B4C9A0076DFEC /* as_config_file.h */,
 				BFEAF6312228638E00FB4248 /* as_conn_pool.h */,
+				BFB1CB512E6B6B2A006171E9 /* as_conn_recover.h */,
 				BFA5B20F20FD3FA4002AF0BB /* as_cpu.h */,
 				BFC65B4A1C921E9E0079DF5A /* as_error.h */,
 				BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */,
@@ -879,6 +885,7 @@
 				BFC65B841C921E9E0079DF5A /* as_query.h in Headers */,
 				BFC65B641C921E9E0079DF5A /* aerospike_key.h in Headers */,
 				BF969BD22DF0EA7300F4D823 /* as_version.h in Headers */,
+				BFB1CB522E6B6B2A006171E9 /* as_conn_recover.h in Headers */,
 				BFC65B621C921E9E0079DF5A /* aerospike_index.h in Headers */,
 				BFC65B831C921E9E0079DF5A /* as_proto.h in Headers */,
 				BFC65B721C921E9E0079DF5A /* as_cluster.h in Headers */,
@@ -1042,6 +1049,7 @@
 				BFBA105318B7D8B300A64E68 /* as_bytes.c in Sources */,
 				BF2AA7EA18BEBFA500E54AF3 /* as_key.c in Sources */,
 				BF8EF4DD2AE1B4BA00FEEC3A /* lvm.c in Sources */,
+				BFB1CB582E6B6C02006171E9 /* as_conn_recover.c in Sources */,
 				BF8EABF61BF3C2800027EF45 /* as_event_ev.c in Sources */,
 				BF8EF4B82AE1B44900FEEC3A /* ldump.c in Sources */,
 				BFBA105E18B7D8B300A64E68 /* as_module.c in Sources */,

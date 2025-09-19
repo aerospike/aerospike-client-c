@@ -171,10 +171,14 @@ wait_socket(as_socket_fd fd, uint32_t socket_timeout, uint64_t deadline, bool re
 			break;
 		}
 
+		if (rv == 0) {
+			rv = 1;  // timeout
+			break;
+		}
+
 		if (rv < 0) {
 			break;  // error
 		}
-		// rv == 0 timeout.  continue in case timed out before real timeout.
 	}
 
 	as_poll_destroy(&poll);
@@ -871,7 +875,7 @@ as_tls_config_reload(as_config_tls* tlscfg, as_tls_context* ctx,
 int
 as_tls_wrap(as_tls_context* ctx, as_socket* sock, const char* tls_name)
 {
-	sock->ctx = ctx;
+	sock->tls = ctx;
 	sock->tls_name = tls_name;
 
 	pthread_mutex_lock(&ctx->lock);
@@ -911,7 +915,7 @@ as_tls_set_context_name(struct ssl_st* ssl, as_tls_context* ctx, const char* tls
 static void
 log_session_info(as_socket* sock)
 {
-	if (! sock->ctx->log_session_info)
+	if (! sock->tls->log_session_info)
 		return;
 	
 	SSL_CIPHER const* cipher = SSL_get_current_cipher(sock->ssl);
@@ -1118,7 +1122,7 @@ as_tls_read_pending(as_socket* sock)
 	// Return the number of pending bytes in the TLS encryption
 	// buffer.  If we aren't using TLS return 0.
 	//
-	return sock->ctx ? SSL_pending(sock->ssl) : 0;
+	return sock->tls ? SSL_pending(sock->ssl) : 0;
 }
 
 int
@@ -1169,9 +1173,12 @@ as_tls_read_once(as_socket* sock, void* buf, size_t len)
 }
 
 int
-as_tls_read(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, uint64_t deadline)
+as_tls_read(
+	as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, uint64_t deadline,
+	as_socket_context* ctx
+	)
 {
-	uint8_t* buf = (uint8_t *) bufp;
+	uint8_t* buf = (uint8_t*)bufp;
 	size_t pos = 0;
 
 	while (true) {
@@ -1197,14 +1204,16 @@ as_tls_read(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, ui
 			switch (sslerr) {
 			case SSL_ERROR_WANT_READ:
 				rv = wait_socket(sock->fd, socket_timeout, deadline, true);
-				if (rv != 0) {
+				if (rv != 0 && ctx) {
+					ctx->offset = pos;
 					return rv;
 				}
 				// loop back around and retry
 				break;
 			case SSL_ERROR_WANT_WRITE:
 				rv = wait_socket(sock->fd, socket_timeout, deadline, false);
-				if (rv != 0) {
+				if (rv != 0 && ctx) {
+					ctx->offset = pos;
 					return rv;
 				}
 				// loop back around and retry
@@ -1234,6 +1243,42 @@ as_tls_read(as_socket* sock, void* bufp, size_t len, uint32_t socket_timeout, ui
 				as_log_warn("SSL_read: unexpected ssl error: %d", sslerr);
 				return -1;
 				break;
+			}
+		}
+	}
+}
+
+int
+as_tls_read_non_blocking(as_socket* sock, void* bufp, size_t len)
+{
+	uint8_t* buf = (uint8_t*)bufp;
+	int pos = 0;
+
+	while (true) {
+		int rv = SSL_read(sock->ssl, buf + pos, (int)(len - pos));
+		if (rv > 0) {
+			pos += rv;
+			if (pos >= len) {
+				return pos;
+			}
+		}
+		else {
+			int sslerr;
+			// Avoid the expensive call to SSL_get_error() in the most common case.
+			BIO* bio = SSL_get_rbio(sock->ssl);
+			if (SSL_want_read(sock->ssl) && BIO_should_read(bio) && BIO_should_retry(bio)) {
+				sslerr = SSL_ERROR_WANT_READ;
+			}
+			else {
+				sslerr = SSL_get_error(sock->ssl, rv);
+			}
+
+			switch (sslerr) {
+			case SSL_ERROR_WANT_READ:
+			case SSL_ERROR_WANT_WRITE:
+				return pos;
+			default:
+				return -1;
 			}
 		}
 	}

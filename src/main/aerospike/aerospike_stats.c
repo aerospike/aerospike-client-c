@@ -147,6 +147,7 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 	stats->sync.closed = as_node_get_sync_conns_closed(node);
 	stats->sync.recovered = as_node_get_sync_conns_recovered(node);
 	stats->sync.aborted = as_node_get_sync_conns_aborted(node);
+	printf("ABORT COUNT=%u\n", stats->sync.aborted);
 
 	// Async connection summary.
 	if (as_event_loop_capacity > 0) {

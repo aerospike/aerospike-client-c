@@ -220,6 +220,12 @@ as_conn_recover_error(as_conn_recover* self, int rv)
 	return true;
 }
 
+static inline uint64_t
+as_clock_ms_to_ns(uint64_t ms)
+{
+	return (uint64_t)ms * 1000 * 1000;
+}
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -286,7 +292,7 @@ as_conn_recover_create(
 	}
 
 	uint64_t now = cf_getns();
-	self->deadline_ns = now + (ctx->timeout_delay * 1000 * 1000);
+	self->deadline_ns = now + as_clock_ms_to_ns(ctx->timeout_delay);
 	log_ts("TIMEOUTDELAY=%u NOW=%" PRIu64 " DEADLINENS=%" PRIu64, ctx->timeout_delay, now, self->deadline_ns);
 
 	return self;

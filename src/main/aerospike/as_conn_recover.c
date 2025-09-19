@@ -20,34 +20,6 @@
 // Static Functions
 //---------------------------------
 
-static void
-log_ts(const char * fmt, ...)
-{
-	va_list ap;
-	va_start(ap, fmt);
-
-	char fmtbuf[1024];
-	struct timespec now;
-	clock_gettime(CLOCK_REALTIME, &now);
-
-	struct tm* t = localtime(&now.tv_sec);
-	uint64_t msecs = now.tv_nsec / 1000000;
-	int len = sprintf(fmtbuf, "%d-%02d-%02d %02d:%02d:%02d.%03" PRIu64 " ",
-		t->tm_year+1900, t->tm_mon+1, t->tm_mday, t->tm_hour, t->tm_min,
-		t->tm_sec, msecs);
-
-	size_t len2 = strlen(fmt);
-	char* p = fmtbuf + len;
-	memcpy(p, fmt, len2);
-	p += len2;
-	*p = 0;
-
-    vprintf(fmtbuf, ap);
-    printf("\n");
-	va_end(ap);
-}
-
-
 static inline void
 as_conn_recover_copy_header_buffer(as_conn_recover* self, uint8_t* buf)
 {
@@ -97,14 +69,12 @@ as_conn_recover_parse_proto(as_conn_recover* self, uint8_t* buf)
 	self->length = proto->sz - (self->offset - 8);
 	self->offset = 0;
 	self->state = AS_READ_STATE_DETAIL;
-	log_ts("DETAIL SIZE %zd", self->length);
 	return true;
 }
 
 static void
 as_conn_recover_abort(as_conn_recover* self)
 {
-	log_ts("CONN ABORTED");
 	as_node_incr_sync_conns_aborted(self->node);
 	as_node_close_conn_error(self->node, &self->socket, self->socket.pool);
 	self->state = AS_READ_STATE_COMPLETE;
@@ -117,7 +87,6 @@ as_conn_recover_abort(as_conn_recover* self)
 static void
 as_conn_recover_recover(as_conn_recover* self)
 {
-	log_ts("CONN RECOVERED");
 	// as_node_put_connection() updates the last_used field of the socket for us.
 	as_node_put_connection(self->node, &self->socket);
 	as_node_incr_sync_conns_recovered(self->node);
@@ -140,8 +109,6 @@ as_conn_recover_drain_header(as_conn_recover* self)
 	}
 
 	int len = as_socket_read_non_blocking(&self->socket, buf, self->length - self->offset);
-
-	log_ts("DRAIN HEADER %d", len);
 
 	if (len < 0) {
 		return -1;
@@ -181,10 +148,7 @@ as_conn_recover_drain_detail(as_conn_recover* self)
 
 	while (rem > 0) {
 		size_t req_size = (rem < max) ? rem : max;
-		log_ts("DRAIN REQ %zd", req_size);
 		int len = as_socket_read_non_blocking(&self->socket, buf, req_size);
-
-		log_ts("DRAIN DETAIL %d", len);
 
 		if (len < 0) {
 			return -1;
@@ -235,7 +199,6 @@ as_conn_recover_create(
 	as_socket* socket, as_socket_context* ctx, as_node* node, uint8_t* buf, size_t buf_len
 	)
 {
-	log_ts("ATTEMPT CONN RECOVER");
 	as_conn_recover* self = cf_malloc(sizeof(as_conn_recover));
 
 	memset(self, 0, sizeof(as_conn_recover));
@@ -293,8 +256,6 @@ as_conn_recover_create(
 
 	uint64_t now = cf_getns();
 	self->deadline_ns = now + as_clock_ms_to_ns(ctx->timeout_delay);
-	log_ts("TIMEOUTDELAY=%u NOW=%" PRIu64 " DEADLINENS=%" PRIu64, ctx->timeout_delay, now, self->deadline_ns);
-
 	return self;
 }
 
@@ -311,7 +272,6 @@ as_conn_recover_destroy(as_conn_recover* self)
 bool
 as_conn_recover_drain(as_conn_recover* self)
 {
-	log_ts("DRAIN CONN");
 	int rv;
 
 	if (self->is_single) {

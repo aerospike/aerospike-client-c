@@ -476,15 +476,7 @@ as_event_command_write_start(as_event_command* cmd)
 static int
 as_event_command_start(as_event_command* cmd)
 {
-	as_event_connection_complete(cmd);
-	
-	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
-		as_event_connector_success(cmd);
-		return AS_EVENT_COMMAND_DONE;
-	}
-
-	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
-		as_event_recover_auth(cmd);
+	if (as_event_connection_complete(cmd)) {
 		return AS_EVENT_COMMAND_DONE;
 	}
 

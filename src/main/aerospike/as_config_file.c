@@ -696,6 +696,10 @@ as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* b
 		return as_parse_replica(yaml, name, value, &policy->replica, AS_READ_REPLICA);
 	}
 
+	if (strcmp(name, "connect_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.connect_timeout, AS_READ_CONNECT_TIMEOUT);
+	}
+
 	if (strcmp(name, "socket_timeout") == 0) {
 		return as_parse_uint32(yaml, name, value, &policy->base.socket_timeout, AS_READ_SOCKET_TIMEOUT);
 	}
@@ -714,11 +718,6 @@ as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* b
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
 		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_READ_SLEEP_BETWEEN_RETRIES);
-	}
-
-	if (strcmp(name, "connect_timeout") == 0) {
-		// Not supported.
-		return true;
 	}
 
 	if (strcmp(name, "fail_on_filtered_out") == 0) {
@@ -750,6 +749,16 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 		as_assign_replica(operate_section, name, value, policy->replica, &base->operate.replica);
 		as_assign_replica(apply_section, name, value, policy->replica, &base->apply.replica);
 		as_assign_replica(remove_section, name, value, policy->replica, &base->remove.replica);
+		return true;
+	}
+
+	if (strcmp(name, "connect_timeout") == 0) {
+		if (!as_parse_uint32(yaml, name, value, &policy->base.connect_timeout, AS_WRITE_CONNECT_TIMEOUT)) {
+			return false;
+		}
+		as_assign_uint32(operate_section, name, value, policy->base.connect_timeout, &base->operate.base.connect_timeout);
+		as_assign_uint32(apply_section, name, value, policy->base.connect_timeout, &base->apply.base.connect_timeout);
+		as_assign_uint32(remove_section, name, value, policy->base.connect_timeout, &base->remove.base.connect_timeout);
 		return true;
 	}
 
@@ -823,11 +832,6 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 		return true;
 	}
 
-	if (strcmp(name, "connect_timeout") == 0) {
-		// Not supported.
-		return true;
-	}
-
 	if (strcmp(name, "fail_on_filtered_out") == 0) {
 		// Not supported.
 		return true;
@@ -845,6 +849,10 @@ as_parse_scan(as_yaml* yaml, const char* name, const char* value, as_policies* b
 
 	if (strcmp(name, "replica") == 0) {
 		return as_parse_replica(yaml, name, value, &policy->replica, AS_SCAN_REPLICA);
+	}
+
+	if (strcmp(name, "connect_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.connect_timeout, AS_SCAN_CONNECT_TIMEOUT);
 	}
 
 	if (strcmp(name, "socket_timeout") == 0) {
@@ -865,11 +873,6 @@ as_parse_scan(as_yaml* yaml, const char* name, const char* value, as_policies* b
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
 		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_SCAN_SLEEP_BETWEEN_RETRIES);
-	}
-
-	if (strcmp(name, "connect_timeout") == 0) {
-		// Not supported.
-		return true;
 	}
 
 	if (strcmp(name, "concurrent_nodes") == 0) {
@@ -894,6 +897,10 @@ as_parse_query(as_yaml* yaml, const char* name, const char* value, as_policies* 
 
 	if (strcmp(name, "replica") == 0) {
 		return as_parse_replica(yaml, name, value, &policy->replica, AS_QUERY_REPLICA);
+	}
+
+	if (strcmp(name, "connect_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.connect_timeout, AS_QUERY_CONNECT_TIMEOUT);
 	}
 
 	if (strcmp(name, "socket_timeout") == 0) {
@@ -922,11 +929,6 @@ as_parse_query(as_yaml* yaml, const char* name, const char* value, as_policies* 
 
 	if (strcmp(name, "expected_duration") == 0) {
 		return as_parse_expected_duration(yaml, name, value, &policy->expected_duration, AS_QUERY_EXPECTED_DURATION);
-	}
-
-	if (strcmp(name, "connect_timeout") == 0) {
-		// Not supported.
-		return true;
 	}
 
 	if (strcmp(name, "include_bin_data") == 0) {
@@ -958,6 +960,10 @@ as_parse_batch_shared(
 
 	if (strcmp(name, "replica") == 0) {
 		return as_parse_replica(yaml, name, value, &policy->replica, offset + AS_BATCH_REPLICA);
+	}
+
+	if (strcmp(name, "connect_timeout") == 0) {
+		return as_parse_uint32(yaml, name, value, &policy->base.connect_timeout, offset + AS_BATCH_CONNECT_TIMEOUT);
 	}
 
 	if (strcmp(name, "socket_timeout") == 0) {
@@ -994,11 +1000,6 @@ as_parse_batch_shared(
 
 	if (strcmp(name, "respond_all_keys") == 0) {
 		return as_parse_bool(yaml, name, value, &policy->respond_all_keys, offset + AS_BATCH_RESPOND_ALL_KEYS);
-	}
-
-	if (strcmp(name, "connect_timeout") == 0) {
-		// Not supported.
-		return true;
 	}
 
 	if (strcmp(name, "fail_on_filtered_out") == 0) {
@@ -1634,6 +1635,8 @@ static void
 as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg, uint8_t* bitmap)
 {
 	// Copy new policy values to the cluster one field at a time.
+	trg->read.base.connect_timeout = as_field_is_set(bitmap, AS_READ_CONNECT_TIMEOUT)?
+		src->read.base.connect_timeout : orig->read.base.connect_timeout;
 	trg->read.base.socket_timeout = as_field_is_set(bitmap, AS_READ_SOCKET_TIMEOUT)?
 		src->read.base.socket_timeout : orig->read.base.socket_timeout;
 	trg->read.base.total_timeout = as_field_is_set(bitmap, AS_READ_TOTAL_TIMEOUT)?
@@ -1651,6 +1654,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->read.replica = as_field_is_set(bitmap, AS_READ_REPLICA)?
 		src->read.replica : orig->read.replica;
 
+	trg->write.base.connect_timeout = as_field_is_set(bitmap, AS_WRITE_CONNECT_TIMEOUT)?
+		src->write.base.connect_timeout : orig->write.base.connect_timeout;
 	trg->write.base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
 		src->write.base.socket_timeout : orig->write.base.socket_timeout;
 	trg->write.base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
@@ -1668,6 +1673,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->write.key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
 		src->write.key : orig->write.key;
 
+	trg->operate.base.connect_timeout = as_field_is_set(bitmap, AS_WRITE_CONNECT_TIMEOUT)?
+		src->operate.base.connect_timeout : orig->operate.base.connect_timeout;
 	trg->operate.base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
 		src->operate.base.socket_timeout : orig->operate.base.socket_timeout;
 	trg->operate.base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
@@ -1689,6 +1696,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->operate.read_mode_sc = as_field_is_set(bitmap, AS_READ_READ_MODE_SC)?
 		src->operate.read_mode_sc : orig->operate.read_mode_sc;
 
+	trg->apply.base.connect_timeout = as_field_is_set(bitmap, AS_WRITE_CONNECT_TIMEOUT)?
+		src->apply.base.connect_timeout : orig->apply.base.connect_timeout;
 	trg->apply.base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
 		src->apply.base.socket_timeout : orig->apply.base.socket_timeout;
 	trg->apply.base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
@@ -1706,6 +1715,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->apply.key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
 		src->apply.key : orig->apply.key;
 
+	trg->remove.base.connect_timeout = as_field_is_set(bitmap, AS_WRITE_CONNECT_TIMEOUT)?
+		src->remove.base.connect_timeout : orig->remove.base.connect_timeout;
 	trg->remove.base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
 		src->remove.base.socket_timeout : orig->remove.base.socket_timeout;
 	trg->remove.base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
@@ -1723,6 +1734,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->remove.key = as_field_is_set(bitmap, AS_WRITE_SEND_KEY)?
 		src->remove.key : orig->remove.key;
 
+	trg->scan.base.connect_timeout = as_field_is_set(bitmap, AS_SCAN_CONNECT_TIMEOUT)?
+		src->scan.base.connect_timeout : orig->scan.base.connect_timeout;
 	trg->scan.base.socket_timeout = as_field_is_set(bitmap, AS_SCAN_SOCKET_TIMEOUT)?
 		src->scan.base.socket_timeout : orig->scan.base.socket_timeout;
 	trg->scan.base.total_timeout = as_field_is_set(bitmap, AS_SCAN_TOTAL_TIMEOUT)?
@@ -1736,6 +1749,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->scan.replica = as_field_is_set(bitmap, AS_SCAN_REPLICA)?
 		src->scan.replica : orig->scan.replica;
 
+	trg->query.base.connect_timeout = as_field_is_set(bitmap, AS_QUERY_CONNECT_TIMEOUT)?
+		src->query.base.connect_timeout : orig->query.base.connect_timeout;
 	trg->query.base.socket_timeout = as_field_is_set(bitmap, AS_QUERY_SOCKET_TIMEOUT)?
 		src->query.base.socket_timeout : orig->query.base.socket_timeout;
 	trg->query.base.total_timeout = as_field_is_set(bitmap, AS_QUERY_TOTAL_TIMEOUT)?
@@ -1753,6 +1768,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->query.expected_duration = as_field_is_set(bitmap, AS_QUERY_EXPECTED_DURATION)?
 		src->query.expected_duration : orig->query.expected_duration;
 
+	trg->batch.base.connect_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_CONNECT_TIMEOUT)?
+		src->batch.base.connect_timeout : orig->batch.base.connect_timeout;
 	trg->batch.base.socket_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_SOCKET_TIMEOUT)?
 		src->batch.base.socket_timeout : orig->batch.base.socket_timeout;
 	trg->batch.base.total_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_TOTAL_TIMEOUT)?
@@ -1778,6 +1795,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->batch.respond_all_keys = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_RESPOND_ALL_KEYS)?
 		src->batch.respond_all_keys : orig->batch.respond_all_keys;
 
+	trg->batch_parent_write.base.connect_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_CONNECT_TIMEOUT)?
+		src->batch_parent_write.base.connect_timeout : orig->batch_parent_write.base.connect_timeout;
 	trg->batch_parent_write.base.socket_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_SOCKET_TIMEOUT)?
 		src->batch_parent_write.base.socket_timeout : orig->batch_parent_write.base.socket_timeout;
 	trg->batch_parent_write.base.total_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_TOTAL_TIMEOUT)?
@@ -1819,6 +1838,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->batch_remove.key = as_field_is_set(bitmap, AS_BATCH_DELETE_SEND_KEY)?
 		src->batch_remove.key : orig->batch_remove.key;
 
+	trg->txn_verify.base.connect_timeout = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_CONNECT_TIMEOUT)?
+		src->txn_verify.base.connect_timeout : orig->txn_verify.base.connect_timeout;
 	trg->txn_verify.base.socket_timeout = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_SOCKET_TIMEOUT)?
 		src->txn_verify.base.socket_timeout : orig->txn_verify.base.socket_timeout;
 	trg->txn_verify.base.total_timeout = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_TOTAL_TIMEOUT)?
@@ -1844,6 +1865,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->txn_verify.respond_all_keys = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_RESPOND_ALL_KEYS)?
 		src->txn_verify.respond_all_keys : orig->txn_verify.respond_all_keys;
 
+	trg->txn_roll.base.connect_timeout = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_CONNECT_TIMEOUT)?
+		src->txn_roll.base.connect_timeout : orig->txn_roll.base.connect_timeout;
 	trg->txn_roll.base.socket_timeout = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_SOCKET_TIMEOUT)?
 		src->txn_roll.base.socket_timeout : orig->txn_roll.base.socket_timeout;
 	trg->txn_roll.base.total_timeout = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_TOTAL_TIMEOUT)?

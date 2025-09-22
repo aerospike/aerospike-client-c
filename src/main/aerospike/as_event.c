@@ -372,6 +372,7 @@ static void connector_error(as_event_command* cmd, as_error* err);
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
 {
+	cmd->total_deadline = (cmd->total_timeout > 0)? cf_getms() + cmd->total_timeout : 0;
 	cmd->command_sent_counter = 0;
 
 	as_event_loop* event_loop = cmd->event_loop;
@@ -390,10 +391,6 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 	}
 	else {
 		// Send command through queue so it can be executed in event loop thread.
-		if (cmd->total_deadline > 0) {
-			// Convert total timeout to deadline.
-			cmd->total_deadline += cf_getms();
-		}
 		cmd->state = AS_ASYNC_STATE_REGISTERED;
 
 		if (! as_event_execute(cmd->event_loop,
@@ -412,10 +409,7 @@ as_event_command_schedule(as_event_command* cmd)
 {
 	// Schedule command to execute in next event loop iteration.
 	// Must be run in event loop thread.
-	if (cmd->total_deadline > 0) {
-		// Convert total timeout to deadline.
-		cmd->total_deadline += cf_getms();
-	}
+	cmd->total_deadline = (cmd->total_timeout > 0)? cf_getms() + cmd->total_timeout : 0;
 
 	// Callback is as_event_process_timer().
 	cmd->state = AS_ASYNC_STATE_REGISTERED;
@@ -448,26 +442,16 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 		return;
 	}
 
-	uint64_t total_timeout = 0;
-
-	if (cmd->total_deadline > 0) {
+	if (cmd->state == AS_ASYNC_STATE_REGISTERED && cmd->total_deadline > 0) {
+		// Command was queued to event loop thread.
 		uint64_t now = cf_getms();
 
-		if (cmd->state == AS_ASYNC_STATE_REGISTERED) {
-			// Command was queued to event loop thread.
-			if (now >= cmd->total_deadline) {
-				// Command already timed out.
-				as_error err;
-				as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Register timeout");
-				as_event_prequeue_error(event_loop, cmd, &err);
-				return;
-			}
-			total_timeout = cmd->total_deadline - now;
-		}
-		else {
-			// Convert total timeout to deadline.
-			total_timeout = cmd->total_deadline;
-			cmd->total_deadline += now;
+		if (now > cmd->total_deadline) {
+			// Command already timed out.
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Register timeout");
+			as_event_prequeue_error(event_loop, cmd, &err);
+			return;
 		}
 	}
 
@@ -504,33 +488,38 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 
 			cmd->state = AS_ASYNC_STATE_DELAY_QUEUE;
 
-			if (total_timeout > 0) {
-				as_event_timer_once(cmd, total_timeout);
+			if (cmd->total_timeout > 0) {
+				as_event_timer_once(cmd, cmd->total_timeout);
 			}
 			return;
 		}
 	}
 
-	if (total_timeout > 0) {
-		if (cmd->socket_timeout > 0 && cmd->socket_timeout < total_timeout) {
+	// Start processing.
+	as_event_set_timeout(cmd);
+	event_loop->pending++;
+	cmd->event_state->pending++;
+
+	as_event_command_begin(event_loop, cmd);
+}
+
+void
+as_event_set_timeout(as_event_command* cmd)
+{
+	if (cmd->total_timeout > 0) {
+		if (cmd->socket_timeout > 0 && cmd->socket_timeout < cmd->total_timeout) {
 			// Use socket timer.
 			as_event_timer_repeat(cmd, cmd->socket_timeout);
 		}
 		else {
 			// Use total timer.
-			as_event_timer_once(cmd, total_timeout);
+			as_event_timer_once(cmd, cmd->total_timeout);
 		}
 	}
 	else if (cmd->socket_timeout > 0) {
 		// Use socket timer.
 		as_event_timer_repeat(cmd, cmd->socket_timeout);
 	}
-
-	// Start processing.
-	event_loop->pending++;
-	cmd->event_state->pending++;
-
-	as_event_command_begin(event_loop, cmd);
 }
 
 static void
@@ -550,8 +539,8 @@ as_event_execute_from_delay_queue(as_event_loop* event_loop)
 		}
 
 		if (cmd->socket_timeout > 0) {
-			if (cmd->total_deadline > 0) {
-				if (cmd->socket_timeout < cmd->total_deadline - cf_getms()) {
+			if (cmd->total_timeout > 0) {
+				if (cmd->socket_timeout < cmd->total_timeout) {
 					// Transition from total timer to socket timer.
 					as_event_timer_stop(cmd);
 					as_event_timer_repeat(cmd, cmd->socket_timeout);
@@ -579,6 +568,11 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	conn->base.watching = 0;
 	conn->cmd = cmd;
 	cmd->conn = &conn->base;
+
+	if (cmd->connect_timeout > 0) {
+		as_event_timer_stop(cmd);
+		as_event_timer_once(cmd, cmd->connect_timeout);
+	}
 	as_event_connect(cmd, pool);
 }
 
@@ -589,12 +583,33 @@ as_event_add_latency(as_event_command* cmd, as_latency_type type)
 	as_node_add_latency(cmd->metrics, type, elapsed);
 }
 
-void
+bool
 as_event_connection_complete(as_event_command* cmd)
 {
 	if (cmd->metrics) {
 		as_event_add_latency(cmd, AS_LATENCY_TYPE_CONN);
 	}
+
+	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
+		as_event_connector_success(cmd);
+		return true;
+	}
+
+	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
+		as_event_recover_auth(cmd);
+		return true;
+	}
+
+	if (cmd->connect_timeout > 0) {
+		// Restore command timeout.
+		as_event_timer_stop(cmd);
+
+		if (cmd->total_timeout > 0) {
+			cmd->total_deadline = cf_getms() + cmd->total_timeout;
+		}
+		as_event_set_timeout(cmd);
+	}
+	return false;
 }
 
 static void
@@ -799,6 +814,32 @@ as_event_decompress(as_event_command* cmd)
 	return true;
 }
 
+static void
+as_event_retry_timeout(as_event_command* cmd)
+{
+	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
+
+	if (cmd->pipe_listener) {
+		as_pipe_timeout(cmd, true);
+		return;
+	}
+
+	if (!as_event_recover_connection(cmd)) {
+		// Node should not be null at this point.
+		as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	}
+
+	if (! as_event_command_retry(cmd, true)) {
+		as_event_timer_stop(cmd);
+
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
+						cmd->iteration, as_node_get_address_string(cmd->node));
+
+		as_event_error_callback(cmd, &err);
+	}
+}
+
 void
 as_event_socket_timeout(as_event_command* cmd)
 {
@@ -834,27 +875,7 @@ as_event_socket_timeout(as_event_command* cmd)
 		return;
 	}
 
-	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
-
-	if (cmd->pipe_listener) {
-		as_pipe_timeout(cmd, true);
-		return;
-	}
-
-	if (!as_event_recover_connection(cmd)) {
-		// Node should not be null at this point.
-		as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
-	}
-
-	if (! as_event_command_retry(cmd, true)) {
-		as_event_timer_stop(cmd);
-
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
-						cmd->iteration, as_node_get_address_string(cmd->node));
-
-		as_event_error_callback(cmd, &err);
-	}
+	as_event_retry_timeout(cmd);
 }
 
 static void
@@ -890,6 +911,15 @@ as_event_process_timer(as_event_command* cmd)
 		case AS_ASYNC_STATE_RETRY:
 			// Execute retry.
 			as_event_execute_retry(cmd);
+			break;
+
+		case AS_ASYNC_STATE_CONNECT:
+			if (cmd->connect_timeout > 0) {
+				as_event_retry_timeout(cmd);
+			}
+			else {
+				as_event_total_timeout(cmd);
+			}
 			break;
 
 		default:
@@ -1918,6 +1948,7 @@ connector_execute_command(as_event_loop* event_loop, connector_shared* cs)
 	event_loop->pending++;
 	cmd->event_state->pending++;
 
+	cmd->total_timeout = cs->timeout_ms;
 	cmd->total_deadline = cf_getms() + cs->timeout_ms;
 	as_event_timer_once(cmd, cs->timeout_ms);
 
@@ -2381,6 +2412,8 @@ as_event_recover_connection(as_event_command* cmd)
 	recover->event_loop->pending++;
 	recover->event_state->pending++;
 	recover->timeout_delay = 0;
+	recover->bytes_in = 0;
+	recover->bytes_out = 0;
 
 	// Socket write variables should never be referenced when in a read state.
 	recover->write_offset = (uint32_t)sizeof(as_recover_command);

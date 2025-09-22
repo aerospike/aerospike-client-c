@@ -454,6 +454,22 @@ typedef enum as_query_duration_e {
 typedef struct as_policy_base_s {
 
 	/**
+	 * Socket connect timeout in milliseconds. If connect_timeout greater than zero, it will
+	 * be applied to creating a connection plus optional user authentication. Otherwise,
+	 * socket_timeout or total_timeout will be used depending on their values.
+	 *
+	 * If connect, socket and total timeouts are zero, the actual socket connect timeout
+	 * is hard-coded to 2000ms.
+	 *
+	 * connect_timeout is useful when new connection creation is expensive (ie TLS connections)
+	 * and it's acceptable to allow extra time to create a new connection compared to using an
+	 * existing connection from the pool.
+	 *
+	 * Default: 0
+	 */
+	uint32_t connect_timeout;
+
+	/**
 	 * Socket idle timeout in milliseconds when processing a database command.
 	 *
 	 * If socket_timeout is zero and total_timeout is non-zero, then socket_timeout will be set
@@ -478,9 +494,17 @@ typedef struct as_policy_base_s {
 	 *
 	 * If total_timeout is not zero and total_timeout is reached before the command
 	 * completes, the command will return error AEROSPIKE_ERR_TIMEOUT.
-	 * If totalTimeout is zero, there will be no total time limit.
 	 *
-	 * Default: 1000
+	 * If totalTimeout is zero, there will be no total time limit on the client side.
+	 * However, the server converts zero timeouts to the server configuration field
+	 * transaction-max-ms (default 1000ms) for all commands except queries. For short
+	 * queries (`expected_duration == AS_QUERY_DURATION_SHORT`), the server
+	 * converts zero timeouts to a hard-coded 1000ms. For long queries, there is no
+	 * timeout conversion on the server.
+	 *
+	 * Default for scan/query: 0
+	 *
+	 * Default for all other commands: 1000
 	 */
 	uint32_t total_timeout;
 
@@ -591,7 +615,6 @@ typedef struct as_policy_base_s {
 	 * Default: false
 	 */
 	bool compress;
-
 } as_policy_base;
 
 /**
@@ -1690,6 +1713,7 @@ typedef struct as_policies_s {
 static inline void
 as_policy_base_read_init(as_policy_base* p)
 {
+	p->connect_timeout = 0;
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
 	p->timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
@@ -1706,6 +1730,7 @@ as_policy_base_read_init(as_policy_base* p)
 static inline void
 as_policy_base_write_init(as_policy_base* p)
 {
+	p->connect_timeout = 0;
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
 	p->timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
@@ -1735,6 +1760,7 @@ as_policy_base_write_init(as_policy_base* p)
 static inline void
 as_policy_base_query_init(as_policy_base* p)
 {
+	p->connect_timeout = 0;
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->total_timeout = 0;
 	p->timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
@@ -2192,6 +2218,7 @@ as_policy_admin_copy(const as_policy_admin* src, as_policy_admin* trg)
 static inline as_policy_txn_verify*
 as_policy_txn_verify_init(as_policy_txn_verify* p)
 {
+	p->base.connect_timeout = 0;
 	p->base.socket_timeout = 3000;
 	p->base.total_timeout = 10000;
 	p->base.timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
@@ -2238,6 +2265,7 @@ as_policy_txn_verify_copy(const as_policy_txn_verify* src, as_policy_txn_verify*
 static inline as_policy_txn_roll*
 as_policy_txn_roll_init(as_policy_txn_roll* p)
 {
+	p->base.connect_timeout = 0;
 	p->base.socket_timeout = 3000;
 	p->base.total_timeout = 10000;
 	p->base.timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;

@@ -361,7 +361,7 @@ static as_status
 as_shm_reset_racks_node(as_cluster* cluster, as_error* err, as_node* node)
 {
 	uint64_t deadline_ms = as_socket_deadline(cluster->conn_timeout_ms);
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &node->info_socket,
+	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &node->info_socket,
 		NULL);
 
 	if (status != AEROSPIKE_OK) {

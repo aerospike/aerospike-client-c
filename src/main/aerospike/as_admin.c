@@ -269,7 +269,7 @@ as_admin_execute_node(
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
 
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, NULL);
+	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &socket, NULL);
 
 	if (status) {
 		return status;
@@ -393,7 +393,7 @@ as_admin_read_list(
 	}
 
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket, NULL);
+	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &socket, NULL);
 
 	if (status) {
 		as_node_release(node);

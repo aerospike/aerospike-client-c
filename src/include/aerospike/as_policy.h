@@ -569,7 +569,7 @@ typedef struct as_policy_base_s {
 	 * Default: NULL
 	 */
 	struct as_exp* filter_exp;
-	
+
 	/**
 	 * Transaction identifier. If set for an async command,  the source txn instance must
 	 * be allocated on the heap using as_txn_create() or as_txn_create_capacity().

@@ -1059,63 +1059,6 @@ as_tls_connect(as_socket* sock, uint64_t deadline)
 	}
 }
 
-/*
-This function is too expensive.
-int
-as_tls_peek(as_socket* sock, void* buf, int num)
-{
-	uint64_t deadline = cf_getms() + 60000;
-
-	while (true) {
-		int rv = SSL_peek(sock->ssl, buf, num);
-		if (rv >= 0) {
-			return rv;
-		}
-
-		int sslerr = SSL_get_error(sock->ssl, rv);
-		unsigned long errcode;
-		char errbuf[1024];
-		switch (sslerr) {
-		case SSL_ERROR_WANT_READ:
-			// Just return 0, there isn't any data.
-			return 0;
-		case SSL_ERROR_WANT_WRITE:
-			rv = wait_writable(sock->fd, 0, deadline);
-			if (rv != 0) {
-				return rv;
-			}
-			// loop back around and retry
-			break;
-		case SSL_ERROR_SSL:
-			log_verify_details(sock);
-			errcode = ERR_get_error();
-			ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
-			as_log_warn("SSL_peek failed: %s", errbuf);
-			return -1;
-		case SSL_ERROR_SYSCALL:
-			errcode = ERR_get_error();
-			if (errcode != 0) {
-				ERR_error_string_n(errcode, errbuf, sizeof(errbuf));
-				as_log_warn("SSL_peek I/O error: %s", errbuf);
-			}
-			else {
-				if (rv == 0) {
-					as_log_warn("SSL_peek I/O error: unexpected EOF");
-				}
-				else {
-					as_log_warn("SSL_peek I/O error: %d", as_last_error());
-				}
-			}
-			return -1;
-		default:
-			as_log_warn("SSL_peek: unexpected ssl error: %d", sslerr);
-			return -1;
-			break;
-		}
-	}
-}
-*/
-
 int
 as_tls_read_pending(as_socket* sock)
 {
@@ -1204,16 +1147,20 @@ as_tls_read(
 			switch (sslerr) {
 			case SSL_ERROR_WANT_READ:
 				rv = wait_socket(sock->fd, socket_timeout, deadline, true);
-				if (rv != 0 && ctx) {
-					ctx->offset = pos;
+				if (rv != 0) {
+					if (ctx) {
+						ctx->offset = pos;
+					}
 					return rv;
 				}
 				// loop back around and retry
 				break;
 			case SSL_ERROR_WANT_WRITE:
 				rv = wait_socket(sock->fd, socket_timeout, deadline, false);
-				if (rv != 0 && ctx) {
-					ctx->offset = pos;
+				if (rv != 0) {
+					if (ctx) {
+						ctx->offset = pos;
+					}
 					return rv;
 				}
 				// loop back around and retry

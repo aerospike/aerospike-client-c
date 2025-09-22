@@ -464,7 +464,7 @@ as_socket_read_deadline(
 	as_poll poll;
 	as_poll_init(&poll, sock->fd);
 
-	uint32_t pos = 0;
+	size_t pos = 0;
 	as_status status = AEROSPIKE_OK;
 	uint32_t timeout;
 	//int try = 0;

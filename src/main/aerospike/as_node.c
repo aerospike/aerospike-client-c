@@ -25,6 +25,7 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_peers.h>
+#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_queue.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
@@ -215,6 +216,8 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conn_pools = cf_malloc(sizeof(as_conn_pool) * cluster->conn_pools_per_node);
 	node->sync_conns_opened = 1;
 	node->sync_conns_closed = 0;
+	node->sync_conns_recovered = 0;
+	node->sync_conns_aborted = 0;
 	node->conn_iter = 0;
 
 	as_node_send_user_agent(node);
@@ -506,8 +509,8 @@ as_node_create_socket(
 
 static as_status
 as_node_create_connection(
-	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms, as_conn_pool* pool,
-	as_socket* sock
+	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
+	as_conn_pool* pool, as_socket* sock, as_socket_context* ctx
 	)
 {
 	uint64_t begin = 0;
@@ -531,12 +534,15 @@ as_node_create_connection(
 
 		if (session) {
 			as_incr_uint32(&session->ref_count);
-			status = as_authenticate(cluster, err, sock, node, session, socket_timeout, deadline_ms);
+			status = as_authenticate(cluster, err, sock, node, session, socket_timeout, deadline_ms, ctx);
 			as_session_release(session);
 
 			if (status) {
 				as_node_signal_login(node);
-				as_node_close_socket(node, sock);
+
+				if (! ctx->in_recovery) {
+					as_node_close_socket(node, sock);
+				}
 				return status;
 			}
 		}
@@ -560,7 +566,7 @@ as_node_create_connections(as_node* node, as_conn_pool* pool, uint32_t timeout_m
 	// Create sync connections.
 	while (count > 0) {
 		uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-		status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, pool, &sock);
+		status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, pool, &sock, NULL);
 
 		if (status != AEROSPIKE_OK) {
 			as_log_debug("Failed to create min connections: %d %s", err.code, err.message);
@@ -593,7 +599,7 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 
 	as_socket sock;
 	as_error err;
-	as_status status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, NULL, &sock);
+	as_status status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, NULL, &sock, NULL);
 
 	if (status == AEROSPIKE_OK) {
 		as_node_close_socket(node, &sock);
@@ -605,7 +611,7 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 as_status
 as_node_get_connection(
 	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
-	as_socket* sock
+	as_socket* sock, as_socket_context* ctx
 	)
 {
 	as_conn_pool* pools = node->sync_conn_pools;
@@ -652,8 +658,8 @@ as_node_get_connection(
 		else if (as_conn_pool_incr(pool)) {
 			// Socket not found and queue has available slot.
 			// Create new connection.
-			as_status status = as_node_create_connection(err, node, ns, socket_timeout, deadline_ms,
-														 pool, sock);
+			as_status status = as_node_create_connection(err, node, ns, socket_timeout, deadline_ms, pool,
+				sock, ctx);
 
 			if (status != AEROSPIKE_OK) {
 				as_conn_pool_decr(pool);
@@ -661,7 +667,7 @@ as_node_get_connection(
 			return status;
 		}
 		else {
-			// Socket not found and queue is full.  Try another queue.
+			// Socket not found and queue is full. Try another queue.
 			as_conn_pool_decr(pool);
 
 			if (backward) {
@@ -880,7 +886,7 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 				}
 			}
 			else {
-				status = as_authenticate(cluster, err, &sock, node, node->session, 0, deadline_ms);
+				status = as_authenticate(cluster, err, &sock, node, node->session, 0, deadline_ms, NULL);
 
 				if (status != AEROSPIKE_OK) {
 					// Authentication failed.
@@ -942,7 +948,7 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	}
 
 	// Reuse the buffer, read the response - first 8 bytes contains body size.
-	if (as_socket_read_deadline(err, sock, node, stack_buf, sizeof(as_proto), 0, deadline_ms) != AEROSPIKE_OK) {
+	if (as_socket_read_deadline(err, sock, node, stack_buf, sizeof(as_proto), 0, deadline_ms, NULL) != AEROSPIKE_OK) {
 		return 0;
 	}
 
@@ -973,7 +979,7 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 	}
 	
 	// Read the response body.
-	if (as_socket_read_deadline(err, sock, node, rbuf, proto_sz, 0, deadline_ms) != AEROSPIKE_OK) {
+	if (as_socket_read_deadline(err, sock, node, rbuf, proto_sz, 0, deadline_ms, NULL) != AEROSPIKE_OK) {
 		if (rbuf != stack_buf) {
 			cf_free(rbuf);
 		}

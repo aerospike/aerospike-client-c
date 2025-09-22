@@ -142,6 +142,7 @@ typedef struct as_event_command {
 	
 	uint8_t* buf;
 	uint64_t begin; // Used for metrics
+	uint32_t timeout_delay;
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
 	uint32_t write_len;
@@ -284,6 +285,9 @@ as_event_connector_success(as_event_command* cmd);
 
 void
 as_event_create_connections(as_node* node, as_async_conn_pool* pools);
+
+void
+as_event_recover_auth(as_event_command* cmd);
 
 void
 as_event_close_cluster(aerospike* as);
@@ -739,6 +743,8 @@ as_async_conn_pool_init(as_async_conn_pool* pool, uint32_t min_size, uint32_t ma
 	pool->limit = max_size;
 	pool->opened = 0;
 	pool->closed = 0;
+	pool->recovered = 0;
+	pool->aborted = 0;
 }
 
 static inline bool

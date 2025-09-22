@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -56,6 +56,32 @@ extern "C" {
 
 struct ssl_ctx_st;
 struct evp_pkey_st;
+struct as_cluster_s;
+
+/**
+ * @private
+ * The socket state when a read timeout occurs.
+ */
+typedef enum as_read_state_e {
+	AS_READ_STATE_NONE,
+	AS_READ_STATE_PROTO,
+	AS_READ_STATE_DETAIL,
+	AS_READ_STATE_AUTH_HEADER,
+	AS_READ_STATE_COMPLETE,
+} as_read_state;
+
+/**
+ * When a socket read timeout occurs, this structure records
+ * the context in which it happened.
+ */
+typedef struct as_socket_context_s {
+	struct as_cluster_s* cluster;
+	size_t offset;
+	uint32_t timeout_delay;
+	as_read_state state;
+	bool is_single;
+	bool in_recovery;
+} as_socket_context;
 
 /**
  * This structure holds TLS context which can be shared (read-only)
@@ -87,7 +113,7 @@ typedef struct as_socket_s {
 		struct as_conn_pool_s* pool; // Used when sync socket is active.
 		uint64_t last_used; // Last used nano timestamp. Used when socket in pool.
 	};
-	as_tls_context* ctx;
+	as_tls_context* tls;
 	const char* tls_name;
 	struct ssl_st* ssl;
 } as_socket;
@@ -97,9 +123,9 @@ typedef struct as_socket_s {
  * Return true if TLS context exists and not TLS login only.
  */
 static inline bool
-as_socket_use_tls(as_tls_context* ctx)
+as_socket_use_tls(as_tls_context* tls)
 {
-	return (ctx && !ctx->for_login_only);
+	return (tls && !tls->for_login_only);
 }
 	
 /**
@@ -107,9 +133,9 @@ as_socket_use_tls(as_tls_context* ctx)
  * Return TLS context only if exists and not for login only.
  */
 static inline as_tls_context*
-as_socket_get_tls_context(as_tls_context* ctx)
+as_socket_get_tls_context(as_tls_context* tls)
 {
-	return (ctx && !ctx->for_login_only) ? ctx : NULL;
+	return (tls && !tls->for_login_only) ? tls : NULL;
 }
 	
 /**
@@ -134,7 +160,7 @@ as_socket_create_fd(int family, as_socket_fd* fdp);
  * Return zero on success.
  */
 int
-as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* tls_name);
+as_socket_create(as_socket* sock, int family, as_tls_context* tls, const char* tls_name);
 
 /**
  * @private
@@ -142,7 +168,9 @@ as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* t
  * Family should be AF_INET or AF_INET6.
  */
 bool
-as_socket_wrap(as_socket* sock, int family, as_socket_fd fd, as_tls_context* ctx, const char* tls_name);
+as_socket_wrap(
+	as_socket* sock, int family, as_socket_fd fd, as_tls_context* tls, const char* tls_name
+	);
 
 /**
  * @private
@@ -166,7 +194,10 @@ as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadlin
  * Create non-blocking socket and connect.
  */
 as_status
-as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name, uint64_t deadline_ms);
+as_socket_create_and_connect(
+	as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* tls, const char* tls_name,
+	uint64_t deadline_ms
+	);
 
 /**
  * @private
@@ -180,7 +211,9 @@ as_socket_close(as_socket* sock);
  * Create error message for socket error.
  */
 as_status
-as_socket_error(as_socket_fd fd, struct as_node_s* node, as_error* err, as_status status, const char* msg, int code);
+as_socket_error(
+	as_socket_fd fd, struct as_node_s* node, as_error* err, as_status status, const char* msg, int code
+	);
 
 /**
  * @private
@@ -212,11 +245,11 @@ as_socket_current_trim(uint64_t last_used, uint64_t max_socket_idle_ns)
 /**
  * @private
  * Peek for socket connection status using underlying fd.
- *  Needed to support libuv.
+ * Needed to support libuv.
  *
- * @return   0 : socket is connected, but no data available.
- * 		> 0 : byte size of data available.
- * 		< 0 : socket is invalid.
+ * @return `0 : socket is connected, but no data available.`
+ * 		`> 0 : socket buffer contains available bytes.`
+ * 		`< 0 : socket is invalid.`
  */
 int
 as_socket_validate_fd(as_socket_fd fd);
@@ -238,7 +271,7 @@ as_socket_deadline(uint32_t timeout_ms)
  */
 as_status
 as_socket_write_deadline(
-	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len,
+	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf, size_t buf_len,
 	uint32_t socket_timeout, uint64_t deadline
 	);
 
@@ -249,9 +282,18 @@ as_socket_write_deadline(
  */
 as_status
 as_socket_read_deadline(
-	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len,
-	uint32_t socket_timeout, uint64_t deadline
+	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf, size_t buf_len,
+	uint32_t socket_timeout, uint64_t deadline, as_socket_context* ctx
 	);
+
+/**
+ * @private
+ * Non-blocking socket read.
+ *
+ * @return Number of bytes read. If the socket is invalid, return -1.
+ */
+int
+as_socket_read_non_blocking(as_socket* sock, uint8_t* buf, size_t buf_len);
 
 #ifdef __cplusplus
 } // end extern "C"

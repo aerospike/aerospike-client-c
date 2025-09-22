@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -51,13 +51,18 @@ int as_tls_connect(as_socket* sock, uint64_t deadline);
 
 int as_tls_read_pending(as_socket* sock);
 
-int as_tls_read_once(as_socket* sock, void* buf, size_t num);
+int as_tls_read_once(as_socket* sock, void* buf, size_t len);
 
-int as_tls_read(as_socket* sock, void* buf, size_t num, uint32_t socket_timeout, uint64_t deadline);
+int as_tls_read(
+	as_socket* sock, void* buf, size_t len, uint32_t socket_timeout, uint64_t deadline,
+	as_socket_context* ctx
+	);
 
-int as_tls_write_once(as_socket* sock, void* buf, size_t num);
+int as_tls_read_non_blocking(as_socket* sock, void* bufp, size_t len);
 
-int as_tls_write(as_socket* sock, void* buf, size_t num, uint32_t socket_timeout, uint64_t deadline);
+int as_tls_write_once(as_socket* sock, void* buf, size_t len);
+
+int as_tls_write(as_socket* sock, void* buf, size_t len, uint32_t socket_timeout, uint64_t deadline);
 
 #ifdef __cplusplus
 } // end extern "C"

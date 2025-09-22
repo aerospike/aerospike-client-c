@@ -277,7 +277,7 @@ as_event_write(as_event_command* cmd)
 {
 	uint8_t* buf = (uint8_t*)cmd + cmd->write_offset;
 
-	if (cmd->conn->socket.ctx) {
+	if (cmd->conn->socket.tls) {
 		do {
 			int rv = as_tls_write_once(&cmd->conn->socket, buf + cmd->pos, cmd->len - cmd->pos);
 			if (rv > 0) {
@@ -364,7 +364,7 @@ as_event_read(as_event_command* cmd)
 {
 	cmd->flags |= AS_ASYNC_FLAGS_EVENT_RECEIVED;
 
-	if (cmd->conn->socket.ctx) {
+	if (cmd->conn->socket.tls) {
 		do {
 			int rv = as_tls_read_once(&cmd->conn->socket, cmd->buf + cmd->pos, cmd->len - cmd->pos);
 			if (rv > 0) {
@@ -482,10 +482,14 @@ as_event_command_start(as_event_command* cmd)
 		as_event_connector_success(cmd);
 		return AS_EVENT_COMMAND_DONE;
 	}
-	else {
-		as_event_command_write_start(cmd);
-		return AS_EVENT_READ_COMPLETE;
+
+	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
+		as_event_recover_auth(cmd);
+		return AS_EVENT_COMMAND_DONE;
 	}
+
+	as_event_command_write_start(cmd);
+	return AS_EVENT_READ_COMPLETE;
 }
 
 static inline void

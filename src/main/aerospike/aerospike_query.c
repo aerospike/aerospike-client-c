@@ -1734,6 +1734,7 @@ as_query_partition_execute_async(
 
 		cmd->total_deadline = pt->total_timeout;
 		cmd->socket_timeout = pt->socket_timeout;
+		cmd->timeout_delay = pt->timeout_delay;
 		cmd->max_retries = 0;
 		cmd->iteration = 0;
 		cmd->replica = AS_POLICY_REPLICA_MASTER;
@@ -1967,6 +1968,8 @@ as_policy_query_merge(aerospike* as, const as_policy_query* src, as_policy_query
 			cfg->base.socket_timeout : src->base.socket_timeout;
 		mrg->base.total_timeout = as_field_is_set(bitmap, AS_QUERY_TOTAL_TIMEOUT)?
 			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.timeout_delay = as_field_is_set(bitmap, AS_QUERY_TIMEOUT_DELAY)?
+			cfg->base.timeout_delay : src->base.timeout_delay;
 		mrg->base.max_retries = as_field_is_set(bitmap, AS_QUERY_MAX_RETRIES)?
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_QUERY_SLEEP_BETWEEN_RETRIES)?
@@ -2323,6 +2326,7 @@ aerospike_query_async(
 		as_event_command* cmd = &qcmd->command;
 		cmd->total_deadline = policy->base.total_timeout;
 		cmd->socket_timeout = policy->base.socket_timeout;
+		cmd->timeout_delay = policy->base.timeout_delay;
 		cmd->max_retries = 0;
 		cmd->iteration = 0;
 		cmd->replica = AS_POLICY_REPLICA_MASTER;

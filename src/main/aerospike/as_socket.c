@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,6 +15,8 @@
  * the License.
  */
 #include <aerospike/as_socket.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_conn_recover.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_poll.h>
@@ -64,9 +66,9 @@ as_socket_is_error(int e)
 
 bool as_socket_stop_on_interrupt = false;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 void
 as_socket_init(as_socket* sock)
@@ -137,7 +139,7 @@ as_socket_create_fd(int family, as_socket_fd* fdp)
 }
 
 int
-as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* tls_name)
+as_socket_create(as_socket* sock, int family, as_tls_context* tls, const char* tls_name)
 {
 	as_socket_fd fd;
 	int rv = as_socket_create_fd(family, &fd);
@@ -146,14 +148,16 @@ as_socket_create(as_socket* sock, int family, as_tls_context* ctx, const char* t
 		return rv;
 	}
 	
-	if (! as_socket_wrap(sock, family, fd, ctx, tls_name)) {
+	if (! as_socket_wrap(sock, family, fd, tls, tls_name)) {
 		return -5;
 	}
 	return 0;
 }
 
 bool
-as_socket_wrap(as_socket* sock, int family, as_socket_fd fd, as_tls_context* ctx, const char* tls_name)
+as_socket_wrap(
+	as_socket* sock, int family, as_socket_fd fd, as_tls_context* tls, const char* tls_name
+	)
 {
 	sock->fd = fd;
 #if !defined(_MSC_VER)
@@ -161,15 +165,15 @@ as_socket_wrap(as_socket* sock, int family, as_socket_fd fd, as_tls_context* ctx
 #endif
 	sock->last_used = 0;
 
-	if (ctx) {
-		if (as_tls_wrap(ctx, sock, tls_name) < 0) {
+	if (tls) {
+		if (as_tls_wrap(tls, sock, tls_name) < 0) {
 			as_close(sock->fd);
 			sock->fd = -1;
 			return false;
 		}
 	}
 	else {
-		sock->ctx = NULL;
+		sock->tls = NULL;
 		sock->tls_name = NULL;
 		sock->ssl = NULL;
 	}
@@ -185,7 +189,7 @@ as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadlin
 		return false;
 	}
 
-	if (sock->ctx) {
+	if (sock->tls) {
 		if (as_tls_connect(sock, deadline_ms)) {
 			return false;
 		}
@@ -194,10 +198,13 @@ as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadlin
 }
 
 as_status
-as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* ctx, const char* tls_name, uint64_t deadline_ms)
+as_socket_create_and_connect(
+	as_socket* sock, as_error* err, struct sockaddr* addr, as_tls_context* tls, const char* tls_name,
+	uint64_t deadline_ms
+	)
 {
 	// Create the socket.
-	int rv = as_socket_create(sock, addr->sa_family, ctx, tls_name);
+	int rv = as_socket_create(sock, addr->sa_family, tls, tls_name);
 	
 	if (rv < 0) {
 		char name[AS_IP_ADDRESS_SIZE];
@@ -218,7 +225,7 @@ as_socket_create_and_connect(as_socket* sock, as_error* err, struct sockaddr* ad
 void
 as_socket_close(as_socket* sock)
 {
-	if (sock->ctx) {
+	if (sock->tls) {
 		SSL_shutdown(sock->ssl);
 		shutdown(sock->fd, SHUT_RDWR);
 		SSL_free(sock->ssl);
@@ -231,7 +238,9 @@ as_socket_close(as_socket* sock)
 }
 
 as_status
-as_socket_error(as_socket_fd fd, as_node* node, as_error* err, as_status status, const char* msg, int code)
+as_socket_error(
+	as_socket_fd fd, as_node* node, as_error* err, as_status status, const char* msg, int code
+	)
 {
 	if (node) {
 		// Print code, address and local port when node present.
@@ -299,11 +308,11 @@ as_socket_validate_fd(as_socket_fd fd)
 
 as_status
 as_socket_write_deadline(
-	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t *buf, size_t buf_len,
+	as_error* err, as_socket* sock, struct as_node_s* node, uint8_t* buf, size_t buf_len,
 	uint32_t socket_timeout, uint64_t deadline
 	)
 {
-	if (sock->ctx) {
+	if (sock->tls) {
 		as_status status = AEROSPIKE_OK;
 		int rv = as_tls_write(sock, buf, buf_len, socket_timeout, deadline);
 
@@ -400,15 +409,40 @@ as_socket_write_deadline(
 	return status;
 }
 
-as_status
-as_socket_read_deadline(
-	as_error* err, as_socket* sock, as_node* node, uint8_t *buf, size_t buf_len,
-	uint32_t socket_timeout, uint64_t deadline
+static inline bool
+as_socket_recoverable(as_socket_context* ctx, as_node* node)
+{
+	return ctx && ctx->timeout_delay > 0 && node;
+}
+
+static void
+as_socket_recover(
+	as_socket* sock, as_socket_context* ctx, as_node* node, uint8_t* buf, size_t buf_len
 	)
 {
-	if (sock->ctx) {
+	as_conn_recover* recover = as_conn_recover_create(sock, ctx, node, buf, buf_len);
+
+	if (!recover) {
+		return;
+	}
+
+	if (as_queue_mt_push(&ctx->cluster->recover_queue, &recover)) {
+		ctx->in_recovery = true;
+	}
+	else {
+		as_conn_recover_destroy(recover);
+	}
+}
+
+as_status
+as_socket_read_deadline(
+	as_error* err, as_socket* sock, as_node* node, uint8_t* buf, size_t buf_len,
+	uint32_t socket_timeout, uint64_t deadline, as_socket_context* ctx
+	)
+{
+	if (sock->tls) {
 		as_status status = AEROSPIKE_OK;
-		int rv = as_tls_read(sock, buf, buf_len, socket_timeout, deadline);
+		int rv = as_tls_read(sock, buf, buf_len, socket_timeout, deadline, ctx);
 
 		if (rv < 0) {
 			status = as_socket_error(sock->fd, node, err, AEROSPIKE_ERR_CONNECTION, "TLS read error", rv);
@@ -419,6 +453,10 @@ as_socket_read_deadline(
 			// not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
 			err->message[0] = 0;
+
+			if (as_socket_recoverable(ctx, node)) {
+				as_socket_recover(sock, ctx, node, buf, buf_len);
+			}
 		}
 		return status;
 	}
@@ -440,6 +478,11 @@ as_socket_read_deadline(
 				// Calling functions usually retry, so the error string is not used anyway.
 				status = err->code = AEROSPIKE_ERR_TIMEOUT;
 				err->message[0] = 0;
+
+				if (as_socket_recoverable(ctx, node)) {
+					ctx->offset = pos;
+					as_socket_recover(sock, ctx, node, buf, buf_len);
+				}
 				break;
 			}
 
@@ -483,6 +526,11 @@ as_socket_read_deadline(
 			// Calling functions usually retry, so the error string is not used anyway.
 			status = err->code = AEROSPIKE_ERR_TIMEOUT;
 			err->message[0] = 0;
+
+			if (as_socket_recoverable(ctx, node)) {
+				ctx->offset = pos;
+				as_socket_recover(sock, ctx, node, buf, buf_len);
+			}
 			break;
 		}
 		else if (rv == -1) {
@@ -499,4 +547,38 @@ as_socket_read_deadline(
 
 	as_poll_destroy(&poll);
 	return status;
+}
+
+int
+as_socket_read_non_blocking(as_socket* sock, uint8_t* buf, size_t buf_len)
+{
+	if (sock->tls) {
+		return as_tls_read_non_blocking(sock, buf, buf_len);
+	}
+
+	size_t pos = 0;
+
+	do {
+#if defined(__linux__)
+		int rv = (int)recv(sock->fd, buf + pos, buf_len - pos, MSG_DONTWAIT | MSG_NOSIGNAL);
+#elif defined(_MSC_VER)
+		// Windows sockets are initialized to non-blocking mode in as_socket_create_fd().
+		// Use regular recv call without any flags.
+		int rv = recv(sock->fd, buf + pos, (int)(buf_len - pos), 0);
+#else
+		int rv = (int)recv(sock->fd, buf + pos, buf_len - pos, MSG_DONTWAIT);
+#endif
+
+		if (rv > 0) {
+			pos += rv;
+		}
+		else if (rv == 0) {
+			return -1;
+		}
+		else {
+			return (errno == EWOULDBLOCK || errno == EAGAIN) ? (int)pos : -1;
+		}
+	} while (pos < buf_len);
+
+	return (int)pos;
 }

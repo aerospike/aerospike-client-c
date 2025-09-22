@@ -26,6 +26,8 @@ void get_info_field(const char *input, const char *field, char *output, uint32_t
 	as_error err;
 	as_error_reset(&err);
 
+	*output = 0;
+
 	char* response = NULL;
 	as_status status = aerospike_info_any(as, &err, NULL, input, &response);
 

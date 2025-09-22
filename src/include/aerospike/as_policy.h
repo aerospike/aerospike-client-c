@@ -79,6 +79,13 @@ extern "C" {
 #define AS_POLICY_TOTAL_TIMEOUT_DEFAULT 1000
 
 /**
+ * Default socket read timeout delay value
+ * 
+ * @ingroup client_policies
+ */
+#define AS_POLICY_TIMEOUT_DELAY_DEFAULT 3000
+
+/**
  * Default value for compression threshold
  *
  * @ingroup client_policies
@@ -478,6 +485,26 @@ typedef struct as_policy_base_s {
 	uint32_t total_timeout;
 
 	/**
+	 * Number of milliseconds to wait after a socket read times out before closing the socket for
+	 * good.  If set to zero, this feature will be disabled.
+	 * 
+	 * If, upon performing a database operation, the host finds the socket it was using timing out
+	 * while reading, the client will receive a timeout error.  However, we don't always want to
+	 * close that socket right away; doing so introduces unwanted latencies.  It might be possible
+	 * to recover the socket, thus saving the socket for future re-use.
+	 * 
+	 * The socket will be closed only if it could not be successfully recovered within `timeout_delay`
+	 * milliseconds of the original timeout.  If this is set to zero, the socket may be closed right
+	 * away, effectively disabling this feature.
+	 * 
+	 * Please note that this feature only applies to sockets being read; write timeouts are not
+	 * affected by this setting. Also, this feature does not apply to pipeline connections.
+	 *
+	 * Default: 3000
+	 */
+	uint32_t timeout_delay;
+
+	/**
 	 * Maximum number of retries before aborting the current command.
 	 * The initial attempt is not counted as a retry.
 	 *
@@ -542,7 +569,7 @@ typedef struct as_policy_base_s {
 	 * Default: NULL
 	 */
 	struct as_exp* filter_exp;
-	
+
 	/**
 	 * Transaction identifier. If set for an async command,  the source txn instance must
 	 * be allocated on the heap using as_txn_create() or as_txn_create_capacity().
@@ -1496,16 +1523,31 @@ typedef struct as_policy_info_s {
 
 	/**
 	 * Maximum time in milliseconds to wait for the operation to complete.
+	 *
+	 * Default: 1000
 	 */
 	uint32_t timeout;
 
 	/**
+	 * Number of milliseconds to wait after a socket read times out before closing the socket for
+	 * good. If set to zero, this feature will be disabled. This field is supported for async info
+	 * commands and ignored by sync info commands.
+	 *
+	 * Default: 3000
+	 */
+	uint32_t timeout_delay;
+
+	/**
 	 * Send request without any further processing.
+	 *
+	 * Default: true
 	 */
 	bool send_as_is;
 
 	/**
 	 * Ensure the request is within allowable size limits.
+	 *
+	 * Default: true
 	 */
 	bool check_bounds;
 	
@@ -1650,6 +1692,7 @@ as_policy_base_read_init(as_policy_base* p)
 {
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	p->timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
 	p->max_retries = 2;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
@@ -1665,6 +1708,7 @@ as_policy_base_write_init(as_policy_base* p)
 {
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->total_timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	p->timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
 	p->max_retries = 0;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
@@ -1693,6 +1737,7 @@ as_policy_base_query_init(as_policy_base* p)
 {
 	p->socket_timeout = AS_POLICY_SOCKET_TIMEOUT_DEFAULT;
 	p->total_timeout = 0;
+	p->timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
 	p->max_retries = 5;
 	p->sleep_between_retries = 0;
 	p->filter_exp = NULL;
@@ -2087,6 +2132,7 @@ static inline as_policy_info*
 as_policy_info_init(as_policy_info* p)
 {
 	p->timeout = AS_POLICY_TOTAL_TIMEOUT_DEFAULT;
+	p->timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
 	p->send_as_is = true;
 	p->check_bounds	= true;
 	return p;
@@ -2148,6 +2194,7 @@ as_policy_txn_verify_init(as_policy_txn_verify* p)
 {
 	p->base.socket_timeout = 3000;
 	p->base.total_timeout = 10000;
+	p->base.timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
 	p->base.max_retries = 5;
 	p->base.sleep_between_retries = 1000;
 	p->base.filter_exp = NULL;
@@ -2193,6 +2240,7 @@ as_policy_txn_roll_init(as_policy_txn_roll* p)
 {
 	p->base.socket_timeout = 3000;
 	p->base.total_timeout = 10000;
+	p->base.timeout_delay = AS_POLICY_TIMEOUT_DELAY_DEFAULT;
 	p->base.max_retries = 5;
 	p->base.sleep_between_retries = 1000;
 	p->base.filter_exp = NULL;

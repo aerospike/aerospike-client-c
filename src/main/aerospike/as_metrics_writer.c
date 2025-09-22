@@ -403,10 +403,10 @@ as_metrics_get_node_sync_conn_stats(const struct as_node_s* node, struct as_conn
 		sync->in_pool += in_pool;
 		sync->in_use += total - in_pool;
 	}
-	sync->opened = node->sync_conns_opened;
-	sync->closed = node->sync_conns_closed;
-	sync->recovered = node->sync_conns_recovered;
-	sync->aborted = node->sync_conns_aborted;
+	sync->opened = as_node_get_sync_conns_opened(node);
+	sync->closed = as_node_get_sync_conns_closed(node);
+	sync->recovered = as_node_get_sync_conns_recovered(node);
+	sync->aborted = as_node_get_sync_conns_aborted(node);
 }
 
 static void

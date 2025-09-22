@@ -81,7 +81,7 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 			if (status == AEROSPIKE_OK) {
 				if (node_info->session) {
 					status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
-											 node_info->session, 0, deadline);
+											 node_info->session, 0, deadline, NULL);
 				}
 
 				if (status == AEROSPIKE_OK) {
@@ -170,7 +170,7 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 			if (status == AEROSPIKE_OK) {
 				if (node_info->session) {
 					status = as_authenticate(cluster, &error_local, &sock, NULL,
-											 node_info->session, 0, deadline);
+											 node_info->session, 0, deadline, NULL);
 				}
 
 				if (status == AEROSPIKE_OK) {

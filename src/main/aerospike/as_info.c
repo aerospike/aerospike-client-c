@@ -123,7 +123,7 @@ as_info_command_node(
 	)
 {
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &socket);
+	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &socket, NULL);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -286,7 +286,7 @@ as_info_command(
 	size = p - cmd;
 	uint64_t proto = (size - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_INFO_MESSAGE_TYPE << 48);
 	*(uint64_t*)cmd = cf_swap_to_be64(proto);
-	
+
 	// Write command
 	as_status status = as_socket_write_deadline(err, sock, node, cmd, size, 0, deadline_ms);
 	as_command_buffer_free(cmd, size);
@@ -301,8 +301,8 @@ as_info_command(
 
 	// Read response
 	as_proto header;
-	status = as_socket_read_deadline(err, sock, node, (uint8_t*)&header, sizeof(as_proto), 0, deadline_ms);
-	
+	status = as_socket_read_deadline(err, sock, node, (uint8_t*)&header, sizeof(as_proto), 0, deadline_ms, NULL);
+
 	if (status) {
 		return status;
 	}
@@ -321,8 +321,8 @@ as_info_command(
 			// Reuse command buffer.
 			int read_len = 100;
 			uint8_t* buf = alloca(read_len + 1);
-			status = as_socket_read_deadline(err, sock, node, buf, read_len, 0, deadline_ms);
-			
+			status = as_socket_read_deadline(err, sock, node, buf, read_len, 0, deadline_ms, NULL);
+
 			if (status) {
 				return status;
 			}
@@ -339,8 +339,8 @@ as_info_command(
 		}
 		
 		char* response = cf_malloc(header.sz + 1);
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)response, header.sz, 0, deadline_ms);
-		
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)response, header.sz, 0, deadline_ms, NULL);
+
 		if (status) {
 			cf_free(response);
 			*values = 0;

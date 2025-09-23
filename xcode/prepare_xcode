@@ -9,6 +9,7 @@ brew install wget
 brew install automake
 brew install libtool
 brew install openssl
+brew install libyaml
 
 # Must perform make to create liblua.a that is referenced in xcode project.
 cd ..

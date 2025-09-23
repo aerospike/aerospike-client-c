@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -67,13 +67,18 @@ parts_create(uint16_t part_begin, uint16_t part_count, const as_digest* digest)
 	return parts_all;
 }
 
-static void
+static as_status
 tracker_init(
 	as_partition_tracker* pt, const as_policy_base* policy, as_partitions_status** pp_resume,
 	uint64_t max_records, as_policy_replica replica, bool paginate, uint16_t part_begin,
-	uint16_t part_count, const as_digest* digest
+	uint16_t part_count, const as_digest* digest, as_error* err
 	)
 {
+	if (replica == AS_POLICY_REPLICA_RANDOM) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid replica: AS_POLICY_REPLICA_RANDOM");
+	}
+
 	as_partitions_status* resume = *pp_resume;
 
 	if (! resume) {
@@ -87,6 +92,12 @@ tracker_init(
 	}
 	else {
 		// Instance contains partitions from previous scan/query.
+		if (!(part_begin == resume->part_begin && part_count == resume->part_count)) {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"Partition filter can not change when pagination is enabled. prev=%u,%u current=%u,%u",
+				resume->part_begin, resume->part_count, part_begin, part_count);
+		}
+
 		pt->parts_all = as_partitions_status_reserve(resume);
 
 		// Retry all partitions when max_records not specified.
@@ -113,8 +124,10 @@ tracker_init(
 	pt->replica = replica;
 
 	pt->sleep_between_retries = policy->sleep_between_retries;
+	pt->connect_timeout = policy->connect_timeout;
 	pt->socket_timeout = policy->socket_timeout;
 	pt->total_timeout = policy->total_timeout;
+	pt->timeout_delay = policy->timeout_delay;
 	pt->max_retries = policy->max_retries;
 
 	if (pt->total_timeout > 0) {
@@ -128,6 +141,7 @@ tracker_init(
 		pt->deadline = 0;
 	}
 	pt->iteration = 1;
+	return AEROSPIKE_OK;
 }
 
 static as_node_partitions*
@@ -246,11 +260,11 @@ release_node_partitions(as_vector* list)
 // Functions
 //---------------------------------
 
-void
+as_status
 as_partition_tracker_init_nodes(
 	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
 	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
-	bool paginate, uint32_t cluster_size
+	bool paginate, uint32_t cluster_size, as_error* err
 	)
 {
 	pt->node_filter = NULL;
@@ -260,19 +274,22 @@ as_partition_tracker_init_nodes(
 	uint32_t ppn = cluster->n_partitions / cluster_size;
 	ppn += ppn >> 2;
 	pt->parts_capacity = ppn;
-	tracker_init(pt, policy, parts_all, max_records, replica, paginate, 0, cluster->n_partitions, NULL);
+	return tracker_init(pt, policy, parts_all, max_records, replica, paginate, 0,
+		cluster->n_partitions, NULL, err);
 }
 
-void
+as_status
 as_partition_tracker_init_node(
 	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
-	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all, bool paginate, as_node* node
+	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all, bool paginate,
+	as_node* node, as_error* err
 	)
 {
 	pt->node_filter = node;
 	pt->node_capacity = 1;
 	pt->parts_capacity = cluster->n_partitions;
-	tracker_init(pt, policy, parts_all, max_records, replica, paginate, 0, cluster->n_partitions, NULL);
+	return tracker_init(pt, policy, parts_all, max_records, replica, paginate, 0,
+		cluster->n_partitions, NULL, err);
 }
 
 as_status
@@ -303,8 +320,7 @@ as_partition_tracker_init_filter(
 	pt->node_filter = NULL;
 	pt->node_capacity = cluster_size;
 	pt->parts_capacity = pf->count;
-	tracker_init(pt, policy, parts_all, max_records, replica, paginate, pf->begin, pf->count, &pf->digest);
-	return AEROSPIKE_OK;
+	return tracker_init(pt, policy, parts_all, max_records, replica, paginate, pf->begin, pf->count, &pf->digest, err);
 }
 
 as_status

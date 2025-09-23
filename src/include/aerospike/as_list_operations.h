@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -38,7 +38,7 @@
  *
  * Example 1:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // list bin = [7,9,5]
  * // Append 11 to list bin.
  * as_operations ops;
@@ -54,11 +54,11 @@
  * // bin result = [7,9,5,11]
  * as_operations_destroy(&ops);
  * as_record_destroy(rec);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Nested CDT operations are supported by optional context (as_cdt_ctx).  Example:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * // bin = [[7,9,5],[1,2,3],[6,5,4,1]]
  * // Append 11 to last list.
  * as_cdt_ctx ctx;
@@ -78,7 +78,7 @@
  * // bin result = [[7,9,5],[1,2,3],[6,5,4,1,11]]
  * as_operations_destroy(&ops);
  * as_record_destroy(rec);
- * ~~~~~~~~~~
+ * @endcode
  */
 
 #include <aerospike/as_operations.h>
@@ -203,7 +203,7 @@ typedef enum as_list_return_type_e {
 	/**
 	 * Invert meaning of list command and return values.  For example:
 	 *
-	 * ~~~~~~~~~~{.c}
+	 * @code
 	 * as_operations ops;
 	 * as_operations_inita(&ops, 1);
 	 *
@@ -213,7 +213,7 @@ typedef enum as_list_return_type_e {
 	 * as_record* rec = NULL;
 	 * as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
 	 * as_operations_destroy(&ops);
-	 * ~~~~~~~~~~
+	 * @endcode
 	 *
 	 * With AS_LIST_RETURN_INVERTED enabled, the items outside of the specified index range will be
 	 * removed and returned.

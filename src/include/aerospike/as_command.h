@@ -56,8 +56,10 @@ extern "C" {
 #define AS_FIELD_DIGEST_ARRAY 12
 #define AS_FIELD_MAX_RECORDS 13
 #define AS_FIELD_BVAL_ARRAY 15
+#define AS_FIELD_INDEX_NAME 21
 #define AS_FIELD_INDEX_RANGE 22
 #define AS_FIELD_INDEX_CONTEXT 23
+#define AS_FIELD_INDEX_EXPRESSION 24
 #define AS_FIELD_INDEX_TYPE 26
 #define AS_FIELD_UDF_PACKAGE_NAME 30
 #define AS_FIELD_UDF_FUNCTION 31
@@ -184,6 +186,7 @@ typedef struct as_command_s {
 	const as_policy_base* policy;
 	as_node* node;
 	const as_key* key;
+	const char* ns;
 	void* partition;
 	as_parse_results_fn parse_results_fn;
 	void* udata;
@@ -757,20 +760,17 @@ as_task_id_resolve(uint64_t* task_id_ptr)
 
 /**
  * @private
- * Return command's starting replica index for AS_POLICY_REPLICA_ANY.
+ * Return starting replica index for read commands.
  */
 uint8_t
-as_replica_index_any(void);
+as_replica_index_init_read(as_cluster* cluster, as_policy_replica replica);
 
 /**
  * @private
- * Return starting replica index for read commands.
+ * Return starting replica index for write commands and change replica when necessary.
  */
-static inline uint8_t
-as_replica_index_init_read(as_policy_replica replica)
-{
-	return (replica != AS_POLICY_REPLICA_ANY)? 0 : as_replica_index_any();
-}
+uint8_t
+as_replica_index_init_write(as_cluster* cluster, as_policy_replica replica);
 
 /**
  * @private
@@ -779,9 +779,7 @@ as_replica_index_init_read(as_policy_replica replica)
 static inline as_policy_replica
 as_command_write_replica(as_policy_replica replica)
 {
-	// Writes should always go to master node on first attempt.
-	// Allow prole on retry when possible.
-	return (replica == AS_POLICY_REPLICA_MASTER)? replica : AS_POLICY_REPLICA_SEQUENCE;
+	return (replica == AS_POLICY_REPLICA_MASTER || replica == AS_POLICY_REPLICA_RANDOM)? replica : AS_POLICY_REPLICA_SEQUENCE;
 }
 
 /**

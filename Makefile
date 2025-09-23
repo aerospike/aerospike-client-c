@@ -120,6 +120,8 @@ AEROSPIKE += as_cdt_ctx.o
 AEROSPIKE += as_cdt_internal.o
 AEROSPIKE += as_command.o
 AEROSPIKE += as_config.o
+AEROSPIKE += as_config_file.o
+AEROSPIKE += as_conn_recover.o
 AEROSPIKE += as_cluster.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_event.o
@@ -160,6 +162,7 @@ AEROSPIKE += as_tls.o
 AEROSPIKE += as_txn.o
 AEROSPIKE += as_txn_monitor.o
 AEROSPIKE += as_udf.o
+AEROSPIKE += as_version.o
 AEROSPIKE += version.o
 
 OBJECTS := 
@@ -169,8 +172,6 @@ DEPS =
 DEPS += $(COMMON)/$(TARGET_OBJ)/common/aerospike/*.o
 DEPS += $(COMMON)/$(TARGET_OBJ)/common/citrusleaf/*.o
 DEPS += $(MOD_LUA)/$(TARGET_OBJ)/*.o
-
-EXP_DEPS := $(foreach DD, $(DEPS), $(wildcard $(DEP)))
 
 LUA_OBJECTS = $(filter-out $(LUAMOD)/lua.o, $(shell ls $(LUAMOD)/*.o))
 
@@ -257,10 +258,10 @@ tags etags:
 $(TARGET_OBJ)/aerospike/%.o: $(SOURCE_MAIN)/aerospike/%.c
 	$(object)
 
-$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) $(EXP_DEPS) | modules
+$(TARGET_LIB)/libaerospike.$(DYNAMIC_SUFFIX): $(OBJECTS) | modules
 	$(library) $(DEPS) $(LUA_OBJECTS)
 
-$(TARGET_LIB)/libaerospike.a: $(OBJECTS) $(EXP_DEPS) | modules
+$(TARGET_LIB)/libaerospike.a: $(OBJECTS) | modules
 	$(archive) $(DEPS) $(LUA_OBJECTS)
 
 $(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h

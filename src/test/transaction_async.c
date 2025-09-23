@@ -59,6 +59,7 @@ typedef enum {
 	CMD_DELETE,
 	CMD_BATCH_READ,
 	CMD_BATCH_WRITE,
+	CMD_BATCH_APPLY,
 	CMD_COMMIT,
 	CMD_ABORT
 } cmd_type;
@@ -77,6 +78,7 @@ typedef struct {
 	command* cmd;
 	atf_test_result* result;
 	int idx;
+	as_error err_orig;
 } commander;
 
 static void
@@ -135,10 +137,10 @@ static as_status
 put_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_write p;
-	as_policy_write* policy = &as->config.policies.write;
+	as_policy_write* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_write_copy(policy, &p);
+		as_policy_write_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -200,10 +202,10 @@ static as_status
 get_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_read p;
-	as_policy_read* policy = &as->config.policies.read;
+	as_policy_read* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_read_copy(policy, &p);
+		as_policy_read_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -254,10 +256,10 @@ static as_status
 operate_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_operate p;
-	as_policy_operate* policy = &as->config.policies.operate;
+	as_policy_operate* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_operate_copy(policy, &p);
+		as_policy_operate_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -309,10 +311,10 @@ static as_status
 touch_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_operate p;
-	as_policy_operate* policy = &as->config.policies.operate;
+	as_policy_operate* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_operate_copy(policy, &p);
+		as_policy_operate_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -363,10 +365,10 @@ static as_status
 udf_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_apply p;
-	as_policy_apply* policy = &as->config.policies.apply;
+	as_policy_apply* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_apply_copy(policy, &p);
+		as_policy_apply_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -429,10 +431,10 @@ static as_status
 delete_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_remove p;
-	as_policy_remove* policy = &as->config.policies.remove;
+	as_policy_remove* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_remove_copy(policy, &p);
+		as_policy_remove_default(as, &p);
 		p.base.txn = cmd->txn;
 		p.durable_delete = true;
 		policy = &p;
@@ -497,10 +499,10 @@ static as_status
 batch_read_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_batch p;
-	as_policy_batch* policy = &as->config.policies.batch;
+	as_policy_batch* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_batch_copy(policy, &p);
+		as_policy_batch_parent_read_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -579,10 +581,10 @@ static as_status
 batch_write_exec(commander* cmdr, command* cmd, as_error* err)
 {
 	as_policy_batch p;
-	as_policy_batch* policy = &as->config.policies.batch_parent_write;
+	as_policy_batch* policy = NULL;
 
 	if (cmd->txn) {
-		as_policy_batch_copy(policy, &p);
+		as_policy_batch_parent_write_default(as, &p);
 		p.base.txn = cmd->txn;
 		policy = &p;
 	}
@@ -604,6 +606,146 @@ batch_write_exec(commander* cmdr, command* cmd, as_error* err)
 	if (status != AEROSPIKE_OK) {
 		as_batch_records_destroy(recs);
 		as_operations_destroy(ops);
+	}
+	return status;
+}
+
+//---------------------------------
+// Batch Apply with on_locking_only
+//---------------------------------
+
+static void
+batch_apply_add(as_vector* cmds, as_txn* txn, uint32_t batch_size, int64_t val)
+{
+	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = CMD_BATCH_APPLY};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+batch_apply_add_error(
+	as_vector* cmds, as_txn* txn, uint32_t batch_size, int64_t val, as_status status
+	)
+{
+	command cmd = {.txn = txn, .batch_size = batch_size, .val = val, .type = CMD_BATCH_APPLY,
+		.status = status};
+	as_vector_append(cmds, &cmd);
+}
+
+static void
+batch_apply_cleanup(as_batch_records* recs)
+{
+	if (recs->list.size > 0) {
+		// Destroy heap allocated arglist that is used on every batch record.
+		const as_batch_apply_record* rec = as_vector_get(&recs->list, 0);
+		as_arraylist_destroy((as_arraylist*)rec->arglist);
+		cf_free((as_policy_batch_apply*)rec->policy);
+	}
+	as_batch_records_destroy(recs);
+}
+
+static void
+abort_on_error_listener(
+	as_error* err, as_abort_status status, void* udata, struct as_event_loop* event_loop
+	)
+{
+	commander* cmdr = udata;
+
+	if (err) {
+		warn("Abort failed: %d - %s\n", err->code, err->message);
+	}
+
+	if (cmdr->cmd->status == AEROSPIKE_OK) {
+		// Error was not expected. Fail with original error.
+		commander_fail(cmdr, &cmdr->err_orig);
+	}
+	else {
+		// Error was expected. run next command.
+		commander_run_next(cmdr);
+	}
+}
+
+static void
+batch_apply_listener(
+	as_error* err, as_batch_records* recs, void* udata, as_event_loop* event_loop
+	)
+{
+	commander* cmdr = udata;
+	atf_test_result* __result__ = cmdr->result;
+	bool success = false;
+
+	if (err) {
+		if (cmdr->cmd->status != AEROSPIKE_OK) {
+			for (uint32_t i = 0; i < recs->list.size; i++) {
+				const as_batch_apply_record* rec = as_vector_get(&recs->list, i);
+				assert_int_eq_async(&monitor, rec->result, cmdr->cmd->status);
+			}
+		}
+		batch_apply_cleanup(recs);
+
+		as_error_copy(&cmdr->err_orig, err);
+		as_status status = aerospike_abort_async(as, err, cmdr->cmd->txn, abort_on_error_listener, cmdr, NULL);
+
+		if (status != AEROSPIKE_OK) {
+			warn("Abort failed: %d - %s\n", err->code, err->message);
+			commander_fail(cmdr, err);
+		}
+	}
+	else {
+		if (cmdr->cmd->status == AEROSPIKE_OK) {
+			for (uint32_t i = 0; i < recs->list.size; i++) {
+				const as_batch_apply_record* rec = as_vector_get(&recs->list, i);
+				assert_int_eq_async(&monitor, rec->result, AEROSPIKE_OK);
+			}
+			success = true;
+		}
+		else {
+			fail_async(&monitor, "Unexpected success. Expected %d", cmdr->cmd->status);
+		}
+
+		batch_apply_cleanup(recs);
+	}
+
+	if (success) {
+		commander_run_next(cmdr);
+	}
+}
+
+static as_status
+batch_apply_exec(commander* cmdr, command* cmd, as_error* err)
+{
+	as_policy_batch p;
+	as_policy_batch* policy = &as->config.policies.batch_parent_write;
+
+	if (cmd->txn) {
+		as_policy_batch_copy(policy, &p);
+		p.base.txn = cmd->txn;
+		policy = &p;
+	}
+
+	as_batch_records* recs = as_batch_records_create(cmd->batch_size);
+
+	// Must allocate ops on the heap when a transaction is involved.
+	as_arraylist* args = as_arraylist_new(2, 0);
+	as_arraylist_append_str(args, BIN);
+	as_arraylist_append_int64(args, cmd->val);
+
+	as_policy_batch_apply* pba = cf_malloc(sizeof(as_policy_batch_apply));
+	as_policy_batch_apply_init(pba);
+	pba->on_locking_only = true;
+
+	for (uint32_t i = 0; i < cmd->batch_size; i++) {
+		as_batch_apply_record* rec = as_batch_apply_reserve(recs);
+		as_key_init_int64(&rec->key, NAMESPACE, SET, i + 20);
+		rec->policy = pba;
+		rec->module = "udf_record";
+		rec->function = "write_bin";
+		rec->arglist = (as_list*)args;
+	}
+
+	as_status status = aerospike_batch_write_async(as, err, policy, recs, batch_apply_listener, cmdr, NULL);
+
+	if (status != AEROSPIKE_OK) {
+		batch_apply_cleanup(recs);
 	}
 	return status;
 }
@@ -723,6 +865,10 @@ commander_run_next(commander* cmdr)
 			status = batch_write_exec(cmdr, cmd, &err);
 			break;
 
+		case CMD_BATCH_APPLY:
+			status = batch_apply_exec(cmdr, cmd, &err);
+			break;
+
 		case CMD_COMMIT:
 			status = commit_exec(cmdr, cmd, &err);
 			break;
@@ -745,7 +891,12 @@ commander_execute(as_vector* cmds, atf_test_result* result)
 {
 	as_monitor_begin(&monitor);
 
-	commander c = {.cmds = cmds, .result = result, .idx = -1};
+	commander c;
+	c.cmds = cmds;
+	c.cmd = NULL;
+	c.result = result;
+	c.idx = -1;
+	as_error_init(&c.err_orig);
 	commander_run_next(&c);
 
 	as_monitor_wait(&monitor);
@@ -1124,6 +1275,23 @@ TEST(txn_async_batch_abort, "transaction async batch abort")
 	as_txn_destroy(txn);
 }
 
+TEST(txn_async_batch_apply, "transaction async batch apply")
+{
+	// Test on_locking_only in async batch apply.
+	uint32_t batch_size = 2;
+
+	as_txn* txn = as_txn_create();
+
+	as_vector cmds;
+	as_vector_inita(&cmds, sizeof(command), 2);
+
+	batch_apply_add(&cmds, txn, batch_size, 1);
+	batch_apply_add_error(&cmds, txn, batch_size, 2, AEROSPIKE_MRT_ALREADY_LOCKED);
+
+	commander_execute(&cmds, __result__);
+	as_txn_destroy(txn);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -1154,4 +1322,5 @@ SUITE(transaction_async, "Async transaction tests")
 	suite_add(txn_async_udf_abort);
 	suite_add(txn_async_batch);
 	suite_add(txn_async_batch_abort);
+	suite_add(txn_async_batch_apply);
 }

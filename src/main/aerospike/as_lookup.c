@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -21,16 +21,16 @@
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_string_builder.h>
 
-/******************************************************************************
- * Declarations
- *****************************************************************************/
+//---------------------------------
+// Declarations
+//---------------------------------
 
 const char*
 as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
 
-/******************************************************************************
- * Static Functions
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static as_status
 as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node_info, uint64_t deadline)
@@ -81,7 +81,7 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 			if (status == AEROSPIKE_OK) {
 				if (node_info->session) {
 					status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
-											 node_info->session, 0, deadline);
+											 node_info->session, 0, deadline, NULL);
 				}
 
 				if (status == AEROSPIKE_OK) {
@@ -170,7 +170,7 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 			if (status == AEROSPIKE_OK) {
 				if (node_info->session) {
 					status = as_authenticate(cluster, &error_local, &sock, NULL,
-											 node_info->session, 0, deadline);
+											 node_info->session, 0, deadline, NULL);
 				}
 
 				if (status == AEROSPIKE_OK) {
@@ -218,9 +218,9 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 	return AEROSPIKE_OK;
 }
 
-/******************************************************************************
- * Functions
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, uint16_t port)
@@ -311,7 +311,7 @@ as_lookup_node(
 
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 256, false);
-	as_string_builder_append(&sb, "node\npartition-generation\nfeatures\n");
+	as_string_builder_append(&sb, "node\npartition-generation\nbuild\n");
 	uint32_t args = 3;
 
 	if (cluster->cluster_name) {
@@ -381,46 +381,30 @@ as_lookup_node(
 		return AEROSPIKE_ERR_CLIENT;
 	}
 
-	// Process features.
+	// Process server build version.
 	nv = as_vector_get(&values, args++);
-	char* begin = nv->value;
 
-	if (begin == 0) {
-		goto Error;
+	if (!as_version_from_string(&node_info->version, nv->value)) {
+		char addr_name[AS_IP_ADDRESS_SIZE];
+		as_address_name((struct sockaddr*)&node_info->addr, addr_name, sizeof(addr_name));
+		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s %s version is invalid: %s",
+						node_info->name, addr_name, nv->value);
+		cf_free(response);
+		as_node_info_destroy(node_info);
+		return AEROSPIKE_ERR_CLIENT;
 	}
 
-	char* end = begin;
+	// Process features.
 	uint32_t features = 0;
+	as_version pscan = {4,9,0,3};
 
-	while (*begin) {
-		while (*end) {
-			if (*end == ';') {
-				*end++ = 0;
-				break;
-			}
-			end++;
-		}
-
-		if (strcmp(begin, "pscans") == 0) {
-			features |= AS_FEATURES_PARTITION_SCAN;
-		}
-		else if (strcmp(begin, "query-show") == 0) {
-			features |= AS_FEATURES_QUERY_SHOW;
-		}
-		else if (strcmp(begin, "batch-any") == 0) {
-			features |= AS_FEATURES_BATCH_ANY;
-		}
-		else if (strcmp(begin, "pquery") == 0) {
-			features |= AS_FEATURES_PARTITION_QUERY;
-		}
-
-		begin = end;
+	if (as_version_compare(&node_info->version, &pscan) >= 0) {
+		features |= AS_FEATURES_PARTITION_SCAN;
 	}
-
-	// This client requires partition scan support. Partition scans were first
-	// supported in server version 4.9. Do not allow any server node into the
-	// cluster that is running server version < 4.9.
-	if ((features & AS_FEATURES_PARTITION_SCAN) == 0) {
+	else {
+		// This client requires partition scan support. Partition scans were first
+		// supported in server version 4.9. Do not allow any server node into the
+		// cluster that is running server version < 4.9.
 		char addr_name[AS_IP_ADDRESS_SIZE];
 		as_address_name((struct sockaddr*)&node_info->addr, addr_name, sizeof(addr_name));
 		as_error_update(err, AEROSPIKE_ERR_CLIENT,
@@ -429,6 +413,19 @@ as_lookup_node(
 		cf_free(response);
 		as_node_info_destroy(node_info);
 		return AEROSPIKE_ERR_CLIENT;
+	}
+
+	as_version queryshow = {5,7,0,7};
+
+	if (as_version_compare(&node_info->version, &queryshow) >= 0) {
+		features |= AS_FEATURES_QUERY_SHOW;
+	}
+
+	as_version pquery_batchany = {6,0,0,0};
+
+	if (as_version_compare(&node_info->version, &pquery_batchany) >= 0) {
+		features |= AS_FEATURES_PARTITION_QUERY;
+		features |= AS_FEATURES_BATCH_ANY;
 	}
 
 	node_info->features = features;

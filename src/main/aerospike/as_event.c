@@ -29,9 +29,9 @@
 #include <citrusleaf/alloc.h>
 #include <pthread.h>
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 // Use pointer comparison for performance.  If portability becomes an issue, use
 // "pthread_equal(event_loop->thread, pthread_self())" instead.
@@ -41,9 +41,9 @@
 #define as_in_event_loop(_t1) ((_t1).p == pthread_self().p)
 #endif
 
-/******************************************************************************
- * GLOBALS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 as_event_loop* as_event_loops = 0;
 as_event_loop* as_event_loop_current = 0;
@@ -57,10 +57,14 @@ static pthread_mutex_t as_event_lock = PTHREAD_MUTEX_INITIALIZER;
 
 as_status aerospike_library_init(as_error* err);
 int as_batch_retry_async(as_event_command* cmd, bool timeout);
+void aerospike_destroy_internal(aerospike* as);
+static void as_event_recover_abort(as_event_command* cmd);
+static bool as_event_recover_connection(as_event_command* cmd);
+static void as_event_recover_timeout(as_event_command* cmd);
 
-/******************************************************************************
- * PUBLIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 static as_status
 as_event_validate_policy(as_error* err, as_policy_event* policy)
@@ -356,9 +360,9 @@ as_event_destroy_loops(void)
 	}
 }
 
-/******************************************************************************
- * PRIVATE FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Private Functions
+//---------------------------------
 
 static void as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd);
 static void as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd);
@@ -368,6 +372,7 @@ static void connector_error(as_event_command* cmd, as_error* err);
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err)
 {
+	cmd->total_deadline = (cmd->total_timeout > 0)? cf_getms() + cmd->total_timeout : 0;
 	cmd->command_sent_counter = 0;
 
 	as_event_loop* event_loop = cmd->event_loop;
@@ -386,10 +391,6 @@ as_event_command_execute(as_event_command* cmd, as_error* err)
 	}
 	else {
 		// Send command through queue so it can be executed in event loop thread.
-		if (cmd->total_deadline > 0) {
-			// Convert total timeout to deadline.
-			cmd->total_deadline += cf_getms();
-		}
 		cmd->state = AS_ASYNC_STATE_REGISTERED;
 
 		if (! as_event_execute(cmd->event_loop,
@@ -408,10 +409,7 @@ as_event_command_schedule(as_event_command* cmd)
 {
 	// Schedule command to execute in next event loop iteration.
 	// Must be run in event loop thread.
-	if (cmd->total_deadline > 0) {
-		// Convert total timeout to deadline.
-		cmd->total_deadline += cf_getms();
-	}
+	cmd->total_deadline = (cmd->total_timeout > 0)? cf_getms() + cmd->total_timeout : 0;
 
 	// Callback is as_event_process_timer().
 	cmd->state = AS_ASYNC_STATE_REGISTERED;
@@ -436,7 +434,6 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	cmd->conn = NULL;
 	cmd->proto_type_rcv = 0;
 	cmd->event_state = &cmd->cluster->event_state[event_loop->index];
-	cmd->metrics_enabled = cmd->cluster->metrics_enabled;
 
 	if (cmd->event_state->closed) {
 		as_error err;
@@ -445,26 +442,16 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 		return;
 	}
 
-	uint64_t total_timeout = 0;
-
-	if (cmd->total_deadline > 0) {
+	if (cmd->state == AS_ASYNC_STATE_REGISTERED && cmd->total_deadline > 0) {
+		// Command was queued to event loop thread.
 		uint64_t now = cf_getms();
 
-		if (cmd->state == AS_ASYNC_STATE_REGISTERED) {
-			// Command was queued to event loop thread.
-			if (now >= cmd->total_deadline) {
-				// Command already timed out.
-				as_error err;
-				as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Register timeout");
-				as_event_prequeue_error(event_loop, cmd, &err);
-				return;
-			}
-			total_timeout = cmd->total_deadline - now;
-		}
-		else {
-			// Convert total timeout to deadline.
-			total_timeout = cmd->total_deadline;
-			cmd->total_deadline += now;
+		if (now > cmd->total_deadline) {
+			// Command already timed out.
+			as_error err;
+			as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "Register timeout");
+			as_event_prequeue_error(event_loop, cmd, &err);
+			return;
 		}
 	}
 
@@ -501,33 +488,38 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 
 			cmd->state = AS_ASYNC_STATE_DELAY_QUEUE;
 
-			if (total_timeout > 0) {
-				as_event_timer_once(cmd, total_timeout);
+			if (cmd->total_timeout > 0) {
+				as_event_timer_once(cmd, cmd->total_timeout);
 			}
 			return;
 		}
 	}
 
-	if (total_timeout > 0) {
-		if (cmd->socket_timeout > 0 && cmd->socket_timeout < total_timeout) {
+	// Start processing.
+	as_event_set_timeout(cmd);
+	event_loop->pending++;
+	cmd->event_state->pending++;
+
+	as_event_command_begin(event_loop, cmd);
+}
+
+void
+as_event_set_timeout(as_event_command* cmd)
+{
+	if (cmd->total_timeout > 0) {
+		if (cmd->socket_timeout > 0 && cmd->socket_timeout < cmd->total_timeout) {
 			// Use socket timer.
 			as_event_timer_repeat(cmd, cmd->socket_timeout);
 		}
 		else {
 			// Use total timer.
-			as_event_timer_once(cmd, total_timeout);
+			as_event_timer_once(cmd, cmd->total_timeout);
 		}
 	}
 	else if (cmd->socket_timeout > 0) {
 		// Use socket timer.
 		as_event_timer_repeat(cmd, cmd->socket_timeout);
 	}
-
-	// Start processing.
-	event_loop->pending++;
-	cmd->event_state->pending++;
-
-	as_event_command_begin(event_loop, cmd);
 }
 
 static void
@@ -547,8 +539,8 @@ as_event_execute_from_delay_queue(as_event_loop* event_loop)
 		}
 
 		if (cmd->socket_timeout > 0) {
-			if (cmd->total_deadline > 0) {
-				if (cmd->socket_timeout < cmd->total_deadline - cf_getms()) {
+			if (cmd->total_timeout > 0) {
+				if (cmd->socket_timeout < cmd->total_timeout) {
 					// Transition from total timer to socket timer.
 					as_event_timer_stop(cmd);
 					as_event_timer_repeat(cmd, cmd->socket_timeout);
@@ -576,6 +568,11 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 	conn->base.watching = 0;
 	conn->cmd = cmd;
 	cmd->conn = &conn->base;
+
+	if (cmd->connect_timeout > 0) {
+		as_event_timer_stop(cmd);
+		as_event_timer_once(cmd, cmd->connect_timeout);
+	}
 	as_event_connect(cmd, pool);
 }
 
@@ -583,15 +580,36 @@ static inline void
 as_event_add_latency(as_event_command* cmd, as_latency_type type)
 {
 	uint64_t elapsed = cf_getns() - cmd->begin;
-	as_node_add_latency(cmd->node, type, elapsed);
+	as_node_add_latency(cmd->metrics, type, elapsed);
 }
 
-void
+bool
 as_event_connection_complete(as_event_command* cmd)
 {
-	if (cmd->metrics_enabled) {
+	if (cmd->metrics) {
 		as_event_add_latency(cmd, AS_LATENCY_TYPE_CONN);
 	}
+
+	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
+		as_event_connector_success(cmd);
+		return true;
+	}
+
+	if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
+		as_event_recover_auth(cmd);
+		return true;
+	}
+
+	if (cmd->connect_timeout > 0) {
+		// Restore command timeout.
+		as_event_timer_stop(cmd);
+
+		if (cmd->total_timeout > 0) {
+			cmd->total_deadline = cf_getms() + cmd->total_timeout;
+		}
+		as_event_set_timeout(cmd);
+	}
+	return false;
 }
 
 static void
@@ -640,8 +658,16 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		return;
 	}
 
-	if (cmd->metrics_enabled) {
-		cmd->begin = cf_getns();
+	cmd->metrics = NULL;
+	cmd->bytes_in = 0;
+	cmd->bytes_out = 0;
+
+	if (cmd->cluster->metrics_enabled) {
+		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->begin = cf_getns();
+		}
 	}
 
 	if (cmd->pipe_listener) {
@@ -788,6 +814,32 @@ as_event_decompress(as_event_command* cmd)
 	return true;
 }
 
+static void
+as_event_retry_timeout(as_event_command* cmd)
+{
+	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
+
+	if (cmd->pipe_listener) {
+		as_pipe_timeout(cmd, true);
+		return;
+	}
+
+	if (!as_event_recover_connection(cmd)) {
+		// Node should not be null at this point.
+		as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	}
+
+	if (! as_event_command_retry(cmd, true)) {
+		as_event_timer_stop(cmd);
+
+		as_error err;
+		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
+						cmd->iteration, as_node_get_address_string(cmd->node));
+
+		as_event_error_callback(cmd, &err);
+	}
+}
+
 void
 as_event_socket_timeout(as_event_command* cmd)
 {
@@ -823,25 +875,7 @@ as_event_socket_timeout(as_event_command* cmd)
 		return;
 	}
 
-	as_node_add_timeout(cmd->node);
-
-	if (cmd->pipe_listener) {
-		as_pipe_timeout(cmd, true);
-		return;
-	}
-
-	// Node should not be null at this point.
-	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
-
-	if (! as_event_command_retry(cmd, true)) {
-		as_event_timer_stop(cmd);
-
-		as_error err;
-		as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
-						cmd->iteration, as_node_get_address_string(cmd->node));
-
-		as_event_error_callback(cmd, &err);
-	}
+	as_event_retry_timeout(cmd);
 }
 
 static void
@@ -849,7 +883,7 @@ as_event_delay_timeout(as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_QUEUE_ERROR;
 
-	if (cmd->metrics_enabled) {
+	if (cmd->cluster->metrics_enabled) {
 		as_cluster_add_delay_queue_timeout(cmd->cluster);
 	}
 
@@ -879,9 +913,24 @@ as_event_process_timer(as_event_command* cmd)
 			as_event_execute_retry(cmd);
 			break;
 
+		case AS_ASYNC_STATE_CONNECT:
+			if (cmd->connect_timeout > 0) {
+				as_event_retry_timeout(cmd);
+			}
+			else {
+				as_event_total_timeout(cmd);
+			}
+			break;
+
 		default:
-			// Total timeout.
-			as_event_total_timeout(cmd);
+			if (cmd->type == AS_ASYNC_TYPE_CONN_RECOVER) {
+				// Abort connection recovery.
+				as_event_recover_timeout(cmd);
+			}
+			else {
+				// Total timeout normal commands.
+				as_event_total_timeout(cmd);
+			}
 			break;
 	}
 }
@@ -890,19 +939,38 @@ void
 as_event_total_timeout(as_event_command* cmd)
 {
 	// Node should not be null at this point.
-	as_node_add_timeout(cmd->node);
-	
+	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
+
 	if (cmd->pipe_listener) {
 		as_pipe_timeout(cmd, false);
 		return;
 	}
 
-	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	if (!as_event_recover_connection(cmd)) {
+		as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	}
 
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_TIMEOUT, "Client timeout: iterations=%u lastNode=%s",
 					cmd->iteration + 1, as_node_get_address_string(cmd->node));
 	as_event_error_callback(cmd, &err);
+}
+
+bool
+as_event_socket_retry(as_event_command* cmd)
+{
+	if (cmd->metrics) {
+		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
+		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
+	}
+
+	if (cmd->pipe_listener) {
+		return false;
+	}
+
+	as_event_stop_watcher(cmd, cmd->conn);
+	as_event_release_async_connection(cmd);
+	return as_event_command_retry(cmd, false);
 }
 
 bool
@@ -1005,10 +1073,15 @@ as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 void
 as_event_response_complete(as_event_command* cmd)
 {
-	if (cmd->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-		as_event_add_latency(cmd, cmd->latency_type);
+	if (cmd->metrics) {
+		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
+		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			as_event_add_latency(cmd, cmd->latency_type);
+		}
 	}
-	
+
 	if (cmd->pipe_listener != NULL) {
 		as_pipe_response_complete(cmd);
 		return;
@@ -1316,6 +1389,9 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 			as_async_batch_error(cmd, err);
 			as_event_executor_error(cmd->udata, err, 1);
 			break;
+		case AS_ASYNC_TYPE_CONN_RECOVER:
+			as_event_recover_abort(cmd);
+			break;
 		default:
 			// Handle command that is part of a group (scan, query).
 			as_event_executor_error(cmd->udata, err, 1);
@@ -1367,14 +1443,19 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	// Release resources, make callback and free command.
 	as_event_timer_stop(cmd);
 	as_event_stop_watcher(cmd, cmd->conn);
-	
+
+	if (cmd->metrics) {
+		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
+		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
+	}
+
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 
 	// Close socket on errors that can leave unread data in socket.
 	switch (err->code) {
 		case AEROSPIKE_ERR_CLUSTER:
 		case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-			as_node_add_error(cmd->node);
+			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
 			as_event_put_connection(cmd, pool);
 			break;
@@ -1386,27 +1467,32 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
-			as_node_add_error(cmd->node);
+			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
 			as_event_release_connection(cmd->conn, pool);
 			break;
 		
 		case AEROSPIKE_ERR_TIMEOUT:
-			as_node_add_timeout(cmd->node);
+			as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 			
 		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 			// Do not increment error count on record not found.
 			// Add latency metrics instead.
-			if (cmd->metrics_enabled && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			if (cmd->metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 				as_event_add_latency(cmd, cmd->latency_type);
 			}
 			as_event_put_connection(cmd, pool);
 			break;
 
+		case AEROSPIKE_ERR_RECORD_BUSY:
+			as_node_add_key_busy(cmd->node, cmd->ns, cmd->metrics);
+			as_event_put_connection(cmd, pool);
+			break;
+
 		default:
-			as_node_add_error(cmd->node);
+			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 	}
@@ -1689,13 +1775,16 @@ as_event_command_free(as_event_command* cmd)
 	}
 }
 
-/******************************************************************************
- * CONNECTION CREATE
- *****************************************************************************/
+//---------------------------------
+// Connection Create
+//---------------------------------
+
+#define AS_CONNECTOR_SINGLE 0
+#define AS_CONNECTOR_WAIT 1
+#define AS_CONNECTOR_NO_WAIT 2
 
 typedef struct {
-	as_monitor* monitor;
-	uint32_t* loop_count;
+	void* parent;
 	as_node* node;
 	as_async_conn_pool* pool;
 	uint32_t conn_start;
@@ -1703,8 +1792,19 @@ typedef struct {
 	uint32_t conn_max;
 	uint32_t concur_max;
 	uint32_t timeout_ms;
+	uint8_t type;
 	bool error;
 } connector_shared;
+
+typedef struct {
+	as_monitor monitor;
+	uint32_t loop_count;
+} connector_shared_wait;
+
+typedef struct {
+	connector_shared* array;
+	uint32_t loop_count;
+} connector_shared_nowait;
 
 typedef struct {
 	as_event_command command;
@@ -1715,23 +1815,53 @@ static void
 connector_execute_command(as_event_loop* event_loop, connector_shared* cs);
 
 static inline void
-connector_release(as_monitor* monitor, uint32_t* loop_count)
+connector_shared_wait_release(connector_shared_wait* csw)
 {
-	if (as_aaf_uint32_rls(loop_count, -1) == 0) {
-		as_monitor_notify(monitor);
+	if (as_aaf_uint32_rls(&csw->loop_count, -1) == 0) {
+		as_monitor_notify(&csw->monitor);
+	}
+}
+
+static inline void
+connector_shared_nowait_release(connector_shared_nowait* csnw)
+{
+	if (as_aaf_uint32_rls(&csnw->loop_count, -1) == 0) {
+		cf_free(csnw->array);
+		cf_free(csnw);
 	}
 }
 
 static void
 connector_complete(connector_shared* cs)
 {
-	if (cs->monitor) {
-		// Initial connector is allocated on stack.
-		connector_release(cs->monitor, cs->loop_count);
-	}
-	else {
-		// Balance connector is allocated on heap.
-		cf_free(cs);
+	switch (cs->type) {
+		case AS_CONNECTOR_SINGLE:
+			// Called from create_connections().
+			// There is no parent array. Free the single heap allocated connector.
+			cf_free(cs);
+			break;
+
+		case AS_CONNECTOR_WAIT: {
+			// Called from create_connections_wait().
+			// There is a parent array, but it's allocated on the stack.
+			// Call as_monitor_notify() when all connector_shared items
+			// are complete.
+			connector_shared_wait* csw = cs->parent;
+			connector_shared_wait_release(csw);
+			break;
+		}
+
+		case AS_CONNECTOR_NO_WAIT: {
+			// Called from create_connections_nowait().
+			// Free heap allocated parent array when all connector_shared
+			// items are complete.
+			connector_shared_nowait* csnw = cs->parent;
+			connector_shared_nowait_release(csnw);
+			break;
+		}
+
+		default:
+			break;
 	}
 }
 
@@ -1818,6 +1948,7 @@ connector_execute_command(as_event_loop* event_loop, connector_shared* cs)
 	event_loop->pending++;
 	cmd->event_state->pending++;
 
+	cmd->total_timeout = cs->timeout_ms;
 	cmd->total_deadline = cf_getms() + cs->timeout_ms;
 	as_event_timer_once(cmd, cs->timeout_ms);
 
@@ -1837,44 +1968,51 @@ connector_create_commands(as_event_loop* event_loop, connector_shared* cs)
 static void
 create_connections_wait(as_node* node, as_async_conn_pool* pools)
 {
-	as_monitor monitor;
-	as_monitor_init(&monitor);
-
 	uint32_t loop_max = as_event_loop_size;
-	uint32_t loop_count = loop_max;
 	uint32_t max_concurrent = 20 / loop_max + 1;
 	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
 
-	connector_shared* list = alloca(sizeof(connector_shared) * loop_max);
+	connector_shared* array = alloca(sizeof(connector_shared) * loop_max);
+
+	connector_shared_wait* csw = alloca(sizeof(connector_shared_wait));
+	as_monitor_init(&csw->monitor);
+	csw->loop_count = loop_max;
+
+	uint32_t queued = 0;
 
 	for (uint32_t i = 0; i < loop_max; i++) {
 		as_async_conn_pool* pool = &pools[i];
 		uint32_t min_size = pool->min_size;
 
 		if (min_size > 0) {
-			connector_shared* cs = &list[i];
-			cs->monitor = &monitor;
-			cs->loop_count = &loop_count;
+			connector_shared* cs = &array[i];
+			cs->parent = csw;
 			cs->node = node;
 			cs->pool = pool;
 			cs->conn_count = 0;
 			cs->conn_max = min_size;
 			cs->concur_max = (min_size >= max_concurrent)? max_concurrent : min_size;
 			cs->timeout_ms = timeout_ms;
+			cs->type = AS_CONNECTOR_WAIT;
 			cs->error = false;
 
-			if (!as_event_execute(&as_event_loops[i],
-				(as_event_executable)connector_create_commands, cs)) {
+			if (as_event_execute(&as_event_loops[i], (as_event_executable)connector_create_commands, cs)) {
+				queued++;
+			}
+			else {
 				as_log_error("Failed to queue connector");
-				connector_release(&monitor, &loop_count);
+				connector_shared_wait_release(csw);
 			}
 		}
 		else {
-			connector_release(&monitor, &loop_count);
+			connector_shared_wait_release(csw);
 		}
 	}
-	as_monitor_wait(&monitor);
-	as_monitor_destroy(&monitor);
+
+	if (queued > 0) {
+		as_monitor_wait(&csw->monitor);
+	}
+	as_monitor_destroy(&csw->monitor);
 }
 
 static void
@@ -1884,27 +2022,32 @@ create_connections_nowait(as_node* node, as_async_conn_pool* pools)
 	uint32_t max_concurrent = 20 / loop_max + 1;
 	uint32_t timeout_ms = node->cluster->conn_timeout_ms;
 
-	connector_shared* list = cf_malloc(sizeof(connector_shared) * loop_max);
+	connector_shared* array = cf_malloc(sizeof(connector_shared) * loop_max);
+
+	connector_shared_nowait* csnw = cf_malloc(sizeof(connector_shared_nowait));
+	csnw->array = array;
+	csnw->loop_count = loop_max;
 
 	for (uint32_t i = 0; i < loop_max; i++) {
 		as_async_conn_pool* pool = &pools[i];
 		uint32_t min_size = pool->min_size;
 
 		if (min_size > 0) {
-			connector_shared* cs = &list[i];
-			cs->monitor = NULL;
-			cs->loop_count = NULL;
+			connector_shared* cs = &array[i];
+			cs->parent = csnw;
 			cs->node = node;
 			cs->pool = pool;
 			cs->conn_count = 0;
 			cs->conn_max = min_size;
 			cs->concur_max = (min_size >= max_concurrent)? max_concurrent : min_size;
 			cs->timeout_ms = timeout_ms;
+			cs->type = AS_CONNECTOR_NO_WAIT;
 			cs->error = false;
 
 			if (!as_event_execute(&as_event_loops[i],
 				(as_event_executable)connector_create_commands, cs)) {
 				as_log_error("Failed to queue connector");
+				connector_shared_nowait_release(csnw);
 			}
 		}
 	}
@@ -1942,22 +2085,22 @@ static void
 create_connections(as_event_loop* event_loop, as_node* node, as_async_conn_pool* pool, int count)
 {
 	connector_shared* cs = cf_malloc(sizeof(connector_shared));
-	cs->monitor = NULL;
-	cs->loop_count = NULL;
+	cs->parent = NULL;
 	cs->node = node;
 	cs->pool = pool;
 	cs->conn_count = 0;
 	cs->conn_max = count;
 	cs->concur_max = 1;
 	cs->timeout_ms = node->cluster->conn_timeout_ms;
+	cs->type = AS_CONNECTOR_SINGLE;
 	cs->error = false;
 
 	connector_create_commands(event_loop, cs);
 }
 
-/******************************************************************************
- * CONNECTION BALANCE
- *****************************************************************************/
+//---------------------------------
+// Connection Balance
+//---------------------------------
 
 typedef struct {
 	as_cluster* cluster;
@@ -2116,12 +2259,180 @@ as_event_node_balance_connections(as_cluster* cluster, as_node* node)
 	as_monitor_destroy(&bs.monitor);
 }
 
-/******************************************************************************
- * CLUSTER CLOSE
- *****************************************************************************/
+//---------------------------------
+// Connection Recover
+//---------------------------------
+
+typedef struct {
+	as_event_command command;
+	uint8_t space[];
+} as_recover_command;
+
+static void
+as_event_recover_success(as_event_command* cmd)
+{
+	// Update metrics.
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	pool->recovered++;
+
+	// Put connection back into the pool and complete the recovery command.
+	as_event_response_complete(cmd);
+	as_event_command_release(cmd);
+}
+
+static void
+as_event_recover_abort(as_event_command* cmd)
+{
+	// Update metrics.
+	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
+	pool->aborted++;
+}
+
+static void
+as_event_recover_timeout(as_event_command* cmd)
+{
+	as_event_recover_abort(cmd);
+	as_event_connection_timeout(cmd, &cmd->node->async_conn_pools[cmd->event_loop->index]);
+	as_event_command_release(cmd);
+}
+
+void
+as_event_recover_auth(as_event_command* cmd)
+{
+	// There is no need to drain the socket because that actual command was not sent.
+	as_event_recover_success(cmd);
+}
+
+static bool
+as_event_recover_parse_info(as_event_command* cmd)
+{
+	// Socket data has been read into a buffer and there is no need to parse that buffer further.
+	as_event_recover_success(cmd);
+	return true;
+}
+
+static bool
+as_event_recover_parse_single(as_event_command* cmd)
+{
+	// Socket data has been read into a buffer and there is no need to parse that buffer further.
+	as_event_recover_success(cmd);
+	return true;
+}
+
+static bool
+as_event_recover_parse_multi(as_event_command* cmd)
+{
+	uint8_t* p = cmd->buf + cmd->pos;
+	uint8_t* end = cmd->buf + cmd->len;
+	
+	while (p < end) {
+		as_msg* msg = (as_msg*)p;
+		as_msg_swap_header_from_be(msg);
+		p += sizeof(as_msg);
+		
+		if (msg->info3 & AS_MSG_INFO3_LAST) {
+			as_event_recover_success(cmd);
+			return true;
+		}
+
+		p = as_command_ignore_fields(p, msg->n_fields);
+		p = as_command_ignore_bins(p, msg->n_ops);
+	}
+	return false;
+}
+
+static bool
+as_event_recover_connection(as_event_command* cmd)
+{
+	if (cmd->timeout_delay == 0) {
+		return false;
+	}
+
+	switch (cmd->state) {
+		case AS_ASYNC_STATE_AUTH_READ_HEADER:
+		case AS_ASYNC_STATE_AUTH_READ_BODY:
+		case AS_ASYNC_STATE_COMMAND_READ_HEADER:
+		case AS_ASYNC_STATE_COMMAND_READ_BODY:
+			break;
+
+		default:
+			as_event_recover_abort(cmd);
+			return false;
+	}
+
+	as_event_parse_results_fn parse_results;
+
+	switch (cmd->type) {
+		case AS_ASYNC_TYPE_WRITE:
+		case AS_ASYNC_TYPE_RECORD:
+		case AS_ASYNC_TYPE_VALUE:
+		case AS_ASYNC_TYPE_TXN_MONITOR:
+			parse_results = as_event_recover_parse_single;
+			break;
+
+		case AS_ASYNC_TYPE_BATCH:
+		case AS_ASYNC_TYPE_SCAN:
+		case AS_ASYNC_TYPE_SCAN_PARTITION:
+		case AS_ASYNC_TYPE_QUERY:
+		case AS_ASYNC_TYPE_QUERY_PARTITION:
+			parse_results = as_event_recover_parse_multi;
+			break;
+
+		case AS_ASYNC_TYPE_INFO:
+			parse_results = as_event_recover_parse_info;
+			break;
+
+		default:
+			as_event_recover_abort(cmd);
+			return false;
+	}
+
+	as_event_command* recover = cf_malloc(sizeof(as_recover_command) + cmd->read_capacity);
+
+	// Copy original command to a new connection drain command.
+	memcpy(recover, cmd, sizeof(as_event_command));
+	as_async_connection* conn = (as_async_connection*)recover->conn;
+	conn->cmd = recover;
+	cmd->conn = NULL;
+
+	// Copy buffer contents.
+	recover->buf = ((uint8_t*)recover) + sizeof(as_recover_command);
+
+	if (cmd->pos > 0) {
+		memcpy(recover->buf, cmd->buf, cmd->pos);
+	}
+
+	recover->type = AS_ASYNC_TYPE_CONN_RECOVER;
+	recover->flags = cmd->flags & AS_ASYNC_FLAGS_READ;
+	recover->txn = NULL;
+	recover->ubuf = NULL;
+	recover->ubuf_size = 0;
+	recover->parse_results = parse_results;
+	recover->max_retries = 0;
+	recover->event_loop->pending++;
+	recover->event_state->pending++;
+	recover->timeout_delay = 0;
+	recover->bytes_in = 0;
+	recover->bytes_out = 0;
+
+	// Socket write variables should never be referenced when in a read state.
+	recover->write_offset = (uint32_t)sizeof(as_recover_command);
+	recover->write_len = 0;
+
+	as_node_reserve(recover->node);
+
+	// Schedule timeout for connection recovery.
+	as_event_timer_once(recover, cmd->timeout_delay);
+	return true;
+}
+
+//---------------------------------
+// Cluster Close
+//---------------------------------
 
 typedef struct {
 	as_monitor* monitor;
+	aerospike* as;
 	as_cluster* cluster;
 	uint32_t event_loop_count;
 } as_event_close_state;
@@ -2136,6 +2447,7 @@ as_event_close_cluster_event_loop(
 	if (as_aaf_uint32_rls(&state->event_loop_count, -1) == 0) {
 		as_fence_acq();
 		as_cluster_destroy(state->cluster);
+		aerospike_destroy_internal(state->as);
 
 		if (state->monitor) {
 			as_monitor_notify(state->monitor);
@@ -2167,7 +2479,7 @@ as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state
 }
 
 void
-as_event_close_cluster(as_cluster* cluster)
+as_event_close_cluster(aerospike* as)
 {
 	if (as_event_loop_size == 0) {
 		return;
@@ -2182,7 +2494,8 @@ as_event_close_cluster(as_cluster* cluster)
 
 	as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
 	state->monitor = monitor;
-	state->cluster = cluster;
+	state->as = as;
+	state->cluster = as->cluster;
 	state->event_loop_count = as_event_loop_size;
 
 	// Send cluster close notification to async event loops.

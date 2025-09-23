@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -31,9 +31,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 /**
  * Maximum size of role string including null byte.
@@ -41,9 +41,9 @@ extern "C" {
  */
 #define AS_ROLE_SIZE 64
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Permission codes define the type of permission granted for a user's role.
@@ -237,9 +237,9 @@ typedef struct as_user_s {
 struct as_node_s;
 struct as_socket_s;
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Create user with password and roles.  Clear-text password will be hashed using bcrypt before 
@@ -250,6 +250,18 @@ AS_EXTERN as_status
 aerospike_create_user(
 	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name,
 	const char* password, const char** roles, int roles_size
+	);
+
+/**
+ * Create PKI user with roles.  PKI users are authenticated via TLS and a certificate instead of a password.
+ * WARNING: This function should only be called for server versions 8.1+. If this function is called for older server versions,
+ * an error will be returned.
+ * @ingroup admin_operations
+ */
+AS_EXTERN as_status
+aerospike_create_pki_user(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user_name,
+	const char** roles, int roles_size
 	);
 
 /**
@@ -460,6 +472,7 @@ as_roles_destroy(as_role** roles, int roles_size);
 struct as_cluster_s;
 struct as_node_info_s;
 struct as_session_s;
+struct as_socket_context_s;
 
 /**
  * @private
@@ -479,7 +492,8 @@ as_cluster_login(
 as_status
 as_authenticate(
 	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, struct as_node_s* node,
-	struct as_session_s* session, uint32_t socket_timeout, uint64_t deadline_ms
+	struct as_session_s* session, uint32_t socket_timeout, uint64_t deadline_ms,
+	struct as_socket_context_s* ctx
 	);
 
 /**

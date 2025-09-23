@@ -13,6 +13,7 @@
 		BF1CA19828D9399B00110268 /* libz.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF1CA18E28D9399B00110268 /* libz.a */; };
 		BF1CA1A828D93CA900110268 /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFC65C851C923A210079DF5A /* libaerospike.a */; };
 		BF2CE58F201976C2000CD2C8 /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD60E64201964E4004A6CE2 /* example.c */; };
+		BF4E9DF42D68F78700A437AC /* libyaml.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF4E9DF22D68F78700A437AC /* libyaml.a */; };
 		BF5FDD632C87863E000CACBB /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5FDD622C87863E000CACBB /* example.c */; };
 		BFBDFE7622F3A30800F585B2 /* example_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C881C923CEB0079DF5A /* example_utils.c */; };
 		BFBDFE8922F3A3CE00F585B2 /* example.c in Sources */ = {isa = PBXBuildFile; fileRef = BF508B4622F3592D00BA4282 /* example.c */; };
@@ -278,6 +279,7 @@
 		BF1CA17228D9348A00110268 /* libcrypto.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libcrypto.a; path = "../../../../opt/homebrew/Cellar/openssl@3/3.0.5/lib/libcrypto.a"; sourceTree = "<group>"; };
 		BF1CA18E28D9399B00110268 /* libz.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libz.a; path = ../../../../opt/homebrew/Cellar/zlib/1.2.12_1/lib/libz.a; sourceTree = "<group>"; };
 		BF1CA1A928D93CDC00110268 /* liblua.5.1.5.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = liblua.5.1.5.dylib; path = "../../../../opt/homebrew/Cellar/lua@5.1/5.1.5_8/lib/liblua.5.1.5.dylib"; sourceTree = "<group>"; };
+		BF4E9DF22D68F78700A437AC /* libyaml.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libyaml.a; path = ../../../../opt/homebrew/Cellar/libyaml/0.2.5/lib/libyaml.a; sourceTree = "<group>"; };
 		BF508B4622F3592D00BA4282 /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/async_examples/async_scan/src/main/example.c; sourceTree = "<group>"; };
 		BF5FDD622C87863E000CACBB /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../../examples/basic_examples/transaction/src/main/example.c; sourceTree = "<group>"; };
 		BFBDFE8322F3A30800F585B2 /* async_scan */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = async_scan; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -336,6 +338,7 @@
 				BF1CA1A828D93CA900110268 /* libaerospike.a in Frameworks */,
 				BF1CA15E28D9345200110268 /* libssl.a in Frameworks */,
 				BF1CA17528D9348A00110268 /* libcrypto.a in Frameworks */,
+				BF4E9DF42D68F78700A437AC /* libyaml.a in Frameworks */,
 				BF1CA19828D9399B00110268 /* libz.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -354,6 +357,7 @@
 		BF1CA1A728D93CA900110268 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				BF4E9DF22D68F78700A437AC /* libyaml.a */,
 				BF1CA1A928D93CDC00110268 /* liblua.5.1.5.dylib */,
 			);
 			name = Frameworks;
@@ -3036,6 +3040,7 @@
 					"/opt/homebrew/Cellar/openssl@3/3.0.5/lib",
 					/opt/homebrew/Cellar/zlib/1.2.12_1/lib,
 					"/opt/homebrew/Cellar/lua@5.1/5.1.5_8/lib",
+					/opt/homebrew/Cellar/libyaml/0.2.5/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";
@@ -3079,6 +3084,7 @@
 					"/opt/homebrew/Cellar/openssl@3/3.0.5/lib",
 					/opt/homebrew/Cellar/zlib/1.2.12_1/lib,
 					"/opt/homebrew/Cellar/lua@5.1/5.1.5_8/lib",
+					/opt/homebrew/Cellar/libyaml/0.2.5/lib,
 				);
 				MACOSX_DEPLOYMENT_TARGET = "";
 				New_Setting = "";

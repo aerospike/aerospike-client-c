@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -29,9 +29,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * Connection statistics.
@@ -59,6 +59,22 @@ typedef struct as_conn_stats_s {
 	 * Total number of node connections closed since node creation.
 	 */
 	uint32_t closed;
+
+	/**
+	 * Total number of recovered connections since node creation. A recovered connecton is a
+	 * connection that timed out on a socket read and then independently drained (read all incoming
+	 * data) so the connection can be put back into the connection pool. The recovery process is
+	 * attempted when the `timeout_delay` policy is greater than zero.
+	 */
+	uint32_t recovered;
+
+	/**
+	 * Total number of aborted connections since node creation. An aborted connecton is a connection
+	 * that timed out on a socket read and the drain (read all incoming data) failed. The drain failure is
+	 * mostly likely due a downed node and results in the connection being closed. The recovery process
+	 * is attempted when the `timeout_delay` policy is greater than zero.
+	 */
+	uint32_t aborted;
 
 } as_conn_stats;
 
@@ -98,6 +114,11 @@ typedef struct as_node_stats_s {
 	 * multiple timeouts per command may occur.
 	 */
 	uint64_t timeout_count;
+
+	/**
+	 * Command key busy error count since node was initialized.
+	 */
+	uint64_t key_busy_count;
 
 } as_node_stats;
 
@@ -156,13 +177,17 @@ typedef struct as_cluster_stats_s {
 	 */
 	uint32_t thread_pool_queued_tasks;
 
+	/**
+	 * Count of sync sockets currently in timeout recovery.
+	 */
+	uint32_t recover_queue_size;
 } as_cluster_stats;
 
 struct as_cluster_s;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Retrieve aerospike cluster statistics.
@@ -178,11 +203,11 @@ aerospike_cluster_stats(struct as_cluster_s* cluster, as_cluster_stats* stats);
 /**
  * Retrieve aerospike client instance statistics.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_cluster_stats stats;
  * aerospike_stats(&as, &stats);
  * aerospike_stats_destroy(&stats);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as		The aerospike instance.
  * @param stats		The statistics summary for specified client instance.
@@ -261,6 +286,8 @@ as_conn_stats_init(as_conn_stats* stats)
 	stats->in_use = 0;
 	stats->opened = 0;
 	stats->closed = 0;
+	stats->recovered = 0;
+	stats->aborted = 0;
 }
 
 void

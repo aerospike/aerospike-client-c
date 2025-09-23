@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2018 by Aerospike.
+ * Copyright 2008-2025 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -74,9 +74,14 @@ main(int argc, char* argv[])
 	// Start clean.
 	example_remove_test_record(&as);
 
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.total_timeout = 500;
+	p.base.timeout_delay = 3000;
+
 	// Try to read the test record from the database. This should fail since the record is not there.
 	as_error err;
-	if (aerospike_key_get_async(&as, &err, NULL, &g_key, expect_not_found, NULL, NULL, NULL) != AEROSPIKE_OK) {
+	if (aerospike_key_get_async(&as, &err, &p, &g_key, expect_not_found, NULL, NULL, NULL) != AEROSPIKE_OK) {
 		LOG("aerospike_key_get_async() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		as_event_close_loops();
@@ -85,7 +90,7 @@ main(int argc, char* argv[])
 
 	// Wait till commands have completed before shutting down.
 	as_monitor_wait(&monitor);
-	
+
 	// Cleanup and shutdown.
 	example_cleanup(&as);
 	as_event_close_loops();

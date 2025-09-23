@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -30,18 +30,18 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 
-/******************************************************************************
- * GLOBALS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern uint32_t as_event_loop_capacity;
 extern int as_event_send_buffer_size;
 extern int as_event_recv_buffer_size;
 extern bool as_event_threads_created;
 
-/******************************************************************************
- * LIBUV FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Libuv Functions
+//---------------------------------
 
 #if defined(AS_USE_LIBUV)
 
@@ -310,7 +310,8 @@ as_uv_command_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 
 	cmd->flags |= AS_ASYNC_FLAGS_EVENT_RECEIVED;
 	cmd->pos += (uint32_t)nread;
-	
+	cmd->bytes_in += (uint32_t)nread;
+
 	if (cmd->pos < cmd->len) {
 		// Read not finished.
 		return;
@@ -372,6 +373,7 @@ as_uv_command_write_complete(uv_write_t* req, int status)
 	as_event_command* cmd = req->data;
 	
 	if (status == 0) {
+		cmd->bytes_out += cmd->len - cmd->pos;
 		cmd->command_sent_counter++;
 		cmd->len = sizeof(as_proto);
 		cmd->pos = 0;
@@ -434,10 +436,7 @@ as_uv_command_write_start(as_event_command* cmd, uv_stream_t* stream)
 static inline void
 as_uv_command_start(as_event_command* cmd, uv_stream_t* stream)
 {
-	as_event_connection_complete(cmd);
-	
-	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
-		as_event_connector_success(cmd);
+	if (as_event_connection_complete(cmd)) {
 		return;
 	}
 
@@ -483,7 +482,8 @@ as_uv_auth_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf)
 	}
 	
 	cmd->pos += (uint32_t)nread;
-	
+	cmd->bytes_in += (uint32_t)nread;
+
 	if (cmd->pos < cmd->len) {
 		// Read not finished.
 		return;
@@ -544,6 +544,7 @@ as_uv_auth_write_complete(uv_write_t* req, int status)
 	as_event_command* cmd = req->data;
 	
 	if (status == 0) {
+		cmd->bytes_out += cmd->len - cmd->pos;
 		as_event_set_auth_read_header(cmd);
 		status = uv_read_start(req->handle, as_uv_auth_command_buffer, as_uv_auth_read);
 		
@@ -585,9 +586,9 @@ as_uv_connect_error(as_event_command* cmd, as_error* err)
 	}
 }
 
-/******************************************************************************
- * BEGIN LIBUV TLS FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Begin Libuv TLS Functions
+//---------------------------------
 
 static void
 as_uv_tls_write(as_event_command* cmd);
@@ -712,6 +713,8 @@ as_uv_tls_fill_buffer(as_event_command* cmd, ssize_t nread)
 		return false;
 	}
 
+	cmd->bytes_in += (uint32_t)nread;
+
 	as_uv_tls* tls = conn->tls;
 	int len = (int)nread;
 	int rv = 0;
@@ -805,6 +808,8 @@ as_uv_tls_write_pending_complete(uv_write_t* req, int status)
 	as_event_command* cmd = as_uv_get_command(conn);
 
 	if (status == 0) {
+		cmd->bytes_out += tls->len;
+
 		if (cmd->pos < cmd->len) {
 			if (tls->error == SSL_ERROR_WANT_READ) {
 				// Start reading.
@@ -938,10 +943,7 @@ as_uv_tls_command_write_start(as_event_command* cmd)
 static inline void
 as_uv_tls_command_start(as_event_command* cmd)
 {
-	as_event_connection_complete(cmd);
-
-	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
-		as_event_connector_success(cmd);
+	if (as_event_connection_complete(cmd)) {
 		return;
 	}
 
@@ -958,6 +960,7 @@ as_uv_tls_read_want_write_complete(uv_write_t* req, int status)
 	as_event_command* cmd = as_uv_get_command(req->data);
 
 	if (status == 0) {
+		cmd->bytes_out += cmd->conn->tls->len;
 		// Resume reading.
 		as_uv_tls_read(cmd);
 	}
@@ -1190,6 +1193,8 @@ as_uv_tls_handshake_send_complete(uv_write_t* req, int status)
 	as_event_command* cmd = as_uv_auth_get_command(req->data);
 
 	if (status == 0) {
+		cmd->bytes_out += cmd->conn->tls->len;
+
 		if (cmd->state == AS_ASYNC_STATE_CONNECT) {
 			// Initiate read once.
 			cmd->state = AS_ASYNC_STATE_TLS_CONNECT;
@@ -1289,9 +1294,9 @@ as_uv_tls_shutdown_complete(uv_write_t* req, int status)
 	uv_close((uv_handle_t*)req->handle, as_uv_connection_closed);
 }
 
-/******************************************************************************
- * END LIBUV TLS FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// End Libuv TLS Functions
+//---------------------------------
 
 void
 as_event_close_connection(as_event_connection* conn)

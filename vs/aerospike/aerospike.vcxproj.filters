@@ -34,12 +34,6 @@
     <Filter Include="Source Files\mod-lua">
       <UniqueIdentifier>{a5ec2876-755e-4e48-a853-7a10c271fcbc}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Header Files\lua">
-      <UniqueIdentifier>{ebc519ab-6c78-43e7-bf69-d67a07529449}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\lua">
-      <UniqueIdentifier>{60b7698e-9072-4cb2-bf4c-b4490f325143}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\include\aerospike\aerospike.h">
@@ -411,90 +405,6 @@
     <ClInclude Include="..\..\modules\common\src\include\aerospike\as_arch.h">
       <Filter>Header Files\common\aerospike</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lapi.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lauxlib.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lcode.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lctype.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\ldebug.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\ldo.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lfunc.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lgc.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\ljumptab.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\llex.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\llimits.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lmem.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lobject.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lopcodes.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lopnames.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lparser.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lprefix.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lstate.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lstring.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\ltable.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\ltests.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\ltm.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lua.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\luaconf.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lualib.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lundump.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lvm.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\modules\lua\lzio.h">
-      <Filter>Header Files\lua</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\include\aerospike\as_metrics.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -511,6 +421,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\include\aerospike\aerospike_txn.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\aerospike\as_config_file.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\aerospike\as_version.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\aerospike\as_conn_recover.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -857,108 +776,6 @@
     <ClCompile Include="..\..\modules\common\src\main\aerospike\as_orderedmap.c">
       <Filter>Source Files\common\aerospike</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lapi.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lauxlib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lbaselib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lcode.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lcorolib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lctype.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\ldblib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\ldebug.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\ldo.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\ldump.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lfunc.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lgc.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\linit.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\liolib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\llex.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lmathlib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lmem.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\loadlib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lobject.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lopcodes.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\loslib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lparser.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lstate.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lstring.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lstrlib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\ltable.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\ltablib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\ltests.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\ltm.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lua.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lundump.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lutf8lib.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lvm.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\modules\lua\lzio.c">
-      <Filter>Source Files\lua</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_metrics.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -975,6 +792,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_txn_monitor.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_config_file.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_version.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_conn_recover.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

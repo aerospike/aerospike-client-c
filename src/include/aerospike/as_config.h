@@ -60,6 +60,16 @@ extern "C" {
  */
 #define AS_PASSWORD_SIZE 64
 
+/**
+ * Minimum tend interval in milliseconds.
+ */
+#define AS_TEND_INTERVAL_MIN 250
+
+/**
+ * Default interval in milliseconds between dynamic configuration check for file modifications.
+ */
+#define AS_CONFIG_PROVIDER_INTERVAL_DEFAULT 60000
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -346,6 +356,33 @@ typedef struct as_config_tls_s {
 } as_config_tls;
 
 /**
+ * Dynamic configuration provider. Determines how to retrieve cluster policies.
+ *
+ * @relates as_config
+ */
+typedef struct as_config_provider_s {
+
+	/**
+	 * Dynamic configuration file path. If set, cluster policies will be read from the yaml file at cluster
+	 * initialization and whenever the file changes. The policies fields in the file
+	 * override all command policies.
+	 *
+	 * Use as_config_provider_set_path() to set this field.
+	 * Default: NULL
+	 */
+	char* path;
+
+	/**
+	 * Interval in milliseconds between dynamic configuration check for file modifications.
+	 * The value must be greater than or equal to the tend interval.
+	 *
+	 * Default: 60000
+	 */
+	uint32_t interval;
+
+} as_config_provider;
+
+/**
  * The `as_config` contains the settings for the `aerospike` client. Including
  * default policies, seed hosts in the cluster and other settings.
  *
@@ -354,10 +391,10 @@ typedef struct as_config_tls_s {
  * Before using as_config, you must first initialize it. This will setup the 
  * default values.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
- * ~~~~~~~~~~
+ * @endcode
  *
  * Once initialized, you can populate the values.
  *
@@ -366,9 +403,9 @@ typedef struct as_config_tls_s {
  * The client will require at least one seed host defined in the 
  * configuration. The seed host is defined in `as_config.hosts`. 
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config_add_host(&config, "127.0.0.1", 3000);
- * ~~~~~~~~~~
+ * @endcode
  *
  * The client will iterate over the list until it connects with one of the hosts.
  *
@@ -397,9 +434,9 @@ typedef struct as_config_tls_s {
  * to `aerospike_key_put()`, then you may find it beneficial to set the global
  * `as_policy_write` in `as_policies.write`, which all write operations will use.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * config.policies.write.key = AS_POLICY_KEY_SEND;
- * ~~~~~~~~~~
+ * @endcode
  *
  * Global operation policies:
  * - as_policies.read
@@ -418,12 +455,9 @@ typedef struct as_config_tls_s {
  * which allows you to define a path to where the client library will look for
  * Lua files for processing.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * strcpy(config.mod_lua.user_path, "/home/me/lua");
- * ~~~~~~~~~~
- *
- * Never call as_config_destroy() directly because ownership of config fields
- * is transferred to aerospike in aerospike_init() or aerospike_new().
+ * @endcode
  *
  * @ingroup client_objects
  */
@@ -450,10 +484,19 @@ typedef struct as_config_s {
 	 * seed nodes belong to the expected cluster on startup.  If not, the client will refuse
 	 * to add the node to the client's view of the cluster.
 	 *
+	 * Use as_config_set_cluster_name() to set this field.
+	 *
 	 * Default: NULL
 	 */
 	char* cluster_name;
 	
+	/**
+	 * Application identifier. Use as_config_set_app_id() to set this field.
+	 *
+	 * Default: NULL
+	 */
+	char* app_id;
+
 	/**
 	 * Cluster event function that will be called when nodes are added/removed from the cluster.
 	 *
@@ -496,6 +539,9 @@ typedef struct as_config_s {
 	 * min_conns_per_node is greater than zero.  Reaping connections can defeat the purpose
 	 * of keeping connections in reserve for a future burst of activity.
 	 *
+	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
+	 * the server will stop automatically reaping based on socket idle timeouts.
+	 *
 	 * Default: 0
 	 */
 	uint32_t min_conns_per_node;
@@ -521,6 +567,9 @@ typedef struct as_config_s {
 	 * Server proto-fd-idle-ms and client max_socket_idle should be set to zero (no reap) if
 	 * async_min_conns_per_node is greater than zero.  Reaping connections can defeat the purpose
 	 * of keeping connections in reserve for a future burst of activity.
+	 *
+	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
+	 * the server will stop automatically reaping based on socket idle timeouts.
 	 *
 	 * Default: 0
 	 */
@@ -560,8 +609,8 @@ typedef struct as_config_s {
 	uint32_t conn_pools_per_node;
 
 	/**
-	 * Initial host connection timeout in milliseconds.  The timeout when opening a connection
-	 * to the server host for the first time.
+	 * Cluster tend info command timeout in milliseconds.
+	 *
 	 * Default: 1000
 	 */
 	uint32_t conn_timeout_ms;
@@ -589,6 +638,9 @@ typedef struct as_config_s {
 	 * when max_socket_idle is zero.  Idle connections will still be trimmed down from peak
 	 * connections to min connections (min_conns_per_node and async_min_conns_per_node) using a
 	 * hard-coded 55 second limit in the cluster tend thread.
+	 *
+	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
+	 * the server will stop automatically reaping based on socket idle timeouts.
 	 *
 	 * Default: 0 seconds
 	 */
@@ -650,6 +702,11 @@ typedef struct as_config_s {
 	as_policies policies;
 
 	/**
+	 * Dynamic configuration provider.
+	 */
+	as_config_provider config_provider;
+
+	/**
 	 * lua config.  This is a global config even though it's located here in cluster config.
 	 * This config has been left here to avoid breaking the API.
 	 *
@@ -657,7 +714,7 @@ typedef struct as_config_s {
 	 * A better method for initializing lua configuration is to leave this field alone and
 	 * instead call aerospike_init_lua():
 	 *
-	 * ~~~~~~~~~~{.c}
+	 * @code
 	 * // Get default global lua configuration.
 	 * as_config_lua lua;
 	 * as_config_lua_init(&lua);
@@ -668,7 +725,7 @@ typedef struct as_config_s {
 	 *
 	 * // Initialize global lua configuration.
 	 * aerospike_init_lua(&lua);
-	 * ~~~~~~~~~~
+	 * @endcode
 	 */
 	as_config_lua lua;
 
@@ -696,7 +753,20 @@ typedef struct as_config_s {
 	bool fail_if_not_connected;
 	
 	/**
-	 * Flag to signify if "services-alternate" should be used instead of "services"
+	 * Flag to signify if alternate IP address discovery info commands should be used.
+	 *
+	 * If false, use:
+	 * IP address: service-clear-std
+	 * TLS IP address: service-tls-std
+	 * Peers addresses: peers-clear-std
+	 * Peers TLS addresses: peers-tls-std
+	 *
+	 * If true, use:
+	 * IP address: service-clear-alt
+	 * TLS IP address: service-tls-alt
+	 * Peers addresses: peers-clear-alt
+	 * Peers TLS addresses: peers-tls-alt
+	 *
 	 * Default: false
 	 */
 	bool use_services_alternate;
@@ -801,11 +871,11 @@ typedef struct as_config_s {
  * You should do this to ensure the configuration has valid values, before 
  * populating it with custom options.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * as_config_add_host(&config, "127.0.0.1", 3000);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @relates as_config
  */
@@ -813,23 +883,34 @@ AS_EXTERN as_config*
 as_config_init(as_config* config);
 
 /**
+ * Destroy configuration.
+ *
+ * Do not call as_config_destroy() after calling aerospike_init() or aerospike_new() because
+ * ownership of config fields is transferred to the aerospike instance.
+ *
+ * @relates as_config
+ */
+AS_EXTERN void
+as_config_destroy(as_config* config);
+
+/**
  * Add seed host(s) from a string with format: hostname1[:tlsname1][:port1],...
  * Hostname may also be an IP address in the following formats.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * IPv4: xxx.xxx.xxx.xxx
  * IPv6: [xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx]
  * IPv6: [xxxx::xxxx]
- * ~~~~~~~~~~
+ * @endcode
  *
  * The host addresses will be copied.
  * The caller is responsible for the original string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * as_config_add_hosts(&config, "host1,host2:3010,192.168.20.1:3020,[2001::1000]:3030", 3000);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */
@@ -841,11 +922,11 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
  * The host address will be copied.
  * The caller is responsible for the original address string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * as_config_add_host(&config, "127.0.0.1", 3000);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */
@@ -864,11 +945,11 @@ as_config_clear_hosts(as_config* config);
  * User authentication for servers with restricted access.  The password will be stored by the
  * client and sent to server in hashed format.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * 	as_config config;
  * 	as_config_init(&config);
  * 	as_config_set_user(&config, "charlie", "mypassword");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */
@@ -890,6 +971,17 @@ static inline void
 as_config_set_cluster_name(as_config* config, const char* cluster_name)
 {
 	as_config_set_string(&config->cluster_name, cluster_name);
+}
+
+/**
+ * Set application identifier.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_set_app_id(as_config* config, const char* app_id)
+{
+	as_config_set_string(&config->app_id, app_id);
 }
 
 /**
@@ -1042,16 +1134,43 @@ as_config_tls_set_certstring(as_config* config, const char* certstring)
  * The host address and TLS name will be copied.
  * The caller is responsible for the original address string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * as_config_tls_add_host(&config, "127.0.0.1", "node1.test.org", 3000);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */
 AS_EXTERN void
 as_config_tls_add_host(as_config* config, const char* address, const char* tls_name, uint16_t port);
+
+/**
+ * Set dynamic configuration file path.
+ *
+ * An altenate way to set the path is to set environment variable AEROSPIKE_CLIENT_CONFIG_URL
+ * before running the application.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_provider_set_path(as_config* config, const char* path)
+{
+	as_config_set_string(&config->config_provider.path, path);
+}
+
+/**
+ * Set dynamic configuration file path and file modification check interval.
+ * The interval is the number of cluster tend iterations.
+ *
+ * @relates as_config
+ */
+static inline void
+as_config_provider_set(as_config* config, const char* path, uint32_t interval)
+{
+	as_config_provider_set_path(config, path);
+	config->config_provider.interval = interval;
+}
 
 /**
  * Add rack id to list of server racks in order of preference. Only add racks that
@@ -1062,7 +1181,7 @@ as_config_tls_add_host(as_config* config, const char* address, const char* tls_n
  * rack_aware, AS_POLICY_REPLICA_PREFER_RACK and server rack configuration must also be
  * set to enable this functionality.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_config config;
  * as_config_init(&config);
  * // Rack 4 is where the client machine is located.
@@ -1071,7 +1190,7 @@ as_config_tls_add_host(as_config* config, const char* address, const char* tls_n
  * as_config_add_rack_id(&config, 2);
  * // All other racks are far enough away that they are equally not preferred, so do not include
  * // them here.
- * ~~~~~~~~~~
+ * @endcode
  *
  * @relates as_config
  */
@@ -1083,6 +1202,13 @@ as_config_add_rack_id(as_config* config, int rack_id);
  */
 AS_EXTERN bool
 as_auth_mode_from_string(as_auth_mode* auth, const char* str);
+
+/**
+ * @private
+ * Validate and modify max_error_rate and error_rate_window if not within bounds.
+ */
+void
+as_config_massage_error_rate(as_config* config);
 
 #ifdef __cplusplus
 } // end extern "C"

@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\openssl-native.3.0.16\build\native\openssl-native.props" Condition="Exists('..\packages\openssl-native.3.0.16\build\native\openssl-native.props')" />
   <PropertyGroup Label="Packages" Condition="'$(PackagesPath)' == ''">
     <PackagesPath>..\packages</PackagesPath>
   </PropertyGroup>
@@ -135,27 +136,35 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
+    <libyamlPlatformToolset>v142</libyamlPlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libevent|x64'">
     <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
+    <libyamlPlatformToolset>v142</libyamlPlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release libuv|x64'">
     <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
+    <libyamlPlatformToolset>v142</libyamlPlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release nodejs|x64'">
     <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
+    <libyamlPlatformToolset>v142</libyamlPlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
+    <libyamlPlatformToolset>v142</libyamlPlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libevent|x64'">
     <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
+    <libyamlPlatformToolset>v142</libyamlPlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug libuv|x64'">
     <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
+    <libyamlPlatformToolset>v142</libyamlPlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug nodejs|x64'">
     <IncludePath>..\..\src\include;..\..\modules\common\src\include;..\..\modules\mod-lua\src\include;..\..\modules\lua;$(IncludePath)</IncludePath>
+    <libyamlPlatformToolset>v142</libyamlPlatformToolset>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -332,34 +341,6 @@
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_queue.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_random.h" />
     <ClInclude Include="..\..\modules\common\src\include\citrusleaf\cf_rchash.h" />
-    <ClInclude Include="..\..\modules\lua\lapi.h" />
-    <ClInclude Include="..\..\modules\lua\lauxlib.h" />
-    <ClInclude Include="..\..\modules\lua\lcode.h" />
-    <ClInclude Include="..\..\modules\lua\lctype.h" />
-    <ClInclude Include="..\..\modules\lua\ldebug.h" />
-    <ClInclude Include="..\..\modules\lua\ldo.h" />
-    <ClInclude Include="..\..\modules\lua\lfunc.h" />
-    <ClInclude Include="..\..\modules\lua\lgc.h" />
-    <ClInclude Include="..\..\modules\lua\ljumptab.h" />
-    <ClInclude Include="..\..\modules\lua\llex.h" />
-    <ClInclude Include="..\..\modules\lua\llimits.h" />
-    <ClInclude Include="..\..\modules\lua\lmem.h" />
-    <ClInclude Include="..\..\modules\lua\lobject.h" />
-    <ClInclude Include="..\..\modules\lua\lopcodes.h" />
-    <ClInclude Include="..\..\modules\lua\lopnames.h" />
-    <ClInclude Include="..\..\modules\lua\lparser.h" />
-    <ClInclude Include="..\..\modules\lua\lprefix.h" />
-    <ClInclude Include="..\..\modules\lua\lstate.h" />
-    <ClInclude Include="..\..\modules\lua\lstring.h" />
-    <ClInclude Include="..\..\modules\lua\ltable.h" />
-    <ClInclude Include="..\..\modules\lua\ltests.h" />
-    <ClInclude Include="..\..\modules\lua\ltm.h" />
-    <ClInclude Include="..\..\modules\lua\lua.h" />
-    <ClInclude Include="..\..\modules\lua\luaconf.h" />
-    <ClInclude Include="..\..\modules\lua\lualib.h" />
-    <ClInclude Include="..\..\modules\lua\lundump.h" />
-    <ClInclude Include="..\..\modules\lua\lvm.h" />
-    <ClInclude Include="..\..\modules\lua\lzio.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike_batch.h" />
     <ClInclude Include="..\..\src\include\aerospike\aerospike_index.h" />
@@ -383,7 +364,9 @@
     <ClInclude Include="..\..\src\include\aerospike\as_cluster.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_command.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_config.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_config_file.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_conn_pool.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_conn_recover.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_cpu.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_error.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_event.h" />
@@ -424,6 +407,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_txn.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_txn_monitor.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_udf.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_version.h" />
     <ClInclude Include="..\..\src\include\aerospike\version.h" />
   </ItemGroup>
   <ItemGroup>
@@ -474,40 +458,6 @@
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_ll.c" />
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_queue.c" />
     <ClCompile Include="..\..\modules\common\src\main\citrusleaf\cf_random.c" />
-    <ClCompile Include="..\..\modules\lua\lapi.c" />
-    <ClCompile Include="..\..\modules\lua\lauxlib.c" />
-    <ClCompile Include="..\..\modules\lua\lbaselib.c" />
-    <ClCompile Include="..\..\modules\lua\lcode.c" />
-    <ClCompile Include="..\..\modules\lua\lcorolib.c" />
-    <ClCompile Include="..\..\modules\lua\lctype.c" />
-    <ClCompile Include="..\..\modules\lua\ldblib.c" />
-    <ClCompile Include="..\..\modules\lua\ldebug.c" />
-    <ClCompile Include="..\..\modules\lua\ldo.c" />
-    <ClCompile Include="..\..\modules\lua\ldump.c" />
-    <ClCompile Include="..\..\modules\lua\lfunc.c" />
-    <ClCompile Include="..\..\modules\lua\lgc.c" />
-    <ClCompile Include="..\..\modules\lua\linit.c" />
-    <ClCompile Include="..\..\modules\lua\liolib.c" />
-    <ClCompile Include="..\..\modules\lua\llex.c" />
-    <ClCompile Include="..\..\modules\lua\lmathlib.c" />
-    <ClCompile Include="..\..\modules\lua\lmem.c" />
-    <ClCompile Include="..\..\modules\lua\loadlib.c" />
-    <ClCompile Include="..\..\modules\lua\lobject.c" />
-    <ClCompile Include="..\..\modules\lua\lopcodes.c" />
-    <ClCompile Include="..\..\modules\lua\loslib.c" />
-    <ClCompile Include="..\..\modules\lua\lparser.c" />
-    <ClCompile Include="..\..\modules\lua\lstate.c" />
-    <ClCompile Include="..\..\modules\lua\lstring.c" />
-    <ClCompile Include="..\..\modules\lua\lstrlib.c" />
-    <ClCompile Include="..\..\modules\lua\ltable.c" />
-    <ClCompile Include="..\..\modules\lua\ltablib.c" />
-    <ClCompile Include="..\..\modules\lua\ltests.c" />
-    <ClCompile Include="..\..\modules\lua\ltm.c" />
-    <ClCompile Include="..\..\modules\lua\lua.c" />
-    <ClCompile Include="..\..\modules\lua\lundump.c" />
-    <ClCompile Include="..\..\modules\lua\lutf8lib.c" />
-    <ClCompile Include="..\..\modules\lua\lvm.c" />
-    <ClCompile Include="..\..\modules\lua\lzio.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\internal.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua.c" />
     <ClCompile Include="..\..\modules\mod-lua\src\main\mod_lua_aerospike.c" />
@@ -541,6 +491,8 @@
     <ClCompile Include="..\..\src\main\aerospike\as_cluster.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_command.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_config.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_config_file.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_conn_recover.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_error.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event_event.c" />
@@ -579,6 +531,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_txn.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_txn_monitor.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_udf.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_version.c" />
     <ClCompile Include="..\..\src\main\aerospike\version.c" />
     <ClCompile Include="..\..\src\main\aerospike\_bin.c" />
   </ItemGroup>
@@ -587,12 +540,19 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\aerospike-client-c-dependencies.1.0.2\build\native\aerospike-client-c-dependencies.targets" Condition="Exists('..\packages\aerospike-client-c-dependencies.1.0.2\build\native\aerospike-client-c-dependencies.targets')" />
+    <Import Project="..\packages\libyaml.0.2.5.12\build\native\libyaml.targets" Condition="Exists('..\packages\libyaml.0.2.5.12\build\native\libyaml.targets')" />
+    <Import Project="..\packages\openssl-native.3.0.16\build\native\openssl-native.targets" Condition="Exists('..\packages\openssl-native.3.0.16\build\native\openssl-native.targets')" />
+    <Import Project="..\packages\lua.5.4.6\build\native\Lua.targets" Condition="Exists('..\packages\lua.5.4.6\build\native\Lua.targets')" />
+    <Import Project="..\packages\aerospike-client-c-dependencies.1.0.3\build\native\aerospike-client-c-dependencies.targets" Condition="Exists('..\packages\aerospike-client-c-dependencies.1.0.3\build\native\aerospike-client-c-dependencies.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\aerospike-client-c-dependencies.1.0.2\build\native\aerospike-client-c-dependencies.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\aerospike-client-c-dependencies.1.0.2\build\native\aerospike-client-c-dependencies.targets'))" />
+    <Error Condition="!Exists('..\packages\libyaml.0.2.5.12\build\native\libyaml.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\libyaml.0.2.5.12\build\native\libyaml.targets'))" />
+    <Error Condition="!Exists('..\packages\openssl-native.3.0.16\build\native\openssl-native.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\openssl-native.3.0.16\build\native\openssl-native.props'))" />
+    <Error Condition="!Exists('..\packages\openssl-native.3.0.16\build\native\openssl-native.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\openssl-native.3.0.16\build\native\openssl-native.targets'))" />
+    <Error Condition="!Exists('..\packages\lua.5.4.6\build\native\Lua.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\lua.5.4.6\build\native\Lua.targets'))" />
+    <Error Condition="!Exists('..\packages\aerospike-client-c-dependencies.1.0.3\build\native\aerospike-client-c-dependencies.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\aerospike-client-c-dependencies.1.0.3\build\native\aerospike-client-c-dependencies.targets'))" />
   </Target>
 </Project>

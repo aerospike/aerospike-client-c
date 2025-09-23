@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -18,19 +18,21 @@
 
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_file.h>
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_thread_pool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * @private
@@ -114,7 +116,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Nodes to be garbage collected.
+	 * Garbage collector.
 	 */
 	as_vector* /* <as_gc_item> */ gc;
 	
@@ -148,6 +150,11 @@ typedef struct as_cluster_s {
 	 */
 	char* cluster_name;
 	
+	/**
+	 * Application identifier.  May be null.
+	 */
+	char* app_id;
+
 	/**
 	 * Cluster event function that will be called when nodes are added/removed from the cluster.
 	 */
@@ -227,6 +234,13 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Queue of sockets that have experienced read timeouts.  This queue is to be
+	 * processed by the tend thread.
+	 */
+	as_queue_mt recover_queue;
+
+	/**
+	 * @private
 	 * Maximum socket idle to validate connections in commands.
 	 */
 	uint64_t max_socket_idle_ns_tran;
@@ -241,13 +255,7 @@ typedef struct as_cluster_s {
 	 * @private
 	 * Rack ids
 	 */
-	int* rack_ids;
-
-	/**
-	 * @private
-	 * Rack ids size
-	 */
-	uint32_t rack_ids_size;
+	as_vector* rack_ids;
 
 	/**
 	 * @private
@@ -311,7 +319,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Initial connection timeout in milliseconds.
+	 * Cluster tend info command timeout in milliseconds.
 	 */
 	uint32_t conn_timeout_ms;
 
@@ -323,9 +331,21 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Random node index.
+	 * Random node index counter.
 	 */
 	uint32_t node_index;
+
+	/**
+	 * @private
+	 * AS_POLICY_REPLICA_ANY index counter.
+	 */
+	uint32_t replica_index_any;
+
+	/**
+	 * @private
+	 * AS_POLICY_REPLICA_RANDOM index counter.
+	 */
+	uint32_t replica_index_random;
 
 	/**
 	 * @private
@@ -353,7 +373,7 @@ typedef struct as_cluster_s {
 	
 	/**
 	 * @private
-	 * If "services-alternate" should be used instead of "services"
+	 * If alternate services info commands should be used.
 	 */
 	bool use_services_alternate;
 	
@@ -395,34 +415,34 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Number of cluster tend iterations between metrics notification events. One tend iteration
-	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
-	 * nodes. This is set using as_policy_metrics.
-	 */
-	uint32_t metrics_interval;
-
-	/**
-	 * @private
 	 * Number of elapsed time range buckets in latency histograms. This is set using as_policy_metrics.
 	 */
-	uint32_t metrics_latency_columns;
+	uint8_t metrics_latency_columns;
 
 	/**
 	 * @private
 	 * Power of 2 multiple between each range bucket in latency histograms starting at column 3. The bucket units
 	 * are in milliseconds. The first 2 buckets are "<=1ms" and ">1ms". Examples:
 	 * 
-	 * ~~~~~~~~~~{.c}
+	 * @code
 	 * // latencyColumns=7 latencyShift=1
 	 * <=1ms >1ms >2ms >4ms >8ms >16ms >32ms
 	 *
 	 * // latencyColumns=5 latencyShift=3
 	 * <=1ms >1ms >8ms >64ms >512ms
-	 * ~~~~~~~~~~
+	 * @endcode
 	 * 
 	 * This is set using as_policy_metrics.
 	 */
-	uint32_t metrics_latency_shift;
+	uint8_t metrics_latency_shift;
+
+	/**
+	 * @private
+	 * Number of cluster tend iterations between metrics notification events. One tend iteration
+	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
+	 * nodes. This is set using as_policy_metrics.
+	 */
+	uint32_t metrics_interval;
 
 	/**
 	 * @private
@@ -455,17 +475,37 @@ typedef struct as_cluster_s {
 	 */
 	uint64_t delay_queue_timeout_count;
 
+	/**
+	 * @private
+	 * Aerospike back pointer.
+	 */
+	struct aerospike_s* as;
+
+	/**
+	 * @private
+	 * Dynamic configuration file status.
+	 */
+	as_file_status config_file_status;
+
+	/**
+	 * @private
+	 * Milliseconds between dynamic configuration check for file modifications.
+	 */
+	uint32_t config_interval;
+
 } as_cluster;
 
-/******************************************************************************
- * FUNCTIONS
- ******************************************************************************/
+struct aerospike_s;
+
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Create and initialize cluster.
  */
 as_status
-as_cluster_create(as_config* config, as_error* err, as_cluster** cluster);
+as_cluster_create(struct aerospike_s* as, as_error* err);
 
 /**
  * Close all connections and release memory associated with cluster.
@@ -599,7 +639,7 @@ as_partition_shm_get_node(
  * Enable the collection of metrics
  */
 as_status
-as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy* policy);
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy);
 
 /**
  * @private
@@ -693,6 +733,17 @@ as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
 
 /**
  * @private
+ * Get a count of the number of sockets currently waiting for timeout recovery.
+ * This is determined directly from the queue itself.
+ */
+static inline uint32_t
+as_cluster_recover_queue_size(as_cluster* cluster)
+{
+	return as_queue_mt_size(&cluster->recover_queue);
+}
+
+/**
+ * @private
  * Get mapped node given partition and replica.  This function does not reserve the node.
  * The caller must reserve the node for future use.
  */
@@ -719,40 +770,7 @@ as_partition_get_node(
 static inline void
 as_node_incr_error_rate(as_node* node)
 {
-	if (node->cluster->max_error_rate > 0) {
-		as_incr_uint32(&node->error_rate);
-	}
-}
-
-/**
- * @private
- * Reset node's error count.
- */
-static inline void
-as_node_reset_error_rate(as_node* node)
-{
-	as_store_uint32(&node->error_rate, 0);
-}
-
-/**
- * @private
- * Get node's error count.
- */
-static inline uint32_t
-as_node_get_error_rate(as_node* node)
-{
-	return as_load_uint32(&node->error_rate);
-}
-
-/**
- * @private
- * Validate node's error count.
- */
-static inline bool
-as_node_valid_error_rate(as_node* node)
-{
-	uint32_t max = node->cluster->max_error_rate;
-	return max == 0 || max >= as_load_uint32(&node->error_rate);
+	as_incr_uint32(&node->error_rate);
 }
 
 /**
@@ -775,6 +793,12 @@ as_node_put_conn_error(as_node* node, as_socket* sock)
 {
 	as_node_put_connection(node, sock);
 	as_node_incr_error_rate(node);
+}
+
+static inline as_vector*
+as_rack_ids_load(as_vector** rack_ids)
+{
+	return (as_vector*)as_load_ptr((void* const*)rack_ids);
 }
 
 #ifdef __cplusplus

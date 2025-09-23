@@ -77,7 +77,7 @@ ifeq ($(EVENT_LIB),libevent)
   TEST_LDFLAGS += -levent_core -levent_pthreads
 endif
 
-TEST_LDFLAGS += -lssl -lcrypto -lpthread -lm -lz $(LINK_SUFFIX)
+TEST_LDFLAGS += -lssl -lcrypto -lpthread -lyaml -lm -lz $(LINK_SUFFIX)
 
 AS_HOST := 127.0.0.1
 AS_PORT := 3000

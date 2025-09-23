@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2021 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,15 +25,15 @@
 #include <citrusleaf/cf_clock.h>
 #include <string.h>
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t size, as_vector* list);
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 // Commands
 #define AUTHENTICATE 0
@@ -78,9 +78,9 @@ typedef as_status (*as_admin_parse_fn) (as_error* err, uint8_t* buffer, size_t s
 #define RESULT_CODE 9
 #define DEFAULT_TIMEOUT 60000  // one minute
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static uint8_t*
 as_admin_write_header(uint8_t* p, uint8_t command, uint8_t field_count)
@@ -218,31 +218,60 @@ as_admin_send(
 	uint64_t proto = (len - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_ADMIN_MESSAGE_TYPE << 48);
 	*(uint64_t*)buffer = cf_swap_to_be64(proto);
 	
-	return as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
+	as_status status = as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
+
+	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
+		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
+
+		if (metrics) {
+			as_node_add_bytes_out(metrics, len);
+		}
+	}
+	return status;
+}
+
+static inline as_status
+as_admin_receive(
+	as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint64_t len,
+	uint32_t socket_timeout, uint64_t deadline_ms, as_socket_context* ctx
+	)
+{
+	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout,
+		deadline_ms, ctx);
+
+	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
+		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
+
+		if (metrics) {
+			as_node_add_bytes_in(metrics, len);
+		}
+	}
+	return status;
+}
+
+static uint32_t
+as_policy_admin_get_timeout(aerospike* as)
+{
+	as_config* config = aerospike_load_config(as);
+	return config->policies.admin.timeout;
 }
 
 static as_status
-as_admin_execute(
-	aerospike* as, as_error* err, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end
+as_admin_execute_node(
+	aerospike* as, as_node* node, as_error* err, const as_policy_admin* policy, uint8_t* buffer,
+	uint8_t* end
 	)
 {
-	uint32_t timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	uint32_t timeout_ms = (policy)? policy->timeout : as_policy_admin_get_timeout(as);
 	if (timeout_ms == 0) {
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-	as_cluster* cluster = as->cluster;
-	as_node* node = as_node_get_random(cluster);
-	
-	if (! node) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
-	}
-	
+
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &socket);
-	
+	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &socket, NULL);
+
 	if (status) {
-		as_node_release(node);
 		return status;
 	}
 
@@ -250,26 +279,39 @@ as_admin_execute(
 	
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
-		as_node_release(node);
 		return status;
 	}
-	
-	status = as_socket_read_deadline(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms);
-	
+
+	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms, NULL);
+
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
-		as_node_release(node);
 		return status;
 	}
 	
 	as_node_put_connection(node, &socket);
-	as_node_release(node);
-	
+
 	status = buffer[RESULT_CODE];
 	
 	if (status) {
 		return as_error_set_message(err, status, as_error_string(status));
 	}
+	return status;
+}
+
+static inline as_status
+as_admin_execute(
+	aerospike* as, as_error* err, const as_policy_admin* policy, uint8_t* buffer, uint8_t* end
+	)
+{
+	as_node* node = as_node_get_random(as->cluster);
+	
+	if (! node) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node");
+	}
+
+	as_status status = as_admin_execute_node(as, node, err, policy, buffer, end);
+	as_node_release(node);
 	return status;
 }
 
@@ -282,13 +324,12 @@ as_admin_read_blocks(
 	as_status status = AEROSPIKE_OK;
 	uint8_t* buf = 0;
 	size_t capacity = 0;
-	
+
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0,
-										 deadline_ms);
-		
+		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms, NULL);
+
 		if (status) {
 			break;
 		}
@@ -310,8 +351,8 @@ as_admin_read_blocks(
 			}
 			
 			// Read remaining message bytes in group
-			status = as_socket_read_deadline(err, sock, node, buf, size, 0, deadline_ms);
-			
+			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms, NULL);
+
 			if (status) {
 				break;
 			}
@@ -339,7 +380,7 @@ as_admin_read_list(
 	as_admin_parse_fn parse_fn, as_vector* list
 	)
 {
-	int timeout_ms = (policy)? policy->timeout : as->config.policies.admin.timeout;
+	int timeout_ms = (policy)? policy->timeout : as_policy_admin_get_timeout(as);
 	if (timeout_ms <= 0) {
 		timeout_ms = DEFAULT_TIMEOUT;
 	}
@@ -348,12 +389,12 @@ as_admin_read_list(
 	as_node* node = as_node_get_random(cluster);
 	
 	if (! node) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node.");
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node");
 	}
 
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &socket);
-	
+	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &socket, NULL);
+
 	if (status) {
 		as_node_release(node);
 		return status;
@@ -368,7 +409,7 @@ as_admin_read_list(
 	}
 	
 	status = as_admin_read_blocks(err, &socket, node, deadline_ms, parse_fn, list);
-	
+
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
 		as_node_release(node);
@@ -380,9 +421,17 @@ as_admin_read_list(
 	return status;
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+static void
+as_admin_modify_password_error(as_status status, as_error* err)
+{
+	if (status == AEROSPIKE_FORBIDDEN_PASSWORD) {
+		as_strncpy(err->message, "PKI user password not changeable", sizeof(err->message));
+	}
+}
+
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 as_cluster_login(
@@ -416,7 +465,7 @@ as_cluster_login(
 		return status;
 	}
 
-	status = as_socket_read_deadline(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms);
+	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms, NULL);
 
 	if (status) {
 		return status;
@@ -449,7 +498,7 @@ as_cluster_login(
 	}
 
 	// Read remaining message bytes in group
-	status = as_socket_read_deadline(err, sock, NULL, buffer, receive_size, 0, deadline_ms);
+	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms, NULL);
 
 	if (status) {
 		return status;
@@ -526,7 +575,7 @@ as_authenticate_set(as_cluster* cluster, as_session* session, uint8_t* buffer)
 as_status
 as_authenticate(
 	as_cluster* cluster, as_error* err, as_socket* sock, as_node* node, as_session* session,
-	uint32_t socket_timeout, uint64_t deadline_ms
+	uint32_t socket_timeout, uint64_t deadline_ms, as_socket_context* ctx
 	)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -548,8 +597,8 @@ as_authenticate(
 		return status;
 	}
 
-	status = as_socket_read_deadline(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms);
-	
+	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms, ctx);
+
 	if (status) {
 		return status;
 	}
@@ -602,6 +651,56 @@ aerospike_create_user(
 }
 
 as_status
+aerospike_create_pki_user(
+	aerospike* as, as_error* err, const as_policy_admin* policy, const char* user,
+	const char** roles, int roles_size
+	)
+{
+	as_node* node = as_node_get_random(as->cluster);
+	
+	if (! node) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node");
+	}
+
+	if (as_version_compare(&node->version, &as_server_version_8_1) < 0) {
+		char ver_str[32], min_str[32];
+		as_version_to_string(&node->version, ver_str, sizeof(ver_str));
+		as_version_to_string(&as_server_version_8_1, min_str, sizeof(min_str));
+		as_node_release(node);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Node version %s is less than required minimum version %s", ver_str, min_str);
+	}
+
+	as_error_reset(err);
+
+	int len = (int)strlen(user);
+
+	if (len >= AS_USER_SIZE) {
+		as_node_release(node);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Max user length %d exceeded: %d",
+							   AS_USER_SIZE - 1, len)
+	}
+
+	char hash[AS_PASSWORD_HASH_SIZE];
+
+	// nopassword is a special keyword used by server versions 8.1+ to indicate that password
+	// authentication is not allowed.
+	as_password_get_constant_hash("nopassword", hash);
+
+	uint8_t buffer[AS_STACK_BUF_SIZE];
+	uint8_t* p = buffer + 8;
+	
+	p = as_admin_write_header(p, CREATE_USER, 3);
+	p = as_admin_write_field_string(p, USER, user);
+	p = as_admin_write_field_string(p, PASSWORD, hash);
+	p = as_admin_write_roles(p, roles, roles_size);
+
+	as_status status = as_admin_execute_node(as, node, err, policy, buffer, p);
+	as_node_release(node);
+	return status;
+}
+
+as_status
 aerospike_drop_user(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user)
 {
 	as_error_reset(err);
@@ -651,8 +750,11 @@ aerospike_set_password(
 	p = as_admin_write_field_string(p, PASSWORD, hash);
 	int status = as_admin_execute(as, err, policy, buffer, p);
 	
-	if (status == 0) {
+	if (status == AEROSPIKE_OK) {
 		as_cluster_change_password(as->cluster, user, password, hash);
+	}
+	else {
+		as_admin_modify_password_error(status, err);
 	}
 	return status;
 }
@@ -697,8 +799,11 @@ aerospike_change_password(
 	p = as_admin_write_field_string(p, PASSWORD, hash);
 	int status = as_admin_execute(as, err, policy, buffer, p);
 	
-	if (status == 0) {
+	if (status == AEROSPIKE_OK) {
 		as_cluster_change_password(as->cluster, user, password, hash);
+	}
+	else {
+		as_admin_modify_password_error(status, err);
 	}
 	return status;
 }
@@ -956,9 +1061,9 @@ aerospike_set_quotas(
 	return as_admin_execute(as, err, policy, buffer, p);
 }
 
-/******************************************************************************
- * QUERY USERS
- *****************************************************************************/
+//---------------------------------
+// Query Users
+//---------------------------------
 
 static uint8_t*
 as_parse_users_roles(uint8_t* p, as_user** user_out)
@@ -1203,9 +1308,9 @@ as_users_destroy(as_user** users, int users_size)
 	cf_free(users);
 }
 
-/******************************************************************************
- * QUERY ROLES
- *****************************************************************************/
+//---------------------------------
+// Query Roles
+//---------------------------------
 
 static uint8_t*
 as_privileges_parse(uint8_t* p, as_role** role_out)

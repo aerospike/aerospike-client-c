@@ -18,6 +18,8 @@
 #include <aerospike/as_address.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_config_file.h>
+#include <aerospike/as_conn_recover.h>
 #include <aerospike/as_cpu.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
@@ -37,17 +39,17 @@
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 
-/******************************************************************************
- * Globals
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern uint32_t as_event_loop_capacity;
 extern bool as_event_single_thread;
 uint32_t as_cluster_count = 0;
 
-/******************************************************************************
- * Function declarations
- *****************************************************************************/
+//---------------------------------
+// Function Declarations
+//---------------------------------
 
 as_status
 as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers);
@@ -64,9 +66,9 @@ as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node);
 void
 as_event_balance_connections(as_cluster* cluster);
 
-/******************************************************************************
- * Functions
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 static inline void
 set_nodes(as_cluster* cluster, as_nodes* nodes)
@@ -556,22 +558,11 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	as_vector_append(cluster->gc, &item);
 }
 
-static void
-as_cluster_destroy_node_metrics(as_cluster* cluster)
-{
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node_destroy_metrics(nodes->array[i]);
-	}
-	as_nodes_release(nodes);
-}
-
 as_status
-as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy* policy)
+as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
 {
 	bool custom_listener = policy->metrics_listeners.enable_listener != NULL;
-	
+
 	if (custom_listener) {
 		// Ensure all listeners and user data has been defined.
 		if (! (policy->metrics_listeners.enable_listener && policy->metrics_listeners.snapshot_listener &&
@@ -580,15 +571,12 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy*
 			return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "All metrics listeners and udata must be defined");
 		}
 	}
-	
-	pthread_mutex_lock(&cluster->metrics_lock);
 
 	as_status status = AEROSPIKE_OK;
 
 	if (cluster->metrics_enabled) {
 		cluster->metrics_enabled = false;
 		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
-		as_cluster_destroy_node_metrics(cluster);
 
 		if (status != AEROSPIKE_OK) {
 			// Disabling old metrics should not prevent new metrics from being created.
@@ -608,11 +596,10 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy*
 		status = as_metrics_writer_create(err, policy, &cluster->metrics_listeners);
 		
 		if (status != AEROSPIKE_OK) {
-			pthread_mutex_unlock(&cluster->metrics_lock);
 			return status;
 		}
 	}
-	
+
 	cluster->metrics_interval = policy->interval;
 	cluster->metrics_latency_columns = policy->latency_columns;
 	cluster->metrics_latency_shift = policy->latency_shift;
@@ -628,13 +615,10 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, as_metrics_policy*
 	status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
 	
 	if (status != AEROSPIKE_OK) {
-		as_cluster_destroy_node_metrics(cluster);
-		pthread_mutex_unlock(&cluster->metrics_lock);
 		return status;
 	}
 
 	cluster->metrics_enabled = true;
-	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
 }
 
@@ -644,15 +628,11 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 	as_status status = AEROSPIKE_OK;
 	as_error_reset(err);
 
-	pthread_mutex_lock(&cluster->metrics_lock);
-
 	if (cluster->metrics_enabled) {
 		cluster->metrics_enabled = false;
 		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
-		as_cluster_destroy_node_metrics(cluster);
 	}
 
-	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
 }
 
@@ -696,6 +676,9 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 static as_status
 as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 {
+	cluster->n_partitions = 4096;
+	return AEROSPIKE_OK;
+#if 0
 	as_nodes* nodes = cluster->nodes;
 	as_status status = AEROSPIKE_OK;
 	
@@ -735,6 +718,7 @@ as_cluster_set_partition_size(as_cluster* cluster, as_error* err)
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to retrieve partition size from empty cluster");
 	}
 	return status;
+#endif
 }
 
 static void
@@ -761,6 +745,39 @@ as_cluster_reset_error_rate(as_cluster* cluster)
 	}
 }
 
+static void
+as_cluster_tend_recover_queue(as_cluster* cluster)
+{
+	// Note that we cannot use a while (as_queue_mt_pop(...)) construct here,
+	// because if we did, and we have a socket which doesn't fully drain this
+	// tend cycle, then when we go to push it back onto the queue's tail, we'll
+	// just re- pop it if the queue would otherwise be empty.  This creates an
+	// infinite loop.
+	//
+	// For this reason, we must query the size, and just iterate for that many
+	// pops.  Anything else that comes up in the meantime, or if we end up
+	// having to re-queue a socket, won't hurt us.  Plus, it guarantees that we
+	// process each socket at most once.
+	uint32_t queue_size = as_queue_mt_size(&cluster->recover_queue);
+
+	while (queue_size > 0) {
+		as_conn_recover* cr;
+
+		if (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
+			if (as_conn_recover_drain(cr)) {
+				// Connection has either been drained or aborted and closed.
+				as_conn_recover_destroy(cr);
+			}
+			else {
+				// connection needs to be re-queued for later draining
+				as_queue_mt_push(&cluster->recover_queue, &cr);
+			}
+		}
+
+		--queue_size;
+	}
+}
+
 void
 as_cluster_manage(as_cluster* cluster)
 {
@@ -772,9 +789,11 @@ as_cluster_manage(as_cluster* cluster)
 	}
 
 	// Reset connection error window for all nodes every error_rate_window tend iterations.
-	if (cluster->max_error_rate > 0 && cluster->tend_count % cluster->error_rate_window == 0) {
+	if (cluster->tend_count % cluster->error_rate_window == 0) {
 		as_cluster_reset_error_rate(cluster);
 	}
+
+	as_cluster_tend_recover_queue(cluster);
 
 	// Call metrics listener every metrics_interval when enabled.
 	as_status status = AEROSPIKE_OK;
@@ -791,6 +810,19 @@ as_cluster_manage(as_cluster* cluster)
 		// Metrics failures should not interrupt cluster tend.
 		// Log warning and continue processing.
 		as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
+	}
+
+	const char* path = cluster->as->config.config_provider.path;
+	uint32_t config_interval = cluster->config_interval / cluster->tend_interval;
+
+	if (path && cluster->tend_count % config_interval == 0) {
+		if (as_file_has_changed(path, &cluster->config_file_status)) {
+			status = as_config_file_update(cluster->as, &err);
+
+			if (status != AEROSPIKE_OK) {
+				as_log_warn("Dynamic configuration error: %s", err.message);
+			}
+		}
 	}
 }
 
@@ -1190,18 +1222,22 @@ as_cluster_init(as_cluster* cluster, as_error* err)
 as_node*
 as_node_get_random(as_cluster* cluster)
 {
+	// Must handle concurrency with other threads.
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t size = nodes->size;
 
-	for (uint32_t i = 0; i < size; i++) {
-		// Must handle concurrency with other threads.
+	if (size > 0) {
 		uint32_t index = as_faa_uint32(&cluster->node_index, 1);
-		as_node* node = nodes->array[index % size];
 
-		if (as_node_is_active(node)) {
-			as_node_reserve(node);
-			as_nodes_release(nodes);
-			return node;
+		for (uint32_t i = 0; i < size; i++) {
+			as_node* node = nodes->array[index % size];
+
+			if (as_node_is_active(node)) {
+				as_node_reserve(node);
+				as_nodes_release(nodes);
+				return node;
+			}
+			index++;
 		}
 	}
 	as_nodes_release(nodes);
@@ -1390,13 +1426,92 @@ as_cluster_force_single_node(as_cluster* cluster, as_error* err)
 		}
 	}
 
-	cluster->valid = true;
+	cluster->valid = false;
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_validate_timeout_delay(as_error* err, uint32_t timeout_delay, const char* id)
+{
+	if (timeout_delay == 0 || timeout_delay >= 3000) {
+		return AEROSPIKE_OK;
+	}
+
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+		"Invalid %s timeout_delay: %u valid values are 0 or >= 3000",
+			id, timeout_delay);
+}
+
+static as_status
+as_cluster_validate_timeout_delay(as_error* err, as_policies* p)
+{
+	if (as_validate_timeout_delay(err, p->read.base.timeout_delay, "read") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->write.base.timeout_delay, "write") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->operate.base.timeout_delay, "operate") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->apply.base.timeout_delay, "apply") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->remove.base.timeout_delay, "remove") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->scan.base.timeout_delay, "scan") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->query.base.timeout_delay, "query") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->batch.base.timeout_delay, "batch_read") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->batch_parent_write.base.timeout_delay, "batch_write") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->txn_verify.base.timeout_delay, "txn_verify") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->txn_roll.base.timeout_delay, "txn_roll") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	if (as_validate_timeout_delay(err, p->info.timeout_delay, "info") != AEROSPIKE_OK) {
+		return err->code;
+	}
+
 	return AEROSPIKE_OK;
 }
 
 as_status
-as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
+as_cluster_create(aerospike* as, as_error* err)
 {
+	as_config* config = &as->config;
+
+	if (config->tender_interval < AS_TEND_INTERVAL_MIN) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Invalid tend interval: %u. min value: %u", config->tender_interval, AS_TEND_INTERVAL_MIN);
+	}
+
+	if (config->config_provider.path && config->config_provider.interval < config->tender_interval) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Dynamic config interval %u must be greater or equal to the tend interval %u",
+			config->config_provider.interval, config->tender_interval);
+	}
+
 	if (config->min_conns_per_node > config->max_conns_per_node) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid connection range: %u - %u",
 			config->min_conns_per_node, config->max_conns_per_node);
@@ -1407,13 +1522,24 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 			config->async_min_conns_per_node, config->async_max_conns_per_node);
 	}
 
+	if (as_cluster_validate_timeout_delay(err, &config->policies) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
+	as_config_massage_error_rate(config);
+
 	char* pass_hash = NULL;
 
-	if (*(config->user) && config->auth_mode != AS_AUTH_PKI) {
+	if (config->auth_mode == AS_AUTH_PKI) {
+		if (*(config->password)) {
+			return as_error_set_message(err, AEROSPIKE_FORBIDDEN_PASSWORD,
+				"Password authentication is disabled for PKI-only users. Please authenticate using your certificate.");
+		}
+	}
+	else if (*(config->user)) {
 		pass_hash = cf_malloc(AS_PASSWORD_HASH_SIZE);
 
 		if (! as_password_get_constant_hash(config->password, pass_hash)) {
-			*cluster_out = NULL;
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to hash password");
 		}
 	}
@@ -1448,16 +1574,17 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		}
 	}
 
-	// Heap allocated cluster_name continues to be owned by as->config.
+	// Heap allocated cluster_name/app_id continue to be owned by as->config.
 	// Make a reference copy here.
 	cluster->cluster_name = config->cluster_name;
+	cluster->app_id = config->app_id;
 	cluster->event_callback = config->event_callback;
 	cluster->event_callback_udata = config->event_callback_udata;
 
 	// Initialize cluster tend and node parameters
 	cluster->max_error_rate = config->max_error_rate;
 	cluster->error_rate_window = config->error_rate_window;
-	cluster->tend_interval = (config->tender_interval < 250)? 250 : config->tender_interval;
+	cluster->tend_interval = config->tender_interval;
 	cluster->min_conns_per_node = config->min_conns_per_node;
 	cluster->max_conns_per_node = config->max_conns_per_node;
 	cluster->async_min_conns_per_node = config->async_min_conns_per_node;
@@ -1472,15 +1599,17 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->fail_if_not_connected = config->fail_if_not_connected;
 
 	if (config->rack_ids) {
-		cluster->rack_ids_size = config->rack_ids->size;
-		size_t sz = sizeof(int) * config->rack_ids->size;
-		cluster->rack_ids = cf_malloc(sz);
-		memcpy(cluster->rack_ids, config->rack_ids->list, sz);
+		uint32_t max = config->rack_ids->size;
+		cluster->rack_ids = as_vector_create(sizeof(int), max);
+
+		for (uint32_t i = 0; i < max; i++) {
+			int id = *(int*)as_vector_get(config->rack_ids, i);
+			as_vector_append(cluster->rack_ids, &id);
+		}
 	}
 	else {
-		cluster->rack_ids_size = 1;
-		cluster->rack_ids = cf_malloc(sizeof(int));
-		cluster->rack_ids[0] = config->rack_id;
+		cluster->rack_ids = as_vector_create(sizeof(int), 1);
+		as_vector_append(cluster->rack_ids, &config->rack_id);
 	}
 
 	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
@@ -1524,7 +1653,19 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 	// Initialize garbage collection array.
 	cluster->gc = as_vector_create(sizeof(as_gc_item), 8);
-	
+
+	// Initialize the timeout delay recovery queue.
+	// 
+	// The +1 avoids a divide-by-zero fault when config->min_conns_per_node =
+	// 0.  This guarantees that the queue always has at least one empty slot,
+	// even if no minimum connections setting currently exists.
+	if (! as_queue_mt_init(&cluster->recover_queue, sizeof(as_conn_recover*),
+		config->min_conns_per_node + 1)) {
+		as_cluster_destroy(cluster);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Unable to initialize socket timeout recovery queue");
+	}
+
 	// Initialize thread pool.
 	int rc = as_thread_pool_init(&cluster->thread_pool, config->thread_pool_size);
 
@@ -1535,7 +1676,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to initialize thread pool of size %u: %d",
 				config->thread_pool_size, rc);
 		as_cluster_destroy(cluster);
-		*cluster_out = 0;
 		return status;
 	}
 
@@ -1547,7 +1687,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 	}
@@ -1556,7 +1695,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 			as_status status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"TLS is required for external or PKI authentication");
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 	}
@@ -1570,10 +1708,21 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 	cluster->retry_count = 0;
 	cluster->delay_queue_timeout_count = 0;
 
+	cluster->as = as;
+
+	if (config->config_provider.path) {
+		// Heap allocated path continues to be owned by as->config.config_provider
+		// Make a reference copy here.
+		cluster->config_interval = config->config_provider.interval;
+
+		if (!as_file_get_status(config->config_provider.path, &cluster->config_file_status)) {
+			as_log_warn("Failed to read: %s", config->config_provider.path);
+		}
+	}
+
 	if (config->force_single_node) {
 		if (config->use_shm) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "force_single_node does not support shared memory tending");
 		}
 
@@ -1581,11 +1730,9 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
-
-		*cluster_out = cluster;
+		as->cluster = cluster;
 		return status;
 	}
 
@@ -1595,7 +1742,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 	}
@@ -1605,7 +1751,6 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 		
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 		// Run cluster tend thread.
@@ -1620,13 +1765,12 @@ as_cluster_create(as_config* config, as_error* err, as_cluster** cluster_out)
 			status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create tend thread: %s", strerror(errno));
 			pthread_attr_destroy(&attr);
 			as_cluster_destroy(cluster);
-			*cluster_out = 0;
 			return status;
 		}
 		pthread_attr_destroy(&attr);
 	}
 
-	*cluster_out = cluster;
+	as->cluster = cluster;
 	return AEROSPIKE_OK;
 }
 
@@ -1665,6 +1809,13 @@ as_cluster_destroy(as_cluster* cluster)
 	as_cluster_gc(cluster->gc);
 	as_vector_destroy(cluster->gc);
 		
+	// Flush and destroy the timeout recovery queue.
+	as_conn_recover* cr;
+	while (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
+		as_conn_recover_destroy(cr);
+	}
+	as_queue_mt_destroy(&cluster->recover_queue);
+
 	// Destroy partition tables.
 	as_partition_tables_destroy(&cluster->partition_tables);
 
@@ -1684,7 +1835,7 @@ as_cluster_destroy(as_cluster* cluster)
 	}
 
 	// Destroy racks.
-	cf_free(cluster->rack_ids);
+	as_vector_destroy(cluster->rack_ids);
 
 	// Destroy seeds.
 	pthread_mutex_lock(&cluster->seed_lock);
@@ -1709,6 +1860,12 @@ as_cluster_destroy(as_cluster* cluster)
 
 	// Do not free cluster name because as->config owns it.
 	// cf_free(cluster->cluster_name);
+
+	// Do not free app_id because as->config owns it.
+	// cf_free(cluster->app_id);
+
+	// Do not free config_file_path name because as->config owns it.
+	// cf_free(cluster->config_file_path);
 
 	if (cluster->tls_ctx) {
 		as_tls_context_destroy(cluster->tls_ctx);

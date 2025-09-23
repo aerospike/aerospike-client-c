@@ -47,27 +47,27 @@
  * First, we build a scan using as_scan. The scan will be on the "test" namespace and "demo" set.
  * We will select only bins "a" and "b" to be returned for each record.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan scan;
  * as_scan_init(&scan, "test", "demo");
  *
  * as_scan_select_inita(&scan, 2);
  * as_scan_select(&scan, "a");
  * as_scan_select(&scan, "B");
- * ~~~~~~~~~~
+ * @endcode
  * 
  * Now that we have a scan defined, we want to execute it using 
  * aerospike_scan_foreach().
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * if (aerospike_scan_foreach(&as, &err, NULL, &scan, callback, NULL) != AEROSPIKE_OK) {
  *     printf("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
- * ~~~~~~~~~~
+ * @endcode
  * 
  * The callback provided to the function above is implemented as:
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_val* val, void* udata)
  * {
  *     if (!val) {
@@ -79,13 +79,13 @@
  *     // Do not call as_record_destroy() because the calling function will do that for you.
  *     return true;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you are finished with the scan, you should destroy the resources allocated to it:
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan_destroy(&scan);
- * ~~~~~~~~~~
+ * @endcode
  */
 
 #include <aerospike/aerospike.h>
@@ -151,7 +151,7 @@ typedef bool (*as_async_scan_listener)(
  * Scan will be run in the background by a thread on client side.
  * No callback will be called in this case.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_scan scan;
  * as_scan_init(&scan, "test", "demo");
  * 
@@ -164,7 +164,7 @@ typedef bool (*as_async_scan_listener)(
  *     printf("Running background scan job: %ll", scanid);
  * }
  * as_scan_destroy(&scan);
- * ~~~~~~~~~~
+ * @endcode
  *
  * The scanid can be used to query the status of the scan running in the 
  * database via aerospike_scan_info().
@@ -188,10 +188,10 @@ aerospike_scan_background(
 /**
  * Wait for a background scan to be completed by servers.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint64_t scan_id = 1234;
  * aerospike_scan_wait(&as, &err, NULL, scan_id, 0);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -211,7 +211,7 @@ aerospike_scan_wait(
  * Check the progress of a background scan running on the database. The status
  * of the scan running on the datatabse will be populated into an as_scan_info.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * uint64_t scan_id = 1234;
  * as_scan_info scan_info;
  * 
@@ -221,7 +221,7 @@ aerospike_scan_wait(
  * else {
  *     printf("Scan id=%ll, status=%d percent=%d", scan_id, scan_info.status, scan_info.progress_pct);
  * }
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -246,7 +246,7 @@ aerospike_scan_info(
  *
  * If "scan.concurrent" is true (default false), the callback code must be thread-safe.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_val* val, void* udata)
  * {
  *     if (!val) {
@@ -266,7 +266,7 @@ aerospike_scan_info(
  *     printf("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_scan_destroy(&scan);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -291,7 +291,7 @@ aerospike_scan_foreach(
  * The callback function will be called for each record scanned. When all records have
  * been scanned, then callback will be called with a NULL value for the record.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_val* val, void* udata)
  * {
  *     if (!val) {
@@ -320,7 +320,7 @@ aerospike_scan_foreach(
  *
  * free(node_names);
  * as_scan_destroy(&scan);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -348,7 +348,7 @@ aerospike_scan_node(
  *
  * If "scan.concurrent" is true (default false), the callback code must be thread-safe.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool callback(const as_val* val, void* udata)
  * {
  *     if (!val) {
@@ -371,7 +371,7 @@ aerospike_scan_node(
  *     printf("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
  * }
  * as_scan_destroy(&scan);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -400,7 +400,7 @@ aerospike_scan_partitions(
  * Scans of each node will be run on the same event loop, so the listener's implementation does
  * not need to be thread safe.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  *     if (err) {
@@ -423,7 +423,7 @@ aerospike_scan_partitions(
  *
  * as_status status = aerospike_scan_async(&as, &err, NULL, &scan, NULL, my_listener, NULL, NULL);
  * as_scan_destroy(&scan);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -451,7 +451,7 @@ aerospike_scan_async(
  * The listener function will be called for each record scanned. When all records have
  * been scanned, then callback will be called with a NULL value for the record.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  *     if (err) {
@@ -483,7 +483,7 @@ aerospike_scan_async(
  *
  * free(node_names);
  * as_scan_destroy(&scan);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -515,7 +515,7 @@ aerospike_scan_node_async(
  * Scans of each node will be run on the same event loop, so the listener's implementation does
  * not need to be thread safe.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool my_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
  * {
  *     if (err) {
@@ -541,7 +541,7 @@ aerospike_scan_node_async(
  *
  * as_status status = aerospike_scan_partitions_async(&as, &err, NULL, &scan, &pf, my_listener, NULL, NULL);
  * as_scan_destroy(&scan);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -52,9 +52,9 @@ extern "C" {
  *
  * You can create the `as_record` on the stack:
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record rec;
- * ~~~~~~~~~~
+ * @endcode
  * 
  * Then initialize it using either the `as_record_init()` function or 
  * `as_record_inita()` macro.
@@ -63,34 +63,34 @@ extern "C" {
  * allocate the specified number of bins using `malloc()`. The following
  * initializes `rec` with 2 bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_init(&rec, 2);
- * ~~~~~~~~~~
+ * @endcode
  *
  * The `as_record_inita()` macro will initialize the variable, then allocate
  * the specified number of bins using `alloca()`. The following initializes 
  * `rec` with 2 bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_inita(&rec, 2);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * The `as_record_new()` function will allocate an `as_record` on the heap
  * using `malloc()` then allocate the specified number of bins using 
  * `malloc()`. The following creates a new `as_record` with 2 bins.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record* rec = as_record_new(2);
- * ~~~~~~~~~~
+ * @endcode
  * 
  * ## Destruction
  *
  * When you no longer require an as_record, you should call `as_record_destroy()`
  * to release the record and associated resources.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_destroy(rec);
- * ~~~~~~~~~~
+ * @endcode
  *
  * If the record has been ref-counted, then the ref-count will be decremented, 
  * until it reaches 0 (zero), at which point, the record will be released.
@@ -137,7 +137,7 @@ extern "C" {
  * use `as_record_get()`. You can then check the type of the value using
  * `as_val_type()`.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bin_value* value = as_record_get(rec, "bin1");
  * switch ( as_val_type(value) ) {
  * 	case AS_NIL: break;
@@ -151,7 +151,7 @@ extern "C" {
  * 	case AS_REC: break;
  * 	case AS_UNDEF: break;
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * ## Traversing Bins
  *
@@ -235,12 +235,12 @@ typedef struct as_record_s {
  * Initialize a stack allocated `as_record` then allocate `__nbins` capacity 
  * for as_record.bins on the stack.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record record;
  * as_record_inita(&record, 2);
  * as_record_set_int64(&record, "bin1", 123);
  * as_record_set_int64(&record, "bin2", 456);
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you are finished using the `as_record` instance, you should release the 
  * resources allocated to it by calling `as_record_destroy()`.
@@ -265,11 +265,11 @@ typedef struct as_record_s {
 /**
  * Create a new as_record on the heap.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record * r = as_record_new(2);
  * as_record_set_int64(r, "bin1", 123);
  * as_record_set_str(r, "bin1", "abc");
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you are finished using the `as_record` instance, you should release the 
  * resources allocated to it by calling `as_record_destroy()`.
@@ -286,12 +286,12 @@ as_record_new(uint16_t nbins);
 /**
  * Initializes an as_record created on the stack.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record r;
  * as_record_init(&r, 2);
  * as_record_set_int64(&r, "bin1", 123);
  * as_record_set_str(&r, "bin1", "abc");
- * ~~~~~~~~~~
+ * @endcode
  *
  * When you are finished using the `as_record` instance, you should release the 
  * resources allocated to it by calling `as_record_destroy()`.
@@ -344,9 +344,9 @@ as_record_set(as_record* rec, const char* name, as_bin_value* value);
  * Set specified bin's value to a bool.
  * Requires server version 5.6.0+.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_bool(rec, "bin", true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -362,9 +362,9 @@ as_record_set_bool(as_record* rec, const char* name, bool value);
 /**
  * Set specified bin's value to an int64_t.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_int64(rec, "bin", 123);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -380,9 +380,9 @@ as_record_set_int64(as_record* rec, const char* name, int64_t value);
 /**
  * Set specified bin's value to a double.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_double(rec, "bin", 123.456);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -398,9 +398,9 @@ as_record_set_double(as_record* rec, const char* name, double value);
 /**
  * Set specified bin's value to an NULL terminated string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_strp(rec, "bin", strdup("abc"), true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -417,9 +417,9 @@ as_record_set_strp(as_record* rec, const char* name, const char* value, bool fre
 /**
  * Set specified bin's value to an NULL terminated string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_str(rec, "bin", "abc");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -438,9 +438,9 @@ as_record_set_str(as_record* rec, const char* name, const char* value)
 /**
  * Set specified bin's value to an NULL terminated GeoJSON string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_geojson_strp(rec, "bin", strdup("abc"), true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -457,9 +457,9 @@ as_record_set_geojson_strp(as_record* rec, const char* name, const char* value, 
 /**
  * Set specified bin's value to an NULL terminated GeoJSON string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_geojson_str(rec, "bin", "abc");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -478,14 +478,14 @@ as_record_set_geojson_str(as_record* rec, const char* name, const char* value)
 /**
  * Set specified bin's value to an NULL terminated string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t * bytes = (uint8_t *) malloc(3);
  * bytes[0] = 1;
  * bytes[1] = 2;
  * bytes[3] = 3;
  *
  * as_record_set_raw(rec, "bin", bytes, 3, true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -503,14 +503,14 @@ as_record_set_rawp(as_record* rec, const char* name, const uint8_t* value, uint3
 /**
  * Set specified bin's value to an as_bytes value of a specified type.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t * bytes = (uint8_t *) malloc(3);
  * bytes[0] = 1;
  * bytes[1] = 2;
  * bytes[3] = 3;
  *
  * as_record_set_raw(rec, "bin", bytes, 3, true);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -529,10 +529,10 @@ as_record_set_raw_typep(as_record* rec, const char* name, const uint8_t* value, 
 /**
  * Set specified bin's value to an NULL terminated string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint8_t bytes[3] = {1,2,3};
  * as_record_set_raw(rec, "bin", bytes, 3);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -552,9 +552,9 @@ as_record_set_raw(as_record* rec, const char* name, const uint8_t* value, uint32
 /**
  * Set specified bin's value to an as_integer.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_integer(rec, "bin", as_integer_new(123));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -570,9 +570,9 @@ as_record_set_integer(as_record* rec, const char* name, as_integer * value);
 /**
  * Set specified bin's value to an as_double.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_as_double(rec, "bin", as_double_new(123.456));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -588,9 +588,9 @@ as_record_set_as_double(as_record* rec, const char* name, as_double * value);
 /**
  * Set specified bin's value to an as_string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_string(rec, "bin", as_string_new("abc", false));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -606,9 +606,9 @@ as_record_set_string(as_record* rec, const char* name, as_string * value);
 /**
  * Set specified bin's value to an as_geojson.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_geojson(rec, "bin", as_geojson_new("abc", false));
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -624,9 +624,9 @@ as_record_set_geojson(as_record* rec, const char* name, as_geojson * value);
 /**
  * Set specified bin's value to an as_bytes.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_integer(rec, "bin", bytes);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -642,7 +642,7 @@ as_record_set_bytes(as_record* rec, const char* name, as_bytes * value);
 /**
  * Set specified bin's value to an as_list.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_arraylist list;
  * as_arraylist_init(&list);
  * as_arraylist_add_int64(&list, 1);
@@ -650,7 +650,7 @@ as_record_set_bytes(as_record* rec, const char* name, as_bytes * value);
  * as_arraylist_add_int64(&list, 3);
  *
  * as_record_set_list(rec, "bin", &list);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -666,7 +666,7 @@ as_record_set_list(as_record* rec, const char* name, as_list * value);
 /**
  * Set specified bin's value to an as_map.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_hashmap map;
  * as_hashmap_init(&map, 32);
  * as_stringmap_set_int64(&map, "a", 1);
@@ -674,7 +674,7 @@ as_record_set_list(as_record* rec, const char* name, as_list * value);
  * as_stringmap_set_int64(&map, "c", 3);
  *
  * as_record_set_map(rec, "bin", &map);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -690,9 +690,9 @@ as_record_set_map(as_record* rec, const char* name, as_map * value);
 /**
  * Set specified bin's value to as_nil.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_record_set_nil(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -707,9 +707,9 @@ as_record_set_nil(as_record* rec, const char* name);
 /**
  * Get specified bin's value.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_val * value = as_record_get(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -724,9 +724,9 @@ as_record_get(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as a bool.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * bool value = as_record_get_bool(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -741,9 +741,9 @@ as_record_get_bool(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as an int64_t.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * int64_t value = as_record_get_int64(rec, "bin", INT64_MAX);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -759,9 +759,9 @@ as_record_get_int64(const as_record* rec, const char* name, int64_t fallback);
 /**
  * Get specified bin's value as a double.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * double value = as_record_get_double(rec, "bin", -1.0);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -777,9 +777,9 @@ as_record_get_double(const as_record* rec, const char* name, double fallback);
 /**
  * Get specified bin's value as an NULL terminated string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * char* value = as_record_get_str(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -794,9 +794,9 @@ as_record_get_str(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as an NULL terminated GeoJSON string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * char* value = as_record_get_geojson_str(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -811,9 +811,9 @@ as_record_get_geojson_str(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as an as_integer.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_integer * value = as_record_get_integer(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -828,9 +828,9 @@ as_record_get_integer(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as an as_double.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_double * value = as_record_get_as_double(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -845,9 +845,9 @@ as_record_get_as_double(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as an as_string.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_string * value = as_record_get_string(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -862,9 +862,9 @@ as_record_get_string(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as an as_geojson.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_geojson * value = as_record_get_geojson(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -879,9 +879,9 @@ as_record_get_geojson(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as an as_bytes.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_bytes * value = as_record_get_bytes(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -896,9 +896,9 @@ as_record_get_bytes(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as an as_list.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_list * value = as_record_get_list(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -913,9 +913,9 @@ as_record_get_list(const as_record* rec, const char* name);
 /**
  * Get specified bin's value as an as_map.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * as_map * value = as_record_get_map(rec, "bin");
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
@@ -952,7 +952,7 @@ as_record_get_udf_error(const as_record* rec);
 /**
  * Iterate over each bin in the record and invoke the callback function.
  * 
- * ~~~~~~~~~~{.c}
+ * @code
  * bool print_bin(const char* name, const as_val * value, void* udata) {
  * 	char * sval = as_val_tostring(value);
  * 	printf("bin: name=%s, value=%s\n", name, sval);
@@ -961,7 +961,7 @@ as_record_get_udf_error(const as_record* rec);
  * }
  *
  * as_record_foreach(rec, print_bin, NULL);
- * ~~~~~~~~~~
+ * @endcode
  *
  * If the callback returns true, then iteration will continue to the next bin.
  * Otherwise, the iteration will halt and `as_record_foreach()` will return

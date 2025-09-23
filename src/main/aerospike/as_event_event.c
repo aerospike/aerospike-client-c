@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -34,9 +34,9 @@
 #include <event.h>
 #include <event2/thread.h>
 
-/******************************************************************************
- * GLOBALS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern int as_event_send_buffer_size;
 extern int as_event_recv_buffer_size;
@@ -47,9 +47,9 @@ static struct timeval as_immediate_tv;
 static void
 as_event_callback(evutil_socket_t sock, short revents, void* udata);
 
-/******************************************************************************
- * LIBEVENT FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Libevent Functions
+//---------------------------------
 
 void
 as_event_close_loop(as_event_loop* event_loop)
@@ -277,12 +277,13 @@ as_event_write(as_event_command* cmd)
 {
 	uint8_t* buf = (uint8_t*)cmd + cmd->write_offset;
 
-	if (cmd->conn->socket.ctx) {
+	if (cmd->conn->socket.tls) {
 		do {
 			int rv = as_tls_write_once(&cmd->conn->socket, buf + cmd->pos, cmd->len - cmd->pos);
 			if (rv > 0) {
 				as_event_watch_write(cmd);
 				cmd->pos += rv;
+				cmd->bytes_out += rv;
 				continue;
 			}
 			else if (rv == -1) {
@@ -319,6 +320,7 @@ as_event_write(as_event_command* cmd)
 #endif
 			if (bytes > 0) {
 				cmd->pos += bytes;
+				cmd->bytes_out += bytes;
 				continue;
 			}
 		
@@ -362,12 +364,13 @@ as_event_read(as_event_command* cmd)
 {
 	cmd->flags |= AS_ASYNC_FLAGS_EVENT_RECEIVED;
 
-	if (cmd->conn->socket.ctx) {
+	if (cmd->conn->socket.tls) {
 		do {
 			int rv = as_tls_read_once(&cmd->conn->socket, cmd->buf + cmd->pos, cmd->len - cmd->pos);
 			if (rv > 0) {
 				as_event_watch_read(cmd);
 				cmd->pos += rv;
+				cmd->bytes_in += rv;
 				continue;
 			}
 			else if (rv == -1) {
@@ -403,6 +406,7 @@ as_event_read(as_event_command* cmd)
 
 			if (bytes > 0) {
 				cmd->pos += bytes;
+				cmd->bytes_in += bytes;
 				continue;
 			}
 		
@@ -472,16 +476,12 @@ as_event_command_write_start(as_event_command* cmd)
 static int
 as_event_command_start(as_event_command* cmd)
 {
-	as_event_connection_complete(cmd);
-	
-	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
-		as_event_connector_success(cmd);
+	if (as_event_connection_complete(cmd)) {
 		return AS_EVENT_COMMAND_DONE;
 	}
-	else {
-		as_event_command_write_start(cmd);
-		return AS_EVENT_READ_COMPLETE;
-	}
+
+	as_event_command_write_start(cmd);
+	return AS_EVENT_READ_COMPLETE;
 }
 
 static inline void

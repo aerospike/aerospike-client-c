@@ -87,7 +87,8 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 	as_error local_err;
 	as_status status;
 
-	as_policy_txn_roll* roll_policy = &as->config.policies.txn_roll;
+	as_config* config = aerospike_load_config(as);
+	as_policy_txn_roll* roll_policy = &config->policies.txn_roll;
 
 	as_key key;
 	as_txn_monitor_init_key(txn, &key);
@@ -173,7 +174,8 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 	txn->state = AS_TXN_STATE_ABORTED;
 	as_set_commit_status(commit_status, AS_COMMIT_VERIFY_FAILED);
 
-	as_policy_txn_roll* roll_policy = &as->config.policies.txn_roll;
+	as_config* config = aerospike_load_config(as);
+	as_policy_txn_roll* roll_policy = &config->policies.txn_roll;
 
 	as_error roll_err;
 	as_status roll_status = as_txn_roll(as, &roll_err, roll_policy, txn, AS_MSG_INFO4_TXN_ROLL_BACK);
@@ -244,7 +246,8 @@ as_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_statu
 {
 	txn->state = AS_TXN_STATE_ABORTED;
 
-	as_policy_txn_roll* roll_policy = &as->config.policies.txn_roll;
+	as_config* config = aerospike_load_config(as);
+	as_policy_txn_roll* roll_policy = &config->policies.txn_roll;
 
 	as_status status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_TXN_ROLL_BACK);
 
@@ -314,7 +317,10 @@ as_commit_data_create(aerospike* as, as_txn* txn, as_commit_listener listener, v
 	as_commit_data* data = cf_malloc(sizeof(as_commit_data));
 	data->as = as;
 	data->txn = txn;
-	data->roll_policy = &as->config.policies.txn_roll;
+
+	as_config* config = aerospike_load_config(as);
+	data->roll_policy = &config->policies.txn_roll;
+
 	data->listener = listener;
 	data->udata = udata;
 	data->verify_err = NULL;
@@ -698,7 +704,10 @@ as_abort_async(
 	as_abort_data* data = cf_malloc(sizeof(as_abort_data));
 	data->as = as;
 	data->txn = txn;
-	data->roll_policy = &as->config.policies.txn_roll;
+
+	as_config* config = aerospike_load_config(as);
+	data->roll_policy = &config->policies.txn_roll;
+
 	data->listener = listener;
 	data->udata = udata;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -31,34 +31,38 @@
 
 #include "_bin.h"
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static as_bin*
 as_bin_defaults(as_bin* bin, const char* name, as_bin_value* valuep)
 {
-	strcpy(bin->name, name);
+	as_strncpy(bin->name, name, sizeof(bin->name));
 	bin->valuep = valuep;
 	return bin;
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_bin*
 as_bin_init(as_bin* bin, const char* name, as_bin_value* value)
 {
-	if ( !bin ) return bin;
-	((as_val *) &bin->value)->type = AS_UNKNOWN;
+	if (!bin) {
+		return bin;
+	}
+	((as_val*)&bin->value)->type = AS_UNKNOWN;
 	return as_bin_defaults(bin, name, value);
 }
 
 as_bin*
 as_bin_init_bool(as_bin* bin, const char* name, bool value)
 {
-	if ( !bin ) return bin;
+	if (!bin) {
+		return bin;
+	}
 	as_boolean_init((as_boolean*) &bin->value, value);
 	return as_bin_defaults(bin, name, &bin->value);
 }
@@ -66,47 +70,59 @@ as_bin_init_bool(as_bin* bin, const char* name, bool value)
 as_bin*
 as_bin_init_int64(as_bin* bin, const char* name, int64_t value)
 {
-	if ( !bin ) return bin;
-	as_integer_init((as_integer *) &bin->value, value);
+	if (!bin) {
+		return bin;
+	}
+	as_integer_init((as_integer*) &bin->value, value);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
 as_bin*
 as_bin_init_double(as_bin* bin, const char* name, double value)
 {
-	if ( !bin ) return bin;
-	as_double_init((as_double *) &bin->value, value);
+	if (!bin) {
+		return bin;
+	}
+	as_double_init((as_double*)&bin->value, value);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
 as_bin*
 as_bin_init_str(as_bin* bin, const char* name, const char* value, bool free)
 {
-	if ( !bin ) return bin;
-	as_string_init((as_string *) &bin->value, (char *) value, free);
+	if (!bin) {
+		return bin;
+	}
+	as_string_init((as_string*)&bin->value, (char*)value, free);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
 as_bin*
 as_bin_init_geojson(as_bin* bin, const char* name, const char* value, bool free)
 {
-	if ( !bin ) return bin;
-	as_geojson_init((as_geojson *) &bin->value, (char *) value, free);
+	if (!bin) {
+		return bin;
+	}
+	as_geojson_init((as_geojson*) &bin->value, (char*)value, free);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
 as_bin*
 as_bin_init_raw(as_bin* bin, const char* name, const uint8_t* value, uint32_t size, bool free)
 {
-	if ( !bin ) return bin;
-	as_bytes_init_wrap((as_bytes *) &bin->value, (uint8_t *) value, size, free);
+	if (!bin) {
+		return bin;
+	}
+	as_bytes_init_wrap((as_bytes*) &bin->value, (uint8_t*)value, size, free);
 	return as_bin_defaults(bin, name, &bin->value);
 }
 
 as_bin*
 as_bin_init_nil(as_bin* bin, const char* name)
 {
-	if ( !bin ) return bin;
+	if (!bin) {
+		return bin;
+	}
 	as_val * nil = (as_val *) &bin->value;
 	nil->type = as_nil.type;
 	nil->free = as_nil.free;
@@ -117,8 +133,9 @@ as_bin_init_nil(as_bin* bin, const char* name)
 void
 as_bin_destroy(as_bin* bin)
 {
-	if ( !bin ) return;
-
+	if (!bin) {
+		return;
+	}
 	bin->name[0] = '\0';
 
 	if ( bin->valuep ) {
@@ -127,17 +144,20 @@ as_bin_destroy(as_bin* bin)
 	}
 }
 
-/******************************************************************************
- * as_bins FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// as_bins Functions
+//---------------------------------
 
 as_bins*
 as_bins_init(as_bins* bins, uint16_t capacity)
 {
-	if ( !bins ) return bins;
+	if (!bins) {
+		return bins;
+	}
 
-	as_bin * entries = (as_bin *) cf_malloc(sizeof(as_bin) * capacity);
-	if ( entries ) {
+	as_bin* entries = (as_bin*)cf_malloc(sizeof(as_bin) * capacity);
+
+	if (entries) {
 		bins->_free = true;
 		bins->capacity = capacity;
 		bins->size = 0;
@@ -156,9 +176,11 @@ as_bins_init(as_bins* bins, uint16_t capacity)
 void
 as_bins_destroy(as_bins* bins)
 {
-	if ( !bins ) return;
+	if (!bins) {
+		return;
+	}
 
-	if ( bins->_free && bins->entries ) {
+	if (bins->_free && bins->entries) {
 		cf_free(bins->entries);
 	}
 
@@ -170,8 +192,14 @@ as_bins_destroy(as_bins* bins)
 bool
 as_bins_append(as_bins* bins, const char* name, as_bin_value* value)
 {
-	if ( !bins ) return false;
-	if ( bins->size >= bins->capacity ) return false;
+	if (!bins) {
+		return false;
+	}
+
+	if (bins->size >= bins->capacity) {
+		return false;
+	}
+
 	as_bin_init(&bins->entries[bins->size], name, value);
 	bins->size++;
 	return true;

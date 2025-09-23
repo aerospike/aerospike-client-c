@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -634,13 +634,14 @@ TEST(batch_write_complex, "Batch write complex")
 	as_key_init_int64(&rm->key, NAMESPACE, SET, 10002);
 
 	// Test default ttl.
-	as->config.policies.batch_write.ttl = 1000;
+	as_config* config = aerospike_load_config(as);
+	config->policies.batch_write.ttl = 1000;
 
 	as_error err;
 	as_status status = aerospike_batch_write(as, &err, NULL, &recs);
 
 	// Reset default ttl.
-	as->config.policies.batch_write.ttl = 0;
+	config->policies.batch_write.ttl = 0;
 
 	assert_int_eq(status, AEROSPIKE_OK);
 

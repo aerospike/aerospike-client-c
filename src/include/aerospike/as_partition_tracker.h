@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -65,8 +65,10 @@ typedef struct as_partition_tracker_s {
 	as_policy_replica replica;
 	uint32_t parts_capacity;
 	uint32_t sleep_between_retries;
+	uint32_t connect_timeout;
 	uint32_t socket_timeout;
 	uint32_t total_timeout;
+	uint32_t timeout_delay;
 	uint32_t max_retries;
 	uint32_t iteration;
 	bool check_max;
@@ -76,17 +78,18 @@ typedef struct as_partition_tracker_s {
  * FUNCTIONS
  ******************************************************************************/
 
-void
+as_status
 as_partition_tracker_init_nodes(
 	as_partition_tracker* pt, struct as_cluster_s* cluster, const as_policy_base* policy,
 	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
-	bool paginate, uint32_t cluster_size
+	bool paginate, uint32_t cluster_size, as_error* err
 	);
 
-void
+as_status
 as_partition_tracker_init_node(
 	as_partition_tracker* pt, struct as_cluster_s* cluster, const as_policy_base* policy,
-	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all, bool paginate, struct as_node_s* node
+	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all, bool paginate,
+	struct as_node_s* node, as_error* err
 	);
 
 as_status

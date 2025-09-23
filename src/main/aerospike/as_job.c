@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -21,9 +21,9 @@
 #include <citrusleaf/alloc.h>
 #include <stdlib.h>
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static char*
 as_find_next(char* p)
@@ -114,9 +114,9 @@ as_job_process(char* response, as_job_info* info)
 	}
 }
 
-/******************************************************************************
- * PUBLIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 aerospike_job_wait(
@@ -147,20 +147,15 @@ aerospike_job_info(
 	as_error_reset(err);
 	
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
-
-	char cmd1[128];
-	char cmd2[128];
-	char cmd3[128];
-	sprintf(cmd1, "query-show:trid=%" PRIu64 "\n", job_id);
-	sprintf(cmd2, "%s-show:trid=%" PRIu64 "\n", module, job_id);
-	sprintf(cmd3, "jobs:module=%s;cmd=get-job;trid=%" PRIu64 "\n", module, job_id);
 
 	info->status = AS_JOB_STATUS_UNDEF;
 	info->progress_pct = 0;
 	info->records_read = 0;
 		
+	char command[256];
 	as_status status = AEROSPIKE_ERR_CLUSTER;
 	uint64_t deadline = as_socket_deadline(policy->timeout);
 	as_cluster* cluster = as->cluster;
@@ -168,19 +163,21 @@ aerospike_job_info(
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
-		char* command;
 
 		if (node->features & AS_FEATURES_PARTITION_QUERY) {
 			// query-show works for both scan and query.
-			command = cmd1;
+			const char* id_name = (as_version_compare(&node->version, &as_server_version_8_1) >= 0)?
+				"id" : "trid";
+			snprintf(command, sizeof(command), "query-show:%s=%" PRIu64 "\n", id_name, job_id);
 		}
 		else if (node->features & AS_FEATURES_QUERY_SHOW) {
 			// scan-show and query-show are separate.
-			command = cmd2;
+			snprintf(command, sizeof(command),  "%s-show:trid=%" PRIu64 "\n", module, job_id);
 		}
 		else {
 			// old job monitor syntax.
-			command = cmd3;
+			snprintf(command, sizeof(command),  "jobs:module=%s;cmd=get-job;trid=%" PRIu64 "\n",
+				module, job_id);
 		}
 
 		char* response = 0;

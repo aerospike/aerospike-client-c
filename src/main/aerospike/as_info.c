@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,9 +25,9 @@
 #include <citrusleaf/cf_b64.h>
 #include <stdlib.h>
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static void
 as_info_decode_error(char* begin)
@@ -112,9 +112,9 @@ as_info_keep_connection(as_status status)
 	}
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_status
 as_info_command_node(
@@ -123,8 +123,8 @@ as_info_command_node(
 	)
 {
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, 0, deadline_ms, &socket);
-	
+	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &socket, NULL);
+
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
@@ -159,7 +159,8 @@ as_info_command_node_async(
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	size_t size = strlen(command);
@@ -182,7 +183,8 @@ as_info_command_random_node(aerospike* as, as_error* err, as_policy_info* policy
 	as_error_reset(err);
 
 	if (! policy) {
-		policy = &as->config.policies.info;
+		as_config* config = aerospike_load_config(as);
+		policy = &config->policies.info;
 	}
 
 	uint64_t deadline = as_socket_deadline(policy->timeout);
@@ -267,6 +269,8 @@ as_info_command(
 		names = "";
 	}
 
+	as_ns_metrics* metrics = (node && node->cluster->metrics_enabled)? as_node_prepare_metrics(node, NULL) : NULL;
+
 	uint8_t* cmd = as_command_buffer_init(size);
 	
 	// Write request
@@ -282,23 +286,29 @@ as_info_command(
 	size = p - cmd;
 	uint64_t proto = (size - 8) | ((uint64_t)AS_PROTO_VERSION << 56) | ((uint64_t)AS_INFO_MESSAGE_TYPE << 48);
 	*(uint64_t*)cmd = cf_swap_to_be64(proto);
-	
+
 	// Write command
 	as_status status = as_socket_write_deadline(err, sock, node, cmd, size, 0, deadline_ms);
 	as_command_buffer_free(cmd, size);
-	
+
 	if (status) {
 		return status;
 	}
-	
+
+	if (metrics) {
+		as_node_add_bytes_out(metrics, size);
+	}
+
 	// Read response
 	as_proto header;
-	status = as_socket_read_deadline(err, sock, node, (uint8_t*)&header, sizeof(as_proto), 0, deadline_ms);
-	
+	status = as_socket_read_deadline(err, sock, node, (uint8_t*)&header, sizeof(as_proto), 0, deadline_ms, NULL);
+
 	if (status) {
 		return status;
 	}
-	
+
+	uint64_t bytes_in = sizeof(as_proto);
+
 	status = as_proto_parse_type(err, &header, AS_INFO_MESSAGE_TYPE);
 
 	if (status) {
@@ -311,12 +321,17 @@ as_info_command(
 			// Reuse command buffer.
 			int read_len = 100;
 			uint8_t* buf = alloca(read_len + 1);
-			status = as_socket_read_deadline(err, sock, node, buf, read_len, 0, deadline_ms);
-			
+			status = as_socket_read_deadline(err, sock, node, buf, read_len, 0, deadline_ms, NULL);
+
 			if (status) {
 				return status;
 			}
 			
+			if (metrics) {
+				bytes_in += read_len;
+				as_node_add_bytes_in(metrics, bytes_in);
+			}
+
 			buf[read_len] = 0;
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 								   "Info request '%s' failed. Response buffer length %lu is excessive. Buffer: %s",
@@ -324,8 +339,8 @@ as_info_command(
 		}
 		
 		char* response = cf_malloc(header.sz + 1);
-		status = as_socket_read_deadline(err, sock, node, (uint8_t*)response, header.sz, 0, deadline_ms);
-		
+		status = as_socket_read_deadline(err, sock, node, (uint8_t*)response, header.sz, 0, deadline_ms, NULL);
+
 		if (status) {
 			cf_free(response);
 			*values = 0;
@@ -333,6 +348,11 @@ as_info_command(
 		}
 		response[header.sz] = 0;
 		
+		if (metrics) {
+			bytes_in += header.sz;
+			as_node_add_bytes_in(metrics, bytes_in);
+		}
+
 		char* error = 0;
 		status = as_info_validate(response, &error);
 		

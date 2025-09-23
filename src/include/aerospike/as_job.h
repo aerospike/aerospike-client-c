@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -74,10 +74,10 @@ typedef struct as_job_info_s {
 /**
  * Wait for a background job to be completed by servers.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint64_t job_id = 1234;
  * aerospike_job_wait(&as, &err, NULL, "scan", job_id, 0);
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -98,7 +98,7 @@ aerospike_job_wait(
  * Check the progress of a background job running on the database. The status
  * of the job running on the datatabse will be populated in as_job_info.
  *
- * ~~~~~~~~~~{.c}
+ * @code
  * uint64_t job_id = 1234;
  * as_job_info job_info;
  *
@@ -108,7 +108,7 @@ aerospike_job_wait(
  * else {
  * 	printf("Scan id=%ll, status=%d percent=%d", job_id, job_info.status, job_info.progress_pct);
  * }
- * ~~~~~~~~~~
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.

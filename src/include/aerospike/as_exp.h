@@ -1661,6 +1661,17 @@ as_exp_destroy_base64(char* base64)
  * @return value stored in variable.
  * @ingroup expression
  */
+#define as_exp_var_builtin_list(__var_id) \
+		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
+		as_exp_int(AS_EXP_TYPE_LIST), \
+		as_exp_int(__var_id)
+
+/**
+ * Retrieve expression value from a built-in variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
 #define as_exp_var_builtin_str(__var_id) \
 		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
 		as_exp_int(AS_EXP_TYPE_STR), \

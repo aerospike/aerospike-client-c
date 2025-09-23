@@ -2924,7 +2924,7 @@ TEST(list_exp_infinity, "test as_exp_inf()")
 	as_operations ops;
     as_operations_inita(&ops, 1);
     as_operations_exp_read(&ops, BIN_NAME, read_exp, AS_EXP_READ_DEFAULT);
-    
+
     as_record* rec_ptr = NULL;
     status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec_ptr);
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -3485,6 +3485,151 @@ TEST(list_apply, "test select apply")
 	rec = NULL;
 }
 
+TEST(list_apply_persist, "test select apply persist")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 217);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	// Create ordered list of ordered maps
+	as_arraylist ordered_list;
+	as_arraylist_init(&ordered_list, 5, 5);
+
+	// Create test data - ordered maps with id and value
+	struct {
+		int64_t id;
+		const char* name;
+		double score;
+	} test_data[] = {
+		{1, "Alice", 85.5},
+		{2, "Bob", 92.0},
+		{3, "Charlie", 78.5},
+		{4, "Diana", 95.5},
+		{5, "Eve", 88.0}
+	};
+
+	// Create ordered maps and add to ordered list
+	for (int i = 0; i < 5; i++) {
+		as_orderedmap* map = as_orderedmap_new(3);
+		as_orderedmap_set(map, (as_val*)as_string_new("id", false),
+						  (as_val*)as_integer_new(test_data[i].id));
+		as_orderedmap_set(map, (as_val*)as_string_new("name", false),
+						  (as_val*)as_string_new((char*)test_data[i].name, false));
+		as_orderedmap_set(map, (as_val*)as_string_new("score", false),
+						  (as_val*)as_double_new(test_data[i].score));
+		as_orderedmap_set_flags(map, AS_MAP_KEY_ORDERED);
+		as_arraylist_append(&ordered_list, (as_val*)map);
+	}
+
+	// Write the ordered list to record
+	as_record *rec = as_record_new(1);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&ordered_list);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Set the list to ordered (with persist index for efficiency)
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_list_set_order(&ops, BIN_NAME, NULL, AS_LIST_ORDERED | AS_LIST_FLAG_PERSIST_INDEX);
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Verify initial order by checking first and last elements
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_list* check_list = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(check_list);
+	assert_int_eq(as_list_size(check_list), 5);
+
+	// Check first element (Alice, id=1)
+	as_map* first_map = as_list_get_map(check_list, 0);
+	assert_not_null(first_map);
+	as_string id_key;
+	as_string_init(&id_key, "id", false);
+	int64_t first_id = as_integer_get((as_integer*)as_map_get(first_map, (as_val*)&id_key));
+	assert_int_eq(first_id, 1);
+
+	// Check last element (Eve, id=5)
+	as_map* last_map = as_list_get_map(check_list, 4);
+	assert_not_null(last_map);
+	int64_t last_id = as_integer_get((as_integer*)as_map_get(last_map, (as_val*)&id_key));
+	assert_int_eq(last_id, 5);
+	as_record_destroy(rec);
+	rec = NULL;
+
+		// Now reverse the order by multiplying all IDs by -1 using CDT apply
+	// This will cause the ordered list to naturally reverse when negative values are sorted
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 2);
+	as_cdt_ctx_add_all(&ctx); // Apply to all elements in the list
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new("id", false)); // Target the "id" field
+
+	// Create expression to multiply by -1
+	as_exp_build(exp, as_exp_mul(as_exp_var_builtin_int(AS_EXP_BUILTIN_VALUE), as_exp_int(-1)));
+	assert_not_null(exp);
+
+	as_operations_init(&ops, 1);
+	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, 0);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(exp);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Verify the reversed order
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	check_list = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(check_list);
+	assert_int_eq(as_list_size(check_list), 5);
+
+		// Check that the order is now reversed (IDs are now negative and sorted)
+	// First element should now be Eve (id=-5, was originally last)
+	first_map = as_list_get_map(check_list, 0);
+	assert_not_null(first_map);
+	first_id = as_integer_get((as_integer*)as_map_get(first_map, (as_val*)&id_key));
+	assert_int_eq(first_id, -5);
+
+	// Last element should now be Alice (id=-1, was originally first)
+	last_map = as_list_get_map(check_list, 4);
+	assert_not_null(last_map);
+	last_id = as_integer_get((as_integer*)as_map_get(last_map, (as_val*)&id_key));
+	assert_int_eq(last_id, -1);
+
+	// Verify complete reversed sequence: -5, -4, -3, -2, -1
+	// This corresponds to the original order reversed: Eve, Diana, Charlie, Bob, Alice
+	for (int i = 0; i < 5; i++) {
+		as_map* map = as_list_get_map(check_list, i);
+		assert_not_null(map);
+		int64_t id = as_integer_get((as_integer*)as_map_get(map, (as_val*)&id_key));
+		assert_int_eq(id, -(5 - i)); // Should be -5, -4, -3, -2, -1
+
+		// Also verify the names are in reverse order
+		as_string name_key;
+		as_string_init(&name_key, "name", false);
+		const char* name = as_string_get((as_string*)as_map_get(map, (as_val*)&name_key));
+
+		// Original order was Alice, Bob, Charlie, Diana, Eve
+		// Reversed order should be Eve, Diana, Charlie, Bob, Alice
+		const char* expected_names[] = {"Eve", "Diana", "Charlie", "Bob", "Alice"};
+		assert_string_eq(name, expected_names[i]);
+	}
+
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -3528,4 +3673,5 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_select);
 	suite_add(list_select2);
 	suite_add(list_apply);
+	suite_add(list_apply_persist);
 }

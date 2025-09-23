@@ -609,8 +609,8 @@ typedef struct as_config_s {
 	uint32_t conn_pools_per_node;
 
 	/**
-	 * Initial host connection timeout in milliseconds.  The timeout when opening a connection
-	 * to the server host for the first time.
+	 * Cluster tend info command timeout in milliseconds.
+	 *
 	 * Default: 1000
 	 */
 	uint32_t conn_timeout_ms;

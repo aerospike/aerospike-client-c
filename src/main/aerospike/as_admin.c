@@ -233,10 +233,11 @@ as_admin_send(
 static inline as_status
 as_admin_receive(
 	as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint64_t len,
-	uint32_t socket_timeout, uint64_t deadline_ms
+	uint32_t socket_timeout, uint64_t deadline_ms, as_socket_context* ctx
 	)
 {
-	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
+	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout,
+		deadline_ms, ctx);
 
 	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
@@ -268,7 +269,7 @@ as_admin_execute_node(
 	uint64_t deadline_ms = as_socket_deadline(timeout_ms);
 
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket);
+	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &socket, NULL);
 
 	if (status) {
 		return status;
@@ -281,7 +282,7 @@ as_admin_execute_node(
 		return status;
 	}
 
-	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms);
+	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms, NULL);
 
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
@@ -323,11 +324,11 @@ as_admin_read_blocks(
 	as_status status = AEROSPIKE_OK;
 	uint8_t* buf = 0;
 	size_t capacity = 0;
-	
+
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms);
+		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms, NULL);
 
 		if (status) {
 			break;
@@ -350,8 +351,8 @@ as_admin_read_blocks(
 			}
 			
 			// Read remaining message bytes in group
-			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms);
-			
+			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms, NULL);
+
 			if (status) {
 				break;
 			}
@@ -392,8 +393,8 @@ as_admin_read_list(
 	}
 
 	as_socket socket;
-	as_status status = as_node_get_connection(err, node, NULL, 0, deadline_ms, &socket);
-	
+	as_status status = as_node_get_connection(err, node, NULL, deadline_ms, &socket, NULL);
+
 	if (status) {
 		as_node_release(node);
 		return status;
@@ -408,7 +409,7 @@ as_admin_read_list(
 	}
 	
 	status = as_admin_read_blocks(err, &socket, node, deadline_ms, parse_fn, list);
-	
+
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
 		as_node_release(node);
@@ -464,7 +465,7 @@ as_cluster_login(
 		return status;
 	}
 
-	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms);
+	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms, NULL);
 
 	if (status) {
 		return status;
@@ -497,7 +498,7 @@ as_cluster_login(
 	}
 
 	// Read remaining message bytes in group
-	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms);
+	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms, NULL);
 
 	if (status) {
 		return status;
@@ -574,7 +575,7 @@ as_authenticate_set(as_cluster* cluster, as_session* session, uint8_t* buffer)
 as_status
 as_authenticate(
 	as_cluster* cluster, as_error* err, as_socket* sock, as_node* node, as_session* session,
-	uint32_t socket_timeout, uint64_t deadline_ms
+	uint32_t socket_timeout, uint64_t deadline_ms, as_socket_context* ctx
 	)
 {
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -596,8 +597,8 @@ as_authenticate(
 		return status;
 	}
 
-	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms);
-	
+	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms, ctx);
+
 	if (status) {
 		return status;
 	}
@@ -661,12 +662,10 @@ aerospike_create_pki_user(
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to find server node");
 	}
 
-	as_version min = {8, 1, 0, 0};
-
-	if (as_version_compare(&node->version, &min) < 0) {
+	if (as_version_compare(&node->version, &as_server_version_8_1) < 0) {
 		char ver_str[32], min_str[32];
 		as_version_to_string(&node->version, ver_str, sizeof(ver_str));
-		as_version_to_string(&min, min_str, sizeof(min_str));
+		as_version_to_string(&as_server_version_8_1, min_str, sizeof(min_str));
 		as_node_release(node);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Node version %s is less than required minimum version %s", ver_str, min_str);

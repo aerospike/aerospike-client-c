@@ -19,17 +19,17 @@
 #include <aerospike/as_node.h>
 #include <aerospike/as_string_builder.h>
 
-/******************************************************************************
- * GLOBALS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern as_event_loop* as_event_loops;
 extern uint32_t as_event_loop_capacity;
 extern uint32_t as_event_loop_size;
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static inline void
 as_conn_stats_tostring(as_string_builder* sb, const char* title, as_conn_stats* cs)
@@ -44,12 +44,16 @@ as_conn_stats_tostring(as_string_builder* sb, const char* title, as_conn_stats* 
 	as_string_builder_append_uint(sb, cs->opened);
 	as_string_builder_append_char(sb, ',');
 	as_string_builder_append_uint(sb, cs->closed);
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint(sb, cs->recovered);
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint(sb, cs->aborted);
 	as_string_builder_append_char(sb, ')');
 }
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 void
 aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
@@ -81,6 +85,7 @@ aerospike_cluster_stats(as_cluster* cluster, as_cluster_stats* stats)
 	// cf_queue applies locks, so we are safe here.
 	stats->thread_pool_queued_tasks = cf_queue_sz(cluster->thread_pool.dispatch_queue);
 	stats->retry_count = cluster->retry_count;
+	stats->recover_queue_size = as_cluster_recover_queue_size(cluster);
 }
 
 void
@@ -138,8 +143,10 @@ aerospike_node_stats(as_node* node, as_node_stats* stats)
 		stats->sync.in_pool += in_pool;
 		stats->sync.in_use += total - in_pool;
 	}
-	stats->sync.opened = node->sync_conns_opened;
-	stats->sync.closed = node->sync_conns_closed;
+	stats->sync.opened = as_node_get_sync_conns_opened(node);
+	stats->sync.closed = as_node_get_sync_conns_closed(node);
+	stats->sync.recovered = as_node_get_sync_conns_recovered(node);
+	stats->sync.aborted = as_node_get_sync_conns_aborted(node);
 
 	// Async connection summary.
 	if (as_event_loop_capacity > 0) {
@@ -158,7 +165,7 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 {
 	as_string_builder sb;
 	as_string_builder_init(&sb, 4096, true);
-	as_string_builder_append(&sb, "nodes(inUse,inPool,opened,closed) error_count,timeout_count,key_busy_count");
+	as_string_builder_append(&sb, "nodes(inUse,inPool,opened,closed,recovered,aborted) error_count,timeout_count,key_busy_count");
 	as_string_builder_append_newline(&sb);
 
 	for (uint32_t i = 0; i < stats->nodes_size; i++) {
@@ -196,6 +203,14 @@ aerospike_stats_to_string(as_cluster_stats* stats)
 	
 	as_string_builder_append(&sb, "retry_count: ");
 	as_string_builder_append_uint64(&sb, stats->retry_count);
+	as_string_builder_append_newline(&sb);
+
+	as_string_builder_append(&sb, "thread_pool_queued_tasks: ");
+	as_string_builder_append_uint(&sb, stats->thread_pool_queued_tasks);
+	as_string_builder_append_newline(&sb);
+
+	as_string_builder_append(&sb, "recover_queue_size: ");
+	as_string_builder_append_uint(&sb, stats->recover_queue_size);
 
 	return sb.data;
 }
@@ -219,4 +234,6 @@ as_conn_stats_sum(as_conn_stats* stats, as_async_conn_pool* pool)
 	stats->in_use += tmp;
 	stats->opened += pool->opened;
 	stats->closed += pool->closed;
+	stats->recovered += pool->recovered;
+	stats->aborted += pool->aborted;
 }

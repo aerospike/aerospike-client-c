@@ -23,6 +23,7 @@
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_queue_mt.h>
 #include <aerospike/as_thread_pool.h>
 
 #ifdef __cplusplus
@@ -233,6 +234,13 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Queue of sockets that have experienced read timeouts.  This queue is to be
+	 * processed by the tend thread.
+	 */
+	as_queue_mt recover_queue;
+
+	/**
+	 * @private
 	 * Maximum socket idle to validate connections in commands.
 	 */
 	uint64_t max_socket_idle_ns_tran;
@@ -311,7 +319,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Initial connection timeout in milliseconds.
+	 * Cluster tend info command timeout in milliseconds.
 	 */
 	uint32_t conn_timeout_ms;
 
@@ -365,7 +373,7 @@ typedef struct as_cluster_s {
 	
 	/**
 	 * @private
-	 * If "services-alternate" should be used instead of "services"
+	 * If alternate services info commands should be used.
 	 */
 	bool use_services_alternate;
 	
@@ -721,6 +729,17 @@ static inline uint64_t
 as_cluster_get_delay_queue_timeout_count(const as_cluster* cluster)
 {
 	return as_load_uint64(&cluster->delay_queue_timeout_count);
+}
+
+/**
+ * @private
+ * Get a count of the number of sockets currently waiting for timeout recovery.
+ * This is determined directly from the queue itself.
+ */
+static inline uint32_t
+as_cluster_recover_queue_size(as_cluster* cluster)
+{
+	return as_queue_mt_size(&cluster->recover_queue);
 }
 
 /**

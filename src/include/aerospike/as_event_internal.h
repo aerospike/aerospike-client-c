@@ -123,9 +123,11 @@ typedef struct as_event_command {
 #else
 #endif
 	uint64_t total_deadline;
+	uint32_t total_timeout;
+	uint32_t connect_timeout;
 	uint32_t socket_timeout;
+	uint32_t timeout_delay;
 	uint32_t max_retries;
-	uint32_t iteration;
 	as_policy_replica replica;
 	as_event_loop* event_loop;
 	as_event_state* event_state;
@@ -142,6 +144,7 @@ typedef struct as_event_command {
 	
 	uint8_t* buf;
 	uint64_t begin; // Used for metrics
+	uint32_t iteration;
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
 	uint32_t write_len;
@@ -199,6 +202,9 @@ void
 as_event_command_schedule(as_event_command* cmd);
 
 void
+as_event_set_timeout(as_event_command* cmd);
+
+bool
 as_event_connection_complete(as_event_command* cmd);
 
 bool
@@ -286,7 +292,10 @@ void
 as_event_create_connections(as_node* node, as_async_conn_pool* pools);
 
 void
-as_event_close_cluster(as_cluster* cluster);
+as_event_recover_auth(as_event_command* cmd);
+
+void
+as_event_close_cluster(aerospike* as);
 
 //----------------------------------
 // Implementation Specific Functions
@@ -739,6 +748,8 @@ as_async_conn_pool_init(as_async_conn_pool* pool, uint32_t min_size, uint32_t ma
 	pool->limit = max_size;
 	pool->opened = 0;
 	pool->closed = 0;
+	pool->recovered = 0;
+	pool->aborted = 0;
 }
 
 static inline bool

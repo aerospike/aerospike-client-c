@@ -3530,8 +3530,10 @@ as_batch_command_create(
 	size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 	as_async_batch_command* bc = cf_malloc(s);
 	as_event_command* cmd = &bc->command;
-	cmd->total_deadline = policy->base.total_timeout;
+	cmd->total_timeout = policy->base.total_timeout;
+	cmd->connect_timeout = policy->base.connect_timeout;
 	cmd->socket_timeout = policy->base.socket_timeout;
+	cmd->timeout_delay = policy->base.timeout_delay;
 	cmd->max_retries = policy->base.max_retries;
 	cmd->iteration = 0;
 	cmd->replica = rep->replica;
@@ -4072,8 +4074,8 @@ as_batch_retry(as_command* parent, as_error* err)
 
 static inline as_async_batch_command*
 as_batch_retry_command_create(
-	as_event_command* parent, as_node* node, as_batch_replica* rep, size_t size, uint64_t deadline,
-	uint8_t flags, uint8_t* ubuf, uint32_t ubuf_size
+	as_event_command* parent, as_node* node, as_batch_replica* rep, size_t size, uint8_t flags,
+	uint8_t* ubuf, uint32_t ubuf_size
 	)
 {
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
@@ -4081,8 +4083,10 @@ as_batch_retry_command_create(
 	size_t s = (sizeof(as_async_batch_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 	as_async_batch_command* bc = cf_malloc(s);
 	as_event_command* cmd = &bc->command;
-	cmd->total_deadline = deadline;
+	cmd->total_timeout = parent->total_timeout;
+	cmd->connect_timeout = parent->connect_timeout;
 	cmd->socket_timeout = parent->socket_timeout;
+	cmd->timeout_delay = parent->timeout_delay;
 	cmd->max_retries = parent->max_retries;
 	cmd->iteration = parent->iteration;
 	cmd->replica = parent->replica;
@@ -4404,16 +4408,10 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 	}
 
-	uint64_t deadline = parent->total_deadline;
-
-	if (deadline > 0) {
-		// Convert deadline back to timeout.
+	if (parent->total_deadline > 0) {
 		uint64_t now = cf_getms();
 
-		if (deadline > now) {
-			deadline -= now;
-		}
-		else {
+		if (now > parent->total_deadline) {
 			// Timeout occurred.
 			as_batch_retry_release_nodes(&bnodes);
 			return -2;  // Timeout occurred, defer to original error.
@@ -4437,7 +4435,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 
 		if (! (parent->ubuf && bnode->size > AS_COMPRESS_THRESHOLD)) {
 			as_async_batch_command* bc = as_batch_retry_command_create(parent, bnode->node, &rep,
-				bnode->size, deadline, flags, NULL, 0);
+				bnode->size, flags, NULL, 0);
 
 			as_event_command* cmd = &bc->command;
 
@@ -4459,7 +4457,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 			size_t comp_size = as_command_compress_max_size(bnode->size);
 
 			as_async_batch_command* bc = as_batch_retry_command_create(parent, bnode->node, &rep,
-				comp_size, deadline, flags, ubuf, (uint32_t)size);
+				comp_size, flags, ubuf, (uint32_t)size);
 
 			as_event_command* cmd = &bc->command;
 
@@ -4553,10 +4551,14 @@ as_policy_batch_parent_read_merge(aerospike* as, const as_policy_batch* src, as_
 		as_config* config = aerospike_load_config(as);
 		as_policy_batch* cfg = &config->policies.batch;
 
+		mrg->base.connect_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_CONNECT_TIMEOUT)?
+			cfg->base.connect_timeout : src->base.connect_timeout;
 		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_SOCKET_TIMEOUT)?
 			cfg->base.socket_timeout : src->base.socket_timeout;
 		mrg->base.total_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_TOTAL_TIMEOUT)?
 			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.timeout_delay = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_TIMEOUT_DELAY)?
+			cfg->base.timeout_delay : src->base.timeout_delay;
 		mrg->base.max_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_MAX_RETRIES)?
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
@@ -4601,10 +4603,14 @@ as_policy_batch_parent_write_merge(aerospike* as, const as_policy_batch* src, as
 		as_config* config = aerospike_load_config(as);
 		as_policy_batch* cfg = &config->policies.batch_parent_write;
 
+		mrg->base.connect_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_CONNECT_TIMEOUT)?
+			cfg->base.connect_timeout : src->base.connect_timeout;
 		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_SOCKET_TIMEOUT)?
 			cfg->base.socket_timeout : src->base.socket_timeout;
 		mrg->base.total_timeout = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_TOTAL_TIMEOUT)?
 			cfg->base.total_timeout : src->base.total_timeout;
+		mrg->base.timeout_delay = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_TIMEOUT_DELAY)?
+			cfg->base.timeout_delay : src->base.timeout_delay;
 		mrg->base.max_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_MAX_RETRIES)?
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_SLEEP_BETWEEN_RETRIES)?

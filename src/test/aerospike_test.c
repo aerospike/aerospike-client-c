@@ -53,6 +53,7 @@ as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
 bool g_enterprise_server = false;
 bool g_has_ttl = false;
 bool g_has_sc = false;
+bool g_has_query_expression = false;
 
 //---------------------------------
 // Static Functions
@@ -330,9 +331,25 @@ static bool before(atf_plan* plan)
 		return false;
 	}
 
-	char* result;
-	if (aerospike_info_any(as, &err, NULL, "edition", &result) != AEROSPIKE_OK) {
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (!node) {
 		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
+		aerospike_close(as, &err);
+		aerospike_destroy(as);
+		as_event_close_loops();
+		return false;
+	}
+
+	const char* edition = (as_version_compare(&node->version, &as_server_version_8_1_1) >= 0) ?
+		"release" : "edition";
+
+	char* result;
+	as_status status = aerospike_info_node(as, &err, NULL, node, edition, &result);
+
+	if (status != AEROSPIKE_OK) {
+		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
+		as_node_release(node);
 		aerospike_close(as, &err);
 		aerospike_destroy(as);
 		as_event_close_loops();
@@ -345,19 +362,24 @@ static bool before(atf_plan* plan)
 
 	cf_free(result);
 
-	as_version min = {8, 1, 0, 0};
-	as_nodes* nodes = as_nodes_reserve(as->cluster);
-	as_version server_version = (nodes->size > 0)? nodes->array[0]->version : min;
-	as_nodes_release(nodes);
+	const char* ns_field_name;
 
-	const char* ns_field_name = (as_version_compare(&server_version, &min) >= 0)?
-		"namespace" : "id";
+	if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
+		ns_field_name = "namespace";
+		g_has_query_expression = true;
+	}
+	else {
+		ns_field_name = "id";
+		g_has_query_expression = false;
+	}
 
 	char command[1024];
 	snprintf(command, sizeof(command), "get-config:context=namespace;%s=test", ns_field_name);
 
-	if (aerospike_info_any(as, &err, NULL, command, &result)
-		!= AEROSPIKE_OK) {
+	status = aerospike_info_node(as, &err, NULL, node, command, &result);
+	as_node_release(node);
+
+	if (status != AEROSPIKE_OK) {
 		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
 		aerospike_close(as, &err);
 		aerospike_destroy(as);

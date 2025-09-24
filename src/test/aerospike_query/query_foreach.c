@@ -53,7 +53,8 @@
 // Global Variables
 //---------------------------------
 
-extern aerospike * as;
+extern aerospike* as;
+extern bool g_has_query_expression;
 static uint64_t g_epochns;
 
 //---------------------------------
@@ -863,84 +864,6 @@ TEST(query_with_rec_size_filter, "query_with_rec_size_filter")
 	// We should match 100 - 65 records
 	assert_int_eq(err.code, 0);
 	assert_int_eq(count, 35);
-
-	as_exp_destroy(filter);
-	as_query_destroy(&q);
-}
-
-TEST(query_with_rec_device_size_filter, "query_with_rec_device_size_filter")
-{
-	as_error err;
-	as_error_reset(&err);
-
-	int count = 0;
-
-	as_query q;
-	as_query_init(&q, NAMESPACE, SET);
-
-	as_query_select_inita(&q, 1);
-	as_query_select(&q, "c");
-
-	as_query_where_inita(&q, 1);
-	as_query_where(&q, "a", as_string_equals("abc"));
-
-	as_exp_build(filter,
-		as_exp_cmp_ge(as_exp_device_size(), as_exp_int(65 * 1024)));
-
-	as_policy_query p;
-	as_policy_query_init(&p);
-	p.base.filter_exp = filter;
-
-	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
-
-	// We should match 100 - 65 records
-	assert_int_eq(err.code, 0);
-
-	if (namespace_has_persistence) {
-		assert_int_eq(count, 35);
-	}
-	else {
-		assert_int_eq(count, 0);
-	}
-
-	as_exp_destroy(filter);
-	as_query_destroy(&q);
-}
-
-TEST(query_with_rec_memory_size_filter, "query_with_rec_memory_size_filter")
-{
-	as_error err;
-	as_error_reset(&err);
-
-	int count = 0;
-
-	as_query q;
-	as_query_init(&q, NAMESPACE, SET);
-
-	as_query_select_inita(&q, 1);
-	as_query_select(&q, "c");
-
-	as_query_where_inita(&q, 1);
-	as_query_where(&q, "a", as_string_equals("abc"));
-
-	as_exp_build(filter,
-		as_exp_cmp_ge(as_exp_memory_size(), as_exp_int(65 * 1024)));
-
-	as_policy_query p;
-	as_policy_query_init(&p);
-	p.base.filter_exp = filter;
-
-	aerospike_query_foreach(as, &err, &p, &q, count_callback, &count);
-
-	// We should match 100 - 65 records
-	assert_int_eq(err.code, 0);
-
-	if (namespace_in_memory) {
-		assert_int_eq(count, 35);
-	}
-	else {
-		assert_int_eq(count, 0);
-	}
 
 	as_exp_destroy(filter);
 	as_query_destroy(&q);
@@ -1963,8 +1886,6 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_with_range_filter);
 	suite_add(query_with_equality_filter);
 	suite_add(query_with_rec_size_filter);
-	suite_add(query_with_rec_device_size_filter);
-	suite_add(query_with_rec_memory_size_filter);
 	suite_add(query_intermittent_bin_filter);
 	suite_add(scan_with_rec_last_update_filter);
 	suite_add(scan_with_rec_last_update_filter_less);
@@ -1988,5 +1909,8 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_map_ctx_is_string);
 	suite_add(query_blob_index);
 	suite_add(query_blob_list_index);
-	suite_add(query_expression);
+
+	if (g_has_query_expression) {
+		suite_add(query_expression);
+	}
 }

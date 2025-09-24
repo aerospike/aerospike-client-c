@@ -22,9 +22,9 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_latency.h>
-#include <aerospike/as_socket.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_queue.h>
+#include <aerospike/as_socket.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_version.h>
 
@@ -187,6 +187,16 @@ typedef struct as_async_conn_pool_s {
 	 * Total async connections closed.
 	 */
 	uint32_t closed;
+
+	/**
+	 * Total async connections recovered by draining connections when a socket read timeout occurs.
+	 */
+	uint32_t recovered;
+
+	/**
+	 * Total async connections aborted after connection drain failed when a socket read timeout occurs.
+	 */
+	uint32_t aborted;
 
 } as_async_conn_pool;
 
@@ -351,6 +361,16 @@ typedef struct as_node_s {
 	uint32_t sync_conns_closed;
 
 	/**
+	 * Total sync connections recovered by draining connections when a socket read timeout occurs.
+	 */
+	uint32_t sync_conns_recovered;
+
+	/**
+	 * Total sync connections aborted after connection drain failed when a socket read timeout occurs.
+	 */
+	uint32_t sync_conns_aborted;
+
+	/**
 	 * Error count for this node's error_rate_window.
 	 */
 	uint32_t error_rate;
@@ -468,6 +488,8 @@ typedef struct as_node_info_s {
 	as_version version;
 
 } as_node_info;
+
+struct as_command_s;
 
 //---------------------------------
 // Functions
@@ -610,8 +632,8 @@ as_node_authenticate_connection(struct as_cluster_s* cluster, uint64_t deadline_
  */
 as_status
 as_node_get_connection(
-	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
-	as_socket* sock
+	as_error* err, as_node* node, struct as_command_s* cmd, uint64_t deadline_ms, as_socket* sock,
+	as_socket_context* ctx
 	);
 
 /**
@@ -639,9 +661,71 @@ as_node_close_socket(as_node* node, as_socket* sock)
 
 /**
  * @private
- * Put connection back into pool.
+ * Return `sync_conns_opened`.
+ */
+static inline uint32_t
+as_node_get_sync_conns_opened(const as_node* node)
+{
+	return as_load_uint32(&node->sync_conns_opened);
+}
+
+/**
+ * @private
+ * Return `sync_conns_closed`.
+ */
+static inline uint32_t
+as_node_get_sync_conns_closed(const as_node* node)
+{
+	return as_load_uint32(&node->sync_conns_closed);
+}
+
+/**
+ * @private
+ * Return `sync_conns_recovered`.
+ */
+static inline uint32_t
+as_node_get_sync_conns_recovered(const as_node* node)
+{
+	return as_load_uint32(&node->sync_conns_recovered);
+}
+
+/**
+ * @private
+ * Increment `sync_conns_recovered`.
  */
 static inline void
+as_node_incr_sync_conns_recovered(as_node* node)
+{
+	as_incr_uint32(&node->sync_conns_recovered);
+}
+
+/**
+ * @private
+ * Return `sync_conns_aborted`.
+ */
+static inline uint32_t
+as_node_get_sync_conns_aborted(const as_node* node)
+{
+	return as_load_uint32(&node->sync_conns_aborted);
+}
+
+/**
+ * @private
+ * Increment `sync_conns_aborted`.
+ */
+static inline void
+as_node_incr_sync_conns_aborted(as_node* node)
+{
+	as_incr_uint32(&node->sync_conns_aborted);
+}
+
+/**
+ * @private
+ * Put connection back into pool.
+ *
+ * Answers true if successful; false if not.
+ */
+static inline bool
 as_node_put_connection(as_node* node, as_socket* sock)
 {
 	// Save pool.
@@ -653,7 +737,10 @@ as_node_put_connection(as_node* node, as_socket* sock)
 	// Put into pool.
 	if (! as_conn_pool_push_head(pool, sock)) {
 		as_node_close_connection(node, sock, pool);
+		return false;
 	}
+
+	return true;
 }
 
 /**

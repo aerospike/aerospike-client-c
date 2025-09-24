@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -34,31 +34,22 @@
 #include "../test.h"
 #include "../util/index_util.h"
 
-/******************************************************************************
- * GLOBAL VARS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern aerospike* as;
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
+
 #define NAMESPACE "test"
 #define SET "test_index"
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
-
-
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
-
-
-/******************************************************************************
- * TEST CASES
- *****************************************************************************/
+//---------------------------------
+// Tests
+//---------------------------------
 
 TEST(index_basics_create, "Create index on bin")
 {
@@ -109,9 +100,21 @@ TEST(index_ctx_test , "Create ctx index on bin")
 	as_error err;
 	as_error_reset(&err);
 
+	char command[1024];
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
+		strcpy(command, "sindex-stat:namespace=test;indexname=idx_test_ctx");
+	}
+	else {
+		strcpy(command, "sindex/test/idx_test_ctx");
+	}
+
+	as_node_release(node);
+
 	char* res = NULL;
 
-	aerospike_info_any(as, &err, NULL, "sindex/test/idx_test_ctx", &res);
+	aerospike_info_any(as, &err, NULL, command, &res);
 
 	if (res != NULL) {
 		assert_not_null(res);
@@ -162,7 +165,7 @@ TEST(index_ctx_test , "Create ctx index on bin")
 
 	as_cdt_ctx_destroy(&ctx);
 
-	aerospike_info_any(as, &err, NULL, "sindex/test/idx_test_ctx", &res);
+	aerospike_info_any(as, &err, NULL, command, &res);
 	assert_not_null(res);
 	info("sindex-info: %s", res);
 	free(res);
@@ -221,9 +224,9 @@ TEST(ctx_restore_test , "backup/restore ctx")
 	as_cdt_ctx_destroy(&ctx2);
 }
 
-/******************************************************************************
- * TEST SUITE
- *****************************************************************************/
+//---------------------------------
+// Test Suite
+//---------------------------------
 
 SUITE(index_basics, "aerospike_sindex basic tests")
 {

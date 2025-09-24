@@ -472,6 +472,7 @@ as_roles_destroy(as_role** roles, int roles_size);
 struct as_cluster_s;
 struct as_node_info_s;
 struct as_session_s;
+struct as_socket_context_s;
 
 /**
  * @private
@@ -491,7 +492,8 @@ as_cluster_login(
 as_status
 as_authenticate(
 	struct as_cluster_s* cluster, as_error* err, struct as_socket_s* sock, struct as_node_s* node,
-	struct as_session_s* session, uint32_t socket_timeout, uint64_t deadline_ms
+	struct as_session_s* session, uint32_t socket_timeout, uint64_t deadline_ms,
+	struct as_socket_context_s* ctx
 	);
 
 /**

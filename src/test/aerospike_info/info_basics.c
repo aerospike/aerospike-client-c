@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2018 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -33,29 +33,31 @@
 #include "../test.h"
 #include "../aerospike_test.h"
 
-/******************************************************************************
- * GLOBAL VARS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern aerospike * as;
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 struct info_data_s {
-	char * 	actual;
+	char* 	actual;
 	uint8_t matches;
 	uint8_t count;
 };
 
 typedef struct info_data_s info_data;
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
-static bool info_compare(const as_error * err, const as_node * node, const char * req, char * res, void * udata) {
+static bool
+info_compare(const as_error* err, const as_node* node, const char* req, char* res, void* udata)
+{
 	info_data * data = (info_data *) udata;
 	
 	// count results
@@ -74,12 +76,12 @@ static bool info_compare(const as_error * err, const as_node * node, const char 
 	return true;
 }
 
-/******************************************************************************
- * TEST CASES
- *****************************************************************************/
+//---------------------------------
+// Tests
+//---------------------------------
 
-TEST( info_basics_help , "help" ) {
-
+TEST(info_basics_help, "help")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -93,28 +95,28 @@ TEST( info_basics_help , "help" ) {
 
 	rc = aerospike_info_foreach(as, &err, NULL, "help", info_compare, &data);
 	
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert( data.count > 0 );
-	assert( data.matches > 0 );
-	assert( data.count == data.matches );
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert(data.count > 0);
+	assert(data.matches > 0);
+	assert(data.count == data.matches);
 
-	char * res = NULL;
+	char* res = NULL;
 
 	rc = aerospike_info_any(as, &err, NULL, "help", &res);
 	
-	assert_not_null( res );
+	assert_not_null(res);
 	assert_string_eq(res, data.actual);
 
 	free(res);
 	res = NULL;
 
-	if ( data.actual ) {
+	if (data.actual) {
 		free(data.actual);
 	}
 }
 
-TEST( info_basics_features , "features" ) {
-
+TEST(info_basics_features, "build")
+{
 	as_error err;
 	as_error_reset(&err);
 
@@ -126,33 +128,34 @@ TEST( info_basics_features , "features" ) {
 
 	as_status rc = AEROSPIKE_OK;
 
-	rc = aerospike_info_foreach(as, &err, NULL, "features", info_compare, &data);
-	
-	assert_int_eq( rc, AEROSPIKE_OK );
-	assert( data.count > 0 );
-	assert( data.matches > 0 );
-	assert_int_eq( data.count, data.matches );
+	rc = aerospike_info_foreach(as, &err, NULL, "build", info_compare, &data);
 
-	char * res = NULL;
+	assert_int_eq(rc, AEROSPIKE_OK);
+	assert(data.count > 0);
+	assert(data.matches > 0);
+	assert_int_eq(data.count, data.matches);
 
-	rc = aerospike_info_any(as, &err, NULL, "features", &res);
+	char* res = NULL;
+
+	rc = aerospike_info_any(as, &err, NULL, "build", &res);
 	
-	assert_not_null( res );
+	assert_not_null(res);
 	assert_string_eq(res, data.actual);
 
 	free(res);
 	res = NULL;
 	
-	if ( data.actual ) {
+	if (data.actual) {
 		free(data.actual);
 	}
 }
 
-/******************************************************************************
- * TEST SUITE
- *****************************************************************************/
+//---------------------------------
+// Test Suite
+//---------------------------------
 
-SUITE( info_basics, "aerospike_info basic tests" ) {
-	suite_add( info_basics_help );
-	suite_add( info_basics_features );
+SUITE(info_basics, "aerospike_info basic tests")
+{
+	suite_add(info_basics_help);
+	suite_add(info_basics_features);
 }

@@ -540,7 +540,7 @@ as_node_create_connection(
 			if (status) {
 				as_node_signal_login(node);
 
-				if (! ctx->in_recovery) {
+				if (!(ctx && ctx->in_recovery)) {
 					as_node_close_socket(node, sock);
 				}
 				return status;

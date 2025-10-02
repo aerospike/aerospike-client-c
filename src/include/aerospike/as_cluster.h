@@ -319,7 +319,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Initial connection timeout in milliseconds.
+	 * Cluster tend info command timeout in milliseconds.
 	 */
 	uint32_t conn_timeout_ms;
 

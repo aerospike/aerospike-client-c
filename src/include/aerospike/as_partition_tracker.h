@@ -65,6 +65,7 @@ typedef struct as_partition_tracker_s {
 	as_policy_replica replica;
 	uint32_t parts_capacity;
 	uint32_t sleep_between_retries;
+	uint32_t connect_timeout;
 	uint32_t socket_timeout;
 	uint32_t total_timeout;
 	uint32_t timeout_delay;

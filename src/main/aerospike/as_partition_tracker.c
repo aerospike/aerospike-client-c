@@ -124,6 +124,7 @@ tracker_init(
 	pt->replica = replica;
 
 	pt->sleep_between_retries = policy->sleep_between_retries;
+	pt->connect_timeout = policy->connect_timeout;
 	pt->socket_timeout = policy->socket_timeout;
 	pt->total_timeout = policy->total_timeout;
 	pt->timeout_delay = policy->timeout_delay;

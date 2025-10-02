@@ -144,6 +144,7 @@ as_txn_policy_copy(const as_policy_base* src, as_policy_operate* trg)
 {
 	as_policy_operate_init(trg);
 
+	trg->base.connect_timeout = src->connect_timeout;
 	trg->base.socket_timeout = src->socket_timeout;
 	trg->base.total_timeout = src->total_timeout;
 	trg->base.timeout_delay = src->timeout_delay;
@@ -249,6 +250,7 @@ as_txn_monitor_remove(
 {
 	as_policy_remove policy;
 	as_policy_remove_init(&policy);
+	policy.base.connect_timeout = base_policy->connect_timeout;
 	policy.base.socket_timeout = base_policy->socket_timeout;
 	policy.base.total_timeout = base_policy->total_timeout;
 	policy.base.timeout_delay = base_policy->timeout_delay;
@@ -340,6 +342,7 @@ as_txn_monitor_remove_async(
 {
 	as_policy_remove policy;
 	as_policy_remove_init(&policy);
+	policy.base.connect_timeout = base_policy->connect_timeout;
 	policy.base.socket_timeout = base_policy->socket_timeout;
 	policy.base.total_timeout = base_policy->total_timeout;
 	policy.base.timeout_delay = base_policy->timeout_delay;

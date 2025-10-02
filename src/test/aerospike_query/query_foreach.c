@@ -53,7 +53,8 @@
 // Global Variables
 //---------------------------------
 
-extern aerospike * as;
+extern aerospike* as;
+extern bool g_has_query_expression;
 static uint64_t g_epochns;
 
 //---------------------------------
@@ -1908,5 +1909,8 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_map_ctx_is_string);
 	suite_add(query_blob_index);
 	suite_add(query_blob_list_index);
-	suite_add(query_expression);
+
+	if (g_has_query_expression) {
+		suite_add(query_expression);
+	}
 }

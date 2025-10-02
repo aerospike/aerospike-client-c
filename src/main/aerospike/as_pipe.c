@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -381,6 +381,11 @@ as_pipe_get_connection(as_event_command* cmd)
 		
 		cmd->conn = (as_event_connection*)conn;
 		write_start(cmd);
+
+		if (cmd->connect_timeout > 0) {
+			as_event_timer_stop(cmd);
+			as_event_timer_once(cmd, cmd->connect_timeout);
+		}
 		as_event_connect(cmd, pool);
 		return;
 	}

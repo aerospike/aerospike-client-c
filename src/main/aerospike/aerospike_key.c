@@ -415,6 +415,8 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 		as_config* config = aerospike_load_config(as);
 		as_policy_read* cfg = &config->policies.read;
 
+		mrg->base.connect_timeout = as_field_is_set(bitmap, AS_READ_CONNECT_TIMEOUT)?
+			cfg->base.connect_timeout : src->base.connect_timeout;
 		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_READ_SOCKET_TIMEOUT)?
 			cfg->base.socket_timeout : src->base.socket_timeout;
 		mrg->base.total_timeout = as_field_is_set(bitmap, AS_READ_TOTAL_TIMEOUT)?
@@ -921,6 +923,8 @@ as_policy_write_merge(aerospike* as, const as_policy_write* src, as_policy_write
 		as_config* config = aerospike_load_config(as);
 		as_policy_write* cfg = &config->policies.write;
 
+		mrg->base.connect_timeout = as_field_is_set(bitmap, AS_WRITE_CONNECT_TIMEOUT)?
+			cfg->base.connect_timeout : src->base.connect_timeout;
 		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
 			cfg->base.socket_timeout : src->base.socket_timeout;
 		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
@@ -1091,6 +1095,8 @@ as_policy_remove_merge(aerospike* as, const as_policy_remove* src, as_policy_rem
 		as_config* config = aerospike_load_config(as);
 		as_policy_remove* cfg = &config->policies.remove;
 
+		mrg->base.connect_timeout = as_field_is_set(bitmap, AS_WRITE_CONNECT_TIMEOUT)?
+			cfg->base.connect_timeout : src->base.connect_timeout;
 		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
 			cfg->base.socket_timeout : src->base.socket_timeout;
 		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
@@ -1253,6 +1259,8 @@ as_policy_operate_merge(aerospike* as, bool is_write, const as_policy_operate* s
 		as_config* config = aerospike_load_config(as);
 		as_policy_operate* cfg = &config->policies.operate;
 
+		mrg->base.connect_timeout = as_field_is_set(bitmap, AS_WRITE_CONNECT_TIMEOUT)?
+			cfg->base.connect_timeout : src->base.connect_timeout;
 		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
 			cfg->base.socket_timeout : src->base.socket_timeout;
 		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
@@ -1616,6 +1624,8 @@ as_policy_apply_merge(aerospike* as, const as_policy_apply* src, as_policy_apply
 		as_config* config = aerospike_load_config(as);
 		as_policy_apply* cfg = &config->policies.apply;
 
+		mrg->base.connect_timeout = as_field_is_set(bitmap, AS_WRITE_CONNECT_TIMEOUT)?
+			cfg->base.connect_timeout : src->base.connect_timeout;
 		mrg->base.socket_timeout = as_field_is_set(bitmap, AS_WRITE_SOCKET_TIMEOUT)?
 			cfg->base.socket_timeout : src->base.socket_timeout;
 		mrg->base.total_timeout = as_field_is_set(bitmap, AS_WRITE_TOTAL_TIMEOUT)?
@@ -1822,6 +1832,7 @@ as_txn_monitor_mark_roll_forward(
 {
 	as_policy_write policy;
 	as_policy_write_init(&policy);
+	policy.base.connect_timeout = base_policy->connect_timeout;
 	policy.base.socket_timeout = base_policy->socket_timeout;
 	policy.base.total_timeout = base_policy->total_timeout;
 	policy.base.timeout_delay = base_policy->timeout_delay;
@@ -1891,6 +1902,7 @@ as_txn_monitor_mark_roll_forward_async(
 {
 	as_policy_write policy;
 	as_policy_write_init(&policy);
+	policy.base.connect_timeout = base_policy->connect_timeout;
 	policy.base.socket_timeout = base_policy->socket_timeout;
 	policy.base.total_timeout = base_policy->total_timeout;
 	policy.base.timeout_delay = base_policy->timeout_delay;

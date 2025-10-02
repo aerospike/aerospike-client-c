@@ -871,11 +871,6 @@ TEST(exp_select, "exp select and apply")
 	rec = NULL;
 
 	// Get and check.
-//	status = aerospike_key_get(as, &err, NULL, &keyA, &rec);
-//	assert_int_eq(status, AEROSPIKE_OK);
-//dump_record(rec);
-//	as_record_destroy(rec);
-//	rec = NULL;
 
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 3);
@@ -911,7 +906,6 @@ TEST(exp_select, "exp select and apply")
 	status = aerospike_key_operate(as, &err, NULL, &keyA, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);
-//dump_record(rec);
 	as_record_destroy(rec);
 	rec = NULL;
 	as_exp_destroy(exp_mod);
@@ -921,7 +915,6 @@ TEST(exp_select, "exp select and apply")
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &keyA, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-//dump_record(rec);
 	as_list* check_list = as_record_get_list(rec, "A");
 	assert_int_eq(as_list_size(check_list), 4);
 	assert_true(as_list_get_double(check_list, 0) < 11);

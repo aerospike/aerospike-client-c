@@ -28,10 +28,39 @@ extern "C" {
  * MACROS
  *****************************************************************************/
 
+/**
+ * This is a convenience macro that starts a block of code that is responsible
+ * for packing CDT expressions.  This macro must be used in an assignment to
+ * a stack-allocated packer.
+ *
+ * The code is established in a loop, allowing for multiple passes over the
+ * data you're trying to pack.  This allows one to pre-compute the size of the
+ * data before packing commences.
+ *
+ * @code
+ * as_packer pk = as_cdt_begin();
+ *   // ...etc...
+ * as_cdt_end(&pk);
+ * @endcode
+ */
 #define as_cdt_begin() \
 	{0};\
 	while (true) {
 
+/**
+ * This is a convenience macro that concludes a block of code that is responsible
+ * for packing CDT expressions.
+ *
+ * If, by this point in the code, a buffer has not been allocated for the packer,
+ * one will be allocated using cf_malloc() based on the packer's current offset
+ * value, and a new pass over the code will start.  Otherwise, the loop will
+ * terminate, and what's left in the resulting buffer should be the packed
+ * CDT representation.
+ *
+ * @param A pointer to the packer instance returned by as_cdt_begin().
+ *
+ * @relates as_cdt_begin
+ */
 #define as_cdt_end(pk) \
 		if (!(pk)->buffer) {\
 			(pk)->buffer = cf_malloc((pk)->offset);\

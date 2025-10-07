@@ -884,7 +884,7 @@ TEST(exp_select, "exp select and apply")
 
 	as_operations ops;
 	as_operations_init(&ops, 1);
-	as_operations_exp_write(&ops, "A", e0, AS_EXP_WRITE_UPDATE_ONLY);
+	as_operations_exp_write(&ops, AString, e0, AS_EXP_WRITE_UPDATE_ONLY);
 
 	status = aerospike_key_operate(as, &err, NULL, &keyA, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -915,7 +915,7 @@ TEST(exp_select, "exp select and apply")
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &keyA, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-	as_list* check_list = as_record_get_list(rec, "A");
+	as_list* check_list = as_record_get_list(rec, AString);
 	assert_int_eq(as_list_size(check_list), 4);
 	assert_true(as_list_get_double(check_list, 0) < 11);
 

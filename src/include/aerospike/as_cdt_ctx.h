@@ -19,7 +19,6 @@
 #include <aerospike/as_cdt_order.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
-//#include <aerospike/as_exp.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,6 +30,9 @@ extern "C" {
 
 /**
  * Nested CDT context type.
+ *
+ * Note that AS_CDT_CTX_VALUE is a flag (currently, bit 1) within each of the
+ * enumeration variants, indicating which variants are to be considered values.
  *
  * @relates as_operations
  * @ingroup base_operations
@@ -46,6 +48,9 @@ typedef enum {
 	AS_CDT_CTX_MAP_VALUE = 0x23
 } as_cdt_ctx_type;
 
+/**
+ * Flag indicating whether or not a AS_CDT_CTX_xxx variant is a value.
+ */
 #define AS_CDT_CTX_VALUE 0x2
 
 /**

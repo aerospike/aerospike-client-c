@@ -73,7 +73,19 @@ extern "C" {
 		break;\
 	}
 
+/**
+ * @private
+ * Opcode used by as_exp_compile() to encode a CDT select and apply operation.
+ * If flag bit 2 is clear, the operation will be interpreted as a select
+ * operation; otherwise, as an apply operation.
+ */
 #define AS_CDT_OP_CONTEXT_SELECT 0xfe
+
+/**
+ * @private
+ * Opcode used by as_exp_compile() to encode the calling of a virtual
+ * operation.
+ */
 #define AS_CDT_OP_CONTEXT_EVAL 0xff
 
 /******************************************************************************

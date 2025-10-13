@@ -292,7 +292,9 @@ as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, 
 	as_pack_list_header(&pk, 3);
 	as_pack_uint64(&pk, AS_CDT_OP_CONTEXT_SELECT);
 	as_cdt_ctx_pack(ctx, &pk);
-	as_pack_uint64(&pk, flags);
+	// Ensure the apply flag is cleared, since no expression is provided.
+	// This avoids problems if the caller accidentally sets bit 2 in the flags field.
+	as_pack_uint64(&pk, flags & ~4);
 	as_cdt_end(&pk);
 
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_READ);
@@ -309,6 +311,7 @@ as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, a
 	as_pack_list_header(&pk, 4);
 	as_pack_uint64(&pk, AS_CDT_OP_CONTEXT_SELECT);
 	as_cdt_ctx_pack(ctx, &pk);
+	// ensure the apply flag is set, since an expression must be provided.
 	as_pack_uint64(&pk, flags | 4);
 	as_pack_append(&pk, mod_exp->packed, mod_exp->packed_sz);
 	as_cdt_end(&pk);

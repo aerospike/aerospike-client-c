@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_conn_recover.h>
+#include <aerospike/as_log_macros.h>
 
 //---------------------------------
 // Static Functions

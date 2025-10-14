@@ -98,7 +98,7 @@ as_node_create_async_pools(uint32_t min_conns_per_node, uint32_t max_conns_per_n
 {
 	// Create one queue per event manager.
 	as_async_conn_pool* pools = cf_malloc(sizeof(as_async_conn_pool) * as_event_loop_capacity);
-	
+
 	// Distribute connections over event loops taking remainder into account.
 	uint32_t min = min_conns_per_node / as_event_loop_capacity;
 	uint32_t rem_min = min_conns_per_node - (min * as_event_loop_capacity);
@@ -171,7 +171,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	if (!node) {
 		return NULL;
 	}
-	
+
 	node->ref_count = 1;
 	node->partition_ref_count = 0;
 	node->peers_generation = 0xFFFFFFFF;
@@ -309,7 +309,7 @@ as_node_destroy(as_node* node)
 	if (racks) {
 		as_racks_release(racks);
 	}
-	
+
 	as_node_destroy_metrics(node);
 	cf_free(node);
 }
@@ -356,7 +356,7 @@ release_node(as_node* node)
  * is just a few instructions, but the race condition could happen.
  *
  * Solve by delaying the tend thread node release until the next tend
- * iteration. This minimum 1 second delay is enough time close the race 
+ * iteration. This minimum 1 second delay is enough time close the race
  * condition loophole.
  */
 void
@@ -389,7 +389,7 @@ as_node_add_address(as_node* node, struct sockaddr* addr)
 	}
 	else {
 		uint32_t offset = AS_ADDRESS4_MAX + node->address6_size;
-		
+
 		if (offset < AS_ADDRESS6_MAX) {
 			node->addresses[offset] = address;
 			node->address6_size++;
@@ -428,20 +428,20 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 	// Create a non-blocking socket.
 	as_tls_context* ctx = as_socket_get_tls_context(node->cluster->tls_ctx);
 	int rv = as_socket_create(sock, family, ctx, node->tls_name);
-	
+
 	if (rv < 0) {
 		return rv;
 	}
-	
+
 	// Try addresses.
 	as_address* addresses = node->addresses;
-	
+
 	if (index >= 0) {
 		// Try primary address.
 		if (as_socket_start_connect(sock, (struct sockaddr*)&primary->addr, deadline_ms)) {
 			return index;
 		}
-		
+
 		// Start from current index + 1 to end.
 		rv = as_node_try_connections(sock, addresses, index + 1, end, deadline_ms);
 
@@ -453,7 +453,7 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 	else {
 		rv = as_node_try_connections(sock, addresses, begin, end, deadline_ms);
 	}
-	
+
 	if (rv < 0) {
 		// Couldn't start a connection on any socket address - close the socket.
 		as_socket_close(sock);
@@ -471,11 +471,11 @@ as_node_create_socket(
 	uint32_t index = node->address_index;
 	as_address* primary = &node->addresses[index];
 	int rv;
-	
+
 	if (primary->addr.ss_family == AF_INET) {
 		// Try IPv4 addresses first.
 		rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, index, primary, sock, deadline_ms);
-		
+
 		if (rv < 0) {
 			// Try IPv6 addresses.
 			rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, -1, NULL, sock, deadline_ms);
@@ -484,13 +484,13 @@ as_node_create_socket(
 	else {
 		// Try IPv6 addresses first.
 		rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, index, primary, sock, deadline_ms);
-		
+
 		if (rv < 0) {
 			// Try IPv4 addresses.
 			rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, -1, NULL, sock, deadline_ms);
 		}
 	}
-	
+
 	if (rv < 0) {
 		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Failed to connect: %s %s", node->name, primary->name);
 	}
@@ -518,7 +518,7 @@ as_node_create_connection(
 	if (node->cluster->metrics_enabled) {
 		begin = cf_getns();
 	}
-	
+
 	as_status status = as_node_create_socket(err, node, pool, sock, deadline_ms);
 
 	if (status) {
@@ -945,23 +945,23 @@ static uint8_t*
 as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_len, uint64_t deadline_ms, uint8_t* stack_buf)
 {
 	as_socket* sock = &node->info_socket;
-	
+
 	// Prepare the write request buffer.
 	size_t write_size = sizeof(as_proto) + names_len;
 	as_proto* proto = (as_proto*)stack_buf;
-	
+
 	proto->sz = names_len;
 	proto->version = AS_PROTO_VERSION;
 	proto->type = AS_INFO_MESSAGE_TYPE;
 	as_proto_swap_to_be(proto);
-	
+
 	memcpy((void*)(stack_buf + sizeof(as_proto)), (const void*)names, names_len);
 
 	// Write the request. Note that timeout_ms is never 0.
 	if (as_socket_write_deadline(err, sock, node, stack_buf, write_size, 0, deadline_ms) != AEROSPIKE_OK) {
 		return 0;
 	}
-	
+
 	as_ns_metrics* metrics = (node->cluster->metrics_enabled)? as_node_prepare_metrics(node, NULL) : NULL;
 
 	if (metrics) {
@@ -987,18 +987,18 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid info response size %lu", proto->sz);
 		return 0;
 	}
-	
+
 	// Allocate a buffer if the response is bigger than the stack buffer -
 	// caller must free it if this call succeeds. Note that proto is overwritten
 	// if stack_buf is used, so we save the sz field here.
 	size_t proto_sz = proto->sz;
 	uint8_t* rbuf = proto_sz >= INFO_STACK_BUF_SIZE ? (uint8_t*)cf_malloc(proto_sz + 1) : stack_buf;
-	
+
 	if (! rbuf) {
 		as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Allocation failed for info response");
 		return 0;
 	}
-	
+
 	// Read the response body.
 	if (as_socket_read_deadline(err, sock, node, rbuf, proto_sz, 0, deadline_ms, NULL) != AEROSPIKE_OK) {
 		if (rbuf != stack_buf) {
@@ -1006,7 +1006,7 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		}
 		return 0;
 	}
-	
+
 	if (metrics) {
 		bytes_in += proto_sz;
 		as_node_add_bytes_in(metrics, bytes_in);
@@ -1023,7 +1023,7 @@ as_node_verify_name(as_error* err, as_node* node, const char* name)
 	if (name == 0 || *name == 0) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Node name not returned from info request.");
 	}
-	
+
 	if (strcmp(node->name, name) != 0) {
 		// Set node to inactive immediately.
 		// Make volatile write so changes are reflected in other threads.
@@ -1084,7 +1084,7 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 
 	for (uint32_t i = 0; i < values->size; i++) {
 		as_name_value* nv = as_vector_get(values, i);
-		
+
 		status = as_info_validate_item(err, nv->value);
 
 		if (status != AEROSPIKE_OK) {
@@ -1093,7 +1093,7 @@ as_node_process_response(as_cluster* cluster, as_error* err, as_node* node, as_v
 
 		if (strcmp(nv->name, "node") == 0) {
 			status = as_node_verify_name(err, node, nv->value);
-			
+
 			if (status != AEROSPIKE_OK) {
 				return status;
 			}
@@ -1138,7 +1138,7 @@ as_status
 as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* peers)
 {
 	as_status status = as_node_get_tend_connection(err, node);
-	
+
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
@@ -1148,7 +1148,7 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 
 	const char* command;
 	size_t command_len;
-	
+
 	if (cluster->rack_aware) {
 		command = INFO_STR_CHECK_RACK;
 		command_len = sizeof(INFO_STR_CHECK_RACK) - 1;
@@ -1160,15 +1160,15 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
-	
+
 	if (! buf) {
 		as_node_close_socket(node, &node->info_socket);
 		return err->code;
 	}
-	
+
 	as_vector values;
 	as_vector_inita(&values, sizeof(as_name_value), 4);
-	
+
 	as_info_parse_multi_response((char*)buf, &values);
 
 	status = as_node_process_response(cluster, err, node, &values, peers);
@@ -1176,7 +1176,7 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	if (status == AEROSPIKE_ERR_CLIENT) {
 		as_node_close_socket(node, &node->info_socket);
 	}
-		
+
 	if (buf != stack_buf) {
 		cf_free(buf);
 	}
@@ -1207,14 +1207,14 @@ as_node_process_peers(as_cluster* cluster, as_error* err, as_node* node, as_vect
 {
 	for (uint32_t i = 0; i < values->size; i++) {
 		as_name_value* nv = as_vector_get(values, i);
-		
+
 		if (strcmp(nv->name, "peers-tls-alt") == 0 ||
 			strcmp(nv->name, "peers-tls-std") == 0 ||
 			strcmp(nv->name, "peers-clear-alt") == 0 ||
 			strcmp(nv->name, "peers-clear-std") == 0
 			) {
 			as_status status = as_peers_parse_peers(peers, err, cluster, node, nv->value);
-			
+
 			if (status != AEROSPIKE_OK) {
 				return status;
 			}
@@ -1255,25 +1255,25 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 			command_len = sizeof(INFO_STR_PEERS_CLEAR_STD) - 1;
 		}
 	}
-	
+
 	uint8_t stack_buf[INFO_STACK_BUF_SIZE];
 	uint8_t* buf = as_node_get_info(err, node, command, command_len, deadline_ms, stack_buf);
-	
+
 	if (! buf) {
 		as_node_close_socket(node, &node->info_socket);
 		return err->code;
 	}
-	
+
 	as_vector values;
 	as_vector_inita(&values, sizeof(as_name_value), 4);
-	
+
 	as_info_parse_multi_response((char*)buf, &values);
 	as_status status = as_node_process_peers(cluster, err, node, &values, peers);
-	
+
 	if (buf != stack_buf) {
 		cf_free(buf);
 	}
-	
+
 	as_vector_destroy(&values);
 
 	if (status == AEROSPIKE_OK) {
@@ -1289,7 +1289,7 @@ as_node_process_partitions(as_cluster* cluster, as_error* err, as_node* node, as
 {
 	for (uint32_t i = 0; i < values->size; i++) {
 		as_name_value* nv = as_vector_get(values, i);
-		
+
 		if (strcmp(nv->name, "partition-generation") == 0) {
 			node->partition_generation = (uint32_t)strtoul(nv->value, NULL, 10);
 		}
@@ -1641,6 +1641,8 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 		}
 	}
 	as_incr_uint64(&metrics->error_count);
+	as_log_debug("Error count incremented for node %s, namespace %s, total errors: %llu",
+		as_node_get_address_string(node), ns, (unsigned long long)metrics->error_count);
 }
 
 void
@@ -1655,6 +1657,8 @@ as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 		}
 	}
 	as_incr_uint64(&metrics->timeout_count);
+	as_log_debug("Timeout count incremented for node %s, namespace %s, total timeouts: %llu",
+		as_node_get_address_string(node), ns, (unsigned long long)metrics->timeout_count);
 }
 
 void
@@ -1669,6 +1673,8 @@ as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 		}
 	}
 	as_incr_uint64(&metrics->key_busy_count);
+	as_log_debug("Key busy count incremented for node %s, namespace %s, total key busy: %llu",
+		as_node_get_address_string(node), ns, (unsigned long long)metrics->key_busy_count);
 }
 
 static as_status

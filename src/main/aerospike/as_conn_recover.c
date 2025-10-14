@@ -75,7 +75,11 @@ as_conn_recover_parse_proto(as_conn_recover* self, uint8_t* buf)
 static void
 as_conn_recover_abort(as_conn_recover* self)
 {
+	as_log_info("Connection recovery aborted for node %s, socket %p",
+		as_node_get_address_string(self->node), &self->socket);
 	as_node_incr_sync_conns_aborted(self->node);
+	as_log_debug("Sync connection aborted count incremented for node %s, total aborted: %u",
+		as_node_get_address_string(self->node), as_node_get_sync_conns_aborted(self->node));
 	as_node_close_conn_error(self->node, &self->socket, self->socket.pool);
 	self->state = AS_READ_STATE_COMPLETE;
 }
@@ -87,9 +91,13 @@ as_conn_recover_abort(as_conn_recover* self)
 static void
 as_conn_recover_recover(as_conn_recover* self)
 {
+	as_log_info("Connection recovery successful for node %s, socket %p",
+		as_node_get_address_string(self->node), &self->socket);
 	// as_node_put_connection() updates the last_used field of the socket for us.
 	as_node_put_connection(self->node, &self->socket);
 	as_node_incr_sync_conns_recovered(self->node);
+	as_log_debug("Sync connection recovered count incremented for node %s, total recovered: %u",
+		as_node_get_address_string(self->node), as_node_get_sync_conns_recovered(self->node));
 	self->state = AS_READ_STATE_COMPLETE;
 }
 
@@ -168,6 +176,8 @@ static bool
 as_conn_recover_error(as_conn_recover* self, int rv)
 {
 	if (rv < 0) {
+		as_log_warn("Connection recovery error (rv=%d) for node %s, socket %p",
+			rv, as_node_get_address_string(self->node), &self->socket);
 		as_conn_recover_abort(self);
 		return true;
 	}
@@ -177,6 +187,8 @@ as_conn_recover_error(as_conn_recover* self, int rv)
 			return false;
 		}
 		else {
+			as_log_warn("Connection recovery timeout for node %s, socket %p",
+				as_node_get_address_string(self->node), &self->socket);
 			as_conn_recover_abort(self);
 			return true;
 		}
@@ -210,6 +222,9 @@ as_conn_recover_create(
 	self->is_single = ctx->is_single;
 	self->check_return_code = false;
 
+	as_log_info("Starting connection recovery for node %s, socket %p, state %d",
+		as_node_get_address_string(node), socket, ctx->state);
+
 	switch(self->state) {
 	case AS_READ_STATE_AUTH_HEADER:
 		self->length = 10;
@@ -220,6 +235,8 @@ as_conn_recover_create(
 		if (self->offset >= self->length) {
 			if (buf[self->length - 1] != 0) {
 				// Authentication failed.
+				as_log_warn("Connection recovery failed - authentication failed for node %s",
+					as_node_get_address_string(node));
 				as_conn_recover_destroy(self);
 				return NULL;
 			}
@@ -239,6 +256,8 @@ as_conn_recover_create(
 
 		if (self->offset >= self->length) {
 			if (! as_conn_recover_parse_proto(self, buf)) {
+				as_log_warn("Connection recovery failed - proto parsing failed for node %s",
+					as_node_get_address_string(node));
 				as_conn_recover_destroy(self);
 				return NULL;
 			}

@@ -121,19 +121,19 @@ as_event_initialize_loops(as_error* err, uint32_t capacity)
 	if (capacity == 0) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid capacity: %u", capacity);
 	}
-	
+
 	as_event_send_buffer_size = as_pipe_get_send_buffer_size();
 	as_event_recv_buffer_size = as_pipe_get_recv_buffer_size();
 
 	as_event_loops = cf_calloc(capacity, sizeof(as_event_loop));
-	
+
 	if (! as_event_loops) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "as_event_loops calloc() failed");
 	}
 
 	as_event_loop_capacity = capacity;
 	as_event_loop_current = as_event_loops;
-	
+
 	// Initialize first loop to circular linked list for efficient round-robin
 	// event loop distribution.
 	as_event_loops->next = as_event_loops;
@@ -180,7 +180,7 @@ as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity,
 	}
 
 	as_event_threads_created = true;
-	
+
 	for (uint32_t i = 0; i < capacity; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
 		as_event_initialize_loop(policy, event_loop, i);
@@ -196,11 +196,11 @@ as_create_event_loops(as_error* err, as_policy_event* policy, uint32_t capacity,
 			as_event_close_loops();
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create event_loop: %u", i);
 		}
-		
+
 		if (i > 0) {
 			// This loop points to first loop to create circular round-robin linked list.
 			event_loop->next = as_event_loops;
-			
+
 			// Adjust previous loop to point to this loop.
 			as_event_loops[i - 1].next = event_loop;
 		}
@@ -272,7 +272,7 @@ as_set_external_event_loop(as_error* err, as_policy_event* policy, void* loop, a
 		pthread_mutex_unlock(&as_event_lock);
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to add external loop. Capacity is %u", as_event_loop_capacity);
 	}
-	
+
 	as_event_loop* event_loop = &as_event_loops[current];
 	as_event_initialize_loop(policy, event_loop, current);
 	event_loop->loop = loop;
@@ -283,7 +283,7 @@ as_set_external_event_loop(as_error* err, as_policy_event* policy, void* loop, a
 	if (current > 0) {
 		// This loop points to first loop to create circular round-robin linked list.
 		event_loop->next = as_event_loops;
-		
+
 		// Adjust previous loop to point to this loop.
 		// Warning: not synchronized with as_event_loop_get()
 		as_event_loops[current - 1].next = event_loop;
@@ -303,7 +303,7 @@ as_event_loop_find(void* loop)
 {
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
-		
+
 		if (event_loop->loop == loop) {
 			return event_loop;
 		}
@@ -317,14 +317,14 @@ as_event_close_loops(void)
 	if (! as_event_loops) {
 		return false;
 	}
-	
+
 	bool status = true;
-	
+
 	// Close or send close signal to all event loops.
 	// This will eventually release resources associated with each event loop.
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
 		as_event_loop* event_loop = &as_event_loops[i];
-	
+
 		// Calling close directly can cause previously queued commands to be dropped.
 		// Therefore, always queue close command to event loop.
 		if (! as_event_execute(event_loop, NULL, NULL)) {
@@ -1086,7 +1086,7 @@ as_event_response_complete(as_event_command* cmd)
 		as_pipe_response_complete(cmd);
 		return;
 	}
-	
+
 	as_event_timer_stop(cmd);
 	as_event_stop_watcher(cmd, cmd->conn);
 
@@ -1098,7 +1098,7 @@ static void
 as_event_executor_destroy(as_event_executor* executor)
 {
 	pthread_mutex_destroy(&executor->lock);
-	
+
 	if (executor->commands) {
 		// Free commands not started yet.
 		for (uint32_t i = executor->queued; i < executor->max; i++) {
@@ -1116,7 +1116,7 @@ as_event_executor_destroy(as_event_executor* executor)
 	if (executor->ns) {
 		cf_free(executor->ns);
 	}
-	
+
 	cf_free(executor);
 }
 
@@ -1438,7 +1438,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		as_pipe_response_error(cmd, err);
 		return;
 	}
-	
+
 	// Server sent back error.
 	// Release resources, make callback and free command.
 	as_event_timer_stop(cmd);
@@ -1467,16 +1467,18 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
+			as_log_warn("Fatal error %d for command %p, node %s - releasing connection",
+				err->code, cmd, as_node_get_address_string(cmd->node));
 			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
 			as_event_release_connection(cmd->conn, pool);
 			break;
-		
+
 		case AEROSPIKE_ERR_TIMEOUT:
 			as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
-			
+
 		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 			// Do not increment error count on record not found.
 			// Add latency metrics instead.
@@ -1604,7 +1606,7 @@ as_event_command_parse_result(as_event_command* cmd)
 
 				rec.gen = msg->generation;
 				rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
-				
+
 				status = as_command_parse_bins(&p, &err, &rec, msg->n_ops,
 											   cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
 
@@ -1620,13 +1622,13 @@ as_event_command_parse_result(as_event_command* cmd)
 			}
 			break;
 		}
-			
+
 		case AEROSPIKE_ERR_UDF: {
 			as_command_parse_udf_failure(p, &err, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
-			
+
 		default: {
 			as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
 			as_event_response_error(cmd, &err);
@@ -1664,7 +1666,7 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 		case AEROSPIKE_OK: {
 			as_val* val = 0;
 			status = as_command_parse_success_failure_bins(&p, &err, msg, &val);
-			
+
 			if (status == AEROSPIKE_OK) {
 				as_event_response_complete(cmd);
 				((as_async_value_command*)cmd)->listener(0, val, cmd->udata, cmd->event_loop);
@@ -1676,13 +1678,13 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 			}
 			break;
 		}
-			
+
 		case AEROSPIKE_ERR_UDF: {
 			as_command_parse_udf_failure(p, &err, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
-			
+
 		default: {
 			as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
 			as_event_response_error(cmd, &err);
@@ -2271,9 +2273,13 @@ typedef struct {
 static void
 as_event_recover_success(as_event_command* cmd)
 {
+	as_log_info("Async connection recovery successful for node %s, command %p",
+		as_node_get_address_string(cmd->node), cmd);
 	// Update metrics.
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	pool->recovered++;
+	as_log_debug("Async connection recovered count incremented for node %s, pool %u, total recovered: %u",
+		as_node_get_address_string(cmd->node), cmd->event_loop->index, pool->recovered);
 
 	// Put connection back into the pool and complete the recovery command.
 	as_event_response_complete(cmd);
@@ -2283,9 +2289,13 @@ as_event_recover_success(as_event_command* cmd)
 static void
 as_event_recover_abort(as_event_command* cmd)
 {
+	as_log_info("Async connection recovery aborted for node %s, command %p",
+		as_node_get_address_string(cmd->node), cmd);
 	// Update metrics.
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 	pool->aborted++;
+	as_log_debug("Async connection aborted count incremented for node %s, pool %u, total aborted: %u",
+		as_node_get_address_string(cmd->node), cmd->event_loop->index, pool->aborted);
 }
 
 static void
@@ -2324,12 +2334,12 @@ as_event_recover_parse_multi(as_event_command* cmd)
 {
 	uint8_t* p = cmd->buf + cmd->pos;
 	uint8_t* end = cmd->buf + cmd->len;
-	
+
 	while (p < end) {
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		p += sizeof(as_msg);
-		
+
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
 			as_event_recover_success(cmd);
 			return true;

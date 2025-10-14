@@ -150,7 +150,8 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool ret
 	}
 
 	if (! conn->in_pool) {
-		as_log_trace("Closing canceled non-pooled pipeline connection %p", conn);
+		as_log_info("Closing canceled non-pooled pipeline connection %p for node %s",
+			conn, as_node_get_address_string(node));
 		// For as_uv_connection_alive().
 		conn->canceled = true;
 		as_async_conn_pool* pool = &node->pipe_conn_pools[loop->index];
@@ -160,7 +161,8 @@ cancel_connection(as_event_command* cmd, as_error* err, int32_t source, bool ret
 		return;
 	}
 
-	as_log_trace("Marking pooled pipeline connection %p as canceled", conn);
+	as_log_info("Marking pooled pipeline connection %p as canceled for node %s",
+		conn, as_node_get_address_string(node));
 	conn->writer = NULL;
 	conn->canceled = true;
 	conn->canceling = false;
@@ -264,12 +266,12 @@ static int
 get_buffer_size(const char* proc, int size)
 {
 	int max;
-	
+
 	if (! read_integer(proc, &max)) {
 		as_log_warn("Failed to read %s; should be at least %d. Please verify.", proc, size);
 		return size;
 	}
-	
+
 	if (max < size) {
 #if defined(USE_XDR)
 		as_log_warn("Buffer limit is %d, should be at least %d for async pipelining. Please set %s accordingly.",
@@ -360,7 +362,7 @@ as_pipe_get_connection(as_event_command* cmd)
 			return;
 		}
 	}
-	
+
 	// Create connection structure only when node connection count within limit.
 	as_log_trace("Creating new pipeline connection");
 
@@ -378,7 +380,7 @@ as_pipe_get_connection(as_event_command* cmd)
 		conn->canceling = false;
 		conn->canceled = false;
 		conn->in_pool = false;
-		
+
 		cmd->conn = (as_event_connection*)conn;
 		write_start(cmd);
 
@@ -419,7 +421,7 @@ as_pipe_modify_fd(as_socket_fd fd)
 			return false;
 		}
 	}
-	
+
 	if (as_event_recv_buffer_size) {
 		if (setsockopt(fd, SOL_SOCKET, SO_RCVBUF, (const char*)&as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
 			int e = as_last_error();
@@ -429,7 +431,7 @@ as_pipe_modify_fd(as_socket_fd fd)
 			return false;
 		}
 	}
-	
+
 #if defined(__linux__)
 	if (as_event_recv_buffer_size) {
 		if (setsockopt(fd, SOL_TCP, TCP_WINDOW_CLAMP, &as_event_recv_buffer_size, sizeof(as_event_recv_buffer_size)) < 0) {
@@ -439,7 +441,7 @@ as_pipe_modify_fd(as_socket_fd fd)
 		}
 	}
 #endif
-	
+
 	// Disable TCP no delay.
 	int arg = 0;
 	if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char*)&arg, sizeof(arg)) < 0) {
@@ -482,7 +484,8 @@ as_pipe_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
-			as_log_trace("Error is fatal");
+			as_log_warn("Fatal error %d for command %p, node %s - canceling connection",
+				err->code, cmd, as_node_get_address_string(cmd->node));
 			cancel_connection(cmd, err, CANCEL_CONNECTION_RESPONSE, false, true);
 			break;
 

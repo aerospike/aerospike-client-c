@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -369,7 +369,7 @@ TEST(batch_udf_default_key_send, "Batch default key send")
 	bar->module = module;
 	bar->function = "write_bin";
 	as_arraylist args;
-       	as_arraylist_inita(&args, 2);
+	as_arraylist_inita(&args, 2);
 	as_arraylist_set_str(&args, 0, "stringbin");
 	as_arraylist_append_str(&args, "s100");
 	bar->arglist = (as_list*)&args;

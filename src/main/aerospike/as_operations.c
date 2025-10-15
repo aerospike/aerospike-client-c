@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -15,8 +15,8 @@
  * the License.
  */
 #include <aerospike/as_operations.h>
-#include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_bin.h>
+#include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_exp.h>
 #include <citrusleaf/alloc.h>
 

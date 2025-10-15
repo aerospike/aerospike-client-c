@@ -2924,7 +2924,7 @@ TEST(list_exp_infinity, "test as_exp_inf()")
 	as_operations ops;
     as_operations_inita(&ops, 1);
     as_operations_exp_read(&ops, BIN_NAME, read_exp, AS_EXP_READ_DEFAULT);
-    
+
     as_record* rec_ptr = NULL;
     status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec_ptr);
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -3222,6 +3222,425 @@ TEST(list_ordered_udf, "test ordered udf")
 	rec = NULL;
 }
 
+TEST(list_select, "test select")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 215);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist list0;
+	as_arraylist_init(&list0, 10, 10);
+
+	for (int i = 0; i < 20; i++) {
+		as_arraylist* list1 = as_arraylist_new(10, 10);
+
+		for (int j = 0; j < 10; j++) {
+			as_arraylist_append_int64(list1, j + 10);
+		}
+
+		as_arraylist_append_list(&list0, (as_list*)list1);
+	}
+
+	as_record *rec = as_record_new(1);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&list0);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_exp_build(exp1,
+		as_exp_bool(true));
+
+	as_exp_build(exp2,
+		as_exp_and(
+			as_exp_cmp_ge(
+				as_exp_var_builtin_int(AS_EXP_BUILTIN_VALUE),
+				as_exp_int(14)),
+			as_exp_cmp_lt(
+				as_exp_var_builtin_int(AS_EXP_BUILTIN_VALUE),
+				as_exp_int(16))));
+
+	assert_not_null(exp1);
+	assert_not_null(exp2);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 2);
+	as_cdt_ctx_add_exp(&ctx, exp1);
+	as_cdt_ctx_add_exp(&ctx, exp2);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_cdt_select(&ops, BIN_NAME, &ctx, 0);
+
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	as_list* check0 = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(check0);
+	assert_int_eq(as_list_size(check0), 20);
+	for (uint32_t i = 0; i < as_list_size(check0); i++) {
+		as_list* check1 = as_list_get_list(check0, i);
+		assert_not_null(check1);
+		assert_int_eq(as_list_size(check1), 2);
+		assert_int_eq(as_list_get_int64(check1, 0), 14);
+		assert_int_eq(as_list_get_int64(check1, 1), 15);
+	}
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(exp1);
+	as_exp_destroy(exp2);
+	as_cdt_ctx_destroy(&ctx);
+}
+
+TEST(list_select2, "test select")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 215);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	struct {
+		const char* title;
+		float price;
+	} table[] = {
+			{"Sayings of the Century", 8.95},
+			{"Sword of Honour", 12.99},
+			{"Moby Dick", 8.99},
+			{"The Lord of the Rings", 22.99},
+	};
+
+	as_arraylist list_books;
+	as_arraylist_init(&list_books, 10, 10);
+
+	for (int i = 0; i < 4; i++) {
+		as_orderedmap* book = as_orderedmap_new(2);
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"title", false),
+				(as_val*)as_string_new((char*)table[i].title, false));
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"price", false),
+				(as_val*)as_double_new(table[i].price));
+		as_arraylist_append(&list_books, (as_val*)book);
+	}
+
+	as_orderedmap map0;
+	as_orderedmap_init(&map0, 10);
+	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)"book", false), (as_val*)&list_books);
+
+	as_record *rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&map0);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+
+	as_record_destroy(rec);
+	rec = NULL;
+
+	assert_true(status == AEROSPIKE_OK);
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	as_record_destroy(rec);
+	rec = NULL;
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_exp_build(exp1,
+		as_exp_bool(true));
+	assert_not_null(exp1);
+
+	as_exp_build(exp2,
+		as_exp_cmp_le(
+			as_exp_map_get_by_key(NULL, AS_MAP_RETURN_VALUE, AS_EXP_TYPE_FLOAT, as_exp_str("price"),
+				as_exp_var_builtin_map(AS_EXP_BUILTIN_VALUE)),
+			as_exp_float(10.0)));
+	assert_not_null(exp2);
+
+	as_exp_build(exp3,
+		as_exp_cmp_eq(as_exp_var_builtin_str(AS_EXP_BUILTIN_KEY), as_exp_str("title")));
+	assert_not_null(exp3);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 3);
+	as_cdt_ctx_add_exp(&ctx, exp1);
+	as_cdt_ctx_add_exp(&ctx, exp2);
+	as_cdt_ctx_add_exp(&ctx, exp3);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_cdt_select(&ops, BIN_NAME, &ctx, AS_CDT_SELECT_LEAF_MAP_VALUE);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	int64_t check_list_size = 0;
+	char* stack_check_list_elt_0 = "---";
+	if (status == AEROSPIKE_OK) {
+		as_list* check_list = as_record_get_list(rec, BIN_NAME);
+		check_list_size = as_list_size(check_list);
+		as_string* heap_check_list_elt_0 = (check_list_size > 0) ? as_list_get_string(check_list, 0) : as_string_new("---", true);
+		stack_check_list_elt_0 = alloca(strlen(as_string_get(heap_check_list_elt_0)) + 1);
+		strcpy(stack_check_list_elt_0, as_string_get(heap_check_list_elt_0));
+		as_string_destroy(heap_check_list_elt_0);
+		as_list_destroy(check_list);
+	}
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+	as_exp_destroy(exp1);
+	as_exp_destroy(exp2);
+	as_exp_destroy(exp3);
+	as_cdt_ctx_destroy(&ctx);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(check_list_size, 2);
+	assert_true(stack_check_list_elt_0[0] == 'S');
+}
+
+TEST(list_apply, "test select apply")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 216);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	struct {
+		const char* title;
+		float price;
+	} table[] = {
+			{"Sayings of the Century", 8.95},
+			{"Sword of Honour", 12.99},
+			{"Moby Dick", 8.99},
+			{"The Lord of the Rings", 22.99},
+	};
+
+	as_arraylist list_books;
+	as_arraylist_init(&list_books, 10, 10);
+
+	for (int i = 0; i < 4; i++) {
+		as_orderedmap* book = as_orderedmap_new(2);
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"title", false),
+				(as_val*)as_string_new((char*)table[i].title, false));
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"price", false),
+				(as_val*)as_double_new(table[i].price));
+		as_arraylist_append(&list_books, (as_val*)book);
+	}
+
+	as_orderedmap map0;
+	as_orderedmap_init(&map0, 10);
+	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)"book", false), (as_val*)&list_books);
+
+	as_record *rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&map0);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+//dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 3);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
+	as_cdt_ctx_add_all(&ctx);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
+
+	as_exp_build(exp,
+		as_exp_mul(as_exp_var_builtin_float(AS_EXP_BUILTIN_VALUE), as_exp_float(1.10)));
+	assert_not_null(exp);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, 0);
+
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(exp);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+//dump_record(rec);
+	as_map* check0 = as_record_get_map(rec, BIN_NAME);
+	assert_not_null(check0);
+	as_string book;
+	as_string_init(&book, "book", false);
+	as_list* check1 = (as_list*)as_map_get(check0, (as_val*)&book);
+	assert_not_null(check1);
+	as_map* check2 = as_list_get_map(check1, 0);
+	assert_not_null(check2);
+	as_string price;
+	as_string_init(&price, "price", false);
+	as_double* check3 = (as_double*)as_map_get(check2, (as_val*)&price);
+	assert_true(as_double_get(check3) > 9);
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
+TEST(list_apply_persist, "test select apply persist")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 217);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	// Create ordered list of ordered maps
+	as_arraylist ordered_list;
+	as_arraylist_init(&ordered_list, 5, 5);
+
+	// Create test data - ordered maps with id and value
+	struct {
+		int64_t id;
+		const char* name;
+		double score;
+	} test_data[] = {
+		{1, "Alice", 85.5},
+		{2, "Bob", 92.0},
+		{3, "Charlie", 78.5},
+		{4, "Diana", 95.5},
+		{5, "Eve", 88.0}
+	};
+
+	// Create ordered maps and add to ordered list
+	for (int i = 0; i < 5; i++) {
+		as_orderedmap* map = as_orderedmap_new(3);
+		as_orderedmap_set(map, (as_val*)as_string_new("id", false),
+						  (as_val*)as_integer_new(test_data[i].id));
+		as_orderedmap_set(map, (as_val*)as_string_new("name", false),
+						  (as_val*)as_string_new((char*)test_data[i].name, false));
+		as_orderedmap_set(map, (as_val*)as_string_new("score", false),
+						  (as_val*)as_double_new(test_data[i].score));
+		as_orderedmap_set_flags(map, AS_MAP_KEY_ORDERED);
+		as_arraylist_append(&ordered_list, (as_val*)map);
+	}
+
+	// Write the ordered list to record
+	as_record *rec = as_record_new(1);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&ordered_list);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Set the list to ordered (with persist index for efficiency)
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_list_set_order(&ops, BIN_NAME, NULL, AS_LIST_ORDERED | AS_LIST_FLAG_PERSIST_INDEX);
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Verify initial order by checking first and last elements
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_list* check_list = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(check_list);
+	assert_int_eq(as_list_size(check_list), 5);
+
+	// Check first element (Alice, id=1)
+	as_map* first_map = as_list_get_map(check_list, 0);
+	assert_not_null(first_map);
+	as_string id_key;
+	as_string_init(&id_key, "id", false);
+	int64_t first_id = as_integer_get((as_integer*)as_map_get(first_map, (as_val*)&id_key));
+	assert_int_eq(first_id, 1);
+
+	// Check last element (Eve, id=5)
+	as_map* last_map = as_list_get_map(check_list, 4);
+	assert_not_null(last_map);
+	int64_t last_id = as_integer_get((as_integer*)as_map_get(last_map, (as_val*)&id_key));
+	assert_int_eq(last_id, 5);
+	as_record_destroy(rec);
+	rec = NULL;
+
+		// Now reverse the order by multiplying all IDs by -1 using CDT apply
+	// This will cause the ordered list to naturally reverse when negative values are sorted
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 2);
+	as_cdt_ctx_add_all(&ctx); // Apply to all elements in the list
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new("id", false)); // Target the "id" field
+
+	// Create expression to multiply by -1
+	as_exp_build(exp, as_exp_mul(as_exp_var_builtin_int(AS_EXP_BUILTIN_VALUE), as_exp_int(-1)));
+	assert_not_null(exp);
+
+	as_operations_init(&ops, 1);
+	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, 0);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(exp);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Verify the reversed order
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	check_list = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(check_list);
+	assert_int_eq(as_list_size(check_list), 5);
+
+		// Check that the order is now reversed (IDs are now negative and sorted)
+	// First element should now be Eve (id=-5, was originally last)
+	first_map = as_list_get_map(check_list, 0);
+	assert_not_null(first_map);
+	first_id = as_integer_get((as_integer*)as_map_get(first_map, (as_val*)&id_key));
+	assert_int_eq(first_id, -5);
+
+	// Last element should now be Alice (id=-1, was originally first)
+	last_map = as_list_get_map(check_list, 4);
+	assert_not_null(last_map);
+	last_id = as_integer_get((as_integer*)as_map_get(last_map, (as_val*)&id_key));
+	assert_int_eq(last_id, -1);
+
+	// Verify complete reversed sequence: -5, -4, -3, -2, -1
+	// This corresponds to the original order reversed: Eve, Diana, Charlie, Bob, Alice
+	for (int i = 0; i < 5; i++) {
+		as_map* map = as_list_get_map(check_list, i);
+		assert_not_null(map);
+		int64_t id = as_integer_get((as_integer*)as_map_get(map, (as_val*)&id_key));
+		assert_int_eq(id, -(5 - i)); // Should be -5, -4, -3, -2, -1
+
+		// Also verify the names are in reverse order
+		as_string name_key;
+		as_string_init(&name_key, "name", false);
+		const char* name = as_string_get((as_string*)as_map_get(map, (as_val*)&name_key));
+
+		// Original order was Alice, Bob, Charlie, Diana, Eve
+		// Reversed order should be Eve, Diana, Charlie, Bob, Alice
+		const char* expected_names[] = {"Eve", "Diana", "Charlie", "Bob", "Alice"};
+		assert_string_eq(name, expected_names[i]);
+	}
+
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -3261,4 +3680,9 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_persist_index);
 	suite_add(list_persist_udf);
 	suite_add(list_ordered_udf);
+
+	suite_add(list_select);
+	suite_add(list_select2);
+	suite_add(list_apply);
+	suite_add(list_apply_persist);
 }

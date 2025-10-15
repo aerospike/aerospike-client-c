@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,8 @@
  */
 #include <aerospike/as_operations.h>
 #include <aerospike/as_bin.h>
+#include <aerospike/as_cdt_internal.h>
+#include <aerospike/as_exp.h>
 #include <citrusleaf/alloc.h>
 
 #include "_bin.h"
@@ -277,4 +279,42 @@ bool
 as_operations_add_delete(as_operations* ops)
 {
 	return as_binop_append(ops, AS_OPERATOR_DELETE);
+}
+
+bool
+as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, uint32_t flags)
+{
+	if (ctx == NULL) {
+		return false;
+	}
+
+	as_packer pk = as_cdt_begin();
+	as_pack_list_header(&pk, 3);
+	as_pack_uint64(&pk, AS_CDT_OP_CONTEXT_SELECT);
+	as_cdt_ctx_pack(ctx, &pk);
+	// Ensure the apply flag is cleared, since no expression is provided.
+	// This avoids problems if the caller accidentally sets bit 2 in the flags field.
+	as_pack_uint64(&pk, flags & ~4);
+	as_cdt_end(&pk);
+
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_READ);
+}
+
+bool
+as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp* mod_exp, uint32_t flags)
+{
+	if (ctx == NULL) {
+		return false;
+	}
+
+	as_packer pk = as_cdt_begin();
+	as_pack_list_header(&pk, 4);
+	as_pack_uint64(&pk, AS_CDT_OP_CONTEXT_SELECT);
+	as_cdt_ctx_pack(ctx, &pk);
+	// ensure the apply flag is set, since an expression must be provided.
+	as_pack_uint64(&pk, flags | 4);
+	as_pack_append(&pk, mod_exp->packed, mod_exp->packed_sz);
+	as_cdt_end(&pk);
+
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_MODIFY);
 }

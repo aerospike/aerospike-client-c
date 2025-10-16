@@ -679,6 +679,8 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
+	as_log_debug("Start command");
+
 	as_socket_context ctx = {
 		.cluster = cmd->cluster,
 		.timeout_delay = cmd->policy->timeout_delay
@@ -732,6 +734,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		status = as_node_get_connection(err, node, cmd, cmd->deadline_ms, &socket, &ctx);
 
 		if (status != AEROSPIKE_OK) {
+			as_log_debug("as_node_get_connection() returned error: %d", status);
 			if (status == AEROSPIKE_ERR_TIMEOUT) {
 				as_node_add_timeout(node, cmd->ns, metrics);
 			}
@@ -751,6 +754,7 @@ as_command_execute(as_command* cmd, as_error* err)
 										  cmd->socket_timeout, cmd->deadline_ms);
 		
 		if (status != AEROSPIKE_OK) {
+			as_log_debug("as_socket_write_deadline() returned error: %d", status);
 			// Socket errors are considered temporary anomalies.  Retry.
 			// Close socket to flush out possible garbage.	Do not put back in pool.
 			as_node_close_conn_error(node, &socket, socket.pool);
@@ -788,6 +792,7 @@ as_command_execute(as_command* cmd, as_error* err)
 			}
 		}
 		else {
+			as_log_debug("as_command_read_message() returned error: %d", status);
 			err->code = status;
 
 			// Close socket on errors that can leave unread data in socket.
@@ -807,10 +812,15 @@ as_command_execute(as_command* cmd, as_error* err)
 					as_node_add_timeout(node, cmd->ns, metrics);
 					
 					if (is_server_timeout(err)) {
+						as_log_debug("Server timeout");
 						as_node_put_conn_error(node, &socket);
 					}
 					else if (! ctx.in_recovery) {
+						as_log_debug("Client timeout not in recovery");
 						as_node_close_conn_error(node, &socket, socket.pool);
+					}
+					else {
+						as_log_debug("Client timeout in recovery");
 					}
 					goto Retry;
 
@@ -920,6 +930,7 @@ Retry:
 			}
 		}
 
+		as_log_debug("RETRY command");
 		as_cluster_add_retry(cmd->cluster);
 	}
 

@@ -46,8 +46,10 @@
 
 static int do_create_expression(void);
 static int do_insert_data(void);
+static int do_remove_data(void);
 
 static void insert(aerospike*, int, const char*, int, const char*);
+static void remove_rec(aerospike*, int);
 
 
 //==========================================================
@@ -70,10 +72,15 @@ main(int argc, char* argv[])
 		return do_insert_data();
 	}
 
+	if (! strcmp(g_subcommand, "remove-data")) {
+		return do_remove_data();
+	}
+
 	LOG("Unrecognized sub-command: %s", g_subcommand);
 	LOG("Available sub-commands include:");
 	LOG("  create-expression -- creates expression and prints base-64 code");
 	LOG("  insert-data -- inserts example data");
+	LOG("  remove-data -- removes example data");
 
 	return 1;
 }
@@ -265,16 +272,46 @@ insert(aerospike* as, int key, const char* name, int age, const char* country)
 	as_record_set_int64(&rec, "age", age);
 	as_record_set_str(&rec, "country", country);
 
-	as_policy_write wpol;
-	as_policy_write_init(&wpol);
-
 	LOG("Attempting to insert record "
-	    "(key=%d, name=\"%s\", age=%d, country=\"%s\"",
+	    "(key=%d, name=\"%s\", age=%d, country=\"%s\")",
 		key, name, age, country);
-	if (aerospike_key_put(as, &err, &wpol, &int_key, &rec) != AEROSPIKE_OK) {
+	if (aerospike_key_put(as, &err, NULL, &int_key, &rec) != AEROSPIKE_OK) {
 		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
 		example_cleanup(as);
 		exit(-1);
 	}
+
+	as_record_destroy(&rec);
 }
 
+static int
+do_remove_data(void)
+{
+	aerospike as;
+	example_connect_to_aerospike(&as);
+
+	for (int i = 1; i < 13; i++) {
+		remove_rec(&as, i);
+	}
+
+	LOG("Records removed OK");
+
+	example_cleanup(&as);
+	return 0;
+}
+
+static void
+remove_rec(aerospike* as, int key) {
+	as_error err;
+	as_error_init(&err);
+
+	as_key int_key;
+	as_key_init_int64(&int_key, g_namespace, g_set, key);
+
+	LOG("Attempting to remove record (key=%d, ...)", key);
+	if (aerospike_key_remove(as, &err, NULL, &int_key) != AEROSPIKE_OK) {
+		LOG("aerospike_key_remove() returned %d - %s", err.code, err.message);
+		example_cleanup(as);
+		exit(-1);
+	}
+}

@@ -29,13 +29,11 @@
 #include <stdlib.h>
 
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_key.h>
 #include <aerospike/as_exp.h>
-
-// #include <aerospike/aerospike_key.h>
-// #include <aerospike/as_error.h>
-// #include <aerospike/as_record.h>
-// #include <aerospike/as_sleep.h>
-// #include <aerospike/as_status.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_record.h>
+#include <aerospike/as_status.h>
 
 #include <aerospike/as_arraylist.h>
 
@@ -47,6 +45,9 @@
 //
 
 static int do_create_expression(void);
+static int do_insert_data(void);
+
+static void insert(aerospike*, int, const char*, int, const char*);
 
 
 //==========================================================
@@ -65,9 +66,14 @@ main(int argc, char* argv[])
 		return do_create_expression();
 	}
 
+	if (! strcmp(g_subcommand, "insert-data")) {
+		return do_insert_data();
+	}
+
 	LOG("Unrecognized sub-command: %s", g_subcommand);
 	LOG("Available sub-commands include:");
 	LOG("  create-expression -- creates expression and prints base-64 code");
+	LOG("  insert-data -- inserts example data");
 
 	return 1;
 }
@@ -218,4 +224,57 @@ do_create_expression(void)
 // lHuTEJMEk1ECo2FnZRKVfwEAkxYNk1EDp2NvdW50cnmSfpOqA0F1c3RyYWxpYacDQ2FuYWRhqQNCb3Rzd2FuYZNRAqNhZ2WRAA C#
 // lHuTEJMEk1ECo2FnZRKVfwEAkxcNk1EEp2NvdW50cnmSfpOqA0F1c3RyYWxpYacDQ2FuYWRhqQNCb3Rzd2FuYZNRAqNhZ2WRAA C
 //                                ^-- ONE character difference.  TODO: Is this significant?
+
+static int
+do_insert_data(void)
+{
+	aerospike as;
+	example_connect_to_aerospike(&as);
+
+	insert(&as, 1, "Tim", 312, "Australia");
+	insert(&as, 2, "Bob", 47, "Canada");
+	insert(&as, 3, "Jo", 15, "USA"); // not indexed
+	insert(&as, 4, "Steven", 23, "Botswana");
+	insert(&as, 5, "Susan", 32, "Canada");
+	insert(&as, 6, "Jess", 17, "Botswana"); // not indexed
+	insert(&as, 7, "Sam", 18, "USA"); // not indexed
+	insert(&as, 8, "Alex", 47, "Canada");
+	insert(&as, 9, "Pam", 56, "Australia");
+	insert(&as, 10, "Vivek", 12, "India"); // not indexed
+	insert(&as, 11, "Kiril", 22, "Sweden"); // not indexed
+	insert(&as, 12, "Bill", 23, "UK"); // not indexed
+
+	LOG("Records inserted OK");
+
+	example_cleanup(&as);
+	return 0;
+}
+
+static void
+insert(aerospike* as, int key, const char* name, int age, const char* country)
+{
+	as_error err;
+	as_error_init(&err);
+
+	as_key int_key;
+	as_key_init_int64(&int_key, g_namespace, g_set, key);
+
+	as_record rec;
+	as_record_inita(&rec, 3);
+	as_record_set_str(&rec, "name", name);
+	as_record_set_int64(&rec, "age", age);
+	as_record_set_str(&rec, "country", country);
+
+	as_policy_write wpol;
+	as_policy_write_init(&wpol);
+
+	LOG("Attempting to insert record "
+	    "(key=%d, name=\"%s\", age=%d, country=\"%s\"",
+		key, name, age, country);
+	if (aerospike_key_put(as, &err, &wpol, &int_key, &rec) != AEROSPIKE_OK) {
+		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
+		example_cleanup(as);
+		exit(-1);
+	}
+}
 

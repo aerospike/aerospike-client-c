@@ -1652,13 +1652,23 @@ as_exp_destroy_base64(char* base64)
 /**
  * Retrieve expression value from a built-in variable.
  * @param __var_id		Variable id.
+ * @param __ret_type    Return type (e.g., AS_EXP_TYPE_MAP).
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_var_builtin_common(__var_id, __ret_type) \
+		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
+		as_exp_int(__ret_type), \
+		as_exp_int(__var_id)
+
+/**
+ * Retrieve expression value from a built-in variable.
+ * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression
  */
 #define as_exp_var_builtin_map(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_MAP), \
-		as_exp_int(__var_id)
+ 		as_exp_var_builtin_common(__var_id, AS_EXP_TYPE_MAP)
 
 /**
  * Retrieve expression value from a built-in variable.
@@ -1667,9 +1677,7 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_var_builtin_list(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_LIST), \
-		as_exp_int(__var_id)
+ 		as_exp_var_builtin_common(__var_id, AS_EXP_TYPE_LIST)
 
 /**
  * Retrieve expression value from a built-in variable.
@@ -1678,9 +1686,7 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_var_builtin_str(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_STR), \
-		as_exp_int(__var_id)
+ 		as_exp_var_builtin_common(__var_id, AS_EXP_TYPE_STR)
 
 /**
  * Retrieve expression value from a built-in variable.
@@ -1689,9 +1695,7 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_var_builtin_int(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_INT), \
-		as_exp_int(__var_id)
+ 		as_exp_var_builtin_common(__var_id, AS_EXP_TYPE_INT)
 
 /**
  * Retrieve expression value from a built-in variable.
@@ -1700,9 +1704,7 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_var_builtin_float(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_FLOAT), \
-		as_exp_int(__var_id)
+ 		as_exp_var_builtin_common(__var_id, AS_EXP_TYPE_FLOAT)
 
 /**
  * Return a result_remove object to indicate entry deletion for cdt_apply.

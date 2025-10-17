@@ -27,13 +27,16 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <limits.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_query.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
+#include <aerospike/as_query.h>
 
 #include <aerospike/as_arraylist.h>
 
@@ -47,10 +50,12 @@
 static int do_create_expression(void);
 static int do_insert_data(void);
 static int do_remove_data(void);
+static int do_query_by_age(int, bool);
 
 static void insert(aerospike*, int, const char*, int, const char*);
 static void remove_rec(aerospike*, int);
-
+static bool query_cb(const as_val*, void*);
+static bool print_bin_cb(const char*, const as_val*, void*);
 
 //==========================================================
 // GET Example
@@ -76,11 +81,26 @@ main(int argc, char* argv[])
 		return do_remove_data();
 	}
 
+	if (! strcmp(g_subcommand, "query-age-5")) {
+		return do_query_by_age(5, true);
+	}
+
+	if (! strcmp(g_subcommand, "query-age-25")) {
+		return do_query_by_age(25, true);
+	}
+
+	if (! strcmp(g_subcommand, "query-no-index")) {
+		return do_query_by_age(0, false);
+	}
+
 	LOG("Unrecognized sub-command: %s", g_subcommand);
 	LOG("Available sub-commands include:");
 	LOG("  create-expression -- creates expression and prints base-64 code");
-	LOG("  insert-data -- inserts example data");
-	LOG("  remove-data -- removes example data");
+	LOG("  insert-data    -- inserts example data");
+	LOG("  remove-data    -- removes example data");
+	LOG("  query-age-5    -- prints records with age >= 5, subject to index");
+	LOG("  query-age-25   -- prints records with age >= 25, subject to index");
+	LOG("  query-no-index -- prints all records, without index");
 
 	return 1;
 }
@@ -283,6 +303,82 @@ insert(aerospike* as, int key, const char* name, int age, const char* country)
 
 	as_record_destroy(&rec);
 }
+
+static int
+do_query_by_age(int age, bool use_index)
+{
+	aerospike as;
+	example_connect_to_aerospike(&as);
+
+	as_query query;
+	as_query_init(&query, g_namespace, g_set);
+
+	if (use_index) {
+		as_query_where_init(&query, 1);
+		// Remember that the result of the cond-expression returns the age field.
+		// The predicate in the following function tests against this field.
+		as_query_where_with_index_name(&query, "cust_index",
+		                               as_integer_range(age, INT_MAX));
+	}
+
+	as_error err;
+	if (aerospike_query_foreach(&as, &err, NULL, &query, &query_cb, NULL) !=
+			AEROSPIKE_OK) {
+		LOG("aerospike_query_foreach() returned %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		return -1;
+	}
+
+	example_cleanup(&as);
+	return 0;
+}
+
+static bool
+query_cb(const as_val* val, void* udata) {
+	if (! val) {
+		// Query is complete.
+		return false;
+	}
+
+	as_record* rec = as_record_fromval(val);
+
+	as_key* key = &rec->key;
+
+	if (key->valuep != NULL) {
+		char* key_value_str = as_val_tostring(key->valuep);
+		printf("key=(%s), ", key_value_str);
+		free(key_value_str);
+	}
+	else {
+		printf("key=(unknown), ");
+	}
+
+	as_record_foreach(rec, print_bin_cb, NULL);
+	printf("\n");
+
+	return true;
+}
+
+static bool
+print_bin_cb(const char* name, const as_val* val, void* udata) {
+	printf("%s=", name);
+
+	uint64_t bin_type = as_val_type(val);
+	switch (bin_type) {
+	case AS_STRING:
+		printf("\"%s\", ", as_string_get(as_string_fromval(val)));
+		return true;
+
+	case AS_INTEGER:
+		printf("%lld, ", as_integer_get(as_integer_fromval(val)));
+		return true;
+
+	default:
+		LOG("print_bin_cb: unknown type %llu for bin named %s", bin_type, name);
+		return false;
+	}
+}
+
 
 static int
 do_remove_data(void)

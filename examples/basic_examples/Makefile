@@ -14,4 +14,5 @@ default: all
 	$(MAKE) -C touch $@
 	$(MAKE) -C transaction $@
 	$(MAKE) -C udf $@
+	$(MAKE) -C expr-index $@
 

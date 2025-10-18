@@ -58,7 +58,7 @@ static bool query_cb(const as_val*, void*);
 static bool print_bin_cb(const char*, const as_val*, void*);
 
 //==========================================================
-// GET Example
+// Expression Index Examples (supporting online tutorial docs)
 //
 
 int

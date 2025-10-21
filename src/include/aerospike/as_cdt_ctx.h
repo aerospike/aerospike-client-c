@@ -310,20 +310,30 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
 /**
  * Add all to select ctx.
  *
- * @relates as_operations
- * @ingroup base_operations
- */
-AS_EXTERN void
-as_cdt_ctx_add_all(as_cdt_ctx* ctx);
-
-/**
- * Add expr to select ctx.  The ctx does NOT take ownership of exp.
+ * At the current context, causes a query to return a list of all the children
+ * of the current item. For a map, this will recurse into the map elements,
+ * for a list this will include all the children in the list.
  *
  * @relates as_operations
  * @ingroup base_operations
  */
 AS_EXTERN void
-as_cdt_ctx_add_exp(as_cdt_ctx* ctx, const struct as_exp* exp);
+as_cdt_ctx_add_all_children(as_cdt_ctx* ctx);
+
+/**
+ * Add expr to select ctx.  The ctx does NOT take ownership of exp.
+ * The passed expression must return a boolean.
+ *
+ * All children of the current level will be selected then the filter expression
+ * applied to each item in turn.  Items that return true will be added to the
+ * list of items returned in a query for this level.  Items that return false
+ * will be filtered out
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const struct as_exp* exp);
 
 /**
  * Return exact serialized size of ctx. Return zero on error.

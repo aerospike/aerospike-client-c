@@ -3275,8 +3275,8 @@ TEST(list_select, "test select")
 
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 2);
-	as_cdt_ctx_add_exp(&ctx, exp1);
-	as_cdt_ctx_add_exp(&ctx, exp2);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp1);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp2);
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -3371,9 +3371,9 @@ TEST(list_select2, "test select")
 
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 3);
-	as_cdt_ctx_add_exp(&ctx, exp1);
-	as_cdt_ctx_add_exp(&ctx, exp2);
-	as_cdt_ctx_add_exp(&ctx, exp3);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp1);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp2);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp3);
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -3456,7 +3456,7 @@ TEST(list_apply, "test select apply")
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 3);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
-	as_cdt_ctx_add_all(&ctx);
+	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
 
 	as_exp_build(exp,
@@ -3580,7 +3580,7 @@ TEST(list_apply_persist, "test select apply persist")
 	// This will cause the ordered list to naturally reverse when negative values are sorted
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 2);
-	as_cdt_ctx_add_all(&ctx); // Apply to all elements in the list
+	as_cdt_ctx_add_all_children(&ctx); // Apply to all elements in the list
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new("id", false)); // Target the "id" field
 
 	// Create expression to multiply by -1

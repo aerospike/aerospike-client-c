@@ -875,7 +875,7 @@ TEST(exp_select, "exp select and apply")
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 3);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
-	as_cdt_ctx_add_all(&ctx);
+	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
 
 	// Select test.

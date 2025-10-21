@@ -879,8 +879,8 @@ TEST(exp_select, "exp select and apply")
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
 
 	// Select test.
-	as_exp_build(e0, as_exp_cdt_select(&ctx, AS_EXP_TYPE_LIST,
-			AS_CDT_SELECT_LEAF_MAP_VALUE, as_exp_bin_map("res1")));
+	as_exp_build(e0, as_exp_select_from_cdt(&ctx, AS_EXP_TYPE_LIST,
+			AS_CDT_SELECT_MAP_KEY_VALUES, as_exp_bin_map("res1")));
 
 	as_operations ops;
 	as_operations_init(&ops, 1);
@@ -898,7 +898,7 @@ TEST(exp_select, "exp select and apply")
 		as_exp_mul(as_exp_loopvar_float(AS_EXP_LOOPVAR_VALUE), as_exp_float(1.50)));
 	assert_not_null(exp_mod);
 
-	as_exp_build(e, as_exp_cdt_apply(&ctx, AS_EXP_TYPE_MAP, exp_mod, 0, as_exp_bin_map("res1")));
+	as_exp_build(e, as_exp_modify_cdt(&ctx, AS_EXP_TYPE_MAP, exp_mod, 0, as_exp_bin_map("res1")));
 
 	as_operations_init(&ops, 1);
 	as_operations_exp_write(&ops, "res1", e, AS_EXP_WRITE_UPDATE_ONLY);

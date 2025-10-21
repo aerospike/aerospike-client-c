@@ -777,10 +777,32 @@ AS_EXTERN bool
 as_operations_add_delete(as_operations* ops);
 
 typedef enum {
-	AS_CDT_SELECT_TREE = 0,
-	AS_CDT_SELECT_LEAF_LIST_VALUE = 1,
-	AS_CDT_SELECT_LEAF_MAP_VALUE = 1,
-	AS_CDT_SELECT_LEAF_MAP_KEY = 2,
+	/**
+	 * Return a tree from the root (bin) level to the bottom of the tree,
+	 * with only non-filtered out nodes.
+	 */
+	AS_CDT_SELECT_MATCHING_TREE = 0,
+
+	/**
+	 * Return the list of the values of the nodes finally selected by the context.
+	 */
+	AS_CDT_SELECT_VALUES = 1,
+
+	/**
+	 * Return a list of Key-value pairs.
+	 */
+	AS_CDT_SELECT_MAP_KEY_VALUES = 1,
+
+	/**
+	 * For final selected nodes which are elements of maps, return the appropiate map key.
+	 */
+	AS_CDT_SELECT_MAP_KEYS = 2,
+
+	/**
+	 * If the expression in the context hits an invalid type (e.g., selects
+	 * as an integer when the value is a string), do not fail the operation;
+	 * just ignore those elements.
+	 */
 	AS_CDT_SELECT_NO_FAIL = 0x10
 } as_cdt_select_flags;
 
@@ -793,10 +815,13 @@ typedef enum {
  * @ingroup cdt_operations
  */
 AS_EXTERN bool
-as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, uint32_t flags);
+as_operations_select_from_cdt(as_operations* ops, const char* name, as_cdt_ctx* ctx, uint32_t flags);
 
 /**
- * Create CDT select operation.
+ * Create CDT modification operation.
+ *
+ * The results of the evaluation of the modifying expression will replace the
+ * selected map and the changes written back to storage.
  *
  * @return true on success. Otherwise an error occurred.
  *
@@ -804,7 +829,7 @@ as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, 
  * @ingroup cdt_operations
  */
 AS_EXTERN bool
-as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, struct as_exp* mod_exp, uint32_t flags);
+as_operations_modify_cdt(as_operations* ops, const char* name, as_cdt_ctx* ctx, struct as_exp* mod_exp, uint32_t flags);
 
 /******************************************************************************
  * LIST FUNCTIONS

@@ -2974,7 +2974,7 @@ as_exp_destroy_base64(char* base64)
  * @param Bin to which the query applies.
  */
 
-#define as_exp_cdt_select(__ctx, __rtype, __flags, __bin) \
+#define as_exp_select_from_cdt(__ctx, __rtype, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \
 		as_exp_int(_AS_EXP_SYS_CALL_CDT), \
@@ -2984,8 +2984,10 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Constructs a CDT apply operation.  This can be used to perform in-place
- * updates to bins across a number of records or fields of records.
+ * Constructs a CDT apply operation.
+ *
+ * The results of the evaluation of the modifying expression will replace the
+ * selected map and the changes written back to storage.
  *
  * @param Pointer to a CDT context.
  * @param Return type specifier (e.g., AS_EXP_TYPE_MAP).
@@ -2994,7 +2996,7 @@ as_exp_destroy_base64(char* base64)
  * @param Bin to which the application applies.
  */
 
-#define as_exp_cdt_apply(__ctx, __rtype, __mod_exp, __flags, __bin) \
+#define as_exp_modify_cdt(__ctx, __rtype, __mod_exp, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \
 		as_exp_int(_AS_EXP_SYS_CALL_CDT | _AS_EXP_SYS_FLAG_MODIFY_LOCAL), \

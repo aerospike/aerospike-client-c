@@ -827,7 +827,8 @@ typedef enum {
 } as_cdt_modify_flags;
 
 /**
- * Create CDT select operation.
+ * Create CDT select operation.  See also the enumeration as_cdt_select_flags
+ * for the set of valid flags for this function.
  *
  * @return true on success. Otherwise an error occurred.
  *
@@ -835,10 +836,11 @@ typedef enum {
  * @ingroup cdt_operations
  */
 AS_EXTERN bool
-as_operations_select_from_cdt(as_operations* ops, const char* name, as_cdt_ctx* ctx, uint32_t flags);
+as_operations_select_from_cdt(as_operations* ops, const char* name, as_cdt_ctx* ctx, as_cdt_select_flags flags);
 
 /**
- * Create CDT modification operation.
+ * Create CDT modification operation.  See also the enumeration as_cdt_modify_flags
+ * for the set of valid flags for this function.
  *
  * The results of the evaluation of the modifying expression will replace the
  * selected map and the changes written back to storage.
@@ -849,7 +851,7 @@ as_operations_select_from_cdt(as_operations* ops, const char* name, as_cdt_ctx* 
  * @ingroup cdt_operations
  */
 AS_EXTERN bool
-as_operations_modify_cdt(as_operations* ops, const char* name, as_cdt_ctx* ctx, struct as_exp* mod_exp, uint32_t flags);
+as_operations_modify_cdt(as_operations* ops, const char* name, as_cdt_ctx* ctx, struct as_exp* mod_exp, as_cdt_modify_flags flags);
 
 /******************************************************************************
  * LIST FUNCTIONS

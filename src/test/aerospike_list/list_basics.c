@@ -3273,14 +3273,31 @@ TEST(list_select, "test select")
 	assert_not_null(exp1);
 	assert_not_null(exp2);
 
+	// negative test; expect an error when &ctx == NULL.
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+
+	assert_false(as_operations_select_by_path(&ops, BIN_NAME, NULL, 0);
+
+	// negative test; expect an error when &ctx != NULL /\ ctx is empty.
+
+	as_operations_inita(&ops, 1);
+
 	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 2);
+
+	assert_false(as_operations_select_by_path(&ops, BIN_NAME, &ctx, 0));
+
+	// Back to positive testing
+
+	as_operations_inita(&ops, 1);
+
 	as_cdt_ctx_inita(&ctx, 2);
 	as_cdt_ctx_add_all_children_with_filter(&ctx, exp1);
 	as_cdt_ctx_add_all_children_with_filter(&ctx, exp2);
 
-	as_operations ops;
-	as_operations_inita(&ops, 1);
-	as_operations_select_by_path(&ops, BIN_NAME, &ctx, 0);
+	assert_true(as_operations_select_by_path(&ops, BIN_NAME, &ctx, 0));
 
 	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3449,11 +3466,30 @@ TEST(list_apply, "test select apply")
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-//dump_record(rec);
+
 	as_record_destroy(rec);
 	rec = NULL;
 
+	// negative test: &ctx == NULL
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+
+	assert_false(as_operations_modify_by_path(&ops, BIN_NAME, NULL, exp, 0));
+
+	// negative test: &ctx != NULL /\ ctx is empty
+
+	as_operations_inita(&ops, 1);
+
 	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 3);
+
+	assert_false(as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0));
+
+	// resume positive test
+
+	as_operations_inita(&ops, 1);
+
 	as_cdt_ctx_inita(&ctx, 3);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
 	as_cdt_ctx_add_all_children(&ctx);
@@ -3463,9 +3499,7 @@ TEST(list_apply, "test select apply")
 		as_exp_mul(as_exp_loopvar_float(AS_EXP_LOOPVAR_VALUE), as_exp_float(1.10)));
 	assert_not_null(exp);
 
-	as_operations ops;
-	as_operations_inita(&ops, 1);
-	as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0);
+	assert_true(as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0));
 
 	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3479,7 +3513,7 @@ TEST(list_apply, "test select apply")
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-//dump_record(rec);
+
 	as_map* check0 = as_record_get_map(rec, BIN_NAME);
 	assert_not_null(check0);
 	as_string book;

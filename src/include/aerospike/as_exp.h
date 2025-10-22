@@ -1673,7 +1673,7 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, MAP)
 
 /**
- * Retrieve expression value from a built-in variable.
+ * Retrieve expression value from a path expression loop variable.
  * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression
@@ -1682,7 +1682,7 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, LIST)
 
 /**
- * Retrieve expression value from a built-in variable.
+ * Retrieve expression value from a path expression loop variable.
  * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression
@@ -1691,7 +1691,7 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, STR)
 
 /**
- * Retrieve expression value from a built-in variable.
+ * Retrieve expression value from a path expression loop variable.
  * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression
@@ -1700,7 +1700,7 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, INT)
 
 /**
- * Retrieve expression value from a built-in variable.
+ * Retrieve expression value from a path expression loop variable.
  * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression

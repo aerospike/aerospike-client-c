@@ -776,6 +776,13 @@ as_operations_add_touch(as_operations* ops);
 AS_EXTERN bool
 as_operations_add_delete(as_operations* ops);
 
+// If you add flags in bits 4 or higher, make sure you make a corresponding
+// change in as_cdt_modify_flags as well (and vice versa, of course).
+// Only bits 0-3 are unique to select vs. modify operations.
+/**
+ * These flags apply to the as_exp_select_from_cdt()/
+ * as_operations_select_from_cdt() functions.
+ */
 typedef enum {
 	/**
 	 * Return a tree from the root (bin) level to the bottom of the tree,
@@ -805,6 +812,19 @@ typedef enum {
 	 */
 	AS_CDT_SELECT_NO_FAIL = 0x10
 } as_cdt_select_flags;
+
+/**
+ * These flags apply to as_exp_modify_cdt()/as_operations_modify_cdt()
+ * functions.
+ */
+typedef enum {
+	/**
+	 * If the expression in the context hits an invalid type (e.g., selects
+	 * as an integer when the value is a string), do not fail the operation;
+	 * just ignore those elements.
+	 */
+	AS_CDT_MODIFY_NO_FAIL = 0x10
+} as_cdt_modify_flags;
 
 /**
  * Create CDT select operation.

@@ -843,7 +843,7 @@ as_operations_select_from_cdt(as_operations* ops, const char* name, as_cdt_ctx* 
  * for the set of valid flags for this function.
  *
  * The results of the evaluation of the modifying expression will replace the
- * selected map and the changes written back to storage.
+ * selected map, and the changes are written back to storage.
  *
  * @return true on success. Otherwise an error occurred.
  *

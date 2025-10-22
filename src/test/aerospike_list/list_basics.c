@@ -3278,7 +3278,7 @@ TEST(list_select, "test select")
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	assert_false(as_operations_select_by_path(&ops, BIN_NAME, NULL, 0);
+	assert_false(as_operations_select_by_path(&ops, BIN_NAME, NULL, 0));
 
 	// negative test; expect an error when &ctx != NULL /\ ctx is empty.
 
@@ -3472,6 +3472,10 @@ TEST(list_apply, "test select apply")
 
 	// negative test: &ctx == NULL
 
+	as_exp_build(exp,
+		as_exp_mul(as_exp_loopvar_float(AS_EXP_LOOPVAR_VALUE), as_exp_float(1.10)));
+	assert_not_null(exp);
+
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
@@ -3494,10 +3498,6 @@ TEST(list_apply, "test select apply")
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
 	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
-
-	as_exp_build(exp,
-		as_exp_mul(as_exp_loopvar_float(AS_EXP_LOOPVAR_VALUE), as_exp_float(1.10)));
-	assert_not_null(exp);
 
 	assert_true(as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0));
 

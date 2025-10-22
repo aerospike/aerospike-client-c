@@ -2995,7 +2995,7 @@ as_exp_destroy_base64(char* base64)
  * @param __rtype    Return type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __mod_exp  Expression to apply.
  * @param __flags    Flags (see enum as_cdt_modify_flags).
- * @param __bin      Bin to which the application applies.
+ * @param __bin      Bin expression to which the application applies.
  * @return (expression)
  * @ingroup expression
  */

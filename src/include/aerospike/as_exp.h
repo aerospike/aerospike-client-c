@@ -2971,7 +2971,7 @@ as_exp_destroy_base64(char* base64)
  * @param __ctx    Pointer to a CDT context.
  * @param __rtype  Return type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __flags  Flags (see enum as_cdt_select_flags).
- * @param __bin    Bin to which the query applies.
+ * @param __bin    Bin expression to which the query applies.
  * @return (expression)
  * @ingroup expression
  */

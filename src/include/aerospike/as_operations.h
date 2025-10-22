@@ -780,8 +780,8 @@ as_operations_add_delete(as_operations* ops);
 // change in as_cdt_modify_flags as well (and vice versa, of course).
 // Only bits 0-3 are unique to select vs. modify operations.
 /**
- * These flags apply to the as_exp_select_from_cdt()/
- * as_operations_select_from_cdt() functions.
+ * These flags apply to the as_exp_select_by_path()/
+ * as_operations_select_by_path() functions.
  */
 typedef enum {
 	/**
@@ -814,7 +814,7 @@ typedef enum {
 } as_cdt_select_flags;
 
 /**
- * These flags apply to as_exp_modify_cdt()/as_operations_modify_cdt()
+ * These flags apply to as_exp_modify_by_path()/as_operations_modify_by_path()
  * functions.
  */
 typedef enum {
@@ -836,7 +836,10 @@ typedef enum {
  * @ingroup cdt_operations
  */
 AS_EXTERN bool
-as_operations_select_from_cdt(as_operations* ops, const char* name, as_cdt_ctx* ctx, as_cdt_select_flags flags);
+as_operations_select_by_path(
+		as_operations* ops, const char* name, as_cdt_ctx* ctx,
+		as_cdt_select_flags flags
+		);
 
 /**
  * Create CDT modification operation.  See also the enumeration as_cdt_modify_flags
@@ -851,7 +854,10 @@ as_operations_select_from_cdt(as_operations* ops, const char* name, as_cdt_ctx* 
  * @ingroup cdt_operations
  */
 AS_EXTERN bool
-as_operations_modify_cdt(as_operations* ops, const char* name, as_cdt_ctx* ctx, struct as_exp* mod_exp, as_cdt_modify_flags flags);
+as_operations_modify_by_path(
+		as_operations* ops, const char* name, as_cdt_ctx* ctx,
+		struct as_exp* mod_exp, as_cdt_modify_flags flags
+		);
 
 /******************************************************************************
  * LIST FUNCTIONS

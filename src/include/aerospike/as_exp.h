@@ -2965,7 +2965,7 @@ as_exp_destroy_base64(char* base64)
 //---------------------------------
 
 /**
- * Constructs a CDT select operation.  This is used to retrieve a number of
+ * Constructs a select by path operation.  This is used to retrieve a number of
  * records or fields of records, including those of structured types.
  *
  * @param __ctx    Pointer to a CDT context.
@@ -2976,7 +2976,7 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 
-#define as_exp_select_from_cdt(__ctx, __rtype, __flags, __bin) \
+#define as_exp_select_by_path(__ctx, __rtype, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \
 		as_exp_int(_AS_EXP_SYS_CALL_CDT), \
@@ -3000,7 +3000,7 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 
-#define as_exp_modify_cdt(__ctx, __rtype, __mod_exp, __flags, __bin) \
+#define as_exp_modify_by_path(__ctx, __rtype, __mod_exp, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \
 		as_exp_int(_AS_EXP_SYS_CALL_CDT | _AS_EXP_SYS_FLAG_MODIFY_LOCAL), \

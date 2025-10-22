@@ -3280,7 +3280,7 @@ TEST(list_select, "test select")
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	as_operations_select_from_cdt(&ops, BIN_NAME, &ctx, 0);
+	as_operations_select_by_path(&ops, BIN_NAME, &ctx, 0);
 
 	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3377,7 +3377,7 @@ TEST(list_select2, "test select")
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	as_operations_select_from_cdt(&ops, BIN_NAME, &ctx, AS_CDT_SELECT_MAP_KEY_VALUES);
+	as_operations_select_by_path(&ops, BIN_NAME, &ctx, AS_CDT_SELECT_MAP_KEY_VALUES);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	int64_t check_list_size = 0;
@@ -3465,7 +3465,7 @@ TEST(list_apply, "test select apply")
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	as_operations_modify_cdt(&ops, BIN_NAME, &ctx, exp, 0);
+	as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0);
 
 	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3588,7 +3588,7 @@ TEST(list_apply_persist, "test select apply persist")
 	assert_not_null(exp);
 
 	as_operations_init(&ops, 1);
-	as_operations_modify_cdt(&ops, BIN_NAME, &ctx, exp, 0);
+	as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);

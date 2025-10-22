@@ -325,7 +325,7 @@ as_cdt_ctx_add_all_children(as_cdt_ctx* ctx);
  * The passed expression must return a boolean.
  *
  * All children of the current level will be selected then the filter expression
- * applied to each item in turn.  Items that return true will be added to the
+ * is applied to each item in turn.  Items that cause the expression to evaluate to true will be added to the
  * list of items returned in a query for this level.  Items that return false
  * will be filtered out
  *

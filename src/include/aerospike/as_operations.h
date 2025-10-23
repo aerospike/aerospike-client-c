@@ -819,6 +819,12 @@ typedef enum {
  */
 typedef enum {
 	/**
+	 * If the expression in the context hits an invalid type, the operation
+	 * will fail.  This is the default behavior.
+	 */
+	AS_CDT_MODIFY_DEFAULT = 0x00,
+
+	/**
 	 * If the expression in the context hits an invalid type (e.g., selects
 	 * as an integer when the value is a string), do not fail the operation;
 	 * just ignore those elements.

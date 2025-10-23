@@ -836,7 +836,8 @@ typedef enum {
  * Create CDT select operation.  See also the enumeration as_cdt_select_flags
  * for the set of valid flags for this function.
  *
- * @return true on success. Otherwise an error occurred.
+ * @return true on success. Otherwise an error occurred.  For example, it is
+ * an error for ctx to be NULL or empty.
  *
  * @relates as_operations
  * @ingroup cdt_operations
@@ -854,7 +855,8 @@ as_operations_select_by_path(
  * The results of the evaluation of the modifying expression will replace the
  * selected map, and the changes are written back to storage.
  *
- * @return true on success. Otherwise an error occurred.
+ * @return true on success. Otherwise an error occurred.  For example, it is
+ * an error for ctx to be NULL or empty.
  *
  * @relates as_operations
  * @ingroup cdt_operations

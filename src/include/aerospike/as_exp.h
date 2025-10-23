@@ -2968,7 +2968,8 @@ as_exp_destroy_base64(char* base64)
  * Constructs a select by path operation.  This is used to retrieve a number of
  * records or fields of records, including those of structured types.
  *
- * @param __ctx    Pointer to a CDT context.
+ * @param __ctx    Pointer to a CDT context.  This cannot be NULL, nor can
+ *                 the context be empty.
  * @param __rtype  Return type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __flags  Flags (see enum as_cdt_select_flags).
  * @param __bin    Bin expression to which the query applies.
@@ -2991,7 +2992,8 @@ as_exp_destroy_base64(char* base64)
  * The results of the evaluation of the modifying expression will replace the
  * selected map and the changes written back to storage.
  *
- * @param __ctx      Pointer to a CDT context.
+ * @param __ctx      Pointer to a CDT context.  This cannot be NULL, nor can
+ *                   the context be empty.
  * @param __rtype    Return type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __mod_exp  Expression to apply.
  * @param __flags    Flags (see enum as_cdt_modify_flags).

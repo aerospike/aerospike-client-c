@@ -3254,7 +3254,7 @@ TEST(list_select, "test select")
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-//dump_record(rec);
+
 	as_record_destroy(rec);
 	rec = NULL;
 
@@ -3271,6 +3271,7 @@ TEST(list_select, "test select")
 				as_exp_int(16))));
 
 	assert_not_null(exp1);
+	assert_not_null(exp2);
 
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 2);
@@ -3285,7 +3286,7 @@ TEST(list_select, "test select")
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);
-//dump_record(rec);
+
 	as_list* check0 = as_record_get_list(rec, BIN_NAME);
 	assert_not_null(check0);
 	assert_int_eq(as_list_size(check0), 20);
@@ -3341,16 +3342,17 @@ TEST(list_select2, "test select")
 	as_record *rec = as_record_new(1);
 	as_record_set_map(rec, BIN_NAME, (as_map*)&map0);
 	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
-	assert_true(status == AEROSPIKE_OK);
+
 	as_record_destroy(rec);
 	rec = NULL;
 
+	assert_true(status == AEROSPIKE_OK);
+
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
-	assert_int_eq(status, AEROSPIKE_OK);
-//dump_record(rec);
 	as_record_destroy(rec);
 	rec = NULL;
+	assert_int_eq(status, AEROSPIKE_OK);
 
 	as_exp_build(exp1,
 		as_exp_bool(true));
@@ -3377,20 +3379,29 @@ TEST(list_select2, "test select")
 	as_operations_inita(&ops, 1);
 	as_operations_cdt_select(&ops, BIN_NAME, &ctx, AS_CDT_SELECT_LEAF_MAP_VALUE);
 
-	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
-	assert_int_eq(status, AEROSPIKE_OK);
-	as_operations_destroy(&ops);
-//dump_record(rec);
-	as_list* check_list = as_record_get_list(rec, BIN_NAME);
-	assert_int_eq(as_list_size(check_list), 2);
-	assert_true(as_string_get(as_list_get_string(check_list, 0))[0] == 'S');
+	int64_t check_list_size = 0;
+	char* stack_check_list_elt_0 = "---";
+	if (status == AEROSPIKE_OK) {
+		as_list* check_list = as_record_get_list(rec, BIN_NAME);
+		check_list_size = as_list_size(check_list);
+		as_string* heap_check_list_elt_0 = (check_list_size > 0) ? as_list_get_string(check_list, 0) : as_string_new("---", true);
+		stack_check_list_elt_0 = alloca(strlen(as_string_get(heap_check_list_elt_0)) + 1);
+		strcpy(stack_check_list_elt_0, as_string_get(heap_check_list_elt_0));
+		as_string_destroy(heap_check_list_elt_0);
+		as_list_destroy(check_list);
+	}
 	as_record_destroy(rec);
 	rec = NULL;
+	as_operations_destroy(&ops);
 	as_exp_destroy(exp1);
 	as_exp_destroy(exp2);
 	as_exp_destroy(exp3);
 	as_cdt_ctx_destroy(&ctx);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(check_list_size, 2);
+	assert_true(stack_check_list_elt_0[0] == 'S');
 }
 
 TEST(list_apply, "test select apply")

@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_cdt_internal.h>
+#include <aerospike/as_exp.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include "_bin.h"

@@ -3203,10 +3203,7 @@ TEST(list_ordered_udf, "test ordered udf")
 
 	aerospike_key_apply(as, &err, NULL, &rkey, "list_unordered", "list_unordered", (as_list*)&args, &val);
 	assert_int_eq(err.code, AEROSPIKE_OK);
-//	char* s = as_val_tostring(val);
-//	info("ret %s", s);
-//	info(s);
-//	free(s);
+
 	as_arraylist_destroy(&args);
 	as_val_destroy(val);
 
@@ -3397,15 +3394,17 @@ TEST(list_select2, "test select")
 	as_operations_select_by_path(&ops, BIN_NAME, &ctx, AS_CDT_SELECT_MAP_KEY_VALUES);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+
 	int64_t check_list_size = 0;
 	char* stack_check_list_elt_0 = "---";
 	if (status == AEROSPIKE_OK) {
 		as_list* check_list = as_record_get_list(rec, BIN_NAME);
 		check_list_size = as_list_size(check_list);
-		as_string* heap_check_list_elt_0 = (check_list_size > 0) ? as_list_get_string(check_list, 0) : as_string_new("---", true);
-		stack_check_list_elt_0 = alloca(strlen(as_string_get(heap_check_list_elt_0)) + 1);
-		strcpy(stack_check_list_elt_0, as_string_get(heap_check_list_elt_0));
-		as_string_destroy(heap_check_list_elt_0);
+		if (check_list_size > 0) {
+			as_string* heap_check_list_elt_0 = as_list_get_string(check_list, 0);
+			stack_check_list_elt_0 = alloca(strlen(as_string_get(heap_check_list_elt_0)) + 1);
+			strcpy(stack_check_list_elt_0, as_string_get(heap_check_list_elt_0));
+		}
 		as_list_destroy(check_list);
 	}
 	as_record_destroy(rec);

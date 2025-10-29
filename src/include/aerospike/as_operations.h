@@ -793,22 +793,28 @@ typedef enum {
 	/**
 	 * Return the list of the values of the nodes finally selected by the context.
 	 */
-	AS_CDT_SELECT_VALUES = 1,
+	AS_CDT_SELECT_LIST_VALUE = 1,
 
 	/**
-	 * Return a list of Key-value pairs.
+	 * Return the list of map values of the nodes finally selected by the context.
 	 */
-	AS_CDT_SELECT_MAP_KEY_VALUES = 1,
+	AS_CDT_SELECT_MAP_VALUE = 1,
 
 	/**
-	 * For final selected nodes which are elements of maps, return the appropiate map key.
+	 * Return the list of map keys of the nodes finally selected by the context.
 	 */
-	AS_CDT_SELECT_MAP_KEYS = 2,
+	AS_CDT_SELECT_MAP_KEY = 2,
+
+	/**
+	 * Returns the list of map (key, value) pairs of the nodes finally selected
+	 * by the context.
+	 */
+	AS_CDT_SELECT_MAP_KEY_VALUE = AS_CDT_SELECT_MAP_KEY | AS_CDT_SELECT_MAP_VALUE,
 
 	/**
 	 * If the expression in the context hits an invalid type (e.g., selects
 	 * as an integer when the value is a string), do not fail the operation;
-	 * just ignore those elements.
+	 * just ignore those elements.  Interpret UNKNOWN as false instead.
 	 */
 	AS_CDT_SELECT_NO_FAIL = 0x10
 } as_cdt_select_flags;
@@ -825,9 +831,14 @@ typedef enum {
 	AS_CDT_MODIFY_DEFAULT = 0x00,
 
 	/**
+	 * This flag is set when leaf values are to be modified.
+	 */
+	AS_CDT_MODIFY_APPLY = 0x04,
+
+	/**
 	 * If the expression in the context hits an invalid type (e.g., selects
 	 * as an integer when the value is a string), do not fail the operation;
-	 * just ignore those elements.
+	 * just ignore those elements.  Interpret UNKNOWN as false instead.
 	 */
 	AS_CDT_MODIFY_NO_FAIL = 0x10
 } as_cdt_modify_flags;

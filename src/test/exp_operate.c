@@ -880,7 +880,7 @@ TEST(exp_select, "exp select and apply")
 
 	// Select test.
 	as_exp_build(e0, as_exp_select_by_path(&ctx, AS_EXP_TYPE_LIST,
-			AS_CDT_SELECT_MAP_KEY_VALUES, as_exp_bin_map("res1")));
+			AS_CDT_SELECT_MAP_KEY_VALUE, as_exp_bin_map("res1")));
 
 	as_operations ops;
 	as_operations_init(&ops, 1);

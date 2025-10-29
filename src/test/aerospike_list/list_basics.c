@@ -3264,10 +3264,10 @@ TEST(list_select, "test select")
 	as_exp_build(exp2,
 		as_exp_and(
 			as_exp_cmp_ge(
-				as_exp_var_builtin_int(AS_EXP_BUILTIN_VALUE),
+				as_exp_loopvar_int(AS_EXP_LOOPVAR_VALUE),
 				as_exp_int(14)),
 			as_exp_cmp_lt(
-				as_exp_var_builtin_int(AS_EXP_BUILTIN_VALUE),
+				as_exp_loopvar_int(AS_EXP_LOOPVAR_VALUE),
 				as_exp_int(16))));
 
 	assert_not_null(exp1);
@@ -3361,12 +3361,12 @@ TEST(list_select2, "test select")
 	as_exp_build(exp2,
 		as_exp_cmp_le(
 			as_exp_map_get_by_key(NULL, AS_MAP_RETURN_VALUE, AS_EXP_TYPE_FLOAT, as_exp_str("price"),
-				as_exp_var_builtin_map(AS_EXP_BUILTIN_VALUE)),
+				as_exp_loopvar_map(AS_EXP_LOOPVAR_VALUE)),
 			as_exp_float(10.0)));
 	assert_not_null(exp2);
 
 	as_exp_build(exp3,
-		as_exp_cmp_eq(as_exp_var_builtin_str(AS_EXP_BUILTIN_KEY), as_exp_str("title")));
+		as_exp_cmp_eq(as_exp_loopvar_str(AS_EXP_LOOPVAR_KEY), as_exp_str("title")));
 	assert_not_null(exp3);
 
 	as_cdt_ctx ctx;
@@ -3460,7 +3460,7 @@ TEST(list_apply, "test select apply")
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
 
 	as_exp_build(exp,
-		as_exp_mul(as_exp_var_builtin_float(AS_EXP_BUILTIN_VALUE), as_exp_float(1.10)));
+		as_exp_mul(as_exp_loopvar_float(AS_EXP_LOOPVAR_VALUE), as_exp_float(1.10)));
 	assert_not_null(exp);
 
 	as_operations ops;
@@ -3584,7 +3584,7 @@ TEST(list_apply_persist, "test select apply persist")
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new("id", false)); // Target the "id" field
 
 	// Create expression to multiply by -1
-	as_exp_build(exp, as_exp_mul(as_exp_var_builtin_int(AS_EXP_BUILTIN_VALUE), as_exp_int(-1)));
+	as_exp_build(exp, as_exp_mul(as_exp_loopvar_int(AS_EXP_LOOPVAR_VALUE), as_exp_int(-1)));
 	assert_not_null(exp);
 
 	as_operations_init(&ops, 1);

@@ -186,10 +186,10 @@ typedef enum {
 } as_exp_type;
 
 typedef enum {
-	AS_EXP_BUILTIN_KEY = 0,
-	AS_EXP_BUILTIN_VALUE = 1,
-	AS_EXP_BUILTIN_INDEX = 2
-} as_exp_var_builtin_type;
+	AS_EXP_LOOPVAR_KEY = 0,
+	AS_EXP_LOOPVAR_VALUE = 1,
+	AS_EXP_LOOPVAR_INDEX = 2
+} as_exp_loopvar_type;
 
 typedef struct as_exp {
 	uint32_t packed_sz;

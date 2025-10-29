@@ -1650,15 +1650,27 @@ as_exp_destroy_base64(char* base64)
 		{.op=_AS_EXP_CODE_VAR, .count=2}, _AS_EXP_VAL_RAWSTR(__var_name)
 
 /**
- * Retrieve expression value from a built-in variable.
+ * @private
+ * Internal macro for making new loopvar variants easier.
+ *
+ * @param __var_id  Variable ID.
+ * @param __kind    The suffix of the return type; if you write BOOL, then
+ *                  the return type will be AS_EXP_TYPE_BOOL.
+ * @ingroup expression
+ */
+#define _as_exp_loopvar_make(__var_id, __kind) \
+		{.op=_AS_EXP_CODE_LOOPVAR, .count=3}, \
+		as_exp_int(AS_EXP_TYPE_##__kind), \
+		as_exp_int(__var_id)
+
+/**
+ * Retrieve expression value from a path expression loop variable.
  * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression
  */
-#define as_exp_var_builtin_map(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_MAP), \
-		as_exp_int(__var_id)
+#define as_exp_loopvar_map(__var_id) \
+		_as_exp_loopvar_make(__var_id, MAP)
 
 /**
  * Retrieve expression value from a built-in variable.
@@ -1666,10 +1678,8 @@ as_exp_destroy_base64(char* base64)
  * @return value stored in variable.
  * @ingroup expression
  */
-#define as_exp_var_builtin_list(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_LIST), \
-		as_exp_int(__var_id)
+#define as_exp_loopvar_list(__var_id) \
+		_as_exp_loopvar_make(__var_id, LIST)
 
 /**
  * Retrieve expression value from a built-in variable.
@@ -1677,10 +1687,8 @@ as_exp_destroy_base64(char* base64)
  * @return value stored in variable.
  * @ingroup expression
  */
-#define as_exp_var_builtin_str(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_STR), \
-		as_exp_int(__var_id)
+#define as_exp_loopvar_str(__var_id) \
+		_as_exp_loopvar_make(__var_id, STR)
 
 /**
  * Retrieve expression value from a built-in variable.
@@ -1688,10 +1696,8 @@ as_exp_destroy_base64(char* base64)
  * @return value stored in variable.
  * @ingroup expression
  */
-#define as_exp_var_builtin_int(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_INT), \
-		as_exp_int(__var_id)
+#define as_exp_loopvar_int(__var_id) \
+		_as_exp_loopvar_make(__var_id, INT)
 
 /**
  * Retrieve expression value from a built-in variable.
@@ -1699,10 +1705,26 @@ as_exp_destroy_base64(char* base64)
  * @return value stored in variable.
  * @ingroup expression
  */
-#define as_exp_var_builtin_float(__var_id) \
-		{.op=_AS_EXP_CODE_VAR_BUILTIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_FLOAT), \
-		as_exp_int(__var_id)
+#define as_exp_loopvar_float(__var_id) \
+		_as_exp_loopvar_make(__var_id, FLOAT)
+
+/**
+ * Retrieve expression value from a path expression loop variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_loopvar_blob(__var_id) \
+		_as_exp_loopvar_make(__var_id, BLOB)
+
+/**
+ * Retrieve expression value from a path expression loop variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_loopvar_bool(__var_id) \
+		_as_exp_loopvar_make(__var_id, BOOL)
 
 /**
  * Return a result_remove object to indicate entry deletion for cdt_apply.

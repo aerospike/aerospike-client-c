@@ -113,22 +113,17 @@ main(int argc, char* argv[])
 static int
 do_create_expression(void)
 {
-	as_arraylist countries_of_interest;
-	as_arraylist_init(&countries_of_interest, 3, 3);
-	as_arraylist_append_str(&countries_of_interest, "Australia");
-	as_arraylist_append_str(&countries_of_interest, "Canada");
-	as_arraylist_append_str(&countries_of_interest, "Botswana");
-
 	as_exp_build(filter_exp,
 		as_exp_cond(
 			as_exp_and(
 				as_exp_cmp_ge(
 					as_exp_bin_int("age"),
 					as_exp_int(18)),
-				as_exp_list_get_by_value_list(
-					NULL, AS_LIST_RETURN_EXISTS,
-					as_exp_bin_list("country"),
-					as_exp_val(&countries_of_interest))),
+				as_exp_or(
+					as_exp_cmp_eq(as_exp_bin_str("country"), as_exp_str("Australia")),
+					as_exp_cmp_eq(as_exp_bin_str("country"), as_exp_str("Canada")),
+					as_exp_cmp_eq(as_exp_bin_str("country"), as_exp_str("Botswana"))
+					)),
 
 			// If true, return the value in the age bin
 			as_exp_bin_int("age"),
@@ -140,12 +135,6 @@ do_create_expression(void)
 	LOG("Expression base64 = %s", as_exp_to_base64(filter_exp));
 	return 0;
 }
-
-// lHuTEJMEk1ECo2FnZRKVfwEAkxYNk1EDp2NvdW50cnmSfpOqA0F1c3RyYWxpYacDQ2FuYWRhqQNCb3Rzd2FuYZNRAqNhZ2WRAA Java
-// lHuTEJMEk1ECo2FnZRKVfwEAkxYNk1EDp2NvdW50cnmSfpOqA0F1c3RyYWxpYacDQ2FuYWRhqQNCb3Rzd2FuYZNRAqNhZ2WRAA Python
-// lHuTEJMEk1ECo2FnZRKVfwEAkxYNk1EDp2NvdW50cnmSfpOqA0F1c3RyYWxpYacDQ2FuYWRhqQNCb3Rzd2FuYZNRAqNhZ2WRAA C#
-// lHuTEJMEk1ECo2FnZRKVfwEAkxcNk1EEp2NvdW50cnmSfpOqA0F1c3RyYWxpYacDQ2FuYWRhqQNCb3Rzd2FuYZNRAqNhZ2WRAA C
-//                                ^-- ONE character difference.  TODO: Is this significant?
 
 static int
 do_insert_data(void)

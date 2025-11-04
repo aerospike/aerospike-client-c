@@ -831,6 +831,7 @@ typedef enum {
 	AS_CDT_MODIFY_DEFAULT = 0x00,
 
 	/**
+	 * @private
 	 * This flag is set when leaf values are to be modified.
 	 */
 	AS_CDT_MODIFY_APPLY = 0x04,

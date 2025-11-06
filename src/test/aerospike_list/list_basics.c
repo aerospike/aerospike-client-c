@@ -3391,7 +3391,8 @@ TEST(list_select2, "test select")
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	as_operations_select_by_path(&ops, BIN_NAME, &ctx, AS_CDT_SELECT_MAP_KEY_VALUE);
+	as_operations_select_by_path(&ops, BIN_NAME, &ctx,
+									AS_EXP_PATH_SELECT_MAP_KEY_VALUE);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 

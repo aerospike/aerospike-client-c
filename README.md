@@ -156,6 +156,10 @@ These packages contain C client libraries and header files. Package creation
 requires doxygen 1.8 or greater and its dependencies (including graphviz).
 Doxygen is used to create online HTML documentation.
 
+### For Debian Linux
+
+    $ sudo apt install doxygen graphviz zip libuv1-dev libev-dev libevent-dev
+
 Build the client package on the current platform:
 
 	$ make package

@@ -880,7 +880,7 @@ TEST(exp_select, "exp select and apply")
 
 	// Select test.
 	as_exp_build(e0, as_exp_select_by_path(&ctx, AS_EXP_TYPE_LIST,
-			AS_EXP_PATH_SELECT_MAP_KEY_VALUE, as_exp_bin_map("res1")));
+			AS_EXP_PATH_SELECT_MAP_VALUE, as_exp_bin_map("res1")));
 
 	as_operations ops;
 	as_operations_init(&ops, 1);
@@ -986,7 +986,7 @@ TEST(exp_result_remove, "exp apply w/ as_exp_result_remove")
 
 	// Select test.
 	as_exp_build(e0, as_exp_select_by_path(&ctx, AS_EXP_TYPE_LIST,
-			AS_EXP_PATH_SELECT_MAP_KEY_VALUE, as_exp_bin_map("res1")));
+			AS_EXP_PATH_SELECT_MAP_VALUE, as_exp_bin_map("res1")));
 
 	as_operations ops;
 	as_operations_init(&ops, 1);

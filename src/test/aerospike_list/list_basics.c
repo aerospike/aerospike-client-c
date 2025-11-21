@@ -3388,8 +3388,9 @@ TEST(list_select2, "test select")
 		as_string* heap_check_list_elt_0 = (check_list_size > 0) ? as_list_get_string(check_list, 0) : as_string_new("---", true);
 		stack_check_list_elt_0 = alloca(strlen(as_string_get(heap_check_list_elt_0)) + 1);
 		strcpy(stack_check_list_elt_0, as_string_get(heap_check_list_elt_0));
-		as_string_destroy(heap_check_list_elt_0);
-		as_list_destroy(check_list);
+		if (check_list_size == 0) {
+			as_string_destroy(heap_check_list_elt_0);
+		}
 	}
 	as_record_destroy(rec);
 	rec = NULL;
@@ -3641,6 +3642,211 @@ TEST(list_apply_persist, "test select apply persist")
 	rec = NULL;
 }
 
+TEST(list_apply_remove, "test select apply remove")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 218);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	struct {
+		const char* title;
+		float price;
+	} table[] = {
+			{"Sayings of the Century", 8.95},
+			{"Sword of Honour", 12.99},
+			{"Moby Dick", 8.99},
+			{"The Lord of the Rings", 22.99},
+	};
+
+	as_arraylist list_books;
+	as_arraylist_init(&list_books, 10, 10);
+
+	for (int i = 0; i < 4; i++) {
+		as_orderedmap* book = as_orderedmap_new(2);
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"title", false),
+				(as_val*)as_string_new((char*)table[i].title, false));
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"price", false),
+				(as_val*)as_double_new(table[i].price));
+		as_arraylist_append(&list_books, (as_val*)book);
+	}
+
+	as_orderedmap map0;
+	as_orderedmap_init(&map0, 10);
+	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)"book", false), (as_val*)&list_books);
+
+	as_record *rec = as_record_new(3);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&map0);
+	as_record_set_double(rec, "price", 10.0);
+	as_record_set_double(rec, "mult", 1.1);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+//dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_exp_build(price_check_exp,
+		as_exp_cmp_le(
+			as_exp_map_get_by_key(NULL, AS_MAP_RETURN_VALUE, AS_EXP_TYPE_FLOAT, as_exp_str("price"),
+				as_exp_var_builtin_map(AS_EXP_BUILTIN_VALUE)),
+			as_exp_float(10.0)));
+	assert_not_null(price_check_exp);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 2);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
+	as_cdt_ctx_add_exp(&ctx, price_check_exp);
+
+	as_exp_build(exp,
+		as_exp_result_remove());
+	assert_not_null(exp);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, 0);
+
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(exp);
+	as_exp_destroy(price_check_exp);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+//dump_record(rec);
+	as_map* check0 = as_record_get_map(rec, BIN_NAME);
+	assert_not_null(check0);
+	as_string book;
+	as_string_init(&book, "book", false);
+	as_list* check1 = (as_list*)as_map_get(check0, (as_val*)&book);
+	assert_not_null(check1);
+	assert_int_eq(as_list_size(check1), 2);
+	as_map* check2 = as_list_get_map(check1, 0);
+	assert_not_null(check2);
+	as_string price;
+	as_string_init(&price, "price", false);
+	as_double* check3 = (as_double*)as_map_get(check2, (as_val*)&price);
+	assert_true(as_double_get(check3) > 9);
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
+TEST(list_apply_remove2, "test select apply remove 2")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 218);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	struct {
+		const char* title;
+		float price;
+	} table[] = {
+			{"Sayings of the Century", 8.95},
+			{"Sword of Honour", 12.99},
+			{"Moby Dick", 8.99},
+			{"The Lord of the Rings", 22.99},
+			{"Mel Fell", 12.95},
+			{"Kitten's First Full Moon", 6.46},
+			{"Hank Goes Honk", 11.99},
+			{"DK Eyewitness Books: Plant", 16.99},
+			{"DK Eyewitness Books: Bird", 8.14},
+			{"Eyewitness Flight", 11.89},
+			{"The Big Book of Airplanes", 10.95},
+			{"Flap Your Wings", 8.29},
+			{"The Seashore", 27.74},
+			{"Upside Down", 12.08},
+			{"All Cats Are on the Autism Spectrum", 11.11},
+			{"Owen", 10.42},
+	};
+
+	as_arraylist list_books;
+	as_arraylist_init(&list_books, 16, 16);
+
+	for (int i = 0; i < 16; i++) {
+		as_orderedmap* book = as_orderedmap_new(2);
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"title", false),
+				(as_val*)as_string_new((char*)table[i].title, false));
+		as_orderedmap_set(book, (as_val*)as_string_new((char*)"price", false),
+				(as_val*)as_double_new(table[i].price));
+		as_arraylist_append(&list_books, (as_val*)book);
+	}
+
+	as_record *rec = as_record_new(3);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&list_books);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+//dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_exp_build(price_check_exp,
+		as_exp_cmp_le(
+			as_exp_map_get_by_key(NULL, AS_MAP_RETURN_VALUE, AS_EXP_TYPE_FLOAT, as_exp_str("price"),
+				as_exp_var_builtin_map(AS_EXP_BUILTIN_VALUE)),
+			as_exp_float(10.0)));
+	assert_not_null(price_check_exp);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 1);
+	as_cdt_ctx_add_exp(&ctx, price_check_exp);
+
+	as_exp_build(exp,
+		as_exp_result_remove());
+	assert_not_null(exp);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, 0);
+
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(exp);
+	as_exp_destroy(price_check_exp);
+	as_cdt_ctx_destroy(&ctx);
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+dump_record(rec);
+	as_list* check0 = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(check0);
+	assert_int_eq(as_list_size(check0), 11);
+	as_map* check1 = as_list_get_map(check0, 0);
+	assert_not_null(check1);
+	as_string price;
+	as_string_init(&price, "price", false);
+	as_double* check2 = (as_double*)as_map_get(check1, (as_val*)&price);
+	assert_true(as_double_get(check2) > 9);
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -3685,4 +3891,7 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_select2);
 	suite_add(list_apply);
 	suite_add(list_apply_persist);
+
+	suite_add(list_apply_remove);
+	suite_add(list_apply_remove2);
 }

@@ -35,6 +35,8 @@
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_queue.h>
 
+extern bool as_op_is_write[];
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -465,10 +467,9 @@ as_scan_command_size(
 
 	sb->n_fields = n_fields;
 
-	// Operations (used in background scans) and bin names (used in foreground scans)
-	// are mutually exclusive.
-	if (scan->ops) {
-		// Estimate size for background operations.
+	// Operations and bin names are mutually exclusive.
+	if (scan->ops && scan->ops->binops.size > 0) {
+		// Estimate size for operations (both foreground and background).
 		as_operations* ops = scan->ops;
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
@@ -498,17 +499,41 @@ as_scan_command_init(
 	uint16_t n_ops = (scan->ops) ? scan->ops->binops.size : scan->select.size;
 	uint8_t* p;
 
-	if (scan->ops) {
-		// Background scan with operations.
-		uint32_t ttl = (scan->ttl)? scan->ttl : scan->ops->ttl;
+	if (scan->ops && scan->ops->binops.size > 0) {
+		// Check if this is a foreground scan with operations (read operations only)
+		bool has_write_ops = false;
 
-		if (ttl == AS_RECORD_CLIENT_DEFAULT_TTL) {
-			ttl = policy->ttl;
+		for (uint16_t i = 0; i < scan->ops->binops.size; i++) {
+			as_binop* op = &scan->ops->binops.entries[i];
+			if (as_op_is_write[op->op]) {
+				has_write_ops = true;
+				break; // No need to check further once we find a write op
+			}
 		}
 
-		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
-				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
-				policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
+		if (has_write_ops) {
+			// Background scan with write operations.
+			uint32_t ttl = (scan->ttl)? scan->ttl : scan->ops->ttl;
+
+			if (ttl == AS_RECORD_CLIENT_DEFAULT_TTL) {
+				ttl = policy->ttl;
+			}
+
+			p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
+					AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
+					policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
+		} else {
+			// Foreground scan with read operations.
+			uint8_t read_attr = AS_MSG_INFO1_READ;
+
+			if (scan->no_bins) {
+				read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
+			}
+
+			p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
+					AS_POLICY_READ_MODE_SC_SESSION, -1, policy->base.total_timeout, sb->n_fields, n_ops,
+					read_attr, 0, AS_MSG_INFO3_PARTITION_DONE);
+		}
 	}
 	else if (scan->apply_each.function[0]) {
 		// Background scan with UDF.
@@ -596,7 +621,7 @@ as_scan_command_init(
 		p = as_command_write_field_uint64(p, AS_FIELD_MAX_RECORDS, sb->max_records);
 	}
 
-	if (scan->ops) {
+	if (scan->ops && scan->ops->binops.size > 0) {
 		as_operations* ops = scan->ops;
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
@@ -637,7 +662,7 @@ as_scan_command_execute(as_scan_task* task)
 
 	as_queue opsbuffers;
 
-	if (task->scan->ops) {
+	if (task->scan->ops && task->scan->ops->binops.size > 0) {
 		as_queue_inita(&opsbuffers, sizeof(as_buffer), task->scan->ops->binops.size);
 	}
 
@@ -656,7 +681,7 @@ as_scan_command_execute(as_scan_task* task)
 	status = as_scan_command_size(task->policy, task->scan, &sb, &err);
 
 	if (status != AEROSPIKE_OK) {
-		if (task->scan->ops) {
+		if (task->scan->ops && task->scan->ops->binops.size > 0) {
 			as_buffers_destroy(&opsbuffers);
 		}
 
@@ -1209,7 +1234,7 @@ as_scan_partition_async(
 
 	as_queue opsbuffers;
 
-	if (scan->ops) {
+	if (scan->ops && scan->ops->binops.size > 0) {
 		as_queue_inita(&opsbuffers, sizeof(as_buffer), scan->ops->binops.size);
 	}
 
@@ -1228,7 +1253,7 @@ as_scan_partition_async(
 	status = as_scan_command_size(policy, scan, &sb, err);
 
 	if (status != AEROSPIKE_OK) {
-		if (scan->ops) {
+		if (scan->ops && scan->ops->binops.size > 0) {
 			as_buffers_destroy(&opsbuffers);
 		}
 		as_partition_tracker_destroy(pt);

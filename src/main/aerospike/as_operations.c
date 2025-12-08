@@ -18,6 +18,7 @@
 #include <aerospike/as_bin.h>
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_exp.h>
+#include <aerospike/as_ml_vector.h>
 #include <citrusleaf/alloc.h>
 
 #include "_bin.h"
@@ -126,7 +127,7 @@ as_operations_destroy(as_operations* ops)
 		cf_free(ops->binops.entries);
 	}
 
-	// reset values 
+	// reset values
 	ops->binops._free = false;
 	ops->binops.capacity = 0;
 	ops->binops.size = 0;
@@ -317,4 +318,38 @@ as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, a
 	as_cdt_end(&pk);
 
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_MODIFY);
+}
+
+/******************************************************************************
+ * VECTOR DISTANCE FUNCTIONS
+ *****************************************************************************/
+
+bool
+as_operations_add_vector_distance(as_operations* ops, const char* name,
+		const as_vector* query_vector, as_ml_vector_element_type element_type)
+{
+	as_binop* binop = as_binop_forappend(ops, AS_OPERATOR_VECTOR_DISTANCE, name);
+	if (!binop) {
+		return false;
+	}
+
+	// Serialize the query vector using ML vector utilities
+	as_bytes* serialized_vector = malloc(sizeof(as_bytes));
+	if (!serialized_vector) {
+		return false;
+	}
+
+	as_status status = as_ml_vector_serialize(query_vector, element_type,
+			serialized_vector);
+
+	if (status != AEROSPIKE_OK) {
+		free(serialized_vector);
+		return false;
+	}
+
+	// Initialize bin with serialized vector data
+	// The as_bytes object manages the memory, so we transfer ownership
+	as_bin_init(&binop->bin, name, (as_bin_value*)serialized_vector);
+
+	return true;
 }

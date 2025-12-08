@@ -14,7 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#pragma once 
+#pragma once
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_bytes.h>
@@ -109,7 +109,8 @@ extern "C" {
  *  `as_record_set_string()`    | Set the bin value to an `as_string`.
  *  `as_record_set_geojson()`   | Set the bin value to an `as_geojson`.
  *  `as_record_set_bytes()`     | Set the bin value to an `as_bytes`.
- *  `as_record_set_list()`      | Set the bin value to an `as_list`.                    
+ *  `as_record_set_vector()`    | Set the bin value to an `as_vector`.
+ *  `as_record_set_list()`      | Set the bin value to an `as_list`.
  *  `as_record_set_map()`       | Set the bin value to an `as_map`.
  *  `as_record_set_nil()`       | Set the bin value to an `as_nil`.
  *  `as_record_set()`           | Set the bin value to an `as_bin_value`.

@@ -1332,6 +1332,7 @@ as_operate_init(
 				// Fall through to read.
 			case AS_OPERATOR_CDT_READ:
 			case AS_OPERATOR_READ:
+			case AS_OPERATOR_VECTOR_DISTANCE:
 				oper->read_attr |= AS_MSG_INFO1_READ;
 
 				if (op->bin.name[0] == 0) {

@@ -23,6 +23,7 @@
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_map.h>
+#include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
 
 #ifdef __cplusplus

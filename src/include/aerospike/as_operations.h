@@ -25,6 +25,7 @@
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_cdt_ctx.h>
+#include <aerospike/as_ml_vector.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,7 +55,8 @@ typedef enum as_operator_e {
 	AS_OPERATOR_BIT_MODIFY,
 	AS_OPERATOR_DELETE,
 	AS_OPERATOR_HLL_READ,
-	AS_OPERATOR_HLL_MODIFY
+	AS_OPERATOR_HLL_MODIFY,
+	AS_OPERATOR_VECTOR_DISTANCE
 } as_operator;
 
 /**
@@ -805,6 +807,26 @@ as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, 
  */
 AS_EXTERN bool
 as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, struct as_exp* mod_exp, uint32_t flags);
+
+/******************************************************************************
+ * VECTOR DISTANCE FUNCTIONS
+ *****************************************************************************/
+
+/**
+ * Add a vector distance operation using ML vector data.
+ * This operation calculates the distance between a query vector and vectors stored in a bin.
+ *
+ * @param ops			The `as_operations` to append the operation to.
+ * @param name			The name of the bin containing vector data.
+ * @param query_vector	The ML vector to calculate distance with.
+ * @param element_type	The type of elements in the query vector.
+ * @return				true on success. Otherwise an error occurred.
+ *
+ * @relates as_operations
+ * @ingroup ml_vector_operations
+ */
+AS_EXTERN bool
+as_operations_add_vector_distance(as_operations* ops, const char* name, const as_vector* query_vector, as_ml_vector_element_type element_type);
 
 /******************************************************************************
  * LIST FUNCTIONS

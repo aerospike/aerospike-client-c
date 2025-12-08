@@ -40,7 +40,7 @@
 //---------------------------------
 
 // These values must line up with as_operator enum.
-static uint8_t as_protocol_types[] = {1, 2, 3, 4, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+static uint8_t as_protocol_types[] = {1, 2, 3, 4, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
 
 //---------------------------------
 // Functions

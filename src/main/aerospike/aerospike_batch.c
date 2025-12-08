@@ -204,7 +204,8 @@ bool as_op_is_write[] = {
 	true,
 	true,
 	false,
-	true
+	true,
+	false
 };
 
 static const char cluster_empty_error[] = "Batch command failed because cluster is empty.";

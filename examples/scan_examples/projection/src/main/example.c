@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_scan.h>
@@ -39,6 +40,7 @@
 #include <aerospike/as_val.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_exp_operations.h>
+#include <aerospike/as_ml_vector.h>
 
 #include "example_utils.h"
 
@@ -56,7 +58,9 @@ const char* SET = "demo1";
 bool scan_operations_callback(const as_val* val, void* udata);
 void example_scan_with_read_operations(aerospike* as);
 void example_scan_with_expression_read_operations(aerospike* as);
+bool verify_records(aerospike* p_as);
 void example_scan_with_write_operations(aerospike* as);
+void example_scan_with_vector_distance_operations(aerospike* as);
 void cleanup_example(aerospike* as);
 bool insert_records(aerospike* p_as);
 
@@ -97,9 +101,18 @@ main(int argc, char* argv[])
 
 	printf("Records inserted\n");
 
+	// Verify inserted records
+	if (! verify_records(&as)) {
+		LOG("Record verification failed!");
+		cleanup_example(&as);
+		aerospike_close(&as, &err);
+		return -1;
+	}
+
 	// Run examples
 	// example_scan_with_read_operations(&as);
-	example_scan_with_expression_read_operations(&as);
+	// example_scan_with_expression_read_operations(&as);
+	example_scan_with_vector_distance_operations(&as);
 
 	// Cleanup and disconnect
 	cleanup_example(&as);
@@ -295,15 +308,15 @@ scan_operations_callback(const as_val* p_val, void* udata)
 bool
 insert_records(aerospike* p_as)
 {
-	// Create an as_record object with up to three integer value bins. By using
+	// Create an as_record object with up to four bins (3 integer + 1 vector). By using
 	// as_record_inita(), we won't need to destroy the record if we only set
-	// bins using as_record_set_int64().
+	// bins using as_record_set_int64() and as_record_set_bytes().
 	as_record rec;
-	as_record_inita(&rec, 3);
+	as_record_inita(&rec, 4);
 
 	// Re-using rec, write records into the database such that each record's key
 	// and (test-bin) value is based on the loop index.
-	for (uint32_t i = 0; i < 1; i++) {
+	for (uint32_t i = 0; i < 2; i++) {
 		as_error err;
 
 		// Set up a default as_policy_write object.
@@ -318,23 +331,239 @@ insert_records(aerospike* p_as)
 		// In general it's ok to reset a bin value - all as_record_set_... calls
 		// destroy any previous value.
 
-			// Write three bins in all remaining records.
-			as_record_set_int64(&rec, "test-bin-1", (int64_t)i);
-			as_record_set_int64(&rec, "test-bin-2", (int64_t)(100 + i));
-			as_record_set_int64(&rec, "test-bin-3", (int64_t)(1000 + i));
+		// Write three integer bins
+		as_record_set_int64(&rec, "test-bin-1", (int64_t)i);
+		as_record_set_int64(&rec, "test-bin-2", (int64_t)(100 + i));
+		as_record_set_int64(&rec, "test-bin-3", (int64_t)(1000 + i));
 
-			// If we want the key to be returned in the scan callback, we must
-			// store it with the record in the database. AS_POLICY_KEY_SEND
-			// causes the key to be stored.
+		// Create and insert a vector bin
+		// Create a sample 3D vector with different values for each record
+		float vector_data[] = {
+			(float)(i + 1.0),      // x component
+			(float)(i + 2.0),      // y component
+			(float)(i + 3.0)       // z component
+		};
+
+		as_vector vector;
+		as_status status = as_ml_vector_init_float32(&vector, vector_data, 3);
+
+		if (status != AEROSPIKE_OK) {
+			LOG("Failed to initialize ML vector: %d", status);
+			return false;
+		}
+
+		// Serialize the ML vector for storage as bytes (with ML vector header)
+		as_bytes* vector_bytes = as_bytes_new(0);
+
+		status = as_ml_vector_serialize(&vector, AS_ML_VECTOR_FLOAT32, vector_bytes);
+
+		if (status != AEROSPIKE_OK) {
+			LOG("Failed to serialize ML vector: %d", status);
+			as_vector_destroy(&vector);
+			as_bytes_destroy(vector_bytes);
+			return false;
+		}
+
+		// Store as bytes with ML vector format (contains magic number, version, type, data)
+		as_record_set_bytes(&rec, "vector-bin", vector_bytes);
+
+		printf("Inserting record %u with vector [%.1f, %.1f, %.1f]\n",
+			   i, vector_data[0], vector_data[1], vector_data[2]);
+
+		// Cleanup vector resources
+		as_vector_destroy(&vector);
+		// Note: vector_bytes memory will be managed by the record
+
+		// If we want the key to be returned in the scan callback, we must
+		// store it with the record in the database. AS_POLICY_KEY_SEND
+		// causes the key to be stored.
 
 		// Write a record to the database.
 		if (aerospike_key_put(p_as, &err, &wpol, &key, &rec) != AEROSPIKE_OK) {
 			LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
 			return false;
 		}
+
+		// Note: vector_bytes will be cleaned up by as_record when it's destroyed
 	}
 
 	LOG("insert succeeded");
 
 	return true;
+}
+
+//==========================================================
+// Record Verification
+//
+
+bool
+verify_records(aerospike* p_as)
+{
+	LOG("Verifying inserted records...");
+
+	for (uint32_t i = 0; i < 2; i++) {
+		as_error err;
+		as_key key;
+		as_record* p_rec = NULL;
+
+		// Initialize key for record retrieval
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+
+		// Read the record from the database
+		if (aerospike_key_get(p_as, &err, NULL, &key, &p_rec) != AEROSPIKE_OK) {
+			LOG("Failed to retrieve record %u: %d - %s", i, err.code, err.message);
+			return false;
+		}
+
+		if (! p_rec) {
+			LOG("Record %u not found", i);
+			return false;
+		}
+
+		printf("\n--- Verifying Record %u ---\n", i);
+
+		// Verify integer bins
+		as_bin_value* bin1 = as_record_get(p_rec, "test-bin-1");
+		as_bin_value* bin2 = as_record_get(p_rec, "test-bin-2");
+		as_bin_value* bin3 = as_record_get(p_rec, "test-bin-3");
+		as_bin_value* vector_bin = as_record_get(p_rec, "vector-bin");
+
+		if (! bin1 || ! bin2 || ! bin3 || ! vector_bin) {
+			LOG("Missing bins in record %u", i);
+			as_record_destroy(p_rec);
+			return false;
+		}
+
+		// Verify integer values
+		int64_t val1 = as_integer_get(&bin1->integer);
+		int64_t val2 = as_integer_get(&bin2->integer);
+		int64_t val3 = as_integer_get(&bin3->integer);
+
+		printf("Integer bins: %ld, %ld, %ld\n", val1, val2, val3);
+
+		if (val1 != (int64_t)i || val2 != (int64_t)(100 + i) || val3 != (int64_t)(1000 + i)) {
+			LOG("Integer bin values don't match expected values for record %u", i);
+			as_record_destroy(p_rec);
+			return false;
+		}
+
+		as_bytes* vector_bytes = &vector_bin->bytes;
+
+		if (! vector_bytes || ! vector_bytes->value) {
+			LOG("Vector bin is not bytes type for record %u", i);
+			as_record_destroy(p_rec);
+			return false;
+		}
+
+		printf("Vector bin: type=%d, size=%u bytes\n", vector_bytes->type, vector_bytes->size);
+
+		// Debug: Show first few bytes of vector data
+		printf("First 16 bytes: ");
+		for (int j = 0; j < 16 && j < vector_bytes->size; j++) {
+			printf("%02x ", vector_bytes->value[j]);
+		}
+		printf("\n");
+
+		// Deserialize and verify vector data
+		as_vector retrieved_vector;
+		as_ml_vector_element_type element_type;
+		as_status status = as_ml_vector_deserialize(vector_bytes, &retrieved_vector, &element_type);
+
+		if (status != AEROSPIKE_OK) {
+			LOG("Failed to deserialize vector for record %u: %d", i, status);
+			as_record_destroy(p_rec);
+			return false;
+		}
+
+		printf("Deserialized vector: type=%d, count=%u, element_size=%u\n",
+			   element_type, retrieved_vector.size, (uint32_t)retrieved_vector.item_size);
+
+		// Verify vector contents
+		if (element_type != AS_ML_VECTOR_FLOAT32 || retrieved_vector.size != 3) {
+			LOG("Vector metadata doesn't match for record %u", i);
+			as_vector_destroy(&retrieved_vector);
+			as_record_destroy(p_rec);
+			return false;
+		}
+
+		float* vector_data = (float*)retrieved_vector.list;
+		float expected_x = (float)(i + 1.0);
+		float expected_y = (float)(i + 2.0);
+		float expected_z = (float)(i + 3.0);
+
+		printf("Vector data: [%.1f, %.1f, %.1f]\n", vector_data[0], vector_data[1], vector_data[2]);
+		printf("Expected:    [%.1f, %.1f, %.1f]\n", expected_x, expected_y, expected_z);
+
+		if (fabs(vector_data[0] - expected_x) > 0.001 ||
+			fabs(vector_data[1] - expected_y) > 0.001 ||
+			fabs(vector_data[2] - expected_z) > 0.001) {
+			LOG("Vector data doesn't match expected values for record %u", i);
+			as_vector_destroy(&retrieved_vector);
+			as_record_destroy(p_rec);
+			return false;
+		}
+
+		printf("✓ Record %u verified successfully\n", i);
+
+		// Cleanup
+		as_vector_destroy(&retrieved_vector);
+		as_record_destroy(p_rec);
+	}
+
+	LOG("All records verified successfully!");
+	return true;
+}
+
+void
+example_scan_with_vector_distance_operations(aerospike* as)
+{
+	printf("\n--- Scan with Vector Distance Operations Example ---\n");
+
+	as_error err;
+	as_scan scan;
+	as_scan_init(&scan, NAMESPACE, SET);
+
+	// Create operations with vector distance calculation
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+
+	// Create a sample query vector for distance calculation
+	// This will calculate distances from stored vectors to this query vector
+	float query_data[] = {2.5f, 3.5f, 4.5f};
+	as_vector query_vector;
+
+	// Initialize the ML vector using the existing utilities
+	as_status status = as_ml_vector_init_float32(&query_vector, query_data, 3);
+	if (status != AEROSPIKE_OK) {
+		printf("Failed to initialize ML vector: %d\n", status);
+		as_operations_destroy(&ops);
+		as_scan_destroy(&scan);
+		return;
+	}
+
+	// Add vector distance operation
+	if (! as_operations_add_vector_distance(&ops, "vector-bin", &query_vector, AS_ML_VECTOR_FLOAT32)) {
+		printf("Failed to add vector distance operation\n");
+		as_vector_destroy(&query_vector);
+		as_operations_destroy(&ops);
+		as_scan_destroy(&scan);
+		return;
+	}
+
+	// Set operations on scan
+	scan.ops = &ops;
+
+	// Execute scan with operations
+	status = aerospike_scan_foreach(as, &err, NULL, &scan, scan_operations_callback, NULL);
+
+	if (status != AEROSPIKE_OK) {
+		printf("Scan failed: (%d) %s\n", err.code, err.message);
+	} else {
+		printf("Scan with vector distance operations completed successfully.\n");
+	}
+
+	// Cleanup
+	as_vector_destroy(&query_vector);
+	as_operations_destroy(&ops);
+	as_scan_destroy(&scan);
 }

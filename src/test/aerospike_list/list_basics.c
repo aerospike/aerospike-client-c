@@ -55,7 +55,8 @@ extern void example_dump_record(const as_record* p_rec);
 #define SET "test_cdt"
 #define BIN_NAME "test-list-1"
 
-#define BOOKS "book"
+// a common name used in a number of CDT-related tests.
+#define BOOKS "books"
 
 /******************************************************************************
  * TYPES

@@ -26,6 +26,8 @@
 
 extern aerospike* as;
 
+extern void example_dump_record(as_record* rec);
+
 /******************************************************************************
  * MACROS
  *****************************************************************************/
@@ -888,7 +890,7 @@ TEST(exp_select, "exp select and apply")
 
 	status = aerospike_key_operate(as, &err, NULL, &keyA, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-extern void example_dump_record(as_record* rec); example_dump_record(rec);
+	example_dump_record(rec);
 	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 	rec = NULL;
@@ -916,7 +918,7 @@ extern void example_dump_record(as_record* rec); example_dump_record(rec);
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &keyA, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-extern void example_dump_record(as_record* rec); example_dump_record(rec);
+	example_dump_record(rec);
 	as_list* check_list = as_record_get_list(rec, AString);
 	assert_int_eq(as_list_size(check_list), 4);
 	assert_true(as_list_get_double(check_list, 0) < 11);

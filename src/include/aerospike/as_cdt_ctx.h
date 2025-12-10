@@ -109,6 +109,36 @@ typedef struct as_cdt_ctx {
 //---------------------------------
 
 /**
+ * Answer true if the CDT context is "empty".  Empty is defined as one of three
+ * conditions: (1) the context pointer itself is null, (2) the pointer is non-
+ * null but the structure is not properly initialized, and (3) the context is
+ * initialized but has yet to receive an expression (see as_cdt_ctx_add_*
+ * functions).
+ */
+inline bool
+cdt_ctx_is_empty(as_cdt_ctx* ctx) {
+	// If ctx is NULL, we consider it empty.
+	if (ctx == NULL) {
+		return true;
+	}
+
+	// If ctx is not NULL, but has not been properly initialized,
+	// we consider it empty.
+	if (ctx->list.list == NULL) {
+		return true;
+	}
+
+	// If ctx is properly initialized but has zero elements in its list,
+	// we consider it empty.
+	if (ctx->list.size == 0) {
+		return true;
+	}
+
+	// Otherwise, the context has at least one expression in it.
+	return false;
+}
+
+/**
  * Initialize a stack allocated nested CDT context list, with item storage on the heap.
  * Call as_cdt_ctx_destroy() when done with the context list.
  *

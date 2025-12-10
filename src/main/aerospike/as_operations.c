@@ -284,7 +284,7 @@ as_operations_add_delete(as_operations* ops)
 bool
 as_operations_select_by_path(as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp_path_select_flags flags)
 {
-	if (ctx == NULL) {
+	if (cdt_ctx_is_empty(ctx)) {
 		return false;
 	}
 

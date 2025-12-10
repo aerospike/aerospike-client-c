@@ -3421,7 +3421,7 @@ TEST(list_select2, "test select")
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(check_list_size, 2);
 	assert_true(stack_check_list_elt_0[0] == 'S');
-	assert_eq(strcmp("Sayings of the Century", stack_check_list_elt_0), 0);
+	assert_int_eq(strcmp("Sayings of the Century", stack_check_list_elt_0), 0);
 }
 
 TEST(list_apply, "test modify/apply")

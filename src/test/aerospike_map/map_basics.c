@@ -404,7 +404,7 @@ TEST(map_mixed, "Map mixed operations")
 
 	as_map_policy mode;
 	as_map_policy_set(&mode, AS_MAP_KEY_VALUE_ORDERED, AS_MAP_UPDATE);
-		
+
 	as_hashmap item_map;
 	as_hashmap_init(&item_map, 3);
 	as_integer mkey1;
@@ -621,7 +621,7 @@ TEST(map_rank, "Map rank")
 	as_hashmap_set(&item_map, (as_val*)&mkey4, (as_val*)&mval4);
 
 	as_operations_add_map_put_items(&ops, BIN_NAME, &mode, (as_map*)&item_map);
-		
+
 	as_record* rec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -3471,6 +3471,56 @@ TEST(map_persist_index, "Test Map Persist Index")
 	rec = NULL;
 }
 
+TEST(map_select_apply, "test select apply")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 32);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_hashmap map;
+	as_hashmap_init(&map, 4);
+	as_hashmap_set(&map, (as_val*)as_string_new("string_a", false), (as_val*)as_string_new("open", false));
+	as_hashmap_set(&map, (as_val*)as_string_new("string_b", false), (as_val*)as_string_new("close", false));
+	as_hashmap_set(&map, (as_val*)as_string_new("string_c", false), (as_val*)as_string_new("open", false));
+
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&map);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_all(&ctx);
+
+	as_exp_build(exp, as_exp_val(as_string_new("updated", false)));
+	assert_not_null(exp);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, 0);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_cdt_ctx_destroy(&ctx);
+	as_exp_destroy(exp);
+
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+dump_record(rec);
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -3510,4 +3560,5 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_inverted_exp);
 	suite_add(map_self_correct);
 	suite_add(map_persist_index);
+	suite_add(map_select_apply);
 }

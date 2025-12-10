@@ -826,7 +826,8 @@ typedef enum {
 	/**
 	 * If the expression in the context hits an invalid type (e.g., selects
 	 * as an integer when the value is a string), do not fail the operation;
-	 * just ignore those elements.  Interpret UNKNOWN as false instead.
+	 * just ignore those elements.  Interpret an expression that returns UNKNOWN
+	 * as false instead.
 	 */
 	AS_EXP_PATH_SELECT_NO_FAIL = 0x10
 } as_exp_path_select_flags;

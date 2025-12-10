@@ -1727,6 +1727,33 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, BOOL)
 
 /**
+ * Retrieve expression value from a path expression loop variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_loopvar_infinity(__var_id) \
+		_as_exp_loopvar_make(__var_id, INF)
+
+/**
+ * Retrieve expression value from a path expression loop variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_loopvar_nil(__var_id) \
+		_as_exp_loopvar_make(__var_id, NIL)
+
+/**
+ * Retrieve expression value from a path expression loop variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_loopvar_geojson(__var_id) \
+		_as_exp_loopvar_make(__var_id, GEOJSON)
+
+/**
  * Return a result_remove object to indicate entry deletion for cdt_apply.
  * @return the result_remove value.
  * @ingroup expression
@@ -2970,9 +2997,9 @@ as_exp_destroy_base64(char* base64)
  *
  * @param __ctx    Pointer to a CDT context.  This cannot be NULL, nor can
  *                 the context be empty.
- * @param __rtype  Return type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __vtype  Value type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __flags  Flags (see enum as_exp_path_select_flags).
- * @param __bin    Bin expression to which the query applies.
+ * @param __bin    Bin expression this select query is performed against.
  * @return (expression)
  * @ingroup expression
  */
@@ -2987,17 +3014,17 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Constructs a CDT apply operation.
+ * Constructs an apply by path operation.
  *
  * The results of the evaluation of the modifying expression will replace the
  * selected map and the changes written back to storage.
  *
  * @param __ctx      Pointer to a CDT context.  This cannot be NULL, nor can
  *                   the context be empty.
- * @param __rtype    Return type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __vtype    Value type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __mod_exp  Expression to apply.
  * @param __flags    Flags (see enum as_exp_path_modify_flags).
- * @param __bin      Bin expression to which the application applies.
+ * @param __bin      Bin expression to which __mod_exp applies to.
  * @return (expression)
  * @ingroup expression
  */

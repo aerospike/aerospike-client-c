@@ -55,6 +55,8 @@ extern void example_dump_record(const as_record* p_rec);
 #define SET "test_cdt"
 #define BIN_NAME "test-list-1"
 
+#define BOOKS "book"
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -3351,7 +3353,7 @@ TEST(list_select2, "test select")
 
 	as_orderedmap map0;
 	as_orderedmap_init(&map0, 10);
-	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)"book", false), (as_val*)&list_books);
+	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)BOOKS, false), (as_val*)&list_books);
 
 	as_record *rec = as_record_new(1);
 	as_record_set_map(rec, BIN_NAME, (as_map*)&map0);
@@ -3419,9 +3421,10 @@ TEST(list_select2, "test select")
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(check_list_size, 2);
 	assert_true(stack_check_list_elt_0[0] == 'S');
+	assert_eq(strcmp("Sayings of the Century", stack_check_list_elt_0), 0);
 }
 
-TEST(list_apply, "test select apply")
+TEST(list_apply, "test modify/apply")
 {
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 216);
@@ -3454,7 +3457,7 @@ TEST(list_apply, "test select apply")
 
 	as_orderedmap map0;
 	as_orderedmap_init(&map0, 10);
-	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)"book", false), (as_val*)&list_books);
+	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)BOOKS, false), (as_val*)&list_books);
 
 	as_record *rec = as_record_new(1);
 	as_record_set_map(rec, BIN_NAME, (as_map*)&map0);
@@ -3495,7 +3498,7 @@ TEST(list_apply, "test select apply")
 	as_operations_inita(&ops, 1);
 
 	as_cdt_ctx_inita(&ctx, 3);
-	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)BOOKS, false));
 	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
 
@@ -3517,7 +3520,7 @@ TEST(list_apply, "test select apply")
 	as_map* check0 = as_record_get_map(rec, BIN_NAME);
 	assert_not_null(check0);
 	as_string book;
-	as_string_init(&book, "book", false);
+	as_string_init(&book, BOOKS, false);
 	as_list* check1 = (as_list*)as_map_get(check0, (as_val*)&book);
 	assert_not_null(check1);
 	as_map* check2 = as_list_get_map(check1, 0);

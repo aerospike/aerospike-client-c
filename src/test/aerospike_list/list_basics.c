@@ -3332,7 +3332,7 @@ TEST(list_select2, "test select")
 
 	struct {
 		const char* title;
-		float price;
+		double price;
 	} table[] = {
 			{"Sayings of the Century", 8.95},
 			{"Sword of Honour", 12.99},
@@ -3436,7 +3436,7 @@ TEST(list_apply, "test modify/apply")
 
 	struct {
 		const char* title;
-		float price;
+		double price;
 	} table[] = {
 			{"Sayings of the Century", 8.95},
 			{"Sword of Honour", 12.99},

@@ -840,7 +840,7 @@ TEST(exp_select, "exp select and apply")
 
 	struct {
 		const char* title;
-		float price;
+		double price;
 	} table[] = {
 			{"Sayings of the Century", 10.45},
 			{"Sword of Honour", 20.99},

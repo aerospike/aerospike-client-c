@@ -45,7 +45,7 @@ as_cdt_ctx_destroy(as_cdt_ctx* ctx)
 }
 
 void
-as_cdt_ctx_add_all(as_cdt_ctx* ctx)
+as_cdt_ctx_add_all_children(as_cdt_ctx* ctx)
 {
 	as_cdt_ctx_item item;
 	item.type = AS_CDT_CTX_EXP;
@@ -57,7 +57,7 @@ as_cdt_ctx_add_all(as_cdt_ctx* ctx)
 }
 
 void
-as_cdt_ctx_add_exp(as_cdt_ctx* ctx, const as_exp* exp)
+as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const as_exp* exp)
 {
 	as_cdt_ctx_item item;
 	item.type = AS_CDT_CTX_EXP;

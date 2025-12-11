@@ -55,6 +55,9 @@ extern void example_dump_record(const as_record* p_rec);
 #define SET "test_cdt"
 #define BIN_NAME "test-list-1"
 
+// a common name used in a number of CDT-related tests.
+#define BOOKS "books"
+
 /******************************************************************************
  * TYPES
  *****************************************************************************/
@@ -3203,10 +3206,7 @@ TEST(list_ordered_udf, "test ordered udf")
 
 	aerospike_key_apply(as, &err, NULL, &rkey, "list_unordered", "list_unordered", (as_list*)&args, &val);
 	assert_int_eq(err.code, AEROSPIKE_OK);
-//	char* s = as_val_tostring(val);
-//	info("ret %s", s);
-//	info(s);
-//	free(s);
+
 	as_arraylist_destroy(&args);
 	as_val_destroy(val);
 
@@ -3273,14 +3273,31 @@ TEST(list_select, "test select")
 	assert_not_null(exp1);
 	assert_not_null(exp2);
 
-	as_cdt_ctx ctx;
-	as_cdt_ctx_inita(&ctx, 2);
-	as_cdt_ctx_add_exp(&ctx, exp1);
-	as_cdt_ctx_add_exp(&ctx, exp2);
+	// negative test; expect an error when &ctx == NULL.
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	as_operations_cdt_select(&ops, BIN_NAME, &ctx, 0);
+
+	assert_false(as_operations_select_by_path(&ops, BIN_NAME, NULL, 0));
+
+	// negative test; expect an error when &ctx != NULL /\ ctx is empty.
+
+	as_operations_inita(&ops, 1);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 2);
+
+	assert_false(as_operations_select_by_path(&ops, BIN_NAME, &ctx, 0));
+
+	// Back to positive testing
+
+	as_operations_inita(&ops, 1);
+
+	as_cdt_ctx_inita(&ctx, 2);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp1);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp2);
+
+	assert_true(as_operations_select_by_path(&ops, BIN_NAME, &ctx, 0));
 
 	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3315,7 +3332,7 @@ TEST(list_select2, "test select")
 
 	struct {
 		const char* title;
-		float price;
+		double price;
 	} table[] = {
 			{"Sayings of the Century", 8.95},
 			{"Sword of Honour", 12.99},
@@ -3337,7 +3354,7 @@ TEST(list_select2, "test select")
 
 	as_orderedmap map0;
 	as_orderedmap_init(&map0, 10);
-	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)"book", false), (as_val*)&list_books);
+	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)BOOKS, false), (as_val*)&list_books);
 
 	as_record *rec = as_record_new(1);
 	as_record_set_map(rec, BIN_NAME, (as_map*)&map0);
@@ -3371,24 +3388,27 @@ TEST(list_select2, "test select")
 
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 3);
-	as_cdt_ctx_add_exp(&ctx, exp1);
-	as_cdt_ctx_add_exp(&ctx, exp2);
-	as_cdt_ctx_add_exp(&ctx, exp3);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp1);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp2);
+	as_cdt_ctx_add_all_children_with_filter(&ctx, exp3);
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	as_operations_cdt_select(&ops, BIN_NAME, &ctx, AS_CDT_SELECT_LEAF_MAP_VALUE);
+	as_operations_select_by_path(&ops, BIN_NAME, &ctx,
+									AS_EXP_PATH_SELECT_MAP_KEY_VALUE);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+
 	int64_t check_list_size = 0;
 	char* stack_check_list_elt_0 = "---";
 	if (status == AEROSPIKE_OK) {
 		as_list* check_list = as_record_get_list(rec, BIN_NAME);
 		check_list_size = as_list_size(check_list);
-		as_string* heap_check_list_elt_0 = (check_list_size > 0) ? as_list_get_string(check_list, 0) : as_string_new("---", true);
-		stack_check_list_elt_0 = alloca(strlen(as_string_get(heap_check_list_elt_0)) + 1);
-		strcpy(stack_check_list_elt_0, as_string_get(heap_check_list_elt_0));
-		as_string_destroy(heap_check_list_elt_0);
+		if (check_list_size > 0) {
+			as_string* heap_check_list_elt_0 = as_list_get_string(check_list, 0);
+			stack_check_list_elt_0 = alloca(strlen(as_string_get(heap_check_list_elt_0)) + 1);
+			strcpy(stack_check_list_elt_0, as_string_get(heap_check_list_elt_0));
+		}
 		as_list_destroy(check_list);
 	}
 	as_record_destroy(rec);
@@ -3402,9 +3422,10 @@ TEST(list_select2, "test select")
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(check_list_size, 2);
 	assert_true(stack_check_list_elt_0[0] == 'S');
+	assert_int_eq(strcmp("Sayings of the Century", stack_check_list_elt_0), 0);
 }
 
-TEST(list_apply, "test select apply")
+TEST(list_apply, "test modify/apply")
 {
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 216);
@@ -3415,7 +3436,7 @@ TEST(list_apply, "test select apply")
 
 	struct {
 		const char* title;
-		float price;
+		double price;
 	} table[] = {
 			{"Sayings of the Century", 8.95},
 			{"Sword of Honour", 12.99},
@@ -3437,7 +3458,7 @@ TEST(list_apply, "test select apply")
 
 	as_orderedmap map0;
 	as_orderedmap_init(&map0, 10);
-	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)"book", false), (as_val*)&list_books);
+	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)BOOKS, false), (as_val*)&list_books);
 
 	as_record *rec = as_record_new(1);
 	as_record_set_map(rec, BIN_NAME, (as_map*)&map0);
@@ -3449,15 +3470,11 @@ TEST(list_apply, "test select apply")
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-//dump_record(rec);
+
 	as_record_destroy(rec);
 	rec = NULL;
 
-	as_cdt_ctx ctx;
-	as_cdt_ctx_inita(&ctx, 3);
-	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
-	as_cdt_ctx_add_all(&ctx);
-	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
+	// negative test: &ctx == NULL
 
 	as_exp_build(exp,
 		as_exp_mul(as_exp_loopvar_float(AS_EXP_LOOPVAR_VALUE), as_exp_float(1.10)));
@@ -3465,7 +3482,28 @@ TEST(list_apply, "test select apply")
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, 0);
+
+	assert_false(as_operations_modify_by_path(&ops, BIN_NAME, NULL, exp, 0));
+
+	// negative test: &ctx != NULL /\ ctx is empty
+
+	as_operations_inita(&ops, 1);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 3);
+
+	assert_false(as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0));
+
+	// resume positive test
+
+	as_operations_inita(&ops, 1);
+
+	as_cdt_ctx_inita(&ctx, 3);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)BOOKS, false));
+	as_cdt_ctx_add_all_children(&ctx);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
+
+	assert_true(as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0));
 
 	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3479,11 +3517,11 @@ TEST(list_apply, "test select apply")
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-//dump_record(rec);
+
 	as_map* check0 = as_record_get_map(rec, BIN_NAME);
 	assert_not_null(check0);
 	as_string book;
-	as_string_init(&book, "book", false);
+	as_string_init(&book, BOOKS, false);
 	as_list* check1 = (as_list*)as_map_get(check0, (as_val*)&book);
 	assert_not_null(check1);
 	as_map* check2 = as_list_get_map(check1, 0);
@@ -3580,7 +3618,7 @@ TEST(list_apply_persist, "test select apply persist")
 	// This will cause the ordered list to naturally reverse when negative values are sorted
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 2);
-	as_cdt_ctx_add_all(&ctx); // Apply to all elements in the list
+	as_cdt_ctx_add_all_children(&ctx); // Apply to all elements in the list
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new("id", false)); // Target the "id" field
 
 	// Create expression to multiply by -1
@@ -3588,7 +3626,7 @@ TEST(list_apply_persist, "test select apply persist")
 	assert_not_null(exp);
 
 	as_operations_init(&ops, 1);
-	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, 0);
+	as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);

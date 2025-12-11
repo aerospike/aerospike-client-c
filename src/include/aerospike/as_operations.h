@@ -292,6 +292,87 @@ typedef struct as_operations_s {
 
 } as_operations;
 
+// If you add flags in bits 4 or higher, make sure you make a corresponding
+// change in as_exp_path_modify_flags as well (and vice versa, of course).
+// Only bits 0-3 are unique to select vs. modify operations.
+/**
+ * These flags apply to the as_exp_select_by_path()/
+ * as_operations_select_by_path() functions.
+ */
+typedef enum {
+	/**
+	 * Return a tree from the root (bin) level to the bottom of the tree,
+	 * with only non-filtered out nodes.
+	 */
+	AS_EXP_PATH_SELECT_MATCHING_TREE = 0,
+
+	/**
+	 * Return the list of the values of the nodes finally selected by the context.
+	 * For maps, this returns the value of each (key, value) pair.
+	 */
+	AS_EXP_PATH_SELECT_VALUE = 1,
+
+	/**
+	 * Return the list of the values of the nodes finally selected by the context.
+	 * This is a synonym for AS_EXP_PATH_SELECT_VALUE to make it clear in your
+	 * source code that you're expecting a list.
+	 */
+	AS_EXP_PATH_SELECT_LIST_VALUE = 1,
+
+	/**
+	 * Return the list of map values of the nodes finally selected by the context.
+	 * This is a synonym for AS_EXP_PATH_SELECT_VALUE to make it clear in your
+	 * source code that you're expecting a map.  See also
+	 * AS_EXP_PATH_SELECT_MAP_KEY_VALUE.
+	 */
+	AS_EXP_PATH_SELECT_MAP_VALUE = 1,
+
+	/**
+	 * Return the list of map keys of the nodes finally selected by the context.
+	 */
+	AS_EXP_PATH_SELECT_MAP_KEY = 2,
+
+	/**
+	 * Returns the list of map (key, value) pairs of the nodes finally selected
+	 * by the context.  This is a synonym for setting both
+	 * AS_EXP_PATH_SELECT_MAP_KEY and AS_EXP_PATH_SELECT_MAP_VALUE bits together.
+	 */
+	AS_EXP_PATH_SELECT_MAP_KEY_VALUE = AS_EXP_PATH_SELECT_MAP_KEY | AS_EXP_PATH_SELECT_MAP_VALUE,
+
+	/**
+	 * If the expression in the context hits an invalid type (e.g., selects
+	 * as an integer when the value is a string), do not fail the operation;
+	 * just ignore those elements.  Interpret an expression that returns UNKNOWN
+	 * as false instead.
+	 */
+	AS_EXP_PATH_SELECT_NO_FAIL = 0x10
+} as_exp_path_select_flags;
+
+/**
+ * These flags apply to as_exp_modify_by_path()/as_operations_modify_by_path()
+ * functions.
+ */
+typedef enum {
+	/**
+	 * If the expression in the context hits an invalid type, the operation
+	 * will fail.  This is the default behavior.
+	 */
+	AS_EXP_PATH_MODIFY_DEFAULT = 0x00,
+
+	/**
+	 * @private
+	 * This flag is set when leaf values are to be modified.
+	 */
+	AS_EXP_PATH_MODIFY_APPLY = 0x04,
+
+	/**
+	 * If the expression in the context hits an invalid type (e.g., selects
+	 * as an integer when the value is a string), do not fail the operation;
+	 * just ignore those elements.  Interpret UNKNOWN as false instead.
+	 */
+	AS_EXP_PATH_MODIFY_NO_FAIL = 0x10
+} as_exp_path_modify_flags;
+
 //---------------------------------
 // Macros
 //---------------------------------
@@ -776,35 +857,40 @@ as_operations_add_touch(as_operations* ops);
 AS_EXTERN bool
 as_operations_add_delete(as_operations* ops);
 
-typedef enum {
-	AS_CDT_SELECT_TREE = 0,
-	AS_CDT_SELECT_LEAF_LIST_VALUE = 1,
-	AS_CDT_SELECT_LEAF_MAP_VALUE = 1,
-	AS_CDT_SELECT_LEAF_MAP_KEY = 2,
-	AS_CDT_SELECT_NO_FAIL = 0x10
-} as_cdt_select_flags;
-
 /**
- * Create CDT select operation.
+ * Create path expression select operation.  See also the enumeration
+ * as_exp_path_select_flags for the set of valid flags for this function.
  *
- * @return true on success. Otherwise an error occurred.
+ * @return true on success. Otherwise an error occurred.  For example, it is
+ * an error for ctx to be NULL or empty.
  *
  * @relates as_operations
  * @ingroup cdt_operations
  */
 AS_EXTERN bool
-as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, uint32_t flags);
+as_operations_select_by_path(
+		as_operations* ops, const char* name, as_cdt_ctx* ctx,
+		as_exp_path_select_flags flags
+		);
 
 /**
- * Create CDT select operation.
+ * Create path expression modification operation.  See also the enumeration
+ * as_exp_path_modify_flags for the set of valid flags for this function.
  *
- * @return true on success. Otherwise an error occurred.
+ * The results of the evaluation of the modifying expression will replace the
+ * selected map, and the changes are written back to storage.
+ *
+ * @return true on success. Otherwise an error occurred.  For example, it is
+ * an error for ctx to be NULL or empty.
  *
  * @relates as_operations
  * @ingroup cdt_operations
  */
 AS_EXTERN bool
-as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, struct as_exp* mod_exp, uint32_t flags);
+as_operations_modify_by_path(
+		as_operations* ops, const char* name, as_cdt_ctx* ctx,
+		struct as_exp* mod_exp, as_exp_path_modify_flags flags
+		);
 
 /******************************************************************************
  * LIST FUNCTIONS

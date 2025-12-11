@@ -282,9 +282,9 @@ as_operations_add_delete(as_operations* ops)
 }
 
 bool
-as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, uint32_t flags)
+as_operations_select_by_path(as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp_path_select_flags flags)
 {
-	if (ctx == NULL) {
+	if (cdt_ctx_is_empty(ctx)) {
 		return false;
 	}
 
@@ -301,7 +301,7 @@ as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, 
 }
 
 bool
-as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp* mod_exp, uint32_t flags)
+as_operations_modify_by_path(as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp* mod_exp, as_exp_path_modify_flags flags)
 {
 	if (ctx == NULL) {
 		return false;

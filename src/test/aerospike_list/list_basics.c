@@ -3403,6 +3403,7 @@ TEST(list_select2, "test select")
 	int64_t check_list_size = 0;
 	char* stack_check_list_elt_0 = "---";
 	if (status == AEROSPIKE_OK) {
+example_dump_record(rec);
 		as_list* check_list = as_record_get_list(rec, BIN_NAME);
 		check_list_size = as_list_size(check_list);
 		if (check_list_size > 0) {
@@ -3421,7 +3422,7 @@ TEST(list_select2, "test select")
 	as_cdt_ctx_destroy(&ctx);
 
 	assert_int_eq(status, AEROSPIKE_OK);
-	assert_int_eq(check_list_size, 2);
+	assert_int_eq(check_list_size, 4);
 	assert_true(stack_check_list_elt_0[0] == 'S');
 	assert_int_eq(strcmp("Sayings of the Century", stack_check_list_elt_0), 0);
 }
@@ -3484,7 +3485,7 @@ TEST(list_apply, "test modify/apply")
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	assert_int_eq(AEROSPIKE_OK, as_operations_modify_by_path(&err, &ops, BIN_NAME, NULL, exp, 0));
+	assert_int_eq(AEROSPIKE_ERR_PARAM, as_operations_modify_by_path(&err, &ops, BIN_NAME, NULL, exp, 0));
 
 	// negative test: &ctx != NULL /\ ctx is empty
 

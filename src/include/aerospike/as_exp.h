@@ -1750,7 +1750,7 @@ as_exp_destroy_base64(char* base64)
  * @return value stored in variable.
  * @ingroup expression
  */
-#define as_exp_loopvar_geojson(__var_id) \
+#define as_exp_loopvar_hll(__var_id) \
 		_as_exp_loopvar_make(__var_id, HLL)
 
 /**

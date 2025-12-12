@@ -34,6 +34,9 @@ extern "C" {
 // Types
 //---------------------------------
 
+struct as_error_s;
+enum as_status_e;
+
 /**
  * Operation Identifiers
  */
@@ -867,8 +870,9 @@ as_operations_add_delete(as_operations* ops);
  * @relates as_operations
  * @ingroup cdt_operations
  */
-AS_EXTERN bool
+AS_EXTERN enum as_status_e
 as_operations_select_by_path(
+		struct as_error_s* errp,
 		as_operations* ops, const char* name, as_cdt_ctx* ctx,
 		as_exp_path_select_flags flags
 		);
@@ -886,8 +890,9 @@ as_operations_select_by_path(
  * @relates as_operations
  * @ingroup cdt_operations
  */
-AS_EXTERN bool
+AS_EXTERN enum as_status_e
 as_operations_modify_by_path(
+		struct as_error_s* errp,
 		as_operations* ops, const char* name, as_cdt_ctx* ctx,
 		struct as_exp* mod_exp, as_exp_path_modify_flags flags
 		);

@@ -285,11 +285,11 @@ as_operations_add_delete(as_operations* ops)
 
 as_status
 as_operations_select_by_path(
-		as_error* errp,
+		as_error* err,
 		as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp_path_select_flags flags)
 {
 	if (cdt_ctx_is_empty(ctx)) {
-		return as_error_set_message(errp, AEROSPIKE_ERR_PARAM, "Context is empty");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context is empty");
 	}
 
 	as_packer pk = as_cdt_begin();
@@ -303,7 +303,7 @@ as_operations_select_by_path(
 
 	bool added = as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_READ);
 	if (! added) {
-		return as_error_set_message(errp, AEROSPIKE_ERR_PARAM, "Context didn't add");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context didn't add");
 	}
 
 	return AEROSPIKE_OK;
@@ -311,11 +311,11 @@ as_operations_select_by_path(
 
 as_status
 as_operations_modify_by_path(
-		as_error* errp,
+		as_error* err,
 		as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp* mod_exp, as_exp_path_modify_flags flags)
 {
 	if (cdt_ctx_is_empty(ctx)) {
-		return as_error_set_message(errp, AEROSPIKE_ERR_PARAM, "Context is empty");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context is empty");
 	}
 
 	as_packer pk = as_cdt_begin();
@@ -329,7 +329,7 @@ as_operations_modify_by_path(
 
 	bool added = as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_MODIFY);
 	if (! added) {
-		return as_error_set_message(errp, AEROSPIKE_ERR_PARAM, "Context packing failed");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context packing failed");
 	}
 
 	return AEROSPIKE_OK;

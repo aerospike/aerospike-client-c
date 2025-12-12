@@ -3628,8 +3628,7 @@ TEST(list_apply_persist, "test select apply persist")
 	assert_not_null(exp);
 
 	as_operations_init(&ops, 1);
-	as_status stat = as_operations_modify_by_path(&err, &ops, BIN_NAME, &ctx, exp, 0);
-	assert_int_eq(stat, 0);
+	assert_int_eq(as_operations_modify_by_path(&err, &ops, BIN_NAME, &ctx, exp, 0), AEROSPIKE_OK);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);

@@ -872,7 +872,7 @@ as_operations_add_delete(as_operations* ops);
  */
 AS_EXTERN enum as_status_e
 as_operations_select_by_path(
-		struct as_error_s* errp,
+		struct as_error_s* err,
 		as_operations* ops, const char* name, as_cdt_ctx* ctx,
 		as_exp_path_select_flags flags
 		);
@@ -892,7 +892,7 @@ as_operations_select_by_path(
  */
 AS_EXTERN enum as_status_e
 as_operations_modify_by_path(
-		struct as_error_s* errp,
+		struct as_error_s* err,
 		as_operations* ops, const char* name, as_cdt_ctx* ctx,
 		struct as_exp* mod_exp, as_exp_path_modify_flags flags
 		);

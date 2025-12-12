@@ -1732,15 +1732,6 @@ as_exp_destroy_base64(char* base64)
  * @return value stored in variable.
  * @ingroup expression
  */
-#define as_exp_loopvar_infinity(__var_id) \
-		_as_exp_loopvar_make(__var_id, INF)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
 #define as_exp_loopvar_nil(__var_id) \
 		_as_exp_loopvar_make(__var_id, NIL)
 
@@ -1752,6 +1743,15 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_loopvar_geojson(__var_id) \
 		_as_exp_loopvar_make(__var_id, GEOJSON)
+
+/**
+ * Retrieve expression value from a path expression loop variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_loopvar_hll(__var_id) \
+		_as_exp_loopvar_make(__var_id, HLL)
 
 /**
  * Return a result_remove object to indicate entry deletion for cdt_apply.

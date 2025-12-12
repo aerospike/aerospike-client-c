@@ -115,7 +115,7 @@ typedef struct as_cdt_ctx {
  * initialized but has yet to receive an expression (see as_cdt_ctx_add_*
  * functions).
  */
-inline bool
+static inline bool
 cdt_ctx_is_empty(as_cdt_ctx* ctx) {
 	// If ctx is NULL, we consider it empty.
 	if (ctx == NULL) {

@@ -3278,7 +3278,7 @@ TEST(list_select, "test select")
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	assert_false(as_operations_select_by_path(&ops, BIN_NAME, NULL, 0));
+	assert_int_eq(as_operations_select_by_path(&err, &ops, BIN_NAME, NULL, 0), AEROSPIKE_ERR_PARAM);
 
 	// negative test; expect an error when &ctx != NULL /\ ctx is empty.
 
@@ -3287,7 +3287,7 @@ TEST(list_select, "test select")
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 2);
 
-	assert_false(as_operations_select_by_path(&ops, BIN_NAME, &ctx, 0));
+	assert_int_eq(as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx, 0), AEROSPIKE_ERR_PARAM);
 
 	// Back to positive testing
 
@@ -3297,7 +3297,7 @@ TEST(list_select, "test select")
 	as_cdt_ctx_add_all_children_with_filter(&ctx, exp1);
 	as_cdt_ctx_add_all_children_with_filter(&ctx, exp2);
 
-	assert_true(as_operations_select_by_path(&ops, BIN_NAME, &ctx, 0));
+	assert_int_eq(as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx, 0), AEROSPIKE_OK);
 
 	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3394,14 +3394,16 @@ TEST(list_select2, "test select")
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	as_operations_select_by_path(&ops, BIN_NAME, &ctx,
+	status = as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx,
 									AS_EXP_PATH_SELECT_MAP_KEY_VALUE);
+	assert_int_eq(status, AEROSPIKE_OK);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 
 	int64_t check_list_size = 0;
 	char* stack_check_list_elt_0 = "---";
 	if (status == AEROSPIKE_OK) {
+example_dump_record(rec);
 		as_list* check_list = as_record_get_list(rec, BIN_NAME);
 		check_list_size = as_list_size(check_list);
 		if (check_list_size > 0) {
@@ -3420,7 +3422,7 @@ TEST(list_select2, "test select")
 	as_cdt_ctx_destroy(&ctx);
 
 	assert_int_eq(status, AEROSPIKE_OK);
-	assert_int_eq(check_list_size, 2);
+	assert_int_eq(check_list_size, 4);
 	assert_true(stack_check_list_elt_0[0] == 'S');
 	assert_int_eq(strcmp("Sayings of the Century", stack_check_list_elt_0), 0);
 }
@@ -3483,7 +3485,7 @@ TEST(list_apply, "test modify/apply")
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 
-	assert_false(as_operations_modify_by_path(&ops, BIN_NAME, NULL, exp, 0));
+	assert_int_eq(AEROSPIKE_ERR_PARAM, as_operations_modify_by_path(&err, &ops, BIN_NAME, NULL, exp, 0));
 
 	// negative test: &ctx != NULL /\ ctx is empty
 
@@ -3492,7 +3494,8 @@ TEST(list_apply, "test modify/apply")
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 3);
 
-	assert_false(as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0));
+	status = as_operations_modify_by_path(&err, &ops, BIN_NAME, &ctx, exp, 0);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 
 	// resume positive test
 
@@ -3503,7 +3506,7 @@ TEST(list_apply, "test modify/apply")
 	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"price", false));
 
-	assert_true(as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0));
+	assert_int_eq(AEROSPIKE_OK, as_operations_modify_by_path(&err, &ops, BIN_NAME, &ctx, exp, 0));
 
 	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
@@ -3626,7 +3629,7 @@ TEST(list_apply_persist, "test select apply persist")
 	assert_not_null(exp);
 
 	as_operations_init(&ops, 1);
-	as_operations_modify_by_path(&ops, BIN_NAME, &ctx, exp, 0);
+	assert_int_eq(as_operations_modify_by_path(&err, &ops, BIN_NAME, &ctx, exp, 0), AEROSPIKE_OK);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);

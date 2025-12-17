@@ -3452,14 +3452,14 @@ TEST(map_select_apply, "test select apply")
 
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 1);
-	as_cdt_ctx_add_all(&ctx);
+	as_cdt_ctx_add_all_children(&ctx);
 
-	as_exp_build(exp, as_exp_val(as_string_new("updated", false)));
+	as_exp_build(exp, as_exp_str("updated"));
 	assert_not_null(exp);
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, 0);
+	as_operations_modify_by_path(&err, &ops, BIN_NAME, &ctx, exp, 0);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -3565,17 +3565,17 @@ test_dump_record(rec, true);
 	// Create context with 2 levels of add_all (targeting level 2)
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 2);
-	as_cdt_ctx_add_all(&ctx);
-	as_cdt_ctx_add_all(&ctx);
+	as_cdt_ctx_add_all_children(&ctx);
+	as_cdt_ctx_add_all_children(&ctx);
 
 	// Build expression: add 5 to integer values
-	as_exp_build(exp, as_exp_add(as_exp_var_builtin_int(AS_EXP_BUILTIN_VALUE), as_exp_int(5)));
+	as_exp_build(exp, as_exp_add(as_exp_loopvar_int(AS_EXP_LOOPVAR_VALUE), as_exp_int(5)));
 	assert_not_null(exp);
 
 	// Apply modify operation with NO_FAIL flag
 	as_operations ops;
 	as_operations_init(&ops, 1);
-	as_operations_cdt_apply(&ops, BIN_NAME, &ctx, exp, AS_CDT_SELECT_NO_FAIL);
+	as_operations_modify_by_path(&err, &ops, BIN_NAME, &ctx, exp, AS_EXP_PATH_SELECT_NO_FAIL);
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);
@@ -3654,11 +3654,11 @@ TEST(map_select_null, "test select null")
 	// First select operation with all_children context and CDT_SELECT_MATCHING_TREE flag
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 1);
-	as_cdt_ctx_add_all(&ctx);
+	as_cdt_ctx_add_all_children(&ctx);
 
 	as_operations ops;
 	as_operations_init(&ops, 1);
-	as_operations_cdt_select(&ops, BIN_NAME, &ctx, AS_CDT_SELECT_TREE);
+	as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx, AS_EXP_PATH_SELECT_MATCHING_TREE);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -3678,14 +3678,14 @@ TEST(map_select_null, "test select null")
 	// Note: The Python test uses LoopVarStr(VALUE) == "a", which seems incorrect
 	// but we'll match the Python test behavior
 	as_exp_build(exp, as_exp_cmp_eq(
-		as_exp_var_builtin_str(AS_EXP_BUILTIN_VALUE),
+		as_exp_loopvar_str(AS_EXP_LOOPVAR_VALUE),
 		as_exp_str("a")));
 	assert_not_null(exp);
-	as_cdt_ctx_add_exp(&ctx2, exp);
+	as_cdt_ctx_add_all_children_with_filter(&ctx2, exp);
 
 	as_operations ops2;
 	as_operations_init(&ops2, 1);
-	as_operations_cdt_select(&ops2, BIN_NAME, &ctx2, AS_CDT_SELECT_TREE);
+	as_operations_select_by_path(&err, &ops2, BIN_NAME, &ctx2, AS_EXP_PATH_SELECT_MATCHING_TREE);
 
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops2, &rec);
 	assert_int_ne(status, AEROSPIKE_OK);

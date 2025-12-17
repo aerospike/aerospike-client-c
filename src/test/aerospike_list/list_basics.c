@@ -37,6 +37,7 @@
 #include <aerospike/as_val.h>
 
 #include "../test.h"
+#include "../util/log_helper.h"
 #include "../util/udf.h"
 
 /******************************************************************************
@@ -3833,7 +3834,6 @@ TEST(list_apply_remove2, "test select apply remove 2")
 	// Get and check.
 	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-dump_record(rec);
 	as_list* check0 = as_record_get_list(rec, BIN_NAME);
 	assert_not_null(check0);
 	assert_int_eq(as_list_size(check0), 11);
@@ -3846,6 +3846,59 @@ dump_record(rec);
 	as_record_destroy(rec);
 	rec = NULL;
 }
+
+TEST(list_select_tree, "test select tree")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 219);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist list0;
+	as_arraylist_init(&list0, 10, 10);
+
+	for (int i = 0; i < 10; i++) {
+		as_arraylist* list1 = as_arraylist_new(10, 10);
+
+		for (int j = 0; j < 2; j++) {
+			as_arraylist_append_int64(list1, j + 10);
+		}
+
+		as_arraylist_append_list(&list0, (as_list*)list1);
+	}
+
+	as_record *rec = as_record_new(2);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&list0);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_true(status == AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	test_dump_record(rec, false);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 1);
+	as_cdt_ctx_add_all(&ctx);
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_cdt_select(&ops, BIN_NAME, &ctx, AS_CDT_SELECT_TREE);
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	test_dump_record(rec, false);
+	as_cdt_ctx_destroy(&ctx);
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
 
 /******************************************************************************
  * TEST SUITE
@@ -3894,4 +3947,5 @@ SUITE(list_basics, "aerospike list basic tests")
 
 	suite_add(list_apply_remove);
 	suite_add(list_apply_remove2);
+	suite_add(list_select_tree);
 }

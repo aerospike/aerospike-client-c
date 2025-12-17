@@ -19,7 +19,6 @@
 #include <aerospike/as_cdt_order.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
-//#include <aerospike/as_exp.h>
 
 #ifdef __cplusplus
 extern "C" {

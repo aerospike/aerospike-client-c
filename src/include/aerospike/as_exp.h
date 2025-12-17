@@ -2987,29 +2987,6 @@ as_exp_destroy_base64(char* base64)
 		__rank, __count, \
 		__bin
 
-/*********************************************************************************
- * CDT Expressions
- *********************************************************************************/
-
-#define as_exp_cdt_select(__ctx, __rtype, __flags, __bin) \
-		{.op=_AS_EXP_CODE_CALL, .count=5}, \
-		_AS_EXP_VAL_RTYPE(__rtype), \
-		as_exp_int(_AS_EXP_SYS_CALL_CDT), \
-		_AS_EXP_MAP_START(NULL, AS_CDT_OP_CONTEXT_SELECT, 2), \
-		{.op=_AS_EXP_CODE_CTX, .v.ctx=__ctx}, \
-		as_exp_int(__flags), \
-		__bin
-
-#define as_exp_cdt_apply(__ctx, __rtype, __mod_exp, __flags, __bin) \
-		{.op=_AS_EXP_CODE_CALL, .count=5}, \
-		_AS_EXP_VAL_RTYPE(__rtype), \
-		as_exp_int(_AS_EXP_SYS_CALL_CDT | _AS_EXP_SYS_FLAG_MODIFY_LOCAL), \
-		_AS_EXP_MAP_START(NULL, AS_CDT_OP_CONTEXT_SELECT, 3), \
-		{.op=_AS_EXP_CODE_CTX, .v.ctx=__ctx}, \
-		as_exp_int(__flags | 4), \
-		{.op=_AS_EXP_CODE_MERGE, .v.expr=__mod_exp}, \
-		__bin
-
 //---------------------------------
 // CDT Expressions
 //---------------------------------

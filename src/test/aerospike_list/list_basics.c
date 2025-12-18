@@ -3715,7 +3715,7 @@ TEST(list_apply_remove, "test select apply remove")
 
 	as_orderedmap map0;
 	as_orderedmap_init(&map0, 10);
-	as_orderedmap_set(&map0, (as_val*)as_string_new((char*)"book", false), (as_val*)&list_books);
+	as_orderedmap_set(&map0, (as_val*)as_string_new(BOOKS, false), (as_val*)&list_books);
 
 	as_record *rec = as_record_new(3);
 	as_record_set_map(rec, BIN_NAME, (as_map*)&map0);
@@ -3742,7 +3742,7 @@ TEST(list_apply_remove, "test select apply remove")
 
 	as_cdt_ctx ctx;
 	as_cdt_ctx_inita(&ctx, 2);
-	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"book", false));
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new(BOOKS, false));
 	as_cdt_ctx_add_all_children_with_filter(&ctx, price_check_exp);
 
 	as_exp_build(exp,
@@ -3770,7 +3770,7 @@ TEST(list_apply_remove, "test select apply remove")
 	as_map* check0 = as_record_get_map(rec, BIN_NAME);
 	assert_not_null(check0);
 	as_string book;
-	as_string_init(&book, "book", false);
+	as_string_init(&book, BOOKS, false);
 	as_list* check1 = (as_list*)as_map_get(check0, (as_val*)&book);
 	assert_not_null(check1);
 	assert_int_eq(as_list_size(check1), 2);

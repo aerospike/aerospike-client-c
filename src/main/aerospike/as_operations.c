@@ -15,7 +15,6 @@
  * the License.
  */
 #include <aerospike/as_operations.h>
-#include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_error.h>
@@ -335,4 +334,3 @@ as_operations_modify_by_path(
 
 	return AEROSPIKE_OK;
 }
-

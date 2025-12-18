@@ -19,7 +19,6 @@
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include "_bin.h"
-#include <aerospike/as_exp.h>
 
 as_binop*
 as_binop_forappend(as_operations* ops, as_operator operator, const char* name);

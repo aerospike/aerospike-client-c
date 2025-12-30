@@ -18,8 +18,17 @@
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_command.h>
+#include <aerospike/as_log_macros.h>
 #include <aerospike/as_txn.h>
 #include <aerospike/as_txn_monitor.h>
+
+// DEBUG: MRT transaction debugging macros using client logging framework
+#define MRT_DEBUG(txn_id, fmt, ...) \
+    as_log_debug("[MRT 0x%llx] " fmt, (unsigned long long)(txn_id), ##__VA_ARGS__)
+
+#define MRT_DEBUG_ERR(txn_id, err, context) \
+    as_log_debug("[MRT 0x%llx] %s - code=%d in_doubt=%d msg='%s'", \
+            (unsigned long long)(txn_id), (context), (err)->code, (err)->in_doubt, (err)->message)
 
 //---------------------------------
 // Function Declarations
@@ -87,6 +96,10 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 	as_error local_err;
 	as_status status;
 
+	MRT_DEBUG(txn->id, "as_commit: ENTER state=%d in_doubt=%d monitor_exists=%d reads=%u writes=%u",
+		txn->state, txn->in_doubt, as_txn_monitor_exists(txn),
+		txn->reads.n_eles, txn->writes.n_eles);
+
 	as_config* config = aerospike_load_config(as);
 	as_policy_txn_roll* roll_policy = &config->policies.txn_roll;
 
@@ -94,20 +107,27 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 	as_txn_monitor_init_key(txn, &key);
 
 	if (as_txn_monitor_exists(txn)) {
+		MRT_DEBUG(txn->id, "as_commit: calling mark_roll_forward");
 		status = as_txn_monitor_mark_roll_forward(as, &local_err, &roll_policy->base, &key);
+		MRT_DEBUG(txn->id, "as_commit: mark_roll_forward returned status=%d", status);
 
 		if (status != AEROSPIKE_OK) {
+			MRT_DEBUG_ERR(txn->id, &local_err, "mark_roll_forward FAILED");
+			
 			if (local_err.code == AEROSPIKE_MRT_ABORTED) {
+				MRT_DEBUG(txn->id, "as_commit: server already aborted this txn");
 				txn->in_doubt = false;
 				txn->state = AS_TXN_STATE_ABORTED;
 			}
 			else if (txn->in_doubt) {
 				// The transaction was already in_doubt and just failed again,
 				// so the new error should also be in_doubt.
+				MRT_DEBUG(txn->id, "as_commit: txn was already in_doubt, propagating");
 				local_err.in_doubt = true;
 			}
 			else if (local_err.in_doubt) {
 				// The current error is in_doubt.
+				MRT_DEBUG(txn->id, "as_commit: error is in_doubt, marking txn in_doubt");
 				txn->in_doubt = true;
 			}
 
@@ -115,39 +135,49 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 			as_error_update(err, status, "Txn aborted:\nMark roll forward abandoned: %s",
 				local_err.message);
 			as_error_copy_fields(err, &local_err);
+			MRT_DEBUG(txn->id, "as_commit: EXIT with MARK_ROLL_FORWARD_ABANDONED, status=%d", status);
 			return status;
 		}
+		MRT_DEBUG(txn->id, "as_commit: mark_roll_forward succeeded");
 	}
 
+	MRT_DEBUG(txn->id, "as_commit: setting state to COMMITTED");
 	txn->state = AS_TXN_STATE_COMMITTED;
 	txn->in_doubt = false;
 
+	MRT_DEBUG(txn->id, "as_commit: calling txn_roll with ROLL_FORWARD");
 	status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_TXN_ROLL_FORWARD);
+	MRT_DEBUG(txn->id, "as_commit: txn_roll returned status=%d", status);
 
 	if (status != AEROSPIKE_OK) {
 		// The client roll has error. The server will eventually roll forward the transaction
 		// after as_txn_monitor_mark_roll_forward() succeeds. Therefore, set commit_status and
 		// return success.
+		MRT_DEBUG(txn->id, "as_commit: txn_roll failed but mark succeeded - server will complete, returning OK");
 		as_set_commit_status(commit_status, AS_COMMIT_ROLL_FORWARD_ABANDONED);
 		as_error_reset(err);
 		return AEROSPIKE_OK;
 	}
 
 	if (as_txn_close_monitor(txn)) {
+		MRT_DEBUG(txn->id, "as_commit: calling monitor_remove");
 		status = as_txn_monitor_remove(as, err, &roll_policy->base, &key);
 
 		if (status != AEROSPIKE_OK) {
 			// The client transaction monitor remove has error. The server will eventually remove the
 			// monitor record after as_txn_monitor_mark_roll_forward() succeeds. Therefore, set
 			// commit_status and return success.
+			MRT_DEBUG(txn->id, "as_commit: monitor_remove failed - server will cleanup, returning OK");
 			as_set_commit_status(commit_status, AS_COMMIT_CLOSE_ABANDONED);
 			as_error_reset(err);
 			return AEROSPIKE_OK;
 		}
+		MRT_DEBUG(txn->id, "as_commit: monitor_remove succeeded");
 	}
 
 	as_set_commit_status(commit_status, AS_COMMIT_OK);
 	as_txn_clear(txn);
+	MRT_DEBUG(txn->id, "as_commit: EXIT with COMMIT_OK");
 	return AEROSPIKE_OK;
 }
 
@@ -157,20 +187,27 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 	as_error verify_err;
 	as_status verify_status;
 
+	MRT_DEBUG(txn->id, "as_verify_and_commit: ENTER state=%d", txn->state);
+	MRT_DEBUG(txn->id, "as_verify_and_commit: calling verify");
 	verify_status = as_txn_verify(as, &verify_err, txn);
+	MRT_DEBUG(txn->id, "as_verify_and_commit: verify returned status=%d", verify_status);
 
 	if (verify_status == AEROSPIKE_OK) {
+		MRT_DEBUG(txn->id, "as_verify_and_commit: verify succeeded, proceeding to commit");
 		txn->state = AS_TXN_STATE_VERIFIED;
 		return as_commit(as, err, txn, commit_status);
 	}
 
 	// Verify failed. Abort.
+	MRT_DEBUG_ERR(txn->id, &verify_err, "verify FAILED");
+	
 	if (verify_status == AEROSPIKE_BATCH_FAILED) {
 		verify_status = AEROSPIKE_TXN_FAILED;
 		verify_err.code = AEROSPIKE_TXN_FAILED;
 		as_strncpy(verify_err.message, "One or more read keys failed to verify", sizeof(verify_err.message));
 	}
 
+	MRT_DEBUG(txn->id, "as_verify_and_commit: setting state to ABORTED, rolling back");
 	txn->state = AS_TXN_STATE_ABORTED;
 	as_set_commit_status(commit_status, AS_COMMIT_VERIFY_FAILED);
 
@@ -179,8 +216,10 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 
 	as_error roll_err;
 	as_status roll_status = as_txn_roll(as, &roll_err, roll_policy, txn, AS_MSG_INFO4_TXN_ROLL_BACK);
+	MRT_DEBUG(txn->id, "as_verify_and_commit: rollback returned status=%d", roll_status);
 
 	if (roll_status != AEROSPIKE_OK) {
+		MRT_DEBUG_ERR(txn->id, &roll_err, "rollback FAILED");
 		as_error_update(err, verify_status, "Txn aborted:\nVerify failed: %s\nRollback abandoned: %s",
 			verify_err.message, roll_err.message);
 		as_error_copy_fields(err, &verify_err);
@@ -194,6 +233,7 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 		roll_status = as_txn_monitor_remove(as, &roll_err, &roll_policy->base, &key);
 
 		if (roll_status != AEROSPIKE_OK) {
+			MRT_DEBUG(txn->id, "as_verify_and_commit: monitor_remove failed during rollback");
 			as_error_update(err, verify_status, "Txn aborted:\nVerify failed: %s\nClose abandoned: %s",
 				verify_err.message, roll_err.message);
 			as_error_copy_fields(err, &verify_err);
@@ -201,6 +241,7 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 		}
 	}
 
+	MRT_DEBUG(txn->id, "as_verify_and_commit: EXIT with VERIFY_FAILED");
 	as_error_update(err, verify_status, "Txn aborted:\nVerify failed: %s", verify_err.message);
 	as_error_copy_fields(err, &verify_err);
 	return verify_status;
@@ -211,19 +252,30 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* co
 {
 	as_error_reset(err);
 
+	MRT_DEBUG(txn->id, "aerospike_commit: ENTER state=%d in_doubt=%d", txn->state, txn->in_doubt);
+
+	as_status result;
 	switch (txn->state) {
 		default:
 		case AS_TXN_STATE_OPEN:
-			return as_verify_and_commit(as, err, txn, commit_status);
+			MRT_DEBUG(txn->id, "aerospike_commit: state=OPEN, calling verify_and_commit");
+			result = as_verify_and_commit(as, err, txn, commit_status);
+			MRT_DEBUG(txn->id, "aerospike_commit: EXIT state=%d result=%d", txn->state, result);
+			return result;
 
 		case AS_TXN_STATE_VERIFIED:
-			return as_commit(as, err, txn, commit_status);
+			MRT_DEBUG(txn->id, "aerospike_commit: state=VERIFIED, calling commit directly");
+			result = as_commit(as, err, txn, commit_status);
+			MRT_DEBUG(txn->id, "aerospike_commit: EXIT state=%d result=%d", txn->state, result);
+			return result;
 
 		case AS_TXN_STATE_COMMITTED:
+			MRT_DEBUG(txn->id, "aerospike_commit: already committed, returning OK");
 			as_set_commit_status(commit_status, AS_COMMIT_ALREADY_COMMITTED);
 			return AEROSPIKE_OK;
 
 		case AS_TXN_STATE_ABORTED:
+			MRT_DEBUG(txn->id, "aerospike_commit: already aborted, returning error");
 			as_set_commit_status(commit_status, AS_COMMIT_ALREADY_ABORTED);
 			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_ABORTED, "Transaction already aborted");
 	}
@@ -244,16 +296,21 @@ as_set_abort_status(as_abort_status* trg, as_abort_status src)
 as_status
 as_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_status)
 {
+	MRT_DEBUG(txn->id, "as_abort: ENTER state=%d in_doubt=%d", txn->state, txn->in_doubt);
+	
 	txn->state = AS_TXN_STATE_ABORTED;
 
 	as_config* config = aerospike_load_config(as);
 	as_policy_txn_roll* roll_policy = &config->policies.txn_roll;
 
+	MRT_DEBUG(txn->id, "as_abort: calling txn_roll with ROLL_BACK");
 	as_status status = as_txn_roll(as, err, roll_policy, txn, AS_MSG_INFO4_TXN_ROLL_BACK);
+	MRT_DEBUG(txn->id, "as_abort: txn_roll returned status=%d", status);
 
 	if (status != AEROSPIKE_OK) {
 		// The client roll has error. The server will eventually abort the transaction.
 		// Therefore, set abort_status and return success.
+		MRT_DEBUG(txn->id, "as_abort: rollback failed - server will complete, returning ROLL_BACK_ABANDONED");
 		as_set_abort_status(abort_status, AS_ABORT_ROLL_BACK_ABANDONED);
 		as_error_reset(err);
 		return AEROSPIKE_OK;
@@ -263,16 +320,19 @@ as_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_statu
 		as_key key;
 		as_txn_monitor_init_key(txn, &key);
 
+		MRT_DEBUG(txn->id, "as_abort: calling monitor_remove");
 		status = as_txn_monitor_remove(as, err, &roll_policy->base, &key);
 
 		if (status != AEROSPIKE_OK) {
 			// The client transaction monitor remove has error. The server will eventually remove the
 			// monitor record. Therefore, set abort_status and return success.
+			MRT_DEBUG(txn->id, "as_abort: monitor_remove failed - server will cleanup, returning CLOSE_ABANDONED");
 			as_set_abort_status(abort_status, AS_ABORT_CLOSE_ABANDONED);
 			as_error_reset(err);
 			return AEROSPIKE_OK;
 		}
 	}
+	MRT_DEBUG(txn->id, "as_abort: EXIT with ABORT_OK");
 	as_set_abort_status(abort_status, AS_ABORT_OK);
 	return AEROSPIKE_OK;
 }
@@ -282,17 +342,25 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abor
 {
 	as_error_reset(err);
 
+	MRT_DEBUG(txn->id, "aerospike_abort: ENTER state=%d in_doubt=%d", txn->state, txn->in_doubt);
+
+	as_status result;
 	switch (txn->state) {
 		default:
 		case AS_TXN_STATE_OPEN:
 		case AS_TXN_STATE_VERIFIED:
-			return as_abort(as, err, txn, abort_status);
+			MRT_DEBUG(txn->id, "aerospike_abort: state=%d, calling as_abort", txn->state);
+			result = as_abort(as, err, txn, abort_status);
+			MRT_DEBUG(txn->id, "aerospike_abort: EXIT state=%d result=%d", txn->state, result);
+			return result;
 
 		case AS_TXN_STATE_COMMITTED:
+			MRT_DEBUG(txn->id, "aerospike_abort: already committed, returning error");
 			as_set_abort_status(abort_status, AS_ABORT_ALREADY_COMMITTED);
 			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Transaction already committed");
 
 		case AS_TXN_STATE_ABORTED:
+			MRT_DEBUG(txn->id, "aerospike_abort: already aborted, returning OK");
 			as_set_abort_status(abort_status, AS_ABORT_ALREADY_ABORTED);
 			return AEROSPIKE_OK;
 	}

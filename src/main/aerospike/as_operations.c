@@ -128,7 +128,7 @@ as_operations_destroy(as_operations* ops)
 		cf_free(ops->binops.entries);
 	}
 
-	// reset values 
+	// reset values
 	ops->binops._free = false;
 	ops->binops.capacity = 0;
 	ops->binops.size = 0;
@@ -334,4 +334,3 @@ as_operations_modify_by_path(
 
 	return AEROSPIKE_OK;
 }
-

@@ -3575,7 +3575,7 @@ test_dump_record(rec, true);
 	// Apply modify operation with NO_FAIL flag
 	as_operations ops;
 	as_operations_init(&ops, 1);
-	as_operations_modify_by_path(&err, &ops, BIN_NAME, &ctx, exp, AS_EXP_PATH_SELECT_NO_FAIL);
+	as_operations_modify_by_path(&err, &ops, BIN_NAME, &ctx, exp, AS_EXP_PATH_MODIFY_NO_FAIL);
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);

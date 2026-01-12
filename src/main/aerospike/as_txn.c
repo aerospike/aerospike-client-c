@@ -357,8 +357,15 @@ as_status
 as_txn_verify_command(as_txn* txn, as_error* err)
 {
 	if (txn->state != AS_TXN_STATE_OPEN) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"Command not allowed in current transaction state: %d", txn->state);
+		// messages must align with definitions in as_txn_state enum.
+		static char* reasons[] = {
+			"(unused entry)",
+			"Issuing commands to this transaction is forbidden because it is currently being committed.",
+			"Issuing commands to this transaction is forbidden because it has been committed.",
+			"Issuing commands to this transaction is forbidden because it has been aborted."
+		};
+
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, reasons[txn->state]);
 	}
 	return AEROSPIKE_OK;
 }

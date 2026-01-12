@@ -356,18 +356,31 @@ as_txn_writes_contain(as_txn* txn, const as_key* key)
 as_status
 as_txn_verify_command(as_txn* txn, as_error* err)
 {
-	if (txn->state != AS_TXN_STATE_OPEN) {
-		// messages must align with definitions in as_txn_state enum.
-		static char* reasons[] = {
-			"(unused entry)",
-			"Issuing commands to this transaction is forbidden because it is currently being committed.",
-			"Issuing commands to this transaction is forbidden because it has been committed.",
-			"Issuing commands to this transaction is forbidden because it has been aborted."
-		};
+	char* reason;
 
-		return as_error_update(err, AEROSPIKE_ERR_PARAM, reasons[txn->state]);
+	switch (txn->state) {
+	case AS_TXN_STATE_OPEN:
+		// Not an error condition.
+		return AEROSPIKE_OK;
+
+	case AS_TXN_STATE_VERIFIED:
+		reason = "Issuing commands to this transaction is forbidden because it is currently being committed.";
+		break;
+
+	case AS_TXN_STATE_COMMITTED:
+		reason = "Issuing commands to this transaction is forbidden because it has been committed.";
+		break;
+
+	case AS_TXN_STATE_ABORTED:
+		reason = "Issuing commands to this transaction is forbidden because it has been aborted.";
+		break;
+
+	default:
+		reason = "Issuing commands to this transaction is forbidden because it is in an unknown/invalid state.";
+		break;
 	}
-	return AEROSPIKE_OK;
+
+	return as_error_update(err, AEROSPIKE_ERR_PARAM, reason);
 }
 
 as_status

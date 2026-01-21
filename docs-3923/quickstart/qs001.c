@@ -73,7 +73,7 @@ main(int argc, char* argv[])
 
 	as_config config;
 	as_config_init(&config);
-	as_config_add_host(&config, "127.0.0.1", 3000);
+	as_config_add_host(&config, "34.28.44.146", 3000);
 
 	aerospike as;
 	aerospike_init(&as, &config);
@@ -93,7 +93,7 @@ main(int argc, char* argv[])
 				as_exp_str("featured"),
 				as_exp_loopvar_map(AS_EXP_LOOPVAR_VALUE)  // loop variable points to each product map
 			),
-			as_exp_bool(false)
+			as_exp_bool(true)
 		)
 	);
 	if (!filter_on_featured) {
@@ -117,32 +117,46 @@ main(int argc, char* argv[])
 	}
 
 	// Operation
+	// Path: inventory map -> all products -> filter featured -> variants map -> filter quantity > 0
 
 	as_cdt_ctx ctx;
-	as_cdt_ctx_inita(&ctx, 4);
+	as_cdt_ctx_inita(&ctx, 5);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"inventory", false));
 	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_all_children_with_filter(&ctx, filter_on_featured);
-	as_cdt_ctx_add_map_key(
-			&ctx, (as_val*)as_string_new((char*)"variants", false));
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"variants", false));
 	as_cdt_ctx_add_all_children_with_filter(&ctx, filter_on_variant_inventory);
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	status = as_operations_select_by_path(&err, &ops, "inventory", &ctx, 0);
+	status = as_operations_select_by_path(&err, &ops, "testbin", &ctx, 
+			AS_EXP_PATH_SELECT_MATCHING_TREE | AS_EXP_PATH_SELECT_NO_FAIL);
 	if (status != AEROSPIKE_OK) {
-		log("qs001: Error %d: as_operations_select_by_path() failed\n", status);
 		goto fail_select_by_path;
 	}
 
 	as_record* rec = NULL;
 	status = aerospike_key_operate(&as, &err, NULL, &key, &ops, &rec);
 	if (status != AEROSPIKE_OK) {
-		log("qs001: Error %d: aerospike_key_operate() failed\n", status);
 		goto fail_key_operate;
 	}
+	
+	log("Operation succeeded. Record has %d bin(s)\n", as_record_numbins(rec));
 
-	as_map* map = as_record_get_map(rec, "inventory");
+	as_map* map = as_record_get_map(rec, "testbin");
+	
+	// Print in JSON format
+	if (map) {
+		char* map_str = as_val_tostring((as_val*)map);
+		log("Result (JSON format):\n%s\n", map_str);
+		free(map_str);
+	} else {
+		log("No map data returned\n");
+	}
+	
+	log("\nDetailed record dump:\n");
 	example_dump_record(rec);
+	log("\n");
 
 	// deliberate fall through to failure-aware cleanup code.
 

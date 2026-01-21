@@ -117,12 +117,11 @@ main(int argc, char* argv[])
 	}
 
 	// Operation
-	// Path: inventory map -> all products -> filter featured -> variants map -> filter quantity > 0
+	// Path: inventory map -> filter featured products -> variants map -> filter quantity > 0
 
 	as_cdt_ctx ctx;
-	as_cdt_ctx_inita(&ctx, 5);
+	as_cdt_ctx_inita(&ctx, 4);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"inventory", false));
-	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_all_children_with_filter(&ctx, filter_on_featured);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new((char*)"variants", false));
 	as_cdt_ctx_add_all_children_with_filter(&ctx, filter_on_variant_inventory);
@@ -141,22 +140,16 @@ main(int argc, char* argv[])
 		goto fail_key_operate;
 	}
 	
-	log("Operation succeeded. Record has %d bin(s)\n", as_record_numbins(rec));
-
 	as_map* map = as_record_get_map(rec, "testbin");
 	
 	// Print in JSON format
 	if (map) {
 		char* map_str = as_val_tostring((as_val*)map);
-		log("Result (JSON format):\n%s\n", map_str);
+		log("%s\n", map_str);
 		free(map_str);
 	} else {
-		log("No map data returned\n");
+		log("No data returned\n");
 	}
-	
-	log("\nDetailed record dump:\n");
-	example_dump_record(rec);
-	log("\n");
 
 	// deliberate fall through to failure-aware cleanup code.
 

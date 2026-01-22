@@ -47,6 +47,7 @@
 // Forward Declarations
 //
 
+static int do_default(void);
 static int do_create_expression(void);
 static int do_insert_data(void);
 static int do_remove_data(void);
@@ -67,6 +68,10 @@ main(int argc, char* argv[])
 	// Parse command line arguments.
 	if (! example_get_opts(argc, argv, EXAMPLE_BASIC_OPTS_SUBCMD)) {
 		exit(-1);
+	}
+
+	if (! strcmp(g_subcommand, "default")) {
+		return do_default();
 	}
 
 	if (! strcmp(g_subcommand, "create-expression")) {
@@ -109,6 +114,48 @@ main(int argc, char* argv[])
 //==========================================================
 // Helpers
 //
+
+static int
+do_default(void) {
+	int result = do_create_expression();
+	if (result != 0) {
+		fprintf(stderr, "Failed creating expression\n");
+		goto fail;
+	}
+
+	result = do_insert_data();
+	if (result != 0) {
+		fprintf(stderr, "Failed while inserting data\n");
+		goto fail;
+	}
+
+	result = do_query_by_age(5, true);
+	if (result != 0) {
+		fprintf(stderr, "Failed while using index to query by age 5\n");
+		goto fail;
+	}
+
+	result = do_query_by_age(25, true);
+	if (result != 0) {
+		fprintf(stderr, "Failed while using index to query by age 25\n");
+		goto fail;
+	}
+
+	result = do_query_by_age(5, false);
+	if (result != 0) {
+		fprintf(stderr, "Failed while not using index to query by age 5\n");
+		goto fail;
+	}
+
+	result = do_remove_data();
+	if (result != 0) {
+		fprintf(stderr, "Failed while trying to remove data\n");
+	}
+
+fail:
+	return result;
+}
+
 
 static int
 do_create_expression(void)

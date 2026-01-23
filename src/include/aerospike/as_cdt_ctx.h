@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_cdt_order.h>
+#include <aerospike/as_list.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
 
@@ -45,7 +46,8 @@ typedef enum {
 	AS_CDT_CTX_MAP_INDEX = 0x20,
 	AS_CDT_CTX_MAP_RANK = 0x21,
 	AS_CDT_CTX_MAP_KEY = 0x22,
-	AS_CDT_CTX_MAP_VALUE = 0x23
+	AS_CDT_CTX_MAP_VALUE = 0x23,
+	AS_CDT_CTX_MAP_KEY_IN_LIST = 0x2a
 } as_cdt_ctx_type;
 
 /**
@@ -319,6 +321,15 @@ as_cdt_ctx_add_map_key_create(as_cdt_ctx* ctx, as_val* key, as_map_order order)
 	as_cdt_ctx_item item;
 	item.type = AS_CDT_CTX_MAP_KEY | as_map_order_to_flag(order);
 	item.val.pval = key;
+	as_vector_append(&ctx->list, &item);
+}
+
+static inline void
+as_cdt_ctx_add_map_key_in_list(as_cdt_ctx* ctx, as_list* list)
+{
+	as_cdt_ctx_item item;
+	item.type = AS_CDT_CTX_MAP_KEY_IN_LIST;
+	item.val.pval = (as_val*)list;
 	as_vector_append(&ctx->list, &item);
 }
 

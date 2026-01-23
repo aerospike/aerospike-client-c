@@ -3699,6 +3699,473 @@ TEST(map_select_null, "test select null")
 	as_exp_destroy(exp);
 }
 
+TEST(map_key_in_list_select, "Test KEY_IN_LIST with select_by_path")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 35);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	// Create nested map structure with users and products
+	// users: {user1: {name, age, status}, user2: {...}, user3: {...}}
+	// products: {prod1: {name, price, stock}, prod2: {...}, prod3: {...}}
+
+	as_hashmap user1;
+	as_hashmap_init(&user1, 3);
+	as_stringmap_set_str((as_map*)&user1, "name", "Alice");
+	as_stringmap_set_int64((as_map*)&user1, "age", 30);
+	as_stringmap_set_str((as_map*)&user1, "status", "active");
+
+	as_hashmap user2;
+	as_hashmap_init(&user2, 3);
+	as_stringmap_set_str((as_map*)&user2, "name", "Bob");
+	as_stringmap_set_int64((as_map*)&user2, "age", 25);
+	as_stringmap_set_str((as_map*)&user2, "status", "inactive");
+
+	as_hashmap user3;
+	as_hashmap_init(&user3, 3);
+	as_stringmap_set_str((as_map*)&user3, "name", "Charlie");
+	as_stringmap_set_int64((as_map*)&user3, "age", 35);
+	as_stringmap_set_str((as_map*)&user3, "status", "active");
+
+	as_hashmap users;
+	as_hashmap_init(&users, 3);
+	as_hashmap_set(&users, (as_val*)as_string_new("user1", false), (as_val*)&user1);
+	as_hashmap_set(&users, (as_val*)as_string_new("user2", false), (as_val*)&user2);
+	as_hashmap_set(&users, (as_val*)as_string_new("user3", false), (as_val*)&user3);
+
+	as_hashmap prod1;
+	as_hashmap_init(&prod1, 3);
+	as_stringmap_set_str((as_map*)&prod1, "name", "Widget");
+	as_hashmap_set(&prod1, (as_val*)as_string_new("price", false), (as_val*)as_double_new(10.99));
+	as_stringmap_set_int64((as_map*)&prod1, "stock", 50);
+
+	as_hashmap prod2;
+	as_hashmap_init(&prod2, 3);
+	as_stringmap_set_str((as_map*)&prod2, "name", "Gadget");
+	as_hashmap_set(&prod2, (as_val*)as_string_new("price", false), (as_val*)as_double_new(20.50));
+	as_stringmap_set_int64((as_map*)&prod2, "stock", 30);
+
+	as_hashmap prod3;
+	as_hashmap_init(&prod3, 3);
+	as_stringmap_set_str((as_map*)&prod3, "name", "Doohickey");
+	as_hashmap_set(&prod3, (as_val*)as_string_new("price", false), (as_val*)as_double_new(15.75));
+	as_stringmap_set_int64((as_map*)&prod3, "stock", 0);
+
+	as_hashmap products;
+	as_hashmap_init(&products, 3);
+	as_hashmap_set(&products, (as_val*)as_string_new("prod1", false), (as_val*)&prod1);
+	as_hashmap_set(&products, (as_val*)as_string_new("prod2", false), (as_val*)&prod2);
+	as_hashmap_set(&products, (as_val*)as_string_new("prod3", false), (as_val*)&prod3);
+
+	as_hashmap top_map;
+	as_hashmap_init(&top_map, 2);
+	as_hashmap_set(&top_map, (as_val*)as_string_new("users", false), (as_val*)&users);
+	as_hashmap_set(&top_map, (as_val*)as_string_new("products", false), (as_val*)&products);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&top_map);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	test_dump_record(rec, true);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test 1: Select single level - Get only user1 and user3 from users map
+	as_cdt_ctx ctx1;
+	as_cdt_ctx_init(&ctx1, 2);
+	as_cdt_ctx_add_map_key(&ctx1, (as_val*)as_string_new("users", false));
+
+	as_arraylist user_keys;
+	as_arraylist_init(&user_keys, 2, 0);
+	as_arraylist_append_str(&user_keys, "user1");
+	as_arraylist_append_str(&user_keys, "user3");
+	as_cdt_ctx_add_map_key_in_list(&ctx1, (as_list*)&user_keys);
+
+	as_operations ops1;
+	as_operations_init(&ops1, 1);
+	as_operations_select_by_path(&err, &ops1, BIN_NAME, &ctx1, AS_EXP_PATH_SELECT_MAP_VALUE);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops1, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops1);
+test_dump_record(rec, true);
+
+	// Verify result contains only user1 and user3 data
+	as_list* result1 = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(result1);
+	assert_int_eq(as_list_size(result1), 2);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_cdt_ctx_destroy(&ctx1);
+
+	// Test 2: Select nested - Get "name" field from user1 and user3
+	as_cdt_ctx ctx2;
+	as_cdt_ctx_init(&ctx2, 3);
+	as_cdt_ctx_add_map_key(&ctx2, (as_val*)as_string_new("users", false));
+
+	as_arraylist user_keys2;
+	as_arraylist_init(&user_keys2, 2, 0);
+	as_arraylist_append_str(&user_keys2, "user1");
+	as_arraylist_append_str(&user_keys2, "user3");
+	as_cdt_ctx_add_map_key_in_list(&ctx2, (as_list*)&user_keys2);
+
+	as_cdt_ctx_add_map_key(&ctx2, (as_val*)as_string_new("name", false));
+
+	as_operations ops2;
+	as_operations_init(&ops2, 1);
+	as_operations_select_by_path(&err, &ops2, BIN_NAME, &ctx2, AS_EXP_PATH_SELECT_MAP_VALUE);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops2, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops2);
+
+	// Verify we got names: Alice and Charlie
+	as_list* result2 = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(result2);
+	assert_int_eq(as_list_size(result2), 2);
+	as_string* name1 = (as_string*)as_list_get(result2, 0);
+	as_string* name2 = (as_string*)as_list_get(result2, 1);
+	assert_true(strcmp(as_string_get(name1), "Alice") == 0 || strcmp(as_string_get(name1), "Charlie") == 0);
+	assert_true(strcmp(as_string_get(name2), "Alice") == 0 || strcmp(as_string_get(name2), "Charlie") == 0);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_cdt_ctx_destroy(&ctx2);
+
+	// Test 3: Select with MATCHING_TREE flag
+	as_cdt_ctx ctx3;
+	as_cdt_ctx_init(&ctx3, 2);
+	as_cdt_ctx_add_map_key(&ctx3, (as_val*)as_string_new("products", false));
+
+	as_arraylist prod_keys;
+	as_arraylist_init(&prod_keys, 2, 0);
+	as_arraylist_append_str(&prod_keys, "prod1");
+	as_arraylist_append_str(&prod_keys, "prod2");
+	as_cdt_ctx_add_map_key_in_list(&ctx3, (as_list*)&prod_keys);
+
+	as_operations ops3;
+	as_operations_init(&ops3, 1);
+	as_operations_select_by_path(&err, &ops3, BIN_NAME, &ctx3, AS_EXP_PATH_SELECT_MATCHING_TREE);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops3, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops3);
+
+	// Verify we got a map with full tree structure
+	as_map* result3 = as_record_get_map(rec, BIN_NAME);
+	assert_not_null(result3);
+	as_string key_products;
+	as_string_init(&key_products, "products", false);
+	as_map* products_map = (as_map*)as_map_get(result3, (as_val*)&key_products);
+	assert_not_null(products_map);
+	assert_int_eq(as_map_size(products_map), 2);  // Should have prod1 and prod2
+	as_record_destroy(rec);
+	rec = NULL;
+	as_cdt_ctx_destroy(&ctx3);
+
+	// Test 4: Select multiple keys at top level
+	as_cdt_ctx ctx4;
+	as_cdt_ctx_init(&ctx4, 1);
+
+	as_arraylist top_keys;
+	as_arraylist_init(&top_keys, 2, 0);
+	as_arraylist_append_str(&top_keys, "users");
+	as_arraylist_append_str(&top_keys, "products");
+	as_cdt_ctx_add_map_key_in_list(&ctx4, (as_list*)&top_keys);
+
+	as_operations ops4;
+	as_operations_init(&ops4, 1);
+	as_operations_select_by_path(&err, &ops4, BIN_NAME, &ctx4, AS_EXP_PATH_SELECT_MAP_VALUE);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops4, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops4);
+
+	// Verify we got both maps
+	as_list* result4 = as_record_get_list(rec, BIN_NAME);
+	assert_not_null(result4);
+	assert_int_eq(as_list_size(result4), 2);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_cdt_ctx_destroy(&ctx4);
+}
+
+TEST(map_key_in_list_modify, "Test KEY_IN_LIST with modify_by_path")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 36);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	// Create nested map structure with inventory data
+	// inventory: {warehouse1: {item_a: {count, price}, ...}, warehouse2: {...}}
+
+	as_hashmap item_a1;
+	as_hashmap_init(&item_a1, 2);
+	as_stringmap_set_int64((as_map*)&item_a1, "count", 100);
+	as_hashmap_set(&item_a1, (as_val*)as_string_new("price", false), (as_val*)as_double_new(5.0));
+
+	as_hashmap item_b1;
+	as_hashmap_init(&item_b1, 2);
+	as_stringmap_set_int64((as_map*)&item_b1, "count", 200);
+	as_hashmap_set(&item_b1, (as_val*)as_string_new("price", false), (as_val*)as_double_new(10.0));
+
+	as_hashmap item_c1;
+	as_hashmap_init(&item_c1, 2);
+	as_stringmap_set_int64((as_map*)&item_c1, "count", 150);
+	as_hashmap_set(&item_c1, (as_val*)as_string_new("price", false), (as_val*)as_double_new(7.5));
+
+	as_hashmap warehouse1;
+	as_hashmap_init(&warehouse1, 3);
+	as_hashmap_set(&warehouse1, (as_val*)as_string_new("item_a", false), (as_val*)&item_a1);
+	as_hashmap_set(&warehouse1, (as_val*)as_string_new("item_b", false), (as_val*)&item_b1);
+	as_hashmap_set(&warehouse1, (as_val*)as_string_new("item_c", false), (as_val*)&item_c1);
+
+	as_hashmap item_a2;
+	as_hashmap_init(&item_a2, 2);
+	as_stringmap_set_int64((as_map*)&item_a2, "count", 50);
+	as_hashmap_set(&item_a2, (as_val*)as_string_new("price", false), (as_val*)as_double_new(5.0));
+
+	as_hashmap item_b2;
+	as_hashmap_init(&item_b2, 2);
+	as_stringmap_set_int64((as_map*)&item_b2, "count", 75);
+	as_hashmap_set(&item_b2, (as_val*)as_string_new("price", false), (as_val*)as_double_new(10.0));
+
+	as_hashmap item_c2;
+	as_hashmap_init(&item_c2, 2);
+	as_stringmap_set_int64((as_map*)&item_c2, "count", 100);
+	as_hashmap_set(&item_c2, (as_val*)as_string_new("price", false), (as_val*)as_double_new(7.5));
+
+	as_hashmap warehouse2;
+	as_hashmap_init(&warehouse2, 3);
+	as_hashmap_set(&warehouse2, (as_val*)as_string_new("item_a", false), (as_val*)&item_a2);
+	as_hashmap_set(&warehouse2, (as_val*)as_string_new("item_b", false), (as_val*)&item_b2);
+	as_hashmap_set(&warehouse2, (as_val*)as_string_new("item_c", false), (as_val*)&item_c2);
+
+	as_hashmap inventory;
+	as_hashmap_init(&inventory, 2);
+	as_hashmap_set(&inventory, (as_val*)as_string_new("warehouse1", false), (as_val*)&warehouse1);
+	as_hashmap_set(&inventory, (as_val*)as_string_new("warehouse2", false), (as_val*)&warehouse2);
+
+	as_hashmap top_map;
+	as_hashmap_init(&top_map, 1);
+	as_hashmap_set(&top_map, (as_val*)as_string_new("inventory", false), (as_val*)&inventory);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&top_map);
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test 1: Single-level modify - Update count in all items of warehouse1 and warehouse2
+	as_cdt_ctx ctx1;
+	as_cdt_ctx_init(&ctx1, 4);
+	as_cdt_ctx_add_map_key(&ctx1, (as_val*)as_string_new("inventory", false));
+
+	as_arraylist warehouse_keys1;
+	as_arraylist_init(&warehouse_keys1, 2, 0);
+	as_arraylist_append_str(&warehouse_keys1, "warehouse1");
+	as_arraylist_append_str(&warehouse_keys1, "warehouse2");
+	as_cdt_ctx_add_map_key_in_list(&ctx1, (as_list*)&warehouse_keys1);
+
+	as_cdt_ctx_add_all_children(&ctx1);
+	as_cdt_ctx_add_map_key(&ctx1, (as_val*)as_string_new("count", false));
+
+	as_exp_build(exp1, as_exp_add(as_exp_loopvar_int(AS_EXP_LOOPVAR_VALUE), as_exp_int(1000)));
+	assert_not_null(exp1);
+
+	as_operations ops1;
+	as_operations_init(&ops1, 1);
+	as_operations_modify_by_path(&err, &ops1, BIN_NAME, &ctx1, exp1, AS_EXP_PATH_MODIFY_DEFAULT);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops1, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops1);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_cdt_ctx_destroy(&ctx1);
+	as_exp_destroy(exp1);
+
+	// Verify: Get and check that counts were increased
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_map* top = as_record_get_map(rec, BIN_NAME);
+	as_string inv_key;
+	as_string_init(&inv_key, "inventory", false);
+	as_map* inv_map = (as_map*)as_map_get(top, (as_val*)&inv_key);
+	as_string w1_key;
+	as_string_init(&w1_key, "warehouse1", false);
+	as_map* w1 = (as_map*)as_map_get(inv_map, (as_val*)&w1_key);
+	as_string ia_key;
+	as_string_init(&ia_key, "item_a", false);
+	as_map* item_a = (as_map*)as_map_get(w1, (as_val*)&ia_key);
+	as_string count_key;
+	as_string_init(&count_key, "count", false);
+	as_integer* count_val = (as_integer*)as_map_get(item_a, (as_val*)&count_key);
+	assert_int_eq(count_val->value, 1100);  // 100 + 1000
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test 2: Multi-level modify - Update specific items across warehouses
+	as_cdt_ctx ctx2;
+	as_cdt_ctx_init(&ctx2, 4);
+	as_cdt_ctx_add_map_key(&ctx2, (as_val*)as_string_new("inventory", false));
+
+	as_arraylist warehouse_keys2;
+	as_arraylist_init(&warehouse_keys2, 2, 0);
+	as_arraylist_append_str(&warehouse_keys2, "warehouse1");
+	as_arraylist_append_str(&warehouse_keys2, "warehouse2");
+	as_cdt_ctx_add_map_key_in_list(&ctx2, (as_list*)&warehouse_keys2);
+
+	as_arraylist item_keys;
+	as_arraylist_init(&item_keys, 2, 0);
+	as_arraylist_append_str(&item_keys, "item_a");
+	as_arraylist_append_str(&item_keys, "item_b");
+	as_cdt_ctx_add_map_key_in_list(&ctx2, (as_list*)&item_keys);
+
+	as_cdt_ctx_add_map_key(&ctx2, (as_val*)as_string_new("count", false));
+
+	as_exp_build(exp2, as_exp_mul(as_exp_loopvar_int(AS_EXP_LOOPVAR_VALUE), as_exp_int(2)));
+	assert_not_null(exp2);
+
+	as_operations ops2;
+	as_operations_init(&ops2, 1);
+	as_operations_modify_by_path(&err, &ops2, BIN_NAME, &ctx2, exp2, AS_EXP_PATH_MODIFY_DEFAULT);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops2, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops2);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_cdt_ctx_destroy(&ctx2);
+	as_exp_destroy(exp2);
+
+	// Verify: item_a count should be 2200 (1100 * 2), item_c should be 1150 (unchanged from first op)
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	test_dump_record(rec, true);
+	top = as_record_get_map(rec, BIN_NAME);
+	as_string_init(&inv_key, "inventory", false);
+	inv_map = (as_map*)as_map_get(top, (as_val*)&inv_key);
+	as_string_init(&w1_key, "warehouse1", false);
+	w1 = (as_map*)as_map_get(inv_map, (as_val*)&w1_key);
+	as_string_init(&ia_key, "item_a", false);
+	item_a = (as_map*)as_map_get(w1, (as_val*)&ia_key);
+	as_string_init(&count_key, "count", false);
+	count_val = (as_integer*)as_map_get(item_a, (as_val*)&count_key);
+	assert_int_eq(count_val->value, 2200);  // 1100 * 2
+	as_string ic_key;
+	as_string_init(&ic_key, "item_c", false);
+	as_map* item_c = (as_map*)as_map_get(w1, (as_val*)&ic_key);
+	count_val = (as_integer*)as_map_get(item_c, (as_val*)&count_key);
+	assert_int_eq(count_val->value, 1150);  // 150 + 1000 (from first op, not doubled)
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test 3: With NO_FAIL flag - Try to modify with some invalid keys
+	as_cdt_ctx ctx3;
+	as_cdt_ctx_init(&ctx3, 4);
+	as_cdt_ctx_add_map_key(&ctx3, (as_val*)as_string_new("inventory", false));
+
+	as_arraylist warehouse_keys3;
+	as_arraylist_init(&warehouse_keys3, 2, 0);
+	as_arraylist_append_str(&warehouse_keys3, "warehouse1");
+	as_arraylist_append_str(&warehouse_keys3, "nonexistent");
+	as_cdt_ctx_add_map_key_in_list(&ctx3, (as_list*)&warehouse_keys3);
+
+	as_cdt_ctx_add_all_children(&ctx3);
+	as_cdt_ctx_add_map_key(&ctx3, (as_val*)as_string_new("count", false));
+
+	as_exp_build(exp3, as_exp_add(as_exp_loopvar_int(AS_EXP_LOOPVAR_VALUE), as_exp_int(10)));
+	assert_not_null(exp3);
+
+	as_operations ops3;
+	as_operations_init(&ops3, 1);
+	as_operations_modify_by_path(&err, &ops3, BIN_NAME, &ctx3, exp3, AS_EXP_PATH_MODIFY_NO_FAIL);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops3, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);  // Should succeed despite invalid key
+	as_operations_destroy(&ops3);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_cdt_ctx_destroy(&ctx3);
+	as_exp_destroy(exp3);
+
+	// Verify: warehouse1 item_a count should be 2210 (2200 + 10)
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	test_dump_record(rec, true);
+	top = as_record_get_map(rec, BIN_NAME);
+	as_string_init(&inv_key, "inventory", false);
+	inv_map = (as_map*)as_map_get(top, (as_val*)&inv_key);
+	as_string_init(&w1_key, "warehouse1", false);
+	w1 = (as_map*)as_map_get(inv_map, (as_val*)&w1_key);
+	as_string_init(&ia_key, "item_a", false);
+	item_a = (as_map*)as_map_get(w1, (as_val*)&ia_key);
+	as_string_init(&count_key, "count", false);
+	count_val = (as_integer*)as_map_get(item_a, (as_val*)&count_key);
+	assert_int_eq(count_val->value, 2210);  // 2200 + 10
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Test 4: Nested all_children - Modify all integer values
+	as_cdt_ctx ctx4;
+	as_cdt_ctx_init(&ctx4, 4);
+	as_cdt_ctx_add_map_key(&ctx4, (as_val*)as_string_new("inventory", false));
+
+	as_arraylist warehouse_keys4;
+	as_arraylist_init(&warehouse_keys4, 1, 0);
+	as_arraylist_append_str(&warehouse_keys4, "warehouse2");
+	as_cdt_ctx_add_map_key_in_list(&ctx4, (as_list*)&warehouse_keys4);
+
+	as_cdt_ctx_add_all_children(&ctx4);
+	as_cdt_ctx_add_all_children(&ctx4);
+
+	as_exp_build(exp4, as_exp_add(as_exp_loopvar_int(AS_EXP_LOOPVAR_VALUE), as_exp_int(5)));
+	assert_not_null(exp4);
+
+	as_operations ops4;
+	as_operations_init(&ops4, 1);
+	as_operations_modify_by_path(&err, &ops4, BIN_NAME, &ctx4, exp4, AS_EXP_PATH_MODIFY_NO_FAIL);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops4, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops4);
+	as_record_destroy(rec);
+test_dump_record(rec, true);
+	rec = NULL;
+	as_cdt_ctx_destroy(&ctx4);
+	as_exp_destroy(exp4);
+
+	// Verify: warehouse2 item_a count should be 2105 (2100 + 5)
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	test_dump_record(rec, true);
+	top = as_record_get_map(rec, BIN_NAME);
+	as_string_init(&inv_key, "inventory", false);
+	inv_map = (as_map*)as_map_get(top, (as_val*)&inv_key);
+	as_string w2_key;
+	as_string_init(&w2_key, "warehouse2", false);
+	as_map* w2 = (as_map*)as_map_get(inv_map, (as_val*)&w2_key);
+	as_string_init(&ia_key, "item_a", false);
+	as_map* item_a_w2 = (as_map*)as_map_get(w2, (as_val*)&ia_key);
+	as_string_init(&count_key, "count", false);
+	as_integer* count_val_w2 = (as_integer*)as_map_get(item_a_w2, (as_val*)&count_key);
+	assert_int_eq(count_val_w2->value, 2105);
+	as_record_destroy(rec);
+	rec = NULL;
+}
+
 
 /******************************************************************************
  * TEST SUITE
@@ -3742,4 +4209,6 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_select_apply);
 	suite_add(map_apply_level);
 	suite_add(map_select_null);
+	suite_add(map_key_in_list_select);
+	suite_add(map_key_in_list_modify);
 }

@@ -289,6 +289,17 @@ aerospike_index_create_exp(
 }
 
 as_status
+aerospike_index_create_exp_and_ctx(
+	aerospike* as, as_error* err, as_index_task* task, const as_policy_info* policy,
+	const char* ns, const char* set, const char* bin_name, const char* index_name,
+	as_index_type itype, as_index_datatype dtype, as_exp* exp, as_cdt_ctx* ctx
+	)
+{
+	return aerospike_index_create_private(as, err, task, policy, ns, set, bin_name,
+		index_name, itype, dtype, ctx, exp);
+}
+
+as_status
 aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interval_ms)
 {
 	if (task->done) {

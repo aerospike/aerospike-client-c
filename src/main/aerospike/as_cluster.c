@@ -1578,15 +1578,6 @@ as_cluster_create(aerospike* as, as_error* err)
 	// Make a reference copy here.
 	cluster->cluster_name = config->cluster_name;
 	cluster->app_id = config->app_id;
-
-	if (!cluster->app_id) {
-		cluster->app_id = cluster->user;
-
-		if (!cluster->app_id) {
-			cluster->app_id = "not-set";
-		}
-	}
-
 	cluster->event_callback = config->event_callback;
 	cluster->event_callback_udata = config->event_callback_udata;
 

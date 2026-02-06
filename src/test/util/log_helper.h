@@ -27,7 +27,6 @@
  * FUNCTIONS
  *****************************************************************************/
 
-void dump_bin(const as_bin* p_bin);
+void dump_bin(const as_bin* p_bin); 
 
 void dump_record(const as_record* p_rec);
-void test_dump_record(const as_record* p_rec, bool tabbed);

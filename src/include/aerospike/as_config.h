@@ -68,7 +68,7 @@ extern "C" {
 /**
  * Default interval in milliseconds between dynamic configuration check for file modifications.
  */
-#define AS_CONFIG_PROVIDER_INTERVAL_DEFAULT 5000
+#define AS_CONFIG_PROVIDER_INTERVAL_DEFAULT 60000
 
 //---------------------------------
 // Types
@@ -376,7 +376,7 @@ typedef struct as_config_provider_s {
 	 * Interval in milliseconds between dynamic configuration check for file modifications.
 	 * The value must be greater than or equal to the tend interval.
 	 *
-	 * Default: 5000
+	 * Default: 60000
 	 */
 	uint32_t interval;
 

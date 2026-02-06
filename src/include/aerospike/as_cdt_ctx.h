@@ -31,14 +31,10 @@ extern "C" {
 /**
  * Nested CDT context type.
  *
- * Note that AS_CDT_CTX_VALUE is a flag (currently, bit 1) within each of the
- * enumeration variants, indicating which variants are to be considered values.
- *
  * @relates as_operations
  * @ingroup base_operations
  */
 typedef enum {
-	AS_CDT_CTX_EXP = 0x04,
 	AS_CDT_CTX_LIST_INDEX = 0x10,
 	AS_CDT_CTX_LIST_RANK = 0x11,
 	AS_CDT_CTX_LIST_VALUE = 0x13,
@@ -48,9 +44,6 @@ typedef enum {
 	AS_CDT_CTX_MAP_VALUE = 0x23
 } as_cdt_ctx_type;
 
-/**
- * Flag indicating whether or not a AS_CDT_CTX_xxx variant is a value.
- */
 #define AS_CDT_CTX_VALUE 0x2
 
 /**
@@ -65,7 +58,6 @@ typedef struct as_cdt_ctx_item {
 	{
 		int64_t ival;
 		as_val* pval;
-		struct as_exp* exp;
 	} val;
 } as_cdt_ctx_item;
 
@@ -107,36 +99,6 @@ typedef struct as_cdt_ctx {
 //---------------------------------
 // Functions
 //---------------------------------
-
-/**
- * Answer true if the CDT context is "empty".  Empty is defined as one of three
- * conditions: (1) the context pointer itself is null, (2) the pointer is non-
- * null but the structure is not properly initialized, and (3) the context is
- * initialized but has yet to receive an expression (see as_cdt_ctx_add_*
- * functions).
- */
-static inline bool
-cdt_ctx_is_empty(as_cdt_ctx* ctx) {
-	// If ctx is NULL, we consider it empty.
-	if (ctx == NULL) {
-		return true;
-	}
-
-	// If ctx is not NULL, but has not been properly initialized,
-	// we consider it empty.
-	if (ctx->list.list == NULL) {
-		return true;
-	}
-
-	// If ctx is properly initialized but has zero elements in its list,
-	// we consider it empty.
-	if (ctx->list.size == 0) {
-		return true;
-	}
-
-	// Otherwise, the context has at least one expression in it.
-	return false;
-}
 
 /**
  * Initialize a stack allocated nested CDT context list, with item storage on the heap.
@@ -336,34 +298,6 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
 	item.val.pval = val;
 	as_vector_append(&ctx->list, &item);
 }
-
-/**
- * Add all to select ctx.
- *
- * At the current context, causes a query to return a list of all the children
- * of the current item. For a map, this will recurse into the map elements,
- * for a list this will include all the children in the list.
- *
- * @relates as_operations
- * @ingroup base_operations
- */
-AS_EXTERN void
-as_cdt_ctx_add_all_children(as_cdt_ctx* ctx);
-
-/**
- * Add expr to select ctx.  The ctx does NOT take ownership of exp.
- * The passed expression must return a boolean.
- *
- * All children of the current level will be selected, and then the filter expression
- * is applied to each item in turn.  Items that cause the expression to evaluate to true will be added to the
- * list of items returned in a query for this level.  Items that cause the expression to evaluate to false
- * will be filtered out
- *
- * @relates as_operations
- * @ingroup base_operations
- */
-AS_EXTERN void
-as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const struct as_exp* exp);
 
 /**
  * Return exact serialized size of ctx. Return zero on error.

@@ -48,7 +48,6 @@
  */
 
 #include <aerospike/as_bit_operations.h>
-#include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_hll_operations.h>
 #include <aerospike/as_list_operations.h>
 #include <aerospike/as_map_operations.h>
@@ -126,10 +125,6 @@ typedef enum {
 	_AS_EXP_CODE_BIN = 81,
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
-	_AS_EXP_CODE_RESULT_REMOVE = 100,
-
-	_AS_EXP_CODE_LOOPVAR = 122,
-
 	_AS_EXP_CODE_COND = 123,
 	_AS_EXP_CODE_VAR = 124,
 	_AS_EXP_CODE_LET = 125,
@@ -156,7 +151,6 @@ typedef enum {
 	_AS_EXP_CODE_CDT_MAP_CR,
 	_AS_EXP_CODE_CDT_MAP_MOD,
 	_AS_EXP_CODE_MERGE,
-	_AS_EXP_CODE_CTX,
 
 	_AS_EXP_CODE_END_OF_VA_ARGS
 } as_exp_ops;
@@ -184,12 +178,6 @@ typedef enum {
 	AS_EXP_TYPE_AUTO,
 	AS_EXP_TYPE_ERROR
 } as_exp_type;
-
-typedef enum {
-	AS_EXP_LOOPVAR_KEY = 0,
-	AS_EXP_LOOPVAR_VALUE = 1,
-	AS_EXP_LOOPVAR_INDEX = 2
-} as_exp_loopvar_type;
 
 typedef struct as_exp {
 	uint32_t packed_sz;
@@ -1570,7 +1558,7 @@ as_exp_destroy_base64(char* base64)
  * as_exp_build(expression,
  *     as_exp_cmp_gt(
  *         as_exp_cond(
- *             as_exp_eq(as_exp_bin_int("type"), as_exp_int(0)),
+ *             as_exp_eq(as_exp_bin_int("type"), as_exp_int(0)), 
  *                 as_exp_add(as_exp_bin_int("val1"), as_exp_bin_int("val2")),
  *             as_exp_eq(as_exp_bin_int("type"), as_exp_int(1)),
  *                 as_exp_sub(as_exp_bin_int("val1"), as_exp_bin_int("val2")),
@@ -1648,117 +1636,6 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_var(__var_name) \
 		{.op=_AS_EXP_CODE_VAR, .count=2}, _AS_EXP_VAL_RAWSTR(__var_name)
-
-/**
- * @private
- * Internal macro for making new loopvar variants easier.
- *
- * @param __var_id  Variable ID.
- * @param __kind    The suffix of the return type; if you write BOOL, then
- *                  the return type will be AS_EXP_TYPE_BOOL.
- * @ingroup expression
- */
-#define _as_exp_loopvar_make(__var_id, __kind) \
-		{.op=_AS_EXP_CODE_LOOPVAR, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_##__kind), \
-		as_exp_int(__var_id)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_map(__var_id) \
-		_as_exp_loopvar_make(__var_id, MAP)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_list(__var_id) \
-		_as_exp_loopvar_make(__var_id, LIST)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_str(__var_id) \
-		_as_exp_loopvar_make(__var_id, STR)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_int(__var_id) \
-		_as_exp_loopvar_make(__var_id, INT)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_float(__var_id) \
-		_as_exp_loopvar_make(__var_id, FLOAT)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_blob(__var_id) \
-		_as_exp_loopvar_make(__var_id, BLOB)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_bool(__var_id) \
-		_as_exp_loopvar_make(__var_id, BOOL)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_nil(__var_id) \
-		_as_exp_loopvar_make(__var_id, NIL)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_geojson(__var_id) \
-		_as_exp_loopvar_make(__var_id, GEOJSON)
-
-/**
- * Retrieve expression value from a path expression loop variable.
- * @param __var_id		Variable id.
- * @return value stored in variable.
- * @ingroup expression
- */
-#define as_exp_loopvar_hll(__var_id) \
-		_as_exp_loopvar_make(__var_id, HLL)
-
-/**
- * Return a result_remove object to indicate entry deletion for cdt_apply.
- * @return the result_remove value.
- * @ingroup expression
- */
-#define as_exp_result_remove() {.op=_AS_EXP_CODE_RESULT_REMOVE, .count=1}
 
 //---------------------------------
 // List Modify Expressions
@@ -2420,7 +2297,7 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Create expression that removes map items identified by key range
+ * Create expression that removes map items identified by key range 
  * (begin inclusive, end exclusive). If begin is nil, the range is less than end.
  * If end is infinity, the range is greater than equal to begin.
  *
@@ -2985,58 +2862,6 @@ as_exp_destroy_base64(char* base64)
 		_AS_EXP_MAP_START(__ctx, AS_CDT_OP_MAP_GET_BY_RANK_RANGE, 3), \
 		as_exp_int(__rtype), \
 		__rank, __count, \
-		__bin
-
-//---------------------------------
-// CDT Expressions
-//---------------------------------
-
-/**
- * Constructs a select by path operation.  This is used to retrieve a number of
- * records or fields of records, including those of structured types.
- *
- * @param __ctx    Pointer to a CDT context.  This cannot be NULL, nor can
- *                 the context be empty.
- * @param __vtype  Value type specifier (e.g., AS_EXP_TYPE_MAP).
- * @param __flags  Flags (see enum as_exp_path_select_flags).
- * @param __bin    Bin expression this select query is performed against.
- * @return (expression)
- * @ingroup expression
- */
-
-#define as_exp_select_by_path(__ctx, __rtype, __flags, __bin) \
-		{.op=_AS_EXP_CODE_CALL, .count=5}, \
-		_AS_EXP_VAL_RTYPE(__rtype), \
-		as_exp_int(_AS_EXP_SYS_CALL_CDT), \
-		_AS_EXP_MAP_START(NULL, AS_CDT_OP_CONTEXT_SELECT, 2), \
-		{.op=_AS_EXP_CODE_CTX, .v.ctx=__ctx}, \
-		as_exp_int(__flags), \
-		__bin
-
-/**
- * Constructs an apply by path operation.
- *
- * The results of the evaluation of the modifying expression will replace the
- * selected map and the changes written back to storage.
- *
- * @param __ctx      Pointer to a CDT context.  This cannot be NULL, nor can
- *                   the context be empty.
- * @param __vtype    Value type specifier (e.g., AS_EXP_TYPE_MAP).
- * @param __mod_exp  Expression to apply.
- * @param __flags    Flags (see enum as_exp_path_modify_flags).
- * @param __bin      Bin expression to which __mod_exp applies to.
- * @return (expression)
- * @ingroup expression
- */
-
-#define as_exp_modify_by_path(__ctx, __rtype, __mod_exp, __flags, __bin) \
-		{.op=_AS_EXP_CODE_CALL, .count=5}, \
-		_AS_EXP_VAL_RTYPE(__rtype), \
-		as_exp_int(_AS_EXP_SYS_CALL_CDT | _AS_EXP_SYS_FLAG_MODIFY_LOCAL), \
-		_AS_EXP_MAP_START(NULL, AS_CDT_OP_CONTEXT_SELECT, 3), \
-		{.op=_AS_EXP_CODE_CTX, .v.ctx=__ctx}, \
-		as_exp_int(__flags | 4), \
-		{.op=_AS_EXP_CODE_MERGE, .v.expr=__mod_exp}, \
 		__bin
 
 //---------------------------------
@@ -3658,7 +3483,7 @@ as_exp_destroy_base64(char* base64)
  * as_exp_build(expr, as_exp_cmp_eq(as_exp_bin_int("a"), as_exp_int(200)));
  * as_exp_build(merged,
  *		as_exp_and(
- *			as_exp_expr(expr),
+ *			as_exp_expr(expr), 
  *			as_exp_cmp_eq(as_exp_bin_int("b"), as_exp_int(100))));
  * @endcode
  *

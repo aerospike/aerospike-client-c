@@ -22,9 +22,7 @@
 #include <citrusleaf/cf_clock.h>
 #include <openssl/conf.h>
 #include <openssl/crypto.h>
-#if OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(OPENSSL_NO_ENGINE)
 #include <openssl/engine.h>
-#endif
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <ctype.h>
@@ -296,9 +294,7 @@ as_tls_cleanup(void)
 #elif OPENSSL_VERSION_NUMBER == 0x10100000L
 	FIPS_module_mode_set(0);
 #endif
-#if OPENSSL_VERSION_NUMBER < 0x30000000L && !defined(OPENSSL_NO_ENGINE)
 	ENGINE_cleanup();
-#endif
 	CONF_modules_unload(1);
 	EVP_cleanup();
 	as_tls_thread_cleanup();

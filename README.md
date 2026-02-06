@@ -9,14 +9,10 @@ are also included.
 
 ### Debian and Ubuntu
 
-	$ sudo apt-get install autoconf automake g++ libc6-dev libev-dev libevent-dev libssl-dev libtool libuv1-dev libyaml-dev zlib1g-dev
+	$ sudo apt-get install libc6-dev libssl-dev autoconf automake libtool g++ zlib1g-dev libyaml-dev
 
 	[Also do on Ubuntu:]
 	$ sudo apt-get install ncurses-dev
-
-If you intend on building packages for a distribution, also perform this:
-
-    $ sudo apt install doxygen graphviz zip
 
 ### Red Hat Enterprise Linux, CentOS and Amazon Linux
 

@@ -30,6 +30,8 @@ typedef enum {
 	CALL_HLL = 2
 } call_system_type;
 
+#define AS_CDT_OP_CONTEXT_EVAL 0xff
+
 as_exp*
 as_exp_compile(as_exp_entry* table, uint32_t n)
 {
@@ -213,18 +215,6 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 		case _AS_EXP_CODE_MERGE:
 			total_sz += entry->v.expr->packed_sz;
 			break;
-		case _AS_EXP_CODE_CTX: {
-			as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
-
-			sz = as_cdt_ctx_pack(entry->v.ctx, &pk);
-
-			if (sz == 0) {
-				return NULL;
-			}
-
-			total_sz += sz;
-			break;
-		}
 		case _AS_EXP_CODE_COND:
 		case _AS_EXP_CODE_LET:
 		case _AS_EXP_CODE_AND:
@@ -356,9 +346,6 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 			as_pack_append(&pk, e->packed, e->packed_sz);
 			break;
 		}
-		case _AS_EXP_CODE_CTX:
-			as_cdt_ctx_pack(entry->v.ctx, &pk);
-			break;
 		default:
 			as_pack_int64(&pk, (int64_t)entry->op);
 			break;

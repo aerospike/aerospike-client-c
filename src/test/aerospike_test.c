@@ -489,9 +489,7 @@ PLAN(aerospike_test)
 	plan_add(key_apply);
 	plan_add(key_apply2);
 	plan_add(key_operate);
-
 	plan_add(list_basics);
-
 	plan_add(map_basics);
 	plan_add(map_udf);
 	plan_add(map_index);
@@ -499,9 +497,7 @@ PLAN(aerospike_test)
 	plan_add(bit);
 	plan_add(hll);
 	plan_add(filter_exp);
-
 	plan_add(exp_operate);
-
 	plan_add(info_basics);
 	plan_add(udf_basics);
 	plan_add(udf_types);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,10 +16,6 @@
  */
 #include <aerospike/as_operations.h>
 #include <aerospike/as_bin.h>
-#include <aerospike/as_cdt_internal.h>
-#include <aerospike/as_error.h>
-#include <aerospike/as_exp.h>
-#include <aerospike/as_status.h>
 #include <citrusleaf/alloc.h>
 
 #include "_bin.h"
@@ -128,7 +124,7 @@ as_operations_destroy(as_operations* ops)
 		cf_free(ops->binops.entries);
 	}
 
-	// reset values
+	// reset values 
 	ops->binops._free = false;
 	ops->binops.capacity = 0;
 	ops->binops.size = 0;
@@ -281,56 +277,4 @@ bool
 as_operations_add_delete(as_operations* ops)
 {
 	return as_binop_append(ops, AS_OPERATOR_DELETE);
-}
-
-as_status
-as_operations_select_by_path(
-		as_error* err,
-		as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp_path_select_flags flags)
-{
-	if (cdt_ctx_is_empty(ctx)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context is empty");
-	}
-
-	as_packer pk = as_cdt_begin();
-	as_pack_list_header(&pk, 3);
-	as_pack_uint64(&pk, AS_CDT_OP_CONTEXT_SELECT);
-	as_cdt_ctx_pack(ctx, &pk);
-	// Ensure the apply flag is cleared, since no expression is provided.
-	// This avoids problems if the caller accidentally sets bit 2 in the flags field.
-	as_pack_uint64(&pk, flags & ~4);
-	as_cdt_end(&pk);
-
-	bool added = as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_READ);
-	if (! added) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context didn't add");
-	}
-
-	return AEROSPIKE_OK;
-}
-
-as_status
-as_operations_modify_by_path(
-		as_error* err,
-		as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp* mod_exp, as_exp_path_modify_flags flags)
-{
-	if (cdt_ctx_is_empty(ctx)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context is empty");
-	}
-
-	as_packer pk = as_cdt_begin();
-	as_pack_list_header(&pk, 4);
-	as_pack_uint64(&pk, AS_CDT_OP_CONTEXT_SELECT);
-	as_cdt_ctx_pack(ctx, &pk);
-	// ensure the apply flag is set, since an expression must be provided.
-	as_pack_uint64(&pk, flags | 4);
-	as_pack_append(&pk, mod_exp->packed, mod_exp->packed_sz);
-	as_cdt_end(&pk);
-
-	bool added = as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_MODIFY);
-	if (! added) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context packing failed");
-	}
-
-	return AEROSPIKE_OK;
 }

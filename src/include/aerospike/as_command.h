@@ -68,6 +68,11 @@ extern "C" {
 #define AS_FIELD_QUERY_BINS 40
 #define AS_FIELD_BATCH_INDEX 41
 #define AS_FIELD_FILTER 43
+#define AS_FIELD_CLIENT_FEATURES 44
+#define AS_FIELD_ERROR_MESSAGE 45
+
+// Client features bitmask values.
+#define AS_CLIENT_FEATURE_ERROR_MESSAGE (1 << 0)
 
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
@@ -678,6 +683,13 @@ as_command_parse_fields_txn(
 
 /**
  * @private
+ * Parse error message field.
+ */
+as_status
+as_command_parse_fields_error(uint8_t** pp, as_error* err, as_msg* msg);
+
+/**
+ * @private
  * Parse record fields given key.
  */
 static inline as_status
@@ -686,8 +698,7 @@ as_command_parse_fields(
 	)
 {
 	if (! txn) {
-		*pp = as_command_ignore_fields(*pp, msg->n_fields);
-		return AEROSPIKE_OK;
+		return as_command_parse_fields_error(pp, err, msg);
 	}
 	return as_command_parse_fields_txn(pp, err, msg, txn, key->digest.value, key->set, is_write);
 }

@@ -691,6 +691,11 @@ as_query_command_size(
 	qb->size += as_command_field_size(sizeof(uint32_t));
 	n_fields++;
 
+	if (base_policy->respond_error_message) {
+		qb->size += as_command_field_size(sizeof(uint32_t));
+		n_fields++;
+	}
+
 	// Estimate taskId size.
 	qb->size += as_command_field_size(8);
 	n_fields++;
@@ -929,6 +934,11 @@ as_query_command_init(
 
 	// Write socket timeout.
 	p = as_command_write_field_uint32(p, AS_FIELD_SOCKET_TIMEOUT, base_policy->socket_timeout);
+
+	if (base_policy->respond_error_message) {
+		p = as_command_write_field_uint32(p, AS_FIELD_CLIENT_FEATURES,
+				AS_CLIENT_FEATURE_ERROR_MESSAGE);
+	}
 
 	// Write taskId field
 	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);

@@ -615,6 +615,13 @@ typedef struct as_policy_base_s {
 	 * Default: false
 	 */
 	bool compress;
+
+	/**
+	 * Request server error message fields in responses.
+	 *
+	 * Default: false
+	 */
+	bool respond_error_message;
 } as_policy_base;
 
 /**
@@ -1722,6 +1729,7 @@ as_policy_base_read_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
+	p->respond_error_message = false;
 }
 
 /**
@@ -1739,6 +1747,7 @@ as_policy_base_write_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
+	p->respond_error_message = false;
 }
 
 /**
@@ -1769,6 +1778,7 @@ as_policy_base_query_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
+	p->respond_error_message = false;
 }
 
 /**

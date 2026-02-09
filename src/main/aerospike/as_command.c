@@ -164,6 +164,11 @@ as_command_key_size(
 		size += as_command_user_key_size(key);
 		tdata->n_fields++;
 	}
+
+	if (policy->respond_error_message) {
+		size += AS_FIELD_HEADER_SIZE + sizeof(uint32_t);
+		tdata->n_fields++;
+	}
 	return size;
 }
 
@@ -442,6 +447,11 @@ as_command_write_key(
 
 	if (pol_key == AS_POLICY_KEY_SEND && key->valuep) {
 		p = as_command_write_user_key(p, key);
+	}
+
+	if (policy->respond_error_message) {
+		p = as_command_write_field_uint32(p, AS_FIELD_CLIENT_FEATURES,
+				AS_CLIENT_FEATURE_ERROR_MESSAGE);
 	}
 	return p;
 }
@@ -1131,7 +1141,9 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	}
 
 	if (msg->result_code) {
-		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+		const char* msg_text = (err && err->message[0] != 0) ?
+				err->message : as_error_string(msg->result_code);
+		return as_error_set_message(err, msg->result_code, msg_text);
 	}
 
 	as_record** rec = cmd->udata;
@@ -1176,15 +1188,48 @@ as_command_parse_fields_txn(
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Record version field has invalid size: %u", len);
 			}
 		}
+		else if (type == AS_FIELD_ERROR_MESSAGE) {
+			if (err && len > 0) {
+				uint32_t copy_len = len > AS_ERROR_MESSAGE_MAX_LEN ? AS_ERROR_MESSAGE_MAX_LEN : len;
+				memcpy(err->message, p, copy_len);
+				err->message[copy_len] = 0;
+			}
+		}
 		p += len;
 	}
 
-	if (is_write) {
-		as_txn_on_write(txn, digest, set, version, msg->result_code);
+	if (txn) {
+		if (is_write) {
+			as_txn_on_write(txn, digest, set, version, msg->result_code);
+		}
+		else {
+			as_txn_on_read(txn, digest, set, version);
+		}
 	}
-	else {
-		as_txn_on_read(txn, digest, set, version);
+	*pp = p;
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_command_parse_fields_error(uint8_t** pp, as_error* err, as_msg* msg)
+{
+	uint8_t* p = *pp;
+	uint32_t len;
+	uint8_t type;
+
+	for (uint32_t i = 0; i < msg->n_fields; i++) {
+		len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+		p += 4;
+		type = *p++;
+
+		if (type == AS_FIELD_ERROR_MESSAGE && err && len > 0) {
+			uint32_t copy_len = len > AS_ERROR_MESSAGE_MAX_LEN ? AS_ERROR_MESSAGE_MAX_LEN : len;
+			memcpy(err->message, p, copy_len);
+			err->message[copy_len] = 0;
+		}
+		p += len;
 	}
+
 	*pp = p;
 	return AEROSPIKE_OK;
 }
@@ -1734,8 +1779,13 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		}
 
 		default:
+		if (err && err->message[0] != 0) {
+			as_error_set_message(err, status, err->message);
+		}
+		else {
 			as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-							as_error_string(status));
+					as_error_string(status));
+		}
 			break;
 	}
 	return status;
@@ -1784,8 +1834,13 @@ as_command_parse_success_failure(
 		}
 
 		default:
-			as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-							as_error_string(status));
+			if (err && err->message[0] != 0) {
+				as_error_set_message(err, status, err->message);
+			}
+			else {
+				as_error_update(err, status, "%s %s", as_node_get_address_string(node),
+						as_error_string(status));
+			}
 			if (val) {
 				*val = 0;
 			}
@@ -1816,8 +1871,11 @@ as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t
 	status = msg->result_code;
 
 	if (status != AEROSPIKE_OK) {
+		if (err && err->message[0] != 0) {
+			return as_error_set_message(err, status, err->message);
+		}
 		return as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-			as_error_string(status));
+				as_error_string(status));
 	}
 
 	return AEROSPIKE_OK;

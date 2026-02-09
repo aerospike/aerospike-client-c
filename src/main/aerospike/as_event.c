@@ -1522,9 +1522,19 @@ as_event_command_parse_header(as_event_command* cmd)
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
+	as_error err;
+	as_error_init(&err);
+
 	if (cmd->txn) {
-		as_error err;
 		as_status status = as_event_command_parse_fields(cmd, &err, msg, &p);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_response_error(cmd, &err);
+			return true;
+		}
+	}
+	else {
+		as_status status = as_command_parse_fields_error(&p, &err, msg);
 
 		if (status != AEROSPIKE_OK) {
 			as_event_response_error(cmd, &err);
@@ -1538,8 +1548,9 @@ as_event_command_parse_header(as_event_command* cmd)
 		as_event_command_release(cmd);
 	}
 	else {
-		as_error err;
-		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+		const char* msg_text = err.message[0] != 0 ?
+				err.message : as_error_string(msg->result_code);
+		as_error_set_message(&err, msg->result_code, msg_text);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -1564,7 +1575,12 @@ as_event_command_parse_result(as_event_command* cmd)
 		}
 	}
 	else {
-		p = as_command_ignore_fields(p, msg->n_fields);
+		status = as_command_parse_fields_error(&p, &err, msg);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_response_error(cmd, &err);
+			return true;
+		}
 	}
 
 	status = msg->result_code;
@@ -1711,7 +1727,13 @@ as_event_command_parse_deadline(as_event_command* cmd)
 	status = msg->result_code;
 
 	if (status != AEROSPIKE_OK) {
-		as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
+		if (err.message[0] != 0) {
+			as_error_set_message(&err, status, err.message);
+		}
+		else {
+			as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node),
+					as_error_string(status));
+		}
 		as_event_response_error(cmd, &err);
 		return true;
 	}

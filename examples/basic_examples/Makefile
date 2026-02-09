@@ -4,6 +4,7 @@ default: all
 %:
 	$(MAKE) -C append $@
 	$(MAKE) -C connect $@
+	$(MAKE) -C error_message $@
 	$(MAKE) -C expire $@
 	$(MAKE) -C generation $@
 	$(MAKE) -C get $@

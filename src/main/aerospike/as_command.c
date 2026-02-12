@@ -31,6 +31,7 @@
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_digest.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
@@ -1161,6 +1162,95 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	return AEROSPIKE_OK;
 }
 
+static as_status
+as_command_parse_error_details(const uint8_t* buf, uint32_t len, as_error* err)
+{
+	if (err == NULL || buf == NULL || len == 0) {
+		return AEROSPIKE_OK;
+	}
+
+	as_unpacker pk = {
+			.buffer = buf,
+			.offset = 0,
+			.length = len
+	};
+
+	int64_t count = as_unpack_map_header_element_count(&pk);
+
+	if (count <= 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"error details map header invalid");
+	}
+
+	uint64_t subcode = 0;
+	uint32_t message_len = 0;
+
+	for (int64_t i = 0; i < count; i++) {
+		uint64_t key;
+
+		if (as_unpack_uint64(&pk, &key) != 0) {
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+					"error details key unpack failed");
+		}
+
+		switch (key) {
+		case AS_ERROR_DETAIL_KEY_MESSAGE: {
+			uint32_t str_sz = 0;
+			const uint8_t* str = as_unpack_str(&pk, &str_sz);
+
+			if (str == NULL) {
+				if (as_unpack_size(&pk) < 0) {
+					return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+							"error details message unpack failed");
+				}
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+						"error details message type invalid");
+			}
+
+			message_len = str_sz > AS_ERROR_MESSAGE_MAX_LEN ?
+					AS_ERROR_MESSAGE_MAX_LEN : str_sz;
+			memcpy(err->message, str, message_len);
+			err->message[message_len] = 0;
+			continue;
+		}
+		case AS_ERROR_DETAIL_KEY_SUBCODE: {
+			if (as_unpack_uint64(&pk, &subcode) != 0) {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+						"error details subcode unpack failed");
+			}
+
+			// message is full so skip the subcode
+			if (message_len >= AS_ERROR_MESSAGE_MAX_LEN) {
+				break;
+			}
+
+			if (message_len == 0) {
+				snprintf(err->message, sizeof(err->message),
+						"error subcode=%" PRIu64, subcode);
+				message_len = (uint32_t)strnlen(err->message, sizeof(err->message));
+			}
+			else {
+				char subcode_msg[AS_ERROR_MESSAGE_MAX_LEN - message_len + 1];
+				snprintf(subcode_msg, sizeof(subcode_msg),
+						" (subcode=%" PRIu64 ")", subcode);
+				strncat(err->message, subcode_msg,
+						sizeof(err->message) - strlen(err->message));
+			}
+
+			continue;
+		}
+		default:
+			if (as_unpack_size(&pk) < 0) {
+				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+						"error details value unpack failed");
+			}
+			break;
+		}
+	}
+
+	return AEROSPIKE_OK;
+}
+
 as_status
 as_command_parse_fields_txn(
 	uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn, const uint8_t* digest, const char* set,
@@ -1189,10 +1279,10 @@ as_command_parse_fields_txn(
 			}
 		}
 		else if (type == AS_FIELD_ERROR_MESSAGE) {
-			if (err && len > 0) {
-				uint32_t copy_len = len > AS_ERROR_MESSAGE_MAX_LEN ? AS_ERROR_MESSAGE_MAX_LEN : len;
-				memcpy(err->message, p, copy_len);
-				err->message[copy_len] = 0;
+			as_status rc = as_command_parse_error_details(p, len, err);
+
+			if (rc != AEROSPIKE_OK) {
+				return rc;
 			}
 		}
 		p += len;
@@ -1223,9 +1313,11 @@ as_command_parse_fields_error(uint8_t** pp, as_error* err, as_msg* msg)
 		type = *p++;
 
 		if (type == AS_FIELD_ERROR_MESSAGE && err && len > 0) {
-			uint32_t copy_len = len > AS_ERROR_MESSAGE_MAX_LEN ? AS_ERROR_MESSAGE_MAX_LEN : len;
-			memcpy(err->message, p, copy_len);
-			err->message[copy_len] = 0;
+			as_status rc = as_command_parse_error_details(p, len, err);
+
+			if (rc != AEROSPIKE_OK) {
+				return rc;
+			}
 		}
 		p += len;
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -2997,13 +2997,12 @@ as_exp_destroy_base64(char* base64)
  *
  * @param __ctx    Pointer to a CDT context.  This cannot be NULL, nor can
  *                 the context be empty.
- * @param __vtype  Value type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __rtype  Return value type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __flags  Flags (see enum as_exp_path_select_flags).
  * @param __bin    Bin expression this select query is performed against.
  * @return (expression)
  * @ingroup expression
  */
-
 #define as_exp_select_by_path(__ctx, __rtype, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \
@@ -3021,14 +3020,13 @@ as_exp_destroy_base64(char* base64)
  *
  * @param __ctx      Pointer to a CDT context.  This cannot be NULL, nor can
  *                   the context be empty.
- * @param __vtype    Value type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __rtype    Return value type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __mod_exp  Expression to apply.
  * @param __flags    Flags (see enum as_exp_path_modify_flags).
  * @param __bin      Bin expression to which __mod_exp applies to.
  * @return (expression)
  * @ingroup expression
  */
-
 #define as_exp_modify_by_path(__ctx, __rtype, __mod_exp, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \

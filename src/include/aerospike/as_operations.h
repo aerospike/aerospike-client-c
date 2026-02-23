@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -868,7 +868,7 @@ as_operations_add_delete(as_operations* ops);
  * an error for ctx to be NULL or empty.
  *
  * @relates as_operations
- * @ingroup cdt_operations
+ * @ingroup base_operations
  */
 AS_EXTERN enum as_status_e
 as_operations_select_by_path(
@@ -888,7 +888,7 @@ as_operations_select_by_path(
  * an error for ctx to be NULL or empty.
  *
  * @relates as_operations
- * @ingroup cdt_operations
+ * @ingroup base_operations
  */
 AS_EXTERN enum as_status_e
 as_operations_modify_by_path(

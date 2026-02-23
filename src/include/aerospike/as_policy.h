@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -2212,8 +2212,6 @@ as_policy_admin_copy(const as_policy_admin* src, as_policy_admin* trg)
  *
  * @param p	The policy to initialize.
  * @return	The initialized policy.
- *
- * @relates as_policy_txn_verify
  */
 static inline as_policy_txn_verify*
 as_policy_txn_verify_init(as_policy_txn_verify* p)
@@ -2245,8 +2243,6 @@ as_policy_txn_verify_init(as_policy_txn_verify* p)
  *
  * @param src	The source policy.
  * @param trg	The target policy.
- *
- * @relates as_policy_txn_verify
  */
 static inline void
 as_policy_txn_verify_copy(const as_policy_txn_verify* src, as_policy_txn_verify* trg)
@@ -2259,8 +2255,6 @@ as_policy_txn_verify_copy(const as_policy_txn_verify* src, as_policy_txn_verify*
  *
  * @param p	The policy to initialize.
  * @return	The initialized policy.
- *
- * @relates as_policy_txn_roll_
  */
 static inline as_policy_txn_roll*
 as_policy_txn_roll_init(as_policy_txn_roll* p)
@@ -2292,8 +2286,6 @@ as_policy_txn_roll_init(as_policy_txn_roll* p)
  *
  * @param src	The source policy.
  * @param trg	The target policy.
- *
- * @relates as_policy_txn_roll
  */
 static inline void
 as_policy_txn_roll_copy(const as_policy_txn_roll* src, as_policy_txn_roll* trg)

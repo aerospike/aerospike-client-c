@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -333,7 +333,7 @@ as_ev_read(as_event_command* cmd)
 			if (bytes < 0) {
 				int e = as_last_error();
 
-				if (e == EWOULDBLOCK) {
+				if (e == AS_WOULDBLOCK) {
 					as_ev_watch_read(cmd);
 					return AS_EVENT_READ_INCOMPLETE;
 				}

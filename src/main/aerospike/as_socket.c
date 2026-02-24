@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -294,7 +294,7 @@ as_socket_validate_fd(as_socket_fd fd)
 
 	if (rv < 0) {
 		// Return zero if valid and no data available.
-		return (errno == EWOULDBLOCK || errno == EAGAIN) ? 0 : -1;
+		return (errno == AS_WOULDBLOCK || errno == EAGAIN) ? 0 : -1;
 	}
 
 	// Return size of data available if peek succeeded.
@@ -576,7 +576,7 @@ as_socket_read_non_blocking(as_socket* sock, uint8_t* buf, size_t buf_len)
 			return -1;
 		}
 		else {
-			return (errno == EWOULDBLOCK || errno == EAGAIN) ? (int)pos : -1;
+			return (errno == AS_WOULDBLOCK || errno == EAGAIN) ? (int)pos : -1;
 		}
 	} while (pos < buf_len);
 

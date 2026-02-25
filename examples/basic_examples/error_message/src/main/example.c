@@ -27,6 +27,7 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
@@ -41,6 +42,31 @@
 //==========================================================
 // Error Message Example
 //
+
+static bool
+assert_error_details(const as_error* err, as_status expected_status,
+		const char* expected_text, const char* expected_subcode)
+{
+	if (err->code != expected_status) {
+		LOG("unexpected status: got %d expected %d (%s)",
+				err->code, expected_status, err->message);
+		return false;
+	}
+
+	if (expected_text != NULL && strstr(err->message, expected_text) == NULL) {
+		LOG("error text mismatch: expected substring '%s' in '%s'",
+				expected_text, err->message);
+		return false;
+	}
+
+	if (expected_subcode != NULL && strstr(err->message, expected_subcode) == NULL) {
+		LOG("error subcode mismatch: expected '%s' in '%s'",
+				expected_subcode, err->message);
+		return false;
+	}
+
+	return true;
+}
 
 int
 main(int argc, char* argv[])
@@ -98,6 +124,35 @@ main(int argc, char* argv[])
 	}
 
 	LOG("operate failed as expected: %d - %s", err.code, err.message);
+
+	if (! assert_error_details(&err, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE,
+			"append failed on bin", "subcode=1100")) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	// Remove with wrong generation to trigger a granular delete error detail.
+	as_policy_remove rm_policy;
+	as_policy_remove_init(&rm_policy);
+	rm_policy.base.respond_error_message = true;
+	rm_policy.gen = AS_POLICY_GEN_EQ;
+	rm_policy.generation = 777;
+
+	status = aerospike_key_remove(&as, &err, &rm_policy, &key);
+
+	if (status == AEROSPIKE_OK) {
+		LOG("unexpected success on generation-mismatch delete");
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("remove failed as expected: %d - %s", err.code, err.message);
+
+	if (! assert_error_details(&err, AEROSPIKE_ERR_RECORD_GENERATION,
+			"delete generation mismatch", "subcode=1701")) {
+		example_cleanup(&as);
+		exit(-1);
+	}
 
 	// Cleanup and disconnect from the database cluster.
 	example_cleanup(&as);

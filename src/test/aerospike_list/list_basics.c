@@ -3746,7 +3746,7 @@ TEST(list_apply_remove, "test select apply remove")
 	as_cdt_ctx_add_all_children_with_filter(&ctx, price_check_exp);
 
 	as_exp_build(exp,
-		as_exp_result_remove());
+		as_exp_remove_result());
 	assert_not_null(exp);
 
 	as_operations ops;
@@ -3853,7 +3853,7 @@ TEST(list_apply_remove2, "test select apply remove 2")
 	as_cdt_ctx_add_all_children_with_filter(&ctx, price_check_exp);
 
 	as_exp_build(exp,
-		as_exp_result_remove());
+		as_exp_remove_result());
 	assert_not_null(exp);
 
 	as_operations ops;

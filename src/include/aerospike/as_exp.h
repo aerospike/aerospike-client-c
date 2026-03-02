@@ -127,7 +127,6 @@ typedef enum {
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
 	_AS_EXP_CODE_REMOVE_RESULT = 100,
-	_AS_EXP_CODE_RESULT_REMOVE = 100,	// deprecated
 
 	_AS_EXP_CODE_LOOPVAR = 122,
 

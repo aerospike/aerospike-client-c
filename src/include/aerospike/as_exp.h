@@ -126,7 +126,7 @@ typedef enum {
 	_AS_EXP_CODE_BIN = 81,
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
-	_AS_EXP_CODE_RESULT_REMOVE = 100,
+	_AS_EXP_CODE_REMOVE_RESULT = 100,
 
 	_AS_EXP_CODE_LOOPVAR = 122,
 
@@ -1754,11 +1754,21 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, HLL)
 
 /**
- * Return a result_remove object to indicate entry deletion for cdt_apply.
- * @return the result_remove value.
+ * Return a remove_result object to indicate entry deletion for cdt_apply.
+ * @return the remove_result value.
  * @ingroup expression
  */
-#define as_exp_result_remove() {.op=_AS_EXP_CODE_RESULT_REMOVE, .count=1}
+#define as_exp_remove_result() {.op=_AS_EXP_CODE_REMOVE_RESULT, .count=1}
+
+/**
+ * Return a remove_result object to indicate entry deletion for cdt_apply.
+ * This name is deprecated; please use as_exp_remove_result() going forward.
+ *
+ * @return the remove_result value.
+ * @ingroup expression
+ * @see as_exp_remove_result()
+ */
+#define as_exp_result_remove() as_exp_remove_result()
 
 //---------------------------------
 // List Modify Expressions

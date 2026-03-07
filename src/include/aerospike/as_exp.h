@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -1774,11 +1774,21 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, HLL)
 
 /**
- * Return a result_remove object to indicate entry deletion for cdt_apply.
- * @return the result_remove value.
+ * Return a remove_result object to indicate entry deletion for cdt_apply.
+ * @return the remove_result value.
  * @ingroup expression
  */
-#define as_exp_result_remove() {.op=_AS_EXP_CODE_RESULT_REMOVE, .count=1}
+#define as_exp_remove_result() {.op=_AS_EXP_CODE_REMOVE_RESULT, .count=1}
+
+/**
+ * Return a remove_result object to indicate entry deletion for cdt_apply.
+ * This name is deprecated; please use as_exp_remove_result() going forward.
+ *
+ * @return the remove_result value.
+ * @ingroup expression
+ * @see as_exp_remove_result()
+ */
+#define as_exp_result_remove() as_exp_remove_result()
 
 //---------------------------------
 // List Modify Expressions
@@ -3049,13 +3059,12 @@ as_exp_destroy_base64(char* base64)
  *
  * @param __ctx    Pointer to a CDT context.  This cannot be NULL, nor can
  *                 the context be empty.
- * @param __vtype  Value type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __rtype  Return value type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __flags  Flags (see enum as_exp_path_select_flags).
  * @param __bin    Bin expression this select query is performed against.
  * @return (expression)
  * @ingroup expression
  */
-
 #define as_exp_select_by_path(__ctx, __rtype, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \
@@ -3073,14 +3082,13 @@ as_exp_destroy_base64(char* base64)
  *
  * @param __ctx      Pointer to a CDT context.  This cannot be NULL, nor can
  *                   the context be empty.
- * @param __vtype    Value type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __rtype    Return value type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __mod_exp  Expression to apply.
  * @param __flags    Flags (see enum as_exp_path_modify_flags).
  * @param __bin      Bin expression to which __mod_exp applies to.
  * @return (expression)
  * @ingroup expression
  */
-
 #define as_exp_modify_by_path(__ctx, __rtype, __mod_exp, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \

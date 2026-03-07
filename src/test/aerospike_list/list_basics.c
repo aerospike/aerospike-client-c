@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -3693,7 +3693,7 @@ TEST(list_apply_remove, "test select apply remove")
 
 	struct {
 		const char* title;
-		float price;
+		double price;
 	} table[] = {
 			{"Sayings of the Century", 8.95},
 			{"Sword of Honour", 12.99},
@@ -3746,7 +3746,7 @@ TEST(list_apply_remove, "test select apply remove")
 	as_cdt_ctx_add_all_children_with_filter(&ctx, price_check_exp);
 
 	as_exp_build(exp,
-		as_exp_result_remove());
+		as_exp_remove_result());
 	assert_not_null(exp);
 
 	as_operations ops;
@@ -3795,7 +3795,7 @@ TEST(list_apply_remove2, "test select apply remove 2")
 
 	struct {
 		const char* title;
-		float price;
+		double price;
 	} table[] = {
 			{"Sayings of the Century", 8.95},
 			{"Sword of Honour", 12.99},
@@ -3853,7 +3853,7 @@ TEST(list_apply_remove2, "test select apply remove 2")
 	as_cdt_ctx_add_all_children_with_filter(&ctx, price_check_exp);
 
 	as_exp_build(exp,
-		as_exp_result_remove());
+		as_exp_remove_result());
 	assert_not_null(exp);
 
 	as_operations ops;

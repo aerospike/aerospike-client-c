@@ -76,6 +76,7 @@ typedef enum {
 
 	_AS_EXP_CODE_CMP_REGEX = 7,
 	_AS_EXP_CODE_CMP_GEO = 8,
+	_AS_EXP_CODE_IN_LIST = 9,
 
 	_AS_EXP_CODE_AND = 16,
 	_AS_EXP_CODE_OR = 17,
@@ -127,6 +128,8 @@ typedef enum {
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
 	_AS_EXP_CODE_RESULT_REMOVE = 100,
+	_AS_EXP_CODE_MAP_KEYS = 101,
+	_AS_EXP_CODE_MAP_VALUES = 102,
 
 	_AS_EXP_CODE_LOOPVAR = 122,
 
@@ -986,6 +989,23 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_cmp_geo(__left, __right) \
 		{.op=_AS_EXP_CODE_CMP_GEO, .count=3}, __left, __right
+
+/**
+ * Create expression that checks if a value is contained in a list.
+ *
+ * @code
+ * // Check if integer 42 is in list bin "mylist".
+ * as_exp_build(expression,
+ *     as_exp_in_list(as_exp_int(42), as_exp_bin_list("mylist")));
+ * @endcode
+ *
+ * @param __value			value expression to search for.
+ * @param __list			list expression to search in.
+ * @return (boolean value)
+ * @ingroup expression
+ */
+#define as_exp_in_list(__value, __list) \
+		{.op=_AS_EXP_CODE_IN_LIST, .count=3}, __value, __list
 
 //---------------------------------
 // Logical Expressions
@@ -2655,6 +2675,38 @@ as_exp_destroy_base64(char* base64)
 		as_exp_int(__rtype), \
 		__rank, __count, \
 		__bin
+
+/**
+ * Create expression that returns a list of all keys from a map expression.
+ *
+ * @code
+ * // Get keys from map bin "mymap".
+ * as_exp_build(expression,
+ *     as_exp_map_keys(as_exp_bin_map("mymap")));
+ * @endcode
+ *
+ * @param __map				map expression.
+ * @return (list value)
+ * @ingroup expression
+ */
+#define as_exp_map_keys(__map) \
+		{.op=_AS_EXP_CODE_MAP_KEYS, .count=2}, __map
+
+/**
+ * Create expression that returns a list of all values from a map expression.
+ *
+ * @code
+ * // Get values from map bin "mymap".
+ * as_exp_build(expression,
+ *     as_exp_map_values(as_exp_bin_map("mymap")));
+ * @endcode
+ *
+ * @param __map				map expression.
+ * @return (list value)
+ * @ingroup expression
+ */
+#define as_exp_map_values(__map) \
+		{.op=_AS_EXP_CODE_MAP_VALUES, .count=2}, __map
 
 //---------------------------------
 // Map Read Expressions

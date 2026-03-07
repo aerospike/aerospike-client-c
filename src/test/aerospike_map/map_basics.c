@@ -4167,6 +4167,134 @@ test_dump_record(rec, true);
 }
 
 
+TEST(map_exp_keys_values, "Map Keys/Values Expression")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 40);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_hashmap map;
+	as_hashmap_init(&map, 4);
+	as_hashmap_set(&map, (as_val*)as_integer_new(1), (as_val*)as_string_new("a", false));
+	as_hashmap_set(&map, (as_val*)as_integer_new(2), (as_val*)as_string_new("b", false));
+	as_hashmap_set(&map, (as_val*)as_integer_new(3), (as_val*)as_string_new("c", false));
+
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&map);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// map_keys returns a list — verify its size is 3.
+	as_exp_build(filter_keys,
+		as_exp_cmp_eq(
+			as_exp_list_size(NULL,
+				as_exp_map_keys(as_exp_bin_map(BIN_NAME))),
+			as_exp_int(3)));
+	assert_not_null(filter_keys);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter_keys;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter_keys);
+
+	// map_values returns a list — check that in_list finds "b" in the values.
+	as_exp_build(filter_vals,
+		as_exp_in_list(
+			as_exp_str("b"),
+			as_exp_map_values(as_exp_bin_map(BIN_NAME))));
+	assert_not_null(filter_vals);
+
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter_vals;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter_vals);
+
+	// in_list should return false for a value not in the map values.
+	as_exp_build(filter_not_found,
+		as_exp_in_list(
+			as_exp_str("z"),
+			as_exp_map_values(as_exp_bin_map(BIN_NAME))));
+	assert_not_null(filter_not_found);
+
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter_not_found;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+	as_exp_destroy(filter_not_found);
+}
+
+TEST(map_exp_in_list_keys, "Map In List with Keys Expression")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 41);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_hashmap map;
+	as_hashmap_init(&map, 4);
+	as_hashmap_set(&map, (as_val*)as_integer_new(10), (as_val*)as_string_new("x", false));
+	as_hashmap_set(&map, (as_val*)as_integer_new(20), (as_val*)as_string_new("y", false));
+	as_hashmap_set(&map, (as_val*)as_integer_new(30), (as_val*)as_string_new("z", false));
+
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, (as_map*)&map);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// in_list(20, map_keys(bin)) should match.
+	as_exp_build(filter_found,
+		as_exp_in_list(
+			as_exp_int(20),
+			as_exp_map_keys(as_exp_bin_map(BIN_NAME))));
+	assert_not_null(filter_found);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter_found;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter_found);
+
+	// in_list(99, map_keys(bin)) should not match.
+	as_exp_build(filter_missing,
+		as_exp_in_list(
+			as_exp_int(99),
+			as_exp_map_keys(as_exp_bin_map(BIN_NAME))));
+	assert_not_null(filter_missing);
+
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter_missing;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+	as_exp_destroy(filter_missing);
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -4211,4 +4339,6 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_select_null);
 	suite_add(map_key_in_list_select);
 	suite_add(map_key_in_list_modify);
+	suite_add(map_exp_keys_values);
+	suite_add(map_exp_in_list_keys);
 }

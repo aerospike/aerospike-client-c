@@ -3939,6 +3939,111 @@ TEST(list_select_tree, "test select tree")
 }
 
 
+TEST(list_exp_in_list, "In List Expression")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 230);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist list;
+	as_arraylist_init(&list, 5, 0);
+	as_arraylist_append_int64(&list, 10);
+	as_arraylist_append_int64(&list, 20);
+	as_arraylist_append_int64(&list, 30);
+	as_arraylist_append_int64(&list, 40);
+	as_arraylist_append_int64(&list, 50);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&list);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// in_list(30, bin) should match.
+	as_exp_build(filter_found,
+		as_exp_in_list(as_exp_int(30), as_exp_bin_list(BIN_NAME)));
+	assert_not_null(filter_found);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter_found;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter_found);
+
+	// in_list(99, bin) should not match.
+	as_exp_build(filter_missing,
+		as_exp_in_list(as_exp_int(99), as_exp_bin_list(BIN_NAME)));
+	assert_not_null(filter_missing);
+
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter_missing;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+	as_exp_destroy(filter_missing);
+}
+
+TEST(list_exp_in_list_str, "In List String Expression")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 231);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist list;
+	as_arraylist_init(&list, 3, 0);
+	as_arraylist_append_str(&list, "alpha");
+	as_arraylist_append_str(&list, "beta");
+	as_arraylist_append_str(&list, "gamma");
+
+	as_record* rec = as_record_new(1);
+	as_record_set_list(rec, BIN_NAME, (as_list*)&list);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// in_list("beta", bin) should match.
+	as_exp_build(filter_found,
+		as_exp_in_list(as_exp_str("beta"), as_exp_bin_list(BIN_NAME)));
+	assert_not_null(filter_found);
+
+	as_policy_read p;
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter_found;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+	as_exp_destroy(filter_found);
+
+	// in_list("delta", bin) should not match.
+	as_exp_build(filter_missing,
+		as_exp_in_list(as_exp_str("delta"), as_exp_bin_list(BIN_NAME)));
+	assert_not_null(filter_missing);
+
+	as_policy_read_init(&p);
+	p.base.filter_exp = filter_missing;
+
+	status = aerospike_key_get(as, &err, &p, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
+	as_exp_destroy(filter_missing);
+}
+
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -3987,4 +4092,7 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_apply_remove);
 	suite_add(list_apply_remove2);
 	suite_add(list_select_tree);
+
+	suite_add(list_exp_in_list);
+	suite_add(list_exp_in_list_str);
 }

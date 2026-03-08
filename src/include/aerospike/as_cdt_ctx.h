@@ -47,7 +47,8 @@ typedef enum {
 	AS_CDT_CTX_MAP_RANK = 0x21,
 	AS_CDT_CTX_MAP_KEY = 0x22,
 	AS_CDT_CTX_MAP_VALUE = 0x23,
-	AS_CDT_CTX_MAP_KEY_IN_LIST = 0x2a
+	AS_CDT_CTX_MAP_KEY_IN_LIST = 0x2a,
+	AS_CDT_CTX_AND = 0x200
 } as_cdt_ctx_type;
 
 /**
@@ -375,6 +376,17 @@ as_cdt_ctx_add_all_children(as_cdt_ctx* ctx);
  */
 AS_EXTERN void
 as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const struct as_exp* exp);
+
+/**
+ * Apply an additional expression filter at the same container level as the
+ * preceding context entry.  The preceding entry must not be an EXP type.
+ * The ctx does NOT take ownership of exp.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_same_level_filter(as_cdt_ctx* ctx, const struct as_exp* exp);
 
 /**
  * Return exact serialized size of ctx. Return zero on error.

@@ -1778,7 +1778,7 @@ as_exp_destroy_base64(char* base64)
  * @return the remove_result value.
  * @ingroup expression
  */
-#define as_exp_remove_result() {.op=_AS_EXP_CODE_REMOVE_RESULT, .count=1}
+#define as_exp_remove_result() {.op=_AS_EXP_CODE_RESULT_REMOVE, .count=1}
 
 /**
  * Return a remove_result object to indicate entry deletion for cdt_apply.

@@ -11,6 +11,7 @@ TEST_AEROSPIKE += aerospike_info/*.c
 TEST_AEROSPIKE += aerospike_key/*.c
 TEST_AEROSPIKE += aerospike_list/*.c
 TEST_AEROSPIKE += aerospike_map/*.c
+TEST_AEROSPIKE += aerospike_cdt/*.c
 TEST_AEROSPIKE += aerospike_query/*.c
 TEST_AEROSPIKE += aerospike_scan/*.c
 TEST_AEROSPIKE += aerospike_udf/*.c

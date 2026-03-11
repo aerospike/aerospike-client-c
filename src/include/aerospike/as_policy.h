@@ -617,11 +617,15 @@ typedef struct as_policy_base_s {
 	bool compress;
 
 	/**
-	 * Request server error message fields in responses.
+	 * Request server error detail fields in responses.
+	 * 0 = disabled (no error details).
+	 * 1 = subcode only.
+	 * 2 = subcode + message.
+	 * 3-7 = reserved for future fields.
 	 *
-	 * Default: false
+	 * Default: 0
 	 */
-	bool respond_error_message;
+	uint8_t error_detail_verbosity;
 } as_policy_base;
 
 /**
@@ -1729,7 +1733,7 @@ as_policy_base_read_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
-	p->respond_error_message = false;
+	p->error_detail_verbosity = 0;
 }
 
 /**
@@ -1747,7 +1751,7 @@ as_policy_base_write_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
-	p->respond_error_message = false;
+	p->error_detail_verbosity = 0;
 }
 
 /**
@@ -1778,7 +1782,7 @@ as_policy_base_query_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
-	p->respond_error_message = false;
+	p->error_detail_verbosity = 0;
 }
 
 /**

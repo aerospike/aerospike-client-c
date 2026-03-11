@@ -166,7 +166,7 @@ as_command_key_size(
 		tdata->n_fields++;
 	}
 
-	if (policy->respond_error_message) {
+	if (policy->error_detail_verbosity > 0) {
 		size += AS_FIELD_HEADER_SIZE + sizeof(uint32_t);
 		tdata->n_fields++;
 	}
@@ -450,9 +450,9 @@ as_command_write_key(
 		p = as_command_write_user_key(p, key);
 	}
 
-	if (policy->respond_error_message) {
+	if (policy->error_detail_verbosity > 0) {
 		p = as_command_write_field_uint32(p, AS_FIELD_CLIENT_FEATURES,
-				AS_CLIENT_FEATURE_ERROR_MESSAGE);
+				(uint32_t)policy->error_detail_verbosity);
 	}
 	return p;
 }

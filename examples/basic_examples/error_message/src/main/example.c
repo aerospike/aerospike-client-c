@@ -31,7 +31,9 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/as_arraylist.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_hll_operations.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
@@ -91,7 +93,7 @@ main(int argc, char* argv[])
 
 	as_policy_write policy;
 	as_policy_write_init(&policy);
-	policy.base.respond_error_message = true;
+	policy.base.error_detail_verbosity = 2;
 
 	as_error err;
 	as_status status = aerospike_key_put(&as, &err, &policy, &key, &rec);
@@ -112,7 +114,7 @@ main(int argc, char* argv[])
 
 	as_policy_operate op_policy;
 	as_policy_operate_init(&op_policy);
-	op_policy.base.respond_error_message = true;
+	op_policy.base.error_detail_verbosity = 2;
 
 	status = aerospike_key_operate(&as, &err, &op_policy, &key, &ops, NULL);
 	as_operations_destroy(&ops);
@@ -134,7 +136,7 @@ main(int argc, char* argv[])
 	// Remove with wrong generation to trigger a granular delete error detail.
 	as_policy_remove rm_policy;
 	as_policy_remove_init(&rm_policy);
-	rm_policy.base.respond_error_message = true;
+	rm_policy.base.error_detail_verbosity = 2;
 	rm_policy.gen = AS_POLICY_GEN_EQ;
 	rm_policy.generation = 777;
 
@@ -150,6 +152,117 @@ main(int argc, char* argv[])
 
 	if (! assert_error_details(&err, AEROSPIKE_ERR_RECORD_GENERATION,
 			"delete generation mismatch", "subcode=1701")) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	//--------------------------------------------------------------
+	// Test: incr on a string bin (particle modify type mismatch).
+	//--------------------------------------------------------------
+
+	as_key key2;
+	as_key_init(&key2, g_namespace, g_set, "error-message-key-2");
+
+	as_record rec2;
+	as_record_inita(&rec2, 1);
+	as_record_set_str(&rec2, bin_name, "hello");
+
+	status = aerospike_key_put(&as, &err, &policy, &key2, &rec2);
+
+	if (status != AEROSPIKE_OK) {
+		LOG("setup write failed: %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	as_operations ops2;
+	as_operations_inita(&ops2, 1);
+	as_operations_add_incr(&ops2, bin_name, 1);
+
+	status = aerospike_key_operate(&as, &err, &op_policy, &key2, &ops2, NULL);
+	as_operations_destroy(&ops2);
+
+	if (status == AEROSPIKE_OK) {
+		LOG("unexpected success on incr of string bin");
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("incr-on-string failed as expected: %d - %s", err.code, err.message);
+
+	if (! assert_error_details(&err, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE,
+			"incr failed on bin", "subcode=1100")) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	//--------------------------------------------------------------
+	// Test: HLL add on an integer bin (hll_verify_bin type mismatch).
+	//--------------------------------------------------------------
+
+	as_operations ops3;
+	as_operations_inita(&ops3, 1);
+
+	as_arraylist hll_list;
+	as_arraylist_init(&hll_list, 1, 0);
+	as_arraylist_append_str(&hll_list, "element1");
+
+	as_operations_hll_add(&ops3, bin_name, NULL, NULL,
+			(as_list*)&hll_list, 8);
+
+	status = aerospike_key_operate(&as, &err, &op_policy, &key, &ops3, NULL);
+	as_operations_destroy(&ops3);
+
+	if (status == AEROSPIKE_OK) {
+		LOG("unexpected success on hll add to integer bin");
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("hll-on-integer failed as expected: %d - %s", err.code, err.message);
+
+	if (! assert_error_details(&err, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE,
+			"bin is not hll type", "subcode=1138")) {
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	//--------------------------------------------------------------
+	// Test: HLL refresh_count on nonexistent bin (prepare can't create).
+	//--------------------------------------------------------------
+
+	as_key key3;
+	as_key_init(&key3, g_namespace, g_set, "error-message-key-3");
+
+	as_record rec3;
+	as_record_inita(&rec3, 1);
+	as_record_set_int64(&rec3, "other-bin", 1);
+
+	status = aerospike_key_put(&as, &err, &policy, &key3, &rec3);
+
+	if (status != AEROSPIKE_OK) {
+		LOG("setup write failed: %d - %s", err.code, err.message);
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	as_operations ops4;
+	as_operations_inita(&ops4, 1);
+	as_operations_hll_refresh_count(&ops4, "nonexistent-hll-bin", NULL);
+
+	status = aerospike_key_operate(&as, &err, &op_policy, &key3, &ops4, NULL);
+	as_operations_destroy(&ops4);
+
+	if (status == AEROSPIKE_OK) {
+		LOG("unexpected success on hll refresh_count of nonexistent bin");
+		example_cleanup(&as);
+		exit(-1);
+	}
+
+	LOG("hll-refresh-count-nonexistent failed as expected: %d - %s", err.code, err.message);
+
+	if (! assert_error_details(&err, AEROSPIKE_ERR_BIN_NOT_FOUND,
+			"hll_refresh_count: cannot create bin with count op", "subcode=1134")) {
 		example_cleanup(&as);
 		exit(-1);
 	}

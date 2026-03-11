@@ -72,7 +72,8 @@ extern "C" {
 #define AS_FIELD_ERROR_MESSAGE 45 // msgpack map payload
 
 // Client features bitmask values.
-#define AS_CLIENT_FEATURE_ERROR_MESSAGE (1 << 0)
+// Bits 0-2: error detail verbosity (0 = off, 1 = subcode, 2 = subcode+message).
+#define AS_CLIENT_FEATURE_ERROR_VERBOSITY_MASK 0x07
 
 // Error detail map keys (keep these as single-byte integers).
 #define AS_ERROR_DETAIL_KEY_MESSAGE 1

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -126,7 +126,7 @@ typedef enum {
 	_AS_EXP_CODE_BIN = 81,
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
-	_AS_EXP_CODE_RESULT_REMOVE = 100,
+	_AS_EXP_CODE_REMOVE_RESULT = 100,
 
 	_AS_EXP_CODE_LOOPVAR = 122,
 
@@ -1673,7 +1673,7 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, MAP)
 
 /**
- * Retrieve expression value from a built-in variable.
+ * Retrieve expression value from a path expression loop variable.
  * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression
@@ -1682,7 +1682,7 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, LIST)
 
 /**
- * Retrieve expression value from a built-in variable.
+ * Retrieve expression value from a path expression loop variable.
  * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression
@@ -1691,7 +1691,7 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, STR)
 
 /**
- * Retrieve expression value from a built-in variable.
+ * Retrieve expression value from a path expression loop variable.
  * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression
@@ -1700,7 +1700,7 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, INT)
 
 /**
- * Retrieve expression value from a built-in variable.
+ * Retrieve expression value from a path expression loop variable.
  * @param __var_id		Variable id.
  * @return value stored in variable.
  * @ingroup expression
@@ -1727,11 +1727,48 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, BOOL)
 
 /**
- * Return a result_remove object to indicate entry deletion for cdt_apply.
- * @return the result_remove value.
+ * Retrieve expression value from a path expression loop variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
  * @ingroup expression
  */
-#define as_exp_result_remove() {.op=_AS_EXP_CODE_RESULT_REMOVE, .count=1}
+#define as_exp_loopvar_nil(__var_id) \
+		_as_exp_loopvar_make(__var_id, NIL)
+
+/**
+ * Retrieve expression value from a path expression loop variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_loopvar_geojson(__var_id) \
+		_as_exp_loopvar_make(__var_id, GEOJSON)
+
+/**
+ * Retrieve expression value from a path expression loop variable.
+ * @param __var_id		Variable id.
+ * @return value stored in variable.
+ * @ingroup expression
+ */
+#define as_exp_loopvar_hll(__var_id) \
+		_as_exp_loopvar_make(__var_id, HLL)
+
+/**
+ * Return a remove_result object to indicate entry deletion for cdt_apply.
+ * @return the remove_result value.
+ * @ingroup expression
+ */
+#define as_exp_remove_result() {.op=_AS_EXP_CODE_REMOVE_RESULT, .count=1}
+
+/**
+ * Return a remove_result object to indicate entry deletion for cdt_apply.
+ * This name is deprecated; please use as_exp_remove_result() going forward.
+ *
+ * @return the remove_result value.
+ * @ingroup expression
+ * @see as_exp_remove_result()
+ */
+#define as_exp_result_remove() as_exp_remove_result()
 
 //---------------------------------
 // List Modify Expressions
@@ -2965,16 +3002,18 @@ as_exp_destroy_base64(char* base64)
 //---------------------------------
 
 /**
- * Constructs a CDT select operation.  This is used to retrieve a number of
+ * Constructs a select by path operation.  This is used to retrieve a number of
  * records or fields of records, including those of structured types.
  *
- * @param Pointer to a CDT context.
- * @param Return type specifier (e.g., AS_EXP_TYPE_MAP).
- * @param Flags.
- * @param Bin to which the query applies.
+ * @param __ctx    Pointer to a CDT context.  This cannot be NULL, nor can
+ *                 the context be empty.
+ * @param __rtype  Return value type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __flags  Flags (see enum as_exp_path_select_flags).
+ * @param __bin    Bin expression this select query is performed against.
+ * @return (expression)
+ * @ingroup expression
  */
-
-#define as_exp_cdt_select(__ctx, __rtype, __flags, __bin) \
+#define as_exp_select_by_path(__ctx, __rtype, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \
 		as_exp_int(_AS_EXP_SYS_CALL_CDT), \
@@ -2984,17 +3023,21 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Constructs a CDT apply operation.  This can be used to perform in-place
- * updates to bins across a number of records or fields of records.
+ * Constructs an apply by path operation.
  *
- * @param Pointer to a CDT context.
- * @param Return type specifier (e.g., AS_EXP_TYPE_MAP).
- * @param Expression to apply.
- * @param Flags.
- * @param Bin to which the application applies.
+ * The results of the evaluation of the modifying expression will replace the
+ * selected map and the changes written back to storage.
+ *
+ * @param __ctx      Pointer to a CDT context.  This cannot be NULL, nor can
+ *                   the context be empty.
+ * @param __rtype    Return value type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __mod_exp  Expression to apply.
+ * @param __flags    Flags (see enum as_exp_path_modify_flags).
+ * @param __bin      Bin expression to which __mod_exp applies to.
+ * @return (expression)
+ * @ingroup expression
  */
-
-#define as_exp_cdt_apply(__ctx, __rtype, __mod_exp, __flags, __bin) \
+#define as_exp_modify_by_path(__ctx, __rtype, __mod_exp, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \
 		as_exp_int(_AS_EXP_SYS_CALL_CDT | _AS_EXP_SYS_FLAG_MODIFY_LOCAL), \

@@ -17,7 +17,9 @@
 #include <aerospike/as_operations.h>
 #include <aerospike/as_bin.h>
 #include <aerospike/as_cdt_internal.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
+#include <aerospike/as_status.h>
 #include <citrusleaf/alloc.h>
 
 #include "_bin.h"
@@ -126,7 +128,7 @@ as_operations_destroy(as_operations* ops)
 		cf_free(ops->binops.entries);
 	}
 
-	// reset values 
+	// reset values
 	ops->binops._free = false;
 	ops->binops.capacity = 0;
 	ops->binops.size = 0;
@@ -281,11 +283,13 @@ as_operations_add_delete(as_operations* ops)
 	return as_binop_append(ops, AS_OPERATOR_DELETE);
 }
 
-bool
-as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, uint32_t flags)
+as_status
+as_operations_select_by_path(
+		as_error* err,
+		as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp_path_select_flags flags)
 {
-	if (ctx == NULL) {
-		return false;
+	if (cdt_ctx_is_empty(ctx)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context is empty");
 	}
 
 	as_packer pk = as_cdt_begin();
@@ -297,14 +301,21 @@ as_operations_cdt_select(as_operations* ops, const char* name, as_cdt_ctx* ctx, 
 	as_pack_uint64(&pk, flags & ~4);
 	as_cdt_end(&pk);
 
-	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_READ);
+	bool added = as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_READ);
+	if (! added) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context didn't add");
+	}
+
+	return AEROSPIKE_OK;
 }
 
-bool
-as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp* mod_exp, uint32_t flags)
+as_status
+as_operations_modify_by_path(
+		as_error* err,
+		as_operations* ops, const char* name, as_cdt_ctx* ctx, as_exp* mod_exp, as_exp_path_modify_flags flags)
 {
-	if (ctx == NULL) {
-		return false;
+	if (cdt_ctx_is_empty(ctx)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context is empty");
 	}
 
 	as_packer pk = as_cdt_begin();
@@ -316,5 +327,10 @@ as_operations_cdt_apply(as_operations* ops, const char* name, as_cdt_ctx* ctx, a
 	as_pack_append(&pk, mod_exp->packed, mod_exp->packed_sz);
 	as_cdt_end(&pk);
 
-	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_MODIFY);
+	bool added = as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_MODIFY);
+	if (! added) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Context packing failed");
+	}
+
+	return AEROSPIKE_OK;
 }

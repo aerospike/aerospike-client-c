@@ -123,18 +123,9 @@ as_node_send_user_agent(as_node* node)
 	}
 
 	as_cluster* cluster = node->cluster;
-	const char* app_id = cluster->app_id;
-
-	if (!app_id) {
-		app_id = cluster->user;
-
-		if (!app_id) {
-			app_id = "not-set";
-		}
-	}
 
 	char agent[512];
-	snprintf(agent, sizeof(agent), "1,%s-%s,%s", aerospike_client_language, aerospike_client_version, app_id);
+	snprintf(agent, sizeof(agent), "1,%s-%s,%s", aerospike_client_language, aerospike_client_version, cluster->app_id);
 
 	uint32_t len = (uint32_t)strlen(agent);
 	uint32_t encoded_len = cf_b64_encoded_len(len);
@@ -707,7 +698,7 @@ as_node_get_connection(
 			else if (++pool_index >= max) {
 				break;
 			}
-			pool = &pool[pool_index];
+			pool = &pools[pool_index];
 		}
 	}
 	// All queues full.

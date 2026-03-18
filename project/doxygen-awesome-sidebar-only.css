@@ -113,4 +113,12 @@ html {
         left: var(--spacing-medium) !important;
         right: auto;
     }
+
+    /* Ensure search box is visible in sidebar-only mode.
+     * --menu-display: none hides all .sm-dox li, including #searchBoxPos2
+     * which contains the search box. Override for the search box container.
+     */
+    #main-menu > li#searchBoxPos2 {
+        display: block !important;
+    }
 }

@@ -1476,6 +1476,17 @@ typedef struct as_policy_query_s {
 	 */
 	bool short_query;
 
+	/**
+	 * When set on a foreground query that uses `as_query.ops` (read operations), the client sets
+	 * the wire-protocol flag so the server returns a result for every operation. This matches
+	 * `as_policy_operate.respond_all_ops` for single-record operate commands.
+	 *
+	 * Ignored when not using `query.ops`, or for background queries.
+	 *
+	 * Default: false
+	 */
+	bool respond_all_ops;
+
 } as_policy_query;
 
 /**
@@ -2129,6 +2140,7 @@ as_policy_query_init(as_policy_query* p)
 	p->fail_on_cluster_change = false;
 	p->deserialize = true;
 	p->short_query = false;
+	p->respond_all_ops = false;
 	return p;
 }
 

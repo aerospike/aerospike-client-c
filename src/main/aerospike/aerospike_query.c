@@ -44,6 +44,55 @@
 
 extern bool as_op_is_write[];
 
+static bool
+as_query_ops_has_write(const as_query* query)
+{
+	if (!query->ops) {
+		return false;
+	}
+	for (uint16_t i = 0; i < query->ops->binops.size; i++) {
+		if (as_op_is_write[query->ops->binops.entries[i].op]) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void
+as_query_foreground_ops_respond_all_write_attr(
+	const as_operations* ops, const as_policy_query* query_policy, uint8_t* write_attr
+	)
+{
+	bool respond_all_ops = false;
+	bool get_all = false;
+
+	for (uint16_t i = 0; i < ops->binops.size; i++) {
+		as_binop* op = &ops->binops.entries[i];
+
+		switch (op->op) {
+			case AS_OPERATOR_MAP_READ:
+			case AS_OPERATOR_EXP_READ:
+			case AS_OPERATOR_BIT_READ:
+			case AS_OPERATOR_HLL_READ:
+				respond_all_ops = true;
+				// Fall through.
+			case AS_OPERATOR_CDT_READ:
+			case AS_OPERATOR_READ:
+				if (op->bin.name[0] == 0) {
+					get_all = true;
+				}
+				break;
+
+			default:
+				break;
+		}
+	}
+
+	if ((respond_all_ops || query_policy->respond_all_ops) && !get_all) {
+		*write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
+	}
+}
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -652,7 +701,8 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 
 static as_status
 as_query_command_size(
-	const as_policy_base* base_policy, const as_query* query, as_query_builder* qb, as_error* err
+	const as_policy_base* base_policy, const as_policy_query* query_policy, const as_query* query,
+	as_query_builder* qb, as_error* err
 	)
 {
 	qb->size = AS_HEADER_SIZE;
@@ -828,20 +878,27 @@ as_query_command_size(
 	qb->n_fields = n_fields;
 	qb->n_ops = 0;
 
-	// Operations (used in background query) and bin names (used in foreground query)
-	// are mutually exclusive.
+	// Operations vs bin names: with ops, projection is encoded as operations (foreground read or
+	// background write). Foreground requires read-only ops; background requires write-only ops.
 	if (query->ops) {
-		// Estimate size for background operations.
 		as_operations* ops = query->ops;
+		bool has_write = as_query_ops_has_write(query);
+
+		if (has_write) {
+			if (query_policy) {
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+					"Write operations require aerospike_query_background()");
+			}
+		}
+		else {
+			if (!query_policy) {
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+					"Read operations require a foreground query (e.g. aerospike_query_foreach())");
+			}
+		}
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
-
-			if (!as_op_is_write[op->op]) {
-				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-					"Read operations not allowed in background query");
-			}
-
 			as_status status = as_command_bin_size(&op->bin, qb->opsbuffers, &qb->size, err);
 
 			if (status != AEROSPIKE_OK) {
@@ -884,6 +941,10 @@ as_query_command_init(
 		}
 		else if (query_policy->expected_duration == AS_QUERY_DURATION_LONG_RELAX_AP) {
 			write_attr |= AS_MSG_INFO2_RELAX_AP_LONG_QUERY;
+		}
+
+		if (query->ops) {
+			as_query_foreground_ops_respond_all_write_attr(query->ops, query_policy, &write_attr);
 		}
 
 		uint8_t info_attr = (qb->is_new || query->where.size == 0)? AS_MSG_INFO3_PARTITION_DONE : 0;
@@ -1225,7 +1286,7 @@ as_query_command_execute_new(as_query_task* task)
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
 
-	as_status status = as_query_command_size(base_policy, task->query, &qb, &err);
+	as_status status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, &err);
 
 	if (status != AEROSPIKE_OK) {
 		if (task->query->ops) {
@@ -1358,7 +1419,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 	// Build Command. It's okay to share command across threads because old query protocol does
 	// not have retries. If retries were allowed, the timeout field in the command would change on
 	// retry which would conflict with other threads.
-	status = as_query_command_size(base_policy, task->query, &qb, task->err);
+	status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, task->err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {
@@ -1825,7 +1886,7 @@ as_query_partition_async(
 	as_query_builder qb;
 	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
 
-	status = as_query_command_size(&policy->base, query, &qb, err);
+	status = as_query_command_size(&policy->base, policy, query, &qb, err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {
@@ -1990,6 +2051,7 @@ as_policy_query_merge(aerospike* as, const as_policy_query* src, as_policy_query
 		mrg->fail_on_cluster_change = src->fail_on_cluster_change;
 		mrg->deserialize = src->deserialize;
 		mrg->short_query = src->short_query;
+		mrg->respond_all_ops = src->respond_all_ops;
 		return mrg;
 	}
 	else {
@@ -2015,8 +2077,14 @@ aerospike_query_foreach(
 	aerospike_query_foreach_callback callback, void* udata)
 {
 	if (query->ops) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"Use aerospike_query_background() for background queries");
+		if (query->apply.function[0]) {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"Cannot combine query operations with aggregation");
+		}
+		if (as_query_ops_has_write(query)) {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"Write operations require aerospike_query_background()");
+		}
 	}
 
 	as_error_reset(err);
@@ -2164,7 +2232,7 @@ aerospike_query_partitions(
 	as_partition_filter* pf, aerospike_query_foreach_callback callback, void* udata
 	)
 {
-	if (query->apply.function[0] || query->ops) {
+	if (query->apply.function[0] || as_query_ops_has_write(query)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
 	}
@@ -2214,7 +2282,7 @@ aerospike_query_async(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop)
 {
-	if (query->apply.function[0] || query->ops) {
+	if (query->apply.function[0] || as_query_ops_has_write(query)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"Async aggregation or background queries are not supported");
 	}
@@ -2223,6 +2291,11 @@ aerospike_query_async(
 
 	as_policy_query merged;
 	policy = as_policy_query_merge(as, policy, &merged);
+
+	if (query->ops && query->apply.function[0]) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Cannot combine query operations with aggregation");
+	}
 	
 	as_cluster* cluster = as->cluster;
 	as_status status;
@@ -2268,7 +2341,7 @@ aerospike_query_async(
 	as_query_builder qb;
 	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
 
-	status = as_query_command_size(&policy->base, query, &qb, err);
+	status = as_query_command_size(&policy->base, policy, query, &qb, err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {
@@ -2395,7 +2468,7 @@ aerospike_query_partitions_async(
 	as_event_loop* event_loop
 	)
 {
-	if (query->apply.function[0] || query->ops) {
+	if (query->apply.function[0] || as_query_ops_has_write(query)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
 	}
@@ -2411,6 +2484,11 @@ aerospike_query_partitions_async(
 
 	as_policy_query merged;
 	policy = as_policy_query_merge(as, policy, &merged);
+
+	if (query->ops && query->apply.function[0]) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"Cannot combine query operations with aggregation");
+	}
 
 	uint32_t n_nodes;
 	as_status status = as_cluster_validate_size(cluster, err, &n_nodes);
@@ -2450,6 +2528,11 @@ aerospike_query_background(
 	if (! (query->apply.function[0] || query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Background function or ops is required");
+	}
+
+	if (query->ops && !as_query_ops_has_write(query)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Foreground read operations require aerospike_query_foreach()");
 	}
 
 	as_cluster* cluster = as->cluster;

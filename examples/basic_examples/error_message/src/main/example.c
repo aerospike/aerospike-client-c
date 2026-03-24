@@ -128,7 +128,7 @@ main(int argc, char* argv[])
 	LOG("operate failed as expected: %d - %s", err.code, err.message);
 
 	if (! assert_error_details(&err, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE,
-			"append failed on bin", "subcode=1100")) {
+			"cannot append", "subcode=1100")) {
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -191,7 +191,7 @@ main(int argc, char* argv[])
 	LOG("incr-on-string failed as expected: %d - %s", err.code, err.message);
 
 	if (! assert_error_details(&err, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE,
-			"incr failed on bin", "subcode=1100")) {
+			"cannot increment", "subcode=1100")) {
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -248,7 +248,7 @@ main(int argc, char* argv[])
 
 	as_operations ops4;
 	as_operations_inita(&ops4, 1);
-	as_operations_hll_refresh_count(&ops4, "nonexistent-hll-bin", NULL);
+	as_operations_hll_refresh_count(&ops4, "no-hll-bin", NULL);
 
 	status = aerospike_key_operate(&as, &err, &op_policy, &key3, &ops4, NULL);
 	as_operations_destroy(&ops4);
@@ -259,7 +259,7 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	LOG("hll-refresh-count-nonexistent failed as expected: %d - %s", err.code, err.message);
+	LOG("hll-refresh-count-no-hll-bin failed as expected: %d - %s", err.code, err.message);
 
 	if (! assert_error_details(&err, AEROSPIKE_ERR_BIN_NOT_FOUND,
 			"hll_refresh_count: cannot create bin with count op", "subcode=1134")) {

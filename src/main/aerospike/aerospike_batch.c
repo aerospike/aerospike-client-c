@@ -69,7 +69,6 @@ typedef struct {
 	uint8_t read_attr; // old batch only
 	// This field is only valid for txn attributes that are fixed for all keys.
 	uint8_t txn_attr;
-	uint8_t verbosity_attr;
 	bool batch_any;
 } as_batch_builder;
 
@@ -1790,7 +1789,6 @@ as_batch_records_write_new(
 					else {
 						as_batch_attr_read_header(&attr, policy);
 					}
-					attr.txn_attr |= bb->verbosity_attr;
 
 					if (br->bin_names) {
 						p = as_batch_write_bin_names(p, &br->key, txn, ver, &attr, attr.filter_exp,
@@ -1835,7 +1833,6 @@ as_batch_records_write_new(
 					}
 
 					as_batch_attr_write(&attr, bw->ops, pbw, send_key, durable_delete);
-					attr.txn_attr |= bb->verbosity_attr;
 					p = as_batch_write_operations(p, &bw->key, txn, ver, &attr, attr.filter_exp, bw->ops,
 						bb->buffers);
 					break;
@@ -1868,7 +1865,6 @@ as_batch_records_write_new(
 					}
 
 					as_batch_attr_apply(&attr, pba, send_key, durable_delete);
-					attr.txn_attr |= bb->verbosity_attr;
 					p = as_batch_write_udf(p, &ba->key, txn, ver, ba, &attr, attr.filter_exp, bb->buffers);
 					break;
 				}
@@ -1900,7 +1896,6 @@ as_batch_records_write_new(
 					}
 
 					as_batch_attr_remove(&attr, pbr, send_key, durable_delete);
-					attr.txn_attr |= bb->verbosity_attr;
 					p = as_batch_write_write(p, &brm->key, txn, ver, &attr, attr.filter_exp, 0, 0);
 					break;
 				}
@@ -2139,7 +2134,6 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 		.txn = btr->base.txn,
 		.versions = btr->base.versions,
 		.txn_attr = btr->base.txn_attr,
-		.verbosity_attr = (uint8_t)(policy->base.error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
@@ -2293,8 +2287,6 @@ as_batch_keys_write_new(
 	as_batch_attr* attr, as_batch_builder* bb, uint8_t* cmd
 	)
 {
-	attr->txn_attr |= bb->verbosity_attr;
-
 	uint32_t n_offsets = offsets->size;
 	uint8_t* p = as_batch_header_write_new(cmd, policy, n_offsets, bb);
 
@@ -2400,7 +2392,6 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 		.txn = btk->base.txn,
 		.versions = btk->base.versions,
 		.txn_attr = btk->base.txn_attr,
-		.verbosity_attr = (uint8_t)(policy->base.error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
@@ -3618,7 +3609,6 @@ as_batch_execute_async(
 		.txn = executor->txn,
 		.versions = executor->versions,
 		.txn_attr = executor->txn_attr,
-		.verbosity_attr = (uint8_t)(policy->base.error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
 	};
 
 	as_status status = AEROSPIKE_OK;

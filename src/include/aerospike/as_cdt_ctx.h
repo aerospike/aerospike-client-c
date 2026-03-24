@@ -28,6 +28,8 @@ extern "C" {
 // Types
 //---------------------------------
 
+typedef struct as_list as_list;
+
 /**
  * Nested CDT context type.
  *
@@ -339,17 +341,24 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
 }
 
 /**
- * Lookup one or more keys in a map.
- * 
+ * Restrict map context to the given list of keys, provided they exist.
+ *
+ * For example, if a map {"A": 1, "B": 2, "C": 3} exists, and you pass
+ * keys ["A", "C", "D"] in as the list of keys, the result will only
+ * include ["A", "C"], since element "D" does not exist in the map.
+ * Observe that the values of the corresponding keys are not returned.
+ *
+ * The ctx list takes ownership of keys.
+ *
  * @relates as_operations
  * @ingroup base_operations
  */
 static inline void
-as_cdt_ctx_add_map_keys_in(as_cdt_ctx* ctx, as_val* keys)
+as_cdt_ctx_add_map_keys_in(as_cdt_ctx* ctx, as_list* keys)
 {
 	as_cdt_ctx_item item;
 	item.type = AS_CDT_CTX_MAP_KEYS_IN;
-	item.val.pval = keys;
+	item.val.pval = (as_val*)keys;
 	as_vector_append(&ctx->list, &item);
 }
 

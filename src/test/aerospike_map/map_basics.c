@@ -2016,7 +2016,7 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	as_cdt_ctx_inita(&ctx, 2);
 	as_string_init(&k2, "key2", false);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)&k2);
-	as_cdt_ctx_add_map_keys_in(&ctx, (as_val*)keys_in);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)keys_in);
 
 	// This list of keys is used by the as_operations_map_get_by_key_list()
 	// function, below.

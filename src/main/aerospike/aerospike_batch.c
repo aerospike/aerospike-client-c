@@ -69,6 +69,7 @@ typedef struct {
 	uint8_t read_attr; // old batch only
 	// This field is only valid for txn attributes that are fixed for all keys.
 	uint8_t txn_attr;
+	uint8_t verbosity_attr;
 	bool batch_any;
 } as_batch_builder;
 
@@ -1023,7 +1024,7 @@ as_batch_txn_size(uint64_t ver, as_batch_builder* bb, bool has_write)
 static as_status
 as_batch_read_record_size(as_batch_read_record* rec, as_batch_builder* bb, as_error* err)
 {
-	bb->size += 4; // read ttl
+	bb->size += 5; // read ttl(4) + info4(1)
 
 	if (rec->bin_names) {
 		for (uint32_t j = 0; j < rec->n_bin_names; j++) {
@@ -1589,10 +1590,19 @@ as_batch_write_read(
 	uint16_t n_ops
 	)
 {
-	*p++ = (BATCH_MSG_INFO | BATCH_MSG_TTL);
-	*p++ = attr->read_attr;
-	*p++ = attr->write_attr;
-	*p++ = attr->info_attr;
+	if (attr->txn_attr) {
+		*p++ = (BATCH_MSG_INFO | BATCH_MSG_TTL | BATCH_MSG_INFO4);
+		*p++ = attr->read_attr;
+		*p++ = attr->write_attr;
+		*p++ = attr->info_attr;
+		*p++ = attr->txn_attr;
+	}
+	else {
+		*p++ = (BATCH_MSG_INFO | BATCH_MSG_TTL);
+		*p++ = attr->read_attr;
+		*p++ = attr->write_attr;
+		*p++ = attr->info_attr;
+	}
 	*(uint32_t*)p = cf_swap_to_be32(attr->ttl);
 	p += sizeof(uint32_t);
 	p = as_batch_write_fields_all(p, key, txn, ver, attr, filter, 0, n_ops);
@@ -1780,6 +1790,7 @@ as_batch_records_write_new(
 					else {
 						as_batch_attr_read_header(&attr, policy);
 					}
+					attr.txn_attr |= bb->verbosity_attr;
 
 					if (br->bin_names) {
 						p = as_batch_write_bin_names(p, &br->key, txn, ver, &attr, attr.filter_exp,
@@ -1824,6 +1835,7 @@ as_batch_records_write_new(
 					}
 
 					as_batch_attr_write(&attr, bw->ops, pbw, send_key, durable_delete);
+					attr.txn_attr |= bb->verbosity_attr;
 					p = as_batch_write_operations(p, &bw->key, txn, ver, &attr, attr.filter_exp, bw->ops,
 						bb->buffers);
 					break;
@@ -1856,6 +1868,7 @@ as_batch_records_write_new(
 					}
 
 					as_batch_attr_apply(&attr, pba, send_key, durable_delete);
+					attr.txn_attr |= bb->verbosity_attr;
 					p = as_batch_write_udf(p, &ba->key, txn, ver, ba, &attr, attr.filter_exp, bb->buffers);
 					break;
 				}
@@ -1887,6 +1900,7 @@ as_batch_records_write_new(
 					}
 
 					as_batch_attr_remove(&attr, pbr, send_key, durable_delete);
+					attr.txn_attr |= bb->verbosity_attr;
 					p = as_batch_write_write(p, &brm->key, txn, ver, &attr, attr.filter_exp, 0, 0);
 					break;
 				}
@@ -2124,7 +2138,8 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 		.buffers = &buffers,
 		.txn = btr->base.txn,
 		.versions = btr->base.versions,
-		.txn_attr = btr->base.txn_attr
+		.txn_attr = btr->base.txn_attr,
+		.verbosity_attr = (uint8_t)(policy->base.error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
@@ -2278,6 +2293,8 @@ as_batch_keys_write_new(
 	as_batch_attr* attr, as_batch_builder* bb, uint8_t* cmd
 	)
 {
+	attr->txn_attr |= bb->verbosity_attr;
+
 	uint32_t n_offsets = offsets->size;
 	uint8_t* p = as_batch_header_write_new(cmd, policy, n_offsets, bb);
 
@@ -2383,6 +2400,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 		.txn = btk->base.txn,
 		.versions = btk->base.versions,
 		.txn_attr = btk->base.txn_attr,
+		.verbosity_attr = (uint8_t)(policy->base.error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
 	};
 
 	as_batch_builder_set_node(&bb, task->node);
@@ -3599,7 +3617,8 @@ as_batch_execute_async(
 		.buffers = &buffers,
 		.txn = executor->txn,
 		.versions = executor->versions,
-		.txn_attr = executor->txn_attr
+		.txn_attr = executor->txn_attr,
+		.verbosity_attr = (uint8_t)(policy->base.error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
 	};
 
 	as_status status = AEROSPIKE_OK;

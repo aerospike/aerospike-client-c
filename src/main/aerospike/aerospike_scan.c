@@ -420,11 +420,6 @@ as_scan_command_size(
 	sb->size += as_command_field_size(sizeof(uint32_t));
 	n_fields++;
 
-	if (policy->base.error_detail_verbosity > 0) {
-		sb->size += as_command_field_size(sizeof(uint32_t));
-		n_fields++;
-	}
-
 	// Estimate taskId size.
 	sb->size += as_command_field_size(8);
 	n_fields++;
@@ -550,11 +545,6 @@ as_scan_command_init(
 
 	// Write socket timeout.
 	p = as_command_write_field_uint32(p, AS_FIELD_SOCKET_TIMEOUT, policy->base.socket_timeout);
-
-	if (policy->base.error_detail_verbosity > 0) {
-		p = as_command_write_field_uint32(p, AS_FIELD_CLIENT_FEATURES,
-				(uint32_t)policy->base.error_detail_verbosity);
-	}
 
 	// Write task_id field.
 	p = as_command_write_field_uint64(p, AS_FIELD_TASK_ID, task_id);

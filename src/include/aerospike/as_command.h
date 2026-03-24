@@ -68,12 +68,11 @@ extern "C" {
 #define AS_FIELD_QUERY_BINS 40
 #define AS_FIELD_BATCH_INDEX 41
 #define AS_FIELD_FILTER 43
-#define AS_FIELD_CLIENT_FEATURES 44
 #define AS_FIELD_ERROR_MESSAGE 45 // msgpack map payload
 
-// Client features bitmask values.
-// Bits 0-2: error detail verbosity (0 = off, 1 = subcode, 2 = subcode+message).
-#define AS_CLIENT_FEATURE_ERROR_VERBOSITY_MASK 0x07
+// info4 bits 5-6: error detail verbosity (0=off, 1=subcode, 2=subcode+message).
+#define AS_MSG_INFO4_ERROR_VERBOSITY_MASK   0x60
+#define AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT  5
 
 // Error detail map keys (keep these as single-byte integers).
 #define AS_ERROR_DETAIL_KEY_MESSAGE 1

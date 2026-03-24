@@ -166,10 +166,6 @@ as_command_key_size(
 		tdata->n_fields++;
 	}
 
-	if (policy->error_detail_verbosity > 0) {
-		size += AS_FIELD_HEADER_SIZE + sizeof(uint32_t);
-		tdata->n_fields++;
-	}
 	return size;
 }
 
@@ -301,6 +297,7 @@ as_command_write_header_write(
 	}
 
 	uint8_t txn_attr = on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
+	txn_attr |= (uint8_t)(policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT);
 
 #if defined USE_XDR
 	read_attr |= AS_MSG_INFO1_XDR;
@@ -335,7 +332,8 @@ as_command_write_header_read(
 	cmd[9] = read_attr;
 	cmd[10] = write_attr;
 	cmd[11] = info_attr;
-	memset(&cmd[12], 0, 6);
+	cmd[12] = (uint8_t)(policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT);
+	memset(&cmd[13], 0, 5);
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
@@ -357,7 +355,8 @@ as_command_write_header_read_header(
 	cmd[9] = read_attr;
 	cmd[10] = 0;
 	cmd[11] = info_attr;
-	memset(&cmd[12], 0, 6);
+	cmd[12] = (uint8_t)(policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT);
+	memset(&cmd[13], 0, 5);
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
 	uint32_t timeout = as_command_server_timeout(policy);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
@@ -450,10 +449,6 @@ as_command_write_key(
 		p = as_command_write_user_key(p, key);
 	}
 
-	if (policy->error_detail_verbosity > 0) {
-		p = as_command_write_field_uint32(p, AS_FIELD_CLIENT_FEATURES,
-				(uint32_t)policy->error_detail_verbosity);
-	}
 	return p;
 }
 

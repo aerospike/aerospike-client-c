@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_cdt_order.h>
+#include <aerospike/as_list.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
 
@@ -28,13 +29,14 @@ extern "C" {
 // Types
 //---------------------------------
 
-typedef struct as_list as_list;
-
 /**
  * Nested CDT context type.
  *
  * Note that AS_CDT_CTX_VALUE is a flag (currently, bit 1) within each of the
  * enumeration variants, indicating which variants are to be considered values.
+ *
+ * AS_CDT_CTX_AND is combined with AS_CDT_CTX_EXP for an additional boolean
+ * filter at the current context level (wire ID 0x0204).
  *
  * @relates as_operations
  * @ingroup base_operations
@@ -55,6 +57,13 @@ typedef enum {
  * Flag indicating whether or not a AS_CDT_CTX_xxx variant is a value.
  */
 #define AS_CDT_CTX_VALUE 0x2
+
+/**
+ * Modifier for expression context items: AND-combine a filter with the
+ * already-narrowed context (see as_cdt_ctx_add_and_filter()).
+ * Wire type is (AS_CDT_CTX_AND | AS_CDT_CTX_EXP) (0x0204).
+ */
+#define AS_CDT_CTX_AND 0x200
 
 /**
  * Nested CDT context level.
@@ -389,6 +398,19 @@ as_cdt_ctx_add_all_children(as_cdt_ctx* ctx);
  */
 AS_EXTERN void
 as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const struct as_exp* exp);
+
+/**
+ * Add a boolean expression filter AND-combined with the current context.
+ *
+ * The ctx does NOT take ownership of exp. Evaluation runs after prior context
+ * steps (e.g. map key-list selection); entries must satisfy both. Multiple
+ * as_cdt_ctx_add_and_filter() calls may be chained.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_and_filter(as_cdt_ctx* ctx, const struct as_exp* exp);
 
 /**
  * Return exact serialized size of ctx. Return zero on error.

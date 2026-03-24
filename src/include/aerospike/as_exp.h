@@ -76,6 +76,7 @@ typedef enum {
 
 	_AS_EXP_CODE_CMP_REGEX = 7,
 	_AS_EXP_CODE_CMP_GEO = 8,
+	_AS_EXP_CODE_IN_LIST = 9,
 
 	_AS_EXP_CODE_AND = 16,
 	_AS_EXP_CODE_OR = 17,
@@ -947,6 +948,29 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_cmp_le(__left, __right) \
 		{.op=_AS_EXP_CODE_CMP_LE, .count=3}, __left, __right
+
+/**
+ * True if the value of @a __left is contained in @a __list (by value).
+ *
+ * @a __left may be any expression. @a __list must be an @c as_list (for example
+ * @c as_arraylist). The list is serialized when the expression is compiled; the
+ * caller retains ownership of @a __list and should destroy it after @c as_exp_build.
+ *
+ * @code
+ * as_arraylist* lst = as_arraylist_new(3, 3);
+ * as_arraylist_append_str(lst, "red");
+ * as_arraylist_append_str(lst, "blue");
+ * as_exp_build(e, as_exp_in_list(as_exp_bin_str("color"), lst));
+ * as_arraylist_destroy(lst);
+ * @endcode
+ *
+ * @param __left	Value expression to test for membership.
+ * @param __list	List of values to search (must not be NULL).
+ * @return (boolean value)
+ * @ingroup expression
+ */
+#define as_exp_in_list(__left, __list) \
+		{.op=_AS_EXP_CODE_IN_LIST, .count=3}, __left, as_exp_val((as_val*)(__list))
 
 /**
  * Create expression that performs a regex match on a string bin or value

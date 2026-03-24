@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/as_arraylist.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_exp_operations.h>
 #include "test.h"
@@ -938,6 +939,120 @@ TEST(exp_select, "exp select and apply")
 	rec = NULL;
 }
 
+TEST(exp_in_list, "as_exp_in_list string and int membership")
+{
+	as_error err;
+	as_status rc;
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 701);
+
+	/* Start from a clean record for this test key. */
+	rc = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(rc == AEROSPIKE_OK || rc == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	/*------------------------------------------------------------------
+	 * Fixture: bins used by the expressions below.
+	 *   "color" -> "blue"
+	 *   "qty"   -> 5
+	 *----------------------------------------------------------------*/
+	as_record rec;
+	as_record_inita(&rec, 2);
+	as_record_set_str(&rec, "color", "blue");
+	as_record_set_int64(&rec, "qty", 5);
+	rc = aerospike_key_put(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(rc, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_operations ops;
+	as_record* oprec = NULL;
+	as_bin* results;
+
+	/*------------------------------------------------------------------
+	 * Case 1: "blue" in ["red", "blue", "green"]  ->  true
+	 *----------------------------------------------------------------*/
+	{
+		as_arraylist* colors = as_arraylist_new(3, 3);
+		assert_not_null(colors);
+		as_arraylist_append_str(colors, "red");
+		as_arraylist_append_str(colors, "blue");
+		as_arraylist_append_str(colors, "green");
+
+		as_exp_build(expr_blue,
+			as_exp_in_list(as_exp_bin_str("color"), colors));
+		assert_not_null(expr_blue);
+		as_arraylist_destroy(colors);
+
+		as_operations_inita(&ops, 1);
+		as_operations_exp_read(&ops, ExpVar, expr_blue, AS_EXP_READ_DEFAULT);
+		oprec = NULL;
+		rc = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &oprec);
+		assert_int_eq(rc, AEROSPIKE_OK);
+		results = oprec->bins.entries;
+		assert_int_eq(as_bin_get_type(&results[0]), AS_BOOLEAN);
+		assert_true(as_bin_get_value(&results[0])->boolean.value);
+		as_record_destroy(oprec);
+		as_operations_destroy(&ops);
+		as_exp_destroy(expr_blue);
+	}
+
+	/*------------------------------------------------------------------
+	 * Case 2: "yellow" in ["red", "blue", "green"]  ->  false
+	 * (LHS is a literal; RHS is the same color list as case 1.)
+	 *----------------------------------------------------------------*/
+	{
+		as_arraylist* colors = as_arraylist_new(3, 3);
+		assert_not_null(colors);
+		as_arraylist_append_str(colors, "red");
+		as_arraylist_append_str(colors, "blue");
+		as_arraylist_append_str(colors, "green");
+
+		as_exp_build(expr_yellow,
+			as_exp_in_list(as_exp_str("yellow"), colors));
+		assert_not_null(expr_yellow);
+		as_arraylist_destroy(colors);
+
+		as_operations_inita(&ops, 1);
+		as_operations_exp_read(&ops, ExpVar, expr_yellow, AS_EXP_READ_DEFAULT);
+		oprec = NULL;
+		rc = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &oprec);
+		assert_int_eq(rc, AEROSPIKE_OK);
+		results = oprec->bins.entries;
+		assert_int_eq(as_bin_get_type(&results[0]), AS_BOOLEAN);
+		assert_false(as_bin_get_value(&results[0])->boolean.value);
+		as_record_destroy(oprec);
+		as_operations_destroy(&ops);
+		as_exp_destroy(expr_yellow);
+	}
+
+	/*------------------------------------------------------------------
+	 * Case 3: 5 in [1, 5, 10]  ->  true
+	 *----------------------------------------------------------------*/
+	{
+		as_arraylist* nums = as_arraylist_new(3, 3);
+		assert_not_null(nums);
+		as_arraylist_append_int64(nums, 1);
+		as_arraylist_append_int64(nums, 5);
+		as_arraylist_append_int64(nums, 10);
+
+		as_exp_build(expr_five,
+			as_exp_in_list(as_exp_bin_int("qty"), nums));
+		assert_not_null(expr_five);
+		as_arraylist_destroy(nums);
+
+		as_operations_inita(&ops, 1);
+		as_operations_exp_read(&ops, ExpVar, expr_five, AS_EXP_READ_DEFAULT);
+		oprec = NULL;
+		rc = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &oprec);
+		assert_int_eq(rc, AEROSPIKE_OK);
+		results = oprec->bins.entries;
+		assert_int_eq(as_bin_get_type(&results[0]), AS_BOOLEAN);
+		assert_true(as_bin_get_value(&results[0])->boolean.value);
+		as_record_destroy(oprec);
+		as_operations_destroy(&ops);
+		as_exp_destroy(expr_five);
+	}
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -958,6 +1073,7 @@ SUITE(exp_operate, "filter expression tests")
 	suite_add(exp_returns_string);
 	suite_add(exp_returns_blob);
 	suite_add(exp_returns_bool);
+	suite_add(exp_in_list);
 	suite_add(exp_returns_hll);
 	suite_add(exp_merge);
 	suite_add(exp_base64);

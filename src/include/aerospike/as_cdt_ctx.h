@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_cdt_order.h>
+#include <aerospike/as_list.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
 
@@ -27,8 +28,6 @@ extern "C" {
 //---------------------------------
 // Types
 //---------------------------------
-
-typedef struct as_list as_list;
 
 /**
  * Nested CDT context type.

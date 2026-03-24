@@ -75,8 +75,8 @@ extern "C" {
 #define AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT  5
 
 // Error detail map keys (keep these as single-byte integers).
-#define AS_ERROR_DETAIL_KEY_MESSAGE 1
-#define AS_ERROR_DETAIL_KEY_SUBCODE 2
+#define AS_ERROR_DETAIL_KEY_SUBCODE 1
+#define AS_ERROR_DETAIL_KEY_MESSAGE 2
 
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation

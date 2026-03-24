@@ -45,7 +45,8 @@ typedef enum {
 	AS_CDT_CTX_MAP_INDEX = 0x20,
 	AS_CDT_CTX_MAP_RANK = 0x21,
 	AS_CDT_CTX_MAP_KEY = 0x22,
-	AS_CDT_CTX_MAP_VALUE = 0x23
+	AS_CDT_CTX_MAP_VALUE = 0x23,
+	AS_CDT_CTX_MAP_KEYS_IN = 0x2A,
 } as_cdt_ctx_type;
 
 /**
@@ -334,6 +335,21 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
 	as_cdt_ctx_item item;
 	item.type = AS_CDT_CTX_MAP_VALUE;
 	item.val.pval = val;
+	as_vector_append(&ctx->list, &item);
+}
+
+/**
+ * Lookup one or more keys in a map.
+ * 
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+static inline void
+as_cdt_ctx_add_map_keys_in(as_cdt_ctx* ctx, as_val* keys)
+{
+	as_cdt_ctx_item item;
+	item.type = AS_CDT_CTX_MAP_KEYS_IN;
+	item.val.pval = keys;
 	as_vector_append(&ctx->list, &item);
 }
 

@@ -1941,6 +1941,102 @@ TEST(map_nested, "Nested Map")
 	as_record_destroy(prec);
 }
 
+TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key list")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 92);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_hashmap m1;
+	as_hashmap_init(&m1, 2);
+	as_string k11;
+	as_string_init(&k11, "key11", false);
+	as_integer v11;
+	as_integer_init(&v11, 9);
+	as_hashmap_set(&m1, (as_val*)&k11, (as_val*)&v11);
+	as_string k12;
+	as_string_init(&k12, "key12", false);
+	as_integer v12;
+	as_integer_init(&v12, 4);
+	as_hashmap_set(&m1, (as_val*)&k12, (as_val*)&v12);
+
+	as_hashmap m2;
+	as_hashmap_init(&m2, 3);
+	as_string k21;
+	as_string_init(&k21, "key21", false);
+	as_integer v21;
+	as_integer_init(&v21, 3);
+	as_hashmap_set(&m2, (as_val*)&k21, (as_val*)&v21);
+	as_string k22;
+	as_string_init(&k22, "key22", false);
+	as_integer v22;
+	as_integer_init(&v22, 5);
+	as_hashmap_set(&m2, (as_val*)&k22, (as_val*)&v22);
+	as_string k23;
+	as_string_init(&k23, "key23", false);
+	as_integer v23;
+	as_integer_init(&v23, 7);
+	as_hashmap_set(&m2, (as_val*)&k23, (as_val*)&v23);
+
+	as_hashmap map;
+	as_hashmap_init(&map, 2);
+	as_string k1;
+	as_string_init(&k1, "key1", false);
+	as_hashmap_set(&map, (as_val*)&k1, (as_val*)&m1);
+	as_string k2;
+	as_string_init(&k2, "key2", false);
+	as_hashmap_set(&map, (as_val*)&k2, (as_val*)&m2);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_map(&rec, BIN_NAME, (as_map*)&map);
+
+	status = aerospike_key_put(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_arraylist* keys_in = as_arraylist_new(2, 2);
+	assert_not_null(keys_in);
+	as_arraylist_append_str(keys_in, "key21");
+	as_arraylist_append_str(keys_in, "key23");
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 2);
+	as_string_init(&k2, "key2", false);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)&k2);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_val*)keys_in);
+
+	as_arraylist* query_keys = as_arraylist_new(2, 2);
+	assert_not_null(query_keys);
+	as_arraylist_append_str(query_keys, "key21");
+	as_arraylist_append_str(query_keys, "key23");
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	assert_true(as_operations_map_get_by_key_list(
+			&ops, BIN_NAME, &ctx, (as_list*)query_keys, AS_MAP_RETURN_KEY_VALUE));
+
+	as_record* prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+
+	assert_not_null(prec);
+	as_bin* results = prec->bins.entries;
+	as_list* list = &results[0].valuep->list;
+	assert_int_eq(as_list_size(list), 2 * 2);
+	assert_string_eq(as_list_get_str(list, 0 * 2), "key21");
+	assert_int_eq(as_list_get_int64(list, 0 * 2 + 1), 3);
+	assert_string_eq(as_list_get_str(list, 1 * 2), "key23");
+	assert_int_eq(as_list_get_int64(list, 1 * 2 + 1), 7);
+
+	as_record_destroy(prec);
+}
+
 TEST(map_double_nested, "Double Nested Map")
 {
 	as_key rkey;
@@ -3723,6 +3819,7 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_remove_relative);
 	suite_add(map_partial);
 	suite_add(map_nested);
+	suite_add(map_nested_map_keys_in);
 	suite_add(map_double_nested);
 	suite_add(map_ctx_create);
 	suite_add(map_simple2);

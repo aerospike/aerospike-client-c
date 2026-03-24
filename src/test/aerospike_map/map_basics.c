@@ -1950,6 +1950,13 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
 	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
+    // Construct a nested map:
+    //
+    // {
+    //     'key1': { 'key11': 9, 'key12': 4 },
+    //     'key2': { 'key21': 3, 'key22': 5, 'key23': 7 },
+    // }
+
 	as_hashmap m1;
 	as_hashmap_init(&m1, 2);
 	as_string k11;
@@ -1998,6 +2005,8 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
+    // Create list of keys to query for in context query
+
 	as_arraylist* keys_in = as_arraylist_new(2, 2);
 	assert_not_null(keys_in);
 	as_arraylist_append_str(keys_in, "key21");
@@ -2008,6 +2017,9 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	as_string_init(&k2, "key2", false);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)&k2);
 	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)keys_in);
+
+    // This list of keys is used by the as_operations_map_get_by_key_list()
+    // function, below.
 
 	as_arraylist* query_keys = as_arraylist_new(2, 2);
 	assert_not_null(query_keys);

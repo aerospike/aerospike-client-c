@@ -128,6 +128,8 @@ typedef enum {
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
 	_AS_EXP_CODE_REMOVE_RESULT = 100,
+	_AS_EXP_CODE_MAP_KEYS = 101,
+	_AS_EXP_CODE_MAP_VALUES = 102,
 
 	_AS_EXP_CODE_LOOPVAR = 122,
 
@@ -971,6 +973,43 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_in_list(__left, __list) \
 		{.op=_AS_EXP_CODE_IN_LIST, .count=3}, __left, as_exp_val((as_val*)(__list))
+
+/**
+ * Return a list of keys from a map-valued subexpression.
+ *
+ * @a __map must evaluate to a map, for example @c as_exp_bin_map("name") for a
+ * map bin, or @c as_exp_val((as_val*)m) for a literal @c as_map / @c as_orderedmap.
+ * Literal maps are serialized at compile time; the caller retains ownership and
+ * should destroy them after @c as_exp_build.
+ *
+ * @code
+ * as_orderedmap m;
+ * as_orderedmap_init(&m, 2);
+ * as_orderedmap_set(&m, (as_val*)as_string_new((char*)"k", false),
+ *     (as_val*)as_integer_new(1));
+ * as_exp_build(e, as_exp_map_keys(as_exp_val((as_val*)&m)));
+ * as_exp_destroy(e);
+ * as_orderedmap_destroy(&m);
+ * @endcode
+ *
+ * @param __map	Map-valued expression (e.g. bin or constant).
+ * @return (list value)
+ * @ingroup expression
+ */
+#define as_exp_map_keys(__map) \
+		{.op=_AS_EXP_CODE_MAP_KEYS, .count=2}, __map
+
+/**
+ * Return a list of values from a map-valued subexpression.
+ *
+ * @a __map must evaluate to a map; see @ref as_exp_map_keys for operand forms.
+ *
+ * @param __map	Map-valued expression (e.g. bin or constant).
+ * @return (list value)
+ * @ingroup expression
+ */
+#define as_exp_map_values(__map) \
+		{.op=_AS_EXP_CODE_MAP_VALUES, .count=2}, __map
 
 /**
  * Create expression that performs a regex match on a string bin or value

@@ -1941,7 +1941,7 @@ TEST(map_nested, "Nested Map")
 	as_record_destroy(prec);
 }
 
-TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key list")
+TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with path select")
 {
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 92);
@@ -2018,18 +2018,10 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)&k2);
 	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)keys_in);
 
-	// This list of keys is used by the as_operations_map_get_by_key_list()
-	// function, below.
-
-	as_arraylist* query_keys = as_arraylist_new(2, 2);
-	assert_not_null(query_keys);
-	as_arraylist_append_str(query_keys, "key21");
-	as_arraylist_append_str(query_keys, "key23");
-
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	assert_true(as_operations_map_get_by_key_list(
-			&ops, BIN_NAME, &ctx, (as_list*)query_keys, AS_MAP_RETURN_KEY));
+	assert_int_eq(as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx,
+			AS_EXP_PATH_SELECT_MAP_KEY), AEROSPIKE_OK);
 
 	as_record* prec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &prec);
@@ -2047,7 +2039,7 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	as_record_destroy(prec);
 }
 
-TEST(map_keys_in_and_filter, "MAP_KEYS_IN with AND expression filter on map get by key list")
+TEST(map_keys_in_and_filter, "MAP_KEYS_IN with AND expression filter on path select")
 {
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 93);
@@ -2103,15 +2095,10 @@ TEST(map_keys_in_and_filter, "MAP_KEYS_IN with AND expression filter on map get 
 	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)keys_in);
 	as_cdt_ctx_add_and_filter(&ctx, af);
 
-	as_arraylist* query_keys = as_arraylist_new(2, 2);
-	assert_not_null(query_keys);
-	as_arraylist_append_str(query_keys, "a");
-	as_arraylist_append_str(query_keys, "c");
-
 	as_operations ops;
 	as_operations_inita(&ops, 1);
-	assert_true(as_operations_map_get_by_key_list(
-			&ops, BIN_NAME, &ctx, (as_list*)query_keys, AS_MAP_RETURN_UNORDERED_MAP));
+	assert_int_eq(as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx,
+			AS_EXP_PATH_SELECT_MATCHING_TREE), AEROSPIKE_OK);
 
 	as_record* prec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &prec);

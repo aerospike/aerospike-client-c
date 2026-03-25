@@ -1950,12 +1950,12 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
 	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
-	// Construct a nested map:
-	//
-	// {
-	//     'key1': { 'key11': 9, 'key12': 4 },
-	//     'key2': { 'key21': 3, 'key22': 5, 'key23': 7 },
-	// }
+    // Construct a nested map:
+    //
+    // {
+    //     'key1': { 'key11': 9, 'key12': 4 },
+    //     'key2': { 'key21': 3, 'key22': 5, 'key23': 7 },
+    // }
 
 	as_hashmap m1;
 	as_hashmap_init(&m1, 2);
@@ -2005,7 +2005,7 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
-	// Create list of keys to query for in context query
+    // Create list of keys to query for in context query
 
 	as_arraylist* keys_in = as_arraylist_new(2, 2);
 	assert_not_null(keys_in);
@@ -2018,8 +2018,8 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)&k2);
 	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)keys_in);
 
-	// This list of keys is used by the as_operations_map_get_by_key_list()
-	// function, below.
+    // This list of keys is used by the as_operations_map_get_by_key_list()
+    // function, below.
 
 	as_arraylist* query_keys = as_arraylist_new(2, 2);
 	assert_not_null(query_keys);
@@ -2029,7 +2029,7 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	as_operations ops;
 	as_operations_inita(&ops, 1);
 	assert_true(as_operations_map_get_by_key_list(
-			&ops, BIN_NAME, &ctx, (as_list*)query_keys, AS_MAP_RETURN_KEY));
+			&ops, BIN_NAME, &ctx, (as_list*)query_keys, AS_MAP_RETURN_KEY_VALUE));
 
 	as_record* prec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &prec);
@@ -2040,9 +2040,11 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with get by key lis
 	assert_not_null(prec);
 	as_bin* results = prec->bins.entries;
 	as_list* list = &results[0].valuep->list;
-	assert_int_eq(as_list_size(list), 2);
-	assert_string_eq(as_list_get_str(list, 0), "key21");
-	assert_string_eq(as_list_get_str(list, 1), "key23");
+	assert_int_eq(as_list_size(list), 2 * 2);
+	assert_string_eq(as_list_get_str(list, 0 * 2), "key21");
+	assert_int_eq(as_list_get_int64(list, 0 * 2 + 1), 3);
+	assert_string_eq(as_list_get_str(list, 1 * 2), "key23");
+	assert_int_eq(as_list_get_int64(list, 1 * 2 + 1), 7);
 
 	as_record_destroy(prec);
 }

@@ -354,13 +354,14 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
  *
  * For example, if a map {"A": 1, "B": 2, "C": 3} exists, and you pass
  * keys ["A", "C", "D"] in as the list of keys, the result will only
- * include ["A", "C"], since element "D" does not exist in the map.
+ * include {"A": 1, "C": 3}, since element "D" does not exist in the map.
  * Observe that the values of the corresponding keys are not returned.
  *
  * The ctx list takes ownership of keys.
  *
  * @relates as_operations
  * @ingroup base_operations
+ * @see as_cdt_ctx_add_and_filter
  */
 static inline void
 as_cdt_ctx_add_map_keys_in(as_cdt_ctx* ctx, as_list* keys)
@@ -408,6 +409,7 @@ as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const struct as_exp* ex
  *
  * @relates as_operations
  * @ingroup base_operations
+ * @see as_cdt_ctx_add_map_keys_in
  */
 AS_EXTERN void
 as_cdt_ctx_add_and_filter(as_cdt_ctx* ctx, const struct as_exp* exp);

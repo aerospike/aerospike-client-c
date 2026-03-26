@@ -88,7 +88,7 @@ as_query_foreground_ops_respond_all_write_attr(
 		}
 	}
 
-	if ((respond_all_ops || query_policy->respond_all_ops) && !get_all) {
+	if (respond_all_ops && !get_all) {
 		*write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
 	}
 }
@@ -2051,7 +2051,6 @@ as_policy_query_merge(aerospike* as, const as_policy_query* src, as_policy_query
 		mrg->fail_on_cluster_change = src->fail_on_cluster_change;
 		mrg->deserialize = src->deserialize;
 		mrg->short_query = src->short_query;
-		mrg->respond_all_ops = src->respond_all_ops;
 		return mrg;
 	}
 	else {

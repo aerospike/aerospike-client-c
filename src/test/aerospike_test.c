@@ -501,6 +501,7 @@ PLAN(aerospike_test)
 	plan_add(bit);
 	plan_add(hll);
 	plan_add(filter_exp);
+	plan_add(exp_dsl);
 	plan_add(exp_operate);
 
 	plan_add(info_basics);

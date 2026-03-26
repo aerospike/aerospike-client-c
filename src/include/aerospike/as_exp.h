@@ -139,6 +139,8 @@ typedef enum {
 	_AS_EXP_CODE_QUOTE = 126,
 	_AS_EXP_CODE_CALL = 127,
 
+	_AS_EXP_CODE_DSL_COMPILE = 128,
+
 	// Begin virtual ops, these do not go on the wire.
 	_AS_EXP_CODE_AS_VAL,
 	_AS_EXP_CODE_VAL_GEO,
@@ -3774,6 +3776,13 @@ as_exp_destroy_base64(char* base64)
 			as_exp* temp = as_exp_compile(__table__, sizeof(__table__) / sizeof(as_exp_entry)); \
 			__name = as_exp_compile_b64(temp); \
 			as_exp_destroy(temp); \
+		} while (false)
+
+#define as_exp_build_dsl(__name, __dsl) \
+		as_exp* __name; \
+		do { \
+			as_exp_entry __table__[] = { { .op=_AS_EXP_CODE_DSL_COMPILE, .count=2, .v.str_val=__dsl } }; \
+			__name = as_exp_compile(__table__, sizeof(__table__) / sizeof(as_exp_entry)); \
 		} while (false)
 
 #ifdef __cplusplus

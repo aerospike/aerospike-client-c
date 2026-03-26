@@ -852,13 +852,13 @@ as_query_command_size(
 		if (has_write) {
 			if (query_policy) {
 				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-					"Write operations require aerospike_query_background()");
+					"Query oeprations must be read-only.  Use background execution for write-only operations.");
 			}
 		}
 		else {
 			if (!query_policy) {
 				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-					"Read operations require a foreground query (e.g. aerospike_query_foreach())");
+					"Background query operations must be write-only.  Use aerospike_query_foreach() for read-only operations.");
 			}
 		}
 

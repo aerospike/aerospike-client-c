@@ -400,6 +400,18 @@ typedef enum {
 	(__ops)->gen = 0;\
 	(__ops)->_free = false;
 
+/**
+ * Answers true if at least one operation on a bin is defined; false otherwise.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+static inline bool
+as_operations_defined_for_bin(as_operations* ops)
+{
+	return ops && ops->binops.size > 0;
+}
+
 //---------------------------------
 // Functions
 //---------------------------------

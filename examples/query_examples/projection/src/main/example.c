@@ -274,7 +274,6 @@ example_query_with_read_ops_respond_all(aerospike* as)
 	as_error err;
 	as_policy_query qpol;
 	as_policy_query_init(&qpol);
-	qpol.respond_all_ops = true;
 
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);

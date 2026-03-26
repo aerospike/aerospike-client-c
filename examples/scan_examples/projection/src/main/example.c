@@ -236,7 +236,7 @@ example_scan_with_write_operations(aerospike* as)
 	if (status != AEROSPIKE_OK) {
 		printf("Background scan failed: (%d) %s\n", err.code, err.message);
 	} else {
-		printf("Background scan with write operations started successfully (ID: %lu).\n", scan_id);
+		printf("Background scan with write operations started successfully (ID: %llu).\n", scan_id);
 
 		// Wait for scan to complete
 		printf("Waiting for background scan to complete...\n");

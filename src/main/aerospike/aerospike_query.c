@@ -58,41 +58,6 @@ as_query_ops_has_write(const as_query* query)
 	return false;
 }
 
-static void
-as_query_foreground_ops_respond_all_write_attr(
-	const as_operations* ops, const as_policy_query* query_policy, uint8_t* write_attr
-	)
-{
-	bool respond_all_ops = false;
-	bool get_all = false;
-
-	for (uint16_t i = 0; i < ops->binops.size; i++) {
-		as_binop* op = &ops->binops.entries[i];
-
-		switch (op->op) {
-			case AS_OPERATOR_MAP_READ:
-			case AS_OPERATOR_EXP_READ:
-			case AS_OPERATOR_BIT_READ:
-			case AS_OPERATOR_HLL_READ:
-				respond_all_ops = true;
-				// Fall through.
-			case AS_OPERATOR_CDT_READ:
-			case AS_OPERATOR_READ:
-				if (op->bin.name[0] == 0) {
-					get_all = true;
-				}
-				break;
-
-			default:
-				break;
-		}
-	}
-
-	if (respond_all_ops && !get_all) {
-		*write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
-	}
-}
-
 //---------------------------------
 // Types
 //---------------------------------
@@ -944,7 +909,7 @@ as_query_command_init(
 		}
 
 		if (query->ops) {
-			as_query_foreground_ops_respond_all_write_attr(query->ops, query_policy, &write_attr);
+			write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
 		}
 
 		uint8_t info_attr = (qb->is_new || query->where.size == 0)? AS_MSG_INFO3_PARTITION_DONE : 0;

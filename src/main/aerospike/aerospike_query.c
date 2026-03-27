@@ -2516,7 +2516,7 @@ aerospike_query_background(
 			"Background function or ops is required");
 	}
 
-	if (query->ops && as_query_consists_of_all_writes(query)) {
+	if (query->ops && !as_query_consists_of_all_writes(query)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Background query operations must be write-only. Use query for read-only operations.");
 	}

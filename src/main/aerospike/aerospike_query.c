@@ -691,7 +691,7 @@ as_query_command_size(
 	uint16_t n_fields = 0;
 
 	// Providing bin names (via .select) and operations to perform (via .ops) at the same time is not allowed.
-	if (query->select.size > 0 && as_operations_defined(query)) {
+	if (query->select.size > 0 && as_operations_defined(query->ops)) {
 		// This will become a AEROSPIKE_ERR_PARAM error for the 8.1.3 server release.
 		as_log_warn("Operations and bin names are mutually exclusive.");
 	}

@@ -407,7 +407,7 @@ typedef enum {
  * @ingroup base_operations
  */
 static inline bool
-as_operations_defined_for_bin(as_operations* ops)
+as_operations_defined(as_operations* ops)
 {
 	return ops && ops->binops.size > 0;
 }

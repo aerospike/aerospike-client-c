@@ -58,6 +58,22 @@ as_query_ops_has_write(const as_query* query)
 	return false;
 }
 
+static bool
+as_query_consists_of_all_writes(const as_query* query)
+{
+	if (!query->ops) {
+		return false;
+	}
+
+	for (uint16_t i = 0; i < query->ops->binops.size; i++) {
+		if (!as_op_is_write[query->ops->binops.entries[i].op]) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -674,6 +690,12 @@ as_query_command_size(
 	uint32_t filter_size = 0;
 	uint16_t n_fields = 0;
 
+	// Providing bin names (via .select) and operations to perform (via .ops) at the same time is not allowed.
+	if (query->select.size > 0 && as_operations_defined(query)) {
+		// This will become a AEROSPIKE_ERR_PARAM error for the 8.1.3 server release.
+		as_log_warn("Operations and bin names are mutually exclusive.");
+	}
+
 	if (qb->np) {
 		qb->parts_full_size = qb->np->parts_full.size * 2;
 		qb->parts_partial_digest_size = qb->np->parts_partial.size * AS_DIGEST_VALUE_SIZE;
@@ -845,20 +867,20 @@ as_query_command_size(
 
 	// Operations vs bin names: with ops, projection is encoded as operations (foreground read or
 	// background write). Foreground requires read-only ops; background requires write-only ops.
-	if (query->ops) {
+	if (as_operations_defined(query->ops)) {
 		as_operations* ops = query->ops;
 		bool has_write = as_query_ops_has_write(query);
 
 		if (has_write) {
 			if (query_policy) {
 				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-					"Query oeprations must be read-only.  Use background execution for write-only operations.");
+					"Query operations must be read-only. Use background query for write-only operations.");
 			}
 		}
 		else {
 			if (!query_policy) {
 				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-					"Background query operations must be write-only.  Use aerospike_query_foreach() for read-only operations.");
+					"Background query operations must be write-only. Use query for read-only operations.");
 			}
 		}
 
@@ -2047,7 +2069,7 @@ aerospike_query_foreach(
 		}
 		if (as_query_ops_has_write(query)) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
-				"Write operations require aerospike_query_background()");
+				"Query operations must be read-only. Use background query for write-only operations.");
 		}
 	}
 
@@ -2494,9 +2516,9 @@ aerospike_query_background(
 			"Background function or ops is required");
 	}
 
-	if (query->ops && !as_query_ops_has_write(query)) {
+	if (query->ops && as_query_consists_of_all_writes(query)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"Foreground read operations require aerospike_query_foreach()");
+			"Background query operations must be write-only. Use query for read-only operations.");
 	}
 
 	as_cluster* cluster = as->cluster;

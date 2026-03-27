@@ -468,7 +468,7 @@ as_scan_command_size(
 	sb->n_fields = n_fields;
 
 	// Operations and bin names are mutually exclusive.
-	if (as_operations_defined_for_bin(scan->ops)) {
+	if (as_operations_defined(scan->ops)) {
 		// Estimate size for operations (both foreground and background).
 		as_operations* ops = scan->ops;
 
@@ -499,7 +499,7 @@ as_scan_command_init(
 	uint16_t n_ops = (scan->ops) ? scan->ops->binops.size : scan->select.size;
 	uint8_t* p;
 
-	if (as_operations_defined_for_bin(scan->ops)) {
+	if (as_operations_defined(scan->ops)) {
 		// Check if this is a foreground scan with operations (read operations only)
 		bool has_write_ops = false;
 
@@ -621,7 +621,7 @@ as_scan_command_init(
 		p = as_command_write_field_uint64(p, AS_FIELD_MAX_RECORDS, sb->max_records);
 	}
 
-	if (as_operations_defined_for_bin(scan->ops)) {
+	if (as_operations_defined(scan->ops)) {
 		as_operations* ops = scan->ops;
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
@@ -662,7 +662,7 @@ as_scan_command_execute(as_scan_task* task)
 
 	as_queue opsbuffers;
 
-	if (as_operations_defined_for_bin(task->scan->ops)) {
+	if (as_operations_defined(task->scan->ops)) {
 		as_queue_inita(&opsbuffers, sizeof(as_buffer), task->scan->ops->binops.size);
 	}
 
@@ -681,7 +681,7 @@ as_scan_command_execute(as_scan_task* task)
 	status = as_scan_command_size(task->policy, task->scan, &sb, &err);
 
 	if (status != AEROSPIKE_OK) {
-		if (as_operations_defined_for_bin(task->scan->ops)) {
+		if (as_operations_defined(task->scan->ops)) {
 			as_buffers_destroy(&opsbuffers);
 		}
 
@@ -1234,7 +1234,7 @@ as_scan_partition_async(
 
 	as_queue opsbuffers;
 
-	if (as_operations_defined_for_bin(scan->ops)) {
+	if (as_operations_defined(scan->ops)) {
 		as_queue_inita(&opsbuffers, sizeof(as_buffer), scan->ops->binops.size);
 	}
 
@@ -1253,7 +1253,7 @@ as_scan_partition_async(
 	status = as_scan_command_size(policy, scan, &sb, err);
 
 	if (status != AEROSPIKE_OK) {
-		if (as_operations_defined_for_bin(scan->ops)) {
+		if (as_operations_defined(scan->ops)) {
 			as_buffers_destroy(&opsbuffers);
 		}
 		as_partition_tracker_destroy(pt);

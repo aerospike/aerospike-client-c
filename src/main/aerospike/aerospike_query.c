@@ -74,6 +74,18 @@ as_query_consists_of_all_writes(const as_query* query)
 	return true;
 }
 
+static void
+as_query_foreground_ops_respond_all_write_attr(
+		const as_operations* ops, uint8_t* write_attr
+		)
+{
+	if (as_operations_add_read_all_called(ops)) {
+		*write_attr &= ~AS_MSG_INFO2_RESPOND_ALL_OPS;
+		return;
+	}
+	*write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
+}
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -931,7 +943,7 @@ as_query_command_init(
 		}
 
 		if (query->ops) {
-			write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
+			as_query_foreground_ops_respond_all_write_attr(query->ops, &write_attr);
 		}
 
 		uint8_t info_attr = (qb->is_new || query->where.size == 0)? AS_MSG_INFO3_PARTITION_DONE : 0;

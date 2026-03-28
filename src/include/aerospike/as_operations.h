@@ -669,6 +669,32 @@ AS_EXTERN bool
 as_operations_add_read_all(as_operations* ops);
 
 /**
+ * @private
+ * Answers true if and only if at least one call was made to
+ * as_operations_add_read_all() on the given vector of operations.
+ *
+ * @relates as_operation
+ * @ingroup base_operations
+ */
+static inline bool
+as_operations_add_read_all_called(const as_operations* ops)
+{
+	if (!ops) {
+		return false;
+	}
+
+	for(int i = 0; i < ops->binops.size; i++) {
+		as_binop* binop = &ops->binops.entries[i];
+
+		if (binop->op == AS_OPERATOR_READ && binop->bin.name[0] == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+/**
  * Add a `AS_OPERATOR_INCR` bin operation with int64_t value. If the record or bin does not exist,
  * the record/bin will be created by default with the value to be added.
  *

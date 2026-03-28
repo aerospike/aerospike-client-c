@@ -25,6 +25,8 @@
  *   client.operate(..., ExpOperation.read("guests", readExp, DEFAULT))
  */
 
+ #include <string.h>
+
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_arraylist.h>
@@ -38,7 +40,8 @@
 #include <aerospike/as_string.h>
 
 #include "../test.h"
-#include <string.h>
+#include "../util/log_helper.h"
+
 
 /******************************************************************************
  * GLOBAL VARS
@@ -104,13 +107,20 @@ TEST(exp_read_select_by_path_map_keys_in, "exp read: selectByPath mapKeysIn + al
 	as_hashmap_set(&top, (as_val*)as_string_new("other", false),
 			(as_val*)&inner_other);
 
-	as_record wrec;
-	as_record_inita(&wrec, 1);
-	as_record_set_map(&wrec, BIN_MAP, (as_map*)&top);
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, BIN_MAP, (as_map*)&top);
 
-	status = aerospike_key_put(as, &err, NULL, &key, &wrec);
+	status = aerospike_key_put(as, &err, NULL, &key, rec);
 	assert_int_eq(status, AEROSPIKE_OK);
-	as_record_destroy(&wrec);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	test_dump_record(rec, true);
+	as_record_destroy(rec);
+	rec = NULL;
 
 	as_arraylist room_keys;
 	as_arraylist_init(&room_keys, 2, 0);
@@ -120,7 +130,7 @@ TEST(exp_read_select_by_path_map_keys_in, "exp read: selectByPath mapKeysIn + al
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 3);
 	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&room_keys);
-	as_cdt_ctx_add_all_children(&ctx);
+//	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new("guest", false));
 
 	as_exp_build(read_exp,
@@ -133,7 +143,6 @@ TEST(exp_read_select_by_path_map_keys_in, "exp read: selectByPath mapKeysIn + al
 	as_operations_inita(&ops, 1);
 	as_operations_exp_read(&ops, BIN_RESULT, read_exp, AS_EXP_READ_DEFAULT);
 
-	as_record* rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_not_null(rec);

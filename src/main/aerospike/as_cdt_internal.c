@@ -95,7 +95,7 @@ as_cdt_ctx_pack(const as_cdt_ctx* ctx, as_packer* pk)
 			return 0;
 		}
 
-		if (item->type == AS_CDT_CTX_EXP) {
+		if ((item->type & ~AS_CDT_CTX_AND) == AS_CDT_CTX_EXP) {
 			if (as_pack_append(pk,
 					item->val.exp->packed, item->val.exp->packed_sz) != 0) {
 				return 0;

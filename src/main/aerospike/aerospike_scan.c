@@ -477,18 +477,16 @@ as_scan_command_size(
 		// Estimate size for operations (both foreground and background).
 		as_operations* ops = scan->ops;
 		bool has_write = as_operations_has_write(ops);
+		bool all_writes = as_operations_consists_of_all_writes(ops);
+		bool is_foreground_scan = scan->select.size > 0;
 
-		if (has_write) {
-			if (policy) {
-				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-						"Scan operations must be read-only. Use background scan for write-only operations.");
-			}
+		if (is_foreground_scan && has_write) {
+			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+					"Scan operations must be read-only. Use background scan for write-only operations.");
 		}
-		else {
-			if (!policy) {
-				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-						"Background scan operations must be write-only. Use scan for read-only operations.");
-			}
+		else if (!is_foreground_scan && !all_writes) {
+			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+					"Background scan operations must be write-only. Use scan for read-only operations.");
 		}
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
@@ -1383,12 +1381,6 @@ aerospike_scan_background(
 {
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
-
-	if (scan->ops && !as_operations_consists_of_all_writes(scan->ops)) {
-		fprintf(stderr, " :: --- FUCK\n");
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"Background scan operations must be write-only. Use scan for read-only operations.");
-	}
 
 	return as_scan_generic(as->cluster, err, policy, scan, 0, 0, scan_id);
 }

@@ -374,42 +374,18 @@ as_operations_has_write(const as_operations* ops)
 	return false;
 }
 
-bool output_flag = false;
-
-static bool
-_aocoaw(const as_operations* ops)
+bool
+as_operations_consists_of_all_writes(const as_operations* ops)
 {
 	if (!ops) {
 		return false;
 	}
 
 	for (uint16_t i = 0; i < ops->binops.size; i++) {
-		if (output_flag) {
-			fprintf(stderr, " :: - %d\n", ops->binops.entries[i].op);
-		}
-
 		if (!as_op_is_write[ops->binops.entries[i].op]) {
-			fprintf(stderr, " :: ^- no!\n");
 			return false;
 		}
 	}
 
-	fprintf(stderr, " :: ^- yes!\n");
 	return true;
 }
-
-bool
-as_operations_consists_of_all_writes(const as_operations* ops)
-{
-	bool b;
-
-	if (output_flag) {
-		fprintf(stderr, " :: ------\n");
-	}
-	b = _aocoaw(ops);
-	if (output_flag) {
-		fprintf(stderr, " :: ------\n");
-	}
-	return b;
-}
-

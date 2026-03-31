@@ -1008,18 +1008,10 @@ TEST(scan_operate, "scan operate")
 	as_scan_init(&scan, NS, SET2);
 	scan.ops = &ops;
 
-extern bool output_flag;
-output_flag = true;
 	uint64_t scanid = 0;
 	as_status status = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
-fprintf(stderr, " :: - (%d) %s at %s[%s:%d]\n", err.code, err.message, err.func, err.file, err.line);
-fprintf(stdout, " :: - (%d) %s at %s[%s:%d]\n", err.code, err.message, err.func, err.file, err.line);
-fsync(0);
-fsync(1);
-fsync(2);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_scan_destroy(&scan);
-output_flag = false;
 
 	aerospike_scan_wait(as, &err, NULL, scanid, 0);
 

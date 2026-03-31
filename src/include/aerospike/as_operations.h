@@ -929,6 +929,20 @@ as_operations_modify_by_path(
 		struct as_exp* mod_exp, as_exp_path_modify_flags flags
 		);
 
+/**
+ * @private
+ * Answer true if at least one operation is a write operation; false otherwise.
+ */
+AS_EXTERN bool
+as_operations_has_write(const as_operations* ops);
+
+/**
+ * @private
+ * Answer true if all the operations are write operations; false otherwise.
+ */
+AS_EXTERN bool
+as_operations_consists_of_all_writes(const as_operations* ops);
+
 /******************************************************************************
  * LIST FUNCTIONS
  *****************************************************************************/

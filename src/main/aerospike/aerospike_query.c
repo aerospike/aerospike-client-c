@@ -42,49 +42,11 @@
 #include <aerospike/as_udf_context.h>
 #include <aerospike/mod_lua.h>
 
+//---------------------------------
+// Imports
+//---------------------------------
+
 extern bool as_op_is_write[];
-
-static bool
-as_query_ops_has_write(const as_query* query)
-{
-	if (!query->ops) {
-		return false;
-	}
-	for (uint16_t i = 0; i < query->ops->binops.size; i++) {
-		if (as_op_is_write[query->ops->binops.entries[i].op]) {
-			return true;
-		}
-	}
-	return false;
-}
-
-static bool
-as_query_consists_of_all_writes(const as_query* query)
-{
-	if (!query->ops) {
-		return false;
-	}
-
-	for (uint16_t i = 0; i < query->ops->binops.size; i++) {
-		if (!as_op_is_write[query->ops->binops.entries[i].op]) {
-			return false;
-		}
-	}
-
-	return true;
-}
-
-static void
-as_query_foreground_ops_respond_all_write_attr(
-		const as_operations* ops, uint8_t* write_attr
-		)
-{
-	if (as_operations_add_read_all_called(ops)) {
-		*write_attr &= ~AS_MSG_INFO2_RESPOND_ALL_OPS;
-		return;
-	}
-	*write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
-}
 
 //---------------------------------
 // Types
@@ -183,6 +145,18 @@ typedef struct as_query_builder {
 //---------------------------------
 // Static Functions
 //---------------------------------
+
+static void
+as_query_foreground_ops_respond_all_write_attr(
+		const as_operations* ops, uint8_t* write_attr
+		)
+{
+	if (as_operations_add_read_all_called(ops)) {
+		*write_attr &= ~AS_MSG_INFO2_RESPOND_ALL_OPS;
+		return;
+	}
+	*write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
+}
 
 static inline void
 as_query_log_iter(uint64_t parent_id, uint64_t task_id, uint32_t iter)
@@ -704,7 +678,7 @@ as_query_command_size(
 
 	// Providing bin names (via .select) and operations to perform (via .ops) at the same time is not allowed.
 	if (query->select.size > 0 && as_operations_defined(query->ops)) {
-		// This will become a AEROSPIKE_ERR_PARAM error for the 8.1.3 server release.
+		// This will become a AEROSPIKE_ERR_PARAM error in the next major release of the client.
 		as_log_warn("Operations and bin names are mutually exclusive.");
 	}
 
@@ -881,7 +855,7 @@ as_query_command_size(
 	// background write). Foreground requires read-only ops; background requires write-only ops.
 	if (as_operations_defined(query->ops)) {
 		as_operations* ops = query->ops;
-		bool has_write = as_query_ops_has_write(query);
+		bool has_write = as_operations_has_write(ops);
 
 		if (has_write) {
 			if (query_policy) {
@@ -2079,7 +2053,7 @@ aerospike_query_foreach(
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
 				"Cannot combine query operations with aggregation");
 		}
-		if (as_query_ops_has_write(query)) {
+		if (as_operations_has_write(query->ops)) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
 				"Query operations must be read-only. Use background query for write-only operations.");
 		}
@@ -2230,7 +2204,7 @@ aerospike_query_partitions(
 	as_partition_filter* pf, aerospike_query_foreach_callback callback, void* udata
 	)
 {
-	if (query->apply.function[0] || as_query_ops_has_write(query)) {
+	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
 	}
@@ -2280,7 +2254,7 @@ aerospike_query_async(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop)
 {
-	if (query->apply.function[0] || as_query_ops_has_write(query)) {
+	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"Async aggregation or background queries are not supported");
 	}
@@ -2466,7 +2440,7 @@ aerospike_query_partitions_async(
 	as_event_loop* event_loop
 	)
 {
-	if (query->apply.function[0] || as_query_ops_has_write(query)) {
+	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
 	}
@@ -2528,7 +2502,7 @@ aerospike_query_background(
 			"Background function or ops is required");
 	}
 
-	if (query->ops && !as_query_consists_of_all_writes(query)) {
+	if (query->ops && !as_operations_consists_of_all_writes(query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Background query operations must be write-only. Use query for read-only operations.");
 	}

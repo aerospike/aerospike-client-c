@@ -394,6 +394,11 @@ as_scan_command_size(
 	sb->size = AS_HEADER_SIZE;
 	uint16_t n_fields = 0;
 
+	// Providing bin names (via .select) and operations to perform (via .ops) at the same time is not allowed.
+	if (scan->select.size > 0 && as_operations_defined(scan->ops)) {
+		as_log_warn("Operations and bin names are mutually exclusive.");
+	}
+
 	if (sb->np) {
 		sb->parts_full_size = sb->np->parts_full.size * 2;
 		sb->parts_partial_size = sb->np->parts_partial.size * 20;
@@ -471,6 +476,20 @@ as_scan_command_size(
 	if (as_operations_defined(scan->ops)) {
 		// Estimate size for operations (both foreground and background).
 		as_operations* ops = scan->ops;
+		bool has_write = as_operations_has_write(ops);
+
+		if (has_write) {
+			if (policy) {
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+						"Scan operations must be read-only. Use background scan for write-only operations.");
+			}
+		}
+		else {
+			if (!policy) {
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+						"Background scan operations must be write-only. Use scan for read-only operations.");
+			}
+		}
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
@@ -1364,6 +1383,12 @@ aerospike_scan_background(
 {
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
+
+	if (scan->ops && !as_operations_consists_of_all_writes(scan->ops)) {
+		fprintf(stderr, " :: --- FUCK\n");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Background scan operations must be write-only. Use scan for read-only operations.");
+	}
 
 	return as_scan_generic(as->cluster, err, policy, scan, 0, 0, scan_id);
 }

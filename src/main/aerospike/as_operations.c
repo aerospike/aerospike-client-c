@@ -24,9 +24,34 @@
 
 #include "_bin.h"
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Variables
+//---------------------------------
+
+// These values must line up with as_operator enum.
+bool as_op_is_write[] = {
+	false,
+	true,
+	false,
+	true,
+	false,
+	true,
+	true,
+	false,
+	true,
+	true,
+	true,
+	true,
+	false,
+	true,
+	true,
+	false,
+	true
+};
+
+//---------------------------------
+// STATIC FUNCTIONS
+//---------------------------------
 
 static as_operations*
 as_operations_default(as_operations* ops, bool free, uint16_t nops)
@@ -334,3 +359,57 @@ as_operations_modify_by_path(
 
 	return AEROSPIKE_OK;
 }
+
+bool
+as_operations_has_write(const as_operations* ops)
+{
+	if (!ops) {
+		return false;
+	}
+	for (uint16_t i = 0; i < ops->binops.size; i++) {
+		if (as_op_is_write[ops->binops.entries[i].op]) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool output_flag = false;
+
+static bool
+_aocoaw(const as_operations* ops)
+{
+	if (!ops) {
+		return false;
+	}
+
+	for (uint16_t i = 0; i < ops->binops.size; i++) {
+		if (output_flag) {
+			fprintf(stderr, " :: - %d\n", ops->binops.entries[i].op);
+		}
+
+		if (!as_op_is_write[ops->binops.entries[i].op]) {
+			fprintf(stderr, " :: ^- no!\n");
+			return false;
+		}
+	}
+
+	fprintf(stderr, " :: ^- yes!\n");
+	return true;
+}
+
+bool
+as_operations_consists_of_all_writes(const as_operations* ops)
+{
+	bool b;
+
+	if (output_flag) {
+		fprintf(stderr, " :: ------\n");
+	}
+	b = _aocoaw(ops);
+	if (output_flag) {
+		fprintf(stderr, " :: ------\n");
+	}
+	return b;
+}
+

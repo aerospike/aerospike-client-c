@@ -1825,6 +1825,35 @@ TEST(query_expression, "query expression")
 	as_query_destroy(&query_resume);
 }
 
+TEST(query_foreach_with_writes, "Attempt to read and write during aerospike_query_foreach")
+{
+	as_error err;
+	as_error_reset(&err);
+
+	uint32_t count = 0;
+
+	as_string str;
+	as_string_init(&str, "bar", false);
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+	q.ops = &ops;
+
+	as_query_select_inita(&q, 1);
+	as_query_select(&q, "c");
+
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "a", as_string_equals("abc"));
+
+	aerospike_query_foreach(as, &err, NULL, &q, query_foreach_count_callback, &count);
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+
+	as_query_destroy(&q);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -1909,6 +1938,7 @@ SUITE(query_foreach, "aerospike_query_foreach tests")
 	suite_add(query_map_ctx_is_string);
 	suite_add(query_blob_index);
 	suite_add(query_blob_list_index);
+	suite_add(query_foreach_with_writes);
 
 	if (g_has_query_expression) {
 		suite_add(query_expression);

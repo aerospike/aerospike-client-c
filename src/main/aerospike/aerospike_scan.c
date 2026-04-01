@@ -396,6 +396,7 @@ as_scan_command_size(
 
 	// Providing bin names (via .select) and operations to perform (via .ops) at the same time is not allowed.
 	if (scan->select.size > 0 && as_operations_defined(scan->ops)) {
+		// This will become an AEROSPIKE_ERR_PARAM error in the next major release of the client.
 		as_log_warn("Operations and bin names are mutually exclusive.");
 	}
 
@@ -478,7 +479,7 @@ as_scan_command_size(
 		as_operations* ops = scan->ops;
 		bool has_write = as_operations_has_write(ops);
 		bool all_writes = as_operations_consists_of_all_writes(ops);
-		bool is_foreground_scan = scan->select.size > 0;
+		bool is_foreground_scan = sb->pt != NULL;
 
 		if (is_foreground_scan && has_write) {
 			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,

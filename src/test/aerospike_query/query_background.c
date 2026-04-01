@@ -393,6 +393,51 @@ TEST(query_operate, "query operate")
 	as_query_destroy(&q);
 }
 
+TEST(query_operate_with_select, "query operate with select bin")
+{
+	write_recs();
+
+	as_error err;
+	as_status status;
+	as_query q;
+
+	as_query_init(&q, NAMESPACE, SET);
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "qebin1", as_integer_range(3, 9));
+
+	as_query_select_init(&q, 1);
+	as_query_select(&q, "blort");
+
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+	q.ops = &ops;
+
+	uint64_t query_id = 0;
+	status = aerospike_query_background(as, &err, NULL, &q, &query_id);
+
+	// This will eventually become an error in the next major release;
+	// however, _for now_, the operation is allowed and behaves exactly
+	// as if the as_query_select() functions were ignored.
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	aerospike_query_wait(as, &err, NULL, &q, query_id, 0);
+	as_query_destroy(&q);
+
+	as_query_init(&q, NAMESPACE, SET);
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "qebin1", as_integer_range(3, 9));
+
+	uint32_t count = 0;
+	status = aerospike_query_foreach(as, &err, NULL, &q, query_operate_callback, &count);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(count, 7);
+	as_query_destroy(&q);
+}
+
 TEST(query_operate_expop, "query operate expop")
 {
 	write_recs();
@@ -494,6 +539,7 @@ SUITE(query_background, "aerospike_query_background tests")
 	suite_add(query_validate1);
 	suite_add(query_aggregation_double);
 	suite_add(query_operate);
+	suite_add(query_operate_with_select);
 	suite_add(query_operate_expop);
 
 	if (g_has_ttl) {

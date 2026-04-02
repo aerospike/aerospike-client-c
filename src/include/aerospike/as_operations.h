@@ -943,6 +943,19 @@ as_operations_has_write(const as_operations* ops);
 AS_EXTERN bool
 as_operations_consists_of_all_writes(const as_operations* ops);
 
+/**
+ * @private
+ * Answer true if an operation's opcode is a basic read.
+ *
+ * We do not support AS_OPERATOR_READ_HEADER which might appear in
+ * other clients.
+ */
+static inline bool
+as_operations_is_basic_read(as_operator t)
+{
+	return t == AS_OPERATOR_READ;
+}
+
 /******************************************************************************
  * LIST FUNCTIONS
  *****************************************************************************/

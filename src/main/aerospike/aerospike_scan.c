@@ -481,7 +481,21 @@ as_scan_command_size(
 		bool all_writes = as_operations_consists_of_all_writes(ops);
 		bool is_foreground_scan = sb->pt != NULL;
 
-		if (is_foreground_scan && has_write) {
+		if (is_foreground_scan && !has_write) {
+			bool xxx_has_query_ops_projection_ext = false;	// TODO: thread this datum through somehow.
+			for (uint16_t i = 0; i < ops->binops.size; i++) {
+				if (!as_operations_is_basic_read(ops->binops.entries[i].op)) {
+					if (!xxx_has_query_ops_projection_ext) {
+						return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+								"Only basic read operations are supported for scan operations projection in server versions prior to 8.1.2.");
+					}
+					else {
+						break;
+					}
+				}
+			}
+		}
+		else if (is_foreground_scan && has_write) {
 			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 					"Scan operations must be read-only. Use background scan for write-only operations.");
 		}

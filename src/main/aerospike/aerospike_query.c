@@ -859,12 +859,30 @@ as_query_command_size(
 
 		if (has_write) {
 			if (query_policy) {
+				// Foreground operation and ops has at least one write in it.
 				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 					"Query operations must be read-only. Use background query for write-only operations.");
 			}
 		}
-		else {
-			if (!query_policy) {
+		else { // ops are all reads
+			if (query_policy) {
+				// foreground operation and ops are all reads.  Make sure that
+				// they are all basic reads for server versions prior to 8.1.2.
+				bool xxx_has_query_ops_projection_ext = false;	// TODO: thread this datum through somehow.
+				for (uint16_t i = 0; i < ops->binops.size; i++) {
+					if (!as_operations_is_basic_read(ops->binops.entries[i].op)) {
+						if (!xxx_has_query_ops_projection_ext) {
+							return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+									"Only basic read operations are supported for query operations projection in server versions prior to 8.1.2.");
+						}
+						else {
+							break;
+						}
+					}
+				}
+			}
+			else {
+				// background operation and ops are all reads
 				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 					"Background query operations must be write-only. Use query for read-only operations.");
 			}

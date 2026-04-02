@@ -669,7 +669,7 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 static as_status
 as_query_command_size(
 	const as_policy_base* base_policy, const as_policy_query* query_policy, const as_query* query,
-	as_query_builder* qb, as_error* err
+	as_query_builder* qb, bool has_query_ops_projection_ext, as_error* err
 	)
 {
 	qb->size = AS_HEADER_SIZE;
@@ -868,10 +868,10 @@ as_query_command_size(
 			if (query_policy) {
 				// foreground operation and ops are all reads.  Make sure that
 				// they are all basic reads for server versions prior to 8.1.2.
-				bool xxx_has_query_ops_projection_ext = false;	// TODO: thread this datum through somehow.
+				bool has_query_ops_projection_ext = false;	// TODO: thread this datum through somehow.
 				for (uint16_t i = 0; i < ops->binops.size; i++) {
 					if (!as_operations_is_basic_read(ops->binops.entries[i].op)) {
-						if (!xxx_has_query_ops_projection_ext) {
+						if (!has_query_ops_projection_ext) {
 							return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 									"Only basic read operations are supported for query operations projection in server versions prior to 8.1.2.");
 						}
@@ -1277,7 +1277,7 @@ as_query_command_execute_new(as_query_task* task)
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
 
-	as_status status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, &err);
+	as_status status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, task->cluster->has_query_ops_projection_ext, &err);
 
 	if (status != AEROSPIKE_OK) {
 		if (task->query->ops) {
@@ -1410,7 +1410,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 	// Build Command. It's okay to share command across threads because old query protocol does
 	// not have retries. If retries were allowed, the timeout field in the command would change on
 	// retry which would conflict with other threads.
-	status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, task->err);
+	status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, task->cluster->has_query_ops_projection_ext, task->err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {
@@ -1877,7 +1877,7 @@ as_query_partition_async(
 	as_query_builder qb;
 	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
 
-	status = as_query_command_size(&policy->base, policy, query, &qb, err);
+	status = as_query_command_size(&policy->base, policy, query, &qb, cluster->has_query_ops_projection_ext, err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {
@@ -2331,7 +2331,7 @@ aerospike_query_async(
 	as_query_builder qb;
 	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
 
-	status = as_query_command_size(&policy->base, policy, query, &qb, err);
+	status = as_query_command_size(&policy->base, policy, query, &qb, cluster->has_query_ops_projection_ext, err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {

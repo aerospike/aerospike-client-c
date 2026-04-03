@@ -868,6 +868,7 @@ as_query_command_size(
 			if (query_policy) {
 				// foreground operation and ops are all reads.  Make sure that
 				// they are all basic reads for server versions prior to 8.1.2.
+				bool has_query_ops_projection_ext = false;	// TODO: thread this datum through somehow.
 				for (uint16_t i = 0; i < ops->binops.size; i++) {
 					if (!as_operations_is_basic_read(ops->binops.entries[i].op)) {
 						if (!has_query_ops_projection_ext) {
@@ -1276,8 +1277,7 @@ as_query_command_execute_new(as_query_task* task)
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
 
-	as_status status = as_query_command_size(base_policy, task->query_policy,
-			task->query, &qb, as_node_has_query_operations_projection_ext(task->node), &err);
+	as_status status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, task->cluster->has_query_ops_projection_ext, &err);
 
 	if (status != AEROSPIKE_OK) {
 		if (task->query->ops) {
@@ -1410,8 +1410,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 	// Build Command. It's okay to share command across threads because old query protocol does
 	// not have retries. If retries were allowed, the timeout field in the command would change on
 	// retry which would conflict with other threads.
-	status = as_query_command_size(base_policy, task->query_policy,
-			task->query, &qb, as_node_has_query_operations_projection_ext(task->node), task->err);
+	status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, task->cluster->has_query_ops_projection_ext, task->err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {

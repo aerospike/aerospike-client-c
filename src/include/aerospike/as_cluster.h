@@ -492,6 +492,12 @@ typedef struct as_cluster_s {
 	 * Milliseconds between dynamic configuration check for file modifications.
 	 */
 	uint32_t config_interval;
+
+	/**
+	 * @private
+	 * True if the cluster supports query operations projection.
+	 */
+	bool has_query_ops_projection_ext;
 } as_cluster;
 
 struct aerospike_s;

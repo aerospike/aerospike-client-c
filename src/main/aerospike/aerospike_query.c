@@ -868,7 +868,6 @@ as_query_command_size(
 			if (query_policy) {
 				// foreground operation and ops are all reads.  Make sure that
 				// they are all basic reads for server versions prior to 8.1.2.
-				bool has_query_ops_projection_ext = false;	// TODO: thread this datum through somehow.
 				for (uint16_t i = 0; i < ops->binops.size; i++) {
 					if (!as_operations_is_basic_read(ops->binops.entries[i].op)) {
 						if (!has_query_ops_projection_ext) {

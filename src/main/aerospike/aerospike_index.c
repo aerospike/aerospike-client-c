@@ -51,6 +51,12 @@ aerospike_index_create_private(
 		policy = &config->policies.info;
 	}
 
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (!node) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "as_node_get_random() failed");
+	}
+
 	const char* dtype_string;
 	switch (dtype) {
 		case AS_INDEX_NUMERIC:
@@ -65,6 +71,15 @@ aerospike_index_create_private(
 		default:
 		case AS_INDEX_STRING:
 			dtype_string = "STRING";
+			break;
+		// For AS_INDEX_TYPE_SET indices
+		case AS_INDEX_NONE:
+			if (as_version_compare(&node->version, &as_server_version_8_1_2) >= 0) {
+				dtype_string = NULL;
+			}
+			else {
+				dtype_string = "STRING";
+			}
 			break;
 	}
 
@@ -93,12 +108,6 @@ aerospike_index_create_private(
 		}
 	}
 
-	as_node* node = as_node_get_random(as->cluster);
-
-	if (!node) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "as_node_get_random() failed");
-	}
-
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 16384, false);
 	as_string_builder_append(&sb, "sindex-create:");
@@ -124,8 +133,10 @@ aerospike_index_create_private(
 		as_string_builder_append(&sb, ";indextype=");
 		as_string_builder_append(&sb, itype_string);
 
-		as_string_builder_append(&sb, ";type=");
-		as_string_builder_append(&sb, dtype_string);
+		if (dtype_string) {
+			as_string_builder_append(&sb, ";type=");
+			as_string_builder_append(&sb, dtype_string);
+		}
 	}
 	else {
 		if (ctx) {
@@ -155,7 +166,20 @@ aerospike_index_create_private(
 		as_string_builder_append(&sb, ";indextype=");
 		as_string_builder_append(&sb, itype_string);
 
-		if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
+		if ((as_version_compare(&node->version, &as_server_version_8_1_2) >= 0) && (itype == AS_INDEX_TYPE_SET)) {
+			// SET doesn't support bin or data type fields; so, only provide them
+			// if they're specified.  This gives the user a chance to respond to
+			// server-generated error messages.
+			if (bin_name) {
+				as_string_builder_append(&sb, ";bin=");
+				as_string_builder_append(&sb, bin_name);
+			}
+			if (dtype_string) {
+				as_string_builder_append(&sb, ";type=");
+				as_string_builder_append(&sb, dtype_string);
+			}
+		}
+		else if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
 			as_string_builder_append(&sb, ";bin=");
 			as_string_builder_append(&sb, bin_name);
 			as_string_builder_append(&sb, ";type=");

@@ -81,7 +81,8 @@ typedef enum as_index_datatype_s {
 	AS_INDEX_STRING,
 	AS_INDEX_NUMERIC,
 	AS_INDEX_GEO2DSPHERE,
-	AS_INDEX_BLOB  // Requires server version 7.0+.
+	AS_INDEX_BLOB, // Requires server version 7.0+.
+	AS_INDEX_NONE  // Requires server version 8.1.2+.
 } as_index_datatype;
 
 /**

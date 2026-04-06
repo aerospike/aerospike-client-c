@@ -73,6 +73,15 @@ TEST(index_basics_create, "Create index on bin")
 	if (! index_process_return_code(status, &err, &task)) {
 		assert_int_eq(status , AEROSPIKE_OK);
 	}
+
+	// SET type index (bin and dtype parameters not supported)
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE,
+			SET, NULL, "idx_test_setbin", AS_INDEX_TYPE_SET,
+			AS_INDEX_NONE);
+
+	if (! index_process_return_code(status, &err, &task)) {
+		assert_int_eq(status , AEROSPIKE_OK);
+	}
 }
 
 TEST(index_basics_drop , "Drop index")
@@ -89,6 +98,13 @@ TEST(index_basics_drop , "Drop index")
 
 	// LIST type index
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_listbin");
+	if ( err.code != AEROSPIKE_OK ) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	// SET type index
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_setbin");
 	if ( err.code != AEROSPIKE_OK ) {
 		info("error(%d): %s", err.code, err.message);
 	}

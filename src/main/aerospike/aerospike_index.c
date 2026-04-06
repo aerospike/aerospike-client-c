@@ -78,6 +78,7 @@ aerospike_index_create_private(
 				dtype_string = NULL;
 			}
 			else {
+				// Preserve client 7.3.0 and earlier behavior
 				dtype_string = "STRING";
 			}
 			break;

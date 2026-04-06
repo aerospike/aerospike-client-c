@@ -135,6 +135,11 @@ struct as_exp;
 
 /**
  * Create secondary index given collection type, data type and context.
+ * 
+ * When creating a set index, neither bin name nor data type are supported.
+ * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_NONE.
+ * If any of these are provided when making a set index, you'll receive back
+ * an error from the server indicating the issue.
  *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
@@ -176,6 +181,11 @@ aerospike_index_create_ctx(
 /**
  * Create secondary index on an expression.
  *
+ * When creating a set index, neither bin name nor data type are supported.
+ * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_NONE.
+ * If any of these are provided when making a set index, you'll receive back
+ * an error from the server indicating the issue.
+ *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
  *
@@ -215,6 +225,11 @@ aerospike_index_create_exp(
 /**
  * Create secondary index given collection type and data type.
  *
+ * When creating a set index, neither bin name nor data type are supported.
+ * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_NONE.
+ * If any of these are provided when making a set index, you'll receive back
+ * an error from the server indicating the issue.
+ *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
  *
@@ -224,7 +239,7 @@ aerospike_index_create_exp(
  *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }
-* @endcode
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -255,6 +270,9 @@ aerospike_index_create_complex(
 
 /**
  * Create secondary index given data type.
+ *
+ * This function cannot be used to create a set index.  To create a set index,
+ * please consider using @see aerospike_index_create_complex instead.
  *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.

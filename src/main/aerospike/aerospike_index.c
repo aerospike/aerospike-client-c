@@ -87,6 +87,10 @@ aerospike_index_create_private(
 			itype_string = "MAPVALUES";
 			break;
 		}
+		case AS_INDEX_TYPE_SET: {
+			itype_string = "SET";
+			break;
+		}
 	}
 
 	as_node* node = as_node_get_random(as->cluster);

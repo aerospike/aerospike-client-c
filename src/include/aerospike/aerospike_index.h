@@ -70,7 +70,8 @@ typedef enum as_index_type_s {
 	AS_INDEX_TYPE_DEFAULT,
 	AS_INDEX_TYPE_LIST,
 	AS_INDEX_TYPE_MAPKEYS,
-	AS_INDEX_TYPE_MAPVALUES
+	AS_INDEX_TYPE_MAPVALUES,
+	AS_INDEX_TYPE_SET
 } as_index_type;
 
 /*
@@ -181,7 +182,7 @@ aerospike_index_create_ctx(
  * as_exp_build(exp, as_exp_add(as_exp_bin_int("a"), as_exp_bin_int("b")));
  *
  * as_index_task task;
- * if (aerospike_index_create_ctx(&as, &err, &task, NULL, "test", "demo",
+ * if (aerospike_index_create_exp(&as, &err, &task, NULL, "test", "demo",
  *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, exp) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }

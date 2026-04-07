@@ -100,6 +100,7 @@ typedef struct as_scan_builder {
 	uint32_t cmd_size_pre;
 	uint32_t cmd_size_post;
 	uint16_t n_fields;
+	bool has_query_ops_projection_ext;
 } as_scan_builder;
 
 //---------------------------------
@@ -388,9 +389,7 @@ as_scan_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* bu
 
 static as_status
 as_scan_command_size(
-	const as_policy_scan* policy, const as_scan* scan, as_scan_builder* sb,
-	bool has_query_ops_projection_ext, as_error* err
-	)
+	const as_policy_scan* policy, const as_scan* scan, as_scan_builder* sb, as_error* err)
 {
 	sb->size = AS_HEADER_SIZE;
 	uint16_t n_fields = 0;
@@ -485,7 +484,7 @@ as_scan_command_size(
 		if (is_foreground_scan && !has_write) {
 			for (uint16_t i = 0; i < ops->binops.size; i++) {
 				if (!as_operations_is_basic_read(ops->binops.entries[i].op)) {
-					if (!has_query_ops_projection_ext) {
+					if (!sb->has_query_ops_projection_ext) {
 						return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 								"Only basic read operations are supported for scan operations projection in server versions prior to 8.1.2.");
 					}
@@ -710,7 +709,9 @@ as_scan_command_execute(as_scan_task* task)
 		sb.max_records = 0;
 	}
 
-	status = as_scan_command_size(task->policy, task->scan, &sb, task->cluster->has_query_ops_projection_ext, &err);
+	sb.has_query_ops_projection_ext = task->cluster->has_query_ops_projection_ext;
+
+	status = as_scan_command_size(task->policy, task->scan, &sb, &err);
 
 	if (status != AEROSPIKE_OK) {
 		if (as_operations_defined(task->scan->ops)) {
@@ -1282,7 +1283,9 @@ as_scan_partition_async(
 	sb.opsbuffers = &opsbuffers;
 	sb.max_records = 0;
 
-	status = as_scan_command_size(policy, scan, &sb, cluster->has_query_ops_projection_ext, err);
+	sb.has_query_ops_projection_ext = cluster->has_query_ops_projection_ext;
+
+	status = as_scan_command_size(policy, scan, &sb, err);
 
 	if (status != AEROSPIKE_OK) {
 		if (as_operations_defined(scan->ops)) {

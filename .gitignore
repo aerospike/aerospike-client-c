@@ -12,7 +12,7 @@ Version.java
 modules/.*
 target/
 client_test-valgrind
-.code-workspace
+*.code-workspace
 
 # Compiled source #
 ###################

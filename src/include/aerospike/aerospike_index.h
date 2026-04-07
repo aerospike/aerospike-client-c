@@ -272,7 +272,7 @@ aerospike_index_create_complex(
  * Create secondary index given data type.
  *
  * This function cannot be used to create a set index.  To create a set index,
- * please consider using @see aerospike_index_create_complex instead.
+ * please consider using `aerospike_index_create_complex()` instead.
  *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
@@ -297,6 +297,7 @@ aerospike_index_create_complex(
  *
  * @return AEROSPIKE_OK if successful. Return AEROSPIKE_ERR_INDEX_FOUND if index exists. Otherwise an error.
  *
+ * @see aerospike_index_create_complex
  * @ingroup index_operations
  */
 static inline as_status

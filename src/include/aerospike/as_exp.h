@@ -585,7 +585,7 @@ as_exp_destroy_base64(char* base64)
  *         as_exp_list_get_by_value(NULL, AS_LIST_RETURN_COUNT,
  *             as_exp_str("abc"), as_exp_bin_list("a")),
  *         as_exp_int(0)));
-  * @endcode
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (list bin)
@@ -962,17 +962,21 @@ as_exp_destroy_base64(char* base64)
  * as_arraylist* lst = as_arraylist_new(3, 3);
  * as_arraylist_append_str(lst, "red");
  * as_arraylist_append_str(lst, "blue");
- * as_exp_build(e, as_exp_in_list(as_exp_bin_str("color"), lst));
+ * as_arraylist_append_str(lst, "green");
+ *
+ * as_exp_build(e1, as_exp_in_list(as_exp_bin_str("color"), as_exp_val((as_val*)lst));
+ * as_exp_build(e2, as_exp_in_list(as_exp_bin_str("color"), as_exp_bin_list("palette"));
+ *
  * as_arraylist_destroy(lst);
  * @endcode
  *
  * @param __left	Value expression to test for membership.
- * @param __list	List of values to search (must not be NULL).
+ * @param __list	Expression that evaluates to a list of values to search.
  * @return (boolean value)
  * @ingroup expression
  */
 #define as_exp_in_list(__left, __list) \
-		{.op=_AS_EXP_CODE_IN_LIST, .count=3}, __left, as_exp_val((as_val*)(__list))
+		{.op=_AS_EXP_CODE_IN_LIST, .count=3}, __left, __list
 
 /**
  * Return a list of keys from a map-valued subexpression.

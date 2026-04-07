@@ -979,7 +979,7 @@ TEST(exp_in_list, "as_exp_in_list string and int membership")
 		as_arraylist_append_str(colors, "green");
 
 		as_exp_build(expr_blue,
-			as_exp_in_list(as_exp_bin_str("color"), colors));
+			as_exp_in_list(as_exp_bin_str("color"), as_exp_val((as_val*)colors)));
 		assert_not_null(expr_blue);
 		as_arraylist_destroy(colors);
 
@@ -1008,7 +1008,7 @@ TEST(exp_in_list, "as_exp_in_list string and int membership")
 		as_arraylist_append_str(colors, "green");
 
 		as_exp_build(expr_yellow,
-			as_exp_in_list(as_exp_str("yellow"), colors));
+			as_exp_in_list(as_exp_str("yellow"), as_exp_val((as_val*)colors)));
 		assert_not_null(expr_yellow);
 		as_arraylist_destroy(colors);
 
@@ -1036,7 +1036,7 @@ TEST(exp_in_list, "as_exp_in_list string and int membership")
 		as_arraylist_append_int64(nums, 10);
 
 		as_exp_build(expr_five,
-			as_exp_in_list(as_exp_bin_int("qty"), nums));
+			as_exp_in_list(as_exp_bin_int("qty"), as_exp_val((as_val*)nums)));
 		assert_not_null(expr_five);
 		as_arraylist_destroy(nums);
 

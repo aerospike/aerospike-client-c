@@ -57,6 +57,12 @@ aerospike_index_create_private(
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "as_node_get_random() failed");
 	}
 
+	// Cache results of this specific version check because
+	// we check it several times, and should save some time.
+	// Other version checks happen only once, so won't gain
+	// benefit for caching.
+	bool is_server_8_1_2 = as_version_compare(&node->version, &as_server_version_8_1_2) >= 0;
+
 	const char* dtype_string;
 	switch (dtype) {
 		case AS_INDEX_NUMERIC:
@@ -74,7 +80,7 @@ aerospike_index_create_private(
 			break;
 		// For AS_INDEX_TYPE_SET indices
 		case AS_INDEX_NONE:
-			if (as_version_compare(&node->version, &as_server_version_8_1_2) >= 0) {
+			if (is_server_8_1_2) {
 				dtype_string = NULL;
 			}
 			else {
@@ -167,7 +173,7 @@ aerospike_index_create_private(
 		as_string_builder_append(&sb, ";indextype=");
 		as_string_builder_append(&sb, itype_string);
 
-		if ((as_version_compare(&node->version, &as_server_version_8_1_2) >= 0) && (itype == AS_INDEX_TYPE_SET)) {
+		if (is_server_8_1_2 && itype == AS_INDEX_TYPE_SET) {
 			// SET doesn't support bin or data type fields; so, only provide them
 			// if they're specified.  This gives the user a chance to respond to
 			// server-generated error messages.

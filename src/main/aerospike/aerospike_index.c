@@ -186,17 +186,43 @@ aerospike_index_create_private(
 				as_string_builder_append(&sb, dtype_string);
 			}
 		}
-		else if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
-			as_string_builder_append(&sb, ";bin=");
-			as_string_builder_append(&sb, bin_name);
-			as_string_builder_append(&sb, ";type=");
-			as_string_builder_append(&sb, dtype_string);
-		}
 		else {
-			as_string_builder_append(&sb, ";indexdata=");
-			as_string_builder_append(&sb, bin_name);
-			as_string_builder_append_char(&sb, ',');
-			as_string_builder_append(&sb, dtype_string);
+			// if itype != AS_INDEX_TYPE_SET
+			// OR if we're addressing server 8.1.1 or earlier
+			// then execute this section of code, exactly as
+			// we would from version 7.3.0 of this client.
+
+			if (bin_name == NULL) {
+				// Avoid a segmentation fault by returning an error
+				if (is_server_8_1_2) {
+					// itype must not be AS_INDEX_TYPE_SET
+					return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Bin name can only be NULL when creating set indexes");
+				}
+				else {
+					// Earlier version of server that doesn't support set indices;
+					// save the round trip overhead.
+					return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Bin name cannot be NULL");
+				}
+			}
+
+			if (dtype == AS_INDEX_NONE) {
+				// Simply log a warning here because, per 7.3.0 logic,
+				// dtype_string will contain "STRING", since it is the default case.
+				as_log_warn("Attempt to create non-set index with a data type set to AS_INDEX_NONE");
+			}
+
+			if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {
+				as_string_builder_append(&sb, ";bin=");
+				as_string_builder_append(&sb, bin_name);
+				as_string_builder_append(&sb, ";type=");
+				as_string_builder_append(&sb, dtype_string);
+			}
+			else {
+				as_string_builder_append(&sb, ";indexdata=");
+				as_string_builder_append(&sb, bin_name);
+				as_string_builder_append_char(&sb, ',');
+				as_string_builder_append(&sb, dtype_string);
+			}
 		}
 	}
 

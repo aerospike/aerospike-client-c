@@ -127,6 +127,7 @@ typedef struct as_query_builder {
 	as_node_partitions* np;
 	as_buffer argbuffer;
 	as_queue* opsbuffers;
+	as_cluster* cluster;
 	uint64_t max_records;
 	size_t size;
 	uint32_t filter_size;
@@ -140,7 +141,6 @@ typedef struct as_query_builder {
 	uint16_t n_fields;
 	uint16_t n_ops;
 	bool is_new;
-	bool has_query_ops_projection_ext;
 } as_query_builder;
 
 //---------------------------------
@@ -871,7 +871,7 @@ as_query_command_size(
 				// they are all basic reads for server versions prior to 8.1.2.
 				for (uint16_t i = 0; i < ops->binops.size; i++) {
 					if (!as_operations_is_basic_read(ops->binops.entries[i].op)) {
-						if (!qb->has_query_ops_projection_ext) {
+						if (!qb->cluster->has_query_ops_projection_ext) {
 							return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 									"Only basic read operations are supported for query operations projection in server versions prior to 8.1.2.");
 						}
@@ -1277,7 +1277,7 @@ as_query_command_execute_new(as_query_task* task)
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
 
-	qb.has_query_ops_projection_ext = task->cluster->has_query_ops_projection_ext;
+	qb.cluster = task->cluster;
 
 	as_status status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, &err);
 
@@ -1409,7 +1409,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
 
-	qb.has_query_ops_projection_ext = task->cluster->has_query_ops_projection_ext;
+	qb.cluster = task->cluster;
 
 	// Build Command. It's okay to share command across threads because old query protocol does
 	// not have retries. If retries were allowed, the timeout field in the command would change on
@@ -1881,7 +1881,7 @@ as_query_partition_async(
 	as_query_builder qb;
 	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
 
-	qb.has_query_ops_projection_ext = cluster->has_query_ops_projection_ext;
+	qb.cluster = cluster;
 
 	status = as_query_command_size(&policy->base, policy, query, &qb, err);
 
@@ -2337,7 +2337,7 @@ aerospike_query_async(
 	as_query_builder qb;
 	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
 
-	qb.has_query_ops_projection_ext = cluster->has_query_ops_projection_ext;
+	qb.cluster = cluster;
 
 	status = as_query_command_size(&policy->base, policy, query, &qb, err);
 

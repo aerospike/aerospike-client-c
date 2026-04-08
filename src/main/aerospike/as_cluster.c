@@ -565,6 +565,7 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	set_nodes(cluster, nodes_new);
 
 	cluster->has_partition_query = as_cluster_has_partition_query(nodes_new);
+	cluster->has_query_ops_projection_ext = as_cluster_has_query_ops_projection_ext(nodes_new);
 
 	if (nodes_new->size == 0) {
 		as_cluster_event_notify(cluster, NULL, AS_CLUSTER_DISCONNECTED);

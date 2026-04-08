@@ -466,6 +466,18 @@ AS_EXTERN void
 as_operations_destroy(as_operations* ops);
 
 /**
+ * Answers true if at least one operation on a bin is defined; false otherwise.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+static inline bool
+as_operations_defined(as_operations* ops)
+{
+	return ops && ops->binops.size > 0;
+}
+
+/**
  * Add a `AS_OPERATOR_WRITE` bin operation.
  *
  * @param ops		The `as_operations` to append the operation to.
@@ -655,6 +667,32 @@ as_operations_add_read(as_operations* ops, const char* name);
  */
 AS_EXTERN bool
 as_operations_add_read_all(as_operations* ops);
+
+/**
+ * @private
+ * Answers true if and only if at least one call was made to
+ * as_operations_add_read_all() on the given vector of operations.
+ *
+ * @relates as_operation
+ * @ingroup base_operations
+ */
+static inline bool
+as_operations_add_read_all_called(const as_operations* ops)
+{
+	if (!ops) {
+		return false;
+	}
+
+	for(int i = 0; i < ops->binops.size; i++) {
+		as_binop* binop = &ops->binops.entries[i];
+
+		if (binop->op == AS_OPERATOR_READ && binop->bin.name[0] == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
 
 /**
  * Add a `AS_OPERATOR_INCR` bin operation with int64_t value. If the record or bin does not exist,
@@ -890,6 +928,33 @@ as_operations_modify_by_path(
 		as_operations* ops, const char* name, as_cdt_ctx* ctx,
 		struct as_exp* mod_exp, as_exp_path_modify_flags flags
 		);
+
+/**
+ * @private
+ * Answer true if at least one operation is a write operation; false otherwise.
+ */
+AS_EXTERN bool
+as_operations_has_write(const as_operations* ops);
+
+/**
+ * @private
+ * Answer true if all the operations are write operations; false otherwise.
+ */
+AS_EXTERN bool
+as_operations_consists_of_all_writes(const as_operations* ops);
+
+/**
+ * @private
+ * Answer true if an operation's opcode is a basic read.
+ *
+ * We do not support AS_OPERATOR_READ_HEADER which might appear in
+ * other clients.
+ */
+static inline bool
+as_operations_is_basic_read(as_operator t)
+{
+	return t == AS_OPERATOR_READ;
+}
 
 /******************************************************************************
  * LIST FUNCTIONS

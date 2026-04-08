@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -400,6 +400,12 @@ typedef struct as_cluster_s {
 	 * Fail on cluster init if seed node and all peers are not reachable.
 	 */
 	bool fail_if_not_connected;
+
+	/**
+	 * @private
+	 * True if the cluster supports query operations projection.
+	 */
+	bool has_query_ops_projection_ext;
 
 	/**
 	 * @private

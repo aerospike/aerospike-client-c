@@ -1,0 +1,24 @@
+# Used by clangd (walks up from source files; applies to this example tree).
+# Paths are relative to this directory (examples/query_examples/projection).
+-std=gnu99
+-Wall
+-D_FILE_OFFSET_BITS=64
+-D_REENTRANT
+-D_GNU_SOURCE
+-I../../../src/include
+-I../../../modules/common/src/include
+-I../../../modules/mod-lua/src/include
+-I../../../modules/lua
+-I../../utils/src/include
+-isystem
+/opt/homebrew/include
+-isystem
+/opt/homebrew/opt/openssl/include
+-isystem
+/opt/homebrew/opt/libevent/include
+-isystem
+/usr/local/include
+-isystem
+/usr/local/opt/openssl/include
+-isystem
+/usr/local/opt/libevent/include

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -355,7 +355,6 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
  * For example, if a map {"A": 1, "B": 2, "C": 3} exists, and you pass
  * keys ["A", "C", "D"] in as the list of keys, the result will only
  * include {"A": 1, "C": 3}, since element "D" does not exist in the map.
- * Observe that the values of the corresponding keys are not returned.
  *
  * The ctx list takes ownership of keys.
  *

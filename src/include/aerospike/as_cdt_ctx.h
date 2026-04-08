@@ -403,6 +403,19 @@ as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const struct as_exp* ex
 /**
  * Add a boolean expression filter AND-combined with the current context.
  *
+ * Restrictions:
+ * - Only one and-filter is allowed per context level.  Multiple filters
+ *   cannot be chained.  To combine multiple conditions, use
+ *   `as_exp_build(as_exp_and(...))` with a single call to
+ *   `as_cdt_ctx_add_and_filter()`.
+ *
+ * - The preceeding context entry must not be an expression type;
+ *   i.e., `as_cdt_ctx_add_and_filter()` cannot follow
+ *   `as_cdt_ctx_add_all_children_with_filter()` or
+ *   `as_cdt_ctx_add_all_children()`.
+ *
+ * - The and-filter cannot be the first entry in the context chain.
+ *
  * The ctx does NOT take ownership of exp. Evaluation runs after prior context
  * steps (e.g. map key-list selection); entries must satisfy both. Multiple
  * as_cdt_ctx_add_and_filter() calls may be chained.

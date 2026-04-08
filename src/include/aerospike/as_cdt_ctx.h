@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -355,7 +355,6 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
  * For example, if a map {"A": 1, "B": 2, "C": 3} exists, and you pass
  * keys ["A", "C", "D"] in as the list of keys, the result will only
  * include {"A": 1, "C": 3}, since element "D" does not exist in the map.
- * Observe that the values of the corresponding keys are not returned.
  *
  * The ctx list takes ownership of keys.
  *
@@ -402,6 +401,19 @@ as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const struct as_exp* ex
 
 /**
  * Add a boolean expression filter AND-combined with the current context.
+ *
+ * Restrictions:
+ * - Only one and-filter is allowed per context level.  Multiple filters
+ *   cannot be chained.  To combine multiple conditions, use
+ *   `as_exp_build(as_exp_and(...))` with a single call to
+ *   `as_cdt_ctx_add_and_filter()`.
+ *
+ * - The preceeding context entry must not be an expression type;
+ *   i.e., `as_cdt_ctx_add_and_filter()` cannot follow
+ *   `as_cdt_ctx_add_all_children_with_filter()` or
+ *   `as_cdt_ctx_add_all_children()`.
+ *
+ * - The and-filter cannot be the first entry in the context chain.
  *
  * The ctx does NOT take ownership of exp. Evaluation runs after prior context
  * steps (e.g. map key-list selection); entries must satisfy both. Multiple

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2023 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -994,6 +994,93 @@ TEST(scan_basics_background_sameid , "starting two udf scan of "SET2" in backgro
 	as_scan_destroy(&scan2);
 }
 
+static bool
+__scan_operate_foreground_writes_callback(const as_val* val_unused, void* data)
+{
+	// Satisfy compiler warnings
+	(void)val_unused;
+	(void)data;
+
+	// We don't really care about the results of any processing, so we just
+	// terminate the foreach on the first hit.
+	return false;
+}
+
+TEST(scan_operate_foreground_writes, "scan operate foreground with writes")
+{
+	as_error err;
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	scan.ops = &ops;
+
+	as_scan_select_init(&scan, 2);
+	as_scan_select(&scan, "baz");
+	as_scan_select(&scan, "blort");
+
+	as_status status = aerospike_scan_foreach(as, &err, NULL, &scan,
+			__scan_operate_foreground_writes_callback, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+
+	as_scan_destroy(&scan);
+}
+
+TEST(scan_operate_background_selects, "scan operate background with selects")
+{
+	as_error err;
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	scan.ops = &ops;
+
+	as_scan_select_init(&scan, 2);
+	as_scan_select(&scan, "baz");
+	as_scan_select(&scan, "blort");
+
+	uint64_t scanid = 0;
+	as_status status = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
+	// This will eventually become an AEROSPIKE_ERR_PARAM in the next major release.
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_scan_destroy(&scan);
+}
+
+TEST(scan_operate_background_reads_and_writes, "scan operate background with reads and writes")
+{
+	as_error err;
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+	as_operations_add_read(&ops, "foo");
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	scan.ops = &ops;
+
+	as_scan_select_init(&scan, 2);
+	as_scan_select(&scan, "baz");
+	as_scan_select(&scan, "blort");
+
+	uint64_t scanid = 0;
+	as_status status = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	as_scan_destroy(&scan);
+}
+
 TEST(scan_operate, "scan operate")
 {
 	as_error err;
@@ -1390,6 +1477,9 @@ SUITE(scan_basics, "aerospike_scan basic tests")
 	suite_add(scan_basics_background_delete_records_md_filter);
 	suite_add(scan_basics_background_delete_records);
 	suite_add(scan_operate);
+	suite_add(scan_operate_foreground_writes);
+	suite_add(scan_operate_background_selects);
+	suite_add(scan_operate_background_reads_and_writes);
 	suite_add(scan_operate_ttl);
 	suite_add(scan_operate_expop);
 	suite_add(scan_filter_set_name);

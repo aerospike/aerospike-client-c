@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -426,6 +426,12 @@ as_lookup_node(
 	if (as_version_compare(&node_info->version, &pquery_batchany) >= 0) {
 		features |= AS_FEATURES_PARTITION_QUERY;
 		features |= AS_FEATURES_BATCH_ANY;
+	}
+
+	as_version query_ops_projection = {8,1,2,0};
+
+	if (as_version_compare(&node_info->version, &query_ops_projection) >= 0) {
+		features |= AS_FEATURES_HAS_QUERY_OPS_PROJECTION_EXT;
 	}
 
 	node_info->features = features;

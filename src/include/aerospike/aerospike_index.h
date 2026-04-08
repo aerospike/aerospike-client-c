@@ -149,8 +149,6 @@ struct as_exp;
  * 
  * When creating a set index, neither bin name nor data type are supported.
  * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_DEFAULT.
- * If any of these are provided when making a set index, you'll receive back
- * an error from the server indicating the issue.
  *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
@@ -194,8 +192,6 @@ aerospike_index_create_ctx(
  *
  * When creating a set index, neither bin name nor data type are supported.
  * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_DEFAULT.
- * If any of these are provided when making a set index, you'll receive back
- * an error from the server indicating the issue.
  *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
@@ -238,8 +234,6 @@ aerospike_index_create_exp(
  *
  * When creating a set index, neither bin name nor data type are supported.
  * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_DEFAULT.
- * If any of these are provided when making a set index, you'll receive back
- * an error from the server indicating the issue.
  *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.

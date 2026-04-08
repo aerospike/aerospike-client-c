@@ -35,6 +35,10 @@
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_queue.h>
 
+//---------------------------------
+// Imports
+//---------------------------------
+
 extern bool as_op_is_write[];
 
 //---------------------------------

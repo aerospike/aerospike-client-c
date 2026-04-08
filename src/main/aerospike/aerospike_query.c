@@ -148,9 +148,7 @@ typedef struct as_query_builder {
 //---------------------------------
 
 static void
-as_query_foreground_ops_respond_all_write_attr(
-		const as_operations* ops, uint8_t* write_attr
-		)
+as_query_foreground_ops_respond_all_write_attr(const as_operations* ops, uint8_t* write_attr)
 {
 	if (as_operations_add_read_all_called(ops)) {
 		*write_attr &= ~AS_MSG_INFO2_RESPOND_ALL_OPS;

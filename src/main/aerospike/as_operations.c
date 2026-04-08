@@ -25,7 +25,7 @@
 #include "_bin.h"
 
 //---------------------------------
-// Static Variables
+// Global Variables
 //---------------------------------
 
 // These values must line up with as_operator enum.
@@ -50,7 +50,7 @@ bool as_op_is_write[] = {
 };
 
 //---------------------------------
-// STATIC FUNCTIONS
+// Static Functions
 //---------------------------------
 
 static as_operations*
@@ -118,10 +118,9 @@ as_binop_append(as_operations* ops, as_operator operator)
 	return true;
 }
 
-
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 as_operations*
 as_operations_init(as_operations* ops, uint16_t nops)
@@ -366,6 +365,7 @@ as_operations_has_write(const as_operations* ops)
 	if (!ops) {
 		return false;
 	}
+
 	for (uint16_t i = 0; i < ops->binops.size; i++) {
 		if (as_op_is_write[ops->binops.entries[i].op]) {
 			return true;
@@ -386,6 +386,5 @@ as_operations_consists_of_all_writes(const as_operations* ops)
 			return false;
 		}
 	}
-
 	return true;
 }

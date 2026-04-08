@@ -400,18 +400,6 @@ typedef enum {
 	(__ops)->gen = 0;\
 	(__ops)->_free = false;
 
-/**
- * Answers true if at least one operation on a bin is defined; false otherwise.
- *
- * @relates as_operations
- * @ingroup base_operations
- */
-static inline bool
-as_operations_defined(as_operations* ops)
-{
-	return ops && ops->binops.size > 0;
-}
-
 //---------------------------------
 // Functions
 //---------------------------------
@@ -476,6 +464,18 @@ as_operations_new(uint16_t nops);
  */
 AS_EXTERN void
 as_operations_destroy(as_operations* ops);
+
+/**
+ * Answers true if at least one operation on a bin is defined; false otherwise.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+static inline bool
+as_operations_defined(as_operations* ops)
+{
+	return ops && ops->binops.size > 0;
+}
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation.

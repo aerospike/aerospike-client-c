@@ -429,6 +429,7 @@ as_lookup_node(
 	}
 
 	as_version query_ops_projection = {8,1,2,0};
+
 	if (as_version_compare(&node_info->version, &query_ops_projection) >= 0) {
 		features |= AS_FEATURES_HAS_QUERY_OPS_PROJECTION_EXT;
 	}

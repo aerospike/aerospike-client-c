@@ -19,7 +19,6 @@
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_exp.h>
-// #include <aerospike/as_log.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_string_builder.h>

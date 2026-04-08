@@ -82,8 +82,19 @@ typedef enum as_index_datatype_s {
 	AS_INDEX_NUMERIC,
 	AS_INDEX_GEO2DSPHERE,
 	AS_INDEX_BLOB, // Requires server version 7.0+.
-	AS_INDEX_NONE  // Requires server version 8.1.2+.
+	AS_INDEX_INTEGER,
 } as_index_datatype;
+
+/*
+ * When creating set indices, the specific data type doesn't matter.
+ * This definition provides a convenient way of expressing that you
+ * don't care about the data type.
+ *
+ * Should match the default case label for the dtype parameter
+ * in aerospike_create_index_private().
+ */
+#define AS_INDEX_DEFAULT  AS_INDEX_STRING
+
 
 /**
  * Index Task
@@ -137,7 +148,7 @@ struct as_exp;
  * Create secondary index given collection type, data type and context.
  * 
  * When creating a set index, neither bin name nor data type are supported.
- * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_NONE.
+ * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_DEFAULT.
  * If any of these are provided when making a set index, you'll receive back
  * an error from the server indicating the issue.
  *
@@ -182,7 +193,7 @@ aerospike_index_create_ctx(
  * Create secondary index on an expression.
  *
  * When creating a set index, neither bin name nor data type are supported.
- * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_NONE.
+ * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_DEFAULT.
  * If any of these are provided when making a set index, you'll receive back
  * an error from the server indicating the issue.
  *
@@ -226,7 +237,7 @@ aerospike_index_create_exp(
  * Create secondary index given collection type and data type.
  *
  * When creating a set index, neither bin name nor data type are supported.
- * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_NONE.
+ * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_DEFAULT.
  * If any of these are provided when making a set index, you'll receive back
  * an error from the server indicating the issue.
  *

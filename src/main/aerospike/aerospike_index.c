@@ -57,12 +57,6 @@ aerospike_index_create_private(
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "as_node_get_random() failed");
 	}
 
-	// Cache results of this specific version check because
-	// we check it several times, and should save some time.
-	// Other version checks happen only once, so won't gain
-	// benefit for caching.
-	bool is_server_8_1_2 = as_version_compare(&node->version, &as_server_version_8_1_2) >= 0;
-
 	const char* dtype_string;
 	switch (dtype) {
 		case AS_INDEX_NUMERIC:
@@ -77,16 +71,6 @@ aerospike_index_create_private(
 		default:
 		case AS_INDEX_STRING:
 			dtype_string = "STRING";
-			break;
-		// For AS_INDEX_TYPE_SET indices
-		case AS_INDEX_NONE:
-			if (is_server_8_1_2) {
-				dtype_string = NULL;
-			}
-			else {
-				// Preserve client 7.3.0 and earlier behavior
-				dtype_string = "STRING";
-			}
 			break;
 	}
 
@@ -130,85 +114,69 @@ aerospike_index_create_private(
 	as_string_builder_append(&sb, ";indexname=");
 	as_string_builder_append(&sb, index_name);
 
-	if (exp) {
-		char* b64 = as_exp_to_base64(exp);
-
-		as_string_builder_append(&sb, ";exp=");
-		as_string_builder_append(&sb, b64);
-		cf_free(b64);
-
-		as_string_builder_append(&sb, ";indextype=");
-		as_string_builder_append(&sb, itype_string);
-
-		if (dtype_string) {
-			as_string_builder_append(&sb, ";type=");
-			as_string_builder_append(&sb, dtype_string);
-		}
+	if (itype == AS_INDEX_TYPE_SET) {
+		as_string_builder_append(&sb, ";indextype=SET");
 	}
 	else {
-		if (ctx) {
-			as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
-
-			if (as_cdt_ctx_pack(ctx, &pk) == 0) {
-				as_node_release(node);
-				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to pack ctx");
+		if (as_version_compare(&node->version, &as_server_version_8_1_3) >= 0) {
+			if (dtype == AS_INDEX_NUMERIC) {
+				dtype = AS_INDEX_INTEGER;
+				dtype_string = "INTEGER";
 			}
-
-			char* context = cf_malloc(pk.offset);
-			uint32_t b64_sz = cf_b64_encoded_len(pk.offset);
-
-			char* b64 = cf_malloc(b64_sz + 1);
-			pk.buffer = (uint8_t*)context;
-			pk.offset = 0;
-			as_cdt_ctx_pack(ctx, &pk);
-			cf_b64_encode(pk.buffer, pk.offset, b64);
-			b64[b64_sz] = 0;
-			cf_free(context);
-
-			as_string_builder_append(&sb, ";context=");
-			as_string_builder_append(&sb, b64);
-			cf_free(b64);
+		}
+		else {
+			if (dtype == AS_INDEX_INTEGER) {
+				dtype = AS_INDEX_NUMERIC;
+				dtype_string = "NUMERIC";
+			}
 		}
 
-		as_string_builder_append(&sb, ";indextype=");
-		as_string_builder_append(&sb, itype_string);
+		if (exp) {
+			char* b64 = as_exp_to_base64(exp);
 
-		if (is_server_8_1_2 && itype == AS_INDEX_TYPE_SET) {
-			// SET doesn't support bin or data type fields; so, only provide them
-			// if they're specified.  This gives the user a chance to respond to
-			// server-generated error messages.
-			if (bin_name) {
-				as_string_builder_append(&sb, ";bin=");
-				as_string_builder_append(&sb, bin_name);
+			as_string_builder_append(&sb, ";exp=");
+			as_string_builder_append(&sb, b64);
+			cf_free(b64);
+
+			// Matches C# logic per Shannon's recommendation
+			if (itype != AS_INDEX_TYPE_DEFAULT) {
+				as_string_builder_append(&sb, ";indextype=");
+				as_string_builder_append(&sb, itype_string);
 			}
+
 			if (dtype_string) {
 				as_string_builder_append(&sb, ";type=");
 				as_string_builder_append(&sb, dtype_string);
 			}
 		}
 		else {
-			// if itype != AS_INDEX_TYPE_SET
-			// OR if we're addressing server 8.1.1 or earlier
-			// then execute this section of code, exactly as
-			// we would from version 7.3.0 of this client.
+			if (ctx) {
+				as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
 
-			if (bin_name == NULL) {
-				// Avoid a segmentation fault by returning an error
-				if (is_server_8_1_2) {
-					// itype must not be AS_INDEX_TYPE_SET
-					return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Bin name can only be NULL when creating set indexes");
+				if (as_cdt_ctx_pack(ctx, &pk) == 0) {
+					as_node_release(node);
+					return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to pack ctx");
 				}
-				else {
-					// Earlier version of server that doesn't support set indices;
-					// save the round trip overhead.
-					return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Bin name cannot be NULL");
-				}
+
+				char* context = cf_malloc(pk.offset);
+				uint32_t b64_sz = cf_b64_encoded_len(pk.offset);
+
+				char* b64 = cf_malloc(b64_sz + 1);
+				pk.buffer = (uint8_t*)context;
+				pk.offset = 0;
+				as_cdt_ctx_pack(ctx, &pk);
+				cf_b64_encode(pk.buffer, pk.offset, b64);
+				b64[b64_sz] = 0;
+				cf_free(context);
+
+				as_string_builder_append(&sb, ";context=");
+				as_string_builder_append(&sb, b64);
+				cf_free(b64);
 			}
 
-			if (dtype == AS_INDEX_NONE) {
-				// Simply log a warning here because, per 7.3.0 logic,
-				// dtype_string will contain "STRING", since it is the default case.
-				as_log_warn("Attempt to create non-set index with a data type set to AS_INDEX_NONE");
+			if (itype != AS_INDEX_TYPE_DEFAULT) {
+				as_string_builder_append(&sb, ";indextype=");
+				as_string_builder_append(&sb, itype_string);
 			}
 
 			if (as_version_compare(&node->version, &as_server_version_8_1) >= 0) {

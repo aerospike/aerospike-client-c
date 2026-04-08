@@ -77,7 +77,7 @@ TEST(index_basics_create, "Create index on bin")
 	// SET type index (bin and dtype parameters not supported)
 	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE,
 			SET, NULL, "idx_test_set", AS_INDEX_TYPE_SET,
-			AS_INDEX_NONE);
+			AS_INDEX_DEFAULT);
 
 	if (! index_process_return_code(status, &err, &task)) {
 		assert_int_eq(status , AEROSPIKE_OK);

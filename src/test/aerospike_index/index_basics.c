@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -73,6 +73,15 @@ TEST(index_basics_create, "Create index on bin")
 	if (! index_process_return_code(status, &err, &task)) {
 		assert_int_eq(status , AEROSPIKE_OK);
 	}
+
+	// SET type index (bin and dtype parameters not supported)
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE,
+			SET, NULL, "idx_test_set", AS_INDEX_TYPE_SET,
+			AS_INDEX_DEFAULT);
+
+	if (! index_process_return_code(status, &err, &task)) {
+		assert_int_eq(status , AEROSPIKE_OK);
+	}
 }
 
 TEST(index_basics_drop , "Drop index")
@@ -82,14 +91,21 @@ TEST(index_basics_drop , "Drop index")
 
 	// DEFAULT type index
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_new_bin");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
 	// LIST type index
 	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_listbin");
-	if ( err.code != AEROSPIKE_OK ) {
+	if (err.code != AEROSPIKE_OK) {
+		info("error(%d): %s", err.code, err.message);
+	}
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	// SET type index
+	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_set");
+	if (err.code != AEROSPIKE_OK) {
 		info("error(%d): %s", err.code, err.message);
 	}
 	assert_int_eq( err.code, AEROSPIKE_OK );

@@ -698,7 +698,7 @@ as_node_get_connection(
 			else if (++pool_index >= max) {
 				break;
 			}
-			pool = &pool[pool_index];
+			pool = &pools[pool_index];
 		}
 	}
 	// All queues full.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -76,6 +76,7 @@ typedef enum {
 
 	_AS_EXP_CODE_CMP_REGEX = 7,
 	_AS_EXP_CODE_CMP_GEO = 8,
+	_AS_EXP_CODE_IN_LIST = 9,
 
 	_AS_EXP_CODE_AND = 16,
 	_AS_EXP_CODE_OR = 17,
@@ -126,7 +127,9 @@ typedef enum {
 	_AS_EXP_CODE_BIN = 81,
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
-	_AS_EXP_CODE_RESULT_REMOVE = 100,
+	_AS_EXP_CODE_REMOVE_RESULT = 100,
+	_AS_EXP_CODE_MAP_KEYS = 101,
+	_AS_EXP_CODE_MAP_VALUES = 102,
 
 	_AS_EXP_CODE_LOOPVAR = 122,
 
@@ -582,7 +585,7 @@ as_exp_destroy_base64(char* base64)
  *         as_exp_list_get_by_value(NULL, AS_LIST_RETURN_COUNT,
  *             as_exp_str("abc"), as_exp_bin_list("a")),
  *         as_exp_int(0)));
-  * @endcode
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (list bin)
@@ -947,6 +950,70 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_cmp_le(__left, __right) \
 		{.op=_AS_EXP_CODE_CMP_LE, .count=3}, __left, __right
+
+/**
+ * True if the value of @a __left is contained in @a __list (by value).
+ *
+ * @a __left may be any expression. @a __list must be an @c as_list (for example
+ * @c as_arraylist). The list is serialized when the expression is compiled; the
+ * caller retains ownership of @a __list and should destroy it after @c as_exp_build.
+ *
+ * @code
+ * as_arraylist* lst = as_arraylist_new(3, 3);
+ * as_arraylist_append_str(lst, "red");
+ * as_arraylist_append_str(lst, "blue");
+ * as_arraylist_append_str(lst, "green");
+ *
+ * as_exp_build(e1, as_exp_in_list(as_exp_bin_str("color"), as_exp_val((as_val*)lst));
+ * as_exp_build(e2, as_exp_in_list(as_exp_bin_str("color"), as_exp_bin_list("palette"));
+ *
+ * as_arraylist_destroy(lst);
+ * @endcode
+ *
+ * @param __left	Value expression to test for membership.
+ * @param __list	Expression that evaluates to a list of values to search.
+ * @return (boolean value)
+ * @ingroup expression
+ */
+#define as_exp_in_list(__left, __list) \
+		{.op=_AS_EXP_CODE_IN_LIST, .count=3}, __left, __list
+
+/**
+ * Return a list of keys from a map-valued subexpression.
+ *
+ * @a __map must evaluate to a map, for example @c as_exp_bin_map("name") for a
+ * map bin, or @c as_exp_val((as_val*)m) for a literal @c as_map / @c as_orderedmap.
+ * Literal maps are serialized at compile time; the caller retains ownership and
+ * should destroy them after @c as_exp_build.
+ *
+ * @code
+ * as_orderedmap m;
+ * as_orderedmap_init(&m, 2);
+ * as_orderedmap_set(&m, (as_val*)as_string_new((char*)"k", false),
+ *     (as_val*)as_integer_new(1));
+ * as_exp_build(e, as_exp_map_keys(as_exp_val((as_val*)&m)));
+ * as_exp_destroy(e);
+ * as_orderedmap_destroy(&m);
+ * @endcode
+ *
+ * @param __map	Map-valued expression (e.g. bin or constant).
+ * @return (list value)
+ * @ingroup expression
+ */
+#define as_exp_map_keys(__map) \
+		{.op=_AS_EXP_CODE_MAP_KEYS, .count=2}, __map
+
+/**
+ * Return a list of values from a map-valued subexpression.
+ *
+ * @a __map must evaluate to a map; see @ref as_exp_map_keys for operand forms.
+ *
+ * @param __map	Map-valued expression (e.g. bin or constant).
+ * @return (list value)
+ * @ingroup expression
+ */
+#define as_exp_map_values(__map) \
+		{.op=_AS_EXP_CODE_MAP_VALUES, .count=2}, __map
 
 /**
  * Create expression that performs a regex match on a string bin or value
@@ -1754,11 +1821,21 @@ as_exp_destroy_base64(char* base64)
 		_as_exp_loopvar_make(__var_id, HLL)
 
 /**
- * Return a result_remove object to indicate entry deletion for cdt_apply.
- * @return the result_remove value.
+ * Return a remove_result object to indicate entry deletion for cdt_apply.
+ * @return the remove_result value.
  * @ingroup expression
  */
-#define as_exp_result_remove() {.op=_AS_EXP_CODE_RESULT_REMOVE, .count=1}
+#define as_exp_remove_result() {.op=_AS_EXP_CODE_REMOVE_RESULT, .count=1}
+
+/**
+ * Return a remove_result object to indicate entry deletion for cdt_apply.
+ * This name is deprecated; please use as_exp_remove_result() going forward.
+ *
+ * @return the remove_result value.
+ * @ingroup expression
+ * @see as_exp_remove_result()
+ */
+#define as_exp_result_remove() as_exp_remove_result()
 
 //---------------------------------
 // List Modify Expressions
@@ -2997,13 +3074,12 @@ as_exp_destroy_base64(char* base64)
  *
  * @param __ctx    Pointer to a CDT context.  This cannot be NULL, nor can
  *                 the context be empty.
- * @param __vtype  Value type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __rtype  Return value type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __flags  Flags (see enum as_exp_path_select_flags).
  * @param __bin    Bin expression this select query is performed against.
  * @return (expression)
  * @ingroup expression
  */
-
 #define as_exp_select_by_path(__ctx, __rtype, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \
@@ -3021,14 +3097,13 @@ as_exp_destroy_base64(char* base64)
  *
  * @param __ctx      Pointer to a CDT context.  This cannot be NULL, nor can
  *                   the context be empty.
- * @param __vtype    Value type specifier (e.g., AS_EXP_TYPE_MAP).
+ * @param __rtype    Return value type specifier (e.g., AS_EXP_TYPE_MAP).
  * @param __mod_exp  Expression to apply.
  * @param __flags    Flags (see enum as_exp_path_modify_flags).
  * @param __bin      Bin expression to which __mod_exp applies to.
  * @return (expression)
  * @ingroup expression
  */
-
 #define as_exp_modify_by_path(__ctx, __rtype, __mod_exp, __flags, __bin) \
 		{.op=_AS_EXP_CODE_CALL, .count=5}, \
 		_AS_EXP_VAL_RTYPE(__rtype), \

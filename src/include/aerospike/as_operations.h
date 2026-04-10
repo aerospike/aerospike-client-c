@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -363,12 +363,6 @@ typedef enum {
 	AS_EXP_PATH_MODIFY_DEFAULT = 0x00,
 
 	/**
-	 * @private
-	 * This flag is set when leaf values are to be modified.
-	 */
-	AS_EXP_PATH_MODIFY_APPLY = 0x04,
-
-	/**
 	 * If the expression in the context hits an invalid type (e.g., selects
 	 * as an integer when the value is a string), do not fail the operation;
 	 * just ignore those elements.  Interpret UNKNOWN as false instead.
@@ -470,6 +464,18 @@ as_operations_new(uint16_t nops);
  */
 AS_EXTERN void
 as_operations_destroy(as_operations* ops);
+
+/**
+ * Answers true if at least one operation on a bin is defined; false otherwise.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+static inline bool
+as_operations_defined(as_operations* ops)
+{
+	return ops && ops->binops.size > 0;
+}
 
 /**
  * Add a `AS_OPERATOR_WRITE` bin operation.
@@ -661,6 +667,34 @@ as_operations_add_read(as_operations* ops, const char* name);
  */
 AS_EXTERN bool
 as_operations_add_read_all(as_operations* ops);
+
+/**
+ * @private
+ * Answers true if and only if at least one call was made to
+ * as_operations_add_read_all() on the given vector of operations.
+ *
+ * @param ops			The `as_operations` to append the operation to.
+ *
+ * @relates as_operation
+ * @ingroup base_operations
+ */
+static inline bool
+as_operations_add_read_all_called(const as_operations* ops)
+{
+	if (!ops) {
+		return false;
+	}
+
+	for(int i = 0; i < ops->binops.size; i++) {
+		as_binop* binop = &ops->binops.entries[i];
+
+		if (binop->op == AS_OPERATOR_READ && binop->bin.name[0] == 0) {
+			return true;
+		}
+	}
+
+	return false;
+}
 
 /**
  * Add a `AS_OPERATOR_INCR` bin operation with int64_t value. If the record or bin does not exist,
@@ -868,7 +902,7 @@ as_operations_add_delete(as_operations* ops);
  * an error for ctx to be NULL or empty.
  *
  * @relates as_operations
- * @ingroup cdt_operations
+ * @ingroup base_operations
  */
 AS_EXTERN enum as_status_e
 as_operations_select_by_path(
@@ -888,7 +922,7 @@ as_operations_select_by_path(
  * an error for ctx to be NULL or empty.
  *
  * @relates as_operations
- * @ingroup cdt_operations
+ * @ingroup base_operations
  */
 AS_EXTERN enum as_status_e
 as_operations_modify_by_path(
@@ -896,6 +930,33 @@ as_operations_modify_by_path(
 		as_operations* ops, const char* name, as_cdt_ctx* ctx,
 		struct as_exp* mod_exp, as_exp_path_modify_flags flags
 		);
+
+/**
+ * @private
+ * Answer true if at least one operation is a write operation; false otherwise.
+ */
+AS_EXTERN bool
+as_operations_has_write(const as_operations* ops);
+
+/**
+ * @private
+ * Answer true if all the operations are write operations; false otherwise.
+ */
+AS_EXTERN bool
+as_operations_consists_of_all_writes(const as_operations* ops);
+
+/**
+ * @private
+ * Answer true if an operation's opcode is a basic read.
+ *
+ * We do not support AS_OPERATOR_READ_HEADER which might appear in
+ * other clients.
+ */
+static inline bool
+as_operations_is_basic_read(as_operator t)
+{
+	return t == AS_OPERATOR_READ;
+}
 
 /******************************************************************************
  * LIST FUNCTIONS

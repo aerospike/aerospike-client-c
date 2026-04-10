@@ -673,6 +673,8 @@ as_operations_add_read_all(as_operations* ops);
  * Answers true if and only if at least one call was made to
  * as_operations_add_read_all() on the given vector of operations.
  *
+ * @param ops			The `as_operations` to append the operation to.
+ *
  * @relates as_operation
  * @ingroup base_operations
  */

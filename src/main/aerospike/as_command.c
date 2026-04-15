@@ -1178,7 +1178,9 @@ as_command_parse_error_details(const uint8_t* buf, uint32_t len, as_error* err)
 	}
 
 	uint64_t subcode = 0;
+	bool has_subcode = false;
 	uint32_t message_len = 0;
+	const uint8_t* message_str = NULL;
 
 	for (int64_t i = 0; i < count; i++) {
 		uint64_t key;
@@ -1191,9 +1193,9 @@ as_command_parse_error_details(const uint8_t* buf, uint32_t len, as_error* err)
 		switch (key) {
 		case AS_ERROR_DETAIL_KEY_MESSAGE: {
 			uint32_t str_sz = 0;
-			const uint8_t* str = as_unpack_str(&pk, &str_sz);
+			message_str = as_unpack_str(&pk, &str_sz);
 
-			if (str == NULL) {
+			if (message_str == NULL) {
 				if (as_unpack_size(&pk) < 0) {
 					return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 							"error details message unpack failed");
@@ -1204,8 +1206,6 @@ as_command_parse_error_details(const uint8_t* buf, uint32_t len, as_error* err)
 
 			message_len = str_sz > AS_ERROR_MESSAGE_MAX_LEN ?
 					AS_ERROR_MESSAGE_MAX_LEN : str_sz;
-			memcpy(err->message, str, message_len);
-			err->message[message_len] = 0;
 			continue;
 		}
 		case AS_ERROR_DETAIL_KEY_SUBCODE: {
@@ -1214,24 +1214,7 @@ as_command_parse_error_details(const uint8_t* buf, uint32_t len, as_error* err)
 						"error details subcode unpack failed");
 			}
 
-			// message is full so skip the subcode
-			if (message_len >= AS_ERROR_MESSAGE_MAX_LEN) {
-				break;
-			}
-
-			if (message_len == 0) {
-				snprintf(err->message, sizeof(err->message),
-						"error subcode=%" PRIu64, subcode);
-				message_len = (uint32_t)strnlen(err->message, sizeof(err->message));
-			}
-			else {
-				char subcode_msg[AS_ERROR_MESSAGE_MAX_LEN - message_len + 1];
-				snprintf(subcode_msg, sizeof(subcode_msg),
-						" (subcode=%" PRIu64 ")", subcode);
-				strncat(err->message, subcode_msg,
-						sizeof(err->message) - strlen(err->message));
-			}
-
+			has_subcode = true;
 			continue;
 		}
 		default:
@@ -1241,6 +1224,27 @@ as_command_parse_error_details(const uint8_t* buf, uint32_t len, as_error* err)
 			}
 			break;
 		}
+	}
+
+	if (message_len > 0 && has_subcode) {
+		memcpy(err->message, message_str, message_len);
+		int n = snprintf(err->message + message_len,
+				sizeof(err->message) - message_len,
+				" (subcode=%" PRIu64 ")", subcode);
+
+		if (n > 0) {
+			message_len += (uint32_t)n;
+		}
+
+		err->message[message_len] = 0;
+	}
+	else if (message_len > 0) {
+		memcpy(err->message, message_str, message_len);
+		err->message[message_len] = 0;
+	}
+	else if (has_subcode) {
+		snprintf(err->message, sizeof(err->message),
+				"error subcode=%" PRIu64, subcode);
 	}
 
 	return AEROSPIKE_OK;

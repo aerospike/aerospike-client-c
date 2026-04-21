@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false # Don't cancel all jobs if one OS fails
       matrix:
-        os: [debian-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         event-lib: [none, libevent, libuv, libev]
         # You can add specific Linux distros by using different runner images
         # or using a container strategy for the 'ubuntu' jobs.

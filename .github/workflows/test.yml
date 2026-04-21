@@ -23,7 +23,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -y
-		  sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev ncurses-dev
+          sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev ncurses-dev
 
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
@@ -79,5 +79,5 @@ jobs:
           make EVENT_LIB=libevent
           make EVENT_LIB=libevent test
 
-# vim:set ts=4:sw=4:noet
+# vim:set ts=2:sw=2:et
 

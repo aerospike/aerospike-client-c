@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2024 by Aerospike.
+ * Copyright 2008-2025 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -69,6 +69,7 @@ const char DEFAULT_NAMESPACE[] = "test";
 const char DEFAULT_SET[] = "eg-set";
 const char DEFAULT_KEY_STR[] = "eg-key";
 const uint32_t DEFAULT_NUM_KEYS = 20;
+const char DEFAULT_SUBCOMMAND[] = "default";
 
 const char SHORT_OPTS_BASIC[] = "h:p:U:P::n:s:k:";
 const struct option LONG_OPTS_BASIC[] = {
@@ -92,6 +93,32 @@ const struct option LONG_OPTS_BASIC[] = {
 	{"tlsCertFile",          required_argument, 0, 'y'},
 	{"tlsLoginOnly",         no_argument,       0, 'f'},
 	{"auth",                 required_argument, 0, 'e'},
+	{0, 0, 0, 0}
+};
+
+const char SHORT_OPTS_BASIC_SUBCMD[] = "h:p:U:P::n:s:k:c:";
+const struct option LONG_OPTS_BASIC_SUBCMD[] = {
+	{"hosts",                required_argument, 0, 'h'},
+	{"port",                 required_argument, 0, 'p'},
+	{"user",                 required_argument, 0, 'U'},
+	{"password",             optional_argument, 0, 'P'},
+	{"namespace",            required_argument, 0, 'n'},
+	{"set",                  required_argument, 0, 's'},
+	{"key",                  required_argument, 0, 'k'},
+	{"tlsEnable",            no_argument,       0, 'A'},
+	{"tlsCaFile",            required_argument, 0, 'E'},
+	{"tlsCaPath",            required_argument, 0, 'F'},
+	{"tlsProtocols",         required_argument, 0, 'G'},
+	{"tlsCipherSuite",       required_argument, 0, 'H'},
+	{"tlsCrlCheck",          no_argument,       0, 'I'},
+	{"tlsCrlCheckAll",       no_argument,       0, 'J'},
+	{"tlsCertBlackList",     required_argument, 0, 'O'},
+	{"tlsLogSessionInfo",    no_argument,       0, 'Q'},
+	{"tlsKeyFile",           required_argument, 0, 'Z'},
+	{"tlsCertFile",          required_argument, 0, 'y'},
+	{"tlsLoginOnly",         no_argument,       0, 'f'},
+	{"auth",                 required_argument, 0, 'e'},
+	{"command",              required_argument, 0, 'c'},
 	{0, 0, 0, 0}
 };
 
@@ -180,6 +207,14 @@ as_config_tls g_tls = {0};
 
 as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
 
+//------------------------------------------------
+// Some examples aren't intended to run from start to finish
+// because they might have external dependencies that need
+// to complete in between example program steps.  For these,
+// a sub-command can be specified which selects which example
+// step to execute.
+char g_subcommand[MAX_SUBCMD_SIZE];
+
 //==========================================================
 // Forward Declarations
 //
@@ -203,6 +238,7 @@ example_get_opts(int argc, char* argv[], int which_opts)
 	strcpy(g_set, DEFAULT_SET);
 	strcpy(g_key_str, DEFAULT_KEY_STR);
 	g_n_keys = DEFAULT_NUM_KEYS;
+	strcpy(g_subcommand, DEFAULT_SUBCOMMAND);
 
 	const char* short_opts;
 	const struct option* long_opts;
@@ -215,6 +251,10 @@ example_get_opts(int argc, char* argv[], int which_opts)
 	case EXAMPLE_MULTI_KEY_OPTS:
 		short_opts = SHORT_OPTS_MULTI_KEY;
 		long_opts = LONG_OPTS_MULTI_KEY;
+		break;
+	case EXAMPLE_BASIC_OPTS_SUBCMD:
+		short_opts = SHORT_OPTS_BASIC_SUBCMD;
+		long_opts = LONG_OPTS_BASIC_SUBCMD;
 		break;
 	default:
 		LOG("ERROR: unrecognized which_opts parameter");
@@ -329,6 +369,11 @@ example_get_opts(int argc, char* argv[], int which_opts)
 			}
 			break;
 
+		case 'c':
+			strncpy(g_subcommand, optarg, MAX_SUBCMD_SIZE);
+			g_subcommand[31] = 0;
+			break;
+
 		default:
 			usage(short_opts);
 			return false;
@@ -361,6 +406,10 @@ example_get_opts(int argc, char* argv[], int which_opts)
 
 	if (strchr(short_opts, 'K')) {
 		LOG("number of keys: %u", g_n_keys);
+	}
+
+	if (strchr(short_opts, 'c')) {
+		LOG("example subcmd: %s", g_subcommand);
 	}
 
 	// Initialize the test as_key object. We won't need to destroy it since it
@@ -416,6 +465,10 @@ usage(const char* short_opts)
 
 	if (strchr(short_opts, 'K')) {
 		LOG("-K <number of keys> [default: %u]", DEFAULT_NUM_KEYS);
+	}
+
+	if (strchr(short_opts, 'c')) {
+		LOG("-c <subcommand> [default: %s]", DEFAULT_SUBCOMMAND);
 	}
 
 	LOG("--tlsEnable  [default: TLS disabled]");

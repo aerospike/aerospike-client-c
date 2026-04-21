@@ -51,7 +51,7 @@ jobs:
 
       - name: Test with libev
         if: runner.os == 'Linux'
-        run|
+        run: |
           make clean
           ./install_libev
           make EVENT_LIB=libev
@@ -59,7 +59,7 @@ jobs:
 
       - name: Test with libuv
         if: runner.os == 'Linux'
-        run|
+        run: |
           make clean
           ./install_libuv
           make EVENT_LIB=libuv
@@ -67,7 +67,7 @@ jobs:
 
       - name: Test with libevent
         if: runner.os == 'Linux'
-        run|
+        run: |
           make clean
           ./install_libevent
           make EVENT_LIB=libevent

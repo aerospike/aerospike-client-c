@@ -1,0 +1,76 @@
+# vim:set ts=4:sw=4:noet
+
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: ${{ matrix.os }} with ${{ matrix.event-lib }}
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false # Don't cancel all jobs if one OS fails
+      matrix:
+        os: [debian-latest, macos-latest, windows-latest]
+        event-lib: [none, libevent, libuv, libev]
+        # You can add specific Linux distros by using different runner images
+        # or using a container strategy for the 'ubuntu' jobs.
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.event-lib }}" = "libevent" ]; then sudo apt install libevent-dev; fi
+          if [ "${{ matrix.event-lib }}" = "libuv" ]; then sudo apt install libuv1-dev; fi
+          if [ "${{ matrix.event-lib }}" = "libev" ]; then sudo apt install libev-dev; fi
+
+      - name: Install Dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          if [ "${{ matrix.event-lib }}" = "libevent" ]; then brew install libevent; fi
+          if [ "${{ matrix.event-lib }}" = "libuv" ]; then brew install libuv; fi
+          if [ "${{ matrix.event-lib }}" = "libev" ]; then brew install libev; fi
+
+      - name: Install Dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          # Use vcpkg or chocolatey for Windows dependencies
+          if ("${{ matrix.event-lib }}" -eq "libuv") { vcpkg install libuv:x64-windows }
+
+      - name: Checkout client
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Aerospike Database
+        uses: reugn/github-action-aerospike@v1
+
+      - name: Test with libev
+        if: runner.os == 'Linux'
+        run|
+          make clean
+          ./install_libev
+          make EVENT_LIB=libev
+          make EVENT_LIB=libev test
+
+      - name: Test with libuv
+        if: runner.os == 'Linux'
+        run|
+          make clean
+          ./install_libuv
+          make EVENT_LIB=libuv
+          make EVENT_LIB=libuv test
+
+      - name: Test with libevent
+        if: runner.os == 'Linux'
+        run|
+          make clean
+          ./install_libevent
+          make EVENT_LIB=libevent
+          make EVENT_LIB=libevent test

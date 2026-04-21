@@ -22,23 +22,21 @@ jobs:
       - name: Install Dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          if [ "${{ matrix.event-lib }}" = "libevent" ]; then sudo apt install libevent-dev; fi
-          if [ "${{ matrix.event-lib }}" = "libuv" ]; then sudo apt install libuv1-dev; fi
-          if [ "${{ matrix.event-lib }}" = "libev" ]; then sudo apt install libev-dev; fi
+          sudo apt-get update -y
+		  sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev ncurses-dev
 
       - name: Install Dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          if [ "${{ matrix.event-lib }}" = "libevent" ]; then brew install libevent; fi
-          if [ "${{ matrix.event-lib }}" = "libuv" ]; then brew install libuv; fi
-          if [ "${{ matrix.event-lib }}" = "libev" ]; then brew install libev; fi
+          if [ "${{ matrix.event-lib }}" = "libevent" ]; then echo brew install libevent; fi
+          if [ "${{ matrix.event-lib }}" = "libuv" ]; then echo brew install libuv; fi
+          if [ "${{ matrix.event-lib }}" = "libev" ]; then echo brew install libev; fi
 
       - name: Install Dependencies (Windows)
         if: runner.os == 'Windows'
         run: |
           # Use vcpkg or chocolatey for Windows dependencies
-          if ("${{ matrix.event-lib }}" -eq "libuv") { vcpkg install libuv:x64-windows }
+          if ("${{ matrix.event-lib }}" -eq "libuv") { echo vcpkg install libuv:x64-windows }
 
       - name: Checkout client
         uses: actions/checkout@v2
@@ -48,6 +46,14 @@ jobs:
 
       - name: Setup Aerospike Database
         uses: reugn/github-action-aerospike@v1
+
+      - name: Test with none
+        if: runner.os == 'Linux'
+        run: |
+          make clean
+          ./install_libev
+          make
+          make test
 
       - name: Test with libev
         if: runner.os == 'Linux'

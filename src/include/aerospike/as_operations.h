@@ -265,7 +265,7 @@ typedef struct as_binops_s {
 typedef struct as_operations_s {
 
 	/**
-     * Operations to be performed on the bins of a record.
+	 * Operations to be performed on the bins of a record.
 	 */
 	as_binops binops;
 	

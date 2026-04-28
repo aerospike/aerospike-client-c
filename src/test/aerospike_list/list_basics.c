@@ -3944,10 +3944,12 @@ TEST(list_check_bin_name_length_handling, "test bin name length handling")
 	// where as_cdt_end() causes memory to be allocated but not freed as a
 	// result of an error from as_cdt_add_packed().  See CLIENT-4704.
 
+	// First, compute a bin name that is too long to process.
 	char long_bin_name[128];
 	memset(long_bin_name, 0, sizeof(long_bin_name));
 	sprintf(long_bin_name, "%s_toolong_0123456789", BIN_NAME);
 
+	// Stuff a list into a record.
 	as_arraylist list;
 	as_arraylist_inita(&list, 5);
 	as_arraylist_append_int64(&list, 40);
@@ -3968,35 +3970,47 @@ TEST(list_check_bin_name_length_handling, "test bin name length handling")
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
-
+	// Next, create an operations list, where we try:
+	//
+	// 1. to append an element to a list via the long bin name, and,
+	// 2. to read back the list at the normal bin name.
+	//
+	// We expect the operation at step 1 to fail locally; however,
+	// we expect step 2 to succeed.
+	//
+	// Note that it was during step 1 that the memory leak occurred
+	// prior to fixing.
 	as_integer v;
 	as_integer_init(&v, 11);
 	as_operations ops;
 	as_operations_inita(&ops, 2);
-	// Use deliberately bad bin name here;
-	// check with Valgrind to discover if leak is plugged.
-	as_operations_list_append(&ops, long_bin_name, NULL, NULL, (as_val*)&v);
-	as_operations_add_read(&ops, BIN_NAME);
+	assert_int_eq(
+		as_operations_list_append(&ops, long_bin_name, NULL, NULL, (as_val*)&v),
+		false);
+	assert_int_eq(
+		as_operations_add_read(&ops, BIN_NAME),
+		true);
 
 	as_record* prec = 0;
 	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_operations_destroy(&ops);
 
-	as_bin* results = prec->bins.entries;
-	int i = 0;
+	// List append on long_bin_name is expected to fail locally.
+	// However, the subsequent read operation is expected to succeed.
+	// As a result, the operations list is still initialized well enough
+	// to support one operation: the read-back of the list.
+	assert_int_eq(prec->bins.size, 1);
+	as_bin* bin = &prec->bins.entries[0];
 
-	int64_t val = results[i++].valuep->integer.value;
-	assert_int_eq(val, 6);
-
-	as_list* l = &results[i++].valuep->list;
-	assert_int_eq(as_list_size(l), 6);
+	assert_int_eq(as_bin_get_type(bin), AS_LIST);
+	as_list* l = (as_list*)as_bin_get_value(bin);
+	assert_int_eq(as_list_size(l), 5);
 	assert_int_eq(as_list_get_int64(l, 0), 40);
 	assert_int_eq(as_list_get_int64(l, 1), 6);
 	assert_int_eq(as_list_get_int64(l, 2), 13);
 	assert_int_eq(as_list_get_int64(l, 3), 27);
 	assert_int_eq(as_list_get_int64(l, 4), 33);
-	assert_int_eq(as_list_get_int64(l, 5), 11);
 
 	as_record_destroy(prec);
 }

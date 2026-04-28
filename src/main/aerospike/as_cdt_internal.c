@@ -119,6 +119,7 @@ as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operat
 {
 	as_binop* binop = as_binop_forappend(ops, op_type, name);
 	if (! binop) {
+		cf_free(pk->buffer);
 		return false;
 	}
 	as_bytes* bytes = as_bytes_new_wrap(pk->buffer, pk->offset, true);

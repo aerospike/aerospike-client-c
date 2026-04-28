@@ -3938,6 +3938,68 @@ TEST(list_select_tree, "test select tree")
 	rec = NULL;
 }
 
+TEST(list_check_bin_name_length_handling, "test bin name length handling")
+{
+	// This test aims to reproduce an edge case found during Python testing,
+	// where as_cdt_end() causes memory to be allocated but not freed as a
+	// result of an error from as_cdt_add_packed().  See CLIENT-4704.
+
+	char long_bin_name[128];
+	memset(long_bin_name, 0, sizeof(long_bin_name));
+	sprintf(long_bin_name, "%s_toolong_0123456789", BIN_NAME);
+
+	as_arraylist list;
+	as_arraylist_inita(&list, 5);
+	as_arraylist_append_int64(&list, 40);
+	as_arraylist_append_int64(&list, 6);
+	as_arraylist_append_int64(&list, 13);
+	as_arraylist_append_int64(&list, 27);
+	as_arraylist_append_int64(&list, 33);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 211);
+
+	as_record rec;
+	as_record_init(&rec, 1);
+	as_record_set_list(&rec, BIN_NAME, (as_list*)&list);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+
+	as_integer v;
+	as_integer_init(&v, 11);
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	// Use deliberately bad bin name here;
+	// check with Valgrind to discover if leak is plugged.
+	as_operations_list_append(&ops, long_bin_name, NULL, NULL, (as_val*)&v);
+	as_operations_add_read(&ops, BIN_NAME);
+
+	as_record* prec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	as_bin* results = prec->bins.entries;
+	int i = 0;
+
+	int64_t val = results[i++].valuep->integer.value;
+	assert_int_eq(val, 6);
+
+	as_list* l = &results[i++].valuep->list;
+	assert_int_eq(as_list_size(l), 6);
+	assert_int_eq(as_list_get_int64(l, 0), 40);
+	assert_int_eq(as_list_get_int64(l, 1), 6);
+	assert_int_eq(as_list_get_int64(l, 2), 13);
+	assert_int_eq(as_list_get_int64(l, 3), 27);
+	assert_int_eq(as_list_get_int64(l, 4), 33);
+	assert_int_eq(as_list_get_int64(l, 5), 11);
+
+	as_record_destroy(prec);
+}
 
 /******************************************************************************
  * TEST SUITE
@@ -3987,4 +4049,6 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_apply_remove);
 	suite_add(list_apply_remove2);
 	suite_add(list_select_tree);
+
+	suite_add(list_check_bin_name_length_handling);
 }

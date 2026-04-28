@@ -3938,6 +3938,37 @@ TEST(list_select_tree, "test select tree")
 	rec = NULL;
 }
 
+TEST(list_check_bin_name_length_handling, "test bin name length handling")
+{
+	// This test aims to reproduce an edge case found during Python testing,
+	// where as_cdt_end() causes memory to be allocated but not freed as a
+	// result of an error from as_cdt_add_packed().  See CLIENT-4704.
+
+//#define ERR_BIN_NAME	"I_am_bin_0123456789abcdefghijklmnopqrstuvwxyz"
+#define ERR_BIN_NAME	"I_am_bin_012345678"
+
+    as_arraylist list;
+    as_arraylist_inita(&list, 5);
+    as_arraylist_append_int64(&list, 40);
+    as_arraylist_append_int64(&list, 6);
+    as_arraylist_append_int64(&list, 13);
+    as_arraylist_append_int64(&list, 27);
+    as_arraylist_append_int64(&list, 33);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 211);
+
+	as_record rec;
+    as_record_init(&rec, 1);
+    as_record_set_list(&rec, ERR_BIN_NAME, (as_list*)&list);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+    as_record_destroy(&rec);
+
+#undef ERR_BIN_NAME
+}
 
 /******************************************************************************
  * TEST SUITE
@@ -3987,4 +4018,6 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_apply_remove);
 	suite_add(list_apply_remove2);
 	suite_add(list_select_tree);
+
+	suite_add(list_check_bin_name_length_handling);
 }

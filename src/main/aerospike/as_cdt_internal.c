@@ -58,9 +58,6 @@ as_packer_free_buffer(as_packer* pk)
 }
 
 
-// --------------------------------------------------------------------------------
-// Public API
-
 void
 as_cdt_pack_header(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32_t count)
 {

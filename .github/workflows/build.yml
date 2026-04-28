@@ -8,17 +8,20 @@ on:
 
 jobs:
   builds-on-linux:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNS_ON_LINUX }}
     env:
       LD_LIBRARY_PATH: /usr/local/lib
     steps:
     - name: Checkout client
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Setup Aerospike Database
-      uses: reugn/github-action-aerospike@v1
+	- name: Setup Aerospike Database
+	  uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@334ad55b790658d549747b0d154407dfc730acca # latest main
+	  with:
+	    oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
+		oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
     - run: ./install_libev
     - run: make EVENT_LIB=libev
     - run: make EVENT_LIB=libev test
@@ -37,12 +40,15 @@ jobs:
       LD_LIBRARY_PATH: /usr/local/lib
     steps:
     - name: Checkout client
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Setup Aerospike Database
-      uses: reugn/github-action-aerospike@v1
+	- name: Setup Aerospike Database
+	  uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@334ad55b790658d549747b0d154407dfc730acca # latest main
+	  with:
+	    oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
+		oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
     - run: ./install_libev
     - run: make EVENT_LIB=libev
     - run: make EVENT_LIB=libev test
@@ -54,3 +60,4 @@ jobs:
     - run: ./install_libevent
     - run: make EVENT_LIB=libevent
     - run: make EVENT_LIB=libevent test
+

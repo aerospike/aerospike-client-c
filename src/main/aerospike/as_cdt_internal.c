@@ -28,11 +28,34 @@
 // --------------------------------------------------------------------------------
 // Forward declarations
 
-void
-as_packer_free_buffer(as_packer* pk);
-
 as_binop*
 as_binop_forappend(as_operations* ops, as_operator operator, const char* name);
+
+
+// --------------------------------------------------------------------------------
+// Local helpers.
+
+/**
+ * @private Remove buffer attached to a packer.
+ *
+ * Typically invoked before returning an error in an outer function.
+ *
+ * Frees a buffer allocated by the as_cdt_end() macro and
+ * attached to a packer.  Note that packers are almost always
+ * stack-allocated, so we cannot free the whole packer itself;
+ * however, we can remove the subordinate buffer.
+ *
+ * This also NULLs out the buffer pointer, so that the packer can
+ * be re-used in a subsequent operation.
+ */
+static inline void
+as_packer_free_buffer(as_packer* pk)
+{
+	if (pk->buffer) {
+		cf_free(pk->buffer);
+		pk->buffer = NULL;
+	}
+}
 
 
 // --------------------------------------------------------------------------------
@@ -275,30 +298,5 @@ as_val_compare(as_val* v1, as_val* v2)
 	cf_free(s1);
 	cf_free(s2);
 	return rv == 0;
-}
-
-// --------------------------------------------------------------------------------
-// Local helpers.
-
-/**
- * @private Remove buffer attached to a packer.
- *
- * Typically invoked before returning an error in an outer function.
- *
- * Frees a buffer allocated by the as_cdt_end() macro and
- * attached to a packer.  Note that packers are almost always
- * stack-allocated, so we cannot free the whole packer itself;
- * however, we can remove the subordinate buffer.
- *
- * This also NULLs out the buffer pointer, so that the packer can
- * be re-used in a subsequent operation.
- */
-void
-as_packer_free_buffer(as_packer* pk)
-{
-	if (pk->buffer) {
-		cf_free(pk->buffer);
-		pk->buffer = NULL;
-	}
 }
 

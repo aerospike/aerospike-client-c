@@ -36,7 +36,7 @@ as_binop_forappend(as_operations* ops, as_operator operator, const char* name);
 // Local helpers.
 
 /**
- * @private Remove buffer attached to a packer.
+ * @private Remove buffer attached to an as_packer variable.
  *
  * Typically invoked before returning an error in an outer function.
  *

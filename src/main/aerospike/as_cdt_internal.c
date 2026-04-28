@@ -138,10 +138,6 @@ as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operat
 		return false;
 	}
 	as_bytes* bytes = as_bytes_new_wrap(pk->buffer, pk->offset, true);
-	if (! bytes) {
-		as_packer_free_buffer(pk);
-		return false;
-	}
 	as_bin_init(&binop->bin, name, (as_bin_value*)bytes);
 	return true;
 }

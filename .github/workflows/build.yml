@@ -40,8 +40,6 @@ jobs:
 
   builds-on-mac:
     runs-on: macos-latest
-    env:
-      LD_LIBRARY_PATH: /usr/local/lib
     steps:
     - name: Checkout client
       uses: actions/checkout@v2

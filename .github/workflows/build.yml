@@ -38,16 +38,21 @@ jobs:
     - run: make EVENT_LIB=libevent
     - run: make EVENT_LIB=libevent test
 
-  builds-on-mac:
+  builds-on-mac-intel:
     runs-on: macos-26-intel
     steps:
+    - run: brew install wget
+    - run: brew install automake
+    - run: brew install libtool
+    - run: brew install openssl
+    - run: brew install libyaml
     - name: Checkout client
       uses: actions/checkout@v2
       with:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
     - name: Set up ASDB for macOS
-      uses: ./.github/actions/setup-asdb-on-macos
+      uses: ./.github/actions/setup-asdb-on-macos-intel
     - run: ./install_libev
     - run: make EVENT_LIB=libev
     - run: make EVENT_LIB=libev test

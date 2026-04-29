@@ -222,7 +222,7 @@ main(int argc, char* argv[])
 	LOG("hll-on-integer failed as expected: %d - %s", err.code, err.message);
 
 	if (! assert_error_details(&err, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE,
-			"bin is not hll type", "subcode=1138")) {
+			"bin is not hll type", "subcode=4102")) {
 		example_cleanup(&as);
 		exit(-1);
 	}
@@ -262,7 +262,7 @@ main(int argc, char* argv[])
 	LOG("hll-refresh-count-no-hll-bin failed as expected: %d - %s", err.code, err.message);
 
 	if (! assert_error_details(&err, AEROSPIKE_ERR_BIN_NOT_FOUND,
-			"hll_refresh_count: cannot create bin with count op", "subcode=1134")) {
+			"hll_refresh_count: cannot create bin with count op", "subcode=4003")) {
 		example_cleanup(&as);
 		exit(-1);
 	}

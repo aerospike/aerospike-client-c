@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [master, stage]
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   builds-on-linux:
     runs-on: ${{ vars.RUNS_ON_LINUX }}

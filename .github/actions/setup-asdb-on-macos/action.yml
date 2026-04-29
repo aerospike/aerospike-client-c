@@ -4,7 +4,7 @@ description: 'Install Docker using colima'
 runs:
   using: "composite"
   steps:
-  - name: Try Podman
+  - name: Set up Aerospike Server via Podman
     shell: bash
     run: |
       echo "BREW INSTALL PODMAN"
@@ -42,15 +42,3 @@ runs:
       podman exec aerospike-server asinfo -v "get-config:context=namespace;id=test" | tr ';' '\n' | grep -E "nsup-period|default-ttl|allow-ttl" || echo "Could not get namespace config"
       echo "=== Server Build ==="
       podman exec aerospike-server asinfo -v "build"
- 
-#  - name: Install Docker Engine
-#    run: brew install colima
-#    shell: bash
-#
-#  - name: Install Docker Client
-#    run: brew install docker
-#    shell: bash
-#
-#  - name: Start Docker Engine
-#    run: colima start
-#    shell: bash

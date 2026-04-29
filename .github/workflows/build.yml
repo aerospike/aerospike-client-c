@@ -46,13 +46,8 @@ jobs:
       with:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Set up Docker for macOS
-      uses: ./.github/actions/setup-docker-on-macos
-    - name: Setup Aerospike Database
-      uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@334ad55b790658d549747b0d154407dfc730acca # latest main
-      with:
-        oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
-        oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
+    - name: Set up ASDB for macOS
+      uses: ./.github/actions/setup-asdb-on-macos
     - run: ./install_libev
     - run: make EVENT_LIB=libev
     - run: make EVENT_LIB=libev test

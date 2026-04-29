@@ -39,7 +39,7 @@ jobs:
     - run: make EVENT_LIB=libevent test
 
   builds-on-mac:
-    runs-on: macos-latest
+    runs-on: macos-26-intel
     steps:
     - name: Checkout client
       uses: actions/checkout@v2

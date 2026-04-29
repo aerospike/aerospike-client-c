@@ -8,12 +8,12 @@ runs:
     shell: bash
     run: |
       echo "BREW INSTALL PODMAN"
-	  brew install podman
-	  echo "PODMAN MACHINE INIT"
+      brew install podman
+      echo "PODMAN MACHINE INIT"
       podman machine init
-	  echo "PODMAN MACHINE START"
+      echo "PODMAN MACHINE START"
       podman machine start
-	  echo "TRYING TO LAUNCH ASDB"
+      echo "TRYING TO LAUNCH ASDB"
       # Retry pulling and running image with exponential backoff (DNS/network issues can be transient)
       for i in {1..5}; do
         if podman run -d -p 3000:3000 --name aerospike-server aerospike/aerospike-server:8.1.2.0; then
@@ -30,7 +30,7 @@ runs:
         echo "Attempt $i failed, retrying in $((2**i)) seconds..."
         sleep $((2**i))
       done
-	  echo "DONE"
+      echo "DONE"
       # Wait for server to be ready
       sleep 5
       # Configure namespace for TTL support (default Docker image has nsup disabled)

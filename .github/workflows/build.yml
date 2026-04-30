@@ -57,15 +57,12 @@ jobs:
           namespace test {
             replication-factor 1
             nsup-period 60
+            default-ttl 2592000
             storage-engine memory { 
                 data-size 4G 
             }
           }
 
-    #- name: Try to set up nsup-period
-    #  steps:
-    #  - run: docker exec aerospike-server asinfo -v "set-config:context=namespace;id=test;nsup-period=120" || echo "Failed to set nsup-period"
-    #  - run: docker exec aerospike-server asinfo -v "set-config:context=namespace;id=test;default-ttl=2592000" || echo "Failed to set default-ttl"
     - run: ./install_libev
     - run: make EVENT_LIB=libev
     - run: make EVENT_LIB=libev test

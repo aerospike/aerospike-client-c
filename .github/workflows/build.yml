@@ -27,6 +27,45 @@ jobs:
         server-tag: 8.1.2.0
         oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
         oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
+        config-content: |
+          service {
+            feature-key-file /etc/aerospike/features.conf
+            cluster-name docker
+            proto-fd-max 15000
+          }
+
+          logging {
+            console {
+              context any info
+            }
+          }
+
+          network {
+            service {
+              address any
+              port 3000
+            }
+            heartbeat {
+              mode mesh
+              port 3002
+            }
+            fabric {
+              port 3001
+            }
+          }
+
+          namespace test {
+            replication-factor 1
+            nsup-period 60
+            storage-engine memory { 
+                data-size 4G 
+            }
+          }
+
+    #- name: Try to set up nsup-period
+    #  steps:
+    #  - run: docker exec aerospike-server asinfo -v "set-config:context=namespace;id=test;nsup-period=120" || echo "Failed to set nsup-period"
+    #  - run: docker exec aerospike-server asinfo -v "set-config:context=namespace;id=test;default-ttl=2592000" || echo "Failed to set default-ttl"
     - run: ./install_libev
     - run: make EVENT_LIB=libev
     - run: make EVENT_LIB=libev test

@@ -41,4 +41,5 @@ jobs:
     - run: sleep 5
     - run: make EVENT_LIB=${{ matrix.EVENT_LIB }} test${{ matrix.valgrind && '-valgrind' || '' }}
     - if: ${{ matrix.valgrind }}
-      run: cat client_test-valgrind
+      run: |
+        grep 'ERROR SUMMARY: 0 errors' client_test-valgrind

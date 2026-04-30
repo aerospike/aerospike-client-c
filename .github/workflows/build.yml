@@ -24,6 +24,7 @@ jobs:
     - name: Setup Aerospike Database
       uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@334ad55b790658d549747b0d154407dfc730acca # latest main
       with:
+        server-tag: 8.1.2.0
         oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
         oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
     - run: ./install_libev

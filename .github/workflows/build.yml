@@ -40,3 +40,5 @@ jobs:
     - run: docker run -d -p 3000:3000 -e DEFAULT_TTL=2592000 aerospike/aerospike-server:8.1.2.0
     - run: sleep 5
     - run: make EVENT_LIB=${{ matrix.EVENT_LIB }} test${{ matrix.valgrind && '-valgrind' || '' }}
+    - if: ${{ matrix.valgrind }}
+      run: cat client_test-valgrind

@@ -22,7 +22,7 @@ jobs:
           submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Aerospike Database
-        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@334ad55b790658d549747b0d154407dfc730acca # latest main
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@d71692306c9e2a076b2354dbe08af95b27ca370c # latest main
         with:
           server-tag: 8.1.2.0
           oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}

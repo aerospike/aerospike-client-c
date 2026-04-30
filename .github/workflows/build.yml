@@ -60,6 +60,21 @@ jobs:
                   data-size 4G
               }
             }
+      - name: Dump server info and config
+        run: |
+          docker exec aerospike-1 asd --version
+          docker exec aerospike-1 asinfo -v build
+          docker exec aerospike-1 asinfo -v status
+          docker exec aerospike-1 asinfo -v service
+          docker exec aerospike-1 asinfo -v namespaces
+          docker exec aerospike-1 asinfo -v "namespace/test"
+          docker exec aerospike-1 asinfo -v "get-config:"
+          docker exec aerospike-1 asinfo -v "get-config:context=service"
+          docker exec aerospike-1 asinfo -v "get-config:context=network"
+          docker exec aerospike-1 asinfo -v "get-config:context=namespace;id=test"
+          docker exec aerospike-1 asinfo -v statistics
+          docker exec aerospike-1 cat /etc/aerospike/aerospike.conf
+          docker logs aerospike-1
       - run: ./install_libev
       - run: make EVENT_LIB=libev
       - run: make EVENT_LIB=libev AS_ARGS='-h 127.0.0.1 -p 3000' test

@@ -38,7 +38,7 @@ jobs:
     - run: make EVENT_LIB=libevent
     - run: make EVENT_LIB=libevent test
 
-  builds-on-mac-intel:
+  builds-and-runs-on-mac-intel:
     runs-on: macos-26-intel
     steps:
     - run: brew install wget
@@ -65,3 +65,25 @@ jobs:
     - run: make EVENT_LIB=libevent
     - run: make EVENT_LIB=libevent test
 
+
+  builds-on-mac-arm:
+    runs-on: macos-latest
+    steps:
+    - run: brew install wget
+    - run: brew install automake
+    - run: brew install libtool
+    - run: brew install openssl
+    - run: brew install libyaml
+    - name: Checkout client
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+        token: ${{ secrets.GITHUB_TOKEN }}
+    - run: ./install_libev
+    - run: make EVENT_LIB=libev
+    - run: make clean
+    - run: ./install_libuv
+    - run: make EVENT_LIB=libuv
+    - run: make clean
+    - run: ./install_libevent
+    - run: make EVENT_LIB=libevent

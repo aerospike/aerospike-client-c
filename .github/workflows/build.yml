@@ -17,8 +17,8 @@ jobs:
       with:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Setup Aerospike Database
-      uses: reugn/github-action-aerospike@v1
+    - run: docker run -d -p 3000:3000 -e DEFAULT_TTL=2592000 aerospike/aerospike-server:8.1.2.0
+    - run: sleep 5
     - run: ./install_libev
     - run: make EVENT_LIB=libev
     - run: make EVENT_LIB=libev test

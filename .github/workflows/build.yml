@@ -58,10 +58,9 @@ jobs:
                 data-size 4G 
             }
           }
-
     - run: ./install_libev
     - run: make EVENT_LIB=libev
-    - run: make EVENT_LIB=libev test
+    - run: make EVENT_LIB=libev AS_ARGS='-h 127.0.0.1 -p 3000' test
     - run: make clean
     - run: ./install_libuv
     - run: make EVENT_LIB=libuv

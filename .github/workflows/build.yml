@@ -33,13 +33,11 @@ jobs:
             cluster-name docker
             proto-fd-max 15000
           }
-
           logging {
             console {
               context any info
             }
           }
-
           network {
             service {
               address any
@@ -53,7 +51,6 @@ jobs:
               port 3001
             }
           }
-
           namespace test {
             replication-factor 1
             allow-ttl-without-nsup true

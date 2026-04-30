@@ -16,106 +16,107 @@ jobs:
     env:
       LD_LIBRARY_PATH: /usr/local/lib
     steps:
-    - name: Checkout client
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Setup Aerospike Database
-      uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@334ad55b790658d549747b0d154407dfc730acca # latest main
-      with:
-        server-tag: 8.1.2.0
-        oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
-        oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
-        config-content: |
-          service {
-            feature-key-file /etc/aerospike/features.conf
-            cluster-name docker
-            proto-fd-max 15000
-          }
-          logging {
-            console {
-              context any info
-            }
-          }
-          network {
+      - name: Checkout client
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Aerospike Database
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@334ad55b790658d549747b0d154407dfc730acca # latest main
+        with:
+          server-tag: 8.1.2.0
+          oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
+          config-content: |
             service {
-              address any
-              port 3000
+              feature-key-file /etc/aerospike/features.conf
+              cluster-name docker
+              proto-fd-max 15000
             }
-            heartbeat {
-              mode mesh
-              port 3002
+            logging {
+              console {
+                context any info
+              }
             }
-            fabric {
-              port 3001
+            network {
+              service {
+                address any
+                port 3000
+              }
+              heartbeat {
+                mode mesh
+                port 3002
+              }
+              fabric {
+                port 3001
+              }
             }
-          }
-          namespace test {
-            replication-factor 1
-            allow-ttl-without-nsup true
-            storage-engine memory { 
-                data-size 4G 
+            namespace test {
+              default-ttl 0
+              replication-factor 1
+              nsup-period 60
+              allow-ttl-without-nsup true
+              storage-engine memory {
+                  data-size 4G
+              }
             }
-          }
-    - run: ./install_libev
-    - run: make EVENT_LIB=libev
-    - run: make EVENT_LIB=libev AS_ARGS='-h 127.0.0.1 -p 3000' test
-    - run: make clean
-    - run: ./install_libuv
-    - run: make EVENT_LIB=libuv
-    - run: make EVENT_LIB=libuv test
-    - run: make clean
-    - run: ./install_libevent
-    - run: make EVENT_LIB=libevent
-    - run: make EVENT_LIB=libevent test
+      - run: ./install_libev
+      - run: make EVENT_LIB=libev
+      - run: make EVENT_LIB=libev AS_ARGS='-h 127.0.0.1 -p 3000' test
+      - run: make clean
+      - run: ./install_libuv
+      - run: make EVENT_LIB=libuv
+      - run: make EVENT_LIB=libuv test
+      - run: make clean
+      - run: ./install_libevent
+      - run: make EVENT_LIB=libevent
+      - run: make EVENT_LIB=libevent test
 
   builds-and-runs-on-mac-intel:
     runs-on: macos-26-intel
     steps:
-    - run: brew install wget
-    - run: brew install automake
-    - run: brew install libtool
-    - run: brew install openssl
-    - run: brew install libyaml
-    - name: Checkout client
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Set up ASDB for macOS
-      uses: ./.github/actions/setup-asdb-on-macos-intel
-    - run: ./install_libev
-    - run: make EVENT_LIB=libev
-    - run: make EVENT_LIB=libev test
-    - run: make clean
-    - run: ./install_libuv
-    - run: make EVENT_LIB=libuv
-    - run: make EVENT_LIB=libuv test
-    - run: make clean
-    - run: ./install_libevent
-    - run: make EVENT_LIB=libevent
-    - run: make EVENT_LIB=libevent test
-
+      - run: brew install wget
+      - run: brew install automake
+      - run: brew install libtool
+      - run: brew install openssl
+      - run: brew install libyaml
+      - name: Checkout client
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up ASDB for macOS
+        uses: ./.github/actions/setup-asdb-on-macos-intel
+      - run: ./install_libev
+      - run: make EVENT_LIB=libev
+      - run: make EVENT_LIB=libev test
+      - run: make clean
+      - run: ./install_libuv
+      - run: make EVENT_LIB=libuv
+      - run: make EVENT_LIB=libuv test
+      - run: make clean
+      - run: ./install_libevent
+      - run: make EVENT_LIB=libevent
+      - run: make EVENT_LIB=libevent test
 
   builds-on-mac-arm:
     runs-on: macos-latest
     steps:
-    - run: brew install wget
-    - run: brew install automake
-    - run: brew install libtool
-    - run: brew install openssl
-    - run: brew install libyaml
-    - name: Checkout client
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - run: ./install_libev
-    - run: make EVENT_LIB=libev
-    - run: make clean
-    - run: ./install_libuv
-    - run: make EVENT_LIB=libuv
-    - run: make clean
-    - run: ./install_libevent
-    - run: make EVENT_LIB=libevent
+      - run: brew install wget
+      - run: brew install automake
+      - run: brew install libtool
+      - run: brew install openssl
+      - run: brew install libyaml
+      - name: Checkout client
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: ./install_libev
+      - run: make EVENT_LIB=libev
+      - run: make clean
+      - run: ./install_libuv
+      - run: make EVENT_LIB=libuv
+      - run: make clean
+      - run: ./install_libevent
+      - run: make EVENT_LIB=libevent

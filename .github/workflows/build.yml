@@ -29,6 +29,12 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - run: ./install_${{ matrix.EVENT_LIB }}
+
+    - if: ${{ matrix.valgrind }}
+      run: |
+        sudo apt update
+        sudo apt install -y valgrind
+
     - run: make EVENT_LIB=${{ matrix.EVENT_LIB }}
 
     - run: docker run -d -p 3000:3000 -e DEFAULT_TTL=2592000 aerospike/aerospike-server:8.1.2.0

@@ -3938,6 +3938,81 @@ TEST(list_select_tree, "test select tree")
 	rec = NULL;
 }
 
+TEST(list_check_bin_name_length_handling, "test bin name length handling")
+{
+	// This test aims to reproduce an edge case found during Python testing,
+	// where as_cdt_end() causes memory to be allocated but not freed as a
+	// result of an error from as_cdt_add_packed().  See CLIENT-4704.
+
+	// First, compute a bin name that is too long to process.
+	char long_bin_name[128];
+	memset(long_bin_name, 0, sizeof(long_bin_name));
+	sprintf(long_bin_name, "%s_toolong_0123456789", BIN_NAME);
+
+	// Stuff a list into a record.
+#define N_ELEMENTS 5
+	int64_t list_elements[N_ELEMENTS] = { 40, 6, 13, 27, 33 };
+
+	as_arraylist list;
+	as_arraylist_inita(&list, N_ELEMENTS);
+	for (int i = 0; i < N_ELEMENTS; i++) {
+		as_arraylist_append_int64(&list, list_elements[i]);
+	}
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 211);
+
+	as_record rec;
+	as_record_init(&rec, 1);
+	as_record_set_list(&rec, BIN_NAME, (as_list*)&list);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	// Next, create an operations list, where we try:
+	//
+	// 1. to append an element to a list via the long bin name, and,
+	// 2. to read back the list at the normal bin name.
+	//
+	// We expect the operation at step 1 to fail locally; however,
+	// we expect step 2 to succeed.
+	//
+	// Note that it was during step 1 that the memory leak occurred
+	// prior to fixing.
+	as_integer v;
+	as_integer_init(&v, 11);
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	assert_int_eq(
+		as_operations_list_append(&ops, long_bin_name, NULL, NULL, (as_val*)&v),
+		false);
+	assert_int_eq(
+		as_operations_add_read(&ops, BIN_NAME),
+		true);
+
+	as_record* prec = 0;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	// List append on long_bin_name is expected to fail locally.
+	// However, the subsequent read operation is expected to succeed.
+	// As a result, the operations list is still initialized well enough
+	// to support one operation: the read-back of the list.
+	assert_int_eq(prec->bins.size, 1);
+	as_bin* bin = &prec->bins.entries[0];
+
+	assert_int_eq(as_bin_get_type(bin), AS_LIST);
+	as_list* l = (as_list*)as_bin_get_value(bin);
+	assert_int_eq(as_list_size(l), N_ELEMENTS);
+	for (int i = 0; i < N_ELEMENTS; i++) {
+		assert_int_eq(as_list_get_int64(l, i), list_elements[i]);
+	}
+#undef N_ELEMENTS
+	as_record_destroy(prec);
+}
 
 /******************************************************************************
  * TEST SUITE
@@ -3987,4 +4062,6 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_apply_remove);
 	suite_add(list_apply_remove2);
 	suite_add(list_select_tree);
+
+	suite_add(list_check_bin_name_length_handling);
 }

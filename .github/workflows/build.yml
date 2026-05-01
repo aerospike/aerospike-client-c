@@ -7,26 +7,39 @@ on:
     branches: [master, stage]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     env:
       LD_LIBRARY_PATH: /usr/local/lib
+    strategy:
+      matrix:
+        EVENT_LIB:
+        - libev
+        - libuv
+        - libevent
+        valgrind:
+        - false
+        - true
+      fail-fast: false
     steps:
     - name: Checkout client
       uses: actions/checkout@v2
       with:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Setup Aerospike Database
-      uses: reugn/github-action-aerospike@v1
-    - run: ./install_libev
-    - run: make EVENT_LIB=libev
-    - run: make EVENT_LIB=libev test
-    - run: make clean
-    - run: ./install_libuv
-    - run: make EVENT_LIB=libuv
-    - run: make EVENT_LIB=libuv test
-    - run: make clean
-    - run: ./install_libevent
-    - run: make EVENT_LIB=libevent
-    - run: make EVENT_LIB=libevent test
+
+    - run: ./install_${{ matrix.EVENT_LIB }}
+
+    - if: ${{ matrix.valgrind }}
+      run: |
+        sudo apt update
+        sudo apt install -y valgrind
+
+    - run: make EVENT_LIB=${{ matrix.EVENT_LIB }}
+
+    - run: docker run -d -p 3000:3000 -e DEFAULT_TTL=2592000 aerospike/aerospike-server:8.1.2.0
+    - run: sleep 5
+    - run: make EVENT_LIB=${{ matrix.EVENT_LIB }} test${{ matrix.valgrind && '-valgrind' || '' }}
+    - if: ${{ matrix.valgrind }}
+      run: |
+        grep 'ERROR SUMMARY: 0 errors' client_test-valgrind

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -14,26 +14,14 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-
-// --------------------------------------------------------------------------------
-// Includes.
-
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_exp.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include "_bin.h"
 
-
-// --------------------------------------------------------------------------------
-// Forward declarations
-
 as_binop*
 as_binop_forappend(as_operations* ops, as_operator operator, const char* name);
-
-
-// --------------------------------------------------------------------------------
-// Local helpers.
 
 /**
  * @private Remove buffer attached to an as_packer variable.

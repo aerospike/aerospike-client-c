@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  builds-on-linux:
+  builds-and-runs-on-linux:
     runs-on: ${{ vars.RUNS_ON_LINUX }}
     env:
       LD_LIBRARY_PATH: /usr/local/lib
@@ -127,3 +127,65 @@ jobs:
     - run: make clean
     - run: ./install_libevent
     - run: make EVENT_LIB=libevent
+
+  builds-on-windows:
+    runs-on: ${{ vars.RUNS_ON_WINDOWS }}
+    steps:
+    - name: Checkout client
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Setup Aerospike Database
+      uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@334ad55b790658d549747b0d154407dfc730acca # latest main
+      with:
+        server-tag: 8.1.2.0
+        oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
+        oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
+        config-content: |
+          service {
+            feature-key-file /etc/aerospike/features.conf
+            cluster-name docker
+            proto-fd-max 15000
+          }
+
+          logging {
+            console {
+              context any info
+            }
+          }
+
+          network {
+            service {
+              address any
+              port 3000
+            }
+            heartbeat {
+              mode mesh
+              port 3002
+            }
+            fabric {
+              port 3001
+            }
+          }
+
+          namespace test {
+            replication-factor 1
+            nsup-period 60
+            storage-engine memory { 
+                data-size 4G 
+            }
+          }
+
+    #- run: ./install_libev
+    #- run: make EVENT_LIB=libev
+    #- run: make EVENT_LIB=libev test
+    #- run: make clean
+    #- run: ./install_libuv
+    #- run: make EVENT_LIB=libuv
+    #- run: make EVENT_LIB=libuv test
+    #- run: make clean
+    #- run: ./install_libevent
+    #- run: make EVENT_LIB=libevent
+    #- run: make EVENT_LIB=libevent test
+

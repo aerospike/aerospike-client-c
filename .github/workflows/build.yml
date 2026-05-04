@@ -16,95 +16,103 @@ jobs:
     env:
       LD_LIBRARY_PATH: /usr/local/lib
     steps:
-    - name: Checkout client
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Setup Aerospike Database
-      uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@334ad55b790658d549747b0d154407dfc730acca # latest main
-      with:
-        server-tag: 8.1.2.0
-        oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
-        oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
-        config-content: |
-          service {
-            feature-key-file /etc/aerospike/features.conf
-            cluster-name docker
-            proto-fd-max 15000
-          }
-
-          logging {
-            console {
-              context any info
-            }
-          }
-
-          network {
+      - name: Checkout client
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Aerospike Database
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@d71692306c9e2a076b2354dbe08af95b27ca370c # latest main
+        with:
+          server-tag: 8.1.2.0
+          oidc-provider: ${{ vars.SHAREDWORKFLOW_DB_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.SHAREDWORKFLOW_DB_OIDC_AUDIENCE }}
+          config-content: |
             service {
-              address any
-              port 3000
+              feature-key-file /etc/aerospike/features.conf
+              cluster-name docker
+              proto-fd-max 15000
             }
-            heartbeat {
-              mode mesh
-              port 3002
+            logging {
+              console {
+                context any info
+              }
             }
-            fabric {
-              port 3001
+            network {
+              service {
+                address any
+                port 3000
+              }
+              heartbeat {
+                mode mesh
+                port 3002
+              }
+              fabric {
+                port 3001
+              }
             }
-          }
-
-          namespace test {
-            replication-factor 1
-            nsup-period 60
-            storage-engine memory { 
-                data-size 4G 
+            namespace test {
+              default-ttl 0
+              replication-factor 1
+              nsup-period 60
+              allow-ttl-without-nsup true
+              storage-engine memory {
+                  data-size 4G
+              }
             }
-          }
-
-    #- name: Try to set up nsup-period
-    #  steps:
-    #  - run: docker exec aerospike-server asinfo -v "set-config:context=namespace;id=test;nsup-period=120" || echo "Failed to set nsup-period"
-    #  - run: docker exec aerospike-server asinfo -v "set-config:context=namespace;id=test;default-ttl=2592000" || echo "Failed to set default-ttl"
-    - run: ./install_libev
-    - run: make EVENT_LIB=libev
-    - run: make EVENT_LIB=libev test
-    - run: make clean
-    - run: ./install_libuv
-    - run: make EVENT_LIB=libuv
-    - run: make EVENT_LIB=libuv test
-    - run: make clean
-    - run: ./install_libevent
-    - run: make EVENT_LIB=libevent
-    - run: make EVENT_LIB=libevent test
+      - name: Dump server info and config
+        run: |
+          docker exec aerospike-1 asd --version
+          docker exec aerospike-1 asinfo -v build
+          docker exec aerospike-1 asinfo -v status
+          docker exec aerospike-1 asinfo -v service
+          docker exec aerospike-1 asinfo -v namespaces
+          docker exec aerospike-1 asinfo -v "namespace/test"
+          docker exec aerospike-1 asinfo -v "get-config:"
+          docker exec aerospike-1 asinfo -v "get-config:context=service"
+          docker exec aerospike-1 asinfo -v "get-config:context=network"
+          docker exec aerospike-1 asinfo -v "get-config:context=namespace;id=test"
+          docker exec aerospike-1 asinfo -v statistics
+          docker exec aerospike-1 cat /etc/aerospike/aerospike.conf
+          docker logs aerospike-1
+      - run: ./install_libev
+      - run: make EVENT_LIB=libev
+      - run: make EVENT_LIB=libev AS_ARGS='-h 127.0.0.1 -p 3000' test
+      - run: make clean
+      - run: ./install_libuv
+      - run: make EVENT_LIB=libuv
+      - run: make EVENT_LIB=libuv test
+      - run: make clean
+      - run: ./install_libevent
+      - run: make EVENT_LIB=libevent
+      - run: make EVENT_LIB=libevent test
 
   builds-and-runs-on-mac-intel:
     runs-on: macos-26-intel
     steps:
-    - run: brew install wget
-    - run: brew install automake
-    - run: brew install libtool
-    - run: brew install openssl
-    - run: brew install libyaml
-    - name: Checkout client
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Set up ASDB for macOS
-      uses: ./.github/actions/setup-asdb-on-macos-intel
-    - run: ./install_libev
-    - run: make EVENT_LIB=libev
-    - run: make EVENT_LIB=libev test
-    - run: make clean
-    - run: ./install_libuv
-    - run: make EVENT_LIB=libuv
-    - run: make EVENT_LIB=libuv test
-    - run: make clean
-    - run: ./install_libevent
-    - run: make EVENT_LIB=libevent
-    - run: make EVENT_LIB=libevent test
-
+      - run: brew install wget
+      - run: brew install automake
+      - run: brew install libtool
+      - run: brew install openssl
+      - run: brew install libyaml
+      - name: Checkout client
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up ASDB for macOS
+        uses: ./.github/actions/setup-asdb-on-macos-intel
+      - run: ./install_libev
+      - run: make EVENT_LIB=libev
+      - run: make EVENT_LIB=libev test
+      - run: make clean
+      - run: ./install_libuv
+      - run: make EVENT_LIB=libuv
+      - run: make EVENT_LIB=libuv test
+      - run: make clean
+      - run: ./install_libevent
+      - run: make EVENT_LIB=libevent
+      - run: make EVENT_LIB=libevent test
 
   builds-on-mac-arm:
     runs-on: macos-latest
@@ -188,4 +196,3 @@ jobs:
     #- run: ./install_libevent
     #- run: make EVENT_LIB=libevent
     #- run: make EVENT_LIB=libevent test
-

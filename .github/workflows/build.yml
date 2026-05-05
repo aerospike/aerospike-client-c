@@ -17,6 +17,7 @@ jobs:
       matrix:
         os: [ "${{ vars.RUNS_ON_LINUX_INTEL }}", "${{ vars.RUNS_ON_LINUX_ARM }}" ]
         config: ["sync", "libev", "libuv", "libevent"]
+        valgrind: ["", "-valgrind"]
     runs-on: "${{ matrix.os }}"
     env:
       LD_LIBRARY_PATH: /usr/local/lib
@@ -81,19 +82,23 @@ jobs:
           docker exec aerospike-1 cat /etc/aerospike/aerospike.conf
           docker logs aerospike-1
       - run: ./install_libev
-        if: ${{ matrix.config == 'libev' }}
+        if: matrix.config == 'libev'
       - run: ./install_libuv
-        if: ${{ matrix.config == 'libuv' }}
+        if: matrix.config == 'libuv'
       - run: ./install_libevent
-        if: ${{ matrix.config == 'libevent' }}
+        if: matrix.config == 'libevent'
       - run: make
-        if: ${{ matrix.config == 'sync' }}
+        if: matrix.config == 'sync'
       - run: make EVENT_LIB=${{ matrix.config }}
-        if: ${{ matrix.config != 'sync' }}
+        if: matrix.config != 'sync'
       - run: make test
-        if: ${{ matrix.config == 'sync' }}
+        if: matrix.config == 'sync' && matrix.os != vars.RUNS_ON_WINDOWS_INTEL
       - run: make EVENT_LIB=${{ matrix.config }} test
-        if: ${{ matrix.config != 'sync' }}
+        if: matrix.config != 'sync' && matrix.os != vars.RUNS_ON_WINDOWS_INTEL
+      - run: make test-valgrind
+        if: matrix.config == 'sync' && matrix.os == vars.RUNS_ON_WINDOWS_INTEL
+      - run: make EVENT_LIB=${{ matrix.config }} test-valgrind
+        if: matrix.config != 'sync' && matrix.os == vars.RUNS_ON_WINDOWS_INTEL
 
   builds-and-runs-on-mac-intel:
     strategy:
@@ -115,19 +120,19 @@ jobs:
       - name: Set up ASDB for macOS
         uses: ./.github/actions/setup-asdb-on-macos-intel
       - run: ./install_libev
-        if: ${{ matrix.config == 'libev' }}
+        if:  matrix.config == 'libev' }}
       - run: ./install_libuv
-        if: ${{ matrix.config == 'libuv' }}
+        if:  matrix.config == 'libuv' }}
       - run: ./install_libevent
-        if: ${{ matrix.config == 'libevent' }}
+        if:  matrix.config == 'libevent' }}
       - run: make
-        if: ${{ matrix.config == 'sync' }}
+        if:  matrix.config == 'sync' }}
       - run: make EVENT_LIB=${{ matrix.config }}
-        if: ${{ matrix.config != 'sync' }}
+        if:  matrix.config != 'sync' }}
       - run: make test
-        if: ${{ matrix.config == 'sync' }}
+        if:  matrix.config == 'sync' }}
       - run: make EVENT_LIB=${{ matrix.config }} test
-        if: ${{ matrix.config != 'sync' }}
+        if:  matrix.config != 'sync' }}
 
   builds-on-mac-arm:
     strategy:
@@ -147,15 +152,15 @@ jobs:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
     - run: ./install_libev
-      if: ${{ matrix.config == 'libev' }}
+      if:  matrix.config == 'libev' }}
     - run: ./install_libuv
-      if: ${{ matrix.config == 'libuv' }}
+      if:  matrix.config == 'libuv' }}
     - run: ./install_libevent
-      if: ${{ matrix.config == 'libevent' }}
+      if:  matrix.config == 'libevent' }}
     - run: make
-      if: ${{ matrix.config == 'sync' }}
+      if:  matrix.config == 'sync' }}
     - run: make EVENT_LIB=${{ matrix.config }}
-      if: ${{ matrix.config != 'sync' }}
+      if:  matrix.config != 'sync' }}
 
   builds-on-windows:
     strategy:

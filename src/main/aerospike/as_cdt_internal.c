@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -22,6 +22,29 @@
 
 as_binop*
 as_binop_forappend(as_operations* ops, as_operator operator, const char* name);
+
+/**
+ * @private Remove buffer attached to an as_packer variable.
+ *
+ * Typically invoked before returning an error in an outer function.
+ *
+ * Frees a buffer allocated by the as_cdt_end() macro and
+ * attached to a packer.  Note that packers are almost always
+ * stack-allocated, so we cannot free the whole packer itself;
+ * however, we can remove the subordinate buffer.
+ *
+ * This also NULLs out the buffer pointer, so that the packer can
+ * be re-used in a subsequent operation.
+ */
+static inline void
+as_packer_free_buffer(as_packer* pk)
+{
+	if (pk->buffer) {
+		cf_free(pk->buffer);
+		pk->buffer = NULL;
+	}
+}
+
 
 void
 as_cdt_pack_header(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32_t count)
@@ -119,6 +142,7 @@ as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operat
 {
 	as_binop* binop = as_binop_forappend(ops, op_type, name);
 	if (! binop) {
+		as_packer_free_buffer(pk);
 		return false;
 	}
 	as_bytes* bytes = as_bytes_new_wrap(pk->buffer, pk->offset, true);
@@ -260,3 +284,4 @@ as_val_compare(as_val* v1, as_val* v2)
 	cf_free(s2);
 	return rv == 0;
 }
+

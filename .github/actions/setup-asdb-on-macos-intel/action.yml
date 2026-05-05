@@ -1,0 +1,44 @@
+name: 'Install Docker on macOS runner'
+description: 'Install Docker using colima'
+
+runs:
+  using: "composite"
+  steps:
+  - name: Set up Aerospike Server via Podman
+    shell: bash
+    run: |
+      echo "BREW INSTALL PODMAN"
+      brew install podman
+      echo "PODMAN MACHINE INIT"
+      podman machine init
+      echo "PODMAN MACHINE START"
+      podman machine start
+      echo "TRYING TO LAUNCH ASDB"
+      # Retry pulling and running image with exponential backoff (DNS/network issues can be transient)
+      for i in {1..5}; do
+        if podman run -d -p 3000:3000 --name aerospike-server aerospike/aerospike-server:8.1.2.0; then
+          echo "Aerospike server started successfully on attempt $i"
+          break
+        fi
+        if [ $i -eq 5 ]; then
+          echo "Failed to start Aerospike server after 5 attempts"
+          echo "Checking network connectivity..."
+          nslookup registry-1.docker.io || echo "DNS resolution failed"
+          curl -I https://registry-1.docker.io/v2/ || echo "HTTPS connection failed"
+          exit 1
+        fi
+        echo "Attempt $i failed, retrying in $((2**i)) seconds..."
+        sleep $((2**i))
+      done
+      echo "DONE"
+      # Wait for server to be ready
+      sleep 5
+      # Configure namespace for TTL support (default Docker image has nsup disabled)
+      echo "Configuring namespace for TTL support..."
+      podman exec aerospike-server asinfo -v "set-config:context=namespace;id=test;nsup-period=120" || echo "Failed to set nsup-period"
+      podman exec aerospike-server asinfo -v "set-config:context=namespace;id=test;default-ttl=2592000" || echo "Failed to set default-ttl"
+      # Debug: Print namespace configuration
+      echo "=== Namespace Configuration ==="
+      podman exec aerospike-server asinfo -v "get-config:context=namespace;id=test" | tr ';' '\n' | grep -E "nsup-period|default-ttl|allow-ttl" || echo "Could not get namespace config"
+      echo "=== Server Build ==="
+      podman exec aerospike-server asinfo -v "build"

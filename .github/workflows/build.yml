@@ -138,6 +138,7 @@ jobs:
 
   builds-on-windows:
     strategy:
+	  fail-fast: false
       matrix:
         configuration: ["Debug", "Debug libuv", "Debug libevent", "Release", "Release libuv", "Release libevent"]
         platform: [x64, arm64]

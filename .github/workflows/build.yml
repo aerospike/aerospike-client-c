@@ -92,13 +92,13 @@ jobs:
       - run: make EVENT_LIB=${{ matrix.config }}
         if: matrix.config != 'sync'
       - run: make test
-        if: matrix.config == 'sync' && matrix.os != "${{ vars.RUNS_ON_WINDOWS_INTEL }}"
+        if: matrix.config == 'sync'
       - run: make EVENT_LIB=${{ matrix.config }} test
-        if: matrix.config != 'sync' && matrix.os != "${{ vars.RUNS_ON_WINDOWS_INTEL }}"
+        if: matrix.config != 'sync'
       - run: make test-valgrind
-        if: matrix.config == 'sync' && matrix.os == "${{ vars.RUNS_ON_WINDOWS_INTEL }}"
+        if: matrix.config == 'sync' && matrix.os == "${{ vars.RUNS_ON_LINUX_INTEL }}"
       - run: make EVENT_LIB=${{ matrix.config }} test-valgrind
-        if: matrix.config != 'sync' && matrix.os == "${{ vars.RUNS_ON_WINDOWS_INTEL }}"
+        if: matrix.config != 'sync' && matrix.os == "${{ vars.RUNS_ON_LINUX_INTEL }}"
 
   builds-and-runs-on-mac-intel:
     strategy:

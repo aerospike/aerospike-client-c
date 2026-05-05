@@ -137,11 +137,11 @@ jobs:
     - run: make EVENT_LIB=libevent
 
   builds-on-windows:
-    runs-on: ${{ vars.RUNS_ON_WINDOWS }}
 	strategy:
 	  matrix:
-	    configuration: [Debug, Debug libuv, Debug libevent, Release, Release libuv, Release libevent]
+	    configuration: ["Debug", "Debug libuv", "Debug libevent", "Release", "Release libuv", "Release libevent"]
 		platform: [x64, arm64]
+    runs-on: ${{ matrix.platform == 'x64' && vars.RUNS_ON_WINDOWS_INTEL || vars.RUNS_ON_WINDOWS_ARM }}
     steps:
     - name: Checkout client
       uses: actions/checkout@v2
@@ -152,11 +152,11 @@ jobs:
 	  uses: microsoft/setup-msbuild@v2
 	- name: Restore nuget and dependencies
 	  run: |
-      cd vs
-      nuget restore aerospike.sln
+        cd vs
+        nuget restore aerospike.sln
 	- name: Build
 	  run: |
-      cd vs
-	    msbuild aerospike.sln `
-      -property:Configuration="${{ matrix.configuration }}" `
-      -property:Platform="${{ matrix.platform }}"
+        cd vs
+	    echo msbuild aerospike.sln `
+          -property:Configuration="${{ matrix.configuration }}" `
+          -property:Platform="${{ matrix.platform }}"

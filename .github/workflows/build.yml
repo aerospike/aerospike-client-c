@@ -157,6 +157,6 @@ jobs:
     - name: Build
       run: |
         cd vs
-        echo msbuild aerospike.sln `
+        msbuild aerospike.sln `
           -property:Configuration="${{ matrix.configuration }}" `
           -property:Platform="${{ matrix.platform }}"

@@ -15,9 +15,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ${{ vars.RUNS_ON_LINUX_INTEL }}, ${{ vars.RUNS_ON_LINUX_ARM }} ]
+        os: [ "${{ vars.RUNS_ON_LINUX_INTEL }}", "${{ vars.RUNS_ON_LINUX_ARM }}" ]
         config: ["sync", "libev", "libuv", "libevent"]
-    runs-on: ${{ matrix.os }}
+    runs-on: "${{ matrix.os }}"
     env:
       LD_LIBRARY_PATH: /usr/local/lib
     steps:

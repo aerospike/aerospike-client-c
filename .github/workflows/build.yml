@@ -12,7 +12,12 @@ permissions:
 
 jobs:
   builds-and-runs-on-linux:
-    runs-on: ${{ vars.RUNS_ON_LINUX }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ${{ vars.RUNS_ON_LINUX_INTEL }}, ${{ vars.RUNS_ON_LINUX_ARM }} ]
+        config: ["sync", "libev", "libuv", "libevent"]
+    runs-on: ${{ matrix.os }}
     env:
       LD_LIBRARY_PATH: /usr/local/lib
     steps:
@@ -76,18 +81,25 @@ jobs:
           docker exec aerospike-1 cat /etc/aerospike/aerospike.conf
           docker logs aerospike-1
       - run: ./install_libev
-      - run: make EVENT_LIB=libev
-      - run: make EVENT_LIB=libev AS_ARGS='-h 127.0.0.1 -p 3000' test
-      - run: make clean
+        if: ${{ matrix.config == 'libev' }}
       - run: ./install_libuv
-      - run: make EVENT_LIB=libuv
-      - run: make EVENT_LIB=libuv test
-      - run: make clean
+        if: ${{ matrix.config == 'libuv' }}
       - run: ./install_libevent
-      - run: make EVENT_LIB=libevent
-      - run: make EVENT_LIB=libevent test
+        if: ${{ matrix.config == 'libevent' }}
+      - run: make
+        if: ${{ matrix.config == 'sync' }}
+      - run: make EVENT_LIB=${{ matrix.config }}
+        if: ${{ matrix.config != 'sync' }}
+      - run: make test
+        if: ${{ matrix.config == 'sync' }}
+      - run: make EVENT_LIB=${{ matrix.config }} test
+        if: ${{ matrix.config != 'sync' }}
 
   builds-and-runs-on-mac-intel:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ["sync", "libev", "libuv", "libevent"]
     runs-on: macos-26-intel
     steps:
       - run: brew install wget
@@ -103,16 +115,19 @@ jobs:
       - name: Set up ASDB for macOS
         uses: ./.github/actions/setup-asdb-on-macos-intel
       - run: ./install_libev
-      - run: make EVENT_LIB=libev
-      - run: make EVENT_LIB=libev test
-      - run: make clean
+        if: ${{ matrix.config == 'libev' }}
       - run: ./install_libuv
-      - run: make EVENT_LIB=libuv
-      - run: make EVENT_LIB=libuv test
-      - run: make clean
+        if: ${{ matrix.config == 'libuv' }}
       - run: ./install_libevent
-      - run: make EVENT_LIB=libevent
-      - run: make EVENT_LIB=libevent test
+        if: ${{ matrix.config == 'libevent' }}
+      - run: make
+        if: ${{ matrix.config == 'sync' }}
+      - run: make EVENT_LIB=${{ matrix.config }}
+        if: ${{ matrix.config != 'sync' }}
+      - run: make test
+        if: ${{ matrix.config == 'sync' }}
+      - run: make EVENT_LIB=${{ matrix.config }} test
+        if: ${{ matrix.config != 'sync' }}
 
   builds-on-mac-arm:
     strategy:

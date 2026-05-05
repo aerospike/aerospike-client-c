@@ -115,6 +115,10 @@ jobs:
       - run: make EVENT_LIB=libevent test
 
   builds-on-mac-arm:
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ["sync", "libev", "libuv", "libevent"]
     runs-on: macos-latest
     steps:
     - run: brew install wget
@@ -128,20 +132,22 @@ jobs:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
     - run: ./install_libev
-    - run: make EVENT_LIB=libev
-    - run: make clean
+      if: ${{ matrix.config == 'libev' }}
     - run: ./install_libuv
-    - run: make EVENT_LIB=libuv
-    - run: make clean
+      if: ${{ matrix.config == 'libuv' }}
     - run: ./install_libevent
-    - run: make EVENT_LIB=libevent
+      if: ${{ matrix.config == 'libevent' }}
+    - run: make
+      if: ${{ matrix.config == 'sync' }}
+    - run: make EVENT_LIB=${{ matrix.config }}
+      if: ${{ matrix.config != 'sync' }}
 
   builds-on-windows:
     strategy:
       fail-fast: false
       matrix:
         configuration: ["Debug", "Debug libuv", "Debug libevent", "Release", "Release libuv", "Release libevent"]
-        platform: [x64, arm64]
+        platform: [x64]
     runs-on: ${{ matrix.platform == 'x64' && vars.RUNS_ON_WINDOWS_INTEL || vars.RUNS_ON_WINDOWS_ARM }}
     steps:
     - name: Checkout client

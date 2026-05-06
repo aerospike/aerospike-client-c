@@ -104,17 +104,36 @@ jobs:
         run: |
           if [[ "${{ matrix.os }}" == "${{ vars.RUNS_ON_LINUX_INTEL }}" ]]; then
             if [[ "${{ matrix.config }}" == "sync" ]]; then
-              echo "SHOULD_VALGRIND=true"
-              echo "SHOULD_VALGRIND_EV=false"
-              echo "SHOULD_VALGRIND=true" >> $GITHUB_ENV
-              echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
+              if [[ "${{ matrix.valgrind }}" == "-valgrind" ]]; then
+                # OS=linux /\ config=sync /\ valgrind=true
+                echo "SHOULD_VALGRIND=true"
+                echo "SHOULD_VALGRIND_EV=false"
+                echo "SHOULD_VALGRIND=true" >> $GITHUB_ENV
+                echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
+              else
+                # OS=linux /\ config=sync /\ valgrind=false
+                echo "SHOULD_VALGRIND=false"
+                echo "SHOULD_VALGRIND_EV=false"
+                echo "SHOULD_VALGRIND=false" >> $GITHUB_ENV
+                echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
+              fi
             else
-              echo "SHOULD_VALGRIND_EV=false"
-              echo "SHOULD_VALGRIND_EV=true"
-              echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
-              echo "SHOULD_VALGRIND_EV=true" >> $GITHUB_ENV
+              if [[ "${{ matrix.valgrind }}" == "-valgrind" ]]; then
+                # OS=linux /\ config=Async /\ valgrind=true
+                echo "SHOULD_VALGRIND_EV=false"
+                echo "SHOULD_VALGRIND_EV=true"
+                echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
+                echo "SHOULD_VALGRIND_EV=true" >> $GITHUB_ENV
+              else
+                # OS=linux /\ config=Async /\ valgrind=false
+                echo "SHOULD_VALGRIND_EV=false"
+                echo "SHOULD_VALGRIND_EV=false"
+                echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
+                echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
+              fi
             fi
           else
+            # OS=other
             echo "SHOULD_VALGRIND=false"
             echo "SHOULD_VALGRIND_EV=false"
             echo "SHOULD_VALGRIND=false" >> $GITHUB_ENV

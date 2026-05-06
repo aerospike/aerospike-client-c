@@ -22,6 +22,8 @@ jobs:
     env:
       LD_LIBRARY_PATH: /usr/local/lib
     steps:
+      - name: Install dependencies
+        run: sudo apt-get install -y autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev valgrind
       - name: Checkout client
         uses: actions/checkout@v2
         with:

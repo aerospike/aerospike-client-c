@@ -100,17 +100,32 @@ jobs:
       - run: make EVENT_LIB=${{ matrix.config }} test
         if: matrix.config != 'sync'
 
-      - name: Debug Matrix Values
+      - name: Calculate if we should run valgrind
         run: |
-          echo "Is config sync?: ${{ matrix.config == 'sync' }}"
-          echo "Is OS matching?: ${{ matrix.os == vars.RUNS_ON_LINUX_INTEL }}"
-          echo " Full Condition: ${{ matrix.config == 'sync' && matrix.os == vars.RUNS_ON_LINUX_INTEL }}"
+          if [[ "${{ matrix.os }}" == "${{ vars.RUNS_ON_LINUX_INTEL }}" ]]; then
+            if [[ "${{ matrix.config }}" == "sync" ]]; then
+              echo "SHOULD_VALGRIND=true"
+              echo "SHOULD_VALGRIND_EV=false"
+              echo "SHOULD_VALGRIND=true" >> $GITHUB_ENV
+              echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
+            else
+              echo "SHOULD_VALGRIND_EV=false"
+              echo "SHOULD_VALGRIND_EV=true"
+              echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
+              echo "SHOULD_VALGRIND_EV=true" >> $GITHUB_ENV
+            fi
+          else
+            echo "SHOULD_VALGRIND=false"
+            echo "SHOULD_VALGRIND_EV=false"
+            echo "SHOULD_VALGRIND=false" >> $GITHUB_ENV
+            echo "SHOULD_VALGRIND_EV=false" >> $GITHUB_ENV
+          fi
 
       - run: make test-valgrind
-        if: (matrix.config == 'sync') && (matrix.os == vars.RUNS_ON_LINUX_INTEL)
+        if: env.SHOULD_VALGRIND == 'true'
 
       - run: make EVENT_LIB=${{ matrix.config }} test-valgrind
-        if: (matrix.config != 'sync') && (matrix.os == vars.RUNS_ON_LINUX_INTEL)
+        if: env.SHOULD_VALGRIND_EV == 'true'
 
   builds-and-runs-on-mac-intel:
     strategy:

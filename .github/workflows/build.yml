@@ -102,8 +102,9 @@ jobs:
 
       - name: Debug Matrix Values
         run: |
-          echo "Config: '${{ matrix.config }}'"
-          echo "    OS: '${{ matrix.os }}'"
+          echo "Is config sync?: ${{ matrix.config == 'sync' }}"
+		  echo "Is OS matching?: ${{ matrix.os == vars.RUNS_ON_LINUX_INTEL }}"
+		  echo " Full Condition: ${{ matrix.config == 'sync' && matrix.os == vars.RUNS_ON_LINUX_INTEL }}"
 
       - run: make test-valgrind
         if: (matrix.config == 'sync') && (matrix.os == vars.RUNS_ON_LINUX_INTEL)

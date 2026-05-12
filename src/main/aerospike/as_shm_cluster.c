@@ -310,7 +310,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 		
 		if (node_tmp.active) {
 			if (! node) {
-				as_node_info node_info;
+				as_node_info node_info = {0};
 				strcpy(node_info.name, node_tmp.name);
 				as_socket_init(&node_info.socket);
 				node_info.features = node_tmp.features;

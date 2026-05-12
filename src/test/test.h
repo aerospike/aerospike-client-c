@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2026 Aerospike, Inc.
+ * Copyright 2008-2022 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -167,12 +167,6 @@ atf_plan_result * atf_plan_result_add(atf_plan_result * plan_result, atf_suite_r
 atf_plan_result * atf_plan_result_new(atf_plan * plan);
 void atf_plan_result_destroy(atf_plan_result * result);
 
-/**
- * On Linux, close fds inherited from the parent (keep 0–2). CI runners often
- * leave fd >= 1024 open; the client select/fd_set path then aborts in glibc.
- * No-op on other platforms.
- */
-void atf_close_inherited_fds(void);
 
 #define PLAN(__plan_name)\
     static void plan_spec__##__plan_name(atf_plan * self); \
@@ -187,7 +181,6 @@ void atf_close_inherited_fds(void);
     int main(int argc, char ** args) { \
     	g_argc = argc; \
 		g_argv = args; \
-        atf_close_inherited_fds(); \
         atf_plan_result * result = atf_plan_result_new(__plan_name); \
         plan_spec__##__plan_name(__plan_name); \
         int rc = atf_plan_run(__plan_name, result); \

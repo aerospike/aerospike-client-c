@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2026 Aerospike, Inc.
+ * Copyright 2008-2019 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -20,11 +20,6 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#if defined(__linux__)
-#include <dirent.h>
-#include <unistd.h>
-#endif
 
 /******************************************************************************
  * MACROS
@@ -388,65 +383,5 @@ void atf_log_line(FILE * f, const char * level, const char * prefix, const char 
     vsnprintf(msg, LOG_MESSAGE_MAX, fmt, ap);
     va_end(ap);
     fprintf(f, "%s[%s:%d] %s - %s\n", prefix, file, line, level, msg);
-}
-
-/******************************************************************************
- * Inherited file descriptors (Linux CI)
- *****************************************************************************/
-
-void
-atf_close_inherited_fds(void)
-{
-#if defined(__linux__)
-	DIR* d = opendir("/proc/self/fd");
-	if (!d) {
-		return;
-	}
-
-	int dir_fd = dirfd(d);
-	int cap = 64;
-	int* fds = malloc((size_t)cap * sizeof(int));
-	if (!fds) {
-		closedir(d);
-		return;
-	}
-
-	int n = 0;
-	struct dirent* e;
-
-	while ((e = readdir(d)) != NULL) {
-		char* end = NULL;
-		long v = strtol(e->d_name, &end, 10);
-
-		if (end == e->d_name || *end != '\0' || v < 0) {
-			continue;
-		}
-
-		int fd = (int)v;
-
-		if (fd <= 2 || fd == dir_fd) {
-			continue;
-		}
-
-		if (n >= cap) {
-			int ncap = cap * 2;
-			int* nf = realloc(fds, (size_t)ncap * sizeof(int));
-
-			if (!nf) {
-				break;
-			}
-			fds = nf;
-			cap = ncap;
-		}
-		fds[n++] = fd;
-	}
-
-	closedir(d);
-
-	for (int i = 0; i < n; i++) {
-		(void)close(fds[i]);
-	}
-	free(fds);
-#endif
 }
 

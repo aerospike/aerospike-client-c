@@ -1,4 +1,4 @@
-name: Aerospike C Client Tests
+name: Aerospike C Client Test
 
 on:
   push:

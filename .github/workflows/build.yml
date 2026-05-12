@@ -43,3 +43,8 @@ jobs:
     - if: ${{ matrix.valgrind }}
       run: |
         grep 'ERROR SUMMARY: 0 errors' client_test-valgrind
+
+  invoke-artifacts-cicd-workflow:
+    needs: [build-and-test]
+    uses: ./.github/workflows/something
+

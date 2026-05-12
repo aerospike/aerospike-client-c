@@ -56,14 +56,14 @@ typedef struct as_node_shm_s {
 	char tls_name[AS_HOSTNAME_SIZE];
 	
 	/**
-	 * Features supported by server.  Stored in bitmap.
-	 */
-	uint32_t features;
-
-	/**
 	 * Server version (for follower local node reconstruction).
 	 */
 	as_version version;
+
+	/**
+	 * Features supported by server.  Stored in bitmap.
+	 */
+	uint32_t features;
 
 	/**
 	 * Server's generation count for partition rebalancing.

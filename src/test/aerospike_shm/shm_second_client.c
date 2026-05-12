@@ -21,6 +21,7 @@
  * Prerequisite: the Aerospike database cluster is already reachable. The test
  * harness (plan_before) connects a normal non-SHM global client to the same
  * seeds to validate the server; that client is unrelated to the SHM pair below.
+ * This suite expects a non-TLS cluster (no TLS copied from the harness).
  *
  * Flow exercised:
  *   1) Create SHM client A and connect. First attach wins tend-master in
@@ -46,7 +47,6 @@
 #include "../test.h"
 #include "../aerospike_test.h"
 
-extern as_config_tls g_tls;
 extern as_auth_mode g_auth_mode;
 
 TEST(shm_second_client_master_follower,
@@ -59,7 +59,6 @@ TEST(shm_second_client_master_follower,
 	as_config cfg1;
 	as_config_init(&cfg1);
 	assert_true(as_config_add_hosts(&cfg1, g_host, g_port));
-	memcpy(&cfg1.tls, &g_tls, sizeof(as_config_tls));
 	cfg1.auth_mode = g_auth_mode;
 	cfg1.use_shm = true;
 	cfg1.shm_key = shm_key;
@@ -77,7 +76,6 @@ TEST(shm_second_client_master_follower,
 	as_config cfg2;
 	as_config_init(&cfg2);
 	assert_true(as_config_add_hosts(&cfg2, g_host, g_port));
-	memcpy(&cfg2.tls, &g_tls, sizeof(as_config_tls));
 	cfg2.auth_mode = g_auth_mode;
 	cfg2.use_shm = true;
 	cfg2.shm_key = shm_key;

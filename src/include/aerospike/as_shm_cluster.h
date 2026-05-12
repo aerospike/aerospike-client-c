@@ -32,7 +32,7 @@ extern "C" {
 
 /**
  * @private
- * Shared memory representation of node. 424 bytes.
+ * Shared memory representation of node.
  */
 typedef struct as_node_shm_s {
 	/**
@@ -59,6 +59,11 @@ typedef struct as_node_shm_s {
 	 * Features supported by server.  Stored in bitmap.
 	 */
 	uint32_t features;
+
+	/**
+	 * Server version (for follower local node reconstruction).
+	 */
+	as_version version;
 
 	/**
 	 * Server's generation count for partition rebalancing.

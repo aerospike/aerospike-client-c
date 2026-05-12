@@ -178,6 +178,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				node_shm->tls_name[0] = 0;
 			}
 			node_shm->features = node_to_add->features;
+			memcpy(&node_shm->version, &node_to_add->version, sizeof(as_version));
 			node_shm->active = true;
 			as_swlock_write_unlock(&node_shm->lock);
 			
@@ -201,6 +202,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 					node_shm->tls_name[0] = 0;
 				}
 				node_shm->features = node_to_add->features;
+				memcpy(&node_shm->version, &node_to_add->version, sizeof(as_version));
 				node_shm->active = true;
 				as_swlock_write_unlock(&node_shm->lock);
 				
@@ -310,7 +312,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 		
 		if (node_tmp.active) {
 			if (! node) {
-				as_node_info node_info = {0};
+				as_node_info node_info;
 				strcpy(node_info.name, node_tmp.name);
 				as_socket_init(&node_info.socket);
 				node_info.features = node_tmp.features;
@@ -319,6 +321,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				node_info.host.port = 0;
 				as_address_copy_storage((struct sockaddr*)&node_tmp.addr, &node_info.addr);
 				node_info.session = NULL;
+				memcpy(&node_info.version, &node_tmp.version, sizeof(as_version));
 				node = as_node_create(cluster, &node_info);
 				as_node_create_min_connections(node);
 				node->index = i;

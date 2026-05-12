@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -513,6 +513,8 @@ PLAN(aerospike_test)
 	plan_add(scan_basics);
 	plan_add(batch);
 	plan_add(transaction);
+
+	plan_add(shm_second_client);
 
 #if AS_EVENT_LIB_DEFINED
 	plan_add(key_basics_async);

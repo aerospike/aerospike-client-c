@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -178,7 +178,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 				node_shm->tls_name[0] = 0;
 			}
 			node_shm->features = node_to_add->features;
-			memcpy(&node_shm->version, &node_to_add->version, sizeof(as_version));
+			node_shm->version = node_to_add->version;
 			node_shm->active = true;
 			as_swlock_write_unlock(&node_shm->lock);
 			
@@ -202,7 +202,7 @@ as_shm_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 					node_shm->tls_name[0] = 0;
 				}
 				node_shm->features = node_to_add->features;
-				memcpy(&node_shm->version, &node_to_add->version, sizeof(as_version));
+				node_shm->version = node_to_add->version;
 				node_shm->active = true;
 				as_swlock_write_unlock(&node_shm->lock);
 				
@@ -321,7 +321,7 @@ as_shm_reset_nodes(as_cluster* cluster)
 				node_info.host.port = 0;
 				as_address_copy_storage((struct sockaddr*)&node_tmp.addr, &node_info.addr);
 				node_info.session = NULL;
-				memcpy(&node_info.version, &node_tmp.version, sizeof(as_version));
+				node_info.version = node_tmp.version;
 				node = as_node_create(cluster, &node_info);
 				as_node_create_min_connections(node);
 				node->index = i;

@@ -485,6 +485,11 @@ PLAN(aerospike_test)
 	plan_before(before);
 	plan_after(after);
 
+	// shm_second_client runs early: one process can exceed ~1024 open fds late
+	// in this plan; Linux then assigns a high socket fd and glibc aborts on
+	// select/FD_SET in the sync connect path (CI failure when this suite ran last).
+	plan_add(shm_second_client);
+
 	plan_add(key_basics);
 	plan_add(key_apply);
 	plan_add(key_apply2);
@@ -513,8 +518,6 @@ PLAN(aerospike_test)
 	plan_add(scan_basics);
 	plan_add(batch);
 	plan_add(transaction);
-
-	plan_add(shm_second_client);
 
 #if AS_EVENT_LIB_DEFINED
 	plan_add(key_basics_async);

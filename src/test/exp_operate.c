@@ -1054,7 +1054,7 @@ TEST(exp_in_list, "as_exp_in_list string and int membership")
 	}
 }
 
-TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
+TEST(exp_map_keys_values, "as_exp_map_keys_in and as_exp_map_values_in")
 {
 	as_error err;
 	as_status rc;
@@ -1089,10 +1089,10 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 	as_bin* results;
 
 	/*------------------------------------------------------------------
-	 * Case 1: map_keys(as_exp_bin_map("m")) -> list containing "a", "b"
+	 * Case 1: map_keys_in(as_exp_bin_map("m")) -> list containing "a", "b"
 	 *----------------------------------------------------------------*/
 	{
-		as_exp_build(expr, as_exp_map_keys(as_exp_bin_map("m")));
+		as_exp_build(expr, as_exp_map_keys_in(as_exp_bin_map("m")));
 		assert_not_null(expr);
 
 		as_operations_inita(&ops, 1);
@@ -1126,10 +1126,10 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 	}
 
 	/*------------------------------------------------------------------
-	 * Case 2: map_values(as_exp_bin_map("m")) -> list containing 1, 2
+	 * Case 2: map_values_in(as_exp_bin_map("m")) -> list containing 1, 2
 	 *----------------------------------------------------------------*/
 	{
-		as_exp_build(expr, as_exp_map_values(as_exp_bin_map("m")));
+		as_exp_build(expr, as_exp_map_values_in(as_exp_bin_map("m")));
 		assert_not_null(expr);
 
 		as_operations_inita(&ops, 1);
@@ -1161,7 +1161,7 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 	}
 
 	/*------------------------------------------------------------------
-	 * Case 3: literal map — map_keys / map_values via as_exp_val
+	 * Case 3: literal map — map_keys_in / map_values_in via as_exp_val
 	 *----------------------------------------------------------------*/
 	{
 		as_orderedmap* lit = as_orderedmap_new(2);
@@ -1171,7 +1171,7 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 		as_orderedmap_set(lit, (as_val*)as_string_new((char*)"b", false),
 				(as_val*)as_integer_new(2));
 
-		as_exp_build(expr_k, as_exp_map_keys(as_exp_val((as_val*)lit)));
+		as_exp_build(expr_k, as_exp_map_keys_in(as_exp_val((as_val*)lit)));
 		assert_not_null(expr_k);
 		as_orderedmap_destroy(lit);
 
@@ -1213,7 +1213,7 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 		as_orderedmap_set(lit, (as_val*)as_string_new((char*)"b", false),
 				(as_val*)as_integer_new(2));
 
-		as_exp_build(expr_v, as_exp_map_values(as_exp_val((as_val*)lit)));
+		as_exp_build(expr_v, as_exp_map_values_in(as_exp_val((as_val*)lit)));
 		assert_not_null(expr_v);
 		as_orderedmap_destroy(lit);
 

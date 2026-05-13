@@ -1,0 +1,24 @@
+name: C Build & Release
+
+# Mirrors aerospike-client-java-sdk/.github/workflows/push-to-stage.yaml.
+# Triggers the build-release pipeline on stage / dev/* pushes and on manual dispatch.
+
+on:
+  push:
+    branches:
+      #- stage
+      - "dev/*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version override (leave empty to auto-detect via pkg/version)
+        required: false
+        default: ""
+
+jobs:
+  build-stage:
+    name: Build stage
+    uses: ./.github/workflows/build-release.yaml
+    with:
+      version-override: ${{ inputs.version }}
+    secrets: inherit

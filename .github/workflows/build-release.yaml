@@ -1,0 +1,176 @@
+name: Build and release (C)
+
+# Equivalent of aerospike-client-java-sdk/.github/workflows/build-release.yaml, adapted for C:
+#   - No SNAPSHOTs (version comes from pkg/version / git describe).
+#   - Uses the newer reusable_artifacts-cicd.yaml wrapper which bundles
+#     execute-build (matrix) -> collect -> sign-mac -> sign -> deploy.
+#   - One matrix cell per (distro, arch); `make package` internally builds all four
+#     event libraries (sync, libuv, libev, libevent) and produces .rpm/.deb/.pkg/.tgz/.zip
+#     into target/packages/.
+
+on:
+  workflow_call:
+    inputs:
+      version-override:
+        description: Optional version override (empty = pkg/version)
+        required: false
+        type: string
+        default: ""
+    secrets:
+      GPG_SECRET_KEY:
+        required: true
+      GPG_PUBLIC_KEY:
+        required: true
+      GPG_PASS:
+        required: true
+      APPLE_APPLICATION_CERT:
+        required: false
+      APPLE_INSTALLER_CERT:
+        required: false
+      APPLE_CERT_PASSWORD:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_NOTARIZATION_PASSWORD:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+  attestations: write
+
+jobs:
+  extract-version:
+    runs-on: ${{ vars.BUILD_CONTAINER_DISTRO_VERSION }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: recursive
+      - name: Extract version
+        id: extract
+        uses: ./.github/actions/get-version
+        with:
+          version-override: ${{ inputs.version-override }}
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+
+  artifacts-cicd:
+    needs: extract-version
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+    with:
+      gh-workflows-ref: 7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+      jf-project: ${{ vars.JFROG_PROJECT }}
+      jf-build-name: aerospike-client-c
+      version: ${{ needs.extract-version.outputs.version }}
+      oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME }}
+      oidc-audience: ${{ vars.OIDC_AUDIENCE }}
+
+      gh-source-path: aerospike-client-c
+      working-directory: aerospike-client-c
+      gh-artifact-directory: target/packages
+
+      # One matrix cell per (distro, arch). `make package` loops over all four event libs internally.
+      # Linux cells build inside a docker container matching the target distro (rpmbuild / dpkg-deb).
+      # Mac cells build natively on macOS runners; signing+notarization is handled by sign-mac below.
+      matrix-json: >-
+        {"include":[
+          {"runs-on":"ubuntu-22.04",     "distro":"el8",        "arch":"x86_64"},
+          {"runs-on":"ubuntu-22.04",     "distro":"el9",        "arch":"x86_64"},
+          {"runs-on":"ubuntu-22.04-arm", "distro":"el9",        "arch":"aarch64"},
+          {"runs-on":"ubuntu-22.04",     "distro":"amzn2023",   "arch":"x86_64"},
+          {"runs-on":"ubuntu-22.04",     "distro":"ubuntu22.04","arch":"x86_64"},
+          {"runs-on":"ubuntu-22.04",     "distro":"ubuntu24.04","arch":"x86_64"},
+          {"runs-on":"ubuntu-22.04-arm", "distro":"ubuntu24.04","arch":"aarch64"},
+          {"runs-on":"ubuntu-22.04",     "distro":"debian12",   "arch":"x86_64"},
+          {"runs-on":"ubuntu-22.04",     "distro":"debian13",   "arch":"x86_64"},
+          {"runs-on":"macos-14",         "distro":"mac",        "arch":"arm64"},
+          {"runs-on":"macos-13",         "distro":"mac",        "arch":"x86_64"}
+        ]}
+
+      build-script: |
+        set -euo pipefail
+        DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
+        ARCH=$(jq -r '.arch'    <<<"$MATRIX_JSON")
+        echo "Building aerospike-client-c for $DISTRO/$ARCH"
+
+        case "$DISTRO" in
+          el*|amzn*|fc*|ubuntu*|debian*)
+            # Linux: build inside a container that has the target distro's package toolchain
+            # (rpmbuild for rpm-family, dpkg-deb/fakeroot for deb-family) plus libuv/libev/libevent
+            # headers and openssl. The helper script picks the image and mounts the workspace.
+            ./.github/scripts/build-in-container.sh "$DISTRO" "$ARCH"
+            ;;
+          mac)
+            # macOS runner has Xcode toolchain; install event-lib deps via Homebrew.
+            brew install libuv libev libevent openssl@3
+            make clean
+            make package
+            ;;
+          *)
+            echo "Unknown distro: $DISTRO" >&2
+            exit 1
+            ;;
+        esac
+
+        echo "Produced packages:"
+        ls -la target/packages/
+
+      # Mac signing path (the wrapper runs a dedicated job on a macOS runner that
+      # downloads all collected artifacts, signs+notarizes the .pkg files, and
+      # re-uploads). pkg/package_type ran unsigned during the build step.
+      sign-mac: true
+      mac-signing-identity:   "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
+      mac-artifact-glob: "*.pkg"
+      mac-notarize: true
+
+      build-type: release
+      dry-run: false
+    secrets:
+      gpg-private-key:             ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key:              ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass:                ${{ secrets.GPG_PASS }}
+      apple-application-cert:      ${{ secrets.APPLE_APPLICATION_CERT }}
+      apple-installer-cert:        ${{ secrets.APPLE_INSTALLER_CERT }}
+      apple-cert-password:         ${{ secrets.APPLE_CERT_PASSWORD }}
+      apple-id:                    ${{ secrets.APPLE_ID }}
+      apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+      apple-team-id:               ${{ secrets.APPLE_TEAM_ID }}
+
+  create-release-bundle:
+    needs: [extract-version, artifacts-cicd]
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+    with:
+      gh-workflows-ref: 7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+      jf-project: ${{ vars.JFROG_PROJECT }}
+      jf-build-names: aerospike-client-c:${{ needs.artifacts-cicd.outputs.jf-build-id }}
+      jf-bundle-name: aerospike-client-c
+      version: ${{ needs.extract-version.outputs.version }}
+      oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME }}
+      oidc-audience: ${{ vars.OIDC_AUDIENCE }}
+      dry-run: false
+
+  promote-release-bundle:
+    needs: [extract-version, create-release-bundle]
+    runs-on: ${{ vars.BUILD_CONTAINER_DISTRO_VERSION }}
+    steps:
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: ${{ vars.JFROG_PROJECT }}
+        with:
+          oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME }}
+          oidc-audience: ${{ vars.OIDC_AUDIENCE }}
+      - name: Promote release bundle to DEV
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+        with:
+          bundle-name: aerospike-client-c
+          version: ${{ needs.extract-version.outputs.version }}
+          environment: DEV
+          jf-project: ${{ vars.JFROG_PROJECT }}

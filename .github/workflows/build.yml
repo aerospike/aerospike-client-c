@@ -1,50 +1,74 @@
-name: Aerospike C Client Test
+#name: Aerospike C Client Test
+
+#on:
+  #push:
+    #branches: [master, stage]
+  #pull_request:
+    #branches: [master, stage]
+
+#jobs:
+  #build-and-test:
+    #runs-on: ubuntu-latest
+    #env:
+      #LD_LIBRARY_PATH: /usr/local/lib
+    #strategy:
+      #matrix:
+        #EVENT_LIB:
+        #- libev
+        #- libuv
+        #- libevent
+        #valgrind:
+        #- false
+        #- true
+      #fail-fast: false
+    #steps:
+    #- name: Checkout client
+      #uses: actions/checkout@v2
+      #with:
+        #submodules: recursive
+        #token: ${{ secrets.GITHUB_TOKEN }}
+
+    #- run: ./install_${{ matrix.EVENT_LIB }}
+
+    #- if: ${{ matrix.valgrind }}
+      #run: |
+        #sudo apt update
+        #sudo apt install -y valgrind
+
+    #- run: make EVENT_LIB=${{ matrix.EVENT_LIB }}
+
+    #- run: docker run -d -p 3000:3000 -e DEFAULT_TTL=2592000 aerospike/aerospike-server:8.1.2.0
+    #- run: sleep 5
+    #- run: make EVENT_LIB=${{ matrix.EVENT_LIB }} test${{ matrix.valgrind && '-valgrind' || '' }}
+    #- if: ${{ matrix.valgrind }}
+      #run: |
+        #grep 'ERROR SUMMARY: 0 errors' client_test-valgrind
+
+  #invoke-artifacts-cicd-workflow:
+    #needs: [build-and-test]
+    #uses: ./.github/workflows/something.yml
+
+name: C Build & Release
+
+# Mirrors aerospike-client-java-sdk/.github/workflows/push-to-stage.yaml.
+# Triggers the build-release pipeline on stage / dev/* pushes and on manual dispatch.
 
 on:
   push:
-    branches: [master, stage]
-  pull_request:
-    branches: [master, stage]
+    branches:
+      #- stage
+      - "dev/*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version override (leave empty to auto-detect via pkg/version)
+        required: false
+        default: ""
 
 jobs:
-  build-and-test:
-    runs-on: ubuntu-latest
-    env:
-      LD_LIBRARY_PATH: /usr/local/lib
-    strategy:
-      matrix:
-        EVENT_LIB:
-        - libev
-        - libuv
-        - libevent
-        valgrind:
-        - false
-        - true
-      fail-fast: false
-    steps:
-    - name: Checkout client
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-        token: ${{ secrets.GITHUB_TOKEN }}
-
-    - run: ./install_${{ matrix.EVENT_LIB }}
-
-    - if: ${{ matrix.valgrind }}
-      run: |
-        sudo apt update
-        sudo apt install -y valgrind
-
-    - run: make EVENT_LIB=${{ matrix.EVENT_LIB }}
-
-    - run: docker run -d -p 3000:3000 -e DEFAULT_TTL=2592000 aerospike/aerospike-server:8.1.2.0
-    - run: sleep 5
-    - run: make EVENT_LIB=${{ matrix.EVENT_LIB }} test${{ matrix.valgrind && '-valgrind' || '' }}
-    - if: ${{ matrix.valgrind }}
-      run: |
-        grep 'ERROR SUMMARY: 0 errors' client_test-valgrind
-
-  invoke-artifacts-cicd-workflow:
-    needs: [build-and-test]
-    uses: ./.github/workflows/something.yml
-
+  build-stage:
+    name: Build stage
+    uses: ./.github/workflows/build-release.yaml
+    with:
+      version-override: ${{ inputs.version }}
+    secrets: inherit

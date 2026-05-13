@@ -1,0 +1,33 @@
+name: Get version
+description: Resolves the C client version from pkg/version (git describe). No SNAPSHOT branch — C does not publish snapshots.
+
+inputs:
+  version-override:
+    description: Optional explicit version (e.g. from workflow_dispatch input). Empty = derive from pkg/version.
+    required: false
+    default: ""
+
+outputs:
+  version:
+    description: Resolved version string
+    value: ${{ steps.resolve.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [[ -n "${{ inputs.version-override }}" ]]; then
+          VERSION="${{ inputs.version-override }}"
+        else
+          # pkg/version uses `git describe` — needs tags and history (fetch-depth: 0, fetch-tags: true).
+          VERSION="$(pkg/version)"
+        fi
+        if [[ -z "$VERSION" ]]; then
+          echo "Error: empty version. Did the checkout fetch tags?" >&2
+          exit 1
+        fi
+        echo "Resolved version: $VERSION"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"

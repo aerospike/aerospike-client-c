@@ -61,9 +61,9 @@ jobs:
 
   artifacts-cicd:
     needs: extract-version
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@f6bb565e7d31fa3013a1a75c5f80aed44c3bde5c # v3.4.1
     with:
-      gh-workflows-ref: 7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+      gh-workflows-ref: f6bb565e7d31fa3013a1a75c5f80aed44c3bde5c # v3.4.1
       jf-project: ${{ vars.JFROG_PROJECT || 'database' }}
       jf-build-name: aerospike-client-c
       version: ${{ needs.extract-version.outputs.version }}
@@ -92,21 +92,27 @@ jobs:
           {"runs-on":"macos-13",         "distro":"mac",        "arch":"x86_64"}
         ]}
 
+      # IMPORTANT: this inline script is interpolated by reusable_execute-build.yaml
+      # inside a SINGLE-QUOTED shell variable: script_value='${{ inputs.build-script }}'.
+      # Any apostrophe in this block (including jq filters and English contractions)
+      # will terminate the outer quote and produce a shell parse error. Use double
+      # quotes or no quotes here — never single quotes.
       build-script: |
         set -euo pipefail
-        DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
-        ARCH=$(jq -r '.arch'    <<<"$MATRIX_JSON")
+        DISTRO=$(jq -r .distro <<<"$MATRIX_JSON")
+        ARCH=$(jq -r .arch    <<<"$MATRIX_JSON")
         echo "Building aerospike-client-c for $DISTRO/$ARCH"
 
         case "$DISTRO" in
           el*|amzn*|fc*|ubuntu*|debian*)
-            # Linux: build inside a container that has the target distro's package toolchain
-            # (rpmbuild for rpm-family, dpkg-deb/fakeroot for deb-family) plus libuv/libev/libevent
-            # headers and openssl. The helper script picks the image and mounts the workspace.
-            ./.github/scripts/build-in-container.sh "$DISTRO" "$ARCH"
+            # Linux: build inside a docker container matching the target distro so
+            # rpmbuild (rpm family) or dpkg-deb+fakeroot (deb family) produce
+            # correctly-tagged packages. The helper installs libuv/libev/libevent
+            # from source (via the repo install_* scripts).
+            bash .github/scripts/build-in-container.sh "$DISTRO" "$ARCH"
             ;;
           mac)
-            # macOS runner has Xcode toolchain; install event-lib deps via Homebrew.
+            # macOS runner has the Xcode toolchain; install event-lib deps via Homebrew.
             brew install libuv libev libevent openssl@3
             make clean
             make package
@@ -144,9 +150,9 @@ jobs:
 
   create-release-bundle:
     needs: [extract-version, artifacts-cicd]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@f6bb565e7d31fa3013a1a75c5f80aed44c3bde5c # v3.4.1
     with:
-      gh-workflows-ref: 7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+      gh-workflows-ref: f6bb565e7d31fa3013a1a75c5f80aed44c3bde5c # v3.4.1
       jf-project: ${{ vars.JFROG_PROJECT || 'database' }}
       jf-build-names: aerospike-client-c:${{ needs.artifacts-cicd.outputs.jf-build-id }}
       jf-bundle-name: aerospike-client-c
@@ -168,7 +174,7 @@ jobs:
           oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME || 'gh-aerospike' }}
           oidc-audience: ${{ vars.OIDC_AUDIENCE || 'aerospike' }}
       - name: Promote release bundle to DEV
-        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@f6bb565e7d31fa3013a1a75c5f80aed44c3bde5c # v3.4.1
         with:
           bundle-name: aerospike-client-c
           version: ${{ needs.extract-version.outputs.version }}

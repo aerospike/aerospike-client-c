@@ -1,6 +1,6 @@
 name: Aerospike C Client Test
 
-#on:
+on: push
 #  push:
 #    branches: [master, stage]
 #  pull_request:

@@ -3,12 +3,6 @@ on:
   issue_comment:
     types: [created]
   workflow_dispatch:
-    inputs:
-      version:
-        description: Version override (leave empty for auto-detection)
-        required: false
-        default: ""
-        type: string
 
 # workflow_call:
 #   inputs:
@@ -28,7 +22,6 @@ concurrency:
   group: jfrog-test-deploy
   cancel-in-progress: false
 
-# This workflow demonstrates a drop-in artifacts pipeline using reusable_artifacts-cicd.yaml
 
 jobs:
   extract-version:
@@ -42,9 +35,6 @@ jobs:
       - name: Extract Version
         id: extract
         uses: ./.github/actions/extract-version-from-tag
-        with:
-          version: ${{ inputs.version }}
-          version-prefix: ""
 
     outputs:
       version: ${{ steps.extract.outputs.version }}

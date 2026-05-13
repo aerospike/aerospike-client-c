@@ -63,6 +63,7 @@ $PKG config-manager --set-enabled powertools 2>/dev/null || true
 $PKG -y install \
   gcc make autoconf automake libtool \
   openssl-devel \
+  zlib-devel \
   rpm-build \
   doxygen \
   git zip wget tar findutils which
@@ -81,6 +82,7 @@ apt-get update -y
 apt-get install -y --no-install-recommends \
   build-essential autoconf automake libtool \
   libssl-dev \
+  zlib1g-dev \
   fakeroot dpkg-dev \
   doxygen \
   git zip wget ca-certificates lsb-release

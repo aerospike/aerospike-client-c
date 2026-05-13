@@ -64,6 +64,7 @@ $PKG -y install \
   gcc make autoconf automake libtool \
   openssl-devel \
   zlib-devel \
+  libyaml-devel \
   rpm-build \
   doxygen \
   git zip wget tar findutils which
@@ -83,6 +84,7 @@ apt-get install -y --no-install-recommends \
   build-essential autoconf automake libtool \
   libssl-dev \
   zlib1g-dev \
+  libyaml-dev \
   fakeroot dpkg-dev \
   doxygen \
   git zip wget ca-certificates lsb-release

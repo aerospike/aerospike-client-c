@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,7 +32,7 @@ extern "C" {
 
 /**
  * @private
- * Shared memory representation of node. 424 bytes.
+ * Shared memory representation of node. 432 bytes.
  */
 typedef struct as_node_shm_s {
 	/**
@@ -55,6 +55,11 @@ typedef struct as_node_shm_s {
 	 */
 	char tls_name[AS_HOSTNAME_SIZE];
 	
+	/**
+	 * Server version (for follower local node reconstruction).
+	 */
+	as_version version;
+
 	/**
 	 * Features supported by server.  Stored in bitmap.
 	 */

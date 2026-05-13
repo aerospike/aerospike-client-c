@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -833,7 +833,7 @@ typedef struct as_config_s {
 	 * Each shared memory segment contains state for one Aerospike cluster.  If there are
 	 * multiple Aerospike clusters, a different shm_key must be defined for each cluster.
 	 * 
-	 * Default: 0xA9000000
+	 * Default: 0xA1100000
 	 */
 	int shm_key;
 	

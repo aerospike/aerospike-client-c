@@ -1,10 +1,10 @@
 name: Aerospike C Client Test
 
-on:
-  push:
-    branches: [master, stage]
-  pull_request:
-    branches: [master, stage]
+#on:
+#  push:
+#    branches: [master, stage]
+#  pull_request:
+#    branches: [master, stage]
 
 jobs:
   build-and-test:

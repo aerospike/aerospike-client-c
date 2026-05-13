@@ -7,7 +7,7 @@ on:
   push:
     branches:
       #- stage
-      - "dev/*"
+      - "test/*"
   workflow_dispatch:
     inputs:
       version:

@@ -50,12 +50,23 @@ read -r -d '' INSTALL_RPM <<'INNER' || true
 set -euxo pipefail
 PKG=dnf
 command -v $PKG >/dev/null 2>&1 || PKG=yum
+
+# doxygen lives in an optional repo on RHEL-family distros:
+#   - EL9 / Rocky 9: CRB (CodeReady Builder)
+#   - EL8 / Rocky 8: PowerTools
+#   - Amazon Linux 2023: neither needed; doxygen is in the main repo
+# Enable whichever applies; ignore the one that does not exist on this distro.
+$PKG -y install dnf-plugins-core
+$PKG config-manager --set-enabled crb        2>/dev/null || true
+$PKG config-manager --set-enabled powertools 2>/dev/null || true
+
 $PKG -y install \
   gcc make autoconf automake libtool \
   openssl-devel \
   rpm-build \
   doxygen \
   git zip wget tar findutils which
+
 # install_libuv runs autogen.sh which needs autoconf/automake (covered above).
 command -v sudo >/dev/null 2>&1 || {
   printf '#!/bin/sh\nexec "$@"\n' > /usr/local/bin/sudo

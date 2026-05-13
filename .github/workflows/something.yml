@@ -6,7 +6,7 @@ on:
         description: Version override (leave empty for auto-detection)
         required: false
         default: ""
-		type: string
+        type: string
 
   workflow_call:
     inputs:
@@ -14,7 +14,7 @@ on:
         description: Version override (leave empty for auto-detection)
         required: false
         default: ""
-		type: string
+        type: string
 
 permissions:
   id-token: write

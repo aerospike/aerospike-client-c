@@ -8,13 +8,13 @@ on:
         default: ""
         type: string
 
-  workflow_call:
-    inputs:
-      version:
-        description: Version override (leave empty for auto-detection)
-        required: false
-        default: ""
-        type: string
+# workflow_call:
+#   inputs:
+#     version:
+#       description: Version override (leave empty for auto-detection)
+#       required: false
+#       default: ""
+#       type: string
 
 permissions:
   id-token: write
@@ -42,7 +42,8 @@ jobs:
         uses: ./.github/actions/extract-version-from-tag
         with:
           version: ${{ inputs.version }}
-          version-file: .github/workflows/VERSION.example
+		  version-prefix: ""
+
     outputs:
       version: ${{ steps.extract.outputs.version }}
       git_tag: ${{ steps.extract.outputs.git_tag }}

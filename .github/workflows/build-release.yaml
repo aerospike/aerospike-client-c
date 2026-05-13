@@ -44,7 +44,7 @@ permissions:
 
 jobs:
   extract-version:
-    runs-on: ${{ vars.BUILD_CONTAINER_DISTRO_VERSION }}
+    runs-on: ${{ vars.BUILD_CONTAINER_DISTRO_VERSION || 'ubuntu-22.04' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -64,11 +64,11 @@ jobs:
     uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
     with:
       gh-workflows-ref: 7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
-      jf-project: ${{ vars.JFROG_PROJECT }}
+      jf-project: ${{ vars.JFROG_PROJECT || 'database' }}
       jf-build-name: aerospike-client-c
       version: ${{ needs.extract-version.outputs.version }}
-      oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME }}
-      oidc-audience: ${{ vars.OIDC_AUDIENCE }}
+      oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME || 'gh-aerospike' }}
+      oidc-audience: ${{ vars.OIDC_AUDIENCE || 'aerospike' }}
 
       gh-source-path: aerospike-client-c
       working-directory: aerospike-client-c
@@ -147,30 +147,30 @@ jobs:
     uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
     with:
       gh-workflows-ref: 7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
-      jf-project: ${{ vars.JFROG_PROJECT }}
+      jf-project: ${{ vars.JFROG_PROJECT || 'database' }}
       jf-build-names: aerospike-client-c:${{ needs.artifacts-cicd.outputs.jf-build-id }}
       jf-bundle-name: aerospike-client-c
       version: ${{ needs.extract-version.outputs.version }}
-      oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME }}
-      oidc-audience: ${{ vars.OIDC_AUDIENCE }}
+      oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME || 'gh-aerospike' }}
+      oidc-audience: ${{ vars.OIDC_AUDIENCE || 'aerospike' }}
       dry-run: false
 
   promote-release-bundle:
     needs: [extract-version, create-release-bundle]
-    runs-on: ${{ vars.BUILD_CONTAINER_DISTRO_VERSION }}
+    runs-on: ${{ vars.BUILD_CONTAINER_DISTRO_VERSION || 'ubuntu-22.04' }}
     steps:
       - name: Setup JFrog CLI
         uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
         env:
           JF_URL: https://artifact.aerospike.io
-          JF_PROJECT: ${{ vars.JFROG_PROJECT }}
+          JF_PROJECT: ${{ vars.JFROG_PROJECT || 'database' }}
         with:
-          oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME }}
-          oidc-audience: ${{ vars.OIDC_AUDIENCE }}
+          oidc-provider-name: ${{ vars.OIDC_PROVIDER_NAME || 'gh-aerospike' }}
+          oidc-audience: ${{ vars.OIDC_AUDIENCE || 'aerospike' }}
       - name: Promote release bundle to DEV
         uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@7b61b675476430553f09b94419ca18802d697e98 # v3.4.0
         with:
           bundle-name: aerospike-client-c
           version: ${{ needs.extract-version.outputs.version }}
           environment: DEV
-          jf-project: ${{ vars.JFROG_PROJECT }}
+          jf-project: ${{ vars.JFROG_PROJECT || 'database' }}

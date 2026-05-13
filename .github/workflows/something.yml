@@ -48,7 +48,7 @@ jobs:
       git_tag: ${{ steps.extract.outputs.git_tag }}
 
   artifacts-cicd:
-    uses: ./.github/workflows/reusable_artifacts-cicd.yaml
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml
     needs: extract-version
     with:
       gh-workflows-ref: ${{ github.sha }}

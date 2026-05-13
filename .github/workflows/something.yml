@@ -42,7 +42,7 @@ jobs:
         uses: ./.github/actions/extract-version-from-tag
         with:
           version: ${{ inputs.version }}
-		  version-prefix: ""
+          version-prefix: ""
 
     outputs:
       version: ${{ steps.extract.outputs.version }}

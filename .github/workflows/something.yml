@@ -73,8 +73,8 @@ jobs:
         env | sort
         make clean && make && sudo make install
         make package
-      oidc-provider-name: gh-dev-ctest
-      oidc-audience: aerospike/testing
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
       dry-run: false
       # sign-mac: true
       # mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"

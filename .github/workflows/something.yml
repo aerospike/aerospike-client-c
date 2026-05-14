@@ -65,98 +65,6 @@ jobs:
           },
 
 
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"debian13",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-debian.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"debian12",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-debian.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"debian11",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-debian.sh",
-          },
-
-
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"debian13",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-debian.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"debian12",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-debian.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"debian11",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-debian.sh",
-          },
-
-
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"focal",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"jammy",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"noble",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
-          },
-
-
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"focal",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"jammy",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"noble",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
-          },
-
-
         ]}
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
@@ -181,6 +89,99 @@ jobs:
       apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
       apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
 
+
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian13",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian12",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian11",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#
+#
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian13",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian12",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian11",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#
+#
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"focal",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"jammy",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"noble",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#
+#
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"focal",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"jammy",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"noble",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#
+#
 #         {
 #           "runs-on":"ubuntu-22.04",
 #           "distro":"amzn2023",

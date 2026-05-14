@@ -67,22 +67,6 @@ jobs:
 
           {
             "runs-on":"ubuntu-22.04",
-            "distro":"amzn2023",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-el.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"amzn2023",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-el.sh",
-          },
-
-
-          {
-            "runs-on":"ubuntu-22.04",
             "distro":"debian13",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
@@ -170,52 +154,6 @@ jobs:
             "arch":"aarch64",
             "build-env":"EMULATED=false",
             "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
-          },
-
-
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"el10",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-el.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"el9",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-el.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"el8",
-            "arch":"x86_64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-el.sh",
-          },
-
-
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"el10",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-el.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"el9",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-el.sh",
-          },
-          {
-            "runs-on":"ubuntu-22.04",
-            "distro":"el8",
-            "arch":"aarch64",
-            "build-env":"EMULATED=false",
-            "build-script": "./.github/bash_scripts/build-script-el.sh",
           },
 
 
@@ -223,11 +161,11 @@ jobs:
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike
       dry-run: false
-      # sign-mac: true
-      # mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
-      # mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
-      # mac-artifact-glob: "*.pkg"
-      # mac-notarize: true
+      sign-mac: true
+      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
+      mac-artifact-glob: "*.pkg"
+      mac-notarize: true
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
@@ -236,12 +174,73 @@ jobs:
       es-password: ${{ secrets.ES_PASSWORD }}
       credential_id: ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
-      # apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
-      # apple-id: ${{ secrets.APPLE_ID }}
-      # apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
-      # apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
-      # apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
-      # apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+      apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
+      apple-id: ${{ secrets.APPLE_ID }}
+      apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
+      apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
+      apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+      apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+#         {
+#           "runs-on":"ubuntu-22.04",
+#           "distro":"amzn2023",
+#           "arch":"x86_64",
+#           "build-env":"EMULATED=false",
+#           "build-script": "./.github/bash_scripts/build-script-el.sh",
+#         },
+#         {
+#           "runs-on":"ubuntu-22.04",
+#           "distro":"amzn2023",
+#           "arch":"aarch64",
+#           "build-env":"EMULATED=false",
+#           "build-script": "./.github/bash_scripts/build-script-el.sh",
+#         },
+#
+#
+#         {
+#           "runs-on":"ubuntu-22.04",
+#           "distro":"el10",
+#           "arch":"x86_64",
+#           "build-env":"EMULATED=false",
+#           "build-script": "./.github/bash_scripts/build-script-el.sh",
+#         },
+#         {
+#           "runs-on":"ubuntu-22.04",
+#           "distro":"el9",
+#           "arch":"x86_64",
+#           "build-env":"EMULATED=false",
+#           "build-script": "./.github/bash_scripts/build-script-el.sh",
+#         },
+#         {
+#           "runs-on":"ubuntu-22.04",
+#           "distro":"el8",
+#           "arch":"x86_64",
+#           "build-env":"EMULATED=false",
+#           "build-script": "./.github/bash_scripts/build-script-el.sh",
+#         },
+#
+#
+#         {
+#           "runs-on":"ubuntu-22.04",
+#           "distro":"el10",
+#           "arch":"aarch64",
+#           "build-env":"EMULATED=false",
+#           "build-script": "./.github/bash_scripts/build-script-el.sh",
+#         },
+#         {
+#           "runs-on":"ubuntu-22.04",
+#           "distro":"el9",
+#           "arch":"aarch64",
+#           "build-env":"EMULATED=false",
+#           "build-script": "./.github/bash_scripts/build-script-el.sh",
+#         },
+#         {
+#           "runs-on":"ubuntu-22.04",
+#           "distro":"el8",
+#           "arch":"aarch64",
+#           "build-env":"EMULATED=false",
+#           "build-script": "./.github/bash_scripts/build-script-el.sh",
+#         },
 
   ########################################################
   # The following jobs demonstrate how to use deployed artifacts.

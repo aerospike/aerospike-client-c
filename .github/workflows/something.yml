@@ -1,14 +1,9 @@
 name: Example Artifacts CI/CD
 on:
-  issue_comment:
-    types: [created]
   workflow_dispatch:
-    inputs:
-      version:
-        description: Version override (leave empty for auto-detection)
-        required: false
-        default: ""
-        type: string
+  pull_request:
+    branches:
+      - stage
 
 # workflow_call:
 #   inputs:
@@ -28,7 +23,6 @@ concurrency:
   group: jfrog-test-deploy
   cancel-in-progress: false
 
-# This workflow demonstrates a drop-in artifacts pipeline using reusable_artifacts-cicd.yaml
 
 jobs:
   extract-version:
@@ -39,13 +33,13 @@ jobs:
         with:
           egress-policy: audit
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Extract Version
-        id: extract
-        uses: ./.github/actions/extract-version-from-tag
         with:
-          version: ${{ inputs.version }}
-          version-prefix: ""
-
+          # Full history + tags so `git describe --tags` can resolve the
+          # nearest release tag instead of falling through to 0.0.0-dev+<sha>.
+          fetch-depth: 0
+      - name: Extract version
+        id: extract
+        uses: aerospike/shared-workflows/.github/actions/extract-version-from-tag@07c958ca4c5cea494dc8790949c08e3fb28c55e1 # v3.3.0
     outputs:
       version: ${{ steps.extract.outputs.version }}
       git_tag: ${{ steps.extract.outputs.git_tag }}
@@ -54,33 +48,63 @@ jobs:
     uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.4.1
     needs: extract-version
     with:
-      gh-workflows-ref: ${{ github.sha }}
+      gh-workflows-ref: v3.4.1
       jf-project: ctest
       jf-build-name: ctest-build
       version: ${{ needs.extract-version.outputs.version }}
-      gh-source-path: repo-source
-      working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       gh-artifact-directory: packaged-artifacts
       matrix-json: >-
         {"include":[
-          {"runs-on":"ubuntu-22.04","distro":"debian13","arch":"x86_64", "build-env":"EMULATED=false"},
-          {"runs-on":"ubuntu-22.04","distro":"jammy","arch":"x86_64", "build-env":"EMULATED=false"},
+          # Debian Intel
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"debian13",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": |
+              # matrix-json is injected into the environment as MATRIX_JSON
+              # we can use jq to extract the values we need
+              export DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
+              export ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
+              # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
+              export EMULATED=$EMULATED
+              echo "DISTRO: $DISTRO"
+              echo "ARCH: $ARCH"
+              echo "EMULATED: $EMULATED"
+              env | sort
+              sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev
+              make clean
+              make
+              sudo make install
+              make package
+          },
+          # Ubuntu Intel
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"jammy",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": |
+              # matrix-json is injected into the environment as MATRIX_JSON
+              # we can use jq to extract the values we need
+              export DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
+              export ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
+              # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
+              export EMULATED=$EMULATED
+              echo "DISTRO: $DISTRO"
+              echo "ARCH: $ARCH"
+              echo "EMULATED: $EMULATED"
+              env | sort
+              sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev
+              sudo apt-get install ncurses-dev
+              make clean
+              make
+              sudo make install
+              make package
+          },
         ]}
-      build-script: |
-        # matrix-json is injected into the environment as MATRIX_JSON
-        # we can use jq to extract the values we need
-        export DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
-        export ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
-        # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
-        export EMULATED=$EMULATED
-        echo "DISTRO: $DISTRO"
-        echo "ARCH: $ARCH"
-        echo "EMULATED: $EMULATED"
-        env | sort
-        make clean && make && sudo make install
-        make package
-      oidc-provider-name: gh-dev-ctest
-      oidc-audience: aerospike/testing
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
       dry-run: false
       # sign-mac: true
       # mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
@@ -146,8 +170,9 @@ jobs:
           deb [arch=$ARCH signed-by=$KEYRING] https://$REPO $CODENAME main
           EOF
 
+          echo "FAILURE EXPECTED HERE"
+          echo "I know this is the wrong package to install...need to find out the right one"
           sudo apt-get update && sudo apt-get install hi -y
-          echo "OK, now what?"
 
 #  use-rpm-artifacts:
 #    runs-on: ubuntu-22.04

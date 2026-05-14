@@ -22,6 +22,8 @@ brew install automake
 brew install libtool
 brew install openssl
 brew install libyaml
+brew install doxygen
+brew install graphviz
 
 ./install_libuv
 ./install_libev

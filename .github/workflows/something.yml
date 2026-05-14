@@ -50,7 +50,7 @@ jobs:
     with:
       gh-workflows-ref: v3.4.1
       jf-project: database
-      jf-build-name: ctest-build
+      jf-build-name: aerospike-client-c
       version: ${{ needs.extract-version.outputs.version }}
       gh-artifact-directory: target/packages
       matrix-json: >-
@@ -110,7 +110,7 @@ jobs:
         uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
         env:
           JF_URL: https://artifact.aerospike.io
-          JF_PROJECT: ctest
+          JF_PROJECT: database
         with:
           oidc-provider-name: gh-dev-test
           oidc-audience: aerospike/testing
@@ -124,7 +124,7 @@ jobs:
           CODENAME=$(lsb_release -sc)
           ARCH=$(dpkg --print-architecture)
           KEYRING=/usr/share/keyrings/aerospike.gpg
-          REPO="artifact.aerospike.io/artifactory/ctest-deb-dev-local"
+          REPO="artifact.aerospike.io/artifactory/aerospike-client-c-deb-dev-local"
 
           sudo install -m 600 /dev/null /etc/apt/auth.conf.d/aerospike.conf
           {

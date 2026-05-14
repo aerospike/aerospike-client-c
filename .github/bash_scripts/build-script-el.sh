@@ -10,7 +10,7 @@
 set -ue
 
 echo --------------------------------------------------------------------------------
-xxd $MATRIX_JSON
+xxd <<< \"$MATRIX_JSON\"
 echo --------------------------------------------------------------------------------
 export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\")
 export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\")

@@ -13,7 +13,7 @@ echo "EMULATED: $EMULATED"
 env | sort
 ls -l
 
-for cmd in dnf yum; do
+for cmd in microdnf dnf yum; do
 	if command -v "$cmd" &>/dev/null; then
 		PKGMGR=$cmd
 		break

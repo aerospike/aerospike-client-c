@@ -9,14 +9,21 @@
 
 set -ue
 
+echo --------------------------------------------------------------------------------
+echo $MATRIX_JSON
+echo --------------------------------------------------------------------------------
 export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\")
 export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\")
 export EMULATED=$EMULATED
+
 echo "DISTRO: $DISTRO"
 echo "ARCH: $ARCH"
 echo "EMULATED: $EMULATED"
+echo --------------------------------------------------------------------------------
 env | sort
+echo --------------------------------------------------------------------------------
 ls -l
+echo --------------------------------------------------------------------------------
 
 # Use --userns=keep-id so the container user matches the runner UID.  This
 # prevents permission denied errors when the container tries to write to the

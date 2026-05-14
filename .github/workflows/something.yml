@@ -112,8 +112,8 @@ jobs:
           JF_URL: https://artifact.aerospike.io
           JF_PROJECT: database
         with:
-          oidc-provider-name: gh-dev-test
-          oidc-audience: aerospike/testing
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
       - name: Install packages
         run: |
           set -euo pipefail
@@ -139,7 +139,7 @@ jobs:
 
           echo "FAILURE EXPECTED HERE"
           echo "I know this is the wrong package to install...need to find out the right one"
-          sudo apt-get update && sudo apt-get install hi -y
+          sudo apt-get update && sudo apt-get install -y aerospike-client-c
 
 #  use-rpm-artifacts:
 #    runs-on: ubuntu-22.04

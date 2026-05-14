@@ -124,7 +124,7 @@ jobs:
           CODENAME=$(lsb_release -sc)
           ARCH=$(dpkg --print-architecture)
           KEYRING=/usr/share/keyrings/aerospike.gpg
-          REPO="artifact.aerospike.io/artifactory/aerospike-client-c-deb-dev-local"
+          REPO="artifact.aerospike.io/artifactory/database-deb-dev-local"
 
           sudo install -m 600 /dev/null /etc/apt/auth.conf.d/aerospike.conf
           {

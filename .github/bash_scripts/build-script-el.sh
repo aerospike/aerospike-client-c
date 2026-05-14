@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 #
 # This should work also for Enterprise Linux, CentOS, Amazon Linux, and Fedora.
+#
+# This is a boot-strap script.  Because only ubuntu machines are really
+# supported on GitHub Workflows, we use a Podman container to launch a
+# suitable RPM-based distro inside a container.  Once the container is
+# initialized, then we run the real build script.
+#
+# We mount the 
 
 set -ue
 
@@ -13,28 +20,27 @@ echo "EMULATED: $EMULATED"
 env | sort
 ls -l
 
-#for cmd in microdnf dnf yum; do
-#	if command -v "$cmd" &>/dev/null; then
-#		PKGMGR=$cmd
-#		break
-#	fi
-#done
-#
-#if [ -z "${PKGMGR:-}" ]; then
-#	echo "ERROR: None of the required package managers were found"
-#	exit 1
-#fi
-#
-#echo "Using package manager: $PKGMGR"
-#
-#sudo $PKGMGR install openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
-yum install -y openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
+# Use --userns=keep-id so the container user matches the runner UID.  This
+# prevents permission denied errors when the container tries to write to the
+# mount.
 
-./install_libuv
-./install_libev
-./install_libevent
-make clean
-make
-sudo make install
-make package
+podman run \
+	--rm \
+	-v "$(pwd):/workspace:rw" \
+	--workdir /workspace \
+	--userns=keep-id \
+	registry.access.redhat.com/ubi10/ubi:latest \
+	/bin/bash -c "dnf --version; ls -la"
+
+exit 1
+
+#yum install -y openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
+#
+#./install_libuv
+#./install_libev
+#./install_libevent
+#make clean
+#make
+#sudo make install
+#make package
 

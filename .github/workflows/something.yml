@@ -52,8 +52,6 @@ jobs:
       jf-project: ctest
       jf-build-name: ctest-build
       version: ${{ needs.extract-version.outputs.version }}
-      gh-source-path: repo-source
-      working-directory: repo-source/.github/workflows/execute-build/test_apps/hi
       gh-artifact-directory: packaged-artifacts
       matrix-json: >-
         {"include":[

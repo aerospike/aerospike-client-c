@@ -6,19 +6,15 @@
 # supported on GitHub Workflows, we use a Podman container to launch a
 # suitable RPM-based distro inside a container.  Once the container is
 # initialized, then we run the real build script.
-#
-# We mount the 
 
 set -ue
 
 export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\")
 export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\")
-export PODMANIMG=$(jq -r '.podmanimage' <<<\"$MATRIX_JSON\")
 export EMULATED=$EMULATED
 echo "DISTRO: $DISTRO"
 echo "ARCH: $ARCH"
 echo "EMULATED: $EMULATED"
-echo "PODMAN IMAGE: $PODMANIMG"
 env | sort
 ls -l
 
@@ -31,6 +27,6 @@ podman run \
 	-v "$(pwd):/workspace:rw" \
 	--workdir /workspace \
 	--userns=keep-id \
-	$PODMANIMG \
+	$DISTRO \
 	/bin/bash -c "./.github/bash_scripts/container_build_script_el.sh"
 

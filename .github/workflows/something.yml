@@ -33,10 +33,13 @@ jobs:
         with:
           egress-policy: audit
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Extract Version
+        with:
+          # Full history + tags so `git describe --tags` can resolve the
+          # nearest release tag instead of falling through to 0.0.0-dev+<sha>.
+          fetch-depth: 0
+      - name: Extract version
         id: extract
-        uses: ./.github/actions/extract-version-from-tag
-
+        uses: aerospike/shared-workflows/.github/actions/extract-version-from-tag@07c958ca4c5cea494dc8790949c08e3fb28c55e1 # v3.3.0
     outputs:
       version: ${{ steps.extract.outputs.version }}
       git_tag: ${{ steps.extract.outputs.git_tag }}

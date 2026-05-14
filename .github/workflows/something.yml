@@ -58,6 +58,22 @@ jobs:
 
           {
             "runs-on":"ubuntu-22.04",
+            "distro":"amzn2023",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-el.sh",
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"amzn2023",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-el.sh",
+          },
+
+
+          {
+            "runs-on":"ubuntu-22.04",
             "distro":"debian13",
             "arch":"x86_64",
             "build-env":"EMULATED=false",

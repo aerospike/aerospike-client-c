@@ -55,20 +55,139 @@ jobs:
       gh-artifact-directory: target/packages
       matrix-json: >-
         {"include":[
+
           {
             "runs-on":"ubuntu-22.04",
             "distro":"debian13",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
-            "build-script": "export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\") && export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\") && export EMULATED=$EMULATED && echo \"DISTRO: $DISTRO\" && echo \"ARCH: $ARCH\" && echo \"EMULATED: $EMULATED\" && env | sort && sudo apt-get install doxygen graphviz zip autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev && ls -l && ./install_libuv && ./install_libev && ./install_libevent && make clean && make EVENT_LIB=\"\" && sudo make EVENT_LIB=\"\" install && make package",
+            "build-script": "./.github/bash_scripts/build-script-debian.sh",
           },
           {
             "runs-on":"ubuntu-22.04",
-            "distro":"jammy",
+            "distro":"debian12",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
-            "build-script": "export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\") && export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\") && export EMULATED=$EMULATED && echo \"DISTRO: $DISTRO\" && echo \"ARCH: $ARCH\" && echo \"EMULATED: $EMULATED\" && env | sort && sudo apt-get install doxygen graphviz zip autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev && sudo apt-get install ncurses-dev && ls -l && ./install_libuv && ./install_libev && ./install_libevent && make clean && make && sudo make install && make package"
+            "build-script": "./.github/bash_scripts/build-script-debian.sh",
           },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"debian11",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+          },
+
+
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"debian13",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"debian12",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"debian11",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+          },
+
+
+          {
+            "runs-on":"ubuntu-20.04",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+          },
+          {
+            "runs-on":"ubuntu-24.04",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+          },
+
+
+          {
+            "runs-on":"ubuntu-20.04",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+          },
+          {
+            "runs-on":"ubuntu-24.04",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+          },
+
+
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"el10",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-el.sh",
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"el9",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-el.sh",
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"el8",
+            "arch":"x86_64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-el.sh",
+          },
+
+
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"el10",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-el.sh",
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"el9",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-el.sh",
+          },
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"el8",
+            "arch":"aarch64",
+            "build-env":"EMULATED=false",
+            "build-script": "./.github/bash_scripts/build-script-el.sh",
+          },
+
+
         ]}
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike

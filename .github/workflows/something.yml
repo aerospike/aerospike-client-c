@@ -55,7 +55,6 @@ jobs:
       gh-artifact-directory: packaged-artifacts
       matrix-json: >-
         {"include":[
-          # Debian Intel
           {
             "runs-on":"ubuntu-22.04",
             "distro":"debian13",
@@ -63,7 +62,6 @@ jobs:
             "build-env":"EMULATED=false",
             "build-script": "export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\") && export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\") && export EMULATED=$EMULATED && echo \"DISTRO: $DISTRO\" && echo \"ARCH: $ARCH\" && echo \"EMULATED: $EMULATED\" && env | sort && sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev && make clean && make && sudo make install && make package"
           },
-          # Ubuntu Intel
           {
             "runs-on":"ubuntu-22.04",
             "distro":"jammy",

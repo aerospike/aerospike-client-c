@@ -13,10 +13,12 @@ set -ue
 
 export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\")
 export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\")
+export PODMANIMG=$(jq -r '.podmanimage' <<<\"$MATRIX_JSON\")
 export EMULATED=$EMULATED
 echo "DISTRO: $DISTRO"
 echo "ARCH: $ARCH"
 echo "EMULATED: $EMULATED"
+echo "PODMAN IMAGE: $PODMANIMG"
 env | sort
 ls -l
 
@@ -29,18 +31,16 @@ podman run \
 	-v "$(pwd):/workspace:rw" \
 	--workdir /workspace \
 	--userns=keep-id \
-	registry.access.redhat.com/ubi10/ubi:latest \
-	/bin/bash -c "dnf --version; ls -la"
+	$PODMANIMG \
+	/bin/bash -c "
+yum install -y openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
 
-exit 1
-
-#yum install -y openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
-#
-#./install_libuv
-#./install_libev
-#./install_libevent
-#make clean
-#make
-#sudo make install
-#make package
+./install_libuv
+./install_libev
+./install_libevent
+make clean
+make
+sudo make install
+make package
+"
 

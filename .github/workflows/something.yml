@@ -49,7 +49,7 @@ jobs:
     needs: extract-version
     with:
       gh-workflows-ref: v3.4.1
-      jf-project: ctest
+      jf-project: database
       jf-build-name: ctest-build
       version: ${{ needs.extract-version.outputs.version }}
       gh-artifact-directory: target/packages

@@ -52,7 +52,7 @@ jobs:
       jf-project: ctest
       jf-build-name: ctest-build
       version: ${{ needs.extract-version.outputs.version }}
-      gh-artifact-directory: packaged-artifacts
+      gh-artifact-directory: target/packages
       matrix-json: >-
         {"include":[
           {

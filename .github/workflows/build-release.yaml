@@ -112,8 +112,14 @@ jobs:
             bash .github/scripts/build-in-container.sh "$DISTRO" "$ARCH"
             ;;
           mac)
-            # macOS runner has the Xcode toolchain; install event-lib deps via Homebrew.
-            brew install libuv libev libevent openssl@3
+            # macOS runner has the Xcode toolchain. Install:
+            #   - event libs (libuv/libev/libevent) and openssl headers (event libs are
+            #     used directly here rather than via install_libuv/install_libev/install_libevent
+            #     because brew packages are faster than building from source and the
+            #     Makefile already picks up the brew include/lib paths on Darwin)
+            #   - doxygen for `make docs` (pkg/package runs it on every platform)
+            #   - wget in case any sub-script reaches for it (install_* scripts do)
+            brew install libuv libev libevent openssl@3 doxygen wget
             make clean
             make package
             ;;

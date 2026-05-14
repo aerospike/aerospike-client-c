@@ -113,6 +113,14 @@ docker run --rm \
   bash -c "
     $INSTALL_CMD
 
+    # pkg/platform recognizes ID=rhel/centos/fedora as the RHEL family; Rocky/Alma/Oracle
+    # report ID=rocky|almalinux|ol and would otherwise fall through to a literal slug like
+    # 'rocky9.3', which pkg/package_type rejects. Rewrite ID to rhel so pkg/platform
+    # emits the canonical el<major> tag. Confined to this throwaway container.
+    if grep -qE '^ID=\"?(rocky|almalinux|ol)\"?' /etc/os-release; then
+      sed -i 's/^ID=.*/ID=\"rhel\"/' /etc/os-release
+    fi
+
     # git refuses to operate on a tree it considers untrusted (uid mismatch from the
     # host mount). pkg/version calls 'git describe', so this is required.
     git config --global --add safe.directory /work

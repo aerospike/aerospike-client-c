@@ -129,21 +129,21 @@ jobs:
 
           {
             "runs-on":"ubuntu-22.04",
-			"distro":"focal",
+            "distro":"focal",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
             "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
           },
           {
             "runs-on":"ubuntu-22.04",
-			"distro":"jammy",
+            "distro":"jammy",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
             "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
           },
           {
             "runs-on":"ubuntu-22.04",
-			"distro":"noble",
+            "distro":"noble",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
             "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
@@ -152,21 +152,21 @@ jobs:
 
           {
             "runs-on":"ubuntu-22.04",
-			"distro":"focal",
+            "distro":"focal",
             "arch":"aarch64",
             "build-env":"EMULATED=false",
             "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
           },
           {
             "runs-on":"ubuntu-22.04",
-			"distro":"jammy",
+            "distro":"jammy",
             "arch":"aarch64",
             "build-env":"EMULATED=false",
             "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
           },
           {
             "runs-on":"ubuntu-22.04",
-			"distro":"noble",
+            "distro":"noble",
             "arch":"aarch64",
             "build-env":"EMULATED=false",
             "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",

@@ -55,7 +55,6 @@ jobs:
       gh-artifact-directory: target/packages
       matrix-json: >-
         {"include":[
-
           {
             "runs-on":"ubuntu-22.04",
             "distro":"public.ecr.aws/amazonlinux/amazonlinux:2023",
@@ -70,8 +69,6 @@ jobs:
             "build-env":"EMULATED=false",
             "build-script": "./.github/bash_scripts/build-script-el.sh",
           },
- 
- 
         ]}
       oidc-provider-name: gh-aerospike
       oidc-audience: aerospike

@@ -61,22 +61,7 @@ jobs:
             "distro":"debian13",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
-            "build-script": |
-              # matrix-json is injected into the environment as MATRIX_JSON
-              # we can use jq to extract the values we need
-              export DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
-              export ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
-              # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
-              export EMULATED=$EMULATED
-              echo "DISTRO: $DISTRO"
-              echo "ARCH: $ARCH"
-              echo "EMULATED: $EMULATED"
-              env | sort
-              sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev
-              make clean
-              make
-              sudo make install
-              make package
+            "build-script": "export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\") && export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\") && export EMULATED=$EMULATED && echo \"DISTRO: $DISTRO\" && echo \"ARCH: $ARCH\" && echo \"EMULATED: $EMULATED\" && env | sort && sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev && make clean && make && sudo make install && make package"
           },
           # Ubuntu Intel
           {
@@ -84,23 +69,7 @@ jobs:
             "distro":"jammy",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
-            "build-script": |
-              # matrix-json is injected into the environment as MATRIX_JSON
-              # we can use jq to extract the values we need
-              export DISTRO=$(jq -r '.distro' <<<"$MATRIX_JSON")
-              export ARCH=$(jq -r '.arch' <<<"$MATRIX_JSON")
-              # emulated is set in the environment by the reusable_artifacts-cicd.yaml workflow
-              export EMULATED=$EMULATED
-              echo "DISTRO: $DISTRO"
-              echo "ARCH: $ARCH"
-              echo "EMULATED: $EMULATED"
-              env | sort
-              sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev
-              sudo apt-get install ncurses-dev
-              make clean
-              make
-              sudo make install
-              make package
+            "build-script": "export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\") && export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\") && export EMULATED=$EMULATED && echo \"DISTRO: $DISTRO\" && echo \"ARCH: $ARCH\" && echo \"EMULATED: $EMULATED\" && env | sort && sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev && sudo apt-get install ncurses-dev && make clean && make && sudo make install && make package"
           },
         ]}
       oidc-provider-name: gh-aerospike

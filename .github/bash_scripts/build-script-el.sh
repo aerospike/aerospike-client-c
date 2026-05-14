@@ -28,7 +28,7 @@ ls -l
 #echo "Using package manager: $PKGMGR"
 #
 #sudo $PKGMGR install openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
-sudo yum install -y openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
+yum install -y openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
 
 ./install_libuv
 ./install_libev

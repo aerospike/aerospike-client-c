@@ -60,14 +60,14 @@ jobs:
             "distro":"debian13",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
-            "build-script": "export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\") && export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\") && export EMULATED=$EMULATED && echo \"DISTRO: $DISTRO\" && echo \"ARCH: $ARCH\" && echo \"EMULATED: $EMULATED\" && env | sort && sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev && make clean && make && sudo make install && make package"
+            "build-script": "export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\") && export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\") && export EMULATED=$EMULATED && echo \"DISTRO: $DISTRO\" && echo \"ARCH: $ARCH\" && echo \"EMULATED: $EMULATED\" && env | sort && sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev && ./install_uv && ./install_ev && ./install_event && make clean && make EVENT_LIB=\"\" && sudo make EVENT_LIB=\"\" install && make package",
           },
           {
             "runs-on":"ubuntu-22.04",
             "distro":"jammy",
             "arch":"x86_64",
             "build-env":"EMULATED=false",
-            "build-script": "export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\") && export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\") && export EMULATED=$EMULATED && echo \"DISTRO: $DISTRO\" && echo \"ARCH: $ARCH\" && echo \"EMULATED: $EMULATED\" && env | sort && sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev && sudo apt-get install ncurses-dev && make clean && make && sudo make install && make package"
+            "build-script": "export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\") && export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\") && export EMULATED=$EMULATED && echo \"DISTRO: $DISTRO\" && echo \"ARCH: $ARCH\" && echo \"EMULATED: $EMULATED\" && env | sort && sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev && sudo apt-get install ncurses-dev && ./install_uv && ./install_ev && ./install_event && make clean && make && sudo make install && make package"
           },
         ]}
       oidc-provider-name: gh-aerospike

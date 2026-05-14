@@ -13,21 +13,22 @@ echo "EMULATED: $EMULATED"
 env | sort
 ls -l
 
-for cmd in microdnf dnf yum; do
-	if command -v "$cmd" &>/dev/null; then
-		PKGMGR=$cmd
-		break
-	fi
-done
-
-if [ -z "${PKGMGR:-}" ]; then
-	echo "ERROR: None of the required package managers were found"
-	exit 1
-fi
-
-echo "Using package manager: $PKGMGR"
-
-sudo $PKGMGR install openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
+#for cmd in microdnf dnf yum; do
+#	if command -v "$cmd" &>/dev/null; then
+#		PKGMGR=$cmd
+#		break
+#	fi
+#done
+#
+#if [ -z "${PKGMGR:-}" ]; then
+#	echo "ERROR: None of the required package managers were found"
+#	exit 1
+#fi
+#
+#echo "Using package manager: $PKGMGR"
+#
+#sudo $PKGMGR install openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
+sudo yum install -y openssl-devel glibc-devel autoconf automake libtool libz-devel libyaml-devel gcc-c++ graphviz rpm-build
 
 ./install_libuv
 ./install_libev

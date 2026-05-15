@@ -34,8 +34,14 @@ echo "RUN dnf update -y && dnf install -y git openssl-devel glibc-devel autoconf
 
 case $DISTRO in
 
-  "el10" | "el9")
-    echo "RUN sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm" >> Dockerfile
+  "el10")
+    V=10
+    echo "RUN sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$V.noarch.rpm" >> Dockerfile
+    echo "RUN sudo dnf makecache" >> Dockerfile
+    ;;
+  "el9")
+    V=9
+    echo "RUN sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$V.noarch.rpm" >> Dockerfile
     echo "RUN sudo dnf makecache" >> Dockerfile
     ;;
 

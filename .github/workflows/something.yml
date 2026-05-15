@@ -94,7 +94,7 @@ jobs:
 #            "base-image":"public.ecr.aws/amazonlinux/amazonlinux:2023",
 #            "arch":"x86_64",
 #            "build-env":"EMULATED=false",
-#            "build-script": "./.github/bash-scripts/build-script-el.sh",
+#            "build-script": "./.github/bash-scripts/build-script-amzn.sh",
 #          },
 #          {
 #            "runs-on":"ubuntu-22.04",
@@ -102,7 +102,7 @@ jobs:
 #            "base-image":"public.ecr.aws/amazonlinux/amazonlinux:2023",
 #            "arch":"aarch64",
 #            "build-env":"EMULATED=false",
-#            "build-script": "./.github/bash-scripts/build-script-el.sh",
+#            "build-script": "./.github/bash-scripts/build-script-amzn.sh",
 #          },
 #
 #

@@ -29,21 +29,6 @@ echo ---------------------------------------------------------------------------
 # access, and the stock images do not include sudo.
 
 echo "FROM $BASEIMG" > Dockerfile
-
-case $DISTRO in
-
-  "el10" | "el9")
-    echo "RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm" >> Dockerfile
-    echo "RUN dnf makecache" >> Dockerfile
-    ;;
-
-  "el8")
-    echo "RUN dnf install -y 'dnf-command(config-manager)'" >> Dockerfile
-    echo "RUN dnf config-manager --set-enabled powertools || dnf config-manager --set-enabled crb" >> Dockerfile
-    ;;
-
-esac
-
 echo "RUN dnf update -y && dnf install -y doxygen git openssl-devel glibc-devel autoconf automake libtool zlib-devel libyaml-devel gcc-c++ graphviz rpm-build wget shadow-utils sudo && dnf clean all" >> Dockerfile
 echo 'RUN useradd -m -s /bin/bash dev && echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers' >> Dockerfile
 echo "USER dev" >> Dockerfile
@@ -58,10 +43,10 @@ podman build -t al2023-custom .
 
 sudo chmod -R 777 .
 podman run \
-  --rm \
-  -v "$(pwd):/workspace:rw,U" \
-  --workdir /workspace \
-  --userns=keep-id \
-  al2023-custom \
-  /bin/bash -c "ls -la; ./.github/bash-scripts/container-build-script-el.sh"
+	--rm \
+	-v "$(pwd):/workspace:rw,U" \
+	--workdir /workspace \
+	--userns=keep-id \
+	al2023-custom \
+	/bin/bash -c "ls -la; ./.github/bash-scripts/container-build-script-el.sh"
 

@@ -32,26 +32,24 @@ echo "FROM $BASEIMG" > Dockerfile
 
 echo "RUN dnf update -y && dnf install -y git openssl-devel glibc-devel autoconf automake libtool zlib-devel libyaml-devel gcc-c++ graphviz rpm-build wget shadow-utils sudo && dnf clean all" >> Dockerfile
 
-case $DISTRO in
+# We need to do this freakishly weird installation procedure to manually
+# install doxygen.  The reason is that RedHat saw fit to content-lock
+# their UBI images, and Doxygen is one of those tools that you get to use
+# only if you actually pay RedHat for the privilege of using 'yum' to install
+# it.
 
-  "el10")
-    V=10
-    echo "RUN sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$V.noarch.rpm" >> Dockerfile
-    echo "RUN sudo dnf makecache" >> Dockerfile
-    ;;
-  "el9")
-    V=9
-    echo "RUN sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$V.noarch.rpm" >> Dockerfile
-    echo "RUN sudo dnf makecache" >> Dockerfile
-    ;;
+echo "RUN dnf install -y libpng libjpeg-turbo" >> Dockerfile
 
-  "el8")
-    echo "RUN sudo dnf install -y 'dnf-command(config-manager)'" >> Dockerfile
-    echo "RUN sudo dnf config-manager --set-enabled powertools || dnf config-manager --set-enabled crb" >> Dockerfile
-    ;;
-
+case "$ARCH" in
+	aarch64) echo "RUN wget https://www.doxygen.nl/files/doxygen-1.9.8.linux.bin.tar.gz" >> Dockerfile ;;
+	*) echo "RUN wget https://www.doxygen.nl/files/doxygen-1.10.0.linux.bin.tar" >> Dockerfile ;;
 esac
-echo "RUN dnf install -y doxygen" >> Dockerfile
+
+echo "RUN tar -xzf doxygen-*.tar.gz" >> Dockerfile
+echo "RUN cd doxygen-* && cp bin/* /usr/local/bin" >> Dockerfile
+
+# End of doxygen install.
+
 
 echo 'RUN useradd -m -s /bin/bash dev && echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers' >> Dockerfile
 echo "USER dev" >> Dockerfile

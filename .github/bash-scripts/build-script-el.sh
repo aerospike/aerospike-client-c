@@ -30,6 +30,8 @@ echo ---------------------------------------------------------------------------
 
 echo "FROM $BASEIMG" > Dockerfile
 
+echo "RUN dnf update -y && dnf install -y git openssl-devel glibc-devel autoconf automake libtool zlib-devel libyaml-devel gcc-c++ graphviz rpm-build wget shadow-utils sudo && dnf clean all" >> Dockerfile
+
 case $DISTRO in
 
   "el10" | "el9")
@@ -43,8 +45,8 @@ case $DISTRO in
     ;;
 
 esac
+echo "RUN dnf install -y doxygen" >> Dockerfile
 
-echo "RUN dnf update -y && dnf install -y doxygen git openssl-devel glibc-devel autoconf automake libtool zlib-devel libyaml-devel gcc-c++ graphviz rpm-build wget shadow-utils sudo && dnf clean all" >> Dockerfile
 echo 'RUN useradd -m -s /bin/bash dev && echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers' >> Dockerfile
 echo "USER dev" >> Dockerfile
 echo "WORKDIR /workspace" >> Dockerfile

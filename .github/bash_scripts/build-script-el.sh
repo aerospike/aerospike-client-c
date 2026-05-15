@@ -33,5 +33,5 @@ podman run \
 	--workdir /workspace \
 	--userns=keep-id \
 	$DISTRO \
-	/bin/bash -c "./.github/bash_scripts/container_build_script_el.sh"
+	/bin/bash -c "ls -la; ./.github/bash_scripts/container_build_script_el.sh"
 

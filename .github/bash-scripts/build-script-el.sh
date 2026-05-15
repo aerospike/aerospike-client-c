@@ -41,9 +41,10 @@ podman build -t al2023-custom .
 # prevents permission denied errors when the container tries to write to the
 # mount.
 
+sudo chmod -R 777 .
 podman run \
 	--rm \
-	-v "$(pwd):/workspace:rw" \
+	-v "$(pwd):/workspace:rw,U" \
 	--workdir /workspace \
 	--userns=keep-id \
 	al2023-custom \

@@ -10,10 +10,8 @@
 set -ue
 
 echo --------------------------------------------------------------------------------
-xxd <<< \"$MATRIX_JSON\"
-echo --------------------------------------------------------------------------------
-export DISTRO=$(jq -r '.distro' <<<\"$MATRIX_JSON\")
-export ARCH=$(jq -r '.arch' <<<\"$MATRIX_JSON\")
+export DISTRO=$(printf "%s" "$MATRIX_JSON" | jq -r '.distro')
+export ARCH=$(printf "%s" "$MATRIX_JSON" | jq -r '.arch')
 export EMULATED=$EMULATED
 
 echo "DISTRO: $DISTRO"

@@ -29,7 +29,7 @@ echo ---------------------------------------------------------------------------
 # access, and the stock images do not include sudo.
 
 echo "FROM $BASEIMG" > Dockerfile
-echo "RUN dnf update -y && dnf install -y openssl-devel glibc-devel autoconf automake libtool zlib-devel libyaml-devel gcc-c++ graphviz rpm-build wget shadow-utils sudo && dnf clean all" >> Dockerfile
+echo "RUN dnf update -y && dnf install -y git openssl-devel glibc-devel autoconf automake libtool zlib-devel libyaml-devel gcc-c++ graphviz rpm-build wget shadow-utils sudo && dnf clean all" >> Dockerfile
 echo 'RUN useradd -m -s /bin/bash dev && echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers' >> Dockerfile
 echo "USER dev" >> Dockerfile
 echo "WORKDIR /workspace" >> Dockerfile

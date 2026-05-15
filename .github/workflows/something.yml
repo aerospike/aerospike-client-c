@@ -72,6 +72,9 @@ jobs:
       mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
       mac-artifact-glob: "*.pkg"
       mac-notarize: true
+      build-script: |
+          pwd
+          find .
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}

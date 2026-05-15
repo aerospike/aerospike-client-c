@@ -33,13 +33,13 @@ echo "FROM $BASEIMG" > Dockerfile
 case $DISTRO in
 
   "el10" | "el9")
-    echo "RUN dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm" >> Dockerfile
-    echo "RUN dnf makecache" >> Dockerfile
+    echo "RUN sudo dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-$(rpm -E %rhel).noarch.rpm" >> Dockerfile
+    echo "RUN sudo dnf makecache" >> Dockerfile
     ;;
 
   "el8")
-    echo "RUN dnf install -y 'dnf-command(config-manager)'" >> Dockerfile
-    echo "RUN dnf config-manager --set-enabled powertools || dnf config-manager --set-enabled crb" >> Dockerfile
+    echo "RUN sudo dnf install -y 'dnf-command(config-manager)'" >> Dockerfile
+    echo "RUN sudo dnf config-manager --set-enabled powertools || dnf config-manager --set-enabled crb" >> Dockerfile
     ;;
 
 esac

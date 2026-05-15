@@ -60,8 +60,8 @@ jobs:
             "distro":"el10",
             "base-image":"registry.access.redhat.com/ubi10/ubi",
             "arch":"x86_64",
-            "build-env":"EMULATED=false",
             "build-script": "pwd; ls -la; ./.github/bash_scripts/build-script-el.sh",
+            "build-env":"EMULATED=false",
           },
         ]}
       oidc-provider-name: gh-aerospike

@@ -25,6 +25,18 @@ echo ---------------------------------------------------------------------------
 ls -l
 echo --------------------------------------------------------------------------------
 
+# First build our custom Docker image, because we absolutely must have sudo
+# access, and the stock images do not include sudo.
+
+echo "FROM $BASEIMG" > Dockerfile
+echo "RUN dnf update -y && dnf install -y sudo && dnf clean all" >> Dockerfile
+echo 'RUN useradd -m -s /bin/bash dev && echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers' >> Dockerfile
+echo "USER dev" >> Dockerfile
+echo "WORKDIR /home/dev" >> Dockerfile
+echo 'CMD ["/bin/bash"]' >> Dockerfile
+
+podman build -t al2023-custom .
+
 # Use --userns=keep-id so the container user matches the runner UID.  This
 # prevents permission denied errors when the container tries to write to the
 # mount.
@@ -34,6 +46,6 @@ podman run \
 	-v "$(pwd):/workspace:rw" \
 	--workdir /workspace \
 	--userns=keep-id \
-	$BASEIMG \
+	al2023-custom \
 	/bin/bash -c "ls -la; ./.github/bash-scripts/container-build-script-el.sh"
 

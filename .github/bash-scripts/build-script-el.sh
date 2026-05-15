@@ -12,10 +12,12 @@ set -ue
 echo --------------------------------------------------------------------------------
 export DISTRO=$(printf "%s" "$MATRIX_JSON" | jq -r '.distro')
 export ARCH=$(printf "%s" "$MATRIX_JSON" | jq -r '.arch')
+export BASEIMG=$(printf "%s" "$MATRIX_JSON" | jq -r '."base-image"')
 export EMULATED=$EMULATED
 
-echo "DISTRO: $DISTRO"
-echo "ARCH: $ARCH"
+echo "  DISTRO: $DISTRO"
+echo "    ARCH: $ARCH"
+echo " BASEIMG: $BASEIMG"
 echo "EMULATED: $EMULATED"
 echo --------------------------------------------------------------------------------
 env | sort
@@ -32,6 +34,6 @@ podman run \
 	-v "$(pwd):/workspace:rw" \
 	--workdir /workspace \
 	--userns=keep-id \
-	$DISTRO \
+	$BASEIMG \
 	/bin/bash -c "ls -la; ./.github/bash-scripts/container-build-script-el.sh"
 

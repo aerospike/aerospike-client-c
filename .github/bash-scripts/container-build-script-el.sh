@@ -2,6 +2,8 @@
 
 set -ue
 
+cd /workspace
+
 ./install_libuv
 ./install_libev
 ./install_libevent

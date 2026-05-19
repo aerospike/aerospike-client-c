@@ -58,7 +58,7 @@ jobs:
           {
             "runs-on":"ubuntu-22.04",
             "distro":"el10",
-            "base-image":"docker.io/library/rockyLinux:10",
+            "base-image":"docker.io/library/rockylinux:10",
             "arch":"x86_64",
             "build-script": "./.github/bash-scripts/build-script-el.sh",
             "build-env":"EMULATED=false",
@@ -109,7 +109,7 @@ jobs:
 #          {
 #            "runs-on":"ubuntu-22.04",
 #            "distro":"el9",
-#            "base-image":"docker.io/library/rockyLinux:9",
+#            "base-image":"docker.io/library/rockylinux:9",
 #            "arch":"x86_64",
 #            "build-env":"EMULATED=false",
 #            "build-script": "./.github/bash_scripts/build-script-el.sh",
@@ -117,7 +117,7 @@ jobs:
 #          {
 #            "runs-on":"ubuntu-22.04",
 #            "distro":"el8",
-#            "base-image":"docker.io/library/rockyLinux:8",
+#            "base-image":"docker.io/library/rockylinux:8",
 #            "arch":"x86_64",
 #            "build-env":"EMULATED=false",
 #            "build-script": "./.github/bash_scripts/build-script-el.sh",
@@ -125,7 +125,7 @@ jobs:
 #          {
 #            "runs-on":"ubuntu-22.04",
 #            "distro":"el10",
-#            "base-image":"docker.io/library/rockyLinux:10",
+#            "base-image":"docker.io/library/rockylinux:10",
 #            "arch":"aarch64",
 #            "build-env":"EMULATED=false",
 #            "build-script": "./.github/bash_scripts/build-script-el.sh",
@@ -133,7 +133,7 @@ jobs:
 #          {
 #            "runs-on":"ubuntu-22.04",
 #            "distro":"el9",
-#            "base-image":"docker.io/library/rockyLinux:9",
+#            "base-image":"docker.io/library/rockylinux:9",
 #            "arch":"aarch64",
 #            "build-env":"EMULATED=false",
 #            "build-script": "./.github/bash_scripts/build-script-el.sh",
@@ -141,7 +141,7 @@ jobs:
 #          {
 #            "runs-on":"ubuntu-22.04",
 #            "distro":"el8",
-#            "base-image":"docker.io/library/rockyLinux:8",
+#            "base-image":"docker.io/library/rockylinux:8",
 #            "arch":"aarch64",
 #            "build-env":"EMULATED=false",
 #            "build-script": "./.github/bash_scripts/build-script-el.sh",

@@ -56,7 +56,7 @@ echo "USER dev" >> Dockerfile
 echo "WORKDIR /workspace" >> Dockerfile
 echo 'CMD ["/bin/bash"]' >> Dockerfile
 
-podman build -t al2023-custom .
+podman build -t server-custom .
 
 # Use --userns=keep-id so the container user matches the runner UID.  This
 # prevents permission denied errors when the container tries to write to the
@@ -68,6 +68,6 @@ podman run \
   -v "$(pwd):/workspace:rw,U" \
   --workdir /workspace \
   --userns=keep-id \
-  al2023-custom \
+  server-custom \
   /bin/bash -c "ls -la; ./.github/bash-scripts/container-build-script-el.sh"
 

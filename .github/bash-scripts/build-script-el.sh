@@ -40,16 +40,16 @@ echo "RUN dnf update -y && dnf install -y git openssl-devel glibc-devel autoconf
 # only if you actually pay RedHat for the privilege of using 'yum' to install
 # it.
 
-echo "RUN dnf install -y libpng libjpeg-turbo" >> Dockerfile
+echo "RUN dnf install -y libpng libjpeg-turbo doxygen graphviz" >> Dockerfile
 
-case "$ARCH" in
-	aarch64) echo "RUN wget https://www.doxygen.nl/files/doxygen-1.9.8.linux.bin.tar.gz" >> Dockerfile ;;
-	*) echo "RUN wget https://www.doxygen.nl/files/doxygen-1.10.0.linux.bin.tar" >> Dockerfile ;;
-esac
-
-echo "RUN tar -xzf doxygen-*.tar.gz" >> Dockerfile
-echo "RUN cd doxygen-* && cp bin/* /usr/local/bin" >> Dockerfile
-
+#case "$ARCH" in
+#	aarch64) echo "RUN wget https://www.doxygen.nl/files/doxygen-1.9.8.linux.bin.tar.gz" >> Dockerfile ;;
+#	*) echo "RUN wget https://www.doxygen.nl/files/doxygen-1.10.0.linux.bin.tar" >> Dockerfile ;;
+#esac
+#
+#echo "RUN tar -xzf doxygen-*.tar.gz" >> Dockerfile
+#echo "RUN cd doxygen-* && cp bin/* /usr/local/bin" >> Dockerfile
+#
 # End of doxygen install.
 
 

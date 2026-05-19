@@ -30,6 +30,7 @@ echo ---------------------------------------------------------------------------
 
 echo "FROM $BASEIMG" > Dockerfile
 
+echo "RUN dnf config-manager --set-enabled crb || dnf config-manager --set-enabled powertools" >> Dockerfile
 echo "RUN dnf update -y && dnf install -y git openssl-devel glibc-devel autoconf automake libtool zlib-devel libyaml-devel gcc-c++ graphviz rpm-build wget shadow-utils sudo && dnf clean all" >> Dockerfile
 
 # We need to do this freakishly weird installation procedure to manually

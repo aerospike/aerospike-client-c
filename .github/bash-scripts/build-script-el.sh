@@ -66,9 +66,14 @@ podman build -t server-custom .
 # mount.
 
 sudo chmod -R 777 .
+echo ////////////////////////////
+echo USER UID: $(id -u)
+echo USER GID: $(id -g)
+echo ////////////////////////////
+
 podman run \
   --rm \
-  -v "$(pwd):/artifacts:rw,Z" \
+  -v "$(pwd):/artifacts:rw,U,Z" \
   --workdir /artifacts \
   --userns=keep-id \
   server-custom \

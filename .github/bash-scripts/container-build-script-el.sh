@@ -2,7 +2,9 @@
 
 set -ue
 
-cd /workspace
+cd /
+cp -pr /artifacts /work/source
+cd /work/source
 
 echo --------------------------------------------------------------------------------
 echo install_libuv - preinstalled from Docker image
@@ -42,4 +44,5 @@ make package
 echo --------------------------------------------------------------------------------
 echo Done with container-build-script-el.sh
 echo --------------------------------------------------------------------------------
-
+echo TODO: Copy artifacts into /artifacts here to be collected.
+exit 1

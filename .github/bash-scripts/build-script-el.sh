@@ -68,8 +68,8 @@ podman build -t server-custom .
 sudo chmod -R 777 .
 podman run \
   --rm \
-  -v "$(pwd):/work/source:rw,U" \
-  --workdir /work/source \
+  -v "$(pwd):/artifacts:rw,U" \
+  --workdir /artifacts \
   --userns=keep-id \
   server-custom \
   /bin/bash -c "ls -la; ./.github/bash-scripts/container-build-script-el.sh"

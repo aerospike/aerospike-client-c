@@ -28,11 +28,11 @@ echo ---------------------------------------------------------------------------
 # First build our custom Docker image, because we absolutely must have sudo
 # access, and the stock images do not include sudo.
 
-echo "FROM $BASEIMG" > Dockerfile
+# echo "FROM $BASEIMG" > Dockerfile
 
-echo "RUN dnf install -y 'dnf-command(config-manager)'" >> Dockerfile
-echo "RUN dnf config-manager --set-enabled crb || dnf config-manager --set-enabled powertools" >> Dockerfile
-echo "RUN dnf update -y && dnf install -y git openssl-devel glibc-devel autoconf automake libtool zlib-devel libyaml-devel gcc-c++ graphviz rpm-build wget shadow-utils sudo && dnf clean all" >> Dockerfile
+# echo "RUN dnf install -y 'dnf-command(config-manager)'" >> Dockerfile
+# echo "RUN dnf config-manager --set-enabled crb || dnf config-manager --set-enabled powertools" >> Dockerfile
+# echo "RUN dnf update -y && dnf install -y git openssl-devel glibc-devel autoconf automake libtool zlib-devel libyaml-devel gcc-c++ graphviz rpm-build wget shadow-utils sudo && dnf clean all" >> Dockerfile
 
 # We need to do this freakishly weird installation procedure to manually
 # install doxygen.  The reason is that RedHat saw fit to content-lock
@@ -40,7 +40,7 @@ echo "RUN dnf update -y && dnf install -y git openssl-devel glibc-devel autoconf
 # only if you actually pay RedHat for the privilege of using 'yum' to install
 # it.
 
-echo "RUN dnf install -y libpng libjpeg-turbo doxygen graphviz" >> Dockerfile
+# echo "RUN dnf install -y libpng libjpeg-turbo doxygen graphviz" >> Dockerfile
 
 #case "$ARCH" in
 #	aarch64) echo "RUN wget https://www.doxygen.nl/files/doxygen-1.9.8.linux.bin.tar.gz" >> Dockerfile ;;
@@ -51,13 +51,14 @@ echo "RUN dnf install -y libpng libjpeg-turbo doxygen graphviz" >> Dockerfile
 #echo "RUN cd doxygen-* && cp bin/* /usr/local/bin" >> Dockerfile
 #
 # End of doxygen install.
+#
+#
+# echo 'RUN useradd -m -s /bin/bash dev && echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers' >> Dockerfile
+# echo "USER dev" >> Dockerfile
+# echo "WORKDIR /workspace" >> Dockerfile
+# echo 'CMD ["/bin/bash"]' >> Dockerfile
 
-
-echo 'RUN useradd -m -s /bin/bash dev && echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers' >> Dockerfile
-echo "USER dev" >> Dockerfile
-echo "WORKDIR /workspace" >> Dockerfile
-echo 'CMD ["/bin/bash"]' >> Dockerfile
-
+cp ./.github/Dockerfiles/el10.Dockerfile ./Dockerfile
 podman build -t server-custom .
 
 # Use --userns=keep-id so the container user matches the runner UID.  This
@@ -67,8 +68,8 @@ podman build -t server-custom .
 sudo chmod -R 777 .
 podman run \
   --rm \
-  -v "$(pwd):/workspace:rw,U" \
-  --workdir /workspace \
+  -v "$(pwd):/work/source:rw,U" \
+  --workdir /work/source \
   --userns=keep-id \
   server-custom \
   /bin/bash -c "ls -la; ./.github/bash-scripts/container-build-script-el.sh"

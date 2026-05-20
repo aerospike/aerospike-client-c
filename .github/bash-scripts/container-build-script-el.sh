@@ -3,6 +3,7 @@
 set -ue
 
 cd /
+mkdir -p /work/source
 cp -pr /artifacts /work/source
 cd /work/source
 

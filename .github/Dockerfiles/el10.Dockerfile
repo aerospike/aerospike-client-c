@@ -108,5 +108,5 @@ RUN dnf install -y zlib-devel --setopt=install_weak_deps=False --nodocs
 # Commands are run from this working directory
 WORKDIR /work/source
 
-# Add the build script
-COPY build.sh /work/bin/build
+# Add the build script - not needed since we provide our own
+#COPY build.sh /work/bin/build

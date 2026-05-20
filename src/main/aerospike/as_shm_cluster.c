@@ -1104,6 +1104,7 @@ as_shm_destroy(as_cluster* cluster)
 
 	// Determine how many processes are still attached to shared memory.
 	struct shmid_ds shm_stat;
+	shm_stat.shm_nattch = 0;
 	int rv = shmctl(shm_info->shm_id, IPC_STAT, &shm_stat);
 
 	// If no more processes are attached, remove shared memory.

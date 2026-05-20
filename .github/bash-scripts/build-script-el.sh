@@ -68,7 +68,7 @@ podman build -t server-custom .
 sudo chmod -R 777 .
 podman run \
   --rm \
-  -v "$(pwd):/artifacts:rw,Z,U" \
+  -v "$(pwd):/artifacts:rw,Z" \
   --workdir /artifacts \
   --userns=keep-id \
   server-custom \

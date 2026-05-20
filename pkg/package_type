@@ -94,7 +94,7 @@ function CreatePackage {
   then
     cp -p $baseDir/target/$trgName/lib/libaerospike.a $topDir/lib
     chmod g-w,o-w $topDir/lib/libaerospike.a
-    cp -pr $baseDir/target/$trgName/include $topDir
+    cp -r $baseDir/target/$trgName/include $topDir
     chmod -R g-w,o-w $topDir/include/*
   else
     cp -p $baseDir/target/$trgName/lib/libaerospike.* $topDir/lib

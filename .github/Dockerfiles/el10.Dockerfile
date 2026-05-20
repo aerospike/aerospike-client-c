@@ -53,11 +53,11 @@ RUN tar xf doxygen-1.9.5.src.tar --no-same-owner --no-same-permissions
 RUN microdnf install -y cmake 
 
 RUN wget https://ftp.gnu.org/gnu/bison/bison-3.7.4.tar.gz
-RUN tar -xzf bison-3.7.4.tar.gz
+RUN tar -xzf bison-3.7.4.tar.gz --no-same-owner --no-same-permissions
 RUN cd bison-3.7.4 && ./configure --prefix=/usr/local && make && make install
 
 RUN wget https://github.com/westes/flex/releases/download/v2.6.4/flex-2.6.4.tar.gz
-RUN tar -xzf flex-2.6.4.tar.gz
+RUN tar -xzf flex-2.6.4.tar.gz --no-same-owner --no-same-permissions
 RUN cd flex-2.6.4 && ./configure --prefix=/usr/local && make && make install
 RUN /usr/local/bin/flex --version
 
@@ -72,7 +72,7 @@ WORKDIR /work
 # Install libuv
 RUN wget -q https://github.com/libuv/libuv/archive/v1.8.0.tar.gz
 RUN \
-  tar xzf v1.8.0.tar.gz && \
+  tar xzf v1.8.0.tar.gz --no-same-owner --no-same-permissions && \
   cd libuv-1.8.0 && \
   sh autogen.sh && \
   ./configure && \
@@ -82,7 +82,7 @@ RUN \
 # Install libev
 RUN wget -q http://dist.schmorp.de/libev/Attic/libev-4.24.tar.gz
 RUN \
-  tar xzf libev-4.24.tar.gz && \
+  tar xzf libev-4.24.tar.gz  --no-same-owner --no-same-permissions && \
   cd libev-4.24 && \
   sh autogen.sh && \
   ./configure && \
@@ -92,7 +92,7 @@ RUN \
 # Install libevent
 RUN wget -q https://github.com/libevent/libevent/archive/refs/tags/release-2.1.12-stable.tar.gz
 RUN \
-  tar xzf release-2.1.12-stable.tar.gz && \
+  tar xzf release-2.1.12-stable.tar.gz --no-same-owner --no-same-permissions  && \
   cd libevent-release-2.1.12-stable && \
   sh autogen.sh && \
   ./configure && \

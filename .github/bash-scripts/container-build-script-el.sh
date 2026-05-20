@@ -10,7 +10,6 @@ echo USER UID: $(id -u)
 echo USER GID: $(id -g)
 echo ................................................................................
 ls -la
-exit 1
 
 echo --------------------------------------------------------------------------------
 echo install_libuv - preinstalled from Docker image

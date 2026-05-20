@@ -73,6 +73,7 @@ echo ////////////////////////////
 
 podman run \
   --rm \
+  --cap-add=FOWNER \
   -v "$(pwd):/artifacts:rw,U,Z" \
   --workdir /artifacts \
   --userns=keep-id \

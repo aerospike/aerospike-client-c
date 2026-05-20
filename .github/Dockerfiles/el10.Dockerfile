@@ -49,7 +49,7 @@ WORKDIR /work
 RUN microdnf install python3 -y
 RUN wget -q https://www.doxygen.nl/files/doxygen-1.9.5.src.tar.gz
 RUN gunzip doxygen-1.9.5.src.tar.gz
-RUN tar xf doxygen-1.9.5.src.tar
+RUN tar xf doxygen-1.9.5.src.tar --no-same-owner --no-same-permissions
 RUN microdnf install -y cmake 
 
 RUN wget https://ftp.gnu.org/gnu/bison/bison-3.7.4.tar.gz

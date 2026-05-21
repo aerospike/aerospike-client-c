@@ -36,6 +36,8 @@ podman run --name build-box -d -it server-custom /bin/bash
 podman cp . build-box:/workspace
 podman exec -w /workspace build-box /bin/bash -c ".github/bash-scripts/container-build-script-el.sh"
 podman cp build-box:/workspace/ .
+podman cp build-box:/workspace/target/ ./target/
+podman cp build-box:/workspace/target/packages/ ./target/packages/
 
 echo Now operating outside of container
 echo --------------------------------------------------------------------------------

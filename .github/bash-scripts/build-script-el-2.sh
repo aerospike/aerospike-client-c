@@ -35,6 +35,5 @@ podman build -t server-custom .
 podman run --name build-box -d -it server-custom /bin/bash
 podman cp . build-box:/workspace
 podman exec -w /workspace build-box /bin/bash -c ".github/bash-scripts/container-build-script-el.sh"
-mkdir -p /artifacts
-podman cp build-box:/workspace /artifacts
+podman cp build-box:/workspace .
 

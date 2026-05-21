@@ -49,5 +49,6 @@ make package
 echo --------------------------------------------------------------------------------
 echo Done with container-build-script-el.sh
 echo --------------------------------------------------------------------------------
-echo TODO: Copy artifacts into /artifacts here to be collected.
-exit 1
+# Artifacts are written directly into the bind-mounted workspace at
+# target/packages, so the host workflow can pick them up via
+# gh-artifact-directory: target/packages.  Nothing more to copy.

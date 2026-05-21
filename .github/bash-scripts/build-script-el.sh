@@ -65,7 +65,6 @@ podman build -t server-custom .
 # prevents permission denied errors when the container tries to write to the
 # mount.
 
-sudo chmod -R 777 .
 echo ////////////////////////////
 echo USER UID: $(id -u)
 echo USER GID: $(id -g)
@@ -73,7 +72,6 @@ echo ////////////////////////////
 
 podman run \
   --rm \
-  --cap-add=FOWNER \
   -v "$(pwd):/artifacts:rw,U,Z" \
   --workdir /artifacts \
   --userns=keep-id \

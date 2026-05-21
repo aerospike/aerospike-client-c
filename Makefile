@@ -266,7 +266,7 @@ $(TARGET_LIB)/libaerospike.a: $(OBJECTS) | modules
 
 $(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h
 	@mkdir -p $(@D)
-	cp -p $< $@
+	cp $< $@
 
 ###############################################################################
 include project/modules.mk project/test.mk project/rules.mk

@@ -49,5 +49,3 @@ make package
 echo --------------------------------------------------------------------------------
 echo Done with container-build-script-el.sh
 echo --------------------------------------------------------------------------------
-echo TODO: Copy artifacts into /artifacts here to be collected.
-exit 1

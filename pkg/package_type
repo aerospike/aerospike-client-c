@@ -93,13 +93,17 @@ function CreatePackage {
   if [ "$pkgType" = "devel" ]
   then
     cp -p $baseDir/target/$trgName/lib/libaerospike.a $topDir/lib
-    chmod g-w,o-w $topDir/lib/libaerospike.a
+# chmod calls commented out because they break inside a Docker container.
+# Although the container's filesystem is read-write (as the cp command works),
+# we nonetheless get "Operation not permitted" errors when trying to change
+# file permissions.
+#   chmod g-w,o-w $topDir/lib/libaerospike.a
     cp -pr $baseDir/target/$trgName/include $topDir
-    chmod -R g-w,o-w $topDir/include/*
+#   chmod -R g-w,o-w $topDir/include/*
   else
     cp -p $baseDir/target/$trgName/lib/libaerospike.* $topDir/lib
     rm $topDir/lib/libaerospike.a
-    chmod g-w,o-w $topDir/lib/libaerospike.*
+#   chmod g-w,o-w $topDir/lib/libaerospike.*
   fi
 }
 

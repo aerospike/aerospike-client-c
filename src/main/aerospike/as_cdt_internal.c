@@ -122,6 +122,11 @@ as_cdt_add_packed(as_packer* pk, as_operations* ops, const char* name, as_operat
 		return false;
 	}
 	as_bytes* bytes = as_bytes_new_wrap(pk->buffer, pk->offset, true);
+	// Server as_bin_string_modify_tr requires msg_op->particle_type ==
+	// AS_PARTICLE_TYPE_STRING; wire byte matches AS_BYTES_STRING (see datamodel.h).
+	if (op_type == AS_OPERATOR_STRING_MODIFY || op_type == AS_OPERATOR_STRING_READ) {
+		bytes->type = AS_BYTES_STRING;
+	}
 	as_bin_init(&binop->bin, name, (as_bin_value*)bytes);
 	return true;
 }

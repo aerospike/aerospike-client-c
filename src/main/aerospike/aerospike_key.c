@@ -1327,6 +1327,8 @@ as_operate_init(
 			case AS_OPERATOR_EXP_READ:
 			case AS_OPERATOR_BIT_READ:
 			case AS_OPERATOR_HLL_READ:
+			case AS_OPERATOR_STRING_READ:
+			case AS_OPERATOR_TO_STRING:
 				// Map operations require respond_all_ops to be true.
 				respond_all_ops = true;
 				// Fall through to read.
@@ -1343,6 +1345,7 @@ as_operate_init(
 			case AS_OPERATOR_EXP_MODIFY:
 			case AS_OPERATOR_BIT_MODIFY:
 			case AS_OPERATOR_HLL_MODIFY:
+			case AS_OPERATOR_STRING_MODIFY:
 				// Map operations require respond_all_ops to be true.
 				respond_all_ops = true;
 				// Fall through to write.

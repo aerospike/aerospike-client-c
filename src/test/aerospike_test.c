@@ -497,6 +497,7 @@ PLAN(aerospike_test)
 	plan_add(map_index);
 	plan_add(map_sort);
 	plan_add(bit);
+	plan_add(string_basics);
 	plan_add(hll);
 	plan_add(filter_exp);
 

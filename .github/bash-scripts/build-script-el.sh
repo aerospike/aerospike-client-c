@@ -61,6 +61,17 @@ echo ---------------------------------------------------------------------------
 cp ./.github/Dockerfiles/el10.Dockerfile ./Dockerfile
 podman build -t server-custom .
 
+### DEBUG ###
+echo "=== host: podman + userns state ==="
+podman --version || true
+podman info --format '{{.Host.Security.Rootless}} rootless / runtime={{.Host.OCIRuntime.Name}} / userns mode={{.Host.IDMappings}}' 2>/dev/null || podman info 2>/dev/null | grep -iE 'rootless|runtime|idmappings' || true
+echo "host id : $(id)"
+echo "/etc/subuid for $USER:"; grep "^$USER:" /etc/subuid || echo "  (no entry)"
+echo "/etc/subgid for $USER:"; grep "^$USER:" /etc/subgid || echo "  (no entry)"
+echo "/etc/passwd entry: $(getent passwd "$(id -u)")"
+echo "=== end host debug ==="
+### END DEBUG ###
+
 # Use --userns=keep-id so the container user matches the runner UID.  This
 # prevents permission denied errors when the container tries to write to the
 # mount.

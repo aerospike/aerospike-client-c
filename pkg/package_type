@@ -94,16 +94,6 @@ function CreatePackage {
   # Source files are 0644 / dirs 0755; with the default 0022 umask the staged
   # copies are already 0644/0755 (no group/other write to strip).  The spec
   # files use %defattr(-,root,root) so rpm packages whatever mode is on disk.
-
-  ### DEBUG ###
-  echo "=== package_type CreatePackage debug ==="
-  echo "  pkgType=$pkgType  topDir=$topDir  trgName=$trgName"
-  echo "  whoami: $(id)   umask: $(umask)"
-  echo "  source dir ls -lan (target/$trgName):"
-  ls -lan "$baseDir/target/$trgName/lib" 2>&1 | head -5
-  ls -lan "$baseDir/target/$trgName/include/aerospike" 2>&1 | head -5
-  ### END DEBUG ###
-
   if [ "$pkgType" = "devel" ]
   then
     cp    $baseDir/target/$trgName/lib/libaerospike.a $topDir/lib
@@ -112,26 +102,6 @@ function CreatePackage {
     cp    $baseDir/target/$trgName/lib/libaerospike.* $topDir/lib
     rm $topDir/lib/libaerospike.a
   fi
-
-  ### DEBUG ###
-  echo "  staged dir ls -lan ($topDir):"
-  ls -lan "$topDir/lib" 2>&1 | head -5
-  if [ -d "$topDir/include/aerospike" ]; then
-    ls -lan "$topDir/include/aerospike" 2>&1 | head -5
-    # Probe the exact failure: can we chmod a staged .h file?
-    probe="$topDir/include/aerospike/as_error.h"
-    if [ -f "$probe" ]; then
-      echo "  chmod probe on staged .h:"
-      stat -c '    pre : mode=%a uid=%u gid=%g name=%n' "$probe"
-      if chmod 0644 "$probe" 2>&1; then
-        echo "    chmod 0644 OK"
-      else
-        echo "    chmod 0644 FAILED ^^"
-      fi
-    fi
-  fi
-  echo "=== end package_type debug ==="
-  ### END DEBUG ###
 }
 
 case ${platform:0:2} in

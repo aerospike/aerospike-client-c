@@ -122,8 +122,6 @@ run_commands(aerospike* as, as_txn* txn)
 	}
 	as_record_destroy(&rec);
 */
-	printf("Write more records in a batch\n");
-
 	as_policy_batch pb;
 	as_policy_batch_parent_write_default(as, &pb);
 	pb.base.txn = txn;
@@ -133,6 +131,7 @@ run_commands(aerospike* as, as_txn* txn)
 	as_operations_add_write_int64(&ops, "c", 9999);
 
 	uint32_t size = 400000;
+	printf("Batch write %u keys\n", size);
 
 	as_batch_records recs;
 	as_batch_records_init(&recs, size);
@@ -145,7 +144,6 @@ run_commands(aerospike* as, as_txn* txn)
 		wr->ops = &ops;
 	}
 
-	printf("CALL aerospike_batch_write\n");
 	status = aerospike_batch_write(as, &err, &pb, &recs);
 	as_operations_destroy(&ops);
 	as_batch_records_destroy(&recs);

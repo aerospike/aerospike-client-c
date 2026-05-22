@@ -144,6 +144,11 @@ run_commands(aerospike* as, as_txn* txn)
 
 		as_operations* ops = as_operations_new(1);
 		as_operations_add_write_int64(ops, "c", 9999);
+
+		// Set ops->ttl to zero even though that is the default.
+		// Only doing this because the python/c interface does this.
+		ops->ttl  = 0;
+
 		wr->ops = ops;
 	}
 

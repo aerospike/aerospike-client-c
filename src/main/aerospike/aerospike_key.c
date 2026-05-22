@@ -1951,6 +1951,7 @@ as_txn_monitor_operate(
 	const as_operations* ops
 	)
 {
+	printf("IN as_txn_monitor_operate\n");
 	uint32_t n_operations = ops->binops.size;
 
 	as_partition_info pi;

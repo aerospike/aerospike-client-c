@@ -94,14 +94,13 @@ main(int argc, char* argv[])
 	return status == AEROSPIKE_OK? 0 : -1;
 }
 
-static bool batch_write_cb(const as_batch_result* results, uint32_t n_keys, void* udata);
-
 static as_status
 run_commands(aerospike* as, as_txn* txn)
 {
 	as_error err;
 	as_status status;
 
+/*
 	printf("Write record\n");
 
 	as_policy_write pw;
@@ -122,7 +121,7 @@ run_commands(aerospike* as, as_txn* txn)
 		return status;
 	}
 	as_record_destroy(&rec);
-
+*/
 	printf("Write more records in a batch\n");
 
 	as_policy_batch pb;
@@ -133,65 +132,28 @@ run_commands(aerospike* as, as_txn* txn)
 	as_operations_inita(&ops, 1);
 	as_operations_add_write_int64(&ops, "c", 9999);
 
-	as_batch batch;
-	as_batch_inita(&batch, 2);
+	uint32_t size = 10000;
 
-	for (uint32_t i = 0; i < 2; i++) {
-		as_key_init_int64(as_batch_keyat(&batch, i), g_namespace, g_set, i);
+	as_batch_records recs;
+	as_batch_records_init(&recs, 10000);
+
+	as_batch_write_record* wr;
+
+	for (uint32_t i = 0; i < size; i++) {
+		wr = as_batch_write_reserve(&recs);
+		as_key_init_int64(&wr->key, g_namespace, g_set, 1);
+		wr->ops = &ops;
 	}
 
-	status = aerospike_batch_operate(as, &err, &pb, NULL, &batch, &ops, batch_write_cb, NULL);
+	printf("CALL aerospike_batch_write\n");
+	status = aerospike_batch_write(as, &err, &pb, &recs);
 	as_operations_destroy(&ops);
+	as_batch_records_destroy(&recs);
 
 	if (status != AEROSPIKE_OK) {
 		printf("aerospike_batch_operate() returned %d - %s\n", err.code, err.message);
 		return status;
 	}
- 	as_batch_destroy(&batch);
-
-	printf("Read record\n");
-
-	as_policy_read pr;
-	as_policy_read_default(as, &pr);
-	pr.base.txn = txn;
-
-	as_key_init_int64(&key, g_namespace, g_set, 3);
-
-	as_record* recp = NULL;
-	status = aerospike_key_get(as, &err, &pr, &key, &recp);
-
-	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-		printf("aerospike_key_get() returned %d - %s\n", err.code, err.message);
-		return status;
-	}
-	as_record_destroy(recp);
-
-	printf("Delete record\n");
-
-	as_policy_remove prem;
-	as_policy_remove_default(as, &prem);
-	prem.base.txn = txn;
-	prem.durable_delete = true; // Required when deleting records in a transaction.
-
-	status = aerospike_key_remove(as, &err, &prem, &key);
-
-	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-		printf("aerospike_key_remove() returned %d - %s\n", err.code, err.message);
-		return status;
-	}
 
 	return AEROSPIKE_OK;
-}
-
-static bool
-batch_write_cb(const as_batch_result* results, uint32_t n_keys, void* udata)
-{
-	for (uint32_t i = 0; i < n_keys; i++) {
-		const as_batch_result* r = &results[i];
-
-		if (r->result != AEROSPIKE_OK) {
-			printf("batch row[%u] returned %d\n", i, r->result);
-		}
-	}
-	return true;
 }

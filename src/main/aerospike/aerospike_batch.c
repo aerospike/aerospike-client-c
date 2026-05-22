@@ -4982,6 +4982,7 @@ aerospike_batch_write(
 
 		printf("CALL as_txn_monitor_add_keys_records\n");
 		status = as_txn_monitor_add_keys_records(as, &policy->base, records, err);
+		printf("as_txn_monitor_add_keys_records returned %d\n", status);
 
 		if (status != AEROSPIKE_OK) {
 			destroy_versions(versions);

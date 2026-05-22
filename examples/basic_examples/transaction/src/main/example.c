@@ -140,7 +140,7 @@ run_commands(aerospike* as, as_txn* txn)
 
 	for (uint32_t i = 0; i < size; i++) {
 		wr = as_batch_write_reserve(&recs);
-		as_key_init_int64(&wr->key, g_namespace, g_set, 1);
+		as_key_init_int64(&wr->key, g_namespace, g_set, i);
 
 		as_operations* ops = as_operations_new(1);
 		as_operations_add_write_int64(ops, "c", 9999);

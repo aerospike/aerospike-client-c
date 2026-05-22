@@ -132,10 +132,10 @@ run_commands(aerospike* as, as_txn* txn)
 	as_operations_inita(&ops, 1);
 	as_operations_add_write_int64(&ops, "c", 9999);
 
-	uint32_t size = 10000;
+	uint32_t size = 400000;
 
 	as_batch_records recs;
-	as_batch_records_init(&recs, 10000);
+	as_batch_records_init(&recs, size);
 
 	as_batch_write_record* wr;
 

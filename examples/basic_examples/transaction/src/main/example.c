@@ -126,9 +126,9 @@ run_commands(aerospike* as, as_txn* txn)
 	as_policy_batch_parent_write_default(as, &pb);
 	pb.base.txn = txn;
 
-	as_operations ops;
-	as_operations_inita(&ops, 1);
-	as_operations_add_write_int64(&ops, "c", 9999);
+	//as_operations ops;
+	//as_operations_inita(&ops, 1);
+	//as_operations_add_write_int64(&ops, "c", 9999);
 
 	uint32_t size = 400000;
 	printf("Batch write %u keys\n", size);
@@ -141,11 +141,20 @@ run_commands(aerospike* as, as_txn* txn)
 	for (uint32_t i = 0; i < size; i++) {
 		wr = as_batch_write_reserve(&recs);
 		as_key_init_int64(&wr->key, g_namespace, g_set, 1);
-		wr->ops = &ops;
+
+		as_operations* ops = as_operations_new(1);
+		as_operations_add_write_int64(ops, "c", 9999);
+		wr->ops = ops;
 	}
 
 	status = aerospike_batch_write(as, &err, &pb, &recs);
-	as_operations_destroy(&ops);
+
+	for (uint32_t i = 0; i < size; i++) {
+		as_batch_write_record* bw = (as_batch_write_record*)as_vector_get(&recs.list, i);
+		as_operations_destroy(bw->ops);
+	}
+
+	//as_operations_destroy(&ops);
 	as_batch_records_destroy(&recs);
 
 	if (status != AEROSPIKE_OK) {

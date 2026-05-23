@@ -1352,7 +1352,6 @@ as_event_check_in_doubt(as_event_command* cmd, as_error* err) {
 			return;
 		}
 
-		printf("ASYNC TXN5\n");
 		as_txn_on_write_in_doubt(cmd->txn, digest, set);
 	}
 }

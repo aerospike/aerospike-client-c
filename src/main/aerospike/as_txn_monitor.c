@@ -208,7 +208,6 @@ as_txn_monitor_add_keys_batch(
    aerospike* as, const as_policy_base* cmd_policy, const as_batch* batch, as_error* err
    )
 {
-	printf("IN as_txn_monitor_add_keys_batch\n");
 	as_txn* txn = cmd_policy->txn;
 
 	as_operations ops;
@@ -217,7 +216,6 @@ as_txn_monitor_add_keys_batch(
 	as_txn_get_ops_keys(txn, batch, &ops);
 
 	as_status status = as_txn_monitor_add_keys(as, txn, cmd_policy, &ops, err);
-	printf("RESUALT as_txn_monitor_add_keys=%d\n", status);
 	as_operations_destroy(&ops);
 	return status;
 }

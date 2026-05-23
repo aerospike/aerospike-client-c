@@ -323,7 +323,6 @@ as_batch_in_doubt(const as_key* key, as_txn* txn, bool has_write, uint32_t sent)
 {
 	if (has_write && sent > 1) {
 		if (txn) {
-			printf("TXN1=%d\n", (int)key->valuep->integer.value);
 			as_txn_on_write_in_doubt(txn, key->digest.value, key->set);
 		}
 		return true;
@@ -407,7 +406,6 @@ as_batch_async_parse_records(as_event_command* cmd)
 static as_status
 as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, size_t size)
 {
-	printf("IN as_batch_parse_records\n");
 	as_batch_task* task = cmd->udata;
 	as_txn* txn = cmd->policy->txn;
 	bool deserialize = task->policy->deserialize;
@@ -447,7 +445,6 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				}
 
 				rec->result = msg->result_code;
-				printf("Batch result: %d\n", rec->result);
 
 				if (msg->result_code == AEROSPIKE_OK) {
 					status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
@@ -2066,7 +2063,6 @@ as_batch_set_doubt_records(as_batch_task_records* btr, as_error* err)
 			rec->in_doubt = true;
 
 			if (txn) {
-				printf("TXN2=%d\n", (int)rec->key.valuep->integer.value);
 				as_txn_on_write_in_doubt(txn, rec->key.digest.value, rec->key.set);
 			}
 		}
@@ -2091,7 +2087,6 @@ as_batch_set_doubt_keys(as_batch_task_keys* btk, as_error* err)
 			res->in_doubt = true;
 
 			if (txn) {
-				printf("TXN3=%d\n", (int)res->key->valuep->integer.value);
 				as_txn_on_write_in_doubt(txn, res->key->digest.value, res->key->set);
 			}
 		}
@@ -2377,7 +2372,6 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 
 	as_batch_builder_set_node(&bb, task->node);
 
-	printf("SIZE KEYS\n");
 	as_status status = as_batch_keys_size(btk->keys, &task->offsets, btk->rec, btk->attr, &bb, err);
 
 	if (status != AEROSPIKE_OK) {
@@ -2385,7 +2379,6 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 		return status;
 	}
 
-	printf("WRITE KEYS\n");
 	size_t capacity = bb.size;
 	uint8_t* buf = as_command_buffer_init(capacity);
 	size_t size = as_batch_keys_write(policy, btk->keys, &task->offsets, btk->rec, btk->attr, &bb,
@@ -2417,7 +2410,6 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	as_command cmd;
 	as_batch_command_init(&cmd, task, policy, buf, size, parent);
 
-	printf("EXECUTE COMMAND\n");
 	status = as_command_execute(&cmd, err);
 
 	// Set in_doubt for keys associated this batch command when
@@ -3187,7 +3179,6 @@ as_batch_keys_execute(
 	void* udata
 	)
 {
-	printf("IN as_batch_keys_execute\n");
 	as_cluster* cluster = as->cluster;
 	as_cluster_add_command_count(cluster);
 	uint32_t n_keys = batch->keys.size;
@@ -3321,7 +3312,6 @@ as_batch_keys_execute(
 	btk.attr = attr;
 
 	if (policy->concurrent && batch_nodes.size > 1) {
-		printf("Run batch in parallel\n");
 		// Run batch requests in parallel in separate threads.
 		btk.base.complete_q = cf_queue_create(sizeof(as_batch_complete_task), true);
 		
@@ -3367,7 +3357,6 @@ as_batch_keys_execute(
 	}
 	else {
 		// Run batch requests sequentially in same thread.
-		printf("CALL as_batch_keys_execute_seq\n");
 		status = as_batch_keys_execute_seq(err, &btk, &batch_nodes, NULL);
 	}
 
@@ -4976,16 +4965,13 @@ aerospike_batch_write(
 	uint64_t* versions = NULL;
 
 	if (txn) {
-		printf("CALL as_batch_records_prepare_txn\n");
 		as_status status = as_batch_records_prepare_txn(txn, records, err, &versions);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 
-		printf("CALL as_txn_monitor_add_keys_records\n");
 		status = as_txn_monitor_add_keys_records(as, &policy->base, records, err);
-		printf("as_txn_monitor_add_keys_records returned %d\n", status);
 
 		if (status != AEROSPIKE_OK) {
 			destroy_versions(versions);
@@ -4993,7 +4979,6 @@ aerospike_batch_write(
 		}
 	}
 
-	printf("CALL as_batch_records_execute\n");
 	return as_batch_records_execute(as, err, policy, records, txn, versions, NULL, 0, true);
 }
 
@@ -5196,7 +5181,6 @@ aerospike_batch_operate(
 	as_operations* ops, as_batch_listener listener, void* udata
 	)
 {
-	printf("IN aerospike_batch_operate\n");
 	as_error_reset(err);
 	
 	uint32_t n_operations = ops->binops.size;
@@ -5212,7 +5196,6 @@ aerospike_batch_operate(
 	}
 
 	if (has_write) {
-		printf("IN BATCH WRITE\n");
 		as_policy_batch merged;
 		policy = as_policy_batch_parent_write_merge(as, policy, &merged);
 
@@ -5250,7 +5233,6 @@ aerospike_batch_operate(
 			listener, udata);
 	}
 	else {
-		printf("IN BATCH READ\n");
 		as_policy_batch merged;
 		policy = as_policy_batch_parent_read_merge(as, policy, &merged);
 

@@ -323,6 +323,7 @@ as_batch_in_doubt(const as_key* key, as_txn* txn, bool has_write, uint32_t sent)
 {
 	if (has_write && sent > 1) {
 		if (txn) {
+			printf("TXN1=%d\n", (int)key->valuep->integer.value);
 			as_txn_on_write_in_doubt(txn, key->digest.value, key->set);
 		}
 		return true;
@@ -446,6 +447,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				}
 
 				rec->result = msg->result_code;
+				printf("Batch result: %d\n", rec->result);
 
 				if (msg->result_code == AEROSPIKE_OK) {
 					status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
@@ -483,7 +485,6 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				}
 
 				res->result = msg->result_code;
-				printf("Batch result: %d\n", res->result);
 
 				if (msg->result_code == AEROSPIKE_OK) {
 					status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
@@ -2065,6 +2066,7 @@ as_batch_set_doubt_records(as_batch_task_records* btr, as_error* err)
 			rec->in_doubt = true;
 
 			if (txn) {
+				printf("TXN2=%d\n", (int)rec->key.valuep->integer.value);
 				as_txn_on_write_in_doubt(txn, rec->key.digest.value, rec->key.set);
 			}
 		}
@@ -2089,6 +2091,7 @@ as_batch_set_doubt_keys(as_batch_task_keys* btk, as_error* err)
 			res->in_doubt = true;
 
 			if (txn) {
+				printf("TXN3=%d\n", (int)res->key->valuep->integer.value);
 				as_txn_on_write_in_doubt(txn, res->key->digest.value, res->key->set);
 			}
 		}

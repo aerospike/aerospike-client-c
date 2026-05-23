@@ -666,12 +666,15 @@ is_server_timeout(as_error* err)
 static void
 as_command_prepare_error(as_command* cmd, as_error* err)
 {
+	printf("IN as_command_prepare_error\n");
 	as_error_set_in_doubt(err, cmd->flags & AS_COMMAND_FLAGS_READ, cmd->sent);
 
 	// It's important that as_txn_on_write_in_doubt() is only executed for commands in a transaction,
 	// but not transaction operations (add transaction key, commit, abort). Add transaction key sets
 	// AS_COMMAND_FLAGS_TXN_MONITOR and commit/abort do not set cmd->policy->txn.
-	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_TXN_MONITOR) == 0) {
+	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_TXN_MONITOR) == 0
+		&& (cmd->flags & AS_COMMAND_FLAGS_BATCH) == 0) {
+		printf("TXN4=%d\n", (int)cmd->key->valuep->integer.value);
 		as_txn_on_write_in_doubt(cmd->policy->txn, cmd->key->digest.value, cmd->key->set);
 	}
 }

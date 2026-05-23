@@ -130,7 +130,7 @@ run_commands(aerospike* as, as_txn* txn)
 	//as_operations_inita(&ops, 1);
 	//as_operations_add_write_int64(&ops, "c", 9999);
 
-	uint32_t size = 400000;
+	uint32_t size = 10000;
 	printf("Batch write %u keys\n", size);
 
 	as_batch_records recs;

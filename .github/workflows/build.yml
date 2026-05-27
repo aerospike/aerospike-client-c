@@ -2,9 +2,11 @@ name: Aerospike C Client Tests
 
 on:
   push:
-    branches: [master, stage]
+    #branches: [master, stage]
+    branches: [test-workflow-stage]
   pull_request:
     branches: [master, stage]
+  workflow_dispatch:
 
 jobs:
   build-and-test:

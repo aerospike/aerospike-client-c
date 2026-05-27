@@ -502,6 +502,114 @@ TEST(select_and_invalid_type, "AND|KEY (not AND|EXP) — expect error")
 }
 
 /******************************************************************************
+ * ALL_CHILDREN + MAP_KEYS_IN (nested map, NO_FAIL)
+ *****************************************************************************/
+
+TEST(select_all_children_map_keys_in_nested,
+		"all_children + MAP_KEYS_IN [l2_a_int] + MATCHING_TREE|NO_FAIL")
+{
+	// l3_b_map: { l4_a_int: 14 }
+	as_map* l4 = (as_map*)as_hashmap_new(1);
+	as_stringmap_set_int64(l4, "l4_a_int", 14);
+
+	// l2_b_map: { l3_a_int, l3_b_map, l3_c_list }
+	as_map* l2b = (as_map*)as_hashmap_new(3);
+	as_stringmap_set_int64(l2b, "l3_a_int", 13);
+	as_stringmap_set_map(l2b, "l3_b_map", l4);
+
+	as_arraylist* l3clist = as_arraylist_new(3, 0);
+	as_arraylist_append_int64(l3clist, 1);
+	as_arraylist_append_int64(l3clist, 2);
+	as_arraylist_append_int64(l3clist, 3);
+	as_stringmap_set_list(l2b, "l3_c_list", (as_list*)l3clist);
+
+	// l2_c_list: [ 13, { l3_a_int: 14 }, [1,2,3] ]
+	as_map* l2c_submap = (as_map*)as_hashmap_new(1);
+	as_stringmap_set_int64(l2c_submap, "l3_a_int", 14);
+
+	as_arraylist* l2c_inner = as_arraylist_new(3, 0);
+	as_arraylist_append_int64(l2c_inner, 1);
+	as_arraylist_append_int64(l2c_inner, 2);
+	as_arraylist_append_int64(l2c_inner, 3);
+
+	as_arraylist* l2c = as_arraylist_new(3, 0);
+	as_arraylist_append_int64(l2c, 13);
+	as_arraylist_append(l2c, (as_val*)l2c_submap);
+	as_arraylist_append(l2c, (as_val*)l2c_inner);
+
+	// l1_b_map
+	as_map* l1b = (as_map*)as_hashmap_new(3);
+	as_stringmap_set_int64(l1b, "l2_a_int", 12);
+	as_stringmap_set_map(l1b, "l2_b_map", l2b);
+	as_stringmap_set_list(l1b, "l2_c_list", (as_list*)l2c);
+
+	as_arraylist* l1i = as_arraylist_new(3, 0);
+	as_arraylist_append_int64(l1i, 1);
+	as_arraylist_append_int64(l1i, 2);
+	as_arraylist_append_int64(l1i, 3);
+
+	as_map* top = (as_map*)as_hashmap_new(2);
+	as_stringmap_set_list(top, "l1_i_list", (as_list*)l1i);
+	as_stringmap_set_map(top, "l1_b_map", l1b);
+
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 201);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, BIN_NAME, top);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &rkey, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	// Get and check.
+	status = aerospike_key_get(as, &err, NULL, &rkey, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	test_dump_record(rec, true);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_arraylist sel_keys;
+	as_arraylist_init(&sel_keys, 1, 0);
+	as_arraylist_append_str(&sel_keys, "l2_a_int");
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 2);
+	as_cdt_ctx_add_all_children(&ctx);
+	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&sel_keys);
+
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx,
+			AS_EXP_PATH_SELECT_MATCHING_TREE | AS_EXP_PATH_SELECT_NO_FAIL);
+
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_map* result = as_record_get_map(rec, BIN_NAME);
+	assert_not_null(result);
+
+	// Top-level map "l1_b_map" is the only child value that is a map containing l2_a_int.
+	as_string k_l1b;
+	as_string_init(&k_l1b, "l1_b_map", false);
+	as_map* r_l1b = (as_map*)as_map_get(result, (as_val*)&k_l1b);
+	assert_not_null(r_l1b);
+	assert_int_eq(as_map_size(r_l1b), 1);
+
+	as_string k_l2a;
+	as_string_init(&k_l2a, "l2_a_int", false);
+	as_integer* v_l2a = (as_integer*)as_map_get(r_l1b, (as_val*)&k_l2a);
+	assert_not_null(v_l2a);
+	assert_int_eq(v_l2a->value, 12);
+
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	as_cdt_ctx_destroy(&ctx);
+}
+
+/******************************************************************************
  * REAL-WORLD AND_EXP TEST
  *****************************************************************************/
 
@@ -652,5 +760,6 @@ SUITE(select_basics, "CDT select basics")
 	suite_add(select_and_duplicate);
 	suite_add(select_and_on_exp_base);
 	suite_add(select_and_invalid_type);
+	suite_add(select_all_children_map_keys_in_nested);
 	suite_add(select_and_room_filter);
 }

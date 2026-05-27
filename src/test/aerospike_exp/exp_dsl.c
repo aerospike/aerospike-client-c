@@ -356,14 +356,14 @@ TEST(exp_dsl_filter_write_skipped, "write filter: DSL false skips put (record un
  * (see dsl.md path examples and list_basics/map_basics suites).
  *****************************************************************************/
 
-TEST(exp_dsl_map_top_count, "map: $.dslbin.{}.count() == 3 (cf map_keys size / map size)")
+TEST(exp_dsl_map_top_count, "map: $.dslbin:MAP.count() == 3 (cf map_keys size / map size)")
 {
 	assert_int_eq(put_map_int_str3(9310), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9310);
 
-	as_exp_build_dsl(filt, "$.dslbin.{}.count() == 3");
+	as_exp_build_dsl(filt, "$.dslbin:MAP.count() == 3");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -380,14 +380,14 @@ TEST(exp_dsl_map_top_count, "map: $.dslbin.{}.count() == 3 (cf map_keys size / m
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_map_keylist_submap_count, "map: $.dslbin.{10,20}.{}.count() == 2 (getByKeyList subset)")
+TEST(exp_dsl_map_keylist_submap_count, "map: $.dslbin:MAP.{@10,20}.count() == 2 (getByKeyList subset)")
 {
 	assert_int_eq(put_map_keys_10_20_30(9311), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9311);
 
-	as_exp_build_dsl(filt, "$.dslbin.{10,20}.{}.count() == 2");
+	as_exp_build_dsl(filt, "$.dslbin:MAP.{@10,20}.count() == 2");
 	assert_not_null(filt);
 
 	as_policy_read p;

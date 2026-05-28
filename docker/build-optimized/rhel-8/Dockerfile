@@ -2,9 +2,9 @@
 # RHEL 8 / UBI 8 Minimal — multi-stage build environment
 #
 # Stage 1 (deps-builder): microdnf has cmake but NOT bison or flex, so both
-#   are compiled from source first, then doxygen 1.9.5, then the three event
-#   libs. Everything is installed into /usr/local. All build tools, source
-#   tarballs, and .o files are discarded with this stage.
+#   are compiled from source first (bison 3.7.4 — 3.4 has a parallel-make bug),
+#   then doxygen 1.9.5, then the three event libs. Everything is installed into
+#   /usr/local. All build tools, source tarballs, and .o files are discarded.
 #
 # Stage 2 (final): fresh ubi8-minimal with GCC toolchain + rpm-build.
 #   The entire /usr/local tree is COPY'd from stage 1 in one instruction,
@@ -24,12 +24,13 @@ RUN microdnf install -y \
 
 WORKDIR /build
 
-# bison 3.4 — not in microdnf repos; required by doxygen configure
-RUN wget -q https://ftp.gnu.org/gnu/bison/bison-3.4.tar.gz \
-    && tar xzf bison-3.4.tar.gz \
-    && cd bison-3.4 && ./configure --prefix=/usr/local \
+# bison 3.7.4 — not in microdnf repos; required by doxygen configure
+# (3.4 has a parallel-make race condition in examples/c/reccalc/scan.stamp)
+RUN wget -q https://ftp.gnu.org/gnu/bison/bison-3.7.4.tar.gz \
+    && tar xzf bison-3.7.4.tar.gz \
+    && cd bison-3.7.4 && ./configure --prefix=/usr/local \
     && make -j"$(nproc)" && make install \
-    && cd .. && rm -rf bison-3.4 bison-3.4.tar.gz
+    && cd .. && rm -rf bison-3.7.4 bison-3.7.4.tar.gz
 
 # flex 2.6.1 — not in microdnf repos; required by doxygen
 RUN wget -q https://github.com/westes/flex/releases/download/v2.6.1/flex-2.6.1.tar.gz \

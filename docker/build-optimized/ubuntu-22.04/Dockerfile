@@ -66,7 +66,7 @@ ENV PKG=deb \
 RUN apt-get update -y && apt-get install -y --no-install-recommends \
         build-essential automake autoconf libtool \
         git tar zip \
-        lua5.1 libssl-dev libyaml-dev libz-dev \
+        lua5.1 libssl-dev libyaml-dev zlib1g-dev \
         graphviz \
     && rm -rf /var/lib/apt/lists/*
 

@@ -27,6 +27,9 @@ run-name: >-
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
+  push:
+    branches: [test-workflow-stage]
+
   workflow_dispatch:
     inputs:
       server-tag:

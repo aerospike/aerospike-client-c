@@ -93,8 +93,37 @@ jobs:
           ref: ${{ env.CHECKOUT_SHA }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Windows runners default to Windows containers; switch to Linux engine
-      # so we can run the aerospike/aerospike-server Linux image as a sidecar.
+      # Windows runners may be in Windows-container mode by default.
+      # Attempt switch via DockerCli.exe (Docker Desktop); if not present, fall
+      # back to checking the daemon directly. Fail fast if still in Windows mode.
+      - name: Switch Docker to Linux containers
+        shell: pwsh
+        run: |
+          $dockerCli = "$Env:ProgramFiles\Docker\Docker\DockerCli.exe"
+          if (Test-Path $dockerCli) {
+            Write-Host "DockerCli.exe found — switching to Linux engine..."
+            & $dockerCli -SwitchLinuxEngine
+          } else {
+            Write-Host "DockerCli.exe not found at expected path — checking current Docker mode..."
+          }
+
+          # Poll until Docker reports OSType=linux (up to 60 s)
+          $timeout = 60
+          $elapsed = 0
+          do {
+            Start-Sleep -Seconds 5
+            $elapsed += 5
+            $osType = docker info --format '{{.OSType}}' 2>&1
+            Write-Host "Docker OSType: $osType ($elapsed s elapsed)"
+          } while ($osType -ne 'linux' -and $elapsed -lt $timeout)
+
+          if ($osType -ne 'linux') {
+            docker info
+            Write-Error "Docker is still in Windows-container mode after ${timeout}s — cannot pull Linux images"
+            exit 1
+          }
+          Write-Host "Docker is in Linux-container mode — ready"
+
       - name: Start Aerospike server
         shell: pwsh
         run: |

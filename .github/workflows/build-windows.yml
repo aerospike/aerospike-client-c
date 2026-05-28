@@ -1,18 +1,19 @@
-name: Aerospike C Client - Windows Build & Test
+name: Aerospike C Client - Windows Build
 
 run-name: >-
   ${{ github.event_name == 'pull_request'
     && format('PR #{0}', github.event.pull_request.number)
     || github.event_name == 'push' && github.ref_name
     || 'Manual' }} — Windows x64
-  (server=${{ inputs.server-tag || '8.1.2.0' }}, config=${{ inputs.config || 'all' }})
+  (config=${{ inputs.config || 'all' }})
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Builds and tests the Aerospike C client on Windows x64 using MSBuild.
+# Builds the Aerospike C client on Windows x64 using MSBuild.
+# No integration tests are run here — build only.
 #
 # Build job (matrix: Release / Release libuv / Release libevent):
-#   - Builds Release config  → runs integration tests against Aerospike server
-#   - Builds Debug config    → no tests, just for packaging
+#   - Builds Release config
+#   - Builds Debug config    → packaging only (if run-package == true)
 #   - Uploads both Release + Debug artifacts (if run-package == true)
 #
 # Package job (runs only when run-package == true):
@@ -32,11 +33,6 @@ on:
 
   workflow_dispatch:
     inputs:
-      server-tag:
-        type: string
-        required: false
-        default: '8.1.2.0'
-        description: 'Aerospike server Docker image tag'
       config:
         type: choice
         required: false
@@ -49,43 +45,13 @@ on:
         default: false
         description: 'Also build and upload Windows NuGet packages (.nupkg × 3)'
 
-  workflow_call:
-    inputs:
-      server-tag:
-        type: string
-        required: false
-        default: '8.1.2.0'
-        description: 'Aerospike server Docker image tag'
-      config:
-        type: string
-        required: false
-        default: all
-        description: 'Configuration to build and test (all = full matrix)'
-      is_workflow_call:
-        type: boolean
-        required: false
-        default: true
-      sha-to-build-and-test:
-        type: string
-        required: false
-        default: ''
-        description: 'Specific commit SHA to check out (workflow_call only)'
-      run-package:
-        type: boolean
-        required: false
-        default: false
-        description: 'Also build and upload Windows NuGet packages'
-
 permissions:
   id-token: write
   contents: read
 
 env:
   SERVER_TAG: ${{ inputs.server-tag || '8.1.2.0' }}
-  CHECKOUT_SHA: >-
-    ${{ (inputs.is_workflow_call == true && inputs.sha-to-build-and-test != '')
-        && inputs.sha-to-build-and-test
-        || github.sha }}
+  CHECKOUT_SHA: ${{ github.sha }}
 
 jobs:
   # ── Resolve configuration matrix ─────────────────────────────────────────
@@ -129,13 +95,6 @@ jobs:
 
       # Windows runners default to Windows containers; switch to Linux engine
       # so we can run the aerospike/aerospike-server Linux image as a sidecar.
-      - name: Switch Docker to Linux containers
-        shell: pwsh
-        run: |
-          & "$Env:ProgramFiles\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
-          Start-Sleep -Seconds 10
-          docker info
-
       - name: Start Aerospike server
         shell: pwsh
         run: |

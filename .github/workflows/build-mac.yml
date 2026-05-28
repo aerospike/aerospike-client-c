@@ -1,0 +1,220 @@
+name: Aerospike C Client - macOS Build & Test
+
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+    && format('PR #{0}', github.event.pull_request.number)
+    || github.event_name == 'push' && github.ref_name
+    || 'Manual' }} — macOS ARM
+  (config=${{ inputs.config || 'all' }})
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Builds the Aerospike C client on macOS ARM (Apple Silicon).
+#
+# macOS ARM — build only; GitHub-hosted ARM runners do not support Docker /
+#             nested virtualisation, so no server-side tests are run.
+#
+# Event-library matrix:
+#   sync      — synchronous API, no event library
+#   libev     — async with libev
+#   libuv     — async with libuv
+#   libevent  — async with libevent
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        type: choice
+        required: false
+        default: all
+        description: 'Event-library configuration (all = full matrix)'
+        options: [all, sync, libev, libuv, libevent]
+      run-package:
+        type: boolean
+        required: false
+        default: false
+        description: 'Also build and upload macOS packages (tarballs + source zip)'
+
+  workflow_call:
+    inputs:
+      config:
+        type: string
+        required: false
+        default: all
+        description: 'Event-library configuration (all = full matrix)'
+      is_workflow_call:
+        type: boolean
+        required: false
+        default: true
+      sha-to-build-and-test:
+        type: string
+        required: false
+        default: ''
+        description: 'Specific commit SHA to check out (workflow_call only)'
+      run-package:
+        type: boolean
+        required: false
+        default: false
+        description: 'Also build and upload macOS packages'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  CHECKOUT_SHA: >-
+    ${{ (inputs.is_workflow_call == true && inputs.sha-to-build-and-test != '')
+        && inputs.sha-to-build-and-test
+        || github.sha }}
+
+jobs:
+  # ── Resolve event-lib matrix ─────────────────────────────────────────────
+  get-mac-matrix:
+    name: resolve / mac config matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      configs: ${{ steps.resolve.outputs.configs }}
+    steps:
+      - id: resolve
+        shell: bash
+        run: |
+          CHOICE="${{ inputs.config }}"
+          if [[ -z "$CHOICE" || "$CHOICE" == "all" ]]; then
+            echo 'configs=["sync","libev","libuv","libevent"]' >> "$GITHUB_OUTPUT"
+          else
+            echo "configs=[\"$CHOICE\"]" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── macOS ARM: build only ─────────────────────────────────────────────────
+  build-mac-arm:
+    name: mac-arm / ${{ matrix.config }}
+    needs: get-mac-matrix
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJSON(needs.get-mac-matrix.outputs.configs) }}
+
+    steps:
+      - name: Install Homebrew dependencies
+        run: brew install wget automake libtool openssl libyaml
+
+      - name: Checkout client
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ env.CHECKOUT_SHA }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install libev
+        if: matrix.config == 'libev'
+        run: ./install_libev
+
+      - name: Install libuv
+        if: matrix.config == 'libuv'
+        run: ./install_libuv
+
+      - name: Install libevent
+        if: matrix.config == 'libevent'
+        run: ./install_libevent
+
+      - name: Build (sync)
+        if: matrix.config == 'sync'
+        run: make
+
+      - name: Build (async — ${{ matrix.config }})
+        if: matrix.config != 'sync'
+        run: make EVENT_LIB=${{ matrix.config }}
+
+  # ── macOS ARM package ─────────────────────────────────────────────────────
+  # pkg/package handles everything: clean, build all 4 variants, source zip,
+  # staging, and tarballs. We just need the event libs installed first.
+  build-package-mac:
+    name: package / mac-arm
+    if: ${{ inputs.run-package == true }}
+    needs: build-mac-arm
+    runs-on: macos-latest
+
+    steps:
+      - name: Install Homebrew dependencies
+        run: brew install wget automake libtool openssl libyaml
+
+      - name: Checkout client
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ env.CHECKOUT_SHA }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install async event libraries
+        run: |
+          ./install_libev
+          ./install_libuv
+          ./install_libevent
+
+      - name: Build and package all variants
+        run: make package
+
+      - name: Upload macOS ARM packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-mac-arm
+          path: target/packages/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Summary ───────────────────────────────────────────────────────────────
+  summary:
+    name: summary
+    if: always()
+    needs:
+      - build-mac-arm
+      - build-package-mac
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Write job summary
+        shell: bash
+        run: |
+          CONFIG="${{ inputs.config || 'all' }}"
+          PKG="${{ inputs.run-package }}"
+
+          if [[ "$CONFIG" == "all" || -z "$CONFIG" ]]; then
+            MAC_CONFIGS="sync, libev, libuv, libevent"
+          else
+            MAC_CONFIGS="$CONFIG"
+          fi
+
+          MAC_ARM="${{ needs.build-mac-arm.result }}"
+          PKG_MAC="${{ needs.build-package-mac.result }}"
+
+          icon() {
+            case "$1" in
+              success)  echo "✅" ;;
+              failure)  echo "❌" ;;
+              skipped)  echo "⏭️" ;;
+              *)        echo "⚠️" ;;
+            esac
+          }
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Aerospike C Client — macOS Run Summary
+
+          | | Value |
+          |---|---|
+          | **Config** | \`$CONFIG\` |
+          | **Packages built** | \`$PKG\` |
+
+          ### Build Results
+
+          | Platform | Arch | Configurations | Tests | Result |
+          |---|---|---|---|---|
+          | macOS | ARM64 (Apple Silicon) | \`$MAC_CONFIGS\` | ⏭️ build only | $(icon $MAC_ARM) \`$MAC_ARM\` |
+
+          ### Package Artifacts
+
+          | Platform | Artifact | Retention | Result |
+          |---|---|---|---|
+          | macOS ARM64 | \`packages-mac-arm\` (tarballs + source zip) | 1 day | $(icon $PKG_MAC) \`$PKG_MAC\` |
+          EOF

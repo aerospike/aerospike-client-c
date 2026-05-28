@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -789,10 +789,17 @@ as_event_release_connection(as_event_connection* conn, as_async_conn_pool* pool)
 }
 
 static inline void
-as_event_release_async_connection(as_event_command* cmd)
+as_event_release_async_connection(as_async_connection* conn, as_async_conn_pool* pool)
+{
+	conn->cmd = NULL;
+	as_event_release_connection(&conn->base, pool);
+}
+
+static inline void
+as_event_release_command_connection(as_event_command* cmd)
 {
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
-	as_event_release_connection(cmd->conn, pool);
+	as_event_release_async_connection((as_async_connection*)cmd->conn, pool);
 	as_node_incr_error_rate(cmd->node);
 }
 
@@ -814,7 +821,7 @@ as_event_connection_timeout(as_event_command* cmd, as_async_conn_pool* pool)
 	if (conn) {
 		if (conn->watching > 0) {
 			as_event_stop_watcher(cmd, conn);
-			as_event_release_connection(conn, pool);
+			as_event_release_async_connection((as_async_connection*)conn, pool);
 			as_node_incr_error_rate(cmd->node);
 		}
 		else {

@@ -1,0 +1,392 @@
+name: Aerospike C Client - Windows Build & Test
+
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+    && format('PR #{0}', github.event.pull_request.number)
+    || github.event_name == 'push' && github.ref_name
+    || 'Manual' }} — Windows x64
+  (server=${{ inputs.server-tag || '8.1.2.0' }}, config=${{ inputs.config || 'all' }})
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Builds and tests the Aerospike C client on Windows x64 using MSBuild.
+#
+# Build job (matrix: Release / Release libuv / Release libevent):
+#   - Builds Release config  → runs integration tests against Aerospike server
+#   - Builds Debug config    → no tests, just for packaging
+#   - Uploads both Release + Debug artifacts (if run-package == true)
+#
+# Package job (runs only when run-package == true):
+#   - Downloads all 6 pre-built artifacts (3 Release + 3 Debug)
+#   - Restores NuGet dependency packages (pthreads, openssl, lua, libyaml)
+#   - Runs nuget pack on 3 .nuspec files — no rebuild at all
+#
+# Windows configurations → MSBuild config names:
+#   sync      → Release / Debug
+#   libuv     → Release libuv / Debug libuv
+#   libevent  → Release libevent / Debug libevent
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_dispatch:
+    inputs:
+      server-tag:
+        type: string
+        required: false
+        default: '8.1.2.0'
+        description: 'Aerospike server Docker image tag'
+      config:
+        type: choice
+        required: false
+        default: all
+        description: 'Configuration to build and test (all = full matrix)'
+        options: [all, sync, libuv, libevent]
+      run-package:
+        type: boolean
+        required: false
+        default: false
+        description: 'Also build and upload Windows NuGet packages (.nupkg × 3)'
+
+  workflow_call:
+    inputs:
+      server-tag:
+        type: string
+        required: false
+        default: '8.1.2.0'
+        description: 'Aerospike server Docker image tag'
+      config:
+        type: string
+        required: false
+        default: all
+        description: 'Configuration to build and test (all = full matrix)'
+      is_workflow_call:
+        type: boolean
+        required: false
+        default: true
+      sha-to-build-and-test:
+        type: string
+        required: false
+        default: ''
+        description: 'Specific commit SHA to check out (workflow_call only)'
+      run-package:
+        type: boolean
+        required: false
+        default: false
+        description: 'Also build and upload Windows NuGet packages'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  SERVER_TAG: ${{ inputs.server-tag || '8.1.2.0' }}
+  CHECKOUT_SHA: >-
+    ${{ (inputs.is_workflow_call == true && inputs.sha-to-build-and-test != '')
+        && inputs.sha-to-build-and-test
+        || github.sha }}
+
+jobs:
+  # ── Resolve configuration matrix ─────────────────────────────────────────
+  get-windows-matrix:
+    name: resolve / windows config matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      configurations: ${{ steps.resolve.outputs.configurations }}
+    steps:
+      - id: resolve
+        shell: bash
+        run: |
+          CHOICE="${{ inputs.config }}"
+          case "$CHOICE" in
+            sync)     echo 'configurations=["Release"]'                                    >> "$GITHUB_OUTPUT" ;;
+            libuv)    echo 'configurations=["Release libuv"]'                             >> "$GITHUB_OUTPUT" ;;
+            libevent) echo 'configurations=["Release libevent"]'                          >> "$GITHUB_OUTPUT" ;;
+            *)        echo 'configurations=["Release","Release libuv","Release libevent"]' >> "$GITHUB_OUTPUT" ;;
+          esac
+
+  # ── Build + test ──────────────────────────────────────────────────────────
+  # Each matrix job builds its Release config (tested) AND the matching Debug
+  # config (packaging only). Both are uploaded when run-package is requested.
+  build-and-test-windows:
+    name: windows-x64 / ${{ matrix.configuration }}
+    needs: get-windows-matrix
+    runs-on: windows-2022
+
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: ${{ fromJSON(needs.get-windows-matrix.outputs.configurations) }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ env.CHECKOUT_SHA }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Windows runners default to Windows containers; switch to Linux engine
+      # so we can run the aerospike/aerospike-server Linux image as a sidecar.
+      - name: Switch Docker to Linux containers
+        shell: pwsh
+        run: |
+          & "$Env:ProgramFiles\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
+          Start-Sleep -Seconds 10
+          docker info
+
+      - name: Start Aerospike server
+        shell: pwsh
+        run: |
+          docker run -d --name aerospike `
+            -p 3000:3000 `
+            -e DEFAULT_TTL=2592000 `
+            aerospike/aerospike-server:${{ env.SERVER_TAG }}
+
+      - name: Wait for Aerospike server to be ready
+        shell: pwsh
+        run: |
+          $retries = 24
+          for ($i = 1; $i -le $retries; $i++) {
+            docker exec aerospike asinfo -v node 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Aerospike ready after $i attempt(s)"
+              exit 0
+            }
+            Write-Host "Waiting for Aerospike... ($i / $retries)"
+            Start-Sleep -Seconds 5
+          }
+          Write-Error "Aerospike server did not become ready in time"
+          exit 1
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        shell: cmd
+        run: nuget restore vs\aerospike.sln
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      # ── Release build + test ──────────────────────────────────────────────
+      - name: Build aerospike library (${{ matrix.configuration }})
+        shell: pwsh
+        run: |
+          msbuild vs\aerospike\aerospike.vcxproj `
+            "/p:Configuration=${{ matrix.configuration }}" `
+            /p:Platform=x64 /m /nologo
+
+      - name: List library output (${{ matrix.configuration }})
+        shell: pwsh
+        run: |
+          $outDir = "vs\x64\${{ matrix.configuration }}"
+          Write-Host "=== $outDir ==="
+          Get-ChildItem -Path $outDir -ErrorAction SilentlyContinue |
+            Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
+
+      - name: Build aerospike-test (${{ matrix.configuration }})
+        shell: pwsh
+        run: |
+          msbuild vs\aerospike-test\aerospike-test.vcxproj `
+            "/p:Configuration=${{ matrix.configuration }}" `
+            /p:Platform=x64 /m /nologo
+
+      - name: List test output (${{ matrix.configuration }})
+        shell: pwsh
+        run: |
+          $outDir = "vs\x64\${{ matrix.configuration }}"
+          Write-Host "=== $outDir (after test build) ==="
+          Get-ChildItem -Path $outDir -ErrorAction SilentlyContinue |
+            Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          $testExe = "vs\x64\${{ matrix.configuration }}\aerospike-test.exe"
+          Write-Host "Executing: $testExe -h 127.0.0.1 -p 3000"
+          & $testExe -h 127.0.0.1 -p 3000
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Dump server logs
+        if: failure()
+        shell: pwsh
+        run: docker logs aerospike 2>&1 || true
+
+      # ── Debug build (packaging only, no tests) ────────────────────────────
+      # Each .nuspec requires both Release and Debug builds.
+      # Map Release → Debug, "Release libuv" → "Debug libuv", etc.
+      - name: Build aerospike library (Debug variant)
+        if: ${{ inputs.run-package == true }}
+        shell: pwsh
+        run: |
+          $debugConfig = "${{ matrix.configuration }}" -replace "^Release", "Debug"
+          Write-Host "=== Building: $debugConfig ==="
+          msbuild vs\aerospike\aerospike.vcxproj `
+            "/p:Configuration=$debugConfig" `
+            /p:Platform=x64 /m /nologo
+
+      - name: List library output (Debug variant)
+        if: ${{ inputs.run-package == true }}
+        shell: pwsh
+        run: |
+          $debugConfig = "${{ matrix.configuration }}" -replace "^Release", "Debug"
+          $outDir = "vs\x64\$debugConfig"
+          Write-Host "=== $outDir ==="
+          Get-ChildItem -Path $outDir -ErrorAction SilentlyContinue |
+            Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
+
+      # ── Upload both Release + Debug artifacts for the package job ─────────
+      - name: Upload Release artifacts
+        if: ${{ inputs.run-package == true && success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-windows-${{ matrix.configuration }}
+          path: vs\x64\${{ matrix.configuration }}\
+          retention-days: 1
+
+      # Compute the Debug config name (replace "Release" prefix with "Debug")
+      # and export it so the upload step can reference it.
+      - name: Resolve Debug configuration name
+        if: ${{ inputs.run-package == true && success() }}
+        id: debug-config
+        shell: pwsh
+        run: |
+          $debugConfig = "${{ matrix.configuration }}" -replace "^Release", "Debug"
+          echo "name=$debugConfig" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Debug artifacts
+        if: ${{ inputs.run-package == true && success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-windows-${{ steps.debug-config.outputs.name }}
+          path: vs\x64\${{ steps.debug-config.outputs.name }}\
+          retention-days: 1
+
+  # ── Package ───────────────────────────────────────────────────────────────
+  # Downloads all 6 pre-built artifacts (3 Release + 3 Debug), restores NuGet
+  # dependency packages, then runs nuget pack — no MSBuild rebuild needed.
+  build-package-windows:
+    name: package / windows-x64
+    if: ${{ inputs.run-package == true }}
+    needs: build-and-test-windows
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          ref: ${{ env.CHECKOUT_SHA }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      # NuGet restore populates vs\packages\ with dependency DLLs referenced
+      # in the .nuspec files (pthreads, openssl, lua, libyaml).
+      - name: Restore NuGet packages
+        shell: cmd
+        run: nuget restore vs\aerospike.sln
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-windows-*
+          path: build-artifacts
+
+      # Restore each artifact to vs\x64\{configuration}\
+      - name: Restore artifacts to vs\x64\
+        shell: pwsh
+        run: |
+          $configs = @(
+            "Release", "Release libuv", "Release libevent",
+            "Debug",   "Debug libuv",   "Debug libevent"
+          )
+          foreach ($config in $configs) {
+            $src = "build-artifacts\build-windows-$config"
+            $dst = "vs\x64\$config"
+            New-Item -ItemType Directory -Force -Path $dst | Out-Null
+            if (Test-Path $src) {
+              Copy-Item "$src\*" $dst -Recurse -Force
+              Write-Host "Restored: $config"
+            } else {
+              Write-Warning "Artifact not found for: $config"
+            }
+          }
+
+      - name: Pack NuGet packages
+        shell: cmd
+        working-directory: vs
+        run: |
+          nuget pack aerospike-client-c.nuspec
+          nuget pack aerospike-client-c-libuv.nuspec
+          nuget pack aerospike-client-c-libevent.nuspec
+
+      - name: Upload Windows NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-windows-x64
+          path: vs\*.nupkg
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Summary ───────────────────────────────────────────────────────────────
+  summary:
+    name: summary
+    if: always()
+    needs:
+      - build-and-test-windows
+      - build-package-windows
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Write job summary
+        shell: bash
+        run: |
+          CONFIG="${{ inputs.config || 'all' }}"
+          SERVER="${{ env.SERVER_TAG }}"
+          PKG="${{ inputs.run-package }}"
+
+          if [[ "$CONFIG" == "all" || -z "$CONFIG" ]]; then
+            WIN_CONFIGS="Release, Release libuv, Release libevent"
+          else
+            case "$CONFIG" in
+              sync)     WIN_CONFIGS="Release" ;;
+              libuv)    WIN_CONFIGS="Release libuv" ;;
+              libevent) WIN_CONFIGS="Release libevent" ;;
+              *)        WIN_CONFIGS="$CONFIG" ;;
+            esac
+          fi
+
+          WIN="${{ needs.build-and-test-windows.result }}"
+          PKG_WIN="${{ needs.build-package-windows.result }}"
+
+          icon() {
+            case "$1" in
+              success)  echo "✅" ;;
+              failure)  echo "❌" ;;
+              skipped)  echo "⏭️" ;;
+              *)        echo "⚠️" ;;
+            esac
+          }
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Aerospike C Client — Windows Run Summary
+
+          | | Value |
+          |---|---|
+          | **Server tag** | \`$SERVER\` |
+          | **Config** | \`$CONFIG\` |
+          | **Packages built** | \`$PKG\` |
+
+          ### Build & Test Results
+
+          | Platform | Arch | Configurations tested | Debug built | Result |
+          |---|---|---|---|---|
+          | Windows | x64 | \`$WIN_CONFIGS\` | ✅ (for packaging) | $(icon $WIN) \`$WIN\` |
+
+          ### Package Artifacts
+
+          | Artifact | Contents | Retention | Result |
+          |---|---|---|---|
+          | \`packages-windows-x64\` | .nupkg × 3 (sync, libuv, libevent) | 1 day | $(icon $PKG_WIN) \`$PKG_WIN\` |
+          EOF

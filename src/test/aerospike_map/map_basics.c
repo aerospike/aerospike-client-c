@@ -4372,7 +4372,7 @@ TEST(map_exp_keys_values, "Map Keys/Values Expression")
 	as_exp_build(filter_keys,
 		as_exp_cmp_eq(
 			as_exp_list_size(NULL,
-				as_exp_map_keys(as_exp_bin_map(BIN_NAME))),
+				as_exp_map_keys_in(as_exp_bin_map(BIN_NAME))),
 			as_exp_int(3)));
 	assert_not_null(filter_keys);
 
@@ -4390,7 +4390,7 @@ TEST(map_exp_keys_values, "Map Keys/Values Expression")
 	as_exp_build(filter_vals,
 		as_exp_in_list(
 			as_exp_str("b"),
-			as_exp_map_values(as_exp_bin_map(BIN_NAME))));
+			as_exp_map_values_in(as_exp_bin_map(BIN_NAME))));
 	assert_not_null(filter_vals);
 
 	as_policy_read_init(&p);
@@ -4406,7 +4406,7 @@ TEST(map_exp_keys_values, "Map Keys/Values Expression")
 	as_exp_build(filter_not_found,
 		as_exp_in_list(
 			as_exp_str("z"),
-			as_exp_map_values(as_exp_bin_map(BIN_NAME))));
+			as_exp_map_values_in(as_exp_bin_map(BIN_NAME))));
 	assert_not_null(filter_not_found);
 
 	as_policy_read_init(&p);
@@ -4444,7 +4444,7 @@ TEST(map_exp_in_list_keys, "Map In List with Keys Expression")
 	as_exp_build(filter_found,
 		as_exp_in_list(
 			as_exp_int(20),
-			as_exp_map_keys(as_exp_bin_map(BIN_NAME))));
+			as_exp_map_keys_in(as_exp_bin_map(BIN_NAME))));
 	assert_not_null(filter_found);
 
 	as_policy_read p;
@@ -4461,7 +4461,7 @@ TEST(map_exp_in_list_keys, "Map In List with Keys Expression")
 	as_exp_build(filter_missing,
 		as_exp_in_list(
 			as_exp_int(99),
-			as_exp_map_keys(as_exp_bin_map(BIN_NAME))));
+			as_exp_map_keys_in(as_exp_bin_map(BIN_NAME))));
 	assert_not_null(filter_missing);
 
 	as_policy_read_init(&p);

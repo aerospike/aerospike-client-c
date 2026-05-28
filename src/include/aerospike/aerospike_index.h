@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -70,7 +70,8 @@ typedef enum as_index_type_s {
 	AS_INDEX_TYPE_DEFAULT,
 	AS_INDEX_TYPE_LIST,
 	AS_INDEX_TYPE_MAPKEYS,
-	AS_INDEX_TYPE_MAPVALUES
+	AS_INDEX_TYPE_MAPVALUES,
+	AS_INDEX_TYPE_SET
 } as_index_type;
 
 /*
@@ -80,8 +81,20 @@ typedef enum as_index_datatype_s {
 	AS_INDEX_STRING,
 	AS_INDEX_NUMERIC,
 	AS_INDEX_GEO2DSPHERE,
-	AS_INDEX_BLOB  // Requires server version 7.0+.
+	AS_INDEX_BLOB, // Requires server version 7.0+.
+	AS_INDEX_INTEGER,
 } as_index_datatype;
+
+/*
+ * When creating set indices, the specific data type doesn't matter.
+ * This definition provides a convenient way of expressing that you
+ * don't care about the data type.
+ *
+ * Should match the default case label for the dtype parameter
+ * in aerospike_create_index_private().
+ */
+#define AS_INDEX_DEFAULT  AS_INDEX_STRING
+
 
 /**
  * Index Task
@@ -133,6 +146,9 @@ struct as_exp;
 
 /**
  * Create secondary index given collection type, data type and context.
+ * 
+ * When creating a set index, neither bin name nor data type are supported.
+ * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_DEFAULT.
  *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
@@ -174,6 +190,9 @@ aerospike_index_create_ctx(
 /**
  * Create secondary index on an expression.
  *
+ * When creating a set index, neither bin name nor data type are supported.
+ * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_DEFAULT.
+ *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
  *
@@ -181,7 +200,7 @@ aerospike_index_create_ctx(
  * as_exp_build(exp, as_exp_add(as_exp_bin_int("a"), as_exp_bin_int("b")));
  *
  * as_index_task task;
- * if (aerospike_index_create_ctx(&as, &err, &task, NULL, "test", "demo",
+ * if (aerospike_index_create_exp(&as, &err, &task, NULL, "test", "demo",
  *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, exp) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }
@@ -213,6 +232,9 @@ aerospike_index_create_exp(
 /**
  * Create secondary index given collection type and data type.
  *
+ * When creating a set index, neither bin name nor data type are supported.
+ * Set the bin name to NULL and the `dtype` parameter to AS_INDEX_DEFAULT.
+ *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
  *
@@ -222,7 +244,7 @@ aerospike_index_create_exp(
  *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }
-* @endcode
+ * @endcode
  *
  * @param as			The aerospike instance to use for this operation.
  * @param err			The as_error to be populated if an error occurs.
@@ -254,6 +276,9 @@ aerospike_index_create_complex(
 /**
  * Create secondary index given data type.
  *
+ * This function cannot be used to create a set index.  To create a set index,
+ * please consider using `aerospike_index_create_complex()` instead.
+ *
  * This asynchronous server call will return before the command is complete.
  * The user can optionally wait for command completion by using a task instance.
  *
@@ -277,6 +302,7 @@ aerospike_index_create_complex(
  *
  * @return AEROSPIKE_OK if successful. Return AEROSPIKE_ERR_INDEX_FOUND if index exists. Otherwise an error.
  *
+ * @see aerospike_index_create_complex
  * @ingroup index_operations
  */
 static inline as_status

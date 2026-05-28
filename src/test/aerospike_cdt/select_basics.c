@@ -99,7 +99,7 @@ TEST(select_key_list_basic, "KEY_LIST select keys [1, 3] from {1:a, 2:b, 3:c}")
 	as_arraylist_init(&sel_keys, 2, 0);
 	as_arraylist_append_int64(&sel_keys, 1);
 	as_arraylist_append_int64(&sel_keys, 3);
-	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&sel_keys);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)&sel_keys);
 
 	as_error err;
 	as_operations ops;
@@ -149,7 +149,7 @@ TEST(select_key_list_single, "KEY_LIST select single key [2]")
 	as_arraylist sel_keys;
 	as_arraylist_init(&sel_keys, 1, 0);
 	as_arraylist_append_int64(&sel_keys, 20);
-	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&sel_keys);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)&sel_keys);
 
 	as_error err;
 	as_operations ops;
@@ -193,7 +193,7 @@ TEST(select_key_list_no_match, "KEY_LIST select non-existent key [99]")
 	as_arraylist sel_keys;
 	as_arraylist_init(&sel_keys, 1, 0);
 	as_arraylist_append_int64(&sel_keys, 99);
-	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&sel_keys);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)&sel_keys);
 
 	as_error err;
 	as_operations ops;
@@ -243,8 +243,8 @@ TEST(select_and_key_list_filter, "KEY_LIST [1,2,3] + AND filter value != b")
 	as_arraylist_append_int64(&sel_keys, 1);
 	as_arraylist_append_int64(&sel_keys, 2);
 	as_arraylist_append_int64(&sel_keys, 3);
-	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&sel_keys);
-	as_cdt_ctx_add_same_level_filter(&ctx, filter);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)&sel_keys);
+	as_cdt_ctx_add_and_filter(&ctx, filter);
 
 	as_error err;
 	as_operations ops;
@@ -304,7 +304,7 @@ TEST(select_and_index_filter, "MAP_INDEX 0 + AND filter key >= 10")
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 2);
 	as_cdt_ctx_add_map_index(&ctx, 0);
-	as_cdt_ctx_add_same_level_filter(&ctx, filter);
+	as_cdt_ctx_add_and_filter(&ctx, filter);
 
 	as_error err;
 	as_operations ops;
@@ -347,7 +347,7 @@ TEST(select_and_on_level0, "AND|EXP as first ctx level — expect error")
 
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 1);
-	as_cdt_ctx_add_same_level_filter(&ctx, filter);
+	as_cdt_ctx_add_and_filter(&ctx, filter);
 
 	as_error err;
 	as_operations ops;
@@ -392,9 +392,9 @@ TEST(select_and_duplicate, "KEY_LIST + AND + AND — expect error")
 	as_arraylist sel_keys;
 	as_arraylist_init(&sel_keys, 1, 0);
 	as_arraylist_append_int64(&sel_keys, 1);
-	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&sel_keys);
-	as_cdt_ctx_add_same_level_filter(&ctx, filter1);
-	as_cdt_ctx_add_same_level_filter(&ctx, filter2);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)&sel_keys);
+	as_cdt_ctx_add_and_filter(&ctx, filter1);
+	as_cdt_ctx_add_and_filter(&ctx, filter2);
 
 	as_error err;
 	as_operations ops;
@@ -437,7 +437,7 @@ TEST(select_and_on_exp_base, "EXP(filter) + AND|EXP — expect error")
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 2);
 	as_cdt_ctx_add_all_children_with_filter(&ctx, base_filter);
-	as_cdt_ctx_add_same_level_filter(&ctx, and_filter);
+	as_cdt_ctx_add_and_filter(&ctx, and_filter);
 
 	as_error err;
 	as_operations ops;
@@ -475,7 +475,7 @@ TEST(select_and_invalid_type, "AND|KEY (not AND|EXP) — expect error")
 	as_arraylist sel_keys;
 	as_arraylist_init(&sel_keys, 1, 0);
 	as_arraylist_append_int64(&sel_keys, 1);
-	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&sel_keys);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)&sel_keys);
 
 	// Manually construct AND|MAP_KEY — the API only provides AND|EXP.
 	as_cdt_ctx_item item;
@@ -578,7 +578,7 @@ TEST(select_all_children_map_keys_in_nested,
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 2);
 	as_cdt_ctx_add_all_children(&ctx);
-	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&sel_keys);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)&sel_keys);
 
 	as_operations ops;
 	as_operations_init(&ops, 1);
@@ -709,8 +709,8 @@ TEST(select_and_room_filter,
 	// CTX: KEY_LIST + AND_EXP(room) + allChildren + filter(beta).
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 4);
-	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&room_ids);
-	as_cdt_ctx_add_same_level_filter(&ctx, room_filter);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)&room_ids);
+	as_cdt_ctx_add_and_filter(&ctx, room_filter);
 	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_all_children_with_filter(&ctx, beta_filter);
 

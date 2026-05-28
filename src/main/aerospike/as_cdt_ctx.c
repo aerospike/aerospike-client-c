@@ -37,7 +37,7 @@ as_cdt_ctx_destroy(as_cdt_ctx* ctx)
 		if (item->type & AS_CDT_CTX_VALUE) {
 			as_val_destroy(item->val.pval);
 		}
-		else if ((item->type & 0x0f) == AS_CDT_CTX_EXP) {
+		else if ((item->type & ~AS_CDT_CTX_AND) == AS_CDT_CTX_EXP) {
 			cf_free(item->val.exp);
 		}
 	}
@@ -68,7 +68,7 @@ as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const as_exp* exp)
 }
 
 void
-as_cdt_ctx_add_same_level_filter(as_cdt_ctx* ctx, const as_exp* exp)
+as_cdt_ctx_add_and_filter(as_cdt_ctx* ctx, const as_exp* exp)
 {
 	as_cdt_ctx_item item;
 	item.type = AS_CDT_CTX_AND | AS_CDT_CTX_EXP;

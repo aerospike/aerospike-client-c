@@ -127,9 +127,9 @@ typedef enum {
 	_AS_EXP_CODE_BIN = 81,
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
-	_AS_EXP_CODE_RESULT_REMOVE = 100,
-	_AS_EXP_CODE_MAP_KEYS = 101,
-	_AS_EXP_CODE_MAP_VALUES = 102,
+	_AS_EXP_CODE_REMOVE_RESULT = 100,
+	_AS_EXP_CODE_MAP_KEYS_IN = 101,
+	_AS_EXP_CODE_MAP_VALUES_IN = 102,
 
 	_AS_EXP_CODE_LOOPVAR = 122,
 
@@ -587,7 +587,7 @@ as_exp_destroy_base64(char* base64)
  *         as_exp_list_get_by_value(NULL, AS_LIST_RETURN_COUNT,
  *             as_exp_str("abc"), as_exp_bin_list("a")),
  *         as_exp_int(0)));
-  * @endcode
+ * @endcode
  *
  * @param __bin_name			Bin name.
  * @return (list bin)
@@ -954,6 +954,82 @@ as_exp_destroy_base64(char* base64)
 		{.op=_AS_EXP_CODE_CMP_LE, .count=3}, __left, __right
 
 /**
+ * True if the value of @a __left is contained in @a __list (by value).
+ *
+ * @a __left may be any expression. @a __list must be an @c as_list (for example
+ * @c as_arraylist). The list is serialized when the expression is compiled; the
+ * caller retains ownership of @a __list and should destroy it after @c as_exp_build.
+ *
+ * @code
+ * as_arraylist* lst = as_arraylist_new(3, 3);
+ * as_arraylist_append_str(lst, "red");
+ * as_arraylist_append_str(lst, "blue");
+ * as_arraylist_append_str(lst, "green");
+ *
+ * as_exp_build(e1, as_exp_in_list(as_exp_bin_str("color"), as_exp_val((as_val*)lst));
+ * as_exp_build(e2, as_exp_in_list(as_exp_bin_str("color"), as_exp_bin_list("palette"));
+ *
+ * as_arraylist_destroy(lst);
+ * @endcode
+ *
+ * @param __left	Value expression to test for membership.
+ * @param __list	Expression that evaluates to a list of values to search.
+ * @return (boolean value)
+ * @ingroup expression
+ */
+#define as_exp_in_list(__left, __list) \
+		{.op=_AS_EXP_CODE_IN_LIST, .count=3}, __left, __list
+
+/**
+ * Return a list of keys from a map-valued subexpression.
+ *
+ * @a __map must evaluate to a map, for example @c as_exp_bin_map("name") for a
+ * map bin, or @c as_exp_val((as_val*)m) for a literal @c as_map / @c as_orderedmap.
+ * Literal maps are serialized at compile time; the caller retains ownership and
+ * should destroy them after @c as_exp_build.
+ *
+ * @code
+ * as_orderedmap m;
+ * as_orderedmap_init(&m, 2);
+ * as_orderedmap_set(&m, (as_val*)as_string_new((char*)"k", false),
+ *     (as_val*)as_integer_new(1));
+ * as_exp_build(e, as_exp_map_keys_in(as_exp_val((as_val*)&m)));
+ * as_exp_destroy(e);
+ * as_orderedmap_destroy(&m);
+ * @endcode
+ *
+ * Note that this macro is also available under an older, deprecated name:
+ * @c as_exp_map_keys.
+ *
+ * @param __map	Map-valued expression (e.g. bin or constant).
+ * @return (list value)
+ * @ingroup expression
+ */
+#define as_exp_map_keys_in(__map) \
+		{.op=_AS_EXP_CODE_MAP_KEYS_IN, .count=2}, __map
+
+// Retain compatibility with 7.4.0 release
+#define as_exp_map_keys(__map)  as_exp_map_keys_in(__map)
+
+/**
+ * Return a list of values from a map-valued subexpression.
+ *
+ * @a __map must evaluate to a map; see @ref as_exp_map_keys_in for operand forms.
+ *
+ * Note that this macro is also available under an older, deprecated name:
+ * @c as_exp_map_values.
+ *
+ * @param __map	Map-valued expression (e.g. bin or constant).
+ * @return (list value)
+ * @ingroup expression
+ */
+#define as_exp_map_values_in(__map) \
+		{.op=_AS_EXP_CODE_MAP_VALUES_IN, .count=2}, __map
+
+// Retain compatibility with 7.4.0 release
+#define as_exp_map_values(__map)  as_exp_map_values_in(__map)
+
+/**
  * Create expression that performs a regex match on a string bin or value
  * expression.
  *
@@ -991,23 +1067,6 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_cmp_geo(__left, __right) \
 		{.op=_AS_EXP_CODE_CMP_GEO, .count=3}, __left, __right
-
-/**
- * Create expression that checks if a value is contained in a list.
- *
- * @code
- * // Check if integer 42 is in list bin "mylist".
- * as_exp_build(expression,
- *     as_exp_in_list(as_exp_int(42), as_exp_bin_list("mylist")));
- * @endcode
- *
- * @param __value			value expression to search for.
- * @param __list			list expression to search in.
- * @return (boolean value)
- * @ingroup expression
- */
-#define as_exp_in_list(__value, __list) \
-		{.op=_AS_EXP_CODE_IN_LIST, .count=3}, __value, __list
 
 //---------------------------------
 // Logical Expressions
@@ -1780,7 +1839,7 @@ as_exp_destroy_base64(char* base64)
  * @return the remove_result value.
  * @ingroup expression
  */
-#define as_exp_remove_result() {.op=_AS_EXP_CODE_RESULT_REMOVE, .count=1}
+#define as_exp_remove_result() {.op=_AS_EXP_CODE_REMOVE_RESULT, .count=1}
 
 /**
  * Return a remove_result object to indicate entry deletion for cdt_apply.
@@ -2687,38 +2746,6 @@ as_exp_destroy_base64(char* base64)
 		as_exp_int(__rtype), \
 		__rank, __count, \
 		__bin
-
-/**
- * Create expression that returns a list of all keys from a map expression.
- *
- * @code
- * // Get keys from map bin "mymap".
- * as_exp_build(expression,
- *     as_exp_map_keys(as_exp_bin_map("mymap")));
- * @endcode
- *
- * @param __map				map expression.
- * @return (list value)
- * @ingroup expression
- */
-#define as_exp_map_keys(__map) \
-		{.op=_AS_EXP_CODE_MAP_KEYS, .count=2}, __map
-
-/**
- * Create expression that returns a list of all values from a map expression.
- *
- * @code
- * // Get values from map bin "mymap".
- * as_exp_build(expression,
- *     as_exp_map_values(as_exp_bin_map("mymap")));
- * @endcode
- *
- * @param __map				map expression.
- * @return (list value)
- * @ingroup expression
- */
-#define as_exp_map_values(__map) \
-		{.op=_AS_EXP_CODE_MAP_VALUES, .count=2}, __map
 
 //---------------------------------
 // Map Read Expressions

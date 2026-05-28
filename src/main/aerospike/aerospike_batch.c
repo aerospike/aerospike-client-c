@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -51,6 +51,12 @@
 
 #define BATCH_TYPE_RECORDS 0
 #define BATCH_TYPE_KEYS 1
+
+//---------------------------------
+// Imports
+//---------------------------------
+
+extern bool as_op_is_write[];
 
 //---------------------------------
 // Types
@@ -185,27 +191,6 @@ typedef struct {
 //---------------------------------
 // Static Variables
 //---------------------------------
-
-// These values must line up with as_operator enum.
-bool as_op_is_write[] = {
-	false,
-	true,
-	false,
-	true,
-	false,
-	true,
-	true,
-	false,
-	true,
-	true,
-	true,
-	true,
-	false,
-	true,
-	true,
-	false,
-	true
-};
 
 static const char cluster_empty_error[] = "Batch command failed because cluster is empty.";
 

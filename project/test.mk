@@ -15,6 +15,7 @@ TEST_AEROSPIKE += aerospike_cdt/*.c
 TEST_AEROSPIKE += aerospike_exp/*.c
 TEST_AEROSPIKE += aerospike_query/*.c
 TEST_AEROSPIKE += aerospike_scan/*.c
+TEST_AEROSPIKE += aerospike_shm/*.c
 TEST_AEROSPIKE += aerospike_udf/*.c
 TEST_AEROSPIKE += policy/*.c
 TEST_AEROSPIKE += util/*.c

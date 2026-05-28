@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -41,6 +41,10 @@
 #include <aerospike/as_thread_pool.h>
 #include <aerospike/as_udf_context.h>
 #include <aerospike/mod_lua.h>
+
+//---------------------------------
+// Imports
+//---------------------------------
 
 extern bool as_op_is_write[];
 
@@ -123,6 +127,7 @@ typedef struct as_query_builder {
 	as_node_partitions* np;
 	as_buffer argbuffer;
 	as_queue* opsbuffers;
+	as_cluster* cluster;
 	uint64_t max_records;
 	size_t size;
 	uint32_t filter_size;
@@ -141,6 +146,16 @@ typedef struct as_query_builder {
 //---------------------------------
 // Static Functions
 //---------------------------------
+
+static void
+as_query_foreground_ops_respond_all_write_attr(const as_operations* ops, uint8_t* write_attr)
+{
+	if (as_operations_add_read_all_called(ops)) {
+		*write_attr &= ~AS_MSG_INFO2_RESPOND_ALL_OPS;
+		return;
+	}
+	*write_attr |= AS_MSG_INFO2_RESPOND_ALL_OPS;
+}
 
 static inline void
 as_query_log_iter(uint64_t parent_id, uint64_t task_id, uint32_t iter)
@@ -652,12 +667,19 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 
 static as_status
 as_query_command_size(
-	const as_policy_base* base_policy, const as_query* query, as_query_builder* qb, as_error* err
+	const as_policy_base* base_policy, const as_policy_query* query_policy, const as_query* query,
+	as_query_builder* qb, as_error* err
 	)
 {
 	qb->size = AS_HEADER_SIZE;
 	uint32_t filter_size = 0;
 	uint16_t n_fields = 0;
+
+	// Providing bin names (via .select) and operations to perform (via .ops) at the same time is not allowed.
+	if (query->select.size > 0 && as_operations_defined(query->ops)) {
+		// This will become a AEROSPIKE_ERR_PARAM error in the next major release of the client.
+		as_log_warn("Operations and bin names are mutually exclusive.");
+	}
 
 	if (qb->np) {
 		qb->parts_full_size = qb->np->parts_full.size * 2;
@@ -828,20 +850,44 @@ as_query_command_size(
 	qb->n_fields = n_fields;
 	qb->n_ops = 0;
 
-	// Operations (used in background query) and bin names (used in foreground query)
-	// are mutually exclusive.
-	if (query->ops) {
-		// Estimate size for background operations.
+	// Operations vs bin names: with ops, projection is encoded as operations (foreground read or
+	// background write). Foreground requires read-only ops; background requires write-only ops.
+	if (as_operations_defined(query->ops)) {
 		as_operations* ops = query->ops;
+		bool has_write = as_operations_has_write(ops);
+
+		if (has_write) {
+			if (query_policy) {
+				// Foreground operation and ops has at least one write in it.
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+					"Query operations must be read-only. Use background query for write-only operations.");
+			}
+		}
+		else { // ops are all reads
+			if (query_policy) {
+				// foreground operation and ops are all reads.  Make sure that
+				// they are all basic reads for server versions prior to 8.1.2.
+				for (uint16_t i = 0; i < ops->binops.size; i++) {
+					if (!as_operations_is_basic_read(ops->binops.entries[i].op)) {
+						if (!qb->cluster->has_query_ops_projection_ext) {
+							return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+									"Only basic read operations are supported for query operations projection in server versions prior to 8.1.2.");
+						}
+						else {
+							break;
+						}
+					}
+				}
+			}
+			else {
+				// background operation and ops are all reads
+				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+					"Background query operations must be write-only. Use query for read-only operations.");
+			}
+		}
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
-
-			if (!as_op_is_write[op->op]) {
-				return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-					"Read operations not allowed in background query");
-			}
-
 			as_status status = as_command_bin_size(&op->bin, qb->opsbuffers, &qb->size, err);
 
 			if (status != AEROSPIKE_OK) {
@@ -884,6 +930,10 @@ as_query_command_init(
 		}
 		else if (query_policy->expected_duration == AS_QUERY_DURATION_LONG_RELAX_AP) {
 			write_attr |= AS_MSG_INFO2_RELAX_AP_LONG_QUERY;
+		}
+
+		if (query->ops) {
+			as_query_foreground_ops_respond_all_write_attr(query->ops, &write_attr);
 		}
 
 		uint8_t info_attr = (qb->is_new || query->where.size == 0)? AS_MSG_INFO3_PARTITION_DONE : 0;
@@ -1225,7 +1275,9 @@ as_query_command_execute_new(as_query_task* task)
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
 
-	as_status status = as_query_command_size(base_policy, task->query, &qb, &err);
+	qb.cluster = task->cluster;
+
+	as_status status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, &err);
 
 	if (status != AEROSPIKE_OK) {
 		if (task->query->ops) {
@@ -1355,10 +1407,12 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 	const as_policy_base* base_policy = (task->query_policy)? &task->query_policy->base :
 															  &task->write_policy->base;
 
+	qb.cluster = task->cluster;
+
 	// Build Command. It's okay to share command across threads because old query protocol does
 	// not have retries. If retries were allowed, the timeout field in the command would change on
 	// retry which would conflict with other threads.
-	status = as_query_command_size(base_policy, task->query, &qb, task->err);
+	status = as_query_command_size(base_policy, task->query_policy, task->query, &qb, task->err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {
@@ -1825,7 +1879,9 @@ as_query_partition_async(
 	as_query_builder qb;
 	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
 
-	status = as_query_command_size(&policy->base, query, &qb, err);
+	qb.cluster = cluster;
+
+	status = as_query_command_size(&policy->base, policy, query, &qb, err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {
@@ -2015,8 +2071,14 @@ aerospike_query_foreach(
 	aerospike_query_foreach_callback callback, void* udata)
 {
 	if (query->ops) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"Use aerospike_query_background() for background queries");
+		if (query->apply.function[0]) {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"Cannot combine query operations with aggregation");
+		}
+		if (as_operations_has_write(query->ops)) {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"Query operations must be read-only. Use background query for write-only operations.");
+		}
 	}
 
 	as_error_reset(err);
@@ -2164,7 +2226,7 @@ aerospike_query_partitions(
 	as_partition_filter* pf, aerospike_query_foreach_callback callback, void* udata
 	)
 {
-	if (query->apply.function[0] || query->ops) {
+	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
 	}
@@ -2214,7 +2276,7 @@ aerospike_query_async(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop)
 {
-	if (query->apply.function[0] || query->ops) {
+	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"Async aggregation or background queries are not supported");
 	}
@@ -2223,6 +2285,11 @@ aerospike_query_async(
 
 	as_policy_query merged;
 	policy = as_policy_query_merge(as, policy, &merged);
+
+	if (query->ops && query->apply.function[0]) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Cannot combine query operations with aggregation");
+	}
 	
 	as_cluster* cluster = as->cluster;
 	as_status status;
@@ -2268,7 +2335,9 @@ aerospike_query_async(
 	as_query_builder qb;
 	as_query_builder_init(&qb, cluster, &opsbuffers, NULL, NULL);
 
-	status = as_query_command_size(&policy->base, query, &qb, err);
+	qb.cluster = cluster;
+
+	status = as_query_command_size(&policy->base, policy, query, &qb, err);
 
 	if (status != AEROSPIKE_OK) {
 		if (query->ops) {
@@ -2395,7 +2464,7 @@ aerospike_query_partitions_async(
 	as_event_loop* event_loop
 	)
 {
-	if (query->apply.function[0] || query->ops) {
+	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
 	}
@@ -2411,6 +2480,11 @@ aerospike_query_partitions_async(
 
 	as_policy_query merged;
 	policy = as_policy_query_merge(as, policy, &merged);
+
+	if (query->ops && query->apply.function[0]) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"Cannot combine query operations with aggregation");
+	}
 
 	uint32_t n_nodes;
 	as_status status = as_cluster_validate_size(cluster, err, &n_nodes);
@@ -2450,6 +2524,11 @@ aerospike_query_background(
 	if (! (query->apply.function[0] || query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Background function or ops is required");
+	}
+
+	if (query->ops && !as_operations_consists_of_all_writes(query->ops)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Background query operations must be write-only. Use query for read-only operations.");
 	}
 
 	as_cluster* cluster = as->cluster;

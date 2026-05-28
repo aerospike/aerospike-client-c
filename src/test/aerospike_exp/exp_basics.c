@@ -129,7 +129,7 @@ TEST(exp_read_select_by_path_map_keys_in, "exp read: selectByPath mapKeysIn + al
 
 	as_cdt_ctx ctx;
 	as_cdt_ctx_init(&ctx, 3);
-	as_cdt_ctx_add_map_key_in_list(&ctx, (as_list*)&room_keys);
+	as_cdt_ctx_add_map_keys_in(&ctx, (as_list*)&room_keys);
 //	as_cdt_ctx_add_all_children(&ctx);
 	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new("guest", false));
 

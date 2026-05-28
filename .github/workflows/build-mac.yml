@@ -105,6 +105,110 @@ jobs:
         if: matrix.config != 'sync'
         run: make EVENT_LIB=${{ matrix.config }}
 
+      # ── Start Aerospike server via colima + Docker ──────────────────────────
+      # colima provides a lightweight Docker runtime on macOS ARM runners.
+      # Community server image only — never enterprise. See memory.md.
+      - name: Install colima and Docker CLI
+        run: brew install colima docker
+
+      - name: Start colima (Docker runtime)
+        run: |
+          colima start --cpu 2 --memory 4 --disk 20 --runtime docker
+          timeout 60 bash -c 'until docker info &>/dev/null; do sleep 2; done'
+
+      - name: Start Aerospike server
+        run: |
+          docker run -d --name aerospike \
+            -p 3000:3000 \
+            -e DEFAULT_TTL=2592000 \
+            aerospike/aerospike-server:8.1.2.0
+
+      - name: Wait for Aerospike server to be ready
+        run: |
+          for i in $(seq 1 24); do
+            if docker exec aerospike asinfo -v node &>/dev/null; then
+              echo "Aerospike ready after $i attempt(s)"
+              exit 0
+            fi
+            echo "Waiting... ($i/24)"
+            sleep 5
+          done
+          echo "::error::Aerospike server did not become ready in time"
+          exit 1
+
+      # ── Run tests and capture output ────────────────────────────────────────
+      - name: Run tests (sync)
+        if: matrix.config == 'sync'
+        run: make test 2>&1 | tee test-output.log
+        continue-on-error: true
+
+      - name: Run tests (async — ${{ matrix.config }})
+        if: matrix.config != 'sync'
+        run: make EVENT_LIB=${{ matrix.config }} test 2>&1 | tee test-output.log
+        continue-on-error: true
+
+      # ── Write test summary to GitHub step summary ───────────────────────────
+      - name: Write test summary
+        if: always()
+        shell: bash
+        run: |
+          CONFIG="${{ matrix.config }}"
+          BUILD_STATUS="${{ job.status }}"
+
+          icon() {
+            case "$1" in
+              success)  echo "✅" ;;
+              failure)  echo "❌" ;;
+              skipped)  echo "⏭️" ;;
+              *)        echo "⚠️" ;;
+            esac
+          }
+
+          # Parse pass/fail counts from test output if available
+          PASSED=$(grep -oE '[0-9]+ passed' test-output.log 2>/dev/null | tail -1 || echo "")
+          FAILED=$(grep -oE '[0-9]+ failed' test-output.log 2>/dev/null | tail -1 || echo "")
+          SKIPPED=$(grep -oE '[0-9]+ skipped' test-output.log 2>/dev/null | tail -1 || echo "")
+          [ -z "$PASSED" ] && PASSED="—"
+          [ -z "$FAILED" ] && FAILED="—"
+          [ -z "$SKIPPED" ] && SKIPPED="—"
+
+          # Collect built artifacts
+          LIBS=$(find target/ -name "*.a" -o -name "*.dylib" 2>/dev/null | sort | sed 's|^target/||' | tr '\n' ' ')
+          [ -z "$LIBS" ] && LIBS="_none found_"
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## macOS ARM — \`$CONFIG\` $(icon $BUILD_STATUS)
+
+          | Field | Value |
+          |---|---|
+          | **Runner** | macOS ARM64 (Apple Silicon) |
+          | **Config** | \`$CONFIG\` |
+          | **Build** | $(icon $BUILD_STATUS) \`$BUILD_STATUS\` |
+          | **Server** | \`aerospike/aerospike-server:8.1.2.0\` (community) |
+
+          ### Test Results
+
+          | ✅ Passed | ❌ Failed | ⏭️ Skipped |
+          |---|---|---|
+          | $PASSED | $FAILED | $SKIPPED |
+
+          ### Built Artifacts
+          \`$LIBS\`
+
+          <details>
+          <summary>Full test output</summary>
+
+          \`\`\`
+          $(cat test-output.log 2>/dev/null || echo "No test output captured")
+          \`\`\`
+
+          </details>
+          EOF
+
+      - name: Dump server logs on failure
+        if: failure()
+        run: docker logs aerospike || true
+
   # ── macOS ARM package ─────────────────────────────────────────────────────
   # pkg/package handles everything: clean, build all 4 variants, source zip,
   # staging, and tarballs. We just need the event libs installed first.

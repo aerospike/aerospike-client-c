@@ -18,7 +18,7 @@ ARG LIBEV_SHA256=973593d3479abdf657674a55afe5f78624b0e440614e2b8cb3a07f16d4d7f82
 
 RUN microdnf install -y \
         gcc gcc-c++ make autoconf automake libtool m4 \
-        cmake python3 wget tar gzip \
+        cmake python3 wget tar diffutils \
         openssl-devel \
     && microdnf clean all
 
@@ -29,7 +29,7 @@ WORKDIR /build
 RUN wget -q https://ftp.gnu.org/gnu/bison/bison-3.7.4.tar.gz \
     && tar xzf bison-3.7.4.tar.gz \
     && cd bison-3.7.4 && ./configure --prefix=/usr/local \
-    && make -j"$(nproc)" && make install \
+    && make -j"$(nproc)" MAKEINFO=true && make install \
     && cd .. && rm -rf bison-3.7.4 bison-3.7.4.tar.gz
 
 # flex 2.6.1 — not in microdnf repos; required by doxygen

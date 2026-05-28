@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -969,7 +969,7 @@ as_event_socket_retry(as_event_command* cmd)
 	}
 
 	as_event_stop_watcher(cmd, cmd->conn);
-	as_event_release_async_connection(cmd);
+	as_event_release_command_connection(cmd);
 	return as_event_command_retry(cmd, false);
 }
 
@@ -1064,6 +1064,7 @@ static inline void
 as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 {
 	as_event_set_conn_last_used(cmd->conn);
+	((as_async_connection*)cmd->conn)->cmd = NULL;
 
 	if (! as_async_conn_pool_push_head(pool, cmd->conn)) {
 		as_event_release_connection(cmd->conn, pool);
@@ -1409,7 +1410,7 @@ as_event_parse_error(as_event_command* cmd, as_error* err)
 
 	// Close connection.
 	as_event_stop_watcher(cmd, cmd->conn);
-	as_event_release_async_connection(cmd);
+	as_event_release_command_connection(cmd);
 
 	// Stop timer.
 	as_event_timer_stop(cmd);
@@ -1469,7 +1470,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_NOT_AUTHENTICATED:
 			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
-			as_event_release_connection(cmd->conn, pool);
+			as_event_release_async_connection((as_async_connection*)cmd->conn, pool);
 			break;
 		
 		case AEROSPIKE_ERR_TIMEOUT:

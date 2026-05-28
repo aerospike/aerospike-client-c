@@ -93,36 +93,50 @@ jobs:
           ref: ${{ env.CHECKOUT_SHA }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Windows runners may be in Windows-container mode by default.
-      # Attempt switch via DockerCli.exe (Docker Desktop); if not present, fall
-      # back to checking the daemon directly. Fail fast if still in Windows mode.
+      # windows-2022 runners run TWO Docker daemons simultaneously:
+      #   Windows containers → default named pipe (docker_engine)
+      #   Linux  containers → separate named pipe (docker_engine_linux)
+      # Point DOCKER_HOST at the Linux daemon pipe directly — no engine switch
+      # needed and no dependency on Docker Desktop / DockerCli.exe.
       - name: Switch Docker to Linux containers
         shell: pwsh
         run: |
-          $dockerCli = "$Env:ProgramFiles\Docker\Docker\DockerCli.exe"
-          if (Test-Path $dockerCli) {
-            Write-Host "DockerCli.exe found — switching to Linux engine..."
-            & $dockerCli -SwitchLinuxEngine
+          # Try the Linux-daemon named pipe first (works on all windows-2022 runners)
+          $linuxPipe = "npipe:////./pipe/docker_engine_linux"
+          $env:DOCKER_HOST = $linuxPipe
+          $osType = docker info --format '{{.OSType}}' 2>&1
+          Write-Host "Linux pipe OSType: $osType"
+
+          if ($osType -eq 'linux') {
+            # Persist DOCKER_HOST for all subsequent steps in this job
+            echo "DOCKER_HOST=$linuxPipe" >> $env:GITHUB_ENV
+            Write-Host "Using Linux Docker daemon via named pipe"
           } else {
-            Write-Host "DockerCli.exe not found at expected path — checking current Docker mode..."
-          }
+            # Fallback: DockerCli.exe engine switch (Docker Desktop path)
+            $env:DOCKER_HOST = ""
+            $dockerCli = "$Env:ProgramFiles\Docker\Docker\DockerCli.exe"
+            if (Test-Path $dockerCli) {
+              Write-Host "Named pipe unavailable — switching via DockerCli.exe..."
+              & $dockerCli -SwitchLinuxEngine
+              # Poll up to 60 s for the switch to complete
+              $timeout = 60; $elapsed = 0
+              do {
+                Start-Sleep -Seconds 5; $elapsed += 5
+                $osType = docker info --format '{{.OSType}}' 2>&1
+                Write-Host "Docker OSType: $osType ($elapsed s elapsed)"
+              } while ($osType -ne 'linux' -and $elapsed -lt $timeout)
+            } else {
+              Write-Host "DockerCli.exe not found either — checking default daemon..."
+              $osType = docker info --format '{{.OSType}}' 2>&1
+            }
 
-          # Poll until Docker reports OSType=linux (up to 60 s)
-          $timeout = 60
-          $elapsed = 0
-          do {
-            Start-Sleep -Seconds 5
-            $elapsed += 5
-            $osType = docker info --format '{{.OSType}}' 2>&1
-            Write-Host "Docker OSType: $osType ($elapsed s elapsed)"
-          } while ($osType -ne 'linux' -and $elapsed -lt $timeout)
-
-          if ($osType -ne 'linux') {
-            docker info
-            Write-Error "Docker is still in Windows-container mode after ${timeout}s — cannot pull Linux images"
-            exit 1
+            if ($osType -ne 'linux') {
+              docker info
+              Write-Error "Cannot reach a Linux Docker daemon — cannot run Linux containers"
+              exit 1
+            }
           }
-          Write-Host "Docker is in Linux-container mode — ready"
+          Write-Host "Linux Docker daemon confirmed"
 
       - name: Start Aerospike server
         shell: pwsh

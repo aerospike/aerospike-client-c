@@ -84,7 +84,7 @@ RUN microdnf install -y \
         gcc gcc-c++ make autoconf automake libtool m4 \
         binutils glibc-devel glibc-headers kernel-headers \
         gettext diffutils patch file \
-        libyaml-devel openssl openssl-devel \
+        libyaml-devel openssl openssl-devel zlib-devel \
         rpm-build \
         graphviz \
     && microdnf clean all

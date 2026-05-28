@@ -63,7 +63,7 @@ ENV PKG=rpm \
 RUN yum install -y \
         git tar zip wget which \
         gcc gcc-c++ make autoconf automake libtool m4 binutils \
-        libyaml-devel openssl openssl-devel \
+        libyaml-devel openssl openssl-devel zlib-devel \
         rpm-build file \
         graphviz \
     && yum clean all

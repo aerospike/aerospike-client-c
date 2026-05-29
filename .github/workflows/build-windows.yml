@@ -186,8 +186,20 @@ jobs:
       - name: Run tests
         shell: pwsh
         run: |
-          & "vs\x64\${{ matrix.config.release }}\aerospike-test.exe" -h $env:AEROSPIKE_HOST -p 3000
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The test binary loads UDF .lua files via AS_START_DIR ("../../" on
+          # Windows) relative to the working directory, so it MUST run from
+          # vs\aerospike-test (../../ → repo root → src\test\lua). Running from
+          # the repo root makes those paths overshoot above the repo and every
+          # UDF test fails. DLLs still load from the exe's own folder.
+          $exe = (Resolve-Path "vs\x64\${{ matrix.config.release }}\aerospike-test.exe").Path
+          Push-Location vs\aerospike-test
+          try {
+            & $exe -h $env:AEROSPIKE_HOST -p 3000
+            $code = $LASTEXITCODE
+          } finally {
+            Pop-Location
+          }
+          if ($code -ne 0) { exit $code }
 
       - name: Dump server logs
         if: failure()

@@ -18,7 +18,7 @@ ARG LIBEV_SHA256=973593d3479abdf657674a55afe5f78624b0e440614e2b8cb3a07f16d4d7f82
 
 RUN microdnf install -y \
         gcc gcc-c++ make autoconf automake libtool m4 \
-        cmake python3 wget tar diffutils \
+        cmake python3 wget tar gzip diffutils \
         openssl-devel \
     && microdnf clean all
 

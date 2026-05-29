@@ -52,7 +52,7 @@ permissions:
 
 env:
   SERVER_TAG: ${{ inputs.server-tag || '8.1.2.0' }}
-  ref: ${{ env.CHECKOUT_SHA }}
+  CHECKOUT_SHA: ${{ github.sha }}
 
 jobs:
   # ── Resolve configuration matrix ─────────────────────────────────────────

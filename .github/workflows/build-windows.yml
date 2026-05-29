@@ -110,15 +110,17 @@ jobs:
       - name: Build aerospike library + test (${{ matrix.config.release }})
         shell: pwsh
         run: |
-          msbuild vs\aerospike\aerospike.vcxproj "/p:Configuration=${{ matrix.config.release }}" /p:Platform=x64 /m /nologo
-          msbuild vs\aerospike-test\aerospike-test.vcxproj "/p:Configuration=${{ matrix.config.release }}" /p:Platform=x64 /m /nologo
+          $slnDir = (Resolve-Path "vs").Path + "\"
+          msbuild vs\aerospike\aerospike.vcxproj "/p:Configuration=${{ matrix.config.release }}" /p:Platform=x64 "/p:SolutionDir=$slnDir" /m /nologo
+          msbuild vs\aerospike-test\aerospike-test.vcxproj "/p:Configuration=${{ matrix.config.release }}" /p:Platform=x64 "/p:SolutionDir=$slnDir" /m /nologo
 
       # Debug library (packaging only, no tests)
       - name: Build aerospike library (${{ matrix.config.debug }})
         if: ${{ inputs.run-package == true }}
         shell: pwsh
         run: |
-          msbuild vs\aerospike\aerospike.vcxproj "/p:Configuration=${{ matrix.config.debug }}" /p:Platform=x64 /m /nologo
+          $slnDir = (Resolve-Path "vs").Path + "\"
+          msbuild vs\aerospike\aerospike.vcxproj "/p:Configuration=${{ matrix.config.debug }}" /p:Platform=x64 "/p:SolutionDir=$slnDir" /m /nologo
 
       # Release artifact is uploaded unconditionally — the test job needs it.
       - name: Upload Release artifact
@@ -154,8 +156,24 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Start Aerospike server
-        run: docker run -d -p 3000:3000 --name aerospike aerospike/aerospike-server
+      - name: Verify Docker points at Linux daemon
+        shell: pwsh
+        run: |
+          $osType = docker info --format '{{.OSType}}'
+          if ($osType -ne 'linux') {
+            Write-Error "Expected Linux Docker daemon, got: $osType"
+            exit 1
+          }
+
+      - name: Resolve Aerospike host from DOCKER_HOST
+        shell: pwsh
+        run: |
+          $aeroHost = $env:DOCKER_HOST -replace '^tcp://','' -replace ':\d+$',''
+          echo "AEROSPIKE_HOST=$aeroHost" >> $env:GITHUB_ENV
+
+      - name: Start Aerospike 
+        shell: pwsh
+        run: docker run -d -p 3000:3000 --name aero aerospike/aerospike-server
 
       - name: Download Release artifact (${{ matrix.config.release }})
         uses: actions/download-artifact@v4
@@ -168,7 +186,7 @@ jobs:
       - name: Run tests
         shell: pwsh
         run: |
-          & "vs\x64\${{ matrix.config.release }}\aerospike-test.exe" -h 127.0.0.1 -p 3000
+          & "vs\x64\${{ matrix.config.release }}\aerospike-test.exe" -h $env:AEROSPIKE_HOST -p 3000
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Dump server logs

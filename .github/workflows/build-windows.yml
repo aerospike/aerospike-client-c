@@ -9,22 +9,23 @@ run-name: >-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Builds the Aerospike C client on Windows x64 using MSBuild.
-# No integration tests are run here — build only.
 #
-# Build job (matrix: Release / Release libuv / Release libevent):
-#   - Builds Release config
-#   - Builds Debug config    → packaging only (if run-package == true)
-#   - Uploads both Release + Debug artifacts (if run-package == true)
+# build    (GitHub-hosted windows-2022, matrix carries Release + Debug names):
+#   - Compiles the Release library + test binary
+#   - Compiles the Debug library (packaging only, when run-package == true)
+#   - Always uploads the Release artifact (the test job consumes it)
+#   - Uploads the Debug artifact when run-package == true
 #
-# Package job (runs only when run-package == true):
-#   - Downloads all 6 pre-built artifacts (3 Release + 3 Debug)
-#   - Restores NuGet dependency packages (pthreads, openssl, lua, libyaml)
-#   - Runs nuget pack on 3 .nuspec files — no rebuild at all
+# test     (self-hosted windows x64, same matrix):
+#   - Downloads its Release artifact, starts an Aerospike server in Docker,
+#     and runs aerospike-test.exe. Needs a checkout too — the test binary
+#     loads Lua UDFs from src/test/lua relative to the repo root.
 #
-# Windows configurations → MSBuild config names:
-#   sync      → Release / Debug
-#   libuv     → Release libuv / Debug libuv
-#   libevent  → Release libevent / Debug libevent
+# package  (GitHub-hosted windows-2022, run-package == true):
+#   - Downloads all build artifacts, restores NuGet deps, runs `nuget pack`
+#     on the 3 .nuspec files — no rebuild.
+#
+#   sync → Release/Debug · libuv → Release/Debug libuv · libevent → …libevent
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -51,10 +52,12 @@ permissions:
 
 env:
   SERVER_TAG: ${{ inputs.server-tag || '8.1.2.0' }}
-  CHECKOUT_SHA: ${{ github.sha }}
+  ref: ${{ env.CHECKOUT_SHA }}
 
 jobs:
   # ── Resolve configuration matrix ─────────────────────────────────────────
+  # Each entry carries the Release config name AND its matching Debug name,
+  # so no Release→Debug string munging is needed downstream.
   get-windows-matrix:
     name: resolve / windows config matrix
     runs-on: ubuntu-24.04
@@ -64,26 +67,27 @@ jobs:
       - id: resolve
         shell: bash
         run: |
-          CHOICE="${{ inputs.config }}"
-          case "$CHOICE" in
-            sync)     echo 'configurations=["Release"]'                                    >> "$GITHUB_OUTPUT" ;;
-            libuv)    echo 'configurations=["Release libuv"]'                             >> "$GITHUB_OUTPUT" ;;
-            libevent) echo 'configurations=["Release libevent"]'                          >> "$GITHUB_OUTPUT" ;;
-            *)        echo 'configurations=["Release","Release libuv","Release libevent"]' >> "$GITHUB_OUTPUT" ;;
+          sync='{"release":"Release","debug":"Debug"}'
+          uv='{"release":"Release libuv","debug":"Debug libuv"}'
+          ev='{"release":"Release libevent","debug":"Debug libevent"}'
+          case "${{ inputs.config }}" in
+            sync)     M="[$sync]" ;;
+            libuv)    M="[$uv]" ;;
+            libevent) M="[$ev]" ;;
+            *)        M="[$sync,$uv,$ev]" ;;
           esac
+          echo "configurations=$M" >> "$GITHUB_OUTPUT"
 
-  # ── Build + test ──────────────────────────────────────────────────────────
-  # Each matrix job builds its Release config (tested) AND the matching Debug
-  # config (packaging only). Both are uploaded when run-package is requested.
-  build-and-test-windows:
-    name: windows-x64 / ${{ matrix.configuration }}
+  # ── Build (compile only) ────────────────────────────────────────────────
+  build:
+    name: build / ${{ matrix.config.release }}
     needs: get-windows-matrix
     runs-on: windows-2022
 
     strategy:
       fail-fast: false
       matrix:
-        configuration: ${{ fromJSON(needs.get-windows-matrix.outputs.configurations) }}
+        config: ${{ fromJSON(needs.get-windows-matrix.outputs.configurations) }}
 
     steps:
       - name: Checkout source
@@ -92,75 +96,6 @@ jobs:
           submodules: recursive
           ref: ${{ env.CHECKOUT_SHA }}
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      # windows-2022 runners run TWO Docker daemons simultaneously:
-      #   Windows containers → default named pipe (docker_engine)
-      #   Linux  containers → separate named pipe (docker_engine_linux)
-      # Point DOCKER_HOST at the Linux daemon pipe directly — no engine switch
-      # needed and no dependency on Docker Desktop / DockerCli.exe.
-      - name: Switch Docker to Linux containers
-        shell: pwsh
-        run: |
-          # Try the Linux-daemon named pipe first (works on all windows-2022 runners)
-          $linuxPipe = "npipe:////./pipe/docker_engine_linux"
-          $env:DOCKER_HOST = $linuxPipe
-          $osType = docker info --format '{{.OSType}}' 2>&1
-          Write-Host "Linux pipe OSType: $osType"
-
-          if ($osType -eq 'linux') {
-            # Persist DOCKER_HOST for all subsequent steps in this job
-            echo "DOCKER_HOST=$linuxPipe" >> $env:GITHUB_ENV
-            Write-Host "Using Linux Docker daemon via named pipe"
-          } else {
-            # Fallback: DockerCli.exe engine switch (Docker Desktop path)
-            $env:DOCKER_HOST = ""
-            $dockerCli = "$Env:ProgramFiles\Docker\Docker\DockerCli.exe"
-            if (Test-Path $dockerCli) {
-              Write-Host "Named pipe unavailable — switching via DockerCli.exe..."
-              & $dockerCli -SwitchLinuxEngine
-              # Poll up to 60 s for the switch to complete
-              $timeout = 60; $elapsed = 0
-              do {
-                Start-Sleep -Seconds 5; $elapsed += 5
-                $osType = docker info --format '{{.OSType}}' 2>&1
-                Write-Host "Docker OSType: $osType ($elapsed s elapsed)"
-              } while ($osType -ne 'linux' -and $elapsed -lt $timeout)
-            } else {
-              Write-Host "DockerCli.exe not found either — checking default daemon..."
-              $osType = docker info --format '{{.OSType}}' 2>&1
-            }
-
-            if ($osType -ne 'linux') {
-              docker info
-              Write-Error "Cannot reach a Linux Docker daemon — cannot run Linux containers"
-              exit 1
-            }
-          }
-          Write-Host "Linux Docker daemon confirmed"
-
-      - name: Start Aerospike server
-        shell: pwsh
-        run: |
-          docker run -d --name aerospike `
-            -p 3000:3000 `
-            -e DEFAULT_TTL=2592000 `
-            aerospike/aerospike-server:${{ env.SERVER_TAG }}
-
-      - name: Wait for Aerospike server to be ready
-        shell: pwsh
-        run: |
-          $retries = 24
-          for ($i = 1; $i -le $retries; $i++) {
-            docker exec aerospike asinfo -v node 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) {
-              Write-Host "Aerospike ready after $i attempt(s)"
-              exit 0
-            }
-            Write-Host "Waiting for Aerospike... ($i / $retries)"
-            Start-Sleep -Seconds 5
-          }
-          Write-Error "Aerospike server did not become ready in time"
-          exit 1
 
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
@@ -172,43 +107,68 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      # ── Release build + test ──────────────────────────────────────────────
-      - name: Build aerospike library (${{ matrix.configuration }})
+      - name: Build aerospike library + test (${{ matrix.config.release }})
         shell: pwsh
         run: |
-          msbuild vs\aerospike\aerospike.vcxproj `
-            "/p:Configuration=${{ matrix.configuration }}" `
-            /p:Platform=x64 /m /nologo
+          msbuild vs\aerospike\aerospike.vcxproj "/p:Configuration=${{ matrix.config.release }}" /p:Platform=x64 /m /nologo
+          msbuild vs\aerospike-test\aerospike-test.vcxproj "/p:Configuration=${{ matrix.config.release }}" /p:Platform=x64 /m /nologo
 
-      - name: List library output (${{ matrix.configuration }})
+      # Debug library (packaging only, no tests)
+      - name: Build aerospike library (${{ matrix.config.debug }})
+        if: ${{ inputs.run-package == true }}
         shell: pwsh
         run: |
-          $outDir = "vs\x64\${{ matrix.configuration }}"
-          Write-Host "=== $outDir ==="
-          Get-ChildItem -Path $outDir -ErrorAction SilentlyContinue |
-            Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
+          msbuild vs\aerospike\aerospike.vcxproj "/p:Configuration=${{ matrix.config.debug }}" /p:Platform=x64 /m /nologo
 
-      - name: Build aerospike-test (${{ matrix.configuration }})
-        shell: pwsh
-        run: |
-          msbuild vs\aerospike-test\aerospike-test.vcxproj `
-            "/p:Configuration=${{ matrix.configuration }}" `
-            /p:Platform=x64 /m /nologo
+      # Release artifact is uploaded unconditionally — the test job needs it.
+      - name: Upload Release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-windows-${{ matrix.config.release }}
+          path: vs\x64\${{ matrix.config.release }}\
+          retention-days: 1
 
-      - name: List test output (${{ matrix.configuration }})
-        shell: pwsh
-        run: |
-          $outDir = "vs\x64\${{ matrix.configuration }}"
-          Write-Host "=== $outDir (after test build) ==="
-          Get-ChildItem -Path $outDir -ErrorAction SilentlyContinue |
-            Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
+      - name: Upload Debug artifact
+        if: ${{ inputs.run-package == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-windows-${{ matrix.config.debug }}
+          path: vs\x64\${{ matrix.config.debug }}\
+          retention-days: 1
+
+  # ── Test (self-hosted) ──────────────────────────────────────────────────
+  # Downloads the Release build output, brings up Aerospike in a Linux Docker
+  # container, and runs the test binary from the repo root (it loads UDFs from
+  # src/test/lua), so a checkout is required alongside the artifact.
+  test:
+    name: test / ${{ matrix.config.release }}
+    needs: [get-windows-matrix, build]
+    runs-on: [self-hosted, windows, x64]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJSON(needs.get-windows-matrix.outputs.configurations) }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Start Aerospike server
+        run: docker run -d -p 3000:3000 --name aerospike aerospike/aerospike-server
+
+      - name: Download Release artifact (${{ matrix.config.release }})
+        uses: actions/download-artifact@v4
+        with:
+          name: build-windows-${{ matrix.config.release }}
+          path: vs\x64\${{ matrix.config.release }}
+
+      - run: sleep 5
 
       - name: Run tests
         shell: pwsh
         run: |
-          $testExe = "vs\x64\${{ matrix.configuration }}\aerospike-test.exe"
-          Write-Host "Executing: $testExe -h 127.0.0.1 -p 3000"
-          & $testExe -h 127.0.0.1 -p 3000
+          & "vs\x64\${{ matrix.config.release }}\aerospike-test.exe" -h 127.0.0.1 -p 3000
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Dump server logs
@@ -216,78 +176,29 @@ jobs:
         shell: pwsh
         run: docker logs aerospike 2>&1 || true
 
-      # ── Debug build (packaging only, no tests) ────────────────────────────
-      # Each .nuspec requires both Release and Debug builds.
-      # Map Release → Debug, "Release libuv" → "Debug libuv", etc.
-      - name: Build aerospike library (Debug variant)
-        if: ${{ inputs.run-package == true }}
-        shell: pwsh
-        run: |
-          $debugConfig = "${{ matrix.configuration }}" -replace "^Release", "Debug"
-          Write-Host "=== Building: $debugConfig ==="
-          msbuild vs\aerospike\aerospike.vcxproj `
-            "/p:Configuration=$debugConfig" `
-            /p:Platform=x64 /m /nologo
-
-      - name: List library output (Debug variant)
-        if: ${{ inputs.run-package == true }}
-        shell: pwsh
-        run: |
-          $debugConfig = "${{ matrix.configuration }}" -replace "^Release", "Debug"
-          $outDir = "vs\x64\$debugConfig"
-          Write-Host "=== $outDir ==="
-          Get-ChildItem -Path $outDir -ErrorAction SilentlyContinue |
-            Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
-
-      # ── Upload both Release + Debug artifacts for the package job ─────────
-      - name: Upload Release artifacts
-        if: ${{ inputs.run-package == true && success() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-windows-${{ matrix.configuration }}
-          path: vs\x64\${{ matrix.configuration }}\
-          retention-days: 1
-
-      # Compute the Debug config name (replace "Release" prefix with "Debug")
-      # and export it so the upload step can reference it.
-      - name: Resolve Debug configuration name
-        if: ${{ inputs.run-package == true && success() }}
-        id: debug-config
-        shell: pwsh
-        run: |
-          $debugConfig = "${{ matrix.configuration }}" -replace "^Release", "Debug"
-          echo "name=$debugConfig" >> $env:GITHUB_OUTPUT
-
-      - name: Upload Debug artifacts
-        if: ${{ inputs.run-package == true && success() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-windows-${{ steps.debug-config.outputs.name }}
-          path: vs\x64\${{ steps.debug-config.outputs.name }}\
-          retention-days: 1
-
   # ── Package ───────────────────────────────────────────────────────────────
-  # Downloads all 6 pre-built artifacts (3 Release + 3 Debug), restores NuGet
-  # dependency packages, then runs nuget pack — no MSBuild rebuild needed.
+  # Downloads the pre-built artifacts, restores NuGet dependency packages, then
+  # runs nuget pack — no MSBuild rebuild needed. Gated on the tests passing.
   build-package-windows:
     name: package / windows-x64
     if: ${{ inputs.run-package == true }}
-    needs: build-and-test-windows
+    needs: [get-windows-matrix, build, test]
     runs-on: windows-2022
 
     steps:
+      # No submodules needed — this job only reads vs\*.nuspec and vs\aerospike.sln;
+      # no C source compilation takes place here.
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           ref: ${{ env.CHECKOUT_SHA }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
 
-      # NuGet restore populates vs\packages\ with dependency DLLs referenced
-      # in the .nuspec files (pthreads, openssl, lua, libyaml).
+      # Populates vs\packages\ with .nuspec dependency DLLs (pthreads, openssl,
+      # lua, libyaml).
       - name: Restore NuGet packages
         shell: cmd
         run: nuget restore vs\aerospike.sln
@@ -298,14 +209,13 @@ jobs:
           pattern: build-windows-*
           path: build-artifacts
 
-      # Restore each artifact to vs\x64\{configuration}\
+      # Config list comes straight from the matrix (release + debug names),
+      # so it tracks the `config` input instead of a hardcoded set.
       - name: Restore artifacts to vs\x64\
         shell: pwsh
         run: |
-          $configs = @(
-            "Release", "Release libuv", "Release libevent",
-            "Debug",   "Debug libuv",   "Debug libevent"
-          )
+          $entries = '${{ needs.get-windows-matrix.outputs.configurations }}' | ConvertFrom-Json
+          $configs = $entries | ForEach-Object { $_.release; $_.debug }
           foreach ($config in $configs) {
             $src = "build-artifacts\build-windows-$config"
             $dst = "vs\x64\$config"
@@ -339,59 +249,82 @@ jobs:
     name: summary
     if: always()
     needs:
-      - build-and-test-windows
+      - build
+      - test
       - build-package-windows
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Write job summary
+      # Per-config test logs uploaded by the test job (test-log-<config>).
+      - name: Download test logs
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-log-*
+          path: test-logs
+
+      - name: Write combined summary
         shell: bash
         run: |
-          CONFIG="${{ inputs.config || 'all' }}"
-          SERVER="${{ env.SERVER_TAG }}"
-          PKG="${{ inputs.run-package }}"
-
-          if [[ "$CONFIG" == "all" || -z "$CONFIG" ]]; then
-            WIN_CONFIGS="Release, Release libuv, Release libevent"
-          else
-            case "$CONFIG" in
-              sync)     WIN_CONFIGS="Release" ;;
-              libuv)    WIN_CONFIGS="Release libuv" ;;
-              libevent) WIN_CONFIGS="Release libevent" ;;
-              *)        WIN_CONFIGS="$CONFIG" ;;
-            esac
-          fi
-
-          WIN="${{ needs.build-and-test-windows.result }}"
+          BUILD="${{ needs.build.result }}"
+          TEST="${{ needs.test.result }}"
           PKG_WIN="${{ needs.build-package-windows.result }}"
 
           icon() {
             case "$1" in
-              success)  echo "✅" ;;
-              failure)  echo "❌" ;;
-              skipped)  echo "⏭️" ;;
-              *)        echo "⚠️" ;;
+              success) echo "✅" ;; failure) echo "❌" ;;
+              skipped) echo "⏭️" ;; *) echo "⚠️" ;;
             esac
           }
 
-          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          S="$GITHUB_STEP_SUMMARY"
+          cat >> "$S" <<EOF
           ## Aerospike C Client — Windows Run Summary
 
           | | Value |
           |---|---|
-          | **Server tag** | \`$SERVER\` |
-          | **Config** | \`$CONFIG\` |
-          | **Packages built** | \`$PKG\` |
+          | **Server tag** | \`${{ env.SERVER_TAG }}\` |
+          | **Config** | \`${{ inputs.config || 'all' }}\` |
+          | **Packages built** | \`${{ inputs.run-package }}\` |
 
-          ### Build & Test Results
-
-          | Platform | Arch | Configurations tested | Debug built | Result |
-          |---|---|---|---|---|
-          | Windows | x64 | \`$WIN_CONFIGS\` | ✅ (for packaging) | $(icon $WIN) \`$WIN\` |
-
-          ### Package Artifacts
-
-          | Artifact | Contents | Retention | Result |
-          |---|---|---|---|
-          | \`packages-windows-x64\` | .nupkg × 3 (sync, libuv, libevent) | 1 day | $(icon $PKG_WIN) \`$PKG_WIN\` |
+          | Job | Runner | Result |
+          |---|---|---|
+          | Build (windows-x64) | github-hosted | $(icon $BUILD) \`$BUILD\` |
+          | Test (windows-x64) | self-hosted | $(icon $TEST) \`$TEST\` |
+          | Package (.nupkg × 3) | github-hosted | $(icon $PKG_WIN) \`$PKG_WIN\` |
           EOF
+
+          # ── Combined test report across every configuration ───────────────
+          shopt -s nullglob
+          dirs=(test-logs/test-log-*)
+          if [ ${#dirs[@]} -eq 0 ]; then
+            printf '\n### Test report\n\n_No test logs were produced._\n' >> "$S"
+            exit 0
+          fi
+
+          {
+            printf '\n### Test report (all configurations)\n\n'
+            printf '| Configuration | Result | Tests |\n|---|---|---|\n'
+          } >> "$S"
+
+          for dir in "${dirs[@]}"; do
+            cfg="${dir#test-logs/test-log-}"
+            code="$(cat "$dir/exit-code.txt" 2>/dev/null || echo '?')"
+            headline="$(grep -E '^[0-9]+ tests:' "$dir/test-output.log" 2>/dev/null | tail -1)"
+            case "$code" in
+              0) ic="✅" ;; '?') ic="⚠️" ;; *) ic="❌" ;;
+            esac
+            printf '| `%s` | %s `exit %s` | %s |\n' "$cfg" "$ic" "$code" "${headline:-n/a}" >> "$S"
+          done
+
+          # Per-config full output (last 800 lines), collapsed.
+          for dir in "${dirs[@]}"; do
+            cfg="${dir#test-logs/test-log-}"
+            {
+              printf '\n<details><summary>Full output — %s</summary>\n\n' "$cfg"
+              printf '```\n'
+              tail -n 800 "$dir/test-output.log" 2>/dev/null || echo '(log missing)'
+              printf '```\n</details>\n'
+            } >> "$S"
+          done

@@ -1,0 +1,37 @@
+# Minimal smoke test for the Mac M1 self-hosted runner.
+#
+# Copy to `.github/workflows/mac-runner-smoketest.yml` in the
+# aerospike/aerospike-client-c repo.
+#
+# Triggers:
+#   - Push to test-workflow-stage branch (auto, for iterating on the runner setup).
+#   - Manual workflow_dispatch (for re-running on demand).
+#
+# Confirms a job actually executes on the Mac M1 runner
+# (identifies the host, checks Docker via colima, runs a container).
+
+name: Mac runner smoke test
+
+on:
+  push:
+    branches:
+      - test-workflow-stage
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 5
+
+    steps:
+      - name: Identify runner
+        run: |
+          echo "Hostname: $(hostname)"
+          echo "User:     $(whoami)"
+          echo "Runner:   $RUNNER_NAME ($RUNNER_OS / $RUNNER_ARCH)"
+
+      - name: Docker connectivity
+        run: docker info --format 'OSType={{.OSType}} Server={{.ServerVersion}}'
+
+      - name: Hello-world container
+        run: docker run --rm hello-world

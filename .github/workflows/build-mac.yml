@@ -8,10 +8,13 @@ run-name: >-
   (config=${{ inputs.config || 'all' }})
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Builds the Aerospike C client on macOS ARM (Apple Silicon).
+# Builds and tests the Aerospike C client on macOS ARM (Apple Silicon).
 #
-# macOS ARM — build only; GitHub-hosted ARM runners do not support Docker /
-#             nested virtualisation, so no server-side tests are run.
+# build-mac-arm runs on the self-hosted Mac M1 runner ([self-hosted, macOS,
+# ARM64]), which already has colima + Docker running as a service — so it can
+# stand up an Aerospike server and run the full suite. (GitHub-hosted macOS ARM
+# can't nest-virtualise, so colima/Docker is unavailable there.) The community
+# server image is public, so no docker login / keychain unlock is required.
 #
 # Event-library matrix:
 #   sync      — synchronous API, no event library
@@ -29,13 +32,13 @@ on:
       config:
         type: choice
         required: false
-        default: all
+        default: sync
         description: 'Event-library configuration (all = full matrix)'
         options: [all, sync, libev, libuv, libevent]
       run-package:
         type: boolean
         required: false
-        default: false
+        default: true
         description: 'Also build and upload macOS packages (tarballs + source zip)'
 
 permissions:
@@ -63,11 +66,11 @@ jobs:
             echo "configs=[\"$CHOICE\"]" >> "$GITHUB_OUTPUT"
           fi
 
-  # ── macOS ARM: build only ─────────────────────────────────────────────────
+  # ── macOS ARM: build + test (self-hosted) ─────────────────────────────────
   build-mac-arm:
     name: mac-arm / ${{ matrix.config }}
     needs: get-mac-matrix
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS, ARM64]
 
     strategy:
       fail-fast: false
@@ -75,8 +78,15 @@ jobs:
         config: ${{ fromJSON(needs.get-mac-matrix.outputs.configs) }}
 
     steps:
-      - name: Install Homebrew dependencies
-        run: brew install wget automake libtool openssl libyaml
+      #So when your workflow step starts, $PATH already contains /opt/homebrew/bin. Adding it again is a no-op (creates a duplicate entry, which is harmless but pointless).
+      #Verify it on the runner right now. ssh aerouser@192.168.177.216 'cat /Users/aerouser/actions-runner/.path'
+
+      # Homebrew isn't on PATH by default on the self-hosted runner.
+      # - name: Add Homebrew to PATH
+      #   run: echo "PATH=$PATH:/opt/homebrew/bin" >> "$GITHUB_ENV"
+
+      # - name: Install Homebrew dependencies
+      #   run: brew install wget automake libtool openssl libyaml
 
       - name: Checkout client
         uses: actions/checkout@v4
@@ -105,20 +115,21 @@ jobs:
         if: matrix.config != 'sync'
         run: make EVENT_LIB=${{ matrix.config }}
 
-      # ── Start Aerospike server via colima + Docker ──────────────────────────
-      # colima provides a lightweight Docker runtime on macOS ARM runners.
-      # Community server image only — never enterprise. See memory.md.
-      - name: Install colima and Docker CLI
-        run: brew install colima docker
-
-      - name: Start colima (Docker runtime)
-        run: |
-          colima start --cpu 2 --memory 4 --disk 20 --runtime docker
-          timeout 60 bash -c 'until docker info &>/dev/null; do sleep 2; done'
+      # ── Aerospike server via the runner's pre-installed colima Docker ───────
+      # The self-hosted Mac M1 runner already runs colima + Docker as a service,
+      # so we only verify connectivity — no install/start. Community (public)
+      # image only — never enterprise, so no docker login. See memory.md.
+      - name: Verify Docker connectivity
+        run: docker info --format 'OSType={{.OSType}} Server={{.ServerVersion}}'
 
       - name: Start Aerospike server
         run: |
+          docker rm -f aerospike 2>/dev/null || true
+          # colima defaults the container's nofile limit to 1024, but the
+          # server config needs 15000 fds (proto-fd-max) or it aborts at
+          # startup with "system file descriptors not enough". Raise it.
           docker run -d --name aerospike \
+            --ulimit nofile=100000:100000 \
             -p 3000:3000 \
             -e DEFAULT_TTL=2592000 \
             aerospike/aerospike-server:8.1.2.0
@@ -209,18 +220,24 @@ jobs:
         if: failure()
         run: docker logs aerospike || true
 
+      # Persistent runner — always remove the container so the next run is clean.
+      - name: Stop Aerospike server
+        if: always()
+        run: docker rm -f aerospike || true
+
   # ── macOS ARM package ─────────────────────────────────────────────────────
   # pkg/package handles everything: clean, build all 4 variants, source zip,
   # staging, and tarballs. We just need the event libs installed first.
   build-package-mac:
     name: package / mac-arm
-    if: ${{ inputs.run-package == true }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-package }}
     needs: build-mac-arm
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS, ARM64]
 
     steps:
-      - name: Install Homebrew dependencies
-        run: brew install wget automake libtool openssl libyaml
+      # Homebrew isn't on PATH by default on the self-hosted runner.
+      # - name: Add Homebrew to PATH
+      #   run: echo "PATH=$PATH:/opt/homebrew/bin" >> "$GITHUB_ENV"
 
       - name: Checkout client
         uses: actions/checkout@v4
@@ -234,6 +251,13 @@ jobs:
           ./install_libev
           ./install_libuv
           ./install_libevent
+
+      # `make package` runs `make docs` at the end (pkg/package), which calls
+      # doxygen; the doxyfile sets HAVE_DOT=YES so it also needs graphviz's `dot`.
+      # Neither ships on the self-hosted runner, so packaging died with
+      # "doxygen: command not found" (make docs → Error 127). Install both.
+      - name: Install doxygen + graphviz (docs)
+        run: brew install doxygen graphviz
 
       - name: Build and package all variants
         run: make package
@@ -292,7 +316,7 @@ jobs:
 
           | Platform | Arch | Configurations | Tests | Result |
           |---|---|---|---|---|
-          | macOS | ARM64 (Apple Silicon) | \`$MAC_CONFIGS\` | ⏭️ build only | $(icon $MAC_ARM) \`$MAC_ARM\` |
+          | macOS | ARM64 (Apple Silicon) | \`$MAC_CONFIGS\` | 🧪 self-hosted M1 (colima) | $(icon $MAC_ARM) \`$MAC_ARM\` |
 
           ### Package Artifacts
 

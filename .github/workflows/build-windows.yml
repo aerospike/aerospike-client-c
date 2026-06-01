@@ -116,7 +116,7 @@ jobs:
 
       # Debug library (packaging only, no tests)
       - name: Build aerospike library (${{ matrix.config.debug }})
-        if: ${{ inputs.run-package == true }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-package }}
         shell: pwsh
         run: |
           $slnDir = (Resolve-Path "vs").Path + "\"
@@ -131,7 +131,7 @@ jobs:
           retention-days: 1
 
       - name: Upload Debug artifact
-        if: ${{ inputs.run-package == true }}
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-package }}
         uses: actions/upload-artifact@v4
         with:
           name: build-windows-${{ matrix.config.debug }}
@@ -211,16 +211,15 @@ jobs:
   # runs nuget pack — no MSBuild rebuild needed. Gated on the tests passing.
   build-package-windows:
     name: package / windows-x64
-    if: ${{ inputs.run-package == true }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-package }}
     needs: [get-windows-matrix, build, test]
     runs-on: windows-2022
 
     steps:
-      # No submodules needed — this job only reads vs\*.nuspec and vs\aerospike.sln;
-      # no C source compilation takes place here.
       - name: Checkout source
         uses: actions/checkout@v4
         with:
+          submodules: recursive
           ref: ${{ env.CHECKOUT_SHA }}
           token: ${{ secrets.GITHUB_TOKEN }}
 

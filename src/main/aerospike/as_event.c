@@ -432,8 +432,11 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
 	cmd->conn = NULL;
+	cmd->metrics = NULL;
 	cmd->proto_type_rcv = 0;
 	cmd->event_state = &cmd->cluster->event_state[event_loop->index];
+	cmd->bytes_in = 0;
+	cmd->bytes_out = 0;
 
 	if (cmd->event_state->closed) {
 		as_error err;
@@ -616,6 +619,9 @@ static void
 as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_CONNECT;
+	cmd->metrics = NULL;
+	cmd->bytes_in = 0;
+	cmd->bytes_out = 0;
 
 	if (cmd->partition) {
 		// If in retry, need to release node from prior attempt.
@@ -643,6 +649,14 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
+	if (cmd->cluster->metrics_enabled) {
+		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->begin = cf_getns();
+		}
+	}
+
 	if (! as_node_valid_error_rate(cmd->node)) {
 		event_loop->errors++;
 
@@ -656,18 +670,6 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_event_timer_stop(cmd);
 		as_event_error_callback(cmd, &err);
 		return;
-	}
-
-	cmd->metrics = NULL;
-	cmd->bytes_in = 0;
-	cmd->bytes_out = 0;
-
-	if (cmd->cluster->metrics_enabled) {
-		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
-
-		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			cmd->begin = cf_getns();
-		}
 	}
 
 	if (cmd->pipe_listener) {

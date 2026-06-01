@@ -218,8 +218,9 @@ put_int_map(aerospike* as, as_key* key, const int64_t* keys,
 //==========================================================
 // Cases: particle modify type mismatches.
 //
-// All map to AS_SUB_RW_BIN_TYPE_INCOMPATIBLE (1100) -- the message
-// substring is what distinguishes which op was rejected.
+// All return AS_ERR_INCOMPATIBLE_TYPE with subcode AS_SUB_NONE (0) --
+// the status is maximally specific, and the message substring
+// distinguishes which op was rejected.
 //
 
 static as_status
@@ -821,14 +822,11 @@ case_operate_filtered_out(aerospike* as, as_error* err)
 // Case table.
 //
 // Subcodes (mirror AS_SUB_* in aerospike-server/as/include/base/proto.h):
-//   1100  AS_SUB_RW_BIN_TYPE_INCOMPATIBLE
-//   1101  AS_SUB_RW_OP_NOT_APPLICABLE
-//   1102  AS_SUB_RW_ELEMENT_NOT_FOUND
-//   1103  AS_SUB_RW_ELEMENT_EXISTS
-//   1025  AS_SUB_RW_RECORD_EXISTS      (write create_only collision)
-//   1700  AS_SUB_RW_FILTERED
-//   1701  AS_SUB_RW_GENERATION_MISMATCH
-//   1714  AS_SUB_RW_RECORD_NOT_FOUND   (write replace_only on missing)
+//      0  AS_SUB_NONE  (status-is-canonical; message text carries the
+//                       disambiguation. Used at maximally-specific
+//                       statuses like AS_ERR_BIN_INCOMPATIBLE_TYPE,
+//                       AS_ERR_RECORD_EXISTS, AS_ERR_NOT_FOUND,
+//                       AS_ERR_GENERATION, AS_ERR_FILTERED_OUT.)
 //   3010  AS_SUB_CDT_INDEX_OUT_OF_BOUNDS
 //   3011  AS_SUB_CDT_RANK_OUT_OF_BOUNDS
 //   3012  AS_SUB_CDT_BOUNDED_LIST_OVERFLOW
@@ -847,19 +845,19 @@ case_operate_filtered_out(aerospike* as, as_error* err)
 static const error_case CASES[] = {
 	// --- Particle modify type mismatches ---
 	{ "append str on int bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 1100, "append",
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, "append",
 	  case_append_str_on_int },
 	{ "incr on string bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 1100, "increment",
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, "increment",
 	  case_incr_on_str },
 	{ "prepend str on int bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 1100, "prepend",
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, "prepend",
 	  case_prepend_str_on_int },
 	{ "incr double on int bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 1100, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
 	  case_incr_double_on_int },
 	{ "hll add on int bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 1100, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
 	  case_hll_add_on_int },
 
 	// --- CDT list ops ---
@@ -879,7 +877,7 @@ static const error_case CASES[] = {
 	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 3012, NULL,
 	  case_list_bounded_overflow },
 	{ "list op on raw-bytes bin (wrong type)",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 1100, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
 	  case_list_op_on_corrupt_bin },
 
 	// --- CDT map ops ---
@@ -890,10 +888,10 @@ static const error_case CASES[] = {
 	  AEROSPIKE_ERR_FAIL_ELEMENT_NOT_FOUND, 3107, NULL,
 	  case_map_put_update_only_missing },
 	{ "map op on list bin (wrong type)",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 1100, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
 	  case_map_op_on_list_bin },
 	{ "map op on raw-bytes bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 1100, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
 	  case_map_op_on_corrupt_bin },
 	{ "list ctx into string map value (type mismatch)",
 	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 3102, NULL,
@@ -914,7 +912,7 @@ static const error_case CASES[] = {
 	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 4005, NULL,
 	  case_hll_fold_target_too_large },
 	{ "hll op on raw-bytes bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 1100, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
 	  case_hll_op_on_corrupt_bin },
 	{ "hll refresh_count on missing bin",
 	  AEROSPIKE_ERR_BIN_NOT_FOUND, 4003, NULL,
@@ -922,22 +920,22 @@ static const error_case CASES[] = {
 
 	// --- Write / delete / read policy ---
 	{ "write create_only on existing record",
-	  AEROSPIKE_ERR_RECORD_EXISTS, 1025, NULL,
+	  AEROSPIKE_ERR_RECORD_EXISTS, 0, NULL,
 	  case_write_create_only_existing },
 	{ "write replace_only on missing record",
-	  AEROSPIKE_ERR_RECORD_NOT_FOUND, 1714, NULL,
+	  AEROSPIKE_ERR_RECORD_NOT_FOUND, 0, NULL,
 	  case_write_replace_only_missing },
 	{ "write generation mismatch",
-	  AEROSPIKE_ERR_RECORD_GENERATION, 1701, NULL,
+	  AEROSPIKE_ERR_RECORD_GENERATION, 0, NULL,
 	  case_write_generation_mismatch },
 	{ "delete generation mismatch",
-	  AEROSPIKE_ERR_RECORD_GENERATION, 1701, NULL,
+	  AEROSPIKE_ERR_RECORD_GENERATION, 0, NULL,
 	  case_delete_generation_mismatch },
 	{ "read filtered out by filter_exp",
-	  AEROSPIKE_FILTERED_OUT, 1700, NULL,
+	  AEROSPIKE_FILTERED_OUT, 1705, NULL,
 	  case_read_filtered_out },
 	{ "operate filtered out by filter_exp",
-	  AEROSPIKE_FILTERED_OUT, 1700, NULL,
+	  AEROSPIKE_FILTERED_OUT, 1705, NULL,
 	  case_operate_filtered_out },
 };
 

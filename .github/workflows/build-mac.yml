@@ -23,9 +23,9 @@ run-name: >-
 #   libevent  — async with libevent
 # ─────────────────────────────────────────────────────────────────────────────
 
-on:
-  push:
-    branches: [test-workflow-stage]
+# on:
+#   push:
+#     branches: [test-workflow-stage]
 
   workflow_dispatch:
     inputs:

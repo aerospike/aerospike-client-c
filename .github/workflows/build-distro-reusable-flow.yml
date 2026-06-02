@@ -1,0 +1,359 @@
+name: Aerospike C Client - Distro Build & Test (reusable flow)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Functionally equivalent to build-distro.yml but replaces the GHA service
+# container with the shared setup-aerospike-server composite action.
+#
+# Key structural difference from build-distro.yml:
+#
+#   build-distro.yml
+#     build job:
+#       container: ubuntu:22.04    ← ALL steps run inside distro image
+#       services: aerospike        ← GHA service container (sibling network)
+#
+#   this file
+#     build job:
+#       (no container:)            ← steps run on ubuntu-24.04 host runner
+#       uses: setup-aerospike-server  ← shared action starts aerospike-1 on
+#                                        aerospike-net Docker bridge network
+#       docker run --network aerospike-net ${{ matrix.container }} bash -c ...
+#                                  ← build/test runs inside distro image but
+#                                     launched manually from the host, sharing
+#                                     the same Docker network as aerospike-1
+#
+# Why this works:
+#   The setup-aerospike-server action needs Docker commands (docker network,
+#   docker run). Inside a container: job, Docker is not available. Running
+#   steps on the host and launching the distro image via explicit docker run
+#   gives us Docker access while preserving distro-specific build/test.
+#
+# Network reachability:
+#   Both the Aerospike container (aerospike-1) and the per-step distro
+#   containers share aerospike-net. Docker's embedded DNS resolves
+#   "aerospike-1" inside any container on that network → AS_HOST=aerospike-1.
+#
+# GITHUB_WORKSPACE inside docker run:
+#   -e GITHUB_WORKSPACE=/workspace keeps all existing script references
+#   (${GITHUB_WORKSPACE}/.github/script/...) working unchanged.
+#
+# build  (distro × event_lib matrix — up to 8 distros × 4 event libs = 32 jobs):
+#   - Checks out on host, starts Aerospike via shared action
+#   - Single docker run: install deps + compile + run full test suite
+#
+# package (distro matrix — 8 jobs, unchanged from build-distro.yml):
+#   - No server needed; container: directive kept as-is
+#   - Installs all event libs, runs `make package`, uploads artifacts
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [test-workflow-stage]
+  workflow_dispatch:
+    inputs:
+      event-lib:
+        type: choice
+        required: false
+        default: libevent
+        description: 'Event library to build + test (all = full matrix)'
+        options: [all, sync, libev, libuv, libevent]
+      server-tag:
+        type: string
+        required: false
+        default: 8.1.2.0
+        description: 'Aerospike Server image tag for the test step'
+      run-jobs:
+        type: choice
+        required: false
+        default: all
+        description: 'Which jobs to run'
+        options: [build-test, package, all]
+
+permissions:
+  contents: read
+  id-token: write  # required by setup-aerospike-server for JFrog OIDC
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: distro-reusable-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Resolve event-lib matrix ─────────────────────────────────────────────
+  get-distro-matrix:
+    name: resolve / event-lib matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      event_libs: ${{ steps.resolve.outputs.event_libs }}
+    steps:
+      - id: resolve
+        run: |
+          case "${{ inputs.event-lib }}" in
+            sync)     M='["sync"]' ;;
+            libev)    M='["libev"]' ;;
+            libuv)    M='["libuv"]' ;;
+            libevent) M='["libevent"]' ;;
+            *)        M='["sync","libev","libuv","libevent"]' ;;
+          esac
+          echo "event_libs=$M" >> "$GITHUB_OUTPUT"
+
+  # ── Build + test ─────────────────────────────────────────────────────────
+  # Matrix: distro × event_lib (up to 8 × 4 = 32 jobs).
+  #
+  # No container: directive — all steps run on the ubuntu-24.04 host so that
+  # Docker commands (needed by setup-aerospike-server) work normally.
+  # The actual build and test execute inside the distro image via docker run.
+  build:
+    name: ${{ matrix.distro }} / ${{ matrix.event_lib }}
+    needs: get-distro-matrix
+    if: ${{ inputs.run-jobs == 'build-test' || inputs.run-jobs == 'all' || inputs.run-jobs == '' }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        distro:
+          - ubuntu-22.04
+          # - ubuntu-24.04
+          # - debian-12
+          # - debian-13
+          # - amazonlinux-2023
+          # - rhel-8
+          # - rhel-9
+          # - rhel-10
+        event_lib: ${{ fromJSON(needs.get-distro-matrix.outputs.event_libs) }}
+        include:
+          - distro: ubuntu-22.04
+            container: ubuntu:22.04
+          # - distro: ubuntu-24.04
+          #   container: ubuntu:24.04
+          # - distro: debian-12
+          #   container: debian:12
+          # - distro: debian-13
+          #   container: debian:trixie
+          # - distro: amazonlinux-2023
+          #   container: amazonlinux:2023
+          # - distro: rhel-8
+          #   container: registry.access.redhat.com/ubi8/ubi-minimal
+          # - distro: rhel-9
+          #   container: registry.access.redhat.com/ubi9/ubi-minimal
+          # - distro: rhel-10
+          #   container: registry.access.redhat.com/ubi10/ubi-minimal
+
+    env:
+      EVENT_LIB: ${{ matrix.event_lib }}
+      # Event libs install into /usr/local; make test passes -L/usr/local/lib,
+      # but the runtime linker still needs this for the test binary.
+      LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
+
+    steps:
+      # Checkout runs on the ubuntu-24.04 host (git is pre-installed).
+      # No "Install checkout prerequisites" step is needed here — that step
+      # was only required when running inside a bare distro container that
+      # lacked git. The workspace is later bind-mounted into the docker run.
+      - name: Checkout client
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Starts aerospike-1 on the aerospike-net Docker bridge network.
+      # Outputs: network-name (used in the docker run below), container-names,
+      # service-ports. The action waits for readiness (port open + migrations
+      # complete) before returning.
+      - name: Start Aerospike server
+        id: setup-aerospike
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@main
+        with:
+          oidc-provider: ${{ secrets.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ secrets.JFROG_OIDC_AUDIENCE }}
+          server-tag: ${{ inputs.server-tag || '8.1.2.0' }}
+          env-vars: "DEFAULT_TTL=2592000"
+
+      # Single docker run covering install → build → test.
+      # They are combined because system packages (gcc, make, etc.) installed
+      # inside a --rm container do not persist across separate docker run
+      # calls. The event libs go to /usr/local, but the compiler toolchain
+      # lives in /usr/bin and /usr/lib — both gone after container exit.
+      #
+      # --network aerospike-net  → DNS resolves "aerospike-1" to its container IP
+      # -v GITHUB_WORKSPACE      → source tree available at /workspace
+      # -e GITHUB_WORKSPACE      → keeps all script references unchanged
+      # -e DISTRO                → passed through so install_deps.bash receives it
+      #
+      # The bash -c script is single-quoted so the outer shell passes it
+      # verbatim to docker; the inner bash expands ${VAR} using the -e env vars.
+      - name: Install, build and test (${{ matrix.event_lib }})
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            --network "${{ steps.setup-aerospike.outputs.network-name }}" \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            -w /workspace \
+            -e GITHUB_WORKSPACE=/workspace \
+            -e EVENT_LIB="${EVENT_LIB}" \
+            -e LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" \
+            -e DISTRO="${{ matrix.distro }}" \
+            ${{ matrix.container }} \
+            bash -c '
+              set -euo pipefail
+
+              # ── Install dependencies ──────────────────────────────────────
+              # install_deps.bash provisions the full toolchain for the distro
+              # (compiler, openssl, libyaml, zlib, git, the chosen event lib).
+              bash "${GITHUB_WORKSPACE}/.github/script/install_deps.bash" \
+                "${DISTRO}" "${EVENT_LIB}"
+
+              # ── Build ─────────────────────────────────────────────────────
+              # Mark workspace as safe so git commands inside make rules work.
+              git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+              make clean
+              if [ "${EVENT_LIB}" = "sync" ]; then
+                make all
+              else
+                make EVENT_LIB="${EVENT_LIB}" all
+              fi
+
+              # ── Test ──────────────────────────────────────────────────────
+              # aerospike-1 is on the same Docker network (aerospike-net) as
+              # this container; Docker DNS resolves it by name.
+              if [ "${EVENT_LIB}" = "sync" ]; then
+                make AS_HOST=aerospike-1 test
+              else
+                make EVENT_LIB="${EVENT_LIB}" AS_HOST=aerospike-1 test
+              fi
+            '
+
+  # ── Package + docs ────────────────────────────────────────────────────────
+  # Unchanged from build-distro.yml — packaging does not run tests, so no
+  # Aerospike server is needed and the container: directive is kept as-is.
+  package:
+    name: package / ${{ matrix.distro }}
+    needs: [get-distro-matrix, build]
+    if: |
+      always() &&
+      (inputs.run-jobs == 'package' || inputs.run-jobs == 'all' || inputs.run-jobs == '') &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-24.04
+
+    container:
+      image: ${{ matrix.container }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: ubuntu-22.04
+            container: ubuntu:22.04
+          # - distro: ubuntu-24.04
+          #   container: ubuntu:24.04
+          # - distro: debian-12
+          #   container: debian:12
+          # - distro: debian-13
+          #   container: debian:trixie
+          # - distro: amazonlinux-2023
+          #   container: amazonlinux:2023
+          # - distro: rhel-8
+          #   container: registry.access.redhat.com/ubi8/ubi-minimal
+          # - distro: rhel-9
+          #   container: registry.access.redhat.com/ubi9/ubi-minimal
+          # - distro: rhel-10
+          #   container: registry.access.redhat.com/ubi10/ubi-minimal
+
+    env:
+      LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
+
+    steps:
+      - name: Install checkout prerequisites
+        run: |
+          set -euo pipefail
+          case "${{ matrix.distro }}" in
+            ubuntu-*|debian-*)
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update
+              apt-get install -y --no-install-recommends git ca-certificates
+              ;;
+            amazonlinux-*)
+              dnf install -y git tar gzip
+              ;;
+            rhel-*)
+              microdnf install -y git tar gzip
+              ;;
+          esac
+          git --version
+
+      - name: Checkout client
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pass "all" → installs libev + libuv + libevent in one shot.
+      # pkg/package needs all of them since it rebuilds every variant.
+      - name: Install dependencies (all event libs)
+        run: |
+          bash "$GITHUB_WORKSPACE/.github/script/install_deps.bash" \
+            "${{ matrix.distro }}" all
+
+      - name: Package + docs (make package)
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          make package
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.distro }}
+          path: target/packages/*
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-${{ matrix.distro }}
+          path: target/docs/**
+          if-no-files-found: warn
+          retention-days: 1
+
+  # ── Summary ───────────────────────────────────────────────────────────────
+  summary:
+    name: summary
+    if: always()
+    needs:
+      - build
+      - package
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Write run summary
+        run: |
+          icon() {
+            case "$1" in
+              success) echo "✅" ;;
+              failure) echo "❌" ;;
+              skipped) echo "⏭️" ;;
+              *)       echo "⚠️" ;;
+            esac
+          }
+          BUILD="${{ needs.build.result }}"
+          PKG="${{ needs.package.result }}"
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Aerospike C Client — Distro Build & Test (reusable flow)
+
+          | | Value |
+          |---|---|
+          | **Event lib** | \`${{ inputs.event-lib || 'all' }}\` |
+          | **Server** | \`aerospike-server-enterprise:${{ inputs.server-tag || '8.1.2.0' }}\` |
+          | **Build env** | distro base images + \`.github/script/install_deps.bash\` |
+
+          | Job | Result |
+          |---|---|
+          | Build + test (distro × event-lib) | $(icon "$BUILD") \`$BUILD\` |
+          | Package + docs (per distro) | $(icon "$PKG") \`$PKG\` |
+          EOF

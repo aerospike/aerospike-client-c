@@ -28,9 +28,9 @@ run-name: >-
 #   sync → Release/Debug · libuv → Release/Debug libuv · libevent → …libevent
 # ─────────────────────────────────────────────────────────────────────────────
 
-on:
-  push:
-    branches: [test-workflow-stage]
+# on:
+#   push:
+#     branches: [test-workflow-stage]
 
   workflow_dispatch:
     inputs:

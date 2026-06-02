@@ -566,9 +566,12 @@ case_map_ctx_into_map_value(aerospike* as, as_error* err)
 }
 
 // (map remove_by_value_list with all-missing values is a no-op success on
-// the server, not an error path -- so it can't drive AS_SUB_CDT_VALUES_NOT_FOUND
-// from the client. That subcode fires from internal index-find failures
-// not reachable through ordinary client requests.)
+// the server, not an error path -- so it can't drive the
+// "values-not-found" path from the client. That branch fires from
+// internal index-find failures not reachable through ordinary client
+// requests, and the per-status redesign collapsed its old subcode
+// (AS_SUB_CDT_VALUES_NOT_FOUND, 3109) to AS_SUB_NONE under
+// AS_ERR_ELEMENT_NOT_FOUND.)
 
 
 //==========================================================

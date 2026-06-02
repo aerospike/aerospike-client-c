@@ -46,7 +46,7 @@ on:
       run-jobs:
         type: choice
         required: false
-        default: package
+        default: build-test
         description: 'Which jobs to run'
         options: [build-test, package, all]
 

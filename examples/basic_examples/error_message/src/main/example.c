@@ -821,25 +821,30 @@ case_operate_filtered_out(aerospike* as, as_error* err)
 //==========================================================
 // Case table.
 //
-// Subcodes (mirror AS_SUB_* in aerospike-server/as/include/base/proto.h):
-//      0  AS_SUB_NONE  (status-is-canonical; message text carries the
-//                       disambiguation. Used at maximally-specific
-//                       statuses like AS_ERR_BIN_INCOMPATIBLE_TYPE,
-//                       AS_ERR_RECORD_EXISTS, AS_ERR_NOT_FOUND,
-//                       AS_ERR_GENERATION, AS_ERR_FILTERED_OUT.)
-//   3010  AS_SUB_CDT_INDEX_OUT_OF_BOUNDS
-//   3011  AS_SUB_CDT_RANK_OUT_OF_BOUNDS
-//   3012  AS_SUB_CDT_BOUNDED_LIST_OVERFLOW
-//   3102  AS_SUB_CDT_CONTEXT_EVAL_TYPE_MISMATCH
-//   3106  AS_SUB_CDT_MAP_KEY_EXISTS
-//   3107  AS_SUB_CDT_MAP_KEY_NOT_FOUND
-//   3108  AS_SUB_CDT_LIST_ELEMENT_EXISTS
-//   3109  AS_SUB_CDT_VALUES_NOT_FOUND
-//   4003  AS_SUB_HLL_CANNOT_CREATE_WITH_OP
-//   4005  AS_SUB_HLL_FOLD_INDEX_BITS_TOO_LARGE
-//   4104  AS_SUB_HLL_PARSE_FAILED
-//   5000  AS_SUB_BITS_OFFSET_OUT_OF_RANGE
-//   5001  AS_SUB_BITS_SIZE_OUT_OF_RANGE
+// Subcodes (per-status enums in aerospike-server/as/include/base/proto.h
+// as of the 2026-06-02 per-status redesign; integers are members of the
+// parent AS_ERR_* status's enum, dense from 1, with AS_SUB_NONE = 0
+// universal):
+//
+//   AS_ERR_PARAMETER (4):
+//     2  AS_SUB_PARAM_BITS_OFFSET_OUT_OF_RANGE
+//     3  AS_SUB_PARAM_BITS_SIZE_OUT_OF_RANGE
+//   AS_ERR_BIN_NOT_FOUND (17):
+//     1  AS_SUB_BIN_NOT_FOUND_HLL_CANNOT_CREATE_WITH_OP
+//   AS_ERR_OP_NOT_APPLICABLE (26):
+//     1  AS_SUB_OPNOT_CDT_INDEX_OUT_OF_BOUNDS
+//     2  AS_SUB_OPNOT_CDT_RANK_OUT_OF_BOUNDS
+//     3  AS_SUB_OPNOT_CDT_BOUNDED_LIST_OVERFLOW
+//     8  AS_SUB_OPNOT_HLL_FOLD_INDEX_BITS_TOO_LARGE
+//   AS_ERR_FILTERED_OUT (27):
+//     2  AS_SUB_FILTERED_BINS
+//   AS_SUB_NONE (0): status-is-canonical, or no app-dispatch use case;
+//     the message text carries the disambiguating context. Used under
+//     INCOMPATIBLE_TYPE, RECORD_EXISTS, RECORD_NOT_FOUND, GENERATION,
+//     and at COLLAPSE sites under broader statuses (e.g. the old
+//     CDT_MAP_KEY_EXISTS / CDT_MAP_KEY_NOT_FOUND / HLL_PARSE_FAILED /
+//     CDT_LIST_ELEMENT_EXISTS / CDT_CONTEXT_EVAL_TYPE_MISMATCH paths,
+//     which had distinct subcodes pre-redesign).
 //
 
 static const error_case CASES[] = {
@@ -862,19 +867,19 @@ static const error_case CASES[] = {
 
 	// --- CDT list ops ---
 	{ "list get index out of bounds",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 3010, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 1, NULL,
 	  case_list_get_index_out_of_bounds },
 	{ "list get_by_rank out of bounds",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 3011, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 2, NULL,
 	  case_list_get_by_rank_out_of_bounds },
 	{ "list pop index out of bounds",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 3010, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 1, NULL,
 	  case_list_pop_index_out_of_bounds },
 	{ "list append add_unique violation",
-	  AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS, 3108, NULL,
+	  AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS, 0, NULL,
 	  case_list_insert_unique_violation },
 	{ "list insert bounded overflow",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 3012, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 3, NULL,
 	  case_list_bounded_overflow },
 	{ "list op on raw-bytes bin (wrong type)",
 	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
@@ -882,10 +887,10 @@ static const error_case CASES[] = {
 
 	// --- CDT map ops ---
 	{ "map put create_only on existing key",
-	  AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS, 3106, NULL,
+	  AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS, 0, NULL,
 	  case_map_put_create_only_existing },
 	{ "map put update_only on missing key",
-	  AEROSPIKE_ERR_FAIL_ELEMENT_NOT_FOUND, 3107, NULL,
+	  AEROSPIKE_ERR_FAIL_ELEMENT_NOT_FOUND, 0, NULL,
 	  case_map_put_update_only_missing },
 	{ "map op on list bin (wrong type)",
 	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
@@ -894,28 +899,28 @@ static const error_case CASES[] = {
 	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
 	  case_map_op_on_corrupt_bin },
 	{ "list ctx into string map value (type mismatch)",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 3102, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
 	  case_map_ctx_into_map_value },
 	// --- Bits ops ---
 	{ "bit get offset out of range",
-	  AEROSPIKE_ERR_REQUEST_INVALID, 5000, NULL,
+	  AEROSPIKE_ERR_REQUEST_INVALID, 2, NULL,
 	  case_bits_get_offset_out_of_range },
 	{ "bit get size zero",
-	  AEROSPIKE_ERR_REQUEST_INVALID, 5001, NULL,
+	  AEROSPIKE_ERR_REQUEST_INVALID, 3, NULL,
 	  case_bits_get_size_zero },
 
 	// --- HLL ops ---
 	{ "hll init parses invalid index bits",
-	  AEROSPIKE_ERR_REQUEST_INVALID, 4104, NULL,
+	  AEROSPIKE_ERR_REQUEST_INVALID, 0, NULL,
 	  case_hll_init_invalid_index_bits },
 	{ "hll fold target larger than current",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 4005, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 8, NULL,
 	  case_hll_fold_target_too_large },
 	{ "hll op on raw-bytes bin",
 	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
 	  case_hll_op_on_corrupt_bin },
 	{ "hll refresh_count on missing bin",
-	  AEROSPIKE_ERR_BIN_NOT_FOUND, 4003, NULL,
+	  AEROSPIKE_ERR_BIN_NOT_FOUND, 1, NULL,
 	  case_hll_refresh_count_no_hll_bin },
 
 	// --- Write / delete / read policy ---
@@ -932,10 +937,10 @@ static const error_case CASES[] = {
 	  AEROSPIKE_ERR_RECORD_GENERATION, 0, NULL,
 	  case_delete_generation_mismatch },
 	{ "read filtered out by filter_exp",
-	  AEROSPIKE_FILTERED_OUT, 1705, NULL,
+	  AEROSPIKE_FILTERED_OUT, 2, NULL,
 	  case_read_filtered_out },
 	{ "operate filtered out by filter_exp",
-	  AEROSPIKE_FILTERED_OUT, 1705, NULL,
+	  AEROSPIKE_FILTERED_OUT, 2, NULL,
 	  case_operate_filtered_out },
 };
 

@@ -1,0 +1,280 @@
+# name: Aerospike C Client - Linux Build & Test
+
+# run-name: >-
+#   ${{ github.event_name == 'pull_request'
+#     && format('PR #{0}', github.event.pull_request.number)
+#     || github.event_name == 'push' && github.ref_name
+#     || 'Manual' }} — Linux
+#   (distro=${{ inputs.distro || 'all' }}, arch=${{ inputs.arch || 'all' }})
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # Builds, tests and packages the Aerospike C client on every Linux distro for
+# # BOTH amd64 and arm64, using the OPTIMIZED multi-stage Dockerfiles in
+# # docker/build-optimized/<distro>/Dockerfile to provision the build environment.
+# #
+# # Each matrix entry = (distro, arch):
+# #   resolve  – expands the distro/arch inputs into a {distro,arch,runner} matrix
+# #   build    – build the optimized image, then run, inside that container:
+# #                build   → make EVENT_LIB=<lib> all
+# #                test    → make EVENT_LIB=<lib> AS_HOST=<server> test
+# #                package → make package  (loops all event libs + builds docs)
+# #
+# # Architecture → runner (native, no QEMU — arm64 tests run at full speed):
+# #   amd64 → ubuntu-24.04        arm64 → ubuntu-24.04-arm
+# # (Swap these for [self-hosted, linux, <arch>] if hosted arm64 is unavailable.)
+# #
+# # The optimized images already contain doxygen + graphviz, so `make package`
+# # (which runs `make docs`) succeeds inside the container.
+# # ─────────────────────────────────────────────────────────────────────────────
+
+# on:
+#   push:
+#     branches: [test-workflow-stage]
+
+#   workflow_dispatch:
+#     inputs:
+#       distro:
+#         type: choice
+#         required: false
+#         default: all
+#         description: 'Linux distro to build (all = every distro)'
+#         options:
+#           - all
+#           - rhel-8
+#           - rhel-9
+#           - rhel-10
+#           - amazonlinux-2023
+#           - debian-12
+#           - debian-13
+#           - ubuntu-22.04
+#           - ubuntu-24.04
+#       arch:
+#         type: choice
+#         required: false
+#         default: all
+#         description: 'Target architecture (all = amd64 + arm64)'
+#         options: [all, amd64, arm64]
+#       event-lib:
+#         type: choice
+#         required: false
+#         default: libev
+#         description: 'Event library used for the build + test steps'
+#         options: [libev, libuv, libevent]
+#       server-tag:
+#         type: string
+#         required: false
+#         default: 8.1.2.0
+#         description: 'Aerospike server image tag used for the test step'
+#       run-package:
+#         type: boolean
+#         required: false
+#         default: true
+#         description: 'Also run the package step and upload the .rpm/.deb/.tgz artifacts'
+
+# permissions:
+#   id-token: write
+#   contents: read
+
+# concurrency:
+#   group: linux-${{ github.ref }}
+#   cancel-in-progress: true
+
+# env:
+#   EVENT_LIB: ${{ inputs.event-lib || 'libev' }}
+#   SERVER_TAG: ${{ inputs.server-tag || '8.1.2.0' }}
+#   CHECKOUT_SHA: ${{ github.sha }}
+
+# jobs:
+#   # ── Resolve the (distro × arch) matrix from the dispatch inputs ─────────────
+#   resolve:
+#     name: resolve / linux matrix
+#     runs-on: ubuntu-24.04
+#     outputs:
+#       entries: ${{ steps.gen.outputs.entries }}
+#     steps:
+#       - id: gen
+#         shell: bash
+#         run: |
+#           DISTRO_IN="${{ inputs.distro }}"
+#           ARCH_IN="${{ inputs.arch }}"
+
+#           if [[ -z "$DISTRO_IN" || "$DISTRO_IN" == "all" ]]; then
+#             DISTROS='["rhel-8","rhel-9","rhel-10","amazonlinux-2023","debian-12","debian-13","ubuntu-22.04","ubuntu-24.04"]'
+#           else
+#             DISTROS="[\"$DISTRO_IN\"]"
+#           fi
+
+#           if [[ -z "$ARCH_IN" || "$ARCH_IN" == "all" ]]; then
+#             ARCHES='["amd64","arm64"]'
+#           else
+#             ARCHES="[\"$ARCH_IN\"]"
+#           fi
+
+#           # Cross-product distro × arch, mapping each arch to its native runner.
+#           entries=$(jq -cn --argjson d "$DISTROS" --argjson a "$ARCHES" '
+#             [ $d[] as $distro | $a[] as $arch |
+#               { distro: $distro,
+#                 arch:   $arch,
+#                 runner: (if $arch == "arm64" then "ubuntu-24.04-arm" else "ubuntu-24.04" end) } ]')
+
+#           echo "entries=$entries" >> "$GITHUB_OUTPUT"
+#           echo "Matrix: $entries"
+
+#   # ── Build + test + package per (distro, arch) ───────────────────────────────
+#   build:
+#     name: ${{ matrix.entry.distro }} / ${{ matrix.entry.arch }}
+#     needs: resolve
+#     runs-on: ${{ matrix.entry.runner }}
+
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         entry: ${{ fromJSON(needs.resolve.outputs.entries) }}
+
+#     env:
+#       DISTRO: ${{ matrix.entry.distro }}
+#       DOCKER_PLATFORM: linux/${{ matrix.entry.arch }}
+#       IMAGE: aerospike-buildenv-${{ matrix.entry.distro }}-${{ matrix.entry.arch }}
+#       NETWORK: aerospike-linux-net
+#       SERVER: aerospike-server
+
+#     steps:
+#       - name: Checkout client
+#         uses: actions/checkout@v4
+#         with:
+#           submodules: recursive
+#           # Full history + tags so `git describe` in pkg/package yields a real
+#           # version instead of "fatal: No names found, cannot describe anything".
+#           fetch-depth: 0
+#           ref: ${{ env.CHECKOUT_SHA }}
+#           token: ${{ secrets.GITHUB_TOKEN }}
+
+#       # ── Provision the build environment from the OPTIMIZED Dockerfile ────────
+#       - name: Build optimized build-env image
+#         run: |
+#           docker build \
+#             --platform "$DOCKER_PLATFORM" \
+#             -t "$IMAGE" \
+#             -f "docker/build-optimized/${DISTRO}/Dockerfile" \
+#             .
+
+#       # ── build step: compile the library with the selected event lib ─────────
+#       - name: Build (make EVENT_LIB=${{ env.EVENT_LIB }} all)
+#         run: |
+#           docker run --rm \
+#             --platform "$DOCKER_PLATFORM" \
+#             -v "${{ github.workspace }}:/work/source" \
+#             -w /work/source \
+#             -e LD_LIBRARY_PATH=/usr/local/lib \
+#             "$IMAGE" \
+#             bash -c "git config --global --add safe.directory /work/source \
+#                      && make clean \
+#                      && make EVENT_LIB=${EVENT_LIB} all"
+
+#       # ── start an Aerospike server for the test step ─────────────────────────
+#       - name: Start Aerospike server
+#         run: |
+#           docker network create "$NETWORK" 2>/dev/null || true
+#           docker rm -f "$SERVER" 2>/dev/null || true
+#           docker run -d \
+#             --name "$SERVER" \
+#             --network "$NETWORK" \
+#             --platform "$DOCKER_PLATFORM" \
+#             --ulimit nofile=100000:100000 \
+#             -e DEFAULT_TTL=2592000 \
+#             "aerospike/aerospike-server:${SERVER_TAG}"
+
+#       - name: Wait for Aerospike server to be ready
+#         run: |
+#           for i in $(seq 1 30); do
+#             node=$(docker exec "$SERVER" asinfo -h 127.0.0.1 -p 3000 -v node 2>/dev/null || true)
+#             if [[ -n "$node" && "$node" != *error* && "$node" != *failed* ]]; then
+#               echo "Aerospike node ready: $node (${i}s)"
+#               sleep 2
+#               exit 0
+#             fi
+#             sleep 1
+#           done
+#           echo "::error::Aerospike server did not become ready in time"
+#           exit 1
+
+#       # ── test step: run the suite against the server ─────────────────────────
+#       - name: Test (make EVENT_LIB=${{ env.EVENT_LIB }} test)
+#         run: |
+#           docker run --rm \
+#             --platform "$DOCKER_PLATFORM" \
+#             --network "$NETWORK" \
+#             -v "${{ github.workspace }}:/work/source" \
+#             -w /work/source \
+#             -e LD_LIBRARY_PATH=/usr/local/lib \
+#             "$IMAGE" \
+#             bash -c "git config --global --add safe.directory /work/source \
+#                      && make EVENT_LIB=${EVENT_LIB} AS_HOST=${SERVER} test"
+
+#       # ── package step: build all event-lib variants + docs, emit packages ────
+#       # pkg/package runs `make docs` (doxygen) and builds every event lib itself,
+#       # so EVENT_LIB is intentionally NOT passed here. Needs no server.
+#       - name: Package (make package)
+#         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-package }}
+#         run: |
+#           docker run --rm \
+#             --platform "$DOCKER_PLATFORM" \
+#             -v "${{ github.workspace }}:/work/source" \
+#             -w /work/source \
+#             -e LD_LIBRARY_PATH=/usr/local/lib \
+#             "$IMAGE" \
+#             bash -c "git config --global --add safe.directory /work/source \
+#                      && make package"
+
+#       - name: Upload packages
+#         if: ${{ github.event_name != 'workflow_dispatch' || inputs.run-package }}
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: packages-linux-${{ matrix.entry.distro }}-${{ matrix.entry.arch }}
+#           path: target/packages/*
+#           if-no-files-found: error
+#           retention-days: 1
+
+#       # Cleanup — runner may be reused (self-hosted) or shared; always tidy up.
+#       - name: Dump server logs on failure
+#         if: failure()
+#         run: docker logs "$SERVER" 2>&1 || true
+
+#       - name: Tear down server + network
+#         if: always()
+#         run: |
+#           docker rm -f "$SERVER" 2>/dev/null || true
+#           docker network rm "$NETWORK" 2>/dev/null || true
+
+#   # ── Summary ─────────────────────────────────────────────────────────────────
+#   summary:
+#     name: summary
+#     if: always()
+#     needs: [resolve, build]
+#     runs-on: ubuntu-24.04
+#     steps:
+#       - name: Write run summary
+#         shell: bash
+#         run: |
+#           RESULT="${{ needs.build.result }}"
+#           icon() {
+#             case "$1" in
+#               success) echo "✅" ;;
+#               failure) echo "❌" ;;
+#               skipped) echo "⏭️" ;;
+#               *)       echo "⚠️" ;;
+#             esac
+#           }
+#           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+#           ## Aerospike C Client — Linux Run Summary
+
+#           | | Value |
+#           |---|---|
+#           | **Distro** | \`${{ inputs.distro || 'all' }}\` |
+#           | **Arch** | \`${{ inputs.arch || 'all' }}\` |
+#           | **Event lib (build/test)** | \`${{ inputs.event-lib || 'libev' }}\` |
+#           | **Server** | \`aerospike/aerospike-server:${{ inputs.server-tag || '8.1.2.0' }}\` |
+#           | **Packages built** | \`${{ inputs.run-package }}\` |
+#           | **Build env** | optimized multi-stage Dockerfiles (\`docker/build-optimized/\`) |
+#           | **Overall build result** | $(icon "$RESULT") \`$RESULT\` |
+#           EOF

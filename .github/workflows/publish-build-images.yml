@@ -1,245 +1,245 @@
-name: Publish Optimized Build Images (JFrog)
+# name: Publish Optimized Build Images (JFrog)
 
-run-name: >-
-  publish build images — distro=${{ inputs.distro || 'all' }},
-  version=${{ inputs.version }}, push=${{ inputs.push }}
+# run-name: >-
+#   publish build images — distro=${{ inputs.distro || 'all' }},
+#   version=${{ inputs.version }}, push=${{ inputs.push }}
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Builds the OPTIMIZED build-environment images (docker/build-optimized/<distro>/
-# Dockerfile) for amd64 + arm64 and publishes them to JFrog Artifactory.
-#
-# The JFrog part is NOT hand-rolled here — it is delegated to the shared
-# reusable workflow:
-#   aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml
-# which handles OIDC login, QEMU+buildx multi-arch build, version tagging,
-# SBOM, provenance, attestation and JFrog build-info publishing. This caller is
-# modeled on shared-workflows' example_docker-test.yaml, fanned out over the 8
-# optimized distros via a matrix.
-#
-# NOTE: the reusable workflow builds both architectures in ONE job using
-# QEMU emulation (platforms: linux/amd64,linux/arm64). Because the optimized
-# Dockerfiles compile doxygen/libuv/libev/libevent from source, the emulated
-# arm64 build can be slow — expect long run times. Set `arch`-style native
-# splitting in the shared workflow if that becomes a problem.
-# ─────────────────────────────────────────────────────────────────────────────
+# # ─────────────────────────────────────────────────────────────────────────────
+# # Builds the OPTIMIZED build-environment images (docker/build-optimized/<distro>/
+# # Dockerfile) for amd64 + arm64 and publishes them to JFrog Artifactory.
+# #
+# # The JFrog part is NOT hand-rolled here — it is delegated to the shared
+# # reusable workflow:
+# #   aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml
+# # which handles OIDC login, QEMU+buildx multi-arch build, version tagging,
+# # SBOM, provenance, attestation and JFrog build-info publishing. This caller is
+# # modeled on shared-workflows' example_docker-test.yaml, fanned out over the 8
+# # optimized distros via a matrix.
+# #
+# # NOTE: the reusable workflow builds both architectures in ONE job using
+# # QEMU emulation (platforms: linux/amd64,linux/arm64). Because the optimized
+# # Dockerfiles compile doxygen/libuv/libev/libevent from source, the emulated
+# # arm64 build can be slow — expect long run times. Set `arch`-style native
+# # splitting in the shared workflow if that becomes a problem.
+# # ─────────────────────────────────────────────────────────────────────────────
 
-on:
-  push:
-    branches: [test-workflow-stage]
-  workflow_dispatch:
-    inputs:
-      distro:
-        type: choice
-        required: false
-        default: all
-        description: 'Linux distro to build'
-        options:
-          - all
-          - rhel-8
-          - rhel-9
-          - rhel-10
-          - amazonlinux-2023
-          - debian-12
-          - debian-13
-          - ubuntu-22.04
-          - ubuntu-24.04
-      version:
-        type: string
-        required: false
-        default: "1.0.0"
-        # Build-env image's OWN version — intentionally decoupled from the C
-        # client release. The toolchain image is versioned on its own track; a
-        # client bump (7.4.0 → 7.5.0) should NOT force a build-env retag.
-        description: 'Build-env image version (independent of the C client version)'
-      push:
-        type: boolean
-        required: false
-        default: false
-        # When true, the `publish` job (shared reusable) ALSO pushes to JFrog.
-        # The OCI image artifact is produced regardless (by build-image + club).
-        description: 'Also push to JFrog via the shared reusable workflow'
-      jf-project:
-        type: string
-        required: true
-        description: 'JFrog project key (e.g. clients) — see repo JFrog setup'
-      oidc-provider-name:
-        type: string
-        required: false
-        default: gh-aerospike
-        description: 'JFrog OIDC provider name'
-      oidc-audience:
-        type: string
-        required: false
-        default: aerospike
-        description: 'JFrog OIDC audience'
+# on:
+#   push:
+#     branches: [test-workflow-stage]
+#   workflow_dispatch:
+#     inputs:
+#       distro:
+#         type: choice
+#         required: false
+#         default: all
+#         description: 'Linux distro to build'
+#         options:
+#           - all
+#           - rhel-8
+#           - rhel-9
+#           - rhel-10
+#           - amazonlinux-2023
+#           - debian-12
+#           - debian-13
+#           - ubuntu-22.04
+#           - ubuntu-24.04
+#       version:
+#         type: string
+#         required: false
+#         default: "1.0.0"
+#         # Build-env image's OWN version — intentionally decoupled from the C
+#         # client release. The toolchain image is versioned on its own track; a
+#         # client bump (7.4.0 → 7.5.0) should NOT force a build-env retag.
+#         description: 'Build-env image version (independent of the C client version)'
+#       push:
+#         type: boolean
+#         required: false
+#         default: false
+#         # When true, the `publish` job (shared reusable) ALSO pushes to JFrog.
+#         # The OCI image artifact is produced regardless (by build-image + club).
+#         description: 'Also push to JFrog via the shared reusable workflow'
+#       jf-project:
+#         type: string
+#         required: true
+#         description: 'JFrog project key (e.g. clients) — see repo JFrog setup'
+#       oidc-provider-name:
+#         type: string
+#         required: false
+#         default: gh-aerospike
+#         description: 'JFrog OIDC provider name'
+#       oidc-audience:
+#         type: string
+#         required: false
+#         default: aerospike
+#         description: 'JFrog OIDC audience'
 
-# Permissions the reusable workflow actually needs:
-#   contents: read      → checkout
-#   id-token: write     → JFrog OIDC login
-#   attestations: write → SLSA build-provenance attestation
-# NOTE: no `packages: write` — that is the GHCR/GitHub Packages scope; we publish
-# to JFrog Artifactory (auth via OIDC + docker login), so it is unused here.
-permissions:
-  contents: read
-  # attestations: write
-  # id-token: write
+# # Permissions the reusable workflow actually needs:
+# #   contents: read      → checkout
+# #   id-token: write     → JFrog OIDC login
+# #   attestations: write → SLSA build-provenance attestation
+# # NOTE: no `packages: write` — that is the GHCR/GitHub Packages scope; we publish
+# # to JFrog Artifactory (auth via OIDC + docker login), so it is unused here.
+# permissions:
+#   contents: read
+#   # attestations: write
+#   # id-token: write
 
-# concurrency:
-#   group: publish-images-${{ github.ref }}-${{ inputs.distro }}
-#   cancel-in-progress: false
+# # concurrency:
+# #   group: publish-images-${{ github.ref }}-${{ inputs.distro }}
+# #   cancel-in-progress: false
 
-jobs:
-  # ── Resolve the distro list from the dispatch input ─────────────────────────
-  resolve:
-    name: resolve / distro list
-    runs-on: ubuntu-22.04
-    outputs:
-      distros: ${{ steps.gen.outputs.distros }}
-    steps:
-      - id: gen
-        shell: bash
-        run: |
-          DISTRO_IN="${{ inputs.distro }}"
-          if [[ -z "$DISTRO_IN" || "$DISTRO_IN" == "all" ]]; then
-            DISTROS='["rhel-8","rhel-9","rhel-10","amazonlinux-2023","debian-12","debian-13","ubuntu-22.04","ubuntu-24.04"]'
-          else
-            DISTROS="[\"$DISTRO_IN\"]"
-          fi
-          echo "distros=$DISTROS" >> "$GITHUB_OUTPUT"
-          echo "Distros: $DISTROS"
+# jobs:
+#   # ── Resolve the distro list from the dispatch input ─────────────────────────
+#   resolve:
+#     name: resolve / distro list
+#     runs-on: ubuntu-22.04
+#     outputs:
+#       distros: ${{ steps.gen.outputs.distros }}
+#     steps:
+#       - id: gen
+#         shell: bash
+#         run: |
+#           DISTRO_IN="${{ inputs.distro }}"
+#           if [[ -z "$DISTRO_IN" || "$DISTRO_IN" == "all" ]]; then
+#             DISTROS='["rhel-8","rhel-9","rhel-10","amazonlinux-2023","debian-12","debian-13","ubuntu-22.04","ubuntu-24.04"]'
+#           else
+#             DISTROS="[\"$DISTRO_IN\"]"
+#           fi
+#           echo "distros=$DISTROS" >> "$GITHUB_OUTPUT"
+#           echo "Distros: $DISTROS"
 
-  # ── Build + publish each distro via the shared reusable workflow ────────────
-  # One call per distro; the reusable builds linux/amd64 + linux/arm64 and pushes
-  # a multi-arch manifest to JFrog. Skipped entirely when push=false (the image
-  # artifact then comes from the build-image job below instead).
-  # publish:
-  #   name: publish / ${{ matrix.distro }}
-  #   needs: resolve
-  #   if: ${{ inputs.push }}
-  #   strategy:
-  #     fail-fast: false
-  #     matrix:
-  #       distro: ${{ fromJSON(needs.resolve.outputs.distros) }}
-  #   uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v3.6.0
-  #   with:
-  #     jf-project: ${{ inputs.jf-project }}
-  #     image-name: aerospike-c-build-${{ matrix.distro }}
-  #     app-name: Aerospike C Client build env (${{ matrix.distro }})
-  #     app-version: ${{ inputs.version }}
-  #     context: .
-  #     file: docker/build-optimized/${{ matrix.distro }}/Dockerfile
-  #     jf-build-name: aerospike-c-build-${{ matrix.distro }}
-  #     platforms: linux/amd64,linux/arm64
-  #     push: ${{ inputs.push }}
-  #     oidc-provider-name: ${{ inputs.oidc-provider-name }}
-  #     oidc-audience: ${{ inputs.oidc-audience }}
+#   # ── Build + publish each distro via the shared reusable workflow ────────────
+#   # One call per distro; the reusable builds linux/amd64 + linux/arm64 and pushes
+#   # a multi-arch manifest to JFrog. Skipped entirely when push=false (the image
+#   # artifact then comes from the build-image job below instead).
+#   # publish:
+#   #   name: publish / ${{ matrix.distro }}
+#   #   needs: resolve
+#   #   if: ${{ inputs.push }}
+#   #   strategy:
+#   #     fail-fast: false
+#   #     matrix:
+#   #       distro: ${{ fromJSON(needs.resolve.outputs.distros) }}
+#   #   uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v3.6.0
+#   #   with:
+#   #     jf-project: ${{ inputs.jf-project }}
+#   #     image-name: aerospike-c-build-${{ matrix.distro }}
+#   #     app-name: Aerospike C Client build env (${{ matrix.distro }})
+#   #     app-version: ${{ inputs.version }}
+#   #     context: .
+#   #     file: docker/build-optimized/${{ matrix.distro }}/Dockerfile
+#   #     jf-build-name: aerospike-c-build-${{ matrix.distro }}
+#   #     platforms: linux/amd64,linux/arm64
+#   #     push: ${{ inputs.push }}
+#   #     oidc-provider-name: ${{ inputs.oidc-provider-name }}
+#   #     oidc-audience: ${{ inputs.oidc-audience }}
 
-  # ── Build each image as a compressed multi-arch OCI archive ──────────────────
-  # Runs whether or not we push. buildx builds amd64 (native) + arm64 (QEMU) into
-  # ONE OCI archive holding both arches, gzip'd, and uploaded as a per-distro
-  # INTERMEDIATE artifact (short retention) for the club job to collect.
-  build-image:
-    name: build / ${{ matrix.distro }}
-    needs: resolve
-    runs-on: ubuntu-22.04
-    strategy:
-      fail-fast: false
-      matrix:
-        distro: ${{ fromJSON(needs.resolve.outputs.distros) }}
-    steps:
-      - name: Checkout client
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+#   # ── Build each image as a compressed multi-arch OCI archive ──────────────────
+#   # Runs whether or not we push. buildx builds amd64 (native) + arm64 (QEMU) into
+#   # ONE OCI archive holding both arches, gzip'd, and uploaded as a per-distro
+#   # INTERMEDIATE artifact (short retention) for the club job to collect.
+#   build-image:
+#     name: build / ${{ matrix.distro }}
+#     needs: resolve
+#     runs-on: ubuntu-22.04
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         distro: ${{ fromJSON(needs.resolve.outputs.distros) }}
+#     steps:
+#       - name: Checkout client
+#         uses: actions/checkout@v4
+#         with:
+#           ref: ${{ github.sha }}
+#           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+#       - name: Set up QEMU
+#         uses: docker/setup-qemu-action@v3
 
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+#       - name: Set up Buildx
+#         uses: docker/setup-buildx-action@v3
 
-      - name: Build multi-arch OCI archive (amd64 + arm64)
-        run: |
-          mkdir -p out
-          TAR="out/aerospike-c-build-${{ matrix.distro }}-${{ inputs.version }}-oci.tar"
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --provenance=false \
-            -f "docker/build-optimized/${{ matrix.distro }}/Dockerfile" \
-            -t "aerospike-c-build:optimized-${{ inputs.version }}-${{ matrix.distro }}" \
-            --output "type=oci,dest=${TAR}" \
-            .
-          gzip -9 "${TAR}"
-          ls -lh "${TAR}.gz"
+#       - name: Build multi-arch OCI archive (amd64 + arm64)
+#         run: |
+#           mkdir -p out
+#           TAR="out/aerospike-c-build-${{ matrix.distro }}-${{ inputs.version }}-oci.tar"
+#           docker buildx build \
+#             --platform linux/amd64,linux/arm64 \
+#             --provenance=false \
+#             -f "docker/build-optimized/${{ matrix.distro }}/Dockerfile" \
+#             -t "aerospike-c-build:optimized-${{ inputs.version }}-${{ matrix.distro }}" \
+#             --output "type=oci,dest=${TAR}" \
+#             .
+#           gzip -9 "${TAR}"
+#           ls -lh "${TAR}.gz"
 
-      - name: Upload per-distro image (intermediate)
-        uses: actions/upload-artifact@v4
-        with:
-          name: oci-part-${{ matrix.distro }}
-          path: out/aerospike-c-build-${{ matrix.distro }}-${{ inputs.version }}-oci.tar.gz
-          if-no-files-found: error
-          retention-days: 1
+#       - name: Upload per-distro image (intermediate)
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: oci-part-${{ matrix.distro }}
+#           path: out/aerospike-c-build-${{ matrix.distro }}-${{ inputs.version }}-oci.tar.gz
+#           if-no-files-found: error
+#           retention-days: 1
 
-  # ── Club all per-distro archives into ONE folder → single zip artifact ───────
-  # Downloads every oci-part-* (one .tar.gz per distro) into a single directory
-  # and re-uploads it as one artifact, so the download is a single .zip containing
-  # all distro images.
-  club:
-    name: club → single zip
-    needs: [resolve, build-image]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Download all per-distro images into one folder
-        uses: actions/download-artifact@v4
-        with:
-          pattern: oci-part-*
-          path: build-env-images
-          merge-multiple: true
+#   # ── Club all per-distro archives into ONE folder → single zip artifact ───────
+#   # Downloads every oci-part-* (one .tar.gz per distro) into a single directory
+#   # and re-uploads it as one artifact, so the download is a single .zip containing
+#   # all distro images.
+#   club:
+#     name: club → single zip
+#     needs: [resolve, build-image]
+#     runs-on: ubuntu-22.04
+#     steps:
+#       - name: Download all per-distro images into one folder
+#         uses: actions/download-artifact@v4
+#         with:
+#           pattern: oci-part-*
+#           path: build-env-images
+#           merge-multiple: true
 
-      - name: List clubbed folder
-        run: ls -lh build-env-images
+#       - name: List clubbed folder
+#         run: ls -lh build-env-images
 
-      - name: Upload single combined artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-env-images-${{ inputs.version }}
-          path: build-env-images
-          if-no-files-found: error
-          retention-days: 7
+#       - name: Upload single combined artifact
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: build-env-images-${{ inputs.version }}
+#           path: build-env-images
+#           if-no-files-found: error
+#           retention-days: 7
 
-  # ── Summary ─────────────────────────────────────────────────────────────────
-  summary:
-    name: summary
-    if: always()
-    needs: [resolve, build-image, club]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Write run summary
-        shell: bash
-        run: |
-          icon() {
-            case "$1" in
-              success) echo "✅" ;;
-              failure) echo "❌" ;;
-              skipped) echo "⏭️" ;;
-              *)       echo "⚠️" ;;
-            esac
-          }
-          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
-          ## Optimized Build Images — Publish Summary
+#   # ── Summary ─────────────────────────────────────────────────────────────────
+#   summary:
+#     name: summary
+#     if: always()
+#     needs: [resolve, build-image, club]
+#     runs-on: ubuntu-22.04
+#     steps:
+#       - name: Write run summary
+#         shell: bash
+#         run: |
+#           icon() {
+#             case "$1" in
+#               success) echo "✅" ;;
+#               failure) echo "❌" ;;
+#               skipped) echo "⏭️" ;;
+#               *)       echo "⚠️" ;;
+#             esac
+#           }
+#           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+#           ## Optimized Build Images — Publish Summary
 
-          | | Value |
-          |---|---|
-          | **Distro** | \`${{ inputs.distro || 'all' }}\` |
-          | **Version** | \`${{ inputs.version }}\` |
-          | **Pushed to JFrog** | \`${{ inputs.push }}\` |
-          | **JFrog project** | \`${{ inputs.jf-project }}\` |
-          | **Platforms** | \`linux/amd64, linux/arm64\` |
-          | **Image name** | \`aerospike-c-build-<distro>\` |
-          | **Shared workflow** | \`reusable_docker-build-deploy.yaml@v3.6.0\` |
-          | **Publish (JFrog) result** | $(icon "${{ needs.publish.result }}") \`${{ needs.publish.result }}\` |
-          | **Combined artifact** | \`build-env-images-${{ inputs.version }}\` (one zip, all distros, multi-arch OCI) |
-          | **Build-image result** | $(icon "${{ needs.build-image.result }}") \`${{ needs.build-image.result }}\` |
-          | **Club result** | $(icon "${{ needs.club.result }}") \`${{ needs.club.result }}\` |
-          EOF
+#           | | Value |
+#           |---|---|
+#           | **Distro** | \`${{ inputs.distro || 'all' }}\` |
+#           | **Version** | \`${{ inputs.version }}\` |
+#           | **Pushed to JFrog** | \`${{ inputs.push }}\` |
+#           | **JFrog project** | \`${{ inputs.jf-project }}\` |
+#           | **Platforms** | \`linux/amd64, linux/arm64\` |
+#           | **Image name** | \`aerospike-c-build-<distro>\` |
+#           | **Shared workflow** | \`reusable_docker-build-deploy.yaml@v3.6.0\` |
+#           | **Publish (JFrog) result** | $(icon "${{ needs.publish.result }}") \`${{ needs.publish.result }}\` |
+#           | **Combined artifact** | \`build-env-images-${{ inputs.version }}\` (one zip, all distros, multi-arch OCI) |
+#           | **Build-image result** | $(icon "${{ needs.build-image.result }}") \`${{ needs.build-image.result }}\` |
+#           | **Club result** | $(icon "${{ needs.club.result }}") \`${{ needs.club.result }}\` |
+#           EOF

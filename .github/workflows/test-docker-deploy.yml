@@ -1,0 +1,244 @@
+# name: Publish Optimized Build Images (JFrog)
+
+# run-name: >-
+#   publish build images — distro=${{ inputs.distro || 'all' }},
+#   arch=${{ inputs.arch || 'all' }}, push=${{ inputs.push }}
+
+# # ─────────────────────────────────────────────────────────────────────────────
+# # Builds the OPTIMIZED build-environment images (docker/build-optimized/<distro>/
+# # Dockerfile) for amd64 AND arm64 on native-arch runners, and pushes them to a
+# # JFrog Artifactory Docker registry.
+# #
+# #   resolve     – expand distro/arch inputs into a {distro,arch,runner} matrix
+# #   build-push  – on the matching-arch runner (x86_64 or arm), docker build the
+# #                 image with --platform linux/<arch>, tag it
+# #                   <registry>/<repo>/aerospike-c-build:optimized-<arch>-<distro>
+# #                 and (when push=true) push it to JFrog
+# #   manifest    – (arch=all + push only) fuse the per-arch tags into one
+# #                 multi-arch tag  …:optimized-<distro>  via buildx imagetools
+# #
+# # Architecture → runner (native, no QEMU):
+# #   amd64 (x86_64) → ubuntu-24.04        arm64 → ubuntu-24.04-arm
+# # (Swap for [self-hosted, linux, <arch>] if hosted arm64 is unavailable.)
+# #
+# # Required configuration (Settings → Secrets and variables → Actions):
+# #   vars.JFROG_REGISTRY   e.g. mycompany.jfrog.io        (Docker registry host)
+# #   vars.JFROG_REPO       e.g. ecosystem-docker-dev      (Artifactory repo key)
+# #   secrets.JFROG_USERNAME
+# #   secrets.JFROG_PASSWORD  (password or identity/access token)
+# # ─────────────────────────────────────────────────────────────────────────────
+
+# on:
+#   workflow_dispatch:
+#     inputs:
+#       distro:
+#         type: choice
+#         required: false
+#         default: amazonlinux-2023
+#         description: 'Linux distro to build'
+#         options:
+#           - all
+#           - rhel-8
+#           - rhel-9
+#           - rhel-10
+#           - amazonlinux-2023
+#           - debian-12
+#           - debian-13
+#           - ubuntu-22.04
+#           - ubuntu-24.04
+#       arch:
+#         type: choice
+#         required: false
+#         default: all
+#         description: 'Target architecture (all = amd64 + arm64)'
+#         options: [all, amd64, arm64]
+#       push:
+#         type: boolean
+#         required: false
+#         default: true
+#         description: 'Push the images to JFrog (uncheck to build-only / dry run)'
+
+# permissions:
+#   contents: read
+
+# concurrency:
+#   group: docker-images--${{ github.ref }}-${{ inputs.distro }}-${{ inputs.arch }}
+#   cancel-in-progress: false
+
+# env:
+#   IMAGE_NAME: aerospike-client-c-build
+#   CHECKOUT_SHA: ${{ github.sha }}
+
+# jobs:
+#   # ── Resolve the (distro × arch) matrix from the dispatch inputs ─────────────
+#   resolve:
+#     name: resolve / image matrix
+#     runs-on: ubuntu-24.04
+#     outputs:
+#       entries: ${{ steps.gen.outputs.entries }}
+#       distros: ${{ steps.gen.outputs.distros }}
+#     steps:
+#       - id: gen
+#         shell: bash
+#         run: |
+#           DISTRO_IN="${{ inputs.distro }}"
+#           ARCH_IN="${{ inputs.arch }}"
+
+#           if [[ -z "$DISTRO_IN" || "$DISTRO_IN" == "all" ]]; then
+#             DISTROS='["rhel-8","rhel-9","rhel-10","amazonlinux-2023","debian-12","debian-13","ubuntu-22.04","ubuntu-24.04"]'
+#           else
+#             DISTROS="[\"$DISTRO_IN\"]"
+#           fi
+
+#           if [[ -z "$ARCH_IN" || "$ARCH_IN" == "all" ]]; then
+#             ARCHES='["amd64","arm64"]'
+#           else
+#             ARCHES="[\"$ARCH_IN\"]"
+#           fi
+
+#           entries=$(jq -cn --argjson d "$DISTROS" --argjson a "$ARCHES" '
+#             [ $d[] as $distro | $a[] as $arch |
+#               { distro: $distro,
+#                 arch:   $arch,
+#                 runner: (if $arch == "arm64" then "ubuntu-24.04-arm" else "ubuntu-24.04" end) } ]')
+
+#           echo "entries=$entries" >> "$GITHUB_OUTPUT"
+#           echo "distros=$DISTROS" >> "$GITHUB_OUTPUT"
+#           echo "Matrix: $entries"
+
+#   # ── Build (per arch, native runner) and push to JFrog ───────────────────────
+#   build-push:
+#     name: ${{ matrix.entry.distro }} / ${{ matrix.entry.arch }}
+#     needs: resolve
+#     runs-on: ${{ matrix.entry.runner }}
+
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         entry: ${{ fromJSON(needs.resolve.outputs.entries) }}
+
+#     env:
+#       DISTRO: ${{ matrix.entry.distro }}
+#       ARCH: ${{ matrix.entry.arch }}
+#       DOCKER_PLATFORM: linux/${{ matrix.entry.arch }}
+#       REGISTRY: ${{ vars.JFROG_REGISTRY }}
+#       REPO: ${{ vars.JFROG_REPO }}
+
+#     steps:
+#       # No submodules — the optimized Dockerfiles don't COPY the client source.
+#       - name: Checkout client
+#         uses: actions/checkout@v4
+#         with:
+#           ref: ${{ env.CHECKOUT_SHA }}
+#           token: ${{ secrets.GITHUB_TOKEN }}
+
+#       # Fail fast with a clear message if the JFrog config is missing.
+#       - name: Verify JFrog configuration
+#         if: ${{ inputs.push }}
+#         run: |
+#           missing=()
+#           [[ -z "${REGISTRY}" ]] && missing+=("vars.JFROG_REGISTRY")
+#           [[ -z "${REPO}" ]] && missing+=("vars.JFROG_REPO")
+#           [[ -z "${{ secrets.JFROG_USERNAME }}" ]] && missing+=("secrets.JFROG_USERNAME")
+#           [[ -z "${{ secrets.JFROG_PASSWORD }}" ]] && missing+=("secrets.JFROG_PASSWORD")
+#           if (( ${#missing[@]} )); then
+#             echo "::error::Missing required config: ${missing[*]}"
+#             exit 1
+#           fi
+#           echo "JFrog target: ${REGISTRY}/${REPO}/${IMAGE_NAME}"
+
+#       - name: Log in to JFrog
+#         if: ${{ inputs.push }}
+#         uses: docker/login-action@v3
+#         with:
+#           registry: ${{ vars.JFROG_REGISTRY }}
+#           username: ${{ secrets.JFROG_USERNAME }}
+#           password: ${{ secrets.JFROG_PASSWORD }}
+
+#       - name: Build optimized image (${{ env.DOCKER_PLATFORM }})
+#         run: |
+#           if [[ "${{ inputs.push }}" == "true" ]]; then
+#             IMAGE="${REGISTRY}/${REPO}/${IMAGE_NAME}:optimized-${ARCH}-${DISTRO}"
+#           else
+#             # Build-only / dry run — tag locally, never reference the registry.
+#             IMAGE="${IMAGE_NAME}:optimized-${ARCH}-${DISTRO}"
+#           fi
+#           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+#           echo "Building $IMAGE"
+#           docker build \
+#             --platform "$DOCKER_PLATFORM" \
+#             -t "$IMAGE" \
+#             -f "docker/build-optimized/${DISTRO}/Dockerfile" \
+#             .
+
+#       - name: Push to JFrog
+#         if: ${{ inputs.push }}
+#         run: |
+#           docker push "$IMAGE"
+#           echo "Pushed $IMAGE"
+
+#   # ── Fuse the two per-arch tags into one multi-arch tag (arch=all + push) ─────
+#   manifest:
+#     name: manifest / ${{ matrix.distro }}
+#     needs: [resolve, build-push]
+#     if: ${{ inputs.push && (inputs.arch == 'all' || inputs.arch == '') }}
+#     runs-on: ubuntu-24.04
+
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         distro: ${{ fromJSON(needs.resolve.outputs.distros) }}
+
+#     env:
+#       REGISTRY: ${{ vars.JFROG_REGISTRY }}
+#       REPO: ${{ vars.JFROG_REPO }}
+
+#     steps:
+#       - name: Log in to JFrog
+#         uses: docker/login-action@v3
+#         with:
+#           registry: ${{ vars.JFROG_REGISTRY }}
+#           username: ${{ secrets.JFROG_USERNAME }}
+#           password: ${{ secrets.JFROG_PASSWORD }}
+
+#       - name: Create multi-arch manifest tag
+#         run: |
+#           BASE="${REGISTRY}/${REPO}/${IMAGE_NAME}"
+#           docker buildx imagetools create \
+#             -t "${BASE}:optimized-${{ matrix.distro }}" \
+#             "${BASE}:optimized-amd64-${{ matrix.distro }}" \
+#             "${BASE}:optimized-arm64-${{ matrix.distro }}"
+#           echo "Created multi-arch tag: ${BASE}:optimized-${{ matrix.distro }}"
+
+#   # ── Summary ─────────────────────────────────────────────────────────────────
+#   summary:
+#     name: summary
+#     if: always()
+#     needs: [resolve, build-push, manifest]
+#     runs-on: ubuntu-24.04
+#     steps:
+#       - name: Write run summary
+#         shell: bash
+#         run: |
+#           icon() {
+#             case "$1" in
+#               success) echo "✅" ;;
+#               failure) echo "❌" ;;
+#               skipped) echo "⏭️" ;;
+#               *)       echo "⚠️" ;;
+#             esac
+#           }
+#           cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+#           ## Optimized Build Images — Publish Summary
+
+#           | | Value |
+#           |---|---|
+#           | **Distro** | \`${{ inputs.distro || 'all' }}\` |
+#           | **Arch** | \`${{ inputs.arch || 'all' }}\` |
+#           | **Pushed to JFrog** | \`${{ inputs.push }}\` |
+#           | **Target** | \`${{ vars.JFROG_REGISTRY }}/${{ vars.JFROG_REPO }}/${{ env.IMAGE_NAME }}\` |
+#           | **Per-arch tag** | \`optimized-<arch>-<distro>\` |
+#           | **Multi-arch tag** | \`optimized-<distro>\` |
+#           | **Build + push** | $(icon "${{ needs.build-push.result }}") \`${{ needs.build-push.result }}\` |
+#           | **Manifest** | $(icon "${{ needs.manifest.result }}") \`${{ needs.manifest.result }}\` |
+#           EOF

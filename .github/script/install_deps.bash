@@ -15,7 +15,7 @@
 #   docs                  : doxygen (+ graphviz) — built from source where the
 #                           distro version is too old (Ubuntu) or absent
 #                           (RHEL / Amazon Linux); on RHEL flex+bison are built
-#                           from source first since microdnf ships neither
+#                           from source (absent from all UBI repos)
 #   packaging             : zip + rpm-build (RHEL/AL) | dpkg-dev + fakeroot (deb)
 #
 # Lua is NOT installed: the client bundles it via the modules/lua submodule.
@@ -70,8 +70,8 @@ install_deps_amazonlinux_2023() {
 }
 
 install_deps_rhel_8() {
-    # ubi8-minimal ships zlib-devel in the enabled repos; microdnf has cmake
-    # but NOT flex/bison → both are built from source before doxygen.
+    # ubi8-minimal: bison/flex are absent from all UBI 8 repos (BaseOS, AppStream,
+    # CodeReady Builder) → build both from source before doxygen.
     # shellcheck disable=SC2086
     microdnf install -y $EL_DEPS zlib-devel $EL_PKG_DEPS cmake python3
     microdnf clean all
@@ -93,7 +93,7 @@ install_debian_common() {
         $DEBIAN_DEPS doxygen $DEBIAN_PKG_DEPS
 }
 
-# Ubuntu apt doxygen is too old → build 1.9.5 from source (cmake/flex/bison).
+# Ubuntu apt doxygen is too old → build from source (cmake/flex/bison).
 install_ubuntu_common() {
     $SUDO apt-get update
     # shellcheck disable=SC2086
@@ -102,9 +102,8 @@ install_ubuntu_common() {
     build_doxygen
 }
 
-# ubi9/ubi10-minimal: zlib-devel is not exposed via microdnf → pull via dnf
-# (same workaround as docker/build/rhel-{9,10}.Dockerfile); flex+bison built
-# from source, then doxygen.
+# ubi9/ubi10-minimal: zlib-devel is not in microdnf's default repos → pull via dnf.
+# bison/flex are absent from all UBI repos → built from source before doxygen.
 install_el_minimal() {
     local bison_ver="$1" flex_ver="$2"
     # shellcheck disable=SC2086
@@ -212,6 +211,7 @@ build_doxygen() {
     rm -rf "$src"
 }
 
+# bison/flex are absent from all UBI repos → built from source on all RHEL variants.
 build_bison() {
     local ver="$1"
     local src
@@ -221,7 +221,7 @@ build_bison() {
     tar xzf "bison-${ver}.tar.gz"
     pushd "bison-${ver}" >/dev/null
     ./configure --prefix=/usr/local
-    make -j"$(nproc)" MAKEINFO=true
+    make MAKEINFO=true
     $SUDO make install
     popd >/dev/null
     popd >/dev/null

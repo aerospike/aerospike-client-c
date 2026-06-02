@@ -56,6 +56,17 @@ as_txn_get_ops_single(as_txn* txn, const as_key* key, as_operations* ops)
 	as_operations_list_append(ops, BIN_NAME_DIGESTS, NULL, &lp, (as_val*)&bytes);
 }
 
+static int
+as_txn_monitor_digests_append(as_arraylist* digests, const as_key* key)
+{
+	uint8_t* buf = (uint8_t*)cf_malloc(AS_DIGEST_VALUE_SIZE);
+	memcpy(buf, key->digest.value, AS_DIGEST_VALUE_SIZE);
+
+	as_bytes* bytes = as_bytes_new_wrap(buf, AS_DIGEST_VALUE_SIZE, true);
+
+	return as_arraylist_append_bytes(digests, bytes);
+}
+
 static void
 as_txn_get_ops_keys(as_txn* txn, const as_batch* batch, as_operations* ops)
 {
@@ -72,13 +83,9 @@ as_txn_get_ops_keys(as_txn* txn, const as_batch* batch, as_operations* ops)
 		as_arraylist_init(&digests, n_keys, 0);
 	}
 
-	as_bytes bytes;
-
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_key* key = &batch->keys.entries[i];
-
-		as_bytes_init_wrap(&bytes, key->digest.value, AS_DIGEST_VALUE_SIZE, false);
-		as_arraylist_append_bytes(&digests, &bytes);
+		as_txn_monitor_digests_append(&digests, key);
 	}
 
 	if (! as_txn_monitor_exists(txn)) {
@@ -110,15 +117,12 @@ as_txn_get_ops_records(as_txn* txn, as_batch_records* records, as_operations* op
 		as_arraylist_init(&digests, n_keys, 0);
 	}
 
-	as_bytes bytes;
-
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_base_record* rec = as_vector_get(records_list, i);
 		as_key* key = &rec->key;
 
 		if (rec->has_write) {
-			as_bytes_init_wrap(&bytes, key->digest.value, AS_DIGEST_VALUE_SIZE, false);
-			as_arraylist_append_bytes(&digests, &bytes);
+			as_txn_monitor_digests_append(&digests, key);
 		}
 	}
 

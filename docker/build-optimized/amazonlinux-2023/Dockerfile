@@ -24,7 +24,7 @@ RUN yum install -y \
 WORKDIR /build
 
 # doxygen 1.9.5
-RUN wget -q https://www.doxygen.nl/files/doxygen-1.9.5.src.tar.gz \
+RUN wget -q https://github.com/doxygen/doxygen/releases/download/Release_1_9_5/doxygen-1.9.5.src.tar.gz \
     && tar xzf doxygen-1.9.5.src.tar.gz \
     && cmake -S doxygen-1.9.5 -B doxygen-1.9.5/build -G "Unix Makefiles" \
     && cmake --build doxygen-1.9.5/build -j2 \

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -66,7 +66,7 @@ as_config_init(as_config* c)
 	c->rack_id = 0;
 	c->rack_ids = NULL;
 	c->use_shm = false;
-	c->shm_key = 0xA9000000;
+	c->shm_key = 0xAC000000;
 	c->shm_max_nodes = 16;
 	c->shm_max_namespaces = 8;
 	c->shm_takeover_threshold_sec = 30;

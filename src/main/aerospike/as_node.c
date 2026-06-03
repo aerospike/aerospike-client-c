@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -66,6 +66,9 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
 
 bool
 as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf);
+
+static as_status
+as_node_get_tend_connection(as_error* err, as_node* node);
 
 static void
 as_node_create_connections(as_node* node, as_conn_pool* pool, uint32_t timeout_ms, int count);
@@ -211,8 +214,6 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conns_aborted = 0;
 	node->conn_iter = 0;
 
-	as_node_send_user_agent(node);
-
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
 	uint32_t rem_min = cluster->min_conns_per_node - (min * cluster->conn_pools_per_node);
 	uint32_t max = cluster->max_conns_per_node / cluster->conn_pools_per_node;
@@ -228,14 +229,27 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	if (as_event_loop_capacity == 0) {
 		node->async_conn_pools = NULL;
 		node->pipe_conn_pools = NULL;
-		return node;
+	}
+	else {
+		// Create async connection pools.
+		node->async_conn_pools = as_node_create_async_pools(cluster->async_min_conns_per_node,
+			cluster->async_max_conns_per_node);
+
+		node->pipe_conn_pools = as_node_create_async_pools(0, cluster->pipe_max_conns_per_node);
 	}
 
-	// Create async connection pools.
-	node->async_conn_pools = as_node_create_async_pools(cluster->async_min_conns_per_node,
-		cluster->async_max_conns_per_node);
+	// as_node_get_tend_connection() must be called because the tend connection has not been created
+	// yet in shared memory mode. The combination of enabling retry_user_agent and calling
+	// as_node_get_tend_connection() will force as_node_send_user_agent() to be called.
+	as_error err;
+	node->retry_user_agent = true;
+	as_status status = as_node_get_tend_connection(&err, node);
 
-	node->pipe_conn_pools = as_node_create_async_pools(0, cluster->pipe_max_conns_per_node);
+	if (status != AEROSPIKE_OK) {
+		// Log error, but still allow node to be added to the cluster.
+		// The tend connection creation will be retried later and retry_user_agent remains true.
+		as_log_error("Failed to get tend connection: %d %s", err.code, err.message);
+	}
 	return node;
 }
 

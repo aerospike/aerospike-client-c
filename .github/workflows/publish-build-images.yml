@@ -26,8 +26,8 @@ run-name: >-
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
-  # push:
-  #   branches: [test-workflow-stage]
+  push:
+    branches: [test-workflow-stage]
   workflow_dispatch:
     inputs:
       distro:
@@ -91,7 +91,7 @@ jobs:
         run: |
           DISTRO_IN="${{ inputs.distro }}"
           if [[ -z "$DISTRO_IN" || "$DISTRO_IN" == "all" ]]; then
-            DISTROS='["debian-13","ubuntu-22.04","ubuntu-24.04"]'
+            DISTROS='["debian-12", "debian-13","ubuntu-22.04","ubuntu-24.04"]'
           else
             DISTROS="[\"$DISTRO_IN\"]"
           fi

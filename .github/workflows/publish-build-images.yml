@@ -33,15 +33,16 @@ on:
       distro:
         type: choice
         required: false
-        default: amazonlinux-2023
+        default: all
         description: 'Linux distro to build (choose "all" to build every distro)'
         options:
-          - amazonlinux-2023
-          - rhel-8
-          - rhel-9
-          - rhel-10
           - all
-          - debian-12
+          # - amazonlinux-2023
+          # - rhel-8
+          # - rhel-9
+          # - rhel-10
+          # - all
+          # - debian-12
           - debian-13
           - ubuntu-22.04
           - ubuntu-24.04
@@ -83,13 +84,14 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       distros: ${{ steps.gen.outputs.distros }}
+   #DISTROS='["rhel-8","rhel-9","rhel-10","amazonlinux-2023","debian-12","debian-13","ubuntu-22.04","ubuntu-24.04"]'
     steps:
       - id: gen
         shell: bash
         run: |
           DISTRO_IN="${{ inputs.distro }}"
           if [[ -z "$DISTRO_IN" || "$DISTRO_IN" == "all" ]]; then
-            DISTROS='["rhel-8","rhel-9","rhel-10","amazonlinux-2023","debian-12","debian-13","ubuntu-22.04","ubuntu-24.04"]'
+            DISTROS='["debian-13","ubuntu-22.04","ubuntu-24.04"]'
           else
             DISTROS="[\"$DISTRO_IN\"]"
           fi

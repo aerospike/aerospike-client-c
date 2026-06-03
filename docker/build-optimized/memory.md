@@ -175,6 +175,7 @@ Workflows and scripts still reference `docker/build/` originals. The new
 |------|--------|
 | **Community server only** | `windows.yml` and `build-mac-wind.yml` MUST test against `aerospike/aerospike-server` (community image) only. Do NOT switch to `aerospike-server-enterprise`. Enterprise requires OIDC auth, `features.conf`, and the `aerospike/shared-workflows` setup action — none of which are wired up in the C client CI. |
 | **No shared-workflows server action** | The C# client uses `aerospike/shared-workflows/.github/actions/setup-aerospike-server` for enterprise. Do not adopt this for the C client — it is enterprise-only and incompatible with the plain `docker run` community setup. |
+| **No `DockerCli.exe -SwitchLinuxEngine` on Windows** | GitHub-hosted `windows-2022` runners have Docker **Engine** (not Docker Desktop). `DockerCli.exe` does not exist on these runners and the step will fail. GitHub runners already default to Linux containers — the switch step is never needed and must not be added. |
 
 ---
 

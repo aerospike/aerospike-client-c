@@ -58,6 +58,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
         git tar zip \
         liblua5.1.0-dev zlib1g-dev libyaml-dev libssl-dev \
         doxygen graphviz \
+        fakeroot \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=deps-builder /usr/local/ /usr/local/

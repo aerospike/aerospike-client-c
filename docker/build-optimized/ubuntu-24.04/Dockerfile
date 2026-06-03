@@ -68,6 +68,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends \
         git tar zip \
         lua5.1 libssl-dev libyaml-dev zlib1g-dev \
         graphviz \
+        fakeroot \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=deps-builder /usr/local/ /usr/local/

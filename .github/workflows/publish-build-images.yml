@@ -26,8 +26,8 @@ run-name: >-
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
-  push:
-    branches: [test-workflow-stage]
+  # push:
+  #   branches: [test-workflow-stage]
   workflow_dispatch:
     inputs:
       distro:
@@ -36,11 +36,11 @@ on:
         default: amazonlinux-2023
         description: 'Linux distro to build (choose "all" to build every distro)'
         options:
-          - all
+          - amazonlinux-2023
           - rhel-8
           - rhel-9
           - rhel-10
-          - amazonlinux-2023
+          - all
           - debian-12
           - debian-13
           - ubuntu-22.04

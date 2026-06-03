@@ -62,6 +62,15 @@ on:
         required: false
         default: 8.1.2.0
         description: 'Aerospike Server image tag for the test step'
+      num-nodes:
+        type: string
+        required: false
+        default: '1'
+        description: >
+          Number of Aerospike cluster nodes (1 = single-node, 2+ = multi-node).
+          Multi-node requires the AEROSPIKE_FEATURES secret to be set (enterprise
+          license). The C client connects to aerospike-1 as the seed node and
+          auto-discovers the full cluster regardless of size.
       run-jobs:
         type: choice
         required: false
@@ -161,10 +170,24 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Starts aerospike-1 on the aerospike-net Docker bridge network.
-      # Outputs: network-name (used in the docker run below), container-names,
-      # service-ports. The action waits for readiness (port open + migrations
-      # complete) before returning.
+      # Starts one or more Aerospike containers on the aerospike-net Docker bridge
+      # network. Outputs: network-name (used in the docker run below),
+      # container-names, service-ports.
+      #
+      # Single-node  (num-nodes = 1, default):
+      #   Creates aerospike-1 on port 3000. No features file needed for
+      #   community edition.
+      #
+      # Multi-node   (num-nodes = 2+):
+      #   Creates aerospike-1, aerospike-2, … on consecutive ports (3000, 3001, …).
+      #   Containers form a cluster over the shared aerospike-net network via mesh
+      #   heartbeat on port 3002. The action waits until CLUSTER-SIZE = num-nodes
+      #   and all migrations complete before returning.
+      #   Requires an enterprise features file → AEROSPIKE_FEATURES secret must be
+      #   set (contains the license that permits multi-node clusters).
+      #
+      # AS_HOST is always aerospike-1 (seed node). The C client auto-discovers the
+      # full cluster topology, so no test-side change is needed for multi-node.
       - name: Start Aerospike server
         id: setup-aerospike
         uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@main
@@ -172,6 +195,10 @@ jobs:
           oidc-provider: ${{ secrets.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ secrets.JFROG_OIDC_AUDIENCE }}
           server-tag: ${{ inputs.server-tag || '8.1.2.0' }}
+          num-nodes: ${{ inputs.num-nodes || '1' }}
+          # features-content is only required for multi-node (enterprise license).
+          # For single-node community builds it is left empty and ignored.
+          features-content: ${{ secrets.AEROSPIKE_FEATURES }}
           env-vars: "DEFAULT_TTL=2592000"
 
       # Single docker run covering install → build → test.
@@ -350,6 +377,7 @@ jobs:
           |---|---|
           | **Event lib** | \`${{ inputs.event-lib || 'all' }}\` |
           | **Server** | \`aerospike-server-enterprise:${{ inputs.server-tag || '8.1.2.0' }}\` |
+          | **Cluster nodes** | \`${{ inputs.num-nodes || '1' }}\` |
           | **Build env** | distro base images + \`.github/script/install_deps.bash\` |
 
           | Job | Result |

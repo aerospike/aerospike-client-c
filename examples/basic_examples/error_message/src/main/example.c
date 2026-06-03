@@ -40,6 +40,11 @@
 // as the substring "subcode=N" -- that's what the C client formats from
 // the AS_MSG_FIELD_TYPE_ERROR_DETAILS field.
 //
+// AS_SUB_NONE (0) is never sent on the wire: the server omits map key 1
+// entirely when the subcode is NONE. Such cases set subcode_absent = true,
+// and the driver asserts no "subcode=" suffix appears in err.message (the
+// message text alone carries the context).
+//
 
 //==========================================================
 // Includes
@@ -94,7 +99,8 @@ typedef as_status (*case_fn)(aerospike* as, as_error* err);
 typedef struct {
 	const char* name;
 	as_status   expected_status;
-	uint32_t    expected_subcode;
+	bool        subcode_absent;      // true: assert NO subcode on the wire
+	uint32_t    expected_subcode;    // checked only when !subcode_absent
 	const char* expected_msg_substr; // NULL to skip
 	case_fn     run;
 } error_case;
@@ -218,9 +224,9 @@ put_int_map(aerospike* as, as_key* key, const int64_t* keys,
 //==========================================================
 // Cases: particle modify type mismatches.
 //
-// All return AS_ERR_INCOMPATIBLE_TYPE with subcode AS_SUB_NONE (0) --
-// the status is maximally specific, and the message substring
-// distinguishes which op was rejected.
+// All return AS_ERR_INCOMPATIBLE_TYPE with subcode AS_SUB_NONE -- the
+// status is maximally specific, so no subcode is sent on the wire and the
+// message substring distinguishes which op was rejected.
 //
 
 static as_status
@@ -852,98 +858,100 @@ case_operate_filtered_out(aerospike* as, as_error* err)
 
 static const error_case CASES[] = {
 	// --- Particle modify type mismatches ---
+	// All collapse to AS_SUB_NONE: the status is canonical and the message
+	// carries the disambiguating context, so no subcode is sent.
 	{ "append str on int bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, "append",
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, "append",
 	  case_append_str_on_int },
 	{ "incr on string bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, "increment",
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, "increment",
 	  case_incr_on_str },
 	{ "prepend str on int bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, "prepend",
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, "prepend",
 	  case_prepend_str_on_int },
 	{ "incr double on int bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, NULL,
 	  case_incr_double_on_int },
 	{ "hll add on int bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, NULL,
 	  case_hll_add_on_int },
 
 	// --- CDT list ops ---
 	{ "list get index out of bounds",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 1, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, false, 1, NULL,
 	  case_list_get_index_out_of_bounds },
 	{ "list get_by_rank out of bounds",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 2, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, false, 2, NULL,
 	  case_list_get_by_rank_out_of_bounds },
 	{ "list pop index out of bounds",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 1, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, false, 1, NULL,
 	  case_list_pop_index_out_of_bounds },
 	{ "list append add_unique violation",
-	  AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS, 0, NULL,
+	  AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS, true, 0, NULL,
 	  case_list_insert_unique_violation },
 	{ "list insert bounded overflow",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 3, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, false, 3, NULL,
 	  case_list_bounded_overflow },
 	{ "list op on raw-bytes bin (wrong type)",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, NULL,
 	  case_list_op_on_corrupt_bin },
 
 	// --- CDT map ops ---
 	{ "map put create_only on existing key",
-	  AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS, 0, NULL,
+	  AEROSPIKE_ERR_FAIL_ELEMENT_EXISTS, true, 0, NULL,
 	  case_map_put_create_only_existing },
 	{ "map put update_only on missing key",
-	  AEROSPIKE_ERR_FAIL_ELEMENT_NOT_FOUND, 0, NULL,
+	  AEROSPIKE_ERR_FAIL_ELEMENT_NOT_FOUND, true, 0, NULL,
 	  case_map_put_update_only_missing },
 	{ "map op on list bin (wrong type)",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, NULL,
 	  case_map_op_on_list_bin },
 	{ "map op on raw-bytes bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, NULL,
 	  case_map_op_on_corrupt_bin },
 	{ "list ctx into string map value (type mismatch)",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, NULL,
 	  case_map_ctx_into_map_value },
 	// --- Bits ops ---
 	{ "bit get offset out of range",
-	  AEROSPIKE_ERR_REQUEST_INVALID, 2, NULL,
+	  AEROSPIKE_ERR_REQUEST_INVALID, false, 2, NULL,
 	  case_bits_get_offset_out_of_range },
 	{ "bit get size zero",
-	  AEROSPIKE_ERR_REQUEST_INVALID, 3, NULL,
+	  AEROSPIKE_ERR_REQUEST_INVALID, false, 3, NULL,
 	  case_bits_get_size_zero },
 
 	// --- HLL ops ---
 	{ "hll init parses invalid index bits",
-	  AEROSPIKE_ERR_REQUEST_INVALID, 0, NULL,
+	  AEROSPIKE_ERR_REQUEST_INVALID, true, 0, NULL,
 	  case_hll_init_invalid_index_bits },
 	{ "hll fold target larger than current",
-	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, 8, NULL,
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, false, 8, NULL,
 	  case_hll_fold_target_too_large },
 	{ "hll op on raw-bytes bin",
-	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, 0, NULL,
+	  AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, true, 0, NULL,
 	  case_hll_op_on_corrupt_bin },
 	{ "hll refresh_count on missing bin",
-	  AEROSPIKE_ERR_BIN_NOT_FOUND, 1, NULL,
+	  AEROSPIKE_ERR_BIN_NOT_FOUND, false, 1, NULL,
 	  case_hll_refresh_count_no_hll_bin },
 
 	// --- Write / delete / read policy ---
 	{ "write create_only on existing record",
-	  AEROSPIKE_ERR_RECORD_EXISTS, 0, NULL,
+	  AEROSPIKE_ERR_RECORD_EXISTS, true, 0, NULL,
 	  case_write_create_only_existing },
 	{ "write replace_only on missing record",
-	  AEROSPIKE_ERR_RECORD_NOT_FOUND, 0, NULL,
+	  AEROSPIKE_ERR_RECORD_NOT_FOUND, true, 0, NULL,
 	  case_write_replace_only_missing },
 	{ "write generation mismatch",
-	  AEROSPIKE_ERR_RECORD_GENERATION, 0, NULL,
+	  AEROSPIKE_ERR_RECORD_GENERATION, true, 0, NULL,
 	  case_write_generation_mismatch },
 	{ "delete generation mismatch",
-	  AEROSPIKE_ERR_RECORD_GENERATION, 0, NULL,
+	  AEROSPIKE_ERR_RECORD_GENERATION, true, 0, NULL,
 	  case_delete_generation_mismatch },
 	{ "read filtered out by filter_exp",
-	  AEROSPIKE_FILTERED_OUT, 2, NULL,
+	  AEROSPIKE_FILTERED_OUT, false, 2, NULL,
 	  case_read_filtered_out },
 	{ "operate filtered out by filter_exp",
-	  AEROSPIKE_FILTERED_OUT, 2, NULL,
+	  AEROSPIKE_FILTERED_OUT, false, 2, NULL,
 	  case_operate_filtered_out },
 };
 
@@ -966,12 +974,23 @@ check_case(const error_case* c, as_status got, const as_error* err)
 		ok = false;
 	}
 
-	char want_sub[32];
-	snprintf(want_sub, sizeof(want_sub), "subcode=%u", c->expected_subcode);
+	if (c->subcode_absent) {
+		// AS_SUB_NONE is omitted on the wire, so the client never formats a
+		// "subcode=N" suffix. Assert the absence rather than "subcode=0".
+		if (strstr(err->message, "subcode=") != NULL) {
+			LOG("    subcode: expected none, but got one in '%s'",
+					err->message);
+			ok = false;
+		}
+	}
+	else {
+		char want_sub[32];
+		snprintf(want_sub, sizeof(want_sub), "subcode=%u", c->expected_subcode);
 
-	if (strstr(err->message, want_sub) == NULL) {
-		LOG("    subcode: expected '%s' in '%s'", want_sub, err->message);
-		ok = false;
+		if (strstr(err->message, want_sub) == NULL) {
+			LOG("    subcode: expected '%s' in '%s'", want_sub, err->message);
+			ok = false;
+		}
 	}
 
 	if (c->expected_msg_substr != NULL &&

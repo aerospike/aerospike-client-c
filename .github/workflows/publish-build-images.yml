@@ -1,11 +1,11 @@
-name: Publish Optimized Build Images (JFrog)
+name: Publish Fast Build Images (JFrog)
 
 run-name: >-
   publish build images — distro=${{ inputs.distro || 'all' }},
   version=${{ inputs.version }}
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Builds the OPTIMIZED build-environment images (docker/build-optimized/<distro>/
+# Builds the FAST build-environment images (docker/build-fast/<distro>/
 # Dockerfile) for amd64 + arm64 and publishes them to JFrog Artifactory.
 #
 # Delegates entirely to the shared reusable workflow:
@@ -13,7 +13,7 @@ run-name: >-
 # which handles OIDC login, QEMU+buildx multi-arch build, version tagging,
 # SBOM, provenance, attestation and JFrog build-info publishing.
 #
-# Fanned out over the 8 optimized distros via a matrix.
+# Fanned out over the 8 fast distros via a matrix.
 #
 # Image pushed to:
 #   artifact.aerospike.io/<jf-project>-docker-dev-local/aerospike-client-c-<distro>
@@ -37,12 +37,11 @@ on:
         description: 'Linux distro to build (choose "all" to build every distro)'
         options:
           - all
-          # - amazonlinux-2023
-          # - rhel-8
-          # - rhel-9
-          # - rhel-10
-          # - all
-          # - debian-12
+          - amazonlinux-2023
+          - rhel-8
+          - rhel-9
+          - rhel-10
+          - debian-12
           - debian-13
           - ubuntu-22.04
           - ubuntu-24.04
@@ -84,14 +83,14 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       distros: ${{ steps.gen.outputs.distros }}
-   #DISTROS='["rhel-8","rhel-9","rhel-10","amazonlinux-2023","debian-12","debian-13","ubuntu-22.04","ubuntu-24.04"]'
+   #DISTROS='["debian-12", "debian-13","ubuntu-22.04","ubuntu-24.04"]'
     steps:
       - id: gen
         shell: bash
         run: |
           DISTRO_IN="${{ inputs.distro }}"
           if [[ -z "$DISTRO_IN" || "$DISTRO_IN" == "all" ]]; then
-            DISTROS='["debian-12", "debian-13","ubuntu-22.04","ubuntu-24.04"]'
+            DISTROS='["rhel-8","rhel-9","rhel-10","amazonlinux-2023","debian-12","debian-13","ubuntu-22.04","ubuntu-24.04"]'
           else
             DISTROS="[\"$DISTRO_IN\"]"
           fi
@@ -109,14 +108,15 @@ jobs:
       matrix:
         distro: ${{ fromJSON(needs.resolve.outputs.distros) }}
     uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy.yaml@v3.6.0
+    # uses: aerospike/shared-workflows/.github/workflows/reusable_docker-build-deploy-multiarch.yaml@7f966d4b6e17ba2c24d1633215208daa663f6d13
     secrets: inherit
     with:
       jf-project:         ${{ vars.JF_PROJECT }}
       image-name:         aerospike-client-c-${{ matrix.distro }}
       app-name:           Aerospike C Client build env (${{ matrix.distro }})
       app-version:        ${{ inputs.version || '1.0.0' }}
-      context:            .
-      file:               docker/build-optimized/${{ matrix.distro }}/Dockerfile
+      context:            docker/build-fast/${{ matrix.distro }}
+      file:               docker/build-fast/${{ matrix.distro }}/Dockerfile
       jf-build-name:      aerospike-c-client-build-${{ matrix.distro }}
       platforms:          linux/amd64,linux/arm64
       push:               true
@@ -151,7 +151,7 @@ jobs:
           REGISTRY="artifact.aerospike.io/${JF_PROJECT}-docker-dev-local"
 
           {
-            echo "## Optimized Build Images — Run Summary"
+            echo "## Fast Build Images — Run Summary"
             echo ""
             echo "### Inputs"
             echo "| | Value |"

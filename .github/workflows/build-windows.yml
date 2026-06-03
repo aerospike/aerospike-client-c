@@ -28,16 +28,16 @@ run-name: >-
 #   sync → Release/Debug · libuv → Release/Debug libuv · libevent → …libevent
 # ─────────────────────────────────────────────────────────────────────────────
 
-# on:
-#   push:
-#     branches: [test-workflow-stage]
+on:
+  push:
+    branches: [test-workflow-stage]
 
   workflow_dispatch:
     inputs:
       config:
         type: choice
         required: false
-        default: all
+        default: libuv
         description: 'Configuration to build and test (all = full matrix)'
         options: [all, sync, libuv, libevent]
       run-package:

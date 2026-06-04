@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -124,6 +124,13 @@ typedef struct as_error_s {
 	 */
 	bool in_doubt;
 
+	/**
+	 * Server error detail subcode. When error_detail_verbosity >= 1 on the request policy
+	 * and the server returns structured error details, this field contains the numeric subcode.
+	 * Zero when no subcode was returned.
+	 */
+	uint64_t subcode;
+
 } as_error;
 
 //---------------------------------
@@ -168,6 +175,7 @@ as_error_init(as_error* err)
 	err->file = NULL;
 	err->line = 0;
 	err->in_doubt = false;
+	err->subcode = 0;
 	return err;
 }
 
@@ -189,6 +197,7 @@ as_error_reset(as_error* err)
 	err->file = NULL;
 	err->line = 0;
 	err->in_doubt = false;
+	err->subcode = 0;
 	return err->code;
 }
 
@@ -208,6 +217,8 @@ as_error_setall(as_error* err, as_status code, const char * message, const char 
 	err->file = file;
 	err->line = line;
 	err->in_doubt = false;
+	// subcode deliberately not zeroed: set by the field-45 parser and must
+	// survive setall/setallv calls made by the priority logic.
 	return err->code;
 }
 
@@ -233,6 +244,8 @@ as_error_setallv(as_error* err, as_status code, const char * func, const char * 
 	err->file = file;
 	err->line = line;
 	err->in_doubt = false;
+	// subcode deliberately not zeroed: set by the field-45 parser and must
+	// survive setall/setallv calls made by the priority logic.
 	return err->code;
 }
 
@@ -264,6 +277,7 @@ as_error_copy(as_error * trg, const as_error * src)
 	trg->file = src->file;
 	trg->line = src->line;
 	trg->in_doubt = src->in_doubt;
+	trg->subcode = src->subcode;
 }
 
 /**

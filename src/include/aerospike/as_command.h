@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -68,6 +68,7 @@ extern "C" {
 #define AS_FIELD_QUERY_BINS 40
 #define AS_FIELD_BATCH_INDEX 41
 #define AS_FIELD_FILTER 43
+#define AS_FIELD_ERROR_DETAILS 45
 
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
@@ -118,6 +119,10 @@ extern "C" {
 #define AS_MSG_INFO4_TXN_ROLL_FORWARD		(1 << 1) // Roll forward transaction.
 #define AS_MSG_INFO4_TXN_ROLL_BACK			(1 << 2) // Roll back transaction.
 #define AS_MSG_INFO4_TXN_ON_LOCKING_ONLY	(1 << 4) // Must be able to lock record in transaction.
+
+// Error detail verbosity in info4 bits 5-6
+#define AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT	5
+#define AS_MSG_INFO4_ERROR_VERBOSITY_MASK	0x60
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -668,6 +673,21 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
 
 /**
  * @private
+ * Iterate fields, parse error details from field type 45 if present, skip others.
+ */
+uint8_t*
+as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields);
+
+/**
+ * @private
+ * Parse msgpack-encoded error details (field type 45 payload).
+ * Populates err->subcode and err->message.
+ */
+void
+as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len);
+
+/**
+ * @private
  * Parse record fields given digest/set.
  */
 as_status
@@ -686,7 +706,7 @@ as_command_parse_fields(
 	)
 {
 	if (! txn) {
-		*pp = as_command_ignore_fields(*pp, msg->n_fields);
+		*pp = as_command_parse_fields_err(*pp, err, msg->n_fields);
 		return AEROSPIKE_OK;
 	}
 	return as_command_parse_fields_txn(pp, err, msg, txn, key->digest.value, key->set, is_write);

@@ -671,7 +671,9 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 	// It's important that as_txn_on_write_in_doubt() is only executed for commands in a transaction,
 	// but not transaction operations (add transaction key, commit, abort). Add transaction key sets
 	// AS_COMMAND_FLAGS_TXN_MONITOR and commit/abort do not set cmd->policy->txn.
-	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_TXN_MONITOR) == 0) {
+	// Do nothing for batch commands as they are handled in aerospike_batch.
+	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_TXN_MONITOR) == 0
+		&& (cmd->flags & AS_COMMAND_FLAGS_BATCH) == 0) {
 		as_txn_on_write_in_doubt(cmd->policy->txn, cmd->key->digest.value, cmd->key->set);
 	}
 }

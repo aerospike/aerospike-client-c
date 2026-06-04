@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -432,8 +432,11 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
 	cmd->conn = NULL;
+	cmd->metrics = NULL;
 	cmd->proto_type_rcv = 0;
 	cmd->event_state = &cmd->cluster->event_state[event_loop->index];
+	cmd->bytes_in = 0;
+	cmd->bytes_out = 0;
 
 	if (cmd->event_state->closed) {
 		as_error err;
@@ -616,6 +619,9 @@ static void
 as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 {
 	cmd->state = AS_ASYNC_STATE_CONNECT;
+	cmd->metrics = NULL;
+	cmd->bytes_in = 0;
+	cmd->bytes_out = 0;
 
 	if (cmd->partition) {
 		// If in retry, need to release node from prior attempt.
@@ -643,6 +649,14 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
+	if (cmd->cluster->metrics_enabled) {
+		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->begin = cf_getns();
+		}
+	}
+
 	if (! as_node_valid_error_rate(cmd->node)) {
 		event_loop->errors++;
 
@@ -656,18 +670,6 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_event_timer_stop(cmd);
 		as_event_error_callback(cmd, &err);
 		return;
-	}
-
-	cmd->metrics = NULL;
-	cmd->bytes_in = 0;
-	cmd->bytes_out = 0;
-
-	if (cmd->cluster->metrics_enabled) {
-		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
-
-		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			cmd->begin = cf_getns();
-		}
 	}
 
 	if (cmd->pipe_listener) {
@@ -969,7 +971,7 @@ as_event_socket_retry(as_event_command* cmd)
 	}
 
 	as_event_stop_watcher(cmd, cmd->conn);
-	as_event_release_async_connection(cmd);
+	as_event_release_command_connection(cmd);
 	return as_event_command_retry(cmd, false);
 }
 
@@ -1064,6 +1066,7 @@ static inline void
 as_event_put_connection(as_event_command* cmd, as_async_conn_pool* pool)
 {
 	as_event_set_conn_last_used(cmd->conn);
+	((as_async_connection*)cmd->conn)->cmd = NULL;
 
 	if (! as_async_conn_pool_push_head(pool, cmd->conn)) {
 		as_event_release_connection(cmd->conn, pool);
@@ -1409,7 +1412,7 @@ as_event_parse_error(as_event_command* cmd, as_error* err)
 
 	// Close connection.
 	as_event_stop_watcher(cmd, cmd->conn);
-	as_event_release_async_connection(cmd);
+	as_event_release_command_connection(cmd);
 
 	// Stop timer.
 	as_event_timer_stop(cmd);
@@ -1469,7 +1472,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_NOT_AUTHENTICATED:
 			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
-			as_event_release_connection(cmd->conn, pool);
+			as_event_release_async_connection((as_async_connection*)cmd->conn, pool);
 			break;
 		
 		case AEROSPIKE_ERR_TIMEOUT:

@@ -1025,7 +1025,7 @@ as_exp_destroy_base64(char* base64)
 		{.op=_AS_EXP_CODE_MAP_VALUES_IN, .count=2}, __map
 
 // Retain compatibility with 7.4.0 release
-#define as_exp_map_valies(__map)  as_exp_map_values_in(__map)
+#define as_exp_map_values(__map)  as_exp_map_values_in(__map)
 
 /**
  * Create expression that performs a regex match on a string bin or value

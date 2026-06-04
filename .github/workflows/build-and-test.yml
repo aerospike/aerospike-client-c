@@ -259,12 +259,15 @@ jobs:
           features-content: ${{ secrets.AEROSPIKE_FEATURES }}
           env-vars: 'DEFAULT_TTL=2592000'
 
+      # Runs on the macOS host (not in Docker), so use localhost:service-ports.
       - name: Test (${{ matrix.event_lib }})
+        env:
+          AS_PORT: ${{ steps.setup-aerospike.outputs.service-ports }}
         run: |
           if [ "${{ matrix.event_lib }}" = "sync" ]; then
-            make AS_HOST=aerospike-1 test
+            make AS_HOST=localhost AS_PORT=$AS_PORT test
           else
-            make EVENT_LIB=${{ matrix.event_lib }} AS_HOST=aerospike-1 test
+            make EVENT_LIB=${{ matrix.event_lib }} AS_HOST=localhost AS_PORT=$AS_PORT test
           fi
 
       - name: Dump server logs on failure

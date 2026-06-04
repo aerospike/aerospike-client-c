@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -34,6 +34,12 @@
 #include <aerospike/as_thread_pool.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_queue.h>
+
+//---------------------------------
+// Imports
+//---------------------------------
+
+extern bool as_op_is_write[];
 
 //---------------------------------
 // Types
@@ -90,6 +96,7 @@ typedef struct as_scan_builder {
 	as_node_partitions* np;
 	as_buffer argbuffer;
 	as_queue* opsbuffers;
+	as_cluster* cluster;
 	uint64_t max_records;
 	size_t size;
 	uint32_t task_id_offset;
@@ -386,11 +393,16 @@ as_scan_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* bu
 
 static as_status
 as_scan_command_size(
-	const as_policy_scan* policy, const as_scan* scan, as_scan_builder* sb, as_error* err
-	)
+	const as_policy_scan* policy, const as_scan* scan, as_scan_builder* sb, as_error* err)
 {
 	sb->size = AS_HEADER_SIZE;
 	uint16_t n_fields = 0;
+
+	// Providing bin names (via .select) and operations to perform (via .ops) at the same time is not allowed.
+	if (scan->select.size > 0 && as_operations_defined(scan->ops)) {
+		// This will become an AEROSPIKE_ERR_PARAM error in the next major release of the client.
+		as_log_warn("Operations and bin names are mutually exclusive.");
+	}
 
 	if (sb->np) {
 		sb->parts_full_size = sb->np->parts_full.size * 2;
@@ -465,11 +477,35 @@ as_scan_command_size(
 
 	sb->n_fields = n_fields;
 
-	// Operations (used in background scans) and bin names (used in foreground scans)
-	// are mutually exclusive.
-	if (scan->ops) {
-		// Estimate size for background operations.
+	// Operations and bin names are mutually exclusive.
+	if (as_operations_defined(scan->ops)) {
+		// Estimate size for operations (both foreground and background).
 		as_operations* ops = scan->ops;
+		bool has_write = as_operations_has_write(ops);
+		bool all_writes = as_operations_consists_of_all_writes(ops);
+		bool is_foreground_scan = sb->pt != NULL;
+
+		if (is_foreground_scan && !has_write) {
+			for (uint16_t i = 0; i < ops->binops.size; i++) {
+				if (!as_operations_is_basic_read(ops->binops.entries[i].op)) {
+					if (!sb->cluster->has_query_ops_projection_ext) {
+						return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+								"Only basic read operations are supported for scan operations projection in server versions prior to 8.1.2.");
+					}
+					else {
+						break;
+					}
+				}
+			}
+		}
+		else if (is_foreground_scan && has_write) {
+			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+					"Scan operations must be read-only. Use background scan for write-only operations.");
+		}
+		else if (!is_foreground_scan && !all_writes) {
+			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+					"Background scan operations must be write-only. Use scan for read-only operations.");
+		}
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
 			as_binop* op = &ops->binops.entries[i];
@@ -498,17 +534,41 @@ as_scan_command_init(
 	uint16_t n_ops = (scan->ops) ? scan->ops->binops.size : scan->select.size;
 	uint8_t* p;
 
-	if (scan->ops) {
-		// Background scan with operations.
-		uint32_t ttl = (scan->ttl)? scan->ttl : scan->ops->ttl;
+	if (as_operations_defined(scan->ops)) {
+		// Check if this is a foreground scan with operations (read operations only)
+		bool has_write_ops = false;
 
-		if (ttl == AS_RECORD_CLIENT_DEFAULT_TTL) {
-			ttl = policy->ttl;
+		for (uint16_t i = 0; i < scan->ops->binops.size; i++) {
+			as_binop* op = &scan->ops->binops.entries[i];
+			if (as_op_is_write[op->op]) {
+				has_write_ops = true;
+				break; // No need to check further once we find a write op
+			}
 		}
 
-		p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
-				AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
-				policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
+		if (has_write_ops) {
+			// Background scan with write operations.
+			uint32_t ttl = (scan->ttl)? scan->ttl : scan->ops->ttl;
+
+			if (ttl == AS_RECORD_CLIENT_DEFAULT_TTL) {
+				ttl = policy->ttl;
+			}
+
+			p = as_command_write_header_write(cmd, &policy->base, AS_POLICY_COMMIT_LEVEL_ALL,
+					AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, ttl, sb->n_fields, n_ops,
+					policy->durable_delete, false, 0, AS_MSG_INFO2_WRITE, 0);
+		} else {
+			// Foreground scan with read operations.
+			uint8_t read_attr = AS_MSG_INFO1_READ;
+
+			if (scan->no_bins) {
+				read_attr |= AS_MSG_INFO1_GET_NOBINDATA;
+			}
+
+			p = as_command_write_header_read(cmd, &policy->base, AS_POLICY_READ_MODE_AP_ONE,
+					AS_POLICY_READ_MODE_SC_SESSION, -1, policy->base.total_timeout, sb->n_fields, n_ops,
+					read_attr, 0, AS_MSG_INFO3_PARTITION_DONE);
+		}
 	}
 	else if (scan->apply_each.function[0]) {
 		// Background scan with UDF.
@@ -596,7 +656,7 @@ as_scan_command_init(
 		p = as_command_write_field_uint64(p, AS_FIELD_MAX_RECORDS, sb->max_records);
 	}
 
-	if (scan->ops) {
+	if (as_operations_defined(scan->ops)) {
 		as_operations* ops = scan->ops;
 
 		for (uint16_t i = 0; i < ops->binops.size; i++) {
@@ -637,7 +697,7 @@ as_scan_command_execute(as_scan_task* task)
 
 	as_queue opsbuffers;
 
-	if (task->scan->ops) {
+	if (as_operations_defined(task->scan->ops)) {
 		as_queue_inita(&opsbuffers, sizeof(as_buffer), task->scan->ops->binops.size);
 	}
 
@@ -653,10 +713,12 @@ as_scan_command_execute(as_scan_task* task)
 		sb.max_records = 0;
 	}
 
+	sb.cluster = task->cluster;
+
 	status = as_scan_command_size(task->policy, task->scan, &sb, &err);
 
 	if (status != AEROSPIKE_OK) {
-		if (task->scan->ops) {
+		if (as_operations_defined(task->scan->ops)) {
 			as_buffers_destroy(&opsbuffers);
 		}
 
@@ -1209,7 +1271,7 @@ as_scan_partition_async(
 
 	as_queue opsbuffers;
 
-	if (scan->ops) {
+	if (as_operations_defined(scan->ops)) {
 		as_queue_inita(&opsbuffers, sizeof(as_buffer), scan->ops->binops.size);
 	}
 
@@ -1225,10 +1287,12 @@ as_scan_partition_async(
 	sb.opsbuffers = &opsbuffers;
 	sb.max_records = 0;
 
+	sb.cluster = cluster;
+
 	status = as_scan_command_size(policy, scan, &sb, err);
 
 	if (status != AEROSPIKE_OK) {
-		if (scan->ops) {
+		if (as_operations_defined(scan->ops)) {
 			as_buffers_destroy(&opsbuffers);
 		}
 		as_partition_tracker_destroy(pt);

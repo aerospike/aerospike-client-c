@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -57,9 +57,7 @@ extern "C" {
  * terminate, and what's left in the resulting buffer should be the packed
  * CDT representation.
  *
- * @param A pointer to the packer instance returned by as_cdt_begin().
- *
- * @relates as_cdt_begin
+ * @param pk A pointer to the packer instance returned by as_cdt_begin().
  */
 #define as_cdt_end(pk) \
 		if (!(pk)->buffer) {\

@@ -16,4 +16,4 @@
  */
 #include <aerospike/version.h>
 
-AS_EXTERN char* aerospike_client_version = "7.3.0";
+AS_EXTERN char* aerospike_client_version = "7.4.0";

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -44,7 +44,7 @@
  *
  * See <a href="files.html">Files</a> for Aerospike header files.<br/>
  * See <a href="classes.html">Data Structures </a> for Aerospike types.<br/>
- * See <a href="https://aerospike.com/developer/client/install?client=c">Developer Guide</a> for installation
+ * See <a href="https://aerospike.com/docs/develop/client/c/install/">Developer Guide</a> for installation
  * instructions and example code.<br/>
  */
  

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_cdt_order.h>
+#include <aerospike/as_list.h>
 #include <aerospike/as_vector.h>
 #include <aerospike/as_val.h>
 
@@ -34,6 +35,9 @@ extern "C" {
  * Note that AS_CDT_CTX_VALUE is a flag (currently, bit 1) within each of the
  * enumeration variants, indicating which variants are to be considered values.
  *
+ * AS_CDT_CTX_AND is combined with AS_CDT_CTX_EXP for an additional boolean
+ * filter at the current context level (wire ID 0x0204).
+ *
  * @relates as_operations
  * @ingroup base_operations
  */
@@ -45,13 +49,21 @@ typedef enum {
 	AS_CDT_CTX_MAP_INDEX = 0x20,
 	AS_CDT_CTX_MAP_RANK = 0x21,
 	AS_CDT_CTX_MAP_KEY = 0x22,
-	AS_CDT_CTX_MAP_VALUE = 0x23
+	AS_CDT_CTX_MAP_VALUE = 0x23,
+	AS_CDT_CTX_MAP_KEYS_IN = 0x2A,
 } as_cdt_ctx_type;
 
 /**
  * Flag indicating whether or not a AS_CDT_CTX_xxx variant is a value.
  */
 #define AS_CDT_CTX_VALUE 0x2
+
+/**
+ * Modifier for expression context items: AND-combine a filter with the
+ * already-narrowed context (see as_cdt_ctx_add_and_filter()).
+ * Wire type is (AS_CDT_CTX_AND | AS_CDT_CTX_EXP) (0x0204).
+ */
+#define AS_CDT_CTX_AND 0x200
 
 /**
  * Nested CDT context level.
@@ -338,6 +350,28 @@ as_cdt_ctx_add_map_value(as_cdt_ctx* ctx, as_val* val)
 }
 
 /**
+ * Restrict map context to the given list of keys, provided they exist.
+ *
+ * For example, if a map {"A": 1, "B": 2, "C": 3} exists, and you pass
+ * keys ["A", "C", "D"] in as the list of keys, the result will only
+ * include {"A": 1, "C": 3}, since element "D" does not exist in the map.
+ *
+ * The ctx list takes ownership of keys.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ * @see as_cdt_ctx_add_and_filter
+ */
+static inline void
+as_cdt_ctx_add_map_keys_in(as_cdt_ctx* ctx, as_list* keys)
+{
+	as_cdt_ctx_item item;
+	item.type = AS_CDT_CTX_MAP_KEYS_IN;
+	item.val.pval = (as_val*)keys;
+	as_vector_append(&ctx->list, &item);
+}
+
+/**
  * Add all to select ctx.
  *
  * At the current context, causes a query to return a list of all the children
@@ -364,6 +398,33 @@ as_cdt_ctx_add_all_children(as_cdt_ctx* ctx);
  */
 AS_EXTERN void
 as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const struct as_exp* exp);
+
+/**
+ * Add a boolean expression filter AND-combined with the current context.
+ *
+ * Restrictions:
+ * - Only one and-filter is allowed per context level.  Multiple filters
+ *   cannot be chained.  To combine multiple conditions, use
+ *   `as_exp_build(as_exp_and(...))` with a single call to
+ *   `as_cdt_ctx_add_and_filter()`.
+ *
+ * - The preceeding context entry must not be an expression type;
+ *   i.e., `as_cdt_ctx_add_and_filter()` cannot follow
+ *   `as_cdt_ctx_add_all_children_with_filter()` or
+ *   `as_cdt_ctx_add_all_children()`.
+ *
+ * - The and-filter cannot be the first entry in the context chain.
+ *
+ * The ctx does NOT take ownership of exp. Evaluation runs after prior context
+ * steps (e.g. map key-list selection); entries must satisfy both. Multiple
+ * as_cdt_ctx_add_and_filter() calls may be chained.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ * @see as_cdt_ctx_add_map_keys_in
+ */
+AS_EXTERN void
+as_cdt_ctx_add_and_filter(as_cdt_ctx* ctx, const struct as_exp* exp);
 
 /**
  * Return exact serialized size of ctx. Return zero on error.

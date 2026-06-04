@@ -9,10 +9,12 @@ are also included.
 
 ### Debian and Ubuntu
 
-	$ sudo apt-get install autoconf automake g++ libc6-dev libev-dev libevent-dev libssl-dev libtool libuv1-dev libyaml-dev zlib1g-dev
+	$ sudo apt-get install autoconf automake g++ libc6-dev libssl-dev libtool libyaml-dev zlib1g-dev
 
 	[Also do on Ubuntu:]
 	$ sudo apt-get install ncurses-dev
+
+If you are building an asynchronous application, see *Event Library (Optional)* below about further dependencies to install.
 
 If you intend on building packages for a distribution, also perform this:
 

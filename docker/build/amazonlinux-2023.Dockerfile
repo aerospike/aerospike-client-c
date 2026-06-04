@@ -10,7 +10,7 @@ RUN yum install -y libyaml-devel openssl openssl-devel
 WORKDIR /work
 
 RUN yum install -y python3
-RUN wget -q https://www.doxygen.nl/files/doxygen-1.9.5.src.tar.gz && \
+RUN wget -q https://github.com/doxygen/doxygen/releases/download/Release_1_9_5/doxygen-1.9.5.src.tar.gz && \
     gunzip doxygen-1.9.5.src.tar.gz && \
     tar xf doxygen-1.9.5.src.tar
 RUN yum install -y cmake flex bison

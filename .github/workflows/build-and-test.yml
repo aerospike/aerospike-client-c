@@ -57,7 +57,7 @@ on:
         description: 'Aerospike cluster node count (2+ requires AEROSPIKE_FEATURES secret)'
         required: false
         type: string
-        default: '1'
+        default: '3'
 
       run-mac:
         description: 'Run macOS ARM64 self-hosted build+test'
@@ -167,7 +167,7 @@ jobs:
       - name: Start Aerospike server
         id: setup-aerospike
          # Pin: post-v3.6.0 SHA (PR #229) — adds --ulimit nofile=15000 to docker
-         # Bump the tag and move away from Commit Pins
+         # Bump the tag and move away from Commit Pin
         uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@91bde550339d432d99123d871c7eee628aa39587
         with:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
@@ -245,9 +245,6 @@ jobs:
 
       # setup-aerospike-server starts Aerospike on aerospike-net and waits
       # until the node is ready before returning.
-      # Pin: post-v3.6.0 SHA (PR #229) — adds --ulimit nofile=15000 to docker
-      # run, fixing ARM64 (aarch64) macOS self-hosted runners where v3.6.0
-      # left the container fd limit at 1024.
       - name: Start Aerospike server
         id: setup-aerospike
         uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@91bde550339d432d99123d871c7eee628aa39587

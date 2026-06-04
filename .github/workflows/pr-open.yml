@@ -29,6 +29,9 @@ permissions:
   pull-requests: write   # allows posting annotations / comments back to the PR
 
 on:
+  push:
+    branches: [test-workflow-stage]
+
   pull_request:
     branches:
       - stage

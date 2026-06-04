@@ -28,6 +28,9 @@
 #include <aerospike/as_tls.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 
 //---------------------------------
 // Globals
@@ -196,40 +199,392 @@ as_ev_watch_read(as_event_command* cmd)
 
 #define AS_EVENT_COMMAND_DONE 8
 
+//---------------------------------
+// Libev TLS (BIO pair) Functions
+//---------------------------------
+
+// For async TLS connections OpenSSL is wired to an in-memory BIO pair instead
+// of the socket fd (SSL_set_fd). SSL_read()/SSL_write() then operate purely on
+// memory and never block on the kernel socket buffers. All socket I/O is
+// performed explicitly here: ciphertext produced by OpenSSL (readable from the
+// network BIO) is sent to the socket, and ciphertext from the socket is fed
+// into the network BIO for OpenSSL to consume. The connection only ever parks
+// on the socket-readiness direction that is actually blocked (send blocked ->
+// watch write, recv blocked -> watch read). This avoids the deadlock the old
+// SSL_set_fd design hit when a large TLS write filled the kernel send buffer
+// over a high-latency link: the watcher could end up waiting on a readiness
+// event that the peer would never produce. See issue #208.
+
+typedef struct as_ev_tls {
+	BIO* nbio;          // Network side of the BIO pair (SSL owns the other side).
+	uint8_t* wbuf;      // Ciphertext pulled from nbio but not yet sent to socket.
+	int wbuf_capacity;
+	int wbuf_len;       // Total valid bytes in wbuf.
+	int wbuf_pos;       // Bytes of wbuf already sent.
+} as_ev_tls;
+
+#define AS_EV_TLS_FLUSH_DONE 0        // All pending ciphertext sent to socket.
+#define AS_EV_TLS_FLUSH_WOULDBLOCK 1  // Socket send would block; EV_WRITE armed.
+#define AS_EV_TLS_FLUSH_ERROR -1
+
+static void as_ev_connect_complete(as_event_command* cmd);
+
+void
+as_ev_tls_conn_free(as_event_connection* conn)
+{
+	as_ev_tls* tls = conn->tls;
+
+	if (! tls) {
+		return;
+	}
+
+	// The internal BIO is owned by the SSL object and freed by SSL_free()
+	// in as_socket_close(). Only the network BIO and buffer are freed here.
+	if (tls->nbio) {
+		BIO_free(tls->nbio);
+	}
+
+	if (tls->wbuf) {
+		cf_free(tls->wbuf);
+	}
+
+	cf_free(tls);
+	conn->tls = NULL;
+}
+
+// Returns true if OpenSSL still has inbound data that can be consumed by
+// SSL_read() without another socket read event: either decrypted plaintext
+// waiting in the SSL object (SSL_pending), or ciphertext already pulled from
+// the socket and buffered in the read BIO (BIO_pending on the read side of the
+// pair). Used to drive the read-drain loop so coalesced TLS records spanning a
+// single socket read are not stranded.
+static inline bool
+as_ev_tls_pending(as_event_connection* conn)
+{
+	if (! conn->socket.tls) {
+		return false;
+	}
+
+	SSL* ssl = conn->socket.ssl;
+
+	if (SSL_pending(ssl) > 0) {
+		return true;
+	}
+
+	BIO* rbio = SSL_get_rbio(ssl);
+	return rbio != NULL && BIO_pending(rbio) > 0;
+}
+
+// Send all ciphertext currently produced by OpenSSL (plus any previously
+// buffered partial write) to the socket. Returns AS_EV_TLS_FLUSH_*.
+static int
+as_ev_tls_flush(as_event_command* cmd)
+{
+	as_event_connection* conn = cmd->conn;
+	as_ev_tls* tls = conn->tls;
+	int fd = conn->socket.fd;
+
+	// Compact any partially-sent leftover to the front so newly produced
+	// ciphertext can be appended after it.
+	if (tls->wbuf_pos > 0) {
+		if (tls->wbuf_pos < tls->wbuf_len) {
+			memmove(tls->wbuf, tls->wbuf + tls->wbuf_pos, tls->wbuf_len - tls->wbuf_pos);
+		}
+		tls->wbuf_len -= tls->wbuf_pos;
+		tls->wbuf_pos = 0;
+	}
+
+	// Pull all ciphertext OpenSSL has produced into wbuf.
+	int pending = BIO_pending(tls->nbio);
+
+	if (pending > 0) {
+		int need = tls->wbuf_len + pending;
+
+		if (need > tls->wbuf_capacity) {
+			tls->wbuf = cf_realloc(tls->wbuf, need);
+			tls->wbuf_capacity = need;
+		}
+
+		int n = BIO_read(tls->nbio, tls->wbuf + tls->wbuf_len, pending);
+
+		if (n > 0) {
+			tls->wbuf_len += n;
+		}
+	}
+
+	// Send as much of wbuf as the socket will accept.
+	while (tls->wbuf_pos < tls->wbuf_len) {
+#if defined(__linux__)
+		ssize_t bytes = send(fd, tls->wbuf + tls->wbuf_pos, tls->wbuf_len - tls->wbuf_pos, MSG_NOSIGNAL);
+#else
+		ssize_t bytes = write(fd, tls->wbuf + tls->wbuf_pos, tls->wbuf_len - tls->wbuf_pos);
+#endif
+		if (bytes > 0) {
+			tls->wbuf_pos += (int)bytes;
+			cmd->bytes_out += (uint32_t)bytes;
+			continue;
+		}
+
+		if (bytes < 0) {
+			if (as_last_error() == AS_WOULDBLOCK) {
+				as_ev_watch_write(cmd);
+				return AS_EV_TLS_FLUSH_WOULDBLOCK;
+			}
+			return AS_EV_TLS_FLUSH_ERROR;
+		}
+		// bytes == 0: connection closed by peer.
+		return AS_EV_TLS_FLUSH_ERROR;
+	}
+
+	tls->wbuf_pos = 0;
+	tls->wbuf_len = 0;
+	return AS_EV_TLS_FLUSH_DONE;
+}
+
+// Read available ciphertext from the socket and feed it into the BIO pair so
+// OpenSSL can decrypt it. Returns:
+//   1  socket read would block (no data available right now)
+//   0  some data was fed into the BIO (or the BIO is full and SSL can proceed)
+//  -1  socket error / closed by peer
+static int
+as_ev_tls_recv(as_event_command* cmd)
+{
+	as_event_connection* conn = cmd->conn;
+	as_ev_tls* tls = conn->tls;
+	int fd = conn->socket.fd;
+
+	// Only read as much as the BIO pair can accept so no socket bytes are lost.
+	int space = (int)BIO_ctrl_get_write_guarantee(tls->nbio);
+
+	if (space <= 0) {
+		// BIO full: OpenSSL can make progress from what is already buffered.
+		return 0;
+	}
+
+	uint8_t buf[16 * 1024];
+
+	if (space > (int)sizeof(buf)) {
+		space = (int)sizeof(buf);
+	}
+
+	ssize_t bytes = read(fd, buf, space);
+
+	if (bytes > 0) {
+		int pos = 0;
+
+		while (pos < bytes) {
+			int w = BIO_write(tls->nbio, buf + pos, (int)bytes - pos);
+
+			if (w <= 0) {
+				// Should not happen: read was sized to the write guarantee.
+				return -1;
+			}
+			pos += w;
+		}
+		return 0;
+	}
+
+	if (bytes < 0) {
+		if (as_last_error() == AS_WOULDBLOCK) {
+			return 1;
+		}
+		return -1;
+	}
+	// bytes == 0: connection closed by peer.
+	return -1;
+}
+
+static int
+as_ev_tls_write_error(as_event_command* cmd, int rv)
+{
+	if (! as_event_socket_retry(cmd)) {
+		as_error err;
+		as_socket_error(cmd->conn->socket.fd, cmd->node, &err, AEROSPIKE_ERR_TLS_ERROR, "TLS write failed", rv);
+		as_event_socket_error(cmd, &err);
+	}
+	return AS_EVENT_WRITE_ERROR;
+}
+
+static int
+as_ev_tls_read_error(as_event_command* cmd, int rv)
+{
+	if (! as_event_socket_retry(cmd)) {
+		as_error err;
+		as_socket_error(cmd->conn->socket.fd, cmd->node, &err, AEROSPIKE_ERR_TLS_ERROR, "TLS read failed", rv);
+		as_event_socket_error(cmd, &err);
+	}
+	return AS_EVENT_READ_ERROR;
+}
+
+static void
+as_ev_tls_connect_error(as_event_command* cmd)
+{
+	if (! as_event_socket_retry(cmd)) {
+		as_error err;
+		as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS connection failed");
+		as_event_socket_error(cmd, &err);
+	}
+}
+
+// Drive the TLS handshake using the BIO pair. On completion calls
+// as_ev_connect_complete(); on failure errors/retries the command. After this
+// returns the caller must not touch cmd (it may have been freed or re-queued).
+static void
+as_ev_tls_handshake(as_event_command* cmd, as_event_connection* conn)
+{
+	SSL* ssl = conn->socket.ssl;
+
+	// Feed any ciphertext waiting on the socket into the BIO pair. "Would
+	// block" (rv == 1) just means no new data right now.
+	int rr = as_ev_tls_recv(cmd);
+
+	if (rr < 0) {
+		as_ev_tls_connect_error(cmd);
+		return;
+	}
+
+	int rv = SSL_do_handshake(ssl);
+	int e = (rv == 1) ? SSL_ERROR_NONE : SSL_get_error(ssl, rv);
+
+	// Always push whatever output the handshake produced to the socket.
+	int fr = as_ev_tls_flush(cmd);
+
+	if (fr == AS_EV_TLS_FLUSH_ERROR) {
+		as_ev_tls_connect_error(cmd);
+		return;
+	}
+
+	if (rv == 1) {
+		if (fr == AS_EV_TLS_FLUSH_WOULDBLOCK) {
+			// Final flight still draining. SSL_is_init_finished() is true now,
+			// so the next writable event re-enters here: recv() yields nothing,
+			// SSL_do_handshake() returns 1 again, the flush completes, and we
+			// fall through to as_ev_connect_complete().
+			return;
+		}
+		as_ev_connect_complete(cmd);
+		return;
+	}
+
+	if (e == SSL_ERROR_WANT_READ || e == SSL_ERROR_WANT_WRITE) {
+		if (fr == AS_EV_TLS_FLUSH_WOULDBLOCK) {
+			// Waiting for the socket to accept output (EV_WRITE armed).
+			return;
+		}
+		// Output fully sent; wait for the peer's response.
+		as_ev_watch_read(cmd);
+		return;
+	}
+
+	// Hard handshake failure.
+	as_ev_tls_connect_error(cmd);
+}
+
+// Replace the fd socket BIO created by as_tls_wrap()/SSL_set_fd() with an
+// in-memory BIO pair and put the SSL object into client connect state.
+static void
+as_ev_tls_init(as_event_command* cmd)
+{
+	as_event_connection* conn = cmd->conn;
+	SSL* ssl = conn->socket.ssl;
+
+	as_ev_tls* tls = cf_malloc(sizeof(as_ev_tls));
+	tls->nbio = NULL;
+	tls->wbuf = NULL;
+	tls->wbuf_capacity = 0;
+	tls->wbuf_len = 0;
+	tls->wbuf_pos = 0;
+	conn->tls = tls;
+
+	BIO* ibio = NULL;
+
+	// Size 0 selects OpenSSL's default buffer (large enough for a full TLS
+	// record), matching the libuv backend.
+	BIO_new_bio_pair(&ibio, 0, &tls->nbio, 0);
+
+	// SSL_set_bio() frees the previous fd BIO. That BIO was created with
+	// BIO_NOCLOSE by SSL_set_fd(), so the socket fd is not affected.
+	SSL_set_bio(ssl, ibio, ibio);
+	SSL_set_connect_state(ssl);
+}
+
 static int
 as_ev_write(as_event_command* cmd)
 {
 	uint8_t* buf = (uint8_t*)cmd + cmd->write_offset;
 
 	if (cmd->conn->socket.tls) {
-		do {
-			int rv = as_tls_write_once(&cmd->conn->socket, buf + cmd->pos, cmd->len - cmd->pos);
+		SSL* ssl = cmd->conn->socket.ssl;
+
+		// First push out any ciphertext left over from a previous partial
+		// socket write.
+		int fr = as_ev_tls_flush(cmd);
+
+		if (fr == AS_EV_TLS_FLUSH_WOULDBLOCK) {
+			return AS_EVENT_WRITE_INCOMPLETE;
+		}
+		if (fr == AS_EV_TLS_FLUSH_ERROR) {
+			return as_ev_tls_write_error(cmd, 0);
+		}
+
+		// Feed plaintext into OpenSSL and flush the resulting ciphertext.
+		while (cmd->pos < cmd->len) {
+			int rv = SSL_write(ssl, buf + cmd->pos, (int)(cmd->len - cmd->pos));
+
 			if (rv > 0) {
-				as_ev_watch_write(cmd);
 				cmd->pos += rv;
-				cmd->bytes_out += rv;
+
+				fr = as_ev_tls_flush(cmd);
+				if (fr == AS_EV_TLS_FLUSH_WOULDBLOCK) {
+					return AS_EVENT_WRITE_INCOMPLETE;
+				}
+				if (fr == AS_EV_TLS_FLUSH_ERROR) {
+					return as_ev_tls_write_error(cmd, rv);
+				}
 				continue;
 			}
-			else if (rv == -1) {
-				// TLS sometimes need to read even when we are writing.
-				as_ev_watch_read(cmd);
-				return AS_EVENT_TLS_NEED_READ;
-			}
-			else if (rv == -2) {
-				// TLS wants a write, we're all set for that.
-				as_ev_watch_write(cmd);
-				return AS_EVENT_WRITE_INCOMPLETE;
-			}
-			else if (rv < -2) {
-				if (! as_event_socket_retry(cmd)) {
-					as_error err;
-					as_socket_error(cmd->conn->socket.fd, cmd->node, &err, AEROSPIKE_ERR_TLS_ERROR, "TLS write failed", rv);
-					as_event_socket_error(cmd, &err);
+
+			int e = SSL_get_error(ssl, rv);
+
+			if (e == SSL_ERROR_WANT_WRITE) {
+				// The BIO pair output buffer is full. Drain it to the socket
+				// to make room, then retry SSL_write.
+				fr = as_ev_tls_flush(cmd);
+				if (fr == AS_EV_TLS_FLUSH_WOULDBLOCK) {
+					return AS_EVENT_WRITE_INCOMPLETE;
 				}
-				return AS_EVENT_WRITE_ERROR;
+				if (fr == AS_EV_TLS_FLUSH_ERROR) {
+					return as_ev_tls_write_error(cmd, rv);
+				}
+				continue;
 			}
-			// as_tls_write_once can't return 0
-		} while (cmd->pos < cmd->len);
+
+			if (e == SSL_ERROR_WANT_READ) {
+				// OpenSSL needs to read (e.g. TLS 1.3 post-handshake / re-key).
+				// Flush any output, then feed it socket data and retry.
+				fr = as_ev_tls_flush(cmd);
+				if (fr == AS_EV_TLS_FLUSH_WOULDBLOCK) {
+					return AS_EVENT_WRITE_INCOMPLETE;
+				}
+				if (fr == AS_EV_TLS_FLUSH_ERROR) {
+					return as_ev_tls_write_error(cmd, rv);
+				}
+
+				int rr = as_ev_tls_recv(cmd);
+				if (rr == 1) {
+					// No socket data yet; wait for it, then resume the write.
+					as_ev_watch_read(cmd);
+					return AS_EVENT_TLS_NEED_READ;
+				}
+				if (rr < 0) {
+					return as_ev_tls_write_error(cmd, rv);
+				}
+				continue;
+			}
+
+			// Hard TLS error.
+			return as_ev_tls_write_error(cmd, rv);
+		}
 	}
 	else {
 		int fd = cmd->conn->socket.fd;
@@ -288,34 +643,46 @@ as_ev_read(as_event_command* cmd)
 	cmd->flags |= AS_ASYNC_FLAGS_EVENT_RECEIVED;
 
 	if (cmd->conn->socket.tls) {
-		do {
-			int rv = as_tls_read_once(&cmd->conn->socket, cmd->buf + cmd->pos, cmd->len - cmd->pos);
+		SSL* ssl = cmd->conn->socket.ssl;
+
+		while (cmd->pos < cmd->len) {
+			int rv = SSL_read(ssl, cmd->buf + cmd->pos, (int)(cmd->len - cmd->pos));
+
 			if (rv > 0) {
-				as_ev_watch_read(cmd);
 				cmd->pos += rv;
-				cmd->bytes_in += rv;
 				continue;
 			}
-			else if (rv == -1) {
-				// TLS wants a read
-				as_ev_watch_read(cmd);
-				return AS_EVENT_READ_INCOMPLETE;
-			}
-			else if (rv == -2) {
-				// TLS sometimes needs to write, even when the app is reading.
-				as_ev_watch_write(cmd);
-				return AS_EVENT_TLS_NEED_WRITE;
-			}
-			else if (rv < -2) {
-				if (! as_event_socket_retry(cmd)) {
-					as_error err;
-					as_socket_error(cmd->conn->socket.fd, cmd->node, &err, AEROSPIKE_ERR_TLS_ERROR, "TLS read failed", rv);
-					as_event_socket_error(cmd, &err);
+
+			int e = SSL_get_error(ssl, rv);
+
+			if (e == SSL_ERROR_WANT_READ) {
+				// Need more ciphertext from the socket.
+				int rr = as_ev_tls_recv(cmd);
+				if (rr == 1) {
+					as_ev_watch_read(cmd);
+					return AS_EVENT_READ_INCOMPLETE;
 				}
-				return AS_EVENT_READ_ERROR;
+				if (rr < 0) {
+					return as_ev_tls_read_error(cmd, rv);
+				}
+				continue;
 			}
-			// as_tls_read_once doesn't return 0
-		} while (cmd->pos < cmd->len);
+
+			if (e == SSL_ERROR_WANT_WRITE) {
+				// OpenSSL needs to write (e.g. handshake / re-key during read).
+				int fr = as_ev_tls_flush(cmd);
+				if (fr == AS_EV_TLS_FLUSH_WOULDBLOCK) {
+					return AS_EVENT_TLS_NEED_WRITE;
+				}
+				if (fr == AS_EV_TLS_FLUSH_ERROR) {
+					return as_ev_tls_read_error(cmd, rv);
+				}
+				continue;
+			}
+
+			// SSL_ERROR_ZERO_RETURN (peer closed) or a hard error.
+			return as_ev_tls_read_error(cmd, rv);
+		}
 	}
 	else {
 		int fd = cmd->conn->socket.fd;
@@ -598,47 +965,6 @@ as_ev_command_read(as_event_command* cmd)
 	return AS_EVENT_COMMAND_DONE;		
 }
 
-bool
-as_ev_tls_connect(as_event_command* cmd, as_event_connection* conn)
-{
-	int rv = as_tls_connect_once(&conn->socket);
-
-	if (rv < -2) {
-		if (! as_event_socket_retry(cmd)) {
-			// Failed, error has been logged.
-			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS connection failed");
-			as_event_socket_error(cmd, &err);
-		}
-		return false;
-	}
-
-	if (rv == -1) {
-		// TLS needs a read.
-		as_ev_watch_read(cmd);
-		return true;
-	}
-
-	if (rv == -2) {
-		// TLS needs a write.
-		as_ev_watch_write(cmd);
-		return true;
-	}
-
-	if (rv == 0) {
-		if (! as_event_socket_retry(cmd)) {
-			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS connection shutdown");
-			as_event_socket_error(cmd, &err);
-		}
-		return false;
-	}
-
-	// TLS connection established.
-	as_ev_connect_complete(cmd);
-	return false;
-}
-
 static void
 as_ev_callback_common(as_event_command* cmd, as_event_connection* conn) {
 	switch (cmd->state) {
@@ -647,11 +973,9 @@ as_ev_callback_common(as_event_command* cmd, as_event_connection* conn) {
 		break;
 
 	case AS_ASYNC_STATE_TLS_CONNECT:
-		do {
-			if (! as_ev_tls_connect(cmd, conn)) {
-				return;
-			}
-		} while (as_tls_read_pending(&cmd->conn->socket) > 0);
+		// as_ev_tls_handshake() drives reads/writes against the BIO pair and
+		// completes or errors the command. Do not touch cmd afterwards.
+		as_ev_tls_handshake(cmd, conn);
 		break;
 
 	case AS_ASYNC_STATE_AUTH_WRITE:
@@ -677,7 +1001,7 @@ as_ev_callback_common(as_event_command* cmd, as_event_connection* conn) {
 				default:
 					break;
 			}
-		} while (as_tls_read_pending(&cmd->conn->socket) > 0);
+		} while (as_ev_tls_pending(cmd->conn));
 		break;
 
 	case AS_ASYNC_STATE_COMMAND_WRITE:
@@ -703,7 +1027,7 @@ as_ev_callback_common(as_event_command* cmd, as_event_connection* conn) {
 			default:
 				break;
 			}
-		} while (as_tls_read_pending(&cmd->conn->socket) > 0);
+		} while (as_ev_tls_pending(cmd->conn));
 		break;
 
 	default:
@@ -767,9 +1091,13 @@ as_ev_watcher_init(as_event_command* cmd, as_socket* sock)
 {
 	as_event_connection* conn = cmd->conn;
 	memcpy(&conn->socket, sock, sizeof(as_socket));
+	conn->tls = NULL;
 
 	// Change state if using TLS.
 	if (as_socket_use_tls(cmd->cluster->tls_ctx)) {
+		// Replace the fd socket BIO created by as_socket_wrap() with an
+		// in-memory BIO pair so SSL I/O never blocks on the kernel socket.
+		as_ev_tls_init(cmd);
 		cmd->state = AS_ASYNC_STATE_TLS_CONNECT;
 	}
 
@@ -868,6 +1196,10 @@ as_ev_connect_error(as_event_command* cmd, as_address* primary, int rv)
 void
 as_event_connect(as_event_command* cmd, as_async_conn_pool* pool)
 {
+	// Initialize TLS state up front so any failure before as_ev_watcher_init()
+	// leaves conn->tls in a known state.
+	cmd->conn->tls = NULL;
+
 	// Try addresses.
 	as_socket sock;
 	as_node* node = cmd->node;

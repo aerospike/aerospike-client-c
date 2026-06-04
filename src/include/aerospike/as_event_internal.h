@@ -81,6 +81,7 @@ typedef struct {
 #if defined(AS_USE_LIBEV)
 	struct ev_io watcher;
 	as_socket socket;
+	struct as_ev_tls* tls;  // Non-NULL only for async TLS connections (BIO pair state).
 #elif defined(AS_USE_LIBUV)
 	uv_tcp_t socket;
 	struct as_uv_tls* tls;
@@ -332,6 +333,9 @@ as_event_node_destroy(as_node* node);
 void as_ev_timer_cb(struct ev_loop* loop, ev_timer* timer, int revents);
 void as_ev_repeat_cb(struct ev_loop* loop, ev_timer* timer, int revents);
 
+// Free BIO-pair TLS state attached to an async connection (no-op if not TLS).
+void as_ev_tls_conn_free(as_event_connection* conn);
+
 static inline bool
 as_event_conn_current_trim(as_event_connection* conn, uint64_t max_socket_idle_ns)
 {
@@ -353,6 +357,10 @@ as_event_conn_validate(as_event_connection* conn)
 static inline void
 as_event_close_connection(as_event_connection* conn)
 {
+	// Free BIO-pair state (network BIO + pending buffer) before closing the
+	// socket. as_socket_close() frees the SSL object, which in turn frees the
+	// internal BIO it owns via SSL_set_bio().
+	as_ev_tls_conn_free(conn);
 	as_socket_close(&conn->socket);
 	cf_free(conn);
 }

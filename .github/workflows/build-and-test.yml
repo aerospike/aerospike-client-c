@@ -54,7 +54,7 @@ on:
         default: latest
 
       num-nodes:
-        description: 'Aerospike cluster node count (2+ requires AEROSPIKE_FEATURES secret)'
+        description: 'Aerospike cluster node count (2+ requires AES_FEATURES_CONF secret)'
         required: false
         type: string
         default: '3'
@@ -164,17 +164,17 @@ jobs:
 
       # Starts Aerospike on the aerospike-net Docker bridge network.
       # The network name is passed to docker run so aerospike-1 is reachable.
+      # Pin: post-v3.6.0 SHA (PR #229) — adds --ulimit nofile=15000 to docker run,
+      # fixing ARM64 runners where v3.6.0 left the container fd limit at 1024.
       - name: Start Aerospike server
         id: setup-aerospike
-         # Pin: post-v3.6.0 SHA (PR #229) — adds --ulimit nofile=15000 to docker
-         # Bump the tag and move away from Commit Pin
         uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@91bde550339d432d99123d871c7eee628aa39587
         with:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
           server-tag: ${{ inputs.server-tag }}
           num-nodes: ${{ inputs.num-nodes }}
-          features-content: ${{ secrets.AEROSPIKE_FEATURES }}
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
           env-vars: 'DEFAULT_TTL=2592000'
 
       - name: Install, build and test
@@ -232,19 +232,7 @@ jobs:
       # service is down, rather than a cryptic failure inside the action.
       - name: Verify Docker (colima)
         run: docker info --format 'OSType={{.OSType}} Server={{.ServerVersion}}'
-
-      # Self-hosted runner is persistent — kill any stale Aerospike container or
-      # network left over from a previous (possibly crashed) run before starting
-      # a fresh one. setup-aerospike-server is a composite action with no post:
-      # step, so cleanup must be explicit (unlike GitHub-hosted runners where
-      # the ephemeral VM discards everything automatically after the job).
-      - name: Remove stale Aerospike containers/network (self-hosted cleanup)
-        run: |
-          docker rm -f aerospike-1 2>/dev/null || true
-          docker network rm aerospike-net 2>/dev/null || true
-
-      # setup-aerospike-server starts Aerospike on aerospike-net and waits
-      # until the node is ready before returning.
+    
       - name: Start Aerospike server
         id: setup-aerospike
         uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@91bde550339d432d99123d871c7eee628aa39587
@@ -252,9 +240,9 @@ jobs:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
           server-tag: ${{ inputs.server-tag }}
-          num-nodes: ${{ inputs.num-nodes }}
+          num-nodes: '1'
           startup-timeout: "60"
-          features-content: ${{ secrets.AEROSPIKE_FEATURES }}
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
           env-vars: 'DEFAULT_TTL=2592000'
 
       # Runs on the macOS host (not in Docker), so use localhost:service-ports.
@@ -268,42 +256,44 @@ jobs:
             make EVENT_LIB=${{ matrix.event_lib }} AS_HOST=localhost AS_PORT=$AS_PORT test
           fi
 
+      # # Runs on the macOS host (not in Docker). Single-node cluster; no peer
+      # # discovery to unreachable container IPs on colima VZ/NAT runners.
+      # - name: Test (${{ matrix.event_lib }})
+      #   env:
+      #     AS_PORTS: ${{ steps.setup-aerospike.outputs.service-ports }}
+      #     EVENT_LIB: ${{ matrix.event_lib != 'sync' && matrix.event_lib || '' }}
+      #   run: |
+      #     AS_PORT="${AS_PORTS%%,*}"   # first port from the CSV (e.g. 3000)
+      #     make ${EVENT_LIB:+EVENT_LIB=$EVENT_LIB} AS_HOST=127.0.0.1 AS_PORT="$AS_PORT" test
+
+
       - name: Verify all containers are running
         run: |
-          for i in 1 2 3; do
-            docker ps --filter "name=aerospike-${i}" --format '{{.Names}}' | grep -q "aerospike-${i}"
-          done
+          docker ps --filter "name=aerospike-1" --format '{{.Names}}' | grep -q "aerospike-1"
 
       - name: Verify cluster formation via asinfo
         run: |
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
-          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
-          for container in aerospike-1 aerospike-2 aerospike-3; do
-            echo "Checking cluster_size on $container..."
-            rc=0
-            stats=$(docker run --rm --network "$network" "$tools_image" \
-              asinfo -h "$container" -p 3000 -v "statistics" 2>&1) || rc=$?
-            cluster_size=$(echo "$stats" | tr ';' '\n' | awk -F= '$1=="cluster_size"{print $2; found=1} END{if(!found) print "N/A"}') 
-            echo "$container cluster_size: $cluster_size (exit code: $rc)"
-            [[ $rc -eq 0 && "$cluster_size" == "3" ]] \
-              || { echo "Expected cluster_size=3 on $container, got $cluster_size"; exit 1; }
+          network="${{ steps.setup-aerospike.outputs.network-name }}"
+          # Pull with retries to guard against transient S3/JFrog EOF errors.
+          for attempt in 1 2 3; do
+            docker pull "$tools_image" && break
+            echo "Pull attempt $attempt failed; retrying in 5 s..."
+            sleep 5
           done
+          stats=$(docker run --rm --network "$network" "$tools_image" \
+            asinfo -h aerospike-1 -p 3000 -v "statistics" 2>&1)
+          cluster_size=$(echo "$stats" | tr ';' '\n' | awk -F= '$1=="cluster_size"{print $2; found=1} END{if(!found) print "N/A"}')
+          echo "aerospike-1 cluster_size: $cluster_size"
+          [[ "$cluster_size" == "1" ]] \
+            || { echo "Expected cluster_size=1, got $cluster_size"; exit 1; }
 
 
       - name: Dump server logs on failure
         if: failure()
         run: docker logs aerospike-1 2>&1 || true
 
-      # Explicit post-job cleanup — persistent self-hosted runner, no automatic
-      # teardown. setup-aerospike-server exposes container-names and network-name
-      # outputs precisely for this purpose; use them instead of hardcoding names.
-      - name: Stop Aerospike server
-        if: always()
-        run: |
-          for c in $(echo "${{ steps.setup-aerospike.outputs.container-names }}" | tr ',' ' '); do
-            docker rm -f "$c" 2>/dev/null || true
-          done
-          docker network rm "${{ steps.setup-aerospike.outputs.network-name }}" 2>/dev/null || true
+
 
   # ── Windows x64: build ──────────────────────────────────────────────────────
   build-windows:
@@ -406,30 +396,32 @@ jobs:
           oidc-audience:    ${{ vars.JFROG_OIDC_AUDIENCE }}
           server-tag:       ${{ inputs.server-tag }}
           num-nodes:        ${{ inputs.num-nodes }}
-          features-content: ${{ secrets.AEROSPIKE_FEATURES }}
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
           env-vars:         'DEFAULT_TTL=2592000'
 
       - name: Verify all containers are running
-        shell: bash 
+        shell: bash
         run: |
-          for i in 1 2 3; do
+          for i in $(seq 1 ${{ inputs.num-nodes }}); do
             docker ps --filter "name=aerospike-${i}" --format '{{.Names}}' | grep -q "aerospike-${i}"
           done
 
       - name: Verify cluster formation via asinfo
-        shell: bash 
+        shell: bash
         run: |
           tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
-          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
-          for container in aerospike-1 aerospike-2 aerospike-3; do
+          network="${{ steps.setup-aerospike.outputs.network-name }}"
+          expected="${{ inputs.num-nodes }}"
+          for i in $(seq 1 "$expected"); do
+            container="aerospike-${i}"
             echo "Checking cluster_size on $container..."
             rc=0
             stats=$(docker run --rm --network "$network" "$tools_image" \
               asinfo -h "$container" -p 3000 -v "statistics" 2>&1) || rc=$?
-            cluster_size=$(echo "$stats" | tr ';' '\n' | grep -oP 'cluster_size=\K\d+' || echo "N/A")
+            cluster_size=$(echo "$stats" | tr ';' '\n' | awk -F= '$1=="cluster_size"{print $2; found=1} END{if(!found) print "N/A"}')
             echo "$container cluster_size: $cluster_size (exit code: $rc)"
-            [[ $rc -eq 0 && "$cluster_size" == "3" ]] \
-              || { echo "Expected cluster_size=3 on $container, got $cluster_size"; exit 1; }
+            [[ $rc -eq 0 && "$cluster_size" == "$expected" ]] \
+              || { echo "Expected cluster_size=$expected on $container, got $cluster_size"; exit 1; }
           done
 
 

@@ -77,7 +77,7 @@ jobs:
       full-matrix:  false   # ci subset: ubuntu-22.04 amd64 + arm64 only
       event-lib:    ${{ inputs.event-lib  || 'all' }}
       server-tag:   ${{ inputs.server-tag || 'latest' }}
-      num-nodes:    '3'
+      num-nodes:    '1' # Multi node for mac self hosted runner not working
       run-mac:      ${{ inputs.run-mac     == 'false' && false || true }}
       run-windows:  ${{ inputs.run-windows == 'false' && false || true }}
     secrets: inherit

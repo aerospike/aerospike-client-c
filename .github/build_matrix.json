@@ -1,0 +1,114 @@
+[
+  {
+    "distro": "ubuntu-22.04",
+    "container": "ubuntu:22.04",
+    "arch": "amd64",
+    "runner": "ubuntu-24.04",
+    "ci": true
+  },
+  {
+    "distro": "ubuntu-22.04",
+    "container": "ubuntu:22.04",
+    "arch": "arm64",
+    "runner": "ubuntu-24.04-arm",
+    "ci": true
+  },
+  {
+    "distro": "ubuntu-24.04",
+    "container": "ubuntu:24.04",
+    "arch": "amd64",
+    "runner": "ubuntu-24.04",
+    "ci": false
+  },
+  {
+    "distro": "ubuntu-24.04",
+    "container": "ubuntu:24.04",
+    "arch": "arm64",
+    "runner": "ubuntu-24.04-arm",
+    "ci": false
+  },
+  {
+    "distro": "debian-12",
+    "container": "debian:12",
+    "arch": "amd64",
+    "runner": "ubuntu-24.04",
+    "ci": false
+  },
+  {
+    "distro": "debian-12",
+    "container": "debian:12",
+    "arch": "arm64",
+    "runner": "ubuntu-24.04-arm",
+    "ci": false
+  },
+  {
+    "distro": "debian-13",
+    "container": "debian:trixie",
+    "arch": "amd64",
+    "runner": "ubuntu-24.04",
+    "ci": false
+  },
+  {
+    "distro": "debian-13",
+    "container": "debian:trixie",
+    "arch": "arm64",
+    "runner": "ubuntu-24.04-arm",
+    "ci": false
+  },
+  {
+    "distro": "amazonlinux-2023",
+    "container": "amazonlinux:2023",
+    "arch": "amd64",
+    "runner": "ubuntu-24.04",
+    "ci": false
+  },
+  {
+    "distro": "amazonlinux-2023",
+    "container": "amazonlinux:2023",
+    "arch": "arm64",
+    "runner": "ubuntu-24.04-arm",
+    "ci": false
+  },
+  {
+    "distro": "rhel-8",
+    "container": "registry.access.redhat.com/ubi8/ubi-minimal",
+    "arch": "amd64",
+    "runner": "ubuntu-24.04",
+    "ci": false
+  },
+  {
+    "distro": "rhel-8",
+    "container": "registry.access.redhat.com/ubi8/ubi-minimal",
+    "arch": "arm64",
+    "runner": "ubuntu-24.04-arm",
+    "ci": false
+  },
+  {
+    "distro": "rhel-9",
+    "container": "registry.access.redhat.com/ubi9/ubi-minimal",
+    "arch": "amd64",
+    "runner": "ubuntu-24.04",
+    "ci": false
+  },
+  {
+    "distro": "rhel-9",
+    "container": "registry.access.redhat.com/ubi9/ubi-minimal",
+    "arch": "arm64",
+    "runner": "ubuntu-24.04-arm",
+    "ci": false
+  },
+  {
+    "distro": "rhel-10",
+    "container": "registry.access.redhat.com/ubi10/ubi-minimal",
+    "arch": "amd64",
+    "runner": "ubuntu-24.04",
+    "ci": false
+  },
+  {
+    "distro": "rhel-10",
+    "container": "registry.access.redhat.com/ubi10/ubi-minimal",
+    "arch": "arm64",
+    "runner": "ubuntu-24.04-arm",
+    "ci": false
+  }
+]

@@ -1,0 +1,65 @@
+name: Setup Linux Distro Environment and Build/Test
+description: >
+  Sets up the distro environment inside a docker container by running
+  .github/script/install_deps.bash (provisions compiler, openssl, libyaml,
+  zlib, and the chosen event lib), then builds and tests the Aerospike C client.
+  Expects the Aerospike server to already be running on the provided Docker
+  network (started by setup-aerospike-server).
+
+inputs:
+  distro:
+    description: 'Distro name passed to install_deps.bash (e.g. ubuntu-22.04)'
+    required: true
+  container:
+    description: 'Docker image to run the build+test inside (e.g. ubuntu:22.04)'
+    required: true
+  arch:
+    description: 'Target architecture for --platform flag (amd64 or arm64)'
+    required: true
+  event-lib:
+    description: 'Event library to build with (sync, libev, libuv, libevent)'
+    required: true
+  network-name:
+    description: 'Docker network name where aerospike-1 is reachable'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Build and test (${{ inputs.distro }} / ${{ inputs.event-lib }})
+      shell: bash
+      env:
+        EVENT_LIB:       ${{ inputs.event-lib }}
+        DISTRO:          ${{ inputs.distro }}
+        LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
+      run: |
+        set -euo pipefail
+        docker run --rm \
+          --platform linux/${{ inputs.arch }} \
+          --network "${{ inputs.network-name }}" \
+          -v "$GITHUB_WORKSPACE:/workspace" \
+          -w /workspace \
+          -e GITHUB_WORKSPACE=/workspace \
+          -e EVENT_LIB="${EVENT_LIB}" \
+          -e LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" \
+          -e DISTRO="${DISTRO}" \
+          ${{ inputs.container }} \
+          bash -c '
+            set -euo pipefail
+
+            # Provision compiler, openssl, libyaml, zlib, and the chosen
+            # event lib for this distro (mirrors build-distro-reusable-flow.yml).
+            bash "${GITHUB_WORKSPACE}/.github/script/install_deps.bash" \
+              "${DISTRO}" "${EVENT_LIB}"
+
+            git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+            make clean
+
+            if [ "${EVENT_LIB}" = "sync" ]; then
+              make all
+              make AS_HOST=aerospike-1 test
+            else
+              make EVENT_LIB="${EVENT_LIB}" all
+              make EVENT_LIB="${EVENT_LIB}" AS_HOST=aerospike-1 test
+            fi
+          '

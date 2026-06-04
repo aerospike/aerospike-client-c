@@ -1,0 +1,80 @@
+name: PR CI
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Triggers on every pull request to stage or main and on manual dispatch.
+#
+# Branch-protection check name to require: "ci / summary"
+#   That single check gates on ALL platform jobs inside build-and-test.yml.
+#   No need to list individual matrix checks in the branch-protection rule.
+#
+# Matrix used: ci subset only (full-matrix: false)
+#   → ubuntu-22.04 amd64 + arm64 only (entries with "ci": true in build_matrix.json)
+#   → all four event libs (sync, libev, libuv, libevent)
+#   → macOS ARM64 self-hosted
+#   → Windows x64
+# ─────────────────────────────────────────────────────────────────────────────
+
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+    && format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title)
+    || github.event_name == 'workflow_dispatch'
+    && format('Manual — {0} / server:{1} / event-lib:{2}', github.ref_name, inputs.server-tag || 'latest', inputs.event-lib || 'all')
+    || github.ref_name }}
+
+permissions:
+  contents: read
+  id-token: write        # OIDC — required by setup-aerospike-server inside build-and-test.yml
+  actions: read          # allows reading other workflow run info (Java SDK pattern)
+  checks: write          # allows step-security to annotate check runs on the PR
+  pull-requests: write   # allows posting annotations / comments back to the PR
+
+on:
+  pull_request:
+    branches:
+      - stage
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+  workflow_dispatch:
+    inputs:
+      server-tag:
+        description: 'Aerospike server Docker image tag'
+        required: false
+        default: latest
+      event-lib:
+        description: 'Event library to test (sync | libev | libuv | libevent | all)'
+        required: false
+        default: all
+      run-mac:
+        description: 'Run macOS ARM64 self-hosted job'
+        type: boolean
+        required: false
+        default: true
+      run-windows:
+        description: 'Run Windows x64 build+test jobs'
+        type: boolean
+        required: false
+        default: true
+
+# Cancel in-progress runs for the same PR / branch when a new push arrives.
+# This avoids queueing up multiple builds on fast-moving PRs.
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Job name "ci" → branch-protection check name is "ci / summary"
+  ci:
+    uses: ./.github/workflows/build-and-test.yml
+    with:
+      full-matrix:  false   # ci subset: ubuntu-22.04 amd64 + arm64 only
+      event-lib:    ${{ inputs.event-lib  || 'all' }}
+      server-tag:   ${{ inputs.server-tag || 'latest' }}
+      num-nodes:    '1'
+      run-mac:      ${{ inputs.run-mac     == 'false' && false || true }}
+      run-windows:  ${{ inputs.run-windows == 'false' && false || true }}
+    secrets: inherit

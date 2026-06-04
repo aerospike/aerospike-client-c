@@ -1,0 +1,470 @@
+name: Build and Test
+
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+    && format('Build & Test — PR #{0} ({1})', github.event.pull_request.number, github.event.pull_request.title)
+    || format('Build & Test — {0}', github.ref_name) }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Reusable build + test workflow for the Aerospike C client.
+# Intended to be called ONLY by pr-open.yml and nightly-build.yml.
+#
+# Linux matrix source: .github/build_matrix.json
+#   Each entry: { distro, container, arch, runner, ci }
+#   ci: true  → included in the PR subset (fast feedback, ubuntu-22.04 only)
+#   ci: false → included only in the full/nightly matrix
+#
+#   The load-matrix job computes the full cross-product of
+#   (distro,arch,container,runner) × event_lib in jq and emits it as a
+#   single flat include array consumed by build-linux. This is required
+#   because GitHub Actions `include:` does not cross-product with other
+#   matrix dimensions — the cross-product must be pre-computed.
+#
+# Pattern: mirrors build-distro-reusable-flow.yml
+#   - Steps run on the host runner (no container: directive).
+#   - setup-aerospike-server shared action starts Aerospike on aerospike-net.
+#   - docker run binds the workspace and joins aerospike-net.
+#   - install_deps.bash provisions the toolchain inside the container.
+#
+# macOS: self-hosted [self-hosted, macOS, ARM64], colima Docker.
+# Windows: windows-2022 compile + self-hosted test, sync/libuv/libevent.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_call:
+    inputs:
+      # false (PR)    → only entries where "ci": true in build_matrix.json
+      # true (nightly) → all entries
+      full-matrix:
+        description: 'Use full distro+arch matrix (true = nightly, false = ci subset)'
+        required: false
+        type: boolean
+        default: false
+
+      event-lib:
+        description: 'Event library. "all" expands to sync+libev+libuv+libevent.'
+        required: false
+        type: string
+        default: all
+
+      server-tag:
+        description: 'Aerospike server Docker image tag'
+        required: false
+        type: string
+        default: latest
+
+      num-nodes:
+        description: 'Aerospike cluster node count (2+ requires AEROSPIKE_FEATURES secret)'
+        required: false
+        type: string
+        default: '1'
+
+      run-mac:
+        description: 'Run macOS ARM64 self-hosted build+test'
+        required: false
+        type: boolean
+        default: false
+
+      run-windows:
+        description: 'Run Windows x64 build+test'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write   # required by setup-aerospike-server for JFrog OIDC
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ── Load + filter distro/arch matrix; compute cross-product with event libs ──
+  # Mirrors the C# nightly_test_servers.json pattern.
+  # The cross-product (distro,arch × event_lib) is computed here in jq so
+  # build-linux can use a single `matrix.include` array from this output.
+  load-matrix:
+    name: load matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      linux-matrix: ${{ steps.load.outputs.linux_matrix }}
+      event-libs:   ${{ steps.load.outputs.event_libs }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Compute matrix
+        id: load
+        run: |
+          # ── Resolve event-lib list ────────────────────────────────────────
+          case "${{ inputs.event-lib }}" in
+            sync)     LIBS='["sync"]' ;;
+            libev)    LIBS='["libev"]' ;;
+            libuv)    LIBS='["libuv"]' ;;
+            libevent) LIBS='["libevent"]' ;;
+            *)        LIBS='["sync","libev","libuv","libevent"]' ;;
+          esac
+          echo "event_libs=$LIBS" >> "$GITHUB_OUTPUT"
+
+          # ── Filter distro+arch entries ────────────────────────────────────
+          if [ "${{ inputs.full-matrix }}" = "true" ]; then
+            DISTROS=$(jq -c '.' .github/build_matrix.json)
+          else
+            DISTROS=$(jq -c '[.[] | select(.ci == true)]' .github/build_matrix.json)
+          fi
+
+          # ── Cross-product: (distro,arch entry) × event_lib ───────────────
+          # GitHub Actions include: does not cross-product with other matrix
+          # dimensions, so we pre-compute the full cartesian product here.
+          MATRIX=$(jq -c \
+            --argjson libs "$LIBS" \
+            '[.[] | . as $entry | $libs[] | {
+                distro:     $entry.distro,
+                container:  $entry.container,
+                arch:       $entry.arch,
+                runner:     $entry.runner,
+                event_lib:  .
+              }]' <<< "$DISTROS")
+
+          echo "linux_matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+  # ── Linux: build + test ─────────────────────────────────────────────────────
+  # Each matrix entry is one (distro, arch, event_lib) combination.
+  # Steps run on the host runner; build+test inside docker run.
+  build-linux:
+    name: linux / ${{ matrix.distro }} / ${{ matrix.arch }} / ${{ matrix.event_lib }}
+    needs: load-matrix
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.load-matrix.outputs.linux-matrix) }}
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      # Checkout on the host runner (git is pre-installed).
+      # The workspace is bind-mounted into the docker run below.
+      - name: Checkout client
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Starts Aerospike on the aerospike-net Docker bridge network.
+      # The network name is passed to docker run so aerospike-1 is reachable.
+      - name: Start Aerospike server
+        id: setup-aerospike
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@v3.6.0
+        with:
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          server-tag: ${{ inputs.server-tag }}
+          num-nodes: ${{ inputs.num-nodes }}
+          features-content: ${{ secrets.AEROSPIKE_FEATURES }}
+          env-vars: 'DEFAULT_TTL=2592000'
+
+      - name: Install, build and test
+        uses: ./.github/actions/setup-linux-distro-env
+        with:
+          distro:       ${{ matrix.distro }}
+          container:    ${{ matrix.container }}
+          arch:         ${{ matrix.arch }}
+          event-lib:    ${{ matrix.event_lib }}
+          network-name: ${{ steps.setup-aerospike.outputs.network-name }}
+
+      - name: Dump Aerospike logs on failure
+        if: failure()
+        run: docker logs aerospike-1 2>&1 || true
+
+  # ── macOS ARM64: build + test ────────────────────────────────────────────────
+  build-mac:
+    name: mac / arm64 / ${{ matrix.event_lib }}
+    if: inputs.run-mac
+    needs: load-matrix
+    runs-on: [self-hosted, macOS, ARM64]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        event_lib: ${{ fromJSON(needs.load-matrix.outputs.event-libs) }}
+
+    steps:
+      - name: Checkout client
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install libev
+        if: matrix.event_lib == 'libev'
+        run: ./install_libev
+
+      - name: Install libuv
+        if: matrix.event_lib == 'libuv'
+        run: ./install_libuv
+
+      - name: Install libevent
+        if: matrix.event_lib == 'libevent'
+        run: ./install_libevent
+
+      - name: Build (${{ matrix.event_lib }})
+        run: |
+          if [ "${{ matrix.event_lib }}" = "sync" ]; then make
+          else make EVENT_LIB=${{ matrix.event_lib }}; fi
+
+      # Verify colima + Docker daemon is reachable before any docker work.
+      # Fails fast with a clear message if the self-hosted runner's colima
+      # service is down, rather than a cryptic failure inside the action.
+      - name: Verify Docker (colima)
+        run: docker info --format 'OSType={{.OSType}} Server={{.ServerVersion}}'
+
+      # Self-hosted runner is persistent — kill any stale Aerospike container or
+      # network left over from a previous (possibly crashed) run before starting
+      # a fresh one. setup-aerospike-server is a composite action with no post:
+      # step, so cleanup must be explicit (unlike GitHub-hosted runners where
+      # the ephemeral VM discards everything automatically after the job).
+      - name: Remove stale Aerospike containers/network (self-hosted cleanup)
+        run: |
+          docker rm -f aerospike-1 2>/dev/null || true
+          docker network rm aerospike-net 2>/dev/null || true
+
+      # setup-aerospike-server starts Aerospike on aerospike-net and waits
+      # until the node is ready before returning.
+      - name: Start Aerospike server
+        id: setup-aerospike
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@v3.6.0
+        with:
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          server-tag: ${{ inputs.server-tag }}
+          num-nodes: ${{ inputs.num-nodes }}
+          features-content: ${{ secrets.AEROSPIKE_FEATURES }}
+          env-vars: 'DEFAULT_TTL=2592000'
+
+      - name: Test (${{ matrix.event_lib }})
+        run: |
+          if [ "${{ matrix.event_lib }}" = "sync" ]; then
+            make AS_HOST=aerospike-1 test
+          else
+            make EVENT_LIB=${{ matrix.event_lib }} AS_HOST=aerospike-1 test
+          fi
+
+      - name: Dump server logs on failure
+        if: failure()
+        run: docker logs aerospike-1 2>&1 || true
+
+      # Explicit post-job cleanup — persistent self-hosted runner, no automatic
+      # teardown. setup-aerospike-server exposes container-names and network-name
+      # outputs precisely for this purpose; use them instead of hardcoding names.
+      - name: Stop Aerospike server
+        if: always()
+        run: |
+          for c in $(echo "${{ steps.setup-aerospike.outputs.container-names }}" | tr ',' ' '); do
+            docker rm -f "$c" 2>/dev/null || true
+          done
+          docker network rm "${{ steps.setup-aerospike.outputs.network-name }}" 2>/dev/null || true
+
+  # ── Windows x64: build ──────────────────────────────────────────────────────
+  build-windows:
+    name: windows / build / ${{ matrix.config }}
+    if: inputs.run-windows
+    runs-on: windows-2022
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Release, "Release libuv", "Release libevent"]
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        shell: cmd
+        run: nuget restore vs\aerospike.sln
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build aerospike library + test (${{ matrix.config }})
+        shell: pwsh
+        run: |
+          $slnDir = (Resolve-Path "vs").Path + "\"
+          msbuild vs\aerospike\aerospike.vcxproj `
+            "/p:Configuration=${{ matrix.config }}" /p:Platform=x64 `
+            "/p:SolutionDir=$slnDir" /m /nologo
+          msbuild vs\aerospike-test\aerospike-test.vcxproj `
+            "/p:Configuration=${{ matrix.config }}" /p:Platform=x64 `
+            "/p:SolutionDir=$slnDir" /m /nologo
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: build-windows-${{ matrix.config }}
+          path: vs\x64\${{ matrix.config }}\
+          retention-days: 1
+
+  # ── Windows x64: test (self-hosted) ─────────────────────────────────────────
+  test-windows:
+    name: windows / test / ${{ matrix.config }}
+    if: inputs.run-windows
+    needs: build-windows
+    runs-on: [self-hosted, windows, x64]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Release, "Release libuv", "Release libevent"]
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Verify Docker (Linux daemon)
+        shell: pwsh
+        run: |
+          $os = docker info --format '{{.OSType}}'
+          if ($os -ne 'linux') { Write-Error "Expected Linux daemon, got: $os"; exit 1 }
+
+      - name: Resolve Aerospike host
+        shell: pwsh
+        run: |
+          $h = $env:DOCKER_HOST -replace '^tcp://','' -replace ':\d+$',''
+          echo "AEROSPIKE_HOST=$h" >> $env:GITHUB_ENV
+
+      # Self-hosted runner is persistent — kill any stale Aerospike container or
+      # network left over from a previous (possibly crashed) run before starting
+      # a fresh one.
+      - name: Remove stale Aerospike containers/network (self-hosted cleanup)
+        shell: pwsh
+        run: |
+          docker rm -f aerospike-1 2>$null; exit 0
+          docker network rm aerospike-net 2>$null; exit 0
+
+      # setup-aerospike-server (PR #229) uses named Docker volumes instead of
+      # bind mounts, which is required for Windows self-hosted runners where the
+      # Docker daemon is remote and bind mounts from the host runner cannot reach
+      # it. The action also handles the cluster-stable wait internally.
+      - name: Start Aerospike server
+        id: setup-aerospike
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@91bde550339d432d99123d871c7eee628aa39587
+        with:
+          oidc-provider:    ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience:    ${{ vars.JFROG_OIDC_AUDIENCE }}
+          server-tag:       ${{ inputs.server-tag }}
+          num-nodes:        ${{ inputs.num-nodes }}
+          features-content: ${{ secrets.AEROSPIKE_FEATURES }}
+          env-vars:         'DEFAULT_TTL=2592000'
+
+      - name: Download build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-windows-${{ matrix.config }}
+          path: vs\x64\${{ matrix.config }}
+
+      # Must run from vs\aerospike-test so UDF Lua scripts resolve correctly.
+      # AEROSPIKE_HOST is the remote Linux daemon IP extracted from DOCKER_HOST
+      # above; the server container exposes port 3000 on that IP.
+      - name: Run tests (${{ matrix.config }})
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "vs\x64\${{ matrix.config }}\aerospike-test.exe").Path
+          Push-Location vs\aerospike-test
+          try {
+            & $exe -h $env:AEROSPIKE_HOST -p 3000
+            $code = $LASTEXITCODE
+          } finally { Pop-Location }
+          if ($code -ne 0) { exit $code }
+
+      - name: Dump server logs on failure
+        if: failure()
+        shell: pwsh
+        run: docker logs aerospike-1 2>&1 || true
+
+      - name: Stop Aerospike server
+        if: always()
+        shell: pwsh
+        run: |
+          foreach ($c in "${{ steps.setup-aerospike.outputs.container-names }}".Split(',')) {
+            docker rm -f $c.Trim() 2>$null
+          }
+          docker network rm "${{ steps.setup-aerospike.outputs.network-name }}" 2>$null; exit 0
+
+  # ── Summary ──────────────────────────────────────────────────────────────────
+  summary:
+    name: summary
+    if: always()
+    needs: [load-matrix, build-linux, build-mac, build-windows, test-windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Write run summary
+        env:
+          R_LINUX:   ${{ needs.build-linux.result }}
+          R_MAC:     ${{ needs.build-mac.result }}
+          R_WIN_BLD: ${{ needs.build-windows.result }}
+          R_WIN_TST: ${{ needs.test-windows.result }}
+        run: |
+          badge() {
+            case "$1" in
+              success)   printf '✅ `success`'   ;;
+              failure)   printf '❌ `failure`'   ;;
+              skipped)   printf '⏭️ `skipped`'   ;;
+              cancelled) printf '🚫 `cancelled`' ;;
+              *)         printf '⚠️ `%s`' "$1"   ;;
+            esac
+          }
+          {
+            echo "## Aerospike C Client — Build & Test"
+            echo ""
+            echo "| Platform | Result |"
+            echo "| :--- | :---: |"
+            echo "| 🐧 Linux \`distro × arch × event-lib\` | $(badge "$R_LINUX") |"
+            echo "| 🍎 macOS ARM64 \`event-lib\` | $(badge "$R_MAC") |"
+            echo "| 🪟 Windows x64 — build | $(badge "$R_WIN_BLD") |"
+            echo "| 🪟 Windows x64 — test | $(badge "$R_WIN_TST") |"
+            echo ""
+            echo "---"
+            echo ""
+            echo "| Parameter | Value |"
+            echo "| :--- | :--- |"
+            echo "| Full matrix | \`${{ inputs.full-matrix }}\` |"
+            echo "| Server tag | \`${{ inputs.server-tag }}\` |"
+            echo "| Event lib | \`${{ inputs.event-lib }}\` |"
+            echo "| Cluster nodes | \`${{ inputs.num-nodes }}\` |"
+            echo "| Mac enabled | \`${{ inputs.run-mac }}\` |"
+            echo "| Windows enabled | \`${{ inputs.run-windows }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Fail this job if any platform job failed or was cancelled so that
+          # branch-protection rules only need to require one check: "ci / summary".
+          for result in "$R_LINUX" "$R_MAC" "$R_WIN_BLD" "$R_WIN_TST"; do
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "::error::One or more platform jobs did not succeed (results: linux=$R_LINUX mac=$R_MAC win-build=$R_WIN_BLD win-test=$R_WIN_TST)"
+              exit 1
+            fi
+          done

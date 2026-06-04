@@ -253,6 +253,7 @@ jobs:
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
           server-tag: ${{ inputs.server-tag }}
           num-nodes: ${{ inputs.num-nodes }}
+          startup-timeout: "60"
           features-content: ${{ secrets.AEROSPIKE_FEATURES }}
           env-vars: 'DEFAULT_TTL=2592000'
 
@@ -266,6 +267,28 @@ jobs:
           else
             make EVENT_LIB=${{ matrix.event_lib }} AS_HOST=localhost AS_PORT=$AS_PORT test
           fi
+
+      - name: Verify all containers are running
+        run: |
+          for i in 1 2 3; do
+            docker ps --filter "name=aerospike-${i}" --format '{{.Names}}' | grep -q "aerospike-${i}"
+          done
+
+      - name: Verify cluster formation via asinfo
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          for container in aerospike-1 aerospike-2 aerospike-3; do
+            echo "Checking cluster_size on $container..."
+            rc=0
+            stats=$(docker run --rm --network "$network" "$tools_image" \
+              asinfo -h "$container" -p 3000 -v "statistics" 2>&1) || rc=$?
+            cluster_size=$(echo "$stats" | tr ';' '\n' | awk -F= '$1=="cluster_size"{print $2; found=1} END{if(!found) print "N/A"}') 
+            echo "$container cluster_size: $cluster_size (exit code: $rc)"
+            [[ $rc -eq 0 && "$cluster_size" == "3" ]] \
+              || { echo "Expected cluster_size=3 on $container, got $cluster_size"; exit 1; }
+          done
+
 
       - name: Dump server logs on failure
         if: failure()
@@ -385,6 +408,30 @@ jobs:
           num-nodes:        ${{ inputs.num-nodes }}
           features-content: ${{ secrets.AEROSPIKE_FEATURES }}
           env-vars:         'DEFAULT_TTL=2592000'
+
+      - name: Verify all containers are running
+        shell: bash 
+        run: |
+          for i in 1 2 3; do
+            docker ps --filter "name=aerospike-${i}" --format '{{.Names}}' | grep -q "aerospike-${i}"
+          done
+
+      - name: Verify cluster formation via asinfo
+        shell: bash 
+        run: |
+          tools_image="aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2"
+          network="${{ steps.setup-aerospike-server.outputs.network-name }}"
+          for container in aerospike-1 aerospike-2 aerospike-3; do
+            echo "Checking cluster_size on $container..."
+            rc=0
+            stats=$(docker run --rm --network "$network" "$tools_image" \
+              asinfo -h "$container" -p 3000 -v "statistics" 2>&1) || rc=$?
+            cluster_size=$(echo "$stats" | tr ';' '\n' | grep -oP 'cluster_size=\K\d+' || echo "N/A")
+            echo "$container cluster_size: $cluster_size (exit code: $rc)"
+            [[ $rc -eq 0 && "$cluster_size" == "3" ]] \
+              || { echo "Expected cluster_size=3 on $container, got $cluster_size"; exit 1; }
+          done
+
 
       - name: Download build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

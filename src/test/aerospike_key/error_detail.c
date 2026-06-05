@@ -22,9 +22,9 @@
 
 #include "../test.h"
 
-/******************************************************************************
- * HELPERS -- msgpack buffer construction
- *****************************************************************************/
+//-------------------------------------
+// Helpers: msgpack buffer construction
+//-------------------------------------
 
 static uint32_t
 write_fixmap(uint8_t* buf, uint8_t count)
@@ -144,9 +144,9 @@ write_true(uint8_t* buf)
 	return 1;
 }
 
-/******************************************************************************
- * SECTION 3: Parser Unit Tests
- *****************************************************************************/
+//---------------------------------
+// Section 3: Parser Unit Tests
+//---------------------------------
 
 // 3.1 Empty map yields no error detail
 TEST(error_detail_parser_empty_map, "3.1 empty map yields no error detail")
@@ -615,9 +615,9 @@ TEST(error_detail_parser_overflow_truncation, "3.22 overflow is truncated")
 	assert_int_eq(err.message[AS_ERROR_MESSAGE_MAX_SIZE - 1], '\0');
 }
 
-/******************************************************************************
- * SECTION 4: Policy Field and Header Serialisation Tests
- *****************************************************************************/
+//-------------------------------------------------------
+// Section 4: Policy Field and Header Serialisation Tests
+//-------------------------------------------------------
 
 // 4.1 Default policy has verbosity 0
 TEST(error_detail_policy_default, "4.1 default policy has verbosity 0")
@@ -830,9 +830,9 @@ TEST(error_detail_header_read_header, "4.11 verbosity in exists header")
 	assert_int_eq(cmd[12] & 0x60, 0x40);
 }
 
-/******************************************************************************
- * SECTION 7.6-7.8: Edge-case Tests (local)
- *****************************************************************************/
+//-----------------------------------
+// Section 7: Edge-case Tests (local)
+//-----------------------------------
 
 // 7.6 as_error_reset clears subcode
 TEST(error_detail_reset_clears_subcode, "7.6 as_error_reset clears subcode")
@@ -893,9 +893,9 @@ TEST(error_detail_parser_populates_on_any_call, "7.8 parser populates regardless
 	assert_true(strstr(err.message, "spurious") != NULL);
 }
 
-/******************************************************************************
- * TEST SUITES
- *****************************************************************************/
+//---------------------------------
+// Test Suites
+//---------------------------------
 
 SUITE(error_detail_parser, "error detail msgpack parser tests")
 {

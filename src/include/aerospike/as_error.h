@@ -98,6 +98,13 @@ typedef struct as_error_s {
 	as_status code;
 
 	/**
+	 * Server error detail subcode. When error_detail_verbosity >= 1 on the request policy
+	 * and the server returns structured error details, this field contains the numeric subcode.
+	 * Zero when no subcode was returned.
+	 */
+	uint32_t subcode;
+
+	/**
 	 * NULL-terminated error message
 	 */
 	char message[AS_ERROR_MESSAGE_MAX_SIZE];
@@ -123,13 +130,6 @@ typedef struct as_error_s {
 	 * to the server.
 	 */
 	bool in_doubt;
-
-	/**
-	 * Server error detail subcode. When error_detail_verbosity >= 1 on the request policy
-	 * and the server returns structured error details, this field contains the numeric subcode.
-	 * Zero when no subcode was returned.
-	 */
-	uint32_t subcode;
 
 } as_error;
 
@@ -170,12 +170,12 @@ static inline as_error*
 as_error_init(as_error* err)
 {
 	err->code = AEROSPIKE_OK;
+	err->subcode = 0;
 	err->message[0] = '\0';
 	err->func = NULL;
 	err->file = NULL;
 	err->line = 0;
 	err->in_doubt = false;
-	err->subcode = 0;
 	return err;
 }
 
@@ -192,12 +192,12 @@ static inline as_status
 as_error_reset(as_error* err)
 {
 	err->code = AEROSPIKE_OK;
+	err->subcode = 0;
 	err->message[0] = '\0';
 	err->func = NULL;
 	err->file = NULL;
 	err->line = 0;
 	err->in_doubt = false;
-	err->subcode = 0;
 	return err->code;
 }
 
@@ -272,12 +272,12 @@ static inline void
 as_error_copy(as_error * trg, const as_error * src)
 {
 	trg->code = src->code;
+	trg->subcode = src->subcode;
 	strcpy(trg->message, src->message);
 	trg->func = src->func;
 	trg->file = src->file;
 	trg->line = src->line;
 	trg->in_doubt = src->in_doubt;
-	trg->subcode = src->subcode;
 }
 
 /**

@@ -41,25 +41,25 @@
 #include "../test.h"
 #include "../util/udf.h"
 
-/******************************************************************************
- * GLOBAL VARS
- *****************************************************************************/
+//---------------------------------
+// Global Variables
+//---------------------------------
 
 extern aerospike* as;
 static as_monitor monitor;
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 #define NAMESPACE "test"
 #define SET "test_error_detail"
 #define LUA_FILE AS_START_DIR "src/test/lua/error_detail_udf.lua"
 #define UDF_MODULE "error_detail_udf"
 
-/******************************************************************************
- * SYNC SUITE LIFECYCLE
- *****************************************************************************/
+//---------------------------------
+// Sync Suite Lifecycle
+//---------------------------------
 
 static bool
 before_sync(atf_suite* suite)
@@ -156,9 +156,9 @@ before_sync(atf_suite* suite)
 	return true;
 }
 
-/******************************************************************************
- * SECTION 5: Sync Integration Tests
- *****************************************************************************/
+//----------------------------------
+// Section 5: Sync Integration Tests
+//----------------------------------
 
 // 5.1.1 Write with verbosity 0 returns no error detail
 TEST(ed_sync_write_gen_v0, "5.1.1 write gen mismatch verbosity 0")
@@ -912,9 +912,9 @@ TEST(ed_sync_param_bits_size, "5.22.1 param bits size out of range verbosity 2")
 	as_operations_destroy(&ops);
 }
 
-/******************************************************************************
- * SECTION 7: Negative / Edge-Case Tests (Integration)
- *****************************************************************************/
+//----------------------------------------------------
+// Section 7: Negative / Edge-Case Tests (Integration)
+//----------------------------------------------------
 
 // 7.1 Verbosity is not leaked into batch requests
 TEST(ed_sync_batch_no_leak, "7.1 batch verbosity no leak")
@@ -1092,9 +1092,9 @@ TEST(ed_sync_error_state_reset, "7.5 error state reset on next op")
 	assert_int_eq(err.subcode, 0);
 }
 
-/******************************************************************************
- * SECTION 6: Async Integration Tests
- *****************************************************************************/
+//-----------------------------------
+// Section 6: Async Integration Tests
+//-----------------------------------
 
 // Async helper data
 typedef struct {
@@ -1542,9 +1542,9 @@ TEST(ed_async_priority_logic_v2, "6.9 async server message displaces default for
 	assert_true(strstr(data.err_copy.message, "subcode=") != NULL);
 }
 
-/******************************************************************************
- * ASYNC SUITE LIFECYCLE
- *****************************************************************************/
+//-----------------------------------
+// Async Suite Lifecycle
+//-----------------------------------
 
 static bool
 before_async(atf_suite* suite)
@@ -1612,9 +1612,9 @@ after_async(atf_suite* suite)
 	return true;
 }
 
-/******************************************************************************
- * TEST SUITES
- *****************************************************************************/
+//-----------------------------------
+// Test Suites
+//-----------------------------------
 
 SUITE(error_detail_sync, "error detail sync integration tests")
 {

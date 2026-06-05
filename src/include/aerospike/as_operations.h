@@ -57,7 +57,10 @@ typedef enum as_operator_e {
 	AS_OPERATOR_BIT_MODIFY,
 	AS_OPERATOR_DELETE,
 	AS_OPERATOR_HLL_READ,
-	AS_OPERATOR_HLL_MODIFY
+	AS_OPERATOR_HLL_MODIFY,
+	AS_OPERATOR_STRING_READ,
+	AS_OPERATOR_STRING_MODIFY,
+	AS_OPERATOR_TO_STRING
 } as_operator;
 
 /**
@@ -958,9 +961,9 @@ as_operations_is_basic_read(as_operator t)
 	return t == AS_OPERATOR_READ;
 }
 
-/******************************************************************************
- * LIST FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// List Functions
+//---------------------------------
 
 // Add list operations to this header file for legacy reasons.
 

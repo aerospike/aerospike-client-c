@@ -403,6 +403,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_shm_cluster.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_socket.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_status.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_string_operations.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_tls.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_txn.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_txn_monitor.h" />
@@ -527,6 +528,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_scan.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_shm_cluster.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_socket.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_string_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_tls.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_txn.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_txn_monitor.c" />

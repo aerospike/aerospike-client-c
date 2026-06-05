@@ -73,9 +73,9 @@
 extern "C" {
 #endif
 
-/******************************************************************************
- * TYPES
- *****************************************************************************/
+//---------------------------------
+// Types
+//---------------------------------
 
 /**
  * String operation policy write bit flags. Use bitwise OR to combine flags.
@@ -179,9 +179,9 @@ typedef enum as_string_op_e {
 	AS_STRING_OP_REGEX_REPLACE = 66
 } as_string_op;
 
-/******************************************************************************
- * FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Functions
+//---------------------------------
 
 /**
  * Initialize string policy to default write semantics.
@@ -195,9 +195,9 @@ as_string_policy_init(as_string_policy* policy);
 AS_EXTERN void
 as_string_policy_set(as_string_policy* policy, as_string_write_flags flags);
 
-/******************************************************************************
- * STRING READ OPERATIONS
- *****************************************************************************/
+//---------------------------------
+// String Read Operations
+//---------------------------------
 
 /**
  * Create string strlen operation. The server returns the number of Unicode
@@ -474,9 +474,9 @@ as_operations_string_regex_compare_flags(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* pattern, as_string_regex_flags flags
 	);
 
-/******************************************************************************
- * STRING MODIFY OPERATIONS
- *****************************************************************************/
+//---------------------------------
+// String Modify Operations
+//---------------------------------
 
 /**
  * Create string insert operation that splices value into the bin at codepoint

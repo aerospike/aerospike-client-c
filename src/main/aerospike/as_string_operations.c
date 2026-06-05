@@ -24,9 +24,9 @@
 as_binop*
 as_binop_forappend(as_operations* ops, as_operator operator, const char* name);
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static inline uint64_t
 as_string_policy_flags(const as_string_policy* policy)
@@ -110,9 +110,9 @@ as_string_modify0(
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_MODIFY);
 }
 
-/******************************************************************************
- * STRING FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// String Functions
+//---------------------------------
 
 void
 as_string_policy_init(as_string_policy* policy)
@@ -126,9 +126,9 @@ as_string_policy_set(as_string_policy* policy, as_string_write_flags flags)
 	policy->flags = flags;
 }
 
-/******************************************************************************
- * STRING READ OPERATIONS
- *****************************************************************************/
+//---------------------------------
+// String Read Operations
+//---------------------------------
 
 bool
 as_operations_string_strlen(as_operations* ops, const char* name, as_cdt_ctx* ctx)
@@ -353,9 +353,9 @@ as_operations_string_regex_compare_flags(
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_READ);
 }
 
-/******************************************************************************
- * STRING MODIFY OPERATIONS
- *****************************************************************************/
+//---------------------------------
+// String Modify Operations
+//---------------------------------
 
 bool
 as_operations_string_insert(
@@ -600,9 +600,9 @@ as_operations_string_regex_replace(
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_MODIFY);
 }
 
-/******************************************************************************
- * STRING TYPE CONVERSION
- *****************************************************************************/
+//---------------------------------
+// String Type Conversion
+//---------------------------------
 
 bool
 as_operations_to_string(as_operations* ops, const char* name)

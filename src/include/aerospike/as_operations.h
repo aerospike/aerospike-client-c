@@ -961,9 +961,9 @@ as_operations_is_basic_read(as_operator t)
 	return t == AS_OPERATOR_READ;
 }
 
-/******************************************************************************
- * LIST FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// List Functions
+//---------------------------------
 
 // Add list operations to this header file for legacy reasons.
 

@@ -46,7 +46,10 @@ bool as_op_is_write[] = {
 	true,
 	true,
 	false,
-	true
+	true,
+	false,
+	true,
+	false
 };
 
 //---------------------------------

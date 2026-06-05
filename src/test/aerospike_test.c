@@ -315,6 +315,8 @@ static bool before(atf_plan* plan)
 	}
 
 	as_config_set_user(&config, g_user, g_password);
+	//as_config_set_user(&config, "admin", "admin");
+	config.use_services_alternate = true;
 
 	// Transfer ownership of all heap allocated TLS fields via shallow copy.
 	memcpy(&config.tls, &g_tls, sizeof(as_config_tls));
@@ -498,6 +500,7 @@ PLAN(aerospike_test)
 	plan_add(map_index);
 	plan_add(map_sort);
 	plan_add(bit);
+	plan_add(string);
 	plan_add(hll);
 	plan_add(filter_exp);
 

@@ -16,6 +16,7 @@
 		BF65C9CA252D33400026D9E2 /* filter_exp.c in Sources */ = {isa = PBXBuildFile; fileRef = BF65C9C9252D33400026D9E2 /* filter_exp.c */; };
 		BF7EBCC725D4B20800D5DFE9 /* exp_operate.c in Sources */ = {isa = PBXBuildFile; fileRef = BF7EBCC625D4B20800D5DFE9 /* exp_operate.c */; };
 		BF809CE52432B38300C16F3D /* hll_operate.c in Sources */ = {isa = PBXBuildFile; fileRef = BF809CE42432B38300C16F3D /* hll_operate.c */; };
+		BF8123032F00000200000001 /* string.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123022F00000200000001 /* string.c */; };
 		BF9750111E4EC8C900B737CF /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750101E4EC8C900B737CF /* libev.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750121E4ECA1C00B737CF /* libuv.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BFB5EBE522BC26B400CE6E43 /* bit.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB5EBE422BC26B400CE6E43 /* bit.c */; };
@@ -100,6 +101,7 @@
 		BF65C9C9252D33400026D9E2 /* filter_exp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = filter_exp.c; path = ../src/test/filter_exp.c; sourceTree = "<group>"; };
 		BF7EBCC625D4B20800D5DFE9 /* exp_operate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = exp_operate.c; path = ../src/test/exp_operate.c; sourceTree = "<group>"; };
 		BF809CE42432B38300C16F3D /* hll_operate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hll_operate.c; path = ../src/test/aerospike_key/hll_operate.c; sourceTree = "<group>"; };
+		BF8123022F00000200000001 /* string.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = string.c; path = ../src/test/aerospike_string/string.c; sourceTree = "<group>"; };
 		BF843C5018D3E61700A06CFB /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = "<group>"; };
 		BF8A328A1E4E73FD00DE2F4D /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = /usr/local/opt/openssl/lib/libssl.dylib; sourceTree = "<absolute>"; };
 		BF9750101E4EC8C900B737CF /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<group>"; };
@@ -202,6 +204,14 @@
 			name = aerospike_bit;
 			sourceTree = "<group>";
 		};
+		BF8123042F00000200000001 /* aerospike_string */ = {
+			isa = PBXGroup;
+			children = (
+				BF8123022F00000200000001 /* string.c */,
+			);
+			name = aerospike_string;
+			sourceTree = "<group>";
+		};
 		BFB7BC6518CAA88000F0D4A0 = {
 			isa = PBXGroup;
 			children = (
@@ -245,6 +255,7 @@
 				BFF344C41CEA8F3300FD1976 /* aerospike_map */,
 				BFC65C3B1C9226B80079DF5A /* aerospike_query */,
 				BFC65C351C92265E0079DF5A /* aerospike_scan */,
+				BF8123042F00000200000001 /* aerospike_string */,
 				BFC65C2E1C9226340079DF5A /* aerospike_udf */,
 				BFC65C231C92260A0079DF5A /* lua */,
 				BFC65C0B1C9225850079DF5A /* util */,
@@ -495,6 +506,7 @@
 				BFC65C411C9226C90079DF5A /* query_foreach.c in Sources */,
 				BF3F7D47259BDD2B0092D808 /* map_sort.c in Sources */,
 				BFC65C1D1C9225AB0079DF5A /* udf.c in Sources */,
+				BF8123032F00000200000001 /* string.c in Sources */,
 				BFF344C81CEA8FD200FD1976 /* map_basics.c in Sources */,
 				BFC65C0A1C92256A0079DF5A /* batch.c in Sources */,
 				BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */,

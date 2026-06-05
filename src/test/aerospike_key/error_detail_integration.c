@@ -70,13 +70,12 @@ before_sync(atf_suite* suite)
 		return false;
 	}
 
-	// TEMPORARILY DISABLED: pre-release server may not report 8.1.3
-	// if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
-	// 	info("Skipping error_detail_sync suite: server %u.%u.%u < 8.1.3",
-	// 		 node->version.major, node->version.minor, node->version.patch);
-	// 	as_node_release(node);
-	// 	return false;
-	// }
+	if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
+		info("Skipping error_detail_sync suite: server %u.%u.%u < 8.1.3",
+			 node->version.major, node->version.minor, node->version.patch);
+		as_node_release(node);
+		return false;
+	}
 	as_node_release(node);
 
 	as_error err;
@@ -1556,13 +1555,12 @@ before_async(atf_suite* suite)
 		return false;
 	}
 
-	// TEMPORARILY DISABLED: pre-release server may not report 8.1.3
-	// if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
-	// 	info("Skipping error_detail_async suite: server %u.%u.%u < 8.1.3",
-	// 		 node->version.major, node->version.minor, node->version.patch);
-	// 	as_node_release(node);
-	// 	return false;
-	// }
+	if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
+		info("Skipping error_detail_async suite: server %u.%u.%u < 8.1.3",
+			 node->version.major, node->version.minor, node->version.patch);
+		as_node_release(node);
+		return false;
+	}
 	as_node_release(node);
 
 	as_monitor_init(&monitor);

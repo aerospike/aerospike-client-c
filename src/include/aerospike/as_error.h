@@ -129,7 +129,7 @@ typedef struct as_error_s {
 	 * and the server returns structured error details, this field contains the numeric subcode.
 	 * Zero when no subcode was returned.
 	 */
-	uint64_t subcode;
+	uint32_t subcode;
 
 } as_error;
 

@@ -1547,7 +1547,7 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 	}
 
 	if (has_subcode) {
-		err->subcode = subcode;
+		err->subcode = (uint32_t)subcode;
 	}
 
 	if (has_subcode && msg_str) {

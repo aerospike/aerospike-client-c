@@ -248,7 +248,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	if (status != AEROSPIKE_OK) {
 		// Log error, but still allow node to be added to the cluster.
 		// The tend connection creation will be retried later and retry_user_agent remains true.
-		as_log_error("Failed to get tend connection: %s %s", err.code, err.message);
+		as_log_error("Failed to get tend connection: %d %s", err.code, err.message);
 	}
 	return node;
 }

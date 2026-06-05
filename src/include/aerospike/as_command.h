@@ -383,7 +383,7 @@ as_command_set_attr_read(
  * @private
  * Write command header for write commands.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_write_header_write(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
@@ -395,7 +395,7 @@ as_command_write_header_write(
  * @private
  * Write command header for read commands.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, int read_ttl, uint32_t timeout, uint16_t n_fields,
@@ -406,7 +406,7 @@ as_command_write_header_read(
  * @private
  * Write command header for read header commands.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_write_header_read_header(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, int read_ttl, uint16_t n_fields, uint16_t n_bins,
@@ -683,7 +683,7 @@ as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields);
  * Parse msgpack-encoded error details (field type 45 payload).
  * Populates err->subcode and err->message.
  */
-void
+AS_EXTERN void
 as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len);
 
 /**

@@ -246,6 +246,8 @@
     <ClCompile Include="..\..\src\test\aerospike_geo\query_geospatial.c" />
     <ClCompile Include="..\..\src\test\aerospike_index\index_basics.c" />
     <ClCompile Include="..\..\src\test\aerospike_info\info_basics.c" />
+    <ClCompile Include="..\..\src\test\aerospike_key\error_detail.c" />
+    <ClCompile Include="..\..\src\test\aerospike_key\error_detail_integration.c" />
     <ClCompile Include="..\..\src\test\aerospike_key\hll_operate.c" />
     <ClCompile Include="..\..\src\test\aerospike_key\key_apply.c" />
     <ClCompile Include="..\..\src\test\aerospike_key\key_apply2.c" />

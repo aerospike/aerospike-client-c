@@ -36,6 +36,10 @@
  * accept ctx because it is sent as its own wire operation instead of a string
  * sub-operation with a msgpack payload.
  *
+ * All string arguments (needle, value, separator, pattern, etc.) are passed as
+ * NULL-terminated C strings, so their length is determined with strlen() and they
+ * cannot contain embedded NULL bytes.
+ *
  * @code
  * // Read: bin "text" = "hello world".
  * as_operations ops;

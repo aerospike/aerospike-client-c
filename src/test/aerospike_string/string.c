@@ -192,7 +192,9 @@ TEST(string_read_more_ops, "additional string read operations")
 	as_operations_string_to_double(&ops, BIN_NAME, NULL);
 	as_operations_string_is_numeric_type(&ops, BIN_NAME, NULL, AS_STRING_NUMERIC_ANY);
 	as_operations_string_is_numeric_type(&ops, BIN_NAME, NULL, AS_STRING_NUMERIC_INT);
-	//as_operations_string_is_numeric_type(&ops, BIN_NAME, NULL, AS_STRING_NUMERIC_FLOAT); There is a bug in the server, this should return false
+	// TODO: re-enable once the server FLOAT-filter bug is fixed; "12345" should
+	// return false for AS_STRING_NUMERIC_FLOAT but the server currently returns true.
+	//as_operations_string_is_numeric_type(&ops, BIN_NAME, NULL, AS_STRING_NUMERIC_FLOAT);
 	as_operations_string_regex_compare_flags(&ops, BIN_NAME, NULL, "^123", AS_STRING_REGEX_FLAGS_NONE);
 	as_operations_string_split(&ops, BIN_NAME, NULL);
 
@@ -209,9 +211,10 @@ TEST(string_read_more_ops, "additional string read operations")
 	assert_string_eq(as_string_get((as_string*)results[3].valuep), "345");
 	assert_int_eq(as_integer_get((as_integer*)results[4].valuep), 12345);
 	assert_double_eq(as_double_get((as_double*)results[5].valuep), 12345.0);
-	assert_true(as_boolean_get((as_boolean*)results[6].valuep));
-	assert_true(as_boolean_get((as_boolean*)results[7].valuep));
-	//assert_false(as_boolean_get((as_boolean*)results[8].valuep));
+	assert_true(as_boolean_get((as_boolean*)results[6].valuep));  // is_numeric_type ANY
+	assert_true(as_boolean_get((as_boolean*)results[7].valuep));  // is_numeric_type INT
+	// NOTE: the AS_STRING_NUMERIC_FLOAT op is commented out above (server bug), so
+	// results[8] is the regex_compare_flags("^123") match here, not the FLOAT filter.
 	assert_true(as_boolean_get((as_boolean*)results[8].valuep));
 
 	as_list* split = (as_list*)results[9].valuep;

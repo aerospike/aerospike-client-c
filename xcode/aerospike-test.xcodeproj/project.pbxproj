@@ -90,7 +90,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BE9280C51E4AC2F0007F7DA7 /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = ../modules/lua/src/liblua.a; sourceTree = "<group>"; };
+		BE9280C51E4AC2F0007F7DA7 /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = ../modules/lua/liblua.a; sourceTree = "<group>"; };
 		BE9280C71E4AC521007F7DA7 /* libz.1.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.1.dylib; path = ../../../../../usr/lib/libz.1.dylib; sourceTree = "<group>"; };
 		BF1881DF28E5093F003DCB7B /* libssl.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libssl.a; path = "../../../../opt/homebrew/Cellar/openssl@3/3.0.5/lib/libssl.a"; sourceTree = "<group>"; };
 		BF3F7D46259BDD2B0092D808 /* map_sort.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_sort.c; path = ../src/test/aerospike_map/map_sort.c; sourceTree = "<group>"; };

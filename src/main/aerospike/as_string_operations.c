@@ -608,7 +608,11 @@ bool
 as_operations_to_string(as_operations* ops, const char* name)
 {
 	as_binop* binop = as_binop_forappend(ops, AS_OPERATOR_TO_STRING, name);
-	if (! binop) return false;
+
+	if (! binop) {
+		return false;
+	}
+
 	as_bin_init_nil(&binop->bin, name);
 	return true;
 }

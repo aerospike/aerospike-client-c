@@ -4100,7 +4100,10 @@ as_exp_destroy_base64(char* base64)
  * Create an expression that performs an as_operations_string_concat_list operation.
  *
  * @param __policy		The string policy.
- * @param __values		The list of values to append.
+ * @param __values		An expression that evaluates to the list of values to append
+ *						(e.g. as_exp_val_list() or a sub-expression yielding a list).
+ *						Unlike as_exp_string_concat(), this value is not auto-wrapped
+ *						as a literal.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the values appended.
  * @ingroup expression

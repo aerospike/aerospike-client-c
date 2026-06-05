@@ -14,11 +14,7 @@ brew install libyaml
 # Must perform make to create liblua.a that is referenced in xcode project.
 cd ..
 git submodule update --init
-cd modules/lua/src
-ln -sf luaconf.h.orig luaconf.h
-cd ..
-make macosx
-cd ../..
+make -C modules/lua CFLAGS="-Wall -O2 -std=c99 -DLUA_USE_MACOSX -fPIC -fno-stack-protector -fno-common -g" a
 
 # Open C client workspace in xcode.
 open xcode/client.xcworkspace

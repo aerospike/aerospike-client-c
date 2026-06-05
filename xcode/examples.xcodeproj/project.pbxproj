@@ -273,7 +273,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		BE9280D81E4BA65D007F7DA7 /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = ../modules/lua/liblua.a; sourceTree = "<group>"; };
+		BE9280D81E4BA65D007F7DA7 /* liblua.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = liblua.a; path = ../modules/lua/src/liblua.a; sourceTree = "<group>"; };
 		BF19D6EF20195AE4001A075D /* async_delay_queue */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = async_delay_queue; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF1CA15C28D9345200110268 /* libssl.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libssl.a; path = "../../../../opt/homebrew/Cellar/openssl@3/3.0.5/lib/libssl.a"; sourceTree = "<group>"; };
 		BF1CA17228D9348A00110268 /* libcrypto.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libcrypto.a; path = "../../../../opt/homebrew/Cellar/openssl@3/3.0.5/lib/libcrypto.a"; sourceTree = "<group>"; };

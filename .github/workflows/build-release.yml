@@ -1,0 +1,512 @@
+name: Build Release
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Multi-platform release build for the Aerospike C client.
+# Called by push-to-stage.yml (on stage branch push or release tags).
+#
+# Pipeline (all three platform legs run in parallel after get-version):
+#
+#  get-version
+#    │
+#  compute-release-matrix  (transforms vars.LINUX_DISTRO_MATRIX → include schema)
+#    ├── artifacts-cicd-linux  (reusable_artifacts-cicd.yaml)
+#    │   matrix: driven by vars.LINUX_DISTRO_MATRIX (8 distros × 2 arches = 16 jobs)
+#    │   artifacts: .deb, .rpm, .tgz, .zip per distro/arch
+#    │   sign:      GPG (.deb, .rpm, .tgz, .zip)
+#    │   deploy  →  jf-build-id: linux
+#    │
+#    ├── artifacts-cicd-mac    (reusable_artifacts-cicd.yaml)
+#    │   matrix: 1 entry (self-hosted macOS ARM64)
+#    │   artifacts: .pkg, .tgz, .zip
+#    │   sign:      Apple codesign + notarize, then GPG on .tgz/.zip
+#    │   deploy  →  jf-build-id: mac
+#    │
+#    ├── build-windows-dlls    (windows-2022, MSBuild: Debug+Release × 3)
+#    │       ↓
+#    │   sign-win-dlls         (reusable_sign-win-artifacts: OV Authenticode)
+#    │       ↓                 DLLs MUST be signed before NuGet pack
+#    │   pack-nuget            (windows-2022: nuget pack × 3 nuspec)
+#    │       ↓
+#    │   sign-nuget            (reusable_sign-artifacts: SSL.com NuGet)
+#    │       ↓
+#    │   deploy-windows        (reusable_deploy-artifacts)
+#    │   → jf-build-id: win
+#    │
+#    └── create-release-bundle (reusable_create-release-bundle.yaml)
+#        jf-build-names: linux-bid, mac-bid, win-bid
+#
+# Artifact naming (from pkg/package):
+#   Linux deb:  aerospike-client-c{-EVENT}{-devel}_VER-PLATFORM_ARCH.deb
+#   Linux rpm:  aerospike-client-c{-EVENT}{-devel}-VER.PLATFORM.ARCH.rpm
+#   Linux tgz:  aerospike-client-c{-EVENT}_VER_PLATFORM_ARCH.tgz
+#   Mac .pkg:   aerospike-client-c{-EVENT}{-devel}-VER-arm64.pkg
+#   Mac tgz:    aerospike-client-c{-EVENT}_VER_mac_arm64.tgz
+#   Win nupkg:  aerospike-client-c{-EVENT}.VER.nupkg  (3 files)
+#
+# Shared-workflows ref used throughout: v3.6.0
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_call:
+    inputs:
+      dry-run:
+        description: >
+          If true, skip JFrog deploy and use SSL.com TEST environment for NuGet signing.
+          Controlled via vars.DRY_RUN repository variable in push-to-stage.yml.
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      jf-build-id:
+        description: JFrog build id of the Linux leg (proxy for overall build)
+        value: ${{ jobs.artifacts-cicd-linux.outputs.jf-build-id }}
+    secrets:
+      GPG_SECRET_KEY:
+        required: true
+      GPG_PUBLIC_KEY:
+        required: true
+      GPG_PASS:
+        required: true
+      APPLE_APPLICATION_CERT:
+        required: false
+      APPLE_CERT_PASSWORD:
+        required: false
+      APPLE_INSTALLER_CERT:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_NOTARIZATION_PASSWORD:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+      ES_OV_USERNAME:
+        required: false
+      ES_OV_PASSWORD:
+        required: false
+      ES_OV_CREDENTIAL_ID:
+        required: false
+      ES_OV_TOTP_SECRET:
+        required: false
+      ES_USERNAME:
+        required: false
+      ES_PASSWORD:
+        required: false
+      CREDENTIAL_ID:
+        required: false
+      ES_TOTP_SECRET:
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+
+  # ── Extract version from pkg/version (git describe) ───────────────────────
+  get-version:
+    name: get version
+    runs-on: ubuntu-24.04
+    outputs:
+      version:     ${{ steps.ver.outputs.release-version }}
+      is-snapshot: ${{ steps.ver.outputs.is-snapshot }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0   # git describe needs full tag history
+
+      - name: Extract version
+        id: ver
+        uses: ./.github/actions/get-version
+
+  # ── Transform vars.LINUX_DISTRO_MATRIX into the orchestrator include schema ─
+  #
+  # vars.LINUX_DISTRO_MATRIX uses the distros/archs schema (same as build-and-test.yml).
+  # reusable_artifacts-cicd.yaml expects an include array with runs-on + build-env.
+  # This job translates between the two so the distro list stays in one place.
+  #
+  # Runners: amd64 → ubuntu-24.04, arm64 → ubuntu-24.04-arm (same as CI).
+  compute-release-matrix:
+    name: compute release matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix-json: ${{ steps.transform.outputs.matrix }}
+    steps:
+      - id: transform
+        shell: bash
+        env:
+          DISTRO_MATRIX: ${{ vars.LINUX_DISTRO_MATRIX }}
+          RUNNERS: '{"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}'
+        run: |
+          set -euo pipefail
+          matrix=$(echo "$DISTRO_MATRIX" | jq -c \
+            --argjson runners "$RUNNERS" \
+            '{"include": [
+              .distros[] | . as $d | $d.archs[] | . as $arch | {
+                "runs-on":  $runners[$arch],
+                "distro":   $d.distro,
+                "arch":     $arch,
+                "build-env": ("DISTRO=" + $d.distro + ";CONTAINER=" + $d.container)
+              }
+            ]}')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "Release matrix: $(echo "$matrix" | jq '.include | length') entries"
+
+  # ── Linux: build + GPG sign + deploy via shared-workflows orchestrator ─────
+  #
+  # The orchestrator (reusable_artifacts-cicd.yaml) handles:
+  #   build (matrix) → collect → sign (GPG) → deploy
+  #
+  # Build script runs on the host ubuntu runner and launches the distro
+  # container via `docker run`. This mirrors the CI pattern in build-and-test.yml
+  # (no `container:` directive, docker socket available on GitHub-hosted runners).
+  #
+  # Each matrix entry's build-env injects DISTRO and CONTAINER for the build script.
+  # The distro list is driven by vars.LINUX_DISTRO_MATRIX (same source as CI builds).
+  #
+  # Artifact output path: target/packages/  (set by pkg/package)
+  artifacts-cicd-linux:
+    name: linux / build-sign-deploy
+    needs: [get-version, compute-release-matrix]
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.6.0
+    with:
+      gh-workflows-ref:       v3.6.0
+      jf-build-name:          aerospike-client-c
+      jf-project:             ${{ vars.JFROG_PROJECT }}
+      version:                ${{ needs.get-version.outputs.version }}
+      gh-source-path:         aerospike-client-c
+      working-directory:      aerospike-client-c
+      gh-artifact-directory:  target/packages
+      oidc-provider-name:     ${{ vars.JFROG_OIDC_PROVIDER }}
+      oidc-audience:          ${{ vars.JFROG_OIDC_AUDIENCE }}
+      sign-mac:               false
+      sign-windows:           false
+      dry-run:                ${{ inputs.dry-run }}
+      matrix-json: ${{ needs.compute-release-matrix.outputs.matrix-json }}
+
+      # Build script runs on the host runner (ubuntu-24.04 / ubuntu-24.04-arm).
+      # DISTRO and CONTAINER are injected into the environment by build-env above.
+      # The docker volume mount provides the checked-out source to the container.
+      # install_deps.bash is called with "all" → installs libev+libuv+libevent.
+      # make package rebuilds all 4 event-lib variants and produces target/packages/*.
+      build-script: |-
+        set -euo pipefail
+        # DISTRO and CONTAINER come from build-env
+        docker run --rm \
+          -e DISTRO="$DISTRO" \
+          -v "$PWD:/workspace" \
+          "$CONTAINER" \
+          bash -c '
+            set -e
+            case "$DISTRO" in
+              ubuntu-*|debian-*)
+                export DEBIAN_FRONTEND=noninteractive
+                apt-get update -q
+                apt-get install -y --no-install-recommends git ca-certificates make
+                ;;
+              amazonlinux-*)
+                dnf install -y git tar gzip make
+                ;;
+              rhel-*)
+                microdnf install -y git tar gzip make
+                ;;
+            esac
+            git config --global --add safe.directory /workspace
+            cd /workspace
+            bash .github/script/install_deps.bash "$DISTRO" all
+            make package
+          '
+
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass:    ${{ secrets.GPG_PASS }}
+
+  # ── macOS ARM64: build + Apple sign/notarize + GPG + deploy ───────────────
+  #
+  # Single matrix entry: GitHub-hosted macOS Sonoma ARM64 (macos-14, Apple Silicon M1).
+  # The install_lib* scripts and `make package` run directly on the runner
+  # (no docker — colima is for CI tests only, not release packaging).
+  #
+  # Runner note: macos-14 = macOS Sonoma (Apple Silicon ARM64).
+  # Bump to macos-15 (Sequoia) when GitHub retires macos-14.
+  #
+  # Signing chain (inside orchestrator):
+  #   1. build   → target/packages/*.pkg + *.tgz + *.zip
+  #   2. sign-mac (macos-14, imports certs from secrets)
+  #               → Apple codesign (.pkg lib) + productsign (.pkg installer)
+  #               → notarytool staple on each .pkg
+  #   3. sign    → GPG-sign .tgz and .zip (macOS .pkg are Authenticode-excluded
+  #               by default; GPG sign-artifacts entrypoint covers non-.exe types)
+  #   4. deploy  → JFrog
+  artifacts-cicd-mac:
+    name: mac / build-sign-deploy
+    needs: get-version
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.6.0
+    with:
+      gh-workflows-ref:       v3.6.0
+      jf-build-name:          aerospike-client-c
+      jf-project:             ${{ vars.JFROG_PROJECT }}
+      version:                ${{ needs.get-version.outputs.version }}
+      gh-source-path:         aerospike-client-c
+      working-directory:      aerospike-client-c
+      gh-artifact-directory:  target/packages
+      oidc-provider-name:     ${{ vars.JFROG_OIDC_PROVIDER }}
+      oidc-audience:          ${{ vars.JFROG_OIDC_AUDIENCE }}
+      sign-windows:           false
+
+      # GitHub-hosted macOS Sonoma ARM64 (Apple Silicon M1).
+      # Bump runs-on to macos-15 when macos-14 reaches end-of-life.
+      matrix-json: |-
+        {"include":[
+          {
+            "runs-on": "macos-14",
+            "distro":  "mac",
+            "arch":    "arm64"
+          }
+        ]}
+
+      # install_lib* scripts build libev/libuv/libevent from source.
+      # On GitHub-hosted runners these run from scratch each time (no cache).
+      # make package produces target/packages/ with .pkg + .tgz + source zip.
+      build-script: |-
+        set -euo pipefail
+        ./install_libev
+        ./install_libuv
+        ./install_libevent
+        brew install doxygen graphviz
+        make package
+
+      # Apple signing (runs on GitHub-hosted macos-14 which imports certs from secrets)
+      sign-mac:               true
+      mac-runs-on:            macos-14
+      # Identity strings from pkg/package_type (Team ID resolved via keychain import)
+      mac-signing-identity:   'Developer ID Application: Aerospike, Inc.'
+      mac-installer-identity: 'Developer ID Installer: Aerospike, Inc.'
+      mac-artifact-glob:      '**/*.pkg'
+      mac-notarize:           true
+      dry-run: ${{ inputs.dry-run }}
+
+    secrets:
+      gpg-private-key:              ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key:               ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass:                 ${{ secrets.GPG_PASS }}
+      apple-application-cert:       ${{ secrets.APPLE_APPLICATION_CERT }}
+      apple-cert-password:          ${{ secrets.APPLE_CERT_PASSWORD }}
+      apple-installer-cert:         ${{ secrets.APPLE_INSTALLER_CERT }}
+      apple-id:                     ${{ secrets.APPLE_ID }}
+      apple-notarization-password:  ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+      apple-team-id:                ${{ secrets.APPLE_TEAM_ID }}
+
+  # ── Windows: MSBuild DLLs ──────────────────────────────────────────────────
+  #
+  # Builds all 6 configurations (Release+Debug × sync/libuv/libevent).
+  # Debug builds are included because nuspec files reference both Debug and
+  # Release DLL paths (see vs/aerospike-client-c*.nuspec).
+  # Uploads raw (unsigned) DLL tree as win-unsigned-dlls for the sign step.
+  build-windows-dlls:
+    name: windows / build dlls
+    needs: get-version
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Restore NuGet packages (populates vs\packages\)
+        shell: cmd
+        run: nuget restore vs\aerospike.sln
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      # Build all 6 configurations so each nuspec has its Debug + Release DLLs.
+      - name: Build all configurations
+        shell: pwsh
+        run: |
+          $slnDir = (Resolve-Path "vs").Path + "\"
+          $configs = @(
+            "Release",
+            "Debug",
+            "Release libuv",
+            "Debug libuv",
+            "Release libevent",
+            "Debug libevent"
+          )
+          foreach ($cfg in $configs) {
+            Write-Host "=== Building: $cfg ==="
+            msbuild vs\aerospike\aerospike.vcxproj `
+              "/p:Configuration=$cfg" `
+              /p:Platform=x64 `
+              "/p:SolutionDir=$slnDir" `
+              /m /nologo
+          }
+
+      # Upload the entire vs\x64\ tree (all 6 config subdirectories).
+      # sign-win-dlls will overwrite this artifact with signed DLLs.
+      - name: Upload unsigned DLLs
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-unsigned-dlls
+          path: vs\x64\
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Windows: OV Authenticode sign DLLs ────────────────────────────────────
+  #
+  # Signs .dll (and .exe) files with SSL.com eSigner (OV Authenticode).
+  # Must happen BEFORE nuget pack — the signed DLLs are embedded in the .nupkg.
+  # Overwrites win-unsigned-dlls artifact with signed version.
+  sign-win-dlls:
+    name: windows / sign dlls (OV Authenticode)
+    needs: build-windows-dlls
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-win-artifacts.yaml@v3.6.0
+    with:
+      gh-workflows-ref:     v3.6.0
+      gh-unsigned-artifacts: win-unsigned-dlls
+      artifact-glob:        '**/*.dll,**/*.exe'
+      runs-on:              windows-2025
+      dry-run:              ${{ inputs.dry-run }}
+    secrets:
+      es_ov_username:      ${{ secrets.ES_OV_USERNAME }}
+      es_ov_password:      ${{ secrets.ES_OV_PASSWORD }}
+      es_ov_credential_id: ${{ secrets.ES_OV_CREDENTIAL_ID }}
+      es_ov_totp_secret:   ${{ secrets.ES_OV_TOTP_SECRET }}
+
+  # ── Windows: NuGet pack ────────────────────────────────────────────────────
+  #
+  # Downloads the signed DLL tree produced by sign-win-dlls, restores NuGet
+  # dependency packages (pthreads, openssl, lua, libyaml), then runs
+  # `nuget pack` on all three .nuspec files.
+  # Uploads the three unsigned .nupkg files for the NuGet sign step.
+  pack-nuget:
+    name: windows / nuget pack
+    needs: [get-version, sign-win-dlls]
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      # Populates vs\packages\ with dependency NuGet packages referenced by
+      # the nuspec files (pthreads, openssl, lua, libyaml DLLs).
+      - name: Restore NuGet packages
+        shell: cmd
+        run: nuget restore vs\aerospike.sln
+
+      # Download signed DLLs from sign-win-dlls into vs\x64\
+      # (overwriting whatever MSBuild left in the local workspace).
+      - name: Download signed DLLs
+        uses: actions/download-artifact@v4
+        with:
+          name: win-unsigned-dlls   # overwritten in-place by sign-win-dlls
+          path: vs\x64
+
+      - name: Pack NuGet packages
+        shell: cmd
+        working-directory: vs
+        run: |
+          nuget pack aerospike-client-c.nuspec
+          nuget pack aerospike-client-c-libuv.nuspec
+          nuget pack aerospike-client-c-libevent.nuspec
+
+      - name: Upload unsigned NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: win-unsigned-nupkg
+          path: vs\*.nupkg
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Windows: sign NuGet packages ──────────────────────────────────────────
+  #
+  # Signs the three .nupkg files with SSL.com eSigner (NuGet package signing).
+  # GPG-signs any non-.nupkg files (none expected, but handled for safety).
+  # Uploads as win-signed-nupkg.
+  sign-nuget:
+    name: windows / sign nupkg
+    needs: pack-nuget
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v3.6.0
+    with:
+      gh-workflows-ref:      v3.6.0
+      gh-unsigned-artifacts: win-unsigned-nupkg
+      gh-artifact-name:      win-signed-nupkg
+      nuget-environment:     ${{ inputs.dry-run && 'TEST' || 'PROD' }}
+      dry-run:               ${{ inputs.dry-run }}
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass:    ${{ secrets.GPG_PASS }}
+      es-username:     ${{ secrets.ES_USERNAME }}
+      es-password:     ${{ secrets.ES_PASSWORD }}
+      credential_id:   ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret:  ${{ secrets.ES_TOTP_SECRET }}
+
+  # ── Windows: deploy to JFrog ───────────────────────────────────────────────
+  deploy-windows:
+    name: windows / deploy
+    needs: [get-version, sign-nuget]
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@v3.6.0
+    with:
+      gh-workflows-ref:     v3.6.0
+      jf-build-name:        aerospike-client-c
+      # jf-build-id and jf-metadata-build-id must stay identical — GitHub Actions
+      # does not allow referencing one with: input from another within the same block.
+      # create-release-bundle uses needs.deploy-windows.outputs.jf-build-id so it
+      # always mirrors whatever is set here without needing a separate update.
+      jf-build-id:          ${{ github.run_id }}-${{ github.run_attempt }}-windows
+      jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-windows
+      jf-project:           ${{ vars.JFROG_PROJECT }}
+      version:              ${{ needs.get-version.outputs.version }}
+      gh-artifact-name:     win-signed-nupkg
+      oidc-provider-name:   ${{ vars.JFROG_OIDC_PROVIDER }}
+      oidc-audience:        ${{ vars.JFROG_OIDC_AUDIENCE }}
+      dry-run:              ${{ inputs.dry-run }}
+    secrets: inherit
+
+  # ── Create release bundle (all platforms) ─────────────────────────────────
+  #
+  # Bundles the JFrog build-infos from all three platform legs into a single
+  # JFrog release bundle named aerospike-client-c@<version>.
+  # Only runs when ALL three legs succeed.
+  create-release-bundle:
+    name: create release bundle
+    needs:
+      - get-version
+      - compute-release-matrix
+      - artifacts-cicd-linux
+      - artifacts-cicd-mac
+      - deploy-windows
+    if: |
+      always() && !cancelled() &&
+      needs.artifacts-cicd-linux.result == 'success' &&
+      needs.artifacts-cicd-mac.result   == 'success' &&
+      needs.deploy-windows.result        == 'success'
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.6.0
+    with:
+      gh-workflows-ref:   v3.6.0
+      jf-project:         ${{ vars.JFROG_PROJECT }}
+      jf-bundle-name:     aerospike-client-c
+      version:            ${{ needs.get-version.outputs.version }}
+      jf-build-names: >-
+        ${{ format('{0}:{1},{0}:{2},{0}:{3}', 'aerospike-client-c', needs.artifacts-cicd-linux.outputs.jf-build-id, needs.artifacts-cicd-mac.outputs.jf-build-id, format('{0}-{1}-windows', github.run_id, github.run_attempt)) }}
+      oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
+      oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
+      dry-run:            false
+    secrets: inherit

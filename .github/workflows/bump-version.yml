@@ -1,0 +1,155 @@
+name: Bump Version
+run-name: >-
+  ${{ format('Bump version to {0}{1}', inputs.version, inputs.dry-run && ' (dry-run)' || '') }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Advances the version in all 5 locations kept in sync by pkg/set_version:
+#   src/include/aerospike/version.h
+#   src/main/aerospike/version.c
+#   vs/aerospike-client-c.nuspec
+#   vs/aerospike-client-c-libuv.nuspec
+#   vs/aerospike-client-c-libevent.nuspec
+#
+# After committing and pushing the tag, the workflow dispatches push-to-stage.yml
+# at the tag ref via `gh workflow run` (Option B — no GITHUB_BOT_PAT required).
+#
+# Option A upgrade path: if GITHUB_BOT_PAT (contents:write) is provisioned later,
+# replace the `gh workflow run` dispatch with a BOT_PAT-backed checkout + tag push.
+# That gives the canonical organic tag trigger and only requires a 2-line change.
+# ─────────────────────────────────────────────────────────────────────────────
+
+permissions:
+  contents: write  # git commit + tag push
+  actions: write   # gh workflow run dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 7.5.0 or 7.5.0-rc1)'
+        required: true
+        type: string
+      branch:
+        description: 'Branch to bump (default: stage)'
+        required: false
+        type: string
+        default: stage
+      dry-run:
+        description: 'Show what would change without committing or tagging'
+        required: false
+        type: boolean
+        default: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  bump:
+    name: bump version
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run pkg/set_version
+        env:
+          TARGET_VERSION: ${{ inputs.version }}
+          IS_DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          echo "Setting version to: $TARGET_VERSION"
+          if [ "$IS_DRY_RUN" = "true" ]; then
+            echo "[dry-run] Would run: ./pkg/set_version $TARGET_VERSION"
+            echo "Files that would be updated:"
+            echo "  src/include/aerospike/version.h"
+            echo "  src/main/aerospike/version.c"
+            echo "  vs/aerospike-client-c.nuspec"
+            echo "  vs/aerospike-client-c-libuv.nuspec"
+            echo "  vs/aerospike-client-c-libevent.nuspec"
+          else
+            ./pkg/set_version "$TARGET_VERSION"
+          fi
+
+      - name: Commit version bump
+        if: ${{ !inputs.dry-run }}
+        env:
+          TARGET_VERSION: ${{ inputs.version }}
+          TARGET_BRANCH:  ${{ inputs.branch }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit — version already at $TARGET_VERSION"
+          else
+            git commit -m "update version to $TARGET_VERSION [skip ci]"
+            git push origin "$TARGET_BRANCH"
+            echo "Committed and pushed to $TARGET_BRANCH"
+          fi
+
+      - name: Create and push tag
+        if: ${{ !inputs.dry-run }}
+        env:
+          TARGET_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/${TARGET_VERSION}" >/dev/null; then
+            echo "::error::Tag ${TARGET_VERSION} already exists. Bump to a new version first."
+            exit 1
+          fi
+          git tag "$TARGET_VERSION"
+          # Push tag using GITHUB_TOKEN. Note: this does NOT trigger push-event workflows
+          # (GitHub blocks self-triggered workflow runs via GITHUB_TOKEN). The dispatch
+          # step below triggers push-to-stage.yml explicitly via gh workflow run.
+          git push origin "$TARGET_VERSION"
+          echo "Pushed tag: $TARGET_VERSION"
+
+      - name: Dispatch push-to-stage.yml at tag ref
+        if: ${{ !inputs.dry-run }}
+        env:
+          TARGET_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Dispatching push-to-stage.yml at ref: $TARGET_VERSION"
+          gh workflow run push-to-stage.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$TARGET_VERSION"
+          echo "Dispatch queued. Release build will start shortly at tag $TARGET_VERSION."
+
+      - name: Summary
+        env:
+          TARGET_VERSION: ${{ inputs.version }}
+          TARGET_BRANCH:  ${{ inputs.branch }}
+          IS_DRY_RUN:     ${{ inputs.dry-run }}
+        run: |
+          {
+            echo "## Version Bump"
+            echo ""
+            echo "| Parameter | Value |"
+            echo "| :--- | :--- |"
+            echo "| Version | \`$TARGET_VERSION\` |"
+            echo "| Branch  | \`$TARGET_BRANCH\` |"
+            echo "| Dry run | \`$IS_DRY_RUN\` |"
+            echo ""
+            if [ "$IS_DRY_RUN" = "true" ]; then
+              echo "> **Dry run** — no commits, tags, or dispatches were made."
+            else
+              echo "- Version bumped and committed with \`[skip ci]\`"
+              echo "- Tag \`$TARGET_VERSION\` pushed to origin"
+              echo "- \`push-to-stage.yml\` dispatched at ref \`$TARGET_VERSION\`"
+              echo ""
+              echo "_The release build is now running. Monitor it in the Actions tab._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,24 @@
+name: C Client Build & Release
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches:
+      # We could dev branch also for big feature that is merged into dev branch for that feature before merging to stage
+      - stage
+      - test-origin-stage
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'     # Matches 7.4.0
+      - '[0-9]+.[0-9]+.[0-9]+-rc*' # Matches 7.4.0-rc1
+  workflow_dispatch:
+
+jobs:
+  build-stage:
+    name: Build stage
+    uses: ./.github/workflows/build-release.yml
+    with:
+      dry-run: ${{ vars.DRY_RUN_RELEASE == 'true' }}
+    secrets: inherit

@@ -7,8 +7,8 @@ name: PR CI
 #   That single check gates on ALL platform jobs inside build-and-test.yml.
 #   No need to list individual matrix checks in the branch-protection rule.
 #
-# Matrix used: ci subset only (full-matrix: false)
-#   → ubuntu-22.04 amd64 + arm64 only (entries with "ci": true in build_matrix.json)
+# Linux matrix: ubuntu-22.04 amd64 only by default (fast feedback).
+#   workflow_dispatch: paste custom JSON into matrix-json to override.
 #   → all four event libs (sync, libev, libuv, libevent)
 #   → macOS ARM64 self-hosted
 #   → Windows x64
@@ -44,14 +44,34 @@ on:
 
   workflow_dispatch:
     inputs:
+      matrix-json:
+        description: >
+          Distro/arch matrix as JSON (distros only, no runners key).
+          Defaults to ubuntu-22.04 amd64 only for fast PR feedback.
+        required: false
+        default: >-
+          {"distros":[{"distro":"ubuntu-22.04","container":"ubuntu:22.04","archs":["amd64"]}]}
+      runners-json:
+        description: >
+          Arch → runner label map. Leave empty to use vars.LINUX_RUNNERS.
+          Example: {"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}
+        required: false
+        default: ${{ vars.LINUX_RUNNERS }}
       server-tag:
         description: 'Aerospike server Docker image tag'
         required: false
         default: latest
       event-lib:
-        description: 'Event library to test (sync | libev | libuv | libevent | all)'
+        description: 'Event library to test'
+        type: choice
         required: false
         default: all
+        options:
+          - all
+          - sync
+          - libev
+          - libuv
+          - libevent
       run-mac:
         description: 'Run macOS ARM64 self-hosted job'
         type: boolean
@@ -62,6 +82,11 @@ on:
         type: boolean
         required: false
         default: true
+      valgrind:
+        description: 'Include valgrind runs in Linux matrix'
+        type: boolean
+        required: false
+        default: false
 
 # Cancel in-progress runs for the same PR / branch when a new push arrives.
 # This avoids queueing up multiple builds on fast-moving PRs.
@@ -74,10 +99,13 @@ jobs:
   ci:
     uses: ./.github/workflows/build-and-test.yml
     with:
-      full-matrix:  false   # ci subset: ubuntu-22.04 amd64 + arm64 only
+      ref:          ${{ github.sha }}
+      matrix-json:  ${{ inputs.matrix-json || '{"distros":[{"distro":"ubuntu-22.04","container":"ubuntu:22.04","archs":["amd64"]}]}' }}
+      runners-json: ${{ inputs.runners-json || vars.LINUX_RUNNERS }}
       event-lib:    ${{ inputs.event-lib  || 'all' }}
       server-tag:   ${{ inputs.server-tag || 'latest' }}
       num-nodes:    '1' # Multi node for mac self hosted runner not working
+      valgrind:     ${{ inputs.valgrind == true }}
       run-mac:      ${{ inputs.run-mac     == 'false' && false || true }}
       run-windows:  ${{ inputs.run-windows == 'false' && false || true }}
     secrets: inherit

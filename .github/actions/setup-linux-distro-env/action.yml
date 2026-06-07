@@ -22,6 +22,10 @@ inputs:
   network-name:
     description: 'Docker network name where aerospike-1 is reachable'
     required: true
+  valgrind:
+    description: 'Run tests under Valgrind and check for zero errors'
+    required: false
+    default: 'false'
 
 runs:
   using: composite
@@ -31,6 +35,7 @@ runs:
       env:
         EVENT_LIB:       ${{ inputs.event-lib }}
         DISTRO:          ${{ inputs.distro }}
+        VALGRIND:        ${{ inputs.valgrind }}
         LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
       run: |
         set -euo pipefail
@@ -43,6 +48,7 @@ runs:
           -e EVENT_LIB="${EVENT_LIB}" \
           -e LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" \
           -e DISTRO="${DISTRO}" \
+          -e VALGRIND="${VALGRIND}" \
           ${{ inputs.container }} \
           bash -c '
             set -euo pipefail
@@ -52,14 +58,35 @@ runs:
             bash "${GITHUB_WORKSPACE}/.github/script/install_deps.bash" \
               "${DISTRO}" "${EVENT_LIB}"
 
+            # Install Valgrind when requested; use whichever package manager
+            # is available so the same action works across all distros.
+            if [ "${VALGRIND}" = "true" ]; then
+              if command -v apt-get &>/dev/null; then
+                apt-get install -y --no-install-recommends valgrind
+              elif command -v microdnf &>/dev/null; then
+                microdnf install -y valgrind
+              elif command -v yum &>/dev/null; then
+                yum install -y valgrind
+              fi
+            fi
+
             git config --global --add safe.directory "${GITHUB_WORKSPACE}"
             make clean
 
+            TEST_TARGET="test"
+            [ "${VALGRIND}" = "true" ] && TEST_TARGET="test-valgrind"
+
             if [ "${EVENT_LIB}" = "sync" ]; then
               make all
-              make AS_HOST=aerospike-1 test
+              make AS_HOST=aerospike-1 "${TEST_TARGET}"
             else
               make EVENT_LIB="${EVENT_LIB}" all
-              make EVENT_LIB="${EVENT_LIB}" AS_HOST=aerospike-1 test
+              make EVENT_LIB="${EVENT_LIB}" AS_HOST=aerospike-1 "${TEST_TARGET}"
+            fi
+
+            # Valgrind writes its summary to client_test-valgrind; fail the
+            # build if any errors were reported (mirrors build.yml check).
+            if [ "${VALGRIND}" = "true" ]; then
+              grep "ERROR SUMMARY: 0 errors" client_test-valgrind
             fi
           '

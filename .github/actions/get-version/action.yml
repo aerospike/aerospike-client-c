@@ -1,0 +1,44 @@
+name: Get Version
+description: >
+  Extract the release version from the repo's pkg/version script (git describe).
+  Outputs the version string and an is-snapshot flag.
+
+outputs:
+  release-version:
+    description: >
+      Version string as produced by pkg/version (e.g. 7.4.0, 7.4.0-rc1, 7.4.0-2).
+      Plain git tags produce a clean version (7.4.0).
+      RC tags or commits past a tag include a dash suffix (7.4.0-rc1, 7.4.0-2).
+    value: ${{ steps.ver.outputs.release_version }}
+
+  is-snapshot:
+    description: >
+      "true" when the version contains a dash (rc, dev, or post-tag commit),
+      "false" for an exact release tag (7.4.0).
+    value: ${{ steps.ver.outputs.is_snapshot }}
+
+runs:
+  using: composite
+  steps:
+    - id: ver
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        version=$(bash "$GITHUB_WORKSPACE/pkg/version")
+
+        if [[ -z "$version" ]]; then
+          echo "::error::pkg/version produced empty output — is fetch-depth: 0 set on the checkout?" >&2
+          exit 1
+        fi
+
+        echo "release_version=$version" >> "$GITHUB_OUTPUT"
+
+        if [[ "$version" == *"-"* ]]; then
+          echo "is_snapshot=true"  >> "$GITHUB_OUTPUT"
+        else
+          echo "is_snapshot=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        echo "Version: $version"
+        echo "Snapshot: $([[ "$version" == *'-'* ]] && echo true || echo false)"

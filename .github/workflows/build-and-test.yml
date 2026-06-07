@@ -9,16 +9,16 @@ run-name: >-
 # Reusable build + test workflow for the Aerospike C client.
 # Intended to be called ONLY by pr-open.yml and nightly-build.yml.
 #
-# Linux matrix source: .github/build_matrix.json
-#   Each entry: { distro, container, arch, runner, ci }
-#   ci: true  → included in the PR subset (fast feedback, ubuntu-22.04 only)
-#   ci: false → included only in the full/nightly matrix
+# Linux matrix source: matrix-json workflow input
+#   PR callers pass vars.LINUX_CI_MATRIX   (PR subset)
+#   Nightly callers pass vars.LINUX_DISTRO_MATRIX (all distros)
+#   When empty, the compute-matrix action falls back to ubuntu-24.04 amd64+arm64.
 #
-#   The load-matrix job computes the full cross-product of
-#   (distro,arch,container,runner) × event_lib in jq and emits it as a
-#   single flat include array consumed by build-linux. This is required
-#   because GitHub Actions `include:` does not cross-product with other
-#   matrix dimensions — the cross-product must be pre-computed.
+#   The load-matrix job validates the JSON, expands distros × archs, then
+#   computes the full cross-product of (distro,arch) × event_lib × valgrind
+#   in jq and emits it as a single flat include array consumed by build-linux.
+#   This is required because GitHub Actions `include:` does not cross-product
+#   with other matrix dimensions — the cross-product must be pre-computed.
 #
 # Pattern: mirrors build-distro-reusable-flow.yml
 #   - Steps run on the host runner (no container: directive).
@@ -33,13 +33,21 @@ run-name: >-
 on:
   workflow_call:
     inputs:
-      # false (PR)    → only entries where "ci": true in build_matrix.json
-      # true (nightly) → all entries
-      full-matrix:
-        description: 'Use full distro+arch matrix (true = nightly, false = ci subset)'
-        required: false
-        type: boolean
-        default: false
+      matrix-json:
+        description: >
+          REQUIRED. Distros-only JSON (no runners key).
+          PR:      ubuntu-22.04 JSON hardcoded in pr-open.yml.
+          Nightly: vars.LINUX_DISTRO_MATRIX.
+        required: true
+        type: string
+
+      runners-json:
+        description: >
+          REQUIRED. Arch → runner label map.
+          Pass vars.LINUX_RUNNERS or hardcode the fallback.
+          Example: {"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}
+        required: true
+        type: string
 
       event-lib:
         description: 'Event library. "all" expands to sync+libev+libuv+libevent.'
@@ -59,6 +67,12 @@ on:
         type: string
         default: '3'
 
+      valgrind:
+        description: 'Include valgrind runs in the Linux matrix (true = both with and without; false = without only)'
+        required: false
+        type: boolean
+        default: false
+
       run-mac:
         description: 'Run macOS ARM64 self-hosted build+test'
         required: false
@@ -70,6 +84,14 @@ on:
         required: false
         type: boolean
         default: false
+
+      ref:
+        description: >
+          REQUIRED. Git ref (branch, tag, or SHA) to checkout.
+          PR builds:      pass github.sha (the PR merge commit).
+          Nightly builds: pass "stage".
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -88,8 +110,9 @@ jobs:
     name: load matrix
     runs-on: ubuntu-24.04
     outputs:
-      linux-matrix: ${{ steps.load.outputs.linux_matrix }}
-      event-libs:   ${{ steps.load.outputs.event_libs }}
+      linux-matrix:   ${{ steps.load.outputs.linux-matrix }}
+      event-libs:     ${{ steps.load.outputs.event-libs }}
+      valgrind-flags: ${{ steps.load.outputs.valgrind-flags }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
@@ -98,47 +121,23 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Compute matrix
         id: load
-        run: |
-          # ── Resolve event-lib list ────────────────────────────────────────
-          case "${{ inputs.event-lib }}" in
-            sync)     LIBS='["sync"]' ;;
-            libev)    LIBS='["libev"]' ;;
-            libuv)    LIBS='["libuv"]' ;;
-            libevent) LIBS='["libevent"]' ;;
-            *)        LIBS='["sync","libev","libuv","libevent"]' ;;
-          esac
-          echo "event_libs=$LIBS" >> "$GITHUB_OUTPUT"
-
-          # ── Filter distro+arch entries ────────────────────────────────────
-          if [ "${{ inputs.full-matrix }}" = "true" ]; then
-            DISTROS=$(jq -c '.' .github/build_matrix.json)
-          else
-            DISTROS=$(jq -c '[.[] | select(.ci == true)]' .github/build_matrix.json)
-          fi
-
-          # ── Cross-product: (distro,arch entry) × event_lib ───────────────
-          # GitHub Actions include: does not cross-product with other matrix
-          # dimensions, so we pre-compute the full cartesian product here.
-          MATRIX=$(jq -c \
-            --argjson libs "$LIBS" \
-            '[.[] | . as $entry | $libs[] | {
-                distro:     $entry.distro,
-                container:  $entry.container,
-                arch:       $entry.arch,
-                runner:     $entry.runner,
-                event_lib:  .
-              }]' <<< "$DISTROS")
-
-          echo "linux_matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/compute-matrix
+        with:
+          matrix-json:  ${{ inputs.matrix-json }}
+          runners-json: ${{ inputs.runners-json }}
+          event-lib:    ${{ inputs.event-lib }}
+          valgrind:     ${{ inputs.valgrind }}
 
   # ── Linux: build + test ─────────────────────────────────────────────────────
   # Each matrix entry is one (distro, arch, event_lib) combination.
   # Steps run on the host runner; build+test inside docker run.
   build-linux:
-    name: linux / ${{ matrix.distro }} / ${{ matrix.arch }} / ${{ matrix.event_lib }}
+    name: linux / ${{ matrix.distro }} / ${{ matrix.arch }} / ${{ matrix.event_lib }}${{ matrix.valgrind && ' / valgrind' || '' }}
     needs: load-matrix
     runs-on: ${{ matrix.runner }}
 
@@ -158,6 +157,7 @@ jobs:
       - name: Checkout client
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ inputs.ref }}
           submodules: recursive
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -185,6 +185,7 @@ jobs:
           arch:         ${{ matrix.arch }}
           event-lib:    ${{ matrix.event_lib }}
           network-name: ${{ steps.setup-aerospike.outputs.network-name }}
+          valgrind:     ${{ matrix.valgrind }}
 
       - name: Dump Aerospike logs on failure
         if: failure()
@@ -206,6 +207,7 @@ jobs:
       - name: Checkout client
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ inputs.ref }}
           submodules: recursive
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -315,6 +317,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ inputs.ref }}
           submodules: recursive
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -362,6 +365,8 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Verify Docker (Linux daemon)
         shell: pwsh

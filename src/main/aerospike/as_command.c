@@ -295,6 +295,8 @@ as_command_write_header_write(
 	}
 
 	uint8_t txn_attr = on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
+	txn_attr |= (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
+				& AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
 
 #if defined USE_XDR
 	read_attr |= AS_MSG_INFO1_XDR;
@@ -329,7 +331,10 @@ as_command_write_header_read(
 	cmd[9] = read_attr;
 	cmd[10] = write_attr;
 	cmd[11] = info_attr;
-	memset(&cmd[12], 0, 6);
+	cmd[12] = (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
+			  & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	cmd[13] = 0;
+	*(uint32_t*)&cmd[14] = 0;
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
@@ -351,7 +356,10 @@ as_command_write_header_read_header(
 	cmd[9] = read_attr;
 	cmd[10] = 0;
 	cmd[11] = info_attr;
-	memset(&cmd[12], 0, 6);
+	cmd[12] = (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
+			  & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	cmd[13] = 0;
+	*(uint32_t*)&cmd[14] = 0;
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
 	uint32_t timeout = as_command_server_timeout(policy);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
@@ -1133,7 +1141,8 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	}
 
 	if (msg->result_code) {
-		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+		as_error_update_status(err, msg->result_code);
+		return msg->result_code;
 	}
 
 	as_record** rec = cmd->udata;
@@ -1177,6 +1186,9 @@ as_command_parse_fields_txn(
 			else {
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Record version field has invalid size: %u", len);
 			}
+		}
+		else if (type == AS_FIELD_ERROR_DETAILS && len > 0) {
+			as_command_parse_error_details(err, p, len);
 		}
 		p += len;
 	}
@@ -1237,6 +1249,333 @@ as_command_bytes_to_int(uint8_t	*buf, int sz, int64_t *value)
 		return 0;
 	}
 	return 0;
+}
+
+static bool
+as_command_skip_msgpack_value(uint8_t** pp, uint8_t* end)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0x80) == 0 || (type & 0xe0) == 0xe0) {
+		return true;
+	}
+
+	if ((type & 0xe0) == 0xa0) {
+		uint32_t len = type & 0x1f;
+		*pp += len;
+		return *pp <= end;
+	}
+
+	if ((type & 0xf0) == 0x90) {
+		uint32_t count = type & 0x0f;
+		for (uint32_t i = 0; i < count; i++) {
+			if (!as_command_skip_msgpack_value(pp, end)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	if ((type & 0xf0) == 0x80) {
+		uint32_t count = type & 0x0f;
+		for (uint32_t i = 0; i < count; i++) {
+			if (!as_command_skip_msgpack_value(pp, end) ||
+				!as_command_skip_msgpack_value(pp, end)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	switch (type) {
+		case 0xc0: // nil
+		case 0xc2: // false
+		case 0xc3: // true
+			return true;
+
+		case 0xcc: // uint8
+			*pp += 1;
+			return *pp <= end;
+
+		case 0xcd: // uint16
+			*pp += 2;
+			return *pp <= end;
+
+		case 0xce: // uint32
+		case 0xca: // float32
+			*pp += 4;
+			return *pp <= end;
+
+		case 0xcf: // uint64
+		case 0xcb: // float64
+			*pp += 8;
+			return *pp <= end;
+
+		case 0xd9: // str8
+		case 0xc4: { // bin8
+			if (*pp >= end) return false;
+			uint32_t len = **pp;
+			(*pp) += 1 + len;
+			return *pp <= end;
+		}
+
+		case 0xda: // str16
+		case 0xc5: { // bin16
+			if (*pp + 2 > end) return false;
+			uint32_t len = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 2 + len;
+			return *pp <= end;
+		}
+
+		case 0xdb: // str32
+		case 0xc6: { // bin32
+			if (*pp + 4 > end) return false;
+			uint32_t len = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 4 + len;
+			return *pp <= end;
+		}
+
+		case 0xdc: { // array16
+			if (*pp + 2 > end) return false;
+			uint32_t count = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 2;
+			for (uint32_t i = 0; i < count; i++) {
+				if (!as_command_skip_msgpack_value(pp, end)) return false;
+			}
+			return true;
+		}
+
+		case 0xdd: { // array32
+			if (*pp + 4 > end) return false;
+			uint32_t count = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 4;
+			for (uint32_t i = 0; i < count; i++) {
+				if (!as_command_skip_msgpack_value(pp, end)) return false;
+			}
+			return true;
+		}
+
+		case 0xde: { // map16
+			if (*pp + 2 > end) return false;
+			uint32_t count = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 2;
+			for (uint32_t i = 0; i < count; i++) {
+				if (!as_command_skip_msgpack_value(pp, end) ||
+					!as_command_skip_msgpack_value(pp, end)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		case 0xdf: { // map32
+			if (*pp + 4 > end) return false;
+			uint32_t count = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 4;
+			for (uint32_t i = 0; i < count; i++) {
+				if (!as_command_skip_msgpack_value(pp, end) ||
+					!as_command_skip_msgpack_value(pp, end)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		default:
+			return false;
+	}
+}
+
+static bool
+as_command_read_msgpack_uint(uint8_t** pp, uint8_t* end, uint64_t* out)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0x80) == 0) {
+		*out = type;
+		return true;
+	}
+
+	switch (type) {
+		case 0xcc:
+			if (*pp + 1 > end) return false;
+			*out = **pp;
+			(*pp)++;
+			return true;
+
+		case 0xcd:
+			if (*pp + 2 > end) return false;
+			*out = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 2;
+			return true;
+
+		case 0xce:
+			if (*pp + 4 > end) return false;
+			*out = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 4;
+			return true;
+
+		case 0xcf:
+			if (*pp + 8 > end) return false;
+			*out = cf_swap_from_be64(*(uint64_t*)*pp);
+			*pp += 8;
+			return true;
+
+		default:
+			return false;
+	}
+}
+
+static bool
+as_command_read_msgpack_str(uint8_t** pp, uint8_t* end, char** out, uint32_t* out_len)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	uint32_t len;
+
+	if ((type & 0xe0) == 0xa0) {
+		len = type & 0x1f;
+	}
+	else if (type == 0xd9) {
+		if (*pp >= end) return false;
+		len = **pp;
+		(*pp)++;
+	}
+	else if (type == 0xda) {
+		if (*pp + 2 > end) return false;
+		len = cf_swap_from_be16(*(uint16_t*)*pp);
+		*pp += 2;
+	}
+	else {
+		return false;
+	}
+
+	if (*pp + len > end) {
+		return false;
+	}
+
+	*out = (char*)*pp;
+	*out_len = len;
+	*pp += len;
+	return true;
+}
+
+void
+as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
+{
+	if (len == 0 || buf == NULL) {
+		return;
+	}
+
+	uint8_t* p = buf;
+	uint8_t* end = buf + len;
+
+	uint8_t type = *p;
+	p++;
+
+	uint32_t n_entries;
+
+	if ((type & 0xf0) == 0x80) {
+		n_entries = type & 0x0f;
+	}
+	else if (type == 0xde) {
+		if (p + 2 > end) return;
+		n_entries = cf_swap_from_be16(*(uint16_t*)p);
+		p += 2;
+	}
+	else if (type == 0xdf) {
+		if (p + 4 > end) return;
+		n_entries = cf_swap_from_be32(*(uint32_t*)p);
+		p += 4;
+	}
+	else {
+		return;
+	}
+
+	bool has_subcode = false;
+	uint64_t subcode = 0;
+	char* msg_str = NULL;
+	uint32_t msg_len = 0;
+
+	for (uint32_t i = 0; i < n_entries; i++) {
+		uint64_t key;
+
+		if (!as_command_read_msgpack_uint(&p, end, &key)) {
+			return;
+		}
+
+		if (key == 1) {
+			uint64_t val;
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return;
+			}
+			subcode = val;
+			has_subcode = true;
+		}
+		else if (key == 2) {
+			if (!as_command_read_msgpack_str(&p, end, &msg_str, &msg_len)) {
+				return;
+			}
+		}
+		else {
+			if (!as_command_skip_msgpack_value(&p, end)) {
+				return;
+			}
+		}
+	}
+
+	if (has_subcode) {
+		err->subcode = (uint32_t)subcode;
+	}
+
+	if (has_subcode && msg_str) {
+		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "%.*s (subcode=%" PRIu64 ")",
+				 (int)msg_len, msg_str, subcode);
+	}
+	else if (has_subcode) {
+		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "error subcode=%" PRIu64, subcode);
+	}
+	else if (msg_str) {
+		uint32_t copy_len = msg_len < AS_ERROR_MESSAGE_MAX_SIZE - 1
+							? msg_len : AS_ERROR_MESSAGE_MAX_SIZE - 1;
+		memcpy(err->message, msg_str, copy_len);
+		err->message[copy_len] = '\0';
+	}
+}
+
+uint8_t*
+as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields)
+{
+	for (uint32_t i = 0; i < n_fields; i++) {
+		uint32_t field_size = cf_swap_from_be32(*(uint32_t*)p);
+		p += 4;
+
+		if (field_size > 0) {
+			uint8_t field_type = *p;
+
+			if (field_type == AS_FIELD_ERROR_DETAILS && field_size > 1) {
+				as_command_parse_error_details(err, p + 1, field_size - 1);
+			}
+		}
+
+		p += field_size;
+	}
+	return p;
 }
 
 uint8_t*
@@ -1736,8 +2075,7 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		}
 
 		default:
-			as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-							as_error_string(status));
+			as_error_update_address(err, status, as_node_get_address_string(node));
 			break;
 	}
 	return status;
@@ -1786,8 +2124,7 @@ as_command_parse_success_failure(
 		}
 
 		default:
-			as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-							as_error_string(status));
+			as_error_update_address(err, status, as_node_get_address_string(node));
 			if (val) {
 				*val = 0;
 			}

@@ -515,6 +515,9 @@ PLAN(aerospike_test)
 	plan_add(scan_basics);
 	plan_add(batch);
 	plan_add(transaction);
+	plan_add(error_detail_parser);
+	plan_add(error_detail_policy);
+	plan_add(error_detail_sync);
 
 	/*
 	 * shm_second_client: skip on github.com CI by default. The monolithic test
@@ -537,5 +540,6 @@ PLAN(aerospike_test)
 	plan_add(scan_async);
 	plan_add(query_async);
 	plan_add(transaction_async);
+	plan_add(error_detail_async);
 #endif
 }

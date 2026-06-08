@@ -1520,19 +1520,25 @@ as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg,
 bool
 as_event_command_parse_header(as_event_command* cmd)
 {
+	as_error err;
+	err.message[0] = '\0';
+	err.subcode = 0;
+
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
 	if (cmd->txn) {
-		as_error err;
 		as_status status = as_event_command_parse_fields(cmd, &err, msg, &p);
 
 		if (status != AEROSPIKE_OK) {
 			as_event_response_error(cmd, &err);
 			return true;
 		}
+	}
+	else {
+		p = as_command_parse_fields_err(p, &err, msg->n_fields);
 	}
 
 	if (msg->result_code == AEROSPIKE_OK) {
@@ -1541,8 +1547,7 @@ as_event_command_parse_header(as_event_command* cmd)
 		as_event_command_release(cmd);
 	}
 	else {
-		as_error err;
-		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+		as_error_update_status(&err, msg->result_code);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -1552,6 +1557,9 @@ bool
 as_event_command_parse_result(as_event_command* cmd)
 {
 	as_error err;
+	err.message[0] = '\0';
+	err.subcode = 0;
+
 	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
@@ -1567,7 +1575,7 @@ as_event_command_parse_result(as_event_command* cmd)
 		}
 	}
 	else {
-		p = as_command_ignore_fields(p, msg->n_fields);
+		p = as_command_parse_fields_err(p, &err, msg->n_fields);
 	}
 
 	status = msg->result_code;
@@ -1575,7 +1583,6 @@ as_event_command_parse_result(as_event_command* cmd)
 	switch (status) {
 		case AEROSPIKE_OK: {
 			if (cmd->flags & AS_ASYNC_FLAGS_HEAP_REC) {
-				// Create record on heap and let user call as_record_destroy() on success.
 				as_record* rec = as_record_new(msg->n_ops);
 
 				rec->gen = msg->generation;
@@ -1595,7 +1602,6 @@ as_event_command_parse_result(as_event_command* cmd)
 				}
 			}
 			else {
-				// Create record on stack and call as_record_destroy() after listener completes.
 				as_record rec;
 
 				if (msg->n_ops < 1000) {
@@ -1631,7 +1637,7 @@ as_event_command_parse_result(as_event_command* cmd)
 		}
 			
 		default: {
-			as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
+			as_error_update_address(&err, status, as_node_get_address_string(cmd->node));
 			as_event_response_error(cmd, &err);
 			break;
 		}
@@ -1643,6 +1649,9 @@ bool
 as_event_command_parse_success_failure(as_event_command* cmd)
 {
 	as_error err;
+	err.message[0] = '\0';
+	err.subcode = 0;
+
 	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)cmd->buf;
@@ -1658,7 +1667,7 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 		}
 	}
 	else {
-		p = as_command_ignore_fields(p, msg->n_fields);
+		p = as_command_parse_fields_err(p, &err, msg->n_fields);
 	}
 
 	status = msg->result_code;
@@ -1687,7 +1696,7 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 		}
 			
 		default: {
-			as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
+			as_error_update_address(&err, status, as_node_get_address_string(cmd->node));
 			as_event_response_error(cmd, &err);
 			break;
 		}

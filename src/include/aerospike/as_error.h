@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -98,6 +98,13 @@ typedef struct as_error_s {
 	as_status code;
 
 	/**
+	 * Server error detail subcode. When error_detail_verbosity >= 1 on the request policy
+	 * and the server returns structured error details, this field contains the numeric subcode.
+	 * Zero when no subcode was returned.
+	 */
+	uint32_t subcode;
+
+	/**
 	 * NULL-terminated error message
 	 */
 	char message[AS_ERROR_MESSAGE_MAX_SIZE];
@@ -146,6 +153,47 @@ typedef struct as_error_s {
 #define as_error_set_message(__err, __code, __msg) \
 	as_error_setall( __err, __code, __msg, __func__, __FILE__, __LINE__ );
 
+/**
+ * If the error already has a message, update code/in_doubt/location fields only.
+ * Otherwise, set a default message from the error code string.
+ *
+ * @relates as_error
+ */
+#define as_error_update_status(__err, __code) \
+	do { \
+		if ((__err)->message[0] != '\0') { \
+			(__err)->code = (__code); \
+			(__err)->in_doubt = false; \
+			(__err)->func = __func__; \
+			(__err)->file = __FILE__; \
+			(__err)->line = __LINE__; \
+		} \
+		else { \
+			as_error_set_message((__err), (__code), as_error_string(__code)); \
+		} \
+	} while(0)
+
+/**
+ * If the error already has a message, update code/in_doubt/location fields only.
+ * Otherwise, set a message containing the node address and error code string.
+ *
+ * @relates as_error
+ */
+#define as_error_update_address(__err, __code, __address) \
+	do { \
+		if ((__err)->message[0] != '\0') { \
+			(__err)->code = (__code); \
+			(__err)->in_doubt = false; \
+			(__err)->func = __func__; \
+			(__err)->file = __FILE__; \
+			(__err)->line = __LINE__; \
+		} \
+		else { \
+			as_error_update((__err), (__code), "%s %s", \
+				(__address), as_error_string(__code)); \
+		} \
+	} while(0)
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -163,6 +211,7 @@ static inline as_error*
 as_error_init(as_error* err)
 {
 	err->code = AEROSPIKE_OK;
+	err->subcode = 0;
 	err->message[0] = '\0';
 	err->func = NULL;
 	err->file = NULL;
@@ -184,6 +233,7 @@ static inline as_status
 as_error_reset(as_error* err)
 {
 	err->code = AEROSPIKE_OK;
+	err->subcode = 0;
 	err->message[0] = '\0';
 	err->func = NULL;
 	err->file = NULL;
@@ -208,6 +258,8 @@ as_error_setall(as_error* err, as_status code, const char * message, const char 
 	err->file = file;
 	err->line = line;
 	err->in_doubt = false;
+	// subcode deliberately not zeroed: set by the field-45 parser and must
+	// survive setall/setallv calls made by the priority logic.
 	return err->code;
 }
 
@@ -233,6 +285,8 @@ as_error_setallv(as_error* err, as_status code, const char * func, const char * 
 	err->file = file;
 	err->line = line;
 	err->in_doubt = false;
+	// subcode deliberately not zeroed: set by the field-45 parser and must
+	// survive setall/setallv calls made by the priority logic.
 	return err->code;
 }
 
@@ -259,6 +313,7 @@ static inline void
 as_error_copy(as_error * trg, const as_error * src)
 {
 	trg->code = src->code;
+	trg->subcode = src->subcode;
 	strcpy(trg->message, src->message);
 	trg->func = src->func;
 	trg->file = src->file;

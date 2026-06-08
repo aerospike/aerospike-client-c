@@ -2107,6 +2107,8 @@ as_txn_verify_single(
 	buf[9] = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA;
 	buf[10] = 0;
 	buf[11] = AS_MSG_INFO3_SC_READ_TYPE;
+	// Verbosity bits intentionally not set: response parser (parse_result_code)
+	// only checks result_code and does not iterate fields or parse field 45.
 	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ;
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;
@@ -2184,6 +2186,8 @@ as_txn_verify_single_async(
 	buf[9] = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA;
 	buf[10] = 0;
 	buf[11] = AS_MSG_INFO3_SC_READ_TYPE;
+	// Verbosity bits intentionally not set: response parser (txn_verify_parse)
+	// only checks result_code and does not iterate fields or parse field 45.
 	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ;
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;

@@ -1108,7 +1108,6 @@ static void
 async_write_gen_v2_cb(as_error* err, void* udata, as_event_loop* event_loop)
 {
 	async_error_data* data = udata;
-	atf_test_result* __result__ = data->result;
 
 	if (err) {
 		as_error_copy(&data->err_copy, err);

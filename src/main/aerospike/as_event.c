@@ -1547,16 +1547,7 @@ as_event_command_parse_header(as_event_command* cmd)
 		as_event_command_release(cmd);
 	}
 	else {
-		if (err.message[0] != '\0') {
-			err.code = msg->result_code;
-			err.in_doubt = false;
-			err.func = __func__;
-			err.file = __FILE__;
-			err.line = __LINE__;
-		}
-		else {
-			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
-		}
+		as_error_update_status(&err, msg->result_code);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -1646,16 +1637,7 @@ as_event_command_parse_result(as_event_command* cmd)
 		}
 			
 		default: {
-			if (err.message[0] != '\0') {
-				err.code = status;
-				err.in_doubt = false;
-				err.func = __func__;
-				err.file = __FILE__;
-				err.line = __LINE__;
-			}
-			else {
-				as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
-			}
+			as_error_update_address(&err, status, as_node_get_address_string(cmd->node));
 			as_event_response_error(cmd, &err);
 			break;
 		}
@@ -1714,16 +1696,7 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 		}
 			
 		default: {
-			if (err.message[0] != '\0') {
-				err.code = status;
-				err.in_doubt = false;
-				err.func = __func__;
-				err.file = __FILE__;
-				err.line = __LINE__;
-			}
-			else {
-				as_error_update(&err, status, "%s %s", as_node_get_address_string(cmd->node), as_error_string(status));
-			}
+			as_error_update_address(&err, status, as_node_get_address_string(cmd->node));
 			as_event_response_error(cmd, &err);
 			break;
 		}

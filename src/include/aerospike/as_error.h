@@ -153,6 +153,47 @@ typedef struct as_error_s {
 #define as_error_set_message(__err, __code, __msg) \
 	as_error_setall( __err, __code, __msg, __func__, __FILE__, __LINE__ );
 
+/**
+ * If the error already has a message, update code/in_doubt/location fields only.
+ * Otherwise, set a default message from the error code string.
+ *
+ * @relates as_error
+ */
+#define as_error_update_status(__err, __code) \
+	do { \
+		if ((__err)->message[0] != '\0') { \
+			(__err)->code = (__code); \
+			(__err)->in_doubt = false; \
+			(__err)->func = __func__; \
+			(__err)->file = __FILE__; \
+			(__err)->line = __LINE__; \
+		} \
+		else { \
+			as_error_set_message((__err), (__code), as_error_string(__code)); \
+		} \
+	} while(0)
+
+/**
+ * If the error already has a message, update code/in_doubt/location fields only.
+ * Otherwise, set a message containing the node address and error code string.
+ *
+ * @relates as_error
+ */
+#define as_error_update_address(__err, __code, __address) \
+	do { \
+		if ((__err)->message[0] != '\0') { \
+			(__err)->code = (__code); \
+			(__err)->in_doubt = false; \
+			(__err)->func = __func__; \
+			(__err)->file = __FILE__; \
+			(__err)->line = __LINE__; \
+		} \
+		else { \
+			as_error_update((__err), (__code), "%s %s", \
+				(__address), as_error_string(__code)); \
+		} \
+	} while(0)
+
 //---------------------------------
 // Functions
 //---------------------------------

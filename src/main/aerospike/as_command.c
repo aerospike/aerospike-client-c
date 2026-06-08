@@ -1141,15 +1141,8 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	}
 
 	if (msg->result_code) {
-		if (err->message[0] != '\0') {
-			err->code = msg->result_code;
-			err->in_doubt = false;
-			err->func = __func__;
-			err->file = __FILE__;
-			err->line = __LINE__;
-			return msg->result_code;
-		}
-		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+		as_error_update_status(err, msg->result_code);
+		return msg->result_code;
 	}
 
 	as_record** rec = cmd->udata;
@@ -2082,17 +2075,7 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		}
 
 		default:
-			if (err->message[0] != '\0') {
-				err->code = status;
-				err->in_doubt = false;
-				err->func = __func__;
-				err->file = __FILE__;
-				err->line = __LINE__;
-			}
-			else {
-				as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-								as_error_string(status));
-			}
+			as_error_update_address(err, status, as_node_get_address_string(node));
 			break;
 	}
 	return status;
@@ -2141,17 +2124,7 @@ as_command_parse_success_failure(
 		}
 
 		default:
-			if (err->message[0] != '\0') {
-				err->code = status;
-				err->in_doubt = false;
-				err->func = __func__;
-				err->file = __FILE__;
-				err->line = __LINE__;
-			}
-			else {
-				as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-								as_error_string(status));
-			}
+			as_error_update_address(err, status, as_node_get_address_string(node));
 			if (val) {
 				*val = 0;
 			}

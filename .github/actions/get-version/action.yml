@@ -1,20 +1,23 @@
 name: Get Version
 description: >
-  Extract the release version from the repo's pkg/version script (git describe).
-  Outputs the version string and an is-snapshot flag.
+  Resolve the build version by comparing src/main/aerospike/version.c at HEAD
+  and HEAD~1. A build is a RELEASE when the committed version changed in this
+  commit; otherwise it is an in-cycle SNAPSHOT and gets a "-<short-sha>" suffix
+  on top of pkg/version output.
+  Requires a checkout with fetch-depth >= 2 (build-artifacts.yml uses 0) so the
+  previous commit's version.c is available for the diff.
 
 outputs:
   release-version:
     description: >
-      Version string as produced by pkg/version (e.g. 7.4.0, 7.4.0-rc1, 7.4.0-2).
-      Plain git tags produce a clean version (7.4.0).
-      RC tags or commits past a tag include a dash suffix (7.4.0-rc1, 7.4.0-2).
+      Version string for this build. Release cut → clean committed version from
+      version.c (e.g. 7.5.0). In-cycle build → "<pkg/version>-<short-sha>".
     value: ${{ steps.ver.outputs.release_version }}
 
   is-snapshot:
     description: >
-      "true" when the version contains a dash (rc, dev, or post-tag commit),
-      "false" for an exact release tag (7.4.0).
+      "false" for a release cut (committed version changed in this commit),
+      "true" for an in-cycle snapshot build (suffix contains a dash).
     value: ${{ steps.ver.outputs.is_snapshot }}
 
 runs:
@@ -25,20 +28,37 @@ runs:
       run: |
         set -euo pipefail
 
-        version=$(bash "$GITHUB_WORKSPACE/pkg/version")
+        VERSION_REL="src/main/aerospike/version.c"
+        read_version_c() {
+          sed -nE 's/.*aerospike_client_version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p'
+        }
 
-        if [[ -z "$version" ]]; then
-          echo "::error::pkg/version produced empty output — is fetch-depth: 0 set on the checkout?" >&2
+        current=$(read_version_c < "$GITHUB_WORKSPACE/$VERSION_REL")
+        if [[ -z "$current" ]]; then
+          echo "::error::Could not read aerospike_client_version from $VERSION_REL at HEAD" >&2
           exit 1
         fi
 
-        echo "release_version=$version" >> "$GITHUB_OUTPUT"
+        # Same version as HEAD~1 means this is an in-cycle snapshot build.
+        prev=$(git -C "$GITHUB_WORKSPACE" show "HEAD~1:$VERSION_REL" 2>/dev/null \
+          | read_version_c || true)
 
-        if [[ "$version" == *"-"* ]]; then
-          echo "is_snapshot=true"  >> "$GITHUB_OUTPUT"
+        echo "Committed version: $current | previous commit: ${prev:-<none>}"
+
+        if [[ -n "$prev" && "$prev" == "$current" ]]; then
+          snapshot_base=$(bash "$GITHUB_WORKSPACE/pkg/version")
+          if [[ -z "$snapshot_base" ]]; then
+            echo "::error::pkg/version produced empty output for snapshot build" >&2
+            exit 1
+          fi
+          release_version="${snapshot_base}-${GITHUB_SHA::8}"
+          is_snapshot=true
         else
-          echo "is_snapshot=false" >> "$GITHUB_OUTPUT"
+          release_version="$current"
+          is_snapshot=false
         fi
 
-        echo "Version: $version"
-        echo "Snapshot: $([[ "$version" == *'-'* ]] && echo true || echo false)"
+        echo "release_version=$release_version" >> "$GITHUB_OUTPUT"
+        echo "is_snapshot=$is_snapshot"          >> "$GITHUB_OUTPUT"
+
+        echo "Resolved version: $release_version (snapshot=$is_snapshot)"

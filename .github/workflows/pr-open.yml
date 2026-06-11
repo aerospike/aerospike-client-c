@@ -1,36 +1,26 @@
 name: PR CI
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Triggers on every pull request to stage or main and on manual dispatch.
-#
-# Branch-protection check name to require: "ci / summary"
-#   That single check gates on ALL platform jobs inside build-and-test.yml.
-#   No need to list individual matrix checks in the branch-protection rule.
-#
-# Linux matrix: ubuntu-22.04 amd64 only by default (fast feedback).
-#   workflow_dispatch: paste custom JSON into matrix-json to override.
-#   → all four event libs (sync, libev, libuv, libevent)
-#   → macOS ARM64 self-hosted
-#   → Windows x64
-# ─────────────────────────────────────────────────────────────────────────────
+# PR/manual CI over the PR server list.
+# Each server in .github/pr_test_servers.json calls build-and-test.yml.
+# Linux stays on the fast ubuntu-22.04 amd64 matrix; macOS and Windows also run.
 
 run-name: >-
   ${{ github.event_name == 'pull_request'
     && format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title)
     || github.event_name == 'workflow_dispatch'
-    && format('Manual — {0} / server:{1} / event-lib:{2}', github.ref_name, inputs.server-tag || 'latest', inputs.event-lib || 'all')
+    && format('Manual — {0}', github.ref_name)
     || github.ref_name }}
 
 permissions:
   contents: read
-  id-token: write        # OIDC — required by setup-aerospike-server inside build-and-test.yml
+  id-token: write        # setup-aerospike-server OIDC
   actions: read          # allows reading other workflow run info (Java SDK pattern)
   checks: write          # allows step-security to annotate check runs on the PR
   pull-requests: write   # allows posting annotations / comments back to the PR
 
 on:
   push:
-    branches: [test-workflow-stage]
+    branches: [CLIENT-4300-release-pipeline-new]
 
   pull_request:
     branches:
@@ -43,69 +33,98 @@ on:
       - ready_for_review
 
   workflow_dispatch:
-    inputs:
-      matrix-json:
-        description: >
-          Distro/arch matrix as JSON (distros only, no runners key).
-          Defaults to ubuntu-22.04 amd64 only for fast PR feedback.
-        required: false
-        default: >-
-          {"distros":[{"distro":"ubuntu-22.04","container":"ubuntu:22.04","archs":["amd64"]}]}
-      runners-json:
-        description: >
-          Arch → runner label map. Leave empty to use vars.LINUX_RUNNERS.
-          Example: {"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}
-        required: false
-        default: ${{ vars.LINUX_RUNNERS }}
-      server-tag:
-        description: 'Aerospike server Docker image tag'
-        required: false
-        default: latest
-      event-lib:
-        description: 'Event library to test'
-        type: choice
-        required: false
-        default: all
-        options:
-          - all
-          - sync
-          - libev
-          - libuv
-          - libevent
-      run-mac:
-        description: 'Run macOS ARM64 self-hosted job'
-        type: boolean
-        required: false
-        default: true
-      run-windows:
-        description: 'Run Windows x64 build+test jobs'
-        type: boolean
-        required: false
-        default: true
-      valgrind:
-        description: 'Include valgrind runs in Linux matrix'
-        type: boolean
-        required: false
-        default: false
 
-# Cancel in-progress runs for the same PR / branch when a new push arrives.
-# This avoids queueing up multiple builds on fast-moving PRs.
+# Keep only the latest run for a PR or branch.
 concurrency:
   group: pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Job name "ci" → branch-protection check name is "ci / summary"
+  load-test-servers:
+    name: load test servers
+    runs-on: ubuntu-24.04
+    outputs:
+      test-servers: ${{ steps.load.outputs.test-servers }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Load PR test servers
+        id: load
+        run: |
+          test_servers="$(
+            jq -c '
+              [
+                to_entries[]
+                | {
+                    server_name: .key,
+                    server: (.value.version // .key),
+                    server_type: (.value.type // ""),
+                    server_type_name: ((.value.type // "") | split("/") | last),
+                    "num-nodes": ((.value["num-nodes"] // .value.num_nodes // 1) | tostring)
+                  }
+              ]
+            ' .github/pr_test_servers.json
+          )"
+
+          if [ "$test_servers" = "[]" ]; then
+            echo "No PR test servers configured" >&2
+            exit 1
+          fi
+
+          echo "test-servers=$test_servers" >> "$GITHUB_OUTPUT"
+
   ci:
+    name: Testing against ${{ matrix.server_type_name }} on ${{ matrix.num-nodes }} node with version ${{ matrix.server }}
+    needs: load-test-servers
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.load-test-servers.outputs.test-servers) }}
     uses: ./.github/workflows/build-and-test.yml
     with:
       ref:          ${{ github.sha }}
-      matrix-json:  ${{ inputs.matrix-json || '{"distros":[{"distro":"ubuntu-22.04","container":"ubuntu:22.04","archs":["amd64"]}]}' }}
-      runners-json: ${{ inputs.runners-json || vars.LINUX_RUNNERS }}
-      event-lib:    ${{ inputs.event-lib  || 'all' }}
-      server-tag:   ${{ inputs.server-tag || 'latest' }}
-      num-nodes:    '1' # Multi node for mac self hosted runner not working
-      valgrind:     ${{ inputs.valgrind == true }}
-      run-mac:      ${{ inputs.run-mac     == 'false' && false || true }}
-      run-windows:  ${{ inputs.run-windows == 'false' && false || true }}
+      matrix-json:  '{"distros":[{"distro":"ubuntu-22.04","container":"ubuntu:22.04","archs":["amd64"]}]}'
+      runners-json: ${{ vars.LINUX_RUNNERS }}
+      event-lib:    all
+      server-tag:   ${{ matrix.server }}
+      num-nodes:    ${{ matrix.num-nodes }}
+      server-config-content: |
+        service {
+            feature-key-file /etc/aerospike/features.conf
+            cluster-name docker
+            proto-fd-max 15000
+        }
+
+        logging {
+            console {
+                context any info
+            }
+        }
+
+        network {
+            service {
+                address any
+                port 3000
+            }
+            heartbeat {
+                mode mesh
+                port 3002
+            }
+            fabric {
+                port 3001
+            }
+        }
+
+        namespace test {
+          replication-factor 1
+          allow-ttl-without-nsup true
+          storage-engine memory {
+            data-size 4G
+          }
+        }
+      valgrind:     true
+      run-mac:     true
+      run-windows: true
+      check-doc-lint: ${{ vars.CHECK_DOC_LINT != 'false' }}
     secrets: inherit

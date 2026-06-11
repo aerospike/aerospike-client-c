@@ -1,0 +1,280 @@
+name: Announce Release
+run-name: Announce release — aerospike-client-c${{ github.event_name == 'workflow_dispatch' && inputs.dry-run && ' (dry-run)' || '' }}
+
+# Announces a release after stage is merged to master.
+# Tags the master/stage merge-base, validates API docs, and drafts a release.
+# Manual runs default to dry-run and do not push tags or create releases.
+
+permissions:
+  contents: write  # push release tag
+
+# on:
+#   push:
+#     branches:
+#       # - master
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Preview release without pushing a tag or creating a draft release
+        required: false
+        type: boolean
+        default: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  resolve-version:
+    name: resolve version
+    runs-on: ubuntu-24.04
+    outputs:
+      version:    ${{ steps.get-version.outputs.version }}
+      target-sha: ${{ steps.target.outputs.sha }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout master
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: master
+          fetch-depth: 0   # required for git merge-base
+
+      # Tag the master/stage merge-base so the release is reachable from both.
+      - name: Resolve release target (merge-base of master and stage)
+        id: target
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin stage:refs/remotes/origin/stage
+          target=$(git merge-base HEAD origin/stage)
+          echo "Release target SHA: $target"
+          echo "sha=$target" >> "$GITHUB_OUTPUT"
+
+      # pkg/version wraps git describe --tags.
+      - name: Read version from release target
+        id: get-version
+        run: |
+          set -euo pipefail
+          git checkout "${{ steps.target.outputs.sha }}"
+          version=$(bash pkg/version)
+          if [ -z "$version" ]; then
+            echo "::error::pkg/version produced empty output at ${{ steps.target.outputs.sha }}"
+            exit 1
+          fi
+          echo "Version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  generate-api-docs:
+    name: generate api docs
+    needs: resolve-version
+    runs-on: ubuntu-24.04
+    outputs:
+      archive:    ${{ steps.package-docs.outputs.archive }}
+      html-count: ${{ steps.package-docs.outputs.html-count }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout at release target
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.resolve-version.outputs.target-sha }}
+          submodules: recursive
+          fetch-depth: 1
+
+      # build-api-docs prepares public headers before running Doxygen.
+      - name: Build API docs
+        uses: ./.github/actions/build-api-docs
+        with:
+          log-path: doxygen.log
+          fail-on-warnings: 'true'
+
+      - name: Package API docs
+        id: package-docs
+        env:
+          VERSION: ${{ needs.resolve-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          html_count=$(find target/docs/html -type f 2>/dev/null | wc -l | tr -d ' ')
+          archive="api-docs-${VERSION}.tgz"
+          tar -C target/docs/html -czf "$archive" .
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "html-count=$html_count" >> "$GITHUB_OUTPUT"
+          echo "Packaged ${html_count} HTML files into ${archive}"
+
+      # Input for the aerospike-websites API docs update.
+      - name: Upload API docs artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-docs-${{ needs.resolve-version.outputs.version }}
+          path: ${{ steps.package-docs.outputs.archive }}
+          retention-days: 90
+
+  push-tag:
+    name: create and push tag
+    needs: [resolve-version, generate-api-docs]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout master
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Create and push release tag
+        id: tag
+        env:
+          VERSION:    ${{ needs.resolve-version.outputs.version }}
+          TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
+          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+          IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            echo "::error::Tag ${VERSION} already exists. Did you forget to bump the version before merging?"
+            exit 1
+          fi
+
+          if [ "$IS_DRY_RUN" = "true" ]; then
+            echo "[dry-run] Would create annotated tag $VERSION at $TARGET_SHA"
+            echo "[dry-run] Would run: git push origin $VERSION"
+            exit 0
+          fi
+
+          git tag -a "$VERSION" -m "Release $VERSION" "$TARGET_SHA"
+          git push origin "$VERSION"
+          echo "Tagged $TARGET_SHA as $VERSION"
+
+  draft-github-release:
+    name: draft github release
+    needs: [resolve-version, push-tag]
+    runs-on: ubuntu-24.04
+    outputs:
+      prev-tag: ${{ steps.notes.outputs.prev-tag }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run && needs.resolve-version.outputs.target-sha || needs.resolve-version.outputs.version }}
+          fetch-depth: 0   # full history required for git log between tags
+
+      - name: Generate release notes
+        id: notes
+        env:
+          VERSION:    ${{ needs.resolve-version.outputs.version }}
+          TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
+          IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+        run: |
+          set -euo pipefail
+
+          release_ref="$VERSION"
+          if [ "$IS_DRY_RUN" = "true" ]; then
+            release_ref="$TARGET_SHA"
+          fi
+
+          prev_tag=$(git describe --tags --abbrev=0 "${release_ref}^" 2>/dev/null || true)
+          if [ -z "$prev_tag" ]; then
+            echo "::error::No previous tag found before $release_ref. Cannot generate release notes."
+            exit 1
+          fi
+
+          range="$prev_tag..$release_ref"
+          notes=$(git log "$range" --pretty=format:"- %s" --no-merges)
+          if [ -z "$notes" ]; then
+            echo "::error::No commits found between $range. Nothing to release."
+            exit 1
+          fi
+
+          {
+            echo "## What's Changed"
+            echo ""
+            echo "$notes"
+            echo ""
+            echo "---"
+            echo ""
+            if [ "$IS_DRY_RUN" = "true" ]; then
+              echo "**Full changelog:** $prev_tag..$VERSION (previewed with target $TARGET_SHA)"
+            else
+              echo "**Full changelog:** $range"
+            fi
+          } > release-notes.md
+
+          echo "Release notes preview:"
+          cat release-notes.md
+          echo "prev-tag=$prev_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub draft release
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry-run) }}
+        uses: step-security/action-gh-release@5f6a6ab53a5a2c000ff3a16fad038291e5b97ce7 # v2.4.2
+        with:
+          tag_name: ${{ needs.resolve-version.outputs.version }}
+          name: Aerospike C Client ${{ needs.resolve-version.outputs.version }}
+          body_path: release-notes.md
+          draft: true
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Skip draft release (dry-run mode)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+        run: echo "dry-run=true — skipping GitHub draft release creation."
+
+  summary:
+    name: summary
+    if: always()
+    needs: [resolve-version, generate-api-docs, push-tag, draft-github-release]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Write release summary
+        env:
+          VERSION:     ${{ needs.resolve-version.outputs.version }}
+          TARGET_SHA:  ${{ needs.resolve-version.outputs.target-sha }}
+          DOC_ARCHIVE: ${{ needs.generate-api-docs.outputs.archive }}
+          HTML_COUNT:  ${{ needs.generate-api-docs.outputs.html-count }}
+          PREV_TAG:    ${{ needs.draft-github-release.outputs.prev-tag }}
+          IS_DRY_RUN:  ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+          R_RESOLVE:   ${{ needs.resolve-version.result }}
+          R_DOCS:      ${{ needs.generate-api-docs.result }}
+          R_TAG:       ${{ needs.push-tag.result }}
+          R_DRAFT:     ${{ needs.draft-github-release.result }}
+        run: |
+          status() {
+            printf '`%s`' "$1"
+          }
+
+          {
+            echo "## Announce Release"
+            echo ""
+            echo "| Item | Value |"
+            echo "| :--- | :--- |"
+            echo "| Version | \`$VERSION\` |"
+            echo "| Dry run | \`$IS_DRY_RUN\` |"
+            echo "| Tag commit | \`$TARGET_SHA\` |"
+            echo "| Changelog | \`${PREV_TAG}..${VERSION}\` |"
+            echo "| API docs | \`${DOC_ARCHIVE}\` (${HTML_COUNT} files) |"
+            echo "| Jobs | resolve $(status "$R_RESOLVE"), docs $(status "$R_DOCS"), tag $(status "$R_TAG"), draft $(status "$R_DRAFT") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for result in "$R_RESOLVE" "$R_DOCS" "$R_TAG" "$R_DRAFT"; do
+            if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
+              echo "::error::Announce release failed (resolve=$R_RESOLVE docs=$R_DOCS tag=$R_TAG draft=$R_DRAFT)"
+              exit 1
+            fi
+          done

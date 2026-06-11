@@ -1,8 +1,7 @@
-name: Resolve Linux Distro × Event-Lib × Valgrind Matrix
+name: Resolve Build/Test Matrix
 description: >
-  Resolves the event-lib list, valgrind flags, and distro/arch entries, then
-  emits the full Cartesian product as a flat JSON include array suitable for a
-  GitHub Actions matrix strategy.
+  Resolve event-lib values, valgrind flags, and Linux distro/arch rows into
+  GitHub Actions matrix JSON.
 
   Callers MUST supply matrix-json, runners-json, and event-lib.
   The action validates all three in the first step and exits on any empty input.
@@ -48,7 +47,7 @@ outputs:
     description: >
       Flat JSON array of objects, each representing one build cell:
         { distro, container, arch, runner, event_lib, valgrind }
-      Pass directly to matrix: include: ${{ fromJSON(...) }}.
+      Pass directly to matrix include via fromJSON in the caller workflow.
     value: ${{ steps.cartesian.outputs.linux_matrix }}
 
   event-libs:

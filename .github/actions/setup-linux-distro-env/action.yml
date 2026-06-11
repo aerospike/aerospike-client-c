@@ -26,6 +26,10 @@ inputs:
     description: 'Run tests under Valgrind and check for zero errors'
     required: false
     default: 'false'
+  junit-xml:
+    description: 'JUnit XML output path inside the build container'
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -36,9 +40,11 @@ runs:
         EVENT_LIB:       ${{ inputs.event-lib }}
         DISTRO:          ${{ inputs.distro }}
         VALGRIND:        ${{ inputs.valgrind }}
+        JUNIT_XML:       ${{ inputs.junit-xml }}
         LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
       run: |
         set -euo pipefail
+        mkdir -p test-results
         docker run --rm \
           --platform linux/${{ inputs.arch }} \
           --network "${{ inputs.network-name }}" \
@@ -49,9 +55,13 @@ runs:
           -e LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" \
           -e DISTRO="${DISTRO}" \
           -e VALGRIND="${VALGRIND}" \
+          -e JUNIT_XML="${JUNIT_XML}" \
           ${{ inputs.container }} \
           bash -c '
             set -euo pipefail
+            if [ -n "${JUNIT_XML}" ]; then
+              mkdir -p "$(dirname "${JUNIT_XML}")"
+            fi
 
             # Provision compiler, openssl, libyaml, zlib, and the chosen
             # event lib for this distro (mirrors build-distro-reusable-flow.yml).

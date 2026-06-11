@@ -1,0 +1,386 @@
+name: Promote Bundle
+run-name: "Promote bundle ${{ inputs.bundle_name }} ${{ inputs.version }} build ${{ inputs.build_number }} to ${{ inputs.environment }}"
+
+# Manual promotion wrapper for the aerospike-client-c release bundle.
+# Validates build-info, commit ancestry, and promotion order before calling the
+# shared promotion action. PROD promotion is intentionally not exposed here.
+
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        required: true
+        description: 'JFrog release bundle version to promote (e.g. 7.5.0)'
+      build_number:
+        description: JFrog build number to promote (e.g. 363)
+        required: true
+        type: string
+      bundle_name:
+        description: Bundle name
+        required: true
+        type: string
+      environment:
+        type: choice
+        required: true
+        description: 'Target environment'
+        options:
+          - DEV
+          - TEST
+          - STAGE
+      dry-run:
+        description: 'Dry run: validate the promotion path without changing JFrog state'
+        required: false
+        default: false
+        type: boolean
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  promote:
+    name: promote ${{ inputs.bundle_name }} ${{ inputs.version }} build ${{ inputs.build_number }} → ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        id: harden
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Setup JFrog CLI
+        id: jfrog-setup
+        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        env:
+          JF_URL: ${{ vars.JFROG_PLATFORM_URL }}
+          JF_PROJECT: ${{ vars.JFROG_PROJECT }}
+        with:
+          oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Fetch parent buildinfo
+        id: parent-buildinfo
+        env:
+          BUNDLE_NAME:  ${{ inputs.bundle_name }}
+          BUILD_NUMBER: ${{ inputs.build_number }}
+          JF_PROJECT:   ${{ vars.JFROG_PROJECT }}
+          DRY_RUN:      ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+
+          api="/api/build/${BUNDLE_NAME}/${BUILD_NUMBER}?project=${JF_PROJECT}"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] command: jf rt curl '${api}' -o /tmp/parent.json -s -w '%{http_code}'"
+          fi
+
+          status_code=$(jf rt curl "$api" -o /tmp/parent.json -s -w "%{http_code}")
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] HTTP ${status_code}"
+          fi
+          if [[ "$status_code" -ne 200 ]]; then
+            echo "::error::Could not fetch build ${BUNDLE_NAME}/${BUILD_NUMBER} from JFrog (HTTP ${status_code})."
+            jq . /tmp/parent.json >&2 || true
+            exit 1
+          fi
+
+          echo "Fetched parent buildinfo ${BUNDLE_NAME}/${BUILD_NUMBER}."
+          jq . /tmp/parent.json
+
+      - name: Extract buildinfo module id
+        id: extract
+        env:
+          BUNDLE_NAME:    ${{ inputs.bundle_name }}
+          BUNDLE_VERSION: ${{ inputs.version }}
+          DRY_RUN:        ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] all module ids in parent buildinfo:"
+            jq -r '.buildInfo.modules[].id' /tmp/parent.json | sed 's/^/  - /'
+          fi
+
+          jfrog_version=$(jq -r '.buildInfo.version // empty' /tmp/parent.json)
+          buildinfo_id=$(
+            jq -r '[.buildInfo.modules[].id | select(contains("buildinfo"))] | first // empty' /tmp/parent.json \
+              | cut -d/ -f2-
+          )
+
+          if [[ -z "$buildinfo_id" ]]; then
+            echo "::error::No parent buildinfo module id containing 'buildinfo' was found in ${BUNDLE_NAME}/${BUILD_NUMBER}."
+            exit 1
+          fi
+
+          if [[ "$jfrog_version" != "$BUNDLE_VERSION" ]]; then
+            echo "::error::Input version '${BUNDLE_VERSION}' does not match JFrog buildInfo.version '${jfrog_version}'."
+            exit 1
+          fi
+
+          echo "buildinfo_id=${buildinfo_id}" >> "$GITHUB_OUTPUT"
+          echo "Resolved buildinfo id: ${buildinfo_id}"
+
+      - name: Snapshot guard
+        id: snapshot-guard
+        env:
+          BUNDLE_VERSION: ${{ inputs.version }}
+          BUILD_NUMBER:  ${{ inputs.build_number }}
+          BUILDINFO_ID:  ${{ steps.extract.outputs.buildinfo_id }}
+          TARGET_ENV:    ${{ inputs.environment }}
+          DRY_RUN:       ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+
+          is_snapshot=$(jq -cr '.buildInfo.properties."buildInfo.env.IS_SNAPSHOT" // "false"' /tmp/parent.json)
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] IS_SNAPSHOT='${is_snapshot}'"
+            echo "[dry-run] buildinfo_id='${BUILDINFO_ID}'"
+          fi
+          if [[ "$is_snapshot" == "true" ]]; then
+            echo "::error::Build ${BUILD_NUMBER} is a SNAPSHOT build. Snapshot builds are not promoted."
+            exit 1
+          fi
+          if [[ "$BUILDINFO_ID" == *SNAPSHOT* ]]; then
+            echo "::error::Buildinfo module id contains SNAPSHOT: ${BUILDINFO_ID}"
+            exit 1
+          fi
+
+          echo "Snapshot guard passed for build ${BUILD_NUMBER}."
+
+      - name: Fetch buildinfo build for commit SHA
+        id: commit
+        env:
+          BUNDLE_NAME:   ${{ inputs.bundle_name }}
+          BUILDINFO_ID:  ${{ steps.extract.outputs.buildinfo_id }}
+          JF_PROJECT:    ${{ vars.JFROG_PROJECT }}
+          DRY_RUN:       ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+
+          api="/api/build/${BUNDLE_NAME}/${BUILDINFO_ID}?project=${JF_PROJECT}"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] command: jf rt curl '${api}' -o /tmp/buildinfo.json -s -w '%{http_code}'"
+          fi
+
+          status_code=$(jf rt curl "$api" -o /tmp/buildinfo.json -s -w "%{http_code}")
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] HTTP ${status_code}"
+          fi
+          if [[ "$status_code" -ne 200 ]]; then
+            echo "::error::Could not fetch buildinfo build ${BUNDLE_NAME}/${BUILDINFO_ID} from JFrog (HTTP ${status_code})."
+            jq . /tmp/buildinfo.json >&2 || true
+            exit 1
+          fi
+
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] vcs entries:"
+            jq '.buildInfo.vcs' /tmp/buildinfo.json
+          fi
+
+          commit=$(jq -r '.buildInfo.vcs[0].revision // empty' /tmp/buildinfo.json)
+          if [[ -z "$commit" || "$commit" == "null" ]]; then
+            echo "::error::buildInfo.vcs[0].revision is missing in ${BUNDLE_NAME}/${BUILDINFO_ID}."
+            exit 1
+          fi
+
+          echo "commit=${commit}" >> "$GITHUB_OUTPUT"
+          echo "Resolved commit: ${commit}"
+
+      - name: Fetch promotion history
+        id: fetch-history
+        env:
+          BUNDLE_NAME:    ${{ inputs.bundle_name }}
+          BUNDLE_VERSION: ${{ inputs.version }}
+          BUILD_NUMBER:   ${{ inputs.build_number }}
+          TARGET_ENV:     ${{ inputs.environment }}
+          JF_PROJECT:     ${{ vars.JFROG_PROJECT }}
+          DRY_RUN:        ${{ inputs.dry-run }}
+        run: |
+          set -euo pipefail
+
+          stages=(DEV TEST STAGE)
+          api="/lifecycle/api/v2/promotion/records/${BUNDLE_NAME}?project=${JF_PROJECT}&filter_by=${BUNDLE_VERSION}&order_by=created_millis&order_asc=true"
+
+          echo "Fetching promotion records for ${BUNDLE_NAME}/${BUNDLE_VERSION} (build ${BUILD_NUMBER})..."
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] command: jf rt curl -X GET '${api}' -H 'Accept: application/json'"
+          fi
+
+          records_json=$(jf rt curl -X GET "$api" -H "Accept: application/json" 2>/dev/null || echo '{"errors":[{"status":404}]}')
+
+          if echo "$records_json" | jq -e '.errors? | length > 0' >/dev/null 2>&1; then
+            if echo "$records_json" | jq -e '.errors[]? | (.status | tostring) == "404"' >/dev/null 2>&1; then
+              echo "::warning::No promotion records found for ${BUNDLE_NAME}/${BUNDLE_VERSION} (404 — new bundle)."
+              current_idx=-1
+              current_stage="NONE"
+            else
+              echo "::error::Failed to fetch promotion records for ${BUNDLE_NAME}/${BUNDLE_VERSION}."
+              echo "$records_json" | jq '.'
+              exit 1
+            fi
+          else
+            current_idx=$(echo "$records_json" | jq \
+              --arg version "$BUNDLE_VERSION" \
+              --argjson stages '["DEV","TEST","STAGE"]' '
+              [(.promotions // [])
+                | map(select(
+                    (.release_bundle_version // .releaseBundleVersion // .version // "") == $version
+                    and ((.status // "COMPLETED") == "COMPLETED")
+                  ))
+                | sort_by(.created_millis // .createdMillis // .created // .createdAt // .created_at // "")
+                | .[]
+                | .environment // empty] as $envs
+              | ($envs[-1] // null) as $current
+              | if $current == null then -1 else ($stages | index($current) // -1) end
+            ')
+
+            if [[ "$current_idx" -ge 0 ]]; then
+              current_stage="${stages[$current_idx]}"
+            else
+              current_stage="NONE"
+            fi
+          fi
+
+          echo "JFrog promotion records for ${BUNDLE_NAME}/${BUNDLE_VERSION}:"
+          echo "$records_json" | jq '.'
+
+          echo "current_idx=${current_idx}"    >> "$GITHUB_OUTPUT"
+          echo "current_stage=${current_stage}" >> "$GITHUB_OUTPUT"
+          echo "Current stage: ${current_stage} (idx=${current_idx}) | Target: ${TARGET_ENV}"
+
+      - name: Promotion guard
+        id: promotion-guard
+        env:
+          BUNDLE_NAME:   ${{ inputs.bundle_name }}
+          BUNDLE_VERSION: ${{ inputs.version }}
+          BUILD_NUMBER:  ${{ inputs.build_number }}
+          TARGET_ENV:    ${{ inputs.environment }}
+          CURRENT_IDX:   ${{ steps.fetch-history.outputs.current_idx }}
+          CURRENT_STAGE: ${{ steps.fetch-history.outputs.current_stage }}
+        run: |
+          set -euo pipefail
+
+          stages=(DEV TEST STAGE)
+
+          # Resolve target index.
+          target_idx=-1
+          for i in "${!stages[@]}"; do
+            [[ "${stages[$i]}" == "$TARGET_ENV" ]] && target_idx=$i && break
+          done
+          if [[ "$target_idx" -lt 0 ]]; then
+            echo "::error::Unknown target environment: $TARGET_ENV"
+            exit 1
+          fi
+
+          current_idx="$CURRENT_IDX"
+          diff=$(( target_idx - current_idx ))
+
+          echo "Current stage : ${CURRENT_STAGE} (idx=${current_idx})"
+          echo "Target  stage : ${TARGET_ENV}    (idx=${target_idx})"
+          echo "Build number  : ${BUILD_NUMBER}"
+          echo "Diff          : ${diff}"
+
+          if [[ "$diff" -eq 0 ]]; then
+            echo "::error::Bundle '${BUNDLE_NAME}@${BUNDLE_VERSION}' is already promoted to ${CURRENT_STAGE}. Re-promoting the same build to the same stage is not allowed."
+            exit 1
+          fi
+
+          if [[ "$diff" -lt 0 ]]; then
+            echo "::error::Backward promotion is not allowed. Bundle is at ${CURRENT_STAGE}; requested ${TARGET_ENV}."
+            exit 1
+          fi
+
+          if [[ "$diff" -ne 1 ]]; then
+            if [[ "$current_idx" -lt 0 ]]; then
+              echo "::error::Bundle '${BUNDLE_NAME}@${BUNDLE_VERSION}' has no prior promotions."
+              echo "::error::First promotion must target DEV. Requested: ${TARGET_ENV}."
+            else
+              next_name="${stages[$(( current_idx + 1 ))]}"
+              echo "::error::Stage skip: ${CURRENT_STAGE} → ${TARGET_ENV} is not allowed."
+              echo "::error::The only permitted next step is ${next_name}."
+            fi
+            exit 1
+          fi
+
+          echo "next_env=${TARGET_ENV}" >> "$GITHUB_OUTPUT"
+
+      - name: Sanity-check commit topology
+        id: topology
+        env:
+          COMMIT:     ${{ steps.commit.outputs.commit }}
+          DRY_RUN:    ${{ inputs.dry-run }}
+          BASE_BRANCH: main
+          STAGE_BRANCH: stage
+        run: |
+          set -euo pipefail
+
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] command: git fetch origin '+refs/heads/${STAGE_BRANCH}:refs/remotes/origin/${STAGE_BRANCH}' '+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}' --tags"
+          fi
+          git fetch origin \
+            "+refs/heads/${STAGE_BRANCH}:refs/remotes/origin/${STAGE_BRANCH}" \
+            "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}" \
+            --tags
+
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] origin/${BASE_BRANCH} tip:  $(git rev-parse "origin/${BASE_BRANCH}")"
+            echo "[dry-run] origin/${STAGE_BRANCH} tip: $(git rev-parse "origin/${STAGE_BRANCH}")"
+            echo "[dry-run] target commit:            ${COMMIT}"
+            echo "[dry-run] target commit metadata:"
+            git show --no-patch --pretty=format:'  %h%n  author: %an <%ae>%n  date:   %ai%n  subject: %s' "$COMMIT" || true
+            echo
+            echo "[dry-run] commits between origin/${BASE_BRANCH} and target (eligible to promote):"
+            git log --oneline "origin/${BASE_BRANCH}..${COMMIT}" | sed 's/^/  /'
+            echo "[dry-run] commits between target and origin/${STAGE_BRANCH} (remain on stage):"
+            git log --oneline "${COMMIT}..origin/${STAGE_BRANCH}" | sed 's/^/  /'
+          fi
+
+          if ! git merge-base --is-ancestor "$COMMIT" "origin/${STAGE_BRANCH}"; then
+            echo "::error::${COMMIT} is not reachable from origin/${STAGE_BRANCH}."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "origin/${BASE_BRANCH}" "$COMMIT"; then
+            echo "::error::origin/${BASE_BRANCH} is not reachable from ${COMMIT}."
+            exit 1
+          fi
+
+          echo "OK: ${COMMIT} is on ${STAGE_BRANCH} and descends from ${BASE_BRANCH}."
+
+      - name: Promote release bundle
+        id: promote
+        if: steps.topology.outcome == 'success' && !inputs.dry-run
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@v3.6.0
+        with:
+          bundle-name:  ${{ inputs.bundle_name }}
+          version:      ${{ inputs.version }}
+          environment:  ${{ inputs.environment }}
+          jf-project:   ${{ vars.JFROG_PROJECT }}
+
+      - name: Summary
+        if: always()
+        env:
+          VERSION:        ${{ inputs.version }}
+          BUNDLE_NAME:    ${{ inputs.bundle_name }}
+          BUILD_NUMBER:   ${{ inputs.build_number }}
+          TARGET_ENV:     ${{ inputs.environment }}
+          COMMIT:         ${{ steps.commit.outputs.commit }}
+          DRY_RUN:        ${{ inputs.dry-run }}
+          PROMOTE_RESULT: ${{ steps.promote.outcome }}
+          TOPOLOGY_RESULT: ${{ steps.topology.outcome }}
+        run: |
+          if [[ "$DRY_RUN" == "true" && "$TOPOLOGY_RESULT" == "success" ]]; then
+            echo "${BUNDLE_NAME}@${VERSION} (build ${BUILD_NUMBER}, commit ${COMMIT}) is valid for promotion to **${TARGET_ENV}**. Dry-run skipped promotion." >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$PROMOTE_RESULT" == "success" ]]; then
+            echo "${BUNDLE_NAME}@${VERSION} (build ${BUILD_NUMBER}, commit ${COMMIT}) promoted to **${TARGET_ENV}**." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Promotion of ${BUNDLE_NAME}@${VERSION} (build ${BUILD_NUMBER}) to **${TARGET_ENV}** did not complete." >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -1,24 +1,28 @@
 name: C Client Build & Release
 
 permissions:
+  actions: write
   id-token: write
   contents: read
+  checks: write
+  pull-requests: write
 
-on:
-  push:
-    branches:
-      # We could dev branch also for big feature that is merged into dev branch for that feature before merging to stage
-      - stage
-      - test-workflow-stage
-    tags:
-      - '[0-9]+.[0-9]+.[0-9]+'     # Matches 7.4.0
-      - '[0-9]+.[0-9]+.[0-9]+-rc*' # Matches 7.4.0-rc1
+# on:
+#   push:
+#     branches:
+#       # Add long-running release branches here if needed.
+#       - stage
+#       - CLIENT-4300-release-pipeline-new
+    # tags:
+    #   - '[0-9]+.[0-9]+.[0-9]+'     # Matches 7.4.0
+    #   - '[0-9]+.[0-9]+.[0-9]+-rc*' # Matches 7.4.0-rc1
   workflow_dispatch:
 
 jobs:
   build-stage:
     name: Build stage
-    uses: ./.github/workflows/build-release.yml
+    uses: ./.github/workflows/build-artifacts.yml
     with:
-      dry-run: ${{ vars.DRY_RUN_RELEASE == 'true' }}
+      dry-run:        ${{ vars.DRY_RUN_RELEASE == 'true' }}
+      check-doc-lint: ${{ vars.CHECK_DOC_LINT != 'false' }} # defaults to true
     secrets: inherit

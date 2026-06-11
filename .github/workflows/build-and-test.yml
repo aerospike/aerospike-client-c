@@ -97,7 +97,7 @@ defaults:
 jobs:
   # Expand distro, arch, event-lib, and valgrind inputs into one Linux matrix.
   load-matrix:
-    name: load matrix
+    name: matrix
     runs-on: ubuntu-24.04
     outputs:
       linux-matrix:   ${{ steps.load.outputs.linux-matrix }}
@@ -125,7 +125,7 @@ jobs:
 
   # Linux build/test runs inside the selected distro container.
   build-linux:
-    name: linux / ${{ matrix.distro }} / ${{ matrix.arch }} / ${{ matrix.event_lib }}${{ matrix.valgrind && ' / valgrind' || '' }}
+    name: ${{ matrix.distro }} ${{ matrix.arch }} / ${{ matrix.event_lib }}${{ matrix.valgrind && ' / valgrind' || '' }}
     needs: load-matrix
     runs-on: ${{ matrix.runner }}
 
@@ -161,7 +161,7 @@ jobs:
           config-content: ${{ inputs.server-config-content }}
           env-vars: 'DEFAULT_TTL=2592000'
 
-      - name: Install, build and test
+      - name: Build/test Linux ${{ matrix.distro }} ${{ matrix.arch }} (${{ matrix.event_lib }}${{ matrix.valgrind && ', valgrind' || '' }})
         uses: ./.github/actions/setup-linux-distro-env
         with:
           distro:       ${{ matrix.distro }}
@@ -208,10 +208,11 @@ jobs:
   # macOS ARM64 build/test
   # TODO: macOS self-hosted runner currently uses a single Aerospike node.
   build-mac:
-    name: mac / arm64 / ${{ matrix.event_lib }}
+    name: macOS arm64 / ${{ matrix.event_lib }}
     if: inputs.run-mac
     needs: load-matrix
-    runs-on: [self-hosted, macOS, ARM64]
+    #runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [test]
     strategy:
       fail-fast: false
       matrix:
@@ -238,7 +239,7 @@ jobs:
         if: matrix.event_lib == 'libevent'
         run: ./install_libevent
 
-      - name: Build (${{ matrix.event_lib }})
+      - name: Build macOS arm64 (${{ matrix.event_lib }})
         run: |
           if [ "${{ matrix.event_lib }}" = "sync" ]; then make
           else make EVENT_LIB=${{ matrix.event_lib }}; fi
@@ -261,7 +262,7 @@ jobs:
           env-vars: 'DEFAULT_TTL=2592000'
 
       # macOS tests run on the host, so connect through localhost.
-      - name: Test (${{ matrix.event_lib }})
+      - name: Test macOS arm64 (${{ matrix.event_lib }})
         env:
           AS_PORT: ${{ steps.setup-aerospike.outputs.service-ports }}
           JUNIT_XML: ${{ github.workspace }}/test-results/macos-arm64-${{ matrix.event_lib }}.xml
@@ -297,7 +298,7 @@ jobs:
 
   # Windows x64 build
   build-windows:
-    name: windows / build / ${{ matrix.config }}
+    name: windows x64 build / ${{ matrix.config }}
     if: inputs.run-windows
     runs-on: windows-2022
 
@@ -330,7 +331,7 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Build aerospike library + test (${{ matrix.config }})
+      - name: Build Windows x64 library + test (${{ matrix.config }})
         shell: pwsh
         run: |
           $slnDir = (Resolve-Path "vs").Path + "\"
@@ -350,7 +351,7 @@ jobs:
 
   # Windows x64 test
   test-windows:
-    name: windows / test / ${{ matrix.config }}
+    name: windows x64 test / ${{ matrix.config }}
     if: inputs.run-windows
     needs: build-windows
     runs-on: [self-hosted, windows, x64]
@@ -411,7 +412,7 @@ jobs:
           path: vs\x64\${{ matrix.config }}
 
       # Run from vs\aerospike-test so UDF Lua scripts resolve correctly.
-      - name: Run tests (${{ matrix.config }})
+      - name: Run Windows x64 tests (${{ matrix.config }})
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\test-results" | Out-Null
@@ -471,6 +472,8 @@ jobs:
         with:
           files: test-results/**/*.xml
           check_name: Unit Test Results
+          comment_mode: off
+          job_summary: false
 
       - name: Write run summary
         env:

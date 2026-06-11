@@ -19,8 +19,8 @@ permissions:
   pull-requests: write   # allows posting annotations / comments back to the PR
 
 on:
-  push:
-    branches: [CLIENT-4300-release-pipeline-new]
+  # push:
+  #   branches: [CLIENT-4300-release-pipeline-new]
 
   pull_request:
     branches:
@@ -60,7 +60,7 @@ jobs:
                     server_name: .key,
                     server: (.value.version // .key),
                     server_type: (.value.type // ""),
-                    server_type_name: ((.value.type // "") | split("/") | last),
+                    server_type_name: ((.value.type // "") | split("/") | last | sub("^aerospike-server-"; "")),
                     "num-nodes": ((.value["num-nodes"] // .value.num_nodes // 1) | tostring)
                   }
               ]
@@ -75,7 +75,7 @@ jobs:
           echo "test-servers=$test_servers" >> "$GITHUB_OUTPUT"
 
   ci:
-    name: Testing against ${{ matrix.server_type_name }} on ${{ matrix.num-nodes }} node with version ${{ matrix.server }}
+    name: ${{ matrix.server_type_name }} ${{ matrix.server }} / ${{ matrix.num-nodes }} node
     needs: load-test-servers
     strategy:
       fail-fast: false

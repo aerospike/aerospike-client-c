@@ -97,6 +97,10 @@ runs:
             # Valgrind writes its summary to client_test-valgrind; fail the
             # build if any errors were reported (mirrors build.yml check).
             if [ "${VALGRIND}" = "true" ]; then
-              grep "ERROR SUMMARY: 0 errors" client_test-valgrind
+              if ! grep "ERROR SUMMARY: 0 errors" client_test-valgrind; then
+                echo "Valgrind reported errors. Full client_test-valgrind log:"
+                cat client_test-valgrind
+                exit 1
+              fi
             fi
           '

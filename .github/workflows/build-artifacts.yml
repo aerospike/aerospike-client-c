@@ -10,8 +10,9 @@ on:
     inputs:
       dry-run:
         description: >
-          If true, skip JFrog deploy and use SSL.com TEST environment for NuGet signing.
-          Controlled via vars.DRY_RUN repository variable in push-to-stage.yml.
+          If true, skip signing, deploy unsigned artifacts, and skip release bundle promotion.
+          Otherwise, sign artifacts and promote the release bundle to TEST.
+          Controlled via vars.DRY_RUN_RELEASE repository variable in push-to-stage.yml.
         required: false
         type: boolean
         default: true
@@ -183,9 +184,9 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "Release matrix: $(echo "$matrix" | jq '.include | length') entries"
 
-  # Linux build, GPG sign, and deploy via shared-workflows.
+  # Linux build and deploy via shared-workflows.
   artifacts-cicd-linux:
-    name: linux / build-sign-deploy
+    name: linux / build-deploy
     needs: [get-version, compute-release-matrix]
     uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.6.0
     with:
@@ -236,9 +237,9 @@ jobs:
       gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass:    ${{ secrets.GPG_PASS }}
 
-  # macOS ARM64 build, notarize, GPG sign, and deploy.
+  # macOS ARM64 build and deploy. Dry-run skips signing/notarization.
   artifacts-cicd-mac:
-    name: mac / build-sign-deploy
+    name: mac / build-deploy
     needs: get-version
     uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.6.0
     with:
@@ -266,19 +267,20 @@ jobs:
       # make package produces target/packages/ with .pkg, .tgz, and source zip.
       build-script: |-
         set -euo pipefail
+        brew install autoconf automake libtool
         ./install_libev
         ./install_libuv
         ./install_libevent
         brew install doxygen graphviz
         make package
 
-      sign-mac:               true
+      sign-mac:               ${{ !inputs.dry-run }}
       mac-runs-on:            macos-14
       mac-signing-identity:   'Developer ID Application: Aerospike, Inc.'
       mac-installer-identity: 'Developer ID Installer: Aerospike, Inc.'
       mac-artifact-glob:      '**/*.pkg'
-      mac-notarize:           true
-      dry-run: ${{ inputs.dry-run }}
+      mac-notarize:           ${{ !inputs.dry-run }}
+      dry-run:                ${{ inputs.dry-run }}
 
     secrets:
       gpg-private-key:              ${{ secrets.GPG_SECRET_KEY }}
@@ -346,6 +348,7 @@ jobs:
   # Sign Windows DLLs before NuGet packaging.
   sign-win-dlls:
     name: windows / sign dlls (OV Authenticode)
+    if: ${{ !inputs.dry-run }}
     needs: build-windows-dlls
     uses: aerospike/shared-workflows/.github/workflows/reusable_sign-win-artifacts.yaml@v3.6.0
     with:
@@ -353,7 +356,6 @@ jobs:
       gh-unsigned-artifacts: win-unsigned-dlls
       artifact-glob:        '**/*.dll,**/*.exe'
       runs-on:              windows-2025
-      dry-run:              ${{ inputs.dry-run }}
     secrets:
       es_ov_username:      ${{ secrets.ES_OV_USERNAME }}
       es_ov_password:      ${{ secrets.ES_OV_PASSWORD }}
@@ -363,7 +365,12 @@ jobs:
   # Pack NuGet packages using the signed DLL tree.
   pack-nuget:
     name: windows / nuget pack
-    needs: [get-version, sign-win-dlls]
+    needs: [get-version, build-windows-dlls, sign-win-dlls]
+    if: |
+      always() && !cancelled() &&
+      needs.get-version.result == 'success' &&
+      needs.build-windows-dlls.result == 'success' &&
+      (inputs.dry-run || needs.sign-win-dlls.result == 'success')
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -380,8 +387,9 @@ jobs:
         shell: cmd
         run: nuget restore vs\aerospike.sln
 
-      # Replace local MSBuild outputs with signed DLLs.
-      - name: Download signed DLLs
+      # In dry-run mode, sign-win-dlls is skipped and this downloads the
+      # unsigned DLL artifact produced by build-windows-dlls.
+      - name: Download Windows DLLs
         uses: actions/download-artifact@v4
         with:
           name: win-unsigned-dlls   # overwritten in-place by sign-win-dlls
@@ -408,6 +416,7 @@ jobs:
   # Sign NuGet packages.
   sign-nuget:
     name: windows / sign nupkg
+    if: ${{ !inputs.dry-run }}
     needs: pack-nuget
     uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v3.6.0
     with:
@@ -424,10 +433,15 @@ jobs:
       credential_id:   ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret:  ${{ secrets.ES_TOTP_SECRET }}
 
-  # Deploy Windows packages to JFrog.
+  # Deploy Windows packages to JFrog. Dry-run deploys unsigned packages.
   deploy-windows:
     name: windows / deploy
-    needs: [get-version, sign-nuget]
+    needs: [get-version, pack-nuget, sign-nuget]
+    if: |
+      always() && !cancelled() &&
+      needs.get-version.result == 'success' &&
+      needs.pack-nuget.result == 'success' &&
+      (inputs.dry-run || needs.sign-nuget.result == 'success')
     uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@b4cb4010214d4c6976234ac40fb60b5e825c4f9b # PR #251
     with:
       gh-workflows-ref:     b4cb4010214d4c6976234ac40fb60b5e825c4f9b
@@ -436,7 +450,7 @@ jobs:
       jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-windows
       jf-project:           ${{ vars.JFROG_PROJECT }}
       version:              ${{ needs.get-version.outputs.version }}
-      gh-artifact-name:     win-signed-nupkg
+      gh-artifact-name:     ${{ inputs.dry-run && 'win-unsigned-nupkg' || 'win-signed-nupkg' }}
       oidc-provider-name:   ${{ vars.JFROG_OIDC_PROVIDER }}
       oidc-audience:        ${{ vars.JFROG_OIDC_AUDIENCE }}
       dry-run:              ${{ inputs.dry-run }}
@@ -462,7 +476,6 @@ jobs:
       needs.deploy-windows.result        == 'success'
     steps:
       - name: Setup JFrog CLI
-        if: ${{ !inputs.dry-run }}
         uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
         env:
           JF_URL: ${{ vars.JFROG_PLATFORM_URL }}
@@ -471,19 +484,16 @@ jobs:
           oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Check existing bundle status
-        if: ${{ !inputs.dry-run }}
         env:
-          VERSION:    ${{ needs.get-version.outputs.version }}
-          JF_URL:     ${{ vars.JFROG_PLATFORM_URL }}
-          JF_PROJECT: ${{ vars.JFROG_PROJECT }}
+          VERSION:       ${{ needs.get-version.outputs.version }}
+          JFROG_PROJECT: ${{ vars.JFROG_PROJECT }}
         run: |
           set -euo pipefail
           BUNDLE_NAME="aerospike-client-c"
+          api="/lifecycle/api/v2/release_bundle/records/${BUNDLE_NAME}/${VERSION}?project=${JFROG_PROJECT}"
 
-          echo "Querying bundle: ${BUNDLE_NAME}@${VERSION} (project: ${JF_PROJECT})"
-          HTTP_CODE=$(curl -s -o /tmp/bundle.json -w "%{http_code}" \
-            -H "Authorization: Bearer ${JFROG_CLI_ACCESS_TOKEN}" \
-            "${JF_URL}/lifecycle/api/v2/release_bundle/records/${BUNDLE_NAME}/${VERSION}?project=${JF_PROJECT}")
+          echo "Querying bundle: ${BUNDLE_NAME}@${VERSION} (project: ${JFROG_PROJECT})"
+          HTTP_CODE=$(jf rt curl "$api" -o /tmp/bundle.json -s -w "%{http_code}")
 
           echo "HTTP status: ${HTTP_CODE}"
 
@@ -503,7 +513,7 @@ jobs:
 
           IS_PROMOTED=$(jq -rn \
             --arg s "$STATUS" \
-            'if ($s == "STAGE" or $s == "PREVIEW" or $s == "PROD") then "true" else "false" end')
+            'if ($s == "TEST" or $s == "STAGE" or $s == "PREVIEW" or $s == "PROD") then "true" else "false" end')
 
           if [[ "$IS_PROMOTED" == "true" ]]; then
             echo "::error::Bundle ${BUNDLE_NAME}@${VERSION} is already at '${STATUS}'." \
@@ -512,9 +522,7 @@ jobs:
           fi
 
           echo "Bundle exists at '${STATUS}' (not yet promoted). Deleting stale bundle..."
-          HTTP_DEL=$(curl -s -o /tmp/del.json -w "%{http_code}" -X DELETE \
-            -H "Authorization: Bearer ${JFROG_CLI_ACCESS_TOKEN}" \
-            "${JF_URL}/lifecycle/api/v2/release_bundle/records/${BUNDLE_NAME}/${VERSION}?project=${JF_PROJECT}")
+          HTTP_DEL=$(jf rt curl -X DELETE "$api" -o /tmp/del.json -s -w "%{http_code}")
           echo "Delete HTTP status: ${HTTP_DEL}"
 
           if [[ "$HTTP_DEL" != "200" && "$HTTP_DEL" != "202" && "$HTTP_DEL" != "204" ]]; then
@@ -524,10 +532,6 @@ jobs:
           fi
 
           echo "Stale bundle deleted. Proceeding with creation."
-
-      - name: Skip check (dry-run mode)
-        if: ${{ inputs.dry-run }}
-        run: echo "dry-run=true — skipping bundle existence check."
 
   # Create the JFrog release bundle from all platform build-info records.
   create-release-bundle:
@@ -561,7 +565,7 @@ jobs:
       dry-run:            ${{ inputs.dry-run }}
     secrets: inherit
 
-  # Auto-promote the new bundle to TEST.
+  # Auto-promote the new bundle to TEST for normal release; dry-run skips promotion.
   auto-promote-test:
     name: promote to TEST
     needs:
@@ -572,10 +576,10 @@ jobs:
       needs.create-release-bundle.result == 'success'
     runs-on: ubuntu-24.04
     steps:
-      - name: Promote to TEST
+      - name: Promote release bundle
         uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@v3.6.0
         with:
           bundle-name: ${{ env.JF_BUNDLE_NAME }}
           version:     ${{ needs.get-version.outputs.version }}
-          environment: TEST
+          environment: ${{ inputs.dry-run && 'DEV' || 'TEST' }}
           jf-project:  ${{ vars.JFROG_PROJECT }}

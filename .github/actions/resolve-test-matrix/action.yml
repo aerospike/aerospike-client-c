@@ -158,10 +158,12 @@ runs:
       run: |
         # GitHub Actions matrix include: does not cross-product with other
         # dimensions, so we pre-compute the full Cartesian product here with jq.
+        # RHEL UBI images do not expose valgrind in their enabled package repos.
         MATRIX=$(jq -c \
           --argjson libs     "$LIBS" \
           --argjson valgrind "$VALGRIND" \
-          '[.[] | . as $entry | $libs[] | . as $lib | $valgrind[] | {
+          '[.[] | . as $entry | $libs[] | . as $lib |
+            (if ($entry.distro | startswith("rhel-")) then [false] else $valgrind end)[] | {
               distro:    $entry.distro,
               container: $entry.container,
               arch:      $entry.arch,

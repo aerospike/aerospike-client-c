@@ -1,49 +1,80 @@
 name: Nightly Trigger Build
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Runs every night at 5 AM UTC against the full distro × arch matrix.
-# Only executes on the stage branch — schedule trigger is skipped on all other refs.
-# workflow_dispatch is also restricted to stage.
-#
-# Calls build-and-test.yml with vars.LINUX_DISTRO_MATRIX (all distros × arches)
-# × selected event libs.
-#
-# Branch-protection check name (if required): "nightly / summary"
-# ─────────────────────────────────────────────────────────────────────────────
+# Nightly CI against the full distro/arch matrix and server list.
+# Scheduled runs build from stage.
 
 run-name: "Nightly — ${{ github.ref_name }}"
 
 permissions:
   contents: read
-  id-token: write   # OIDC — required by setup-aerospike-server inside build-and-test.yml
-  checks: write     # harden-runner writes audit annotations to the check run
+  id-token: write   # setup-aerospike-server JFrog OIDC
+  checks: write     # harden-runner annotations
+  pull-requests: write
 
 on:
   schedule:
-    - cron: '0 5 * * *' # Daily at 5:00 AM UTC — always runs on the default branch
+    - cron: '0 5 * * *' # daily at 5:00 AM UTC
   workflow_dispatch:
     branches:
-      - stage   # manual dispatch restricted to stage branch only
+      - stage
 
 
-# Do NOT cancel in-progress nightly runs — let them finish.
-# A new nightly will queue behind the current one rather than interrupting it.
+# Let nightly runs finish; queue newer runs behind them.
 concurrency:
   group: nightly-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  # Job name "nightly" → branch-protection check name would be "nightly / summary"
-  # Always builds from stage regardless of which branch triggered the schedule.
+  load-test-servers:
+    name: load test servers
+    runs-on: ubuntu-24.04
+    outputs:
+      test-servers: ${{ steps.load.outputs.test-servers }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: stage
+
+      - name: Load nightly test servers
+        id: load
+        run: |
+          test_servers="$(
+            jq -c '
+              [
+                to_entries[]
+                | {
+                    server_name: .key,
+                    server: (.value.version // .key),
+                    server_type: (.value.type // ""),
+                    "num-nodes": ((.value["num-nodes"] // .value.num_nodes // 1) | tostring)
+                  }
+              ]
+            ' .github/test_servers_nightly.json
+          )"
+
+          if [ "$test_servers" = "[]" ]; then
+            echo "No nightly test servers configured" >&2
+            exit 1
+          fi
+
+          echo "test-servers=$test_servers" >> "$GITHUB_OUTPUT"
+
   nightly:
+    name: test-${{ matrix.server }}-${{ matrix.num-nodes }} node
+    needs: load-test-servers
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.load-test-servers.outputs.test-servers) }}
     uses: ./.github/workflows/build-and-test.yml
     with:
       ref:          stage
       matrix-json:  ${{ vars.LINUX_DISTRO_MATRIX }}
       runners-json: ${{ vars.LINUX_RUNNERS || '{"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}' }}
       event-lib:    all
-      server-tag:   latest
-      num-nodes:    '1'
+      server-tag:   ${{ matrix.server }}
+      num-nodes:    ${{ matrix.num-nodes }}
       valgrind:     true
       run-mac:      true
       run-windows:  true

@@ -1,0 +1,86 @@
+name: Verify Aerospike Cluster
+description: Verify Aerospike test containers are running and report the expected cluster size.
+
+inputs:
+  network-name:
+    description: Docker network name where Aerospike containers are reachable.
+    required: true
+  expected-size:
+    description: Expected Aerospike cluster size.
+    required: true
+  container-count:
+    description: Number of Aerospike containers to inspect.
+    required: false
+    default: ''
+  container-prefix:
+    description: Aerospike container name prefix.
+    required: false
+    default: aerospike
+  tools-image:
+    description: Aerospike tools image used for asinfo checks.
+    required: false
+    default: aerospike.jfrog.io/database-docker-virtual/aerospike-tools:12.1.1_2
+
+runs:
+  using: composite
+  steps:
+    - name: Verify cluster
+      shell: bash
+      env:
+        NETWORK_NAME: ${{ inputs.network-name }}
+        EXPECTED_SIZE: ${{ inputs.expected-size }}
+        CONTAINER_COUNT: ${{ inputs.container-count }}
+        CONTAINER_PREFIX: ${{ inputs.container-prefix }}
+        TOOLS_IMAGE: ${{ inputs.tools-image }}
+      run: |
+        set -euo pipefail
+
+        count="${CONTAINER_COUNT:-$EXPECTED_SIZE}"
+
+        container_name() {
+          printf '%s-%s' "$CONTAINER_PREFIX" "$1"
+        }
+
+        require_container() {
+          local container="$1"
+          docker ps --filter "name=${container}" --format '{{.Names}}' \
+            | grep -Fxq "$container" \
+            || { echo "::error::Expected container $container to be running"; exit 1; }
+        }
+
+        pull_tools_image() {
+          local attempt
+          for attempt in 1 2 3; do
+            docker pull "$TOOLS_IMAGE" && return 0
+            echo "Pull attempt $attempt failed; retrying in 5 s..."
+            sleep 5
+          done
+          echo "::error::Failed to pull $TOOLS_IMAGE after 3 attempts"
+          exit 1
+        }
+
+        verify_cluster_size() {
+          local container="$1"
+          local rc=0
+          local stats
+          local cluster_size
+
+          echo "Checking cluster_size on $container..."
+          stats=$(docker run --rm --network "$NETWORK_NAME" "$TOOLS_IMAGE" \
+            asinfo -h "$container" -p 3000 -v "statistics" 2>&1) || rc=$?
+          cluster_size=$(echo "$stats" | tr ';' '\n' | awk -F= '$1=="cluster_size"{print $2; found=1} END{if(!found) print "N/A"}')
+          echo "$container cluster_size: $cluster_size (exit code: $rc)"
+
+          if [[ $rc -ne 0 || "$cluster_size" != "$EXPECTED_SIZE" ]]; then
+            echo "::error::Expected cluster_size=$EXPECTED_SIZE on $container, got $cluster_size"
+            exit 1
+          fi
+        }
+
+        pull_tools_image
+
+        for i in $(seq 1 "$count"); do
+          container="$(container_name "$i")"
+          require_container "$container"
+          verify_cluster_size "$container"
+        done

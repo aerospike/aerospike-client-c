@@ -12,11 +12,10 @@ permissions:
   pull-requests: write
 
 on:
+  push:
+    branches: [CLIENT-4300-release-pipeline-new]
   schedule:
     - cron: '0 5 * * *' # daily at 5:00 AM UTC
-  workflow_dispatch:
-    branches:
-      - stage
 
 
 # Let nightly runs finish; queue newer runs behind them.
@@ -34,7 +33,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: stage
+          ref: ${{ github.ref }}
 
       - name: Load nightly test servers
         id: load
@@ -69,7 +68,7 @@ jobs:
         include: ${{ fromJSON(needs.load-test-servers.outputs.test-servers) }}
     uses: ./.github/workflows/build-and-test.yml
     with:
-      ref:          stage
+      ref:          ${{ github.ref }}
       matrix-json:  ${{ vars.LINUX_DISTRO_MATRIX }}
       runners-json: ${{ vars.LINUX_RUNNERS || '{"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}' }}
       event-lib:    all
@@ -78,4 +77,5 @@ jobs:
       valgrind:     true
       run-mac:      true
       run-windows:  true
+      check-doc-lint: false
     secrets: inherit

@@ -58,7 +58,7 @@ jobs:
         uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
         env:
           JF_URL: ${{ vars.JFROG_PLATFORM_URL }}
-          JF_PROJECT: ${{ vars.JFROG_PROJECT }}
+          JFROG_PROJECT: ${{ vars.JFROG_PROJECT }}
         with:
           oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
@@ -73,12 +73,12 @@ jobs:
         env:
           BUNDLE_NAME:  ${{ inputs.bundle_name }}
           BUILD_NUMBER: ${{ inputs.build_number }}
-          JF_PROJECT:   ${{ vars.JFROG_PROJECT }}
+          JFROG_PROJECT: ${{ vars.JFROG_PROJECT }}
           DRY_RUN:      ${{ inputs.dry-run }}
         run: |
           set -euo pipefail
 
-          api="/api/build/${BUNDLE_NAME}/${BUILD_NUMBER}?project=${JF_PROJECT}"
+          api="/api/build/${BUNDLE_NAME}/${BUILD_NUMBER}?project=${JFROG_PROJECT}"
           if [[ "$DRY_RUN" == "true" ]]; then
             echo "[dry-run] command: jf rt curl '${api}' -o /tmp/parent.json -s -w '%{http_code}'"
           fi
@@ -161,12 +161,12 @@ jobs:
         env:
           BUNDLE_NAME:   ${{ inputs.bundle_name }}
           BUILDINFO_ID:  ${{ steps.extract.outputs.buildinfo_id }}
-          JF_PROJECT:    ${{ vars.JFROG_PROJECT }}
+          JFROG_PROJECT: ${{ vars.JFROG_PROJECT }}
           DRY_RUN:       ${{ inputs.dry-run }}
         run: |
           set -euo pipefail
 
-          api="/api/build/${BUNDLE_NAME}/${BUILDINFO_ID}?project=${JF_PROJECT}"
+          api="/api/build/${BUNDLE_NAME}/${BUILDINFO_ID}?project=${JFROG_PROJECT}"
           if [[ "$DRY_RUN" == "true" ]]; then
             echo "[dry-run] command: jf rt curl '${api}' -o /tmp/buildinfo.json -s -w '%{http_code}'"
           fi
@@ -202,13 +202,13 @@ jobs:
           BUNDLE_VERSION: ${{ inputs.version }}
           BUILD_NUMBER:   ${{ inputs.build_number }}
           TARGET_ENV:     ${{ inputs.environment }}
-          JF_PROJECT:     ${{ vars.JFROG_PROJECT }}
+          JFROG_PROJECT:  ${{ vars.JFROG_PROJECT }}
           DRY_RUN:        ${{ inputs.dry-run }}
         run: |
           set -euo pipefail
 
           stages=(DEV TEST STAGE)
-          api="/lifecycle/api/v2/promotion/records/${BUNDLE_NAME}?project=${JF_PROJECT}&filter_by=${BUNDLE_VERSION}&order_by=created_millis&order_asc=true"
+          api="/lifecycle/api/v2/promotion/records/${BUNDLE_NAME}?project=${JFROG_PROJECT}&filter_by=${BUNDLE_VERSION}&order_by=created_millis&order_asc=true"
 
           echo "Fetching promotion records for ${BUNDLE_NAME}/${BUNDLE_VERSION} (build ${BUILD_NUMBER})..."
           if [[ "$DRY_RUN" == "true" ]]; then

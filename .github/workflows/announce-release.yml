@@ -8,7 +8,7 @@ run-name: Announce release — aerospike-client-c${{ github.event_name == 'workf
 permissions:
   contents: write  # push release tag
 
-# on:
+on:
 #   push:
 #     branches:
 #       # - master

@@ -7,15 +7,16 @@ permissions:
   checks: write
   pull-requests: write
 
-# on:
-#   push:
-#     branches:
+on:
+  push:
+    branches:
+      - CLIENT-4300-release-pipeline-new
 #       # Add long-running release branches here if needed.
 #       - stage
-#       - CLIENT-4300-release-pipeline-new
-    # tags:
-    #   - '[0-9]+.[0-9]+.[0-9]+'     # Matches 7.4.0
-    #   - '[0-9]+.[0-9]+.[0-9]+-rc*' # Matches 7.4.0-rc1
+   
+  #   tags:
+  #     - '[0-9]+.[0-9]+.[0-9]+'     # Matches 7.4.0
+  #     - '[0-9]+.[0-9]+.[0-9]+-rc*' # Matches 7.4.0-rc1
   workflow_dispatch:
 
 jobs:

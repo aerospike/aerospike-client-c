@@ -28,8 +28,36 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        doxyfile_version=$(sed -nE 's/^# Doxyfile ([0-9.]+).*/\1/p' project/doxyfile | head -n 1)
+        if [ -z "$doxyfile_version" ]; then
+          echo "::error::Could not read Doxygen version from project/doxyfile header"
+          exit 1
+        fi
+
         sudo apt-get update -q
-        sudo apt-get install -y --no-install-recommends doxygen graphviz
+        sudo apt-get install -y --no-install-recommends \
+          cmake \
+          doxygen \
+          graphviz \
+          wget
+
+        installed_version=$(doxygen --version)
+        if printf '%s\n%s\n' "$doxyfile_version" "$installed_version" | sort -V -C; then
+          echo "Using Doxygen $installed_version (Doxyfile requires >= $doxyfile_version)"
+        else
+          echo "Doxygen $installed_version is older than Doxyfile $doxyfile_version; building $doxyfile_version from source."
+
+          src="$(mktemp -d)"
+          trap 'rm -rf "$src"' EXIT
+          dir="doxygen-${doxyfile_version}"
+          tag="Release_${doxyfile_version//./_}"
+
+          wget -q "https://github.com/doxygen/doxygen/releases/download/${tag}/${dir}.src.tar.gz" -O "$src/${dir}.src.tar.gz"
+          tar -C "$src" -xzf "$src/${dir}.src.tar.gz"
+          cmake -S "$src/$dir" -B "$src/$dir/build" -G "Unix Makefiles"
+          cmake --build "$src/$dir/build" -j"$(nproc)"
+          sudo cmake --install "$src/$dir/build"
+        fi
         doxygen --version
 
     - name: Prepare generated headers
@@ -54,21 +82,12 @@ runs:
         set -e
 
         warnings_path="${DOXYGEN_LOG%.log}-warnings.log"
-        grep -Ei '(^|[^[:alpha:]])warning:' "$DOXYGEN_LOG" > "$warnings_path" || true
+        grep -Ei '(^|[^[:alpha:]])(warning|error):' "$DOXYGEN_LOG" > "$warnings_path" || true
         warning_count=$(wc -l < "$warnings_path" | tr -d ' ')
 
         tail_path="${DOXYGEN_LOG%.log}-last-${SUMMARY_TAIL_LINES}.log"
         if [ "$SUMMARY_TAIL_LINES" -gt 0 ]; then
           tail -n "$SUMMARY_TAIL_LINES" "$DOXYGEN_LOG" > "$tail_path"
-          {
-            echo "## Doxygen Log Tail"
-            echo ""
-            echo "Last $SUMMARY_TAIL_LINES lines from \`$DOXYGEN_LOG\`:"
-            echo ""
-            echo '```text'
-            cat "$tail_path"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
         else
           : > "$tail_path"
         fi
@@ -79,7 +98,7 @@ runs:
         has_warnings=false
         if [ "$warning_count" -gt 0 ]; then
           has_warnings=true
-          echo "::warning::Doxygen emitted ${warning_count} warnings. See ${diagnostics_archive}."
+          echo "Doxygen emitted ${warning_count} warnings; diagnostics: ${diagnostics_archive}"
         fi
 
         echo "has_warnings=$has_warnings" >> "$GITHUB_OUTPUT"

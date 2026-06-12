@@ -2458,6 +2458,7 @@ as_event_close_cluster_event_loop(
 
 	if (as_aaf_uint32_rls(&state->event_loop_count, -1) == 0) {
 		as_fence_acq();
+		as_event_cleanup();
 		as_cluster_destroy(state->cluster);
 		aerospike_destroy_internal(state->as);
 

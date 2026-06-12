@@ -415,6 +415,11 @@ as_event_command_release(as_event_command* cmd)
 	as_event_command_free(cmd);
 }
 
+static inline void
+as_event_cleanup(void)
+{
+}
+
 //----------------------------------
 // Libuv Inline Functions
 //----------------------------------
@@ -521,6 +526,12 @@ as_event_command_release(as_event_command* cmd)
 	}
 }
 
+static inline void
+as_event_cleanup(void)
+{
+	uv_library_shutdown();
+}
+
 //----------------------------------
 // Libevent Inline Functions
 //----------------------------------
@@ -616,6 +627,11 @@ as_event_command_release(as_event_command* cmd)
 	as_event_command_free(cmd);
 }
 
+static inline void
+as_event_cleanup(void)
+{
+}
+
 //---------------------------------------
 // EVENT_LIB Not Defined Inline Functions
 //---------------------------------------
@@ -682,6 +698,11 @@ as_event_stop_read(as_event_connection* conn)
 
 static inline void
 as_event_command_release(as_event_command* cmd)
+{
+}
+
+static inline void
+as_event_cleanup(void)
 {
 }
 

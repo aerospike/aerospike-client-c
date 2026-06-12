@@ -57,7 +57,7 @@ An event library is required when C client asynchronous functionality is used.
 On Linux and MacOS, the event library must be installed independently of the C client.
 Install one of the supported event libraries:
 
-#### [libuv 1.15.0+](http://docs.libuv.org) 
+#### [libuv 1.38.0+](http://docs.libuv.org) 
 
 libuv has excellent performance and supports all platforms.  If using libuv and TLS (SSL),
 OpenSSL 1.1.0 or greater is required.  Use `install_libuv` to install on Linux/MacOS.

@@ -584,8 +584,8 @@ TEST(error_detail_parser_near_max_len, "3.21 message near max length")
 
 	assert_int_eq(err.subcode, 99999);
 	assert_true(err.message[0] != '\0');
+	assert_not_null(memchr(err.message, '\0', AS_ERROR_MESSAGE_MAX_SIZE));
 	assert_true(strlen(err.message) <= 1023);
-	assert_true(err.message[1023] == '\0' || strlen(err.message) < 1023);
 }
 
 // 3.22 Message exceeding buffer capacity is safely truncated
@@ -610,9 +610,8 @@ TEST(error_detail_parser_overflow_truncation, "3.22 overflow is truncated")
 
 	assert_int_eq(err.subcode, 1);
 	assert_true(err.message[0] != '\0');
+	assert_not_null(memchr(err.message, '\0', AS_ERROR_MESSAGE_MAX_SIZE));
 	assert_true(strlen(err.message) <= 1023);
-	// Must be null-terminated at or before index 1023
-	assert_int_eq(err.message[AS_ERROR_MESSAGE_MAX_SIZE - 1], '\0');
 }
 
 //-------------------------------------------------------

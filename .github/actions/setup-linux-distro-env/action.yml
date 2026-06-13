@@ -63,22 +63,11 @@ runs:
               mkdir -p "$(dirname "${JUNIT_XML}")"
             fi
 
-            # Provision compiler, openssl, libyaml, zlib, and the chosen
-            # event lib for this distro (mirrors build-distro-reusable-flow.yml).
+            # Provision compiler, openssl, libyaml, zlib, the chosen event lib,
+            # and Valgrind (when requested) for this distro.  RHEL variants build
+            # Valgrind from source; other distros install the packaged version.
             bash "${GITHUB_WORKSPACE}/.github/script/install_deps.bash" \
-              "${DISTRO}" "${EVENT_LIB}"
-
-            # Install Valgrind when requested; use whichever package manager
-            # is available so the same action works across all distros.
-            if [ "${VALGRIND}" = "true" ]; then
-              if command -v apt-get &>/dev/null; then
-                apt-get install -y --no-install-recommends valgrind
-              elif command -v microdnf &>/dev/null; then
-                microdnf install -y valgrind
-              elif command -v yum &>/dev/null; then
-                yum install -y valgrind
-              fi
-            fi
+              "${DISTRO}" "${EVENT_LIB}" "${VALGRIND}"
 
             git config --global --add safe.directory "${GITHUB_WORKSPACE}"
             make clean

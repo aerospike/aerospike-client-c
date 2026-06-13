@@ -72,11 +72,7 @@ jobs:
       # TODO: restore to vars.LINUX_DISTRO_MATRIX once RHEL valgrind work is complete.
       matrix-json: >-
         {"distros":[
-          {"distro":"ubuntu-22.04",    "container":"ubuntu:22.04",      "archs":["amd64","arm64"]},
-          {"distro":"ubuntu-24.04",    "container":"ubuntu:24.04",      "archs":["amd64","arm64"]},
-          {"distro":"debian-12",       "container":"debian:12",         "archs":["amd64","arm64"]},
-          {"distro":"debian-13",       "container":"debian:13",         "archs":["amd64","arm64"]},
-          {"distro":"amazonlinux-2023","container":"amazonlinux:2023",  "archs":["amd64","arm64"]}
+          {"distro":"rhel-8","container":"registry.access.redhat.com/ubi8/ubi-minimal","archs":["amd64"]}
         ]}
       runners-json: ${{ vars.LINUX_RUNNERS || '{"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}' }}
       event-lib:    all

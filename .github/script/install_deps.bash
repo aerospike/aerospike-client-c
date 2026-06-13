@@ -244,16 +244,66 @@ build_flex() {
     rm -rf "$src"
 }
 
+build_valgrind() {
+    local version=3.25.1
+    local src
+    src="$(mktemp -d)"
+    pushd "$src" >/dev/null
+    wget -q "https://sourceware.org/pub/valgrind/valgrind-${version}.tar.bz2"
+    tar -xjf "valgrind-${version}.tar.bz2"
+    pushd "valgrind-${version}" >/dev/null
+    ./configure --prefix=/usr
+    make -j"$(nproc)"
+    $SUDO make install
+    popd >/dev/null
+    popd >/dev/null
+    rm -rf "$src"
+}
+
+# Install Valgrind for the given distro.
+# RHEL variants lack a usable packaged version → build from source.
+# Debian/Ubuntu/Amazon Linux ship a recent enough package.
+# Skips silently if Valgrind is already installed at any version.
+install_valgrind() {
+    local distro="$1"
+
+    if command -v valgrind &>/dev/null; then
+        echo "valgrind already installed ($(valgrind --version)) – skipping"
+        return 0
+    fi
+
+    case "$distro" in
+    rhel-*)
+        build_valgrind
+        ;;
+    *)
+        if command -v apt-get &>/dev/null; then
+            $SUDO apt-get install -y --no-install-recommends valgrind
+        elif command -v dnf &>/dev/null; then
+            $SUDO dnf install -y valgrind
+        elif command -v microdnf &>/dev/null; then
+            microdnf install -y valgrind
+        elif command -v yum &>/dev/null; then
+            $SUDO yum install -y valgrind
+        else
+            echo "No supported package manager found to install valgrind" >&2
+            exit 1
+        fi
+        ;;
+    esac
+}
+
 # --- Main ---------------------------------------------------------------------------
 
 main() {
-    if [[ $# -lt 1 || $# -gt 2 ]]; then
-        echo "Usage: install_deps.bash <distro> [event_lib]" >&2
+    if [[ $# -lt 1 || $# -gt 3 ]]; then
+        echo "Usage: install_deps.bash <distro> [event_lib] [valgrind=false]" >&2
         exit 1
     fi
 
     local distro="$1"
     local event_lib="${2:-sync}"
+    local valgrind="${3:-false}"
     export DEBIAN_FRONTEND=noninteractive
 
     case "$distro" in
@@ -275,7 +325,11 @@ main() {
         build_event_lib "$event_lib"
     fi
 
-    echo "Dependencies installed for $distro (event_lib=$event_lib)."
+    if [[ "$valgrind" == "true" ]]; then
+        install_valgrind "$distro"
+    fi
+
+    echo "Dependencies installed for $distro (event_lib=$event_lib, valgrind=$valgrind)."
 }
 
 main "$@"

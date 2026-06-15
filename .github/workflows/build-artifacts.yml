@@ -490,7 +490,6 @@ jobs:
       gh-workflows-ref:     b4cb4010214d4c6976234ac40fb60b5e825c4f9b
       jf-build-name:        aerospike-client-c
       jf-build-id:          ${{ github.run_id }}-${{ github.run_attempt }}-windows
-      jf-metadata-build-id: ${{ github.run_id }}-${{ github.run_attempt }}-windows
       jf-project:           ${{ vars.JFROG_PROJECT }}
       version:              ${{ needs.get-version.outputs.version }}
       gh-artifact-name:     ${{ inputs.dry-run && 'win-unsigned-nupkg' || 'win-signed-nupkg' }}

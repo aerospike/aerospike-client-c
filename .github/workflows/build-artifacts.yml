@@ -201,7 +201,6 @@ jobs:
       oidc-audience:          ${{ vars.JFROG_OIDC_AUDIENCE }}
       sign-mac:               false
       sign-windows:           false
-      dry-run:                ${{ inputs.dry-run }}
       matrix-json: ${{ needs.compute-release-matrix.outputs.matrix-json }}
 
       # build-env provides DISTRO and CONTAINER for the packaging container.
@@ -237,34 +236,27 @@ jobs:
       gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass:    ${{ secrets.GPG_PASS }}
 
-  # macOS ARM64 build and deploy. Dry-run skips signing/notarization.
-  artifacts-cicd-mac:
-    name: mac / build-deploy
+  # macOS ARM64 split into four jobs to assign a platform-unique JFrog build-ID,
+  # avoiding the build-ID collision with Linux when both use reusable_artifacts-cicd.
+
+  # Build and publish child build-info; artifact: mac-build-artifacts.
+  build-mac-artifacts:
+    name: mac / build
     needs: get-version
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.6.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v3.6.0
     with:
-      gh-workflows-ref:       v3.6.0
-      jf-build-name:          aerospike-client-c
-      jf-project:             ${{ vars.JFROG_PROJECT }}
-      version:                ${{ needs.get-version.outputs.version }}
-      gh-source-path:         aerospike-client-c
-      working-directory:      aerospike-client-c
-      gh-artifact-directory:  target/packages
-      oidc-provider-name:     ${{ vars.JFROG_OIDC_PROVIDER }}
-      oidc-audience:          ${{ vars.JFROG_OIDC_AUDIENCE }}
-      sign-windows:           false
-
-      # GitHub-hosted macOS Sonoma ARM64.
-      matrix-json: |-
-        {"include":[
-          {
-            "runs-on": "macos-14",
-            "distro":  "mac",
-            "arch":    "arm64"
-          }
-        ]}
-
-      # make package produces target/packages/ with .pkg, .tgz, and source zip.
+      gh-workflows-ref:      v3.6.0
+      jf-build-name:         aerospike-client-c
+      jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}-mac-buildinfo-arm64
+      jf-project:            ${{ vars.JFROG_PROJECT }}
+      runs-on:               macos-14
+      gh-source-path:        aerospike-client-c
+      working-directory:     aerospike-client-c
+      gh-artifact-directory: target/packages
+      gh-artifact-name:      mac-build-artifacts
+      publish-build-info:    true
+      oidc-provider-name:    ${{ vars.JFROG_OIDC_PROVIDER }}
+      oidc-audience:         ${{ vars.JFROG_OIDC_AUDIENCE }}
       build-script: |-
         set -euo pipefail
         brew install autoconf automake libtool
@@ -273,25 +265,66 @@ jobs:
         ./install_libevent
         brew install doxygen graphviz
         make package
+    secrets: inherit
 
-      sign-mac:               ${{ !inputs.dry-run }}
-      mac-runs-on:            macos-14
-      mac-signing-identity:   'Developer ID Application: Aerospike, Inc.'
-      mac-installer-identity: 'Developer ID Installer: Aerospike, Inc.'
-      mac-artifact-glob:      '**/*.pkg'
-      mac-notarize:           ${{ !inputs.dry-run }}
-      dry-run:                ${{ inputs.dry-run }}
-
+  # Apple code-sign and notarize .pkg files; overwrites mac-build-artifacts in-place. Skipped on dry-run.
+  sign-mac-apple:
+    name: mac / sign (Apple)
+    if: ${{ !inputs.dry-run }}
+    needs: build-mac-artifacts
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-mac-artifacts.yaml@v3.6.0
+    with:
+      gh-workflows-ref:      v3.6.0
+      gh-unsigned-artifacts: mac-build-artifacts
+      signing-identity:      'Developer ID Application: Aerospike, Inc.'
+      installer-identity:    'Developer ID Installer: Aerospike, Inc.'
+      artifact-glob:         '**/*.pkg'
+      notarize:              true
+      runs-on:               macos-14
     secrets:
-      gpg-private-key:              ${{ secrets.GPG_SECRET_KEY }}
-      gpg-public-key:               ${{ secrets.GPG_PUBLIC_KEY }}
-      gpg-key-pass:                 ${{ secrets.GPG_PASS }}
-      apple-application-cert:       ${{ secrets.APPLE_APPLICATION_CERT }}
-      apple-cert-password:          ${{ secrets.APPLE_CERT_PASSWORD }}
-      apple-installer-cert:         ${{ secrets.APPLE_INSTALLER_CERT }}
-      apple-id:                     ${{ secrets.APPLE_ID }}
-      apple-notarization-password:  ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
-      apple-team-id:                ${{ secrets.APPLE_TEAM_ID }}
+      apple-application-cert:      ${{ secrets.APPLE_APPLICATION_CERT }}
+      apple-cert-password:         ${{ secrets.APPLE_CERT_PASSWORD }}
+      apple-installer-cert:        ${{ secrets.APPLE_INSTALLER_CERT }}
+      apple-id:                    ${{ secrets.APPLE_ID }}
+      apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+      apple-team-id:               ${{ secrets.APPLE_TEAM_ID }}
+
+  # GPG-sign all artifacts; runs even when Apple-sign is skipped on dry-run.
+  sign-mac-gpg:
+    name: mac / sign (GPG)
+    needs: [build-mac-artifacts, sign-mac-apple]
+    if: |
+      always() && !cancelled() &&
+      needs.build-mac-artifacts.result == 'success' &&
+      (needs.sign-mac-apple.result == 'success' || needs.sign-mac-apple.result == 'skipped')
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v3.6.0
+    with:
+      gh-workflows-ref:      v3.6.0
+      gh-unsigned-artifacts: mac-build-artifacts
+      gh-artifact-name:      mac-signed-artifacts
+      runs-on:               ubuntu-22.04
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass:    ${{ secrets.GPG_PASS }}
+
+  # Deploy to JFrog; jf-metadata-build-id prefix scopes AQL aggregation to mac child records only.
+  deploy-mac:
+    name: mac / deploy
+    needs: [get-version, sign-mac-gpg]
+    if: always() && !cancelled() && needs.sign-mac-gpg.result == 'success'
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@b4cb4010214d4c6976234ac40fb60b5e825c4f9b # PR #251
+    with:
+      gh-workflows-ref:      b4cb4010214d4c6976234ac40fb60b5e825c4f9b
+      jf-build-name:         aerospike-client-c
+      jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}-mac
+      jf-metadata-build-id:  ${{ github.run_id }}-${{ github.run_attempt }}-mac-buildinfo
+      jf-project:            ${{ vars.JFROG_PROJECT }}
+      version:               ${{ needs.get-version.outputs.version }}
+      gh-artifact-name:      mac-signed-artifacts
+      oidc-provider-name:    ${{ vars.JFROG_OIDC_PROVIDER }}
+      oidc-audience:         ${{ vars.JFROG_OIDC_AUDIENCE }}
+    secrets: inherit
 
   # Build unsigned Windows DLLs for all NuGet configurations.
   build-windows-dlls:
@@ -453,7 +486,6 @@ jobs:
       gh-artifact-name:     ${{ inputs.dry-run && 'win-unsigned-nupkg' || 'win-signed-nupkg' }}
       oidc-provider-name:   ${{ vars.JFROG_OIDC_PROVIDER }}
       oidc-audience:        ${{ vars.JFROG_OIDC_AUDIENCE }}
-      dry-run:              ${{ inputs.dry-run }}
     secrets: inherit
 
   # Ensure an existing promoted bundle is not overwritten.
@@ -465,15 +497,15 @@ jobs:
       - test
       - generate-api-docs
       - artifacts-cicd-linux
-      - artifacts-cicd-mac
+      - deploy-mac
       - deploy-windows
     if: |
       always() && !cancelled() &&
       needs.test.result                 == 'success' &&
       needs.generate-api-docs.result    == 'success' &&
       needs.artifacts-cicd-linux.result == 'success' &&
-      needs.artifacts-cicd-mac.result   == 'success' &&
-      needs.deploy-windows.result        == 'success'
+      needs.deploy-mac.result           == 'success' &&
+      needs.deploy-windows.result       == 'success'
     steps:
       - name: Setup JFrog CLI
         uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
@@ -541,17 +573,17 @@ jobs:
       - test
       - generate-api-docs
       - artifacts-cicd-linux
-      - artifacts-cicd-mac
+      - deploy-mac
       - deploy-windows
       - check-existing-bundle
     if: |
       always() && !cancelled() &&
-      needs.test.result                    == 'success' &&
-      needs.generate-api-docs.result       == 'success' &&
-      needs.artifacts-cicd-linux.result    == 'success' &&
-      needs.artifacts-cicd-mac.result      == 'success' &&
-      needs.deploy-windows.result          == 'success' &&
-      needs.check-existing-bundle.result   == 'success'
+      needs.test.result                  == 'success' &&
+      needs.generate-api-docs.result     == 'success' &&
+      needs.artifacts-cicd-linux.result  == 'success' &&
+      needs.deploy-mac.result            == 'success' &&
+      needs.deploy-windows.result        == 'success' &&
+      needs.check-existing-bundle.result == 'success'
     uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.6.0
     with:
       gh-workflows-ref:   v3.6.0
@@ -559,7 +591,7 @@ jobs:
       jf-bundle-name:     aerospike-client-c
       version:            ${{ needs.get-version.outputs.version }}
       jf-build-names: >-
-        ${{ format('{0}:{1},{0}:{2},{0}:{3}', 'aerospike-client-c', needs.artifacts-cicd-linux.outputs.jf-build-id, needs.artifacts-cicd-mac.outputs.jf-build-id, needs.deploy-windows.outputs.jf-build-id) }}
+        ${{ format('{0}:{1},{0}:{2},{0}:{3}', 'aerospike-client-c', needs.artifacts-cicd-linux.outputs.jf-build-id, needs.deploy-mac.outputs.jf-build-id, needs.deploy-windows.outputs.jf-build-id) }}
       oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
       oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
     secrets: inherit

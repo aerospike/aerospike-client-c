@@ -19,8 +19,8 @@ permissions:
   pull-requests: write   # allows posting annotations / comments back to the PR
 
 on:
-  push:
-    branches: [CLIENT-4300-release-pipeline-new]
+  # push:
+  #   branches: [CLIENT-4300-release-pipeline-new]
 
   pull_request:
     branches:

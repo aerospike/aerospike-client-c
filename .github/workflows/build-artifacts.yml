@@ -105,7 +105,7 @@ jobs:
     with:
       ref:          ${{ github.sha }}
       matrix-json:  '{"distros":[{"distro":"ubuntu-22.04","container":"ubuntu:22.04","archs":["amd64"]}]}'
-      runners-json: '{"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}'
+      runners-json: '{"amd64":"ubuntu-24.04"}'
       event-lib:    sync
       server-tag:   latest
       num-nodes:    '1'
@@ -370,7 +370,7 @@ jobs:
       always() && !cancelled() &&
       needs.get-version.result == 'success' &&
       needs.build-windows-dlls.result == 'success' &&
-      (inputs.dry-run || needs.sign-win-dlls.result == 'success')
+      (needs.sign-win-dlls.result == 'success' || needs.sign-win-dlls.result == 'skipped')
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -423,7 +423,7 @@ jobs:
       gh-workflows-ref:      v3.6.0
       gh-unsigned-artifacts: win-unsigned-nupkg
       gh-artifact-name:      win-signed-nupkg
-      nuget-environment:     ${{ inputs.dry-run && 'TEST' || 'PROD' }}
+      nuget-environment:     PROD
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
@@ -441,7 +441,7 @@ jobs:
       always() && !cancelled() &&
       needs.get-version.result == 'success' &&
       needs.pack-nuget.result == 'success' &&
-      (inputs.dry-run || needs.sign-nuget.result == 'success')
+      (needs.sign-nuget.result == 'success' || needs.sign-nuget.result == 'skipped')
     uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@b4cb4010214d4c6976234ac40fb60b5e825c4f9b # PR #251
     with:
       gh-workflows-ref:     b4cb4010214d4c6976234ac40fb60b5e825c4f9b
@@ -562,7 +562,6 @@ jobs:
         ${{ format('{0}:{1},{0}:{2},{0}:{3}', 'aerospike-client-c', needs.artifacts-cicd-linux.outputs.jf-build-id, needs.artifacts-cicd-mac.outputs.jf-build-id, needs.deploy-windows.outputs.jf-build-id) }}
       oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
       oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
-      dry-run:            ${{ inputs.dry-run }}
     secrets: inherit
 
   # Auto-promote the new bundle to TEST for normal release; dry-run skips promotion.
@@ -571,11 +570,17 @@ jobs:
     needs:
       - get-version
       - create-release-bundle
-    if: |
-      !inputs.dry-run &&
-      needs.create-release-bundle.result == 'success'
+    if: always() && needs.create-release-bundle.result == 'success'
     runs-on: ubuntu-24.04
     steps:
+      - name: Setup JFrog CLI
+        uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
+        env:
+          JF_URL: ${{ vars.JFROG_PLATFORM_URL }}
+        with:
+          oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
+
       - name: Promote release bundle
         uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@v3.6.0
         with:

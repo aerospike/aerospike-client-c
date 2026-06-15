@@ -205,14 +205,12 @@ jobs:
           diagnostics-artifact-name: doxygen-diagnostics-${{ inputs.server-tag }}-${{ inputs.num-nodes }}node
           fail-on-warnings: 'true'
 
-  # macOS ARM64 build/test
-  # TODO: macOS self-hosted runner currently uses a single Aerospike node.
+  # macOS ARM64 build
   build-mac:
-    name: macOS arm64 / ${{ matrix.event_lib }}
+    name: macOS arm64 build / ${{ matrix.event_lib }}
     if: inputs.run-mac
     needs: load-matrix
-    #runs-on: [self-hosted, macOS, ARM64]
-    runs-on: [test]
+    runs-on: [macos-14]
     strategy:
       fail-fast: false
       matrix:
@@ -226,6 +224,14 @@ jobs:
           submodules: recursive
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install build dependencies
+        run: |
+          set -e
+          echo "Homebrew version:"
+          brew --version
+          echo "Installing dependencies..."
+          brew install cmake autoconf automake libtool openssl@3 pkg-config wget libyaml
 
       - name: Install libev
         if: matrix.event_lib == 'libev'
@@ -244,10 +250,39 @@ jobs:
           if [ "${{ matrix.event_lib }}" = "sync" ]; then make
           else make EVENT_LIB=${{ matrix.event_lib }}; fi
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: build-macos-arm64-${{ matrix.event_lib }}
+          path: |
+            target/
+            src/test/**/*.lua
+          retention-days: 1
+
+  # macOS ARM64 test
+  # TODO: macOS self-hosted runner currently uses a single Aerospike node.
+  test-mac:
+    name: macOS arm64 test / ${{ matrix.event_lib }}
+    if: inputs.run-mac
+    needs: [load-matrix, build-mac]
+    #runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [test]
+    strategy:
+      fail-fast: false
+      matrix:
+        event_lib: ${{ fromJSON(needs.load-matrix.outputs.event-libs) }}
+
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: build-macos-arm64-${{ matrix.event_lib }}
+          path: ${{ github.workspace }}
+
       # Fail fast if the self-hosted runner's Colima Docker daemon is down.
       - name: Verify Docker (colima)
         run: docker info --format 'OSType={{.OSType}} Server={{.ServerVersion}}'
-    
+
       - name: Start Aerospike server
         id: setup-aerospike
         uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@91bde550339d432d99123d871c7eee628aa39587
@@ -268,11 +303,8 @@ jobs:
           JUNIT_XML: ${{ github.workspace }}/test-results/macos-arm64-${{ matrix.event_lib }}.xml
         run: |
           mkdir -p test-results
-          if [ "${{ matrix.event_lib }}" = "sync" ]; then
-            make AS_HOST=localhost AS_PORT=$AS_PORT test
-          else
-            make EVENT_LIB=${{ matrix.event_lib }} AS_HOST=localhost AS_PORT=$AS_PORT test
-          fi
+          chmod +x target/Darwin-arm64/test/aerospike_test
+          target/Darwin-arm64/test/aerospike_test -h localhost -p $AS_PORT
 
       - name: Dump server logs on failure
         if: failure()
@@ -339,7 +371,9 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: build-windows-${{ matrix.config }}
-          path: vs\x64\${{ matrix.config }}\
+          path: |
+            vs\x64\${{ matrix.config }}\
+            src\test\**\*.lua
           retention-days: 1
 
   # Windows x64 test
@@ -355,11 +389,6 @@ jobs:
         config: [Release, "Release libuv", "Release libevent"]
 
     steps:
-      - name: Checkout source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ inputs.ref }}
-
       - name: Verify Docker (Linux daemon)
         shell: pwsh
         run: |
@@ -396,13 +425,14 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: build-windows-${{ matrix.config }}
-          path: vs\x64\${{ matrix.config }}
+          path: ${{ github.workspace }}
 
-      # Run from vs\aerospike-test so UDF Lua scripts resolve correctly.
+      # Run from vs\aerospike-test so AS_START_DIR "../../" resolves src\test\lua\ correctly.
       - name: Run Windows x64 tests (${{ matrix.config }})
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\test-results" | Out-Null
+          New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\vs\aerospike-test" | Out-Null
           $resultName = "${{ matrix.config }}" -replace '\s+', '-'
           $env:JUNIT_XML = "$env:GITHUB_WORKSPACE\test-results\windows-$resultName.xml"
           $exe = (Resolve-Path "vs\x64\${{ matrix.config }}\aerospike-test.exe").Path
@@ -440,7 +470,7 @@ jobs:
   summary:
     name: summary
     if: always()
-    needs: [load-matrix, build-linux, lint-docs, build-mac, build-windows, test-windows]
+    needs: [load-matrix, build-linux, lint-docs, build-mac, test-mac, build-windows, test-windows]
     runs-on: ubuntu-24.04
     steps:
       - name: Download test results
@@ -467,7 +497,8 @@ jobs:
           R_MATRIX:  ${{ needs.load-matrix.result }}
           R_LINUX:   ${{ needs.build-linux.result }}
           R_DOCS:    ${{ needs.lint-docs.result }}
-          R_MAC:     ${{ needs.build-mac.result }}
+          R_MAC_BLD: ${{ needs.build-mac.result }}
+          R_MAC_TST: ${{ needs.test-mac.result }}
           R_WIN_BLD: ${{ needs.build-windows.result }}
           R_WIN_TST: ${{ needs.test-windows.result }}
         run: |
@@ -481,7 +512,7 @@ jobs:
             esac
           }
 
-          results="matrix=$R_MATRIX linux=$R_LINUX docs=$R_DOCS mac=$R_MAC win-build=$R_WIN_BLD win-test=$R_WIN_TST"
+          results="matrix=$R_MATRIX linux=$R_LINUX docs=$R_DOCS mac-build=$R_MAC_BLD mac-test=$R_MAC_TST win-build=$R_WIN_BLD win-test=$R_WIN_TST"
 
           {
             echo "## Aerospike C Client — Build & Test"
@@ -491,7 +522,8 @@ jobs:
             echo "| Matrix setup | $(badge "$R_MATRIX") |"
             echo "| Linux distro/arch/event-lib matrix | $(badge "$R_LINUX") |"
             echo "| Doxygen lint | $(badge "$R_DOCS") |"
-            echo "| macOS ARM64 event-lib matrix | $(badge "$R_MAC") |"
+            echo "| macOS ARM64 build | $(badge "$R_MAC_BLD") |"
+            echo "| macOS ARM64 test | $(badge "$R_MAC_TST") |"
             echo "| Windows x64 build | $(badge "$R_WIN_BLD") |"
             echo "| Windows x64 test | $(badge "$R_WIN_TST") |"
             echo ""
@@ -504,7 +536,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           # Fail the reusable workflow if any required job failed or was cancelled.
-          for result in "$R_MATRIX" "$R_LINUX" "$R_DOCS" "$R_MAC" "$R_WIN_BLD" "$R_WIN_TST"; do
+          for result in "$R_MATRIX" "$R_LINUX" "$R_DOCS" "$R_MAC_BLD" "$R_MAC_TST" "$R_WIN_BLD" "$R_WIN_TST"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
               echo "::error::One or more build/test jobs did not succeed ($results)"
               exit 1

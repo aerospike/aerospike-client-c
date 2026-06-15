@@ -363,7 +363,9 @@ jobs:
           bundle-name:  ${{ inputs.bundle_name }}
           version:      ${{ inputs.version }}
           environment:  ${{ inputs.environment }}
-          jf-project:   ${{ vars.JFROG_PROJECT }}
+          jf-project:    ${{ vars.JFROG_PROJECT }}
+          # Exclude legacy JFrog Pipelines repos (DEV-tagged, no CI write access) from distribution.
+          exclude-repos: pipelines-templates-local
 
       - name: Summary
         if: always()

@@ -90,8 +90,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
-          fetch-depth: 0   # get-version compares against prior history
+          fetch-depth: 0   # get-version compares HEAD vs HEAD~1 to detect release cuts
 
       - name: Extract version
         id: ver
@@ -342,7 +341,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vs\packages
-          key: nuget-${{ hashFiles('vs/aerospike.sln', 'vs/**/*.vcxproj') }}
+          key: nuget-${{ hashFiles('vs/**/packages.config') }}
           restore-keys: nuget-
 
       - name: Restore NuGet packages (populates vs\packages\)
@@ -423,7 +422,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: vs\packages
-          key: nuget-${{ hashFiles('vs/aerospike.sln', 'vs/**/*.vcxproj') }}
+          key: nuget-${{ hashFiles('vs/**/packages.config') }}
           restore-keys: nuget-
 
       # Restore DLL dependencies referenced by the nuspec files.
@@ -625,7 +624,10 @@ jobs:
       - name: Promote release bundle
         uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@v3.6.0
         with:
-          bundle-name: ${{ env.JF_BUNDLE_NAME }}
-          version:     ${{ needs.get-version.outputs.version }}
-          environment: ${{ inputs.dry-run && 'DEV' || 'TEST' }}
-          jf-project:  ${{ vars.JFROG_PROJECT }}
+          bundle-name:   ${{ env.JF_BUNDLE_NAME }}
+          version:       ${{ needs.get-version.outputs.version }}
+          environment:   ${{ inputs.dry-run && 'DEV' || 'TEST' }}
+          jf-project:    ${{ vars.JFROG_PROJECT }}
+          # Exclude legacy JFrog Pipelines repos (DEV-tagged, no CI write access) from distribution.
+          exclude-repos: pipelines-templates-local
+

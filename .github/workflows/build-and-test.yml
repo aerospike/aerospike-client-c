@@ -145,7 +145,6 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           submodules: recursive
-          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # Pinned for setup-aerospike-server nofile=15000 support on ARM64 runners.
@@ -196,7 +195,6 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           submodules: recursive
-          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run docs lint
@@ -222,7 +220,6 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           submodules: recursive
-          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install build dependencies
@@ -343,11 +340,17 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
           submodules: recursive
-          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: vs\packages
+          key: nuget-${{ hashFiles('vs/**/packages.config') }}
+          restore-keys: nuget-
 
       - name: Restore NuGet packages
         shell: cmd

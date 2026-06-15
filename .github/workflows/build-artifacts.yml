@@ -2,8 +2,8 @@ name: Build Release
 
 # Multi-platform release build for the Aerospike C client.
 # Called by push-to-stage.yml to build, sign, deploy, and bundle artifacts.
-# Linux and macOS use shared-workflows orchestrators; Windows signs DLLs and
-# NuGet packages separately before deployment.
+# Linux uses per-matrix composable jobs (build → GPG sign → deploy); macOS and
+# Windows use composable shared-workflows chains before deployment.
 
 on:
   workflow_call:
@@ -24,9 +24,9 @@ on:
         type: boolean
         default: true
     outputs:
-      jf-build-id:
-        description: JFrog build id of the Linux leg (proxy for overall build)
-        value: ${{ jobs.artifacts-cicd-linux.outputs.jf-build-id }}
+      jf-build-names:
+        description: Comma-separated build-name:build-id pairs included in the release bundle
+        value: ${{ jobs.assemble-jf-build-names.outputs.jf-build-names }}
     secrets:
       GPG_SECRET_KEY:
         required: true
@@ -155,7 +155,7 @@ jobs:
           path: ${{ steps.package-docs.outputs.archive }}
           retention-days: 90
 
-  # Convert vars.LINUX_DISTRO_MATRIX into the shared orchestrator include schema.
+  # Convert vars.LINUX_DISTRO_MATRIX into the composable execute-build matrix schema.
   compute-release-matrix:
     name: compute release matrix
     runs-on: ubuntu-24.04
@@ -176,36 +176,43 @@ jobs:
                 "runs-on":  $runners[$arch],
                 "distro":   $d.distro,
                 "arch":     $arch,
-                "build-env": ("DISTRO=" + $d.distro + ";CONTAINER=" + $d.container)
+                "build-env": (
+                  "DISTRO=" + $d.distro + ";CONTAINER=" + $d.container +
+                  (if $d.distro == "ubuntu-22.04" and $arch == "amd64" then ";OWN_SOURCE=1" else ";OWN_SOURCE=0" end)
+                )
               }
             ]}')
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           echo "Release matrix: $(echo "$matrix" | jq '.include | length') entries"
 
-  # Linux build and deploy via shared-workflows.
-  artifacts-cicd-linux:
-    name: linux / build-deploy
+  # Linux per-matrix chain (mirrors mac): build → GPG sign → deploy. No collect/merge.
+  build-linux:
+    name: linux / build (${{ matrix.distro }}, ${{ matrix.arch }})
     needs: [get-version, compute-release-matrix]
-    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.6.0
+    strategy:
+      fail-fast: true
+      matrix: ${{ fromJSON(needs.compute-release-matrix.outputs.matrix-json) }}
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v3.6.0
     with:
       gh-workflows-ref:       v3.6.0
       jf-build-name:          aerospike-client-c
+      jf-build-id:            ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
       jf-project:             ${{ vars.JFROG_PROJECT }}
-      version:                ${{ needs.get-version.outputs.version }}
+      runs-on:                ${{ matrix.runs-on }}
+      build-env:              ${{ matrix.build-env }}
+      matrix-json-data:       ${{ toJSON(matrix) }}
       gh-source-path:         aerospike-client-c
       working-directory:      aerospike-client-c
       gh-artifact-directory:  target/packages
+      gh-artifact-name:       linux-build-${{ matrix.distro }}-${{ matrix.arch }}
+      publish-build-info:     true
       oidc-provider-name:     ${{ vars.JFROG_OIDC_PROVIDER }}
       oidc-audience:          ${{ vars.JFROG_OIDC_AUDIENCE }}
-      sign-mac:               false
-      sign-windows:           false
-      matrix-json: ${{ needs.compute-release-matrix.outputs.matrix-json }}
-
-      # build-env provides DISTRO and CONTAINER for the packaging container.
       build-script: |-
         set -euo pipefail
         docker run --rm \
           -e DISTRO="$DISTRO" \
+          -e OWN_SOURCE="${OWN_SOURCE:-0}" \
           -v "$PWD:/workspace" \
           "$CONTAINER" \
           bash -c '
@@ -227,15 +234,53 @@ jobs:
             cd /workspace
             bash .github/script/install_deps.bash "$DISTRO" all
             make package
+            if [ "${OWN_SOURCE:-0}" != "1" ]; then
+              rm -f target/packages/aerospike-client-c-src-*.zip
+            fi
           '
+    secrets: inherit
 
+  sign-linux-gpg:
+    name: linux / sign (${{ matrix.distro }}, ${{ matrix.arch }})
+    if: ${{ !inputs.dry-run }}
+    needs: [build-linux, compute-release-matrix]
+    strategy:
+      matrix: ${{ fromJSON(needs.compute-release-matrix.outputs.matrix-json) }}
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v3.6.0
+    with:
+      gh-workflows-ref:      v3.6.0
+      gh-unsigned-artifacts: linux-build-${{ matrix.distro }}-${{ matrix.arch }}
+      gh-artifact-name:      linux-signed-${{ matrix.distro }}-${{ matrix.arch }}
+      runs-on:               ubuntu-22.04
     secrets:
       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
       gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass:    ${{ secrets.GPG_PASS }}
 
-  # macOS ARM64 split into four jobs to assign a platform-unique JFrog build-ID,
-  # avoiding the build-ID collision with Linux when both use reusable_artifacts-cicd.
+  deploy-linux:
+    name: linux / deploy (${{ matrix.distro }}, ${{ matrix.arch }})
+    needs: [get-version, build-linux, sign-linux-gpg, compute-release-matrix]
+    if: |
+      always() && !cancelled() &&
+      needs.get-version.result == 'success' &&
+      needs.build-linux.result == 'success' &&
+      (needs.sign-linux-gpg.result == 'success' || needs.sign-linux-gpg.result == 'skipped')
+    strategy:
+      matrix: ${{ fromJSON(needs.compute-release-matrix.outputs.matrix-json) }}
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@b4cb4010214d4c6976234ac40fb60b5e825c4f9b # PR #251
+    with:
+      gh-workflows-ref:      b4cb4010214d4c6976234ac40fb60b5e825c4f9b
+      jf-build-name:         aerospike-client-c
+      jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}-linux-${{ matrix.distro }}-${{ matrix.arch }}
+      jf-metadata-build-id:  ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
+      jf-project:            ${{ vars.JFROG_PROJECT }}
+      version:               ${{ needs.get-version.outputs.version }}
+      gh-artifact-name:      ${{ inputs.dry-run && format('linux-build-{0}-{1}', matrix.distro, matrix.arch) || format('linux-signed-{0}-{1}', matrix.distro, matrix.arch) }}
+      oidc-provider-name:    ${{ vars.JFROG_OIDC_PROVIDER }}
+      oidc-audience:         ${{ vars.JFROG_OIDC_AUDIENCE }}
+    secrets: inherit
+
+  # macOS ARM64 composable chain with a platform-unique JFrog build-ID.
 
   # Build and publish child build-info; artifact: mac-build-artifacts.
   build-mac-artifacts:
@@ -497,6 +542,37 @@ jobs:
       oidc-audience:        ${{ vars.JFROG_OIDC_AUDIENCE }}
     secrets: inherit
 
+  # Build the comma-separated jf-build-names list for create-release-bundle.
+  assemble-jf-build-names:
+    name: assemble jf build names
+    runs-on: ubuntu-24.04
+    needs:
+      - compute-release-matrix
+      - deploy-linux
+      - deploy-mac
+      - deploy-windows
+    if: |
+      always() && !cancelled() &&
+      needs.deploy-linux.result   == 'success' &&
+      needs.deploy-mac.result     == 'success' &&
+      needs.deploy-windows.result == 'success'
+    outputs:
+      jf-build-names: ${{ steps.assemble.outputs.jf-build-names }}
+    steps:
+      - id: assemble
+        env:
+          MATRIX:     ${{ needs.compute-release-matrix.outputs.matrix-json }}
+          RUN_PREFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+          BUILD_NAME: aerospike-client-c
+        run: |
+          set -euo pipefail
+          linux=$(echo "$MATRIX" | jq -r --arg p "$RUN_PREFIX" --arg n "$BUILD_NAME" \
+            '.include[] | "\($n):\($p)-linux-\(.distro)-\(.arch)"' | paste -sd, -)
+          names="${linux},${BUILD_NAME}:${RUN_PREFIX}-mac,${BUILD_NAME}:${RUN_PREFIX}-windows"
+          echo "jf-build-names=${names}" >> "$GITHUB_OUTPUT"
+          linux_count=$(echo "$linux" | tr ',' '\n' | wc -l | tr -d ' ')
+          echo "Assembled ${linux_count} Linux + mac + windows JFrog build IDs for release bundle"
+
   # Ensure an existing promoted bundle is not overwritten.
   # Does not need test or generate-api-docs — those gate create-release-bundle instead,
   # allowing the bundle check to start as soon as all platform deploys finish.
@@ -505,14 +581,14 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - get-version
-      - artifacts-cicd-linux
+      - deploy-linux
       - deploy-mac
       - deploy-windows
     if: |
       always() && !cancelled() &&
-      needs.artifacts-cicd-linux.result == 'success' &&
-      needs.deploy-mac.result           == 'success' &&
-      needs.deploy-windows.result       == 'success'
+      needs.deploy-linux.result   == 'success' &&
+      needs.deploy-mac.result     == 'success' &&
+      needs.deploy-windows.result == 'success'
     steps:
       - name: Setup JFrog CLI
         uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
@@ -579,17 +655,13 @@ jobs:
       - get-version
       - test
       - generate-api-docs
-      - artifacts-cicd-linux
-      - deploy-mac
-      - deploy-windows
+      - assemble-jf-build-names
       - check-existing-bundle
     if: |
       always() && !cancelled() &&
       needs.test.result                  == 'success' &&
       needs.generate-api-docs.result     == 'success' &&
-      needs.artifacts-cicd-linux.result  == 'success' &&
-      needs.deploy-mac.result            == 'success' &&
-      needs.deploy-windows.result        == 'success' &&
+      needs.assemble-jf-build-names.result == 'success' &&
       needs.check-existing-bundle.result == 'success'
     uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@v3.6.0
     with:
@@ -597,8 +669,7 @@ jobs:
       jf-project:         ${{ vars.JFROG_PROJECT }}
       jf-bundle-name:     aerospike-client-c
       version:            ${{ needs.get-version.outputs.version }}
-      jf-build-names: >-
-        ${{ format('{0}:{1},{0}:{2},{0}:{3}', 'aerospike-client-c', needs.artifacts-cicd-linux.outputs.jf-build-id, needs.deploy-mac.outputs.jf-build-id, needs.deploy-windows.outputs.jf-build-id) }}
+      jf-build-names:     ${{ needs.assemble-jf-build-names.outputs.jf-build-names }}
       oidc-provider-name: ${{ vars.JFROG_OIDC_PROVIDER }}
       oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
     secrets: inherit

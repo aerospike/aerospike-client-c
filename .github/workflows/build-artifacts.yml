@@ -128,7 +128,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 1
 
       - name: Build API docs
         uses: ./.github/actions/build-api-docs
@@ -259,12 +258,12 @@ jobs:
       oidc-audience:         ${{ vars.JFROG_OIDC_AUDIENCE }}
       build-script: |-
         set -euo pipefail
-        brew install autoconf automake libtool
+        brew install autoconf automake libtool doxygen graphviz
         ./install_libev
         ./install_libuv
         ./install_libevent
-        brew install doxygen graphviz
         make package
+        rm -f target/packages/*.zip  # Linux owns the source zip; removing avoids duplicate-artifact 422 on create-release-bundle.
     secrets: inherit
 
   # Apple code-sign and notarize .pkg files; overwrites mac-build-artifacts in-place. Skipped on dry-run.
@@ -335,10 +334,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
 
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: vs\packages
+          key: nuget-${{ hashFiles('vs/aerospike.sln', 'vs/**/*.vcxproj') }}
+          restore-keys: nuget-
 
       - name: Restore NuGet packages (populates vs\packages\)
         shell: cmd
@@ -410,10 +415,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          fetch-depth: 0
 
       - name: Setup NuGet
         uses: NuGet/setup-nuget@v2
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: vs\packages
+          key: nuget-${{ hashFiles('vs/aerospike.sln', 'vs/**/*.vcxproj') }}
+          restore-keys: nuget-
 
       # Restore DLL dependencies referenced by the nuspec files.
       - name: Restore NuGet packages
@@ -489,20 +500,18 @@ jobs:
     secrets: inherit
 
   # Ensure an existing promoted bundle is not overwritten.
+  # Does not need test or generate-api-docs — those gate create-release-bundle instead,
+  # allowing the bundle check to start as soon as all platform deploys finish.
   check-existing-bundle:
     name: check existing bundle
     runs-on: ubuntu-24.04
     needs:
       - get-version
-      - test
-      - generate-api-docs
       - artifacts-cicd-linux
       - deploy-mac
       - deploy-windows
     if: |
       always() && !cancelled() &&
-      needs.test.result                 == 'success' &&
-      needs.generate-api-docs.result    == 'success' &&
       needs.artifacts-cicd-linux.result == 'success' &&
       needs.deploy-mac.result           == 'success' &&
       needs.deploy-windows.result       == 'success'

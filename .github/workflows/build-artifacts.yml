@@ -402,6 +402,30 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Publish Windows child build-info (metadata only); NuGet packages are built below.
+  publish-windows-buildinfo:
+    name: windows / publish build-info
+    needs: build-windows-dlls
+    if: always() && !cancelled() && needs.build-windows-dlls.result == 'success'
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v3.6.0
+    with:
+      gh-workflows-ref:      v3.6.0
+      jf-build-name:         aerospike-client-c
+      jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-windows-amd64
+      jf-project:            ${{ vars.JFROG_PROJECT }}
+      runs-on:               ubuntu-24.04
+      gh-source-path:        aerospike-client-c
+      working-directory:     aerospike-client-c
+      gh-artifact-directory: target/packages
+      gh-artifact-name:      win-buildinfo-stub
+      publish-build-info:    true
+      oidc-provider-name:    ${{ vars.JFROG_OIDC_PROVIDER }}
+      oidc-audience:         ${{ vars.JFROG_OIDC_AUDIENCE }}
+      build-script: |-
+        mkdir -p target/packages
+        echo "windows-amd64" > target/packages/.buildinfo-stub
+    secrets: inherit
+
   # Sign Windows DLLs before NuGet packaging.
   sign-win-dlls:
     name: windows / sign dlls (OV Authenticode)
@@ -544,8 +568,11 @@ jobs:
   # Single deploy: one parent build-id tags Linux, macOS, and Windows artifacts.
   deploy-artifacts:
     name: deploy
-    needs: [get-version, collect-release-artifacts]
-    if: always() && !cancelled() && needs.collect-release-artifacts.result == 'success'
+    needs: [get-version, collect-release-artifacts, publish-windows-buildinfo]
+    if: |
+      always() && !cancelled() &&
+      needs.collect-release-artifacts.result == 'success' &&
+      needs.publish-windows-buildinfo.result == 'success'
     uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@b4cb4010214d4c6976234ac40fb60b5e825c4f9b # PR #251
     with:
       gh-workflows-ref:      b4cb4010214d4c6976234ac40fb60b5e825c4f9b

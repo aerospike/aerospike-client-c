@@ -37,9 +37,6 @@ docker run --rm \
     set -euo pipefail
     git config --global --add safe.directory /workspace
     export MAKEFLAGS="-j$(nproc)"
-    # Docs are built in generate-api-docs (ubuntu runner). Skip here to avoid
-    # doxygen glibc mismatches in pre-built JFrog distro images (e.g. rhel-8).
-    export AEROSPIKE_SKIP_PACKAGE_DOCS=1
     make package
     if [ "${OWN_SOURCE:-0}" != "1" ]; then
       rm -f target/packages/aerospike-client-c-src-*.zip

@@ -534,7 +534,7 @@ jobs:
 
   # Each job uploads + publish_build_info(). Mac/Win omit jf-metadata-build-id; only deploy-linux
   # discovers build-phase children ({run}-{attempt}-buildinfo*). Serial order avoids concurrent
-  # parent build-info publish races. No collect-release-artifacts merge step.
+  # parent build-info publish races.
   deploy-mac:
     name: mac / deploy
     needs: [get-version, sign-mac-gpg]

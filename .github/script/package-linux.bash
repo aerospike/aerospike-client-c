@@ -4,12 +4,12 @@
 # Required environment (injected via build-env in build-artifacts.yml):
 #   DISTRO    — e.g. ubuntu-22.04
 #   CONTAINER — full image ref, e.g.
-#               aerospike.jfrog.io/database-docker-virtual/aerospike-client-c-ubuntu-22.04:latest
+#               aerospike.jfrog.io/database-docker-virtual/client-c-build-ubuntu-22.04:ubuntu-22.04
 #   ARCH      — amd64 | arm64 (docker --platform)
 #   OWN_SOURCE — 1 on ubuntu-22.04/amd64 only (keeps the source zip); 0 elsewhere
 #
 # install_deps.bash is not invoked here. The JFrog build container images
-# (aerospike-client-c-<distro>, built via aerospike-asconfig / .build.yml) already
+# (client-c-build-<distro>, built via aerospike-asconfig / .build.yml) already
 # provision the toolchain and event libs using install_deps.bash at image build time.
 # See .github/script/install_deps.bash.
 

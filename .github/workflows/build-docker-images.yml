@@ -8,6 +8,7 @@
 name: Build Docker Images
 
 on:
+  workflow_dispatch:
   # push:
   #   branches: [CLIENT-4300-release-pipeline-new]
     # paths:
@@ -97,7 +98,7 @@ jobs:
       platforms:              linux/amd64,linux/arm64
       jf-build-name:          client-c-docker-build-${{ matrix.distro }}
       repo-scope:             -docker-dev-local
-      push:                   false
+      push:                   true
       versions-override:      ${{ matrix.distro }},latest-${{ matrix.distro }}
       attest:                 true
       sbom:                   true

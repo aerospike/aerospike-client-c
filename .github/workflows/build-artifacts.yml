@@ -233,6 +233,7 @@ jobs:
             git config --global --add safe.directory /workspace
             cd /workspace
             bash .github/script/install_deps.bash "$DISTRO" all
+            export MAKEFLAGS="-j$(nproc)"
             make package
             if [ "${OWN_SOURCE:-0}" != "1" ]; then
               rm -f target/packages/aerospike-client-c-src-*.zip
@@ -300,6 +301,7 @@ jobs:
         ./install_libev
         ./install_libuv
         ./install_libevent
+        export MAKEFLAGS="-j$(sysctl -n hw.ncpu)"
         make package
         rm -f target/packages/*.zip  # Linux owns the source zip; removing avoids duplicate-artifact 422 on create-release-bundle.
     secrets: inherit

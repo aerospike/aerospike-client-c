@@ -88,9 +88,13 @@ do
   tar cf - -C $stageDir/final $packageName | gzip -c > $stageDir/packages/$packageName.tgz
 done
 
-# Create docs using last build.
-echo Make docs
-make -C $baseDir docs
+# Create docs using last build (skipped in CI linux containers — generate-api-docs
+# builds docs separately; container images may ship an incompatible doxygen binary).
+if [ -z "${AEROSPIKE_SKIP_PACKAGE_DOCS:-}" ]
+then
+  echo Make docs
+  make -C $baseDir docs
+fi
 
 # Initialize package directory
 packageDir=$baseDir/target/packages

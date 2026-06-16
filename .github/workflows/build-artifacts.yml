@@ -157,7 +157,7 @@ jobs:
 
   # Convert vars.LINUX_DISTRO_MATRIX into the composable execute-build matrix schema.
   # Distro/arch list comes from LINUX_DISTRO_MATRIX; container images are the
-  # aerospike-asconfig JFrog build containers (database-docker-virtual/aerospike-client-c-<distro>).
+  # aerospike-asconfig JFrog build containers (database-docker-virtual/client-c-build-<distro>).
   compute-release-matrix:
     name: compute release matrix
     runs-on: ubuntu-24.04
@@ -183,7 +183,7 @@ jobs:
                 "build-env": (
                   "DISTRO=" + $d.distro +
                   ";ARCH=" + $arch +
-                  ";CONTAINER=" + $registry + "/aerospike-client-c-" + $d.distro + ":latest" +
+                  ";CONTAINER=" + $registry + "/client-c-build-" + $d.distro + ":" + $d.distro +
                   (if $d.distro == "ubuntu-22.04" and $arch == "amd64" then ";OWN_SOURCE=1" else ";OWN_SOURCE=0" end)
                 )
               }

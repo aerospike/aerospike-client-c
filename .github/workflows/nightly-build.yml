@@ -12,8 +12,8 @@ permissions:
   pull-requests: write
 
 on:
-  push:
-    branches: [CLIENT-4300-release-pipeline-new]
+  # push:
+  #   branches: [CLIENT-4300-release-pipeline-new]
   schedule:
     - cron: '0 5 * * *' # daily at 5:00 AM UTC
 

@@ -1,8 +1,8 @@
 # =============================================================================
 # RHEL 8 / UBI 8 Minimal — optimal-final build environment
 #
-# bison 3.4 + flex 2.6.1 on arm64 (install_deps_rhel_8); skipped on amd64
-# when using pre-built doxygen binary.
+# bison 3.4 + flex 2.6.1 + doxygen 1.12.0 from source on all arches
+# (install_deps_rhel_8). Pre-built doxygen binary needs glibc > 2.28.
 # =============================================================================
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal AS deps-builder
@@ -18,31 +18,22 @@ RUN microdnf install -y \
 WORKDIR /build
 
 RUN set -euo pipefail && \
-    ARCH=$(uname -m) && \
-    if [ "$ARCH" = "x86_64" ]; then \
-      wget -q "https://github.com/doxygen/doxygen/releases/download/Release_1_12_0/doxygen-1.12.0.linux.bin.tar.gz" \
-        -O doxygen.tar.gz \
-      && tar xzf doxygen.tar.gz \
-      && install -m 755 doxygen-1.12.0/bin/doxygen /usr/local/bin/doxygen \
-      && rm -rf doxygen-1.12.0 doxygen.tar.gz; \
-    else \
-      wget -q https://ftp.gnu.org/gnu/bison/bison-3.4.tar.gz \
-      && tar xzf bison-3.4.tar.gz \
-      && cd bison-3.4 && ./configure --prefix=/usr/local \
-      && make MAKEINFO=true && make install \
-      && cd .. && rm -rf bison-3.4* \
-      && wget -q https://github.com/westes/flex/releases/download/v2.6.1/flex-2.6.1.tar.gz \
-      && tar xzf flex-2.6.1.tar.gz \
-      && cd flex-2.6.1 && ./configure --prefix=/usr/local \
-      && make -j"$(nproc)" && make install \
-      && cd .. && rm -rf flex-2.6.1* \
-      && wget -q https://github.com/doxygen/doxygen/releases/download/Release_1_12_0/doxygen-1.12.0.src.tar.gz \
-      && tar xzf doxygen-1.12.0.src.tar.gz \
-      && cmake -S doxygen-1.12.0 -B doxygen-1.12.0/build -G "Unix Makefiles" \
-      && cmake --build doxygen-1.12.0/build -j"$(( $(nproc) > 4 ? 4 : $(nproc) ))" \
-      && cmake --install doxygen-1.12.0/build \
-      && rm -rf doxygen-1.12.0*; \
-    fi
+    wget -q https://ftp.gnu.org/gnu/bison/bison-3.4.tar.gz \
+    && tar xzf bison-3.4.tar.gz \
+    && cd bison-3.4 && ./configure --prefix=/usr/local \
+    && make MAKEINFO=true && make install \
+    && cd .. && rm -rf bison-3.4* \
+    && wget -q https://github.com/westes/flex/releases/download/v2.6.1/flex-2.6.1.tar.gz \
+    && tar xzf flex-2.6.1.tar.gz \
+    && cd flex-2.6.1 && ./configure --prefix=/usr/local \
+    && make -j"$(nproc)" && make install \
+    && cd .. && rm -rf flex-2.6.1* \
+    && wget -q https://github.com/doxygen/doxygen/releases/download/Release_1_12_0/doxygen-1.12.0.src.tar.gz \
+    && tar xzf doxygen-1.12.0.src.tar.gz \
+    && cmake -S doxygen-1.12.0 -B doxygen-1.12.0/build -G "Unix Makefiles" \
+    && cmake --build doxygen-1.12.0/build -j"$(( $(nproc) > 4 ? 4 : $(nproc) ))" \
+    && cmake --install doxygen-1.12.0/build \
+    && rm -rf doxygen-1.12.0*
 
 RUN set -euo pipefail && \
     wget -q http://dist.libuv.org/dist/v1.15.0/libuv-v1.15.0.tar.gz -O libuv.tar.gz & \

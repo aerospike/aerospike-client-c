@@ -1,0 +1,13 @@
+{
+  "_comment": "Distro matrix for build-docker-images.yml (docker/optimal-final).",
+  "distros": [
+    { "distro": "ubuntu-22.04" },
+    { "distro": "ubuntu-24.04" },
+    { "distro": "debian-12" },
+    { "distro": "debian-13" },
+    { "distro": "amazonlinux-2023" },
+    { "distro": "rhel-8" },
+    { "distro": "rhel-9" },
+    { "distro": "rhel-10" }
+  ]
+}

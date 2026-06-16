@@ -72,6 +72,8 @@ runs:
             git config --global --add safe.directory "${GITHUB_WORKSPACE}"
             make clean
 
+            export MAKEFLAGS="-j$(nproc)"
+
             TEST_TARGET="test"
             [ "${VALGRIND}" = "true" ] && TEST_TARGET="test-valgrind"
 

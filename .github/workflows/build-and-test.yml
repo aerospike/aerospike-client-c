@@ -244,6 +244,7 @@ jobs:
 
       - name: Build macOS arm64 (${{ matrix.event_lib }})
         run: |
+          export MAKEFLAGS="-j$(sysctl -n hw.ncpu)"
           if [ "${{ matrix.event_lib }}" = "sync" ]; then make
           else make EVENT_LIB=${{ matrix.event_lib }}; fi
 

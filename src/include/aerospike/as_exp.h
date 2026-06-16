@@ -1033,6 +1033,9 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create expression that performs a regex match on a string bin or value
  * expression.
+ * @deprecated Use as_exp_string_regex_compare() instead. This legacy expression
+ * uses POSIX regex and is not Unicode/DBCS-aware; the string-package equivalent
+ * uses ICU regex.
  *
  * @code
  * // Select string bin "a" that starts with "prefix" and ends with "suffix".
@@ -3775,17 +3778,17 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_substr_range operation.
  *
- * @param __start		The starting index of the substring.
- * @param __length		The length of the substring.
+ * @param __start		Starting codepoint index, inclusive.
+ * @param __end			Ending codepoint index, exclusive.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The substring of the string in the bin.
  * @ingroup expression
  */
 
-#define as_exp_string_substr_range(__start, __length, __bin) \
+#define as_exp_string_substr_range(__start, __end, __bin) \
 		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_STR, AS_STRING_OP_SUBSTR, 2), \
 		as_exp_int(__start), \
-		as_exp_int(__length), \
+		as_exp_int(__end), \
 		__bin
 
 /**
@@ -4061,7 +4064,7 @@ as_exp_destroy_base64(char* base64)
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_INSERT, 3), \
 		as_exp_int(__index), \
 		as_exp_str(__value), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4078,7 +4081,7 @@ as_exp_destroy_base64(char* base64)
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_OVERWRITE, 3), \
 		as_exp_int(__index), \
 		as_exp_str(__value), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4093,7 +4096,7 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_string_concat(__policy, __value, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_CONCAT, 2), \
 		_AS_EXP_QUOTED_LIST_1(as_exp_str(__value)), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4111,39 +4114,58 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_string_concat_list(__policy, __values, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_CONCAT, 2), \
 		__values, \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_append operation.
+ * Unlike legacy AS_OPERATOR_APPEND operations, this string-package expression
+ * uses Unicode codepoint semantics.
+ *
+ * @param __policy		The string policy.
+ * @param __value		The value to append.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value appended.
+ * @ingroup expression
+ */
+#define as_exp_string_append(__policy, __value, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_APPEND, 2), \
+		as_exp_str(__value), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_prepend operation.
+ * Unlike legacy AS_OPERATOR_PREPEND operations, this string-package expression
+ * uses Unicode codepoint semantics.
+ *
+ * @param __policy		The string policy.
+ * @param __value		The value to prepend.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value prepended.
+ * @ingroup expression
+ */
+#define as_exp_string_prepend(__policy, __value, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_PREPEND, 2), \
+		as_exp_str(__value), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
  * Create an expression that performs an as_operations_string_snip operation.
  *
  * @param __policy		The string policy.
- * @param __start		The index of the codepoint to remove from.
+ * @param __start		First codepoint to remove, inclusive.
+ * @param __end			One past the last codepoint to remove, exclusive.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value snipped.
  * @ingroup expression
  */
-#define as_exp_string_snip(__policy, __start, __bin) \
-		_AS_EXP_STRING_MOD_START(AS_STRING_OP_SNIP, 2), \
-		as_exp_int(__start), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
-		__bin
-
-/**
- * Create an expression that performs an as_operations_string_snip_range operation.
- *
- * @param __policy		The string policy.
- * @param __start		The index of the codepoint to remove from.
- * @param __end			The index of the codepoint to remove to.
- * @param __bin			A bin expression to apply this function to.
- * @return (string bin) The string in the bin with the value snipped.
- * @ingroup expression
- */
-#define as_exp_string_snip_range(__policy, __start, __end, __bin) \
+#define as_exp_string_snip(__policy, __start, __end, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_SNIP, 3), \
 		as_exp_int(__start), \
 		as_exp_int(__end), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4160,7 +4182,7 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_string_replace(__policy, __needle, __replacement, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REPLACE, 2), \
 		_AS_EXP_QUOTED_PAIR(as_exp_str(__needle), as_exp_str(__replacement)), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4176,7 +4198,7 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_string_replace_all(__policy, __needle, __replacement, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REPLACE_ALL, 2), \
 		_AS_EXP_QUOTED_PAIR(as_exp_str(__needle), as_exp_str(__replacement)), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4189,7 +4211,7 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_string_upper(__policy, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_UPPER, 1), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4202,7 +4224,7 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_string_lower(__policy, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_LOWER, 1), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4215,7 +4237,7 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_string_case_fold(__policy, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_CASE_FOLD, 1), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4228,7 +4250,7 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_string_normalize_nfc(__policy, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_NORMALIZE_NFC, 1), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4241,7 +4263,7 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_string_trim_start(__policy, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_TRIM_START, 1), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4254,7 +4276,7 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_string_trim_end(__policy, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_TRIM_END, 1), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4267,7 +4289,7 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_string_trim(__policy, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_TRIM, 1), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4284,7 +4306,7 @@ as_exp_destroy_base64(char* base64)
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_PAD_START, 3), \
 		as_exp_int(__target_length), \
 		as_exp_str(__pad_string), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4301,7 +4323,7 @@ as_exp_destroy_base64(char* base64)
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_PAD_END, 3), \
 		as_exp_int(__target_length), \
 		as_exp_str(__pad_string), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
@@ -4316,12 +4338,13 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_string_repeat(__policy, __count, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REPEAT, 2), \
 		as_exp_int(__count), \
-		as_exp_uint(__policy ? ((as_string_policy*)(__policy))->flags : 0), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**
  * Create an expression that performs an as_operations_string_regex_replace operation.
  *
+ * @param __policy		The string policy. Not packed in the wire payload.
  * @param __pattern		The regex pattern to match against.
  * @param __replacement	The string to replace with.
  * @param __flags		The regex flags to use.
@@ -4329,10 +4352,10 @@ as_exp_destroy_base64(char* base64)
  * @return (string bin) The string in the bin with the value replaced.
  * @ingroup expression
  */
-#define as_exp_string_regex_replace(__pattern, __replacement, __flags, __bin) \
+#define as_exp_string_regex_replace(__policy, __pattern, __replacement, __flags, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REGEX_REPLACE, 2), \
 		_AS_EXP_QUOTED_PAIR(as_exp_str(__pattern), as_exp_str(__replacement)), \
-		as_exp_int(__flags), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**

@@ -125,10 +125,12 @@ TEST(string_api_validation, "string operation api validation")
 	assert_false(as_operations_string_insert(&ops, BIN_NAME, NULL, NULL, 0, NULL));
 	assert_false(as_operations_string_concat(&ops, BIN_NAME, NULL, NULL, NULL));
 	assert_false(as_operations_string_concat_list(&ops, BIN_NAME, NULL, NULL, NULL));
+	assert_false(as_operations_string_append(&ops, BIN_NAME, NULL, NULL, NULL));
+	assert_false(as_operations_string_prepend(&ops, BIN_NAME, NULL, NULL, NULL));
 	assert_false(as_operations_string_replace(&ops, BIN_NAME, NULL, NULL, NULL, "x"));
 	assert_false(as_operations_string_replace_all(&ops, BIN_NAME, NULL, NULL, "x", NULL));
 	assert_false(as_operations_string_pad_start(&ops, BIN_NAME, NULL, NULL, 3, NULL));
-	assert_false(as_operations_string_regex_replace(&ops, BIN_NAME, NULL, NULL, "x", AS_STRING_REGEX_FLAGS_NONE));
+	assert_false(as_operations_string_regex_replace(&ops, BIN_NAME, NULL, NULL, NULL, "x", AS_STRING_REGEX_FLAGS_NONE));
 	assert_int_eq(ops.binops.size, 0);
 
 	as_operations_destroy(&ops);
@@ -183,18 +185,17 @@ TEST(string_read_more_ops, "additional string read operations")
 	as_key_init_int64(&key, NAMESPACE, SET, 105);
 
 	as_operations ops;
-	as_operations_inita(&ops, 11);
+	as_operations_inita(&ops, 12);
 	as_operations_string_starts_with(&ops, BIN_NAME, NULL, "123");
 	as_operations_string_ends_with(&ops, BIN_NAME, NULL, "45");
 	as_operations_string_find(&ops, BIN_NAME, NULL, "x");
 	as_operations_string_substr(&ops, BIN_NAME, NULL, 2);
+	as_operations_string_substr_range(&ops, BIN_NAME, NULL, 0, -1);
 	as_operations_string_to_integer(&ops, BIN_NAME, NULL);
 	as_operations_string_to_double(&ops, BIN_NAME, NULL);
 	as_operations_string_is_numeric_type(&ops, BIN_NAME, NULL, AS_STRING_NUMERIC_ANY);
 	as_operations_string_is_numeric_type(&ops, BIN_NAME, NULL, AS_STRING_NUMERIC_INT);
-	// TODO: re-enable once the server FLOAT-filter bug is fixed; "12345" should
-	// return false for AS_STRING_NUMERIC_FLOAT but the server currently returns true.
-	//as_operations_string_is_numeric_type(&ops, BIN_NAME, NULL, AS_STRING_NUMERIC_FLOAT);
+	as_operations_string_is_numeric_type(&ops, BIN_NAME, NULL, AS_STRING_NUMERIC_FLOAT);
 	as_operations_string_regex_compare_flags(&ops, BIN_NAME, NULL, "^123", AS_STRING_REGEX_FLAGS_NONE);
 	as_operations_string_split(&ops, BIN_NAME, NULL);
 
@@ -209,15 +210,15 @@ TEST(string_read_more_ops, "additional string read operations")
 	assert_true(as_boolean_get((as_boolean*)results[1].valuep));
 	assert_int_eq(as_integer_get((as_integer*)results[2].valuep), -1);
 	assert_string_eq(as_string_get((as_string*)results[3].valuep), "345");
-	assert_int_eq(as_integer_get((as_integer*)results[4].valuep), 12345);
-	assert_double_eq(as_double_get((as_double*)results[5].valuep), 12345.0);
-	assert_true(as_boolean_get((as_boolean*)results[6].valuep));  // is_numeric_type ANY
-	assert_true(as_boolean_get((as_boolean*)results[7].valuep));  // is_numeric_type INT
-	// NOTE: the AS_STRING_NUMERIC_FLOAT op is commented out above (server bug), so
-	// results[8] is the regex_compare_flags("^123") match here, not the FLOAT filter.
-	assert_true(as_boolean_get((as_boolean*)results[8].valuep));
+	assert_string_eq(as_string_get((as_string*)results[4].valuep), "1234");
+	assert_int_eq(as_integer_get((as_integer*)results[5].valuep), 12345);
+	assert_double_eq(as_double_get((as_double*)results[6].valuep), 12345.0);
+	assert_true(as_boolean_get((as_boolean*)results[7].valuep));  // is_numeric_type ANY
+	assert_true(as_boolean_get((as_boolean*)results[8].valuep));  // is_numeric_type INT
+	assert_false(as_boolean_get((as_boolean*)results[9].valuep)); // is_numeric_type FLOAT
+	assert_true(as_boolean_get((as_boolean*)results[10].valuep)); // regex_compare_flags
 
-	as_list* split = (as_list*)results[9].valuep;
+	as_list* split = (as_list*)results[11].valuep;
 	assert_int_eq(as_list_size(split), 5);
 	assert_string_eq(as_string_get((as_string*)as_list_get(split, 0)), "1");
 	assert_string_eq(as_string_get((as_string*)as_list_get(split, 4)), "5");
@@ -286,7 +287,7 @@ TEST(string_modify_ops, "string modify operations")
 	as_operations_string_concat_list(&ops, BIN_NAME, NULL, NULL, (as_list*)&concat);
 	as_operations_string_replace(&ops, BIN_NAME, NULL, NULL, "beautiful", "wide");
 	as_operations_string_replace_all(&ops, BIN_NAME, NULL, NULL, "!", ".");
-	as_operations_string_regex_replace(&ops, BIN_NAME, NULL, "[?]", ".", AS_STRING_REGEX_FLAGS_GLOBAL);
+	as_operations_string_regex_replace(&ops, BIN_NAME, NULL, NULL, "[?]", ".", AS_STRING_REGEX_FLAGS_GLOBAL);
 	as_operations_string_upper(&ops, BIN_NAME, NULL, NULL);
 	as_operations_add_read(&ops, BIN_NAME);
 
@@ -298,7 +299,8 @@ TEST(string_modify_ops, "string modify operations")
 	assert_int_eq(status, AEROSPIKE_OK);
 
 	as_bin* results = rec->bins.entries;
-	assert_string_eq(as_string_get((as_string*)results[0].valuep), "HELLO WIDE EARTH..");
+	assert_int_eq(rec->bins.size, 8);
+	assert_string_eq(as_string_get((as_string*)results[7].valuep), "HELLO WIDE EARTH..");
 	as_record_destroy(rec);
 }
 
@@ -381,7 +383,8 @@ TEST(string_modify_more_ops, "additional string modify operations")
 	assert_int_eq(status, AEROSPIKE_OK);
 
 	as_bin* results = rec->bins.entries;
-	assert_string_eq(as_string_get((as_string*)results[0].valuep), "**hello..**hello..");
+	assert_int_eq(rec->bins.size, 6);
+	assert_string_eq(as_string_get((as_string*)results[5].valuep), "**hello..**hello..");
 	as_record_destroy(rec);
 
 	assert_int_eq(put_string_key(112, " hello "), AEROSPIKE_OK);
@@ -397,7 +400,8 @@ TEST(string_modify_more_ops, "additional string modify operations")
 	assert_int_eq(status, AEROSPIKE_OK);
 
 	results = rec->bins.entries;
-	assert_string_eq(as_string_get((as_string*)results[0].valuep), "hello");
+	assert_int_eq(rec->bins.size, 2);
+	assert_string_eq(as_string_get((as_string*)results[1].valuep), "hello");
 	as_record_destroy(rec);
 }
 
@@ -421,7 +425,8 @@ TEST(string_modify_case_normalize_ops, "string case and normalize modify operati
 	assert_int_eq(status, AEROSPIKE_OK);
 
 	as_bin* results = rec->bins.entries;
-	assert_string_eq(as_string_get((as_string*)results[0].valuep), "hello world");
+	assert_int_eq(rec->bins.size, 3);
+	assert_string_eq(as_string_get((as_string*)results[2].valuep), "hello world");
 	as_record_destroy(rec);
 
 	assert_int_eq(put_string_key(109, "e\xCC\x81"), AEROSPIKE_OK);
@@ -437,7 +442,8 @@ TEST(string_modify_case_normalize_ops, "string case and normalize modify operati
 	assert_int_eq(status, AEROSPIKE_OK);
 
 	results = rec->bins.entries;
-	assert_string_eq(as_string_get((as_string*)results[0].valuep), "\xC3\xA9");
+	assert_int_eq(rec->bins.size, 2);
+	assert_string_eq(as_string_get((as_string*)results[1].valuep), "\xC3\xA9");
 	as_record_destroy(rec);
 }
 
@@ -450,8 +456,8 @@ TEST(string_modify_snip_concat_ops, "string snip and concat operations")
 
 	as_operations ops;
 	as_operations_inita(&ops, 4);
-	as_operations_string_snip_range(&ops, BIN_NAME, NULL, NULL, 5, 15);
-	as_operations_string_snip_range(&ops, BIN_NAME, NULL, NULL, 5, 11);
+	as_operations_string_snip(&ops, BIN_NAME, NULL, NULL, 5, 15);
+	as_operations_string_snip(&ops, BIN_NAME, NULL, NULL, 5, 11);
 	as_operations_string_concat(&ops, BIN_NAME, NULL, NULL, "!");
 	as_operations_add_read(&ops, BIN_NAME);
 
@@ -462,7 +468,33 @@ TEST(string_modify_snip_concat_ops, "string snip and concat operations")
 	assert_int_eq(status, AEROSPIKE_OK);
 
 	as_bin* results = rec->bins.entries;
-	assert_string_eq(as_string_get((as_string*)results[0].valuep), "hello!");
+	assert_int_eq(rec->bins.size, 4);
+	assert_string_eq(as_string_get((as_string*)results[3].valuep), "hello!");
+	as_record_destroy(rec);
+}
+
+TEST(string_modify_append_prepend_ops, "string append and prepend operations")
+{
+	assert_int_eq(put_string_key(114, "middle"), AEROSPIKE_OK);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 114);
+
+	as_operations ops;
+	as_operations_inita(&ops, 3);
+	as_operations_string_prepend(&ops, BIN_NAME, NULL, NULL, "start-");
+	as_operations_string_append(&ops, BIN_NAME, NULL, NULL, "-end");
+	as_operations_add_read(&ops, BIN_NAME);
+
+	as_record* rec = NULL;
+	as_error err;
+	as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_bin* results = rec->bins.entries;
+	assert_int_eq(rec->bins.size, 3);
+	assert_string_eq(as_string_get((as_string*)results[2].valuep), "start-middle-end");
 	as_record_destroy(rec);
 }
 
@@ -484,8 +516,16 @@ TEST(string_expression_ops, "string expression operations")
 
 	as_exp_build(regex_replace_exp,
 		as_exp_string_regex_replace(
-			"[0-9]+", "NUM", AS_STRING_REGEX_FLAGS_GLOBAL, as_exp_bin_str(BIN_NAME)));
+			NULL, "[0-9]+", "NUM", AS_STRING_REGEX_FLAGS_GLOBAL, as_exp_bin_str(BIN_NAME)));
 	assert_not_null(regex_replace_exp);
+
+	as_exp_build(append_exp,
+		as_exp_string_append(NULL, "!", as_exp_bin_str(BIN_NAME)));
+	assert_not_null(append_exp);
+
+	as_exp_build(prepend_exp,
+		as_exp_string_prepend(NULL, "Say ", as_exp_bin_str(BIN_NAME)));
+	assert_not_null(prepend_exp);
 
 	as_exp_build(to_string_exp,
 		as_exp_to_string(as_exp_int(42)));
@@ -495,11 +535,13 @@ TEST(string_expression_ops, "string expression operations")
 	as_key_init_int64(&key, NAMESPACE, SET, 111);
 
 	as_operations ops;
-	as_operations_inita(&ops, 5);
+	as_operations_inita(&ops, 7);
 	as_operations_exp_read(&ops, "len", len_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "upper", upper_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "replace", replace_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "regex_replace", regex_replace_exp, AS_EXP_READ_DEFAULT);
+	as_operations_exp_read(&ops, "append", append_exp, AS_EXP_READ_DEFAULT);
+	as_operations_exp_read(&ops, "prepend", prepend_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "to_string", to_string_exp, AS_EXP_READ_DEFAULT);
 
 	as_record* rec = NULL;
@@ -510,6 +552,8 @@ TEST(string_expression_ops, "string expression operations")
 	as_exp_destroy(upper_exp);
 	as_exp_destroy(replace_exp);
 	as_exp_destroy(regex_replace_exp);
+	as_exp_destroy(append_exp);
+	as_exp_destroy(prepend_exp);
 	as_exp_destroy(to_string_exp);
 	assert_int_eq(status, AEROSPIKE_OK);
 
@@ -517,6 +561,8 @@ TEST(string_expression_ops, "string expression operations")
 	assert_string_eq(as_record_get_str(rec, "upper"), "HELLO123WORLD");
 	assert_string_eq(as_record_get_str(rec, "replace"), "Hello-World");
 	assert_string_eq(as_record_get_str(rec, "regex_replace"), "HelloNUMWorld");
+	assert_string_eq(as_record_get_str(rec, "append"), "Hello123World!");
+	assert_string_eq(as_record_get_str(rec, "prepend"), "Say Hello123World");
 	assert_string_eq(as_record_get_str(rec, "to_string"), "42");
 
 	as_record_destroy(rec);
@@ -628,7 +674,8 @@ TEST(string_ctx_ops, "string context operations")
 	as_bin* results = rec->bins.entries;
 	assert_int_eq(as_integer_get((as_integer*)results[0].valuep), 4);
 
-	as_list* out = (as_list*)results[1].valuep;
+	assert_int_eq(rec->bins.size, 3);
+	as_list* out = (as_list*)results[2].valuep;
 	assert_string_eq(as_string_get((as_string*)as_list_get(out, 0)), "alpha");
 	assert_string_eq(as_string_get((as_string*)as_list_get(out, 1)), "beta-gamma");
 	as_record_destroy(rec);
@@ -647,6 +694,7 @@ SUITE(string, "aerospike string operation tests")
 	suite_add(string_modify_more_ops);
 	suite_add(string_modify_case_normalize_ops);
 	suite_add(string_modify_snip_concat_ops);
+	suite_add(string_modify_append_prepend_ops);
 	suite_add(string_expression_ops);
 	suite_add(string_conversion_unicode_ops);
 	suite_add(string_ctx_ops);

@@ -176,7 +176,9 @@ typedef enum as_string_op_e {
 	AS_STRING_OP_PAD_START = 63,
 	AS_STRING_OP_PAD_END = 64,
 	AS_STRING_OP_REPEAT = 65,
-	AS_STRING_OP_REGEX_REPLACE = 66
+	AS_STRING_OP_REGEX_REPLACE = 66,
+	AS_STRING_OP_APPEND = 67,
+	AS_STRING_OP_PREPEND = 68
 } as_string_op;
 
 //---------------------------------
@@ -228,18 +230,18 @@ AS_EXTERN bool
 as_operations_string_substr(as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t start);
 
 /**
- * Create string substr operation that returns length codepoints starting at
- * start. Negative start indexes count from the end of the string.
+ * Create string substr operation that returns the half-open codepoint range
+ * [start, end). Negative indexes count from the end of the string.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param start Starting codepoint index.
- * @param length Number of codepoints to return.
+ * @param start Starting codepoint index, inclusive.
+ * @param end Ending codepoint index, exclusive.
  */
 AS_EXTERN bool
 as_operations_string_substr_range(
-	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t start, uint64_t length
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t start, int64_t end
 	);
 
 /**
@@ -543,18 +545,35 @@ as_operations_string_concat_list(
 	);
 
 /**
- * Create string snip operation that removes codepoints from start through the
- * end of the string.
+ * Create string append operation that appends value to the end of the bin.
+ * Unlike legacy AS_OPERATOR_APPEND operations, this string-package operation
+ * uses Unicode codepoint semantics and supports string policy and ctx.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
- * @param start The index of the codepoint to remove from.
+ * @param value The value to append.
  */
 AS_EXTERN bool
-as_operations_string_snip(
-	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, int64_t start
+as_operations_string_append(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* value
+	);
+
+/**
+ * Create string prepend operation that prepends value to the start of the bin.
+ * Unlike legacy AS_OPERATOR_PREPEND operations, this string-package operation
+ * uses Unicode codepoint semantics and supports string policy and ctx.
+ *
+ * @param ops Operations array.
+ * @param name Name of string bin.
+ * @param ctx Optional path into a string nested inside a list or map.
+ * @param policy String policy.
+ * @param value The value to prepend.
+ */
+AS_EXTERN bool
+as_operations_string_prepend(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* value
 	);
 
 /**
@@ -565,11 +584,11 @@ as_operations_string_snip(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
- * @param start The index of the codepoint to remove from.
- * @param end The index of the codepoint to remove to.
+ * @param start First codepoint to remove, inclusive.
+ * @param end One past the last codepoint to remove, exclusive.
  */
 AS_EXTERN bool
-as_operations_string_snip_range(
+as_operations_string_snip(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
 	int64_t start, int64_t end
 	);
@@ -756,18 +775,20 @@ as_operations_string_repeat(
 /**
  * Create string regex_replace operation that replaces the first match of pattern
  * with replacement. Pass AS_STRING_REGEX_FLAGS_GLOBAL to replace every match.
- * This server operation accepts regex flags but not string policy flags.
+ * The policy argument is accepted for API symmetry, but this server operation
+ * accepts regex flags and does not pack string policy flags.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
+ * @param policy String policy. Not packed in the wire payload.
  * @param pattern The regex pattern to match against.
  * @param replacement The string to replace with.
  * @param flags The regex flags to use.
  */
 AS_EXTERN bool
 as_operations_string_regex_replace(
-	as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* pattern,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* pattern,
 	const char* replacement, as_string_regex_flags flags
 	);
 

@@ -56,7 +56,7 @@ env:
   BUILD_NUMBER:   ${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '27700135842-1' }}
   BUNDLE_NAME:    ${{ github.event_name == 'workflow_dispatch' && inputs.bundle_name || 'aerospike-client-c' }}
   TARGET_ENV:     ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'TEST' }}
-  IS_DRY_RUN:     ${{ github.event_name == 'push' && 'true' || (inputs.dry-run && 'true' || 'false') }}
+  IS_DRY_RUN:     'false'
 
 jobs:
   promote:

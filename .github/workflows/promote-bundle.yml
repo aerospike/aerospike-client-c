@@ -1,5 +1,12 @@
 name: Promote Bundle
-run-name: "Promote bundle ${{ inputs.bundle_name }} ${{ inputs.version }} build ${{ inputs.build_number }} to ${{ inputs.environment }}"
+run-name: >-
+  ${{ format('Promote {0} {1} build {2} to {3}{4}',
+    github.event_name == 'workflow_dispatch' && inputs.bundle_name || 'aerospike-client-c',
+    github.event_name == 'workflow_dispatch' && inputs.version || '7.4.1-test-6',
+    github.event_name == 'workflow_dispatch' && inputs.build_number || '27675730757-1',
+    github.event_name == 'workflow_dispatch' && inputs.environment || 'TEST',
+    (github.event_name == 'push' || inputs.dry-run) && ' (dry-run)' || ''
+  ) }}
 
 # Manual promotion wrapper for the aerospike-client-c release bundle.
 # Validates build-info, commit ancestry, and promotion order before calling the
@@ -10,6 +17,8 @@ permissions:
   contents: read
 
 on:
+  push:
+    branches: [stage-test]
   workflow_dispatch:
     inputs:
       version:
@@ -42,9 +51,22 @@ defaults:
   run:
     shell: bash
 
+env:
+  BUNDLE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '7.4.1-test-6' }}
+  BUILD_NUMBER:   ${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '27675730757-1' }}
+  BUNDLE_NAME:    ${{ github.event_name == 'workflow_dispatch' && inputs.bundle_name || 'aerospike-client-c' }}
+  TARGET_ENV:     ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'TEST' }}
+  IS_DRY_RUN:     ${{ github.event_name == 'push' && 'true' || (inputs.dry-run && 'true' || 'false') }}
+
 jobs:
   promote:
-    name: promote ${{ inputs.bundle_name }} ${{ inputs.version }} build ${{ inputs.build_number }} → ${{ inputs.environment }}
+    name: >-
+      ${{ format('promote {0} {1} build {2} → {3}',
+        github.event_name == 'workflow_dispatch' && inputs.bundle_name || 'aerospike-client-c',
+        github.event_name == 'workflow_dispatch' && inputs.version || '7.4.1-test-6',
+        github.event_name == 'workflow_dispatch' && inputs.build_number || '27675730757-1',
+        github.event_name == 'workflow_dispatch' && inputs.environment || 'TEST'
+      ) }}
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -71,10 +93,10 @@ jobs:
       - name: Fetch parent buildinfo
         id: parent-buildinfo
         env:
-          BUNDLE_NAME:  ${{ inputs.bundle_name }}
-          BUILD_NUMBER: ${{ inputs.build_number }}
+          BUNDLE_NAME:  ${{ env.BUNDLE_NAME }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
           JFROG_PROJECT: ${{ vars.JFROG_PROJECT }}
-          DRY_RUN:      ${{ inputs.dry-run }}
+          DRY_RUN:      ${{ env.IS_DRY_RUN }}
         run: |
           set -euo pipefail
 
@@ -99,9 +121,11 @@ jobs:
       - name: Extract buildinfo module id
         id: extract
         env:
-          BUNDLE_NAME:    ${{ inputs.bundle_name }}
-          BUNDLE_VERSION: ${{ inputs.version }}
-          DRY_RUN:        ${{ inputs.dry-run }}
+          BUNDLE_NAME:    ${{ env.BUNDLE_NAME }}
+          BUNDLE_VERSION: ${{ env.BUNDLE_VERSION }}
+          BUILD_NUMBER:   ${{ env.BUILD_NUMBER }}
+          JFROG_PROJECT:  ${{ vars.JFROG_PROJECT }}
+          DRY_RUN:        ${{ env.IS_DRY_RUN }}
         run: |
           set -euo pipefail
 
@@ -110,7 +134,7 @@ jobs:
             jq -r '.buildInfo.modules[].id' /tmp/parent.json | sed 's/^/  - /'
           fi
 
-          jfrog_version=$(jq -r '.buildInfo.version // empty' /tmp/parent.json)
+          jfrog_build_version=$(jq -r '.buildInfo.version // empty' /tmp/parent.json)
           buildinfo_id=$(
             jq -r '[.buildInfo.modules[].id | select(contains("buildinfo"))] | first // empty' /tmp/parent.json \
               | cut -d/ -f2-
@@ -121,9 +145,35 @@ jobs:
             exit 1
           fi
 
-          if [[ "$jfrog_version" != "$BUNDLE_VERSION" ]]; then
-            echo "::error::Input version '${BUNDLE_VERSION}' does not match JFrog buildInfo.version '${jfrog_version}'."
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] buildInfo.version='${jfrog_build_version}' (JFrog aggregate metadata; release bundles use the version input instead)"
+          fi
+
+          # Release bundle version (from get-version at build time) is the promotion key —
+          # not buildInfo.version on the parent deploy build.
+          bundle_api="/lifecycle/api/v2/release_bundle/records/${BUNDLE_NAME}/${BUNDLE_VERSION}?project=${JFROG_PROJECT}"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] command: jf rt curl -X GET '${bundle_api}' -H 'Accept: application/json'"
+          fi
+          bundle_status=$(jf rt curl -X GET "$bundle_api" -H "Accept: application/json" \
+            -o /tmp/bundle.json -s -w "%{http_code}")
+          if [[ "$DRY_RUN" == "true" ]]; then
+            echo "[dry-run] release bundle HTTP ${bundle_status}"
+          fi
+          if [[ "$bundle_status" == "404" ]]; then
+            echo "::error::Release bundle ${BUNDLE_NAME}@${BUNDLE_VERSION} not found in JFrog (HTTP 404)."
+            echo "::error::Confirm create-release-bundle ran for build ${BUILD_NUMBER} and the version matches get-version output."
             exit 1
+          fi
+          if [[ "$bundle_status" != "200" ]]; then
+            echo "::error::Could not query release bundle ${BUNDLE_NAME}@${BUNDLE_VERSION} (HTTP ${bundle_status})."
+            jq . /tmp/bundle.json >&2 || true
+            exit 1
+          fi
+
+          echo "Release bundle ${BUNDLE_NAME}@${BUNDLE_VERSION} exists."
+          if [[ "$DRY_RUN" == "true" ]]; then
+            jq . /tmp/bundle.json
           fi
 
           echo "buildinfo_id=${buildinfo_id}" >> "$GITHUB_OUTPUT"
@@ -132,11 +182,11 @@ jobs:
       - name: Snapshot guard
         id: snapshot-guard
         env:
-          BUNDLE_VERSION: ${{ inputs.version }}
-          BUILD_NUMBER:  ${{ inputs.build_number }}
+          BUNDLE_VERSION: ${{ env.BUNDLE_VERSION }}
+          BUILD_NUMBER:  ${{ env.BUILD_NUMBER }}
           BUILDINFO_ID:  ${{ steps.extract.outputs.buildinfo_id }}
-          TARGET_ENV:    ${{ inputs.environment }}
-          DRY_RUN:       ${{ inputs.dry-run }}
+          TARGET_ENV:    ${{ env.TARGET_ENV }}
+          DRY_RUN:       ${{ env.IS_DRY_RUN }}
         run: |
           set -euo pipefail
 
@@ -159,10 +209,10 @@ jobs:
       - name: Fetch buildinfo build for commit SHA
         id: commit
         env:
-          BUNDLE_NAME:   ${{ inputs.bundle_name }}
+          BUNDLE_NAME:   ${{ env.BUNDLE_NAME }}
           BUILDINFO_ID:  ${{ steps.extract.outputs.buildinfo_id }}
           JFROG_PROJECT: ${{ vars.JFROG_PROJECT }}
-          DRY_RUN:       ${{ inputs.dry-run }}
+          DRY_RUN:       ${{ env.IS_DRY_RUN }}
         run: |
           set -euo pipefail
 
@@ -198,12 +248,12 @@ jobs:
       - name: Fetch promotion history
         id: fetch-history
         env:
-          BUNDLE_NAME:    ${{ inputs.bundle_name }}
-          BUNDLE_VERSION: ${{ inputs.version }}
-          BUILD_NUMBER:   ${{ inputs.build_number }}
-          TARGET_ENV:     ${{ inputs.environment }}
+          BUNDLE_NAME:    ${{ env.BUNDLE_NAME }}
+          BUNDLE_VERSION: ${{ env.BUNDLE_VERSION }}
+          BUILD_NUMBER:   ${{ env.BUILD_NUMBER }}
+          TARGET_ENV:     ${{ env.TARGET_ENV }}
           JFROG_PROJECT:  ${{ vars.JFROG_PROJECT }}
-          DRY_RUN:        ${{ inputs.dry-run }}
+          DRY_RUN:        ${{ env.IS_DRY_RUN }}
         run: |
           set -euo pipefail
 
@@ -260,10 +310,10 @@ jobs:
       - name: Promotion guard
         id: promotion-guard
         env:
-          BUNDLE_NAME:   ${{ inputs.bundle_name }}
-          BUNDLE_VERSION: ${{ inputs.version }}
-          BUILD_NUMBER:  ${{ inputs.build_number }}
-          TARGET_ENV:    ${{ inputs.environment }}
+          BUNDLE_NAME:   ${{ env.BUNDLE_NAME }}
+          BUNDLE_VERSION: ${{ env.BUNDLE_VERSION }}
+          BUILD_NUMBER:  ${{ env.BUILD_NUMBER }}
+          TARGET_ENV:    ${{ env.TARGET_ENV }}
           CURRENT_IDX:   ${{ steps.fetch-history.outputs.current_idx }}
           CURRENT_STAGE: ${{ steps.fetch-history.outputs.current_stage }}
         run: |
@@ -317,9 +367,9 @@ jobs:
         id: topology
         env:
           COMMIT:     ${{ steps.commit.outputs.commit }}
-          DRY_RUN:    ${{ inputs.dry-run }}
+          DRY_RUN:    ${{ env.IS_DRY_RUN }}
           BASE_BRANCH: main
-          STAGE_BRANCH: stage
+          STAGE_BRANCH: stage-test #TODO undo
         run: |
           set -euo pipefail
 
@@ -357,12 +407,12 @@ jobs:
 
       - name: Promote release bundle
         id: promote
-        if: steps.topology.outcome == 'success' && !inputs.dry-run
+        if: steps.topology.outcome == 'success' && env.IS_DRY_RUN != 'true'
         uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@v3.6.0
         with:
-          bundle-name:  ${{ inputs.bundle_name }}
-          version:      ${{ inputs.version }}
-          environment:  ${{ inputs.environment }}
+          bundle-name:  ${{ env.BUNDLE_NAME }}
+          version:      ${{ env.BUNDLE_VERSION }}
+          environment:  ${{ env.TARGET_ENV }}
           jf-project:    ${{ vars.JFROG_PROJECT }}
           # Exclude legacy JFrog Pipelines repos (DEV-tagged, no CI write access) from distribution.
           exclude-repos: pipelines-templates-local
@@ -370,12 +420,12 @@ jobs:
       - name: Summary
         if: always()
         env:
-          VERSION:        ${{ inputs.version }}
-          BUNDLE_NAME:    ${{ inputs.bundle_name }}
-          BUILD_NUMBER:   ${{ inputs.build_number }}
-          TARGET_ENV:     ${{ inputs.environment }}
+          VERSION:        ${{ env.BUNDLE_VERSION }}
+          BUNDLE_NAME:    ${{ env.BUNDLE_NAME }}
+          BUILD_NUMBER:   ${{ env.BUILD_NUMBER }}
+          TARGET_ENV:     ${{ env.TARGET_ENV }}
           COMMIT:         ${{ steps.commit.outputs.commit }}
-          DRY_RUN:        ${{ inputs.dry-run }}
+          DRY_RUN:        ${{ env.IS_DRY_RUN }}
           PROMOTE_RESULT: ${{ steps.promote.outcome }}
           TOPOLOGY_RESULT: ${{ steps.topology.outcome }}
         run: |

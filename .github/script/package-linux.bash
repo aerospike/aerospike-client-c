@@ -36,8 +36,7 @@ docker run --rm \
   bash -c '
     set -euo pipefail
     git config --global --add safe.directory /workspace
-    export MAKEFLAGS="-j$(nproc)"
-    make package
+    make -j"$(nproc)" package
     if [ "${OWN_SOURCE:-0}" != "1" ]; then
       rm -f target/packages/aerospike-client-c-src-*.zip
     fi

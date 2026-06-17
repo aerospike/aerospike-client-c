@@ -148,13 +148,13 @@ as_operations_string_substr(as_operations* ops, const char* name, as_cdt_ctx* ct
 
 bool
 as_operations_string_substr_range(
-	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t start, uint64_t length
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t start, int64_t end
 	)
 {
 	as_packer pk = as_cdt_begin();
 	as_string_pack_header(&pk, ctx, AS_STRING_OP_SUBSTR, 2);
 	as_pack_int64(&pk, start);
-	as_pack_uint64(&pk, length);
+	as_pack_int64(&pk, end);
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_READ);
 }
@@ -430,18 +430,41 @@ as_operations_string_concat_list(
 }
 
 bool
-as_operations_string_snip(as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, int64_t start)
+as_operations_string_append(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* value
+	)
 {
+	if (! as_string_arg_not_null(value)) {
+		return false;
+	}
+
 	as_packer pk = as_cdt_begin();
-	as_string_pack_header(&pk, ctx, AS_STRING_OP_SNIP, 2);
-	as_pack_int64(&pk, start);
+	as_string_pack_header(&pk, ctx, AS_STRING_OP_APPEND, 2);
+	as_string_pack_value(&pk, value);
 	as_pack_uint64(&pk, as_string_policy_flags(policy));
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_MODIFY);
 }
 
 bool
-as_operations_string_snip_range(
+as_operations_string_prepend(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* value
+	)
+{
+	if (! as_string_arg_not_null(value)) {
+		return false;
+	}
+
+	as_packer pk = as_cdt_begin();
+	as_string_pack_header(&pk, ctx, AS_STRING_OP_PREPEND, 2);
+	as_string_pack_value(&pk, value);
+	as_pack_uint64(&pk, as_string_policy_flags(policy));
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_MODIFY);
+}
+
+bool
+as_operations_string_snip(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
 	int64_t start, int64_t end
 	)
@@ -584,10 +607,12 @@ as_operations_string_repeat(as_operations* ops, const char* name, as_cdt_ctx* ct
 
 bool
 as_operations_string_regex_replace(
-	as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* pattern,
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* pattern,
 	const char* replacement, as_string_regex_flags flags
 	)
 {
+	(void)policy;
+
 	if (! as_string_args_not_null2(pattern, replacement)) {
 		return false;
 	}

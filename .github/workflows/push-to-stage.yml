@@ -8,9 +8,9 @@ permissions:
   pull-requests: write
 
 on:
-  push:
-    branches:
-      - stage-test
+  # push:
+  #   branches:
+  #     - stage-test
      # - CLIENT-4300-release-pipeline-new
 #       # Add long-running release branches here if needed.
 #       - stage

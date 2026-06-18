@@ -32,7 +32,8 @@ on:
         default: ''
 
 env:
-  IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || true }}
+  #IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || true }}
+  IS_DRY_RUN: false
   BASE_REF_BRANCH: prestine-branch
   HEAD_REF_BRANCH: stage-test
   BUILD_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.build-run-id || '27700135842' }}
@@ -244,31 +245,31 @@ jobs:
           ref: ${{ env.BASE_REF_BRANCH }}
           fetch-depth: 0
 
-      - name: Create and push release tag
-        id: tag
-        env:
-          VERSION:    ${{ needs.resolve-version.outputs.version }}
-          TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
-          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      # - name: Create and push release tag
+      #   id: tag
+      #   env:
+      #     VERSION:    ${{ needs.resolve-version.outputs.version }}
+      #     TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
+      #     GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     set -euo pipefail
+      #     git config user.name  "github-actions[bot]"
+      #     git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
-            echo "::error::Tag ${VERSION} already exists. Did you forget to bump the version before merging?"
-            exit 1
-          fi
+      #     if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+      #       echo "::error::Tag ${VERSION} already exists. Did you forget to bump the version before merging?"
+      #       exit 1
+      #     fi
 
-          if [ "$IS_DRY_RUN" = "true" ]; then
-            echo "[dry-run] Would create annotated tag $VERSION at $TARGET_SHA"
-            echo "[dry-run] Would run: git push origin $VERSION"
-            exit 0
-          fi
+      #     if [ "$IS_DRY_RUN" = "true" ]; then
+      #       echo "[dry-run] Would create annotated tag $VERSION at $TARGET_SHA"
+      #       echo "[dry-run] Would run: git push origin $VERSION"
+      #       exit 0
+      #     fi
 
-          git tag -a "$VERSION" -m "Release $VERSION" "$TARGET_SHA"
-          git push origin "$VERSION"
-          echo "Tagged $TARGET_SHA as $VERSION"
+      #     git tag -a "$VERSION" -m "Release $VERSION" "$TARGET_SHA"
+      #     git push origin "$VERSION"
+      #     echo "Tagged $TARGET_SHA as $VERSION"
 
   draft-github-release:
     name: draft github release

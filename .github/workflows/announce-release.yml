@@ -95,6 +95,7 @@ jobs:
       archive:              ${{ steps.publish.outputs.archive }}
       html-count:           ${{ steps.publish.outputs.html-count }}
       api-doc-version:      ${{ steps.locate.outputs.api-doc-version }}
+      source-run-id:        ${{ steps.locate.outputs.run-id }}
       source-run-sha:       ${{ steps.locate.outputs.source-run-sha }}
       source-run-url:       ${{ steps.locate.outputs.run-url }}
       source-artifact-url:  ${{ steps.locate.outputs.artifact-url }}
@@ -140,22 +141,6 @@ jobs:
               echo "::warning::Tag commit (${TARGET_SHA}) and build run commit (${run_sha}) differ"
             fi
             echo "Review artifact: $artifact_link"
-
-            {
-              echo "## API docs (${HEAD_REF_BRANCH} build)"
-              echo ""
-              echo "| Field | Value |"
-              echo "| :--- | :--- |"
-              echo "| Release version | \`${VERSION}\` |"
-              echo "| API docs version | \`${api_doc_version}\` |"
-              echo "| Tag commit (merge-base) | \`${TARGET_SHA}\` |"
-              echo "| Build run commit | \`${run_sha}\` |"
-              if [ "$run_sha" != "$TARGET_SHA" ]; then
-                echo "| Commit mismatch | tag commit and build run commit **differ** |"
-              fi
-              echo "| Artifact | [\`${name}\`](${artifact_link}) |"
-              echo "| Workflow run | [${run_id}](${run_link}) |"
-            } >> "$GITHUB_STEP_SUMMARY"
           }
 
           pick_api_docs_from_run() {
@@ -278,7 +263,8 @@ jobs:
     needs: [resolve-version, push-tag]
     runs-on: ubuntu-24.04
     outputs:
-      prev-tag: ${{ steps.notes.outputs.prev-tag }}
+      prev-tag:     ${{ steps.notes.outputs.prev-tag }}
+      release-url:  ${{ steps.release.outputs.html_url }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
@@ -309,6 +295,7 @@ jobs:
           repository-path:  release-target
 
       - name: Create GitHub draft release
+        id: release
         if: env.IS_DRY_RUN != 'true'
         uses: step-security/action-gh-release@5f6a6ab53a5a2c000ff3a16fad038291e5b97ce7 # v2.4.2
         with:
@@ -331,51 +318,59 @@ jobs:
     steps:
       - name: Write release summary
         env:
-          VERSION:            ${{ needs.resolve-version.outputs.version }}
-          TARGET_SHA:         ${{ needs.resolve-version.outputs.target-sha }}
-          DOC_ARCHIVE:         ${{ needs.api-doc.outputs.archive }}
-          HTML_COUNT:            ${{ needs.api-doc.outputs.html-count }}
-          SOURCE_RUN_URL:        ${{ needs.api-doc.outputs.source-run-url }}
-          SOURCE_ARTIFACT_URL:   ${{ needs.api-doc.outputs.source-artifact-url }}
-          API_DOC_VERSION:       ${{ needs.api-doc.outputs.api-doc-version }}
-          SOURCE_RUN_SHA:        ${{ needs.api-doc.outputs.source-run-sha }}
-          SOURCE_ARTIFACT:       ${{ needs.api-doc.outputs.source-artifact-name }}
-          PREV_TAG:            ${{ needs.draft-github-release.outputs.prev-tag }}
+          VERSION:             ${{ needs.resolve-version.outputs.version }}
+          TARGET_SHA:          ${{ needs.resolve-version.outputs.target-sha }}
+          SOURCE_RUN_URL:      ${{ needs.api-doc.outputs.source-run-url }}
+          SOURCE_ARTIFACT_URL: ${{ needs.api-doc.outputs.source-artifact-url }}
+          API_DOC_VERSION:     ${{ needs.api-doc.outputs.api-doc-version }}
+          SOURCE_RUN_SHA:      ${{ needs.api-doc.outputs.source-run-sha }}
+          SOURCE_ARTIFACT:     ${{ needs.api-doc.outputs.source-artifact-name }}
+          SOURCE_RUN_ID:       ${{ needs.api-doc.outputs.source-run-id }}
+          RELEASE_URL:         ${{ needs.draft-github-release.outputs.release-url }}
           R_RESOLVE:           ${{ needs.resolve-version.result }}
-          R_API_DOCS:            ${{ needs.api-doc.result }}
-          R_TAG:                 ${{ needs.push-tag.result }}
-          R_DRAFT:               ${{ needs.draft-github-release.result }}
+          R_API_DOCS:          ${{ needs.api-doc.result }}
+          R_TAG:               ${{ needs.push-tag.result }}
+          R_DRAFT:             ${{ needs.draft-github-release.result }}
         run: |
-          status() {
-            printf '`%s`' "$1"
-          }
-
           {
             echo "## Announce Release"
             echo ""
             echo "| Item | Value |"
             echo "| :--- | :--- |"
             echo "| Version | \`$VERSION\` |"
-            echo "| API docs version | \`$API_DOC_VERSION\` |"
             echo "| Dry run | \`$IS_DRY_RUN\` |"
             echo "| Base branch | \`${BASE_REF_BRANCH}\` |"
             echo "| Head branch | \`${HEAD_REF_BRANCH}\` |"
             echo "| Tag commit (merge-base) | \`$TARGET_SHA\` |"
+            if [ -n "$RELEASE_URL" ]; then
+              echo "| Draft release | [Aerospike C Client ${VERSION}](${RELEASE_URL}) |"
+            elif [ "$IS_DRY_RUN" = "true" ]; then
+              echo "| Draft release | dry-run — not created |"
+            fi
+            echo ""
+            echo "## API docs"
+            echo ""
+            echo "| Field | Value |"
+            echo "| :--- | :--- |"
+            echo "| Release version | \`${VERSION}\` |"
+            echo "| API docs version | \`${API_DOC_VERSION}\` |"
+            echo "| Tag commit (merge-base) | \`${TARGET_SHA}\` |"
             if [ -n "$SOURCE_RUN_SHA" ]; then
-              echo "| Build run commit | \`$SOURCE_RUN_SHA\` |"
+              echo "| Build run commit | \`${SOURCE_RUN_SHA}\` |"
               if [ "$SOURCE_RUN_SHA" != "$TARGET_SHA" ]; then
                 echo "| Commit mismatch | tag commit and build run commit **differ** |"
               fi
             fi
-            echo "| Changelog | \`${PREV_TAG}..${VERSION}\` |"
-            if [ "$IS_DRY_RUN" = "true" ]; then
-              echo "| API docs | dry-run — review [\`${SOURCE_ARTIFACT}\`](${SOURCE_ARTIFACT_URL}) (upload skipped) |"
-            else
-              echo "| API docs | \`${DOC_ARCHIVE}\` (${HTML_COUNT} entries) |"
-              echo "| Source artifact | [\`${SOURCE_ARTIFACT}\`](${SOURCE_ARTIFACT_URL}) |"
-              echo "| Source workflow run | [link](${SOURCE_RUN_URL}) |"
+            if [ -n "$SOURCE_ARTIFACT" ]; then
+              echo "| Artifact | [\`${SOURCE_ARTIFACT}\`](${SOURCE_ARTIFACT_URL}) |"
             fi
-            echo "| Jobs | resolve $(status "$R_RESOLVE"), api-docs $(status "$R_API_DOCS"), tag $(status "$R_TAG"), draft $(status "$R_DRAFT") |"
+            if [ -n "$SOURCE_RUN_URL" ]; then
+              if [ -n "$SOURCE_RUN_ID" ]; then
+                echo "| Workflow run | [${SOURCE_RUN_ID}](${SOURCE_RUN_URL}) |"
+              else
+                echo "| Workflow run | [link](${SOURCE_RUN_URL}) |"
+              fi
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
           for result in "$R_RESOLVE" "$R_API_DOCS" "$R_TAG" "$R_DRAFT"; do

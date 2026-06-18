@@ -63,7 +63,7 @@ jobs:
         id: target
         run: |
           set -euo pipefail
-          git fetch --no-tags "origin/${HEAD_REF_BRANCH}:refs/remotes/origin/${HEAD_REF_BRANCH}"
+          git fetch --no-tags origin "${HEAD_REF_BRANCH}:refs/remotes/origin/${HEAD_REF_BRANCH}"
           target=$(git merge-base HEAD "origin/${HEAD_REF_BRANCH}")
           echo "Release target SHA: $target"
           echo "sha=$target" >> "$GITHUB_OUTPUT"

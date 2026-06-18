@@ -1,0 +1,371 @@
+name: Example Artifacts CI/CD
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - stage
+
+# workflow_call:
+#   inputs:
+#     version:
+#       description: Version override (leave empty for auto-detection)
+#       required: false
+#       default: ""
+#       type: string
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+  attestations: write
+
+concurrency:
+  group: jfrog-test-deploy
+  cancel-in-progress: false
+
+
+jobs:
+  extract-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Full history + tags so `git describe --tags` can resolve the
+          # nearest release tag instead of falling through to 0.0.0-dev+<sha>.
+          fetch-depth: 0
+      - name: Extract version
+        id: extract
+        uses: aerospike/shared-workflows/.github/actions/extract-version-from-tag@07c958ca4c5cea494dc8790949c08e3fb28c55e1 # v3.3.0
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      git_tag: ${{ steps.extract.outputs.git_tag }}
+
+  artifacts-cicd:
+    uses: aerospike/shared-workflows/.github/workflows/reusable_artifacts-cicd.yaml@v3.4.1
+    needs: extract-version
+    with:
+      gh-workflows-ref: v3.4.1
+      jf-project: database
+      jf-build-name: aerospike-client-c
+      version: ${{ needs.extract-version.outputs.version }}
+      gh-artifact-directory: target/packages
+      matrix-json: >-
+        {"include":[
+          {
+            "runs-on":"ubuntu-22.04",
+            "distro":"el10",
+            "base-image":"registry.access.redhat.com/ubi10/ubi",
+            "arch":"x86_64",
+            "build-script": "./.github/bash-scripts/build-script-el-2.sh",
+            "build-env":"EMULATED=false",
+          },
+        ]}
+      oidc-provider-name: gh-aerospike
+      oidc-audience: aerospike
+      dry-run: false
+      sign-mac: true
+      mac-signing-identity: "Developer ID Application: Aerospike, Inc. (22224RFU67)"
+      mac-installer-identity: "Developer ID Installer: Aerospike, Inc. (22224RFU67)"
+      mac-artifact-glob: "*.pkg"
+      mac-notarize: true
+    secrets:
+      gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+      gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+      gpg-key-pass: ${{ secrets.GPG_PASS }}
+      es-username: ${{ secrets.ES_USERNAME }}
+      es-password: ${{ secrets.ES_PASSWORD }}
+      credential_id: ${{ secrets.CREDENTIAL_ID }}
+      es-totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+      apple-application-cert: ${{ secrets.APPLE_APPLICATION_CERT }}
+      apple-id: ${{ secrets.APPLE_ID }}
+      apple-installer-cert: ${{ secrets.APPLE_INSTALLER_CERT }}
+      apple-cert-password: ${{ secrets.APPLE_CERT_PASSWORD }}
+      apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+      apple-team-id: ${{ secrets.APPLE_TEAM_ID }}
+
+
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"amzn2023",
+#            "base-image":"public.ecr.aws/amazonlinux/amazonlinux:2023",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash-scripts/build-script-amzn.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"amzn2023",
+#            "base-image":"public.ecr.aws/amazonlinux/amazonlinux:2023",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash-scripts/build-script-amzn.sh",
+#          },
+#
+#
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"el9",
+#            "base-image":"docker.io/library/rockylinux:9",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-el.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"el8",
+#            "base-image":"docker.io/library/rockylinux:8",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-el.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"el10",
+#            "base-image":"docker.io/library/rockylinux:10",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-el.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"el9",
+#            "base-image":"docker.io/library/rockylinux:9",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-el.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"el8",
+#            "base-image":"docker.io/library/rockylinux:8",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-el.sh",
+#          },
+
+
+#          {
+#            "runs-on":"macos-latest",
+#            "distro":"darwin",
+#            "arch":"arm64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-mac.sh",
+#          },
+#
+#
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian13",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian12",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian11",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#
+#
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian13",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian12",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"debian11",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-debian.sh",
+#          },
+#
+#
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"focal",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"jammy",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"noble",
+#            "arch":"x86_64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#
+#
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"focal",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"jammy",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#          {
+#            "runs-on":"ubuntu-22.04",
+#            "distro":"noble",
+#            "arch":"aarch64",
+#            "build-env":"EMULATED=false",
+#            "build-script": "./.github/bash_scripts/build-script-ubuntu.sh",
+#          },
+#
+#
+
+  ########################################################
+  # The following jobs demonstrate how to use deployed artifacts.
+  ########################################################
+  use-artifacts:
+    needs: [artifacts-cicd, extract-version]
+    runs-on: ubuntu-22.04
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+      - name: Install JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: database
+        with:
+          oidc-provider-name: gh-aerospike
+          oidc-audience: aerospike
+      - name: Install packages
+        run: |
+          set -euo pipefail
+          wget -qO - https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public \
+          | sudo gpg --dearmor -o /usr/share/keyrings/aerospike.gpg
+
+          export DEBIAN_FRONTEND=noninteractive
+          CODENAME=$(lsb_release -sc)
+          ARCH=$(dpkg --print-architecture)
+          KEYRING=/usr/share/keyrings/aerospike.gpg
+          REPO="artifact.aerospike.io/artifactory/database-deb-dev-local"
+
+          sudo install -m 600 /dev/null /etc/apt/auth.conf.d/aerospike.conf
+          {
+            echo "machine artifact.aerospike.io"
+            echo "login ${{ steps.jf.outputs.oidc-user }}"
+            echo "password ${{ steps.jf.outputs.oidc-token }}"
+          } | sudo tee /etc/apt/auth.conf.d/aerospike.conf >/dev/null
+
+          cat <<EOF | sudo tee /etc/apt/sources.list.d/aerospike.list
+          deb [arch=$ARCH signed-by=$KEYRING] https://$REPO $CODENAME main
+          EOF
+
+          echo "FAILURE EXPECTED HERE"
+          echo "I know this is the wrong package to install...need to find out the right one"
+          sudo apt-get update && sudo apt-get install -y aerospike-client-c
+
+  use-rpm-artifacts:
+    runs-on: ubuntu-22.04
+    if: github.actor != 'dependabot[bot]'
+    container:
+      image: rockylinux:9
+    needs: [extract-version, artifacts-cicd]
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+      - name: Install JFrog CLI
+        id: jf
+        uses: step-security/setup-jfrog-cli@893a92f96c7727242adf0e603c77b1f2a22390e1 # v4.9.1
+        env:
+          JF_URL: https://artifact.aerospike.io
+          JF_PROJECT: test
+        with:
+          oidc-provider-name: gh-dev-test
+          oidc-audience: aerospike/testing
+      - name: Set up RPM repository
+        run: |
+          JF_USERNAME=${{ steps.jf.outputs.oidc-user }}
+          JF_TOKEN=${{ steps.jf.outputs.oidc-token }}
+          if [ -f /etc/os-release ]; then
+              . /etc/os-release
+              case "$ID" in
+                  rhel|centos|almalinux|rocky)
+                      DIST="el${VERSION_ID%%.*}"
+                      ;;
+                  amzn)
+                      if [[ "$VERSION_ID" == "2023" ]]; then
+                          DIST="amzn2023"
+                      else
+                          echo "Unsupported Amazon Linux version: $VERSION_ID"
+                          exit 1
+                      fi
+                      ;;
+                  *)
+                      echo "Unsupported distro: $ID"
+                      exit 1
+                      ;;
+              esac
+          else
+              echo "Cannot determine OS version"
+              exit 1
+          fi
+
+          ARCH=$(uname -m)
+          REPO_FILE="/etc/yum.repos.d/aerospike-${DIST,,}-all.repo"
+
+          tee "$REPO_FILE" > /dev/null <<EOF
+          [aerospike-${DIST,,}-test]
+          name=Aerospike RPM Repo DEV for ${DIST^^} (\$basearch)
+          baseurl=https://artifact.aerospike.io/artifactory/test-rpm-dev-local/${DIST,,}/$ARCH/
+          username=${JF_USERNAME}
+          password=${JF_TOKEN}
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://artifact.aerospike.io/artifactory/api/security/keypair/aerospike/public
+          EOF
+          echo "--------------------------------"
+          cat "$REPO_FILE"
+          echo "--------------------------------"
+          echo "Aerospike .repo file written to $REPO_FILE"
+      - name: Install RPMs
+        run: |
+          yum install hi -y
+          echo "the test binary says:"
+          hi
+

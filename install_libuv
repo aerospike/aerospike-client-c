@@ -6,6 +6,8 @@ url=http://dist.libuv.org/dist/v$ver/$fn
 
 rm -rf $fn $dir
 
+echo PWD: $(pwd -P)
+
 echo Download $url
 wget $url
 

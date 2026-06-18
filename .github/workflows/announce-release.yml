@@ -21,10 +21,11 @@ on:
         required: false
         type: boolean
         default: true
-      version:
+      build-run-id:
         description: >
-          Override release/API-docs version (e.g. 7.5.0 or 7.5.0-deadbee1).
-          When set, skips commit-based run lookup and resolves api-docs-{version} directly.
+          GitHub Actions run ID for the HEAD_REF_BRANCH build (e.g. 27700135842).
+          When set, skips commit-based run lookup and picks api-docs from that run;
+          api-doc version is derived from the artifact name (api-docs-{version}).
         required: false
         type: string
         default: ''
@@ -33,8 +34,8 @@ env:
   IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || true }}
   BASE_REF_BRANCH: prestine-branch
   HEAD_REF_BRANCH: stage-test
-  VERSION_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
-
+  BUILD_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.build-run-id || '' }}
+  
 defaults:
   run:
     shell: bash
@@ -68,21 +69,16 @@ jobs:
           echo "Release target SHA: $target"
           echo "sha=$target" >> "$GITHUB_OUTPUT"
 
-      # pkg/version wraps git describe --tags; workflow_dispatch version input overrides.
+      # pkg/version wraps git describe --tags at the merge-base release target.
       - name: Read version from release target
         id: get-version
         run: |
           set -euo pipefail
-          if [ -n "$VERSION_OVERRIDE" ]; then
-            version="$VERSION_OVERRIDE"
-            echo "Using workflow_dispatch version override: $version"
-          else
-            git checkout "${{ steps.target.outputs.sha }}"
-            version=$(bash pkg/version)
-            if [ -z "$version" ]; then
-              echo "::error::pkg/version produced empty output at ${{ steps.target.outputs.sha }}"
-              exit 1
-            fi
+          git checkout "${{ steps.target.outputs.sha }}"
+          version=$(bash pkg/version)
+          if [ -z "$version" ]; then
+            echo "::error::pkg/version produced empty output at ${{ steps.target.outputs.sha }}"
+            exit 1
           fi
           echo "Version: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
@@ -94,6 +90,7 @@ jobs:
     outputs:
       archive:              ${{ steps.publish.outputs.archive }}
       html-count:           ${{ steps.publish.outputs.html-count }}
+      api-doc-version:      ${{ steps.locate.outputs.api-doc-version }}
       source-run-url:       ${{ steps.locate.outputs.run-url }}
       source-artifact-url:  ${{ steps.locate.outputs.artifact-url }}
       source-artifact-name: ${{ steps.locate.outputs.artifact-name }}
@@ -103,7 +100,7 @@ jobs:
         with:
           egress-policy: audit
 
-      # Resolve api-docs artifact from build-artifacts (C Client Build & Release) or by version override.
+      # Resolve api-docs artifact from build-artifacts (C Client Build & Release) or by build-run-id override.
       - name: Locate ${{ env.HEAD_REF_BRANCH }} API docs artifact
         id: locate
         env:
@@ -121,15 +118,17 @@ jobs:
             local run_id="$1" name="$2" id="$3"
             local run_link="${run_url}/${run_id}"
             local artifact_link="${run_link}/artifacts/${id}"
+            local api_doc_version="${name#api-docs-}"
 
-            echo "run-id=$run_id"              >> "$GITHUB_OUTPUT"
-            echo "artifact-name=$name"         >> "$GITHUB_OUTPUT"
-            echo "artifact-id=$id"             >> "$GITHUB_OUTPUT"
-            echo "run-url=$run_link"           >> "$GITHUB_OUTPUT"
-            echo "artifact-url=$artifact_link" >> "$GITHUB_OUTPUT"
+            echo "run-id=$run_id"                  >> "$GITHUB_OUTPUT"
+            echo "artifact-name=$name"             >> "$GITHUB_OUTPUT"
+            echo "artifact-id=$id"                 >> "$GITHUB_OUTPUT"
+            echo "api-doc-version=$api_doc_version" >> "$GITHUB_OUTPUT"
+            echo "run-url=$run_link"               >> "$GITHUB_OUTPUT"
+            echo "artifact-url=$artifact_link"     >> "$GITHUB_OUTPUT"
 
             echo "${HEAD_REF_BRANCH} build workflow run: $run_link"
-            echo "${HEAD_REF_BRANCH} API docs artifact: $name"
+            echo "${HEAD_REF_BRANCH} API docs artifact: $name (version ${api_doc_version})"
             echo "Review artifact: $artifact_link"
 
             {
@@ -137,7 +136,8 @@ jobs:
               echo ""
               echo "| Field | Value |"
               echo "| :--- | :--- |"
-              echo "| Version | \`${VERSION}\` |"
+              echo "| Release version | \`${VERSION}\` |"
+              echo "| API docs version | \`${api_doc_version}\` |"
               echo "| ${HEAD_REF_BRANCH} commit | \`${TARGET_SHA}\` |"
               echo "| Artifact | [\`${name}\`](${artifact_link}) |"
               echo "| Workflow run | [${run_id}](${run_link}) |"
@@ -161,14 +161,9 @@ jobs:
             emit "$run_id" "$(echo "$picked" | jq -r '.name')" "$(echo "$picked" | jq -r '.id')"
           }
 
-          if [ -n "$VERSION_OVERRIDE" ]; then
-            echo "Version override — resolving ${expected} by artifact name"
-            meta=$(gh api "/repos/${repo}/actions/artifacts?name=${expected}" --paginate \
-              --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0] // empty')
-            [ -n "$meta" ] || { echo "::error::No non-expired artifact named ${expected}"; exit 1; }
-            emit "$(echo "$meta" | jq -r '.workflow_run.id')" \
-                 "$(echo "$meta" | jq -r '.name')" \
-                 "$(echo "$meta" | jq -r '.id')"
+          if [ -n "$BUILD_RUN_ID" ]; then
+            echo "Build run override — picking api-docs from run ${BUILD_RUN_ID}"
+            pick_api_docs_from_run "$BUILD_RUN_ID"
           else
             echo "Finding successful ${HEAD_REF_BRANCH} build for commit ${TARGET_SHA}"
             run_id=""
@@ -178,7 +173,7 @@ jobs:
               [ -n "$run_id" ] && { echo "Matched ${wf} run ${run_id}"; break; }
             done
             [ -n "$run_id" ] || {
-              echo "::error::No successful ${HEAD_REF_BRANCH} build for ${TARGET_SHA}. Run C Client Build & Release first, or set version."
+              echo "::error::No successful ${HEAD_REF_BRANCH} build for ${TARGET_SHA}. Run C Client Build & Release first, or set build-run-id."
               exit 1
             }
             pick_api_docs_from_run "$run_id"
@@ -354,6 +349,7 @@ jobs:
           HTML_COUNT:            ${{ needs.api-doc.outputs.html-count }}
           SOURCE_RUN_URL:        ${{ needs.api-doc.outputs.source-run-url }}
           SOURCE_ARTIFACT_URL:   ${{ needs.api-doc.outputs.source-artifact-url }}
+          API_DOC_VERSION:       ${{ needs.api-doc.outputs.api-doc-version }}
           SOURCE_ARTIFACT:       ${{ needs.api-doc.outputs.source-artifact-name }}
           PREV_TAG:            ${{ needs.draft-github-release.outputs.prev-tag }}
           R_RESOLVE:           ${{ needs.resolve-version.result }}
@@ -371,6 +367,7 @@ jobs:
             echo "| Item | Value |"
             echo "| :--- | :--- |"
             echo "| Version | \`$VERSION\` |"
+            echo "| API docs version | \`$API_DOC_VERSION\` |"
             echo "| Dry run | \`$IS_DRY_RUN\` |"
             echo "| Base branch | \`${BASE_REF_BRANCH}\` |"
             echo "| Head branch | \`${HEAD_REF_BRANCH}\` |"

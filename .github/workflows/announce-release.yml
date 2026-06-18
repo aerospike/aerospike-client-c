@@ -35,7 +35,7 @@ env:
   IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || true }}
   BASE_REF_BRANCH: prestine-branch
   HEAD_REF_BRANCH: stage-test
-  BUILD_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.build-run-id || '' }}
+  BUILD_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.build-run-id || '27700135842' }}
   
 defaults:
   run:

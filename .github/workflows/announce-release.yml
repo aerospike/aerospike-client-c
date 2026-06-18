@@ -150,7 +150,7 @@ jobs:
             local snap="${expected}-${TARGET_SHA:0:8}"
             local picked
             picked=$(gh api "/repos/${repo}/actions/runs/${run_id}/artifacts" \
-              --jq --arg expected "$expected" --arg snap "$snap" '
+              | jq --arg expected "$expected" --arg snap "$snap" '
                 [.artifacts[] | select(.expired == false and (.name | startswith("api-docs-")))] as $all |
                 ($all | map(select(.name == $expected)) | .[0]) //
                 ($all | map(select(.name == $snap)) | .[0]) //

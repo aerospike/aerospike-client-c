@@ -1,17 +1,20 @@
 name: Announce Release
-run-name: Announce release — aerospike-client-c${{ github.event_name == 'workflow_dispatch' && inputs.dry-run && ' (dry-run)' || '' }}
+run-name: Announce release — aerospike-client-c${{ (github.event_name == 'workflow_dispatch' && inputs.dry-run) && ' (dry-run)' || '' }}
 
-# Announces a release after stage is merged to master.
-# Tags the master/stage merge-base, validates API docs, and drafts a release.
-# Manual runs default to dry-run and do not push tags or create releases.
+# Announces a release after HEAD_REF_BRANCH is merged to BASE_REF_BRANCH.
+# Tags the merge-base of both branches, reuses API docs from the HEAD_REF_BRANCH build, and drafts a release.
+# Manual runs default to dry-run which do not push tags or create releases.
 
 permissions:
-  contents: write  # push release tag
+  actions: read   # download api-docs artifact from an earlier workflow run
+  contents: write # push release tag
 
 on:
-#   push:
-#     branches:
-#       # - master
+  push:
+    branches:
+      # Must match env.BASE_REF_BRANCH.
+      #
+      - prestine-branch
   workflow_dispatch:
     inputs:
       dry-run:
@@ -19,7 +22,22 @@ on:
         required: false
         type: boolean
         default: true
+      build-run-id:
+        description: >
+          GitHub Actions run ID for the HEAD_REF_BRANCH build (e.g. 27700135842).
+          When set, skips commit-based run lookup and picks api-docs from that run;
+          api-doc version is derived from the artifact name (api-docs-{version}).
+        required: false
+        type: string
+        default: ''
 
+env:
+  #IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || true }}
+  IS_DRY_RUN: false
+  BASE_REF_BRANCH: prestine-branch
+  HEAD_REF_BRANCH: stage-test
+  BUILD_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.build-run-id || '' }}
+  
 defaults:
   run:
     shell: bash
@@ -37,23 +55,25 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout master
+      - name: Checkout ${{ env.BASE_REF_BRANCH }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: master
+          ref: ${{ env.BASE_REF_BRANCH }}
           fetch-depth: 0   # required for git merge-base
 
-      # Tag the master/stage merge-base so the release is reachable from both.
-      - name: Resolve release target (merge-base of master and stage)
+      # Tag the BASE_REF_BRANCH/HEAD_REF_BRANCH merge-base so the release is reachable from both.
+      - name: Resolve release target (merge-base of ${{ env.BASE_REF_BRANCH }} and ${{ env.HEAD_REF_BRANCH }})
         id: target
         run: |
           set -euo pipefail
-          git fetch --no-tags origin stage:refs/remotes/origin/stage
-          target=$(git merge-base HEAD origin/stage)
+          git fetch --no-tags origin "${HEAD_REF_BRANCH}:refs/remotes/origin/${HEAD_REF_BRANCH}"
+          #target=$(git merge-base HEAD "origin/${HEAD_REF_BRANCH}")
+          # TODO: remove hardcoded target after testing
+          target="d4e2606cd82b1a97d438794a452fa13084be588f"
           echo "Release target SHA: $target"
           echo "sha=$target" >> "$GITHUB_OUTPUT"
 
-      # pkg/version wraps git describe --tags.
+      # pkg/version wraps git describe --tags at the merge-base release target.
       - name: Read version from release target
         id: get-version
         run: |
@@ -67,57 +87,138 @@ jobs:
           echo "Version: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  generate-api-docs:
-    name: generate api docs
+  api-doc:
+    name: api doc
     needs: resolve-version
     runs-on: ubuntu-24.04
     outputs:
-      archive:    ${{ steps.package-docs.outputs.archive }}
-      html-count: ${{ steps.package-docs.outputs.html-count }}
+      archive:              ${{ steps.publish.outputs.archive }}
+      html-count:           ${{ steps.publish.outputs.html-count }}
+      api-doc-version:      ${{ steps.locate.outputs.api-doc-version }}
+      source-run-id:        ${{ steps.locate.outputs.run-id }}
+      source-run-sha:       ${{ steps.locate.outputs.source-run-sha }}
+      source-run-url:       ${{ steps.locate.outputs.run-url }}
+      source-artifact-url:  ${{ steps.locate.outputs.artifact-url }}
+      source-artifact-name: ${{ steps.locate.outputs.artifact-name }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
 
-      - name: Checkout at release target
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ needs.resolve-version.outputs.target-sha }}
-          submodules: recursive
-          fetch-depth: 1
-
-      # build-api-docs prepares public headers before running Doxygen.
-      - name: Build API docs
-        uses: ./.github/actions/build-api-docs
-        with:
-          log-path: doxygen.log
-          fail-on-warnings: 'true'
-
-      - name: Package API docs
-        id: package-docs
+      # Resolve api-docs artifact from build-artifacts (C Client Build & Release) or by build-run-id override.
+      - name: Locate ${{ env.HEAD_REF_BRANCH }} API docs artifact
+        id: locate
         env:
-          VERSION: ${{ needs.resolve-version.outputs.version }}
+          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+          VERSION:    ${{ needs.resolve-version.outputs.version }}
+          TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
         run: |
           set -euo pipefail
-          html_count=$(find target/docs/html -type f 2>/dev/null | wc -l | tr -d ' ')
-          archive="api-docs-${VERSION}.tgz"
-          tar -C target/docs/html -czf "$archive" .
-          echo "archive=$archive" >> "$GITHUB_OUTPUT"
-          echo "html-count=$html_count" >> "$GITHUB_OUTPUT"
-          echo "Packaged ${html_count} HTML files into ${archive}"
 
-      # Input for the aerospike-websites API docs update.
+          repo="$GITHUB_REPOSITORY"
+          run_url="${GITHUB_SERVER_URL}/${repo}/actions/runs"
+          expected="api-docs-${VERSION}"
+
+          emit() {
+            local run_id="$1" name="$2" id="$3" run_sha="$4"
+            local run_link="${run_url}/${run_id}"
+            local artifact_link="${run_link}/artifacts/${id}"
+            local api_doc_version="${name#api-docs-}"
+
+            echo "run-id=$run_id"                  >> "$GITHUB_OUTPUT"
+            echo "artifact-name=$name"             >> "$GITHUB_OUTPUT"
+            echo "artifact-id=$id"                 >> "$GITHUB_OUTPUT"
+            echo "api-doc-version=$api_doc_version" >> "$GITHUB_OUTPUT"
+            echo "source-run-sha=$run_sha"         >> "$GITHUB_OUTPUT"
+            echo "run-url=$run_link"               >> "$GITHUB_OUTPUT"
+            echo "artifact-url=$artifact_link"     >> "$GITHUB_OUTPUT"
+
+            echo "${HEAD_REF_BRANCH} build workflow run: $run_link"
+            echo "${HEAD_REF_BRANCH} API docs artifact: $name (version ${api_doc_version})"
+            echo "Build run commit: ${run_sha}"
+            if [ "$run_sha" != "$TARGET_SHA" ]; then
+              echo "::warning::Tag commit (${TARGET_SHA}) and build run commit (${run_sha}) differ"
+            fi
+            echo "Review artifact: $artifact_link"
+          }
+
+          pick_api_docs_from_run() {
+            local run_id="$1"
+            local run_sha snap picked
+            run_sha=$(gh api "/repos/${repo}/actions/runs/${run_id}" --jq '.head_sha')
+            snap="${expected}-${TARGET_SHA:0:8}"
+            picked=$(gh api "/repos/${repo}/actions/runs/${run_id}/artifacts" \
+              | jq --arg expected "$expected" --arg snap "$snap" '
+                [.artifacts[] | select(.expired == false and (.name | startswith("api-docs-")))] as $all |
+                ($all | map(select(.name == $expected)) | .[0]) //
+                ($all | map(select(.name == $snap)) | .[0]) //
+                ($all | .[0])')
+            [ -n "$picked" ] && [ "$picked" != "null" ] || {
+              echo "::error::No api-docs artifact on run ${run_id} for commit ${TARGET_SHA}"
+              exit 1
+            }
+            emit "$run_id" "$(echo "$picked" | jq -r '.name')" "$(echo "$picked" | jq -r '.id')" "$run_sha"
+          }
+
+          if [ -n "$BUILD_RUN_ID" ]; then
+            echo "Build run override — picking api-docs from run ${BUILD_RUN_ID}"
+            pick_api_docs_from_run "$BUILD_RUN_ID"
+          else
+            echo "Finding successful ${HEAD_REF_BRANCH} build for commit ${TARGET_SHA}"
+            run_id=""
+            for wf in push-to-stage.yml build-artifacts.yml; do
+              run_id=$(gh run list --repo "$repo" --workflow "$wf" --commit "$TARGET_SHA" \
+                --status success --json databaseId --limit 1 --jq '.[0].databaseId // empty' 2>/dev/null || true)
+              [ -n "$run_id" ] && { echo "Matched ${wf} run ${run_id}"; break; }
+            done
+            [ -n "$run_id" ] || {
+              echo "::error::No successful ${HEAD_REF_BRANCH} build for ${TARGET_SHA}. Run C Client Build & Release first, or set build-run-id."
+              exit 1
+            }
+            pick_api_docs_from_run "$run_id"
+          fi
+
+      - name: Download API docs from ${{ env.HEAD_REF_BRANCH }} build
+        if: env.IS_DRY_RUN != 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.locate.outputs.run-id }}
+          name: ${{ steps.locate.outputs.artifact-name }}
+
+      - name: Validate API docs archive
+        id: publish
+        if: env.IS_DRY_RUN != 'true'
+        run: |
+          set -euo pipefail
+
+          downloaded=$(find . -maxdepth 1 -name 'api-docs-*.tgz' -print -quit)
+          [ -n "$downloaded" ] || { echo "::error::Downloaded API docs archive not found"; exit 1; }
+
+          html_count=$(tar -tzf "$downloaded" | wc -l | tr -d ' ')
+          [ "$html_count" -gt 0 ] || { echo "::error::Downloaded API docs archive is empty"; exit 1; }
+
+          echo "archive=$downloaded" >> "$GITHUB_OUTPUT"
+          echo "html-count=$html_count" >> "$GITHUB_OUTPUT"
+          echo "Validated ${html_count} entries in $(basename "$downloaded")"
+
       - name: Upload API docs artifact
+        if: env.IS_DRY_RUN != 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: api-docs-${{ needs.resolve-version.outputs.version }}
-          path: ${{ steps.package-docs.outputs.archive }}
-          retention-days: 90
+          path: ${{ steps.publish.outputs.archive }}
+          retention-days: 30
+
+      - name: Skip download and upload (dry-run)
+        if: env.IS_DRY_RUN == 'true'
+        run: echo "[dry-run] Skipping API docs download and upload — use the ${HEAD_REF_BRANCH} build links above to review."
 
   push-tag:
     name: create and push tag
-    needs: [resolve-version, generate-api-docs]
+    needs: [resolve-version, api-doc]
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -125,139 +226,116 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout master
+      - name: Checkout ${{ env.BASE_REF_BRANCH }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: master
+          ref: ${{ env.BASE_REF_BRANCH }}
           fetch-depth: 0
 
-      - name: Create and push release tag
-        id: tag
-        env:
-          VERSION:    ${{ needs.resolve-version.outputs.version }}
-          TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
-          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
-          IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
-        run: |
-          set -euo pipefail
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      # - name: Create and push release tag
+      #   id: tag
+      #   env:
+      #     VERSION:    ${{ needs.resolve-version.outputs.version }}
+      #     TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
+      #     GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+      #   run: |
+      #     set -euo pipefail
+      #     git config user.name  "github-actions[bot]"
+      #     git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
-            echo "::error::Tag ${VERSION} already exists. Did you forget to bump the version before merging?"
-            exit 1
-          fi
+      #     if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+      #       echo "::error::Tag ${VERSION} already exists. Did you forget to bump the version before merging?"
+      #       exit 1
+      #     fi
 
-          if [ "$IS_DRY_RUN" = "true" ]; then
-            echo "[dry-run] Would create annotated tag $VERSION at $TARGET_SHA"
-            echo "[dry-run] Would run: git push origin $VERSION"
-            exit 0
-          fi
+      #     if [ "$IS_DRY_RUN" = "true" ]; then
+      #       echo "[dry-run] Would create annotated tag $VERSION at $TARGET_SHA"
+      #       echo "[dry-run] Would run: git push origin $VERSION"
+      #       exit 0
+      #     fi
 
-          git tag -a "$VERSION" -m "Release $VERSION" "$TARGET_SHA"
-          git push origin "$VERSION"
-          echo "Tagged $TARGET_SHA as $VERSION"
+      #     git tag -a "$VERSION" -m "Release $VERSION" "$TARGET_SHA"
+      #     git push origin "$VERSION"
+      #     echo "Tagged $TARGET_SHA as $VERSION"
 
   draft-github-release:
     name: draft github release
     needs: [resolve-version, push-tag]
     runs-on: ubuntu-24.04
     outputs:
-      prev-tag: ${{ steps.notes.outputs.prev-tag }}
+      prev-tag:     ${{ steps.notes.outputs.prev-tag }}
+      release-url:  ${{ steps.release.outputs.url }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
         with:
           egress-policy: audit
 
-      - name: Checkout release tag
+      - name: Checkout local actions
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run && needs.resolve-version.outputs.target-sha || needs.resolve-version.outputs.version }}
-          fetch-depth: 0   # full history required for git log between tags
+          sparse-checkout: .github/actions/generate-release-notes
+          sparse-checkout-cone-mode: true
+
+      - name: Checkout release target
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.resolve-version.outputs.target-sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          path: release-target
 
       - name: Generate release notes
         id: notes
-        env:
-          VERSION:    ${{ needs.resolve-version.outputs.version }}
-          TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
-          IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
-        run: |
-          set -euo pipefail
-
-          release_ref="$VERSION"
-          if [ "$IS_DRY_RUN" = "true" ]; then
-            release_ref="$TARGET_SHA"
-          fi
-
-          prev_tag=$(git describe --tags --abbrev=0 "${release_ref}^" 2>/dev/null || true)
-          if [ -z "$prev_tag" ]; then
-            echo "::error::No previous tag found before $release_ref. Cannot generate release notes."
-            exit 1
-          fi
-
-          range="$prev_tag..$release_ref"
-          notes=$(git log "$range" --pretty=format:"- %s" --no-merges)
-          if [ -z "$notes" ]; then
-            echo "::error::No commits found between $range. Nothing to release."
-            exit 1
-          fi
-
-          {
-            echo "## What's Changed"
-            echo ""
-            echo "$notes"
-            echo ""
-            echo "---"
-            echo ""
-            if [ "$IS_DRY_RUN" = "true" ]; then
-              echo "**Full changelog:** $prev_tag..$VERSION (previewed with target $TARGET_SHA)"
-            else
-              echo "**Full changelog:** $range"
-            fi
-          } > release-notes.md
-
-          echo "Release notes preview:"
-          cat release-notes.md
-          echo "prev-tag=$prev_tag" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/generate-release-notes
+        with:
+          version:          ${{ needs.resolve-version.outputs.version }}
+          target-sha:       ${{ needs.resolve-version.outputs.target-sha }}
+          dry-run:          ${{ env.IS_DRY_RUN }}
+          repository-path:  release-target
 
       - name: Create GitHub draft release
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry-run) }}
+        id: release
+        if: env.IS_DRY_RUN != 'true'
         uses: step-security/action-gh-release@5f6a6ab53a5a2c000ff3a16fad038291e5b97ce7 # v2.4.2
         with:
           tag_name: ${{ needs.resolve-version.outputs.version }}
           name: Aerospike C Client ${{ needs.resolve-version.outputs.version }}
-          body_path: release-notes.md
+          body_path: ${{ steps.notes.outputs.release-notes-path }}
           draft: true
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Skip draft release (dry-run mode)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
+        if: env.IS_DRY_RUN == 'true'
         run: echo "dry-run=true — skipping GitHub draft release creation."
 
   summary:
     name: summary
     if: always()
-    needs: [resolve-version, generate-api-docs, push-tag, draft-github-release]
+    needs: [resolve-version, api-doc, push-tag, draft-github-release]
     runs-on: ubuntu-24.04
     steps:
       - name: Write release summary
         env:
-          VERSION:     ${{ needs.resolve-version.outputs.version }}
-          TARGET_SHA:  ${{ needs.resolve-version.outputs.target-sha }}
-          DOC_ARCHIVE: ${{ needs.generate-api-docs.outputs.archive }}
-          HTML_COUNT:  ${{ needs.generate-api-docs.outputs.html-count }}
-          PREV_TAG:    ${{ needs.draft-github-release.outputs.prev-tag }}
-          IS_DRY_RUN:  ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
-          R_RESOLVE:   ${{ needs.resolve-version.result }}
-          R_DOCS:      ${{ needs.generate-api-docs.result }}
-          R_TAG:       ${{ needs.push-tag.result }}
-          R_DRAFT:     ${{ needs.draft-github-release.result }}
+          GH_TOKEN:            ${{ secrets.GITHUB_TOKEN }}
+          VERSION:             ${{ needs.resolve-version.outputs.version }}
+          TARGET_SHA:          ${{ needs.resolve-version.outputs.target-sha }}
+          SOURCE_RUN_URL:      ${{ needs.api-doc.outputs.source-run-url }}
+          SOURCE_ARTIFACT_URL: ${{ needs.api-doc.outputs.source-artifact-url }}
+          API_DOC_VERSION:     ${{ needs.api-doc.outputs.api-doc-version }}
+          SOURCE_RUN_SHA:      ${{ needs.api-doc.outputs.source-run-sha }}
+          SOURCE_ARTIFACT:     ${{ needs.api-doc.outputs.source-artifact-name }}
+          SOURCE_RUN_ID:       ${{ needs.api-doc.outputs.source-run-id }}
+          RELEASE_URL:         ${{ needs.draft-github-release.outputs.release-url }}
+          R_RESOLVE:           ${{ needs.resolve-version.result }}
+          R_API_DOCS:          ${{ needs.api-doc.result }}
+          R_TAG:               ${{ needs.push-tag.result }}
+          R_DRAFT:             ${{ needs.draft-github-release.result }}
         run: |
-          status() {
-            printf '`%s`' "$1"
-          }
+          if [ -z "$RELEASE_URL" ] && [ "$IS_DRY_RUN" != "true" ] && [ "$R_DRAFT" = "success" ] && [ -n "$VERSION" ]; then
+            RELEASE_URL=$(gh api "/repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}" --jq '.html_url' 2>/dev/null || true)
+          fi
 
           {
             echo "## Announce Release"
@@ -266,15 +344,45 @@ jobs:
             echo "| :--- | :--- |"
             echo "| Version | \`$VERSION\` |"
             echo "| Dry run | \`$IS_DRY_RUN\` |"
-            echo "| Tag commit | \`$TARGET_SHA\` |"
-            echo "| Changelog | \`${PREV_TAG}..${VERSION}\` |"
-            echo "| API docs | \`${DOC_ARCHIVE}\` (${HTML_COUNT} files) |"
-            echo "| Jobs | resolve $(status "$R_RESOLVE"), docs $(status "$R_DOCS"), tag $(status "$R_TAG"), draft $(status "$R_DRAFT") |"
+            echo "| Base branch | \`${BASE_REF_BRANCH}\` |"
+            echo "| Head branch | \`${HEAD_REF_BRANCH}\` |"
+            echo "| Tag commit (merge-base) | \`$TARGET_SHA\` |"
+            if [ -n "$RELEASE_URL" ]; then
+              echo "| Draft release | [Aerospike C Client ${VERSION}](${RELEASE_URL}) |"
+            elif [ "$IS_DRY_RUN" = "true" ]; then
+              echo "| Draft release | dry-run — not created |"
+            else
+              echo "| Draft release | not found for tag \`${VERSION}\` |"
+            fi
+            echo ""
+            echo "## API docs"
+            echo ""
+            echo "| Field | Value |"
+            echo "| :--- | :--- |"
+            echo "| Release version | \`${VERSION}\` |"
+            echo "| API docs version | \`${API_DOC_VERSION}\` |"
+            echo "| Tag commit (merge-base) | \`${TARGET_SHA}\` |"
+            if [ -n "$SOURCE_RUN_SHA" ]; then
+              echo "| Build run commit | \`${SOURCE_RUN_SHA}\` |"
+              if [ "$SOURCE_RUN_SHA" != "$TARGET_SHA" ]; then
+                echo "| Commit mismatch | tag commit and build run commit **differ** |"
+              fi
+            fi
+            if [ -n "$SOURCE_ARTIFACT" ]; then
+              echo "| Artifact | [\`${SOURCE_ARTIFACT}\`](${SOURCE_ARTIFACT_URL}) |"
+            fi
+            if [ -n "$SOURCE_RUN_URL" ]; then
+              if [ -n "$SOURCE_RUN_ID" ]; then
+                echo "| Workflow run | [${SOURCE_RUN_ID}](${SOURCE_RUN_URL}) |"
+              else
+                echo "| Workflow run | [link](${SOURCE_RUN_URL}) |"
+              fi
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          for result in "$R_RESOLVE" "$R_DOCS" "$R_TAG" "$R_DRAFT"; do
+          for result in "$R_RESOLVE" "$R_API_DOCS" "$R_TAG" "$R_DRAFT"; do
             if [[ "$result" == "failure" || "$result" == "cancelled" ]]; then
-              echo "::error::Announce release failed (resolve=$R_RESOLVE docs=$R_DOCS tag=$R_TAG draft=$R_DRAFT)"
+              echo "::error::Announce release failed (resolve=$R_RESOLVE api-docs=$R_API_DOCS tag=$R_TAG draft=$R_DRAFT)"
               exit 1
             fi
           done

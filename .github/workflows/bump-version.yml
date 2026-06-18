@@ -22,8 +22,8 @@ permissions:
   actions: write   # dispatch push-to-stage.yml
 
 on:
-  push:
-    branches: [CLIENT-4300-release-pipeline-new]
+  # push:
+  #   branches: [CLIENT-4300-release-pipeline-new]
   workflow_dispatch:
     inputs:
       version:
@@ -50,7 +50,7 @@ jobs:
     name: bump version
     runs-on: ubuntu-24.04
     env:
-      TARGET_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '7.4.1-test-5' }}
+      TARGET_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '7.4.1-test-4' }}
       TARGET_BRANCH:  ${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'stage-test' }}
       IS_DRY_RUN:     'false'
     steps:

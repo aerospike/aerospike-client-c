@@ -57,6 +57,8 @@ env:
   BUNDLE_NAME:    ${{ github.event_name == 'workflow_dispatch' && inputs.bundle_name || 'aerospike-client-c' }}
   TARGET_ENV:     ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'TEST' }}
   IS_DRY_RUN:     'false'
+  REF_BRANCH:     prestine-branch
+  STAGE_BRANCH:   stage-test
 
 jobs:
   promote:
@@ -428,30 +430,30 @@ jobs:
       - name: Sanity-check commit topology
         id: topology
         env:
-          COMMIT:     ${{ steps.commit.outputs.commit }}
-          DRY_RUN:    ${{ env.IS_DRY_RUN }}
-          BASE_BRANCH: master
-          STAGE_BRANCH: stage-test #TODO undo
+          COMMIT:       ${{ steps.commit.outputs.commit }}
+          DRY_RUN:      ${{ env.IS_DRY_RUN }}
+          REF_BRANCH:   ${{ env.REF_BRANCH }}
+          STAGE_BRANCH: ${{ env.STAGE_BRANCH }}
         run: |
           set -euo pipefail
 
           if [[ "$DRY_RUN" == "true" ]]; then
-            echo "[dry-run] command: git fetch origin '+refs/heads/${STAGE_BRANCH}:refs/remotes/origin/${STAGE_BRANCH}' '+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}' --tags"
+            echo "[dry-run] command: git fetch origin '+refs/heads/${STAGE_BRANCH}:refs/remotes/origin/${STAGE_BRANCH}' '+refs/heads/${REF_BRANCH}:refs/remotes/origin/${REF_BRANCH}' --tags"
           fi
           git fetch origin \
             "+refs/heads/${STAGE_BRANCH}:refs/remotes/origin/${STAGE_BRANCH}" \
-            "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}" \
+            "+refs/heads/${REF_BRANCH}:refs/remotes/origin/${REF_BRANCH}" \
             --tags
 
           if [[ "$DRY_RUN" == "true" ]]; then
-            echo "[dry-run] origin/${BASE_BRANCH} tip:  $(git rev-parse "origin/${BASE_BRANCH}")"
+            echo "[dry-run] origin/${REF_BRANCH} tip:  $(git rev-parse "origin/${REF_BRANCH}")"
             echo "[dry-run] origin/${STAGE_BRANCH} tip: $(git rev-parse "origin/${STAGE_BRANCH}")"
             echo "[dry-run] target commit:            ${COMMIT}"
             echo "[dry-run] target commit metadata:"
             git show --no-patch --pretty=format:'  %h%n  author: %an <%ae>%n  date:   %ai%n  subject: %s' "$COMMIT" || true
             echo
-            echo "[dry-run] commits between origin/${BASE_BRANCH} and target (eligible to promote):"
-            git log --oneline "origin/${BASE_BRANCH}..${COMMIT}" | sed 's/^/  /'
+            echo "[dry-run] commits between origin/${REF_BRANCH} and target (eligible to promote):"
+            git log --oneline "origin/${REF_BRANCH}..${COMMIT}" | sed 's/^/  /'
             echo "[dry-run] commits between target and origin/${STAGE_BRANCH} (remain on stage):"
             git log --oneline "${COMMIT}..origin/${STAGE_BRANCH}" | sed 's/^/  /'
           fi
@@ -460,12 +462,12 @@ jobs:
             echo "::error::${COMMIT} is not reachable from origin/${STAGE_BRANCH}."
             exit 1
           fi
-          if ! git merge-base --is-ancestor "origin/${BASE_BRANCH}" "$COMMIT"; then
-            echo "::error::origin/${BASE_BRANCH} is not reachable from ${COMMIT}."
+          if ! git merge-base --is-ancestor "origin/${REF_BRANCH}" "$COMMIT"; then
+            echo "::error::origin/${REF_BRANCH} is not reachable from ${COMMIT}."
             exit 1
           fi
 
-          echo "OK: ${COMMIT} is on ${STAGE_BRANCH} and descends from ${BASE_BRANCH}."
+          echo "OK: ${COMMIT} is on ${STAGE_BRANCH} and descends from ${REF_BRANCH}."
 
       - name: Promote release bundle
         id: promote

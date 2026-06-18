@@ -91,6 +91,7 @@ jobs:
       archive:              ${{ steps.publish.outputs.archive }}
       html-count:           ${{ steps.publish.outputs.html-count }}
       api-doc-version:      ${{ steps.locate.outputs.api-doc-version }}
+      source-run-sha:       ${{ steps.locate.outputs.source-run-sha }}
       source-run-url:       ${{ steps.locate.outputs.run-url }}
       source-artifact-url:  ${{ steps.locate.outputs.artifact-url }}
       source-artifact-name: ${{ steps.locate.outputs.artifact-name }}
@@ -115,7 +116,7 @@ jobs:
           expected="api-docs-${VERSION}"
 
           emit() {
-            local run_id="$1" name="$2" id="$3"
+            local run_id="$1" name="$2" id="$3" run_sha="$4"
             local run_link="${run_url}/${run_id}"
             local artifact_link="${run_link}/artifacts/${id}"
             local api_doc_version="${name#api-docs-}"
@@ -124,11 +125,16 @@ jobs:
             echo "artifact-name=$name"             >> "$GITHUB_OUTPUT"
             echo "artifact-id=$id"                 >> "$GITHUB_OUTPUT"
             echo "api-doc-version=$api_doc_version" >> "$GITHUB_OUTPUT"
+            echo "source-run-sha=$run_sha"         >> "$GITHUB_OUTPUT"
             echo "run-url=$run_link"               >> "$GITHUB_OUTPUT"
             echo "artifact-url=$artifact_link"     >> "$GITHUB_OUTPUT"
 
             echo "${HEAD_REF_BRANCH} build workflow run: $run_link"
             echo "${HEAD_REF_BRANCH} API docs artifact: $name (version ${api_doc_version})"
+            echo "Build run commit: ${run_sha}"
+            if [ "$run_sha" != "$TARGET_SHA" ]; then
+              echo "::warning::Tag commit (${TARGET_SHA}) and build run commit (${run_sha}) differ"
+            fi
             echo "Review artifact: $artifact_link"
 
             {
@@ -138,7 +144,11 @@ jobs:
               echo "| :--- | :--- |"
               echo "| Release version | \`${VERSION}\` |"
               echo "| API docs version | \`${api_doc_version}\` |"
-              echo "| ${HEAD_REF_BRANCH} commit | \`${TARGET_SHA}\` |"
+              echo "| Tag commit (merge-base) | \`${TARGET_SHA}\` |"
+              echo "| Build run commit | \`${run_sha}\` |"
+              if [ "$run_sha" != "$TARGET_SHA" ]; then
+                echo "| Commit mismatch | tag commit and build run commit **differ** |"
+              fi
               echo "| Artifact | [\`${name}\`](${artifact_link}) |"
               echo "| Workflow run | [${run_id}](${run_link}) |"
             } >> "$GITHUB_STEP_SUMMARY"
@@ -146,8 +156,9 @@ jobs:
 
           pick_api_docs_from_run() {
             local run_id="$1"
-            local snap="${expected}-${TARGET_SHA:0:8}"
-            local picked
+            local run_sha snap picked
+            run_sha=$(gh api "/repos/${repo}/actions/runs/${run_id}" --jq '.head_sha')
+            snap="${expected}-${TARGET_SHA:0:8}"
             picked=$(gh api "/repos/${repo}/actions/runs/${run_id}/artifacts" \
               | jq --arg expected "$expected" --arg snap "$snap" '
                 [.artifacts[] | select(.expired == false and (.name | startswith("api-docs-")))] as $all |
@@ -158,7 +169,7 @@ jobs:
               echo "::error::No api-docs artifact on run ${run_id} for commit ${TARGET_SHA}"
               exit 1
             }
-            emit "$run_id" "$(echo "$picked" | jq -r '.name')" "$(echo "$picked" | jq -r '.id')"
+            emit "$run_id" "$(echo "$picked" | jq -r '.name')" "$(echo "$picked" | jq -r '.id')" "$run_sha"
           }
 
           if [ -n "$BUILD_RUN_ID" ]; then
@@ -350,6 +361,7 @@ jobs:
           SOURCE_RUN_URL:        ${{ needs.api-doc.outputs.source-run-url }}
           SOURCE_ARTIFACT_URL:   ${{ needs.api-doc.outputs.source-artifact-url }}
           API_DOC_VERSION:       ${{ needs.api-doc.outputs.api-doc-version }}
+          SOURCE_RUN_SHA:        ${{ needs.api-doc.outputs.source-run-sha }}
           SOURCE_ARTIFACT:       ${{ needs.api-doc.outputs.source-artifact-name }}
           PREV_TAG:            ${{ needs.draft-github-release.outputs.prev-tag }}
           R_RESOLVE:           ${{ needs.resolve-version.result }}
@@ -371,7 +383,13 @@ jobs:
             echo "| Dry run | \`$IS_DRY_RUN\` |"
             echo "| Base branch | \`${BASE_REF_BRANCH}\` |"
             echo "| Head branch | \`${HEAD_REF_BRANCH}\` |"
-            echo "| Tag commit | \`$TARGET_SHA\` |"
+            echo "| Tag commit (merge-base) | \`$TARGET_SHA\` |"
+            if [ -n "$SOURCE_RUN_SHA" ]; then
+              echo "| Build run commit | \`$SOURCE_RUN_SHA\` |"
+              if [ "$SOURCE_RUN_SHA" != "$TARGET_SHA" ]; then
+                echo "| Commit mismatch | tag commit and build run commit **differ** |"
+              fi
+            fi
             echo "| Changelog | \`${PREV_TAG}..${VERSION}\` |"
             if [ "$IS_DRY_RUN" = "true" ]; then
               echo "| API docs | dry-run — review [\`${SOURCE_ARTIFACT}\`](${SOURCE_ARTIFACT_URL}) (upload skipped) |"

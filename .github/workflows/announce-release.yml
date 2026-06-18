@@ -286,7 +286,8 @@ jobs:
       - name: Checkout release tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ env.IS_DRY_RUN == 'true' && needs.resolve-version.outputs.target-sha || needs.resolve-version.outputs.version }}
+          #ref: ${{ env.IS_DRY_RUN == 'true' && needs.resolve-version.outputs.target-sha || needs.resolve-version.outputs.version }}
+          ref: ${{ needs.resolve-version.outputs.target-sha }}
           fetch-depth: 0   # full history required for git log between tags
 
       - name: Generate release notes

@@ -23,6 +23,12 @@ inputs:
     description: Path to write release-notes.md
     required: false
     default: release-notes.md
+  repository-path:
+    description: >
+      Git working tree to read history from (use when the release target is
+      checked out to a subdirectory so local actions remain on the workflow commit).
+    required: false
+    default: .
 
 outputs:
   prev-tag:
@@ -43,8 +49,11 @@ runs:
         DRY_RUN:      ${{ inputs.dry-run }}
         DOWNLOAD_URL: ${{ inputs.download-url }}
         OUTPUT_PATH:  ${{ inputs.output-path }}
+        REPO_PATH:    ${{ inputs.repository-path }}
       run: |
         set -euo pipefail
+
+        git() { command git -C "$REPO_PATH" "$@"; }
 
         # Commits matching these patterns are omitted from release notes.
         readonly SKIP_COMMIT_RE='^(test|dry run|workflow|pipeline|bump version|update verison|harcode|override|clean rel|merge branch|promote-bundle|fixed run name|test announce|update version)'

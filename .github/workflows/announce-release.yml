@@ -285,20 +285,28 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout release tag
+      - name: Checkout local actions
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          #ref: ${{ env.IS_DRY_RUN == 'true' && needs.resolve-version.outputs.target-sha || needs.resolve-version.outputs.version }}
+          sparse-checkout: .github/actions/generate-release-notes
+          sparse-checkout-cone-mode: true
+
+      - name: Checkout release target
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
           ref: ${{ needs.resolve-version.outputs.target-sha }}
-          fetch-depth: 0   # full history required for git log between tags
+          fetch-depth: 0
+          fetch-tags: true
+          path: release-target
 
       - name: Generate release notes
         id: notes
         uses: ./.github/actions/generate-release-notes
         with:
-          version:     ${{ needs.resolve-version.outputs.version }}
-          target-sha:  ${{ needs.resolve-version.outputs.target-sha }}
-          dry-run:     ${{ env.IS_DRY_RUN }}
+          version:          ${{ needs.resolve-version.outputs.version }}
+          target-sha:       ${{ needs.resolve-version.outputs.target-sha }}
+          dry-run:          ${{ env.IS_DRY_RUN }}
+          repository-path:  release-target
 
       - name: Create GitHub draft release
         if: env.IS_DRY_RUN != 'true'

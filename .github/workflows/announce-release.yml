@@ -36,7 +36,7 @@ env:
   IS_DRY_RUN: false
   BASE_REF_BRANCH: prestine-branch
   HEAD_REF_BRANCH: stage-test
-  BUILD_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.build-run-id || '27700135842' }}
+  BUILD_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.build-run-id || '' }}
   
 defaults:
   run:
@@ -67,7 +67,9 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags origin "${HEAD_REF_BRANCH}:refs/remotes/origin/${HEAD_REF_BRANCH}"
-          target=$(git merge-base HEAD "origin/${HEAD_REF_BRANCH}")
+          #target=$(git merge-base HEAD "origin/${HEAD_REF_BRANCH}")
+          # TODO: remove hardcoded target after testing
+          target="d4e2606cd82b1a97d438794a452fa13084be588f"
           echo "Release target SHA: $target"
           echo "sha=$target" >> "$GITHUB_OUTPUT"
 

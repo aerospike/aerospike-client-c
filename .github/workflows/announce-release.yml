@@ -298,8 +298,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          release_ref="$VERSION"
-          if [ "$IS_DRY_RUN" = "true" ]; then
+          using_tag=false
+          if [ "$IS_DRY_RUN" != "true" ] && git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            using_tag=true
+            release_ref="$VERSION"
+          else
             release_ref="$TARGET_SHA"
           fi
 
@@ -310,7 +313,11 @@ jobs:
           fi
 
           range="$prev_tag..$release_ref"
-          notes=$(git log "$range" --pretty=format:"- %s" --no-merges)
+          if [ "$using_tag" = "true" ]; then
+            notes=$(git log "$range" --pretty=format:"- %s" --no-merges)
+          else
+            notes=$(git log "$range" --pretty=format:"- %s (\`%h\`)" --no-merges)
+          fi
           if [ -z "$notes" ]; then
             echo "::error::No commits found between $range. Nothing to release."
             exit 1
@@ -319,14 +326,18 @@ jobs:
           {
             echo "## What's Changed"
             echo ""
+            if [ "$using_tag" != "true" ]; then
+              echo "**Release target:** \`${TARGET_SHA}\` (tag \`${VERSION}\` not created yet)"
+              echo ""
+            fi
             echo "$notes"
             echo ""
             echo "---"
             echo ""
-            if [ "$IS_DRY_RUN" = "true" ]; then
-              echo "**Full changelog:** $prev_tag..$VERSION (previewed with target $TARGET_SHA)"
-            else
+            if [ "$using_tag" = "true" ]; then
               echo "**Full changelog:** $range"
+            else
+              echo "**Full changelog:** $prev_tag..\`${TARGET_SHA}\` (preview for tag \`${VERSION}\`)"
             fi
           } > release-notes.md
 

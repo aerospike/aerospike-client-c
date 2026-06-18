@@ -1,5 +1,5 @@
 name: Announce Release
-run-name: Announce release — aerospike-client-c${{ env.IS_DRY_RUN == 'true' && ' (dry-run)' || '' }}
+run-name: Announce release — aerospike-client-c${{ (github.event_name == 'workflow_dispatch' && inputs.dry-run || true) && ' (dry-run)' || '' }}
 
 # Announces a release after HEAD_REF_BRANCH is merged to BASE_REF_BRANCH.
 # Tags the merge-base of both branches, reuses API docs from the HEAD_REF_BRANCH build, and drafts a release.

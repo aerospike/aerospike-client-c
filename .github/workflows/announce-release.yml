@@ -34,7 +34,7 @@ env:
   IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || true }}
   BASE_REF_BRANCH: prestine-branch
   HEAD_REF_BRANCH: stage-test
-  VERSION_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+  VERSION_OVERRIDE: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '27700135842' }}
 
 defaults:
   run:

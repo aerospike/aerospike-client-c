@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2008-2023 by Aerospike.
+ * Copyright 2008-2025 by Aerospike.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -74,11 +74,21 @@ extern uint32_t g_n_keys;
 
 
 //==========================================================
+// Example Test Sub-Command (if applicable for the test)
+//
+
+#define MAX_SUBCMD_SIZE 32
+
+extern char g_subcommand[MAX_SUBCMD_SIZE];
+
+
+//==========================================================
 // Example Command Line Options
 //
 
 #define EXAMPLE_BASIC_OPTS 0
 #define EXAMPLE_MULTI_KEY_OPTS 1
+#define EXAMPLE_BASIC_OPTS_SUBCMD 2
 
 // Must be called first!
 bool example_get_opts(int argc, char* argv[], int which_opts);

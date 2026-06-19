@@ -5,6 +5,7 @@ default: all
 	$(MAKE) -C append $@
 	$(MAKE) -C connect $@
 	$(MAKE) -C expire $@
+	$(MAKE) -C expr-index $@
 	$(MAKE) -C generation $@
 	$(MAKE) -C get $@
 	$(MAKE) -C incr $@

@@ -155,9 +155,9 @@ jobs:
           path: ${{ steps.package-docs.outputs.archive }}
           retention-days: 90
 
-  # Convert vars.LINUX_DISTRO_MATRIX into the composable execute-build matrix schema.
-  # Distro/arch list comes from LINUX_DISTRO_MATRIX; container images are the
-  # aerospike-asconfig JFrog build containers (database-docker-virtual/client-c-build-<distro>).
+  # Convert vars.LINUX_DISTRO_MATRIX into the execute-build matrix schema.
+  # Each row passes DISTRO and CONTAINER from the matrix; build-linux runs
+  # install_deps.bash inside that container before make package.
   compute-release-matrix:
     name: compute release matrix
     runs-on: ubuntu-24.04
@@ -171,19 +171,15 @@ jobs:
           RUNNERS: '{"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}'
         run: |
           set -euo pipefail
-          registry="aerospike.jfrog.io/database-docker-virtual"
           matrix=$(echo "$DISTRO_MATRIX" | jq -c \
             --argjson runners "$RUNNERS" \
-            --arg registry "$registry" \
             '{"include": [
               .distros[] | . as $d | $d.archs[] | . as $arch | {
                 "runs-on":  $runners[$arch],
                 "distro":   $d.distro,
                 "arch":     $arch,
                 "build-env": (
-                  "DISTRO=" + $d.distro +
-                  ";ARCH=" + $arch +
-                  ";CONTAINER=" + $registry + "/client-c-build-" + $d.distro + ":" + $d.distro +
+                  "DISTRO=" + $d.distro + ";CONTAINER=" + $d.container +
                   (if $d.distro == "ubuntu-22.04" and $arch == "amd64" then ";OWN_SOURCE=1" else ";OWN_SOURCE=0" end)
                 )
               }
@@ -214,7 +210,37 @@ jobs:
       publish-build-info:     true
       oidc-provider-name:     ${{ vars.JFROG_OIDC_PROVIDER }}
       oidc-audience:          ${{ vars.JFROG_OIDC_AUDIENCE }}
-      build-script-path:      .github/script/package-linux.bash
+      build-script: |-
+        set -euo pipefail
+          docker run --rm \
+            -e DISTRO="$DISTRO" \
+            -e OWN_SOURCE="${OWN_SOURCE:-0}" \
+            -v "$PWD:/workspace" \
+            "$CONTAINER" \
+            bash -c '
+              set -e
+              case "$DISTRO" in
+                ubuntu-*|debian-*)
+                  export DEBIAN_FRONTEND=noninteractive
+                  apt-get update -q
+                  apt-get install -y --no-install-recommends git ca-certificates make
+                  ;;
+                amazonlinux-*)
+                  dnf install -y git tar gzip make
+                  ;;
+                rhel-*)
+                  microdnf install -y git tar gzip make
+                  ;;
+              esac
+              git config --global --add safe.directory /workspace
+              cd /workspace
+              bash .github/script/install_deps.bash "$DISTRO" all
+              export MAKEFLAGS="-j$(nproc)"
+              make package
+              if [ "${OWN_SOURCE:-0}" != "1" ]; then
+                rm -f target/packages/aerospike-client-c-src-*.zip
+              fi
+            '
     secrets: inherit
 
   # Download linux-build-* on the runner and sign in one job (skips collect re-upload).
@@ -549,7 +575,7 @@ jobs:
         with:
           name: release-artifacts
           path: build-artifacts
-          retention-days: 1
+          retention-days: 7
 
   # Single deploy: one -artifacts child includes mac .pkg, win nupkg, and linux packages.
   deploy-artifacts:

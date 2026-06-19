@@ -12,8 +12,6 @@ permissions:
   pull-requests: write
 
 on:
-  # push:
-  #   branches: [CLIENT-4300-release-pipeline-new]
   schedule:
     - cron: '0 5 * * *' # daily at 5:00 AM UTC
 
@@ -69,20 +67,13 @@ jobs:
     uses: ./.github/workflows/build-and-test.yml
     with:
       ref:          ${{ github.ref }}
-      # TODO: restore to vars.LINUX_DISTRO_MATRIX once RHEL valgrind work is complete.
-      matrix-json: >-
-        {"distros":[
-          {"distro":"rhel-8",           "container":"registry.access.redhat.com/ubi8/ubi-minimal",  "archs":["amd64"]},
-          {"distro":"rhel-9",           "container":"registry.access.redhat.com/ubi9/ubi-minimal",  "archs":["amd64"]},
-          {"distro":"rhel-10",          "container":"registry.access.redhat.com/ubi10/ubi-minimal", "archs":["amd64"]},
-          {"distro":"amazonlinux-2023", "container":"amazonlinux:2023",                             "archs":["amd64"]}
-        ]}
+      matrix-json: ${{ vars.LINUX_DISTRO_MATRIX }}
       runners-json: ${{ vars.LINUX_RUNNERS || '{"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}' }}
       event-lib:    all
       server-tag:   ${{ matrix.server }}
       num-nodes:    ${{ matrix.num-nodes }}
       valgrind:     true
-      run-mac:      false #TODO will undo to true
+      run-mac:      false # TODO will make it true once the mac runner are online again
       run-windows:  true
       check-doc-lint: false
     secrets: inherit

@@ -10,11 +10,6 @@ permissions:
   contents: write # push release tag
 
 on:
-  push:
-    branches:
-      # Must match env.BASE_REF_BRANCH.
-      #
-      - prestine-branch
   workflow_dispatch:
     inputs:
       dry-run:
@@ -24,19 +19,19 @@ on:
         default: true
       build-run-id:
         description: >
-          GitHub Actions run ID for the HEAD_REF_BRANCH build (e.g. 27700135842).
-          When set, skips commit-based run lookup and picks api-docs from that run;
-          api-doc version is derived from the artifact name (api-docs-{version}).
+          GitHub Actions run ID from the C Client Build & Release run that created the
+          release bundle (e.g. 27700135842). When set, skips commit-based run lookup and
+          selects the api-docs artifact from that run; version is derived from the
+          artifact name (api-docs-{version}).
         required: false
         type: string
         default: ''
 
 env:
-  #IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run || true }}
-  IS_DRY_RUN: false
-  BASE_REF_BRANCH: prestine-branch
-  HEAD_REF_BRANCH: stage-test
-  BUILD_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.build-run-id || '' }}
+  IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry-run && 'true' || 'false') || 'false' }}
+  BASE_REF_BRANCH: ${{ github.event_name == 'workflow_dispatch' && 'master' || github.ref_name }}
+  HEAD_REF_BRANCH: ${{ github.event_name == 'workflow_dispatch' && 'stage' || github.ref_name }}
+  BUILD_RUN_ID: ${{ inputs.build-run-id || '' }}
   
 defaults:
   run:
@@ -61,15 +56,12 @@ jobs:
           ref: ${{ env.BASE_REF_BRANCH }}
           fetch-depth: 0   # required for git merge-base
 
-      # Tag the BASE_REF_BRANCH/HEAD_REF_BRANCH merge-base so the release is reachable from both.
       - name: Resolve release target (merge-base of ${{ env.BASE_REF_BRANCH }} and ${{ env.HEAD_REF_BRANCH }})
         id: target
         run: |
           set -euo pipefail
           git fetch --no-tags origin "${HEAD_REF_BRANCH}:refs/remotes/origin/${HEAD_REF_BRANCH}"
-          #target=$(git merge-base HEAD "origin/${HEAD_REF_BRANCH}")
-          # TODO: remove hardcoded target after testing
-          target="d4e2606cd82b1a97d438794a452fa13084be588f"
+          target=$(git merge-base HEAD "origin/${HEAD_REF_BRANCH}")
           echo "Release target SHA: $target"
           echo "sha=$target" >> "$GITHUB_OUTPUT"
 
@@ -232,31 +224,31 @@ jobs:
           ref: ${{ env.BASE_REF_BRANCH }}
           fetch-depth: 0
 
-      # - name: Create and push release tag
-      #   id: tag
-      #   env:
-      #     VERSION:    ${{ needs.resolve-version.outputs.version }}
-      #     TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
-      #     GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
-      #   run: |
-      #     set -euo pipefail
-      #     git config user.name  "github-actions[bot]"
-      #     git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Create and push release tag
+        id: tag
+        env:
+          VERSION:    ${{ needs.resolve-version.outputs.version }}
+          TARGET_SHA: ${{ needs.resolve-version.outputs.target-sha }}
+          GH_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      #     if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
-      #       echo "::error::Tag ${VERSION} already exists. Did you forget to bump the version before merging?"
-      #       exit 1
-      #     fi
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            echo "::error::Tag ${VERSION} already exists. Did you forget to bump the version before merging?"
+            exit 1
+          fi
 
-      #     if [ "$IS_DRY_RUN" = "true" ]; then
-      #       echo "[dry-run] Would create annotated tag $VERSION at $TARGET_SHA"
-      #       echo "[dry-run] Would run: git push origin $VERSION"
-      #       exit 0
-      #     fi
+          if [ "$IS_DRY_RUN" = "true" ]; then
+            echo "[dry-run] Would create annotated tag $VERSION at $TARGET_SHA"
+            echo "[dry-run] Would run: git push origin $VERSION"
+            exit 0
+          fi
 
-      #     git tag -a "$VERSION" -m "Release $VERSION" "$TARGET_SHA"
-      #     git push origin "$VERSION"
-      #     echo "Tagged $TARGET_SHA as $VERSION"
+          git tag -a "$VERSION" -m "Release $VERSION" "$TARGET_SHA"
+          git push origin "$VERSION"
+          echo "Tagged $TARGET_SHA as $VERSION"
 
   draft-github-release:
     name: draft github release
@@ -305,10 +297,6 @@ jobs:
           draft: true
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Skip draft release (dry-run mode)
-        if: env.IS_DRY_RUN == 'true'
-        run: echo "dry-run=true — skipping GitHub draft release creation."
 
   summary:
     name: summary

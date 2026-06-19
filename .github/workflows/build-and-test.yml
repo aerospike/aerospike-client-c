@@ -245,8 +245,11 @@ jobs:
       - name: Build macOS arm64 (${{ matrix.event_lib }})
         run: |
           export MAKEFLAGS="-j$(sysctl -n hw.ncpu)"
-          if [ "${{ matrix.event_lib }}" = "sync" ]; then make
-          else make EVENT_LIB=${{ matrix.event_lib }}; fi
+          if [ "${{ matrix.event_lib }}" = "sync" ]; then
+            make all test-build
+          else
+            make EVENT_LIB=${{ matrix.event_lib }} all test-build
+          fi
 
       - name: Upload build artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -264,7 +267,7 @@ jobs:
     if: inputs.run-mac
     needs: [load-matrix, build-mac]
     #runs-on: [self-hosted, macOS, ARM64]
-    runs-on: [test]
+    runs-on: [test] # TODO: will move to [self-hosted, macOS, ARM64]
     strategy:
       fail-fast: false
       matrix:
@@ -276,7 +279,6 @@ jobs:
         with:
           name: build-macos-arm64-${{ matrix.event_lib }}
           path: ${{ github.workspace }}
-
       # Fail fast if the self-hosted runner's Colima Docker daemon is down.
       - name: Verify Docker (colima)
         run: docker info --format 'OSType={{.OSType}} Server={{.ServerVersion}}'

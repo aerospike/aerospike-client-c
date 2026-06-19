@@ -4,12 +4,7 @@ name: PR CI
 # Each server in .github/pr_test_servers.json calls build-and-test.yml.
 # Linux stays on the fast ubuntu-22.04 amd64 matrix; macOS and Windows also run.
 
-run-name: >-
-  ${{ github.event_name == 'pull_request'
-    && format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title)
-    || github.event_name == 'workflow_dispatch'
-    && format('Manual — {0}', github.ref_name)
-    || github.ref_name }}
+run-name: "${{ github.event_name == 'pull_request' && format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) || format('Manual — {0}', github.ref_name) }}"
 
 permissions:
   contents: read
@@ -19,13 +14,13 @@ permissions:
   pull-requests: write   # allows posting annotations / comments back to the PR
 
 on:
-  # push:
-  #   branches: [CLIENT-4300-release-pipeline-new]
-
+  # keeping for testing sake
+  push:
+    branches: [CLIENT-4300-release-pipeline-new]
   pull_request:
     branches:
       - stage
-      - main
+      - master
     types:
       - opened
       - synchronize

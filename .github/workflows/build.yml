@@ -1,10 +1,9 @@
 name: Aerospike C Client Tests
 
+#Legacy flow will remove this gradually
 on:
-  push:
-    branches: [master, stage]
   pull_request:
-    branches: [master, stage]
+    branches: [stage]
 jobs:
   build-and-test:
     runs-on: ubuntu-latest

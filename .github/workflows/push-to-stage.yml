@@ -8,16 +8,10 @@ permissions:
   pull-requests: write
 
 on:
-  # push:
-  #   branches:
-  #     - stage-test
-     # - CLIENT-4300-release-pipeline-new
-#       # Add long-running release branches here if needed.
-#       - stage
-   
-  #   tags:
-  #     - '[0-9]+.[0-9]+.[0-9]+'     # Matches 7.4.0
-  #     - '[0-9]+.[0-9]+.[0-9]+-rc*' # Matches 7.4.0-rc1
+  push:
+    branches:
+      - CLIENT-4300-release-pipeline-new # keeping for testing sake
+      - stage
   workflow_dispatch:
 
 jobs:
@@ -26,5 +20,5 @@ jobs:
     uses: ./.github/workflows/build-artifacts.yml
     with:
       dry-run:        ${{ vars.DRY_RUN_RELEASE == 'true' }} # dry-run would be false by default
-      check-doc-lint: ${{ vars.CHECK_DOC_LINT != 'false' }} # check-doc would be enabled by defaulr
+      check-doc-lint: ${{ vars.CHECK_DOC_LINT != 'false' }} # check-doc would be enabled by default
     secrets: inherit

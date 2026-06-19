@@ -2,44 +2,35 @@ name: Bump Version
 run-name: >-
   ${{ format('Bump version to {0}{1}', inputs.version, inputs.dry-run && ' (dry-run)' || '') }}
 
-# Advances the version in all 5 locations kept in sync by pkg/set_version:
-#   src/include/aerospike/version.h
-#   src/main/aerospike/version.c
-#   vs/aerospike-client-c.nuspec
-#   vs/aerospike-client-c-libuv.nuspec
-#   vs/aerospike-client-c-libevent.nuspec
-#
 # This workflow commits the version bump only. Tagging happens after stage is
 # merged to master via announce-release.yml.
 #
 # Full release flow:
-#   1. Run bump-version.yml -> version commit on stage-test -> push triggers stage build
-#   2. Open PR: stage -> master -> review -> merge
-#   3. announce-release.yml tags the merge-base commit and starts release work
+#   1. Run bump-version.yml -> version commit on stage -> push triggers stage build -> create a bumped release
+#      and associated jfrog bundle to be elgible for promotion
+#   2. Open PR from stage to master -> review -> merge
+#   3. Run announce-release.yml to tags the merge-base commit and starts release work
 
 permissions:
   contents: write  # commit and push version bump
   actions: write   # dispatch push-to-stage.yml
 
 on:
-  # push:
-  #   branches: [CLIENT-4300-release-pipeline-new]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. 7.5.0 or 7.5.0-rc1)'
+        description: 'Jfrog Release Bundle version (e.g. 7.5.0 or 7.5.0-rc1)'
         required: true
         type: string
       branch:
-        description: 'Branch to bump (default: stage)'
-        required: false
+        description: 'Branch to bump release on'
+        required: true
         type: string
-        default: abc
       dry-run:
-        description: 'Show what would change without committing or tagging'
+        description: 'Preview the change'
         required: false
         type: boolean
-        default: false
+        default: true
 
 defaults:
   run:
@@ -50,9 +41,10 @@ jobs:
     name: bump version
     runs-on: ubuntu-24.04
     env:
-      TARGET_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '7.4.1-test-4' }}
-      TARGET_BRANCH:  ${{ github.event_name == 'workflow_dispatch' && inputs.branch || 'stage-test' }}
-      IS_DRY_RUN:     'false'
+      TARGET_VERSION: ${{ inputs.version }}
+      TARGET_BRANCH:  ${{ inputs.branch }}
+      IS_DRY_RUN: ${{ inputs.dry-run && 'true' || 'false' }}
+
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3

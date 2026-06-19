@@ -1,12 +1,5 @@
 name: Promote Bundle
-run-name: >-
-  ${{ format('Promote {0} {1} build {2} to {3}{4}',
-    github.event_name == 'workflow_dispatch' && inputs.bundle_name || 'aerospike-client-c',
-    github.event_name == 'workflow_dispatch' && inputs.version || '7.4.1-test-6',
-    github.event_name == 'workflow_dispatch' && inputs.build_number || '27675730757-1',
-    github.event_name == 'workflow_dispatch' && inputs.environment || 'TEST',
-    (github.event_name == 'push' || inputs.dry-run) && ' (dry-run)' || ''
-  ) }}
+run-name: ${{ format('Promote {0} {1} build {2} to {3}{4}', inputs.bundle_name, inputs.version, inputs.build_number, inputs.environment, inputs.dry-run && ' (dry-run)' || '') }}
 
 # Manual promotion wrapper for the aerospike-client-c release bundle.
 # Validates build-info, commit ancestry, and promotion order before calling the
@@ -17,8 +10,8 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches: [stage-test]
+  # push:
+  #   branches: [stage-test]
   workflow_dispatch:
     inputs:
       version:
@@ -30,7 +23,7 @@ on:
         required: true
         type: string
       bundle_name:
-        description: Bundle name
+        description: Jfrog Bundle name
         required: true
         type: string
       environment:
@@ -44,7 +37,7 @@ on:
       dry-run:
         description: 'Dry run: validate the promotion path without changing JFrog state'
         required: false
-        default: false
+        default: true
         type: boolean
 
 defaults:
@@ -52,23 +45,17 @@ defaults:
     shell: bash
 
 env:
-  BUNDLE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '7.4.1-test-8' }}
-  BUILD_NUMBER:   ${{ github.event_name == 'workflow_dispatch' && inputs.build_number || '27700135842-1' }}
-  BUNDLE_NAME:    ${{ github.event_name == 'workflow_dispatch' && inputs.bundle_name || 'aerospike-client-c' }}
-  TARGET_ENV:     ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'TEST' }}
-  IS_DRY_RUN:     'false'
-  REF_BRANCH:     prestine-branch
-  STAGE_BRANCH:   stage-test
+  BUNDLE_VERSION: ${{ inputs.version }}
+  BUILD_NUMBER:   ${{ inputs.build_number }}
+  BUNDLE_NAME:    ${{ inputs.bundle_name }}
+  TARGET_ENV:     ${{ inputs.environment }}
+  IS_DRY_RUN:     ${{ inputs.dry-run && 'true' || 'false' }}
+  TARGET_BRANCH:  master
+  HEAD_BRANCH:    stage
 
 jobs:
   promote:
-    name: >-
-      ${{ format('promote {0} {1} build {2} → {3}',
-        github.event_name == 'workflow_dispatch' && inputs.bundle_name || 'aerospike-client-c',
-        github.event_name == 'workflow_dispatch' && inputs.version || '7.4.1-test-6',
-        github.event_name == 'workflow_dispatch' && inputs.build_number || '27675730757-1',
-        github.event_name == 'workflow_dispatch' && inputs.environment || 'TEST'
-      ) }}
+    name: ${{ format('promote {0} {1} build {2} → {3}', inputs.bundle_name, inputs.version, inputs.build_number, inputs.environment) }}
     runs-on: ubuntu-24.04
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -432,42 +419,42 @@ jobs:
         env:
           COMMIT:       ${{ steps.commit.outputs.commit }}
           DRY_RUN:      ${{ env.IS_DRY_RUN }}
-          REF_BRANCH:   ${{ env.REF_BRANCH }}
-          STAGE_BRANCH: ${{ env.STAGE_BRANCH }}
+          TARGET_BRANCH:   ${{ env.TARGET_BRANCH }}
+          HEAD_BRANCH: ${{ env.HEAD_BRANCH }}
         run: |
           set -euo pipefail
 
           if [[ "$DRY_RUN" == "true" ]]; then
-            echo "[dry-run] command: git fetch origin '+refs/heads/${STAGE_BRANCH}:refs/remotes/origin/${STAGE_BRANCH}' '+refs/heads/${REF_BRANCH}:refs/remotes/origin/${REF_BRANCH}' --tags"
+            echo "[dry-run] command: git fetch origin '+refs/heads/${HEAD_BRANCH}:refs/remotes/origin/${HEAD_BRANCH}' '+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}' --tags"
           fi
           git fetch origin \
-            "+refs/heads/${STAGE_BRANCH}:refs/remotes/origin/${STAGE_BRANCH}" \
-            "+refs/heads/${REF_BRANCH}:refs/remotes/origin/${REF_BRANCH}" \
+            "+refs/heads/${HEAD_BRANCH}:refs/remotes/origin/${HEAD_BRANCH}" \
+            "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}" \
             --tags
 
           if [[ "$DRY_RUN" == "true" ]]; then
-            echo "[dry-run] origin/${REF_BRANCH} tip:  $(git rev-parse "origin/${REF_BRANCH}")"
-            echo "[dry-run] origin/${STAGE_BRANCH} tip: $(git rev-parse "origin/${STAGE_BRANCH}")"
+            echo "[dry-run] origin/${TARGET_BRANCH} tip:  $(git rev-parse "origin/${TARGET_BRANCH}")"
+            echo "[dry-run] origin/${HEAD_BRANCH} tip: $(git rev-parse "origin/${HEAD_BRANCH}")"
             echo "[dry-run] target commit:            ${COMMIT}"
             echo "[dry-run] target commit metadata:"
             git show --no-patch --pretty=format:'  %h%n  author: %an <%ae>%n  date:   %ai%n  subject: %s' "$COMMIT" || true
             echo
-            echo "[dry-run] commits between origin/${REF_BRANCH} and target (eligible to promote):"
-            git log --oneline "origin/${REF_BRANCH}..${COMMIT}" | sed 's/^/  /'
-            echo "[dry-run] commits between target and origin/${STAGE_BRANCH} (remain on stage):"
-            git log --oneline "${COMMIT}..origin/${STAGE_BRANCH}" | sed 's/^/  /'
+            echo "[dry-run] commits between origin/${TARGET_BRANCH} and target (eligible to promote):"
+            git log --oneline "origin/${TARGET_BRANCH}..${COMMIT}" | sed 's/^/  /'
+            echo "[dry-run] commits between target and origin/${HEAD_BRANCH} (remain on stage):"
+            git log --oneline "${COMMIT}..origin/${HEAD_BRANCH}" | sed 's/^/  /'
           fi
 
-          if ! git merge-base --is-ancestor "$COMMIT" "origin/${STAGE_BRANCH}"; then
-            echo "::error::${COMMIT} is not reachable from origin/${STAGE_BRANCH}."
+          if ! git merge-base --is-ancestor "$COMMIT" "origin/${HEAD_BRANCH}"; then
+            echo "::error::${COMMIT} is not reachable from origin/${HEAD_BRANCH}."
             exit 1
           fi
-          if ! git merge-base --is-ancestor "origin/${REF_BRANCH}" "$COMMIT"; then
-            echo "::error::origin/${REF_BRANCH} is not reachable from ${COMMIT}."
+          if ! git merge-base --is-ancestor "origin/${TARGET_BRANCH}" "$COMMIT"; then
+            echo "::error::origin/${TARGET_BRANCH} is not reachable from ${COMMIT}."
             exit 1
           fi
 
-          echo "OK: ${COMMIT} is on ${STAGE_BRANCH} and descends from ${REF_BRANCH}."
+          echo "OK: ${COMMIT} is on ${HEAD_BRANCH} and descends from ${TARGET_BRANCH}."
 
       - name: Promote release bundle
         id: promote

@@ -230,19 +230,20 @@ jobs:
           echo "Installing dependencies..."
           brew install cmake autoconf automake libtool openssl@3 pkg-config wget libyaml
 
-      - name: Install libev
-        if: matrix.event_lib == 'libev'
-        run: ./install_libev
+      - name: Install event library (/usr/local)
+        if: matrix.event_lib != 'sync'
+        run: |
+          case "${{ matrix.event_lib }}" in
+            libev)    ./install_libev ;;
+            libuv)    ./install_libuv ;;
+            libevent) ./install_libevent ;;
+          esac
 
-      - name: Install libuv
-        if: matrix.event_lib == 'libuv'
-        run: ./install_libuv
-
-      - name: Install libevent
-        if: matrix.event_lib == 'libevent'
-        run: ./install_libevent
-
+      # install_lib* puts libs in /usr/local/lib. EXT_LDFLAGS is read by project/test.mk
+      # as-is; prepend /usr/local so -lev/-luv/-levent resolve there before Homebrew.
       - name: Build macOS arm64 (${{ matrix.event_lib }})
+        env:
+          EXT_LDFLAGS: -L/usr/local/lib -Wl,-rpath,/usr/local/lib
         run: |
           export MAKEFLAGS="-j$(sysctl -n hw.ncpu)"
           if [ "${{ matrix.event_lib }}" = "sync" ]; then
@@ -274,11 +275,36 @@ jobs:
         event_lib: ${{ fromJSON(needs.load-matrix.outputs.event-libs) }}
 
     steps:
+      - name: Checkout install scripts
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 1
+          sparse-checkout: |
+            install_libev
+            install_libuv
+            install_libevent
+          sparse-checkout-cone-mode: false
+
       - name: Download build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: build-macos-arm64-${{ matrix.event_lib }}
           path: ${{ github.workspace }}
+
+      # Event libs link from /usr/local (install_lib*). libyaml, openssl@3, wget,
+      # autoconf, automake, and libtool are pre-provisioned on the self-hosted Mac runner.
+      - name: Install event library (/usr/local)
+        if: matrix.event_lib != 'sync'
+        run: |
+          set -euo pipefail
+          export PKG_CONFIG_PATH="$(brew --prefix openssl@3)/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+          case "${{ matrix.event_lib }}" in
+            libev)    ./install_libev ;;
+            libuv)    ./install_libuv ;;
+            libevent) ./install_libevent ;;
+          esac
+
       # Fail fast if the self-hosted runner's Colima Docker daemon is down.
       - name: Verify Docker (colima)
         run: docker info --format 'OSType={{.OSType}} Server={{.ServerVersion}}'
@@ -406,13 +432,6 @@ jobs:
         run: |
           $h = $env:DOCKER_HOST -replace '^tcp://','' -replace ':\d+$',''
           echo "AEROSPIKE_HOST=$h" >> $env:GITHUB_ENV
-
-      # Self-hosted runners are persistent; remove leftovers before starting.
-      - name: Remove stale Aerospike containers/network (self-hosted cleanup)
-        shell: pwsh
-        run: |
-          docker rm -f aerospike-1 2>$null; exit 0
-          docker network rm aerospike-net 2>$null; exit 0
 
       # Named Docker volumes work with the remote Linux daemon used by Windows.
       - name: Start Aerospike server

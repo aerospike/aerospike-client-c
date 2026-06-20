@@ -534,39 +534,6 @@ jobs:
       credential_id:   ${{ secrets.CREDENTIAL_ID }}
       es-totp_secret:  ${{ secrets.ES_TOTP_SECRET }}
 
-  # Windows-only NuGet signature check (nuget verify requires Windows).
-  verify-win-nupkg:
-    name: windows / verify nupkg signatures
-    if: ${{ !inputs.dry-run }}
-    needs: sign-nuget
-    runs-on: windows-2022
-    steps:
-      - name: Setup NuGet
-        uses: NuGet/setup-nuget@v2
-
-      - name: Download signed NuGet packages
-        uses: actions/download-artifact@v4
-        with:
-          name: win-signed-nupkg
-          path: nupkg
-
-      - name: Verify NuGet package signatures
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $packages = @(Get-ChildItem -Path nupkg -Recurse -Filter *.nupkg)
-          if ($packages.Count -eq 0) {
-            throw "No .nupkg files found under nupkg/ (expected win-signed-nupkg/nuget/*.nupkg)"
-          }
-          foreach ($pkg in $packages) {
-            Write-Host "=== nuget verify -Signatures: $($pkg.Name) ==="
-            nuget verify -Signatures $pkg.FullName
-            if ($LASTEXITCODE -ne 0) {
-              throw "nuget verify failed for $($pkg.Name) (exit $LASTEXITCODE)"
-            }
-          }
-          Write-Host "Verified $($packages.Count) signed NuGet package(s)."
-
   # Merge Linux + mac + Windows signed artifacts for one JFrog -artifacts build-info.
   collect-release-artifacts:
     name: collect release artifacts

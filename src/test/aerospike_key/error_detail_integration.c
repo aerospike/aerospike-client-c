@@ -112,6 +112,7 @@ before_sync(atf_suite* suite)
 		return false;
 	}
 	as_key_destroy(&key_list);
+	as_record_destroy(&rec_list);
 
 	// CDT map record for 5.12
 	as_key key_map;
@@ -1600,6 +1601,7 @@ before_async(atf_suite* suite)
 		return false;
 	}
 	as_key_destroy(&key_list);
+	as_record_destroy(&rec_list);
 
 	return true;
 }

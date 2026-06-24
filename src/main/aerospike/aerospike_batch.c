@@ -293,6 +293,27 @@ as_batch_parse_record(uint8_t** pp, as_error* err, as_msg* msg, as_record* rec, 
 	return AEROSPIKE_OK;
 }
 
+// Walk a response row's fields for the error-details field (type 45) and capture
+// its subcode/message into the per-record out-params. The field rides only on
+// error rows that the client opted into; callers invoke this only when the row's
+// result is not AEROSPIKE_OK. The fields region is the same one as_command_parse_fields()
+// reads, so this must be called with the pre-walk field pointer.
+static void
+as_batch_parse_error_details(uint8_t* p, as_msg* msg, uint32_t* subcode, char** message)
+{
+	for (uint32_t i = 0; i < msg->n_fields; i++) {
+		uint32_t len = cf_swap_from_be32(*(uint32_t*)p) - 1;
+		p += sizeof(uint32_t);
+		uint8_t type = *p++;
+
+		if (type == AS_FIELD_ERROR_MESSAGE && len > 0) {
+			as_command_parse_error_details_values(p, len, subcode, message);
+		}
+
+		p += len;
+	}
+}
+
 static void
 as_batch_complete_async(as_event_executor* executor)
 {
@@ -365,6 +386,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 		
 		as_batch_base_record* rec = as_vector_get(records, offset);
 
+		uint8_t* fields = p;
 		as_status status = as_command_parse_fields(&p, &err, msg, cmd->txn, &rec->key, rec->has_write);
 
 		if (status != AEROSPIKE_OK) {
@@ -372,6 +394,11 @@ as_batch_async_parse_records(as_event_command* cmd)
 		}
 
 		rec->result = msg->result_code;
+
+		if (msg->result_code != AEROSPIKE_OK) {
+			as_batch_parse_error_details(fields, msg, &rec->error_subcode,
+				&rec->error_message);
+		}
 
 		if (msg->result_code == AEROSPIKE_OK) {
 			as_status status = as_batch_parse_record(&p, &err, msg, &rec->record,
@@ -438,6 +465,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				as_batch_task_records* btr = (as_batch_task_records*)task;
 				as_batch_base_record* rec = as_vector_get(btr->records, offset);
 
+				uint8_t* fields = p;
 				as_status status = as_command_parse_fields(&p, err, msg, txn, &rec->key, rec->has_write);
 
 				if (status != AEROSPIKE_OK) {
@@ -445,6 +473,11 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				}
 
 				rec->result = msg->result_code;
+
+				if (msg->result_code != AEROSPIKE_OK) {
+					as_batch_parse_error_details(fields, msg, &rec->error_subcode,
+						&rec->error_message);
+				}
 
 				if (msg->result_code == AEROSPIKE_OK) {
 					status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
@@ -475,6 +508,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				as_batch_task_keys* btk = (as_batch_task_keys*)task;
 				as_batch_result* res = &btk->results[offset];
 
+				uint8_t* fields = p;
 				as_status status = as_command_parse_fields(&p, err, msg, txn, res->key, btk->base.has_write);
 
 				if (status != AEROSPIKE_OK) {
@@ -482,6 +516,11 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 				}
 
 				res->result = msg->result_code;
+
+				if (msg->result_code != AEROSPIKE_OK) {
+					as_batch_parse_error_details(fields, msg, &res->error_subcode,
+						&res->error_message);
+				}
 
 				if (msg->result_code == AEROSPIKE_OK) {
 					status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
@@ -1081,7 +1120,10 @@ as_batch_apply_record_size(as_batch_apply_record* rec, as_batch_builder* bb)
 static inline void
 as_batch_remove_record_size(as_batch_builder* bb)
 {
-	bb->size += 6; // gen(2) + ttl(4)
+	// Always account for the info4 byte even though it's rarely used, matching the
+	// write/apply sizers. It rides when on_locking_only or error-details verbosity
+	// is set on the row.
+	bb->size += 7; // gen(2) + ttl(4) + info4(1)
 }
 
 static inline void
@@ -1747,6 +1789,12 @@ as_batch_records_write_new(
 	uint64_t ver_prev = 0;
 	as_batch_attr attr;
 
+	// Batch-wide per-row error-details opt-in, from the parent batch policy. ORed
+	// into each non-repeat row's info4 below; repeat rows reuse the previous
+	// row's serialized info4 and therefore inherit the same verbosity.
+	uint8_t error_verbosity = (uint8_t)(policy->base.error_detail_verbosity <<
+			AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT);
+
 	for (uint32_t i = 0; i < n_offsets; i++) {
 		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
 		*(uint32_t*)p = cf_swap_to_be32(offset);
@@ -1774,6 +1822,8 @@ as_batch_records_write_new(
 					else {
 						as_batch_attr_read_header(&attr, policy);
 					}
+
+					attr.txn_attr |= error_verbosity;
 
 					if (br->bin_names) {
 						p = as_batch_write_bin_names(p, &br->key, txn, ver, &attr, attr.filter_exp,
@@ -1818,6 +1868,7 @@ as_batch_records_write_new(
 					}
 
 					as_batch_attr_write(&attr, bw->ops, pbw, send_key, durable_delete);
+					attr.txn_attr |= error_verbosity;
 					p = as_batch_write_operations(p, &bw->key, txn, ver, &attr, attr.filter_exp, bw->ops,
 						bb->buffers);
 					break;
@@ -1850,6 +1901,7 @@ as_batch_records_write_new(
 					}
 
 					as_batch_attr_apply(&attr, pba, send_key, durable_delete);
+					attr.txn_attr |= error_verbosity;
 					p = as_batch_write_udf(p, &ba->key, txn, ver, ba, &attr, attr.filter_exp, bb->buffers);
 					break;
 				}
@@ -1881,6 +1933,7 @@ as_batch_records_write_new(
 					}
 
 					as_batch_attr_remove(&attr, pbr, send_key, durable_delete);
+					attr.txn_attr |= error_verbosity;
 					p = as_batch_write_write(p, &brm->key, txn, ver, &attr, attr.filter_exp, 0, 0);
 					break;
 				}
@@ -3191,7 +3244,14 @@ as_batch_keys_execute(
 	as_cluster* cluster = as->cluster;
 	as_cluster_add_command_count(cluster);
 	uint32_t n_keys = batch->keys.size;
-	
+
+	// Per-row error-details opt-in is batch-wide, driven by the parent batch
+	// policy. Fold it into the shared row attributes here so every key-based
+	// command (simple get/operate/apply/remove and the keys batch API) carries
+	// the verbosity bits in its info4.
+	attr->txn_attr |= (uint8_t)(policy->base.error_detail_verbosity <<
+			AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT);
+
 	if (n_keys == 0) {
 		destroy_versions(versions);
 
@@ -3240,6 +3300,8 @@ as_batch_keys_execute(
 		result->key = key;
 		result->result = AEROSPIKE_NO_RESPONSE;
 		result->in_doubt = false;
+		result->error_subcode = 0;
+		result->error_message = NULL;
 		as_record_init(&result->record, 0);
 
 		status = as_key_set_digest(err, key);
@@ -3382,6 +3444,7 @@ as_batch_keys_execute(
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_result* br = &btk.results[i];
 		as_record_destroy(&br->record);
+		cf_free(br->error_message);
 	}
 	batch_results_free(results, n_keys);
 
@@ -5040,9 +5103,10 @@ as_batch_records_destroy(as_batch_records* records)
 	
 	for (uint32_t i = 0; i < list->size; i++) {
 		as_batch_base_record* record = as_vector_get(list, i);
-		
+
 		as_key_destroy(&record->key);
 		as_record_destroy(&record->record);
+		cf_free(record->error_message);
 	}
 	as_vector_destroy(list);
 }

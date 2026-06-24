@@ -58,8 +58,10 @@
 #include <string.h>
 
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_arraylist.h>
+#include <aerospike/as_batch.h>
 #include <aerospike/as_bit_operations.h>
 #include <aerospike/as_cdt_ctx.h>
 #include <aerospike/as_error.h>
@@ -74,6 +76,7 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_vector.h>
 
 #include "example_utils.h"
 
@@ -1003,6 +1006,126 @@ check_case(const error_case* c, as_status got, const as_error* err)
 	return ok;
 }
 
+//==========================================================
+// Batch error-details checks.
+//
+// Batch surfaces per-row detail differently from single-record: the server
+// serializes field 45 into each error row's reply, and the client folds it into
+// that record's error_subcode / error_message (NOT the top-level as_error). The
+// opt-in is batch-wide via the parent batch policy's error_detail_verbosity.
+// These checks run a mixed-row batch and assert: an error row carries the per-
+// row detail when opted in, a success row carries none, and opt-in OFF carries
+// none. Returns the number of failed checks.
+//
+
+static uint32_t
+run_batch_cases(aerospike* as)
+{
+	uint32_t failed = 0;
+	as_error err;
+
+	as_key k_err;
+	as_key k_ok;
+	as_key_init(&k_err, g_namespace, g_set, "edk-batch-err");
+	as_key_init(&k_ok, g_namespace, g_set, "edk-batch-ok");
+	put_int(as, &k_err, 1);
+	put_int(as, &k_ok, 1);
+
+	// Append a string to an int bin -> bin-incompatible error on that row.
+	as_operations bad;
+	as_operations_inita(&bad, 1);
+	as_operations_add_append_str(&bad, BIN, "bad");
+
+	// A valid increment -> success row.
+	as_operations good;
+	as_operations_inita(&good, 1);
+	as_operations_add_incr(&good, BIN, 1);
+
+	// --- opt-in ON: detail rides the error row only. ---
+	as_policy_batch bp;
+	as_policy_batch_init(&bp);
+	bp.base.error_detail_verbosity = 2;
+	bp.respond_all_keys = true; // per-record mode: every row (incl. error) sent
+
+	as_batch_records recs;
+	as_batch_records_inita(&recs, 2);
+
+	as_batch_write_record* w0 = as_batch_write_reserve(&recs);
+	as_key_init(&w0->key, g_namespace, g_set, "edk-batch-err");
+	w0->ops = &bad;
+
+	as_batch_write_record* w1 = as_batch_write_reserve(&recs);
+	as_key_init(&w1->key, g_namespace, g_set, "edk-batch-ok");
+	w1->ops = &good;
+
+	aerospike_batch_write(as, &err, &bp, &recs);
+
+	as_batch_base_record* e = (as_batch_base_record*)as_vector_get(&recs.list, 0);
+	as_batch_base_record* o = (as_batch_base_record*)as_vector_get(&recs.list, 1);
+
+	// The bin-incompatible error is authored AS_SUB_NONE + message, so the
+	// per-row detail is message-only (subcode legitimately absent). Asserting
+	// the message rode proves field 45 round-tripped per record.
+	if (e->result == AEROSPIKE_OK) {
+		LOG("FAIL batch_optin_error_row: row unexpectedly succeeded");
+		failed++;
+	}
+	else if (e->error_message == NULL || e->error_message[0] == 0) {
+		LOG("FAIL batch_optin_error_row: missing per-row message (result=%d)",
+				e->result);
+		failed++;
+	}
+	else {
+		LOG("PASS batch_optin_error_row (result=%d subcode=%u msg='%s')",
+				e->result, e->error_subcode, e->error_message);
+	}
+
+	if (o->error_subcode != 0 || o->error_message != NULL) {
+		LOG("FAIL batch_success_row: unexpected detail (subcode=%u msg=%s)",
+				o->error_subcode,
+				o->error_message ? o->error_message : "(null)");
+		failed++;
+	}
+	else {
+		LOG("PASS batch_success_row");
+	}
+
+	as_batch_records_destroy(&recs);
+
+	// --- opt-in OFF: no detail anywhere (byte-identical legacy reply). ---
+	as_policy_batch bp_off;
+	as_policy_batch_init(&bp_off);
+	bp_off.base.error_detail_verbosity = 0;
+	bp_off.respond_all_keys = true;
+
+	as_batch_records recs2;
+	as_batch_records_inita(&recs2, 1);
+	as_batch_write_record* w2 = as_batch_write_reserve(&recs2);
+	as_key_init(&w2->key, g_namespace, g_set, "edk-batch-err");
+	w2->ops = &bad;
+
+	aerospike_batch_write(as, &err, &bp_off, &recs2);
+
+	as_batch_base_record* e2 = (as_batch_base_record*)as_vector_get(&recs2.list, 0);
+
+	if (e2->error_subcode != 0 || e2->error_message != NULL) {
+		LOG("FAIL batch_optin_off: detail leaked at verbosity 0 (subcode=%u)",
+				e2->error_subcode);
+		failed++;
+	}
+	else {
+		LOG("PASS batch_optin_off");
+	}
+
+	as_batch_records_destroy(&recs2);
+	as_operations_destroy(&bad);
+	as_operations_destroy(&good);
+	as_key_destroy(&k_err);
+	as_key_destroy(&k_ok);
+
+	return failed;
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -1042,10 +1165,17 @@ main(int argc, char* argv[])
 		}
 	}
 
+	// Batch per-row error details (separate harness - details land per record,
+	// not in the top-level as_error).
+	LOG("--- batch ---");
+	uint32_t batch_failed = run_batch_cases(&as);
+	failed += batch_failed;
+
 	example_cleanup(&as);
 
 	LOG("---");
-	LOG("%u passed, %u failed (of %u cases)", passed, failed, N_CASES);
+	LOG("%u passed, %u failed (of %u single-record cases + 3 batch checks)",
+			passed, failed, N_CASES);
 
 	return failed == 0 ? 0 : 1;
 }

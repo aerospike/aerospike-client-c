@@ -1251,6 +1251,88 @@ as_command_parse_error_details(const uint8_t* buf, uint32_t len, as_error* err)
 }
 
 as_status
+as_command_parse_error_details_values(
+	const uint8_t* buf, uint32_t len, uint32_t* subcode, char** message
+	)
+{
+	// Extract the raw subcode/message from a field-45 payload for callers (batch)
+	// that store details per record instead of folding them into one as_error.
+	// *subcode is set to 0 and *message to NULL when the map key is absent.
+	// *message is heap-allocated and owned by the caller; any existing non-NULL
+	// *message is freed first so a parse on retry does not leak.
+	*subcode = 0;
+
+	if (*message != NULL) {
+		cf_free(*message);
+		*message = NULL;
+	}
+
+	if (buf == NULL || len == 0) {
+		return AEROSPIKE_OK;
+	}
+
+	as_unpacker pk = {
+			.buffer = buf,
+			.offset = 0,
+			.length = len
+	};
+
+	int64_t count = as_unpack_map_header_element_count(&pk);
+
+	if (count <= 0) {
+		return AEROSPIKE_OK;
+	}
+
+	for (int64_t i = 0; i < count; i++) {
+		uint64_t key;
+
+		if (as_unpack_uint64(&pk, &key) != 0) {
+			return AEROSPIKE_OK;
+		}
+
+		switch (key) {
+		case AS_ERROR_DETAIL_KEY_MESSAGE: {
+			uint32_t str_sz = 0;
+			const uint8_t* str = as_unpack_str(&pk, &str_sz);
+
+			if (str == NULL) {
+				if (as_unpack_size(&pk) < 0) {
+					return AEROSPIKE_OK;
+				}
+				break;
+			}
+
+			uint32_t message_len = str_sz > AS_ERROR_MESSAGE_MAX_LEN ?
+					AS_ERROR_MESSAGE_MAX_LEN : str_sz;
+			char* m = cf_malloc(message_len + 1);
+
+			memcpy(m, str, message_len);
+			m[message_len] = 0;
+			*message = m;
+			break;
+		}
+		case AS_ERROR_DETAIL_KEY_SUBCODE: {
+			uint64_t sc = 0;
+
+			if (as_unpack_uint64(&pk, &sc) != 0) {
+				return AEROSPIKE_OK;
+			}
+
+			*subcode = (uint32_t)sc;
+			break;
+		}
+		default:
+			if (as_unpack_size(&pk) < 0) {
+				return AEROSPIKE_OK;
+			}
+			break;
+		}
+	}
+
+	return AEROSPIKE_OK;
+}
+
+as_status
 as_command_parse_fields_txn(
 	uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn, const uint8_t* digest, const char* set,
 	bool is_write

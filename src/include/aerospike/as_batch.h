@@ -91,6 +91,20 @@ typedef struct as_batch_result_s {
 	 * after the command was sent to the server.
 	 */
 	bool in_doubt;
+
+	/**
+	 * Server error subcode for this record, or zero when absent. Set only when
+	 * result is not AEROSPIKE_OK and the client requested error details via
+	 * as_policy_base.error_detail_verbosity.
+	 */
+	uint32_t error_subcode;
+
+	/**
+	 * Server error detail message for this record, or NULL when absent. Set only
+	 * when result is not AEROSPIKE_OK and error_detail_verbosity >= 2. Freed when
+	 * the batch results are released.
+	 */
+	char* error_message;
 } as_batch_result;
 
 /**

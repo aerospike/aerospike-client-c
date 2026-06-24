@@ -694,6 +694,19 @@ as_command_parse_fields_error(uint8_t** pp, as_error* err, as_msg* msg);
 
 /**
  * @private
+ * Parse an error-details field (type 45) payload into raw subcode/message
+ * out-params. *subcode is set to zero and *message to NULL when the
+ * corresponding map key is absent. *message is heap-allocated and owned by the
+ * caller (any existing non-NULL *message is freed first). Used by batch, which
+ * stores error details per record rather than in a single as_error.
+ */
+as_status
+as_command_parse_error_details_values(
+	const uint8_t* buf, uint32_t len, uint32_t* subcode, char** message
+	);
+
+/**
+ * @private
  * Parse record fields given key.
  */
 static inline as_status

@@ -99,6 +99,20 @@ typedef struct as_batch_base_record_s {
 	 * to the server.
 	 */
 	bool in_doubt;
+
+	/**
+	 * Server error subcode for this record, or zero when absent. Set only when
+	 * result is not AEROSPIKE_OK and the client requested error details via
+	 * as_policy_base.error_detail_verbosity.
+	 */
+	uint32_t error_subcode;
+
+	/**
+	 * Server error detail message for this record, or NULL when absent. Set only
+	 * when result is not AEROSPIKE_OK and error_detail_verbosity >= 2. Freed by
+	 * as_batch_records_destroy().
+	 */
+	char* error_message;
 } as_batch_base_record;
 
 /**
@@ -114,6 +128,20 @@ typedef struct as_batch_read_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt; // Will always be false for reads.
+
+	/**
+	 * Server error subcode for this record, or zero when absent. Set only when
+	 * result is not AEROSPIKE_OK and the client requested error details via
+	 * as_policy_base.error_detail_verbosity.
+	 */
+	uint32_t error_subcode;
+
+	/**
+	 * Server error detail message for this record, or NULL when absent. Set only
+	 * when result is not AEROSPIKE_OK and error_detail_verbosity >= 2. Freed by
+	 * as_batch_records_destroy().
+	 */
+	char* error_message;
 
 	/**
 	 * Optional read policy.
@@ -165,6 +193,20 @@ typedef struct as_batch_write_record_s {
 	bool in_doubt;
 
 	/**
+	 * Server error subcode for this record, or zero when absent. Set only when
+	 * result is not AEROSPIKE_OK and the client requested error details via
+	 * as_policy_base.error_detail_verbosity.
+	 */
+	uint32_t error_subcode;
+
+	/**
+	 * Server error detail message for this record, or NULL when absent. Set only
+	 * when result is not AEROSPIKE_OK and error_detail_verbosity >= 2. Freed by
+	 * as_batch_records_destroy().
+	 */
+	char* error_message;
+
+	/**
 	 * Optional write policy.
 	 */
 	const as_policy_batch_write* policy;
@@ -194,6 +236,20 @@ typedef struct as_batch_apply_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
+
+	/**
+	 * Server error subcode for this record, or zero when absent. Set only when
+	 * result is not AEROSPIKE_OK and the client requested error details via
+	 * as_policy_base.error_detail_verbosity.
+	 */
+	uint32_t error_subcode;
+
+	/**
+	 * Server error detail message for this record, or NULL when absent. Set only
+	 * when result is not AEROSPIKE_OK and error_detail_verbosity >= 2. Freed by
+	 * as_batch_records_destroy().
+	 */
+	char* error_message;
 
 	/**
 	 * Optional apply policy.
@@ -237,6 +293,20 @@ typedef struct as_batch_remove_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
+
+	/**
+	 * Server error subcode for this record, or zero when absent. Set only when
+	 * result is not AEROSPIKE_OK and the client requested error details via
+	 * as_policy_base.error_detail_verbosity.
+	 */
+	uint32_t error_subcode;
+
+	/**
+	 * Server error detail message for this record, or NULL when absent. Set only
+	 * when result is not AEROSPIKE_OK and error_detail_verbosity >= 2. Freed by
+	 * as_batch_records_destroy().
+	 */
+	char* error_message;
 
 	/**
 	 * Optional remove policy.

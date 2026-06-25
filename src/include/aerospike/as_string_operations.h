@@ -589,14 +589,13 @@ as_operations_string_concat(
 /**
  * Create string concat operation that appends each string element in values to
  * the bin in order.
-
  * This function takes ownership and frees heap memory associated with values parameter.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
- * @param values The list of values to append.
+ * @param values The list of values to append. This function takes ownership and frees heap memory associated with values parameter.
  *
  * @ingroup string_operations
  */

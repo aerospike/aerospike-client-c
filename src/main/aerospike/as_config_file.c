@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -597,8 +597,9 @@ as_assign_send_key(
 	const char* section, const char* name, const char* value, as_policy_key src, as_policy_key* trg
 	)
 {
-	if (*trg != src) {
-		const char* str = (src == AS_POLICY_KEY_SEND) ? as_xstr(AS_POLICY_KEY_SEND) : as_xstr(AS_POLICY_KEY_DIGEST);
+	// send_key can only be enabled in dynamic config.
+	if (src == AS_POLICY_KEY_SEND && *trg != src) {
+		const char* str = as_xstr(AS_POLICY_KEY_SEND);
 		as_log_info("Set %s.%s = %s", section, name, str);
 		*trg = src;
 	}
@@ -615,10 +616,13 @@ as_parse_send_key(
 		return false;
 	}
 
-	as_policy_key val = send_key ? AS_POLICY_KEY_SEND : AS_POLICY_KEY_DIGEST;
+	// send_key can only be enabled in dynamic config.
+	if (send_key) {
+		as_policy_key val = send_key ? AS_POLICY_KEY_SEND : AS_POLICY_KEY_DIGEST;
 
-	as_assign_send_key(yaml->name, name, value, val, key);
-	as_field_set(yaml->bitmap, field);
+		as_assign_send_key(yaml->name, name, value, val, key);
+		as_field_set(yaml->bitmap, field);
+	}
 	return true;
 }
 

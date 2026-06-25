@@ -1,4 +1,4 @@
-name: Build Release
+name: Create Release Bundle 
 
 # Multi-platform release build for the Aerospike C client.
 # Called by push-to-stage.yml to build, sign, deploy, and bundle artifacts.
@@ -46,14 +46,6 @@ on:
         required: false
       APPLE_TEAM_ID:
         required: false
-      ES_OV_USERNAME:
-        required: false
-      ES_OV_PASSWORD:
-        required: false
-      ES_OV_CREDENTIAL_ID:
-        required: false
-      ES_OV_TOTP_SECRET:
-        required: false
       ES_USERNAME:
         required: false
       ES_PASSWORD:
@@ -88,7 +80,7 @@ jobs:
       is-snapshot: ${{ steps.ver.outputs.is-snapshot }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0   # get-version compares HEAD vs HEAD~1 to detect release cuts
 
@@ -124,7 +116,7 @@ jobs:
       html-count: ${{ steps.package-docs.outputs.html-count }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: recursive
 
@@ -149,7 +141,7 @@ jobs:
           echo "Packaged ${html_count} HTML files into ${archive}"
 
       - name: Upload API docs artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: api-docs-${{ needs.get-version.outputs.version }}
           path: ${{ steps.package-docs.outputs.archive }}
@@ -194,9 +186,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix: ${{ fromJSON(needs.compute-release-matrix.outputs.matrix-json) }}
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v3.6.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
     with:
-      gh-workflows-ref:       v3.6.0
+      gh-workflows-ref:       a9aa1d2a786b28b96f1f5cec6036c202741d8ca4
       jf-build-name:          aerospike-client-c
       jf-build-id:            ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
       jf-project:             ${{ vars.JFROG_PROJECT }}
@@ -250,21 +242,21 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Download matrix build artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           pattern: linux-build-*
           path: unsigned-artifacts
           merge-multiple: true
 
       - name: Checkout shared-workflows
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: aerospike/shared-workflows
-          ref: v3.6.0
+          ref: a9aa1d2a786b28b96f1f5cec6036c202741d8ca4
           path: shared-workflows
 
       - name: Set up GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@v3.6.0
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
@@ -280,7 +272,7 @@ jobs:
             'unsigned-artifacts/**/*' 'linux-signed-artifacts'
 
       - name: Upload signed artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: linux-signed-artifacts
           path: linux-signed-artifacts
@@ -292,9 +284,9 @@ jobs:
   build-mac-artifacts:
     name: mac / build
     needs: get-version
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v3.6.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
     with:
-      gh-workflows-ref:      v3.6.0
+      gh-workflows-ref:      a9aa1d2a786b28b96f1f5cec6036c202741d8ca4
       jf-build-name:         aerospike-client-c
       jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-mac-arm64
       jf-project:            ${{ vars.JFROG_PROJECT }}
@@ -322,9 +314,9 @@ jobs:
     name: mac / sign (Apple)
     if: ${{ !inputs.dry-run }}
     needs: build-mac-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-mac-artifacts.yaml@v3.6.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-mac-artifacts.yaml@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
     with:
-      gh-workflows-ref:      v3.6.0
+      gh-workflows-ref:      a9aa1d2a786b28b96f1f5cec6036c202741d8ca4
       gh-unsigned-artifacts: mac-build-artifacts
       signing-identity:      'Developer ID Application: Aerospike, Inc.'
       installer-identity:    'Developer ID Installer: Aerospike, Inc.'
@@ -347,9 +339,9 @@ jobs:
       always() && !cancelled() &&
       needs.build-mac-artifacts.result == 'success' &&
       (needs.sign-mac-apple.result == 'success' || needs.sign-mac-apple.result == 'skipped')
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@v3.6.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
     with:
-      gh-workflows-ref:      v3.6.0
+      gh-workflows-ref:      a9aa1d2a786b28b96f1f5cec6036c202741d8ca4
       gh-unsigned-artifacts: mac-build-artifacts
       gh-artifact-name:      mac-signed-artifacts
       runs-on:               ubuntu-22.04
@@ -358,21 +350,21 @@ jobs:
       gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
       gpg-key-pass:    ${{ secrets.GPG_PASS }}
 
-  # Windows — build and sign only; deploy is unified below.
+  # Windows — build DLLs, pack NuGet, GPG-sign nupkg; deploy is unified below.
   build-windows-dlls:
     name: windows / build dlls
     runs-on: windows-2022
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: recursive
 
       - name: Setup NuGet
-        uses: NuGet/setup-nuget@v2
+        uses: NuGet/setup-nuget@b26b823c478ee115be5c9403e62c90b0bf943843 # v3.1.0
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: vs\packages
           key: nuget-${{ hashFiles('vs/**/packages.config') }}
@@ -383,7 +375,7 @@ jobs:
         run: nuget restore vs\aerospike.sln
 
       - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
 
       # Build all configs referenced by the nuspec files.
       - name: Build all configurations
@@ -407,9 +399,8 @@ jobs:
               /m /nologo
           }
 
-      # sign-win-dlls replaces this artifact with signed DLLs.
-      - name: Upload unsigned DLLs
-        uses: actions/upload-artifact@v4
+      - name: Upload Windows DLLs
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: win-unsigned-dlls
           path: vs\x64\
@@ -421,9 +412,9 @@ jobs:
     name: windows / publish build-info
     needs: build-windows-dlls
     if: always() && !cancelled() && needs.build-windows-dlls.result == 'success'
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@v3.6.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
     with:
-      gh-workflows-ref:      v3.6.0
+      gh-workflows-ref:      a9aa1d2a786b28b96f1f5cec6036c202741d8ca4
       jf-build-name:         aerospike-client-c
       jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-windows-amd64
       jf-project:            ${{ vars.JFROG_PROJECT }}
@@ -440,44 +431,26 @@ jobs:
         echo "windows-amd64" > target/packages/.buildinfo-stub
     secrets: inherit
 
-  # Sign Windows DLLs before NuGet packaging.
-  sign-win-dlls:
-    name: windows / sign dlls (OV Authenticode)
-    if: ${{ !inputs.dry-run }}
-    needs: build-windows-dlls
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-win-artifacts.yaml@v3.6.0
-    with:
-      gh-workflows-ref:     v3.6.0
-      gh-unsigned-artifacts: win-unsigned-dlls
-      artifact-glob:        '**/*.dll,**/*.exe'
-      runs-on:              windows-2025
-    secrets:
-      es_ov_username:      ${{ secrets.ES_OV_USERNAME }}
-      es_ov_password:      ${{ secrets.ES_OV_PASSWORD }}
-      es_ov_credential_id: ${{ secrets.ES_OV_CREDENTIAL_ID }}
-      es_ov_totp_secret:   ${{ secrets.ES_OV_TOTP_SECRET }}
-
-  # Pack NuGet packages using the signed DLL tree.
+  # Pack NuGet packages from the DLLs built in build-windows-dlls.
   pack-nuget:
     name: windows / nuget pack
-    needs: [get-version, build-windows-dlls, sign-win-dlls]
+    needs: [get-version, build-windows-dlls]
     if: |
       always() && !cancelled() &&
       needs.get-version.result == 'success' &&
-      needs.build-windows-dlls.result == 'success' &&
-      (needs.sign-win-dlls.result == 'success' || needs.sign-win-dlls.result == 'skipped')
+      needs.build-windows-dlls.result == 'success'
     runs-on: windows-2022
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           submodules: recursive
 
       - name: Setup NuGet
-        uses: NuGet/setup-nuget@v2
+        uses: NuGet/setup-nuget@b26b823c478ee115be5c9403e62c90b0bf943843 # v3.1.0
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: vs\packages
           key: nuget-${{ hashFiles('vs/**/packages.config') }}
@@ -488,12 +461,10 @@ jobs:
         shell: cmd
         run: nuget restore vs\aerospike.sln
 
-      # In dry-run mode, sign-win-dlls is skipped and this downloads the
-      # unsigned DLL artifact produced by build-windows-dlls.
       - name: Download Windows DLLs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
-          name: win-unsigned-dlls   # overwritten in-place by sign-win-dlls
+          name: win-unsigned-dlls
           path: vs\x64
 
       - name: Pack NuGet packages
@@ -507,7 +478,7 @@ jobs:
           nuget pack aerospike-client-c-libevent.nuspec -Version %VERSION%
 
       - name: Upload unsigned NuGet packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: win-unsigned-nupkg
           path: vs\*.nupkg
@@ -519,9 +490,9 @@ jobs:
     name: windows / sign nupkg
     if: ${{ !inputs.dry-run }}
     needs: pack-nuget
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@a1b7f7da5c29a28692903e12e7d21431284827d7 #v3.6.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
     with:
-      gh-workflows-ref:      v3.6.0
+      gh-workflows-ref:      a9aa1d2a786b28b96f1f5cec6036c202741d8ca4
       gh-unsigned-artifacts: win-unsigned-nupkg
       gh-artifact-name:      win-signed-nupkg
       nuget-environment:     PROD
@@ -551,27 +522,27 @@ jobs:
       (needs.sign-nuget.result == 'success' || needs.sign-nuget.result == 'skipped')
     steps:
       - name: Download Linux artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: linux-signed-artifacts
           path: build-artifacts
 
       - name: Download macOS artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: mac-signed-artifacts
           path: build-artifacts
           merge-multiple: true
 
       - name: Download Windows artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         with:
           name: ${{ inputs.dry-run && 'win-unsigned-nupkg' || 'win-signed-nupkg' }}
           path: build-artifacts
           merge-multiple: true
 
       - name: Upload merged release artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: release-artifacts
           path: build-artifacts
@@ -585,9 +556,9 @@ jobs:
       always() && !cancelled() &&
       needs.collect-release-artifacts.result == 'success' &&
       needs.publish-windows-buildinfo.result == 'success'
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@b4cb4010214d4c6976234ac40fb60b5e825c4f9b # PR #251
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
     with:
-      gh-workflows-ref:      b4cb4010214d4c6976234ac40fb60b5e825c4f9b
+      gh-workflows-ref:      a9aa1d2a786b28b96f1f5cec6036c202741d8ca4
       jf-build-name:         aerospike-client-c
       jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}
       jf-metadata-build-id:  ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo
@@ -683,9 +654,9 @@ jobs:
       needs.generate-api-docs.result     == 'success' &&
       needs.deploy-artifacts.result      == 'success' &&
       needs.check-existing-bundle.result == 'success'
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@b4cb4010214d4c6976234ac40fb60b5e825c4f9b # PR #251
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
     with:
-      gh-workflows-ref:   b4cb4010214d4c6976234ac40fb60b5e825c4f9b
+      gh-workflows-ref:   a9aa1d2a786b28b96f1f5cec6036c202741d8ca4
       jf-project:         ${{ vars.JFROG_PROJECT }}
       jf-bundle-name:     aerospike-client-c
       version:            ${{ needs.get-version.outputs.version }}
@@ -713,7 +684,7 @@ jobs:
           oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Promote release bundle
-        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@v3.6.0
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
         with:
           bundle-name:   ${{ env.JF_BUNDLE_NAME }}
           version:       ${{ needs.get-version.outputs.version }}

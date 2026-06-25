@@ -75,7 +75,7 @@ jobs:
           oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
 
@@ -459,7 +459,7 @@ jobs:
       - name: Promote release bundle
         id: promote
         if: steps.topology.outcome == 'success' && env.IS_DRY_RUN != 'true'
-        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@v3.6.0
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
         with:
           bundle-name:  ${{ env.BUNDLE_NAME }}
           version:      ${{ steps.extract.outputs.bundle_version }}

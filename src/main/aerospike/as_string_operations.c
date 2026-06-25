@@ -426,6 +426,7 @@ as_operations_string_concat_list(
 	as_pack_val(&pk, (as_val*)values);
 	as_pack_uint64(&pk, as_string_policy_flags(policy));
 	as_cdt_end(&pk);
+	as_list_destroy(values);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_MODIFY);
 }
 

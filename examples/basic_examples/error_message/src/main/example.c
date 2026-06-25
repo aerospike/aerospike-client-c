@@ -848,11 +848,10 @@ case_operate_filtered_out(aerospike* as, as_error* err)
 //     2  AS_SUB_OPNOT_CDT_RANK_OUT_OF_BOUNDS
 //     3  AS_SUB_OPNOT_CDT_BOUNDED_LIST_OVERFLOW
 //     8  AS_SUB_OPNOT_HLL_FOLD_INDEX_BITS_TOO_LARGE
-//   AS_ERR_FILTERED_OUT (27):
-//     2  AS_SUB_FILTERED_BINS
 //   AS_SUB_NONE (0): status-is-canonical, or no app-dispatch use case;
 //     the message text carries the disambiguating context. Used under
 //     INCOMPATIBLE_TYPE, RECORD_EXISTS, RECORD_NOT_FOUND, GENERATION,
+//     FILTERED_OUT (filter misses; as_sub_filtered_t removed 2026-06-25),
 //     and at COLLAPSE sites under broader statuses (e.g. the old
 //     CDT_MAP_KEY_EXISTS / CDT_MAP_KEY_NOT_FOUND / HLL_PARSE_FAILED /
 //     CDT_LIST_ELEMENT_EXISTS / CDT_CONTEXT_EVAL_TYPE_MISMATCH paths,
@@ -951,10 +950,10 @@ static const error_case CASES[] = {
 	  AEROSPIKE_ERR_RECORD_GENERATION, true, 0, NULL,
 	  case_delete_generation_mismatch },
 	{ "read filtered out by filter_exp",
-	  AEROSPIKE_FILTERED_OUT, false, 2, NULL,
+	  AEROSPIKE_FILTERED_OUT, true, 0, "filtered out",
 	  case_read_filtered_out },
 	{ "operate filtered out by filter_exp",
-	  AEROSPIKE_FILTERED_OUT, false, 2, NULL,
+	  AEROSPIKE_FILTERED_OUT, true, 0, "filtered out",
 	  case_operate_filtered_out },
 };
 

@@ -79,6 +79,7 @@ extern "C" {
 
 /**
  * String operation policy write bit flags. Use bitwise OR to combine flags.
+ * @ingroup string_operations
  */
 typedef enum as_string_write_flags_e {
 	/** Default. Allow create or update. */
@@ -93,6 +94,7 @@ typedef enum as_string_write_flags_e {
 
 /**
  * String operation policy.
+ * @ingroup string_operations
  */
 typedef struct as_string_policy_s {
 	as_string_write_flags flags;
@@ -100,6 +102,7 @@ typedef struct as_string_policy_s {
 
 /**
  * Numeric type filter for as_operations_string_is_numeric_type().
+ * @ingroup string_operations
  */
 typedef enum as_string_numeric_type_e {
 	/** Match either an integer or a floating-point number. */
@@ -114,7 +117,8 @@ typedef enum as_string_numeric_type_e {
 
 /**
  * Regex flags for string regex operations. Use bitwise OR to combine flags.
- */
+ * @ingroup string_operations
+*/
 typedef enum as_string_regex_flags_e {
 	/** Default. No flags set. */
 	AS_STRING_REGEX_FLAGS_NONE = 0,
@@ -141,6 +145,7 @@ typedef enum as_string_regex_flags_e {
 /**
  * @private
  * String operation codes.
+ * @ingroup string_operations
  */
 typedef enum as_string_op_e {
 	AS_STRING_OP_STRLEN = 0,
@@ -187,12 +192,16 @@ typedef enum as_string_op_e {
 
 /**
  * Initialize string policy to default write semantics.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN void
 as_string_policy_init(as_string_policy* policy);
 
 /**
  * Set string policy write flags.
+ * 
+ * @ingroup string_operations
  */
 AS_EXTERN void
 as_string_policy_set(as_string_policy* policy, as_string_write_flags flags);
@@ -213,6 +222,8 @@ as_string_policy_set(as_string_policy* policy, as_string_write_flags flags);
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_strlen(as_operations* ops, const char* name, as_cdt_ctx* ctx);
@@ -225,6 +236,8 @@ as_operations_string_strlen(as_operations* ops, const char* name, as_cdt_ctx* ct
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param start Starting codepoint index.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_substr(as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t start);
@@ -238,6 +251,8 @@ as_operations_string_substr(as_operations* ops, const char* name, as_cdt_ctx* ct
  * @param ctx Optional path into a string nested inside a list or map.
  * @param start Starting codepoint index, inclusive.
  * @param end Ending codepoint index, exclusive.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_substr_range(
@@ -252,6 +267,8 @@ as_operations_string_substr_range(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param index Index of the codepoint to return.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_char_at(as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index);
@@ -264,6 +281,8 @@ as_operations_string_char_at(as_operations* ops, const char* name, as_cdt_ctx* c
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param needle The string to search for.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_find(as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* needle);
@@ -277,6 +296,8 @@ as_operations_string_find(as_operations* ops, const char* name, as_cdt_ctx* ctx,
  * @param ctx Optional path into a string nested inside a list or map.
  * @param needle The string to search for.
  * @param occurrence The occurrence of the string to search for.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_find_occurrence(
@@ -290,6 +311,8 @@ as_operations_string_find_occurrence(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param needle The string to search for.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_contains(as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* needle);
@@ -302,6 +325,8 @@ as_operations_string_contains(as_operations* ops, const char* name, as_cdt_ctx* 
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param prefix The string to search for.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_starts_with(
@@ -316,7 +341,9 @@ as_operations_string_starts_with(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param suffix The string to search for.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_ends_with(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* suffix
@@ -329,7 +356,9 @@ as_operations_string_ends_with(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_to_integer(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
@@ -340,7 +369,9 @@ as_operations_string_to_integer(as_operations* ops, const char* name, as_cdt_ctx
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_to_double(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
@@ -351,7 +382,9 @@ as_operations_string_to_double(as_operations* ops, const char* name, as_cdt_ctx*
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_byte_length(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
@@ -362,7 +395,9 @@ as_operations_string_byte_length(as_operations* ops, const char* name, as_cdt_ct
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_is_numeric(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
@@ -386,7 +421,9 @@ as_operations_string_is_numeric_type(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_is_upper(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
@@ -397,6 +434,8 @@ as_operations_string_is_upper(as_operations* ops, const char* name, as_cdt_ctx* 
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_is_lower(as_operations* ops, const char* name, as_cdt_ctx* ctx);
@@ -408,7 +447,9 @@ as_operations_string_is_lower(as_operations* ops, const char* name, as_cdt_ctx* 
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_to_blob(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
@@ -419,7 +460,9 @@ as_operations_string_to_blob(as_operations* ops, const char* name, as_cdt_ctx* c
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_split(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
@@ -431,7 +474,9 @@ as_operations_string_split(as_operations* ops, const char* name, as_cdt_ctx* ctx
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param separator The separator to split by.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_split_separator(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* separator
@@ -444,7 +489,9 @@ as_operations_string_split_separator(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_b64_decode(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
@@ -456,7 +503,9 @@ as_operations_string_b64_decode(as_operations* ops, const char* name, as_cdt_ctx
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param pattern The regex pattern to match against.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_regex_compare(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* pattern
@@ -470,7 +519,9 @@ as_operations_string_regex_compare(
  * @param ctx Optional path into a string nested inside a list or map.
  * @param pattern The regex pattern to match against.
  * @param flags The regex flags to use.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_regex_compare_flags(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* pattern, as_string_regex_flags flags
@@ -490,7 +541,9 @@ as_operations_string_regex_compare_flags(
  * @param policy String policy.
  * @param index Index of the codepoint to insert at.
  * @param value The value to insert.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_insert(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
@@ -508,7 +561,9 @@ as_operations_string_insert(
  * @param policy String policy.
  * @param index Index of the codepoint to overwrite at.
  * @param value The value to overwrite.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_overwrite(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
@@ -523,7 +578,9 @@ as_operations_string_overwrite(
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
  * @param value The value to append.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_concat(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* value
@@ -532,12 +589,16 @@ as_operations_string_concat(
 /**
  * Create string concat operation that appends each string element in values to
  * the bin in order.
+
+ * This function takes ownership and frees heap memory associated with values parameter.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
  * @param values The list of values to append.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_concat_list(
@@ -554,7 +615,9 @@ as_operations_string_concat_list(
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
  * @param value The value to append.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_append(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* value
@@ -570,7 +633,9 @@ as_operations_string_append(
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
  * @param value The value to prepend.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_prepend(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* value
@@ -586,7 +651,9 @@ as_operations_string_prepend(
  * @param policy String policy.
  * @param start First codepoint to remove, inclusive.
  * @param end One past the last codepoint to remove, exclusive.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_snip(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
@@ -603,7 +670,9 @@ as_operations_string_snip(
  * @param policy String policy.
  * @param needle The string to replace.
  * @param replacement The string to replace with.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_replace(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
@@ -620,7 +689,9 @@ as_operations_string_replace(
  * @param policy String policy.
  * @param needle The string to replace.
  * @param replacement The string to replace with.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_replace_all(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
@@ -634,7 +705,9 @@ as_operations_string_replace_all(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_upper(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy
@@ -647,7 +720,9 @@ as_operations_string_upper(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_lower(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy
@@ -661,7 +736,9 @@ as_operations_string_lower(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_case_fold(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy
@@ -689,7 +766,9 @@ as_operations_string_normalize_nfc(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_trim_start(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy
@@ -703,7 +782,9 @@ as_operations_string_trim_start(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_trim_end(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy
@@ -716,7 +797,9 @@ as_operations_string_trim_end(
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_trim(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy
@@ -733,7 +816,9 @@ as_operations_string_trim(
  * @param policy String policy.
  * @param target_length The target length of the string.
  * @param pad_string The string to pad with.
- */
+*
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_pad_start(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
@@ -751,6 +836,8 @@ as_operations_string_pad_start(
  * @param policy String policy.
  * @param target_length The target length of the string.
  * @param pad_string The string to pad with.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_pad_end(
@@ -766,6 +853,8 @@ as_operations_string_pad_end(
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy.
  * @param count The number of times to repeat the string. Must be non-negative.
+ *
+ * @ingroup string_operations
  */
 AS_EXTERN bool
 as_operations_string_repeat(
@@ -785,7 +874,9 @@ as_operations_string_repeat(
  * @param pattern The regex pattern to match against.
  * @param replacement The string to replace with.
  * @param flags The regex flags to use.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_string_regex_replace(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* pattern,
@@ -800,7 +891,9 @@ as_operations_string_regex_replace(
  *
  * @param ops Operations array.
  * @param name Name of string bin.
- */
+ *
+ * @ingroup string_operations
+*/
 AS_EXTERN bool
 as_operations_to_string(as_operations* ops, const char* name);
 

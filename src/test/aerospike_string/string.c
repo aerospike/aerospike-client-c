@@ -14,6 +14,8 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+#include <stdlib.h>
+
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_arraylist.h>
@@ -22,6 +24,7 @@
 #include <aerospike/as_cdt_ctx.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_double.h>
+#include <aerospike/as_hashmap.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_string.h>
@@ -104,6 +107,70 @@ put_int_key(int64_t id, int64_t value)
 	as_record rec;
 	as_record_inita(&rec, 1);
 	as_record_set_int64(&rec, BIN_NAME, value);
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	as_record_destroy(&rec);
+	return status;
+}
+
+static as_status
+put_double_key(int64_t id, double value)
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, id);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+
+	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		return status;
+	}
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_double(&rec, BIN_NAME, value);
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	as_record_destroy(&rec);
+	return status;
+}
+
+static as_status
+put_blob_key(int64_t id, const uint8_t* value, uint32_t size)
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, id);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+
+	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		return status;
+	}
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_rawp(&rec, BIN_NAME, value, size, false);
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	as_record_destroy(&rec);
+	return status;
+}
+
+static as_status
+put_invalid_string_key(int64_t id)
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, id);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+
+	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		return status;
+	}
+
+	uint8_t invalid[] = {0xED, 0xA0, 0x80};
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_raw_typep(&rec, BIN_NAME, invalid, sizeof(invalid), AS_BYTES_STRING, false);
 	status = aerospike_key_put(as, &err, NULL, &key, &rec);
 	as_record_destroy(&rec);
 	return status;
@@ -226,6 +293,158 @@ TEST(string_read_more_ops, "additional string read operations")
 	as_record_destroy(rec);
 }
 
+TEST(string_unicode_boundary_ops, "string unicode boundary operations")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 115);
+
+	as_error err;
+	as_operations ops;
+	as_record* rec = NULL;
+	as_bin* results;
+
+	assert_int_eq(put_string_key(115, "café"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 2);
+	as_operations_string_strlen(&ops, BIN_NAME, NULL);
+	as_operations_string_byte_length(&ops, BIN_NAME, NULL);
+	as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	results = rec->bins.entries;
+	assert_int_eq(as_integer_get((as_integer*)results[0].valuep), 4);
+	assert_int_eq(as_integer_get((as_integer*)results[1].valuep), 5);
+	as_record_destroy(rec);
+
+	assert_int_eq(put_string_key(115, "日本語"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 2);
+	as_operations_string_strlen(&ops, BIN_NAME, NULL);
+	as_operations_string_byte_length(&ops, BIN_NAME, NULL);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	results = rec->bins.entries;
+	assert_int_eq(as_integer_get((as_integer*)results[0].valuep), 3);
+	assert_int_eq(as_integer_get((as_integer*)results[1].valuep), 9);
+	as_record_destroy(rec);
+
+	assert_int_eq(put_string_key(115, "👋hi"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 2);
+	as_operations_string_strlen(&ops, BIN_NAME, NULL);
+	as_operations_string_byte_length(&ops, BIN_NAME, NULL);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	results = rec->bins.entries;
+	assert_int_eq(as_integer_get((as_integer*)results[0].valuep), 3);
+	assert_int_eq(as_integer_get((as_integer*)results[1].valuep), 6);
+	as_record_destroy(rec);
+
+	assert_int_eq(put_string_key(115, "日本語hi"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_substr_range(&ops, BIN_NAME, NULL, 3, 5);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(rec, BIN_NAME), "hi");
+	as_record_destroy(rec);
+
+	assert_int_eq(put_string_key(115, "a👋b"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_char_at(&ops, BIN_NAME, NULL, 1);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(rec, BIN_NAME), "👋");
+	as_record_destroy(rec);
+
+	assert_int_eq(put_string_key(115, "café-world"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_find(&ops, BIN_NAME, NULL, "world");
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(as_record_get_int64(rec, BIN_NAME, 0), 5);
+	as_record_destroy(rec);
+
+	assert_int_eq(put_string_key(115, "👋-world"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_find(&ops, BIN_NAME, NULL, "world");
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(as_record_get_int64(rec, BIN_NAME, 0), 2);
+	as_record_destroy(rec);
+
+	assert_int_eq(put_string_key(115, "café"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 4);
+	as_operations_string_find(&ops, BIN_NAME, NULL, "café");
+	as_operations_string_contains(&ops, BIN_NAME, NULL, "café");
+	as_operations_string_find(&ops, BIN_NAME, NULL, "café");
+	as_operations_string_contains(&ops, BIN_NAME, NULL, "café");
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	results = rec->bins.entries;
+	assert_int_eq(as_integer_get((as_integer*)results[0].valuep), 0);
+	assert_true(as_boolean_get((as_boolean*)results[1].valuep));
+	assert_int_eq(as_integer_get((as_integer*)results[2].valuep), -1);
+	assert_false(as_boolean_get((as_boolean*)results[3].valuep));
+	as_record_destroy(rec);
+}
+
+TEST(string_overlap_ops, "string overlapping match operations")
+{
+	assert_int_eq(put_string_key(116, "aaaa"), AEROSPIKE_OK);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 116);
+
+	as_operations ops;
+	as_operations_inita(&ops, 3);
+	as_operations_string_find_occurrence(&ops, BIN_NAME, NULL, "aa", 1);
+	as_operations_string_find_occurrence(&ops, BIN_NAME, NULL, "aa", 2);
+	as_operations_string_find_occurrence(&ops, BIN_NAME, NULL, "aa", 3);
+
+	as_record* rec = NULL;
+	as_error err;
+	as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_bin* results = rec->bins.entries;
+	assert_int_eq(as_integer_get((as_integer*)results[0].valuep), 0);
+	assert_int_eq(as_integer_get((as_integer*)results[1].valuep), 2);
+	assert_int_eq(as_integer_get((as_integer*)results[2].valuep), -1);
+	as_record_destroy(rec);
+
+	as_operations_inita(&ops, 2);
+	as_operations_string_replace_all(&ops, BIN_NAME, NULL, NULL, "aa", "X");
+	as_operations_add_read(&ops, BIN_NAME);
+
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(rec->bins.size, 2);
+	assert_string_eq(as_string_get((as_string*)rec->bins.entries[1].valuep), "XX");
+	as_record_destroy(rec);
+}
+
 TEST(string_case_predicate_ops, "string case predicate operations")
 {
 	as_key key;
@@ -275,16 +494,16 @@ TEST(string_modify_ops, "string modify operations")
 	as_string_policy_init(&policy);
 	as_string_policy_set(&policy, AS_STRING_WRITE_FLAGS_NO_FAIL);
 
-	as_arraylist concat;
-	as_arraylist_inita(&concat, 2);
-	as_arraylist_append_str(&concat, "!");
-	as_arraylist_append_str(&concat, "?");
+	as_arraylist* concat = as_arraylist_new(2, 2);
+	assert_not_null(concat);
+	as_arraylist_append_str(concat, "!");
+	as_arraylist_append_str(concat, "?");
 
 	as_operations ops;
 	as_operations_inita(&ops, 8);
 	as_operations_string_insert(&ops, BIN_NAME, NULL, &policy, 5, " beautiful");
 	as_operations_string_overwrite(&ops, BIN_NAME, NULL, NULL, 16, "earth");
-	as_operations_string_concat_list(&ops, BIN_NAME, NULL, NULL, (as_list*)&concat);
+	as_operations_string_concat_list(&ops, BIN_NAME, NULL, NULL, (as_list*)concat);
 	as_operations_string_replace(&ops, BIN_NAME, NULL, NULL, "beautiful", "wide");
 	as_operations_string_replace_all(&ops, BIN_NAME, NULL, NULL, "!", ".");
 	as_operations_string_regex_replace(&ops, BIN_NAME, NULL, NULL, "[?]", ".", AS_STRING_REGEX_FLAGS_GLOBAL);
@@ -295,13 +514,29 @@ TEST(string_modify_ops, "string modify operations")
 	as_error err;
 	as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
 	as_operations_destroy(&ops);
-	as_arraylist_destroy(&concat);
 	assert_int_eq(status, AEROSPIKE_OK);
 
 	as_bin* results = rec->bins.entries;
 	assert_int_eq(rec->bins.size, 8);
 	assert_string_eq(as_string_get((as_string*)results[7].valuep), "HELLO WIDE EARTH..");
 	as_record_destroy(rec);
+}
+
+TEST(string_concat_list_ownership, "string concat list takes ownership")
+{
+	as_arraylist* concat = as_arraylist_new(2, 2);
+	assert_not_null(concat);
+	as_arraylist_append_str(concat, "!");
+	as_arraylist_append_str(concat, "?");
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	assert_true(as_operations_string_concat_list(&ops, BIN_NAME, NULL, NULL, (as_list*)concat));
+	assert_int_eq(ops.binops.size, 1);
+
+	// as_operations_string_concat_list() owns concat after the call.
+	// Do not destroy it here; leak checkers should catch ownership regressions.
+	as_operations_destroy(&ops);
 }
 
 TEST(string_policy_ops, "string policy operations")
@@ -498,6 +733,123 @@ TEST(string_modify_append_prepend_ops, "string append and prepend operations")
 	as_record_destroy(rec);
 }
 
+TEST(string_nested_map_ctx_ops, "string context operations on nested map values")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 117);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_hashmap map;
+	as_hashmap_init(&map, 2);
+
+	as_string key_a;
+	as_string val_a;
+	as_string key_b;
+	as_string val_b;
+	as_string_init(&key_a, "a", false);
+	as_string_init(&val_a, "Hello", false);
+	as_string_init(&key_b, "b", false);
+	as_string_init(&val_b, "World", false);
+	as_hashmap_set(&map, (as_val*)&key_a, (as_val*)&val_a);
+	as_hashmap_set(&map, (as_val*)&key_b, (as_val*)&val_b);
+
+	as_record put;
+	as_record_inita(&put, 1);
+	as_record_set_map(&put, BIN_NAME, (as_map*)&map);
+	status = aerospike_key_put(as, &err, NULL, &key, &put);
+	as_record_destroy(&put);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new("b", false));
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_string_starts_with(&ops, BIN_NAME, &ctx, "Wor");
+
+	as_record* rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(as_record_get_bool(rec, BIN_NAME));
+	as_record_destroy(rec);
+
+	as_hashmap map2;
+	as_hashmap_init(&map2, 2);
+	as_string val2_a;
+	as_string val2_b;
+	as_string_init(&key_a, "a", false);
+	as_string_init(&val2_a, "hello world", false);
+	as_string_init(&key_b, "b", false);
+	as_string_init(&val2_b, "foo", false);
+	as_hashmap_set(&map2, (as_val*)&key_a, (as_val*)&val2_a);
+	as_hashmap_set(&map2, (as_val*)&key_b, (as_val*)&val2_b);
+
+	as_record put2;
+	as_record_inita(&put2, 1);
+	as_record_set_map(&put2, BIN_NAME, (as_map*)&map2);
+	status = aerospike_key_put(as, &err, NULL, &key, &put2);
+	as_record_destroy(&put2);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_map_key(&ctx, (as_val*)as_string_new("a", false));
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_replace(&ops, BIN_NAME, &ctx, NULL, "world", "earth");
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, NULL);
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	rec = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_map* out = as_record_get_map(rec, BIN_NAME);
+	as_string lookup;
+	as_string_init(&lookup, "a", false);
+	as_val* val = as_map_get(out, (as_val*)&lookup);
+	assert_string_eq(as_string_get((as_string*)val), "hello earth");
+	as_record_destroy(rec);
+}
+
+TEST(string_expression_concat_repro, "string expression concat list")
+{
+	assert_int_eq(put_string_key(118, "hello"), AEROSPIKE_OK);
+
+	as_arraylist concat;
+	as_arraylist_inita(&concat, 3);
+	as_arraylist_append_str(&concat, " ");
+	as_arraylist_append_str(&concat, "big");
+	as_arraylist_append_str(&concat, " world");
+
+	as_exp_build(concat_exp,
+		as_exp_string_concat_list(NULL, as_exp_val((as_val*)&concat), as_exp_bin_str(BIN_NAME)));
+	assert_not_null(concat_exp);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 118);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "concat", concat_exp, AS_EXP_READ_DEFAULT);
+
+	as_record* rec = NULL;
+	as_error err;
+	as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(concat_exp);
+	as_arraylist_destroy(&concat);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(rec, "concat"), "hello big world");
+	as_record_destroy(rec);
+}
+
 TEST(string_expression_ops, "string expression operations")
 {
 	assert_int_eq(put_string_key(111, "Hello123World"), AEROSPIKE_OK);
@@ -634,6 +986,135 @@ TEST(string_conversion_unicode_ops, "string conversion and unicode operations")
 	as_record_destroy(rec);
 }
 
+TEST(string_to_string_variant_ops, "string to_string variant operations")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 119);
+
+	as_operations ops;
+	as_record* rec = NULL;
+	as_error err;
+	as_status status;
+
+	assert_int_eq(put_int_key(119, 42), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_to_string(&ops, BIN_NAME);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(rec, BIN_NAME), "42");
+	as_record_destroy(rec);
+
+	assert_int_eq(put_double_key(119, 3.14), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_to_string(&ops, BIN_NAME);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_double_eq(atof(as_record_get_str(rec, BIN_NAME)), 3.14);
+	as_record_destroy(rec);
+
+	assert_int_eq(put_string_key(119, "hello"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_to_string(&ops, BIN_NAME);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(rec, BIN_NAME), "hello");
+	as_record_destroy(rec);
+
+	uint8_t blob[] = {'h', 'i'};
+	assert_int_eq(put_blob_key(119, blob, sizeof(blob)), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_to_string(&ops, BIN_NAME);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(rec, BIN_NAME), "hi");
+	as_record_destroy(rec);
+
+	as_arraylist list;
+	as_arraylist_inita(&list, 1);
+	as_arraylist_append_str(&list, "hello");
+
+	status = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_record put;
+	as_record_inita(&put, 1);
+	as_record_set_list(&put, BIN_NAME, (as_list*)&list);
+	status = aerospike_key_put(as, &err, NULL, &key, &put);
+	as_record_destroy(&put);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_to_string(&ops, BIN_NAME);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);
+	assert_null(rec);
+}
+
+TEST(string_error_ops, "string error operations")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 120);
+
+	as_operations ops;
+	as_error err;
+	as_record* rec = NULL;
+	as_status status;
+
+	assert_int_eq(put_string_key(120, "hello"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_find_occurrence(&ops, BIN_NAME, NULL, "x", 0);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+	assert_null(rec);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_pad_start(&ops, BIN_NAME, NULL, NULL, 10, "");
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+	assert_null(rec);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_pad_end(&ops, BIN_NAME, NULL, NULL, 10, "");
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+	assert_null(rec);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_regex_replace(&ops, BIN_NAME, NULL, NULL, "[unclosed", "NUM",
+			AS_STRING_REGEX_FLAGS_NONE);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+	assert_null(rec);
+
+	assert_int_eq(put_invalid_string_key(120), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 2);
+	as_operations_string_strlen(&ops, BIN_NAME, NULL);
+	as_operations_string_upper(&ops, BIN_NAME, NULL, NULL);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_INVALID_ENCODING);
+	assert_null(rec);
+}
+
 TEST(string_ctx_ops, "string context operations")
 {
 	as_key key;
@@ -688,14 +1169,21 @@ SUITE(string, "aerospike string operation tests")
 	suite_add(string_api_validation);
 	suite_add(string_read_ops);
 	suite_add(string_read_more_ops);
+	suite_add(string_unicode_boundary_ops);
+	suite_add(string_overlap_ops);
 	suite_add(string_case_predicate_ops);
 	suite_add(string_modify_ops);
+	suite_add(string_concat_list_ownership);
 	suite_add(string_policy_ops);
 	suite_add(string_modify_more_ops);
 	suite_add(string_modify_case_normalize_ops);
 	suite_add(string_modify_snip_concat_ops);
 	suite_add(string_modify_append_prepend_ops);
+	suite_add(string_nested_map_ctx_ops);
 	suite_add(string_expression_ops);
+	suite_add(string_expression_concat_repro);
 	suite_add(string_conversion_unicode_ops);
+	suite_add(string_to_string_variant_ops);
+	suite_add(string_error_ops);
 	suite_add(string_ctx_ops);
 }

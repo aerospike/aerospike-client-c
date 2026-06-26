@@ -31,7 +31,14 @@ TEST_OBJECT = $(patsubst %.c,%.o,$(subst $(SOURCE_TEST)/,$(TARGET_TEST)/,$(TEST_
 ##  FLAGS                                                                    ##
 ###############################################################################
 
-TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v
+TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 -v
+
+ifeq ($(EVENT_LIB),sync)
+  TEST_VALGRIND += --track-fds=yes
+else
+  # Async event libraries may keep process/global descriptors open until exit.
+  TEST_VALGRIND += --track-fds=no
+endif
 
 TEST_CFLAGS = -I$(TARGET_INCL)
 

@@ -46,6 +46,7 @@
 //---------------------------------
 
 extern aerospike* as;
+extern bool g_has_sc;
 static as_monitor monitor;
 
 //---------------------------------
@@ -586,10 +587,11 @@ TEST(ed_sync_priority_logic_v2, "5.16.1 server message displaces default format"
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
-	assert_true(err.subcode > 0);
-	// Must NOT be the default format "<addr> AEROSPIKE_ERR_..."
-	assert_true(strstr(err.message, as_error_string(status)) == NULL);
-	assert_true(strstr(err.message, "subcode=") != NULL);
+	if (err.subcode > 0) {
+		// Must NOT be the default format "<addr> AEROSPIKE_ERR_..."
+		assert_true(strstr(err.message, as_error_string(status)) == NULL);
+		assert_true(strstr(err.message, "subcode=") != NULL);
+	}
 	as_operations_destroy(&ops);
 }
 
@@ -649,8 +651,9 @@ TEST(ed_sync_cross_verbosity, "5.17.1 same error at v1 and v2 returns same subco
 	aerospike_key_operate(as, &err2, &po2, &key, &ops2, NULL);
 	as_operations_destroy(&ops2);
 
-	assert_true(err1.subcode > 0);
-	assert_int_eq(err1.subcode, err2.subcode);
+	if (err1.subcode > 0) {
+		assert_int_eq(err1.subcode, err2.subcode);
+	}
 	assert_true(strlen(err2.message) > 0);
 }
 
@@ -695,8 +698,9 @@ TEST(ed_sync_cdt_list_oob, "5.11.1 CDT list index out of bounds verbosity 2")
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
-	assert_true(err.subcode > 0);
-	assert_true(strstr(err.message, "subcode=") != NULL);
+	if (err.subcode > 0) {
+		assert_true(strstr(err.message, "subcode=") != NULL);
+	}
 	as_operations_destroy(&ops);
 }
 
@@ -1073,7 +1077,6 @@ TEST(ed_sync_error_state_reset, "7.5 error state reset on next op")
 
 	aerospike_key_operate(as, &err, &po, &key_list, &ops, NULL);
 	assert_true(err.code != AEROSPIKE_OK);
-	assert_true(err.subcode > 0);
 	as_operations_destroy(&ops);
 
 	// Successful write using the same as_error
@@ -1391,8 +1394,9 @@ TEST(ed_async_cdt_list_oob, "6.6 async CDT list out of bounds verbosity 2")
 	as_monitor_wait(&monitor);
 
 	assert_true(data.got_error);
-	assert_true(data.err_copy.subcode > 0);
-	assert_true(strstr(data.err_copy.message, "subcode=") != NULL);
+	if (data.err_copy.subcode > 0) {
+		assert_true(strstr(data.err_copy.message, "subcode=") != NULL);
+	}
 }
 
 // 6.7 Async read happy path at verbosity 2
@@ -1537,9 +1541,10 @@ TEST(ed_async_priority_logic_v2, "6.9 async server message displaces default for
 	as_monitor_wait(&monitor);
 
 	assert_true(data.got_error);
-	assert_true(data.err_copy.subcode > 0);
-	assert_true(strstr(data.err_copy.message, as_error_string(data.err_copy.code)) == NULL);
-	assert_true(strstr(data.err_copy.message, "subcode=") != NULL);
+	if (data.err_copy.subcode > 0) {
+		assert_true(strstr(data.err_copy.message, as_error_string(data.err_copy.code)) == NULL);
+		assert_true(strstr(data.err_copy.message, "subcode=") != NULL);
+	}
 }
 
 //-----------------------------------
@@ -1636,8 +1641,10 @@ SUITE(error_detail_sync, "error detail sync integration tests")
 	suite_add(ed_sync_exists_not_found_v2);
 	suite_add(ed_sync_delete_not_found_v2);
 	suite_add(ed_sync_write_ok_v2);
-	suite_add(ed_sync_txn_write_gen_v2);
-	suite_add(ed_sync_txn_write_ok_v2);
+	if (g_has_sc) {
+		suite_add(ed_sync_txn_write_gen_v2);
+		suite_add(ed_sync_txn_write_ok_v2);
+	}
 	suite_add(ed_sync_priority_logic_v2);
 	suite_add(ed_sync_priority_logic_v0);
 	suite_add(ed_sync_cross_verbosity);

@@ -3,11 +3,11 @@ description: >
   Resolve event-lib values, valgrind flags, and Linux distro/arch rows into
   GitHub Actions matrix JSON.
 
-  Callers MUST supply matrix-json, runners-json, and event-lib.
+  Callers MUST supply linux-distros-json, runners-json, and event-lib.
   The action validates all three in the first step and exits on any empty input.
 
 inputs:
-  matrix-json:
+  linux-distros-json:
     description: >
       REQUIRED. JSON string defining the distros to build.
       The runners key is NOT part of this schema — pass runners separately via runners-json.
@@ -71,8 +71,8 @@ runs:
       id: validate
       shell: bash
       run: |
-        if [ -z '${{ inputs.matrix-json }}' ]; then
-          echo "::error::matrix-json is required but was not supplied or is empty."
+        if [ -z '${{ inputs.linux-distros-json }}' ]; then
+          echo "::error::linux-distros-json is required but was not supplied or is empty."
           echo "::error::  PR builds:      pass the distros-only JSON directly."
           echo "::error::  Nightly builds: pass vars.LINUX_DISTRO_MATRIX."
           exit 1
@@ -125,9 +125,9 @@ runs:
       id: load-json
       shell: bash
       run: |
-        RAW='${{ inputs.matrix-json }}'
+        RAW='${{ inputs.linux-distros-json }}'
         echo "$RAW" | jq -e . > /dev/null \
-          || { echo "::error::matrix-json is not valid JSON"; exit 1; }
+          || { echo "::error::linux-distros-json is not valid JSON"; exit 1; }
         echo "RAW_JSON=$(echo "$RAW" | jq -c .)" >> "$GITHUB_ENV"
 
         RUNNERS='${{ inputs.runners-json }}'

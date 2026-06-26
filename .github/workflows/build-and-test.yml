@@ -12,7 +12,7 @@ run-name: >-
 on:
   workflow_call:
     inputs:
-      matrix-json:
+      linux-distros-json:
         description: >
           REQUIRED. Distros-only JSON (no runners key).
           PR:      ubuntu-22.04 JSON hardcoded in pr-open.yml.
@@ -118,7 +118,7 @@ jobs:
         id: load
         uses: ./.github/actions/resolve-test-matrix
         with:
-          matrix-json:  ${{ inputs.matrix-json }}
+          linux-distros-json: ${{ inputs.linux-distros-json }}
           runners-json: ${{ inputs.runners-json }}
           event-lib:    ${{ inputs.event-lib }}
           valgrind:     ${{ inputs.valgrind }}
@@ -150,7 +150,7 @@ jobs:
       # Pinned for setup-aerospike-server nofile=15000 support on ARM64 runners.
       - name: Start Aerospike server
         id: setup-aerospike
-        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
         with:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
@@ -310,7 +310,7 @@ jobs:
 
       - name: Start Aerospike server
         id: setup-aerospike
-        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
         with:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
@@ -435,7 +435,7 @@ jobs:
       # Named Docker volumes work with the remote Linux daemon used by Windows.
       - name: Start Aerospike server
         id: setup-aerospike
-        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
         with:
           oidc-provider:    ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience:    ${{ vars.JFROG_OIDC_AUDIENCE }}

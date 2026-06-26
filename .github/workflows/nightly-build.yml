@@ -3,7 +3,7 @@ name: Nightly Trigger Build
 # Nightly CI against the full distro/arch matrix and server list.
 # Scheduled runs build from stage.
 
-run-name: "Nightly — ${{ github.ref_name }}"
+run-name: Nightly-${{ github.run_number }}
 
 permissions:
   contents: read
@@ -18,7 +18,7 @@ on:
 
 # Let nightly runs finish; queue newer runs behind them.
 concurrency:
-  group: nightly-${{ github.ref }}
+  group: nightly-stage
   cancel-in-progress: false
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          ref: ${{ github.ref }}
+          ref: stage
 
       - name: Load nightly test servers
         id: load
@@ -43,7 +43,6 @@ jobs:
                 | {
                     server_name: .key,
                     server: (.value.version // .key),
-                    server_type: (.value.type // ""),
                     "num-nodes": ((.value["num-nodes"] // .value.num_nodes // 1) | tostring)
                   }
               ]
@@ -66,14 +65,14 @@ jobs:
         include: ${{ fromJSON(needs.load-test-servers.outputs.test-servers) }}
     uses: ./.github/workflows/build-and-test.yml
     with:
-      ref:          ${{ github.ref }}
-      matrix-json: ${{ vars.LINUX_DISTRO_MATRIX }}
+      ref:          stage
+      linux-distros-json: ${{ vars.LINUX_DISTRO_MATRIX }}
       runners-json: ${{ vars.LINUX_RUNNERS || '{"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}' }}
       event-lib:    all
       server-tag:   ${{ matrix.server }}
       num-nodes:    ${{ matrix.num-nodes }}
       valgrind:     true
-      run-mac:      false # TODO will make it true once the mac runner are online again
+      run-mac:      true 
       run-windows:  true
       check-doc-lint: false
     secrets: inherit

@@ -459,7 +459,7 @@ jobs:
       - name: Promote release bundle
         id: promote
         if: steps.topology.outcome == 'success' && env.IS_DRY_RUN != 'true'
-        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@a9aa1d2a786b28b96f1f5cec6036c202741d8ca4 # main
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
         with:
           bundle-name:  ${{ env.BUNDLE_NAME }}
           version:      ${{ steps.extract.outputs.bundle_version }}

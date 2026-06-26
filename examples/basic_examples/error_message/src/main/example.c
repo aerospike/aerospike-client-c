@@ -66,6 +66,7 @@
 #include <aerospike/as_cdt_ctx.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
+#include <aerospike/as_exp_operations.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_hll_operations.h>
 #include <aerospike/as_integer.h>
@@ -829,6 +830,61 @@ case_operate_filtered_out(aerospike* as, as_error* err)
 	return s;
 }
 
+// A filter expression that fails to COMPILE on the server: eq(5, 6.0) has
+// int vs float operands, which the server rejects at build time (it does not
+// type-check this client-side). Yields AS_ERR_PARAMETER with the build-phase
+// detail message. Verbosity 3 so the server also emits the field-45 expression
+// trace (key 3); the client skips it as an unknown sub-key, exercising that
+// path end-to-end.
+static as_status
+case_filter_build_fail(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-filter-build-fail");
+	put_int(as, &key, 1);
+
+	as_exp_build(filter, as_exp_cmp_eq(as_exp_int(5), as_exp_float(6.0)));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = 3;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// An expression operation (exp_write) whose expression fails to COMPILE ->
+// AS_ERR_PARAMETER. Covers the operate-path build-failure detail authored in
+// as_exp_op_parse (distinct message from the filter path).
+static as_status
+case_exp_op_build_fail(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-expop-build-fail");
+	put_int(as, &key, 1);
+
+	as_exp_build(exp, as_exp_cmp_eq(as_exp_int(5), as_exp_float(6.0)));
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_write(&ops, BIN, exp, AS_EXP_WRITE_DEFAULT);
+
+	as_policy_operate pol = g_op_pol;
+	pol.base.error_detail_verbosity = 3;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_operate(as, err, &pol, &key, &ops, &rec);
+
+	as_record_destroy(rec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(exp);
+	return s;
+}
+
 
 //==========================================================
 // Case table.
@@ -955,6 +1011,14 @@ static const error_case CASES[] = {
 	{ "operate filtered out by filter_exp",
 	  AEROSPIKE_FILTERED_OUT, true, 0, "filtered out",
 	  case_operate_filtered_out },
+	// --- Expression build (compile) failures: AS_ERR_PARAMETER, AS_SUB_NONE,
+	// build-phase detail message (+ field-45 expression trace at verbosity 3). ---
+	{ "filter expression fails to build",
+	  AEROSPIKE_ERR_REQUEST_INVALID, true, 0,
+	  "invalid metadata expression in request", case_filter_build_fail },
+	{ "exp_write operation fails to build",
+	  AEROSPIKE_ERR_REQUEST_INVALID, true, 0,
+	  "invalid expression in operation request", case_exp_op_build_fail },
 };
 
 static const uint32_t N_CASES = (uint32_t)(sizeof(CASES) / sizeof(CASES[0]));

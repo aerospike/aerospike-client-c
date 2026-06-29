@@ -1734,7 +1734,7 @@ as_policy_base_read_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
-	p->error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	p->error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 }
 
 /**
@@ -1752,7 +1752,7 @@ as_policy_base_write_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
-	p->error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	p->error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 }
 
 /**
@@ -1783,7 +1783,7 @@ as_policy_base_query_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
-	p->error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	p->error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 }
 
 /**
@@ -2240,7 +2240,7 @@ as_policy_txn_verify_init(as_policy_txn_verify* p)
 	p->base.filter_exp = NULL;
 	p->base.txn = NULL;
 	p->base.compress = false;
-	p->base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	p->base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 	p->replica = AS_POLICY_REPLICA_MASTER;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_LINEARIZE;
@@ -2284,7 +2284,7 @@ as_policy_txn_roll_init(as_policy_txn_roll* p)
 	p->base.filter_exp = NULL;
 	p->base.txn = NULL;
 	p->base.compress = false;
-	p->base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	p->base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 	p->replica = AS_POLICY_REPLICA_MASTER;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;

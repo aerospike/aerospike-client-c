@@ -35,7 +35,7 @@
  * No error details requested (default).
  * Set on as_policy_base.error_detail_verbosity.
  */
-#define AS_ERROR_DETAIL_OFF        0
+#define AS_ERROR_DETAIL_NONE        0
 
 /**
  * Request subcode only from the server on error responses.
@@ -59,9 +59,9 @@
  */
 #define AS_SUB_NONE                                        0
 
-//---------------------------------
+//------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_PARAM (AS_ERR_PARAMETER)
-//---------------------------------
+//------------------------------------------------------------
 
 /**
  * Per-record TTL exceeds the namespace's max-ttl.
@@ -93,9 +93,9 @@
  */
 #define AS_SUB_PARAM_BIN_COUNT_TOO_LARGE                   5
 
-//---------------------------------
+//----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_CLUSTER (AS_ERR_UNAVAILABLE)
-//---------------------------------
+//----------------------------------------------------------------
 
 /**
  * Cluster is still resolving initial partition balance at startup.
@@ -111,9 +111,9 @@
  */
 #define AS_SUB_UNAVAIL_REPLICA_UNAVAILABLE                 2
 
-//---------------------------------
+//----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_UNSUPPORTED_FEATURE
-//---------------------------------
+//----------------------------------------------------------------
 
 /**
  * MRT attempted against a non-SC (AP) namespace.
@@ -128,9 +128,9 @@
  */
 #define AS_SUB_UNSUPP_FEAT_GENERIC                         2
 
-//---------------------------------
+//----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_BIN_NOT_FOUND
-//---------------------------------
+//----------------------------------------------------------------
 
 /**
  * HLL op needs an existing bin and can't auto-create one.
@@ -139,9 +139,9 @@
  */
 #define AS_SUB_BIN_NOT_FOUND_HLL_CANNOT_CREATE_WITH_OP     1
 
-//---------------------------------
+//----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_BIN_NAME
-//---------------------------------
+//----------------------------------------------------------------
 
 /**
  * Write would exceed the per-record bin-count limit (UDF path).
@@ -149,9 +149,9 @@
  */
 #define AS_SUB_BIN_NAME_COUNT_TOO_LARGE                    1
 
-//---------------------------------
+//----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_FAIL_FORBIDDEN
-//---------------------------------
+//----------------------------------------------------------------
 
 /**
  * Write bounced by an XDR ship filter at the destination.
@@ -208,9 +208,9 @@
  */
 #define AS_SUB_FORBID_MASKING_ROLE_VIOLATION               9
 
-//---------------------------------
+//----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_OP_NOT_APPLICABLE
-//---------------------------------
+//----------------------------------------------------------------
 
 /**
  * List index is outside the current element range.
@@ -267,9 +267,9 @@
  */
 #define AS_SUB_OPNOT_HLL_INTERSECT_MINHASH_MISMATCH        9
 
-//---------------------------------
+//----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_FILTERED_OUT
-//---------------------------------
+//----------------------------------------------------------------
 
 /**
  * Record filtered out by a metadata-only filter expression.
@@ -295,9 +295,9 @@
  */
 #define AS_SUB_FILTERED_BINS_EVAL_FAILED                   4
 
-//---------------------------------
+//----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_MRT_BLOCKED
-//---------------------------------
+//----------------------------------------------------------------
 
 /**
  * Record is provisionally locked by another MRT.

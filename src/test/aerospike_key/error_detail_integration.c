@@ -171,7 +171,7 @@ TEST(ed_sync_write_gen_v0, "5.1.1 write gen mismatch verbosity 0")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 	pw.gen = AS_POLICY_GEN_EQ;
 
 	as_record rec;
@@ -246,7 +246,7 @@ TEST(ed_sync_delete_gen_v0, "5.2.1 delete gen mismatch verbosity 0")
 
 	as_policy_remove pr;
 	as_policy_remove_init(&pr);
-	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 	pr.gen = AS_POLICY_GEN_EQ;
 	pr.generation = 9999;
 
@@ -285,7 +285,7 @@ TEST(ed_sync_touch_gen_v0, "5.3.1 touch gen mismatch verbosity 0")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 	po.gen = AS_POLICY_GEN_EQ;
 
 	as_operations ops;
@@ -334,7 +334,7 @@ TEST(ed_sync_operate_type_v0, "5.4.1 operate bin type mismatch verbosity 0")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -604,7 +604,7 @@ TEST(ed_sync_priority_logic_v0, "5.16.2 default format preserved at verbosity 0"
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 	pw.gen = AS_POLICY_GEN_EQ;
 
 	as_record rec;

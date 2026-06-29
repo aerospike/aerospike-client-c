@@ -667,7 +667,7 @@ TEST(error_detail_header_v0, "4.3 verbosity 0 clears info4 bits")
 {
 	as_policy_base policy;
 	as_policy_base_write_init(&policy);
-	policy.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
+	policy.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 
 	uint8_t cmd[30];
 	memset(cmd, 0, sizeof(cmd));

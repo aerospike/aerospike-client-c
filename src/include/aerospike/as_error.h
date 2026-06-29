@@ -19,6 +19,7 @@
 #include <aerospike/as_std.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_subcode.h>
 
 #include <stdarg.h>
 #include <stdio.h>

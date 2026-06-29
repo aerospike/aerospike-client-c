@@ -171,7 +171,7 @@ TEST(ed_sync_write_gen_v0, "5.1.1 write gen mismatch verbosity 0")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 0;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
 	pw.gen = AS_POLICY_GEN_EQ;
 
 	as_record rec;
@@ -183,7 +183,7 @@ TEST(ed_sync_write_gen_v0, "5.1.1 write gen mismatch verbosity 0")
 
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_GENERATION);
 	assert_true(strstr(err.message, "subcode=") == NULL);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
 // 5.1.2 Write with verbosity 1 returns subcode only
@@ -195,7 +195,7 @@ TEST(ed_sync_write_gen_v1, "5.1.2 write gen mismatch verbosity 1")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 1;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_SUBCODE;
 	pw.gen = AS_POLICY_GEN_EQ;
 
 	as_record rec;
@@ -208,7 +208,7 @@ TEST(ed_sync_write_gen_v1, "5.1.2 write gen mismatch verbosity 1")
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_GENERATION);
 	// AS_ERR_RECORD_GENERATION has no per-status subcode enum; server uses AS_SUB_NONE.
 	// At verbosity 1, field 45 is omitted entirely when there is no dispatchable subcode.
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
 // 5.1.3 Write with verbosity 2 returns server message (no subcode for gen mismatch)
@@ -220,7 +220,7 @@ TEST(ed_sync_write_gen_v2, "5.1.3 write gen mismatch verbosity 2")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 2;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	pw.gen = AS_POLICY_GEN_EQ;
 
 	as_record rec;
@@ -233,7 +233,7 @@ TEST(ed_sync_write_gen_v2, "5.1.3 write gen mismatch verbosity 2")
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_GENERATION);
 	// AS_ERR_RECORD_GENERATION has no per-status subcode enum; server uses AS_SUB_NONE.
 	// At verbosity 2, server may send message-only or omit field 45 entirely.
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	assert_true(strlen(err.message) > 0);
 }
 
@@ -246,7 +246,7 @@ TEST(ed_sync_delete_gen_v0, "5.2.1 delete gen mismatch verbosity 0")
 
 	as_policy_remove pr;
 	as_policy_remove_init(&pr);
-	pr.base.error_detail_verbosity = 0;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
 	pr.gen = AS_POLICY_GEN_EQ;
 	pr.generation = 9999;
 
@@ -265,14 +265,14 @@ TEST(ed_sync_delete_gen_v2, "5.2.2 delete gen mismatch verbosity 2")
 
 	as_policy_remove pr;
 	as_policy_remove_init(&pr);
-	pr.base.error_detail_verbosity = 2;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	pr.gen = AS_POLICY_GEN_EQ;
 	pr.generation = 9999;
 
 	as_status status = aerospike_key_remove(as, &err, &pr, &key);
 
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_GENERATION);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	assert_true(strlen(err.message) > 0);
 }
 
@@ -285,7 +285,7 @@ TEST(ed_sync_touch_gen_v0, "5.3.1 touch gen mismatch verbosity 0")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 0;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
 	po.gen = AS_POLICY_GEN_EQ;
 
 	as_operations ops;
@@ -309,7 +309,7 @@ TEST(ed_sync_touch_gen_v2, "5.3.2 touch gen mismatch verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	po.gen = AS_POLICY_GEN_EQ;
 
 	as_operations ops;
@@ -320,7 +320,7 @@ TEST(ed_sync_touch_gen_v2, "5.3.2 touch gen mismatch verbosity 2")
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_GENERATION);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	assert_true(strlen(err.message) > 0);
 	as_operations_destroy(&ops);
 }
@@ -334,7 +334,7 @@ TEST(ed_sync_operate_type_v0, "5.4.1 operate bin type mismatch verbosity 0")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 0;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -356,7 +356,7 @@ TEST(ed_sync_operate_type_v1, "5.4.2 operate bin type mismatch verbosity 1")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 1;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_SUBCODE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -366,7 +366,7 @@ TEST(ed_sync_operate_type_v1, "5.4.2 operate bin type mismatch verbosity 1")
 
 	assert_int_eq(status, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);
 	// AS_ERR_BIN_INCOMPATIBLE_TYPE has no per-status subcode enum.
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	as_operations_destroy(&ops);
 }
 
@@ -379,7 +379,7 @@ TEST(ed_sync_operate_type_v2, "5.4.3 operate bin type mismatch verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -389,7 +389,7 @@ TEST(ed_sync_operate_type_v2, "5.4.3 operate bin type mismatch verbosity 2")
 
 	assert_int_eq(status, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);
 	// AS_ERR_BIN_INCOMPATIBLE_TYPE has no per-status subcode enum.
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	assert_true(strlen(err.message) > 0);
 	as_operations_destroy(&ops);
 }
@@ -403,7 +403,7 @@ TEST(ed_sync_read_ok_v2, "5.5.1 successful read verbosity 2")
 
 	as_policy_read pr;
 	as_policy_read_init(&pr);
-	pr.base.error_detail_verbosity = 2;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_record* rec = NULL;
 	as_status status = aerospike_key_get(as, &err, &pr, &key, &rec);
@@ -411,7 +411,7 @@ TEST(ed_sync_read_ok_v2, "5.5.1 successful read verbosity 2")
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_not_null(rec);
 	assert_int_eq(as_record_get_int64(rec, "ibin", 0), 100);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	as_record_destroy(rec);
 }
 
@@ -424,7 +424,7 @@ TEST(ed_sync_exists_ok_v2, "5.6.1 successful exists verbosity 2")
 
 	as_policy_read pr;
 	as_policy_read_init(&pr);
-	pr.base.error_detail_verbosity = 2;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_record* rec = NULL;
 	as_status status = aerospike_key_exists(as, &err, &pr, &key, &rec);
@@ -432,7 +432,7 @@ TEST(ed_sync_exists_ok_v2, "5.6.1 successful exists verbosity 2")
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_not_null(rec);
 	assert_true(rec->gen > 0);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	as_record_destroy(rec);
 }
 
@@ -445,7 +445,7 @@ TEST(ed_sync_exists_not_found_v2, "5.7.1 exists not found verbosity 2")
 
 	as_policy_read pr;
 	as_policy_read_init(&pr);
-	pr.base.error_detail_verbosity = 2;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_record* rec = NULL;
 	as_status status = aerospike_key_exists(as, &err, &pr, &key, &rec);
@@ -465,7 +465,7 @@ TEST(ed_sync_delete_not_found_v2, "5.8.1 delete not found verbosity 2")
 
 	as_policy_remove pr;
 	as_policy_remove_init(&pr);
-	pr.base.error_detail_verbosity = 2;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_status status = aerospike_key_remove(as, &err, &pr, &key);
 
@@ -484,7 +484,7 @@ TEST(ed_sync_write_ok_v2, "5.10.1 successful write verbosity 2")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 2;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_record rec;
 	as_record_inita(&rec, 1);
@@ -493,7 +493,7 @@ TEST(ed_sync_write_ok_v2, "5.10.1 successful write verbosity 2")
 	as_status status = aerospike_key_put(as, &err, &pw, &key, &rec);
 
 	assert_int_eq(status, AEROSPIKE_OK);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 
 	// Read back to verify
 	as_record* recp = NULL;
@@ -518,7 +518,7 @@ TEST(ed_sync_txn_write_gen_v2, "5.15.1 txn write gen mismatch verbosity 2")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 2;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	pw.base.txn = &txn;
 	pw.gen = AS_POLICY_GEN_EQ;
 
@@ -530,7 +530,7 @@ TEST(ed_sync_txn_write_gen_v2, "5.15.1 txn write gen mismatch verbosity 2")
 	as_status status = aerospike_key_put(as, &err, &pw, &key, &rec);
 
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_GENERATION);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	assert_true(strlen(err.message) > 0);
 
 	aerospike_abort(as, &err, &txn, NULL);
@@ -549,7 +549,7 @@ TEST(ed_sync_txn_write_ok_v2, "5.15.2 txn write ok verbosity 2")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 2;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	pw.base.txn = &txn;
 
 	as_record rec;
@@ -559,7 +559,7 @@ TEST(ed_sync_txn_write_ok_v2, "5.15.2 txn write ok verbosity 2")
 	as_status status = aerospike_key_put(as, &err, &pw, &key, &rec);
 
 	assert_int_eq(status, AEROSPIKE_OK);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 
 	aerospike_abort(as, &err, &txn, NULL);
 	as_txn_destroy(&txn);
@@ -578,7 +578,7 @@ TEST(ed_sync_priority_logic_v2, "5.16.1 server message displaces default format"
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -604,7 +604,7 @@ TEST(ed_sync_priority_logic_v0, "5.16.2 default format preserved at verbosity 0"
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 0;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_OFF;
 	pw.gen = AS_POLICY_GEN_EQ;
 
 	as_record rec;
@@ -616,7 +616,7 @@ TEST(ed_sync_priority_logic_v0, "5.16.2 default format preserved at verbosity 0"
 
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_GENERATION);
 	assert_true(strstr(err.message, as_error_string(AEROSPIKE_ERR_RECORD_GENERATION)) != NULL);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
 // 5.17.1 Cross-verbosity consistency
@@ -630,7 +630,7 @@ TEST(ed_sync_cross_verbosity, "5.17.1 same error at v1 and v2 returns same subco
 	// Verbosity 1
 	as_policy_operate po1;
 	as_policy_operate_init(&po1);
-	po1.base.error_detail_verbosity = 1;
+	po1.base.error_detail_verbosity = AS_ERROR_DETAIL_SUBCODE;
 
 	as_operations ops1;
 	as_operations_inita(&ops1, 1);
@@ -642,7 +642,7 @@ TEST(ed_sync_cross_verbosity, "5.17.1 same error at v1 and v2 returns same subco
 	// Verbosity 2
 	as_policy_operate po2;
 	as_policy_operate_init(&po2);
-	po2.base.error_detail_verbosity = 2;
+	po2.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops2;
 	as_operations_inita(&ops2, 1);
@@ -666,14 +666,14 @@ TEST(ed_sync_udf_non_interference, "5.9.1 UDF error non-interference at verbosit
 
 	as_policy_apply pa;
 	as_policy_apply_init(&pa);
-	pa.base.error_detail_verbosity = 2;
+	pa.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_val* res = NULL;
 	as_status status = aerospike_key_apply(as, &err, &pa, &key, UDF_MODULE, "fail_test", NULL, &res);
 
 	assert_int_eq(status, AEROSPIKE_ERR_UDF);
 	assert_true(strstr(err.message, "test failure") != NULL);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 
 	if (res) {
 		as_val_destroy(res);
@@ -689,7 +689,7 @@ TEST(ed_sync_cdt_list_oob, "5.11.1 CDT list index out of bounds verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -713,7 +713,7 @@ TEST(ed_sync_cdt_map_create_only, "5.12.1 CDT map create-only violation verbosit
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_map_policy mp;
 	as_map_policy_set(&mp, AS_MAP_UNORDERED, AS_MAP_CREATE_ONLY);
@@ -745,7 +745,7 @@ TEST(ed_sync_bit_invalid, "5.13.1 bit invalid offset verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -770,7 +770,7 @@ TEST(ed_sync_hll_invalid, "5.14.1 HLL invalid params verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	aerospike_key_remove(as, &err, NULL, &key);
 
@@ -797,7 +797,7 @@ TEST(ed_sync_param_ttl_invalid, "5.18.1 param bit offset out of range verbosity 
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -822,7 +822,7 @@ TEST(ed_sync_cdt_rank_oob, "5.19.1 CDT list rank out of bounds verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -850,7 +850,7 @@ TEST(ed_sync_filtered_out, "5.20.1 filtered out verbosity 2")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 2;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	pw.base.filter_exp = filter;
 
 	as_record rec;
@@ -876,7 +876,7 @@ TEST(ed_sync_bin_not_found_hll, "5.21.1 bin not found HLL verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -901,7 +901,7 @@ TEST(ed_sync_param_bits_size, "5.22.1 param bits size out of range verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -927,7 +927,7 @@ TEST(ed_sync_batch_no_leak, "7.1 batch verbosity no leak")
 	as_error err;
 	as_policy_batch pb;
 	as_policy_batch_init(&pb);
-	pb.base.error_detail_verbosity = 2;
+	pb.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_batch_records records;
 	as_batch_records_inita(&records, 3);
@@ -967,7 +967,7 @@ TEST(ed_sync_scan_no_leak, "7.2 scan verbosity no leak")
 	as_error err;
 	as_policy_scan ps;
 	as_policy_scan_init(&ps);
-	ps.base.error_detail_verbosity = 2;
+	ps.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_scan scan;
 	as_scan_init(&scan, NAMESPACE, SET);
@@ -995,7 +995,7 @@ TEST(ed_sync_query_no_leak, "7.3 query verbosity no leak")
 	as_error err;
 	as_policy_query pq;
 	as_policy_query_init(&pq);
-	pq.base.error_detail_verbosity = 2;
+	pq.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);
@@ -1017,7 +1017,7 @@ TEST(ed_sync_no_cross_request_leak, "7.4 no cross-request leak")
 	// Error A: generation mismatch
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 2;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	pw.gen = AS_POLICY_GEN_EQ;
 
 	as_record rec;
@@ -1033,7 +1033,7 @@ TEST(ed_sync_no_cross_request_leak, "7.4 no cross-request leak")
 	// Successful write clears error
 	as_policy_write pw_ok;
 	as_policy_write_init(&pw_ok);
-	pw_ok.base.error_detail_verbosity = 2;
+	pw_ok.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_record rec_ok;
 	as_record_inita(&rec_ok, 1);
@@ -1045,7 +1045,7 @@ TEST(ed_sync_no_cross_request_leak, "7.4 no cross-request leak")
 	// Error B: bin type mismatch
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -1069,7 +1069,7 @@ TEST(ed_sync_error_state_reset, "7.5 error state reset on next op")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -1085,7 +1085,7 @@ TEST(ed_sync_error_state_reset, "7.5 error state reset on next op")
 
 	as_policy_write pw_ok;
 	as_policy_write_init(&pw_ok);
-	pw_ok.base.error_detail_verbosity = 2;
+	pw_ok.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_record rec_ok;
 	as_record_inita(&rec_ok, 1);
@@ -1093,7 +1093,7 @@ TEST(ed_sync_error_state_reset, "7.5 error state reset on next op")
 
 	aerospike_key_put(as, &err, &pw_ok, &key, &rec_ok);
 	assert_int_eq(err.code, AEROSPIKE_OK);
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
 //-----------------------------------
@@ -1132,7 +1132,7 @@ TEST(ed_async_write_gen_v2, "6.1 async write gen mismatch verbosity 2")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 2;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	pw.gen = AS_POLICY_GEN_EQ;
 
 	as_record rec;
@@ -1182,7 +1182,7 @@ TEST(ed_async_delete_gen_v2, "6.2 async delete gen mismatch verbosity 2")
 
 	as_policy_remove pr;
 	as_policy_remove_init(&pr);
-	pr.base.error_detail_verbosity = 2;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	pr.gen = AS_POLICY_GEN_EQ;
 	pr.generation = 9999;
 
@@ -1228,7 +1228,7 @@ TEST(ed_async_operate_type_v2, "6.3 async operate bin type mismatch verbosity 2"
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -1277,7 +1277,7 @@ TEST(ed_async_touch_gen_v2, "6.4 async touch gen mismatch verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	po.gen = AS_POLICY_GEN_EQ;
 
 	as_operations ops;
@@ -1328,7 +1328,7 @@ TEST(ed_async_exists_not_found_v2, "6.5 async exists not found verbosity 2")
 
 	as_policy_read pr;
 	as_policy_read_init(&pr);
-	pr.base.error_detail_verbosity = 2;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	async_error_data data;
 	data.result = __result__;
@@ -1374,7 +1374,7 @@ TEST(ed_async_cdt_list_oob, "6.6 async CDT list out of bounds verbosity 2")
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -1427,7 +1427,7 @@ TEST(ed_async_read_ok_v2, "6.7 async read happy path verbosity 2")
 
 	as_policy_read pr;
 	as_policy_read_init(&pr);
-	pr.base.error_detail_verbosity = 2;
+	pr.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	async_error_data data;
 	data.result = __result__;
@@ -1469,7 +1469,7 @@ TEST(ed_async_write_ok_v2, "6.8 async write happy path verbosity 2")
 
 	as_policy_write pw;
 	as_policy_write_init(&pw);
-	pw.base.error_detail_verbosity = 2;
+	pw.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_record rec;
 	as_record_inita(&rec, 1);
@@ -1521,7 +1521,7 @@ TEST(ed_async_priority_logic_v2, "6.9 async server message displaces default for
 
 	as_policy_operate po;
 	as_policy_operate_init(&po);
-	po.base.error_detail_verbosity = 2;
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);

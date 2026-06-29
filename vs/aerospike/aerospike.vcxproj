@@ -404,6 +404,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_socket.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_status.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_string_operations.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_subcode.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_tls.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_txn.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_txn_monitor.h" />

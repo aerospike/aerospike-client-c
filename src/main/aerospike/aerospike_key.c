@@ -437,6 +437,7 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->key = src->key;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->deserialize = src->deserialize;
@@ -945,6 +946,7 @@ as_policy_write_merge(aerospike* as, const as_policy_write* src, as_policy_write
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->exists = src->exists;
@@ -1117,6 +1119,7 @@ as_policy_remove_merge(aerospike* as, const as_policy_remove* src, as_policy_rem
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->generation = src->generation;
@@ -1285,6 +1288,7 @@ as_policy_operate_merge(aerospike* as, bool is_write, const as_policy_operate* s
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->exists = src->exists;
@@ -1649,6 +1653,7 @@ as_policy_apply_merge(aerospike* as, const as_policy_apply* src, as_policy_apply
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->ttl = src->ttl;
 		mrg->on_locking_only = src->on_locking_only;

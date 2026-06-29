@@ -4514,6 +4514,7 @@ as_policy_batch_parent_read_merge(aerospike* as, const as_policy_batch* src, as_
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->send_set_name = src->send_set_name;
 		mrg->deserialize = src->deserialize;
@@ -4566,6 +4567,7 @@ as_policy_batch_parent_write_merge(aerospike* as, const as_policy_batch* src, as
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->send_set_name = src->send_set_name;
 		mrg->deserialize = src->deserialize;

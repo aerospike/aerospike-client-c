@@ -160,7 +160,7 @@ TEST(error_detail_parser_empty_map, "3.1 empty map yields no error detail")
 	as_command_parse_error_details(&err, buf, len);
 
 	assert_string_eq(err.message, "");
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
 // 3.2 Subcode only (fixint key 1)
@@ -199,7 +199,7 @@ TEST(error_detail_parser_message_only, "3.3 message only fixstr")
 	as_command_parse_error_details(&err, buf, p);
 
 	assert_string_eq(err.message, "record not found");
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
 // 3.4 Subcode and message together
@@ -322,7 +322,7 @@ TEST(error_detail_parser_truncated, "3.8 truncated buffer no crash")
 	as_command_parse_error_details(&err, buf, 2);
 
 	assert_string_eq(err.message, "");
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
 // 3.9 Zero-length buffer returns null
@@ -334,7 +334,7 @@ TEST(error_detail_parser_zero_length, "3.9 zero-length buffer")
 	as_command_parse_error_details(&err, NULL, 0);
 
 	assert_string_eq(err.message, "");
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
 // 3.10 Subcode encoded as uint8 (0xCC)
@@ -536,7 +536,7 @@ TEST(error_detail_parser_subcode_zero, "3.19 subcode zero is valid")
 	as_command_parse_error_details(&err, buf, p);
 
 	assert_string_eq(err.message, "zero subcode (subcode=0)");
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
 // 3.20 Large subcode value (boundary)
@@ -655,7 +655,7 @@ TEST(error_detail_policy_copy, "4.2 policy copy preserves verbosity")
 {
 	as_policy_write src;
 	as_policy_write_init(&src);
-	src.base.error_detail_verbosity = 2;
+	src.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_policy_write dst;
 	as_policy_write_copy(&src, &dst);
@@ -667,7 +667,7 @@ TEST(error_detail_header_v0, "4.3 verbosity 0 clears info4 bits")
 {
 	as_policy_base policy;
 	as_policy_base_write_init(&policy);
-	policy.error_detail_verbosity = 0;
+	policy.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 
 	uint8_t cmd[30];
 	memset(cmd, 0, sizeof(cmd));
@@ -683,7 +683,7 @@ TEST(error_detail_header_v1, "4.4 verbosity 1 sets info4 0x20")
 {
 	as_policy_base policy;
 	as_policy_base_write_init(&policy);
-	policy.error_detail_verbosity = 1;
+	policy.error_detail_verbosity = AS_ERROR_DETAIL_SUBCODE;
 
 	uint8_t cmd[30];
 	memset(cmd, 0, sizeof(cmd));
@@ -699,7 +699,7 @@ TEST(error_detail_header_v2, "4.5 verbosity 2 sets info4 0x40")
 {
 	as_policy_base policy;
 	as_policy_base_write_init(&policy);
-	policy.error_detail_verbosity = 2;
+	policy.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	uint8_t cmd[30];
 	memset(cmd, 0, sizeof(cmd));
@@ -768,7 +768,7 @@ TEST(error_detail_header_no_clobber, "4.8 verbosity does not clobber txn flags")
 {
 	as_policy_base policy;
 	as_policy_base_write_init(&policy);
-	policy.error_detail_verbosity = 2;
+	policy.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	uint8_t cmd[30];
 	memset(cmd, 0, sizeof(cmd));
@@ -786,7 +786,7 @@ TEST(error_detail_header_read, "4.9 verbosity in read header")
 {
 	as_policy_base policy;
 	as_policy_base_read_init(&policy);
-	policy.error_detail_verbosity = 2;
+	policy.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	uint8_t cmd[30];
 	memset(cmd, 0, sizeof(cmd));
@@ -802,7 +802,7 @@ TEST(error_detail_header_write, "4.10 verbosity in write header")
 {
 	as_policy_base policy;
 	as_policy_base_write_init(&policy);
-	policy.error_detail_verbosity = 1;
+	policy.error_detail_verbosity = AS_ERROR_DETAIL_SUBCODE;
 
 	uint8_t cmd[30];
 	memset(cmd, 0, sizeof(cmd));
@@ -818,7 +818,7 @@ TEST(error_detail_header_read_header, "4.11 verbosity in exists header")
 {
 	as_policy_base policy;
 	as_policy_base_read_init(&policy);
-	policy.error_detail_verbosity = 2;
+	policy.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	uint8_t cmd[30];
 	memset(cmd, 0, sizeof(cmd));
@@ -843,7 +843,7 @@ TEST(error_detail_reset_clears_subcode, "7.6 as_error_reset clears subcode")
 
 	as_error_reset(&err);
 
-	assert_int_eq(err.subcode, 0);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	assert_string_eq(err.message, "");
 }
 

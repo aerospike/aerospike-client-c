@@ -435,6 +435,9 @@
     <ClInclude Include="..\..\src\include\aerospike\as_string_operations.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\aerospike\as_subcode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\main\aerospike\_bin.c">

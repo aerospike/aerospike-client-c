@@ -2043,6 +2043,7 @@ as_policy_query_merge(aerospike* as, const as_policy_query* src, as_policy_query
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->fail_on_cluster_change = src->fail_on_cluster_change;
 		mrg->deserialize = src->deserialize;
 		mrg->short_query = src->short_query;

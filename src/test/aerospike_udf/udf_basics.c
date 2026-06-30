@@ -153,10 +153,74 @@ TEST( udf_basics_1 , "manage udf_basics.lua" ) {
 	as_bytes_destroy(&content);
 }
 
+TEST( udf_basics_2 , "path-prefixed filename is stripped to basename for put, get and remove" ) {
+
+	const char * path_prefixed = LUA_FILE;
+	const char * basename_only = UDF_FILE".lua";
+
+	as_error err;
+	as_error_reset(&err);
+
+	// Ensure clean state.
+	aerospike_udf_remove(as, &err, NULL, basename_only);
+	as_sleep(100);
+
+	// Upload the file content.
+	as_bytes content;
+	bool b = udf_readfile(path_prefixed, &content);
+	assert_true(b);
+
+	// udf_put with a path-prefixed filename must succeed (as_basename strips).
+	info("udf_put with path-prefixed filename: %s", path_prefixed);
+	aerospike_udf_put(as, &err, NULL, path_prefixed, AS_UDF_TYPE_LUA, &content);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	aerospike_udf_put_wait(as, &err, NULL, basename_only, 100);
+
+	// udf_get with a path-prefixed filename must succeed.
+	as_udf_file file;
+	as_udf_file_init(&file);
+
+	info("udf_get with path-prefixed filename: %s", path_prefixed);
+	aerospike_udf_get(as, &err, NULL, path_prefixed, AS_UDF_TYPE_LUA, &file);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	// file.name must contain the basename, not the full path.
+	assert_string_eq( file.name, basename_only );
+	assert_int_eq( file.content.size, content.size );
+
+	as_udf_file_destroy(&file);
+
+	// udf_remove with a path-prefixed filename must succeed.
+	info("udf_remove with path-prefixed filename: %s", path_prefixed);
+	aerospike_udf_remove(as, &err, NULL, path_prefixed);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	as_sleep(100);
+
+	// Verify the module is gone.
+	as_udf_files files;
+	as_udf_files_init(&files, 0);
+	aerospike_udf_list(as, &err, NULL, &files);
+	assert_int_eq( err.code, AEROSPIKE_OK );
+
+	bool still_exists = false;
+	for (uint32_t i = 0; i < files.size; i++) {
+		if ( strcmp(files.entries[i].name, basename_only) == 0 ) {
+			still_exists = true;
+		}
+	}
+	as_udf_files_destroy(&files);
+	assert_false( still_exists );
+
+	as_bytes_destroy(&content);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
 SUITE( udf_basics, "aerospike_udf basic tests" ) {
 	suite_add( udf_basics_1 );
+	suite_add( udf_basics_2 );
 }

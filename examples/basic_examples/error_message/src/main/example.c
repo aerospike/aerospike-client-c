@@ -885,6 +885,171 @@ case_exp_op_build_fail(aerospike* as, as_error* err)
 	return s;
 }
 
+// --- SERVER-1138 runtime expression eval FAULTS. ---
+//
+// These expressions COMPILE cleanly but FAULT at evaluation (integer div/mod
+// by zero). The non-breaking contract: which records MATCH is unchanged -- a
+// filter fault is still cleanly FILTERED_OUT, an expop fault still
+// OP_NOT_APPLICABLE. At verbosity 3 the server ADDS a field-45 key-3 eval-phase
+// trace (phase=eval, outcome=fault, op, path, snippet) PLUS the tier-2 detail
+// message ("integer division by zero" etc.). The client skips key 3 as an
+// unknown sub-key (as_command_parse_error_details), so it surfaces the status +
+// message and the trace bytes round-trip harmlessly; the trace's internal
+// fields are decoded/asserted by the server-side ErrorDetailsTest unit suite.
+
+// Filter fault: gt(div(5, 0), 1). Literal operands -> faults for ANY record.
+static as_status
+case_filter_eval_fault_div_zero(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-filter-div0");
+	put_int(as, &key, 1);
+
+	as_exp_build(filter,
+			as_exp_cmp_gt(as_exp_div(as_exp_int(5), as_exp_int(0)),
+					as_exp_int(1)));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = 3;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// Filter fault: gt(mod(5, 0), 1) -> integer modulo by zero (eval_mod site).
+static as_status
+case_filter_eval_fault_mod_zero(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-filter-mod0");
+	put_int(as, &key, 1);
+
+	as_exp_build(filter,
+			as_exp_cmp_gt(as_exp_mod(as_exp_int(5), as_exp_int(0)),
+					as_exp_int(1)));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = 3;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// Tier gating: the SAME div-by-zero filter fault at verbosity 1. Status is
+// still FILTERED_OUT, but no field-45 detail rides at all (tier < 2), so the
+// eval message must NOT appear in err.message.
+static as_status
+case_filter_eval_fault_low_verbosity(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-filter-div0-lowv");
+	put_int(as, &key, 1);
+
+	as_exp_build(filter,
+			as_exp_cmp_gt(as_exp_div(as_exp_int(5), as_exp_int(0)),
+					as_exp_int(1)));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = 1;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// Non-breaking tripwire: a filter over an ABSENT bin still cleanly filters --
+// bin_int("missing") resolves to UNKNOWN (not a fault), so gt(<unknown>, 1) ->
+// UNKNOWN -> FILTERED_OUT with NO eval message and NO trace.
+static as_status
+case_filter_absent_bin_no_fault(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-filter-absent");
+	put_int(as, &key, 1); // has BIN; filter reads a DIFFERENT, missing bin
+
+	as_exp_build(filter,
+			as_exp_cmp_gt(as_exp_bin_int("missing"), as_exp_int(1)));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = 3;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// Non-breaking tripwire: key() over a keyless record still cleanly filters. The
+// record is written without storing its key (default), so key_int() resolves to
+// UNKNOWN -> FILTERED_OUT, NOT a fault (eval_rec_key stays absent/UNK in v1).
+static as_status
+case_filter_keyless_key_no_fault(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-filter-keyless");
+	put_int(as, &key, 1); // g_write_pol does not store the key on the server
+
+	as_exp_build(filter,
+			as_exp_cmp_eq(as_exp_key_int(), as_exp_int(7)));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = 3;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// expop fault: a read-expression value op that faults -- exp_read("v",
+// div(5,0)). The result fails to materialize -> AEROSPIKE_ERR_OP_NOT_APPLICABLE
+// (status unchanged) + eval trace/message at verbosity 3. Distinct boundary
+// from the filter path (as_exp_eval_to_result -> eval_op in expop.c).
+static as_status
+case_expop_eval_fault_div_zero(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-expop-div0");
+	put_int(as, &key, 1);
+
+	as_exp_build(exp, as_exp_div(as_exp_int(5), as_exp_int(0)));
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "v", exp, AS_EXP_READ_DEFAULT);
+
+	as_policy_operate pol = g_op_pol;
+	pol.base.error_detail_verbosity = 3;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_operate(as, err, &pol, &key, &ops, &rec);
+
+	as_record_destroy(rec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(exp);
+	return s;
+}
+
 
 //==========================================================
 // Case table.
@@ -1019,6 +1184,30 @@ static const error_case CASES[] = {
 	{ "exp_write operation fails to build",
 	  AEROSPIKE_ERR_REQUEST_INVALID, true, 0,
 	  "invalid expression in operation request", case_exp_op_build_fail },
+	// --- SERVER-1138 runtime eval faults (verbosity 3): status unchanged +
+	// AS_SUB_NONE + eval-fault message; field-45 key-3 trace rides too (the
+	// client skips it as an unknown sub-key). ---
+	{ "filter eval fault: div by zero -> FILTERED_OUT + trace",
+	  AEROSPIKE_FILTERED_OUT, true, 0,
+	  "integer division by zero", case_filter_eval_fault_div_zero },
+	{ "filter eval fault: mod by zero -> FILTERED_OUT + trace",
+	  AEROSPIKE_FILTERED_OUT, true, 0,
+	  "integer modulo by zero", case_filter_eval_fault_mod_zero },
+	{ "expop eval fault: div by zero -> OP_NOT_APPLICABLE + trace",
+	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, true, 0,
+	  "integer division by zero", case_expop_eval_fault_div_zero },
+	// --- SERVER-1138 non-breaking tripwires / tier floor: still cleanly
+	// filtered, NO fault detail (the must-be-absent message is checked
+	// explicitly in run_eval_fault_positive_checks). ---
+	{ "tier gating: div-by-zero filter at verbosity 1 -> no eval detail",
+	  AEROSPIKE_FILTERED_OUT, true, 0, NULL,
+	  case_filter_eval_fault_low_verbosity },
+	{ "non-breaking: absent bin filter -> FILTERED_OUT, no fault",
+	  AEROSPIKE_FILTERED_OUT, true, 0, NULL,
+	  case_filter_absent_bin_no_fault },
+	{ "non-breaking: keyless key() filter -> FILTERED_OUT, no fault",
+	  AEROSPIKE_FILTERED_OUT, true, 0, NULL,
+	  case_filter_keyless_key_no_fault },
 };
 
 static const uint32_t N_CASES = (uint32_t)(sizeof(CASES) / sizeof(CASES[0]));
@@ -1189,6 +1378,129 @@ run_batch_cases(aerospike* as)
 	return failed;
 }
 
+//==========================================================
+// SERVER-1138 positive (must-SUCCEED) eval-fault checks.
+//
+// The CASES[] loop models only FAILING ops. Two SERVER-1138 behaviors are
+// proved by SUCCESS, so they get their own checks (mirrors run_batch_cases):
+//   - or(<faulting>, TRUE): the non-breaking invariant -- a Kleene OR with a
+//     determining TRUE sibling must still MATCH, not be flipped to filtered.
+//   - exp_read(div(5,0)) with EVAL_NO_FAIL: fault swallowed, op SUCCEEDS, no
+//     detail.
+// Plus a stronger negative check on the three "no fault" filter paths: the
+// eval-fault message must be genuinely ABSENT from err.message.
+//
+// Returns the number of failed checks.
+//
+
+static uint32_t
+run_eval_fault_positive_checks(aerospike* as)
+{
+	uint32_t failed = 0;
+
+	// --- or(div(5,0), TRUE) must still MATCH (record is read). ---
+	{
+		as_key key;
+		as_key_init(&key, g_namespace, g_set, "edk-or-fault-true");
+		put_int(as, &key, 1);
+
+		as_exp_build(filter,
+				as_exp_or(
+						as_exp_cmp_gt(as_exp_div(as_exp_int(5), as_exp_int(0)),
+								as_exp_int(1)),
+						as_exp_bool(true)));
+
+		as_policy_read pol = g_read_pol;
+		pol.base.error_detail_verbosity = 3;
+		pol.base.filter_exp = filter;
+
+		as_error err;
+		as_error_reset(&err);
+		as_record* rec = NULL;
+		as_status s = aerospike_key_get(as, &err, &pol, &key, &rec);
+
+		if (s != AEROSPIKE_OK) {
+			LOG("FAIL eval_or_fault_true_matches: got %d - %s "
+					"(must MATCH despite absorbed div-by-zero)", s, err.message);
+			failed++;
+		}
+		else {
+			LOG("PASS eval_or_fault_true_matches (record read OK)");
+		}
+
+		as_record_destroy(rec);
+		as_exp_destroy(filter);
+	}
+
+	// --- exp_read(div(5,0)) with EVAL_NO_FAIL must SUCCEED, no detail. ---
+	{
+		as_key key;
+		as_key_init(&key, g_namespace, g_set, "edk-expop-nofail");
+		put_int(as, &key, 1);
+
+		as_exp_build(exp, as_exp_div(as_exp_int(5), as_exp_int(0)));
+
+		as_operations ops;
+		as_operations_inita(&ops, 1);
+		as_operations_exp_read(&ops, "v", exp, AS_EXP_READ_EVAL_NO_FAIL);
+
+		as_policy_operate pol = g_op_pol;
+		pol.base.error_detail_verbosity = 3;
+
+		as_error err;
+		as_error_reset(&err);
+		as_record* rec = NULL;
+		as_status s = aerospike_key_operate(as, &err, &pol, &key, &ops, &rec);
+
+		if (s != AEROSPIKE_OK) {
+			LOG("FAIL expop_eval_no_fail_succeeds: got %d - %s "
+					"(div-by-zero must be swallowed)", s, err.message);
+			failed++;
+		}
+		else {
+			LOG("PASS expop_eval_no_fail_succeeds (no detail, op OK)");
+		}
+
+		as_record_destroy(rec);
+		as_operations_destroy(&ops);
+		as_exp_destroy(exp);
+	}
+
+	// --- no-fault filter paths: the eval message must be ABSENT. ---
+	{
+		struct { const char* name; case_fn fn; } checks[] = {
+			{ "absent-bin filter carries no eval message",
+					case_filter_absent_bin_no_fault },
+			{ "keyless key() filter carries no eval message",
+					case_filter_keyless_key_no_fault },
+			{ "verbosity-1 div-by-zero carries no eval message",
+					case_filter_eval_fault_low_verbosity },
+		};
+
+		for (uint32_t i = 0; i < sizeof(checks) / sizeof(checks[0]); i++) {
+			as_error err;
+			as_error_reset(&err);
+
+			as_status s = checks[i].fn(as, &err);
+
+			if (s != AEROSPIKE_FILTERED_OUT) {
+				LOG("FAIL %s: status %d (want FILTERED_OUT)", checks[i].name, s);
+				failed++;
+			}
+			else if (strstr(err.message, "division by zero") != NULL) {
+				LOG("FAIL %s: eval message leaked in '%s'", checks[i].name,
+						err.message);
+				failed++;
+			}
+			else {
+				LOG("PASS %s", checks[i].name);
+			}
+		}
+	}
+
+	return failed;
+}
+
 int
 main(int argc, char* argv[])
 {
@@ -1234,11 +1546,16 @@ main(int argc, char* argv[])
 	uint32_t batch_failed = run_batch_cases(&as);
 	failed += batch_failed;
 
+	// SERVER-1138 positive eval-fault checks (must-succeed + must-be-absent).
+	LOG("--- SERVER-1138 eval-fault positive checks ---");
+	uint32_t eval_failed = run_eval_fault_positive_checks(&as);
+	failed += eval_failed;
+
 	example_cleanup(&as);
 
 	LOG("---");
-	LOG("%u passed, %u failed (of %u single-record cases + 3 batch checks)",
-			passed, failed, N_CASES);
+	LOG("%u passed, %u failed (of %u single-record cases + 3 batch checks "
+			"+ 5 eval-fault checks)", passed, failed, N_CASES);
 
 	return failed == 0 ? 0 : 1;
 }

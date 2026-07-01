@@ -665,6 +665,12 @@ as_query_write_range_integer(uint8_t* p, int64_t begin, int64_t end)
 	return p;
 }
 
+static inline bool
+as_query_is_integer_dtype(as_index_datatype dtype)
+{
+	return dtype == AS_INDEX_NUMERIC || dtype == AS_INDEX_INTEGER;
+}
+
 static as_status
 as_query_command_size(
 	const as_policy_base* base_policy, const as_policy_query* query_policy, const as_query* query,
@@ -743,6 +749,7 @@ as_query_command_size(
 						break;
 
 					case AS_INDEX_NUMERIC:
+					case AS_INDEX_INTEGER:
 						filter_size += sizeof(int64_t) * 2;
 						break;
 
@@ -756,7 +763,7 @@ as_query_command_size(
 				break;
 
 			case AS_PREDICATE_RANGE:
-				if (pred->dtype == AS_INDEX_NUMERIC) {
+				if (as_query_is_integer_dtype(pred->dtype)) {
 					filter_size += sizeof(int64_t) * 2;
 				}
 				else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {
@@ -1017,7 +1024,8 @@ as_query_command_init(
 						break;
 					}
 
-					case AS_INDEX_NUMERIC: {
+					case AS_INDEX_NUMERIC:
+					case AS_INDEX_INTEGER: {
 						p = as_query_write_range_integer(p, pred->value.integer, pred->value.integer);
 						break;
 					}
@@ -1034,7 +1042,7 @@ as_query_command_init(
 				break;
 
 			case AS_PREDICATE_RANGE:
-				if (pred->dtype == AS_INDEX_NUMERIC) {
+				if (as_query_is_integer_dtype(pred->dtype)) {
 					p = as_query_write_range_integer(p, pred->value.integer_range.min, pred->value.integer_range.max);
 				}
 				else if (pred->dtype == AS_INDEX_GEO2DSPHERE) {

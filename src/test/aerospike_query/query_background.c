@@ -105,7 +105,7 @@ before(atf_suite * suite)
 
 	as_error err;
 	as_index_task task;
-	as_status status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "qebin1", "qeindex9", AS_INDEX_NUMERIC);
+	as_status status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "qebin1", "qeindex9", AS_INDEX_INTEGER);
 
 	if (! (status == AEROSPIKE_OK || status == AEROSPIKE_ERR_INDEX_FOUND)) {
 		error("error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
@@ -279,7 +279,7 @@ TEST(query_aggregation_double, "query aggregation validate")
 	as_index_task task;
 
 	//create index on "a_int_bin"
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, int_bin, "idx_test_a_int_bin", AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, int_bin, "idx_test_a_int_bin", AS_INDEX_INTEGER);
 	index_process_return_code(status, &err, &task);
 
 	as_record r;

@@ -50,6 +50,18 @@ extern aerospike* as;
 #define LIST_BIN "listbin"
 #define OTHER_BIN "other"
 
+#define assert_invalid_string_op(__key, __build_op) \
+	do { \
+		as_operations ops; \
+		as_operations_inita(&ops, 1); \
+		__build_op; \
+		as_record* rec = NULL; \
+		as_status status = aerospike_key_operate(as, &err, NULL, &(__key), &ops, &rec); \
+		as_operations_destroy(&ops); \
+		assert_int_eq(status, AEROSPIKE_INVALID_ENCODING); \
+		assert_null(rec); \
+	} while (0)
+
 //---------------------------------
 // Static Functions
 //---------------------------------
@@ -58,7 +70,6 @@ static bool
 before(atf_suite* suite)
 {
 	(void)suite;
-
 	as_node* node = as_node_get_random(as->cluster);
 
 	if (! node) {
@@ -580,8 +591,15 @@ TEST(string_policy_ops, "string policy operations")
 	rec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
 	as_operations_destroy(&ops);
-	assert_int_eq(status, AEROSPIKE_ERR_BIN_NOT_FOUND);
-	assert_null(rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+
+	rec = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_null(as_record_get(rec, BIN_NAME));
+	assert_string_eq(as_record_get_str(rec, OTHER_BIN), "untouched");
+	as_record_destroy(rec);
 
 	assert_int_eq(put_int_key(113, 7), AEROSPIKE_OK);
 
@@ -730,6 +748,48 @@ TEST(string_modify_append_prepend_ops, "string append and prepend operations")
 	as_bin* results = rec->bins.entries;
 	assert_int_eq(rec->bins.size, 3);
 	assert_string_eq(as_string_get((as_string*)results[2].valuep), "start-middle-end");
+	as_record_destroy(rec);
+}
+
+TEST(string_modify_append_prepend_unicode_ops, "string append and prepend unicode operations")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 121);
+
+	as_error err;
+	as_operations ops;
+	as_record* rec = NULL;
+	as_status status;
+
+	assert_int_eq(put_string_key(121, "日本"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 3);
+	as_operations_string_append(&ops, BIN_NAME, NULL, NULL, "語");
+	as_operations_add_read(&ops, BIN_NAME);
+	as_operations_string_strlen(&ops, BIN_NAME, NULL);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_bin* results = rec->bins.entries;
+	assert_string_eq(as_string_get((as_string*)results[1].valuep), "日本語");
+	assert_int_eq(as_integer_get((as_integer*)results[2].valuep), 3);
+	as_record_destroy(rec);
+
+	assert_int_eq(put_string_key(121, "語"), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 3);
+	as_operations_string_prepend(&ops, BIN_NAME, NULL, NULL, "日本");
+	as_operations_add_read(&ops, BIN_NAME);
+	as_operations_string_strlen(&ops, BIN_NAME, NULL);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	results = rec->bins.entries;
+	assert_string_eq(as_string_get((as_string*)results[1].valuep), "日本語");
+	assert_int_eq(as_integer_get((as_integer*)results[2].valuep), 3);
 	as_record_destroy(rec);
 }
 
@@ -1040,6 +1100,17 @@ TEST(string_to_string_variant_ops, "string to_string variant operations")
 	assert_string_eq(as_record_get_str(rec, BIN_NAME), "hi");
 	as_record_destroy(rec);
 
+	uint8_t invalid_blob[] = {0xED, 0xA0, 0x80};
+	assert_int_eq(put_blob_key(119, invalid_blob, sizeof(invalid_blob)), AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_to_string(&ops, BIN_NAME);
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
+	assert_null(rec);
+
 	as_arraylist list;
 	as_arraylist_inita(&list, 1);
 	as_arraylist_append_str(&list, "hello");
@@ -1115,6 +1186,54 @@ TEST(string_error_ops, "string error operations")
 	assert_null(rec);
 }
 
+TEST(string_invalid_utf8_ops, "string invalid utf8 operations")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 122);
+
+	as_error err;
+	assert_int_eq(put_invalid_string_key(122), AEROSPIKE_OK);
+
+	assert_invalid_string_op(key, as_operations_string_strlen(&ops, BIN_NAME, NULL));
+	assert_invalid_string_op(key, as_operations_string_substr(&ops, BIN_NAME, NULL, 0));
+	assert_invalid_string_op(key, as_operations_string_char_at(&ops, BIN_NAME, NULL, 0));
+	assert_invalid_string_op(key, as_operations_string_find(&ops, BIN_NAME, NULL, "x"));
+	assert_invalid_string_op(key, as_operations_string_contains(&ops, BIN_NAME, NULL, "x"));
+	assert_invalid_string_op(key, as_operations_string_starts_with(&ops, BIN_NAME, NULL, "x"));
+	assert_invalid_string_op(key, as_operations_string_ends_with(&ops, BIN_NAME, NULL, "x"));
+	assert_invalid_string_op(key, as_operations_string_to_integer(&ops, BIN_NAME, NULL));
+	assert_invalid_string_op(key, as_operations_string_to_double(&ops, BIN_NAME, NULL));
+	assert_invalid_string_op(key, as_operations_string_byte_length(&ops, BIN_NAME, NULL));
+	assert_invalid_string_op(key, as_operations_string_is_numeric(&ops, BIN_NAME, NULL));
+	assert_invalid_string_op(key, as_operations_string_is_upper(&ops, BIN_NAME, NULL));
+	assert_invalid_string_op(key, as_operations_string_is_lower(&ops, BIN_NAME, NULL));
+	assert_invalid_string_op(key, as_operations_string_to_blob(&ops, BIN_NAME, NULL));
+	assert_invalid_string_op(key, as_operations_string_split_separator(&ops, BIN_NAME, NULL, ","));
+	assert_invalid_string_op(key, as_operations_string_b64_decode(&ops, BIN_NAME, NULL));
+	assert_invalid_string_op(key, as_operations_string_regex_compare(&ops, BIN_NAME, NULL, "x"));
+
+	assert_invalid_string_op(key, as_operations_string_insert(&ops, BIN_NAME, NULL, NULL, 0, "x"));
+	assert_invalid_string_op(key, as_operations_string_overwrite(&ops, BIN_NAME, NULL, NULL, 0, "x"));
+	assert_invalid_string_op(key, as_operations_string_concat(&ops, BIN_NAME, NULL, NULL, "x"));
+	assert_invalid_string_op(key, as_operations_string_snip(&ops, BIN_NAME, NULL, NULL, 0, 1));
+	assert_invalid_string_op(key, as_operations_string_replace(&ops, BIN_NAME, NULL, NULL, "x", "y"));
+	assert_invalid_string_op(key, as_operations_string_replace_all(&ops, BIN_NAME, NULL, NULL, "x", "y"));
+	assert_invalid_string_op(key, as_operations_string_upper(&ops, BIN_NAME, NULL, NULL));
+	assert_invalid_string_op(key, as_operations_string_lower(&ops, BIN_NAME, NULL, NULL));
+	assert_invalid_string_op(key, as_operations_string_case_fold(&ops, BIN_NAME, NULL, NULL));
+	assert_invalid_string_op(key, as_operations_string_normalize_nfc(&ops, BIN_NAME, NULL, NULL));
+	assert_invalid_string_op(key, as_operations_string_trim_start(&ops, BIN_NAME, NULL, NULL));
+	assert_invalid_string_op(key, as_operations_string_trim_end(&ops, BIN_NAME, NULL, NULL));
+	assert_invalid_string_op(key, as_operations_string_trim(&ops, BIN_NAME, NULL, NULL));
+	assert_invalid_string_op(key, as_operations_string_pad_start(&ops, BIN_NAME, NULL, NULL, 10, "*"));
+	assert_invalid_string_op(key, as_operations_string_pad_end(&ops, BIN_NAME, NULL, NULL, 10, "*"));
+	assert_invalid_string_op(key, as_operations_string_repeat(&ops, BIN_NAME, NULL, NULL, 2));
+	assert_invalid_string_op(key, as_operations_string_regex_replace(
+			&ops, BIN_NAME, NULL, NULL, "x", "y", AS_STRING_REGEX_FLAGS_NONE));
+	assert_invalid_string_op(key, as_operations_string_append(&ops, BIN_NAME, NULL, NULL, "x"));
+	assert_invalid_string_op(key, as_operations_string_prepend(&ops, BIN_NAME, NULL, NULL, "x"));
+}
+
 TEST(string_ctx_ops, "string context operations")
 {
 	as_key key;
@@ -1164,8 +1283,6 @@ TEST(string_ctx_ops, "string context operations")
 
 SUITE(string, "aerospike string operation tests")
 {
-	suite_before(before);
-
 	suite_add(string_api_validation);
 	suite_add(string_read_ops);
 	suite_add(string_read_more_ops);
@@ -1179,11 +1296,13 @@ SUITE(string, "aerospike string operation tests")
 	suite_add(string_modify_case_normalize_ops);
 	suite_add(string_modify_snip_concat_ops);
 	suite_add(string_modify_append_prepend_ops);
+	suite_add(string_modify_append_prepend_unicode_ops);
 	suite_add(string_nested_map_ctx_ops);
 	suite_add(string_expression_ops);
 	suite_add(string_expression_concat_repro);
 	suite_add(string_conversion_unicode_ops);
 	suite_add(string_to_string_variant_ops);
 	suite_add(string_error_ops);
+	suite_add(string_invalid_utf8_ops);
 	suite_add(string_ctx_ops);
 }

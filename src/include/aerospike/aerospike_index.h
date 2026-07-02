@@ -79,10 +79,10 @@ typedef enum as_index_type_s {
  */
 typedef enum as_index_datatype_s {
 	AS_INDEX_STRING,
-	AS_INDEX_NUMERIC,
+	AS_INDEX_INTEGER, // For use with server versions 8.1.3+. Use AS_INDEX_NUMERIC for server versions prior to 8.1.3.
 	AS_INDEX_GEO2DSPHERE,
 	AS_INDEX_BLOB, // Requires server version 7.0+.
-	AS_INDEX_INTEGER,
+	AS_INDEX_NUMERIC, // For use with server versions prior to 8.1.3. Use AS_INDEX_INTEGER for server versions 8.1.3+.
 } as_index_datatype;
 
 /*
@@ -159,7 +159,7 @@ struct as_exp;
  * as_cdt_ctx_add_list_rank(&ctx, -1);
  * as_index_task task;
  * if (aerospike_index_create_ctx(&as, &err, &task, NULL, "test", "demo", "bin1",
- *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, &ctx) == AEROSPIKE_OK) {
+ *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_INTEGER, &ctx) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }
  * @endcode
@@ -201,7 +201,7 @@ aerospike_index_create_ctx(
  *
  * as_index_task task;
  * if (aerospike_index_create_exp(&as, &err, &task, NULL, "test", "demo",
- *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, exp) == AEROSPIKE_OK) {
+ *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_INTEGER, exp) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }
  * as_exp_destroy(exp);
@@ -241,7 +241,7 @@ aerospike_index_create_exp(
  * @code
  * as_index_task task;
  * if (aerospike_index_create_complex(&as, &err, &task, NULL, "test", "demo", "bin1",
- *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC) == AEROSPIKE_OK) {
+ *     "idx_test_demo_bin1", AS_INDEX_TYPE_DEFAULT, AS_INDEX_INTEGER) == AEROSPIKE_OK) {
  *     aerospike_index_create_wait(&err, &task, 0);
  * }
  * @endcode
@@ -285,7 +285,7 @@ aerospike_index_create_complex(
  * @code
  * as_index_task task;
  * if (aerospike_index_create(&as, &err, &task, NULL, "test", "demo", "bin1", 
- * 	   "idx_test_demo_bin1", AS_INDEX_NUMERIC) == AEROSPIKE_OK) {
+ * 	   "idx_test_demo_bin1", AS_INDEX_INTEGER) == AEROSPIKE_OK) {
  * 	   aerospike_index_create_wait(&err, &task, 0);
  * }
  * @endcode
@@ -372,7 +372,7 @@ aerospike_index_integer_create(
 	const char* ns, const char* set, const char* bin, const char* name
 	)
 {
-	return aerospike_index_create_complex(as, err, 0, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC);
+	return aerospike_index_create_complex(as, err, 0, policy, ns, set, bin, name, AS_INDEX_TYPE_DEFAULT, AS_INDEX_INTEGER);
 }
 
 /**

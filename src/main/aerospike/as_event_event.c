@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -751,8 +751,10 @@ as_event_callback_common(as_event_command* cmd, as_event_connection* conn) {
 					return;
 
 				case AS_EVENT_READ_COMPLETE:
-					as_event_watch_read(cmd);
-					break;
+					// Auth succeeded; the command write phase has already
+					// registered the correct read/write watch. Don't override
+					// it, and stop looping since we're no longer in an auth state.
+					return;
 
 				default:
 					break;

@@ -1283,6 +1283,8 @@ TEST(string_ctx_ops, "string context operations")
 
 SUITE(string, "aerospike string operation tests")
 {
+	suite_before(before);
+
 	suite_add(string_api_validation);
 	suite_add(string_read_ops);
 	suite_add(string_read_more_ops);

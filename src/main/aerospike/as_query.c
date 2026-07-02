@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -221,6 +221,7 @@ as_query_where_predicate(
 				break;
 
 			case AS_INDEX_NUMERIC:
+			case AS_INDEX_INTEGER:
 				p->value.integer = va_arg(ap, int64_t);
 				break;
 
@@ -236,7 +237,7 @@ as_query_where_predicate(
 		break;
 
 	case AS_PREDICATE_RANGE:
-		if (dtype == AS_INDEX_NUMERIC) {
+		if (dtype == AS_INDEX_NUMERIC || dtype == AS_INDEX_INTEGER) {
 			p->value.integer_range.min = va_arg(ap, int64_t);
 			p->value.integer_range.max = va_arg(ap, int64_t);
 		}
@@ -456,6 +457,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 						break;
 
 					case AS_INDEX_NUMERIC:
+					case AS_INDEX_INTEGER:
 						as_pack_int64(&pk, pred->value.integer);
 						break;
 
@@ -469,7 +471,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 				break;
 
 			case AS_PREDICATE_RANGE:
-				if (pred->dtype == AS_INDEX_NUMERIC) {
+				if (pred->dtype == AS_INDEX_NUMERIC || pred->dtype == AS_INDEX_INTEGER) {
 					as_pack_int64(&pk, pred->value.integer_range.min);
 					as_pack_int64(&pk, pred->value.integer_range.max);
 				}
@@ -720,6 +722,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 							break;
 
 						case AS_INDEX_NUMERIC:
+						case AS_INDEX_INTEGER:
 							if (as_unpack_int64(&pk, &pred->value.integer) != 0) {
 								goto HandlePredError;
 							}
@@ -739,7 +742,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 					break;
 
 				case AS_PREDICATE_RANGE:
-					if (pred->dtype == AS_INDEX_NUMERIC) {
+					if (pred->dtype == AS_INDEX_NUMERIC || pred->dtype == AS_INDEX_INTEGER) {
 						if (as_unpack_int64(&pk, &pred->value.integer_range.min) != 0) {
 							goto HandlePredError;
 						}
@@ -1116,6 +1119,7 @@ as_query_compare(as_query* q1, as_query* q2) {
 						break;
 
 					case AS_INDEX_NUMERIC:
+					case AS_INDEX_INTEGER:
 						if (p1->value.integer != p2->value.integer) {
 							as_cmp_error();
 						}
@@ -1138,7 +1142,7 @@ as_query_compare(as_query* q1, as_query* q2) {
 				break;
 
 			case AS_PREDICATE_RANGE:
-				if (p1->dtype == AS_INDEX_NUMERIC) {
+				if (p1->dtype == AS_INDEX_NUMERIC || p1->dtype == AS_INDEX_INTEGER) {
 					if (p1->value.integer_range.min != p2->value.integer_range.min) {
 						as_cmp_error();
 					}

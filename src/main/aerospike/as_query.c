@@ -259,7 +259,7 @@ as_query_where_predicate(
 		break;
 
 	case AS_PREDICATE_RANGE:
-		if (as_query_is_integer_dtype(p->dtype)) {
+		if (as_query_is_integer_dtype(dtype)) {
 			p->value.integer_range.min = va_arg(ap, int64_t);
 			p->value.integer_range.max = va_arg(ap, int64_t);
 		}

@@ -62,6 +62,28 @@ as_query_defaults(as_query* query, bool free, const char* ns, const char* set)
 	return query;
 }
 
+static inline bool
+as_query_is_valid_index_datatype(int64_t dtype)
+{
+	switch ((as_index_datatype)dtype) {
+		case AS_INDEX_STRING:
+		case AS_INDEX_INTEGER:
+		case AS_INDEX_GEO2DSPHERE:
+		case AS_INDEX_BLOB:
+		case AS_INDEX_NUMERIC:
+			return true;
+
+		default:
+			return false;
+	}
+}
+
+static inline bool
+as_query_is_integer_dtype(as_index_datatype dtype)
+{
+	return dtype == AS_INDEX_INTEGER || dtype == AS_INDEX_NUMERIC;
+}
+
 as_query*
 as_query_init(as_query* query, const char* ns, const char* set)
 {
@@ -237,7 +259,7 @@ as_query_where_predicate(
 		break;
 
 	case AS_PREDICATE_RANGE:
-		if (dtype == AS_INDEX_NUMERIC || dtype == AS_INDEX_INTEGER) {
+		if (as_query_is_integer_dtype(p->dtype)) {
 			p->value.integer_range.min = va_arg(ap, int64_t);
 			p->value.integer_range.max = va_arg(ap, int64_t);
 		}
@@ -471,7 +493,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 				break;
 
 			case AS_PREDICATE_RANGE:
-				if (pred->dtype == AS_INDEX_NUMERIC || pred->dtype == AS_INDEX_INTEGER) {
+				if (as_query_is_integer_dtype(pred->dtype)) {
 					as_pack_int64(&pk, pred->value.integer_range.min);
 					as_pack_int64(&pk, pred->value.integer_range.max);
 				}
@@ -695,7 +717,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 				goto HandlePredError;
 			}
 
-			if (ival < 0 || ival > AS_INDEX_GEO2DSPHERE) {
+			if (! as_query_is_valid_index_datatype(ival)) {
 				goto HandlePredError;
 			}
 
@@ -742,7 +764,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 					break;
 
 				case AS_PREDICATE_RANGE:
-					if (pred->dtype == AS_INDEX_NUMERIC || pred->dtype == AS_INDEX_INTEGER) {
+					if (as_query_is_integer_dtype(pred->dtype)) {
 						if (as_unpack_int64(&pk, &pred->value.integer_range.min) != 0) {
 							goto HandlePredError;
 						}
@@ -1142,7 +1164,7 @@ as_query_compare(as_query* q1, as_query* q2) {
 				break;
 
 			case AS_PREDICATE_RANGE:
-				if (p1->dtype == AS_INDEX_NUMERIC || p1->dtype == AS_INDEX_INTEGER) {
+				if (as_query_is_integer_dtype(p1->dtype)) {
 					if (p1->value.integer_range.min != p2->value.integer_range.min) {
 						as_cmp_error();
 					}

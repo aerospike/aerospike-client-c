@@ -1079,6 +1079,125 @@ case_expop_eval_fault_div_zero(aerospike* as, as_error* err)
 //     which had distinct subcodes pre-redesign).
 //
 
+// Surface a single batch row's per-record result + error detail through *err so
+// the CASES harness (which checks one *err) can assert them. The client parses
+// field-45 per row into rec->result / rec->error_message (verbosity >= 2);
+// key-3 (the trace) is skipped as an unknown sub-key, as on the single-record
+// path. Must copy before as_batch_records_destroy frees rec->error_message.
+static as_status
+batch_row_to_err(as_error* err, as_batch_records* recs)
+{
+	// The per-row result + error detail live on the common as_batch_base_record
+	// (that is where the batch reply parser writes them). Read them via the base
+	// type, not as_batch_read_record - the read record inserts read-specific
+	// fields that shift the error fields to a different offset.
+	as_batch_base_record* rr =
+			(as_batch_base_record*)as_vector_get(&recs->list, 0);
+	as_status row = rr->result;
+
+	as_error_set_message(err, row,
+			rr->error_message != NULL ? rr->error_message : "");
+
+	return row;
+}
+
+// Batch: a per-row filter (BIN == 99) that evaluates FALSE on a batch row now
+// gets the SERVER-1139 filter-decision explanation per row (batch subs were
+// previously excluded from the explainer). At verbosity 3 the row's detail is
+// the 1139 explanation ("...evaluated to false"), not the generic
+// "filtered out by bins expression". The filter references a bin so it defers
+// past the metadata phase to the record phase, where the explainer runs.
+static as_status
+case_batch_filter_false_explained(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-batch-false");
+	put_int(as, &key, 1);
+
+	as_exp_build(filter, as_exp_cmp_eq(as_exp_bin_int(BIN), as_exp_int(99)));
+
+	// The filter rides a per-record batch-read policy; error-detail verbosity is
+	// batch-wide on the parent policy. respond_all_keys keeps the filtered row.
+	as_policy_batch_read rp;
+	as_policy_batch_read_init(&rp);
+	rp.filter_exp = filter;
+
+	as_policy_batch bp;
+	as_policy_batch_init(&bp);
+	bp.base.error_detail_verbosity = 3;
+	bp.respond_all_keys = true;
+
+	// Two rows so this is a genuine batch (a single-key batch can be serviced as
+	// a single-record op that does not populate the per-row error detail).
+	as_batch_records recs;
+	as_batch_records_inita(&recs, 2);
+
+	as_batch_read_record* r = as_batch_read_reserve(&recs);
+	as_key_init(&r->key, g_namespace, g_set, "edk-batch-false");
+	r->policy = &rp;
+	r->read_all_bins = true;
+
+	as_batch_read_record* r2 = as_batch_read_reserve(&recs);
+	as_key_init(&r2->key, g_namespace, g_set, "edk-batch-false");
+	r2->policy = &rp;
+	r2->read_all_bins = true;
+
+	aerospike_batch_read(as, err, &bp, &recs);
+
+	as_status row = batch_row_to_err(err, &recs);
+
+	as_batch_records_destroy(&recs);
+	as_exp_destroy(filter);
+	return row;
+}
+
+// Batch: a filter eval fault (div by zero) on a batch row stays FILTERED_OUT and
+// at verbosity 3 the row carries the SERVER-1138 eval-fault message. Literal
+// div0 faults for any record. (Faults already rode on batch; this pins it.)
+static as_status
+case_batch_filter_fault_div_zero(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-batch-div0");
+	put_int(as, &key, 1);
+
+	as_exp_build(filter,
+			as_exp_cmp_gt(as_exp_div(as_exp_int(5), as_exp_int(0)),
+					as_exp_int(1)));
+
+	as_policy_batch_read rp;
+	as_policy_batch_read_init(&rp);
+	rp.filter_exp = filter;
+
+	as_policy_batch bp;
+	as_policy_batch_init(&bp);
+	bp.base.error_detail_verbosity = 3;
+	bp.respond_all_keys = true;
+
+	// Two rows so this is a genuine batch (a single-key batch can be serviced as
+	// a single-record op that does not populate the per-row error detail).
+	as_batch_records recs;
+	as_batch_records_inita(&recs, 2);
+
+	as_batch_read_record* r = as_batch_read_reserve(&recs);
+	as_key_init(&r->key, g_namespace, g_set, "edk-batch-div0");
+	r->policy = &rp;
+	r->read_all_bins = true;
+
+	as_batch_read_record* r2 = as_batch_read_reserve(&recs);
+	as_key_init(&r2->key, g_namespace, g_set, "edk-batch-div0");
+	r2->policy = &rp;
+	r2->read_all_bins = true;
+
+	aerospike_batch_read(as, err, &bp, &recs);
+
+	as_status row = batch_row_to_err(err, &recs);
+
+	as_batch_records_destroy(&recs);
+	as_exp_destroy(filter);
+	return row;
+}
+
 static const error_case CASES[] = {
 	// --- Particle modify type mismatches ---
 	// All collapse to AS_SUB_NONE: the status is canonical and the message
@@ -1208,6 +1327,16 @@ static const error_case CASES[] = {
 	{ "non-breaking: keyless key() filter -> FILTERED_OUT, no fault",
 	  AEROSPIKE_FILTERED_OUT, true, 0, NULL,
 	  case_filter_keyless_key_no_fault },
+	// --- Batch: expression error details + explanations per row. The explainer
+	// now runs for batch subs; details ride the per-row field-45 (rec->result /
+	// rec->error_message). ---
+	{ "batch: filter FALSE -> per-row FILTERED_OUT + 1139 explanation",
+	  AEROSPIKE_FILTERED_OUT, true, 0,
+	  "filter expression evaluated to false",
+	  case_batch_filter_false_explained },
+	{ "batch: filter eval fault div0 -> per-row FILTERED_OUT + trace message",
+	  AEROSPIKE_FILTERED_OUT, true, 0,
+	  "integer division by zero", case_batch_filter_fault_div_zero },
 };
 
 static const uint32_t N_CASES = (uint32_t)(sizeof(CASES) / sizeof(CASES[0]));

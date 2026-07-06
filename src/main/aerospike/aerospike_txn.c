@@ -115,15 +115,15 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 				// The transaction was already in_doubt and just failed again,
 				// so the new error should also be in_doubt.
 				local_err.in_doubt = true;
-				// The commit outcome is uncertain: block a conflicting abort while
-				// keeping the commit retryable.
+				// The commit may still advance: block abort to prevent
+				// discarding committed writes; keep the commit retryable.
 				txn->state = AS_TXN_STATE_COMMIT_FAILED;
 			}
 			else if (local_err.in_doubt) {
 				// The current error is in_doubt.
 				txn->in_doubt = true;
-				// The commit outcome is uncertain: block a conflicting abort while
-				// keeping the commit retryable.
+				// The commit may still advance: block abort to prevent
+				// discarding committed writes; keep the commit retryable.
 				txn->state = AS_TXN_STATE_COMMIT_FAILED;
 			}
 			// A clean, not-in-doubt failure leaves the transaction VERIFIED so it
@@ -314,9 +314,8 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abor
 			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Transaction already committed");
 
 		case AS_TXN_STATE_COMMIT_FAILED:
-			// A commit already failed with an in-doubt outcome. Do not send a roll
-			// back: it could conflict with a server-side roll forward. The commit
-			// should be retried; the server will otherwise roll back at its deadline.
+			// A commit failed in-doubt and may still advance, so do not send a
+			// roll back. Retry the commit to resolve the transaction safely.
 			as_set_abort_status(abort_status, AS_ABORT_COMMIT_FAILED);
 			return as_error_set_message(err, AEROSPIKE_TXN_FAILED,
 				"Abort not allowed because a commit already failed on this transaction with an in-doubt outcome");
@@ -401,15 +400,15 @@ as_commit_notify_error_mark(as_error* err, as_commit_data* data, as_event_loop* 
 		// The transaction was already in_doubt and just failed again,
 		// so the new error should also be in_doubt.
 		err->in_doubt = true;
-		// The commit outcome is uncertain: block a conflicting abort while
-		// keeping the commit retryable.
+		// The commit may still advance: block abort to prevent
+		// discarding committed writes; keep the commit retryable.
 		txn->state = AS_TXN_STATE_COMMIT_FAILED;
 	}
 	else if (err->in_doubt) {
 		// The current error is in_doubt.
 		txn->in_doubt = true;
-		// The commit outcome is uncertain: block a conflicting abort while
-		// keeping the commit retryable.
+		// The commit may still advance: block abort to prevent
+		// discarding committed writes; keep the commit retryable.
 		txn->state = AS_TXN_STATE_COMMIT_FAILED;
 	}
 	// A clean, not-in-doubt failure leaves the transaction VERIFIED so it remains
@@ -790,9 +789,8 @@ aerospike_abort_async(
 			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Transaction already committed");
 
 		case AS_TXN_STATE_COMMIT_FAILED:
-			// A commit already failed with an in-doubt outcome. Do not send a roll
-			// back: it could conflict with a server-side roll forward. The commit
-			// should be retried; the server will otherwise roll back at its deadline.
+			// A commit failed in-doubt and may still advance, so do not send a
+			// roll back. Retry the commit to resolve the transaction safely.
 			return as_error_set_message(err, AEROSPIKE_TXN_FAILED,
 				"Abort not allowed because a commit already failed on this transaction with an in-doubt outcome");
 

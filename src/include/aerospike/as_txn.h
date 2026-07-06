@@ -54,10 +54,8 @@ typedef enum {
 	AS_TXN_STATE_ABORTED,
 
 	/**
-	 * A commit attempt failed at the mark-roll-forward step with an in-doubt
-	 * (uncertain) outcome: the server may still roll the transaction forward, so
-	 * a client-initiated roll back could conflict with a server commit. The
-	 * commit may be retried, but abort is not allowed in this state.
+	 * A commit failed in-doubt and may still advance, so abort is not allowed
+	 * in this state. Retry the commit to resolve the transaction safely.
 	 */
 	AS_TXN_STATE_COMMIT_FAILED
 } as_txn_state;

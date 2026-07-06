@@ -118,10 +118,8 @@ typedef enum {
 	AS_ABORT_CLOSE_ABANDONED,
 
 	/**
-	 * Abort was refused because a commit already failed on this transaction with an
-	 * in-doubt outcome. Sending a roll back could conflict with a server-side roll
-	 * forward. Retry the commit to resolve the transaction; the server will otherwise
-	 * roll the transaction back when its deadline is reached.
+	 * Abort was refused because a commit failed in-doubt and may still advance.
+	 * Retry the commit to resolve the transaction safely.
 	 */
 	AS_ABORT_COMMIT_FAILED
 } as_abort_status;

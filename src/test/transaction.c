@@ -989,9 +989,9 @@ TEST(txn_commit_fail_safe_abortable, "commit fail (not in doubt) leaves txn abor
 TEST(txn_commit_fail_abort_blocked, "abort blocked after in-doubt commit failure")
 {
 	// An in-doubt commit failure at mark roll forward must block a subsequent abort
-	// (a roll back could conflict with a server-side roll forward), while the commit
-	// remains retryable. The true in-doubt path requires a transport fault to
-	// trigger, so drive the txn into the COMMIT_FAILED state directly.
+	// (the commit may still advance, so a roll back could discard committed
+	// writes), while the commit remains retryable.
+	// The true in-doubt path requires a transport fault to trigger
 	as_key key;
 	as_key_init(&key, NAMESPACE, SET, "txn_commit_fail_abort_blocked");
 

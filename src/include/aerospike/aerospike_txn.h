@@ -115,7 +115,15 @@ typedef enum {
 	 * Transaction has been rolled back, but client transaction close was abandoned.
 	 * Server will eventually close the transaction.
 	 */
-	AS_ABORT_CLOSE_ABANDONED
+	AS_ABORT_CLOSE_ABANDONED,
+
+	/**
+	 * Abort was refused because a commit already failed on this transaction with an
+	 * in-doubt outcome. Sending a roll back could conflict with a server-side roll
+	 * forward. Retry the commit to resolve the transaction; the server will otherwise
+	 * roll the transaction back when its deadline is reached.
+	 */
+	AS_ABORT_COMMIT_FAILED
 } as_abort_status;
 
 /**

@@ -928,6 +928,157 @@ TEST(txn_batch_abort, "transaction batch abort")
 	as_batch_destroy(&batch);
 }
 
+TEST(txn_commit_fail_safe_abortable, "commit fail (not in doubt) leaves txn abortable")
+{
+	// A clean, not-in-doubt commit failure at mark roll forward must NOT block a
+	// subsequent abort. Sabotage: durable-delete the transaction monitor record so
+	// mark roll forward fails with MRT_EXPIRED (in_doubt=false).
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_commit_fail_safe_abortable");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN, 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_write pw;
+	as_policy_write_default(as, &pw);
+	pw.base.txn = &txn;
+
+	as_record_set_int64(&rec, BIN, 2);
+	status = aerospike_key_put(as, &err, &pw, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	// Sabotage: durable-delete the monitor record for this transaction.
+	as_key mkey;
+	as_key_init_int64(&mkey, NAMESPACE, "<ERO~MRT", (int64_t)txn.id);
+
+	as_policy_remove prem;
+	as_policy_remove_default(as, &prem);
+	prem.durable_delete = true;
+
+	status = aerospike_key_remove(as, &err, &prem, &mkey);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Commit fails at mark roll forward, but the failure is not in doubt, so the
+	// txn stays VERIFIED (abortable) rather than transitioning to COMMIT_FAILED.
+	as_commit_status commit_status = -1;
+	status = aerospike_commit(as, &err, &txn, &commit_status);
+	assert_int_ne(status, AEROSPIKE_OK);
+	assert_int_eq(commit_status, AS_COMMIT_MARK_ROLL_FORWARD_ABANDONED);
+	assert_int_eq(txn.in_doubt, false);
+	assert_int_eq(txn.state, AS_TXN_STATE_VERIFIED);
+
+	// Abort must be allowed (not blocked) so the still-locked records are released.
+	as_abort_status abort_status = -1;
+	status = aerospike_abort(as, &err, &txn, &abort_status);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_ne(abort_status, AS_ABORT_COMMIT_FAILED);
+	assert_int_eq(txn.state, AS_TXN_STATE_ABORTED);
+
+	as_txn_destroy(&txn);
+}
+
+TEST(txn_commit_fail_abort_blocked, "abort blocked after in-doubt commit failure")
+{
+	// An in-doubt commit failure at mark roll forward must block a subsequent abort
+	// (a roll back could conflict with a server-side roll forward), while the commit
+	// remains retryable. The true in-doubt path requires a transport fault to
+	// trigger, so drive the txn into the COMMIT_FAILED state directly.
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_commit_fail_abort_blocked");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN, 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_write pw;
+	as_policy_write_default(as, &pw);
+	pw.base.txn = &txn;
+
+	as_record_set_int64(&rec, BIN, 2);
+	status = aerospike_key_put(as, &err, &pw, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	// Simulate an in-doubt mark roll forward failure.
+	txn.state = AS_TXN_STATE_COMMIT_FAILED;
+	txn.in_doubt = true;
+
+	// Abort must be blocked without sending a roll back.
+	as_abort_status abort_status = -1;
+	status = aerospike_abort(as, &err, &txn, &abort_status);
+	assert_int_eq(status, AEROSPIKE_TXN_FAILED);
+	assert_int_eq(abort_status, AS_ABORT_COMMIT_FAILED);
+	assert_int_eq(txn.state, AS_TXN_STATE_COMMIT_FAILED);
+
+	// Commit must still be dispatched (retryable) from COMMIT_FAILED. The retry
+	// resolves the transaction and cleans up.
+	as_commit_status commit_status = -1;
+	status = aerospike_commit(as, &err, &txn, &commit_status);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_txn_destroy(&txn);
+}
+
+TEST(txn_commit_fail_command_blocked, "commands blocked while txn in commit-failed state")
+{
+	// While a txn is in the in-doubt COMMIT_FAILED state, issuing further commands
+	// on it must be rejected by as_txn_verify_command rather than proceeding.
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_commit_fail_command_blocked");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN, 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_write pw;
+	as_policy_write_default(as, &pw);
+	pw.base.txn = &txn;
+
+	as_record_set_int64(&rec, BIN, 2);
+	status = aerospike_key_put(as, &err, &pw, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Simulate an in-doubt mark roll forward failure.
+	txn.state = AS_TXN_STATE_COMMIT_FAILED;
+	txn.in_doubt = true;
+
+	// A further command on the txn must be rejected (not sent to the server).
+	as_record_set_int64(&rec, BIN, 3);
+	status = aerospike_key_put(as, &err, &pw, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	as_record_destroy(&rec);
+
+	// Retry commit to resolve the transaction and clean up.
+	as_commit_status commit_status = -1;
+	status = aerospike_commit(as, &err, &txn, &commit_status);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_txn_destroy(&txn);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -960,4 +1111,7 @@ SUITE(transaction, "Transaction tests")
 	suite_add(txn_batch);
 	suite_add(txn_batch_too_many_keys);
 	suite_add(txn_batch_abort);
+	suite_add(txn_commit_fail_safe_abortable);
+	suite_add(txn_commit_fail_abort_blocked);
+	suite_add(txn_commit_fail_command_blocked);
 }

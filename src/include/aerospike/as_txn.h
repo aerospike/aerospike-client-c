@@ -51,7 +51,13 @@ typedef enum {
 	AS_TXN_STATE_OPEN,
 	AS_TXN_STATE_VERIFIED,
 	AS_TXN_STATE_COMMITTED,
-	AS_TXN_STATE_ABORTED
+	AS_TXN_STATE_ABORTED,
+
+	/**
+	 * A commit failed in-doubt and may still advance, so abort is not allowed
+	 * in this state. Retry the commit to resolve the transaction safely.
+	 */
+	AS_TXN_STATE_COMMIT_FAILED
 } as_txn_state;
 
 /**

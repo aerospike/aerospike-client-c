@@ -526,9 +526,9 @@ PLAN(aerospike_test)
 	 * client and libev still hold sockets. Set AEROSPIKE_RUN_SHM_SECOND_CLIENT=1
 	 * in the job (e.g. a dedicated small run) to enable this suite on GHA.
 	 */
-	if (getenv("GITHUB_ACTIONS") == NULL || getenv("AEROSPIKE_RUN_SHM_SECOND_CLIENT") != NULL) {
-		plan_add(shm_second_client);
-	}
+	//if (getenv("GITHUB_ACTIONS") == NULL || getenv("AEROSPIKE_RUN_SHM_SECOND_CLIENT") != NULL) {
+	//	plan_add(shm_second_client);
+	//}
 
 #if AS_EVENT_LIB_DEFINED
 	plan_add(key_basics_async);

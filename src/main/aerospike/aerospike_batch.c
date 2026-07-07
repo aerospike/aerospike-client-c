@@ -883,21 +883,7 @@ as_batch_equals_write(as_batch_builder* bb, as_batch_write_record* prev, as_batc
 	if (!(prev->ops == rec->ops && prev->policy == rec->policy)) {
 		return false;
 	}
-
-	as_policy_key key;
-
-	if (!rec->policy) {
-		key = bb->defs->batch_write.key;
-	}
-	else if (bb->config_bitmap) {
-		key = as_field_is_set(bb->config_bitmap, AS_BATCH_WRITE_SEND_KEY)?
-			bb->defs->batch_write.key : rec->policy->key;
-	}
-	else {
-		key = rec->policy->key;
-	}
-
-	return key == AS_POLICY_KEY_DIGEST;
+	return true;
 }
 
 static inline bool
@@ -907,21 +893,7 @@ as_batch_equals_apply(as_batch_builder* bb, as_batch_apply_record* prev, as_batc
 		  prev->module == rec->module && prev->policy == rec->policy)) {
 		return false;
 	}
-
-	as_policy_key key;
-
-	if (!rec->policy) {
-		key = bb->defs->batch_apply.key;
-	}
-	else if (bb->config_bitmap) {
-		key = as_field_is_set(bb->config_bitmap, AS_BATCH_UDF_SEND_KEY)?
-			bb->defs->batch_apply.key : rec->policy->key;
-	}
-	else {
-		key = rec->policy->key;
-	}
-
-	return key == AS_POLICY_KEY_DIGEST;
+	return true;
 }
 
 static inline bool
@@ -930,21 +902,7 @@ as_batch_equals_remove(as_batch_builder* bb, as_batch_remove_record* prev, as_ba
 	if (!(prev->policy == rec->policy)) {
 		return false;
 	}
-
-	as_policy_key key;
-
-	if (!rec->policy) {
-		key = bb->defs->batch_remove.key;
-	}
-	else if (bb->config_bitmap) {
-		key = as_field_is_set(bb->config_bitmap, AS_BATCH_DELETE_SEND_KEY)?
-			bb->defs->batch_remove.key : rec->policy->key;
-	}
-	else {
-		key = rec->policy->key;
-	}
-
-	return key == AS_POLICY_KEY_DIGEST;
+	return true;
 }
 
 static bool
@@ -1112,6 +1070,59 @@ as_batch_size_fields(as_key* key, as_exp* filter_exp, as_policy_key key_policy, 
 	}
 }
 
+static inline as_policy_key
+as_batch_resolve_send_key_write(as_batch_builder* bb, as_batch_write_record* rec)
+{
+	// Resolve from cluster send_key default or record specific send_key policy.
+	// Dynamic config settings have aleady been merged into cluster defaults.
+	if (bb->defs->batch_write.key == AS_POLICY_KEY_SEND ||
+	   (rec->policy && rec->policy->key == AS_POLICY_KEY_SEND)) {
+		return AS_POLICY_KEY_SEND;
+	}
+	return AS_POLICY_KEY_DIGEST;
+}
+
+static inline as_policy_key
+as_batch_resolve_send_key_apply(as_batch_builder* bb, as_batch_apply_record* rec)
+{
+	if (bb->defs->batch_apply.key == AS_POLICY_KEY_SEND ||
+	   (rec->policy && rec->policy->key == AS_POLICY_KEY_SEND)) {
+		return AS_POLICY_KEY_SEND;
+	}
+	return AS_POLICY_KEY_DIGEST;
+}
+
+static inline as_policy_key
+as_batch_resolve_send_key_remove(as_batch_builder* bb, as_batch_remove_record* rec)
+{
+	if (bb->defs->batch_remove.key == AS_POLICY_KEY_SEND ||
+	   (rec->policy && rec->policy->key == AS_POLICY_KEY_SEND)) {
+		return AS_POLICY_KEY_SEND;
+	}
+	return AS_POLICY_KEY_DIGEST;
+}
+
+static as_policy_key
+as_batch_resolve_send_key(as_batch_builder* bb, as_batch_base_record* rec)
+{
+	switch (rec->type) {
+	default:
+	case AS_BATCH_READ:
+	case AS_BATCH_TXN_VERIFY:
+	case AS_BATCH_TXN_ROLL:
+		return AS_POLICY_KEY_DIGEST;
+
+	case AS_BATCH_WRITE:
+		return as_batch_resolve_send_key_write(bb, (as_batch_write_record*)rec);
+
+	case AS_BATCH_APPLY:
+		return as_batch_resolve_send_key_apply(bb, (as_batch_apply_record*)rec);
+
+	case AS_BATCH_REMOVE:
+		return as_batch_resolve_send_key_remove(bb, (as_batch_remove_record*)rec);
+	}
+}
+
 static as_status
 as_batch_records_size_new(
 	as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
@@ -1126,10 +1137,11 @@ as_batch_records_size_new(
 		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
 		as_batch_base_record* rec = as_vector_get(records, offset);
 		uint64_t ver = bb->versions ? bb->versions[offset] : 0;
+		as_policy_key send_key = as_batch_resolve_send_key(bb, rec);
 
 		bb->size += AS_DIGEST_VALUE_SIZE + sizeof(uint32_t);
 
-		if (as_batch_equals_records(bb, prev, rec, ver, ver_prev)) {
+		if (!send_key && as_batch_equals_records(bb, prev, rec, ver, ver_prev)) {
 			// Can set repeat flag to save space.
 			bb->size++;
 		}
@@ -1155,24 +1167,7 @@ as_batch_records_size_new(
 			
 				case AS_BATCH_WRITE: {
 					as_batch_write_record* bw = (as_batch_write_record*)rec;
-					as_exp* filter_exp;
-					as_policy_key send_key;
-
-					if (bw->policy) {
-						filter_exp = bw->policy->filter_exp;
-
-						if (bb->config_bitmap) {
-							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_WRITE_SEND_KEY)?
-								bb->defs->batch_write.key : bw->policy->key;
-						}
-						else {
-							send_key = bw->policy->key;
-						}
-					}
-					else {
-						filter_exp = bb->defs->batch_write.filter_exp;
-						send_key = bb->defs->batch_write.key;
-					}
+					as_exp* filter_exp = (bw->policy) ? bw->policy->filter_exp : bb->defs->batch_write.filter_exp;
 
 					as_batch_size_fields(key, filter_exp, send_key, bb);
 					status = as_batch_write_record_size(bw, bb, err);
@@ -1181,24 +1176,7 @@ as_batch_records_size_new(
 
 				case AS_BATCH_APPLY: {
 					as_batch_apply_record* ba = (as_batch_apply_record*)rec;
-					as_exp* filter_exp;
-					as_policy_key send_key;
-
-					if (ba->policy) {
-						filter_exp = ba->policy->filter_exp;
-
-						if (bb->config_bitmap) {
-							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_UDF_SEND_KEY)?
-								bb->defs->batch_apply.key : ba->policy->key;
-						}
-						else {
-							send_key = ba->policy->key;
-						}
-					}
-					else {
-						filter_exp = bb->defs->batch_apply.filter_exp;
-						send_key = bb->defs->batch_apply.key;
-					}
+					as_exp* filter_exp = (ba->policy) ? ba->policy->filter_exp : bb->defs->batch_apply.filter_exp;
 
 					as_batch_size_fields(key, filter_exp, send_key, bb);
 					as_batch_apply_record_size(ba, bb);
@@ -1208,24 +1186,7 @@ as_batch_records_size_new(
 			
 				case AS_BATCH_REMOVE: {
 					as_batch_remove_record* brm = (as_batch_remove_record*)rec;
-					as_exp* filter_exp;
-					as_policy_key send_key;
-
-					if (brm->policy) {
-						filter_exp = brm->policy->filter_exp;
-
-						if (bb->config_bitmap) {
-							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_DELETE_SEND_KEY)?
-								bb->defs->batch_remove.key : brm->policy->key;
-						}
-						else {
-							send_key = brm->policy->key;
-						}
-					}
-					else {
-						filter_exp = bb->defs->batch_remove.filter_exp;
-						send_key = bb->defs->batch_remove.key;
-					}
+					as_exp* filter_exp = (brm->policy) ? brm->policy->filter_exp : bb->defs->batch_remove.filter_exp;
 
 					as_batch_size_fields(key, filter_exp, send_key, bb);
 					as_batch_remove_record_size(bb);
@@ -1749,7 +1710,9 @@ as_batch_records_write_new(
 		memcpy(p, rec->key.digest.value, AS_DIGEST_VALUE_SIZE);
 		p += AS_DIGEST_VALUE_SIZE;
 		
-		if (as_batch_equals_records(bb, prev, rec, ver, ver_prev)) {
+		as_policy_key send_key = as_batch_resolve_send_key(bb, rec);
+
+		if (!send_key && as_batch_equals_records(bb, prev, rec, ver, ver_prev)) {
 			// Can set repeat flag to save space.
 			*p++ = BATCH_MSG_REPEAT;
 		}
@@ -1785,26 +1748,21 @@ as_batch_records_write_new(
 				case AS_BATCH_WRITE: {
 					as_batch_write_record* bw = (as_batch_write_record*)rec;
 					const as_policy_batch_write* pbw;
-					as_policy_key send_key;
 					bool durable_delete;
 
 					if (bw->policy) {
 						pbw = bw->policy;
 
 						if (bb->config_bitmap) {
-							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_WRITE_SEND_KEY)?
-								bb->defs->batch_write.key : pbw->key;
 							durable_delete = as_field_is_set(bb->config_bitmap, AS_BATCH_WRITE_DURABLE_DELETE)?
 								bb->defs->batch_write.durable_delete : pbw->durable_delete;
 						}
 						else {
-							send_key = pbw->key;
 							durable_delete = pbw->durable_delete;
 						}
 					}
 					else {
 						pbw = &bb->defs->batch_write;
-						send_key = pbw->key;
 						durable_delete = pbw->durable_delete;
 					}
 
@@ -1817,26 +1775,21 @@ as_batch_records_write_new(
 				case AS_BATCH_APPLY: {
 					as_batch_apply_record* ba = (as_batch_apply_record*)rec;
 					const as_policy_batch_apply* pba;
-					as_policy_key send_key;
 					bool durable_delete;
 
 					if (ba->policy) {
 						pba = ba->policy;
 
 						if (bb->config_bitmap) {
-							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_UDF_SEND_KEY)?
-								bb->defs->batch_apply.key : pba->key;
 							durable_delete = as_field_is_set(bb->config_bitmap, AS_BATCH_UDF_DURABLE_DELETE)?
 								bb->defs->batch_apply.durable_delete : pba->durable_delete;
 						}
 						else {
-							send_key = pba->key;
 							durable_delete = pba->durable_delete;
 						}
 					}
 					else {
 						pba = &bb->defs->batch_apply;
-						send_key = pba->key;
 						durable_delete = pba->durable_delete;
 					}
 
@@ -1848,26 +1801,21 @@ as_batch_records_write_new(
 				case AS_BATCH_REMOVE: {
 					as_batch_remove_record* brm = (as_batch_remove_record*)rec;
 					const as_policy_batch_remove* pbr;
-					as_policy_key send_key;
 					bool durable_delete;
 
 					if (brm->policy) {
 						pbr = brm->policy;
 
 						if (bb->config_bitmap) {
-							send_key = as_field_is_set(bb->config_bitmap, AS_BATCH_DELETE_SEND_KEY)?
-								bb->defs->batch_remove.key : pbr->key;
 							durable_delete = as_field_is_set(bb->config_bitmap, AS_BATCH_DELETE_DURABLE_DELETE)?
 								bb->defs->batch_remove.durable_delete : pbr->durable_delete;
 						}
 						else {
-							send_key = pbr->key;
 							durable_delete = pbr->durable_delete;
 						}
 					}
 					else {
 						pbr = &bb->defs->batch_remove;
-						send_key = pbr->key;
 						durable_delete = pbr->durable_delete;
 					}
 
@@ -4566,6 +4514,7 @@ as_policy_batch_parent_read_merge(aerospike* as, const as_policy_batch* src, as_
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->send_set_name = src->send_set_name;
 		mrg->deserialize = src->deserialize;
@@ -4618,6 +4567,7 @@ as_policy_batch_parent_write_merge(aerospike* as, const as_policy_batch* src, as
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->send_set_name = src->send_set_name;
 		mrg->deserialize = src->deserialize;

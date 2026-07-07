@@ -1,0 +1,123 @@
+name: PR CI
+
+# PR/manual CI over the PR server list.
+# Each server in .github/pr_test_servers.json calls build-and-test.yml.
+# Linux stays on the fast ubuntu-22.04 amd64 matrix; macOS and Windows also run.
+
+run-name: "${{ github.event_name == 'pull_request' && format('PR #{0} — {1}', github.event.pull_request.number, github.event.pull_request.title) || format('Manual — {0}', github.ref_name) }}"
+
+permissions:
+  contents: read
+  id-token: write        # setup-aerospike-server OIDC
+  actions: read          # allows reading other workflow run info (Java SDK pattern)
+  checks: write          # allows step-security to annotate check runs on the PR
+  pull-requests: write   # allows posting annotations / comments back to the PR
+
+on:
+  # keeping for testing sake
+  push:
+    branches: [CLIENT-4300-release-pipeline-new]
+  pull_request:
+    branches:
+      - stage
+      - master
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+  workflow_dispatch:
+
+# Keep only the latest run for a PR or branch.
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  load-test-servers:
+    name: load test servers
+    runs-on: ubuntu-24.04
+    outputs:
+      test-servers: ${{ steps.load.outputs.test-servers }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Load PR test servers
+        id: load
+        run: |
+          test_servers="$(
+            jq -c '
+              [
+                to_entries[]
+                | {
+                    server_name: .key,
+                    server: (.value.version // .key),
+                    "num-nodes": ((.value["num-nodes"] // .value.num_nodes // 1) | tostring)
+                  }
+              ]
+            ' .github/pr_test_servers.json
+          )"
+
+          if [ "$test_servers" = "[]" ]; then
+            echo "No PR test servers configured" >&2
+            exit 1
+          fi
+
+          echo "test-servers=$test_servers" >> "$GITHUB_OUTPUT"
+
+  ci:
+    name: Enterprise ${{ matrix.server }} / ${{ matrix.num-nodes }} node
+    needs: load-test-servers
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.load-test-servers.outputs.test-servers) }}
+    uses: ./.github/workflows/build-and-test.yml
+    with:
+      ref:          ${{ github.sha }}
+      linux-distros-json:  '{"distros":[{"distro":"ubuntu-22.04","container":"ubuntu:22.04","archs":["amd64"]}]}'
+      runners-json: ${{ vars.LINUX_RUNNERS }}
+      event-lib:    all
+      server-tag:   ${{ matrix.server }}
+      num-nodes:    ${{ matrix.num-nodes }}
+      server-config-content: |
+        service {
+            feature-key-file /etc/aerospike/features.conf
+            cluster-name docker
+            proto-fd-max 15000
+        }
+
+        logging {
+            console {
+                context any info
+            }
+        }
+
+        network {
+            service {
+                address any
+                port 3000
+            }
+            heartbeat {
+                mode mesh
+                port 3002
+            }
+            fabric {
+                port 3001
+            }
+        }
+
+        namespace test {
+          replication-factor 1
+          allow-ttl-without-nsup true
+          storage-engine memory {
+            data-size 4G
+          }
+        }
+      valgrind:    true
+      run-mac:     true # TODO will make it true once the mac runner are online again
+      run-windows: true
+      check-doc-lint: ${{ vars.CHECK_DOC_LINT != 'false' }}
+    secrets: inherit

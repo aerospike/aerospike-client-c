@@ -11,6 +11,8 @@ default: all
 	$(MAKE) -C list $@
 	$(MAKE) -C map $@
 	$(MAKE) -C put $@
+	$(MAKE) -C string $@
+	$(MAKE) -C string_expression $@
 	$(MAKE) -C touch $@
 	$(MAKE) -C transaction $@
 	$(MAKE) -C udf $@

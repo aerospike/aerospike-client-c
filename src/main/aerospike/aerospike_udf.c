@@ -176,13 +176,17 @@ aerospike_udf_get(
 		policy = &config->policies.info;
 	}
 		
+	as_string filename_string;
+	const char* filebase = as_basename(&filename_string, filename);
+
 	char command[512];
-	snprintf(command, sizeof(command), "udf-get:filename=%s;", filename);
+	snprintf(command, sizeof(command), "udf-get:filename=%s;", filebase);
 	
 	char* response = 0;
 	as_status status = aerospike_info_any(as, err, policy, command, &response);
 	
 	if (status) {
+		as_string_destroy(&filename_string);
 		return status;
 	}
 	
@@ -192,6 +196,7 @@ aerospike_udf_get(
 	if (!p) {
 		as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid udf-get response: %s", response);
 		cf_free(response);
+		as_string_destroy(&filename_string);
 		return AEROSPIKE_ERR_PARAM;
 	}
 	p++;
@@ -201,11 +206,13 @@ aerospike_udf_get(
 	if (!p) {
 		as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid udf-get response: %s", response);
 		cf_free(response);
+		as_string_destroy(&filename_string);
 		return AEROSPIKE_ERR_PARAM;
 	}
 	p += 8;
 	
-	as_strncpy(file->name, filename, AS_UDF_FILE_NAME_SIZE);
+	as_strncpy(file->name, filebase, AS_UDF_FILE_NAME_SIZE);
+	as_string_destroy(&filename_string);
 	file->type = AS_UDF_TYPE_LUA;
 
 	char* content = p;
@@ -379,8 +386,12 @@ aerospike_udf_remove(
 		policy = &config->policies.info;
 	}
 	
+	as_string filename_string;
+	const char* filebase = as_basename(&filename_string, filename);
+
 	char command[512];
-	snprintf(command, sizeof(command), "udf-remove:filename=%s;", filename);
+	snprintf(command, sizeof(command), "udf-remove:filename=%s;", filebase);
+	as_string_destroy(&filename_string);
 	
 	char* response = 0;
 	as_status status = aerospike_info_any(as, err, policy, command, &response);

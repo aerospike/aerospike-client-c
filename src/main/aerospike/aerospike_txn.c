@@ -101,15 +101,33 @@ as_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_st
 				txn->in_doubt = false;
 				txn->state = AS_TXN_STATE_ABORTED;
 			}
+			else if (local_err.code == AEROSPIKE_MRT_COMMITTED) {
+				// The server has already committed this transaction (e.g. a prior
+				// in-doubt mark roll forward actually succeeded). Report success
+				// truthfully instead of a commit failure.
+				txn->in_doubt = false;
+				txn->state = AS_TXN_STATE_COMMITTED;
+				as_set_commit_status(commit_status, AS_COMMIT_ALREADY_COMMITTED);
+				as_error_reset(err);
+				return AEROSPIKE_OK;
+			}
 			else if (txn->in_doubt) {
 				// The transaction was already in_doubt and just failed again,
 				// so the new error should also be in_doubt.
 				local_err.in_doubt = true;
+				// The commit may still advance: block abort to prevent
+				// discarding committed writes; keep the commit retryable.
+				txn->state = AS_TXN_STATE_COMMIT_FAILED;
 			}
 			else if (local_err.in_doubt) {
 				// The current error is in_doubt.
 				txn->in_doubt = true;
+				// The commit may still advance: block abort to prevent
+				// discarding committed writes; keep the commit retryable.
+				txn->state = AS_TXN_STATE_COMMIT_FAILED;
 			}
+			// A clean, not-in-doubt failure leaves the transaction VERIFIED so it
+			// remains abortable, releasing the still-locked records immediately.
 
 			as_set_commit_status(commit_status, AS_COMMIT_MARK_ROLL_FORWARD_ABANDONED);
 			as_error_update(err, status, "Txn aborted:\nMark roll forward abandoned: %s",
@@ -217,6 +235,9 @@ aerospike_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* co
 			return as_verify_and_commit(as, err, txn, commit_status);
 
 		case AS_TXN_STATE_VERIFIED:
+		case AS_TXN_STATE_COMMIT_FAILED:
+			// A prior commit failed at mark roll forward with an in-doubt outcome.
+			// The commit is retryable: re-run from the (already verified) mark step.
 			return as_commit(as, err, txn, commit_status);
 
 		case AS_TXN_STATE_COMMITTED:
@@ -292,6 +313,13 @@ aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abor
 			as_set_abort_status(abort_status, AS_ABORT_ALREADY_COMMITTED);
 			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Transaction already committed");
 
+		case AS_TXN_STATE_COMMIT_FAILED:
+			// A commit failed in-doubt and may still advance, so do not send a
+			// roll back. Retry the commit to resolve the transaction safely.
+			as_set_abort_status(abort_status, AS_ABORT_COMMIT_FAILED);
+			return as_error_set_message(err, AEROSPIKE_TXN_FAILED,
+				"Abort not allowed because a commit already failed on this transaction with an in-doubt outcome");
+
 		case AS_TXN_STATE_ABORTED:
 			as_set_abort_status(abort_status, AS_ABORT_ALREADY_ABORTED);
 			return AEROSPIKE_OK;
@@ -359,15 +387,32 @@ as_commit_notify_error_mark(as_error* err, as_commit_data* data, as_event_loop* 
 		txn->in_doubt = false;
 		txn->state = AS_TXN_STATE_ABORTED;
 	}
+	else if (err->code == AEROSPIKE_MRT_COMMITTED) {
+		// The server has already committed this transaction (e.g. a prior in-doubt
+		// mark roll forward actually succeeded). Report success truthfully instead
+		// of a commit failure.
+		txn->in_doubt = false;
+		txn->state = AS_TXN_STATE_COMMITTED;
+		as_commit_notify_success(AS_COMMIT_ALREADY_COMMITTED, data, event_loop);
+		return;
+	}
 	else if (txn->in_doubt) {
 		// The transaction was already in_doubt and just failed again,
 		// so the new error should also be in_doubt.
 		err->in_doubt = true;
+		// The commit may still advance: block abort to prevent
+		// discarding committed writes; keep the commit retryable.
+		txn->state = AS_TXN_STATE_COMMIT_FAILED;
 	}
 	else if (err->in_doubt) {
 		// The current error is in_doubt.
 		txn->in_doubt = true;
+		// The commit may still advance: block abort to prevent
+		// discarding committed writes; keep the commit retryable.
+		txn->state = AS_TXN_STATE_COMMIT_FAILED;
 	}
+	// A clean, not-in-doubt failure leaves the transaction VERIFIED so it remains
+	// abortable, releasing the still-locked records immediately.
 
 	as_error commit_err;
 	as_error_update(&commit_err, err->code, "Txn aborted:\nMark roll forward abandoned: %s",
@@ -611,6 +656,9 @@ aerospike_commit_async(
 			return as_commit_verify_async(as, err, txn, listener, udata, event_loop);
 
 		case AS_TXN_STATE_VERIFIED:
+		case AS_TXN_STATE_COMMIT_FAILED:
+			// A prior commit failed at mark roll forward with an in-doubt outcome.
+			// The commit is retryable: re-run from the (already verified) mark step.
 			as_commit_async(as, txn, listener, udata, event_loop);
 			return AEROSPIKE_OK;
 
@@ -739,6 +787,12 @@ aerospike_abort_async(
 
 		case AS_TXN_STATE_COMMITTED:
 			return as_error_set_message(err, AEROSPIKE_TXN_ALREADY_COMMITTED, "Transaction already committed");
+
+		case AS_TXN_STATE_COMMIT_FAILED:
+			// A commit failed in-doubt and may still advance, so do not send a
+			// roll back. Retry the commit to resolve the transaction safely.
+			return as_error_set_message(err, AEROSPIKE_TXN_FAILED,
+				"Abort not allowed because a commit already failed on this transaction with an in-doubt outcome");
 
 		case AS_TXN_STATE_ABORTED:
 			listener(NULL, AS_ABORT_ALREADY_ABORTED, udata, event_loop);

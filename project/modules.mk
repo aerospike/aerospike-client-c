@@ -75,7 +75,7 @@ MOD_LUA-build: $(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a
 MOD_LUA-clean:
 	$(MAKE) -e -C $(MOD_LUA) clean COMMON=$(COMMON) LUAMOD=$(LUAMOD)
 
-$(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a:
+$(MOD_LUA)/$(TARGET_LIB)/libmod_lua.a: $(COMMON)/$(TARGET_LIB)/libaerospike-common.a
 	$(MAKE) -e -C $(MOD_LUA) COMMON=$(COMMON) LUAMOD=$(LUAMOD) EXT_CFLAGS=-DAS_MOD_LUA_CLIENT
 
 .PHONY: MOD_LUA-prepare

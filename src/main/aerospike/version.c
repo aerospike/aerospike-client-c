@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,4 +16,4 @@
  */
 #include <aerospike/version.h>
 
-AS_EXTERN char* aerospike_client_version = "7.4.1";
+AS_EXTERN char* aerospike_client_version = "7.5.0";

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\packages\openssl-native.3.0.16\build\native\openssl-native.props" Condition="Exists('..\packages\openssl-native.3.0.16\build\native\openssl-native.props')" />
   <ItemGroup Label="ProjectConfigurations">
@@ -189,6 +189,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <StackReserveSize>8388608</StackReserveSize>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release libevent|x64'">
@@ -246,6 +247,8 @@
     <ClCompile Include="..\..\src\test\aerospike_geo\query_geospatial.c" />
     <ClCompile Include="..\..\src\test\aerospike_index\index_basics.c" />
     <ClCompile Include="..\..\src\test\aerospike_info\info_basics.c" />
+    <ClCompile Include="..\..\src\test\aerospike_key\error_detail.c" />
+    <ClCompile Include="..\..\src\test\aerospike_key\error_detail_integration.c" />
     <ClCompile Include="..\..\src\test\aerospike_key\hll_operate.c" />
     <ClCompile Include="..\..\src\test\aerospike_key\key_apply.c" />
     <ClCompile Include="..\..\src\test\aerospike_key\key_apply2.c" />
@@ -267,6 +270,7 @@
     <ClCompile Include="..\..\src\test\aerospike_scan\scan_async.c" />
     <ClCompile Include="..\..\src\test\aerospike_scan\scan_basics.c" />
     <ClCompile Include="..\..\src\test\aerospike_shm\shm_second_client.c" />
+    <ClCompile Include="..\..\src\test\aerospike_string\string.c" />
     <ClCompile Include="..\..\src\test\aerospike_test.c" />
     <ClCompile Include="..\..\src\test\aerospike_udf\udf_basics.c" />
     <ClCompile Include="..\..\src\test\aerospike_udf\udf_record.c" />

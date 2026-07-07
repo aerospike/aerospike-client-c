@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /******************************************************************************
  * MACROS
@@ -194,6 +195,114 @@ atf_plan * atf_plan_after(atf_plan * plan, bool (* after)(atf_plan * plan)) {
     return plan;
 }
 
+static void
+atf_xml_write_escaped(FILE* f, const char* s)
+{
+	if (! s) {
+		return;
+	}
+
+	for (; *s; s++) {
+		switch (*s) {
+			case '&':
+				fputs("&amp;", f);
+				break;
+			case '<':
+				fputs("&lt;", f);
+				break;
+			case '>':
+				fputs("&gt;", f);
+				break;
+			case '"':
+				fputs("&quot;", f);
+				break;
+			case '\'':
+				fputs("&apos;", f);
+				break;
+			default:
+				fputc(*s, f);
+				break;
+		}
+	}
+}
+
+static uint32_t
+atf_plan_result_test_count(atf_plan_result* result)
+{
+	uint32_t total = 0;
+
+	for (uint32_t i = 0; i < result->size; i++) {
+		total += result->suites[i]->size;
+	}
+
+	return total;
+}
+
+static uint32_t
+atf_plan_result_failure_count(atf_plan_result* result)
+{
+	uint32_t failures = 0;
+
+	for (uint32_t i = 0; i < result->size; i++) {
+		failures += result->suites[i]->size - result->suites[i]->success;
+	}
+
+	return failures;
+}
+
+static void
+atf_plan_result_write_junit(atf_plan_result* result, const char* path)
+{
+	if (! path || ! *path) {
+		return;
+	}
+
+	FILE* f = fopen(path, "w");
+
+	if (! f) {
+		fprintf(stderr, "WARN: failed to write JUnit XML: %s\n", path);
+		return;
+	}
+
+	uint32_t total = atf_plan_result_test_count(result);
+	uint32_t failures = atf_plan_result_failure_count(result);
+
+	fprintf(f, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+	fprintf(f, "<testsuites tests=\"%u\" failures=\"%u\" errors=\"0\">\n",
+			total, failures);
+
+	for (uint32_t i = 0; i < result->size; i++) {
+		atf_suite_result* suite_result = result->suites[i];
+		fprintf(f, "  <testsuite name=\"");
+		atf_xml_write_escaped(f, suite_result->suite->name);
+		fprintf(f, "\" tests=\"%u\" failures=\"%u\" errors=\"0\">\n",
+				suite_result->size, suite_result->size - suite_result->success);
+
+		for (uint32_t j = 0; j < suite_result->size; j++) {
+			atf_test_result* test_result = suite_result->tests[j];
+			fprintf(f, "    <testcase classname=\"");
+			atf_xml_write_escaped(f, suite_result->suite->name);
+			fprintf(f, "\" name=\"");
+			atf_xml_write_escaped(f, test_result->test->name);
+			fprintf(f, "\">");
+
+			if (! test_result->success) {
+				fprintf(f, "\n      <failure message=\"");
+				atf_xml_write_escaped(f, test_result->message);
+				fprintf(f, "\">");
+				atf_xml_write_escaped(f, test_result->message);
+				fprintf(f, "</failure>\n    ");
+			}
+
+			fprintf(f, "</testcase>\n");
+		}
+
+		fprintf(f, "  </testsuite>\n");
+	}
+
+	fprintf(f, "</testsuites>\n");
+	fclose(f);
+}
 
 int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
 
@@ -238,6 +347,8 @@ int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
     printf("\n");
 
     printf("%u tests: %u passed, %u failed\n", total, passed, total-passed);
+
+	atf_plan_result_write_junit(result, getenv("JUNIT_XML"));
 
     atf_plan_result_destroy(result);
 

@@ -1824,10 +1824,11 @@ main(int argc, char* argv[])
 	strcpy(g.set, "ael-gui");
 
 	int http_port = 8280;
+	const char* bind_addr = "127.0.0.1";
 	const char* ui_path = NULL;
 	int c;
 
-	while ((c = getopt(argc, argv, "h:p:n:s:l:u:?")) != -1) {
+	while ((c = getopt(argc, argv, "h:p:n:s:l:u:b:?")) != -1) {
 		switch (c) {
 		case 'h':
 			snprintf(g.host, sizeof(g.host), "%s", optarg);
@@ -1847,9 +1848,12 @@ main(int argc, char* argv[])
 		case 'u':
 			ui_path = optarg;
 			break;
+		case 'b':
+			bind_addr = optarg;
+			break;
 		default:
 			printf("usage: %s [-h host] [-p port] [-n namespace] [-s set] "
-					"[-l http-port] [-u ui.html]\n", argv[0]);
+					"[-l http-port] [-u ui.html] [-b bind-addr]\n", argv[0]);
 			return 1;
 		}
 	}
@@ -1913,13 +1917,19 @@ main(int argc, char* argv[])
 	struct sockaddr_in addr = { 0 };
 
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	addr.sin_port = htons((uint16_t)http_port);
+
+	if (inet_pton(AF_INET, bind_addr, &addr.sin_addr) != 1) {
+		fprintf(stderr, "bad bind address %s\n", bind_addr);
+		aerospike_close(&g.as, &err);
+		aerospike_destroy(&g.as);
+		return 1;
+	}
 
 	if (bind(g_listen_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0 ||
 			listen(g_listen_fd, 8) != 0) {
-		fprintf(stderr, "failed to listen on 127.0.0.1:%d - %s\n", http_port,
-				strerror(errno));
+		fprintf(stderr, "failed to listen on %s:%d - %s\n", bind_addr,
+				http_port, strerror(errno));
 		aerospike_close(&g.as, &err);
 		aerospike_destroy(&g.as);
 		return 1;
@@ -1927,7 +1937,8 @@ main(int argc, char* argv[])
 
 	printf("ael-gui: cluster %s:%d ns=%s set=%s\n", g.host, g.port, g.ns,
 			g.set);
-	printf("ael-gui: open http://127.0.0.1:%d/\n", http_port);
+	printf("ael-gui: listening on %s:%d - open http://127.0.0.1:%d/\n",
+			bind_addr, http_port, http_port);
 
 	while (! g_stop) {
 		int fd = accept(g_listen_fd, NULL, NULL);

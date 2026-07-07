@@ -17,6 +17,9 @@ Local dev tool — not part of any build or CI.
 
 ## What you need
 
+The fastest path is the **Docker quickstart** below — it needs nothing but
+docker and GitHub access. To build and run natively instead:
+
 - **This branch** (`dylan/ael-gui`). It is based on
   `dylan/return-error-messages`, which carries the error-details client
   support (verbosity policy, field-45 decode) the tool builds against.
@@ -27,6 +30,45 @@ Local dev tool — not part of any build or CI.
   just needs a reachable host/port with a `test` namespace (override with
   `-n`). See PRs citrusleaf/aerospike-server#1436 and
   citrusleaf/aerospike-server-enterprise#530 for what the server side does.
+
+## Docker quickstart (no local toolchain needed)
+
+The `docker/` directory holds a self-contained image recipe: it builds the
+server (CE) and client from their branches plus the tool, and runs both
+`asd` and the GUI in one container. You need docker (BuildKit) and an
+ssh-agent holding a GitHub key that can read `citrusleaf/aerospike-server`
+— the key is used only to clone during the build and never enters the
+image.
+
+```bash
+# Build straight from GitHub - no clone needed (10-15 min first time):
+docker build --ssh default -f docker/Dockerfile -t ael-gui \
+    'https://github.com/aerospike/aerospike-client-c.git#dylan/ael-gui:tools/ael-gui'
+
+# Run self-contained (internal single-node server):
+docker run --rm --init -p 127.0.0.1:8280:8280 ael-gui
+# then open http://localhost:8280/
+```
+
+To point the GUI at an **existing cluster** instead of the internal one,
+set `AS_HOST` (and optionally `AS_PORT`, `AS_NS`, `AS_SET`) — the internal
+server is then skipped entirely:
+
+```bash
+docker run --rm --init -p 127.0.0.1:8280:8280 \
+    -e AS_HOST=172.17.0.4 -e AS_PORT=3000 ael-gui
+```
+
+The cluster must be reachable *from the container* and be running an
+error-details-branch asd: docker-bridge clusters (e.g. aerolab) work as-is;
+for a cluster on the host itself use `--network host` (then drop `-p`).
+When the branches move, rebuild with `--no-cache` to pick up the new tips.
+From a local checkout, build with context `tools/ael-gui` — local edits to
+`ael_gui.c`/`ui.html` are included without pushing:
+
+```bash
+cd tools/ael-gui && docker build --ssh default -f docker/Dockerfile -t ael-gui .
+```
 
 ## Build & run
 

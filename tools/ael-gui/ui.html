@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AEL Playground</title>
+<style>
+:root {
+	--bg: #14181d;
+	--panel: #1b2129;
+	--panel-2: #171d24;
+	--line: #2a323d;
+	--text: #d8dee6;
+	--muted: #8b96a3;
+	--accent: #4aa3d0;
+	--ok: #4fb96b;
+	--fault: #e05252;
+	--filtered: #d9a13d;
+	--absent: #b07ad1;
+	--mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font: 14px/1.5 system-ui, sans-serif;
+}
+header {
+	display: flex;
+	align-items: baseline;
+	gap: 14px;
+	padding: 14px 22px 10px;
+	border-bottom: 1px solid var(--line);
+}
+header h1 {
+	font-size: 17px;
+	margin: 0;
+	font-weight: 650;
+	letter-spacing: 0.2px;
+}
+header h1 span { color: var(--accent); }
+#conn {
+	font-family: var(--mono);
+	font-size: 12px;
+	color: var(--muted);
+}
+#conn .dot {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--muted);
+	margin-right: 5px;
+}
+#conn.up .dot { background: var(--ok); }
+#conn.down .dot { background: var(--fault); }
+main {
+	display: grid;
+	grid-template-columns: minmax(380px, 46%) 1fr;
+	gap: 16px;
+	padding: 16px 22px;
+	max-width: 1500px;
+}
+@media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+.card {
+	background: var(--panel);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	padding: 14px 16px;
+	margin-bottom: 16px;
+}
+.card h2 {
+	margin: 0 0 10px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.09em;
+	color: var(--muted);
+}
+textarea {
+	width: 100%;
+	min-height: 110px;
+	background: var(--panel-2);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 10px 12px;
+	font-family: var(--mono);
+	font-size: 14px;
+	resize: vertical;
+}
+textarea:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+.controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: center;
+	margin-top: 10px;
+}
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button {
+	background: var(--panel-2);
+	color: var(--muted);
+	border: 0;
+	padding: 6px 12px;
+	font: inherit;
+	cursor: pointer;
+}
+.seg button.on { background: #24303c; color: var(--text); }
+select, .btn {
+	background: var(--panel-2);
+	color: var(--text);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 6px 10px;
+	font: inherit;
+}
+label.chk { color: var(--muted); font-size: 13px; display: inline-flex; gap: 5px; align-items: center; }
+#run {
+	background: var(--accent);
+	color: #0d1216;
+	font-weight: 650;
+	border: 0;
+	padding: 7px 18px;
+	border-radius: 6px;
+	cursor: pointer;
+}
+#run:hover { filter: brightness(1.1); }
+.hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+kbd {
+	font-family: var(--mono);
+	font-size: 11px;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	border-radius: 4px;
+	padding: 1px 5px;
+}
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+td, th { text-align: left; padding: 4px 10px 4px 0; vertical-align: top; }
+th { color: var(--muted); font-weight: 500; white-space: nowrap; }
+td.mono, .mono { font-family: var(--mono); }
+#banner {
+	display: none;
+	border-radius: 6px;
+	padding: 10px 14px;
+	font-family: var(--mono);
+	font-size: 14px;
+	margin-bottom: 12px;
+	border: 1px solid;
+}
+#banner.ok       { display: block; border-color: var(--ok);       color: var(--ok);       background: rgba(79,185,107,0.07); }
+#banner.fault    { display: block; border-color: var(--fault);    color: var(--fault);    background: rgba(224,82,82,0.07); }
+#banner.filtered { display: block; border-color: var(--filtered); color: var(--filtered); background: rgba(217,161,61,0.07); }
+#banner .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.pill {
+	display: inline-block;
+	font-size: 11px;
+	font-family: var(--mono);
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	padding: 0 8px;
+	margin-left: 8px;
+	color: var(--text);
+}
+#srvmsg {
+	display: none;
+	font-family: var(--mono);
+	font-size: 13px;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	border-left: 3px solid var(--accent);
+	border-radius: 6px;
+	padding: 9px 12px;
+	margin-bottom: 12px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+#tracecard { display: none; }
+.srcview {
+	font-family: var(--mono);
+	font-size: 14px;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 10px 12px;
+	white-space: pre-wrap;
+	word-break: break-word;
+	margin-bottom: 10px;
+}
+.srcview mark {
+	background: rgba(224,82,82,0.25);
+	color: inherit;
+	border-bottom: 2px solid var(--fault);
+	border-radius: 2px;
+	padding: 0 1px;
+}
+.srcview.explain mark {
+	background: rgba(217,161,61,0.22);
+	border-bottom-color: var(--filtered);
+}
+.snippet .focus {
+	color: var(--fault);
+	font-weight: 700;
+}
+.tgrid {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 3px 16px;
+	font-size: 13px;
+}
+.tgrid .k { color: var(--muted); white-space: nowrap; }
+.tgrid .v { font-family: var(--mono); word-break: break-word; }
+.crumb { color: var(--muted); }
+.crumb b { color: var(--text); font-weight: 600; }
+#binsout { display: none; }
+details { margin-top: 10px; }
+summary { color: var(--muted); cursor: pointer; font-size: 12px; }
+pre.raw {
+	font-family: var(--mono);
+	font-size: 12px;
+	background: var(--panel-2);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 10px;
+	overflow-x: auto;
+	color: var(--muted);
+}
+#history { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+#history li {
+	font-family: var(--mono);
+	padding: 3px 6px;
+	border-radius: 4px;
+	cursor: pointer;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--muted);
+}
+#history li:hover { background: var(--panel-2); color: var(--text); }
+#history li .st { display: inline-block; min-width: 90px; }
+#history li .st.ok { color: var(--ok); }
+#history li .st.fault { color: var(--fault); }
+#history li .st.filtered { color: var(--filtered); }
+.btn { cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+	<h1>AEL <span>Playground</span> — expressions &amp; error details</h1>
+	<div id="conn"><span class="dot"></span><span id="conntxt">connecting…</span></div>
+</header>
+<main>
+<section>
+	<div class="card">
+		<h2>Expression</h2>
+		<textarea id="src" spellcheck="false" placeholder="$.x == 10"></textarea>
+		<div class="controls">
+			<span class="seg" id="modeseg">
+				<button data-mode="filter" class="on" title="Send as policy filter_exp on a get of the sample record">Filter read</button>
+				<button data-mode="value" title="Send as an expression-read operation; shows the value">Read value</button>
+			</span>
+			<select id="verbosity" title="error_detail_verbosity">
+				<option value="0">verbosity 0 — off</option>
+				<option value="1">verbosity 1 — subcode</option>
+				<option value="2">verbosity 2 — + message</option>
+				<option value="3" selected>verbosity 3 — + trace / explain</option>
+			</select>
+			<label class="chk" id="nofailwrap" style="display:none">
+				<input type="checkbox" id="nofail"> EVAL_NO_FAIL
+			</label>
+			<button id="run">Run</button>
+		</div>
+		<div class="controls">
+			<select id="examples">
+				<option value="">Examples…</option>
+				<option value='filter|$.x == 10'>filter passes → record</option>
+				<option value='filter|$.x == 999'>filter FALSE → explain</option>
+				<option value='filter|$.nope == 1'>absent bin → explain</option>
+				<option value='filter|1 / 0 == 1'>eval fault — divide by zero</option>
+				<option value='filter|$.x + +'>parse error → build trace</option>
+				<option value='filter|$.name == "ael" and $.xs != nil'>and over mixed bins</option>
+				<option value='filter|$.x + $.name == 12'>type mismatch fault</option>
+				<option value='value|$.x * 3 + 2'>value: arithmetic on a bin</option>
+				<option value='value|$.x / 0'>value: divide-by-zero fault</option>
+				<option value='value|$.name:STRING'>value: string bin (typed)</option>
+				<option value='value|$.name'>value: unresolved bin type diagnostic</option>
+				<optgroup label="Trace-machinery cases (probe.py battery)">
+					<option value='filter|$.x == 999 or $.y == 2.6 or $.name == "aed" or 1 == 2'>or-chain all false → whole-chain focus</option>
+					<option value='filter|let(a = $.x + 1) then (${a} == 99)'>let body FALSE → pierces to eq + operands</option>
+					<option value='filter|when($.x == 11 => 1, $.y == 9.9 => 2, default => 3) == 99'>when result compared → operands</option>
+					<option value='filter|when($.x == 999 => 1, $.x / 0 == 1 => 2, default => 3) == 3'>fault in 2nd when condition → exact focus</option>
+					<option value='filter|let(a = $.missing:INT) then (${a} == 1)'>absent bin through let var</option>
+					<option value='filter|$.xs:LIST.[0]:INT == 99'>CDT list element FALSE → operands</option>
+					<option value='filter|$.xs:LIST.[9]:INT == 1'>CDT out-of-bounds → message + appended trace</option>
+					<option value='filter|$.xs:LIST.*[?(@ / 0 > 1)].count() == 1'>fault inside CDT select → message + appended trace</option>
+					<option value='filter|exclusive($.x == 10, $.missing == 1)'>exclusive with absent branch</option>
+					<option value='filter|$.x / 0'>non-boolean filter → build detail</option>
+					<option value='filter|$.ttl() == -5'>metadata-phase FALSE → decided pre-record, no trace</option>
+					<option value='filter|not(not(not(not(not(not(not(not(not(not(not(not(not(not(not(not(not(not($.x / 0 == 1))))))))))))))))))'>18-deep fault → path truncation</option>
+				</optgroup>
+			</select>
+			<span class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>
+		</div>
+	</div>
+	<div class="card">
+		<h2>Sample record <span class="mono" id="recid"></span></h2>
+		<table id="rectable"><tbody></tbody></table>
+		<div class="controls">
+			<button class="btn" id="reset">Reset record</button>
+			<span class="hint">every run reads this record — reference bins as <span class="mono">$.x</span>, <span class="mono">$.name</span>, …</span>
+		</div>
+	</div>
+	<div class="card">
+		<h2>History</h2>
+		<ul id="history"></ul>
+	</div>
+</section>
+<section>
+	<div class="card">
+		<h2>Result</h2>
+		<div id="banner"></div>
+		<div id="srvmsg"></div>
+		<div id="tracecard">
+			<div class="srcview" id="srcview"></div>
+			<div class="tgrid" id="tgrid"></div>
+		</div>
+		<div id="binsout">
+			<h2 style="margin-top:14px" id="binstitle">Returned bins</h2>
+			<table id="binstable"><tbody></tbody></table>
+		</div>
+		<details id="rawwrap" style="display:none">
+			<summary>raw response JSON</summary>
+			<pre class="raw" id="raw"></pre>
+		</details>
+	</div>
+</section>
+</main>
+<script>
+"use strict";
+
+let mode = "filter";
+const $ = (id) => document.getElementById(id);
+const hist = [];
+
+function esc(s) {
+	return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+			.replace(/>/g, "&gt;");
+}
+
+// Split a JS string at UTF-8 byte offsets (the server reports byte spans).
+function byteSplit(str, off, span) {
+	const bytes = new TextEncoder().encode(str);
+	const dec = new TextDecoder();
+	const end = Math.min(off + span, bytes.length);
+	return [
+		dec.decode(bytes.slice(0, Math.min(off, bytes.length))),
+		dec.decode(bytes.slice(Math.min(off, bytes.length), end)),
+		dec.decode(bytes.slice(end)),
+	];
+}
+
+function fmtVal(v) {
+	if (v === null) return "nil";
+	if (typeof v === "object") return JSON.stringify(v);
+	if (typeof v === "string") return JSON.stringify(v);
+	return String(v);
+}
+
+function typeName(v) {
+	if (v === null) return "nil";
+	if (Array.isArray(v)) return "list";
+	if (typeof v === "object") return "map";
+	if (typeof v === "string") return v.startsWith("0x") ? "blob" : "string";
+	if (typeof v === "boolean") return "bool";
+	return Number.isInteger(v) ? "int" : "double";
+}
+
+function renderRecord(bins) {
+	const tb = $("rectable").querySelector("tbody");
+	tb.innerHTML = "";
+	if (!bins) {
+		tb.innerHTML = "<tr><td class='crumb'>no record</td></tr>";
+		return;
+	}
+	for (const [k, v] of Object.entries(bins)) {
+		const tr = document.createElement("tr");
+		tr.innerHTML = "<th class='mono'>$." + esc(k) + "</th><td class='crumb'>" +
+				typeName(v) + "</td><td class='mono'>" + esc(fmtVal(v)) + "</td>";
+		tb.appendChild(tr);
+	}
+}
+
+async function loadInfo() {
+	try {
+		const r = await fetch("/info");
+		const j = await r.json();
+		const conn = $("conn");
+		conn.className = j.connected ? "up" : "down";
+		$("conntxt").textContent = j.host + ":" + j.port + "  " + j.namespace +
+				"." + j.set + (j.connected ? "" : "  (" + (j.error || "down") + ")");
+		$("recid").textContent = "(" + j.namespace + "." + j.set + " key=sample)";
+		renderRecord(j.bins);
+	}
+	catch (e) {
+		$("conn").className = "down";
+		$("conntxt").textContent = "backend unreachable";
+	}
+}
+
+function classify(j) {
+	if (j.ok) return "ok";
+	if (j.status_name === "AEROSPIKE_FILTERED_OUT") return "filtered";
+	return "fault";
+}
+
+function render(j, src) {
+	// Banner.
+	const cls = classify(j);
+	const banner = $("banner");
+	banner.className = cls;
+	let head = j.status_name + " (" + j.status + ")";
+	if (j.details && j.details.has_subcode) {
+		head += "<span class='pill'>subcode " + j.details.subcode + "</span>";
+	}
+	if (j.in_doubt) {
+		head += "<span class='pill'>in doubt</span>";
+	}
+	banner.innerHTML = head + "<div class='sub'>" + esc(j.status_desc || "") +
+			"</div>";
+
+	// Server detail message.
+	const sm = $("srvmsg");
+	if (j.details && j.details.message) {
+		sm.style.display = "block";
+		sm.textContent = j.details.message;
+	}
+	else {
+		sm.style.display = "none";
+	}
+
+	// Trace.
+	const t = j.details && j.details.trace;
+	const tc = $("tracecard");
+	if (t) {
+		tc.style.display = "block";
+
+		// Source with the failing span highlighted (byte offsets).
+		const sv = $("srcview");
+		const isExplain = t.outcome === 2 || t.outcome === 3;
+		sv.className = "srcview" + (isExplain ? " explain" : "");
+		if (t.lang === 2 && t.ael_offset !== undefined) {
+			const span = t.ael_span !== undefined ? t.ael_span : 1;
+			const [a, b, c] = byteSplit(src, t.ael_offset, span);
+			sv.innerHTML = esc(a) + "<mark>" + esc(b) + "</mark>" + esc(c);
+		}
+		else {
+			sv.textContent = src;
+		}
+
+		// Field grid.
+		const rows = [];
+		if (t.outcome !== undefined) {
+			rows.push(["outcome", t.outcome_name + " (" + t.outcome + ")"]);
+		}
+		if (t.phase !== undefined) {
+			rows.push(["phase", t.phase_name + " (" + t.phase + ")"]);
+		}
+		if (t.snippet !== undefined) {
+			rows.push(["snippet", "<span class='snippet'>" +
+					esc(t.snippet).replace(/»/g, "<span class='focus'>»</span>")
+					.replace(/«/g, "<span class='focus'>«</span>") + "</span>"]);
+		}
+		if (t.op !== undefined) rows.push(["op", esc(t.op)]);
+		if (t.path !== undefined) {
+			rows.push(["path", "<span class='crumb'>" + t.path.map((p, i) =>
+					i === t.path.length - 1 ? "<b>" + esc(p) + "</b>" : esc(p))
+					.join(" → ") + "</span>"]);
+		}
+		if (t.operands !== undefined) {
+			rows.push(["operands", "lhs = " + esc(fmtVal(t.operands[0])) +
+					"   rhs = " + esc(fmtVal(t.operands[1]))]);
+		}
+		if (t.depth !== undefined) rows.push(["depth", t.depth]);
+		if (t.byte_offset !== undefined) {
+			rows.push(["wire offset", t.byte_offset]);
+		}
+		if (t.lang !== undefined) {
+			rows.push(["lang", t.lang_name + " (" + t.lang + ")"]);
+		}
+		if (t.ael_offset !== undefined) {
+			rows.push(["ael span", "offset " + t.ael_offset + ", width " +
+					(t.ael_span !== undefined ? t.ael_span : "?")]);
+		}
+		$("tgrid").innerHTML = rows.map(([k, v]) =>
+				"<div class='k'>" + k + "</div><div class='v'>" + v + "</div>")
+				.join("");
+	}
+	else {
+		tc.style.display = "none";
+	}
+
+	// Bins.
+	const bo = $("binsout");
+	if (j.bins) {
+		bo.style.display = "block";
+		$("binstitle").textContent = mode === "value" ? "Expression value" :
+				"Returned record";
+		const tb = $("binstable").querySelector("tbody");
+		tb.innerHTML = "";
+		for (const [k, v] of Object.entries(j.bins)) {
+			const tr = document.createElement("tr");
+			tr.innerHTML = "<th class='mono'>" + esc(k) + "</th><td class='crumb'>" +
+					typeName(v) + "</td><td class='mono'>" + esc(fmtVal(v)) +
+					"</td>";
+			tb.appendChild(tr);
+		}
+	}
+	else {
+		bo.style.display = "none";
+	}
+
+	// Raw.
+	$("rawwrap").style.display = "block";
+	$("raw").textContent = JSON.stringify(j, null, 2);
+}
+
+function pushHistory(src, m, verb, j) {
+	hist.unshift({ src, mode: m, verb, name: j.status_name, cls: classify(j) });
+	if (hist.length > 12) hist.pop();
+	$("history").innerHTML = hist.map((h, i) =>
+			"<li data-i='" + i + "'><span class='st " + h.cls + "'>" +
+			esc(h.name.replace("AEROSPIKE_", "")) + "</span> <span class='crumb'>" +
+			h.mode + " v" + h.verb + "</span>  " + esc(h.src) + "</li>").join("");
+}
+
+async function run() {
+	const src = $("src").value.trim();
+	if (!src) return;
+	const verb = $("verbosity").value;
+	const nofail = $("nofail").checked ? 1 : 0;
+	$("run").disabled = true;
+	try {
+		const r = await fetch("/eval?mode=" + mode + "&verbosity=" + verb +
+				"&nofail=" + nofail, { method: "POST", body: src });
+		const j = await r.json();
+		render(j, src);
+		pushHistory(src, mode, verb, j);
+	}
+	catch (e) {
+		const banner = $("banner");
+		banner.className = "fault";
+		banner.innerHTML = "backend error<div class='sub'>" + esc(e) + "</div>";
+	}
+	finally {
+		$("run").disabled = false;
+	}
+}
+
+$("modeseg").addEventListener("click", (ev) => {
+	const b = ev.target.closest("button");
+	if (!b) return;
+	mode = b.dataset.mode;
+	for (const x of $("modeseg").querySelectorAll("button")) {
+		x.classList.toggle("on", x === b);
+	}
+	$("nofailwrap").style.display = mode === "value" ? "inline-flex" : "none";
+});
+
+$("examples").addEventListener("change", (ev) => {
+	const v = ev.target.value;
+	if (!v) return;
+	const [m, expr] = [v.slice(0, v.indexOf("|")), v.slice(v.indexOf("|") + 1)];
+	$("src").value = expr;
+	const btn = $("modeseg").querySelector("button[data-mode='" + m + "']");
+	if (btn) btn.click();
+	ev.target.value = "";
+	run();
+});
+
+$("history").addEventListener("click", (ev) => {
+	const li = ev.target.closest("li");
+	if (!li) return;
+	const h = hist[Number(li.dataset.i)];
+	$("src").value = h.src;
+	$("verbosity").value = h.verb;
+	const btn = $("modeseg").querySelector("button[data-mode='" + h.mode + "']");
+	if (btn) btn.click();
+});
+
+$("run").addEventListener("click", run);
+$("src").addEventListener("keydown", (ev) => {
+	if (ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)) {
+		ev.preventDefault();
+		run();
+	}
+});
+$("reset").addEventListener("click", async () => {
+	await fetch("/reset", { method: "POST" });
+	loadInfo();
+});
+
+loadInfo();
+
+// Deep link: #mode|verbosity|expression (URL-encoded) auto-runs on load,
+// e.g. /#filter|3|1 / 0 == 1
+if (location.hash.length > 1) {
+	const parts = decodeURIComponent(location.hash.slice(1)).split("|");
+	if (parts.length >= 3) {
+		const [m, v, ...rest] = parts;
+		$("src").value = rest.join("|");
+		$("verbosity").value = v;
+		const btn = $("modeseg").querySelector("button[data-mode='" + m + "']");
+		if (btn) btn.click();
+		run();
+	}
+}
+</script>
+</body>
+</html>

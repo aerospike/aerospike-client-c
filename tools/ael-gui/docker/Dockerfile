@@ -76,6 +76,10 @@ RUN cd aerospike-client-c && make -j"$(nproc)"
 COPY ael_gui.c ui.html Makefile /src/tool/
 RUN cd /src/tool && make AEROSPIKE=/src/aerospike-client-c
 
+# Stage at an arch-independent path (target dir is Linux-x86_64 /
+# Linux-aarch64 depending on build host).
+RUN cp /src/aerospike-server/target/Linux-*/bin/asd /src/asd
+
 #------------------------------------------------------------------ runtime --
 FROM ${UBUNTU}
 
@@ -87,8 +91,7 @@ RUN apt-get update && \
         ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /src/aerospike-server/target/Linux-x86_64/bin/asd \
-        /opt/aerospike/bin/asd
+COPY --from=builder /src/asd /opt/aerospike/bin/asd
 COPY --from=builder /src/tool/target/ael-gui /opt/aerospike/bin/ael-gui
 COPY --from=builder /src/tool/ui.html /opt/aerospike/ui.html
 COPY docker/aerospike.conf /opt/aerospike/etc/aerospike.conf

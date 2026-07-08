@@ -26,6 +26,18 @@ ARG CLIENT_REF=dylan/ael-gui
 ARG SERVER_REPO=git@github.com:citrusleaf/aerospike-server.git
 ARG SERVER_REF=dylan/SERVER-1137-exp-build-trace
 
+# Content-aware cache-bust for the two clone layers below. Docker caches a
+# `git clone` by command string, not by remote content, so a moved branch is
+# never re-cloned without --no-cache. Pass the branch's current commit here
+# (from `git ls-remote`) and the clone's cache key changes iff the SHA changed:
+#   --build-arg CLIENT_REV=$(git ls-remote <client-repo> <CLIENT_REF> | cut -f1)
+#   --build-arg SERVER_REV=$(git ls-remote <server-repo> <SERVER_REF> | cut -f1)
+# Omit them and the build behaves as before (constant -> always a cache hit).
+# A build-arg (not an `ADD https://api.github.com/...commits/<ref>` probe) is
+# used because the server repo is private ssh - ADD can't authenticate to it.
+ARG CLIENT_REV=
+ARG SERVER_REV=
+
 ENV DEBIAN_FRONTEND=noninteractive
 ENV AEROSPIKE_TELEMETRY=FALSE
 
@@ -40,8 +52,10 @@ WORKDIR /src
 
 # Client lib (public repo) - provides libaerospike.a + headers for the tool.
 # Submodules are public https, cloned full-depth (shallow submodule fetches
-# can fail on unadvertised pins).
-RUN git clone --depth 1 --branch "${CLIENT_REF}" --recurse-submodules \
+# can fail on unadvertised pins). The CLIENT_REV echo pins this layer's cache
+# key to the branch tip (see the ARG note above).
+RUN echo "client rev: ${CLIENT_REV}" && \
+    git clone --depth 1 --branch "${CLIENT_REF}" --recurse-submodules \
         "${CLIENT_REPO}" aerospike-client-c
 
 # Server (private repo, ssh submodule URLs) - clone + submodules in one
@@ -50,6 +64,7 @@ RUN git clone --depth 1 --branch "${CLIENT_REF}" --recurse-submodules \
 # rejects nodes whose build version is a bare SHA.
 RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 RUN --mount=type=ssh \
+    echo "server rev: ${SERVER_REV}" && \
     git clone --single-branch --branch "${SERVER_REF}" "${SERVER_REPO}" \
         aerospike-server && \
     cd aerospike-server && git submodule update --init --jobs 4

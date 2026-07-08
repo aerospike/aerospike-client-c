@@ -267,7 +267,7 @@ jobs:
     name: macOS arm64 test / ${{ matrix.event_lib }}
     if: inputs.run-mac
     needs: [load-matrix, build-mac]
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: [self-hosted, macOS, ARM64, ci]
     strategy:
       fail-fast: false
       matrix:

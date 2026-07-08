@@ -64,9 +64,19 @@ RUN cd aerospike-server && ./bin/install-dependencies.sh && \
 # (it is only built/tested as EE there); the CE sources themselves are
 # intact, so strip the tripwires for this image's CE build. Drop this once
 # the FIXMEs are resolved upstream.
+#
+# Also ensure the exp/ AEL sources are in tso/exclude_ce.txt: the TSO GIMPLE
+# plugin runs on aarch64 only and ICEs on codegen.c when it isn't excluded.
+# The exp subsystem is request-local (exp.c/expop.c are already excluded), so
+# excluding the rest is safe. Idempotent + no-op on x86 (plugin off there);
+# drop once the server branch carries the exclusion itself.
 RUN cd aerospike-server && \
     sed -i '/\$(error CE sources included/d' cf/src/Makefile \
         as/src/Makefile && \
+    { grep -qxF codegen.c tso/exclude_ce.txt || \
+        printf '%s\n' ael_actions.c ael_diag.c ael_func_table.c \
+            ael_lexer.c ael_parser.c ael_string.c ast.c codegen.c \
+            >> tso/exclude_ce.txt; } && \
     make -j"$(nproc)"
 
 RUN cd aerospike-client-c && make -j"$(nproc)"

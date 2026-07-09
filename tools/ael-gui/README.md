@@ -62,7 +62,17 @@ docker run --rm --init -p 127.0.0.1:8280:8280 \
 The cluster must be reachable *from the container* and be running an
 error-details-branch asd: docker-bridge clusters (e.g. aerolab) work as-is;
 for a cluster on the host itself use `--network host` (then drop `-p`).
-When the branches move, rebuild with `--no-cache` to pick up the new tips.
+When the branches move, re-clone only what changed by passing the tips as
+cache-bust args (falling back to `--no-cache` also works, but rebuilds
+everything):
+
+```bash
+docker build --ssh default -f docker/Dockerfile -t ael-gui \
+    --build-arg CLIENT_REV=$(git ls-remote https://github.com/aerospike/aerospike-client-c.git dylan/ael-gui | cut -f1) \
+    --build-arg SERVER_REV=$(git ls-remote git@github.com:citrusleaf/aerospike-server.git dylan/SERVER-1137-exp-build-trace | cut -f1) \
+    'https://github.com/aerospike/aerospike-client-c.git#dylan/ael-gui:tools/ael-gui'
+```
+
 From a local checkout, build with context `tools/ael-gui` — local edits to
 `ael_gui.c`/`ui.html` are included without pushing:
 

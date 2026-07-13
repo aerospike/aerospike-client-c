@@ -118,6 +118,7 @@ atf_suite_result * atf_suite_run(atf_suite * suite) {
     if ( suite->init ) suite->init(suite);
 
     printf("[+] %s[%u] :: %s\n", suite->name, suite->size, suite->desc);
+    fflush(stdout);
 
     atf_suite_result * suite_result = atf_suite_result_new(suite);
 
@@ -130,10 +131,12 @@ atf_suite_result * atf_suite_run(atf_suite * suite) {
     for (uint32_t i = 0; i < suite->size; i++) {
         atf_test * test = suite->tests[i];
         printf("    [+] %s[%s] :: %s\n", suite->name, test->name, test->desc);
+        fflush(stdout);
         atf_test_result * test_result = atf_test_run(test);
         atf_suite_result_add(suite_result, test_result);
         if ( ! test_result->success ) {
             printf("        [✘] %s\n", test_result->message);
+            fflush(stdout);
         }
 
     }

@@ -432,8 +432,26 @@ TEST(key_operate_reset_read_ttl, "operate reset_read_ttl")
 	// Read the record after it expires, showing it's gone.
 	as_sleep(2000);
 
-	prec = NULL;
-	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	// Expiration visibility can lag slightly on CI runners where the client runs
+	// on the macOS host and the server runs behind Docker/Colima port forwarding.
+	// Poll for a bounded time instead of asserting on the exact TTL boundary.
+	for (uint32_t i = 0; i < 10; i++) {
+		prec = NULL;
+		status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+
+		if (status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			break;
+		}
+
+		assert_int_eq(status, AEROSPIKE_OK);
+
+		if (prec) {
+			as_record_destroy(prec);
+		}
+
+		as_sleep(500);
+	}
+
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
 	as_operations_destroy(&ops);

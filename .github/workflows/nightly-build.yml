@@ -14,6 +14,8 @@ permissions:
 on:
   schedule:
     - cron: '0 5 * * *' # daily at 5:00 AM UTC
+  push:
+    branches: [pipeline-reliablity-verf]
 
 
 # Let nightly runs finish; queue newer runs behind them.

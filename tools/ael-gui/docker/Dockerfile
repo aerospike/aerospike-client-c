@@ -75,15 +75,7 @@ RUN --mount=type=ssh \
 RUN cd aerospike-server && ./bin/install-dependencies.sh && \
     rm -rf /var/lib/apt/lists/*
 
-# The dsl branch fences off community builds with FIXME $(error) tripwires
-# (it is only built/tested as EE there); the CE sources themselves are
-# intact, so strip the tripwires for this image's CE build. as/src's guard
-# (and the tso/exclude_ce.txt AEL entries this step used to add) were
-# resolved upstream; cf/src's remains. Drop this once it goes too. The sed
-# is a no-op if the pattern is already gone.
-RUN cd aerospike-server && \
-    sed -i '/\$(error CE sources included/d' cf/src/Makefile && \
-    make -j"$(nproc)"
+RUN cd aerospike-server && make -j"$(nproc)"
 
 RUN cd aerospike-client-c && make -j"$(nproc)"
 

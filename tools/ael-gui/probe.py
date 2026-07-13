@@ -185,11 +185,11 @@ BATTERY = [
     # ---- faults ----
     ('$.x / 0 == 1', {"op": "div", "outcome": 1,
                       "msg_contains": "division by zero"}),
-    # focus includes the 'default =>' keyword prefix: the default result's
-    # start is inherited from the case boundary (keyword tokens belong to no
-    # AST node - same approximation as 'when('/'not(' prefixes).
+    # true spans (server 97485408d+): the default arm's result spans exactly
+    # its own construct - no more 'default =>' keyword-prefix inheritance
+    # from the case boundary.
     ('when($.x == 999 => 1, default => 2 / 0) == 1',
-     {"op": "div", "outcome": 1, "focus": "default => 2 / 0"}),
+     {"op": "div", "outcome": 1, "focus": "2 / 0"}),
     ('when($.x == 999 => 1, $.x / 0 == 1 => 2, default => 3) == 3',
      {"op": "div", "outcome": 1, "focus": "$.x / 0"}),
     ('when($.x == 999 => 1, $.x == 10 => 2 / 0, default => 3) == 1',

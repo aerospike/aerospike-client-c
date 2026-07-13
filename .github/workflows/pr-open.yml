@@ -16,7 +16,7 @@ permissions:
 on:
   # keeping for testing sake
   push:
-    branches: [CLIENT-4300-release-pipeline-new]
+    branches: [pipeline-reliablity-verf]
   pull_request:
     branches:
       - stage
@@ -30,9 +30,9 @@ on:
   workflow_dispatch:
 
 # Keep only the latest run for a PR or branch.
-concurrency:
-  group: pr-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+# concurrency:
+#   group: pr-${{ github.event.pull_request.number || github.ref }}
+#   cancel-in-progress: true
 
 jobs:
   load-test-servers:
@@ -117,7 +117,7 @@ jobs:
           }
         }
       valgrind:    true
-      run-mac:     true # TODO will make it true once the mac runner are online again
-      run-windows: true
+      run-mac:     ${{ fromJSON(vars.PR_EXTRA_PLATFORMS || '{}').mac == true }}
+      run-windows: ${{ fromJSON(vars.PR_EXTRA_PLATFORMS || '{}').win == true }}
       check-doc-lint: ${{ vars.CHECK_DOC_LINT != 'false' }}
     secrets: inherit

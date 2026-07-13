@@ -53,10 +53,15 @@ on:
         default: ''
 
       valgrind:
-        description: 'Include valgrind runs in the Linux matrix (true = both with and without; false = without only)'
+        description: 'Include configured Valgrind runs in the Linux matrix'
         required: false
         type: boolean
         default: false
+
+      valgrind-targets-json:
+        description: 'Distro/arch pairs that get Valgrind when valgrind=true; container, runner, and event libs come from the resolved matrix.'
+        required: false
+        type: string
 
       run-mac:
         description: 'Run macOS ARM64 self-hosted build+test'
@@ -122,6 +127,7 @@ jobs:
           runners-json: ${{ inputs.runners-json }}
           event-lib:    ${{ inputs.event-lib }}
           valgrind:     ${{ inputs.valgrind }}
+          valgrind-targets-json: ${{ inputs.valgrind-targets-json }}
 
   # Linux build/test runs inside the selected distro container.
   build-linux:
@@ -321,7 +327,7 @@ jobs:
           config-content: ${{ inputs.server-config-content }}
           env-vars: 'DEFAULT_TTL=2592000'
 
-      # macOS tests run on the host, so connect through localhost.
+      # macOS tests run on the host, so connect through the IPv4 loopback port.
       - name: Test macOS arm64 (${{ matrix.event_lib }})
         env:
           AS_PORT: ${{ steps.setup-aerospike.outputs.service-ports }}
@@ -329,7 +335,12 @@ jobs:
         run: |
           mkdir -p test-results
           chmod +x target/Darwin-arm64/test/aerospike_test
-          target/Darwin-arm64/test/aerospike_test -h localhost -p $AS_PORT
+          for _ in {1..30}; do
+            nc -z 127.0.0.1 "$AS_PORT" && break
+            sleep 1
+          done
+          nc -z 127.0.0.1 "$AS_PORT"
+          target/Darwin-arm64/test/aerospike_test -h 127.0.0.1 -p "$AS_PORT"
 
       - name: Dump server logs on failure
         if: failure()

@@ -37,10 +37,14 @@ inputs:
   valgrind:
     description: >
       Include valgrind runs.
-      true  → matrix contains both valgrind:false and valgrind:true rows.
+      true  → matrix includes explicit valgrind-targets-json rows.
       false → matrix contains only valgrind:false rows (fast feedback).
     required: false
     default: 'false'
+
+  valgrind-targets-json:
+    description: 'Distro/arch pairs that get Valgrind when valgrind=true; container, runner, and event libs come from the resolved matrix.'
+    required: false
 
 outputs:
   linux-matrix:
@@ -110,15 +114,18 @@ runs:
       id: resolve-valgrind
       shell: bash
       run: |
-        # true  → [false, true] : plain run + valgrind run
-        # false → [false]       : plain run only (fast PR feedback)
+        # true  → append explicit valgrind targets after the plain matrix
+        # false → plain run only (fast PR feedback)
         if [ "${{ inputs.valgrind }}" = "true" ]; then
           VALGRIND='[false, true]'
+          VALGRIND_ENABLED='true'
         else
           VALGRIND='[false]'
+          VALGRIND_ENABLED='false'
         fi
         echo "valgrind_flags=$VALGRIND" >> "$GITHUB_OUTPUT"
         echo "VALGRIND=$VALGRIND"       >> "$GITHUB_ENV"
+        echo "VALGRIND_ENABLED=$VALGRIND_ENABLED" >> "$GITHUB_ENV"
 
     # ── Step 4: Load and validate JSON inputs ──────────────────────────────────
     - name: Load and validate JSON inputs
@@ -134,6 +141,17 @@ runs:
         echo "$RUNNERS" | jq -e . > /dev/null \
           || { echo "::error::runners-json is not valid JSON"; exit 1; }
         echo "RUNNERS=$RUNNERS" >> "$GITHUB_ENV"
+
+        VALGRIND_TARGETS_RAW='${{ inputs.valgrind-targets-json }}'
+        if [ -z "$VALGRIND_TARGETS_RAW" ]; then
+          VALGRIND_TARGETS_RAW='[
+            {"distro":"ubuntu-22.04","arch":"amd64"},
+            {"distro":"rhel-8","arch":"amd64"}
+          ]'
+        fi
+        echo "$VALGRIND_TARGETS_RAW" | jq -e . > /dev/null \
+          || { echo "::error::valgrind-targets-json is not valid JSON"; exit 1; }
+        echo "VALGRIND_TARGETS=$(echo "$VALGRIND_TARGETS_RAW" | jq -c .)" >> "$GITHUB_ENV"
 
     # ── Step 5: Expand distros × archs ─────────────────────────────────────────
     - name: Expand distros × archs
@@ -151,25 +169,49 @@ runs:
             ]' <<< "$RAW_JSON")
         echo "DISTROS=$DISTROS" >> "$GITHUB_ENV"
 
-    # ── Step 6: Compute Cartesian product (distro,arch) × event_lib × valgrind ─
+    # ── Step 6: Compute Cartesian product (distro,arch) × event_lib ────────────
     - name: Compute Cartesian product
       id: cartesian
       shell: bash
       run: |
         # GitHub Actions matrix include: does not cross-product with other
         # dimensions, so we pre-compute the full Cartesian product here with jq.
-        MATRIX=$(jq -c \
-          --argjson libs     "$LIBS" \
-          --argjson valgrind "$VALGRIND" \
+        BASE_MATRIX=$(jq -c \
+          --argjson libs "$LIBS" \
           '[.[] | . as $entry | $libs[] | . as $lib |
-            $valgrind[] | {
+            {
               distro:    $entry.distro,
               container: $entry.container,
               arch:      $entry.arch,
               runner:    $entry.runner,
               event_lib: $lib,
-              valgrind:  .
+              valgrind:  false
             }]' <<< "$DISTROS")
 
+        if [ "$VALGRIND_ENABLED" = "true" ]; then
+          VALGRIND_MATRIX=$(jq -c \
+            --argjson distros "$DISTROS" \
+            --argjson libs "$LIBS" \
+            '[.[] | . as $target |
+              $distros[] |
+              select(.distro == $target.distro and .arch == $target.arch) |
+              . as $entry |
+              $libs[] | . as $lib |
+              {
+                distro:    $entry.distro,
+                container: $entry.container,
+                arch:      $entry.arch,
+                runner:    $entry.runner,
+                event_lib: $lib,
+                valgrind:  true
+              }]' <<< "$VALGRIND_TARGETS")
+        else
+          VALGRIND_MATRIX='[]'
+        fi
+
+        MATRIX=$(jq -c -s 'add | unique_by(.distro, .arch, .event_lib, .valgrind)' \
+          <(printf '%s\n' "$BASE_MATRIX") \
+          <(printf '%s\n' "$VALGRIND_MATRIX"))
+
         echo "linux_matrix=$MATRIX" >> "$GITHUB_OUTPUT"
-        echo "cells=$(jq 'length' <<< "$MATRIX")  event_libs=$LIBS  valgrind=$VALGRIND"
+        echo "cells=$(jq 'length' <<< "$MATRIX")  event_libs=$LIBS  valgrind=$VALGRIND  valgrind_targets=$VALGRIND_TARGETS"

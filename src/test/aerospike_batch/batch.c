@@ -774,6 +774,24 @@ not_exists_cb(const as_batch_result* results, uint32_t n, void* udata)
 	return true;
 }
 
+typedef struct {
+	as_error* err;
+	as_batch* batch;
+	as_status status;
+	uint32_t errors;
+} batch_not_exists_data;
+
+static bool
+batch_not_exists(void* udata)
+{
+	batch_not_exists_data* data = udata;
+	data->errors = 0;
+	data->status = aerospike_batch_exists(as, data->err, NULL, data->batch, not_exists_cb,
+		&data->errors);
+
+	return data->status == AEROSPIKE_OK && data->errors == 0;
+}
+
 TEST(batch_remove, "Batch remove")
 {
 	as_error err;
@@ -848,8 +866,16 @@ TEST(batch_reset_read_ttl, "Batch reset read ttl")
 
 	// Read the record after it expires, showing it's gone.
 	as_sleep(2000);
-	errors = 0;
-	status = aerospike_batch_exists(as, &err, NULL, &batch, not_exists_cb, &errors);
+
+	batch_not_exists_data data = {
+		.err = &err,
+		.batch = &batch,
+		.status = AEROSPIKE_OK,
+		.errors = 0
+	};
+	ATF_WAIT_FOR_TTL_EXPIRATION(batch_not_exists, &data);
+	status = data.status;
+	errors = data.errors;
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(errors, 0);
 }

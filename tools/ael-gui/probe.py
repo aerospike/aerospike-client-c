@@ -238,6 +238,16 @@ BATTERY = [
     # non-boolean filter: message-only build detail (check_filter_exp fix)
     ('$.x / 0', {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
                  "msg_contains": "must evaluate to boolean"}),
+    # ---- string-ops round: toString is a unary cast, concat gains a method --
+    # toString() pins its receiver to the stringifiable set (INT|BLOB|FLOAT);
+    # a MAP-pinned receiver conflicts at the post-parse type check.
+    ('$.m:MAP.toString()',
+     {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
+      "msg_contains": "bin type conflict: MAP vs INT|BLOB|FLOAT"}),
+    # the $.recv.concat(...) method form rejects a named argument.
+    ('$.name.concat(x: 1)',
+     {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
+      "msg_contains": "concat takes positional arguments"}),
     # ---- misc / edges ----
     ('$.name == "aél and ünïcode"', {"op": "eq", "outcome": 2}),
     ('$.y / 0.0 == 1.0', {"op": "eq", "outcome": 2}),  # inf, no float fault

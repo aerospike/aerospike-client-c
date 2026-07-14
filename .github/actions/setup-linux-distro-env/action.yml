@@ -56,6 +56,7 @@ runs:
           -e DISTRO="${DISTRO}" \
           -e VALGRIND="${VALGRIND}" \
           -e JUNIT_XML="${JUNIT_XML}" \
+          ${CI:+-e CI="$CI"} \
           ${{ inputs.container }} \
           bash -c '
             set -euo pipefail

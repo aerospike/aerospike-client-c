@@ -39,7 +39,7 @@ atf_is_ci(void)
 {
 	bool is_ci = getenv("GITHUB_ACTIONS") != NULL || getenv("CI") != NULL;
 
-	fprintf(stderr, "%sINFO: CI detected: %s.\n", ATF_LOG_PREFIX, is_ci ? "true" : "false");
+	printf("%sINFO: CI detected: %s.\n", ATF_LOG_PREFIX, is_ci ? "true" : "false");
 	return is_ci;
 }
 

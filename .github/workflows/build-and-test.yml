@@ -186,7 +186,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: test-results-linux-${{ matrix.distro }}-${{ matrix.arch }}-${{ matrix.event_lib }}${{ matrix.valgrind && '-valgrind' || '' }}
+          name: test-results-linux-${{ inputs.server-tag }}-${{ matrix.distro }}-${{ matrix.arch }}-${{ matrix.event_lib }}${{ matrix.valgrind && '-valgrind' || '' }}
           path: test-results/*.xml
           if-no-files-found: ignore
           retention-days: 1
@@ -351,7 +351,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: test-results-macos-arm64-${{ matrix.event_lib }}
+          name: test-results-macos-arm64-${{ inputs.server-tag }}-${{ matrix.event_lib }}
           path: test-results/*.xml
           if-no-files-found: ignore
           retention-days: 1
@@ -497,7 +497,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: test-results-windows-${{ matrix.config }}
+          name: test-results-windows-${{ inputs.server-tag }}-${{ matrix.config }}
           path: test-results/*.xml
           if-no-files-found: ignore
           retention-days: 1

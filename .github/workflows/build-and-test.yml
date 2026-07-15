@@ -524,9 +524,13 @@ jobs:
         uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2.23.0
         with:
           files: test-results/**/*.xml
-          check_name: Unit Test Results
+          check_name: >-
+            Tests — server ${{ inputs.server-tag }}
+            / ${{ inputs.num-nodes }} node
+            / ${{ inputs.event-lib }}
           comment_mode: off
-          job_summary: false
+          job_summary: true
+          report_individual_runs: false
 
       - name: Write run summary
         env:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install ALL build, test, docs and packaging dependencies for the Aerospike C
+# Install build, test, docs and packaging dependencies for the Aerospike C
 # client on a bare distro base image — in one shot, per distro.
 #
 # This mirrors the aerospike-server repo's install_deps.bash pattern: a single
@@ -12,7 +12,7 @@
 #   link-time dev libs    : openssl(-devel), libyaml(-devel), zlib(-devel)
 #   one async event lib   : libev | libuv | libevent  (built from source,
 #                           versions mirror the repo's ./install_lib* scripts)
-#   docs                  : doxygen (+ graphviz) — built from source where the
+#   docs (docs=true only) : doxygen (+ graphviz) — built from source where the
 #                           distro version is too old (Ubuntu) or absent
 #                           (RHEL / Amazon Linux); on RHEL flex+bison are built
 #                           from source (absent from all UBI repos)
@@ -20,11 +20,15 @@
 #
 # Lua is NOT installed: the client bundles it via the modules/lua submodule.
 #
-# Usage: install_deps.bash <distro> [event_lib]
+# Usage: install_deps.bash <distro> [event_lib] [valgrind=false] [docs=true]
 #
 #   distro:    ubuntu-22.04 | ubuntu-24.04 | debian-12 | debian-13 |
 #              amazonlinux-2023 | rhel-8 | rhel-9 | rhel-10
 #   event_lib: libev (default) | libuv | libevent
+#   valgrind:  true | false (default)
+#   docs:      true (default) | false — skip doxygen/graphviz and their
+#              prerequisites (cmake, flex, bison); use false for build+test
+#              jobs that never run `make docs` or `make package`
 set -xeuo pipefail
 
 # Event-library versions — kept in sync with the repo's canonical installers
@@ -42,6 +46,10 @@ if [[ $(id -u) -ne 0 ]] && command -v sudo >/dev/null; then
     SUDO=sudo
 fi
 
+# Set by main() from the 4th argument; defaulted here so distro functions can
+# reference it even if called directly during testing.
+INSTALL_DOCS=true
+
 # Compiler + autotools + link-time dev libs, common to a distro family.
 DEBIAN_DEPS='build-essential autoconf automake libtool make pkg-config git tar wget ca-certificates libssl-dev libyaml-dev zlib1g-dev'
 
@@ -49,9 +57,10 @@ DEBIAN_DEPS='build-essential autoconf automake libtool make pkg-config git tar w
 # configure scripts and by `tar xzf` on the minimal RHEL/AL images.
 EL_DEPS='gcc gcc-c++ make autoconf automake libtool m4 git tar wget which gzip diffutils file findutils openssl openssl-devel libyaml-devel'
 
-# Extra packages for `make docs` + `make package` (see pkg/package*, Makefile).
-DEBIAN_PKG_DEPS='graphviz zip dpkg-dev fakeroot'
-EL_PKG_DEPS='graphviz zip rpm-build'
+# Packaging deps (zip + distro packager). graphviz is docs-only and added
+# conditionally below when INSTALL_DOCS=true.
+DEBIAN_PKG_DEPS='zip dpkg-dev fakeroot'
+EL_PKG_DEPS='zip rpm-build'
 
 # --- Per-distro install functions (full toolchain, single shot) ---------------------
 
@@ -62,22 +71,27 @@ install_deps_debian_12() { install_debian_common; }
 install_deps_debian_13() { install_debian_common; }
 
 install_deps_amazonlinux_2023() {
+    local docs_pkgs=""
+    [[ "$INSTALL_DOCS" == "true" ]] && docs_pkgs="graphviz cmake flex bison python3"
     # shellcheck disable=SC2086
-    $SUDO dnf install -y $EL_DEPS zlib-devel \
-        $EL_PKG_DEPS cmake flex bison python3
+    $SUDO dnf install -y $EL_DEPS zlib-devel $EL_PKG_DEPS $docs_pkgs
     $SUDO dnf clean all
-    build_doxygen
+    if [[ "$INSTALL_DOCS" == "true" ]]; then build_doxygen; fi
 }
 
 install_deps_rhel_8() {
     # ubi8-minimal: bison/flex are absent from all UBI 8 repos (BaseOS, AppStream,
     # CodeReady Builder) → build both from source before doxygen.
+    local docs_pkgs=""
+    [[ "$INSTALL_DOCS" == "true" ]] && docs_pkgs="graphviz cmake python3"
     # shellcheck disable=SC2086
-    microdnf install -y $EL_DEPS zlib-devel $EL_PKG_DEPS cmake python3
+    microdnf install -y $EL_DEPS zlib-devel $EL_PKG_DEPS $docs_pkgs
     microdnf clean all
-    build_bison 3.4
-    build_flex 2.6.1
-    build_doxygen
+    if [[ "$INSTALL_DOCS" == "true" ]]; then
+        build_bison 3.4
+        build_flex 2.6.1
+        build_doxygen
+    fi
 }
 
 install_deps_rhel_9()  { install_el_minimal 3.7.4 2.6.4; }
@@ -87,34 +101,42 @@ install_deps_rhel_10() { install_el_minimal 3.7.4 2.6.4; }
 
 # Debian apt ships a current-enough doxygen → no source build needed.
 install_debian_common() {
+    local docs_pkgs=""
+    [[ "$INSTALL_DOCS" == "true" ]] && docs_pkgs="doxygen graphviz"
     $SUDO apt-get update
     # shellcheck disable=SC2086
     $SUDO apt-get install -y --no-install-recommends \
-        $DEBIAN_DEPS doxygen $DEBIAN_PKG_DEPS
+        $DEBIAN_DEPS $DEBIAN_PKG_DEPS $docs_pkgs
 }
 
 # Ubuntu apt doxygen is too old → build from source (cmake/flex/bison).
 install_ubuntu_common() {
+    local docs_pkgs=""
+    [[ "$INSTALL_DOCS" == "true" ]] && docs_pkgs="graphviz cmake flex bison python3"
     $SUDO apt-get update
     # shellcheck disable=SC2086
     $SUDO apt-get install -y --no-install-recommends \
-        $DEBIAN_DEPS $DEBIAN_PKG_DEPS cmake flex bison python3
-    build_doxygen
+        $DEBIAN_DEPS $DEBIAN_PKG_DEPS $docs_pkgs
+    if [[ "$INSTALL_DOCS" == "true" ]]; then build_doxygen; fi
 }
 
 # ubi9/ubi10-minimal: zlib-devel is not in microdnf's default repos → pull via dnf.
 # bison/flex are absent from all UBI repos → built from source before doxygen.
 install_el_minimal() {
     local bison_ver="$1" flex_ver="$2"
+    local docs_pkgs=""
+    [[ "$INSTALL_DOCS" == "true" ]] && docs_pkgs="graphviz cmake python3"
     # shellcheck disable=SC2086
-    microdnf install -y $EL_DEPS $EL_PKG_DEPS cmake python3
+    microdnf install -y $EL_DEPS $EL_PKG_DEPS $docs_pkgs
     microdnf install -y dnf
     $SUDO dnf install -y zlib-devel --setopt=install_weak_deps=False --nodocs
     $SUDO dnf clean all
     microdnf clean all
-    build_bison "$bison_ver"
-    build_flex "$flex_ver"
-    build_doxygen
+    if [[ "$INSTALL_DOCS" == "true" ]]; then
+        build_bison "$bison_ver"
+        build_flex "$flex_ver"
+        build_doxygen
+    fi
 }
 
 run_ldconfig() {
@@ -298,14 +320,15 @@ install_valgrind() {
 # --- Main ---------------------------------------------------------------------------
 
 main() {
-    if [[ $# -lt 1 || $# -gt 3 ]]; then
-        echo "Usage: install_deps.bash <distro> [event_lib] [valgrind=false]" >&2
+    if [[ $# -lt 1 || $# -gt 4 ]]; then
+        echo "Usage: install_deps.bash <distro> [event_lib] [valgrind=false] [docs=true]" >&2
         exit 1
     fi
 
     local distro="$1"
     local event_lib="${2:-sync}"
     local valgrind="${3:-false}"
+    INSTALL_DOCS="${4:-true}"
     export DEBIAN_FRONTEND=noninteractive
 
     case "$distro" in
@@ -331,7 +354,7 @@ main() {
         install_valgrind "$distro"
     fi
 
-    echo "Dependencies installed for $distro (event_lib=$event_lib, valgrind=$valgrind)."
+    echo "Dependencies installed for $distro (event_lib=$event_lib, valgrind=$valgrind, docs=$INSTALL_DOCS)."
 }
 
 main "$@"

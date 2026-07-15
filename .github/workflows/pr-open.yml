@@ -15,8 +15,8 @@ permissions:
 
 on:
   # keeping for testing sake
-  push:
-    branches: [CLIENT-5076-valgrind-one-distro]
+  # push:
+  #   branches: [CLIENT-5076-valgrind-one-distro]
   pull_request:
     branches:
       - stage

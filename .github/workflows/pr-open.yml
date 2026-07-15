@@ -16,7 +16,7 @@ permissions:
 on:
   # keeping for testing sake
   push:
-    branches: [pipeline-reliablity-verf]
+    branches: [CLIENT-5076-valgrind-one-distro]
   pull_request:
     branches:
       - stage
@@ -28,11 +28,6 @@ on:
       - ready_for_review
 
   workflow_dispatch:
-
-# Keep only the latest run for a PR or branch.
-# concurrency:
-#   group: pr-${{ github.event.pull_request.number || github.ref }}
-#   cancel-in-progress: true
 
 jobs:
   load-test-servers:

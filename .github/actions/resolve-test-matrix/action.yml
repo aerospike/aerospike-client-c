@@ -43,7 +43,7 @@ inputs:
     default: 'false'
 
   valgrind-targets-json:
-    description: 'Distro/arch pairs that get Valgrind when valgrind=true; container, runner, and event libs come from the resolved matrix.'
+    description: 'Distro/arch pairs that get Valgrind when valgrind=true'
     required: false
 
 outputs:
@@ -115,7 +115,6 @@ runs:
       shell: bash
       run: |
         # true  → append explicit valgrind targets after the plain matrix
-        # false → plain run only (fast PR feedback)
         if [ "${{ inputs.valgrind }}" = "true" ]; then
           VALGRIND='[false, true]'
           VALGRIND_ENABLED='true'

@@ -15,7 +15,7 @@ on:
   schedule:
     - cron: '0 5 * * *' # daily at 5:00 AM UTC
   push:
-    branches: [pipeline-reliablity-verf]
+    branches: [CLIENT-5076-valgrind-one-distro]
 
 
 # Let nightly runs finish; queue newer runs behind them.

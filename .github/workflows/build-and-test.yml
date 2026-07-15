@@ -59,7 +59,7 @@ on:
         default: false
 
       valgrind-targets-json:
-        description: 'Distro/arch pairs that get Valgrind when valgrind=true; container, runner, and event libs come from the resolved matrix.'
+        description: 'Distro/arch pairs that get Valgrind when valgrind=true'
         required: false
         type: string
 
@@ -274,7 +274,7 @@ jobs:
     name: macOS arm64 test / ${{ matrix.event_lib }}
     if: inputs.run-mac
     needs: [load-matrix, build-mac]
-    runs-on: [self-hosted, macOS, ARM64, ci]
+    runs-on: [self-hosted, macOS, ARM64]
     strategy:
       fail-fast: false
       matrix:

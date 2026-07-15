@@ -1,7 +1,7 @@
 name: Nightly Trigger Build
 
 # Nightly CI against the full distro/arch matrix and server list.
-# Scheduled runs build from stage.
+# Builds from the commit that triggered the run (github.sha).
 
 run-name: Nightly-${{ github.run_number }}
 
@@ -32,8 +32,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          ref: stage
 
       - name: Load nightly test servers
         id: load
@@ -67,7 +65,7 @@ jobs:
         include: ${{ fromJSON(needs.load-test-servers.outputs.test-servers) }}
     uses: ./.github/workflows/build-and-test.yml
     with:
-      ref:          stage
+      ref:          ${{ github.sha }}
       linux-distros-json: ${{ vars.LINUX_DISTRO_MATRIX }}
       runners-json: ${{ vars.LINUX_RUNNERS || '{"amd64":"ubuntu-24.04","arm64":"ubuntu-24.04-arm"}' }}
       event-lib:    all

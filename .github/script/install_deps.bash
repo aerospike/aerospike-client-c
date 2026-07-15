@@ -217,7 +217,9 @@ build_bison() {
     local src
     src="$(mktemp -d)"
     pushd "$src" >/dev/null
-    wget -q "https://ftp.gnu.org/gnu/bison/bison-${ver}.tar.gz"
+    # ftpmirror.gnu.org routes to the nearest healthy GNU mirror;
+    # ftp.gnu.org (single origin) is unreliable from ARM64 CI runners.
+    wget -q "https://ftpmirror.gnu.org/bison/bison-${ver}.tar.gz"
     tar xzf "bison-${ver}.tar.gz"
     pushd "bison-${ver}" >/dev/null
     ./configure --prefix=/usr/local

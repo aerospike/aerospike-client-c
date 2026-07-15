@@ -178,9 +178,9 @@ jobs:
           valgrind:     ${{ matrix.valgrind }}
           junit-xml:    /workspace/test-results/${{ matrix.distro }}-${{ matrix.arch }}-${{ matrix.event_lib }}.xml
 
-      - name: Dump Aerospike logs on failure
-        if: failure()
-        run: docker logs aerospike-1 2>&1 || true
+      # - name: Dump Aerospike logs on failure
+      #   if: failure()
+      #   run: docker logs aerospike-1 2>&1 || true
 
       - name: Upload test results
         if: always()

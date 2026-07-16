@@ -62,17 +62,12 @@ use_azure_ubuntu_mirror() {
 
     local changed=0
 
-    if [[ -f /etc/apt/sources.list ]]; then
-        $SUDO sed -i 's|http://ports\.ubuntu\.com|http://azure.ports.ubuntu.com|g' \
-            /etc/apt/sources.list
-        changed=1
-    fi
-
-    if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
-        $SUDO sed -i 's|http://ports\.ubuntu\.com|http://azure.ports.ubuntu.com|g' \
-            /etc/apt/sources.list.d/ubuntu.sources
-        changed=1
-    fi
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+        if [[ -f "$f" ]] && grep -q 'ports\.ubuntu\.com' "$f"; then
+            $SUDO sed -i 's|http://ports\.ubuntu\.com|http://azure.ports.ubuntu.com|g' "$f"
+            changed=1
+        fi
+    done
 
     if [[ $changed -eq 1 ]]; then
         echo "use_azure_ubuntu_mirror: switched ARM64 apt source to azure.ports.ubuntu.com"

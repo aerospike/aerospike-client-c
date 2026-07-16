@@ -31,9 +31,7 @@
 #              jobs that never run `make docs` or `make package`
 set -xeuo pipefail
 
-# Event-library versions — kept in sync with the repo's canonical installers
-# (./install_libev, ./install_libuv, ./install_libevent), NOT the older 1.8.0
-# pinned inside docker/build*/.
+# Event-library versions — kept in sync with ./install_libev, ./install_libuv, ./install_libevent.
 LIBEV_VERSION="4.24"
 LIBUV_VERSION="1.15.0"
 LIBEVENT_VERSION="2.1.12-stable"
@@ -46,49 +44,41 @@ if [[ $(id -u) -ne 0 ]] && command -v sudo >/dev/null; then
     SUDO=sudo
 fi
 
-# use_azure_ubuntu_mirror
-#
-# On ARM64 Ubuntu runners (aarch64), replace the canonical ports.ubuntu.com
-# source with azure.ports.ubuntu.com.  GitHub's ARM64 runners run in Azure
-# datacenters and have fast, reliable connectivity to azure.ports.ubuntu.com,
-# whereas ports.ubuntu.com has no CDN and is the root cause of the recurring
-# "Unable to connect to ports.ubuntu.com:80" failures.
-#
-# Ubuntu 22.04 and earlier use /etc/apt/sources.list (one-liner format).
-# Ubuntu 24.04+ uses /etc/apt/sources.list.d/ubuntu.sources (deb822 format).
-# We patch whichever file(s) exist.
-use_azure_ubuntu_mirror() {
-    [[ "$(uname -m)" != "aarch64" ]] && return 0
+# apt_update_arm64: runs apt-get update; on aarch64 switches ports.ubuntu.com to
+# mirrors.ocf.berkeley.edu (official US West Coast mirror) with azure.ports.ubuntu.com
+# as a fallback, working around unreachable Canonical UK servers from Azure westus3.
+apt_update_arm64() {
+    if [[ "$(uname -m)" != "aarch64" ]]; then
+        $SUDO apt-get update
+        return
+    fi
 
+    # Switch to OCF primary mirror
     local changed=0
-
     for f in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
         if [[ -f "$f" ]] && grep -q 'ports\.ubuntu\.com' "$f"; then
-            $SUDO sed -i 's|http://ports\.ubuntu\.com|http://azure.ports.ubuntu.com|g' "$f"
+            $SUDO sed -i 's|http://ports\.ubuntu\.com|http://mirrors.ocf.berkeley.edu|g' "$f"
             changed=1
         fi
     done
+    [[ $changed -eq 1 ]] && echo "apt_update_arm64: using primary mirror mirrors.ocf.berkeley.edu"
 
-    if [[ $changed -eq 1 ]]; then
-        echo "use_azure_ubuntu_mirror: switched ARM64 apt source to azure.ports.ubuntu.com"
+    if $SUDO apt-get update; then
+        return 0
     fi
+
+    # Primary failed — fall back to azure.ports.ubuntu.com
+    echo "apt_update_arm64: primary mirror failed, falling back to azure.ports.ubuntu.com" >&2
+    for f in /etc/apt/sources.list /etc/apt/sources.list.d/ubuntu.sources; do
+        if [[ -f "$f" ]] && grep -q 'mirrors\.ocf\.berkeley\.edu' "$f"; then
+            $SUDO sed -i 's|http://mirrors\.ocf\.berkeley\.edu|http://azure.ports.ubuntu.com|g' "$f"
+        fi
+    done
+    $SUDO apt-get update
 }
 
-# apt_install <pkg>...
-#
-# Two-layer retry for transient mirror failures — a safety net even after
-# the azure mirror switch above, because azure.ports.ubuntu.com itself can
-# occasionally be slow:
-#
-#   Inner layer – apt option Acquire::Retries=3 retries each individual
-#                 package download up to 3 times; Acquire::http::Timeout=30
-#                 caps each TCP wait at 30 s so a stalled connection is
-#                 detected quickly rather than hanging for minutes.
-#
-#   Outer layer – if apt-get still exits non-zero (mirror was completely
-#                 unreachable), the whole command is retried up to 3 times
-#                 with a 30 s sleep and a fresh apt-get update between
-#                 attempts.
+# apt_install <pkg>...: installs packages with per-file retries (Acquire::Retries=3,
+# 30 s timeout) and up to 3 outer retries with a fresh apt-get update between attempts.
 apt_install() {
     local attempt=1
     until $SUDO apt-get install -y --no-install-recommends \
@@ -106,8 +96,7 @@ apt_install() {
     done
 }
 
-# Set by main() from the 4th argument; defaulted here so distro functions can
-# reference it even if called directly during testing.
+# Defaulted here so distro functions can reference it before main() sets it.
 INSTALL_DOCS=true
 
 # Compiler + autotools + link-time dev libs, common to a distro family.
@@ -117,8 +106,7 @@ DEBIAN_DEPS='build-essential autoconf automake libtool make pkg-config git tar w
 # configure scripts and by `tar xzf` on the minimal RHEL/AL images.
 EL_DEPS='gcc gcc-c++ make autoconf automake libtool m4 git tar wget which gzip diffutils file findutils openssl openssl-devel libyaml-devel'
 
-# Packaging deps (zip + distro packager). graphviz is docs-only and added
-# conditionally below when INSTALL_DOCS=true.
+# Packaging deps (zip + distro packager).
 DEBIAN_PKG_DEPS='zip dpkg-dev fakeroot'
 EL_PKG_DEPS='zip rpm-build'
 
@@ -163,8 +151,7 @@ install_deps_rhel_10() { install_el_minimal 3.7.4 2.6.4; }
 install_debian_common() {
     local docs_pkgs=""
     [[ "$INSTALL_DOCS" == "true" ]] && docs_pkgs="doxygen graphviz"
-    use_azure_ubuntu_mirror
-    $SUDO apt-get update
+    apt_update_arm64
     # shellcheck disable=SC2086
     apt_install $DEBIAN_DEPS $DEBIAN_PKG_DEPS $docs_pkgs
 }
@@ -173,8 +160,7 @@ install_debian_common() {
 install_ubuntu_common() {
     local docs_pkgs=""
     [[ "$INSTALL_DOCS" == "true" ]] && docs_pkgs="graphviz cmake flex bison python3"
-    use_azure_ubuntu_mirror
-    $SUDO apt-get update
+    apt_update_arm64
     # shellcheck disable=SC2086
     apt_install $DEBIAN_DEPS $DEBIAN_PKG_DEPS $docs_pkgs
     if [[ "$INSTALL_DOCS" == "true" ]]; then build_doxygen; fi
@@ -344,10 +330,7 @@ build_valgrind() {
     rm -rf "$src"
 }
 
-# Install Valgrind for the given distro.
-# RHEL variants lack a usable packaged version → build from source.
-# Debian/Ubuntu/Amazon Linux ship a recent enough package.
-# Skips silently if Valgrind is already installed at any version.
+# install_valgrind: builds from source on RHEL (no usable package); uses the distro package elsewhere.
 install_valgrind() {
     local distro="$1"
 
@@ -418,5 +401,3 @@ main() {
 }
 
 main "$@"
-
-#ec

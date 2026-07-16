@@ -1,0 +1,108 @@
+name: Test Report
+description: >
+  Parses JUnit XML test results from all matrix combinations and writes a
+  single deduplicated test-count line to the job summary.
+  A test is marked failed if it failed in ANY combination, passed only if
+  it passed in ALL combinations.
+
+inputs:
+  pattern:
+    description: 'Glob pattern for JUnit XML files (recursive)'
+    required: false
+    default: 'test-results/**/*.xml'
+
+outputs:
+  total:
+    description: 'Total unique tests'
+    value: ${{ steps.parse.outputs.total }}
+  passed:
+    description: 'Tests that passed in every combination'
+    value: ${{ steps.parse.outputs.passed }}
+  skipped:
+    description: 'Tests that were skipped in every combination'
+    value: ${{ steps.parse.outputs.skipped }}
+  failed:
+    description: 'Tests that failed in at least one combination'
+    value: ${{ steps.parse.outputs.failed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Parse results
+      id: parse
+      shell: python3 {0}
+      run: |
+        from __future__ import annotations
+        import glob, os, sys
+        import xml.etree.ElementTree as ET
+
+        # Outcome precedence: higher = worse.
+        PASS, SKIP, FAIL = 0, 1, 2
+
+        def classify(tc: ET.Element) -> int:
+            if tc.find("failure") is not None or tc.find("error") is not None:
+                return FAIL
+            if tc.find("skipped") is not None:
+                return SKIP
+            return PASS
+
+        pattern = "${{ inputs.pattern }}"
+        files   = sorted(glob.glob(pattern, recursive=True))
+
+        if not files:
+            print("No test result files found — skipping summary.", file=sys.stderr)
+            sys.exit(0)
+
+        # Track worst outcome and failing contexts per unique test.
+        worst: dict[str, int] = {}
+        fail_contexts: dict[str, list[str]] = {}
+
+        for path in files:
+            ctx = os.path.splitext(os.path.basename(path))[0]  # e.g. ubuntu-22.04-amd64-sync
+            try:
+                root   = ET.parse(path).getroot()
+                suites = root.findall("testsuite") if root.tag == "testsuites" else [root]
+                for suite in suites:
+                    sname = suite.get("name", "")
+                    for tc in suite.findall("testcase"):
+                        key     = f"{sname}::{tc.get('name', '')}"
+                        outcome = classify(tc)
+                        worst[key] = max(worst.get(key, PASS), outcome)
+                        if outcome == FAIL:
+                            fail_contexts.setdefault(key, []).append(ctx)
+            except Exception as exc:
+                print(f"WARN: could not parse {path}: {exc}", file=sys.stderr)
+
+        total   = len(worst)
+        failed  = sum(1 for v in worst.values() if v == FAIL)
+        skipped = sum(1 for v in worst.values() if v == SKIP)
+        passed  = total - failed - skipped
+
+        # Write step outputs for downstream consumption.
+        output_file = os.environ.get("GITHUB_OUTPUT", "")
+        if output_file:
+            with open(output_file, "a") as fh:
+                fh.write(f"total={total}\npassed={passed}\nskipped={skipped}\nfailed={failed}\n")
+
+        # Append test-count line and failed test list to the job summary.
+        summary_file = os.environ.get("GITHUB_STEP_SUMMARY", "")
+        if summary_file and total > 0:
+            icon = "✅" if failed == 0 else "❌"
+            summary = (
+                f"{icon} **{total} tests** &nbsp;"
+                f"  {passed} ✅"
+                f"  {skipped} 💤"
+                f"  {failed} ❌\n\n"
+            )
+            if failed > 0:
+                summary += "**Failed tests:**\n\n"
+                for key, contexts in fail_contexts.items():
+                    first   = contexts[0]
+                    extra   = len(contexts) - 1
+                    suffix  = f" +{extra} more" if extra > 0 else ""
+                    summary += f"- `{key}` — {first}{suffix}\n"
+                summary += "\n"
+            with open(summary_file, "a") as fh:
+                fh.write(summary)
+
+        print(f"total={total} passed={passed} skipped={skipped} failed={failed}")

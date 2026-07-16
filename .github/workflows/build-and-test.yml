@@ -92,7 +92,6 @@ on:
 permissions:
   contents: read
   id-token: write   # required by setup-aerospike-server for JFrog OIDC
-  checks: write
   pull-requests: write
 
 defaults:
@@ -518,19 +517,8 @@ jobs:
           path: test-results
           merge-multiple: false
 
-      - name: Publish unit test results
-        if: always()
-        continue-on-error: true
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2.23.0
-        with:
-          files: test-results/**/*.xml
-          check_name: >-
-            Tests — server ${{ inputs.server-tag }}
-            / ${{ inputs.num-nodes }} node
-            / ${{ inputs.event-lib }}
-          comment_mode: off
-          job_summary: true
-          report_individual_runs: false
+      - name: Summarize test results
+        uses: ./.github/actions/test-report
 
       - name: Write run summary
         env:

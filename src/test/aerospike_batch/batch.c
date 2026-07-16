@@ -910,7 +910,10 @@ TEST(batch_write_with_cluster_send_key, "Batch write with cluster send key")
 
 	// Run batch operate.
 	uint32_t errors = 0;
-	status = aerospike_batch_operate(as, &err, NULL, NULL, &batch, &ops, result_cb, &errors);
+	as_policy_batch_write policy;
+	as_policy_batch_write_init(&policy);
+	policy.key = AS_POLICY_KEY_DIGEST;
+	status = aerospike_batch_operate(as, &err, NULL, &policy, &batch, &ops, result_cb, &errors);
 
 	// Reset global batch write sendKey.
 	as->config.policies.batch_write.key = orig;

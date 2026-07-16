@@ -46,6 +46,71 @@ if [[ $(id -u) -ne 0 ]] && command -v sudo >/dev/null; then
     SUDO=sudo
 fi
 
+# use_azure_ubuntu_mirror
+#
+# On ARM64 Ubuntu runners (aarch64), replace the canonical ports.ubuntu.com
+# source with azure.ports.ubuntu.com.  GitHub's ARM64 runners run in Azure
+# datacenters and have fast, reliable connectivity to azure.ports.ubuntu.com,
+# whereas ports.ubuntu.com has no CDN and is the root cause of the recurring
+# "Unable to connect to ports.ubuntu.com:80" failures.
+#
+# Ubuntu 22.04 and earlier use /etc/apt/sources.list (one-liner format).
+# Ubuntu 24.04+ uses /etc/apt/sources.list.d/ubuntu.sources (deb822 format).
+# We patch whichever file(s) exist.
+use_azure_ubuntu_mirror() {
+    [[ "$(uname -m)" != "aarch64" ]] && return 0
+
+    local changed=0
+
+    if [[ -f /etc/apt/sources.list ]]; then
+        $SUDO sed -i 's|http://ports\.ubuntu\.com|http://azure.ports.ubuntu.com|g' \
+            /etc/apt/sources.list
+        changed=1
+    fi
+
+    if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
+        $SUDO sed -i 's|http://ports\.ubuntu\.com|http://azure.ports.ubuntu.com|g' \
+            /etc/apt/sources.list.d/ubuntu.sources
+        changed=1
+    fi
+
+    if [[ $changed -eq 1 ]]; then
+        echo "use_azure_ubuntu_mirror: switched ARM64 apt source to azure.ports.ubuntu.com"
+    fi
+}
+
+# apt_install <pkg>...
+#
+# Two-layer retry for transient mirror failures — a safety net even after
+# the azure mirror switch above, because azure.ports.ubuntu.com itself can
+# occasionally be slow:
+#
+#   Inner layer – apt option Acquire::Retries=3 retries each individual
+#                 package download up to 3 times; Acquire::http::Timeout=30
+#                 caps each TCP wait at 30 s so a stalled connection is
+#                 detected quickly rather than hanging for minutes.
+#
+#   Outer layer – if apt-get still exits non-zero (mirror was completely
+#                 unreachable), the whole command is retried up to 3 times
+#                 with a 30 s sleep and a fresh apt-get update between
+#                 attempts.
+apt_install() {
+    local attempt=1
+    until $SUDO apt-get install -y --no-install-recommends \
+              -o Acquire::Retries=3 \
+              -o Acquire::http::Timeout=30 \
+              "$@"; do
+        if [[ $attempt -ge 3 ]]; then
+            echo "apt_install: failed after $attempt attempts — giving up" >&2
+            return 1
+        fi
+        echo "apt_install: attempt $attempt failed, retrying in 30 s..." >&2
+        sleep 30
+        $SUDO apt-get update
+        attempt=$((attempt + 1))
+    done
+}
+
 # Set by main() from the 4th argument; defaulted here so distro functions can
 # reference it even if called directly during testing.
 INSTALL_DOCS=true
@@ -103,20 +168,20 @@ install_deps_rhel_10() { install_el_minimal 3.7.4 2.6.4; }
 install_debian_common() {
     local docs_pkgs=""
     [[ "$INSTALL_DOCS" == "true" ]] && docs_pkgs="doxygen graphviz"
+    use_azure_ubuntu_mirror
     $SUDO apt-get update
     # shellcheck disable=SC2086
-    $SUDO apt-get install -y --no-install-recommends \
-        $DEBIAN_DEPS $DEBIAN_PKG_DEPS $docs_pkgs
+    apt_install $DEBIAN_DEPS $DEBIAN_PKG_DEPS $docs_pkgs
 }
 
 # Ubuntu apt doxygen is too old → build from source (cmake/flex/bison).
 install_ubuntu_common() {
     local docs_pkgs=""
     [[ "$INSTALL_DOCS" == "true" ]] && docs_pkgs="graphviz cmake flex bison python3"
+    use_azure_ubuntu_mirror
     $SUDO apt-get update
     # shellcheck disable=SC2086
-    $SUDO apt-get install -y --no-install-recommends \
-        $DEBIAN_DEPS $DEBIAN_PKG_DEPS $docs_pkgs
+    apt_install $DEBIAN_DEPS $DEBIAN_PKG_DEPS $docs_pkgs
     if [[ "$INSTALL_DOCS" == "true" ]]; then build_doxygen; fi
 }
 
@@ -302,7 +367,7 @@ install_valgrind() {
         ;;
     *)
         if command -v apt-get &>/dev/null; then
-            $SUDO apt-get install -y --no-install-recommends valgrind
+            apt_install valgrind
         elif command -v dnf &>/dev/null; then
             $SUDO dnf install -y valgrind
         elif command -v microdnf &>/dev/null; then

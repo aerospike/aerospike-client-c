@@ -619,7 +619,7 @@ main(int argc, char* argv[])
 	as_error err;
 	as_index_task task;
 	as_status istat = aerospike_index_create(&as, &err, &task, NULL, NAMESPACE, SET,
-			"test-bin-1", INDEX_NAME, AS_INDEX_NUMERIC);
+			"test-bin-1", INDEX_NAME, AS_INDEX_INTEGER);
 	switch (istat) {
 	case AEROSPIKE_OK:
 		if (aerospike_index_create_wait(&err, &task, 0) != AEROSPIKE_OK) {

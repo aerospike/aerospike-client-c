@@ -248,7 +248,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	if (status != AEROSPIKE_OK) {
 		// Log error, but still allow node to be added to the cluster.
 		// The tend connection creation will be retried later and retry_user_agent remains true.
-		as_log_error("Failed to get tend connection: %s %s", err.code, err.message);
+		as_log_error("Failed to get tend connection: %d %s", err.code, err.message);
 	}
 	return node;
 }
@@ -518,9 +518,13 @@ as_node_create_connection(
 	as_conn_pool* pool, as_socket* sock, as_socket_context* ctx
 	)
 {
+	// Snapshot metrics_enabled once so the begin timestamp and the latency recording below
+	// use a consistent view. Re-reading the flag could leave begin at 0 (bogus latency) if
+	// metrics are enabled by another thread during connection setup.
+	bool metrics_enabled = node->cluster->metrics_enabled;
 	uint64_t begin = 0;
 
-	if (node->cluster->metrics_enabled) {
+	if (metrics_enabled) {
 		begin = cf_getns();
 	}
 	
@@ -553,7 +557,7 @@ as_node_create_connection(
 		}
 	}
 
-	if (node->cluster->metrics_enabled) {
+	if (metrics_enabled) {
 		uint64_t elapsed = cf_getns() - begin;
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
 		as_node_add_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
@@ -1618,6 +1622,10 @@ as_latency_get_index(as_latency* latency, uint64_t elapsed)
 void
 as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
 {
+	if (!metrics) {
+		return;
+	}
+
 	// Convert nanoseconds to milliseconds.
 	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
 

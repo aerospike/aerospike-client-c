@@ -158,6 +158,7 @@ AEROSPIKE += as_record_iterator.o
 AEROSPIKE += as_scan.o
 AEROSPIKE += as_shm_cluster.o
 AEROSPIKE += as_socket.o
+AEROSPIKE += as_string_operations.o
 AEROSPIKE += as_tls.o
 AEROSPIKE += as_txn.o
 AEROSPIKE += as_txn_monitor.o

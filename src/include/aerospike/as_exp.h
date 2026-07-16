@@ -55,6 +55,7 @@
 #include <aerospike/as_msgpack_ext.h>
 #include <aerospike/as_nil.h>
 #include <aerospike/as_std.h>
+#include <aerospike/as_string_operations.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -170,6 +171,8 @@ typedef enum {
 	_AS_EXP_SYS_CALL_CDT = 0,
 	_AS_EXP_SYS_CALL_BITS = 1,
 	_AS_EXP_SYS_CALL_HLL = 2,
+	_AS_EXP_SYS_CALL_STRING = 3,
+	_AS_EXP_SYS_CALL_REPR = 4,
 
 	_AS_EXP_SYS_FLAG_MODIFY_LOCAL = 0x40
 } as_exp_call_system_type;
@@ -1032,6 +1035,9 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create expression that performs a regex match on a string bin or value
  * expression.
+ * @deprecated Use as_exp_string_regex_compare() instead. This legacy expression
+ * uses POSIX regex and is not Unicode/DBCS-aware; the string-package equivalent
+ * uses ICU regex.
  *
  * @code
  * // Select string bin "a" that starts with "prefix" and ends with "suffix".
@@ -3734,10 +3740,646 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 //---------------------------------
+// String Read Expressions
+//---------------------------------
+
+#define _AS_EXP_STRING_READ(__rtype) \
+		{.op=_AS_EXP_CODE_CALL, .count=5}, \
+		_AS_EXP_VAL_RTYPE(__rtype), \
+		as_exp_int(_AS_EXP_SYS_CALL_STRING)
+
+#define _AS_EXP_STRING_READ_START(__rtype, __op, __n_params) \
+		_AS_EXP_STRING_READ(__rtype), \
+		{.op=_AS_EXP_CODE_CALL_VOP_START, .count=1 + (__n_params) }, \
+		as_exp_int(__op)
+
+/**
+ * Create an expression that performs an as_operations_string_strlen operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (integer bin) The length of the string in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_strlen(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_INT, AS_STRING_OP_STRLEN, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_substr operation.
+ *
+ * @param __start		The starting index of the substring.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The substring of the string in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_substr(__start, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_STR, AS_STRING_OP_SUBSTR, 1), \
+		as_exp_int(__start), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_substr_range operation.
+ *
+ * @param __start		Starting codepoint index, inclusive.
+ * @param __end			Ending codepoint index, exclusive.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The substring of the string in the bin.
+ * @ingroup expression
+ */
+
+#define as_exp_string_substr_range(__start, __end, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_STR, AS_STRING_OP_SUBSTR, 2), \
+		as_exp_int(__start), \
+		as_exp_int(__end), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_char_at operation.
+ *
+ * @param __index		The index of the codepoint to return.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The codepoint at the index in the string in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_char_at(__index, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_STR, AS_STRING_OP_CHAR_AT, 1), \
+		as_exp_int(__index), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_find operation.
+ *
+ * @param __needle		The string to search for.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (integer bin) The index of the first occurrence of the string in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_find(__needle, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_INT, AS_STRING_OP_FIND, 1), \
+		as_exp_str(__needle), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_find_occurrence operation.
+ *
+ * @param __needle		The string to search for.
+ * @param __occurrence	The occurrence of the string to search for.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (integer bin) The index of the occurrence of the string in the bin.
+ * @ingroup expression
+ */
+
+#define as_exp_string_find_occurrence(__needle, __occurrence, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_INT, AS_STRING_OP_FIND, 2), \
+		as_exp_str(__needle), \
+		as_exp_int(__occurrence), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_contains operation.
+ *
+ * @param __needle		The string to search for.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (bool bin) true if the string contains the string, false otherwise.
+ * @ingroup expression
+ */
+#define as_exp_string_contains(__needle, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BOOL, AS_STRING_OP_CONTAINS, 1), \
+		as_exp_str(__needle), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_starts_with operation.
+ *
+ * @param __prefix		The string to search for.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (bool bin) true if the string starts with the string, false otherwise.
+ * @ingroup expression
+ */
+#define as_exp_string_starts_with(__prefix, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BOOL, AS_STRING_OP_STARTS_WITH, 1), \
+		as_exp_str(__prefix), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_ends_with operation.
+ *
+ * @param __suffix		The string to search for.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (bool bin) true if the string ends with the string, false otherwise.
+ * @ingroup expression
+ */
+#define as_exp_string_ends_with(__suffix, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BOOL, AS_STRING_OP_ENDS_WITH, 1), \
+		as_exp_str(__suffix), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_to_integer operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (integer bin) The integer value of the string in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_to_integer(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_INT, AS_STRING_OP_TO_INTEGER, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_to_double operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (double bin) The double value of the string in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_to_double(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_FLOAT, AS_STRING_OP_TO_DOUBLE, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_byte_length operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (integer bin) The number of bytes in the string in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_byte_length(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_INT, AS_STRING_OP_BYTE_LENGTH, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_is_numeric operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (bool bin) true if the string is a numeric value, false otherwise.
+ * @ingroup expression
+ */
+#define as_exp_string_is_numeric(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BOOL, AS_STRING_OP_IS_NUMERIC, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_is_numeric_type operation.
+ *
+ * @param __numeric_type	The numeric type to filter for.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (bool bin) true if the string is a numeric value of the type, false otherwise.
+ * @ingroup expression
+ */
+#define as_exp_string_is_numeric_type(__numeric_type, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BOOL, AS_STRING_OP_IS_NUMERIC, 1), \
+		as_exp_int(__numeric_type), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_is_upper operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (bool bin) true if the string is uppercase, false otherwise.
+ * @ingroup expression
+ */
+#define as_exp_string_is_upper(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BOOL, AS_STRING_OP_IS_UPPER, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_is_lower operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (bool bin) true if the string is lowercase, false otherwise.
+ * @ingroup expression
+ */
+#define as_exp_string_is_lower(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BOOL, AS_STRING_OP_IS_LOWER, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_to_blob operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (blob bin) The blob value of the string in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_to_blob(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BLOB, AS_STRING_OP_TO_BLOB, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_split operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (list bin) The list of strings in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_split(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_LIST, AS_STRING_OP_SPLIT, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_split_separator operation.
+ *
+ * @param __separator		The separator to split by.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (list bin) The list of strings in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_split_separator(__separator, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_LIST, AS_STRING_OP_SPLIT, 1), \
+		as_exp_str(__separator), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_b64_decode operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (blob bin) The blob value of the string in the bin.
+ * @ingroup expression
+ */
+#define as_exp_string_b64_decode(__bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BLOB, AS_STRING_OP_B64_DECODE, 0), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_regex_compare operation.
+ *
+ * @param __pattern		The regex pattern to match against.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (bool bin) true if the pattern matches, false otherwise.
+ * @ingroup expression
+ */
+#define as_exp_string_regex_compare(__pattern, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BOOL, AS_STRING_OP_REGEX_COMPARE, 1), \
+		as_exp_str(__pattern), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_regex_compare_flags operation.
+ *
+ * @param __pattern		The regex pattern to match against.
+ * @param __flags		The regex flags to use.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (bool bin) true if the pattern matches, false otherwise.
+ * @ingroup expression
+ */
+#define as_exp_string_regex_compare_flags(__pattern, __flags, __bin) \
+		_AS_EXP_STRING_READ_START(AS_EXP_TYPE_BOOL, AS_STRING_OP_REGEX_COMPARE, 2), \
+		as_exp_str(__pattern), \
+		as_exp_int(__flags), \
+		__bin
+
+//---------------------------------
+// String Modify Expressions
+//---------------------------------
+
+#define _AS_EXP_STRING_MOD() \
+		{.op=_AS_EXP_CODE_CALL, .count=5}, \
+		_AS_EXP_VAL_RTYPE(AS_EXP_TYPE_STR), \
+		as_exp_int(_AS_EXP_SYS_CALL_STRING | _AS_EXP_SYS_FLAG_MODIFY_LOCAL)
+
+#define _AS_EXP_STRING_MOD_START(__op, __n_params) \
+		_AS_EXP_STRING_MOD(), \
+		{.op=_AS_EXP_CODE_CALL_VOP_START, .count=1 + (__n_params) }, \
+		as_exp_int(__op)
+
+#define _AS_EXP_QUOTED_LIST_1(__value) \
+		{.op=_AS_EXP_CODE_QUOTE, .count=2}, \
+		{.op=_AS_EXP_CODE_CALL_VOP_START, .count=1}, \
+		__value
+
+#define _AS_EXP_QUOTED_PAIR(__first, __second) \
+		{.op=_AS_EXP_CODE_QUOTE, .count=2}, \
+		{.op=_AS_EXP_CODE_CALL_VOP_START, .count=2}, \
+		__first, \
+		__second
+
+/**
+ * Create an expression that performs an as_operations_string_insert operation.
+ *
+ * @param __policy		The string policy.
+ * @param __index		The index of the codepoint to insert at.
+ * @param __value		The value to insert.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value inserted.
+ * @ingroup expression
+ */
+#define as_exp_string_insert(__policy, __index, __value, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_INSERT, 3), \
+		as_exp_int(__index), \
+		as_exp_str(__value), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_overwrite operation.
+ *
+ * @param __policy		The string policy.
+ * @param __index		The index of the codepoint to overwrite at.
+ * @param __value		The value to overwrite.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value overwritten.
+ * @ingroup expression
+ */
+#define as_exp_string_overwrite(__policy, __index, __value, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_OVERWRITE, 3), \
+		as_exp_int(__index), \
+		as_exp_str(__value), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_concat operation.
+ *
+ * @param __policy		The string policy.
+ * @param __value		The value to append.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value appended.
+ * @ingroup expression
+ */
+#define as_exp_string_concat(__policy, __value, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_CONCAT, 2), \
+		_AS_EXP_QUOTED_LIST_1(as_exp_str(__value)), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_concat_list operation.
+ *
+ * @param __policy		The string policy.
+ * @param __values		An expression that evaluates to the list of values to append
+ *						(e.g. as_exp_val_list() or a sub-expression yielding a list).
+ *						Unlike as_exp_string_concat(), this value is not auto-wrapped
+ *						as a literal.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the values appended.
+ * @ingroup expression
+ */
+#define as_exp_string_concat_list(__policy, __values, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_CONCAT, 2), \
+		__values, \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_append operation.
+ * Unlike legacy AS_OPERATOR_APPEND operations, this string-package expression
+ * uses Unicode codepoint semantics.
+ *
+ * @param __policy		The string policy.
+ * @param __value		The value to append.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value appended.
+ * @ingroup expression
+ */
+#define as_exp_string_append(__policy, __value, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_APPEND, 2), \
+		as_exp_str(__value), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_prepend operation.
+ * Unlike legacy AS_OPERATOR_PREPEND operations, this string-package expression
+ * uses Unicode codepoint semantics.
+ *
+ * @param __policy		The string policy.
+ * @param __value		The value to prepend.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value prepended.
+ * @ingroup expression
+ */
+#define as_exp_string_prepend(__policy, __value, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_PREPEND, 2), \
+		as_exp_str(__value), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_snip operation.
+ *
+ * @param __policy		The string policy.
+ * @param __start		First codepoint to remove, inclusive.
+ * @param __end			One past the last codepoint to remove, exclusive.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value snipped.
+ * @ingroup expression
+ */
+#define as_exp_string_snip(__policy, __start, __end, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_SNIP, 3), \
+		as_exp_int(__start), \
+		as_exp_int(__end), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_replace operation.
+ *
+ * @param __policy		The string policy.
+ * @param __needle		The string to replace.
+ * @param __replacement	The string to replace with.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value replaced.
+ * @ingroup expression
+ */
+
+#define as_exp_string_replace(__policy, __needle, __replacement, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REPLACE, 2), \
+		_AS_EXP_QUOTED_PAIR(as_exp_str(__needle), as_exp_str(__replacement)), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_replace_all operation.
+ *
+ * @param __policy		The string policy.
+ * @param __needle		The string to replace.
+ * @param __replacement	The string to replace with.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value replaced.
+ * @ingroup expression
+ */
+#define as_exp_string_replace_all(__policy, __needle, __replacement, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REPLACE_ALL, 2), \
+		_AS_EXP_QUOTED_PAIR(as_exp_str(__needle), as_exp_str(__replacement)), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_upper operation.
+ *
+ * @param __policy		The string policy.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value uppercased.
+ * @ingroup expression
+ */
+#define as_exp_string_upper(__policy, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_UPPER, 1), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_lower operation.
+ *
+ * @param __policy		The string policy.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value lowercased.
+ * @ingroup expression
+ */
+#define as_exp_string_lower(__policy, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_LOWER, 1), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_case_fold operation.
+ *
+ * @param __policy		The string policy.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value case folded.
+ * @ingroup expression
+ */
+#define as_exp_string_case_fold(__policy, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_CASE_FOLD, 1), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_normalize_nfc operation.
+ *
+ * @param __policy		The string policy.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value normalized.
+ * @ingroup expression
+ */
+#define as_exp_string_normalize_nfc(__policy, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_NORMALIZE_NFC, 1), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_trim_start operation.
+ *
+ * @param __policy		The string policy.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value trimmed.
+ * @ingroup expression
+ */
+#define as_exp_string_trim_start(__policy, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_TRIM_START, 1), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_trim_end operation.
+ *
+ * @param __policy		The string policy.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value trimmed.
+ * @ingroup expression
+ */
+#define as_exp_string_trim_end(__policy, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_TRIM_END, 1), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_trim operation.
+ *
+ * @param __policy		The string policy.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value trimmed.
+ * @ingroup expression
+ */
+#define as_exp_string_trim(__policy, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_TRIM, 1), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_pad_start operation.
+ *
+ * @param __policy		The string policy.
+ * @param __target_length	The target length of the string.
+ * @param __pad_string		The string to pad with.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value padded.
+ * @ingroup expression
+ */
+#define as_exp_string_pad_start(__policy, __target_length, __pad_string, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_PAD_START, 3), \
+		as_exp_int(__target_length), \
+		as_exp_str(__pad_string), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_pad_end operation.
+ *
+ * @param __policy		The string policy.
+ * @param __target_length	The target length of the string.
+ * @param __pad_string		The string to pad with.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value padded.
+ * @ingroup expression
+ */
+#define as_exp_string_pad_end(__policy, __target_length, __pad_string, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_PAD_END, 3), \
+		as_exp_int(__target_length), \
+		as_exp_str(__pad_string), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_repeat operation.
+ *
+ * @param __policy		The string policy.
+ * @param __count		The number of times to repeat the string.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value repeated.
+ * @ingroup expression
+ */
+#define as_exp_string_repeat(__policy, __count, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REPEAT, 2), \
+		as_exp_int(__count), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_string_regex_replace operation.
+ *
+ * @param __policy		The string policy. Not packed in the wire payload.
+ * @param __pattern		The regex pattern to match against.
+ * @param __replacement	The string to replace with.
+ * @param __flags		The regex flags to use.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value replaced.
+ * @ingroup expression
+ */
+#define as_exp_string_regex_replace(__policy, __pattern, __replacement, __flags, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REGEX_REPLACE, 2), \
+		_AS_EXP_QUOTED_PAIR(as_exp_str(__pattern), as_exp_str(__replacement)), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		__bin
+
+/**
+ * Create an expression that performs an as_operations_to_string operation.
+ *
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string bin) The string in the bin with the value converted to a string.
+ * @ingroup expression
+ */
+#define as_exp_to_string(__bin) \
+	{.op=_AS_EXP_CODE_CALL, .count=5}, \
+	_AS_EXP_VAL_RTYPE(AS_EXP_TYPE_STR), \
+	as_exp_int(_AS_EXP_SYS_CALL_REPR), \
+	{.op=_AS_EXP_CODE_CALL_VOP_START, .count=1}, \
+	as_exp_int(0), \
+	__bin
+
+//---------------------------------
 // Expression Merge
 //---------------------------------
 
-/**
+/*
  * Merge precompiled expression into a new expression tree.
  * Useful for storing common precompiled expressions and then reusing
  * these expressions as part of a greater expression.

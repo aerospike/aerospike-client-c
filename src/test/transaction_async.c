@@ -1292,6 +1292,69 @@ TEST(txn_async_batch_apply, "transaction async batch apply")
 	as_txn_destroy(txn);
 }
 
+static void
+blocked_abort_listener(
+	as_error* err, as_abort_status status, void* udata, struct as_event_loop* event_loop
+	)
+{
+	// Should never be invoked: the abort is blocked and returns synchronously.
+	warn("Abort listener unexpectedly invoked after blocked abort");
+}
+
+static void
+commit_retry_listener(
+	as_error* err, as_commit_status status, void* udata, struct as_event_loop* event_loop
+	)
+{
+	as_monitor_notify(&monitor);
+}
+
+TEST(txn_async_commit_fail_abort_blocked, "async abort blocked after in-doubt commit failure")
+{
+	// An in-doubt commit failure at mark roll forward must block a subsequent async
+	// abort while leaving the commit retryable. The true in-doubt path needs a
+	// transport fault to trigger, so drive the txn into COMMIT_FAILED directly.
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "txn_async_commit_fail_abort_blocked");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN, 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_txn txn;
+	as_txn_init(&txn);
+
+	as_policy_write pw;
+	as_policy_write_default(as, &pw);
+	pw.base.txn = &txn;
+
+	as_record_set_int64(&rec, BIN, 2);
+	status = aerospike_key_put(as, &err, &pw, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	// Simulate an in-doubt mark roll forward failure.
+	txn.state = AS_TXN_STATE_COMMIT_FAILED;
+	txn.in_doubt = true;
+
+	// Abort must be blocked synchronously (returned error, listener not invoked).
+	status = aerospike_abort_async(as, &err, &txn, blocked_abort_listener, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_TXN_FAILED);
+	assert_int_eq(txn.state, AS_TXN_STATE_COMMIT_FAILED);
+
+	// Commit must still be dispatched (retryable). Resolve the txn to clean up.
+	as_monitor_begin(&monitor);
+	status = aerospike_commit_async(as, &err, &txn, commit_retry_listener, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
+
+	as_txn_destroy(&txn);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -1323,4 +1386,5 @@ SUITE(transaction_async, "Async transaction tests")
 	suite_add(txn_async_batch);
 	suite_add(txn_async_batch_abort);
 	suite_add(txn_async_batch_apply);
+	suite_add(txn_async_commit_fail_abort_blocked);
 }

@@ -833,7 +833,7 @@ typedef struct as_config_s {
 	 * Each shared memory segment contains state for one Aerospike cluster.  If there are
 	 * multiple Aerospike clusters, a different shm_key must be defined for each cluster.
 	 * 
-	 * Default: 0xA1100000
+	 * Default: 0xAC000000
 	 */
 	int shm_key;
 	

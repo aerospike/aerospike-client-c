@@ -10,6 +10,7 @@ container:
       - docker.qe.aerospike.com/build/aerospike-client-c:debian-13
       - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-22.04
       - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-24.04
+      - docker.qe.aerospike.com/build/aerospike-client-c:ubuntu-26.04
       - docker.qe.aerospike.com/build/aerospike-client-c:arm-rhel-8
       - docker.qe.aerospike.com/build/aerospike-client-c:arm-rhel-9
       - docker.qe.aerospike.com/build/aerospike-client-c:arm-rhel-10
@@ -18,6 +19,7 @@ container:
       - docker.qe.aerospike.com/build/aerospike-client-c:arm-debian-13
       - docker.qe.aerospike.com/build/aerospike-client-c:arm-ubuntu-22.04
       - docker.qe.aerospike.com/build/aerospike-client-c:arm-ubuntu-24.04
+      - docker.qe.aerospike.com/build/aerospike-client-c:arm-ubuntu-26.04
 
 build:
   - name: default

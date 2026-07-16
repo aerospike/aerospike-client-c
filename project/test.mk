@@ -16,6 +16,7 @@ TEST_AEROSPIKE += aerospike_exp/*.c
 TEST_AEROSPIKE += aerospike_query/*.c
 TEST_AEROSPIKE += aerospike_scan/*.c
 TEST_AEROSPIKE += aerospike_shm/*.c
+TEST_AEROSPIKE += aerospike_string/*.c
 TEST_AEROSPIKE += aerospike_udf/*.c
 TEST_AEROSPIKE += policy/*.c
 TEST_AEROSPIKE += util/*.c
@@ -32,7 +33,14 @@ TEST_OBJECT = $(patsubst %.c,%.o,$(subst $(SOURCE_TEST)/,$(TARGET_TEST)/,$(TEST_
 ##  FLAGS                                                                    ##
 ###############################################################################
 
-TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 --track-fds=yes -v
+TEST_VALGRIND = --tool=memcheck --leak-check=yes --show-reachable=yes --num-callers=20 -v
+
+ifeq ($(EVENT_LIB),sync)
+  TEST_VALGRIND += --track-fds=yes
+else
+  # Async event libraries may keep process/global descriptors open until exit.
+  TEST_VALGRIND += --track-fds=no
+endif
 
 TEST_CFLAGS = -I$(TARGET_INCL)
 

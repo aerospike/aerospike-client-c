@@ -1,11 +1,9 @@
 name: Aerospike C Client Tests
 
+#Legacy flow will remove this gradually
 on:
-  push:
-    branches: [master, stage]
   pull_request:
-    branches: [master, stage]
-
+    branches: [stage]
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -23,7 +21,7 @@ jobs:
       fail-fast: false
     steps:
     - name: Checkout client
-      uses: actions/checkout@v2
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       with:
         submodules: recursive
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -34,6 +32,8 @@ jobs:
       run: |
         sudo apt update
         sudo apt install -y valgrind
+
+    - run: echo "MAKEFLAGS=-j$(nproc)" >> "$GITHUB_ENV"
 
     - run: make EVENT_LIB=${{ matrix.EVENT_LIB }}
 

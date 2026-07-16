@@ -432,6 +432,12 @@
     <ClInclude Include="..\..\src\include\aerospike\as_conn_recover.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\aerospike\as_string_operations.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\include\aerospike\as_subcode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\main\aerospike\_bin.c">
@@ -801,6 +807,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_conn_recover.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_string_operations.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_query.h>
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_status.h>
@@ -94,7 +95,6 @@ TEST(key_operate_touchget , "operate: (test,test,key2) = {touch, get}")
 	assert_int_eq( as_list_size(rlist), 3 );
 
 	as_record_destroy(rec);
-
 }
 
 TEST(key_operate_9 , "operate: (test,test,key3) = {append, read, write, read, incr, read, prepend}")
@@ -439,6 +439,79 @@ TEST(key_operate_reset_read_ttl, "operate reset_read_ttl")
 	as_operations_destroy(&ops);
 }
 
+typedef struct {
+	uint32_t count;
+	uint32_t errors;
+	uint32_t expected;
+} query_stats;
+
+static bool
+query_send_key_callback(const as_val* v, void* udata)
+{
+	if (v == NULL) {
+		return false;
+	}
+
+	query_stats* stats = udata;
+
+	as_incr_uint32(&stats->count);
+	as_record* rec = as_record_fromval(v);
+
+	if (rec->key.valuep == NULL || rec->key.valuep->integer.value != stats->expected) {
+		as_incr_uint32(&stats->errors);
+	}
+	return true;
+}
+
+TEST(key_operate_store_key , "operate: (test,test,key2) = {touch, get}")
+{
+	const char* set = "store_key_op";
+	uint32_t user_key = 99;
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, set, user_key);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write_int64(&ops, "a", 1);
+
+	as_record* prec = NULL;
+
+	as_policy_operate pol;
+	as_policy_operate_init(&pol);
+	pol.key = AS_POLICY_KEY_DIGEST;
+
+	// Change global batch write sendKey.
+	as_policy_key orig = as->config.policies.operate.key;
+	as->config.policies.operate.key = AS_POLICY_KEY_SEND;
+
+	as_status status = aerospike_key_operate(as, &err, &pol, &key, &ops, &prec);
+
+	// Reset global batch write sendKey.
+	as->config.policies.operate.key = orig;
+
+	assert_int_eq(status, AEROSPIKE_OK );
+
+	as_record_destroy(prec);
+	as_operations_destroy(&ops);
+
+	// Query user keys.
+	query_stats stats = {.expected = user_key};
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, set);
+
+	status = aerospike_query_foreach(as, &err, NULL, &q, query_send_key_callback, &stats);
+
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(stats.errors, 0);
+	assert_int_eq(stats.count, 1);
+
+	as_query_destroy(&q);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -455,4 +528,5 @@ SUITE(key_operate, "aerospike_key_operate tests")
 	suite_add(key_operate_delete);
 	suite_add(key_operate_bool);
 	suite_add(key_operate_read_all_bins);
+	suite_add(key_operate_store_key);
 }

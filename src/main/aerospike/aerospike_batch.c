@@ -4579,19 +4579,24 @@ as_policy_batch_parent_write_merge(aerospike* as, const as_policy_batch* src, as
 }
 
 static const as_policy_batch_write*
-as_policy_batch_write_merge(aerospike* as, const as_policy_batch_write* src, as_policy_batch_write* mrg)
+as_policy_batch_write_merge(
+	aerospike* as, const as_policy_batch_write* src, as_policy_batch_write* mrg, as_policy_key* pkey
+	)
 {
-	if (!src) {
-		as_config* config = aerospike_load_config(as);
-		return &config->policies.batch_write;
-	}
-	else if (as->config_bitmap) {
-		uint8_t* bitmap = as->config_bitmap;
-		as_config* config = aerospike_load_config(as);
-		as_policy_batch_write* cfg = &config->policies.batch_write;
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch_write* cfg = &config->policies.batch_write;
 
-		mrg->key = as_field_is_set(bitmap, AS_BATCH_WRITE_SEND_KEY)?
-			cfg->key : src->key;
+	if (!src) {
+		*pkey = cfg->key;
+		return cfg;
+	}
+
+	*pkey = as_policy_key_resolve(cfg->key, src->key);
+
+	if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+
+		mrg->key = *pkey;
 		mrg->durable_delete = as_field_is_set(bitmap, AS_BATCH_WRITE_DURABLE_DELETE)?
 			cfg->durable_delete : src->durable_delete;
 
@@ -4603,25 +4608,28 @@ as_policy_batch_write_merge(aerospike* as, const as_policy_batch_write* src, as_
 		mrg->on_locking_only = src->on_locking_only;
 		return mrg;
 	}
-	else {
-		return src;
-	}
+	return src;
 }
 
 static const as_policy_batch_apply*
-as_policy_batch_apply_merge(aerospike* as, const as_policy_batch_apply* src, as_policy_batch_apply* mrg)
+as_policy_batch_apply_merge(
+	aerospike* as, const as_policy_batch_apply* src, as_policy_batch_apply* mrg, as_policy_key* pkey
+	)
 {
-	if (!src) {
-		as_config* config = aerospike_load_config(as);
-		return &config->policies.batch_apply;
-	}
-	else if (as->config_bitmap) {
-		uint8_t* bitmap = as->config_bitmap;
-		as_config* config = aerospike_load_config(as);
-		as_policy_batch_apply* cfg = &config->policies.batch_apply;
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch_apply* cfg = &config->policies.batch_apply;
 
-		mrg->key = as_field_is_set(bitmap, AS_BATCH_UDF_SEND_KEY)?
-			cfg->key : src->key;
+	if (!src) {
+		*pkey = cfg->key;
+		return cfg;
+	}
+
+	*pkey = as_policy_key_resolve(cfg->key, src->key);
+
+	if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+
+		mrg->key = *pkey;
 		mrg->durable_delete = as_field_is_set(bitmap, AS_BATCH_UDF_DURABLE_DELETE)?
 			cfg->durable_delete : src->durable_delete;
 
@@ -4631,25 +4639,28 @@ as_policy_batch_apply_merge(aerospike* as, const as_policy_batch_apply* src, as_
 		mrg->on_locking_only = src->on_locking_only;
 		return mrg;
 	}
-	else {
-		return src;
-	}
+	return src;
 }
 
 static const as_policy_batch_remove*
-as_policy_batch_remove_merge(aerospike* as, const as_policy_batch_remove* src, as_policy_batch_remove* mrg)
+as_policy_batch_remove_merge(
+	aerospike* as, const as_policy_batch_remove* src, as_policy_batch_remove* mrg, as_policy_key* pkey
+	)
 {
-	if (!src) {
-		as_config* config = aerospike_load_config(as);
-		return &config->policies.batch_remove;
-	}
-	else if (as->config_bitmap) {
-		uint8_t* bitmap = as->config_bitmap;
-		as_config* config = aerospike_load_config(as);
-		as_policy_batch_remove* cfg = &config->policies.batch_remove;
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch_remove* cfg = &config->policies.batch_remove;
 
-		mrg->key = as_field_is_set(bitmap, AS_BATCH_DELETE_SEND_KEY)?
-			cfg->key : src->key;
+	if (!src) {
+		*pkey = cfg->key;
+		return cfg;
+	}
+
+	*pkey = as_policy_key_resolve(cfg->key, src->key);
+
+	if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+
+		mrg->key = *pkey;
 		mrg->durable_delete = as_field_is_set(bitmap, AS_BATCH_DELETE_DURABLE_DELETE)?
 			cfg->durable_delete : src->durable_delete;
 
@@ -4659,9 +4670,7 @@ as_policy_batch_remove_merge(aerospike* as, const as_policy_batch_remove* src, a
 		mrg->generation = src->generation;
 		return mrg;
 	}
-	else {
-		return src;
-	}
+	return src;
 }
 
 //---------------------------------
@@ -5150,7 +5159,8 @@ aerospike_batch_operate(
 		policy = as_policy_batch_parent_write_merge(as, policy, &merged);
 
 		as_policy_batch_write merged_write;
-		policy_write = as_policy_batch_write_merge(as, policy_write, &merged_write);
+		as_policy_key pkey;
+		policy_write = as_policy_batch_write_merge(as, policy_write, &merged_write, &pkey);
 
 		uint64_t* versions = NULL;
 
@@ -5177,7 +5187,7 @@ aerospike_batch_operate(
 		};
 
 		as_batch_attr attr;
-		as_batch_attr_write(&attr, ops, policy_write, policy_write->key, policy_write->durable_delete);
+		as_batch_attr_write(&attr, ops, policy_write, pkey, policy_write->durable_delete);
 
 		return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 			listener, udata);
@@ -5224,7 +5234,8 @@ aerospike_batch_apply(
 	policy = as_policy_batch_parent_write_merge(as, policy, &merged);
 	
 	as_policy_batch_apply merged_apply;
-	policy_apply = as_policy_batch_apply_merge(as, policy_apply, &merged_apply);
+	as_policy_key pkey;
+	policy_apply = as_policy_batch_apply_merge(as, policy_apply, &merged_apply, &pkey);
 
 	uint64_t* versions = NULL;
 
@@ -5253,7 +5264,7 @@ aerospike_batch_apply(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_apply(&attr, policy_apply, policy_apply->key, policy_apply->durable_delete);
+	as_batch_attr_apply(&attr, policy_apply, pkey, policy_apply->durable_delete);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 		listener, udata);
@@ -5272,7 +5283,8 @@ aerospike_batch_remove(
 	policy = as_policy_batch_parent_write_merge(as, policy, &merged);
 
 	as_policy_batch_remove merged_remove;
-	policy_remove = as_policy_batch_remove_merge(as, policy_remove, &merged_remove);
+	as_policy_key pkey;
+	policy_remove = as_policy_batch_remove_merge(as, policy_remove, &merged_remove, &pkey);
 
 	uint64_t* versions = NULL;
 
@@ -5298,7 +5310,7 @@ aerospike_batch_remove(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_remove(&attr, policy_remove, policy_remove->key, policy_remove->durable_delete);
+	as_batch_attr_remove(&attr, policy_remove, pkey, policy_remove->durable_delete);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 		listener, udata);

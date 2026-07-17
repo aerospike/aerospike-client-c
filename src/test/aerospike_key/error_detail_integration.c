@@ -65,19 +65,28 @@ static as_monitor monitor;
 static bool
 before_sync(atf_suite* suite)
 {
-	as_node* node = as_node_get_random(as->cluster);
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+    as_node* node = NULL;
 
-	if (!node) {
-		return false;
-	}
+    for (uint32_t i = 0; i < nodes->size; i++) {
+        if (as_node_is_active(nodes->array[i])) {
+            node = nodes->array[i];
+            break;
+        }
+    }
 
-	if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
-		info("Skipping error_detail_sync suite: server %u.%u.%u < 8.1.3",
-			 node->version.major, node->version.minor, node->version.patch);
-		as_node_release(node);
-		return false;
-	}
-	as_node_release(node);
+    if (!node) {
+        as_nodes_release(nodes);
+        return false;
+    }
+
+    if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
+        info("Skipping error_detail_sync suite: server %u.%u.%u < 8.1.3",
+             node->version.major, node->version.minor, node->version.patch);
+        as_nodes_release(nodes);
+        return false;
+    }
+    as_nodes_release(nodes);
 
 	as_error err;
 	as_key key;
@@ -1554,19 +1563,28 @@ TEST(ed_async_priority_logic_v2, "6.9 async server message displaces default for
 static bool
 before_async(atf_suite* suite)
 {
-	as_node* node = as_node_get_random(as->cluster);
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+    as_node* node = NULL;
 
-	if (!node) {
-		return false;
-	}
+    for (uint32_t i = 0; i < nodes->size; i++) {
+        if (as_node_is_active(nodes->array[i])) {
+            node = nodes->array[i];
+            break;
+        }
+    }
 
-	if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
-		info("Skipping error_detail_async suite: server %u.%u.%u < 8.1.3",
-			 node->version.major, node->version.minor, node->version.patch);
-		as_node_release(node);
-		return false;
-	}
-	as_node_release(node);
+    if (!node) {
+        as_nodes_release(nodes);
+        return false;
+    }
+
+    if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
+        info("Skipping error_detail_async suite: server %u.%u.%u < 8.1.3",
+             node->version.major, node->version.minor, node->version.patch);
+        as_nodes_release(nodes);
+        return false;
+    }
+    as_nodes_release(nodes);
 
 	as_monitor_init(&monitor);
 

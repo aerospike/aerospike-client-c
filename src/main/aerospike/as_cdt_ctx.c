@@ -167,6 +167,49 @@ as_cdt_ctx_add_map_value_interval(as_cdt_ctx* ctx, as_val* begin, as_val* end)
 			as_cdt_ctx_val_pair(begin, end));
 }
 
+static as_val*
+as_cdt_ctx_rel_triple(as_val* pivot, int64_t start, int64_t count)
+{
+	as_arraylist* list = as_arraylist_new(3, 0);
+	as_arraylist_append(list, pivot);
+	as_arraylist_append_int64(list, start);
+	as_arraylist_append_int64(list, count);
+	return (as_val*)list;
+}
+
+void
+as_cdt_ctx_add_list_value_rel_rank_range(as_cdt_ctx* ctx, as_val* value, int rank,
+		uint32_t count)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_LIST_VALUE_REL_RANK_RANGE,
+			as_cdt_ctx_rel_triple(value, rank, count));
+}
+
+void
+as_cdt_ctx_add_map_key_rel_index_range(as_cdt_ctx* ctx, as_val* key, int index,
+		uint32_t count)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_MAP_KEY_REL_INDEX_RANGE,
+			as_cdt_ctx_rel_triple(key, index, count));
+}
+
+void
+as_cdt_ctx_add_map_value_rel_rank_range(as_cdt_ctx* ctx, as_val* value, int rank,
+		uint32_t count)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_MAP_VALUE_REL_RANK_RANGE,
+			as_cdt_ctx_rel_triple(value, rank, count));
+}
+
+void
+as_cdt_ctx_invert_last(as_cdt_ctx* ctx)
+{
+	if (ctx->list.size > 0) {
+		as_cdt_ctx_item* item = as_vector_get(&ctx->list, ctx->list.size - 1);
+		item->type |= AS_CDT_CTX_INVERTED;
+	}
+}
+
 uint32_t
 as_cdt_ctx_byte_capacity(const as_cdt_ctx* ctx)
 {

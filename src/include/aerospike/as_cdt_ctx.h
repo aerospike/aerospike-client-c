@@ -542,6 +542,50 @@ AS_EXTERN void
 as_cdt_ctx_add_map_value_interval(as_cdt_ctx* ctx, as_val* begin, as_val* end);
 
 /**
+ * Select `count` list items by value relative rank, starting `rank` from the
+ * item(s) with value `value`. The ctx takes ownership of `value`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_list_value_rel_rank_range(as_cdt_ctx* ctx, as_val* value, int rank,
+		uint32_t count);
+
+/**
+ * Select `count` map items by key relative index, starting `index` from the
+ * item(s) with key `key`. The ctx takes ownership of `key`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_map_key_rel_index_range(as_cdt_ctx* ctx, as_val* key, int index,
+		uint32_t count);
+
+/**
+ * Select `count` map items by value relative rank, starting `rank` from the
+ * item(s) with value `value`. The ctx takes ownership of `value`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_map_value_rel_rank_range(as_cdt_ctx* ctx, as_val* value, int rank,
+		uint32_t count);
+
+/**
+ * Invert the most recently added multi-select context segment (select the
+ * complement of its range / interval / value list). Applies only to plural
+ * segments.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_invert_last(as_cdt_ctx* ctx);
+
+/**
  * Return exact serialized size of ctx. Return zero on error.
  */
 AS_EXTERN uint32_t

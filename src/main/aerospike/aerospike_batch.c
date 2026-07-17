@@ -4578,15 +4578,6 @@ as_policy_batch_parent_write_merge(aerospike* as, const as_policy_batch* src, as
 	}
 }
 
-static inline as_policy_key
-as_policy_key_resolve(as_policy_key def_key, as_policy_key rec_key)
-{
-	if (def_key == AS_POLICY_KEY_SEND || rec_key == AS_POLICY_KEY_SEND) {
-		return AS_POLICY_KEY_SEND;
-	}
-	return AS_POLICY_KEY_DIGEST;
-}
-
 static const as_policy_batch_write*
 as_policy_batch_write_merge(
 	aerospike* as, const as_policy_batch_write* src, as_policy_batch_write* mrg, as_policy_key* pkey

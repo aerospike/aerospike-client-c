@@ -39,8 +39,8 @@ extern aerospike* as;
  *****************************************************************************/
 
 #define NAMESPACE "test"
-#define SET "testexpdsl"
-#define BIN_DSL "dslbin"
+#define SET "testexpael"
+#define BIN_AEL "aelbin"
 
 /******************************************************************************
  * HELPERS
@@ -54,7 +54,7 @@ put_one_int(int64_t rec_id, int64_t val)
 
 	as_record rec;
 	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, BIN_DSL, val);
+	as_record_set_int64(&rec, BIN_AEL, val);
 
 	as_error err;
 	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
@@ -77,7 +77,7 @@ put_map_int_str3(int64_t rec_id)
 
 	as_record rec;
 	as_record_inita(&rec, 1);
-	as_record_set_map(&rec, BIN_DSL, (as_map*)&map);
+	as_record_set_map(&rec, BIN_AEL, (as_map*)&map);
 
 	as_error err;
 	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
@@ -100,7 +100,7 @@ put_map_keys_10_20_30(int64_t rec_id)
 
 	as_record rec;
 	as_record_inita(&rec, 1);
-	as_record_set_map(&rec, BIN_DSL, (as_map*)&map);
+	as_record_set_map(&rec, BIN_AEL, (as_map*)&map);
 
 	as_error err;
 	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
@@ -123,7 +123,7 @@ put_list_indexed_0_8(int64_t rec_id)
 
 	as_record rec;
 	as_record_inita(&rec, 1);
-	as_record_set_list(&rec, BIN_DSL, (as_list*)&list);
+	as_record_set_list(&rec, BIN_AEL, (as_list*)&list);
 
 	as_error err;
 	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
@@ -148,7 +148,7 @@ put_list_membership(int64_t rec_id)
 
 	as_record rec;
 	as_record_inita(&rec, 1);
-	as_record_set_list(&rec, BIN_DSL, (as_list*)&list);
+	as_record_set_list(&rec, BIN_AEL, (as_list*)&list);
 
 	as_error err;
 	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
@@ -180,7 +180,7 @@ put_list_nested(int64_t rec_id)
 
 	as_record rec;
 	as_record_inita(&rec, 1);
-	as_record_set_list(&rec, BIN_DSL, (as_list*)&outer);
+	as_record_set_list(&rec, BIN_AEL, (as_list*)&outer);
 
 	as_error err;
 	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
@@ -190,18 +190,18 @@ put_list_nested(int64_t rec_id)
 }
 
 /******************************************************************************
- * READ POLICY + as_exp_build_dsl (server parses DSL from filter field).
- * DSL shapes follow dsl.md / enterprise test_dsl.cc.
+ * READ POLICY + as_exp_build_ael (server parses AEL from filter field).
+ * AEL shapes follow the AEL spec / enterprise AEL parse tests.
  *****************************************************************************/
 
-TEST(exp_dsl_filter_read_literal_true, "read filter: DSL 1 == 1")
+TEST(exp_ael_filter_read_literal_true, "read filter: AEL 1 == 1")
 {
 	assert_int_eq(put_one_int(9301, 1), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9301);
 
-	as_exp_build_dsl(filt, "1 == 1");
+	as_exp_build_ael(filt, "1 == 1");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -214,19 +214,19 @@ TEST(exp_dsl_filter_read_literal_true, "read filter: DSL 1 == 1")
 
 	assert_int_eq(rc, AEROSPIKE_OK);
 	assert_not_null(prec);
-	assert_int_eq(as_record_get_int64(prec, BIN_DSL, -1), 1);
+	assert_int_eq(as_record_get_int64(prec, BIN_AEL, -1), 1);
 	as_record_destroy(prec);
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_filter_read_literal_false, "read filter: DSL 1 == 2 -> FILTERED_OUT")
+TEST(exp_ael_filter_read_literal_false, "read filter: AEL 1 == 2 -> FILTERED_OUT")
 {
 	assert_int_eq(put_one_int(9302, 1), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9302);
 
-	as_exp_build_dsl(filt, "1 == 2");
+	as_exp_build_ael(filt, "1 == 2");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -244,14 +244,14 @@ TEST(exp_dsl_filter_read_literal_false, "read filter: DSL 1 == 2 -> FILTERED_OUT
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_filter_read_bin_eq, "read filter: DSL $.dslbin == 42")
+TEST(exp_ael_filter_read_bin_eq, "read filter: AEL $.aelbin == 42")
 {
 	assert_int_eq(put_one_int(9303, 42), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9303);
 
-	as_exp_build_dsl(filt, "$.dslbin == 42");
+	as_exp_build_ael(filt, "$.aelbin == 42");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -264,19 +264,19 @@ TEST(exp_dsl_filter_read_bin_eq, "read filter: DSL $.dslbin == 42")
 
 	assert_int_eq(rc, AEROSPIKE_OK);
 	assert_not_null(prec);
-	assert_int_eq(as_record_get_int64(prec, BIN_DSL, -1), 42);
+	assert_int_eq(as_record_get_int64(prec, BIN_AEL, -1), 42);
 	as_record_destroy(prec);
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_filter_read_bin_no_match, "read filter: DSL $.dslbin == 43 -> FILTERED_OUT")
+TEST(exp_ael_filter_read_bin_no_match, "read filter: AEL $.aelbin == 43 -> FILTERED_OUT")
 {
 	assert_int_eq(put_one_int(9304, 42), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9304);
 
-	as_exp_build_dsl(filt, "$.dslbin == 43");
+	as_exp_build_ael(filt, "$.aelbin == 43");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -294,14 +294,14 @@ TEST(exp_dsl_filter_read_bin_no_match, "read filter: DSL $.dslbin == 43 -> FILTE
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_filter_read_logic_and, "read filter: DSL 1 == 1 and 2 == 2")
+TEST(exp_ael_filter_read_logic_and, "read filter: AEL 1 == 1 and 2 == 2")
 {
 	assert_int_eq(put_one_int(9305, 1), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9305);
 
-	as_exp_build_dsl(filt, "1 == 1 and 2 == 2");
+	as_exp_build_ael(filt, "1 == 1 and 2 == 2");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -318,7 +318,7 @@ TEST(exp_dsl_filter_read_logic_and, "read filter: DSL 1 == 1 and 2 == 2")
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_filter_write_skipped, "write filter: DSL false skips put (record unchanged)")
+TEST(exp_ael_filter_write_skipped, "write filter: AEL false skips put (record unchanged)")
 {
 	assert_int_eq(put_one_int(9306, 7), AEROSPIKE_OK);
 
@@ -327,9 +327,9 @@ TEST(exp_dsl_filter_write_skipped, "write filter: DSL false skips put (record un
 
 	as_record rec;
 	as_record_inita(&rec, 1);
-	as_record_set_int64(&rec, BIN_DSL, 100);
+	as_record_set_int64(&rec, BIN_AEL, 100);
 
-	as_exp_build_dsl(filt, "$.dslbin == 99");
+	as_exp_build_ael(filt, "$.aelbin == 99");
 	assert_not_null(filt);
 
 	as_policy_write pw;
@@ -347,23 +347,23 @@ TEST(exp_dsl_filter_write_skipped, "write filter: DSL false skips put (record un
 	rc = aerospike_key_get(as, &err, NULL, &key, &prec);
 	assert_int_eq(rc, AEROSPIKE_OK);
 	assert_not_null(prec);
-	assert_int_eq(as_record_get_int64(prec, BIN_DSL, -1), 7);
+	assert_int_eq(as_record_get_int64(prec, BIN_AEL, -1), 7);
 	as_record_destroy(prec);
 }
 
 /******************************************************************************
- * CDT path filters — DSL equivalents of richer list/map expression tests
- * (see dsl.md path examples and list_basics/map_basics suites).
+ * CDT path filters — AEL equivalents of richer list/map expression tests
+ * (see the AEL spec path examples and list_basics/map_basics suites).
  *****************************************************************************/
 
-TEST(exp_dsl_map_top_count, "map: $.dslbin:MAP.count() == 3 (cf map_keys size / map size)")
+TEST(exp_ael_map_top_count, "map: $.aelbin:MAP.count() == 3 (cf map_keys size / map size)")
 {
 	assert_int_eq(put_map_int_str3(9310), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9310);
 
-	as_exp_build_dsl(filt, "$.dslbin:MAP.count() == 3");
+	as_exp_build_ael(filt, "$.aelbin:MAP.count() == 3");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -380,14 +380,14 @@ TEST(exp_dsl_map_top_count, "map: $.dslbin:MAP.count() == 3 (cf map_keys size / 
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_map_keylist_submap_count, "map: $.dslbin:MAP.{@10,20}.count() == 2 (getByKeyList subset)")
+TEST(exp_ael_map_keylist_submap_count, "map: $.aelbin:MAP.{@10,20}.count() == 2 (getByKeyList subset)")
 {
 	assert_int_eq(put_map_keys_10_20_30(9311), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9311);
 
-	as_exp_build_dsl(filt, "$.dslbin:MAP.{@10,20}.count() == 2");
+	as_exp_build_ael(filt, "$.aelbin:MAP.{@10,20}.count() == 2");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -404,14 +404,14 @@ TEST(exp_dsl_map_keylist_submap_count, "map: $.dslbin:MAP.{@10,20}.count() == 2 
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_map_key_exists, "map: $.dslbin.20.exists() (cf in_list on map_keys for key 20)")
+TEST(exp_ael_map_key_exists, "map: $.aelbin.20.exists() (cf in_list on map_keys for key 20)")
 {
 	assert_int_eq(put_map_keys_10_20_30(9312), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9312);
 
-	as_exp_build_dsl(filt, "$.dslbin.20.exists()");
+	as_exp_build_ael(filt, "$.aelbin.20.exists()");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -428,14 +428,14 @@ TEST(exp_dsl_map_key_exists, "map: $.dslbin.20.exists() (cf in_list on map_keys 
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_map_key_missing, "map: $.dslbin.99.exists() -> FILTERED_OUT (cf in_list miss on keys)")
+TEST(exp_ael_map_key_missing, "map: $.aelbin.99.exists() -> FILTERED_OUT (cf in_list miss on keys)")
 {
 	assert_int_eq(put_map_keys_10_20_30(9313), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9313);
 
-	as_exp_build_dsl(filt, "$.dslbin.99.exists()");
+	as_exp_build_ael(filt, "$.aelbin.99.exists()");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -453,14 +453,14 @@ TEST(exp_dsl_map_key_missing, "map: $.dslbin.99.exists() -> FILTERED_OUT (cf in_
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_map_value_by_key, "map: $.dslbin.2 == \"b\" (typed get by int key)")
+TEST(exp_ael_map_value_by_key, "map: $.aelbin.2 == \"b\" (typed get by int key)")
 {
 	assert_int_eq(put_map_int_str3(9314), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9314);
 
-	as_exp_build_dsl(filt, "$.dslbin.2 == \"b\"");
+	as_exp_build_ael(filt, "$.aelbin.2 == \"b\"");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -477,14 +477,14 @@ TEST(exp_dsl_map_value_by_key, "map: $.dslbin.2 == \"b\" (typed get by int key)"
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_list_index_range_count, "list: $.dslbin.[3:7].count() > 2 (index range COUNT)")
+TEST(exp_ael_list_index_range_count, "list: $.aelbin.[3:7].count() > 2 (index range COUNT)")
 {
 	assert_int_eq(put_list_indexed_0_8(9315), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9315);
 
-	as_exp_build_dsl(filt, "$.dslbin.[3:7].count() > 2");
+	as_exp_build_ael(filt, "$.aelbin.[3:7].count() > 2");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -501,14 +501,14 @@ TEST(exp_dsl_list_index_range_count, "list: $.dslbin.[3:7].count() > 2 (index ra
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_list_membership_in, "list: 3 in $.dslbin (cf Exp IN / getByValue EXISTS)")
+TEST(exp_ael_list_membership_in, "list: 3 in $.aelbin (cf Exp IN / getByValue EXISTS)")
 {
 	assert_int_eq(put_list_membership(9316), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9316);
 
-	as_exp_build_dsl(filt, "3 in $.dslbin");
+	as_exp_build_ael(filt, "3 in $.aelbin");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -525,14 +525,14 @@ TEST(exp_dsl_list_membership_in, "list: 3 in $.dslbin (cf Exp IN / getByValue EX
 	as_exp_destroy(filt);
 }
 
-TEST(exp_dsl_list_nested_index, "list: $.dslbin.[1].[0] == 3 (nested list path)")
+TEST(exp_ael_list_nested_index, "list: $.aelbin.[1].[0] == 3 (nested list path)")
 {
 	assert_int_eq(put_list_nested(9317), AEROSPIKE_OK);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 9317);
 
-	as_exp_build_dsl(filt, "$.dslbin.[1].[0] == 3");
+	as_exp_build_ael(filt, "$.aelbin.[1].[0] == 3");
 	assert_not_null(filt);
 
 	as_policy_read p;
@@ -553,20 +553,20 @@ TEST(exp_dsl_list_nested_index, "list: $.dslbin.[1].[0] == 3 (nested list path)"
  * TEST SUITE
  *****************************************************************************/
 
-SUITE(exp_dsl, "Expression DSL filters (as_exp_build_dsl)")
+SUITE(exp_ael, "Expression AEL filters (as_exp_build_ael)")
 {
-	suite_add(exp_dsl_filter_read_literal_true);
-	suite_add(exp_dsl_filter_read_literal_false);
-	suite_add(exp_dsl_filter_read_bin_eq);
-	suite_add(exp_dsl_filter_read_bin_no_match);
-	suite_add(exp_dsl_filter_read_logic_and);
-	suite_add(exp_dsl_filter_write_skipped);
-	suite_add(exp_dsl_map_top_count);
-	suite_add(exp_dsl_map_keylist_submap_count);
-	suite_add(exp_dsl_map_key_exists);
-	suite_add(exp_dsl_map_key_missing);
-	suite_add(exp_dsl_map_value_by_key);
-	suite_add(exp_dsl_list_index_range_count);
-	suite_add(exp_dsl_list_membership_in);
-	suite_add(exp_dsl_list_nested_index);
+	suite_add(exp_ael_filter_read_literal_true);
+	suite_add(exp_ael_filter_read_literal_false);
+	suite_add(exp_ael_filter_read_bin_eq);
+	suite_add(exp_ael_filter_read_bin_no_match);
+	suite_add(exp_ael_filter_read_logic_and);
+	suite_add(exp_ael_filter_write_skipped);
+	suite_add(exp_ael_map_top_count);
+	suite_add(exp_ael_map_keylist_submap_count);
+	suite_add(exp_ael_map_key_exists);
+	suite_add(exp_ael_map_key_missing);
+	suite_add(exp_ael_map_value_by_key);
+	suite_add(exp_ael_list_index_range_count);
+	suite_add(exp_ael_list_membership_in);
+	suite_add(exp_ael_list_nested_index);
 }

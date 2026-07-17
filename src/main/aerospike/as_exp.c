@@ -57,9 +57,9 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 		}
 
 		switch (entry->op) {
-		case _AS_EXP_CODE_DSL_COMPILE:
+		case _AS_EXP_CODE_AEL_COMPILE:
 			entry->sz = (uint32_t)strlen(entry->v.str_val);
-			total_sz += as_pack_int64_size((int64_t)_AS_EXP_CODE_DSL_COMPILE);
+			total_sz += as_pack_int64_size((int64_t)_AS_EXP_CODE_AEL_COMPILE);
 			total_sz += as_pack_str_size(entry->sz);
 			break;
 		case _AS_EXP_CODE_CDT_LIST_CRMOD:
@@ -272,8 +272,8 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 		}
 
 		switch (entry->op) {
-		case _AS_EXP_CODE_DSL_COMPILE:
-			as_pack_int64(&pk, (int64_t)_AS_EXP_CODE_DSL_COMPILE);
+		case _AS_EXP_CODE_AEL_COMPILE:
+			as_pack_int64(&pk, (int64_t)_AS_EXP_CODE_AEL_COMPILE);
 			as_pack_str(&pk, (const uint8_t*)entry->v.str_val, entry->sz);
 			break;
 		case _AS_EXP_CODE_CDT_LIST_CRMOD:

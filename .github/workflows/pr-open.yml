@@ -16,7 +16,7 @@ permissions:
 on:
   # keeping for testing sake
   push:
-    branches: [CLIENT-4300-release-pipeline-new]
+    branches: [CLIENT-5076-2]
   pull_request:
     branches:
       - stage

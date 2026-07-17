@@ -746,11 +746,157 @@ TEST(select_and_room_filter,
 }
 
 /******************************************************************************
+ * COUNT / EXISTS / RANGE / INVERTED TESTS
+ *****************************************************************************/
+
+TEST(select_count_all, "COUNT select all children -> 3")
+{
+	int64_t keys[] = {1, 2, 3};
+	const char* vals[] = {"a", "b", "c"};
+
+	assert_int_eq(write_int_str_map(200, keys, vals, 3), AEROSPIKE_OK);
+
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 200);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_all_children(&ctx);
+
+	as_error err;
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx,
+			AS_EXP_PATH_SELECT_COUNT);
+
+	as_record* rec = NULL;
+	as_status status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(as_record_get_int64(rec, BIN_NAME, -1), 3);
+
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	as_cdt_ctx_destroy(&ctx);
+}
+
+TEST(select_exists_true, "EXISTS select all children -> true")
+{
+	int64_t keys[] = {1, 2, 3};
+	const char* vals[] = {"a", "b", "c"};
+
+	assert_int_eq(write_int_str_map(201, keys, vals, 3), AEROSPIKE_OK);
+
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 201);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_all_children(&ctx);
+
+	as_error err;
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx,
+			AS_EXP_PATH_SELECT_EXISTS);
+
+	as_record* rec = NULL;
+	as_status status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(as_record_get_bool(rec, BIN_NAME));
+
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	as_cdt_ctx_destroy(&ctx);
+}
+
+TEST(select_map_index_range, "index_range(0, 2) -> first two entries")
+{
+	int64_t keys[] = {1, 2, 3};
+	const char* vals[] = {"a", "b", "c"};
+
+	assert_int_eq(write_int_str_map(202, keys, vals, 3), AEROSPIKE_OK);
+
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 202);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_map_index_range(&ctx, 0, 2);
+
+	as_error err;
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx,
+			AS_EXP_PATH_SELECT_MATCHING_TREE);
+
+	as_record* rec = NULL;
+	as_status status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_map* result = as_record_get_map(rec, BIN_NAME);
+	assert_not_null(result);
+	assert_int_eq(as_map_size(result), 2);
+
+	as_integer k1;
+	as_integer_init(&k1, 1);
+	assert_not_null(as_map_get(result, (as_val*)&k1));
+	as_integer k3;
+	as_integer_init(&k3, 3);
+	assert_null(as_map_get(result, (as_val*)&k3));
+
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	as_cdt_ctx_destroy(&ctx);
+}
+
+TEST(select_map_index_range_inverted, "index_range(0, 2) inverted -> last entry")
+{
+	int64_t keys[] = {1, 2, 3};
+	const char* vals[] = {"a", "b", "c"};
+
+	assert_int_eq(write_int_str_map(203, keys, vals, 3), AEROSPIKE_OK);
+
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 203);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_init(&ctx, 1);
+	as_cdt_ctx_add_map_index_range(&ctx, 0, 2);
+	as_cdt_ctx_invert_last(&ctx);
+
+	as_error err;
+	as_operations ops;
+	as_operations_init(&ops, 1);
+	as_operations_select_by_path(&err, &ops, BIN_NAME, &ctx,
+			AS_EXP_PATH_SELECT_MATCHING_TREE);
+
+	as_record* rec = NULL;
+	as_status status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_map* result = as_record_get_map(rec, BIN_NAME);
+	assert_not_null(result);
+	assert_int_eq(as_map_size(result), 1);
+
+	as_integer k3;
+	as_integer_init(&k3, 3);
+	assert_not_null(as_map_get(result, (as_val*)&k3));
+
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+	as_cdt_ctx_destroy(&ctx);
+}
+
+/******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
 SUITE(select_basics, "CDT select basics")
 {
+	suite_add(select_count_all);
+	suite_add(select_exists_true);
+	suite_add(select_map_index_range);
+	suite_add(select_map_index_range_inverted);
 	suite_add(select_key_list_basic);
 	suite_add(select_key_list_single);
 	suite_add(select_key_list_no_match);

@@ -35,6 +35,8 @@
 #include <aerospike/as_exp.h>
 #include <aerospike/as_exp_operations.h>
 #include <aerospike/as_hashmap.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_list_operations.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_string.h>
@@ -159,6 +161,140 @@ TEST(exp_read_select_by_path_map_keys_in, "exp read: selectByPath mapKeysIn + al
 	as_cdt_ctx_destroy(&ctx);
 }
 
+TEST(exp_bin_exists_native, "exp read: native bin_exists (op 83)")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 94010);
+
+	as_error err;
+	aerospike_key_remove(as, &err, NULL, &key);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_int64(rec, "x", 42);
+	as_status status = aerospike_key_put(as, &err, NULL, &key, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_exp_build(e_yes, as_exp_bin_exists("x"));
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "r", e_yes, AS_EXP_READ_DEFAULT);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(as_record_get_bool(rec, "r"));
+	as_record_destroy(rec);
+	rec = NULL;
+	as_operations_destroy(&ops);
+	as_exp_destroy(e_yes);
+
+	as_exp_build(e_no, as_exp_bin_exists("nope"));
+	as_operations ops2;
+	as_operations_inita(&ops2, 1);
+	as_operations_exp_read(&ops2, "r", e_no, AS_EXP_READ_DEFAULT);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops2, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(as_record_get_bool(rec, "r") == false);
+	as_record_destroy(rec);
+	as_operations_destroy(&ops2);
+	as_exp_destroy(e_no);
+}
+
+TEST(exp_size_polymorphic, "exp read: polymorphic size (op 0xfd) of a map")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 94011);
+
+	as_error err;
+	aerospike_key_remove(as, &err, NULL, &key);
+
+	as_hashmap m;
+	as_hashmap_init(&m, 3);
+	as_hashmap_set(&m, (as_val*)as_string_new("a", false), (as_val*)as_integer_new(1));
+	as_hashmap_set(&m, (as_val*)as_string_new("b", false), (as_val*)as_integer_new(2));
+	as_hashmap_set(&m, (as_val*)as_string_new("c", false), (as_val*)as_integer_new(3));
+
+	as_record* rec = as_record_new(1);
+	as_record_set_map(rec, "m", (as_map*)&m);
+	as_status status = aerospike_key_put(as, &err, NULL, &key, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_exp_build(e, as_exp_size(NULL, as_exp_bin_map("m")));
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "r", e, AS_EXP_READ_DEFAULT);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(as_record_get_int64(rec, "r", -1), 3);
+
+	as_record_destroy(rec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(e);
+}
+
+TEST(exp_to_string_int, "exp read: toString(42) == \"42\"")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 94012);
+
+	as_error err;
+	aerospike_key_remove(as, &err, NULL, &key);
+
+	as_record* rec = as_record_new(1);
+	as_record_set_int64(rec, "x", 1);
+	as_status status = aerospike_key_put(as, &err, NULL, &key, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_exp_build(e, as_exp_to_string(as_exp_int(42)));
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "r", e, AS_EXP_READ_DEFAULT);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(rec, "r"), "42");
+
+	as_record_destroy(rec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(e);
+}
+
+TEST(exp_list_append_persist, "exp write: list append with ordered+persist policy")
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 94013);
+
+	as_error err;
+	aerospike_key_remove(as, &err, NULL, &key);
+
+	as_record* rec = as_record_new(1);
+	as_arraylist l;
+	as_arraylist_init(&l, 1, 0);
+	as_arraylist_append_int64(&l, 1);
+	as_record_set_list(rec, "l", (as_list*)&l);
+	as_status status = aerospike_key_put(as, &err, NULL, &key, rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(rec);
+	rec = NULL;
+
+	as_list_policy pol;
+	as_list_policy_set_all(&pol, AS_LIST_ORDERED, AS_LIST_WRITE_DEFAULT, true);
+
+	as_exp_build(e, as_exp_list_append(NULL, &pol, as_exp_int(5), as_exp_bin_list("l")));
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_write(&ops, "l", e, AS_EXP_WRITE_DEFAULT);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_record_destroy(rec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(e);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -166,4 +302,8 @@ TEST(exp_read_select_by_path_map_keys_in, "exp read: selectByPath mapKeysIn + al
 SUITE(exp_basics, "Expression basics (exp read + select_by_path)")
 {
 	suite_add(exp_read_select_by_path_map_keys_in);
+	suite_add(exp_bin_exists_native);
+	suite_add(exp_size_polymorphic);
+	suite_add(exp_to_string_int);
+	suite_add(exp_list_append_persist);
 }

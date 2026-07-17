@@ -115,18 +115,11 @@ TEST( map_index_pre , "create indexes" )
 
 TEST( map_index_post , "drop indexes" )
 {
-	// Use an explicit policy with a generous timeout. The default info policy
-	// timeout (1000 ms) can expire on slow ARM64/libuv CI runners, producing
-	// AEROSPIKE_ERR_TIMEOUT (9) even though the server is healthy.
-	as_policy_info pol;
-	as_policy_info_init(&pol);
-	pol.timeout = 10000;
-
 	for (size_t i = 0; i < index_table_size; i++) {
 		as_error err;
 		as_error_reset(&err);
 
-		aerospike_index_remove(as, &err, &pol, NAMESPACE, index_table[i].index_name);
+		aerospike_index_remove(as, &err, NULL, NAMESPACE, index_table[i].index_name);
 		if ( err.code != AEROSPIKE_OK ) {
 			info("error(%d): %s", err.code, err.message);
 		}

@@ -3,12 +3,11 @@ ver=4.24
 dir=libev-$ver
 fn=$dir.tar.gz
 url=http://dist.schmorp.de/libev/Attic/$fn
-fallback=https://fossies.org/linux/misc/$fn
 
 rm -rf $fn $dir
 
 echo Download $url
-wget --timeout=60 --tries=2 $url || wget $fallback
+wget $url
 
 echo Extract $fn 
 tar xf $fn

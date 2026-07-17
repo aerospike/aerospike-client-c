@@ -278,7 +278,13 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 			break;
 		case _AS_EXP_CODE_CDT_LIST_CRMOD:
 			if (entry->v.list_pol != NULL) {
-				as_pack_uint64(&pk, (uint64_t)entry->v.list_pol->order);
+				uint64_t order = (uint64_t)entry->v.list_pol->order;
+
+				if (entry->v.list_pol->persist_index) {
+					order |= 0x10;
+				}
+
+				as_pack_uint64(&pk, order);
 				as_pack_uint64(&pk, (uint64_t)entry->v.list_pol->flags);
 			}
 

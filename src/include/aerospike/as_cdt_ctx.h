@@ -46,17 +46,45 @@ typedef enum {
 	AS_CDT_CTX_LIST_INDEX = 0x10,
 	AS_CDT_CTX_LIST_RANK = 0x11,
 	AS_CDT_CTX_LIST_VALUE = 0x13,
+	// Multi-select list segments (list operand; as_exp_select_by_path).
+	AS_CDT_CTX_LIST_INDEX_RANGE = 0x18,
+	AS_CDT_CTX_LIST_RANK_RANGE = 0x19,
+	AS_CDT_CTX_LIST_VALUE_LIST = 0x1B,
+	AS_CDT_CTX_LIST_VALUE_INTERVAL = 0x1D,
+	AS_CDT_CTX_LIST_VALUE_REL_RANK_RANGE = 0x1F,
 	AS_CDT_CTX_MAP_INDEX = 0x20,
 	AS_CDT_CTX_MAP_RANK = 0x21,
 	AS_CDT_CTX_MAP_KEY = 0x22,
 	AS_CDT_CTX_MAP_VALUE = 0x23,
+	// Multi-select map segments (list operand; as_exp_select_by_path).
+	AS_CDT_CTX_MAP_INDEX_RANGE = 0x28,
+	AS_CDT_CTX_MAP_RANK_RANGE = 0x29,
 	AS_CDT_CTX_MAP_KEYS_IN = 0x2A,
+	AS_CDT_CTX_MAP_VALUE_LIST = 0x2B,
+	AS_CDT_CTX_MAP_KEY_INTERVAL = 0x2C,
+	AS_CDT_CTX_MAP_VALUE_INTERVAL = 0x2D,
+	AS_CDT_CTX_MAP_KEY_REL_INDEX_RANGE = 0x2E,
+	AS_CDT_CTX_MAP_VALUE_REL_RANK_RANGE = 0x2F,
 } as_cdt_ctx_type;
 
 /**
  * Flag indicating whether or not a AS_CDT_CTX_xxx variant is a value.
  */
 #define AS_CDT_CTX_VALUE 0x2
+
+/**
+ * Modifier that inverts a multi-select context segment (select the complement
+ * of the range / interval / list). OR into the segment type. Wire bit 0x400.
+ */
+#define AS_CDT_CTX_INVERTED 0x400
+
+/**
+ * True when a context item's operand is an as_val (single value/key, a value
+ * list, or a range/interval/relative operand list) rather than a bare integer.
+ * The low nibble of the range/list/interval/relative types is >= 0x08.
+ */
+#define AS_CDT_CTX_HAS_VAL(__type) \
+	((((__type) & AS_CDT_CTX_VALUE) != 0) || (((__type) & 0x0f) >= 0x08))
 
 /**
  * Modifier for expression context items: AND-combine a filter with the
@@ -425,6 +453,93 @@ as_cdt_ctx_add_all_children_with_filter(as_cdt_ctx* ctx, const struct as_exp* ex
  */
 AS_EXTERN void
 as_cdt_ctx_add_and_filter(as_cdt_ctx* ctx, const struct as_exp* exp);
+
+/**
+ * Select a range of `count` list items starting at `index` (multi-select).
+ * For use with as_exp_select_by_path() / as_exp_modify_by_path().
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_list_index_range(as_cdt_ctx* ctx, int index, uint32_t count);
+
+/**
+ * Select a range of `count` list items by rank starting at `rank`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_list_rank_range(as_cdt_ctx* ctx, int rank, uint32_t count);
+
+/**
+ * Select the list items whose values are in `values`. The ctx takes ownership
+ * of `values`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_list_value_list(as_cdt_ctx* ctx, as_list* values);
+
+/**
+ * Select the list items whose values are in the interval [begin, end). The ctx
+ * takes ownership of `begin` and `end`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_list_value_interval(as_cdt_ctx* ctx, as_val* begin, as_val* end);
+
+/**
+ * Select a range of `count` map items starting at `index` (multi-select).
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_map_index_range(as_cdt_ctx* ctx, int index, uint32_t count);
+
+/**
+ * Select a range of `count` map items by rank starting at `rank`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_map_rank_range(as_cdt_ctx* ctx, int rank, uint32_t count);
+
+/**
+ * Select the map items whose values are in `values`. The ctx takes ownership
+ * of `values`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_map_value_list(as_cdt_ctx* ctx, as_list* values);
+
+/**
+ * Select the map items whose keys are in the interval [begin, end). The ctx
+ * takes ownership of `begin` and `end`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_map_key_interval(as_cdt_ctx* ctx, as_val* begin, as_val* end);
+
+/**
+ * Select the map items whose values are in the interval [begin, end). The ctx
+ * takes ownership of `begin` and `end`.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+AS_EXTERN void
+as_cdt_ctx_add_map_value_interval(as_cdt_ctx* ctx, as_val* begin, as_val* end);
 
 /**
  * Return exact serialized size of ctx. Return zero on error.

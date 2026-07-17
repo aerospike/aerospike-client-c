@@ -73,6 +73,13 @@ extern "C" {
 
 /**
  * @private
+ * Polymorphic CDT size opcode. The server dispatches to list or map size at
+ * run time, so the receiving container's type need not be known.
+ */
+#define AS_CDT_OP_SIZE 0xfd
+
+/**
+ * @private
  * Opcode used by as_exp_compile() to encode a CDT select and apply operation.
  * If flag bit 2 is clear, the operation will be interpreted as a select
  * operation; otherwise, as an apply operation.

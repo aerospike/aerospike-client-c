@@ -152,6 +152,7 @@ typedef enum as_list_write_flags_e {
 typedef struct as_list_policy_s {
 	as_list_order order;
 	as_list_write_flags flags;
+	bool persist_index;
 } as_list_policy;
 
 /**
@@ -275,6 +276,7 @@ as_list_policy_init(as_list_policy* policy)
 {
 	policy->order = AS_LIST_UNORDERED;
 	policy->flags = AS_LIST_WRITE_DEFAULT;
+	policy->persist_index = false;
 }
 
 /**
@@ -287,6 +289,22 @@ as_list_policy_set(as_list_policy* policy, as_list_order order, as_list_write_fl
 {
 	policy->order = order;
 	policy->flags = flags;
+	policy->persist_index = false;
+}
+
+/**
+ * Set list attributes to specified list order, write flags, and whether to
+ * persist the list index. A list index improves lookup performance but requires
+ * more storage; it is supported for a top-level ordered list only.
+ *
+ * @ingroup list_operations
+ */
+static inline void
+as_list_policy_set_all(as_list_policy* policy, as_list_order order, as_list_write_flags flags, bool persist_index)
+{
+	policy->order = order;
+	policy->flags = flags;
+	policy->persist_index = persist_index;
 }
 
 /**

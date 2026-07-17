@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_cdt_ctx.h>
 #include <aerospike/as_cdt_internal.h>
+#include <aerospike/as_arraylist.h>
 #include <aerospike/as_val.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_b64.h>
@@ -34,7 +35,7 @@ as_cdt_ctx_destroy(as_cdt_ctx* ctx)
 		as_cdt_ctx_item* item = as_vector_get(list, i);
 
 		// Destroy ctx entries that contain an as_val.
-		if (item->type & AS_CDT_CTX_VALUE) {
+		if (AS_CDT_CTX_HAS_VAL(item->type)) {
 			as_val_destroy(item->val.pval);
 		}
 		else if ((item->type & ~AS_CDT_CTX_AND) == AS_CDT_CTX_EXP) {
@@ -76,6 +77,94 @@ as_cdt_ctx_add_and_filter(as_cdt_ctx* ctx, const as_exp* exp)
 	memcpy(new_exp, exp, sizeof(as_exp) + exp->packed_sz);
 	item.val.exp = new_exp;
 	as_vector_append(&ctx->list, &item);
+}
+
+static void
+as_cdt_ctx_add_val(as_cdt_ctx* ctx, uint32_t type, as_val* operand)
+{
+	as_cdt_ctx_item item;
+	item.type = type;
+	item.val.pval = operand;
+	as_vector_append(&ctx->list, &item);
+}
+
+static as_val*
+as_cdt_ctx_int_pair(int64_t a, int64_t b)
+{
+	as_arraylist* list = as_arraylist_new(2, 0);
+	as_arraylist_append_int64(list, a);
+	as_arraylist_append_int64(list, b);
+	return (as_val*)list;
+}
+
+static as_val*
+as_cdt_ctx_val_pair(as_val* a, as_val* b)
+{
+	as_arraylist* list = as_arraylist_new(2, 0);
+	as_arraylist_append(list, a);
+	as_arraylist_append(list, b);
+	return (as_val*)list;
+}
+
+void
+as_cdt_ctx_add_list_index_range(as_cdt_ctx* ctx, int index, uint32_t count)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_LIST_INDEX_RANGE,
+			as_cdt_ctx_int_pair(index, count));
+}
+
+void
+as_cdt_ctx_add_list_rank_range(as_cdt_ctx* ctx, int rank, uint32_t count)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_LIST_RANK_RANGE,
+			as_cdt_ctx_int_pair(rank, count));
+}
+
+void
+as_cdt_ctx_add_list_value_list(as_cdt_ctx* ctx, as_list* values)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_LIST_VALUE_LIST, (as_val*)values);
+}
+
+void
+as_cdt_ctx_add_list_value_interval(as_cdt_ctx* ctx, as_val* begin, as_val* end)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_LIST_VALUE_INTERVAL,
+			as_cdt_ctx_val_pair(begin, end));
+}
+
+void
+as_cdt_ctx_add_map_index_range(as_cdt_ctx* ctx, int index, uint32_t count)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_MAP_INDEX_RANGE,
+			as_cdt_ctx_int_pair(index, count));
+}
+
+void
+as_cdt_ctx_add_map_rank_range(as_cdt_ctx* ctx, int rank, uint32_t count)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_MAP_RANK_RANGE,
+			as_cdt_ctx_int_pair(rank, count));
+}
+
+void
+as_cdt_ctx_add_map_value_list(as_cdt_ctx* ctx, as_list* values)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_MAP_VALUE_LIST, (as_val*)values);
+}
+
+void
+as_cdt_ctx_add_map_key_interval(as_cdt_ctx* ctx, as_val* begin, as_val* end)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_MAP_KEY_INTERVAL,
+			as_cdt_ctx_val_pair(begin, end));
+}
+
+void
+as_cdt_ctx_add_map_value_interval(as_cdt_ctx* ctx, as_val* begin, as_val* end)
+{
+	as_cdt_ctx_add_val(ctx, AS_CDT_CTX_MAP_VALUE_INTERVAL,
+			as_cdt_ctx_val_pair(begin, end));
 }
 
 uint32_t

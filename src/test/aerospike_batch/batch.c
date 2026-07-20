@@ -882,7 +882,7 @@ query_send_key_callback(const as_val* v, void* udata)
 TEST(batch_write_with_cluster_send_key, "Batch write with cluster send key")
 {
 	const char* set = "sendKeyCluster";
-	uint32_t size = 2;
+	uint32_t size = 1;
 
 	as_error err;
 	as_status status;

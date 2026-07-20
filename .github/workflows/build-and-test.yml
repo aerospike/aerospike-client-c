@@ -133,7 +133,7 @@ jobs:
     name: ${{ matrix.distro }} ${{ matrix.arch }} / ${{ matrix.event_lib }}${{ matrix.valgrind && ' / valgrind' || '' }}
     needs: load-matrix
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     strategy:
       fail-fast: false
@@ -176,10 +176,6 @@ jobs:
           network-name: ${{ steps.setup-aerospike.outputs.network-name }}
           valgrind:     ${{ matrix.valgrind }}
           junit-xml:    /workspace/test-results/${{ matrix.distro }}-${{ matrix.arch }}-${{ matrix.event_lib }}.xml
-
-      # - name: Dump Aerospike logs on failure
-      #   if: failure()
-      #   run: docker logs aerospike-1 2>&1 || true
 
       - name: Upload test results
         if: always()
@@ -466,10 +462,12 @@ jobs:
       - name: Run Windows x64 tests (${{ matrix.config }})
         shell: pwsh
         run: |
+          Remove-Item -Recurse -Force "$env:GITHUB_WORKSPACE\test-results" -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\test-results" | Out-Null
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\vs\aerospike-test" | Out-Null
           $resultName = "${{ matrix.config }}" -replace '\s+', '-'
           $env:JUNIT_XML = "$env:GITHUB_WORKSPACE\test-results\windows-$resultName.xml"
+          "JUNIT_XML=$env:JUNIT_XML" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           $exe = (Resolve-Path "vs\x64\${{ matrix.config }}\aerospike-test.exe").Path
           Push-Location vs\aerospike-test
           try {
@@ -492,12 +490,38 @@ jobs:
           }
           docker network rm "${{ steps.setup-aerospike.outputs.network-name }}" 2>$null; exit 0
 
-      - name: Upload test results
+      - name: Verify test results
         if: always()
+        id: verify-results
+        shell: pwsh
+        run: |
+          if (-not $env:JUNIT_XML) {
+            Write-Error "JUNIT_XML is not set"
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath $env:JUNIT_XML)) {
+            Write-Error "Expected JUnit XML not found: $env:JUNIT_XML"
+            exit 1
+          }
+          $expected = (Resolve-Path -LiteralPath $env:JUNIT_XML).Path
+          $dir = "$env:GITHUB_WORKSPACE\test-results"
+          $xmlFiles = @(Get-ChildItem -Path $dir -Filter *.xml -File -ErrorAction SilentlyContinue)
+          if ($xmlFiles.Count -ne 1) {
+            Write-Error "Expected exactly 1 XML in test-results, found $($xmlFiles.Count): $($xmlFiles.Name -join ', ')"
+            exit 1
+          }
+          if ($xmlFiles[0].FullName -ne $expected) {
+            Write-Error "Unexpected XML file: $($xmlFiles[0].FullName) (expected $expected)"
+            exit 1
+          }
+          Write-Host "OK: single test result file $expected"
+
+      - name: Upload test results
+        if: always() && steps.verify-results.outcome == 'success'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: test-results-windows-${{ inputs.server-tag }}-${{ matrix.config }}
-          path: test-results/*.xml
+          path: ${{ env.JUNIT_XML }}
           if-no-files-found: ignore
           retention-days: 1
 

@@ -21,6 +21,7 @@
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_double.h>
 #include <aerospike/as_error.h>
+#include <aerospike/aerospike_query.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_hashmap_iterator.h>
 #include <aerospike/as_integer.h>
@@ -171,20 +172,31 @@ result_cb(const as_batch_result* results, uint32_t n, void* udata)
 	return true;
 }
 
+typedef struct {
+	uint32_t count;
+	uint32_t errors;
+	uint32_t size;
+} query_stats;
+
+extern bool
+query_send_key_callback(const as_val* v, void* udata);
+
 TEST(batch_udf, "Batch UDF Apply")
 {
 	as_error err;
 	as_status status;
 
-	// Define keys
-	as_batch batch;
-	as_batch_inita(&batch, 2);
-	as_key_init_int64(as_batch_keyat(&batch, 0), NAMESPACE, SET, 20000);
-	as_key_init_int64(as_batch_keyat(&batch, 1), NAMESPACE, SET, 20001);
-
-	// Delete keys
-	status = aerospike_batch_remove(as, &err, NULL, NULL, &batch, NULL, NULL);
+	// Truncate set
+	status = aerospike_truncate(as, &err, NULL, NAMESPACE, SET, 0);
 	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Define keys
+	unsigned long size = 1;
+	as_batch batch;
+	as_batch_inita(&batch, size);
+	for (unsigned long i = 0; i < size; i++) {
+		as_key_init_int64(as_batch_keyat(&batch, i), NAMESPACE, SET, i + 1);
+	}
 
 	// Apply UDF
 	as_arraylist args;
@@ -192,17 +204,35 @@ TEST(batch_udf, "Batch UDF Apply")
 	as_arraylist_append_str(&args, "B5");
 	as_arraylist_append_str(&args, "value5");
 
-	status = aerospike_batch_apply(as, &err, NULL, NULL, &batch, module, "write_bin",
+	// Copy cluster batch write policy and set send key.
+	as_policy_key orig = as->config.policies.batch_apply.key;
+	as->config.policies.batch_apply.key = AS_POLICY_KEY_SEND;
+
+	as_policy_batch_apply policy;
+	as_policy_batch_apply_init(&policy);
+	policy.key = AS_POLICY_KEY_DIGEST;
+
+	status = aerospike_batch_apply(as, &err, NULL, &policy, &batch, module, "write_bin",
 		(as_list*)&args, NULL, NULL);
+
+	as->config.policies.batch_apply.key = orig;
 
 	as_arraylist_destroy(&args);
 	assert_int_eq(status, AEROSPIKE_OK);
 
-	// Validate records
-	uint32_t errors = 0;
-	status = aerospike_batch_get(as, &err, NULL, &batch, result_cb, &errors);
-	assert_int_eq(status, AEROSPIKE_OK);
-	assert_int_eq(errors, 0);
+	// Query user keys.
+	query_stats stats = {.size = size};
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET);
+
+	status = aerospike_query_foreach(as, &err, NULL, &q, query_send_key_callback, &stats);
+
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(stats.errors, 0);
+	assert_int_eq(stats.count, size);
+
+	as_query_destroy(&q);
 }
 
 static bool

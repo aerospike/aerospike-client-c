@@ -860,7 +860,7 @@ typedef struct {
 	uint32_t size;
 } query_stats;
 
-static bool
+bool
 query_send_key_callback(const as_val* v, void* udata)
 {
 	if (v == NULL) {

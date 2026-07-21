@@ -114,5 +114,5 @@ jobs:
       valgrind:    true
       run-mac:     ${{ fromJSON(vars.PR_EXTRA_PLATFORMS || '{}').mac == true }}
       run-windows: ${{ fromJSON(vars.PR_EXTRA_PLATFORMS || '{}').win == true }}
-      check-doc-lint: ${{ vars.CHECK_DOC_LINT != 'false' }}
+      enforce-doxygen-warnings: ${{ vars.ENFORCE_DOXYGEN_WARNINGS != 'false' }} # default on
     secrets: inherit

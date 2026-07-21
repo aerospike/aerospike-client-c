@@ -16,7 +16,7 @@ on:
         required: false
         type: boolean
         default: true
-      check-doc-lint:
+      enforce-doxygen-warnings:
         description: >
           If true, non-snapshot builds fail when Doxygen emits warnings.
           Snapshot builds still generate and upload API docs without warning enforcement.
@@ -103,7 +103,7 @@ jobs:
       valgrind:     false
       run-mac:      false
       run-windows:  false
-      check-doc-lint: false
+      enforce-doxygen-warnings: false
     secrets: inherit
 
   # Build API docs; release cuts can enforce warning-free Doxygen output.
@@ -125,7 +125,7 @@ jobs:
         with:
           log-path: doxygen.log
           diagnostics-artifact-name: doxygen-diagnostics-${{ needs.get-version.outputs.version }}
-          fail-on-warnings: ${{ inputs.check-doc-lint && needs.get-version.outputs.is-snapshot == 'false' }}
+          fail-on-warnings: ${{ inputs.enforce-doxygen-warnings && needs.get-version.outputs.is-snapshot == 'false' }}
 
       - name: Package API docs
         id: package-docs

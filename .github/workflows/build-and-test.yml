@@ -75,8 +75,8 @@ on:
         type: boolean
         default: false
 
-      check-doc-lint:
-        description: 'Run strict Doxygen lint and fail on documentation warnings'
+      enforce-doxygen-warnings:
+        description: 'Build API docs with Doxygen and fail when warnings are emitted'
         required: false
         type: boolean
         default: true
@@ -189,7 +189,7 @@ jobs:
   # Doxygen lint
   lint-docs:
     name: lint docs
-    if: inputs.check-doc-lint
+    if: inputs.enforce-doxygen-warnings
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout client

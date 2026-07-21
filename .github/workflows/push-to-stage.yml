@@ -20,5 +20,5 @@ jobs:
     uses: ./.github/workflows/build-artifacts.yml
     with:
       dry-run:        ${{ vars.DRY_RUN_RELEASE == 'true' }} # dry-run would be false by default
-      check-doc-lint: ${{ vars.CHECK_DOC_LINT != 'false' }} # check-doc would be enabled by default
+      enforce-doxygen-warnings: ${{ vars.ENFORCE_DOXYGEN_WARNINGS != 'false' }} # default on
     secrets: inherit

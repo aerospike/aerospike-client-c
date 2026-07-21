@@ -23,6 +23,21 @@ on:
         required: false
         type: boolean
         default: true
+      event-lib:
+        description: 'Event library filter for the smoke test. If all is present, it takes precedence.'
+        required: false
+        type: string
+        default: all
+      run-mac:
+        description: 'Run macOS ARM64 build+test in the smoke test'
+        required: false
+        type: boolean
+        default: false
+      run-windows:
+        description: 'Run Windows x64 build+test in the smoke test'
+        required: false
+        type: boolean
+        default: false
     outputs:
       jf-build-id:
         description: Single JFrog parent build id for the whole release (all platforms)
@@ -97,12 +112,12 @@ jobs:
       ref:          ${{ github.sha }}
       linux-distros-json:  '{"distros":[{"distro":"ubuntu-22.04","container":"ubuntu:22.04","archs":["amd64"]}]}'
       runners-json: '{"amd64":"ubuntu-24.04"}'
-      event-lib:    sync
+      event-lib:    ${{ inputs.event-lib }}
       server-tag:   latest
       num-nodes:    '1'
       valgrind:     false
-      run-mac:      false
-      run-windows:  false
+      run-mac:      ${{ inputs.run-mac }}
+      run-windows:  ${{ inputs.run-windows }}
       enforce-doxygen-warnings: false
     secrets: inherit
 

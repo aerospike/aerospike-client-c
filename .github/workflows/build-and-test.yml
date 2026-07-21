@@ -29,7 +29,7 @@ on:
         type: string
 
       event-lib:
-        description: 'Event library. "all" expands to sync+libev+libuv+libevent.'
+        description: 'Event library filter (all | single | comma/JSON list). If all is present, it takes precedence.'
         required: false
         type: string
         default: all

@@ -241,7 +241,7 @@ jobs:
               esac
               git config --global --add safe.directory /workspace
               cd /workspace
-              bash .github/script/install_deps.bash "$DISTRO" all
+              bash .github/script/install_deps.bash "$DISTRO" all false false
               export MAKEFLAGS="-j$(nproc)"
               make package
               if [ "${OWN_SOURCE:-0}" != "1" ]; then

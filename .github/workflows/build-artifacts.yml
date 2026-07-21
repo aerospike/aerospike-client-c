@@ -10,7 +10,7 @@ on:
     inputs:
       dry-run:
         description: >
-          If true, skip signing, deploy unsigned artifacts, and skip release bundle promotion.
+          If true, skip Apple/NuGet signing, deploy unsigned artifacts, and skip auto-promotion to TEST.
           Otherwise, sign artifacts and promote the release bundle to TEST.
           Controlled via vars.DRY_RUN_RELEASE repository variable in push-to-stage.yml.
         required: false
@@ -681,13 +681,13 @@ jobs:
       oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
     secrets: inherit
 
-  # Auto-promote the new bundle to TEST for normal release; dry-run skips promotion.
+  # Auto-promote the new bundle to TEST for normal release; skipped on dry-run.
   auto-promote-test:
     name: promote to TEST
     needs:
       - get-version
       - create-release-bundle
-    if: always() && needs.create-release-bundle.result == 'success'
+    if: always() && !cancelled() && !inputs.dry-run && needs.create-release-bundle.result == 'success'
     runs-on: ubuntu-24.04
     steps:
       - name: Setup JFrog CLI
@@ -703,7 +703,7 @@ jobs:
         with:
           bundle-name:   ${{ env.JF_BUNDLE_NAME }}
           version:       ${{ needs.get-version.outputs.version }}
-          environment:   ${{ inputs.dry-run && 'DEV' || 'TEST' }}
+          environment:   TEST
           jf-project:    ${{ vars.JFROG_PROJECT }}
           # Exclude legacy JFrog Pipelines repos (DEV-tagged, no CI write access) from distribution.
           exclude-repos: pipelines-templates-local

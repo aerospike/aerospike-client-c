@@ -10,7 +10,7 @@ permissions:
 on:
   push:
     branches:
-      - CLIENT-4300-release-pipeline-new # keeping for testing sake
+      - CLIENT-5076-valgrind-one-distro # keeping for testing sake
       - stage
   workflow_dispatch:
 

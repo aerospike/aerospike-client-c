@@ -14,9 +14,6 @@ permissions:
   pull-requests: write   # allows posting annotations / comments back to the PR
 
 on:
-  # keeping for testing sake
-  push:
-    branches: [CLIENT-5076-valgrind-one-distro]
   pull_request:
     branches:
       - stage

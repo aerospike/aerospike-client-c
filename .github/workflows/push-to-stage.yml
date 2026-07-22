@@ -10,7 +10,6 @@ permissions:
 on:
   push:
     branches:
-      - CLIENT-5076-valgrind-one-distro # keeping for testing sake
       - stage
   workflow_dispatch:
 

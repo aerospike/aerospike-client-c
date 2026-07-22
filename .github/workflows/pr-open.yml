@@ -14,9 +14,6 @@ permissions:
   pull-requests: write   # allows posting annotations / comments back to the PR
 
 on:
-  # keeping for testing sake
-  push:
-    branches: [CLIENT-4300-release-pipeline-new]
   pull_request:
     branches:
       - stage
@@ -28,11 +25,6 @@ on:
       - ready_for_review
 
   workflow_dispatch:
-
-# Keep only the latest run for a PR or branch.
-concurrency:
-  group: pr-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   load-test-servers:
@@ -117,7 +109,7 @@ jobs:
           }
         }
       valgrind:    true
-      run-mac:     true # TODO will make it true once the mac runner are online again
-      run-windows: true
-      check-doc-lint: ${{ vars.CHECK_DOC_LINT != 'false' }}
+      run-mac:     ${{ fromJSON(vars.PR_EXTRA_PLATFORMS || '{}').mac == true }}
+      run-windows: ${{ fromJSON(vars.PR_EXTRA_PLATFORMS || '{}').win == true }}
+      enforce-doxygen-warnings: ${{ vars.ENFORCE_DOXYGEN_WARNINGS != 'false' }} # default on
     secrets: inherit

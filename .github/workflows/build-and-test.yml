@@ -29,7 +29,7 @@ on:
         type: string
 
       event-lib:
-        description: 'Event library. "all" expands to sync+libev+libuv+libevent.'
+        description: 'Event library filter (all | single | comma/JSON list). If all is present, it takes precedence.'
         required: false
         type: string
         default: all
@@ -53,10 +53,15 @@ on:
         default: ''
 
       valgrind:
-        description: 'Include valgrind runs in the Linux matrix (true = both with and without; false = without only)'
+        description: 'Include configured Valgrind runs in the Linux matrix'
         required: false
         type: boolean
         default: false
+
+      valgrind-targets-json:
+        description: 'Distro/arch pairs that get Valgrind when valgrind=true'
+        required: false
+        type: string
 
       run-mac:
         description: 'Run macOS ARM64 self-hosted build+test'
@@ -70,8 +75,8 @@ on:
         type: boolean
         default: false
 
-      check-doc-lint:
-        description: 'Run strict Doxygen lint and fail on documentation warnings'
+      enforce-doxygen-warnings:
+        description: 'Build API docs with Doxygen and fail when warnings are emitted'
         required: false
         type: boolean
         default: true
@@ -87,7 +92,6 @@ on:
 permissions:
   contents: read
   id-token: write   # required by setup-aerospike-server for JFrog OIDC
-  checks: write
   pull-requests: write
 
 defaults:
@@ -122,12 +126,14 @@ jobs:
           runners-json: ${{ inputs.runners-json }}
           event-lib:    ${{ inputs.event-lib }}
           valgrind:     ${{ inputs.valgrind }}
+          valgrind-targets-json: ${{ inputs.valgrind-targets-json }}
 
   # Linux build/test runs inside the selected distro container.
   build-linux:
     name: ${{ matrix.distro }} ${{ matrix.arch }} / ${{ matrix.event_lib }}${{ matrix.valgrind && ' / valgrind' || '' }}
     needs: load-matrix
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
 
     strategy:
       fail-fast: false
@@ -171,15 +177,11 @@ jobs:
           valgrind:     ${{ matrix.valgrind }}
           junit-xml:    /workspace/test-results/${{ matrix.distro }}-${{ matrix.arch }}-${{ matrix.event_lib }}.xml
 
-      - name: Dump Aerospike logs on failure
-        if: failure()
-        run: docker logs aerospike-1 2>&1 || true
-
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: test-results-linux-${{ matrix.distro }}-${{ matrix.arch }}-${{ matrix.event_lib }}${{ matrix.valgrind && '-valgrind' || '' }}
+          name: test-results-linux-${{ inputs.server-tag }}-${{ matrix.distro }}-${{ matrix.arch }}-${{ matrix.event_lib }}${{ matrix.valgrind && '-valgrind' || '' }}
           path: test-results/*.xml
           if-no-files-found: ignore
           retention-days: 1
@@ -187,7 +189,7 @@ jobs:
   # Doxygen lint
   lint-docs:
     name: lint docs
-    if: inputs.check-doc-lint
+    if: inputs.enforce-doxygen-warnings
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout client
@@ -321,7 +323,7 @@ jobs:
           config-content: ${{ inputs.server-config-content }}
           env-vars: 'DEFAULT_TTL=2592000'
 
-      # macOS tests run on the host, so connect through localhost.
+      # macOS tests run on the host, so connect through the IPv4 loopback port.
       - name: Test macOS arm64 (${{ matrix.event_lib }})
         env:
           AS_PORT: ${{ steps.setup-aerospike.outputs.service-ports }}
@@ -329,7 +331,12 @@ jobs:
         run: |
           mkdir -p test-results
           chmod +x target/Darwin-arm64/test/aerospike_test
-          target/Darwin-arm64/test/aerospike_test -h localhost -p $AS_PORT
+          for _ in {1..30}; do
+            nc -z 127.0.0.1 "$AS_PORT" && break
+            sleep 1
+          done
+          nc -z 127.0.0.1 "$AS_PORT"
+          target/Darwin-arm64/test/aerospike_test -h 127.0.0.1 -p "$AS_PORT"
 
       - name: Dump server logs on failure
         if: failure()
@@ -339,7 +346,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: test-results-macos-arm64-${{ matrix.event_lib }}
+          name: test-results-macos-arm64-${{ inputs.server-tag }}-${{ matrix.event_lib }}
           path: test-results/*.xml
           if-no-files-found: ignore
           retention-days: 1
@@ -455,10 +462,12 @@ jobs:
       - name: Run Windows x64 tests (${{ matrix.config }})
         shell: pwsh
         run: |
+          Remove-Item -Recurse -Force "$env:GITHUB_WORKSPACE\test-results" -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\test-results" | Out-Null
           New-Item -ItemType Directory -Force -Path "$env:GITHUB_WORKSPACE\vs\aerospike-test" | Out-Null
           $resultName = "${{ matrix.config }}" -replace '\s+', '-'
           $env:JUNIT_XML = "$env:GITHUB_WORKSPACE\test-results\windows-$resultName.xml"
+          "JUNIT_XML=$env:JUNIT_XML" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           $exe = (Resolve-Path "vs\x64\${{ matrix.config }}\aerospike-test.exe").Path
           Push-Location vs\aerospike-test
           try {
@@ -481,12 +490,38 @@ jobs:
           }
           docker network rm "${{ steps.setup-aerospike.outputs.network-name }}" 2>$null; exit 0
 
-      - name: Upload test results
+      - name: Verify test results
         if: always()
+        id: verify-results
+        shell: pwsh
+        run: |
+          if (-not $env:JUNIT_XML) {
+            Write-Error "JUNIT_XML is not set"
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath $env:JUNIT_XML)) {
+            Write-Error "Expected JUnit XML not found: $env:JUNIT_XML"
+            exit 1
+          }
+          $expected = (Resolve-Path -LiteralPath $env:JUNIT_XML).Path
+          $dir = "$env:GITHUB_WORKSPACE\test-results"
+          $xmlFiles = @(Get-ChildItem -Path $dir -Filter *.xml -File -ErrorAction SilentlyContinue)
+          if ($xmlFiles.Count -ne 1) {
+            Write-Error "Expected exactly 1 XML in test-results, found $($xmlFiles.Count): $($xmlFiles.Name -join ', ')"
+            exit 1
+          }
+          if ($xmlFiles[0].FullName -ne $expected) {
+            Write-Error "Unexpected XML file: $($xmlFiles[0].FullName) (expected $expected)"
+            exit 1
+          }
+          Write-Host "OK: single test result file $expected"
+
+      - name: Upload test results
+        if: always() && steps.verify-results.outcome == 'success'
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: test-results-windows-${{ matrix.config }}
-          path: test-results/*.xml
+          name: test-results-windows-${{ inputs.server-tag }}-${{ matrix.config }}
+          path: ${{ env.JUNIT_XML }}
           if-no-files-found: ignore
           retention-days: 1
 
@@ -497,6 +532,12 @@ jobs:
     needs: [load-matrix, build-linux, lint-docs, build-mac, test-mac, build-windows, test-windows]
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          sparse-checkout: .github/actions/test-report
+          fetch-depth: 1
+
       - name: Download test results
         if: always()
         continue-on-error: true
@@ -506,15 +547,8 @@ jobs:
           path: test-results
           merge-multiple: false
 
-      - name: Publish unit test results
-        if: always()
-        continue-on-error: true
-        uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2.23.0
-        with:
-          files: test-results/**/*.xml
-          check_name: Unit Test Results
-          comment_mode: off
-          job_summary: false
+      - name: Summarize test results
+        uses: ./.github/actions/test-report
 
       - name: Write run summary
         env:

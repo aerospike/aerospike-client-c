@@ -380,6 +380,30 @@ TEST(key_operate_read_all_bins , "operate read all bins")
 	as_record_destroy(prec);
 }
 
+typedef struct {
+	as_error* err;
+	as_key* key;
+	as_operations* ops;
+	as_status status;
+} key_operate_not_found_data;
+
+static bool
+key_operate_not_found(void* udata)
+{
+	key_operate_not_found_data* data = udata;
+	as_record* rec = NULL;
+	data->status = aerospike_key_operate(as, data->err, NULL, data->key, data->ops, &rec);
+
+	if (data->status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		return true;
+	}
+
+	if (rec) {
+		as_record_destroy(rec);
+	}
+	return false;
+}
+
 TEST(key_operate_reset_read_ttl, "operate reset_read_ttl")
 {
 	// Write initial record.
@@ -432,8 +456,14 @@ TEST(key_operate_reset_read_ttl, "operate reset_read_ttl")
 	// Read the record after it expires, showing it's gone.
 	as_sleep(2000);
 
-	prec = NULL;
-	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	key_operate_not_found_data data = {
+		.err = &err,
+		.key = &key,
+		.ops = &ops,
+		.status = AEROSPIKE_OK
+	};
+	ATF_WAIT_FOR_TTL_EXPIRATION(key_operate_not_found, &data);
+	status = data.status;
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
 
 	as_operations_destroy(&ops);

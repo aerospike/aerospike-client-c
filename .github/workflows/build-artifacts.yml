@@ -18,8 +18,7 @@ on:
         default: true
       enforce-doxygen-warnings:
         description: >
-          If true, non-snapshot builds fail when Doxygen emits warnings.
-          Snapshot builds still generate and upload API docs without warning enforcement.
+          If true, fail generate-api-docs when Doxygen emits warnings.
         required: false
         type: boolean
         default: true
@@ -121,7 +120,7 @@ jobs:
       enforce-doxygen-warnings: false
     secrets: inherit
 
-  # Build API docs; release cuts can enforce warning-free Doxygen output.
+  # Build API docs; optionally fail on Doxygen warnings (enforce-doxygen-warnings).
   generate-api-docs:
     name: generate api docs
     needs: get-version
@@ -140,7 +139,7 @@ jobs:
         with:
           log-path: doxygen.log
           diagnostics-artifact-name: doxygen-diagnostics-${{ needs.get-version.outputs.version }}
-          fail-on-warnings: ${{ inputs.enforce-doxygen-warnings && needs.get-version.outputs.is-snapshot == 'false' }}
+          fail-on-warnings: ${{ inputs.enforce-doxygen-warnings }}
 
       - name: Package API docs
         id: package-docs
@@ -241,9 +240,14 @@ jobs:
               esac
               git config --global --add safe.directory /workspace
               cd /workspace
-              bash .github/script/install_deps.bash "$DISTRO" all false false
+              INSTALL_DOCS=false
+              bash .github/script/install_deps.bash "$DISTRO" all false "$INSTALL_DOCS"
               export MAKEFLAGS="-j$(nproc)"
-              make package
+              if [ "$INSTALL_DOCS" = false ]; then
+                SKIP_DOCS=1 make package
+              else
+                make package
+              fi
               if [ "${OWN_SOURCE:-0}" != "1" ]; then
                 rm -f target/packages/aerospike-client-c-src-*.zip
               fi

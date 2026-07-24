@@ -346,6 +346,17 @@ typedef enum {
 	AS_EXP_PATH_SELECT_MAP_KEY_VALUE = AS_EXP_PATH_SELECT_MAP_KEY | AS_EXP_PATH_SELECT_MAP_VALUE,
 
 	/**
+	 * Return the number of nodes finally selected by the context, as an integer.
+	 */
+	AS_EXP_PATH_SELECT_COUNT = 10,
+
+	/**
+	 * Return true if the context selects at least one node, false otherwise.
+	 * Short-circuits at the first match.
+	 */
+	AS_EXP_PATH_SELECT_EXISTS = 11,
+
+	/**
 	 * If the expression in the context hits an invalid type (e.g., selects
 	 * as an integer when the value is a string), do not fail the operation;
 	 * just ignore those elements.  Interpret an expression that returns UNKNOWN

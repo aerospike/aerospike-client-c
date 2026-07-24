@@ -443,7 +443,7 @@ static bool before(atf_plan* plan)
 		error("aerospike_enable_metrics() returned %d - %s", err.code, err.message);
 	}
 	*/
-	
+
 	return true;
 }
 
@@ -492,16 +492,19 @@ PLAN(aerospike_test)
 	plan_add(key_operate);
 
 	plan_add(list_basics);
-
 	plan_add(map_basics);
+	plan_add(select_basics);
+
 	plan_add(map_udf);
 	plan_add(map_index);
 	plan_add(map_sort);
+
 	plan_add(bit);
 	plan_add(string);
 	plan_add(hll);
 	plan_add(filter_exp);
-
+	plan_add(exp_basics);
+	plan_add(exp_ael);
 	plan_add(exp_operate);
 
 	plan_add(info_basics);

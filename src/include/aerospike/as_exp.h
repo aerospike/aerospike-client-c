@@ -127,6 +127,9 @@ typedef enum {
 	_AS_EXP_CODE_KEY = 80,
 	_AS_EXP_CODE_BIN = 81,
 	_AS_EXP_CODE_BIN_TYPE = 82,
+	_AS_EXP_CODE_BIN_EXISTS = 83,
+
+	_AS_EXP_CODE_TO_STRING = 99,
 
 	_AS_EXP_CODE_REMOVE_RESULT = 100,
 	_AS_EXP_CODE_MAP_KEYS_IN = 101,
@@ -139,6 +142,8 @@ typedef enum {
 	_AS_EXP_CODE_LET = 125,
 	_AS_EXP_CODE_QUOTE = 126,
 	_AS_EXP_CODE_CALL = 127,
+
+	_AS_EXP_CODE_AEL_COMPILE = 128,
 
 	// Begin virtual ops, these do not go on the wire.
 	_AS_EXP_CODE_AS_VAL,
@@ -170,7 +175,6 @@ typedef enum {
 	_AS_EXP_SYS_CALL_BITS = 1,
 	_AS_EXP_SYS_CALL_HLL = 2,
 	_AS_EXP_SYS_CALL_STRING = 3,
-	_AS_EXP_SYS_CALL_REPR = 4,
 
 	_AS_EXP_SYS_FLAG_MODIFY_LOCAL = 0x40
 } as_exp_call_system_type;
@@ -652,7 +656,8 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_bin_exists(__bin_name) \
-		as_exp_cmp_ne(as_exp_bin_type(__bin_name), as_exp_int(AS_BYTES_UNDEF))
+		{.op=_AS_EXP_CODE_BIN_EXISTS, .count=2}, \
+		_AS_EXP_VAL_RAWSTR(__bin_name)
 
 /**
  * Create expression that returns the type of a bin as a integer.
@@ -3132,6 +3137,60 @@ as_exp_destroy_base64(char* base64)
 		{.op=_AS_EXP_CODE_MERGE, .v.expr=__mod_exp}, \
 		__bin
 
+/**
+ * Convenience form of as_exp_select_by_path() that returns the number of nodes
+ * the context selects, as an integer.
+ *
+ * @param __ctx    Pointer to a CDT context (cannot be NULL or empty).
+ * @param __bin    Bin expression this select query is performed against.
+ * @return (integer expression)
+ * @ingroup expression
+ */
+#define as_exp_select_count_by_path(__ctx, __bin) \
+		{.op=_AS_EXP_CODE_CALL, .count=5}, \
+		_AS_EXP_VAL_RTYPE(AS_EXP_TYPE_INT), \
+		as_exp_int(_AS_EXP_SYS_CALL_CDT), \
+		_AS_EXP_MAP_START(NULL, AS_CDT_OP_CONTEXT_SELECT, 2), \
+		{.op=_AS_EXP_CODE_CTX, .v.ctx=__ctx}, \
+		as_exp_int(AS_EXP_PATH_SELECT_COUNT), \
+		__bin
+
+/**
+ * Convenience form of as_exp_select_by_path() that returns true if the context
+ * selects at least one node, false otherwise (short-circuits at the first
+ * match).
+ *
+ * @param __ctx    Pointer to a CDT context (cannot be NULL or empty).
+ * @param __bin    Bin expression this select query is performed against.
+ * @return (boolean expression)
+ * @ingroup expression
+ */
+#define as_exp_select_exists_by_path(__ctx, __bin) \
+		{.op=_AS_EXP_CODE_CALL, .count=5}, \
+		_AS_EXP_VAL_RTYPE(AS_EXP_TYPE_BOOL), \
+		as_exp_int(_AS_EXP_SYS_CALL_CDT), \
+		_AS_EXP_MAP_START(NULL, AS_CDT_OP_CONTEXT_SELECT, 2), \
+		{.op=_AS_EXP_CODE_CTX, .v.ctx=__ctx}, \
+		as_exp_int(AS_EXP_PATH_SELECT_EXISTS), \
+		__bin
+
+/**
+ * Create expression that returns the size (element count) of a list or map,
+ * resolved polymorphically at run time. Unlike as_exp_list_size() /
+ * as_exp_map_size(), the receiving container's type need not be known.
+ *
+ * @param __ctx    Optional context path for a nested CDT (as_cdt_ctx).
+ * @param __bin    List or map bin, or a CDT value expression.
+ * @return (integer expression)
+ * @ingroup expression
+ */
+#define as_exp_size(__ctx, __bin) \
+		{.op=_AS_EXP_CODE_CALL, .count=5}, \
+		_AS_EXP_VAL_RTYPE(AS_EXP_TYPE_INT), \
+		as_exp_int(_AS_EXP_SYS_CALL_CDT), \
+		_AS_EXP_LIST_START(__ctx, AS_CDT_OP_SIZE, 0), \
+		__bin
+
 //---------------------------------
 // Bit Modify Expressions
 //---------------------------------
@@ -4366,12 +4425,7 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_to_string(__bin) \
-	{.op=_AS_EXP_CODE_CALL, .count=5}, \
-	_AS_EXP_VAL_RTYPE(AS_EXP_TYPE_STR), \
-	as_exp_int(_AS_EXP_SYS_CALL_REPR), \
-	{.op=_AS_EXP_CODE_CALL_VOP_START, .count=1}, \
-	as_exp_int(0), \
-	__bin
+	{.op=_AS_EXP_CODE_TO_STRING, .count=2}, __bin
 
 //---------------------------------
 // Expression Merge
@@ -4443,6 +4497,13 @@ as_exp_destroy_base64(char* base64)
 			as_exp* temp = as_exp_compile(__table__, sizeof(__table__) / sizeof(as_exp_entry)); \
 			__name = as_exp_compile_b64(temp); \
 			as_exp_destroy(temp); \
+		} while (false)
+
+#define as_exp_build_ael(__name, __ael) \
+		as_exp* __name; \
+		do { \
+			as_exp_entry __table__[] = { { .op=_AS_EXP_CODE_AEL_COMPILE, .count=2, .v.str_val=__ael } }; \
+			__name = as_exp_compile(__table__, sizeof(__table__) / sizeof(as_exp_entry)); \
 		} while (false)
 
 #ifdef __cplusplus

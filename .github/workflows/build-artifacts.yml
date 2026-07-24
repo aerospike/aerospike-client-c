@@ -10,19 +10,33 @@ on:
     inputs:
       dry-run:
         description: >
-          If true, skip signing, deploy unsigned artifacts, and skip release bundle promotion.
+          If true, skip Apple/NuGet signing, deploy unsigned artifacts, and skip auto-promotion to TEST.
           Otherwise, sign artifacts and promote the release bundle to TEST.
           Controlled via vars.DRY_RUN_RELEASE repository variable in push-to-stage.yml.
         required: false
         type: boolean
         default: true
-      check-doc-lint:
+      enforce-doxygen-warnings:
         description: >
-          If true, non-snapshot builds fail when Doxygen emits warnings.
-          Snapshot builds still generate and upload API docs without warning enforcement.
+          If true, fail generate-api-docs when Doxygen emits warnings.
         required: false
         type: boolean
         default: true
+      event-lib:
+        description: 'Event library filter for the smoke test. If all is present, it takes precedence.'
+        required: false
+        type: string
+        default: all
+      run-mac:
+        description: 'Run macOS ARM64 build+test in the smoke test'
+        required: false
+        type: boolean
+        default: false
+      run-windows:
+        description: 'Run Windows x64 build+test in the smoke test'
+        required: false
+        type: boolean
+        default: false
     outputs:
       jf-build-id:
         description: Single JFrog parent build id for the whole release (all platforms)
@@ -97,16 +111,16 @@ jobs:
       ref:          ${{ github.sha }}
       linux-distros-json:  '{"distros":[{"distro":"ubuntu-22.04","container":"ubuntu:22.04","archs":["amd64"]}]}'
       runners-json: '{"amd64":"ubuntu-24.04"}'
-      event-lib:    sync
+      event-lib:    ${{ inputs.event-lib }}
       server-tag:   latest
       num-nodes:    '1'
       valgrind:     false
-      run-mac:      false
-      run-windows:  false
-      check-doc-lint: false
+      run-mac:      ${{ inputs.run-mac }}
+      run-windows:  ${{ inputs.run-windows }}
+      enforce-doxygen-warnings: false
     secrets: inherit
 
-  # Build API docs; release cuts can enforce warning-free Doxygen output.
+  # Build API docs; optionally fail on Doxygen warnings (enforce-doxygen-warnings).
   generate-api-docs:
     name: generate api docs
     needs: get-version
@@ -125,7 +139,7 @@ jobs:
         with:
           log-path: doxygen.log
           diagnostics-artifact-name: doxygen-diagnostics-${{ needs.get-version.outputs.version }}
-          fail-on-warnings: ${{ inputs.check-doc-lint && needs.get-version.outputs.is-snapshot == 'false' }}
+          fail-on-warnings: ${{ inputs.enforce-doxygen-warnings }}
 
       - name: Package API docs
         id: package-docs
@@ -226,9 +240,14 @@ jobs:
               esac
               git config --global --add safe.directory /workspace
               cd /workspace
-              bash .github/script/install_deps.bash "$DISTRO" all
+              INSTALL_DOCS=false
+              bash .github/script/install_deps.bash "$DISTRO" all false "$INSTALL_DOCS"
               export MAKEFLAGS="-j$(nproc)"
-              make package
+              if [ "$INSTALL_DOCS" = false ]; then
+                SKIP_DOCS=1 make package
+              else
+                make package
+              fi
               if [ "${OWN_SOURCE:-0}" != "1" ]; then
                 rm -f target/packages/aerospike-client-c-src-*.zip
               fi
@@ -666,13 +685,13 @@ jobs:
       oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
     secrets: inherit
 
-  # Auto-promote the new bundle to TEST for normal release; dry-run skips promotion.
+  # Auto-promote the new bundle to TEST for normal release; skipped on dry-run.
   auto-promote-test:
     name: promote to TEST
     needs:
       - get-version
       - create-release-bundle
-    if: always() && needs.create-release-bundle.result == 'success'
+    if: always() && !cancelled() && !inputs.dry-run && needs.create-release-bundle.result == 'success'
     runs-on: ubuntu-24.04
     steps:
       - name: Setup JFrog CLI
@@ -688,7 +707,7 @@ jobs:
         with:
           bundle-name:   ${{ env.JF_BUNDLE_NAME }}
           version:       ${{ needs.get-version.outputs.version }}
-          environment:   ${{ inputs.dry-run && 'DEV' || 'TEST' }}
+          environment:   TEST
           jf-project:    ${{ vars.JFROG_PROJECT }}
           # Exclude legacy JFrog Pipelines repos (DEV-tagged, no CI write access) from distribution.
           exclude-repos: pipelines-templates-local

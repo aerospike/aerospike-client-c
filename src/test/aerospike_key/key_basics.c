@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -717,7 +717,7 @@ static bool scan_cb(const as_val * val, void * udata)
 
 	// check set name
 	const char * set = rec->key.set[0] == '\0' ? NULL : rec->key.set;
-	if (strcmp(set, "store_key_set") != 0) {
+	if (strncmp(set, "store_key", 9) != 0) {
 		error("Expected record in set [store_key_set], but got set in [%s]", set);
 		*result = 2; // fail 2
 		return false;
@@ -754,6 +754,48 @@ TEST( key_basics_storekey , "store key" ) {
 	// scan the 1 record set back, to get the key
 	as_scan scan;
 	as_scan_init(&scan, NAMESPACE, "store_key_set");
+
+	uint64_t myresult = 9;
+	rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb, &myresult);
+
+	assert_int_eq( rc, AEROSPIKE_OK );
+	assert_int_eq( myresult, 0 );
+
+	as_scan_destroy(&scan);
+}
+
+TEST(key_basics_storekey_by_default , "store key by default") {
+
+	as_error err;
+	as_error_reset(&err);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, "store_key_def", "store_key");
+
+	as_record rec;
+	as_record_init(&rec, 1);
+	as_record_set_int64(&rec, "a", 123);
+
+	as_policy_write sendKeyPolicy;
+	as_policy_write_init(&sendKeyPolicy);
+	sendKeyPolicy.key = AS_POLICY_KEY_DIGEST;
+
+	// Change global batch write sendKey.
+	as_policy_key orig = as->config.policies.write.key;
+	as->config.policies.write.key = AS_POLICY_KEY_SEND;
+
+	as_status rc = aerospike_key_put(as, &err, &sendKeyPolicy, &key, &rec);
+
+	// Reset global batch write sendKey.
+	as->config.policies.write.key = orig;
+
+    assert_int_eq(rc, AEROSPIKE_OK);
+	as_key_destroy(&key);
+	as_record_destroy(&rec);
+
+	// scan the 1 record set back, to get the key
+	as_scan scan;
+	as_scan_init(&scan, NAMESPACE, "store_key_def");
 
 	uint64_t myresult = 9;
 	rc = aerospike_scan_foreach(as, &err, NULL, &scan, scan_cb, &myresult);
@@ -824,6 +866,29 @@ TEST(key_basics_write_empty_bin_name, "write empty bin name")
 	as_record_destroy(prec);
 }
 
+typedef struct {
+	as_error* err;
+	as_key* key;
+	as_status status;
+} key_get_not_found_data;
+
+static bool
+key_get_not_found(void* udata)
+{
+	key_get_not_found_data* data = udata;
+	as_record* rec = NULL;
+	data->status = aerospike_key_get(as, data->err, NULL, data->key, &rec);
+
+	if (data->status == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		return true;
+	}
+
+	if (rec) {
+		as_record_destroy(rec);
+	}
+	return false;
+}
+
 TEST(key_basics_reset_read_ttl, "reset read ttl")
 {
 	// Write initial record.
@@ -872,8 +937,13 @@ TEST(key_basics_reset_read_ttl, "reset read ttl")
 	// Read the record after it expires, showing it's gone.
 	as_sleep(2000);
 
-	prec = NULL;
-	status = aerospike_key_get(as, &err, NULL, &key, &prec);
+	key_get_not_found_data data = {
+		.err = &err,
+		.key = &key,
+		.status = AEROSPIKE_OK
+	};
+	ATF_WAIT_FOR_TTL_EXPIRATION(key_get_not_found, &data);
+	status = data.status;
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
 }
 
@@ -903,6 +973,7 @@ SUITE(key_basics, "aerospike_key basic tests") {
 	suite_add(key_basics_read_raw_list);
 	suite_add(key_basics_list_map_double);
 	suite_add(key_basics_storekey);
+	suite_add(key_basics_storekey_by_default);
 	suite_add(key_basics_bool);
 	suite_add(key_basics_write_empty_bin_name);
 

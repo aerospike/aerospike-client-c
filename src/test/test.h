@@ -29,6 +29,15 @@
 
 #define ATF_PLAN_SUITE_MAX 128
 #define ATF_SUITE_TEST_MAX 128
+#define ATF_TTL_EXPIRATION_RETRY_MS 500
+#define ATF_TTL_EXPIRATION_RETRY_COUNT (atf_is_ci() ? 10 : 0)
+#define ATF_WAIT_FOR_TTL_EXPIRATION(__predicate, __udata) \
+	atf_wait_until((__predicate), (__udata), ATF_TTL_EXPIRATION_RETRY_COUNT, ATF_TTL_EXPIRATION_RETRY_MS)
+
+typedef bool (*atf_wait_predicate)(void* udata);
+
+bool atf_is_ci(void);
+bool atf_wait_until(atf_wait_predicate predicate, void* udata, uint32_t max_retries, uint32_t sleep_ms);
 
 /******************************************************************************
  * atf_test

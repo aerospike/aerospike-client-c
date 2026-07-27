@@ -7,11 +7,13 @@ with `»«` focus marks, op, path, outcome, operands, and the AEL source
 span, which the UI highlights directly in your submitted expression.
 
 One C binary that connects to the cluster and serves the UI on
-`http://127.0.0.1:8280`. The stock client only folds subcode/message into
-`as_error` and skips the trace; this tool issues the read/operate wire
-commands itself (same exported `as_command_*` helpers `aerospike_key.c`
-uses) with a parse callback that captures the raw field-45 payload and
-decodes all of it.
+`http://127.0.0.1:8280`. The client renders the trace as a one-line
+summary appended to `as_error.message`, which is the right shape for an
+application but not for a UI that wants each field addressable; this tool
+issues the read/operate wire commands itself (same exported
+`as_command_*` helpers `aerospike_key.c` uses) with a parse callback that
+captures the raw field-45 payload, and decodes it to JSON. The wire keys
+come from the client's `as_command.h` so the two decoders cannot drift.
 
 Local dev tool — not part of any build or CI.
 
@@ -136,10 +138,17 @@ two branches. The trace sub-key list lives in `as/include/base/proto.h`
 
 ## probe.py — trace-invariant battery
 
-`./probe.py` drives `/eval` with a 33-case battery and mechanically checks
+`./probe.py` drives `/eval` with a 44-case battery and mechanically checks
 trace invariants (span↔snippet agreement, depth==|path|, operand gating,
 outcome↔message, utf-8 span sanity) plus per-case expectations. Run it after
 any change to the trace machinery; `-e '<ael>'` probes a single expression,
 `-v` prints passing traces too, `-b` targets a non-default GUI port. The
 same cases live in the UI's examples dropdown under "Trace-machinery
 cases".
+
+The battery doubles as a tripwire on the language surface: a rename that
+lands server-side without reaching here shows up as a case that stopped
+producing the diagnostic it was written for. The "Language surface" group
+in the dropdown covers the ratified round — `:LOCAL`, `toInt`/`toFloat`,
+the mandatory named parameters on `pow`/`log`/`findBit*`, and `+` as the
+string concatenation operator.

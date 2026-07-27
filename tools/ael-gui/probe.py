@@ -238,16 +238,53 @@ BATTERY = [
     # non-boolean filter: message-only build detail (check_filter_exp fix)
     ('$.x / 0', {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
                  "msg_contains": "must evaluate to boolean"}),
-    # ---- string-ops round: toString is a unary cast, concat gains a method --
+    # ---- string-ops round: toString is a unary cast ----
     # toString() pins its receiver to the stringifiable set (INT|BLOB|FLOAT);
     # a MAP-pinned receiver conflicts at the post-parse type check.
     ('$.m:MAP.toString()',
      {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
       "msg_contains": "bin type conflict: MAP vs INT|BLOB|FLOAT"}),
-    # the $.recv.concat(...) method form rejects a named argument.
-    ('$.name.concat(x: 1)',
+    # concat() is gone - '+' is the string concatenation operator, and it type
+    # checks its operands like any other arithmetic op.
+    ('$.name:STRING + 1 == 2',
      {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
-      "msg_contains": "concat takes positional arguments"}),
+      "msg_contains": "type mismatch: STRING vs INT", "focus": "1"}),
+    # ---- ratified surface round: :LOCAL, toInt/toFloat, named params ----
+    # The local-bin marker is upper case now; the lower-case spelling is not a
+    # renamed keyword, it is a syntax error at the ':'.
+    ('$.x:local:INT == 1',
+     {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
+      "msg_contains": "syntax error at line 1 col 5", "focus": "local"}),
+    ('$.x:LOCAL:INT == 1', {"op": "eq", "outcome": 2}),
+    # asInt/asFloat became the polymorphic toInt/toFloat, resolved after type
+    # inference - so the old names are simply unknown.
+    ('$.name.asInt() == 1',
+     {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
+      "msg_contains": "unknown function 'asInt'", "focus": "asInt"}),
+    # Resolving toInt/toFloat needs the receiver's type, and an unpinned bin has
+    # none by the time the rewrite runs - a diagnostic new to this round.
+    ('$.x.toInt() == 1',
+     {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
+      "msg_contains": "unresolved bin type, use $.bin:STRING, $.bin:INT, or "
+                      "$.bin:FLOAT"}),
+    # The string->number casts are total on their own type but can fault on the
+    # value: these run, and fail because "ael" is not a number.
+    ('$.name:STRING.toInt() == 1',
+     {"op": "call", "outcome": 1, "msg_contains": "string_to_integer"}),
+    ('$.name:STRING.toFloat() == 1.0',
+     {"op": "call", "outcome": 1, "msg_contains": "string_to_double"}),
+    # pow/log/findBit* take mandatory named parameters; positional is rejected
+    # at the call name, not at the offending argument.
+    ('pow(2, 3) > 1',
+     {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
+      "msg_contains": "this function takes named arguments", "focus": "pow"}),
+    ('log(8, 2) > 1',
+     {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
+      "msg_contains": "this function takes named arguments", "focus": "log"}),
+    ('findBitLeft($.blob:BLOB, 0, true) == 1',
+     {"status_name": "AEROSPIKE_ERR_REQUEST_INVALID",
+      "msg_contains": "this function takes named arguments",
+      "focus": "findBitLeft"}),
     # ---- misc / edges ----
     ('$.name == "aél and ünïcode"', {"op": "eq", "outcome": 2}),
     ('$.y / 0.0 == 1.0', {"op": "eq", "outcome": 2}),  # inf, no float fault

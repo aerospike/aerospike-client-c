@@ -300,6 +300,19 @@ pre.raw {
 					<option value='filter|$.ttl() == -5'>metadata-phase FALSE → decided pre-record, no trace</option>
 					<option value='filter|not(not(not(not(not(not(not(not(not(not(not(not(not(not(not(not(not(not($.x / 0 == 1))))))))))))))))))'>18-deep fault → path truncation</option>
 				</optgroup>
+				<optgroup label="Language surface (post-ratification)">
+					<option value='filter|$.x:LOCAL:INT == 1'>:LOCAL — upper case now</option>
+					<option value='filter|$.x:local:INT == 1'>:local — syntax error, not a rename</option>
+					<option value='value|$.name:STRING.toInt()'>toInt() on a non-numeric string → fault</option>
+					<option value='value|$.x.toInt()'>toInt() on an unpinned bin → unresolved type</option>
+					<option value='value|$.name.asInt()'>asInt() → gone, renamed to toInt()</option>
+					<option value='value|pow(2, 3)'>pow positional → named arguments required</option>
+					<option value='value|pow(base: 2.0, exponent: 3.0)'>pow named → ok</option>
+					<option value='value|$.name:STRING + "!"'>'+' concatenates strings (concat() is gone)</option>
+					<option value='filter|$.name:STRING + 1 == 2'>'+' type checks its operands</option>
+					<option value='value|$.x:INT.toString()'>toString() — a unary cast</option>
+					<option value='filter|$.m:MAP.toString()'>toString() on a map → type conflict</option>
+				</optgroup>
 			</select>
 			<span class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> runs</span>
 		</div>

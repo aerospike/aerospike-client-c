@@ -7,12 +7,14 @@
 // get) or as an expression-read operation, at a chosen error-detail
 // verbosity (0-3).
 //
-// The stock client folds the field-45 subcode/message into as_error and
-// skips the expression trace (key 3). This tool builds the read/operate
-// wire commands itself - using the same exported as_command_* helpers
-// aerospike_key.c uses - with a custom parse callback that captures the
-// raw field-45 payload, then decodes the full trace (snippet, path,
-// outcome, operands, AEL source span) to JSON for the browser.
+// The client renders the field-45 trace as a one-line summary on the end
+// of as_error.message, which a UI cannot address field by field. So this
+// tool builds the read/operate wire commands itself - using the same
+// exported as_command_* helpers aerospike_key.c uses - with a custom
+// parse callback that captures the raw field-45 payload, then decodes the
+// full trace (snippet, path, outcome, operands, AEL source span) to JSON
+// for the browser. The wire keys come from the client's as_command.h, so
+// the two decoders read the same payload the same way.
 //
 // Local dev tool - not part of any build or CI.
 //==========================================================
@@ -65,28 +67,11 @@
 // Constants & typedefs.
 //
 
-// Server-side constants (mirrors as/include/base/proto.h on the
-// error-details branches - keep in sync by hand).
+// The field-45 map keys and the trace sub-map keys now come from the client's
+// as_command.h; only the AEL compile op is still tool-local, since the client
+// has no AEL builder.
 
 #define WIRE_EXP_AEL_COMPILE 128
-
-#define F45_KEY_SUBCODE   1
-#define F45_KEY_MESSAGE   2
-#define F45_KEY_EXP_TRACE 3
-
-#define TRACE_KEY_PHASE       1
-#define TRACE_KEY_BYTE_OFFSET 2
-#define TRACE_KEY_OP          3
-#define TRACE_KEY_DEPTH       4
-#define TRACE_KEY_PATH        5
-#define TRACE_KEY_SNIPPET     6
-#define TRACE_KEY_OUTCOME     7
-#define TRACE_KEY_LANG        8
-#define TRACE_KEY_AEL_OFFSET  9
-#define TRACE_KEY_AEL_SPAN    10
-#define TRACE_KEY_AEL_LINE    11
-#define TRACE_KEY_AEL_COL     12
-#define TRACE_KEY_OPERANDS    13
 
 #define HTTP_MAX_REQUEST (4 * 1024 * 1024)
 
@@ -743,17 +728,17 @@ f45_decode(const uint8_t* buf, uint32_t len, f45_info* out)
 		}
 
 		switch (k) {
-		case F45_KEY_SUBCODE: {
+		case AS_ERROR_DETAIL_KEY_SUBCODE: {
 			int64_t v;
 			if (! mp_read_int(&m, &v)) return false;
 			out->subcode = (uint64_t)v;
 			out->has_subcode = true;
 			break;
 		}
-		case F45_KEY_MESSAGE:
+		case AS_ERROR_DETAIL_KEY_MESSAGE:
 			if (! mp_read_str(&m, &out->msg, &out->msg_len)) return false;
 			break;
-		case F45_KEY_EXP_TRACE: {
+		case AS_ERROR_DETAIL_KEY_EXP_TRACE: {
 			uint32_t start = m.off;
 			if (! mp_skip(&m)) return false;
 			out->trace = buf + start;
@@ -813,60 +798,60 @@ trace_json(const uint8_t* buf, uint32_t len, sb* out)
 		uint32_t sn;
 
 		switch (k) {
-		case TRACE_KEY_PHASE:
+		case AS_EXP_TRACE_KEY_PHASE:
 			if (! mp_read_int(&m, &v)) return false;
 			sb_fmt(out, "\"phase\":%lld,\"phase_name\":", (long long)v);
 			sb_json_cstr(out, v == 1 ? "build" : v == 2 ? "eval" : "?");
 			break;
-		case TRACE_KEY_BYTE_OFFSET:
+		case AS_EXP_TRACE_KEY_BYTE_OFFSET:
 			if (! mp_read_int(&m, &v)) return false;
 			sb_fmt(out, "\"byte_offset\":%lld", (long long)v);
 			break;
-		case TRACE_KEY_OP:
+		case AS_EXP_TRACE_KEY_OP:
 			if (! mp_read_str(&m, &s, &sn)) return false;
 			sb_puts(out, "\"op\":");
 			sb_json_str(out, s, sn);
 			break;
-		case TRACE_KEY_DEPTH:
+		case AS_EXP_TRACE_KEY_DEPTH:
 			if (! mp_read_int(&m, &v)) return false;
 			sb_fmt(out, "\"depth\":%lld", (long long)v);
 			break;
-		case TRACE_KEY_PATH:
+		case AS_EXP_TRACE_KEY_PATH:
 			sb_puts(out, "\"path\":");
 			if (! mp_json(&m, out, false)) return false;
 			break;
-		case TRACE_KEY_SNIPPET:
+		case AS_EXP_TRACE_KEY_SNIPPET:
 			if (! mp_read_str(&m, &s, &sn)) return false;
 			sb_puts(out, "\"snippet\":");
 			sb_json_str(out, s, sn);
 			break;
-		case TRACE_KEY_OUTCOME:
+		case AS_EXP_TRACE_KEY_OUTCOME:
 			if (! mp_read_int(&m, &v)) return false;
 			sb_fmt(out, "\"outcome\":%lld,\"outcome_name\":", (long long)v);
 			sb_json_cstr(out, outcome_name(v));
 			break;
-		case TRACE_KEY_LANG:
+		case AS_EXP_TRACE_KEY_LANG:
 			if (! mp_read_int(&m, &v)) return false;
 			sb_fmt(out, "\"lang\":%lld,\"lang_name\":", (long long)v);
 			sb_json_cstr(out, v == 2 ? "ael" : "msgpack");
 			break;
-		case TRACE_KEY_AEL_OFFSET:
+		case AS_EXP_TRACE_KEY_AEL_OFFSET:
 			if (! mp_read_int(&m, &v)) return false;
 			sb_fmt(out, "\"ael_offset\":%lld", (long long)v);
 			break;
-		case TRACE_KEY_AEL_SPAN:
+		case AS_EXP_TRACE_KEY_AEL_SPAN:
 			if (! mp_read_int(&m, &v)) return false;
 			sb_fmt(out, "\"ael_span\":%lld", (long long)v);
 			break;
-		case TRACE_KEY_AEL_LINE:
+		case AS_EXP_TRACE_KEY_AEL_LINE:
 			if (! mp_read_int(&m, &v)) return false;
 			sb_fmt(out, "\"ael_line\":%lld", (long long)v);
 			break;
-		case TRACE_KEY_AEL_COL:
+		case AS_EXP_TRACE_KEY_AEL_COL:
 			if (! mp_read_int(&m, &v)) return false;
 			sb_fmt(out, "\"ael_col\":%lld", (long long)v);
 			break;
-		case TRACE_KEY_OPERANDS:
+		case AS_EXP_TRACE_KEY_OPERANDS:
 			sb_puts(out, "\"operands\":");
 			if (! mp_json(&m, out, false)) return false;
 			break;
@@ -1125,7 +1110,7 @@ capture_parse(as_error* err, as_command* cmd, as_node* node, uint8_t* buf,
 
 		uint8_t type = *p++;
 
-		if (type == AS_FIELD_ERROR_MESSAGE && len > 0 && cap->f45 == NULL) {
+		if (type == AS_FIELD_ERROR_DETAILS && len > 0 && cap->f45 == NULL) {
 			cap->f45 = malloc(len);
 			memcpy(cap->f45, p, len);
 			cap->f45_len = len;

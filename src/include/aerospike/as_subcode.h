@@ -49,6 +49,17 @@
  */
 #define AS_ERROR_DETAIL_MESSAGE    2
 
+/**
+ * Request subcode, message, and expression trace from the server on error
+ * responses. Set on as_policy_base.error_detail_verbosity.
+ *
+ * When a failure is traced back to a filter expression or an expression
+ * operation, the server also reports where in that expression it happened, and
+ * for a record that was cleanly filtered out, why it did not match. The client
+ * renders that onto the end of as_error.message.
+ */
+#define AS_ERROR_DETAIL_TRACE      3
+
 //---------------------------------
 // Subcodes
 //---------------------------------

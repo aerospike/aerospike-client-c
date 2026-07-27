@@ -622,9 +622,15 @@ typedef struct as_policy_base_s {
 	 * 0 - disabled (no error details returned). Default.
 	 * 1 - return subcode only.
 	 * 2 - return subcode and human-readable message.
+	 * 3 - also return an expression trace, when the failure came from a filter
+	 *     expression or an expression operation. The trace says where in the
+	 *     expression it happened, and for a record that was cleanly filtered
+	 *     out, why it did not match.
 	 *
 	 * When enabled and the server returns error details, as_error.subcode will contain the
-	 * numeric subcode and as_error.message will contain the server-authored message.
+	 * numeric subcode and as_error.message will contain the server-authored message. At
+	 * verbosity 3 the trace is rendered onto the end of as_error.message; see
+	 * as_command_render_exp_trace() for its shape.
 	 */
 	uint8_t error_detail_verbosity;
 } as_policy_base;

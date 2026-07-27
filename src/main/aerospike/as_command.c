@@ -31,6 +31,7 @@
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_digest.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
@@ -164,6 +165,7 @@ as_command_key_size(
 		size += as_command_user_key_size(key);
 		tdata->n_fields++;
 	}
+
 	return size;
 }
 
@@ -451,6 +453,7 @@ as_command_write_key(
 	if (pol_key == AS_POLICY_KEY_SEND && key->valuep) {
 		p = as_command_write_user_key(p, key);
 	}
+
 	return p;
 }
 
@@ -1193,11 +1196,13 @@ as_command_parse_fields_txn(
 		p += len;
 	}
 
-	if (is_write) {
-		as_txn_on_write(txn, digest, set, version, msg->result_code);
-	}
-	else {
-		as_txn_on_read(txn, digest, set, version);
+	if (txn) {
+		if (is_write) {
+			as_txn_on_write(txn, digest, set, version, msg->result_code);
+		}
+		else {
+			as_txn_on_read(txn, digest, set, version);
+		}
 	}
 	*pp = p;
 	return AEROSPIKE_OK;
@@ -1475,6 +1480,37 @@ as_command_read_msgpack_str(uint8_t** pp, uint8_t* end, char** out, uint32_t* ou
 	return true;
 }
 
+static bool
+as_command_read_msgpack_array(uint8_t** pp, uint8_t* end, uint32_t* out_count)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0xf0) == 0x90) {
+		*out_count = type & 0x0f;
+		return true;
+	}
+
+	if (type == 0xdc) {
+		if (*pp + 2 > end) return false;
+		*out_count = cf_swap_from_be16(*(uint16_t*)*pp);
+		*pp += 2;
+		return true;
+	}
+
+	if (type == 0xdd) {
+		if (*pp + 4 > end) return false;
+		*out_count = cf_swap_from_be32(*(uint32_t*)*pp);
+		*pp += 4;
+		return true;
+	}
+
+	return false;
+}
 
 static bool
 as_command_read_msgpack_map(uint8_t** pp, uint8_t* end, uint32_t* out_count)
@@ -1508,6 +1544,317 @@ as_command_read_msgpack_map(uint8_t** pp, uint8_t* end, uint32_t* out_count)
 	return false;
 }
 
+//---------------------------------
+// Expression Trace (error detail key 3)
+//---------------------------------
+
+// Scratch capacity for a rendered trace. The server bounds the whole field-45
+// payload at 1024 bytes, but the rendering adds key names around the values, so
+// give it room and let the copy-out truncate.
+#define AS_EXP_TRACE_RENDER_MAX 1280
+
+typedef struct {
+	char*    buf;
+	uint32_t size;
+	uint32_t len;
+} as_exp_trace_sb;
+
+static void
+as_exp_trace_sb_str(as_exp_trace_sb* sb, const char* s)
+{
+	while (*s != 0 && sb->len < sb->size - 1) {
+		sb->buf[sb->len++] = *s++;
+	}
+}
+
+// Append a length-delimited msgpack str. Control bytes become spaces so a trace
+// can never break the single-line shape of an error message; multi-byte UTF-8
+// (the snippet's focus guillemets) passes through untouched.
+static void
+as_exp_trace_sb_slice(as_exp_trace_sb* sb, const char* s, uint32_t n)
+{
+	for (uint32_t i = 0; i < n && sb->len < sb->size - 1; i++) {
+		uint8_t c = (uint8_t)s[i];
+
+		sb->buf[sb->len++] = c < 0x20 ? ' ' : (char)c;
+	}
+}
+
+static void
+as_exp_trace_sb_uint(as_exp_trace_sb* sb, uint64_t v)
+{
+	char tmp[21];
+
+	snprintf(tmp, sizeof(tmp), "%" PRIu64, v);
+	as_exp_trace_sb_str(sb, tmp);
+}
+
+// A str borrowed from the reply buffer - never NUL-terminated.
+typedef struct {
+	char*    p;
+	uint32_t len;
+} as_exp_trace_str;
+
+uint32_t
+as_command_render_exp_trace(uint8_t* buf, uint32_t len, char* out, uint32_t out_size)
+{
+	if (buf == NULL || len == 0 || out == NULL || out_size < AS_EXP_TRACE_RENDER_MIN) {
+		return 0;
+	}
+
+	uint8_t* p = buf;
+	uint8_t* end = buf + len;
+	uint32_t n_entries;
+
+	if (!as_command_read_msgpack_map(&p, end, &n_entries)) {
+		return 0;
+	}
+
+	uint64_t phase = 0;
+	uint64_t outcome = 0;
+	uint64_t depth = 0;
+	uint64_t byte_offset = 0;
+	uint64_t lang = AS_EXP_TRACE_LANG_MSGPACK;
+	uint64_t ael_offset = 0;
+	uint64_t ael_span = 0;
+	bool has_depth = false;
+	bool has_byte_offset = false;
+	bool has_ael_offset = false;
+	bool has_ael_span = false;
+
+	as_exp_trace_str op = { NULL, 0 };
+	as_exp_trace_str snippet = { NULL, 0 };
+	as_exp_trace_str lhs = { NULL, 0 };
+	as_exp_trace_str rhs = { NULL, 0 };
+	bool has_operands = false;
+
+	as_exp_trace_str path[AS_EXP_TRACE_MAX_FRAMES];
+	uint32_t n_frames = 0;
+
+	for (uint32_t i = 0; i < n_entries; i++) {
+		uint64_t key;
+
+		if (!as_command_read_msgpack_uint(&p, end, &key)) {
+			return 0;
+		}
+
+		switch (key) {
+			case AS_EXP_TRACE_KEY_PHASE:
+				if (!as_command_read_msgpack_uint(&p, end, &phase)) return 0;
+				break;
+
+			case AS_EXP_TRACE_KEY_OUTCOME:
+				if (!as_command_read_msgpack_uint(&p, end, &outcome)) return 0;
+				break;
+
+			case AS_EXP_TRACE_KEY_DEPTH:
+				if (!as_command_read_msgpack_uint(&p, end, &depth)) return 0;
+				has_depth = true;
+				break;
+
+			case AS_EXP_TRACE_KEY_BYTE_OFFSET:
+				if (!as_command_read_msgpack_uint(&p, end, &byte_offset)) return 0;
+				has_byte_offset = true;
+				break;
+
+			case AS_EXP_TRACE_KEY_LANG:
+				if (!as_command_read_msgpack_uint(&p, end, &lang)) return 0;
+				break;
+
+			case AS_EXP_TRACE_KEY_AEL_OFFSET:
+				if (!as_command_read_msgpack_uint(&p, end, &ael_offset)) return 0;
+				has_ael_offset = true;
+				break;
+
+			case AS_EXP_TRACE_KEY_AEL_SPAN:
+				if (!as_command_read_msgpack_uint(&p, end, &ael_span)) return 0;
+				has_ael_span = true;
+				break;
+
+			case AS_EXP_TRACE_KEY_OP:
+				if (!as_command_read_msgpack_str(&p, end, &op.p, &op.len)) return 0;
+				break;
+
+			case AS_EXP_TRACE_KEY_SNIPPET:
+				if (!as_command_read_msgpack_str(&p, end, &snippet.p, &snippet.len)) return 0;
+				break;
+
+			case AS_EXP_TRACE_KEY_PATH: {
+				uint32_t n;
+
+				if (!as_command_read_msgpack_array(&p, end, &n)) {
+					return 0;
+				}
+
+				for (uint32_t f = 0; f < n; f++) {
+					as_exp_trace_str frame;
+
+					if (!as_command_read_msgpack_str(&p, end, &frame.p, &frame.len)) {
+						return 0;
+					}
+
+					// Frames past the server's own cap can only mean a payload
+					// this client does not understand - keep what fits.
+					if (n_frames < AS_EXP_TRACE_MAX_FRAMES) {
+						path[n_frames++] = frame;
+					}
+				}
+				break;
+			}
+
+			case AS_EXP_TRACE_KEY_OPERANDS: {
+				uint32_t n;
+
+				if (!as_command_read_msgpack_array(&p, end, &n) || n != 2) {
+					return 0;
+				}
+
+				if (!as_command_read_msgpack_str(&p, end, &lhs.p, &lhs.len) ||
+					!as_command_read_msgpack_str(&p, end, &rhs.p, &rhs.len)) {
+					return 0;
+				}
+
+				has_operands = true;
+				break;
+			}
+
+			default:
+				// Reserved or newer key - the server promises these are skippable.
+				if (!as_command_skip_msgpack_value(&p, end)) {
+					return 0;
+				}
+				break;
+		}
+	}
+
+	if (phase == 0) {
+		return 0; // not a trace this client recognizes
+	}
+
+	char scratch[AS_EXP_TRACE_RENDER_MAX];
+	as_exp_trace_sb sb = { scratch, sizeof(scratch), 0 };
+
+	as_exp_trace_sb_str(&sb, "[exp: ");
+	as_exp_trace_sb_str(&sb, phase == AS_EXP_TRACE_PHASE_BUILD ? "build" : "eval");
+
+	switch (outcome) {
+		case AS_EXP_TRACE_OUTCOME_FAULT:
+			as_exp_trace_sb_str(&sb, "/fault");
+			break;
+		case AS_EXP_TRACE_OUTCOME_FALSE:
+			as_exp_trace_sb_str(&sb, "/false");
+			break;
+		case AS_EXP_TRACE_OUTCOME_ABSENT:
+			as_exp_trace_sb_str(&sb, "/absent");
+			break;
+		default:
+			break; // the build phase never sends an outcome
+	}
+
+	if (op.p != NULL) {
+		as_exp_trace_sb_str(&sb, " op=");
+		as_exp_trace_sb_slice(&sb, op.p, op.len);
+	}
+
+	if (n_frames != 0) {
+		as_exp_trace_sb_str(&sb, " path=");
+
+		for (uint32_t f = 0; f < n_frames; f++) {
+			if (f != 0) {
+				as_exp_trace_sb_str(&sb, "/");
+			}
+			as_exp_trace_sb_slice(&sb, path[f].p, path[f].len);
+		}
+	}
+
+	if (has_depth) {
+		as_exp_trace_sb_str(&sb, " depth=");
+		as_exp_trace_sb_uint(&sb, depth);
+	}
+
+	// Two coordinate spaces that must never be conflated: byte_offset indexes
+	// the msgpack payload, ael_offset/ael_span index the AEL source text.
+	if (lang == AS_EXP_TRACE_LANG_AEL && has_ael_offset) {
+		as_exp_trace_sb_str(&sb, " ael=");
+		as_exp_trace_sb_uint(&sb, ael_offset);
+
+		if (has_ael_span) {
+			as_exp_trace_sb_str(&sb, "+");
+			as_exp_trace_sb_uint(&sb, ael_span);
+		}
+	}
+	else if (has_byte_offset) {
+		as_exp_trace_sb_str(&sb, " offset=");
+		as_exp_trace_sb_uint(&sb, byte_offset);
+	}
+
+	// Single quotes around the free-form values: a msgpack disassembly snippet
+	// embeds double quotes around bin names, an AEL one embeds them around
+	// string literals.
+	if (has_operands) {
+		as_exp_trace_sb_str(&sb, " operands=['");
+		as_exp_trace_sb_slice(&sb, lhs.p, lhs.len);
+		as_exp_trace_sb_str(&sb, "','");
+		as_exp_trace_sb_slice(&sb, rhs.p, rhs.len);
+		as_exp_trace_sb_str(&sb, "']");
+	}
+
+	if (snippet.p != NULL) {
+		as_exp_trace_sb_str(&sb, " snippet='");
+		as_exp_trace_sb_slice(&sb, snippet.p, snippet.len);
+		as_exp_trace_sb_str(&sb, "'");
+	}
+
+	as_exp_trace_sb_str(&sb, "]");
+
+	if (sb.len <= out_size) {
+		memcpy(out, scratch, sb.len);
+		return sb.len;
+	}
+
+	// Cut the tail and say so, rather than implying the trace ended there.
+	uint32_t kept = out_size - 4;
+
+	memcpy(out, scratch, kept);
+	memcpy(out + kept, "...]", 4);
+	return out_size;
+}
+
+// Append a rendered trace to a message already sitting in buf, separated by a
+// space. Returns the new length. A trace that cannot fit is dropped whole - the
+// message it would have annotated matters more than a fragment of the trace.
+static uint32_t
+as_command_append_exp_trace(
+	char* buf, uint32_t buf_size, uint32_t used, uint8_t* trace, uint32_t trace_len
+	)
+{
+	if (trace == NULL) {
+		return used;
+	}
+
+	// A space only when there is something to separate from.
+	uint32_t sep = used != 0 ? 1 : 0;
+
+	if (used + sep + AS_EXP_TRACE_RENDER_MIN >= buf_size) {
+		return used;
+	}
+
+	uint32_t n = as_command_render_exp_trace(trace, trace_len, buf + used + sep,
+			buf_size - used - sep - 1);
+
+	if (n == 0) {
+		return used;
+	}
+
+	if (sep != 0) {
+		buf[used] = ' ';
+	}
+
+	used += sep + n;
+	buf[used] = 0;
+	return used;
+}
+
 void
 as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 {
@@ -1527,6 +1874,8 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 	uint64_t subcode = 0;
 	char* msg_str = NULL;
 	uint32_t msg_len = 0;
+	uint8_t* trace = NULL;
+	uint32_t trace_len = 0;
 
 	for (uint32_t i = 0; i < n_entries; i++) {
 		uint64_t key;
@@ -1548,6 +1897,18 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 				return;
 			}
 		}
+		else if (key == AS_ERROR_DETAIL_KEY_EXP_TRACE) {
+			// Borrow the nested map's bytes; rendering happens once the message
+			// it annotates is in place.
+			uint8_t* start = p;
+
+			if (!as_command_skip_msgpack_value(&p, end)) {
+				return;
+			}
+
+			trace = start;
+			trace_len = (uint32_t)(p - start);
+		}
 		else {
 			if (!as_command_skip_msgpack_value(&p, end)) {
 				return;
@@ -1559,19 +1920,39 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 		err->subcode = (uint32_t)subcode;
 	}
 
+	int used;
+
 	if (has_subcode && msg_str) {
-		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "%.*s (subcode=%" PRIu64 ")",
+		used = snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "%.*s (subcode=%" PRIu64 ")",
 				 (int)msg_len, msg_str, subcode);
 	}
 	else if (has_subcode) {
-		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "error subcode=%" PRIu64, subcode);
+		used = snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "error subcode=%" PRIu64, subcode);
 	}
 	else if (msg_str) {
 		uint32_t copy_len = msg_len < AS_ERROR_MESSAGE_MAX_SIZE - 1
 							? msg_len : AS_ERROR_MESSAGE_MAX_SIZE - 1;
 		memcpy(err->message, msg_str, copy_len);
 		err->message[copy_len] = '\0';
+		used = (int)copy_len;
 	}
+	else {
+		// A trace with neither subcode nor message. Whatever the caller staged
+		// stays, and the trace annotates it.
+		used = (int)strlen(err->message);
+	}
+
+	// snprintf reports what it wanted to write, which is past the end of the
+	// buffer for a message that filled it.
+	if (used < 0) {
+		used = 0;
+	}
+	else if (used > AS_ERROR_MESSAGE_MAX_SIZE - 1) {
+		used = AS_ERROR_MESSAGE_MAX_SIZE - 1;
+	}
+
+	as_command_append_exp_trace(err->message, AS_ERROR_MESSAGE_MAX_SIZE, (uint32_t)used,
+			trace, trace_len);
 }
 
 void
@@ -1600,6 +1981,8 @@ as_command_parse_error_details_values(
 
 	char* msg_str = NULL;
 	uint32_t msg_len = 0;
+	uint8_t* trace = NULL;
+	uint32_t trace_len = 0;
 
 	for (uint32_t i = 0; i < n_entries; i++) {
 		uint64_t key;
@@ -1620,6 +2003,16 @@ as_command_parse_error_details_values(
 				break;
 			}
 		}
+		else if (key == AS_ERROR_DETAIL_KEY_EXP_TRACE) {
+			uint8_t* start = p;
+
+			if (!as_command_skip_msgpack_value(&p, end)) {
+				break;
+			}
+
+			trace = start;
+			trace_len = (uint32_t)(p - start);
+		}
 		else {
 			if (!as_command_skip_msgpack_value(&p, end)) {
 				break;
@@ -1627,19 +2020,31 @@ as_command_parse_error_details_values(
 		}
 	}
 
-	if (msg_len == 0) {
+	if (msg_len == 0 && trace == NULL) {
 		return;
 	}
+
+	// The row's message and the trace annotating it share one string, so a batch
+	// row reads the same way as the single-record as_error.message does. Batch
+	// replies carry one of these per failed row - assemble in scratch and keep
+	// only what was used.
+	char scratch[AS_ERROR_MESSAGE_MAX_SIZE];
 
 	if (msg_len > AS_ERROR_MESSAGE_MAX_SIZE - 1) {
 		msg_len = AS_ERROR_MESSAGE_MAX_SIZE - 1;
 	}
 
-	char* m = cf_malloc(msg_len + 1);
+	if (msg_len != 0) {
+		memcpy(scratch, msg_str, msg_len);
+	}
 
-	memcpy(m, msg_str, msg_len);
-	m[msg_len] = 0;
-	*message = m;
+	scratch[msg_len] = 0;
+
+	uint32_t used = as_command_append_exp_trace(scratch, sizeof(scratch), msg_len, trace,
+			trace_len);
+
+	*message = cf_malloc(used + 1);
+	memcpy(*message, scratch, used + 1);
 }
 
 uint8_t*
@@ -2239,8 +2644,11 @@ as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t
 	status = msg->result_code;
 
 	if (status != AEROSPIKE_OK) {
+		if (err && err->message[0] != 0) {
+			return as_error_set_message(err, status, err->message);
+		}
 		return as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-			as_error_string(status));
+				as_error_string(status));
 	}
 
 	return AEROSPIKE_OK;

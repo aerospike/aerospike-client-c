@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -68,13 +68,11 @@ extern "C" {
 #define AS_FIELD_QUERY_BINS 40
 #define AS_FIELD_BATCH_INDEX 41
 #define AS_FIELD_FILTER 43
-#define AS_FIELD_ERROR_MESSAGE 45 // msgpack map payload
+#define AS_FIELD_ERROR_DETAILS 45
 
-// info4 bits 5-6: error detail verbosity (0=off, 1=subcode, 2=subcode+message).
-#define AS_MSG_INFO4_ERROR_VERBOSITY_MASK   0x60
-#define AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT  5
-
-// Error detail map keys (keep these as single-byte integers).
+// Error detail map keys (keep these as single-byte integers). Distinct from the
+// AS_ERROR_DETAIL_* verbosity levels in as_subcode.h, which say what the server
+// should send; these name what came back.
 #define AS_ERROR_DETAIL_KEY_SUBCODE 1
 #define AS_ERROR_DETAIL_KEY_MESSAGE 2
 
@@ -127,6 +125,10 @@ extern "C" {
 #define AS_MSG_INFO4_TXN_ROLL_FORWARD		(1 << 1) // Roll forward transaction.
 #define AS_MSG_INFO4_TXN_ROLL_BACK			(1 << 2) // Roll back transaction.
 #define AS_MSG_INFO4_TXN_ON_LOCKING_ONLY	(1 << 4) // Must be able to lock record in transaction.
+
+// Error detail verbosity in info4 bits 5-6
+#define AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT	5
+#define AS_MSG_INFO4_ERROR_VERBOSITY_MASK	0x60
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -387,7 +389,7 @@ as_command_set_attr_read(
  * @private
  * Write command header for write commands.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_write_header_write(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
@@ -399,7 +401,7 @@ as_command_write_header_write(
  * @private
  * Write command header for read commands.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, int read_ttl, uint32_t timeout, uint16_t n_fields,
@@ -410,7 +412,7 @@ as_command_write_header_read(
  * @private
  * Write command header for read header commands.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_write_header_read_header(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, int read_ttl, uint16_t n_fields, uint16_t n_bins,
@@ -677,20 +679,18 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
 
 /**
  * @private
- * Parse record fields given digest/set.
+ * Iterate fields, parse error details from field type 45 if present, skip others.
  */
-as_status
-as_command_parse_fields_txn(
-	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const uint8_t* digest,
-	const char* set, bool is_write
-	);
+uint8_t*
+as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields);
 
 /**
  * @private
- * Parse error message field.
+ * Parse msgpack-encoded error details (field type 45 payload).
+ * Populates err->subcode and err->message.
  */
-as_status
-as_command_parse_fields_error(uint8_t** pp, as_error* err, as_msg* msg);
+AS_EXTERN void
+as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len);
 
 /**
  * @private
@@ -700,9 +700,19 @@ as_command_parse_fields_error(uint8_t** pp, as_error* err, as_msg* msg);
  * caller (any existing non-NULL *message is freed first). Used by batch, which
  * stores error details per record rather than in a single as_error.
  */
-as_status
+void
 as_command_parse_error_details_values(
-	const uint8_t* buf, uint32_t len, uint32_t* subcode, char** message
+	uint8_t* buf, uint32_t len, uint32_t* subcode, char** message
+	);
+
+/**
+ * @private
+ * Parse record fields given digest/set.
+ */
+as_status
+as_command_parse_fields_txn(
+	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const uint8_t* digest,
+	const char* set, bool is_write
 	);
 
 /**
@@ -715,7 +725,8 @@ as_command_parse_fields(
 	)
 {
 	if (! txn) {
-		return as_command_parse_fields_error(pp, err, msg);
+		*pp = as_command_parse_fields_err(*pp, err, msg->n_fields);
+		return AEROSPIKE_OK;
 	}
 	return as_command_parse_fields_txn(pp, err, msg, txn, key->digest.value, key->set, is_write);
 }

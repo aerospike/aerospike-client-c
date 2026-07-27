@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,7 +16,9 @@
  */
 #pragma once
 
-/** 
+/**
+ * @deprecated Use aerospike_query functions instead.
+ *
  * @defgroup scan_operations Scan Operations
  * @ingroup client_operations
  *
@@ -146,6 +148,8 @@ typedef bool (*as_async_scan_listener)(
  *****************************************************************************/
 
 /**
+ * @deprecated Use aerospike_query_background()  instead.
+ *
  * Scan the records in the specified namespace and set in the cluster.
  *
  * Scan will be run in the background by a thread on client side.
@@ -186,6 +190,8 @@ aerospike_scan_background(
 	);
 
 /**
+ * @deprecated Use aerospike_query_wait()  instead.
+ *
  * Wait for a background scan to be completed by servers.
  *
  * @code
@@ -208,6 +214,8 @@ aerospike_scan_wait(
 	);
 
 /**
+ * @deprecated Use aerospike_query_info()  instead.
+ *
  * Check the progress of a background scan running on the database. The status
  * of the scan running on the datatabse will be populated into an as_scan_info.
  * 
@@ -239,6 +247,8 @@ aerospike_scan_info(
 	);
 
 /**
+ * @deprecated Use aerospike_query_foreach()  instead.
+ *
  * Scan the records in the specified namespace and set in the cluster.
  *
  * Call the callback function for each record scanned. When all records have 
@@ -341,6 +351,8 @@ aerospike_scan_node(
 	);
 
 /**
+ * @deprecated Use aerospike_query_partitions()  instead.
+ *
  * Scan records in specified namespace, set and partition filter.
  *
  * Call the callback function for each record scanned. When all records have 
@@ -392,6 +404,8 @@ aerospike_scan_partitions(
 	);
 
 /**
+ * @deprecated Use aerospike_query_async()  instead.
+ *
  * Asynchronously scan the records in the specified namespace and set in the cluster.
  *
  * Call the listener function for each record scanned. When all records have
@@ -507,6 +521,8 @@ aerospike_scan_node_async(
 	);
 
 /**
+ * @deprecated Use aerospike_query_partitions_async()  instead.
+ *
  * Asynchronously scan records in specified namespace, set and partition filter.
  *
  * Call the listener function for each record scanned. When all records have

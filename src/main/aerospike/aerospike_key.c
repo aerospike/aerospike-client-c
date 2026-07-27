@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -437,6 +437,7 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->key = src->key;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->deserialize = src->deserialize;
@@ -945,6 +946,7 @@ as_policy_write_merge(aerospike* as, const as_policy_write* src, as_policy_write
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->exists = src->exists;
@@ -1117,6 +1119,7 @@ as_policy_remove_merge(aerospike* as, const as_policy_remove* src, as_policy_rem
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->generation = src->generation;
@@ -1285,6 +1288,7 @@ as_policy_operate_merge(aerospike* as, bool is_write, const as_policy_operate* s
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->exists = src->exists;
@@ -1327,6 +1331,8 @@ as_operate_init(
 			case AS_OPERATOR_EXP_READ:
 			case AS_OPERATOR_BIT_READ:
 			case AS_OPERATOR_HLL_READ:
+			case AS_OPERATOR_STRING_READ:
+			case AS_OPERATOR_TO_STRING:
 				// Map operations require respond_all_ops to be true.
 				respond_all_ops = true;
 				// Fall through to read.
@@ -1343,7 +1349,8 @@ as_operate_init(
 			case AS_OPERATOR_EXP_MODIFY:
 			case AS_OPERATOR_BIT_MODIFY:
 			case AS_OPERATOR_HLL_MODIFY:
-				// Map operations require respond_all_ops to be true.
+			case AS_OPERATOR_STRING_MODIFY:
+				// Complex modify operations require respond_all_ops to be true.
 				respond_all_ops = true;
 				// Fall through to write.
 			default:
@@ -1646,6 +1653,7 @@ as_policy_apply_merge(aerospike* as, const as_policy_apply* src, as_policy_apply
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->ttl = src->ttl;
 		mrg->on_locking_only = src->on_locking_only;
@@ -2105,6 +2113,8 @@ as_txn_verify_single(
 	buf[9] = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA;
 	buf[10] = 0;
 	buf[11] = AS_MSG_INFO3_SC_READ_TYPE;
+	// Verbosity bits intentionally not set: response parser (parse_result_code)
+	// only checks result_code and does not iterate fields or parse field 45.
 	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ;
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;
@@ -2182,6 +2192,8 @@ as_txn_verify_single_async(
 	buf[9] = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA;
 	buf[10] = 0;
 	buf[11] = AS_MSG_INFO3_SC_READ_TYPE;
+	// Verbosity bits intentionally not set: response parser (txn_verify_parse)
+	// only checks result_code and does not iterate fields or parse field 45.
 	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ;
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;

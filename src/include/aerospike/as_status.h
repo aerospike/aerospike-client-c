@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -299,6 +299,13 @@ typedef enum as_status_e {
 	 * Write command loses conflict to XDR.
 	 */
 	AEROSPIKE_LOST_CONFLICT = 28,
+
+	/**
+	 * String bin or string argument contains invalid UTF-8.
+	 * Returned by server 8.1.3+ string operations when the bin value or a
+	 * string argument fails the UTF-8 well-formedness gate.
+	 */
+	AEROSPIKE_INVALID_ENCODING = 29,
 
 	/**
 	 * Write can't complete until XDR finishes shipping.

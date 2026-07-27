@@ -108,15 +108,15 @@ query_foreach_create(void)
 	index_process_return_code(status, &err, &task);
 
 	// create index on "b"
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "b", "idx_test_b", AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "b", "idx_test_b", AS_INDEX_INTEGER);
 	index_process_return_code(status, &err, &task);
 
 	// create index on "c"
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "c", "idx_test_c", AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "c", "idx_test_c", AS_INDEX_INTEGER);
 	index_process_return_code(status, &err, &task);
 
 	// create index on "d"
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, "d", "idx_test_d", AS_INDEX_INTEGER);
 	index_process_return_code(status, &err, &task);
 
 
@@ -154,13 +154,13 @@ query_foreach_create(void)
 	as_cdt_ctx_destroy(&ctx);
 
 	// create complex index on "z"	 
-	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_test_z", AS_INDEX_TYPE_LIST, AS_INDEX_NUMERIC);
+	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_test_z", AS_INDEX_TYPE_LIST, AS_INDEX_INTEGER);
 	index_process_return_code(status, &err, &task);
 
 	as_cdt_ctx_init(&ctx, 1);
 	as_cdt_ctx_add_list_rank(&ctx, -1);
 
-	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_ctx_test_z", AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, &ctx);
+	status = aerospike_index_create_ctx(as, &err, &task, NULL, NAMESPACE, SET, "z", "idx_ctx_test_z", AS_INDEX_TYPE_DEFAULT, AS_INDEX_INTEGER, &ctx);
 	index_process_return_code(status, &err, &task);
 
 	as_cdt_ctx_destroy(&ctx);
@@ -1496,7 +1496,7 @@ TEST(query_foreach_nullset, "test null-set behavior")
 	char *setname = NULL;
 	as_index_task task;
 
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, setname, "NUMERIC", "idx2", AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, setname, "NUMERIC", "idx2", AS_INDEX_INTEGER);
 	index_process_return_code(status, &err, &task);
 
 	as_record r;
@@ -1568,7 +1568,7 @@ TEST(query_foreach_int_with_double_bin, "test query on double behavior")
 	as_index_task task;
 
 	//create index on "int_bin"
-	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, int_bin, "idx_test_int_bin", AS_INDEX_NUMERIC);
+	status = aerospike_index_create(as, &err, &task, NULL, NAMESPACE, SET, int_bin, "idx_test_int_bin", AS_INDEX_INTEGER);
 	index_process_return_code(status, &err, &task);
 
 	as_record r;
@@ -1773,7 +1773,7 @@ TEST(query_expression, "query expression")
 	as_index_task task;
 
 	status = aerospike_index_create_exp(as, &err, &task, NULL, NAMESPACE, set, "exp_index",
-		AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, exp);
+		AS_INDEX_TYPE_DEFAULT, AS_INDEX_INTEGER, exp);
 
 	switch (status) {
 		case AEROSPIKE_OK:

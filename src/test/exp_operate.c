@@ -16,9 +16,11 @@
  */
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_exp_operations.h>
+#include <aerospike/as_version.h>
 #include "test.h"
 #include "util/log_helper.h"
 #include <string.h>
@@ -57,6 +59,36 @@ static bool
 after(atf_suite* suite)
 {
 	return true;
+}
+
+static bool
+server_supports_exp_membership(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		info("skipping expression membership tests; no cluster node available");
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	as_node_release(node);
+	return supported;
+}
+
+static bool
+server_supports_exp_path_select_apply(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		info("skipping expression path select/apply test; no cluster node available");
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	as_node_release(node);
+	return supported;
 }
 
 static bool
@@ -834,6 +866,11 @@ TEST(exp_base64, "exp base64")
 
 TEST(exp_select, "exp select and apply")
 {
+	if (! server_supports_exp_path_select_apply()) {
+		info("skipping expression path select/apply; requires server >= 8.1.3");
+		return;
+	}
+
 	as_key keyA;
 	as_key keyB;
 	bool b = filter_prepare(&keyA, &keyB);
@@ -942,6 +979,11 @@ TEST(exp_select, "exp select and apply")
 
 TEST(exp_in_list, "as_exp_in_list string and int membership")
 {
+	if (! server_supports_exp_membership()) {
+		info("skipping as_exp_in_list; requires server >= 8.1.3");
+		return;
+	}
+
 	as_error err;
 	as_status rc;
 	as_key rkey;
@@ -1054,8 +1096,13 @@ TEST(exp_in_list, "as_exp_in_list string and int membership")
 	}
 }
 
-TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
+TEST(exp_map_keys_values, "as_exp_map_keys_in and as_exp_map_values_in")
 {
+	if (! server_supports_exp_membership()) {
+		info("skipping map key/value expression helpers; requires server >= 8.1.3");
+		return;
+	}
+
 	as_error err;
 	as_status rc;
 	as_key rkey;
@@ -1089,10 +1136,10 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 	as_bin* results;
 
 	/*------------------------------------------------------------------
-	 * Case 1: map_keys(as_exp_bin_map("m")) -> list containing "a", "b"
+	 * Case 1: map_keys_in(as_exp_bin_map("m")) -> list containing "a", "b"
 	 *----------------------------------------------------------------*/
 	{
-		as_exp_build(expr, as_exp_map_keys(as_exp_bin_map("m")));
+		as_exp_build(expr, as_exp_map_keys_in(as_exp_bin_map("m")));
 		assert_not_null(expr);
 
 		as_operations_inita(&ops, 1);
@@ -1126,10 +1173,10 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 	}
 
 	/*------------------------------------------------------------------
-	 * Case 2: map_values(as_exp_bin_map("m")) -> list containing 1, 2
+	 * Case 2: map_values_in(as_exp_bin_map("m")) -> list containing 1, 2
 	 *----------------------------------------------------------------*/
 	{
-		as_exp_build(expr, as_exp_map_values(as_exp_bin_map("m")));
+		as_exp_build(expr, as_exp_map_values_in(as_exp_bin_map("m")));
 		assert_not_null(expr);
 
 		as_operations_inita(&ops, 1);
@@ -1161,7 +1208,7 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 	}
 
 	/*------------------------------------------------------------------
-	 * Case 3: literal map — map_keys / map_values via as_exp_val
+	 * Case 3: literal map — map_keys_in / map_values_in via as_exp_val
 	 *----------------------------------------------------------------*/
 	{
 		as_orderedmap* lit = as_orderedmap_new(2);
@@ -1171,7 +1218,7 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 		as_orderedmap_set(lit, (as_val*)as_string_new((char*)"b", false),
 				(as_val*)as_integer_new(2));
 
-		as_exp_build(expr_k, as_exp_map_keys(as_exp_val((as_val*)lit)));
+		as_exp_build(expr_k, as_exp_map_keys_in(as_exp_val((as_val*)lit)));
 		assert_not_null(expr_k);
 		as_orderedmap_destroy(lit);
 
@@ -1213,7 +1260,7 @@ TEST(exp_map_keys_values, "as_exp_map_keys and as_exp_map_values")
 		as_orderedmap_set(lit, (as_val*)as_string_new((char*)"b", false),
 				(as_val*)as_integer_new(2));
 
-		as_exp_build(expr_v, as_exp_map_values(as_exp_val((as_val*)lit)));
+		as_exp_build(expr_v, as_exp_map_values_in(as_exp_val((as_val*)lit)));
 		assert_not_null(expr_v);
 		as_orderedmap_destroy(lit);
 

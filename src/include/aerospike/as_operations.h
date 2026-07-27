@@ -57,7 +57,10 @@ typedef enum as_operator_e {
 	AS_OPERATOR_BIT_MODIFY,
 	AS_OPERATOR_DELETE,
 	AS_OPERATOR_HLL_READ,
-	AS_OPERATOR_HLL_MODIFY
+	AS_OPERATOR_HLL_MODIFY,
+	AS_OPERATOR_STRING_READ,
+	AS_OPERATOR_STRING_MODIFY,
+	AS_OPERATOR_TO_STRING
 } as_operator;
 
 /**
@@ -265,7 +268,7 @@ typedef struct as_binops_s {
 typedef struct as_operations_s {
 
 	/**
-     * Operations to be performed on the bins of a record.
+	 * Operations to be performed on the bins of a record.
 	 */
 	as_binops binops;
 	
@@ -673,9 +676,9 @@ as_operations_add_read_all(as_operations* ops);
  * Answers true if and only if at least one call was made to
  * as_operations_add_read_all() on the given vector of operations.
  *
- * @param ops			The `as_operations` to append the operation to.
+ * @param ops			Collection to append the operation to.
  *
- * @relates as_operation
+ * @relates as_operations
  * @ingroup base_operations
  */
 static inline bool
@@ -730,6 +733,9 @@ as_operations_add_incr_double(as_operations* ops, const char* name, double value
 
 /**
  * Add a `AS_OPERATOR_PREPEND` bin operation with a NULL-terminated string value.
+ * @deprecated Use as_operations_string_prepend() instead. This legacy operation
+ * performs raw byte concatenation, is not Unicode/DBCS-aware, and does not
+ * support string policy or ctx.
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
@@ -746,6 +752,9 @@ as_operations_add_prepend_strp(as_operations* ops, const char* name, const char*
 
 /**
  * Add a `AS_OPERATOR_PREPEND` bin operation with a NULL-terminated string value.
+ * @deprecated Use as_operations_string_prepend() instead. This legacy operation
+ * performs raw byte concatenation, is not Unicode/DBCS-aware, and does not
+ * support string policy or ctx.
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
@@ -800,6 +809,9 @@ as_operations_add_prepend_raw(as_operations* ops, const char* name, const uint8_
 
 /**
  * Add a `AS_OPERATOR_APPEND` bin operation with a NULL-terminated string value.
+ * @deprecated Use as_operations_string_append() instead. This legacy operation
+ * performs raw byte concatenation, is not Unicode/DBCS-aware, and does not
+ * support string policy or ctx.
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
@@ -816,6 +828,9 @@ as_operations_add_append_strp(as_operations* ops, const char* name, const char* 
 
 /**
  * Add a `AS_OPERATOR_APPEND` bin operation with a NULL-terminated string value.
+ * @deprecated Use as_operations_string_append() instead. This legacy operation
+ * performs raw byte concatenation, is not Unicode/DBCS-aware, and does not
+ * support string policy or ctx.
  *
  * @param ops			The `as_operations` to append the operation to.
  * @param name 			The name of the bin to perform the operation on.
@@ -958,9 +973,9 @@ as_operations_is_basic_read(as_operator t)
 	return t == AS_OPERATOR_READ;
 }
 
-/******************************************************************************
- * LIST FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// List Functions
+//---------------------------------
 
 // Add list operations to this header file for legacy reasons.
 

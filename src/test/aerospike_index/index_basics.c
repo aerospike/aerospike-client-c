@@ -30,6 +30,7 @@
 #include <aerospike/as_map.h>
 #include <aerospike/as_hashmap.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_version.h>
 
 #include "../test.h"
 #include "../util/index_util.h"
@@ -39,6 +40,21 @@
 //---------------------------------
 
 extern aerospike* as;
+
+static bool
+server_supports_set_index(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		info("skipping SET index test; no cluster node available");
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_1) < 0;
+	as_node_release(node);
+	return supported;
+}
 
 //---------------------------------
 // Macros
@@ -74,13 +90,18 @@ TEST(index_basics_create, "Create index on bin")
 		assert_int_eq(status , AEROSPIKE_OK);
 	}
 
-	// SET type index (bin and dtype parameters not supported)
-	status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE,
-			SET, NULL, "idx_test_set", AS_INDEX_TYPE_SET,
-			AS_INDEX_DEFAULT);
+	if (server_supports_set_index()) {
+		// SET type index (bin and dtype parameters not supported)
+		status = aerospike_index_create_complex(as, &err, &task, NULL, NAMESPACE,
+				SET, NULL, "idx_test_set", AS_INDEX_TYPE_SET,
+				AS_INDEX_DEFAULT);
 
-	if (! index_process_return_code(status, &err, &task)) {
-		assert_int_eq(status , AEROSPIKE_OK);
+		if (! index_process_return_code(status, &err, &task)) {
+			assert_int_eq(status , AEROSPIKE_OK);
+		}
+	}
+	else {
+		info("skipping SET index create; unsupported by server >= 8.1");
 	}
 }
 
@@ -103,12 +124,17 @@ TEST(index_basics_drop , "Drop index")
 	}
 	assert_int_eq( err.code, AEROSPIKE_OK );
 
-	// SET type index
-	aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_set");
-	if (err.code != AEROSPIKE_OK) {
-		info("error(%d): %s", err.code, err.message);
+	if (server_supports_set_index()) {
+		// SET type index
+		aerospike_index_remove(as, &err, NULL, NAMESPACE, "idx_test_set");
+		if (err.code != AEROSPIKE_OK) {
+			info("error(%d): %s", err.code, err.message);
+		}
+		assert_int_eq( err.code, AEROSPIKE_OK );
 	}
-	assert_int_eq( err.code, AEROSPIKE_OK );
+	else {
+		info("skipping SET index drop; unsupported by server >= 8.1");
+	}
 }
 
 TEST(index_ctx_test , "Create ctx index on bin")
@@ -155,7 +181,7 @@ TEST(index_ctx_test , "Create ctx index on bin")
 
 	as_status status = aerospike_index_create_ctx(as, &err, &task, NULL,
 			NAMESPACE, SET, "new_bin", "idx_test_ctx", AS_INDEX_TYPE_DEFAULT,
-			AS_INDEX_NUMERIC, &ctx);
+			AS_INDEX_INTEGER, &ctx);
 
 	if (! index_process_return_code(status, &err, &task)) {
 		assert_int_eq(status , AEROSPIKE_OK);

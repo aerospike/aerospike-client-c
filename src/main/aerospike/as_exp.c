@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2025 Aerospike, Inc.
+ * Copyright 2021-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -22,6 +22,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_msgpack.h>
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_b64.h>
 
 typedef enum {

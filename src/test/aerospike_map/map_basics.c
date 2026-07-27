@@ -18,6 +18,7 @@
 #include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_info.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_boolean.h>
 #include <aerospike/as_double.h>
@@ -38,6 +39,7 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_version.h>
 
 #include "../test.h"
 #include "../util/log_helper.h"
@@ -60,6 +62,21 @@ extern aerospike *as;
 /******************************************************************************
  * STATIC FUNCTIONS
  *****************************************************************************/
+
+static bool
+server_supports_map_keys_in_ctx(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		info("skipping MAP_KEYS_IN context test; no cluster node available");
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	as_node_release(node);
+	return supported;
+}
 
 static void
 rand_str(as_string* s)
@@ -1943,6 +1960,11 @@ TEST(map_nested, "Nested Map")
 
 TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with path select")
 {
+	if (! server_supports_map_keys_in_ctx()) {
+		info("skipping MAP_KEYS_IN context path select; requires server >= 8.1.3");
+		return;
+	}
+
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 92);
 
@@ -2041,6 +2063,11 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with path select")
 
 TEST(map_keys_in_and_filter, "MAP_KEYS_IN with AND expression filter on path select")
 {
+	if (! server_supports_map_keys_in_ctx()) {
+		info("skipping MAP_KEYS_IN context path select filter; requires server >= 8.1.3");
+		return;
+	}
+
 	as_key rkey;
 	as_key_init_int64(&rkey, NAMESPACE, SET, 93);
 

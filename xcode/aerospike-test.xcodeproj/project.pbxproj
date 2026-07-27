@@ -14,8 +14,11 @@
 		BF5D22741E69096800724AE3 /* info_helper.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5D22721E69096800724AE3 /* info_helper.c */; };
 		BF5FDD6C2C937420000CACBB /* transaction.c in Sources */ = {isa = PBXBuildFile; fileRef = BF5FDD6B2C937420000CACBB /* transaction.c */; };
 		BF65C9CA252D33400026D9E2 /* filter_exp.c in Sources */ = {isa = PBXBuildFile; fileRef = BF65C9C9252D33400026D9E2 /* filter_exp.c */; };
+		BF6927792FD37C2300CD9453 /* error_detail.c in Sources */ = {isa = PBXBuildFile; fileRef = BF6927772FD37C2300CD9453 /* error_detail.c */; };
+		BF69277A2FD37C2300CD9453 /* error_detail_integration.c in Sources */ = {isa = PBXBuildFile; fileRef = BF6927782FD37C2300CD9453 /* error_detail_integration.c */; };
 		BF7EBCC725D4B20800D5DFE9 /* exp_operate.c in Sources */ = {isa = PBXBuildFile; fileRef = BF7EBCC625D4B20800D5DFE9 /* exp_operate.c */; };
 		BF809CE52432B38300C16F3D /* hll_operate.c in Sources */ = {isa = PBXBuildFile; fileRef = BF809CE42432B38300C16F3D /* hll_operate.c */; };
+		BF8123032F00000200000001 /* string.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123022F00000200000001 /* string.c */; };
 		BF9750111E4EC8C900B737CF /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750101E4EC8C900B737CF /* libev.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750121E4ECA1C00B737CF /* libuv.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BFB5EBE522BC26B400CE6E43 /* bit.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB5EBE422BC26B400CE6E43 /* bit.c */; };
@@ -52,6 +55,7 @@
 		BFC65C5B1C9227440079DF5A /* info_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C5A1C9227440079DF5A /* info_basics.c */; };
 		BFC65C5E1C9227640079DF5A /* index_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C5D1C9227640079DF5A /* index_basics.c */; };
 		BFC65C611C9227860079DF5A /* query_geospatial.c in Sources */ = {isa = PBXBuildFile; fileRef = BFC65C601C9227860079DF5A /* query_geospatial.c */; };
+		BFCBC2E32FD08CE5001FA365 /* shm_second_client.c in Sources */ = {isa = PBXBuildFile; fileRef = BFCBC2E22FD08CE5001FA365 /* shm_second_client.c */; };
 		BFD74AE11CFE699800D79E15 /* map_basics_async.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD74AE01CFE699800D79E15 /* map_basics_async.c */; };
 		BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */ = {isa = PBXBuildFile; fileRef = BFD74AE51CFE6E4B00D79E15 /* map_udf.c */; };
 		BFD8C86F18D7E3A300CB8B6D /* libaerospike.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BFD8C86C18D7E37800CB8B6D /* libaerospike.a */; };
@@ -98,8 +102,11 @@
 		BF5D22731E69096800724AE3 /* info_helper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = info_helper.h; path = ../src/test/util/info_helper.h; sourceTree = "<group>"; };
 		BF5FDD6B2C937420000CACBB /* transaction.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = transaction.c; path = ../src/test/transaction.c; sourceTree = "<group>"; };
 		BF65C9C9252D33400026D9E2 /* filter_exp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = filter_exp.c; path = ../src/test/filter_exp.c; sourceTree = "<group>"; };
+		BF6927772FD37C2300CD9453 /* error_detail.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = error_detail.c; path = ../src/test/aerospike_key/error_detail.c; sourceTree = SOURCE_ROOT; };
+		BF6927782FD37C2300CD9453 /* error_detail_integration.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = error_detail_integration.c; path = ../src/test/aerospike_key/error_detail_integration.c; sourceTree = SOURCE_ROOT; };
 		BF7EBCC625D4B20800D5DFE9 /* exp_operate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = exp_operate.c; path = ../src/test/exp_operate.c; sourceTree = "<group>"; };
 		BF809CE42432B38300C16F3D /* hll_operate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hll_operate.c; path = ../src/test/aerospike_key/hll_operate.c; sourceTree = "<group>"; };
+		BF8123022F00000200000001 /* string.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = string.c; path = ../src/test/aerospike_string/string.c; sourceTree = "<group>"; };
 		BF843C5018D3E61700A06CFB /* aerospike.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; path = aerospike.xcodeproj; sourceTree = "<group>"; };
 		BF8A328A1E4E73FD00DE2F4D /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = /usr/local/opt/openssl/lib/libssl.dylib; sourceTree = "<absolute>"; };
 		BF9750101E4EC8C900B737CF /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<group>"; };
@@ -158,6 +165,7 @@
 		BFC65C5A1C9227440079DF5A /* info_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = info_basics.c; path = ../src/test/aerospike_info/info_basics.c; sourceTree = "<group>"; };
 		BFC65C5D1C9227640079DF5A /* index_basics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = index_basics.c; path = ../src/test/aerospike_index/index_basics.c; sourceTree = "<group>"; };
 		BFC65C601C9227860079DF5A /* query_geospatial.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = query_geospatial.c; path = ../src/test/aerospike_geo/query_geospatial.c; sourceTree = "<group>"; };
+		BFCBC2E22FD08CE5001FA365 /* shm_second_client.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = shm_second_client.c; path = ../src/test/aerospike_shm/shm_second_client.c; sourceTree = SOURCE_ROOT; };
 		BFD74AE01CFE699800D79E15 /* map_basics_async.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_basics_async.c; path = ../src/test/aerospike_map/map_basics_async.c; sourceTree = "<group>"; };
 		BFD74AE51CFE6E4B00D79E15 /* map_udf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = map_udf.c; path = ../src/test/aerospike_map/map_udf.c; sourceTree = "<group>"; };
 		BFED8ED11F704B0B000BCBBE /* index_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = index_util.c; path = ../src/test/util/index_util.c; sourceTree = "<group>"; };
@@ -192,6 +200,14 @@
 				BF9750101E4EC8C900B737CF /* libev.a */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		BF8123042F00000200000001 /* aerospike_string */ = {
+			isa = PBXGroup;
+			children = (
+				BF8123022F00000200000001 /* string.c */,
+			);
+			name = aerospike_string;
 			sourceTree = "<group>";
 		};
 		BFB5EBE322BC268500CE6E43 /* aerospike_bit */ = {
@@ -245,6 +261,8 @@
 				BFF344C41CEA8F3300FD1976 /* aerospike_map */,
 				BFC65C3B1C9226B80079DF5A /* aerospike_query */,
 				BFC65C351C92265E0079DF5A /* aerospike_scan */,
+				BF8123042F00000200000001 /* aerospike_string */,
+				BFCBC2E12FD08CAA001FA365 /* aerospike_shm */,
 				BFC65C2E1C9226340079DF5A /* aerospike_udf */,
 				BFC65C231C92260A0079DF5A /* lua */,
 				BFC65C0B1C9225850079DF5A /* util */,
@@ -351,6 +369,8 @@
 		BFC65C4A1C9227170079DF5A /* aerospike_key */ = {
 			isa = PBXGroup;
 			children = (
+				BF6927772FD37C2300CD9453 /* error_detail.c */,
+				BF6927782FD37C2300CD9453 /* error_detail_integration.c */,
 				BFC65C4B1C9227260079DF5A /* key_apply_async.c */,
 				BFC65C4C1C9227260079DF5A /* key_apply.c */,
 				BFC65C4D1C9227260079DF5A /* key_apply2.c */,
@@ -385,6 +405,14 @@
 				BFC65C601C9227860079DF5A /* query_geospatial.c */,
 			);
 			name = aerospike_geo;
+			sourceTree = "<group>";
+		};
+		BFCBC2E12FD08CAA001FA365 /* aerospike_shm */ = {
+			isa = PBXGroup;
+			children = (
+				BFCBC2E22FD08CE5001FA365 /* shm_second_client.c */,
+			);
+			path = aerospike_shm;
 			sourceTree = "<group>";
 		};
 		BFD8C86818D7E37800CB8B6D /* Products */ = {
@@ -481,6 +509,7 @@
 				BF65C9CA252D33400026D9E2 /* filter_exp.c in Sources */,
 				BFC65C1B1C9225AB0079DF5A /* producer_stream.c in Sources */,
 				BF5FDD6C2C937420000CACBB /* transaction.c in Sources */,
+				BFCBC2E32FD08CE5001FA365 /* shm_second_client.c in Sources */,
 				BFC65C331C92264E0079DF5A /* udf_record.c in Sources */,
 				BFB5EBE522BC26B400CE6E43 /* bit.c in Sources */,
 				BFC65C041C92250B0079DF5A /* aerospike_test.c in Sources */,
@@ -495,6 +524,7 @@
 				BFC65C411C9226C90079DF5A /* query_foreach.c in Sources */,
 				BF3F7D47259BDD2B0092D808 /* map_sort.c in Sources */,
 				BFC65C1D1C9225AB0079DF5A /* udf.c in Sources */,
+				BF8123032F00000200000001 /* string.c in Sources */,
 				BFF344C81CEA8FD200FD1976 /* map_basics.c in Sources */,
 				BFC65C0A1C92256A0079DF5A /* batch.c in Sources */,
 				BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */,
@@ -511,6 +541,8 @@
 				BFC65C321C92264E0079DF5A /* udf_basics.c in Sources */,
 				BFC65C451C9226E50079DF5A /* list_basics_async.c in Sources */,
 				BFC65C541C9227260079DF5A /* key_apply2.c in Sources */,
+				BF6927792FD37C2300CD9453 /* error_detail.c in Sources */,
+				BF69277A2FD37C2300CD9453 /* error_detail_integration.c in Sources */,
 				BFC65C571C9227260079DF5A /* key_operate.c in Sources */,
 				BFC65C581C9227260079DF5A /* key_pipeline.c in Sources */,
 				BFC2E7682CA35F9E00263F2B /* transaction_async.c in Sources */,

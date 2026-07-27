@@ -375,6 +375,10 @@ as_txn_verify_command(as_txn* txn, as_error* err)
 		reason = "Issuing commands to this transaction is forbidden because it has been aborted.";
 		break;
 
+	case AS_TXN_STATE_COMMIT_FAILED:
+		reason = "Issuing commands to this transaction is forbidden because a commit failed on it with an in-doubt outcome.";
+		break;
+
 	default:
 		reason = "Issuing commands to this transaction is forbidden because it is in an unknown/invalid state.";
 		break;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -31,7 +31,6 @@
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_digest.h>
-#include <inttypes.h>
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
@@ -41,7 +40,7 @@
 //---------------------------------
 
 // These values must line up with as_operator enum.
-static uint8_t as_protocol_types[] = {1, 2, 3, 4, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+static uint8_t as_protocol_types[] = {1, 2, 3, 4, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
 
 //---------------------------------
 // Functions
@@ -165,7 +164,6 @@ as_command_key_size(
 		size += as_command_user_key_size(key);
 		tdata->n_fields++;
 	}
-
 	return size;
 }
 
@@ -297,7 +295,8 @@ as_command_write_header_write(
 	}
 
 	uint8_t txn_attr = on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
-	txn_attr |= (uint8_t)(policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT);
+	txn_attr |= (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
+				& AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
 
 #if defined USE_XDR
 	read_attr |= AS_MSG_INFO1_XDR;
@@ -332,8 +331,10 @@ as_command_write_header_read(
 	cmd[9] = read_attr;
 	cmd[10] = write_attr;
 	cmd[11] = info_attr;
-	cmd[12] = (uint8_t)(policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT);
-	memset(&cmd[13], 0, 5);
+	cmd[12] = (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
+			  & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	cmd[13] = 0;
+	*(uint32_t*)&cmd[14] = 0;
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
 	*(uint16_t*)&cmd[26] = cf_swap_to_be16(n_fields);
@@ -355,8 +356,10 @@ as_command_write_header_read_header(
 	cmd[9] = read_attr;
 	cmd[10] = 0;
 	cmd[11] = info_attr;
-	cmd[12] = (uint8_t)(policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT);
-	memset(&cmd[13], 0, 5);
+	cmd[12] = (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
+			  & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	cmd[13] = 0;
+	*(uint32_t*)&cmd[14] = 0;
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
 	uint32_t timeout = as_command_server_timeout(policy);
 	*(uint32_t*)&cmd[22] = cf_swap_to_be32(timeout);
@@ -448,7 +451,6 @@ as_command_write_key(
 	if (pol_key == AS_POLICY_KEY_SEND && key->valuep) {
 		p = as_command_write_user_key(p, key);
 	}
-
 	return p;
 }
 
@@ -677,7 +679,9 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 	// It's important that as_txn_on_write_in_doubt() is only executed for commands in a transaction,
 	// but not transaction operations (add transaction key, commit, abort). Add transaction key sets
 	// AS_COMMAND_FLAGS_TXN_MONITOR and commit/abort do not set cmd->policy->txn.
-	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_TXN_MONITOR) == 0) {
+	// Do nothing for batch commands as they are handled in aerospike_batch.
+	if (err->in_doubt && cmd->policy->txn && (cmd->flags & AS_COMMAND_FLAGS_TXN_MONITOR) == 0
+		&& (cmd->flags & AS_COMMAND_FLAGS_BATCH) == 0) {
 		as_txn_on_write_in_doubt(cmd->policy->txn, cmd->key->digest.value, cmd->key->set);
 	}
 }
@@ -1137,9 +1141,8 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	}
 
 	if (msg->result_code) {
-		const char* msg_text = (err && err->message[0] != 0) ?
-				err->message : as_error_string(msg->result_code);
-		return as_error_set_message(err, msg->result_code, msg_text);
+		as_error_update_status(err, msg->result_code);
+		return msg->result_code;
 	}
 
 	as_record** rec = cmd->udata;
@@ -1154,181 +1157,6 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		r->gen = (uint16_t)msg->generation;
 		r->ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 	}
-	return AEROSPIKE_OK;
-}
-
-static as_status
-as_command_parse_error_details(const uint8_t* buf, uint32_t len, as_error* err)
-{
-	if (err == NULL || buf == NULL || len == 0) {
-		return AEROSPIKE_OK;
-	}
-
-	as_unpacker pk = {
-			.buffer = buf,
-			.offset = 0,
-			.length = len
-	};
-
-	int64_t count = as_unpack_map_header_element_count(&pk);
-
-	if (count <= 0) {
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-				"error details map header invalid");
-	}
-
-	uint64_t subcode = 0;
-	bool has_subcode = false;
-	uint32_t message_len = 0;
-	const uint8_t* message_str = NULL;
-
-	for (int64_t i = 0; i < count; i++) {
-		uint64_t key;
-
-		if (as_unpack_uint64(&pk, &key) != 0) {
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-					"error details key unpack failed");
-		}
-
-		switch (key) {
-		case AS_ERROR_DETAIL_KEY_MESSAGE: {
-			uint32_t str_sz = 0;
-			message_str = as_unpack_str(&pk, &str_sz);
-
-			if (message_str == NULL) {
-				if (as_unpack_size(&pk) < 0) {
-					return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-							"error details message unpack failed");
-				}
-				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-						"error details message type invalid");
-			}
-
-			message_len = str_sz > AS_ERROR_MESSAGE_MAX_LEN ?
-					AS_ERROR_MESSAGE_MAX_LEN : str_sz;
-			continue;
-		}
-		case AS_ERROR_DETAIL_KEY_SUBCODE: {
-			if (as_unpack_uint64(&pk, &subcode) != 0) {
-				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-						"error details subcode unpack failed");
-			}
-
-			has_subcode = true;
-			continue;
-		}
-		default:
-			if (as_unpack_size(&pk) < 0) {
-				return as_error_update(err, AEROSPIKE_ERR_CLIENT,
-						"error details value unpack failed");
-			}
-			break;
-		}
-	}
-
-	if (message_len > 0 && has_subcode) {
-		memcpy(err->message, message_str, message_len);
-		int n = snprintf(err->message + message_len,
-				sizeof(err->message) - message_len,
-				" (subcode=%" PRIu64 ")", subcode);
-
-		if (n > 0) {
-			message_len += (uint32_t)n;
-		}
-
-		err->message[message_len] = 0;
-	}
-	else if (message_len > 0) {
-		memcpy(err->message, message_str, message_len);
-		err->message[message_len] = 0;
-	}
-	else if (has_subcode) {
-		snprintf(err->message, sizeof(err->message),
-				"error subcode=%" PRIu64, subcode);
-	}
-
-	return AEROSPIKE_OK;
-}
-
-as_status
-as_command_parse_error_details_values(
-	const uint8_t* buf, uint32_t len, uint32_t* subcode, char** message
-	)
-{
-	// Extract the raw subcode/message from a field-45 payload for callers (batch)
-	// that store details per record instead of folding them into one as_error.
-	// *subcode is set to 0 and *message to NULL when the map key is absent.
-	// *message is heap-allocated and owned by the caller; any existing non-NULL
-	// *message is freed first so a parse on retry does not leak.
-	*subcode = 0;
-
-	if (*message != NULL) {
-		cf_free(*message);
-		*message = NULL;
-	}
-
-	if (buf == NULL || len == 0) {
-		return AEROSPIKE_OK;
-	}
-
-	as_unpacker pk = {
-			.buffer = buf,
-			.offset = 0,
-			.length = len
-	};
-
-	int64_t count = as_unpack_map_header_element_count(&pk);
-
-	if (count <= 0) {
-		return AEROSPIKE_OK;
-	}
-
-	for (int64_t i = 0; i < count; i++) {
-		uint64_t key;
-
-		if (as_unpack_uint64(&pk, &key) != 0) {
-			return AEROSPIKE_OK;
-		}
-
-		switch (key) {
-		case AS_ERROR_DETAIL_KEY_MESSAGE: {
-			uint32_t str_sz = 0;
-			const uint8_t* str = as_unpack_str(&pk, &str_sz);
-
-			if (str == NULL) {
-				if (as_unpack_size(&pk) < 0) {
-					return AEROSPIKE_OK;
-				}
-				break;
-			}
-
-			uint32_t message_len = str_sz > AS_ERROR_MESSAGE_MAX_LEN ?
-					AS_ERROR_MESSAGE_MAX_LEN : str_sz;
-			char* m = cf_malloc(message_len + 1);
-
-			memcpy(m, str, message_len);
-			m[message_len] = 0;
-			*message = m;
-			break;
-		}
-		case AS_ERROR_DETAIL_KEY_SUBCODE: {
-			uint64_t sc = 0;
-
-			if (as_unpack_uint64(&pk, &sc) != 0) {
-				return AEROSPIKE_OK;
-			}
-
-			*subcode = (uint32_t)sc;
-			break;
-		}
-		default:
-			if (as_unpack_size(&pk) < 0) {
-				return AEROSPIKE_OK;
-			}
-			break;
-		}
-	}
-
 	return AEROSPIKE_OK;
 }
 
@@ -1359,50 +1187,18 @@ as_command_parse_fields_txn(
 				return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Record version field has invalid size: %u", len);
 			}
 		}
-		else if (type == AS_FIELD_ERROR_MESSAGE) {
-			as_status rc = as_command_parse_error_details(p, len, err);
-
-			if (rc != AEROSPIKE_OK) {
-				return rc;
-			}
+		else if (type == AS_FIELD_ERROR_DETAILS && len > 0) {
+			as_command_parse_error_details(err, p, len);
 		}
 		p += len;
 	}
 
-	if (txn) {
-		if (is_write) {
-			as_txn_on_write(txn, digest, set, version, msg->result_code);
-		}
-		else {
-			as_txn_on_read(txn, digest, set, version);
-		}
+	if (is_write) {
+		as_txn_on_write(txn, digest, set, version, msg->result_code);
 	}
-	*pp = p;
-	return AEROSPIKE_OK;
-}
-
-as_status
-as_command_parse_fields_error(uint8_t** pp, as_error* err, as_msg* msg)
-{
-	uint8_t* p = *pp;
-	uint32_t len;
-	uint8_t type;
-
-	for (uint32_t i = 0; i < msg->n_fields; i++) {
-		len = cf_swap_from_be32(*(uint32_t*)p) - 1;
-		p += 4;
-		type = *p++;
-
-		if (type == AS_FIELD_ERROR_MESSAGE && err && len > 0) {
-			as_status rc = as_command_parse_error_details(p, len, err);
-
-			if (rc != AEROSPIKE_OK) {
-				return rc;
-			}
-		}
-		p += len;
+	else {
+		as_txn_on_read(txn, digest, set, version);
 	}
-
 	*pp = p;
 	return AEROSPIKE_OK;
 }
@@ -1453,6 +1249,417 @@ as_command_bytes_to_int(uint8_t	*buf, int sz, int64_t *value)
 		return 0;
 	}
 	return 0;
+}
+
+static bool
+as_command_skip_msgpack_value(uint8_t** pp, uint8_t* end)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0x80) == 0 || (type & 0xe0) == 0xe0) {
+		return true;
+	}
+
+	if ((type & 0xe0) == 0xa0) {
+		uint32_t len = type & 0x1f;
+		*pp += len;
+		return *pp <= end;
+	}
+
+	if ((type & 0xf0) == 0x90) {
+		uint32_t count = type & 0x0f;
+		for (uint32_t i = 0; i < count; i++) {
+			if (!as_command_skip_msgpack_value(pp, end)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	if ((type & 0xf0) == 0x80) {
+		uint32_t count = type & 0x0f;
+		for (uint32_t i = 0; i < count; i++) {
+			if (!as_command_skip_msgpack_value(pp, end) ||
+				!as_command_skip_msgpack_value(pp, end)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	switch (type) {
+		case 0xc0: // nil
+		case 0xc2: // false
+		case 0xc3: // true
+			return true;
+
+		case 0xcc: // uint8
+			*pp += 1;
+			return *pp <= end;
+
+		case 0xcd: // uint16
+			*pp += 2;
+			return *pp <= end;
+
+		case 0xce: // uint32
+		case 0xca: // float32
+			*pp += 4;
+			return *pp <= end;
+
+		case 0xcf: // uint64
+		case 0xcb: // float64
+			*pp += 8;
+			return *pp <= end;
+
+		case 0xd9: // str8
+		case 0xc4: { // bin8
+			if (*pp >= end) return false;
+			uint32_t len = **pp;
+			(*pp) += 1 + len;
+			return *pp <= end;
+		}
+
+		case 0xda: // str16
+		case 0xc5: { // bin16
+			if (*pp + 2 > end) return false;
+			uint32_t len = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 2 + len;
+			return *pp <= end;
+		}
+
+		case 0xdb: // str32
+		case 0xc6: { // bin32
+			if (*pp + 4 > end) return false;
+			uint32_t len = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 4 + len;
+			return *pp <= end;
+		}
+
+		case 0xdc: { // array16
+			if (*pp + 2 > end) return false;
+			uint32_t count = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 2;
+			for (uint32_t i = 0; i < count; i++) {
+				if (!as_command_skip_msgpack_value(pp, end)) return false;
+			}
+			return true;
+		}
+
+		case 0xdd: { // array32
+			if (*pp + 4 > end) return false;
+			uint32_t count = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 4;
+			for (uint32_t i = 0; i < count; i++) {
+				if (!as_command_skip_msgpack_value(pp, end)) return false;
+			}
+			return true;
+		}
+
+		case 0xde: { // map16
+			if (*pp + 2 > end) return false;
+			uint32_t count = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 2;
+			for (uint32_t i = 0; i < count; i++) {
+				if (!as_command_skip_msgpack_value(pp, end) ||
+					!as_command_skip_msgpack_value(pp, end)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		case 0xdf: { // map32
+			if (*pp + 4 > end) return false;
+			uint32_t count = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 4;
+			for (uint32_t i = 0; i < count; i++) {
+				if (!as_command_skip_msgpack_value(pp, end) ||
+					!as_command_skip_msgpack_value(pp, end)) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		default:
+			return false;
+	}
+}
+
+static bool
+as_command_read_msgpack_uint(uint8_t** pp, uint8_t* end, uint64_t* out)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0x80) == 0) {
+		*out = type;
+		return true;
+	}
+
+	switch (type) {
+		case 0xcc:
+			if (*pp + 1 > end) return false;
+			*out = **pp;
+			(*pp)++;
+			return true;
+
+		case 0xcd:
+			if (*pp + 2 > end) return false;
+			*out = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 2;
+			return true;
+
+		case 0xce:
+			if (*pp + 4 > end) return false;
+			*out = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 4;
+			return true;
+
+		case 0xcf:
+			if (*pp + 8 > end) return false;
+			*out = cf_swap_from_be64(*(uint64_t*)*pp);
+			*pp += 8;
+			return true;
+
+		default:
+			return false;
+	}
+}
+
+static bool
+as_command_read_msgpack_str(uint8_t** pp, uint8_t* end, char** out, uint32_t* out_len)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	uint32_t len;
+
+	if ((type & 0xe0) == 0xa0) {
+		len = type & 0x1f;
+	}
+	else if (type == 0xd9) {
+		if (*pp >= end) return false;
+		len = **pp;
+		(*pp)++;
+	}
+	else if (type == 0xda) {
+		if (*pp + 2 > end) return false;
+		len = cf_swap_from_be16(*(uint16_t*)*pp);
+		*pp += 2;
+	}
+	else {
+		return false;
+	}
+
+	if (*pp + len > end) {
+		return false;
+	}
+
+	*out = (char*)*pp;
+	*out_len = len;
+	*pp += len;
+	return true;
+}
+
+
+static bool
+as_command_read_msgpack_map(uint8_t** pp, uint8_t* end, uint32_t* out_count)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0xf0) == 0x80) {
+		*out_count = type & 0x0f;
+		return true;
+	}
+
+	if (type == 0xde) {
+		if (*pp + 2 > end) return false;
+		*out_count = cf_swap_from_be16(*(uint16_t*)*pp);
+		*pp += 2;
+		return true;
+	}
+
+	if (type == 0xdf) {
+		if (*pp + 4 > end) return false;
+		*out_count = cf_swap_from_be32(*(uint32_t*)*pp);
+		*pp += 4;
+		return true;
+	}
+
+	return false;
+}
+
+void
+as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
+{
+	if (len == 0 || buf == NULL) {
+		return;
+	}
+
+	uint8_t* p = buf;
+	uint8_t* end = buf + len;
+	uint32_t n_entries;
+
+	if (!as_command_read_msgpack_map(&p, end, &n_entries)) {
+		return;
+	}
+
+	bool has_subcode = false;
+	uint64_t subcode = 0;
+	char* msg_str = NULL;
+	uint32_t msg_len = 0;
+
+	for (uint32_t i = 0; i < n_entries; i++) {
+		uint64_t key;
+
+		if (!as_command_read_msgpack_uint(&p, end, &key)) {
+			return;
+		}
+
+		if (key == AS_ERROR_DETAIL_KEY_SUBCODE) {
+			uint64_t val;
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return;
+			}
+			subcode = val;
+			has_subcode = true;
+		}
+		else if (key == AS_ERROR_DETAIL_KEY_MESSAGE) {
+			if (!as_command_read_msgpack_str(&p, end, &msg_str, &msg_len)) {
+				return;
+			}
+		}
+		else {
+			if (!as_command_skip_msgpack_value(&p, end)) {
+				return;
+			}
+		}
+	}
+
+	if (has_subcode) {
+		err->subcode = (uint32_t)subcode;
+	}
+
+	if (has_subcode && msg_str) {
+		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "%.*s (subcode=%" PRIu64 ")",
+				 (int)msg_len, msg_str, subcode);
+	}
+	else if (has_subcode) {
+		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "error subcode=%" PRIu64, subcode);
+	}
+	else if (msg_str) {
+		uint32_t copy_len = msg_len < AS_ERROR_MESSAGE_MAX_SIZE - 1
+							? msg_len : AS_ERROR_MESSAGE_MAX_SIZE - 1;
+		memcpy(err->message, msg_str, copy_len);
+		err->message[copy_len] = '\0';
+	}
+}
+
+void
+as_command_parse_error_details_values(
+	uint8_t* buf, uint32_t len, uint32_t* subcode, char** message
+	)
+{
+	*subcode = 0;
+
+	if (*message != NULL) {
+		cf_free(*message);
+		*message = NULL;
+	}
+
+	if (len == 0 || buf == NULL) {
+		return;
+	}
+
+	uint8_t* p = buf;
+	uint8_t* end = buf + len;
+	uint32_t n_entries;
+
+	if (!as_command_read_msgpack_map(&p, end, &n_entries)) {
+		return;
+	}
+
+	char* msg_str = NULL;
+	uint32_t msg_len = 0;
+
+	for (uint32_t i = 0; i < n_entries; i++) {
+		uint64_t key;
+
+		if (!as_command_read_msgpack_uint(&p, end, &key)) {
+			break;
+		}
+
+		if (key == AS_ERROR_DETAIL_KEY_SUBCODE) {
+			uint64_t val;
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				break;
+			}
+			*subcode = (uint32_t)val;
+		}
+		else if (key == AS_ERROR_DETAIL_KEY_MESSAGE) {
+			if (!as_command_read_msgpack_str(&p, end, &msg_str, &msg_len)) {
+				break;
+			}
+		}
+		else {
+			if (!as_command_skip_msgpack_value(&p, end)) {
+				break;
+			}
+		}
+	}
+
+	if (msg_len == 0) {
+		return;
+	}
+
+	if (msg_len > AS_ERROR_MESSAGE_MAX_SIZE - 1) {
+		msg_len = AS_ERROR_MESSAGE_MAX_SIZE - 1;
+	}
+
+	char* m = cf_malloc(msg_len + 1);
+
+	memcpy(m, msg_str, msg_len);
+	m[msg_len] = 0;
+	*message = m;
+}
+
+uint8_t*
+as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields)
+{
+	for (uint32_t i = 0; i < n_fields; i++) {
+		uint32_t field_size = cf_swap_from_be32(*(uint32_t*)p);
+		p += 4;
+
+		if (field_size > 0) {
+			uint8_t field_type = *p;
+
+			if (field_type == AS_FIELD_ERROR_DETAILS && field_size > 1) {
+				as_command_parse_error_details(err, p + 1, field_size - 1);
+			}
+		}
+
+		p += field_size;
+	}
+	return p;
 }
 
 uint8_t*
@@ -1952,13 +2159,7 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		}
 
 		default:
-		if (err && err->message[0] != 0) {
-			as_error_set_message(err, status, err->message);
-		}
-		else {
-			as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-					as_error_string(status));
-		}
+			as_error_update_address(err, status, as_node_get_address_string(node));
 			break;
 	}
 	return status;
@@ -2007,13 +2208,7 @@ as_command_parse_success_failure(
 		}
 
 		default:
-			if (err && err->message[0] != 0) {
-				as_error_set_message(err, status, err->message);
-			}
-			else {
-				as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-						as_error_string(status));
-			}
+			as_error_update_address(err, status, as_node_get_address_string(node));
 			if (val) {
 				*val = 0;
 			}
@@ -2044,11 +2239,8 @@ as_command_parse_deadline(as_error* err, as_command* cmd, as_node* node, uint8_t
 	status = msg->result_code;
 
 	if (status != AEROSPIKE_OK) {
-		if (err && err->message[0] != 0) {
-			return as_error_set_message(err, status, err->message);
-		}
 		return as_error_update(err, status, "%s %s", as_node_get_address_string(node),
-				as_error_string(status));
+			as_error_string(status));
 	}
 
 	return AEROSPIKE_OK;

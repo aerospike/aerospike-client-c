@@ -1,0 +1,205 @@
+name: Generate Release Notes
+description: >
+  Build GitHub release notes from git history using the Aerospike release notes
+  template (Release Date, New Features, Bug Fixes, Full Changelog link).
+  Requires a prior checkout with fetch-depth: 0 so tags and history are available.
+
+inputs:
+  version:
+    description: Release version string (tag name when the tag exists)
+    required: true
+  target-sha:
+    description: Release target commit SHA (merge-base or tag target)
+    required: true
+  dry-run:
+    description: When true, use target-sha instead of the version tag for the changelog range
+    required: false
+    default: 'false'
+  download-url:
+    description: Download page URL linked from the Release Date line
+    required: false
+    default: https://aerospike.com/download/client/c/
+  output-path:
+    description: Path to write release-notes.md
+    required: false
+    default: release-notes.md
+  repository-path:
+    description: >
+      Git working tree to read history from (use when the release target is
+      checked out to a subdirectory so local actions remain on the workflow commit).
+    required: false
+    default: .
+
+outputs:
+  prev-tag:
+    description: Previous git tag before this release
+    value: ${{ steps.generate.outputs.prev-tag }}
+  release-notes-path:
+    description: Path to the generated release notes file
+    value: ${{ steps.generate.outputs.release-notes-path }}
+
+runs:
+  using: composite
+  steps:
+    - id: generate
+      shell: bash
+      env:
+        VERSION:      ${{ inputs.version }}
+        TARGET_SHA:   ${{ inputs.target-sha }}
+        DRY_RUN:      ${{ inputs.dry-run }}
+        DOWNLOAD_URL: ${{ inputs.download-url }}
+        OUTPUT_PATH:  ${{ inputs.output-path }}
+        REPO_PATH:    ${{ inputs.repository-path }}
+      run: |
+        set -euo pipefail
+
+        git() { command git -C "$REPO_PATH" "$@"; }
+
+        # Commits matching these patterns are omitted from release notes.
+        readonly SKIP_COMMIT_RE='^(test|dry run|workflow|pipeline|bump version|update verison|harcode|override|clean rel|merge branch|promote-bundle|fixed run name|test announce|update version)'
+
+        # ---------------------------------------------------------------------------
+        # Helpers
+        # ---------------------------------------------------------------------------
+
+        should_skip() {
+          local lower="${1,,}"
+          [[ "$lower" =~ $SKIP_COMMIT_RE ]] && return 0
+          [[ "$lower" =~ (^|[[:space:]])\[skip[[:space:]]ci\] ]] && return 0
+          return 1
+        }
+
+        bucket_commit() {
+          local lower="${1,,}"
+          if [[ "$lower" =~ ^(add|support|implement|introduce)[[:space:]] ]] || [[ "$lower" == *"new feature"* ]]; then
+            echo feature
+          elif [[ "$lower" =~ ^client-[0-9]+ ]]; then
+            if [[ "$lower" =~ (add|support|mark) ]]; then echo feature
+            else echo bugfix; fi
+          else
+            echo bugfix
+          fi
+        }
+
+        format_item() {
+          local msg="$1" short_sha="$2"
+          local jira summary line
+
+          jira=$(grep -oE 'CLIENT-[0-9]+' <<< "$msg" | head -1 || true)
+          summary=$(sed -E 's/^CLIENT-[0-9]+[[:space:]]*//' <<< "$msg")
+          if [[ -n "$jira" ]]; then
+            summary=$(sed -E "s/[[:space:]]*\\[${jira}\\][[:space:]]*$//" <<< "$summary")
+          fi
+
+          summary="${summary%.}"
+          summary="${summary^}"
+
+          if [[ -n "$jira" ]]; then
+            line="- ${summary}. [${jira}]"
+          else
+            line="- ${summary}."
+          fi
+
+          if [[ "$using_tag" != "true" && -n "$short_sha" ]]; then
+            line+=" (\`${short_sha}\`)"
+          fi
+
+          echo "$line"
+        }
+
+        print_section() {
+          local title="$1" file="$2"
+          [[ ! -s "$file" ]] && return
+          printf '### %s\n\n' "$title"
+          cat "$file"
+          echo ""
+        }
+
+        build_changelog_link() {
+          local from_tag="$1" to_ref="$2" label="$3"
+          local compare_base="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare"
+          local compare_range="${from_tag}...${to_ref}"
+          echo "[${label}](${compare_base}/${compare_range})"
+        }
+
+        # ---------------------------------------------------------------------------
+        # Resolve git range
+        # ---------------------------------------------------------------------------
+
+        using_tag=false
+        release_ref="$TARGET_SHA"
+
+        if [[ "$DRY_RUN" != "true" ]] && git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+          using_tag=true
+          release_ref="$VERSION"
+        fi
+
+        prev_tag=$(git describe --tags --abbrev=0 "${release_ref}^" 2>/dev/null || true)
+        if [[ -z "$prev_tag" ]]; then
+          echo "::error::No previous tag found before ${release_ref}. Cannot generate release notes."
+          exit 1
+        fi
+
+        range="${prev_tag}..${release_ref}"
+
+        if [[ "$using_tag" == "true" ]]; then
+          changelog_link=$(build_changelog_link "$prev_tag" "$release_ref" "${prev_tag}...${release_ref}")
+        else
+          changelog_link=$(build_changelog_link "$prev_tag" "$TARGET_SHA" "${prev_tag}...${TARGET_SHA:0:7}")
+        fi
+
+        # ---------------------------------------------------------------------------
+        # Bucket commits into section files
+        # ---------------------------------------------------------------------------
+
+        workdir=$(mktemp -d)
+        : > "${workdir}/features" "${workdir}/bugfixes"
+        total=0
+
+        while IFS='|' read -r msg sha; do
+          [[ -z "$msg" ]] && continue
+          should_skip "$msg" && continue
+
+          line=$(format_item "$msg" "$sha")
+          case "$(bucket_commit "$msg")" in
+            feature) echo "$line" >> "${workdir}/features" ;;
+            bugfix)  echo "$line" >> "${workdir}/bugfixes" ;;
+          esac
+          total=$((total + 1))
+        done < <(git log "$range" --pretty=format:"%s|%h" --no-merges)
+
+        if [[ "$total" -eq 0 ]]; then
+          echo "::error::No commits found between ${range}. Nothing to release."
+          exit 1
+        fi
+
+        # ---------------------------------------------------------------------------
+        # Write release-notes.md
+        # ---------------------------------------------------------------------------
+
+        release_date=$(date -u +"%B %d, %Y" | sed 's/ 0/ /')
+
+        {
+          echo "Release Date: ${release_date} | [Download](${DOWNLOAD_URL})"
+          echo ""
+
+          if [[ "$using_tag" != "true" ]]; then
+            echo "> **Draft preview** — release target \`${TARGET_SHA}\` (tag \`${VERSION}\` not created yet). Review and edit sections before publishing."
+            echo ""
+          fi
+
+          print_section "New Features" "${workdir}/features"
+          print_section "Bug Fixes"    "${workdir}/bugfixes"
+          echo "**Full Changelog**: ${changelog_link}"
+        } > "$OUTPUT_PATH"
+
+        rm -rf "$workdir"
+
+        # ---------------------------------------------------------------------------
+        # Outputs
+        # ---------------------------------------------------------------------------
+
+        echo "Release notes preview:"
+        cat "$OUTPUT_PATH"
+        echo "prev-tag=${prev_tag}" >> "$GITHUB_OUTPUT"
+        echo "release-notes-path=${OUTPUT_PATH}" >> "$GITHUB_OUTPUT"

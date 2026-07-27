@@ -618,12 +618,13 @@ typedef struct as_policy_base_s {
 
 	/**
 	 * Request server error detail fields in responses.
-	 * 0 = disabled (no error details).
-	 * 1 = subcode only.
-	 * 2 = subcode + message.
-	 * 3-7 = reserved for future fields.
 	 *
-	 * Default: 0
+	 * 0 - disabled (no error details returned). Default.
+	 * 1 - return subcode only.
+	 * 2 - return subcode and human-readable message.
+	 *
+	 * When enabled and the server returns error details, as_error.subcode will contain the
+	 * numeric subcode and as_error.message will contain the server-authored message.
 	 */
 	uint8_t error_detail_verbosity;
 } as_policy_base;
@@ -1733,7 +1734,7 @@ as_policy_base_read_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
-	p->error_detail_verbosity = 0;
+	p->error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 }
 
 /**
@@ -1751,7 +1752,7 @@ as_policy_base_write_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
-	p->error_detail_verbosity = 0;
+	p->error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 }
 
 /**
@@ -1782,7 +1783,7 @@ as_policy_base_query_init(as_policy_base* p)
 	p->filter_exp = NULL;
 	p->txn = NULL;
 	p->compress = false;
-	p->error_detail_verbosity = 0;
+	p->error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 }
 
 /**
@@ -2239,6 +2240,7 @@ as_policy_txn_verify_init(as_policy_txn_verify* p)
 	p->base.filter_exp = NULL;
 	p->base.txn = NULL;
 	p->base.compress = false;
+	p->base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 	p->replica = AS_POLICY_REPLICA_MASTER;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_LINEARIZE;
@@ -2282,6 +2284,7 @@ as_policy_txn_roll_init(as_policy_txn_roll* p)
 	p->base.filter_exp = NULL;
 	p->base.txn = NULL;
 	p->base.compress = false;
+	p->base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 	p->replica = AS_POLICY_REPLICA_MASTER;
 	p->read_mode_ap = AS_POLICY_READ_MODE_AP_DEFAULT;
 	p->read_mode_sc = AS_POLICY_READ_MODE_SC_DEFAULT;

@@ -35,15 +35,28 @@
 // driver loop checks expected status + subcode + (optional) message
 // substring per row in CASES[] and prints PASS/FAIL.
 //
-// Subcode constants mirror AS_SUB_* in aerospike-server/as/include/base/proto.h.
-// They are stored as ints in the table and matched against err.message
-// as the substring "subcode=N" -- that's what the C client formats from
-// the AS_MSG_FIELD_TYPE_ERROR_DETAILS field.
+// Everything the server can say about one failure arrives in the same
+// field-45 payload and lands in err.message, so every assertion in this
+// file is a substring of that one string:
+//
+//   list_get_..._range: index 99 out of bounds for element count 3
+//       (subcode=1) [exp: eval/fault op=call path=eq/call depth=2 ...]
+//   |___ message (tier 2) _______________| |_ tier 1 _| |_ tier 3 ___...
+//
+// The trace is the tier-3 part, rendered by the client from key 3. It says
+// where in the expression the failure was, and for a record that merely did
+// not match, which comparison decided and what it compared. Rows assert it
+// through expected_trace_substr, or assert its absence with trace_absent.
+//
+// Subcode constants mirror AS_SUB_* in aerospike-server/as/include/base/proto.h
+// (and as_subcode.h client-side). The client reports a subcode twice: as the
+// structured err.subcode, and folded into err.message as "(subcode=N)". Rows
+// store the expected integer and the driver checks both.
 //
 // AS_SUB_NONE (0) is never sent on the wire: the server omits map key 1
 // entirely when the subcode is NONE. Such cases set subcode_absent = true,
-// and the driver asserts no "subcode=" suffix appears in err.message (the
-// message text alone carries the context).
+// and the driver asserts err.subcode stayed zero and no "subcode=" suffix
+// appears in err.message (the message text alone carries the context).
 //
 
 //==========================================================
@@ -88,6 +101,10 @@
 
 static const char* BIN = "bin";
 
+// What the client prefixes a rendered expression trace with. Its presence in
+// err.message is the signal that field-45 key 3 arrived and was decoded.
+#define TRACE_MARK "[exp: "
+
 static as_policy_write g_write_pol;
 static as_policy_operate g_op_pol;
 static as_policy_remove g_rm_pol;
@@ -107,6 +124,10 @@ typedef struct {
 	uint32_t    expected_subcode;    // checked only when !subcode_absent
 	const char* expected_msg_substr; // NULL to skip
 	case_fn     run;
+	// Expression-trace expectations. These trail the function pointer so the
+	// rows that predate the trace need no edit - C zero-fills what they omit.
+	const char* expected_trace_substr; // NULL to skip
+	bool        trace_absent;          // true: assert NO trace at all
 } error_case;
 
 
@@ -118,16 +139,16 @@ static void
 init_policies(void)
 {
 	as_policy_write_init(&g_write_pol);
-	g_write_pol.base.error_detail_verbosity = 2;
+	g_write_pol.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_policy_operate_init(&g_op_pol);
-	g_op_pol.base.error_detail_verbosity = 2;
+	g_op_pol.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_policy_remove_init(&g_rm_pol);
-	g_rm_pol.base.error_detail_verbosity = 2;
+	g_rm_pol.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 
 	as_policy_read_init(&g_read_pol);
-	g_read_pol.base.error_detail_verbosity = 2;
+	g_read_pol.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 }
 
 // Bail with a clear message if a setup precondition fails. Setup failures
@@ -834,8 +855,7 @@ case_operate_filtered_out(aerospike* as, as_error* err)
 // int vs float operands, which the server rejects at build time (it does not
 // type-check this client-side). Yields AS_ERR_PARAMETER with the build-phase
 // detail message. Verbosity 3 so the server also emits the field-45 expression
-// trace (key 3); the client skips it as an unknown sub-key, exercising that
-// path end-to-end.
+// trace (key 3), which the client renders onto the end of err.message.
 static as_status
 case_filter_build_fail(aerospike* as, as_error* err)
 {
@@ -846,7 +866,7 @@ case_filter_build_fail(aerospike* as, as_error* err)
 	as_exp_build(filter, as_exp_cmp_eq(as_exp_int(5), as_exp_float(6.0)));
 
 	as_policy_read pol = g_read_pol;
-	pol.base.error_detail_verbosity = 3;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 	pol.base.filter_exp = filter;
 
 	as_record* rec = NULL;
@@ -874,7 +894,7 @@ case_exp_op_build_fail(aerospike* as, as_error* err)
 	as_operations_exp_write(&ops, BIN, exp, AS_EXP_WRITE_DEFAULT);
 
 	as_policy_operate pol = g_op_pol;
-	pol.base.error_detail_verbosity = 3;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 
 	as_record* rec = NULL;
 	as_status s = aerospike_key_operate(as, err, &pol, &key, &ops, &rec);
@@ -892,10 +912,8 @@ case_exp_op_build_fail(aerospike* as, as_error* err)
 // filter fault is still cleanly FILTERED_OUT, an expop fault still
 // OP_NOT_APPLICABLE. At verbosity 3 the server ADDS a field-45 key-3 eval-phase
 // trace (phase=eval, outcome=fault, op, path, snippet) PLUS the tier-2 detail
-// message ("integer division by zero" etc.). The client skips key 3 as an
-// unknown sub-key (as_command_parse_error_details), so it surfaces the status +
-// message and the trace bytes round-trip harmlessly; the trace's internal
-// fields are decoded/asserted by the server-side ErrorDetailsTest unit suite.
+// message ("integer division by zero" etc.). The client renders the trace onto
+// the end of err.message, so these rows can assert both halves.
 
 // Filter fault: gt(div(5, 0), 1). Literal operands -> faults for ANY record.
 static as_status
@@ -910,7 +928,7 @@ case_filter_eval_fault_div_zero(aerospike* as, as_error* err)
 					as_exp_int(1)));
 
 	as_policy_read pol = g_read_pol;
-	pol.base.error_detail_verbosity = 3;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 	pol.base.filter_exp = filter;
 
 	as_record* rec = NULL;
@@ -934,7 +952,7 @@ case_filter_eval_fault_mod_zero(aerospike* as, as_error* err)
 					as_exp_int(1)));
 
 	as_policy_read pol = g_read_pol;
-	pol.base.error_detail_verbosity = 3;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 	pol.base.filter_exp = filter;
 
 	as_record* rec = NULL;
@@ -960,7 +978,7 @@ case_filter_eval_fault_low_verbosity(aerospike* as, as_error* err)
 					as_exp_int(1)));
 
 	as_policy_read pol = g_read_pol;
-	pol.base.error_detail_verbosity = 1;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_SUBCODE;
 	pol.base.filter_exp = filter;
 
 	as_record* rec = NULL;
@@ -985,7 +1003,7 @@ case_filter_absent_bin_no_fault(aerospike* as, as_error* err)
 			as_exp_cmp_gt(as_exp_bin_int("missing"), as_exp_int(1)));
 
 	as_policy_read pol = g_read_pol;
-	pol.base.error_detail_verbosity = 3;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 	pol.base.filter_exp = filter;
 
 	as_record* rec = NULL;
@@ -1010,7 +1028,158 @@ case_filter_keyless_key_no_fault(aerospike* as, as_error* err)
 			as_exp_cmp_eq(as_exp_key_int(), as_exp_int(7)));
 
 	as_policy_read pol = g_read_pol;
-	pol.base.error_detail_verbosity = 3;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// toString() over a MAP bin. The server takes toString as a standalone unary op
+// (EXP_TO_STRING) accepting INT, FLOAT, STR, BLOB or TRILEAN, so a map operand
+// is rejected at build time -- and the trace names the op that rejected it. The
+// case doubles as a wire check on as_exp_to_string(): the older CALL sub-type
+// encoding is rejected as an unknown call, with no op to name.
+static as_status
+case_to_string_on_map_build_fail(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-tostring-map");
+
+	int64_t keys[] = { 1 };
+	const char* vals[] = { "a" };
+	put_int_map(as, &key, keys, vals, 1);
+
+	as_exp_build(exp, as_exp_to_string(as_exp_bin_map(BIN)));
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "s", exp, AS_EXP_READ_DEFAULT);
+
+	as_policy_operate pol = g_op_pol;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_operate(as, err, &pol, &key, &ops, &rec);
+
+	as_record_destroy(rec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(exp);
+	return s;
+}
+
+// --- SERVER-1139 filter-decision explanations (verbosity 3). ---
+//
+// A record that a filter cleanly rejected is not an error the server can name:
+// the status is FILTERED_OUT either way. At verbosity 3 it re-runs the filter
+// and reports WHICH comparison decided, and for a comparison, the two values it
+// compared. That is the difference between "filtered out by bins expression"
+// (tier 2) and a trace pointing at the deciding op.
+//
+// These are the same shapes the client renders for a fault, distinguished by
+// the outcome field: eval/false and eval/absent instead of eval/fault.
+
+// The whole filter is the decisive op, so the path is one frame deep and the
+// operands are the compared values (bin BIN = 1 against the literal 99).
+static as_status
+case_filter_false_explained(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-false-explained");
+	put_int(as, &key, 1);
+
+	as_exp_build(filter, as_exp_cmp_eq(as_exp_bin_int(BIN), as_exp_int(99)));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// and(<true>, <false>): the explainer pierces the AND to the branch that
+// actually decided, so the path is root -> decisive op and depth is 2. Without
+// the pierce this would blame the AND and carry no operands.
+static as_status
+case_filter_false_nested_explained(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-false-nested");
+	put_int(as, &key, 1);
+
+	as_exp_build(filter,
+			as_exp_and(
+					as_exp_cmp_eq(as_exp_bin_int(BIN), as_exp_int(1)),
+					as_exp_cmp_eq(as_exp_bin_int(BIN), as_exp_int(99))));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// A filter over a bin the record does not have. The decision is ABSENT rather
+// than FALSE, and it is the bin read - not the comparison - that is decisive,
+// so there are no operands to report.
+static as_status
+case_filter_absent_explained(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-absent-explained");
+	put_int(as, &key, 1); // has BIN; the filter reads a different, missing bin
+
+	as_exp_build(filter,
+			as_exp_cmp_eq(as_exp_bin_int("nosuchbin"), as_exp_int(1)));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+// A CDT call that faults inside a filter. The CDT layer authors its message
+// (with a subcode) before the expression layer stages the trace, so this is the
+// late-attach path: the trace is appended to an already-assembled field-45
+// payload rather than packed inline with it. All three parts must arrive.
+static as_status
+case_filter_cdt_fault_trace(aerospike* as, as_error* err)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-filter-cdt-oob");
+
+	int64_t vals[] = { 1, 2, 3 };
+	put_int_list(as, &key, vals, 3);
+
+	as_exp_build(filter,
+			as_exp_cmp_eq(
+					as_exp_list_get_by_index(NULL, AS_LIST_RETURN_VALUE,
+							AS_EXP_TYPE_INT, as_exp_int(99),
+							as_exp_bin_list(BIN)),
+					as_exp_int(1)));
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 	pol.base.filter_exp = filter;
 
 	as_record* rec = NULL;
@@ -1039,7 +1208,7 @@ case_expop_eval_fault_div_zero(aerospike* as, as_error* err)
 	as_operations_exp_read(&ops, "v", exp, AS_EXP_READ_DEFAULT);
 
 	as_policy_operate pol = g_op_pol;
-	pol.base.error_detail_verbosity = 3;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 
 	as_record* rec = NULL;
 	as_status s = aerospike_key_operate(as, err, &pol, &key, &ops, &rec);
@@ -1081,9 +1250,9 @@ case_expop_eval_fault_div_zero(aerospike* as, as_error* err)
 
 // Surface a single batch row's per-record result + error detail through *err so
 // the CASES harness (which checks one *err) can assert them. The client parses
-// field-45 per row into rec->result / rec->error_message (verbosity >= 2);
-// key-3 (the trace) is skipped as an unknown sub-key, as on the single-record
-// path. Must copy before as_batch_records_destroy frees rec->error_message.
+// field-45 per row into rec->result / rec->error_message (verbosity >= 2), with
+// key-3 (the trace) rendered onto the end of that message, as on the
+// single-record path. Must copy before as_batch_records_destroy frees it.
 static as_status
 batch_row_to_err(as_error* err, as_batch_records* recs)
 {
@@ -1097,6 +1266,7 @@ batch_row_to_err(as_error* err, as_batch_records* recs)
 
 	as_error_set_message(err, row,
 			rr->error_message != NULL ? rr->error_message : "");
+	err->subcode = rr->error_subcode;
 
 	return row;
 }
@@ -1124,7 +1294,7 @@ case_batch_filter_false_explained(aerospike* as, as_error* err)
 
 	as_policy_batch bp;
 	as_policy_batch_init(&bp);
-	bp.base.error_detail_verbosity = 3;
+	bp.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 	bp.respond_all_keys = true;
 
 	// Two rows so this is a genuine batch (a single-key batch can be serviced as
@@ -1171,7 +1341,7 @@ case_batch_filter_fault_div_zero(aerospike* as, as_error* err)
 
 	as_policy_batch bp;
 	as_policy_batch_init(&bp);
-	bp.base.error_detail_verbosity = 3;
+	bp.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 	bp.respond_all_keys = true;
 
 	// Two rows so this is a genuine batch (a single-key batch can be serviced as
@@ -1289,54 +1459,92 @@ static const error_case CASES[] = {
 	{ "delete generation mismatch",
 	  AEROSPIKE_ERR_RECORD_GENERATION, true, 0, NULL,
 	  case_delete_generation_mismatch },
+	// Verbosity 2 (the default set in init_policies): the generic filtered-out
+	// message, and no trace -- the tier floor for the explanations below.
 	{ "read filtered out by filter_exp",
 	  AEROSPIKE_FILTERED_OUT, true, 0, "filtered out",
-	  case_read_filtered_out },
+	  case_read_filtered_out, NULL, true },
 	{ "operate filtered out by filter_exp",
 	  AEROSPIKE_FILTERED_OUT, true, 0, "filtered out",
-	  case_operate_filtered_out },
+	  case_operate_filtered_out, NULL, true },
 	// --- Expression build (compile) failures: AS_ERR_PARAMETER, AS_SUB_NONE,
-	// build-phase detail message (+ field-45 expression trace at verbosity 3). ---
+	// build-phase detail message + a build-phase trace at verbosity 3. The
+	// coordinate is a byte offset into the msgpack payload the client sent. ---
 	{ "filter expression fails to build",
 	  AEROSPIKE_ERR_REQUEST_INVALID, true, 0,
-	  "invalid metadata expression in request", case_filter_build_fail },
+	  "invalid metadata expression in request", case_filter_build_fail,
+	  "[exp: build op=eq path=eq depth=1 offset=" },
 	{ "exp_write operation fails to build",
 	  AEROSPIKE_ERR_REQUEST_INVALID, true, 0,
-	  "invalid expression in operation request", case_exp_op_build_fail },
+	  "invalid expression in operation request", case_exp_op_build_fail,
+	  "[exp: build op=eq path=eq depth=1 offset=" },
+	{ "exp_read toString() on a map bin fails to build",
+	  AEROSPIKE_ERR_REQUEST_INVALID, true, 0,
+	  "invalid expression in operation request", case_to_string_on_map_build_fail,
+	  "[exp: build op=to_string path=to_string depth=1 offset=" },
 	// --- SERVER-1138 runtime eval faults (verbosity 3): status unchanged +
-	// AS_SUB_NONE + eval-fault message; field-45 key-3 trace rides too (the
-	// client skips it as an unknown sub-key). ---
+	// AS_SUB_NONE + eval-fault message + an eval-phase trace naming the op that
+	// faulted and its ancestry. ---
 	{ "filter eval fault: div by zero -> FILTERED_OUT + trace",
 	  AEROSPIKE_FILTERED_OUT, true, 0,
-	  "integer division by zero", case_filter_eval_fault_div_zero },
+	  "integer division by zero", case_filter_eval_fault_div_zero,
+	  "[exp: eval/fault op=div path=gt/div depth=2" },
 	{ "filter eval fault: mod by zero -> FILTERED_OUT + trace",
 	  AEROSPIKE_FILTERED_OUT, true, 0,
-	  "integer modulo by zero", case_filter_eval_fault_mod_zero },
+	  "integer modulo by zero", case_filter_eval_fault_mod_zero,
+	  "[exp: eval/fault op=mod path=gt/mod depth=2" },
 	{ "expop eval fault: div by zero -> OP_NOT_APPLICABLE + trace",
 	  AEROSPIKE_ERR_OP_NOT_APPLICABLE, true, 0,
-	  "integer division by zero", case_expop_eval_fault_div_zero },
+	  "integer division by zero", case_expop_eval_fault_div_zero,
+	  "[exp: eval/fault op=div path=div depth=1" },
+	// A CDT fault reached through an expression: message and subcode authored by
+	// the CDT layer, trace attached afterwards by the expression layer.
+	{ "filter CDT fault: list index oob -> message + subcode + trace",
+	  AEROSPIKE_FILTERED_OUT, false, 1,
+	  "out of bounds", case_filter_cdt_fault_trace,
+	  "[exp: eval/fault op=call path=eq/call depth=2" },
+	// --- SERVER-1139 filter-decision explanations (verbosity 3): a clean
+	// non-match, explained. Status is unchanged and no subcode rides. ---
+	{ "filter FALSE -> which comparison decided, and with what values",
+	  AEROSPIKE_FILTERED_OUT, true, 0,
+	  "filter expression evaluated to false", case_filter_false_explained,
+	  "[exp: eval/false op=eq path=eq depth=1 operands=['1','99']" },
+	{ "filter FALSE under and() -> explainer pierces to the decisive branch",
+	  AEROSPIKE_FILTERED_OUT, true, 0,
+	  "filter expression evaluated to false",
+	  case_filter_false_nested_explained,
+	  "[exp: eval/false op=eq path=and/eq depth=2 operands=['1','99']" },
+	{ "filter ABSENT -> the bin read is decisive, so no operands",
+	  AEROSPIKE_FILTERED_OUT, true, 0,
+	  "filter references an absent bin or key", case_filter_absent_explained,
+	  "[exp: eval/absent op=bin path=eq/bin depth=2" },
 	// --- SERVER-1138 non-breaking tripwires / tier floor: still cleanly
 	// filtered, NO fault detail (the must-be-absent message is checked
 	// explicitly in run_eval_fault_positive_checks). ---
 	{ "tier gating: div-by-zero filter at verbosity 1 -> no eval detail",
 	  AEROSPIKE_FILTERED_OUT, true, 0, NULL,
-	  case_filter_eval_fault_low_verbosity },
-	{ "non-breaking: absent bin filter -> FILTERED_OUT, no fault",
+	  case_filter_eval_fault_low_verbosity, NULL, true },
+	// These two predate the explainer and were written to prove the absence of a
+	// FAULT. At verbosity 3 they now also carry the ABSENT explanation -- still
+	// no fault, which run_eval_fault_positive_checks continues to assert.
+	{ "non-breaking: absent bin filter -> FILTERED_OUT, absent explanation",
 	  AEROSPIKE_FILTERED_OUT, true, 0, NULL,
-	  case_filter_absent_bin_no_fault },
-	{ "non-breaking: keyless key() filter -> FILTERED_OUT, no fault",
+	  case_filter_absent_bin_no_fault, "[exp: eval/absent op=bin" },
+	{ "non-breaking: keyless key() filter -> FILTERED_OUT, absent explanation",
 	  AEROSPIKE_FILTERED_OUT, true, 0, NULL,
-	  case_filter_keyless_key_no_fault },
+	  case_filter_keyless_key_no_fault, "[exp: eval/absent" },
 	// --- Batch: expression error details + explanations per row. The explainer
 	// now runs for batch subs; details ride the per-row field-45 (rec->result /
 	// rec->error_message). ---
 	{ "batch: filter FALSE -> per-row FILTERED_OUT + 1139 explanation",
 	  AEROSPIKE_FILTERED_OUT, true, 0,
 	  "filter expression evaluated to false",
-	  case_batch_filter_false_explained },
+	  case_batch_filter_false_explained,
+	  "[exp: eval/false op=eq path=eq depth=1 operands=['1','99']" },
 	{ "batch: filter eval fault div0 -> per-row FILTERED_OUT + trace message",
 	  AEROSPIKE_FILTERED_OUT, true, 0,
-	  "integer division by zero", case_batch_filter_fault_div_zero },
+	  "integer division by zero", case_batch_filter_fault_div_zero,
+	  "[exp: eval/fault op=div path=gt/div depth=2" },
 };
 
 static const uint32_t N_CASES = (uint32_t)(sizeof(CASES) / sizeof(CASES[0]));
@@ -1358,9 +1566,17 @@ check_case(const error_case* c, as_status got, const as_error* err)
 		ok = false;
 	}
 
+	// The subcode arrives twice over: as the structured err.subcode, and folded
+	// into the message as a "(subcode=N)" suffix. Assert both, so a regression
+	// in either surface shows up here.
 	if (c->subcode_absent) {
-		// AS_SUB_NONE is omitted on the wire, so the client never formats a
-		// "subcode=N" suffix. Assert the absence rather than "subcode=0".
+		// AS_SUB_NONE is omitted on the wire, so err.subcode stays zero and the
+		// client formats no suffix. Assert the absence rather than "subcode=0".
+		if (err->subcode != 0) {
+			LOG("    subcode: expected none, got %u", err->subcode);
+			ok = false;
+		}
+
 		if (strstr(err->message, "subcode=") != NULL) {
 			LOG("    subcode: expected none, but got one in '%s'",
 					err->message);
@@ -1370,6 +1586,12 @@ check_case(const error_case* c, as_status got, const as_error* err)
 	else {
 		char want_sub[32];
 		snprintf(want_sub, sizeof(want_sub), "subcode=%u", c->expected_subcode);
+
+		if (err->subcode != c->expected_subcode) {
+			LOG("    subcode: got %u want %u", err->subcode,
+					c->expected_subcode);
+			ok = false;
+		}
 
 		if (strstr(err->message, want_sub) == NULL) {
 			LOG("    subcode: expected '%s' in '%s'", want_sub, err->message);
@@ -1381,6 +1603,18 @@ check_case(const error_case* c, as_status got, const as_error* err)
 			strstr(err->message, c->expected_msg_substr) == NULL) {
 		LOG("    message: expected substring '%s' in '%s'",
 				c->expected_msg_substr, err->message);
+		ok = false;
+	}
+
+	if (c->trace_absent && strstr(err->message, TRACE_MARK) != NULL) {
+		LOG("    trace: expected none, but got one in '%s'", err->message);
+		ok = false;
+	}
+
+	if (c->expected_trace_substr != NULL &&
+			strstr(err->message, c->expected_trace_substr) == NULL) {
+		LOG("    trace: expected substring '%s' in '%s'",
+				c->expected_trace_substr, err->message);
 		ok = false;
 	}
 
@@ -1425,7 +1659,7 @@ run_batch_cases(aerospike* as)
 	// --- opt-in ON: detail rides the error row only. ---
 	as_policy_batch bp;
 	as_policy_batch_init(&bp);
-	bp.base.error_detail_verbosity = 2;
+	bp.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
 	bp.respond_all_keys = true; // per-record mode: every row (incl. error) sent
 
 	as_batch_records recs;
@@ -1476,7 +1710,7 @@ run_batch_cases(aerospike* as)
 	// --- opt-in OFF: no detail anywhere (byte-identical legacy reply). ---
 	as_policy_batch bp_off;
 	as_policy_batch_init(&bp_off);
-	bp_off.base.error_detail_verbosity = 0;
+	bp_off.base.error_detail_verbosity = AS_ERROR_DETAIL_NONE;
 	bp_off.respond_all_keys = true;
 
 	as_batch_records recs2;
@@ -1506,6 +1740,200 @@ run_batch_cases(aerospike* as)
 
 	return failed;
 }
+
+//==========================================================
+// AEL source expressions.
+//
+// The same error-detail machinery, reached through the other front end. An AEL
+// expression is a normal as_exp whose payload is [128, <source bytes>]: the
+// server compiles the text and evaluates the result, so filter_exp carries it
+// with no other client change. The client has no AEL builder yet, so this
+// example packs it directly.
+//
+// What differs is the locator. A msgpack expression is reported as a byte
+// offset into the payload the client sent ("offset=N"); an AEL one is reported
+// as an offset and span into the SOURCE TEXT ("ael=OFF+SPAN"), with a snippet
+// that marks the offending region with guillemets. The two coordinate spaces
+// are distinct and the client keeps them apart.
+//
+// AEL is preview-only, so the section starts with a capability probe and skips
+// itself against a server that does not compile it.
+//
+
+#define WIRE_EXP_AEL_COMPILE 128
+
+// Pack [128, <src>] into an as_exp. Freed with as_exp_destroy() like any other.
+static as_exp*
+ael_exp(const char* src)
+{
+	uint32_t src_len = (uint32_t)strlen(src);
+	as_packer sizer = { .buffer = NULL, .capacity = 0 };
+
+	as_pack_list_header(&sizer, 2);
+	as_pack_uint64(&sizer, WIRE_EXP_AEL_COMPILE);
+	as_pack_bin(&sizer, (const uint8_t*)src, src_len);
+
+	uint32_t sz = (uint32_t)sizer.offset;
+	as_exp* exp = cf_malloc(sizeof(as_exp) + sz);
+	as_packer pk = { .buffer = exp->packed, .capacity = (int)sz };
+
+	as_pack_list_header(&pk, 2);
+	as_pack_uint64(&pk, WIRE_EXP_AEL_COMPILE);
+	as_pack_bin(&pk, (const uint8_t*)src, src_len);
+
+	exp->packed_sz = sz;
+	return exp;
+}
+
+// Read the AEL fixture record with src as the filter, at verbosity 3.
+static as_status
+ael_filter_get(aerospike* as, as_error* err, const char* src)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-ael");
+
+	as_exp* filter = ael_exp(src);
+
+	as_policy_read pol = g_read_pol;
+	pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
+	pol.base.filter_exp = filter;
+
+	as_record* rec = NULL;
+	as_status s = aerospike_key_get(as, err, &pol, &key, &rec);
+
+	as_record_destroy(rec);
+	as_exp_destroy(filter);
+	return s;
+}
+
+typedef struct {
+	const char* src;
+	as_status   expected_status;
+	const char* expected_msg_substr;  // NULL to skip
+	const char* expected_trace_substr; // NULL to skip
+} ael_case;
+
+static const ael_case AEL_CASES[] = {
+	// Runtime: the decision, the values behind it, and the source region the
+	// deciding comparison came from.
+	{ "$.bin == 99", AEROSPIKE_FILTERED_OUT,
+	  "filter expression evaluated to false",
+	  "[exp: eval/false op=eq path=eq depth=1 ael=0+11 operands=['1','99'] "
+	  "snippet='\xc2\xbb$.bin == 99\xc2\xab'" },
+	// The span narrows to the decisive branch, and the snippet marks it inside
+	// the whole source line rather than quoting it out of context.
+	{ "$.name == \"ael\" and $.bin == 99", AEROSPIKE_FILTERED_OUT,
+	  "filter expression evaluated to false",
+	  "ael=20+11 operands=['1','99'] "
+	  "snippet='$.name == \"ael\" and \xc2\xbb$.bin == 99\xc2\xab'" },
+	{ "$.bin / 0 > 1", AEROSPIKE_FILTERED_OUT,
+	  "integer division by zero",
+	  "[exp: eval/fault op=div path=gt/div depth=2 ael=0+9" },
+	{ "$.nosuchbin == 1", AEROSPIKE_FILTERED_OUT,
+	  "filter references an absent bin or key",
+	  "[exp: eval/absent op=bin path=eq/bin depth=2 ael=0+11" },
+	// Build: the compiler reports the source region it choked on. No op or path
+	// - there is no compiled tree to walk yet.
+	{ "$.bin:local:INT == 1", AEROSPIKE_ERR_REQUEST_INVALID,
+	  "syntax error at line 1 col 7",
+	  "[exp: build ael=6+5 snippet='$.bin:\xc2\xbblocal\xc2\xab:INT == 1'" },
+	// A diagnostic with nothing to point at still reports where it ran out; the
+	// span key is omitted rather than sent as zero.
+	{ "$.bin +", AEROSPIKE_ERR_REQUEST_INVALID,
+	  "unexpected end of expression at line 1 col 8",
+	  "[exp: build ael=7 snippet=" },
+};
+
+static const uint32_t N_AEL_CASES =
+		(uint32_t)(sizeof(AEL_CASES) / sizeof(AEL_CASES[0]));
+
+// Returns the number of failed checks.
+static uint32_t
+run_ael_cases(aerospike* as)
+{
+	as_key key;
+	as_key_init(&key, g_namespace, g_set, "edk-ael");
+
+	as_record rec;
+	as_record_inita(&rec, 2);
+	as_record_set_int64(&rec, BIN, 1);
+	as_record_set_str(&rec, "name", "ael");
+
+	as_error err;
+	must(aerospike_key_put(as, &err, &g_write_pol, &key, &rec), &err,
+			"ael fixture put");
+
+	// Capability probe: a filter that must MATCH. Anything else means this
+	// server does not compile AEL, and the rest of the section is meaningless.
+	as_error_reset(&err);
+
+	if (ael_filter_get(as, &err, "$.bin == 1") != AEROSPIKE_OK) {
+		LOG("SKIP ael cases: server does not compile AEL (%s)", err.message);
+		return 0;
+	}
+
+	uint32_t failed = 0;
+
+	for (uint32_t i = 0; i < N_AEL_CASES; i++) {
+		const ael_case* c = &AEL_CASES[i];
+
+		as_error_reset(&err);
+
+		as_status s = ael_filter_get(as, &err, c->src);
+		bool ok = true;
+
+		if (s != c->expected_status) {
+			LOG("    status: got %d want %d (message: %s)", s,
+					c->expected_status, err.message);
+			ok = false;
+		}
+
+		if (c->expected_msg_substr != NULL &&
+				strstr(err.message, c->expected_msg_substr) == NULL) {
+			LOG("    message: expected substring '%s' in '%s'",
+					c->expected_msg_substr, err.message);
+			ok = false;
+		}
+
+		if (c->expected_trace_substr != NULL &&
+				strstr(err.message, c->expected_trace_substr) == NULL) {
+			LOG("    trace: expected substring '%s' in '%s'",
+					c->expected_trace_substr, err.message);
+			ok = false;
+		}
+
+		LOG("%s ael: %s", ok ? "PASS" : "FAIL", c->src);
+		failed += ok ? 0 : 1;
+	}
+
+	// Tier floor: the same filter at verbosity 2 carries no locator at all.
+	{
+		as_exp* filter = ael_exp("$.bin == 99");
+
+		as_policy_read pol = g_read_pol;
+		pol.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
+		pol.base.filter_exp = filter;
+
+		as_error_reset(&err);
+		as_record* got = NULL;
+		as_status s = aerospike_key_get(as, &err, &pol, &key, &got);
+
+		if (s != AEROSPIKE_FILTERED_OUT ||
+				strstr(err.message, TRACE_MARK) != NULL) {
+			LOG("FAIL ael_verbosity_2_has_no_trace: rc=%d '%s'", s, err.message);
+			failed++;
+		}
+		else {
+			LOG("PASS ael_verbosity_2_has_no_trace");
+		}
+
+		as_record_destroy(got);
+		as_exp_destroy(filter);
+	}
+
+	return failed;
+}
+
 
 //==========================================================
 // SERVER-1138 positive (must-SUCCEED) eval-fault checks.
@@ -1540,7 +1968,7 @@ run_eval_fault_positive_checks(aerospike* as)
 						as_exp_bool(true)));
 
 		as_policy_read pol = g_read_pol;
-		pol.base.error_detail_verbosity = 3;
+		pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 		pol.base.filter_exp = filter;
 
 		as_error err;
@@ -1574,7 +2002,7 @@ run_eval_fault_positive_checks(aerospike* as)
 		as_operations_exp_read(&ops, "v", exp, AS_EXP_READ_EVAL_NO_FAIL);
 
 		as_policy_operate pol = g_op_pol;
-		pol.base.error_detail_verbosity = 3;
+		pol.base.error_detail_verbosity = AS_ERROR_DETAIL_TRACE;
 
 		as_error err;
 		as_error_reset(&err);
@@ -1680,11 +2108,17 @@ main(int argc, char* argv[])
 	uint32_t eval_failed = run_eval_fault_positive_checks(&as);
 	failed += eval_failed;
 
+	// The same details reached through AEL source, where the locator is a span
+	// in the source text rather than an offset into a msgpack payload.
+	LOG("--- AEL source expressions ---");
+	failed += run_ael_cases(&as);
+
 	example_cleanup(&as);
 
 	LOG("---");
 	LOG("%u passed, %u failed (of %u single-record cases + 3 batch checks "
-			"+ 5 eval-fault checks)", passed, failed, N_CASES);
+			"+ 5 eval-fault checks + %u AEL checks)", passed, failed, N_CASES,
+			N_AEL_CASES + 1);
 
 	return failed == 0 ? 0 : 1;
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -69,7 +69,7 @@ extern "C" {
  * @relates as_query
  * @ingroup query_operations
  */
-#define as_integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, (int64_t)__val
+#define as_integer_equals(__val) AS_PREDICATE_EQUAL, AS_INDEX_TYPE_DEFAULT, AS_INDEX_INTEGER, (int64_t)__val
 
 /**
  * Ranger filter on integer bins.
@@ -81,7 +81,7 @@ extern "C" {
  * @relates as_query
  * @ingroup query_operations
  */
-#define as_integer_range(__min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_NUMERIC, (int64_t)__min, (int64_t)__max
+#define as_integer_range(__min, __max) AS_PREDICATE_RANGE, AS_INDEX_TYPE_DEFAULT, AS_INDEX_INTEGER, (int64_t)__min, (int64_t)__max
 
 /**
  * Range filter on list/map elements.

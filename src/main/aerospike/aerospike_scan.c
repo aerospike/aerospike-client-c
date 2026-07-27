@@ -1372,6 +1372,7 @@ as_policy_scan_merge(aerospike* as, const as_policy_scan* src, as_policy_scan* m
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
+		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->max_records = src->max_records;
 		mrg->records_per_second = src->records_per_second;
 		mrg->ttl = src->ttl;

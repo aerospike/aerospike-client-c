@@ -1,0 +1,175 @@
+name: Resolve Build/Test Matrix
+description: >
+  Resolve event-lib values, valgrind flags, and Linux distro/arch rows into
+  GitHub Actions matrix JSON.
+
+  Callers MUST supply linux-distros-json, runners-json, and event-lib.
+  The action validates all three in the first step and exits on any empty input.
+
+inputs:
+  linux-distros-json:
+    description: >
+      REQUIRED. JSON string defining the distros to build.
+      The runners key is NOT part of this schema — pass runners separately via runners-json.
+      Schema:
+        {
+          "distros": [
+            { "distro": "...", "container": "...", "archs": ["amd64","arm64"] },
+            ...
+          ]
+        }
+    required: true
+
+  runners-json:
+    description: >
+      REQUIRED. JSON object mapping arch → GitHub-hosted runner label.
+      Pass from vars.LINUX_RUNNERS or hardcode the fallback.
+      Schema: { "amd64": "ubuntu-24.04", "arm64": "ubuntu-24.04-arm" }
+    required: true
+
+  event-lib:
+    description: >
+      REQUIRED. Event library filter.
+      One of: sync | libev | libuv | libevent | all.
+      "all" expands to ["sync","libev","libuv","libevent"].
+    required: true
+
+  valgrind:
+    description: >
+      Include valgrind runs.
+      true  → matrix contains both valgrind:false and valgrind:true rows.
+      false → matrix contains only valgrind:false rows (fast feedback).
+    required: false
+    default: 'false'
+
+outputs:
+  linux-matrix:
+    description: >
+      Flat JSON array of objects, each representing one build cell:
+        { distro, container, arch, runner, event_lib, valgrind }
+      Pass directly to matrix include via fromJSON in the caller workflow.
+    value: ${{ steps.cartesian.outputs.linux_matrix }}
+
+  event-libs:
+    description: >
+      JSON array of the selected event libraries, e.g. ["sync","libev"].
+      Useful for jobs (e.g. macOS) that only iterate over event libs.
+    value: ${{ steps.resolve-event-lib.outputs.event_libs }}
+
+  valgrind-flags:
+    description: >
+      JSON boolean array, e.g. [false] or [false, true].
+      Exported for callers that need the resolved flag list.
+    value: ${{ steps.resolve-valgrind.outputs.valgrind_flags }}
+
+runs:
+  using: composite
+  steps:
+
+    # ── Step 1: Validate required inputs ───────────────────────────────────────
+    - name: Validate inputs
+      id: validate
+      shell: bash
+      run: |
+        if [ -z '${{ inputs.linux-distros-json }}' ]; then
+          echo "::error::linux-distros-json is required but was not supplied or is empty."
+          echo "::error::  PR builds:      pass the distros-only JSON directly."
+          echo "::error::  Nightly builds: pass vars.LINUX_DISTRO_MATRIX."
+          exit 1
+        fi
+
+        if [ -z '${{ inputs.runners-json }}' ]; then
+          echo "::error::runners-json is required but was not supplied or is empty."
+          echo "::error::  Pass vars.LINUX_RUNNERS or hardcode: {\"amd64\":\"ubuntu-24.04\",\"arm64\":\"ubuntu-24.04-arm\"}"
+          exit 1
+        fi
+
+        if [ -z '${{ inputs.event-lib }}' ]; then
+          echo "::error::event-lib is required but was not supplied or is empty."
+          echo "::error::  Valid values: sync | libev | libuv | libevent | all"
+          exit 1
+        fi
+
+    # ── Step 2: Resolve event-lib list ─────────────────────────────────────────
+    - name: Resolve event-lib
+      id: resolve-event-lib
+      shell: bash
+      run: |
+        case "${{ inputs.event-lib }}" in
+          sync)     LIBS='["sync"]' ;;
+          libev)    LIBS='["libev"]' ;;
+          libuv)    LIBS='["libuv"]' ;;
+          libevent) LIBS='["libevent"]' ;;
+          *)        LIBS='["sync","libev","libuv","libevent"]' ;;
+        esac
+        echo "event_libs=$LIBS" >> "$GITHUB_OUTPUT"
+        echo "LIBS=$LIBS"       >> "$GITHUB_ENV"
+
+    # ── Step 3: Resolve valgrind flags ─────────────────────────────────────────
+    - name: Resolve valgrind flags
+      id: resolve-valgrind
+      shell: bash
+      run: |
+        # true  → [false, true] : plain run + valgrind run
+        # false → [false]       : plain run only (fast PR feedback)
+        if [ "${{ inputs.valgrind }}" = "true" ]; then
+          VALGRIND='[false, true]'
+        else
+          VALGRIND='[false]'
+        fi
+        echo "valgrind_flags=$VALGRIND" >> "$GITHUB_OUTPUT"
+        echo "VALGRIND=$VALGRIND"       >> "$GITHUB_ENV"
+
+    # ── Step 4: Load and validate JSON inputs ──────────────────────────────────
+    - name: Load and validate JSON inputs
+      id: load-json
+      shell: bash
+      run: |
+        RAW='${{ inputs.linux-distros-json }}'
+        echo "$RAW" | jq -e . > /dev/null \
+          || { echo "::error::linux-distros-json is not valid JSON"; exit 1; }
+        echo "RAW_JSON=$(echo "$RAW" | jq -c .)" >> "$GITHUB_ENV"
+
+        RUNNERS='${{ inputs.runners-json }}'
+        echo "$RUNNERS" | jq -e . > /dev/null \
+          || { echo "::error::runners-json is not valid JSON"; exit 1; }
+        echo "RUNNERS=$RUNNERS" >> "$GITHUB_ENV"
+
+    # ── Step 5: Expand distros × archs ─────────────────────────────────────────
+    - name: Expand distros × archs
+      id: expand
+      shell: bash
+      run: |
+        DISTROS=$(jq -c \
+          --argjson runners "$RUNNERS" \
+          '[ .distros[] | . as $d | $d.archs[] | . as $arch |
+              select($runners[$arch] != null) |
+              { distro:    $d.distro,
+                container: $d.container,
+                arch:      $arch,
+                runner:    $runners[$arch] }
+            ]' <<< "$RAW_JSON")
+        echo "DISTROS=$DISTROS" >> "$GITHUB_ENV"
+
+    # ── Step 6: Compute Cartesian product (distro,arch) × event_lib × valgrind ─
+    - name: Compute Cartesian product
+      id: cartesian
+      shell: bash
+      run: |
+        # GitHub Actions matrix include: does not cross-product with other
+        # dimensions, so we pre-compute the full Cartesian product here with jq.
+        MATRIX=$(jq -c \
+          --argjson libs     "$LIBS" \
+          --argjson valgrind "$VALGRIND" \
+          '[.[] | . as $entry | $libs[] | . as $lib |
+            $valgrind[] | {
+              distro:    $entry.distro,
+              container: $entry.container,
+              arch:      $entry.arch,
+              runner:    $entry.runner,
+              event_lib: $lib,
+              valgrind:  .
+            }]' <<< "$DISTROS")
+
+        echo "linux_matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+        echo "cells=$(jq 'length' <<< "$MATRIX")  event_libs=$LIBS  valgrind=$VALGRIND"

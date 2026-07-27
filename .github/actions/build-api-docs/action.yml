@@ -1,0 +1,143 @@
+name: Build API Docs
+description: >
+  Installs Doxygen dependencies, prepares generated headers, builds API
+  documentation with log capture, compresses diagnostics, and validates HTML.
+
+inputs:
+  log-path:
+    description: 'Path where Doxygen output is captured'
+    required: false
+    default: 'doxygen.log'
+  diagnostics-artifact-name:
+    description: 'Artifact name for the compressed Doxygen diagnostics archive'
+    required: false
+    default: 'doxygen-diagnostics'
+  fail-on-warnings:
+    description: 'Fail if Doxygen emits warnings'
+    required: false
+    default: 'false'
+  lines-to-tail:
+    description: 'Number of Doxygen log lines to show in the step summary; 0 disables summary output'
+    required: false
+    default: '300'
+
+runs:
+  using: composite
+  steps:
+    - name: Install Doxygen and Graphviz
+      shell: bash
+      run: |
+        set -euo pipefail
+        doxyfile_version=$(sed -nE 's/^# Doxyfile ([0-9.]+).*/\1/p' project/doxyfile | head -n 1)
+        if [ -z "$doxyfile_version" ]; then
+          echo "::error::Could not read Doxygen version from project/doxyfile header"
+          exit 1
+        fi
+
+        sudo apt-get update -q
+        sudo apt-get install -y --no-install-recommends \
+          cmake \
+          doxygen \
+          graphviz \
+          wget
+
+        installed_version=$(doxygen --version)
+        if printf '%s\n%s\n' "$doxyfile_version" "$installed_version" | sort -V -C; then
+          echo "Using Doxygen $installed_version (Doxyfile requires >= $doxyfile_version)"
+        else
+          echo "Doxygen $installed_version is older than Doxyfile $doxyfile_version; building $doxyfile_version from source."
+
+          src="$(mktemp -d)"
+          trap 'rm -rf "$src"' EXIT
+          dir="doxygen-${doxyfile_version}"
+          tag="Release_${doxyfile_version//./_}"
+
+          wget -q "https://github.com/doxygen/doxygen/releases/download/${tag}/${dir}.src.tar.gz" -O "$src/${dir}.src.tar.gz"
+          tar -C "$src" -xzf "$src/${dir}.src.tar.gz"
+          cmake -S "$src/$dir" -B "$src/$dir/build" -G "Unix Makefiles"
+          cmake --build "$src/$dir/build" -j"$(nproc)"
+          sudo cmake --install "$src/$dir/build"
+        fi
+        doxygen --version
+
+    - name: Prepare generated headers
+      shell: bash
+      run: |
+        set -euo pipefail
+        make prepare
+
+    - name: Build API docs
+      id: build
+      shell: bash
+      env:
+        DOXYGEN_LOG: ${{ inputs.log-path }}
+        SUMMARY_TAIL_LINES: ${{ inputs.lines-to-tail }}
+      run: |
+        set -euo pipefail
+
+        set +e
+        echo "Building API docs; full Doxygen output will be uploaded as diagnostics."
+        make docs > "$DOXYGEN_LOG" 2>&1
+        docs_rc=$?
+        set -e
+
+        warnings_path="${DOXYGEN_LOG%.log}-warnings.log"
+        grep -Ei '(^|[^[:alpha:]])(warning|error):' "$DOXYGEN_LOG" > "$warnings_path" || true
+        warning_count=$(wc -l < "$warnings_path" | tr -d ' ')
+
+        tail_path="${DOXYGEN_LOG%.log}-last-${SUMMARY_TAIL_LINES}.log"
+        if [ "$SUMMARY_TAIL_LINES" -gt 0 ]; then
+          tail -n "$SUMMARY_TAIL_LINES" "$DOXYGEN_LOG" > "$tail_path"
+        else
+          : > "$tail_path"
+        fi
+
+        diagnostics_archive="${DOXYGEN_LOG%.log}-diagnostics.tgz"
+        tar -czf "$diagnostics_archive" "$DOXYGEN_LOG" "$warnings_path" "$tail_path"
+
+        has_warnings=false
+        if [ "$warning_count" -gt 0 ]; then
+          has_warnings=true
+          echo "Doxygen emitted ${warning_count} warnings; diagnostics: ${diagnostics_archive}"
+        fi
+
+        echo "has_warnings=$has_warnings" >> "$GITHUB_OUTPUT"
+        echo "diagnostics_archive=$diagnostics_archive" >> "$GITHUB_OUTPUT"
+
+        if [ "$docs_rc" != "0" ]; then
+          echo "::error::make docs failed with exit code ${docs_rc}. See ${diagnostics_archive}."
+          exit "$docs_rc"
+        fi
+
+    - name: Upload Doxygen diagnostics
+      if: always()
+      uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+      with:
+        name: ${{ inputs.diagnostics-artifact-name }}
+        path: ${{ steps.build.outputs.diagnostics_archive }}
+        if-no-files-found: warn
+        retention-days: 3
+
+    - name: Validate HTML output
+      shell: bash
+      run: |
+        set -euo pipefail
+        DOCS_DIR=target/docs/html
+        if [ ! -d "$DOCS_DIR" ]; then
+          echo "::error::Doxygen output directory not found: $DOCS_DIR"
+          exit 1
+        fi
+
+        html_count=$(find "$DOCS_DIR" -type f | wc -l | tr -d ' ')
+        echo "Generated ${html_count} files in ${DOCS_DIR}/"
+        if [ "$html_count" -eq 0 ]; then
+          echo "::error::Doxygen produced no output. Check ${{ steps.build.outputs.diagnostics_archive }}."
+          exit 1
+        fi
+
+    - name: Enforce warning-free docs
+      if: inputs.fail-on-warnings == 'true' && steps.build.outputs.has_warnings == 'true'
+      shell: bash
+      run: |
+        echo "::error::Doxygen emitted warnings. See ${{ steps.build.outputs.diagnostics_archive }}."
+        exit 1

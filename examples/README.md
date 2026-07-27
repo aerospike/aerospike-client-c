@@ -131,6 +131,27 @@ exists. It then uses aerospike_key_remove() to delete the record, then shows
 the next create succeed.
 
 
+### string
+
+	aerospike_key_operate()
+
+This example demonstrates string operations for reading, modifying, converting,
+and searching string bin values. It follows the Java client's OperateString
+example, including Unicode codepoint length, UTF-8 byte length, numeric
+conversion, split, base64 decode, regex comparison, string modification, and
+to-string conversion examples.
+
+
+### string_expression
+
+	as_operations_exp_read()
+
+This example demonstrates string expression builders using expression read
+operations. It follows the Java client's StringExpression example and shows
+that modify-style string expressions return transformed values without mutating
+the stored bin.
+
+
 ### touch
 
 	aerospike_key_operate()

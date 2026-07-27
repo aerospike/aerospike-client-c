@@ -1,0 +1,97 @@
+name: Setup Linux Distro Environment and Build/Test
+description: >
+  Sets up the distro environment inside a docker container by running
+  .github/script/install_deps.bash (provisions compiler, openssl, libyaml,
+  zlib, and the chosen event lib), then builds and tests the Aerospike C client.
+  Expects the Aerospike server to already be running on the provided Docker
+  network (started by setup-aerospike-server).
+
+inputs:
+  distro:
+    description: 'Distro name passed to install_deps.bash (e.g. ubuntu-22.04)'
+    required: true
+  container:
+    description: 'Docker image to run the build+test inside (e.g. ubuntu:22.04)'
+    required: true
+  arch:
+    description: 'Target architecture for --platform flag (amd64 or arm64)'
+    required: true
+  event-lib:
+    description: 'Event library to build with (sync, libev, libuv, libevent)'
+    required: true
+  network-name:
+    description: 'Docker network name where aerospike-1 is reachable'
+    required: true
+  valgrind:
+    description: 'Run tests under Valgrind and check for zero errors'
+    required: false
+    default: 'false'
+  junit-xml:
+    description: 'JUnit XML output path inside the build container'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Build and test (${{ inputs.distro }} / ${{ inputs.event-lib }})
+      shell: bash
+      env:
+        EVENT_LIB:       ${{ inputs.event-lib }}
+        DISTRO:          ${{ inputs.distro }}
+        VALGRIND:        ${{ inputs.valgrind }}
+        JUNIT_XML:       ${{ inputs.junit-xml }}
+        LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
+      run: |
+        set -euo pipefail
+        mkdir -p test-results
+        docker run --rm \
+          --platform linux/${{ inputs.arch }} \
+          --network "${{ inputs.network-name }}" \
+          -v "$GITHUB_WORKSPACE:/workspace" \
+          -w /workspace \
+          -e GITHUB_WORKSPACE=/workspace \
+          -e EVENT_LIB="${EVENT_LIB}" \
+          -e LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" \
+          -e DISTRO="${DISTRO}" \
+          -e VALGRIND="${VALGRIND}" \
+          -e JUNIT_XML="${JUNIT_XML}" \
+          ${{ inputs.container }} \
+          bash -c '
+            set -euo pipefail
+            if [ -n "${JUNIT_XML}" ]; then
+              mkdir -p "$(dirname "${JUNIT_XML}")"
+            fi
+
+            # Provision compiler, openssl, libyaml, zlib, the chosen event lib,
+            # and Valgrind (when requested) for this distro.  RHEL variants build
+            # Valgrind from source; other distros install the packaged version.
+            bash "${GITHUB_WORKSPACE}/.github/script/install_deps.bash" \
+              "${DISTRO}" "${EVENT_LIB}" "${VALGRIND}"
+
+            git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+            make clean
+
+            export MAKEFLAGS="-j$(nproc)"
+
+            TEST_TARGET="test"
+            [ "${VALGRIND}" = "true" ] && TEST_TARGET="test-valgrind"
+
+            if [ "${EVENT_LIB}" = "sync" ]; then
+              make all
+              make AS_HOST=aerospike-1 "${TEST_TARGET}"
+            else
+              make EVENT_LIB="${EVENT_LIB}" all
+              make EVENT_LIB="${EVENT_LIB}" AS_HOST=aerospike-1 "${TEST_TARGET}"
+            fi
+
+            # Valgrind writes its summary to client_test-valgrind; fail the
+            # build if any errors were reported (mirrors build.yml check).
+            if [ "${VALGRIND}" = "true" ]; then
+              if ! grep "ERROR SUMMARY: 0 errors" client_test-valgrind; then
+                echo "Valgrind reported errors. Full client_test-valgrind log:"
+                cat client_test-valgrind
+                exit 1
+              fi
+            fi
+          '

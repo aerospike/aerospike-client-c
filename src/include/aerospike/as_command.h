@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -68,15 +68,50 @@ extern "C" {
 #define AS_FIELD_QUERY_BINS 40
 #define AS_FIELD_BATCH_INDEX 41
 #define AS_FIELD_FILTER 43
-#define AS_FIELD_ERROR_MESSAGE 45 // msgpack map payload
+#define AS_FIELD_ERROR_DETAILS 45
 
-// info4 bits 5-6: error detail verbosity (0=off, 1=subcode, 2=subcode+message).
-#define AS_MSG_INFO4_ERROR_VERBOSITY_MASK   0x60
-#define AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT  5
-
-// Error detail map keys (keep these as single-byte integers).
+// Error detail map keys (keep these as single-byte integers). Distinct from the
+// AS_ERROR_DETAIL_* verbosity levels in as_subcode.h, which say what the server
+// should send; these name what came back.
 #define AS_ERROR_DETAIL_KEY_SUBCODE 1
 #define AS_ERROR_DETAIL_KEY_MESSAGE 2
+#define AS_ERROR_DETAIL_KEY_EXP_TRACE 3 // value = nested msgpack map
+
+// Expression-trace sub-map keys, under AS_ERROR_DETAIL_KEY_EXP_TRACE. Sent only
+// at verbosity 3, and only for a failure the server traced back to an
+// expression. Published meanings are fixed - the server adds new keys rather
+// than repurposing these, so an unrecognized key is always safe to skip.
+#define AS_EXP_TRACE_KEY_PHASE       1  // uint: 1=build, 2=eval
+#define AS_EXP_TRACE_KEY_BYTE_OFFSET 2  // uint: byte offset into the payload
+#define AS_EXP_TRACE_KEY_OP          3  // str:  failing / decisive op name
+#define AS_EXP_TRACE_KEY_DEPTH       4  // uint: true nesting depth
+#define AS_EXP_TRACE_KEY_PATH        5  // str array, root -> failing op
+#define AS_EXP_TRACE_KEY_SNIPPET     6  // str:  human-only display
+#define AS_EXP_TRACE_KEY_OUTCOME     7  // uint: eval phase only
+#define AS_EXP_TRACE_KEY_LANG        8  // uint: 1=msgpack (default), 2=AEL
+#define AS_EXP_TRACE_KEY_AEL_OFFSET  9  // uint: char offset into AEL source
+#define AS_EXP_TRACE_KEY_AEL_SPAN    10 // uint: byte width of the AEL span
+#define AS_EXP_TRACE_KEY_AEL_LINE    11 // uint: 1-based line (reserved)
+#define AS_EXP_TRACE_KEY_AEL_COL     12 // uint: 1-based column (reserved)
+#define AS_EXP_TRACE_KEY_OPERANDS    13 // str[2]: decisive [lhs, rhs] values
+
+#define AS_EXP_TRACE_PHASE_BUILD     1
+#define AS_EXP_TRACE_PHASE_EVAL      2
+
+#define AS_EXP_TRACE_OUTCOME_FAULT   1 // eval faulted
+#define AS_EXP_TRACE_OUTCOME_FALSE   2 // clean FALSE
+#define AS_EXP_TRACE_OUTCOME_ABSENT  3 // bin or key absent
+
+#define AS_EXP_TRACE_LANG_MSGPACK    1
+#define AS_EXP_TRACE_LANG_AEL        2
+
+// Server-side cap on the rendered path; frames beyond it are the server's own
+// truncation marker, not real ancestors.
+#define AS_EXP_TRACE_MAX_FRAMES      16
+
+// Smallest output buffer as_command_render_exp_trace() will write into - enough
+// for a head that still says something ("[exp: eval/false op=eq").
+#define AS_EXP_TRACE_RENDER_MIN      24
 
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation
@@ -127,6 +162,10 @@ extern "C" {
 #define AS_MSG_INFO4_TXN_ROLL_FORWARD		(1 << 1) // Roll forward transaction.
 #define AS_MSG_INFO4_TXN_ROLL_BACK			(1 << 2) // Roll back transaction.
 #define AS_MSG_INFO4_TXN_ON_LOCKING_ONLY	(1 << 4) // Must be able to lock record in transaction.
+
+// Error detail verbosity in info4 bits 5-6
+#define AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT	5
+#define AS_MSG_INFO4_ERROR_VERBOSITY_MASK	0x60
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -387,7 +426,7 @@ as_command_set_attr_read(
  * @private
  * Write command header for write commands.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_write_header_write(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_commit_level commit_level,
 	as_policy_exists exists, as_policy_gen gen_policy, uint32_t gen, uint32_t ttl,
@@ -399,7 +438,7 @@ as_command_write_header_write(
  * @private
  * Write command header for read commands.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_write_header_read(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, int read_ttl, uint32_t timeout, uint16_t n_fields,
@@ -410,7 +449,7 @@ as_command_write_header_read(
  * @private
  * Write command header for read header commands.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_write_header_read_header(
 	uint8_t* cmd, const as_policy_base* policy, as_policy_read_mode_ap read_mode_ap,
 	as_policy_read_mode_sc read_mode_sc, int read_ttl, uint16_t n_fields, uint16_t n_bins,
@@ -677,6 +716,21 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
 
 /**
  * @private
+ * Iterate fields, parse error details from field type 45 if present, skip others.
+ */
+uint8_t*
+as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields);
+
+/**
+ * @private
+ * Parse msgpack-encoded error details (field type 45 payload).
+ * Populates err->subcode and err->message.
+ */
+AS_EXTERN void
+as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len);
+
+/**
+ * @private
  * Parse record fields given digest/set.
  */
 as_status
@@ -687,23 +741,37 @@ as_command_parse_fields_txn(
 
 /**
  * @private
- * Parse error message field.
- */
-as_status
-as_command_parse_fields_error(uint8_t** pp, as_error* err, as_msg* msg);
-
-/**
- * @private
  * Parse an error-details field (type 45) payload into raw subcode/message
  * out-params. *subcode is set to zero and *message to NULL when the
  * corresponding map key is absent. *message is heap-allocated and owned by the
  * caller (any existing non-NULL *message is freed first). Used by batch, which
  * stores error details per record rather than in a single as_error.
+ *
+ * At verbosity 3 the payload also carries an expression trace; it is rendered
+ * onto the end of *message, as it is onto as_error.message.
  */
-as_status
+void
 as_command_parse_error_details_values(
-	const uint8_t* buf, uint32_t len, uint32_t* subcode, char** message
+	uint8_t* buf, uint32_t len, uint32_t* subcode, char** message
 	);
+
+/**
+ * @private
+ * Render an expression trace (error-detail key 3) as a compact one-line
+ * summary, for appending to an error message. Returns bytes written, without a
+ * trailing NUL, or zero when nothing could be rendered. out_size must be at
+ * least AS_EXP_TRACE_RENDER_MIN; an over-long trace is cut at the tail and
+ * marked with "...".
+ *
+ *   [exp: eval/false op=eq path=and/eq depth=2 ael=20+11 operands=['1','99']
+ *    snippet='...']
+ *
+ * Only the keys the server sent appear. Coordinates read "ael=<offset>+<span>"
+ * into AEL source text, or "offset=<n>" into the msgpack payload - the two
+ * spaces are distinct and never conflated.
+ */
+uint32_t
+as_command_render_exp_trace(uint8_t* buf, uint32_t len, char* out, uint32_t out_size);
 
 /**
  * @private
@@ -715,7 +783,8 @@ as_command_parse_fields(
 	)
 {
 	if (! txn) {
-		return as_command_parse_fields_error(pp, err, msg);
+		*pp = as_command_parse_fields_err(*pp, err, msg->n_fields);
+		return AEROSPIKE_OK;
 	}
 	return as_command_parse_fields_txn(pp, err, msg, txn, key->digest.value, key->set, is_write);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -689,7 +689,13 @@ as_tls_context_setup(as_config_tls* tlscfg, as_tls_context* ctx, as_error* errp)
 	if (! (protocols & AS_TLS_PROTOCOL_TLSV1_2)) {
 		SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1_2);
 	}
-	
+
+// Disable TLSv1.3 for now as the server does not currently support it.
+// TODO Support TLSv1.3 in the future.
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	SSL_CTX_set_options(ctx->ssl_ctx, SSL_OP_NO_TLSv1_3);
+#endif
+
 	if (tlscfg->cafile || tlscfg->capath) {
 		int rv = SSL_CTX_load_verify_locations(ctx->ssl_ctx, tlscfg->cafile, tlscfg->capath);
 

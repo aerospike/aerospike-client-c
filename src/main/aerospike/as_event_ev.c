@@ -671,8 +671,10 @@ as_ev_callback_common(as_event_command* cmd, as_event_connection* conn) {
 					return;
 
 				case AS_EVENT_READ_COMPLETE:
-					as_ev_watch_read(cmd);
-					break;
+					// Auth succeeded; the command write phase has already
+					// registered the correct read/write watch. Don't override
+					// it, and stop looping since we're no longer in an auth state.
+					return;
 
 				default:
 					break;

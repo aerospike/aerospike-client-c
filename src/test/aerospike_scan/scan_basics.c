@@ -1054,6 +1054,8 @@ TEST(scan_operate_background_selects, "scan operate background with selects")
 	// This will eventually become an AEROSPIKE_ERR_PARAM in the next major release.
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_scan_destroy(&scan);
+
+	aerospike_scan_wait(as, &err, NULL, scanid, 0);
 }
 
 TEST(scan_operate_background_reads_and_writes, "scan operate background with reads and writes")

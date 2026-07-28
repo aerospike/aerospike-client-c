@@ -128,6 +128,7 @@ typedef enum {
 	_AS_EXP_CODE_BIN = 81,
 	_AS_EXP_CODE_BIN_TYPE = 82,
 
+	_AS_EXP_CODE_TO_STRING = 99,
 	_AS_EXP_CODE_REMOVE_RESULT = 100,
 	_AS_EXP_CODE_MAP_KEYS_IN = 101,
 	_AS_EXP_CODE_MAP_VALUES_IN = 102,
@@ -170,7 +171,6 @@ typedef enum {
 	_AS_EXP_SYS_CALL_BITS = 1,
 	_AS_EXP_SYS_CALL_HLL = 2,
 	_AS_EXP_SYS_CALL_STRING = 3,
-	_AS_EXP_SYS_CALL_REPR = 4,
 
 	_AS_EXP_SYS_FLAG_MODIFY_LOCAL = 0x40
 } as_exp_call_system_type;
@@ -4366,12 +4366,8 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_to_string(__bin) \
-	{.op=_AS_EXP_CODE_CALL, .count=5}, \
-	_AS_EXP_VAL_RTYPE(AS_EXP_TYPE_STR), \
-	as_exp_int(_AS_EXP_SYS_CALL_REPR), \
-	{.op=_AS_EXP_CODE_CALL_VOP_START, .count=1}, \
-	as_exp_int(0), \
-	__bin
+		{.op=_AS_EXP_CODE_TO_STRING, .count=2}, \
+		__bin
 
 //---------------------------------
 // Expression Merge

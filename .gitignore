@@ -11,6 +11,7 @@ Version.java
 *.pyc
 modules/.*
 target/
+target-*/
 client_test-valgrind
 *.code-workspace
 

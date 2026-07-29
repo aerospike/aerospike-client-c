@@ -25,6 +25,7 @@
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_cdt_ctx.h>
+#include <aerospike/as_vector_value.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -643,6 +644,17 @@ as_operations_add_write_raw(as_operations* ops, const char* name, const uint8_t*
 {
 	return as_operations_add_write_rawp(ops, name, value, size, false);
 }
+
+/**
+ * Add a `AS_OPERATOR_WRITE` bin operation with a vector value, serialized as an
+ * as_bytes tagged AS_BYTES_VECTOR. The serialized buffer is owned by `ops` and
+ * released when the operations are destroyed; `value` may be destroyed
+ * independently after this call.
+ *
+ * @ingroup base_operations
+ */
+AS_EXTERN bool
+as_operations_add_write_vector(as_operations* ops, const char* name, const as_vector_value* value);
 
 /**
  * Add a `AS_OPERATOR_READ` bin operation.

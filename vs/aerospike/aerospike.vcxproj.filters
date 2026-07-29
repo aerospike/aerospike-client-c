@@ -168,6 +168,9 @@
     <ClInclude Include="..\..\src\include\aerospike\as_udf.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\include\aerospike\as_vector_value.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\include\aerospike\version.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -486,6 +489,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_udf.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_vector_value.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_scan.c">

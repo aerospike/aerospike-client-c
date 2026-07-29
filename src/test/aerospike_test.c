@@ -530,6 +530,7 @@ PLAN(aerospike_test)
 	plan_add(bit);
 	plan_add(string);
 	plan_add(hll);
+	plan_add(vector);
 	plan_add(filter_exp);
 
 	plan_add(exp_operate);

@@ -65,6 +65,10 @@ xcuserdata
 ########################
 *.pem
 
+# IDE
+.idea/
+compile_commands.json
+
 # Windows
 *.suo
 *.user

@@ -52,6 +52,13 @@ as_query_defaults(as_query* query, bool free, const char* ns, const char* set)
 	query->ttl = 0;
 	query->no_bins = false;
 
+	query->order_by.bin[0] = 0;
+	query->order_by.type = AS_QUERY_ORDER_BY_INTEGER;
+	query->order_by.direction = AS_ORDER_ASCENDING;
+	query->order_by.flags = AS_QUERY_ORDER_BY_FLAGS_DEFAULT;
+	query->order_by.defined = false;
+	query->top_k = 0;
+
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
 
 	query->parts_all = NULL;
@@ -428,6 +435,37 @@ as_query_apply(as_query* query, const char* module, const char* function, const 
 }
 
 //---------------------------------
+// Order By / Top-K
+//---------------------------------
+
+void
+as_query_order_by(
+	as_query* query, const char* bin_name, as_query_order_by_type type, as_order direction,
+	as_query_order_by_flags flags
+	)
+{
+	if (!query || !bin_name || strlen(bin_name) >= AS_BIN_NAME_MAX_SIZE) {
+		return;
+	}
+
+	as_strncpy(query->order_by.bin, bin_name, sizeof(query->order_by.bin));
+	query->order_by.type = type;
+	query->order_by.direction = direction;
+	query->order_by.flags = flags;
+	query->order_by.defined = true;
+}
+
+void
+as_query_top_k(as_query* query, uint32_t k)
+{
+	if (!query) {
+		return;
+	}
+
+	query->top_k = k;
+}
+
+//---------------------------------
 // Query Serialization
 //---------------------------------
 
@@ -569,6 +607,19 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 	as_pack_uint64(&pk, query->ttl);
 	as_pack_bool(&pk, query->paginate);
 	as_pack_bool(&pk, query->no_bins);
+
+	if (query->order_by.defined) {
+		as_pack_bool(&pk, true);
+		as_pack_string(&pk, query->order_by.bin);
+		as_pack_int64(&pk, query->order_by.type);
+		as_pack_int64(&pk, query->order_by.direction);
+		as_pack_uint64(&pk, query->order_by.flags);
+	}
+	else {
+		as_pack_bool(&pk, false);
+	}
+
+	as_pack_uint64(&pk, query->top_k);
 
 	as_cdt_end(&pk);
 
@@ -967,6 +1018,55 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 		goto HandleError;
 	}
 
+	// Order by / top_k. Older serialized queries do not have these fields, but
+	// as_query_from_bytes() is only ever used with buffers produced by this
+	// client's own as_query_to_bytes(), so no version negotiation is needed.
+	if (as_unpack_boolean(&pk, &b) != 0) {
+		goto HandleError;
+	}
+
+	if (b) {
+		if (! as_unpack_str_init(&pk, query->order_by.bin, AS_BIN_NAME_MAX_SIZE)) {
+			goto HandleError;
+		}
+
+		if (as_unpack_int64(&pk, &ival) != 0) {
+			goto HandleError;
+		}
+
+		if (ival < 0 || ival > AS_QUERY_ORDER_BY_BYTES) {
+			goto HandleError;
+		}
+
+		query->order_by.type = (as_query_order_by_type)ival;
+
+		if (as_unpack_int64(&pk, &ival) != 0) {
+			goto HandleError;
+		}
+
+		if (ival != AS_ORDER_ASCENDING && ival != AS_ORDER_DESCENDING) {
+			goto HandleError;
+		}
+
+		query->order_by.direction = (as_order)ival;
+
+		if (as_unpack_uint64(&pk, &uval) != 0) {
+			goto HandleError;
+		}
+
+		query->order_by.flags = (as_query_order_by_flags)uval;
+		query->order_by.defined = true;
+	}
+	else {
+		query->order_by.defined = false;
+	}
+
+	if (as_unpack_uint64(&pk, &uval) != 0) {
+		goto HandleError;
+	}
+
+	query->top_k = (uint32_t)uval;
+
 	return true;
 
 HandlePredError:
@@ -1308,6 +1408,32 @@ as_query_compare(as_query* q1, as_query* q2) {
 	}
 
 	if (q1->no_bins != q2->no_bins) {
+		as_cmp_error();
+	}
+
+	if (q1->order_by.defined != q2->order_by.defined) {
+		as_cmp_error();
+	}
+
+	if (q1->order_by.defined) {
+		if (strcmp(q1->order_by.bin, q2->order_by.bin) != 0) {
+			as_cmp_error();
+		}
+
+		if (q1->order_by.type != q2->order_by.type) {
+			as_cmp_error();
+		}
+
+		if (q1->order_by.direction != q2->order_by.direction) {
+			as_cmp_error();
+		}
+
+		if (q1->order_by.flags != q2->order_by.flags) {
+			as_cmp_error();
+		}
+	}
+
+	if (q1->top_k != q2->top_k) {
 		as_cmp_error();
 	}
 

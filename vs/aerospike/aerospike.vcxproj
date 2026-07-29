@@ -396,6 +396,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_poll.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_proto.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_query.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_query_topk.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_query_validate.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_record.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_record_iterator.h" />
@@ -522,6 +523,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_policy.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_proto.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_query.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_query_topk.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_query_validate.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_record.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_record_hooks.c" />

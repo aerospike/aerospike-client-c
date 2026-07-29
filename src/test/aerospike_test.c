@@ -510,6 +510,7 @@ PLAN(aerospike_test)
 	plan_add(udf_record);
 	plan_add(index_basics);
 	plan_add(query_foreach);
+	plan_add(query_topk);
 	plan_add(query_background);
 	plan_add(query_geospatial);
 	plan_add(scan_basics);

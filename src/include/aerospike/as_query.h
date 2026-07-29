@@ -298,6 +298,89 @@ typedef struct as_ordering_s {
 } as_ordering;
 
 /**
+ * Scalar type of the order-by bin value, as declared by the caller.
+ * Used with as_query_order_by(). Values match the server's wire constants
+ * for the ORDER BY field.
+ */
+typedef enum as_query_order_by_type_e {
+
+	/**
+	 * Order-by bin is an integer.
+	 */
+	AS_QUERY_ORDER_BY_INTEGER = 0,
+
+	/**
+	 * Order-by bin is a double.
+	 */
+	AS_QUERY_ORDER_BY_DOUBLE = 1,
+
+	/**
+	 * Order-by bin is a string.
+	 */
+	AS_QUERY_ORDER_BY_STRING = 2,
+
+	/**
+	 * Order-by bin is a byte array.
+	 */
+	AS_QUERY_ORDER_BY_BYTES = 3
+
+} as_query_order_by_type;
+
+/**
+ * Optional per-type modifiers for order-by comparison. Bitmask, room for
+ * future flags.
+ */
+typedef uint32_t as_query_order_by_flags;
+
+/**
+ * No order-by flags set.
+ */
+#define AS_QUERY_ORDER_BY_FLAGS_DEFAULT 0
+
+/**
+ * Perform a case-insensitive comparison. Only valid when the order-by type
+ * is AS_QUERY_ORDER_BY_STRING.
+ */
+#define AS_QUERY_ORDER_BY_CASE_INSENSITIVE (1 << 0)
+
+/**
+ * Declares the ORDER BY clause of a Top-K query (`ORDER BY <bin> LIMIT k`).
+ * Set via as_query_order_by(). At most one order-by clause is supported per
+ * as_query.
+ */
+typedef struct as_query_order_by_field_s {
+
+	/**
+	 * Name of the bin to order by. Must match a projected bin name if
+	 * as_query.select or as_query.ops is set.
+	 */
+	as_bin_name bin;
+
+	/**
+	 * Scalar type of the order-by bin value.
+	 */
+	as_query_order_by_type type;
+
+	/**
+	 * Sort direction. Reuses the existing as_order enum.
+	 */
+	as_order direction;
+
+	/**
+	 * Optional comparison modifiers. See AS_QUERY_ORDER_BY_CASE_INSENSITIVE.
+	 */
+	as_query_order_by_flags flags;
+
+	/**
+	 * @private
+	 * Whether order_by has been set via as_query_order_by(). Set/cleared
+	 * internally; do not set directly.
+	 */
+	bool defined;
+
+} as_query_order_by_field;
+
+/**
  * Sequence of bins which should be selected during a query.
  *
  * Entries can either be initialized on the stack or on the heap.
@@ -470,6 +553,30 @@ typedef struct as_query_predicates_s {
  * as_query_apply(query, "udf_module", "udf_function", arglist);
  * @endcode
  *
+ * ### Ordering Results (Top-K)
+ *
+ * as_query_order_by() and as_query_top_k() are used together to run a
+ * `ORDER BY <bin> LIMIT k` (Top-K) foreground query. The server ranks
+ * matching records by the given bin and returns only the top `k`.
+ *
+ * @code
+ * as_query_order_by(query, "score", AS_QUERY_ORDER_BY_DOUBLE, AS_ORDER_DESCENDING,
+ *     AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+ * as_query_top_k(query, 10);
+ * @endcode
+ *
+ * Top-K is only supported on foreground queries (aerospike_query_foreach(),
+ * aerospike_query_async(), aerospike_query_partitions(),
+ * aerospike_query_partitions_async()). It is not supported on background
+ * queries or aggregation UDF queries.
+ *
+ * **Important:** Setting order_by/top_k changes the foreground query
+ * callback/listener from "streaming as records arrive" to "buffered until
+ * every targeted node has returned its results, then delivered once in
+ * final rank order." This is inherent: the global top-k cannot be known
+ * until every targeted node has reported. The memory bound is at most
+ * `n_nodes * k` records buffered at once (k capped at 1000).
+ *
  * @ingroup query_operations
  */
 typedef struct as_query_s {
@@ -583,6 +690,20 @@ typedef struct as_query_s {
 	 * Default: false.
 	 */
 	bool no_bins;
+
+	/**
+	 * ORDER BY clause for a Top-K query. Use as_query_order_by() to set.
+	 *
+	 * Default: order_by.defined == false (not a Top-K query).
+	 */
+	as_query_order_by_field order_by;
+
+	/**
+	 * Top-K limit. Must be paired with order_by. Use as_query_top_k() to set.
+	 *
+	 * Default: 0 (not a Top-K query).
+	 */
+	uint32_t top_k;
 
 } as_query;
 
@@ -952,6 +1073,72 @@ as_query_where_with_exp(
  */
 AS_EXTERN bool
 as_query_apply(as_query* query, const char* module, const char* function, const as_list* arglist);
+
+//---------------------------------
+// Order By / Top-K Functions
+//---------------------------------
+
+/**
+ * Set the ORDER BY clause for a Top-K query. Must be paired with
+ * as_query_top_k(). Overwrites any previously set order-by clause (only one
+ * clause is supported).
+ *
+ * If bin_name is longer than AS_BIN_NAME_MAX_LEN characters, the order-by
+ * clause is not set and this call is a no-op. This is validated again
+ * (and reported via as_error) when the query is executed.
+ *
+ * IMPORTANT: setting order_by/top_k changes aerospike_query_foreach()/
+ * aerospike_query_async()/aerospike_query_partitions()/
+ * aerospike_query_partitions_async() from streaming-as-records-arrive to
+ * buffering until every targeted node has returned its results, then
+ * delivering them once in final rank order. See as_query_top_k().
+ *
+ * @code
+ * as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_DOUBLE, AS_ORDER_DESCENDING,
+ *     AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+ * @endcode
+ *
+ * @param query			The query to modify.
+ * @param bin_name		Name of the bin to order by.
+ * @param type			Scalar type of the order-by bin value.
+ * @param direction		Sort direction.
+ * @param flags			Optional comparison modifiers. Use AS_QUERY_ORDER_BY_FLAGS_DEFAULT
+ *						for none.
+ *
+ * @relates as_query
+ * @ingroup query_operations
+ */
+AS_EXTERN void
+as_query_order_by(
+	as_query* query, const char* bin_name, as_query_order_by_type type, as_order direction,
+	as_query_order_by_flags flags
+	);
+
+/**
+ * Set the global Top-K limit for a Top-K query. Must be paired with
+ * as_query_order_by(). k must be in [1, 1000]; this is validated at query
+ * execution time (mirroring as_query_where()/as_query_select(), which also
+ * defer validation to command-build time).
+ *
+ * Incompatible with: background queries, aggregate UDFs (as_query_apply),
+ * short queries (as_policy_query.short_query / AS_QUERY_DURATION_SHORT),
+ * metadata-only projection (as_query.no_bins), query pagination
+ * (as_query_set_paginate()), and query->max_records set to a value less
+ * than k. These combinations are rejected with AEROSPIKE_ERR_PARAM when the
+ * query is executed.
+ *
+ * @code
+ * as_query_top_k(&query, 10);
+ * @endcode
+ *
+ * @param query		The query to modify.
+ * @param k			Top-K limit, in [1, 1000].
+ *
+ * @relates as_query
+ * @ingroup query_operations
+ */
+AS_EXTERN void
+as_query_top_k(as_query* query, uint32_t k);
 
 //---------------------------------
 // Paginate Functions

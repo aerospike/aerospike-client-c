@@ -6,14 +6,13 @@ run-name: >-
 # merged to master via announce-release.yml.
 #
 # Full release flow:
-#   1. Run bump-version.yml -> version commit on stage -> push triggers stage build -> create a bumped release
-#      and associated jfrog bundle to be elgible for promotion
-#   2. Open PR from stage to master -> review -> merge
-#   3. Run announce-release.yml to tags the merge-base commit and starts release work
+#   1. Run bump-version.yml -> version commit on stage
+#   2. Manually run push-to-stage.yml (C Client Build & Release) on that branch
+#   3. Open PR from stage to master -> review -> merge
+#   4. Run announce-release.yml to tag the merge-base commit and start release work
 
 permissions:
   contents: write  # commit and push version bump
-  actions: write   # dispatch push-to-stage.yml
 
 on:
   workflow_dispatch:
@@ -88,7 +87,6 @@ jobs:
             git commit -m "update version to $TARGET_VERSION"
             git push origin "$TARGET_BRANCH"
             echo "Committed and pushed to $TARGET_BRANCH"
-            echo "Release build will start from the push trigger on push-to-stage.yml"
           fi
 
       - name: Summary
@@ -105,9 +103,10 @@ jobs:
             if [ "$IS_DRY_RUN" = "true" ]; then
               echo "> **Dry run** — no commits were made."
             else
-              echo "- Pushed to \`$TARGET_BRANCH\`; \`push-to-stage.yml\` runs on that push."
+              echo "- Pushed to \`$TARGET_BRANCH\`."
+              echo "- **Next:** manually run \`push-to-stage.yml\` (C Client Build & Release) on \`$TARGET_BRANCH\` with \`dry-run: false\` to build the release bundle."
               echo ""
-              echo "_Next step: open a PR from \`$TARGET_BRANCH\` to \`master\`._"
-              echo "_When the PR is merged, \`announce-release.yml\` will tag the commit and start release work._"
+              echo "_Then open a PR from \`$TARGET_BRANCH\` to \`master\`._"
+              echo "_When the PR is merged, run \`announce-release.yml\` to tag the commit and start release work._"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

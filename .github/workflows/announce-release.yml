@@ -1,9 +1,11 @@
 name: Announce Release
 run-name: Announce release — aerospike-client-c${{ (github.event_name == 'workflow_dispatch' && inputs.dry-run) && ' (dry-run)' || '' }}
 
-# Announces a release after HEAD_REF_BRANCH is merged to BASE_REF_BRANCH.
-# Tags the merge-base of both branches, reuses API docs from the HEAD_REF_BRANCH build, and drafts a release.
-# Manual runs default to dry-run which do not push tags or create releases.
+# Run this workflow from master after stage has been merged to master.
+#
+# Resolves the release target as merge-base(master, stage), tags that commit with the
+# version from version.c, reuses API docs from the stage build (or build-run-id), and
+# drafts a GitHub release. Manual runs default to dry-run (no tag push, no draft release).
 
 permissions:
   actions: read   # download api-docs artifact from an earlier workflow run
@@ -19,10 +21,8 @@ on:
         default: true
       build-run-id:
         description: >
-          GitHub Actions run ID from the C Client Build & Release run that created the
-          release bundle (e.g. 27700135842). When set, skips commit-based run lookup and
-          selects the api-docs artifact from that run; version is derived from the
-          artifact name (api-docs-{version}).
+          Optional C Client Build & Release run ID (e.g. 27700135842). Use when the release
+          build is not at the merge-base commit — otherwise api-docs lookup fails.
         required: false
         type: string
         default: ''
@@ -42,7 +42,7 @@ jobs:
     name: resolve version
     runs-on: ubuntu-24.04
     outputs:
-      version:    ${{ steps.get-version.outputs.version }}
+      version:    ${{ steps.ver.outputs.version }}
       target-sha: ${{ steps.target.outputs.sha }}
     steps:
       - name: Harden the runner (Audit all outbound calls)
@@ -65,15 +65,18 @@ jobs:
           echo "Release target SHA: $target"
           echo "sha=$target" >> "$GITHUB_OUTPUT"
 
-      # pkg/version wraps git describe --tags at the merge-base release target.
+      - name: Checkout release target
+        run: git checkout "${{ steps.target.outputs.sha }}"
+
+      # Tag and release name use the committed version at merge-base (version.c),
       - name: Read version from release target
-        id: get-version
+        id: ver
         run: |
           set -euo pipefail
-          git checkout "${{ steps.target.outputs.sha }}"
-          version=$(bash pkg/version)
+          VERSION_REL="src/main/aerospike/version.c"
+          version=$(sed -nE 's/.*aerospike_client_version[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' "$VERSION_REL")
           if [ -z "$version" ]; then
-            echo "::error::pkg/version produced empty output at ${{ steps.target.outputs.sha }}"
+            echo "::error::Could not read aerospike_client_version from $VERSION_REL at ${{ steps.target.outputs.sha }}"
             exit 1
           fi
           echo "Version: $version"

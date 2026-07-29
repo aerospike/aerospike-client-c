@@ -69,6 +69,8 @@ extern "C" {
 #define AS_FIELD_BATCH_INDEX 41
 #define AS_FIELD_FILTER 43
 #define AS_FIELD_ERROR_DETAILS 45
+#define AS_FIELD_ORDER_BY 46
+#define AS_FIELD_TOP_K 47
 
 // Message info1 bits
 #define AS_MSG_INFO1_READ				(1 << 0) // contains a read operation

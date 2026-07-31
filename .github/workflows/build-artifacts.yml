@@ -221,6 +221,7 @@ jobs:
           docker run --rm \
             -e DISTRO="$DISTRO" \
             -e OWN_SOURCE="${OWN_SOURCE:-0}" \
+            -e RELEASE_VERSION="${{ needs.get-version.outputs.is-snapshot == 'false' && needs.get-version.outputs.version || '' }}" \
             -v "$PWD:/workspace" \
             "$CONTAINER" \
             bash -c '
@@ -324,6 +325,9 @@ jobs:
         ./install_libuv
         ./install_libevent
         export MAKEFLAGS="-j$(sysctl -n hw.ncpu)"
+        if [ "${{ needs.get-version.outputs.is-snapshot }}" = "false" ]; then
+          export RELEASE_VERSION="${{ needs.get-version.outputs.version }}"
+        fi
         make package
         rm -f target/packages/*.zip  # Linux owns the source zip; removing avoids duplicate-artifact 422 on create-release-bundle.
     secrets: inherit

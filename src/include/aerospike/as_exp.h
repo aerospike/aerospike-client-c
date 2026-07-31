@@ -130,7 +130,6 @@ typedef enum {
 	_AS_EXP_CODE_BIN_EXISTS = 83,
 
 	_AS_EXP_CODE_TO_STRING = 99,
-
 	_AS_EXP_CODE_REMOVE_RESULT = 100,
 	_AS_EXP_CODE_MAP_KEYS_IN = 101,
 	_AS_EXP_CODE_MAP_VALUES_IN = 102,
@@ -4425,7 +4424,8 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_to_string(__bin) \
-	{.op=_AS_EXP_CODE_TO_STRING, .count=2}, __bin
+		{.op=_AS_EXP_CODE_TO_STRING, .count=2}, \
+		__bin
 
 //---------------------------------
 // Expression Merge

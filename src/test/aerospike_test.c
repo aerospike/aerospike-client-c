@@ -486,6 +486,8 @@ PLAN(aerospike_test)
 	plan_before(before);
 	plan_after(after);
 
+	plan_add(config_basics);
+
 	plan_add(key_basics);
 	plan_add(key_apply);
 	plan_add(key_apply2);

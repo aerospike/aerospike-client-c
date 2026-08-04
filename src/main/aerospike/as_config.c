@@ -22,6 +22,7 @@
 #include <aerospike/mod_lua_config.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 
 //---------------------------------
 // Functions
@@ -340,19 +341,23 @@ as_config_clear_hosts(as_config* config)
 bool
 as_config_set_user(as_config* config, const char* user, const char* password)
 {
-	if (user && *user) {
-		if (as_strncpy(config->user, user, sizeof(config->user))) {
-			return false;
-		}
-
-		if (as_strncpy(config->password, password, sizeof(config->password))) {
-			return false;
-		}
-		return true;
-	}
-	else {
+	if (! (user && *user)) {
 		return false;
 	}
+
+	if (strlen(user) >= sizeof(config->user)) {
+		return false;
+	}
+
+	if (password && strlen(password) >= sizeof(config->password)) {
+		return false;
+	}
+
+	// Neither field is touched unless both fit, so a false return above
+	// leaves config->user and config->password completely unmodified.
+	as_strncpy(config->user, user, sizeof(config->user));
+	as_strncpy(config->password, password, sizeof(config->password));
+	return true;
 }
 
 void

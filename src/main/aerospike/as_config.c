@@ -345,16 +345,20 @@ as_config_set_user(as_config* config, const char* user, const char* password)
 		return false;
 	}
 
+	if (! (password && *password)) {
+		return false;
+	}
+
 	if (strlen(user) >= sizeof(config->user)) {
 		return false;
 	}
 
-	if (password && strlen(password) >= sizeof(config->password)) {
+	if (strlen(password) >= sizeof(config->password)) {
 		return false;
 	}
 
-	// Neither field is touched unless both fit, so a false return above
-	// leaves config->user and config->password completely unmodified.
+	// Neither field is touched unless both are valid and fit, so a false
+	// return above leaves config->user and config->password completely unmodified.
 	as_strncpy(config->user, user, sizeof(config->user));
 	as_strncpy(config->password, password, sizeof(config->password));
 	return true;

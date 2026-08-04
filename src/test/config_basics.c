@@ -72,16 +72,6 @@ TEST(config_set_user_valid, "as_config_set_user() accepts valid length user/pass
 	assert_string_eq(config.password, "mypassword");
 }
 
-TEST(config_set_user_null_password, "as_config_set_user() accepts a NULL password")
-{
-	as_config config;
-	as_config_init(&config);
-
-	assert_true(as_config_set_user(&config, "charlie", NULL));
-	assert_string_eq(config.user, "charlie");
-	assert_int_eq(config.password[0], 0);
-}
-
 TEST(config_set_user_empty_username, "as_config_set_user() rejects empty/NULL username without touching config")
 {
 	as_config config;
@@ -96,6 +86,23 @@ TEST(config_set_user_empty_username, "as_config_set_user() rejects empty/NULL us
 	assert_config_unchanged(__result__, &config, user_snapshot, password_snapshot);
 
 	assert_false(as_config_set_user(&config, NULL, "somepassword"));
+	assert_config_unchanged(__result__, &config, user_snapshot, password_snapshot);
+}
+
+TEST(config_set_user_empty_password, "as_config_set_user() rejects empty/NULL password without touching config")
+{
+	as_config config;
+	char user_snapshot[AS_USER_SIZE];
+	char password_snapshot[AS_PASSWORD_SIZE];
+
+	seed_config(&config);
+	memcpy(user_snapshot, config.user, sizeof(user_snapshot));
+	memcpy(password_snapshot, config.password, sizeof(password_snapshot));
+
+	assert_false(as_config_set_user(&config, "charlie", ""));
+	assert_config_unchanged(__result__, &config, user_snapshot, password_snapshot);
+
+	assert_false(as_config_set_user(&config, "charlie", NULL));
 	assert_config_unchanged(__result__, &config, user_snapshot, password_snapshot);
 }
 
@@ -157,8 +164,8 @@ TEST(config_set_user_both_oversized, "as_config_set_user() rejects oversized use
 SUITE(config_basics, "aerospike config tests")
 {
 	suite_add(config_set_user_valid);
-	suite_add(config_set_user_null_password);
 	suite_add(config_set_user_empty_username);
+	suite_add(config_set_user_empty_password);
 	suite_add(config_set_user_oversized_user);
 	suite_add(config_set_user_oversized_password);
 	suite_add(config_set_user_both_oversized);

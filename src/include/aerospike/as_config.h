@@ -945,7 +945,7 @@ as_config_clear_hosts(as_config* config);
  * User authentication for servers with restricted access.  The password will be stored by the
  * client and sent to server in hashed format.
  *
- * Returns false if user is null/empty, or if user/password exceed the storage limits
+ * Returns false if user or password is null/empty, or if user/password exceed the storage limits
  * (AS_USER_SIZE/AS_PASSWORD_SIZE). On a false return, config->user and config->password are left
  * completely untouched.
  *

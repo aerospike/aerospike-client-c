@@ -76,3 +76,5 @@ x64
 ipch
 packages
 packages/repositories.config
+CLAUDE.md
+.idea

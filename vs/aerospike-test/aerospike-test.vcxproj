@@ -241,6 +241,7 @@
     <ClInclude Include="..\..\src\test\util\udf.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\src\test\config_basics.c" />
     <ClCompile Include="..\..\src\test\aerospike_batch\batch.c" />
     <ClCompile Include="..\..\src\test\aerospike_batch\batch_async.c" />
     <ClCompile Include="..\..\src\test\aerospike_bit\bit.c" />

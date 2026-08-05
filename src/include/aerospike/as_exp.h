@@ -4355,7 +4355,7 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_string_regex_replace(__policy, __pattern, __replacement, __flags, __bin) \
 		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REGEX_REPLACE, 2), \
 		_AS_EXP_QUOTED_PAIR(as_exp_str(__pattern), as_exp_str(__replacement)), \
-		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
+		as_exp_uint(__flags), \
 		__bin
 
 /**

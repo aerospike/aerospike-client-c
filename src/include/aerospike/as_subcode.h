@@ -49,6 +49,14 @@
  */
 #define AS_ERROR_DETAIL_MESSAGE    2
 
+/**
+ * Request subcode and human-readable message from the server on error responses,
+ * as well as expression build trace if an expression fails to build.
+ *
+ * Set on as_policy_base.error_detail_verbosity.
+ */
+#define AS_ERROR_DETAIL_EXP_TRACE    3
+
 //---------------------------------
 // Subcodes
 //---------------------------------

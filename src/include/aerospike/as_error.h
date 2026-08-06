@@ -43,6 +43,21 @@ extern "C" {
  */
 #define AS_ERROR_MESSAGE_MAX_LEN 	(AS_ERROR_MESSAGE_MAX_SIZE - 1)
 
+typedef struct {
+	uint8_t phase;
+	uint64_t byte_offset;
+	char op[32];
+	uint8_t depth;
+	char **path;
+	char snippet[256];
+	uint8_t outcome;
+	uint8_t lang;
+	uint32_t ael_offset;
+	uint32_t ael_span;
+	uint32_t ael_line;
+	uint32_t col;
+} as_exp_trace;
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -104,6 +119,13 @@ typedef struct as_error_s {
 	 * Zero when no subcode was returned.
 	 */
 	uint32_t subcode;
+
+	/**
+	 * This field contains the expression trace when an expression fails to build
+	 * and error_detail_verbosity >= 3.
+	 * This is NULL'ed out when no expression trace is returned.
+	 */
+	as_exp_trace exp_trace;
 
 	/**
 	 * NULL-terminated error message

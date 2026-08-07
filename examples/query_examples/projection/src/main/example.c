@@ -53,8 +53,6 @@
 // Constants
 //
 
-const char* NAMESPACE = "test";
-const char* SET = "demo1";
 const char* INDEX_NAME = "test-bin-1-index";
 
 //==========================================================
@@ -174,7 +172,7 @@ example_query_with_read_operations(aerospike* as)
 	as_error err;
 
 	as_query query;
-	as_query_init(&query, NAMESPACE, SET);
+	as_query_init(&query, g_namespace, g_set);
 
 	as_query_where_inita(&query, 1);
 	as_query_where(&query, "test-bin-1", as_integer_range(0, 10));
@@ -210,7 +208,7 @@ example_query_with_select_bins_read_operations(aerospike* as)
 
 	as_error err;
 	as_query query;
-	as_query_init(&query, NAMESPACE, SET);
+	as_query_init(&query, g_namespace, g_set);
 
 	as_query_select_inita(&query, 3);
 	as_query_select(&query, "test-bin-1");
@@ -238,7 +236,7 @@ example_query_with_expression_read_operations(aerospike* as)
 	as_error err;
 
 	as_query query;
-	as_query_init(&query, NAMESPACE, SET);
+	as_query_init(&query, g_namespace, g_set);
 
 	as_query_where_inita(&query, 1);
 	as_query_where(&query, "test-bin-1", as_integer_range(0, 10));
@@ -276,7 +274,7 @@ example_query_with_read_ops_respond_all(aerospike* as)
 	as_policy_query_init(&qpol);
 
 	as_query query;
-	as_query_init(&query, NAMESPACE, SET);
+	as_query_init(&query, g_namespace, g_set);
 
 	as_query_where_inita(&query, 1);
 	as_query_where(&query, "test-bin-1", as_integer_range(0, 10));
@@ -313,7 +311,7 @@ example_query_with_increment_operations(aerospike* as)
 
 	as_error err;
 	as_query query;
-	as_query_init(&query, NAMESPACE, SET);
+	as_query_init(&query, g_namespace, g_set);
 
 	as_query_where_inita(&query, 1);
 	as_query_where(&query, "test-bin-1", as_integer_range(0, 10));
@@ -341,7 +339,7 @@ example_query_with_increment_operations(aerospike* as)
 
 	as_query_destroy(&query);
 
-	as_query_init(&query, NAMESPACE, SET);
+	as_query_init(&query, g_namespace, g_set);
 	as_query_select_inita(&query, 3);
 	as_query_select(&query, "test-bin-1");
 	as_query_select(&query, "test-bin-2");
@@ -385,7 +383,7 @@ insert_records(aerospike* p_as)
 		// No need to destroy a stack as_key object, if we only use
 		// as_key_init_int64().
 		as_key key;
-		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
 		// In general it's ok to reset a bin value - all as_record_set_... calls
 		// destroy any previous value.
@@ -471,7 +469,7 @@ verify_records(aerospike* p_as)
 		as_record* p_rec = NULL;
 
 		// Initialize key for record retrieval
-		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
 		// Read the record from the database
 		if (aerospike_key_get(p_as, &err, NULL, &key, &p_rec) != AEROSPIKE_OK) {
@@ -580,12 +578,12 @@ cleanup_example(aerospike* p_as)
 	as_error err;
 
 	// Drop the index
-	aerospike_index_remove(p_as, &err, NULL, NAMESPACE, INDEX_NAME);
+	aerospike_index_remove(p_as, &err, NULL, g_namespace, INDEX_NAME);
 
 	// Clean up records
 	for (uint32_t i = 0; i < 5; i++) {
 		as_key key;
-		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 		aerospike_key_remove(p_as, &err, NULL, &key);
 	}
 
@@ -608,7 +606,7 @@ main(int argc, char* argv[])
 	aerospike as;
 	example_connect_to_aerospike(&as);
 
-	// Start clean (uses -n / -s from CLI; use -n test -s demo1 to match this example).
+	// Start clean.
 	example_remove_test_records(&as);
 
 	insert_records(&as);
@@ -618,7 +616,7 @@ main(int argc, char* argv[])
 	// Create index for queries
 	as_error err;
 	as_index_task task;
-	as_status istat = aerospike_index_create(&as, &err, &task, NULL, NAMESPACE, SET,
+	as_status istat = aerospike_index_create(&as, &err, &task, NULL, g_namespace, g_set,
 			"test-bin-1", INDEX_NAME, AS_INDEX_INTEGER);
 	switch (istat) {
 	case AEROSPIKE_OK:

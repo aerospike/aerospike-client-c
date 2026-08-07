@@ -282,6 +282,8 @@
 		BF4E9DF22D68F78700A437AC /* libyaml.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libyaml.a; path = ../../../../opt/homebrew/Cellar/libyaml/0.2.5/lib/libyaml.a; sourceTree = "<group>"; };
 		BF508B4622F3592D00BA4282 /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/async_examples/async_scan/src/main/example.c; sourceTree = "<group>"; };
 		BF5FDD622C87863E000CACBB /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../../examples/basic_examples/transaction/src/main/example.c; sourceTree = "<group>"; };
+		702B3E62BFF447F0BB6672F9 /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/connect/src/main/example.c; sourceTree = "<group>"; };
+		8FFE176C0F8D41B294754495 /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/string/src/main/example.c; sourceTree = "<group>"; };
 		BFBDFE8322F3A30800F585B2 /* async_scan */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = async_scan; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC2E7752CAC76D500263F2B /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../../examples/async_examples/async_transaction/src/main/example.c; sourceTree = "<group>"; };
 		BFC65C741C9237EE0079DF5A /* put */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = put; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -314,6 +316,9 @@
 		BFC65DB71C924D920079DF5A /* example.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/query_examples/simple/src/main/example.c; sourceTree = "<group>"; };
 		BFC65DBB1C924E0F0079DF5A /* example.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/scan_examples/background/src/main/example.c; sourceTree = "<group>"; };
 		BFC65DBC1C924E200079DF5A /* example.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/scan_examples/standard/src/main/example.c; sourceTree = "<group>"; };
+		CB1C72D9A4BB49D796070862 /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/basic_examples/string_expression/src/main/example.c; sourceTree = "<group>"; };
+		EEFB1F6E827E480C9886649D /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/query_examples/projection/src/main/example.c; sourceTree = "<group>"; };
+		F34B91AF940B48838FEE3E42 /* example.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = example.c; path = ../examples/scan_examples/projection/src/main/example.c; sourceTree = "<group>"; };
 		BFC65DCE1C924E4F0079DF5A /* async_get */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = async_get; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65DE01C924E880079DF5A /* async_batch_get */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = async_batch_get; sourceTree = BUILT_PRODUCTS_DIR; };
 		BFC65DF21C924EC20079DF5A /* async_query */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = async_query; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -371,12 +376,36 @@
 			name = async_scan;
 			sourceTree = "<group>";
 		};
+		3BFF22C52C3A4837A6971969 /* connect */ = {
+			isa = PBXGroup;
+			children = (
+				702B3E62BFF447F0BB6672F9 /* example.c */,
+			);
+			name = connect;
+			sourceTree = "<group>";
+		};
 		BF5FDD602C8785EA000CACBB /* transaction */ = {
 			isa = PBXGroup;
 			children = (
 				BF5FDD622C87863E000CACBB /* example.c */,
 			);
 			path = transaction;
+			sourceTree = "<group>";
+		};
+		E11AB37901EA47F3BDB55883 /* string */ = {
+			isa = PBXGroup;
+			children = (
+				8FFE176C0F8D41B294754495 /* example.c */,
+			);
+			name = string;
+			sourceTree = "<group>";
+		};
+		192E3AFFE48F4A45AABF2733 /* string_expression */ = {
+			isa = PBXGroup;
+			children = (
+				CB1C72D9A4BB49D796070862 /* example.c */,
+			);
+			name = string_expression;
 			sourceTree = "<group>";
 		};
 		BFC2E7742CAC762E00263F2B /* async_transaction */ = {
@@ -407,6 +436,7 @@
 			isa = PBXGroup;
 			children = (
 				BFC65CC91C9241DB0079DF5A /* append */,
+				3BFF22C52C3A4837A6971969 /* connect */,
 				BFC65CCD1C9242CB0079DF5A /* expire */,
 				BFC65CD01C9242FC0079DF5A /* generation */,
 				BFC65CAC1C923FA50079DF5A /* get */,
@@ -414,6 +444,8 @@
 				BFC65CD81C92436D0079DF5A /* list */,
 				BFF344D61CEE413400FD1976 /* map */,
 				BFC65E831C9255D50079DF5A /* put */,
+				E11AB37901EA47F3BDB55883 /* string */,
+				192E3AFFE48F4A45AABF2733 /* string_expression */,
 				BFC65CD31C9243310079DF5A /* touch */,
 				BF5FDD602C8785EA000CACBB /* transaction */,
 				BFC65CD21C9243290079DF5A /* udf */,
@@ -625,6 +657,7 @@
 			isa = PBXGroup;
 			children = (
 				BFC65DB41C924D360079DF5A /* aggregate */,
+				EC6314432E684E118FA21EB6 /* projection */,
 				BFC65DB51C924D4D0079DF5A /* simple */,
 			);
 			name = query_examples;
@@ -646,10 +679,19 @@
 			name = simple;
 			sourceTree = "<group>";
 		};
+		EC6314432E684E118FA21EB6 /* projection */ = {
+			isa = PBXGroup;
+			children = (
+				EEFB1F6E827E480C9886649D /* example.c */,
+			);
+			name = projection;
+			sourceTree = "<group>";
+		};
 		BFC65DB81C924DAF0079DF5A /* scan_examples */ = {
 			isa = PBXGroup;
 			children = (
 				BFC65DBA1C924DD90079DF5A /* background */,
+				132B59E9946E4D398820F53F /* projection */,
 				BFC65DB91C924DCC0079DF5A /* standard */,
 			);
 			name = scan_examples;
@@ -669,6 +711,14 @@
 				BFC65DBB1C924E0F0079DF5A /* example.c */,
 			);
 			name = background;
+			sourceTree = "<group>";
+		};
+		132B59E9946E4D398820F53F /* projection */ = {
+			isa = PBXGroup;
+			children = (
+				F34B91AF940B48838FEE3E42 /* example.c */,
+			);
+			name = projection;
 			sourceTree = "<group>";
 		};
 		BFC65E831C9255D50079DF5A /* put */ = {

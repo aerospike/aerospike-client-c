@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import re
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MANIFEST = REPO_ROOT / "examples" / "manifest" / "examples.json"
+README_START = "<!-- examples-manifest:start -->"
+README_END = "<!-- examples-manifest:end -->"
+
+GROUP_MAKEFILES = {
+    "async": REPO_ROOT / "examples" / "async_examples" / "Makefile",
+    "basic": REPO_ROOT / "examples" / "basic_examples" / "Makefile",
+    "batch": REPO_ROOT / "examples" / "batch_examples" / "Makefile",
+    "geospatial": REPO_ROOT / "examples" / "geospatial_examples" / "Makefile",
+    "query": REPO_ROOT / "examples" / "query_examples" / "Makefile",
+    "scan": REPO_ROOT / "examples" / "scan_examples" / "Makefile",
+}
+
+
+def load_manifest(path: Path) -> list[dict]:
+    data = json.loads(path.read_text())
+    return data["examples"]
+
+
+def parse_makefile_targets(path: Path) -> set[str]:
+    targets = set()
+
+    for line in path.read_text().splitlines():
+        match = re.search(r"\$\(MAKE\)\s+-C\s+([^\s]+)\s+\$@", line)
+        if match:
+            targets.add(match.group(1))
+
+    return targets
+
+
+def parse_examples_readme_ids(path: Path) -> set[str]:
+    text = path.read_text()
+    start = text.find(README_START)
+    end = text.find(README_END)
+
+    if start == -1 or end == -1 or end < start:
+        raise ValueError("examples README manifest section is missing")
+
+    ids = set()
+
+    for line in text[start:end].splitlines():
+        match = re.search(r"-\s+`([^`]+)`", line)
+        if match:
+            ids.add(match.group(1))
+
+    return ids
+
+
+def parse_vs_projects(path: Path) -> set[str]:
+    projects = set()
+
+    for line in path.read_text().splitlines():
+        match = re.search(r'Project\("[^"]+"\) = "([^"]+)", "examples\\', line)
+        if match:
+            projects.add(match.group(1))
+
+    return projects
+
+
+def expected_xcode_target(example: dict) -> str:
+    group = example["group"]
+    name = example["name"]
+
+    if group in {"async", "basic"}:
+        return name
+
+    prefixes = {
+        "batch": "batch",
+        "geospatial": "geo",
+        "query": "query",
+        "scan": "scan",
+    }
+
+    try:
+        return f"{prefixes[group]}_{name}"
+    except KeyError as exc:
+        raise ValueError(f"unsupported Xcode target mapping for group {group!r}") from exc
+
+
+def xcode_contains_example(pbxproj_text: str, source_dir: str) -> bool:
+    fragment = f"{source_dir}/src/main/example.c"
+    return fragment in pbxproj_text
+
+
+def parse_xcode_project_targets(pbxproj_text: str) -> dict[str, str | None]:
+    project_match = re.search(r"targets = \(\n(?P<body>.*?)\n\t\t\t\);", pbxproj_text, re.S)
+    if not project_match:
+        raise ValueError("Xcode project targets list is missing")
+
+    target_ids = set(re.findall(r"\b([A-F0-9]{24}) /\* [^*]+ \*/", project_match.group("body")))
+    targets: dict[str, str | None] = {}
+    target_re = re.compile(
+        r"\t\t(?P<id>[A-F0-9]{24}) /\* (?P<name>[^*]+) \*/ = \{\n"
+        r"\t\t\tisa = PBXNativeTarget;\n"
+        r"(?P<body>.*?)"
+        r"\n\t\t\};",
+        re.S,
+    )
+
+    for match in target_re.finditer(pbxproj_text):
+        if match.group("id") not in target_ids:
+            continue
+
+        body = match.group("body")
+        product_match = re.search(r"productReference = [A-F0-9]{24} /\* ([^*]+) \*/;", body)
+        targets[match.group("name").strip()] = product_match.group(1).strip() if product_match else None
+
+    return targets
+
+
+def expected_makefile_entries(examples: list[dict]) -> dict[str, set[str]]:
+    entries: dict[str, set[str]] = defaultdict(set)
+
+    for example in examples:
+        if example["inventory_flags"]["unix_makefile"]:
+            entries[example["group"]].add(example["source_dir"].split("/")[-1])
+
+    return entries
+
+
+def expected_readme_entries(examples: list[dict]) -> set[str]:
+    return {
+        example["id"]
+        for example in examples
+        if example["inventory_flags"]["examples_readme"]
+    }
+
+
+def expected_vs_entries(examples: list[dict]) -> set[str]:
+    return {
+        example["vs_project"]
+        for example in examples
+        if example["inventory_flags"]["vs"]
+    }
+
+
+def compare_sets(surface: str, expected: set[str], actual: set[str]) -> list[str]:
+    issues = []
+
+    for item in sorted(expected - actual):
+        issues.append(f"{surface}: missing `{item}`")
+
+    for item in sorted(actual - expected):
+        issues.append(f"{surface}: unexpected `{item}`")
+
+    return issues
+
+
+def validate_root_readme(path: Path) -> list[str]:
+    text = path.read_text()
+    issues = []
+
+    for token in [
+        "make -C examples",
+        "examples/run_examples",
+        "examples/manifest/examples.json",
+    ]:
+        if token not in text:
+            issues.append(f"root README: missing `{token}` reference")
+
+    return issues
+
+
+def validate(args: argparse.Namespace) -> list[str]:
+    manifest = load_manifest(args.manifest)
+    issues: list[str] = []
+
+    for group, makefile in GROUP_MAKEFILES.items():
+        expected = expected_makefile_entries(manifest).get(group, set())
+        actual = parse_makefile_targets(makefile)
+        issues.extend(compare_sets(f"{group} Makefile", expected, actual))
+
+    examples_readme = REPO_ROOT / "examples" / "README.md"
+
+    try:
+        readme_ids = parse_examples_readme_ids(examples_readme)
+        issues.extend(compare_sets("examples README", expected_readme_entries(manifest), readme_ids))
+    except ValueError as exc:
+        issues.append(f"examples README: {exc}")
+
+    issues.extend(validate_root_readme(REPO_ROOT / "README.md"))
+
+    vs_projects = parse_vs_projects(REPO_ROOT / "vs" / "aerospike.sln")
+    issues.extend(compare_sets("Visual Studio", expected_vs_entries(manifest), vs_projects))
+
+    pbxproj_text = (REPO_ROOT / "xcode" / "examples.xcodeproj" / "project.pbxproj").read_text()
+    xcode_targets = parse_xcode_project_targets(pbxproj_text)
+
+    for example in manifest:
+        if not example["inventory_flags"]["xcode"]:
+            continue
+
+        expected_target = expected_xcode_target(example)
+        actual_product = xcode_targets.get(expected_target)
+
+        if actual_product is None:
+            issues.append(f"Xcode: missing `{example['id']}` target `{expected_target}`")
+            continue
+
+        if actual_product != expected_target:
+            issues.append(
+                f"Xcode: `{example['id']}` target `{expected_target}` has product `{actual_product}`"
+            )
+
+        if not xcode_contains_example(pbxproj_text, example["source_dir"]):
+            issues.append(f"Xcode: missing `{example['id']}` source entry")
+
+    return issues
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Validate example inventory drift against the manifest.")
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_MANIFEST,
+        help="Path to the authoritative examples manifest.",
+    )
+    args = parser.parse_args()
+
+    issues = validate(args)
+
+    if issues:
+        print("Examples inventory drift detected:")
+        for issue in issues:
+            print(f" - {issue}")
+        return 1
+
+    print("Examples inventory is aligned with the manifest.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

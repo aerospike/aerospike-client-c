@@ -50,15 +50,10 @@
 // Constants
 //
 
-#if !defined(_MSC_VER)
-#define UDF_USER_PATH "src/lua/"
-#else
-#define UDF_USER_PATH "../../../examples/query_examples/aggregate/src/lua/"
-#endif
-
 #define UDF_MODULE "query_udf"
 
-const char UDF_FILE_PATH[] =  UDF_USER_PATH UDF_MODULE ".lua";
+const char UDF_RESOURCE_DIR[] = "src/lua";
+const char UDF_RESOURCE_PATH[] = "src/lua/" UDF_MODULE ".lua";
 
 const char TEST_INDEX_NAME[] = "test-bin-index";
 
@@ -72,7 +67,7 @@ const int MAX_TOKEN = 10; // don't exceed 2 digits, i.e. 99
 
 bool query_cb(const as_val* p_val, void* udata);
 bool query_cb_map(const as_val* p_val, void* udata);
-void cleanup(aerospike* p_as);
+void cleanup(aerospike* p_as, const char* udf_file_path);
 bool insert_records(aerospike* p_as);
 char* generate_numbers(char* numbers);
 
@@ -83,38 +78,53 @@ char* generate_numbers(char* numbers);
 int
 main(int argc, char* argv[])
 {
+	char udf_user_path[1024];
+	char udf_file_path[1024];
+
 	// Parse command line arguments.
 	if (! example_get_opts(argc, argv, EXAMPLE_MULTI_KEY_OPTS)) {
 		exit(-1);
 	}
 
+	if (! example_resolve_resource_path(UDF_RESOURCE_DIR, udf_user_path,
+			sizeof(udf_user_path))) {
+		LOG("cannot resolve UDF resource directory %s", UDF_RESOURCE_DIR);
+		exit(-1);
+	}
+
+	if (! example_resolve_resource_path(UDF_RESOURCE_PATH, udf_file_path,
+			sizeof(udf_file_path))) {
+		LOG("cannot resolve UDF resource %s", UDF_RESOURCE_PATH);
+		exit(-1);
+	}
+
 	// Connect to the aerospike database cluster.
 	aerospike as;
-	example_connect_to_aerospike_with_udf_config(&as, UDF_USER_PATH);
+	example_connect_to_aerospike_with_udf_config(&as, udf_user_path);
 
 	// Start clean.
 	example_remove_test_records(&as);
 	example_remove_index(&as, TEST_INDEX_NAME);
 
 	// Register the UDF in the database cluster.
-	if (! example_register_udf(&as, UDF_FILE_PATH)) {
+	if (! example_register_udf(&as, udf_file_path)) {
 		example_cleanup(&as);
 		exit(-1);
 	}
 
 	// Create a numeric secondary index on test-bin.
 	if (! example_create_integer_index(&as, g_set, "test-bin", TEST_INDEX_NAME)) {
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
 	if (! insert_records(&as)) {
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
 	if (! example_read_test_records(&as)) {
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -142,7 +152,7 @@ main(int argc, char* argv[])
 		LOG("aerospike_query_foreach() returned %d - %s", err.code,
 				err.message);
 		as_query_destroy(&query);
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -170,7 +180,7 @@ main(int argc, char* argv[])
 		LOG("aerospike_query_foreach() returned %d - %s", err.code,
 				err.message);
 		as_query_destroy(&query);
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -198,7 +208,7 @@ main(int argc, char* argv[])
 		LOG("aerospike_query_foreach() returned %d - %s", err.code,
 				err.message);
 		as_query_destroy(&query);
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -224,7 +234,7 @@ main(int argc, char* argv[])
 		LOG("aerospike_query_foreach() returned %d - %s", err.code,
 				err.message);
 		as_query_destroy(&query);
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -233,7 +243,7 @@ main(int argc, char* argv[])
 	as_query_destroy(&query);
 
 	// Cleanup and disconnect from the database cluster.
-	cleanup(&as);
+	cleanup(&as, udf_file_path);
 
 	LOG("aggregate query example successfully completed");
 
@@ -296,11 +306,11 @@ query_cb_map(const as_val* p_val, void* udata)
 //
 
 void
-cleanup(aerospike* p_as)
+cleanup(aerospike* p_as, const char* udf_file_path)
 {
 	example_remove_test_records(p_as);
 	example_remove_index(p_as, TEST_INDEX_NAME);
-	example_remove_udf(p_as, UDF_FILE_PATH);
+	example_remove_udf(p_as, udf_file_path);
 	example_cleanup(p_as);
 }
 

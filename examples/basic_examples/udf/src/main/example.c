@@ -46,21 +46,15 @@
 // Constants
 //
 
-#if !defined(_MSC_VER)
-#define UDF_USER_PATH "src/lua/"
-#else
-#define UDF_USER_PATH "../../../examples/basic_examples/udf/src/lua/"
-#endif
-
 #define UDF_MODULE "basic_udf"
-const char UDF_FILE_PATH[] = UDF_USER_PATH UDF_MODULE ".lua";
+const char UDF_RESOURCE_PATH[] = "src/lua/" UDF_MODULE ".lua";
 
 
 //==========================================================
 // Forward Declarations
 //
 
-void cleanup(aerospike* p_as);
+void cleanup(aerospike* p_as, const char* udf_file_path);
 bool write_record(aerospike* p_as);
 
 
@@ -71,8 +65,16 @@ bool write_record(aerospike* p_as);
 int
 main(int argc, char* argv[])
 {
+	char udf_file_path[1024];
+
 	// Parse command line arguments.
 	if (! example_get_opts(argc, argv, EXAMPLE_BASIC_OPTS)) {
+		exit(-1);
+	}
+
+	if (! example_resolve_resource_path(UDF_RESOURCE_PATH, udf_file_path,
+			sizeof(udf_file_path))) {
+		LOG("cannot resolve UDF resource %s", UDF_RESOURCE_PATH);
 		exit(-1);
 	}
 
@@ -84,14 +86,14 @@ main(int argc, char* argv[])
 	example_remove_test_record(&as);
 
 	// Register the UDF in the database cluster.
-	if (! example_register_udf(&as, UDF_FILE_PATH)) {
+	if (! example_register_udf(&as, udf_file_path)) {
 		example_cleanup(&as);
 		exit(-1);
 	}
 
 	// Write a record to the database.
 	if (! write_record(&as)) {
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -101,7 +103,7 @@ main(int argc, char* argv[])
 	if (aerospike_key_apply(&as, &err, NULL, &g_key, UDF_MODULE,
 			"test_bin_1_add_1000", NULL, NULL) != AEROSPIKE_OK) {
 		LOG("aerospike_key_apply() returned %d - %s", err.code, err.message);
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -129,7 +131,7 @@ main(int argc, char* argv[])
 			"bin_transform", (as_list*)&args, &p_return_val) != AEROSPIKE_OK) {
 		LOG("aerospike_key_apply() returned %d - %s", err.code, err.message);
 		as_arraylist_destroy(&args);
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -137,7 +139,7 @@ main(int argc, char* argv[])
 
 	if (! p_return_val) {
 		LOG("aerospike_key_apply() retrieved null as_val object");
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -149,7 +151,7 @@ main(int argc, char* argv[])
 
 	if (i_val == -1) {
 		LOG("aerospike_key_apply() retrieved non-as_integer object");
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -161,7 +163,7 @@ main(int argc, char* argv[])
 	}
 
 	// Cleanup and disconnect from the database cluster.
-	cleanup(&as);
+	cleanup(&as, udf_file_path);
 
 	LOG("udf example successfully completed");
 
@@ -174,9 +176,9 @@ main(int argc, char* argv[])
 //
 
 void
-cleanup(aerospike* p_as)
+cleanup(aerospike* p_as, const char* udf_file_path)
 {
-	example_remove_udf(p_as, UDF_FILE_PATH);
+	example_remove_udf(p_as, udf_file_path);
 	example_cleanup(p_as);
 }
 

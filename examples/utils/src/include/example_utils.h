@@ -30,6 +30,7 @@
 #include <stdio.h>
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_config.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
@@ -82,6 +83,28 @@ extern uint32_t g_n_keys;
 
 // Must be called first!
 bool example_get_opts(int argc, char* argv[], int which_opts);
+
+typedef struct example_args_s {
+	const char* host;
+	int port;
+	const char* user;
+	const char* password;
+	as_auth_mode auth_mode;
+	const as_config_tls* tls;
+	const char* namespace_name;
+	const char* set;
+	const char* key_string;
+	uint32_t n_keys;
+} example_args;
+
+typedef struct example_context_s {
+	example_args args;
+	const char* resource_roots;
+	const char* repo_root;
+} example_context;
+
+void example_get_context(example_context* context);
+bool example_resolve_resource_path(const char* relative_path, char* buffer, size_t buffer_size);
 
 
 //==========================================================

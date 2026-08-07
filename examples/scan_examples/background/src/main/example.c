@@ -45,21 +45,15 @@
 // Constants
 //
 
-#if !defined(_MSC_VER)
-#define UDF_USER_PATH "src/lua/"
-#else
-#define UDF_USER_PATH "../../../examples/scan_examples/background/src/lua/"
-#endif
-
 #define UDF_MODULE "bg_scan_udf"
-const char UDF_FILE_PATH[] = UDF_USER_PATH UDF_MODULE ".lua";
+const char UDF_RESOURCE_PATH[] = "src/lua/" UDF_MODULE ".lua";
 
 
 //==========================================================
 // Forward Declarations
 //
 
-void cleanup(aerospike* p_as);
+void cleanup(aerospike* p_as, const char* udf_file_path);
 bool insert_records(aerospike* p_as);
 
 
@@ -70,8 +64,16 @@ bool insert_records(aerospike* p_as);
 int
 main(int argc, char* argv[])
 {
+	char udf_file_path[1024];
+
 	// Parse command line arguments.
 	if (! example_get_opts(argc, argv, EXAMPLE_MULTI_KEY_OPTS)) {
+		exit(-1);
+	}
+
+	if (! example_resolve_resource_path(UDF_RESOURCE_PATH, udf_file_path,
+			sizeof(udf_file_path))) {
+		LOG("cannot resolve UDF resource %s", UDF_RESOURCE_PATH);
 		exit(-1);
 	}
 
@@ -83,18 +85,18 @@ main(int argc, char* argv[])
 	example_remove_test_records(&as);
 
 	// Register the UDF in the database cluster.
-	if (! example_register_udf(&as, UDF_FILE_PATH)) {
+	if (! example_register_udf(&as, udf_file_path)) {
 		example_cleanup(&as);
 		exit(-1);
 	}
 
 	if (! insert_records(&as)) {
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
 	if (! example_read_test_records(&as)) {
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -114,7 +116,7 @@ main(int argc, char* argv[])
 		LOG("aerospike_scan_background() returned %d - %s", err.code,
 				err.message);
 		as_scan_destroy(&scan);
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
@@ -133,7 +135,7 @@ main(int argc, char* argv[])
 				AEROSPIKE_OK) {
 			LOG("aerospike_scan_info() returned %d - %s", err.code,
 					err.message);
-			cleanup(&as);
+			cleanup(&as, udf_file_path);
 			exit(-1);
 		}
 
@@ -146,12 +148,12 @@ main(int argc, char* argv[])
 
 	// Read everything back and show the changes done by the scan.
 	if (! example_read_test_records(&as)) {
-		cleanup(&as);
+		cleanup(&as, udf_file_path);
 		exit(-1);
 	}
 
 	// Cleanup and disconnect from the database cluster.
-	cleanup(&as);
+	cleanup(&as, udf_file_path);
 
 	LOG("background scan example successfully completed");
 
@@ -164,10 +166,10 @@ main(int argc, char* argv[])
 //
 
 void
-cleanup(aerospike* p_as)
+cleanup(aerospike* p_as, const char* udf_file_path)
 {
 	example_remove_test_records(p_as);
-	example_remove_udf(p_as, UDF_FILE_PATH);
+	example_remove_udf(p_as, udf_file_path);
 	example_cleanup(p_as);
 }
 

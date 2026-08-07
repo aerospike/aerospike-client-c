@@ -1,0 +1,875 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+import shlex
+import subprocess
+import sys
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+MANIFEST_PATH = REPO_ROOT / "examples" / "manifest" / "examples.json"
+DEFAULT_OUTPUT_ROOT = REPO_ROOT / "examples" / "target" / "run_examples"
+VALIDATION_SCRIPT = REPO_ROOT / "scripts" / "validate_examples_inventory"
+FACT_PROBE_DIR = REPO_ROOT / "examples" / "tools" / "probe_server_facts"
+FACT_PROBE_BINARY = FACT_PROBE_DIR / "target" / ("probe_server_facts.exe" if os.name == "nt" else "probe_server_facts")
+BUILD_STATE_FILENAME = ".run_examples_event_lib"
+PROBEABLE_REQUIREMENTS = ("event_lib", "ttl_support", "enterprise", "strong_consistency", "min_server_version")
+EXAMPLE_MANAGED_REQUIREMENTS = ("udf", "secondary_index")
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run Aerospike C examples from the authoritative manifest."
+    )
+    parser.add_argument("targets", nargs="*", default=["all"], help="Example ids, unique example names, groups, or 'all'.")
+    parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH, help="Path to the manifest.")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=3000)
+    parser.add_argument("--user")
+    parser.add_argument("--password")
+    parser.add_argument("--auth")
+    parser.add_argument("--namespace", default="test")
+    parser.add_argument("--set", dest="set_name", default="eg-set")
+    parser.add_argument("--key", default="eg-key")
+    parser.add_argument("--multikey", type=int, default=20)
+    parser.add_argument("--event-lib", choices=["libev", "libuv", "libevent"])
+    parser.add_argument("--tag", action="append", default=[], help="Only include examples with this tag. Repeatable.")
+    parser.add_argument("--exclude-tag", action="append", default=[], help="Exclude examples with this tag. Repeatable.")
+    parser.add_argument("--list", action="store_true", help="List manifest examples and exit.")
+    parser.add_argument("--build", action="store_true", help="Force a build before running selected examples.")
+    parser.add_argument("--fail-fast", action="store_true", help="Stop on the first failed example.")
+    parser.add_argument("--validate-inventory", action="store_true", help="Run the manifest drift validator after execution.")
+    parser.add_argument("--validation-only", action="store_true", help="Run only the manifest drift validator.")
+    parser.add_argument("--report", type=Path, help="JUnit XML output path.")
+
+    parser.add_argument("--server-version", help="Override the detected server version for skip checks.")
+    parser.add_argument("--enterprise", action="store_true", help="Treat the target cluster as Enterprise Edition.")
+    parser.add_argument("--community", action="store_true", help="Treat the target cluster as Community Edition.")
+    parser.add_argument("--strong-consistency", action="store_true", help="Treat the target namespace as strong-consistency.")
+    parser.add_argument("--no-strong-consistency", action="store_true")
+    parser.add_argument("--ttl-support", action="store_true", help="Treat the target namespace as TTL-capable.")
+    parser.add_argument("--no-ttl-support", action="store_true")
+
+    parser.add_argument("--tls-enable", action="store_true")
+    parser.add_argument("--tls-ca-file")
+    parser.add_argument("--tls-ca-path")
+    parser.add_argument("--tls-protocols")
+    parser.add_argument("--tls-cipher-suite")
+    parser.add_argument("--tls-crl-check", action="store_true")
+    parser.add_argument("--tls-crl-check-all", action="store_true")
+    parser.add_argument("--tls-cert-blacklist")
+    parser.add_argument("--tls-log-session-info", action="store_true")
+    parser.add_argument("--tls-key-file")
+    parser.add_argument("--tls-cert-file")
+    parser.add_argument("--tls-login-only", action="store_true")
+    parser.add_argument("--tls-name", help="TLS cluster name for the self-managed connect example.")
+
+    args = parser.parse_args()
+
+    if args.enterprise and args.community:
+        parser.error("--enterprise and --community are mutually exclusive")
+
+    if args.strong_consistency and args.no_strong_consistency:
+        parser.error("--strong-consistency and --no-strong-consistency are mutually exclusive")
+
+    if args.ttl_support and args.no_ttl_support:
+        parser.error("--ttl-support and --no-ttl-support are mutually exclusive")
+
+    return args
+
+
+def load_manifest(path: Path) -> list[dict]:
+    return json.loads(path.read_text())["examples"]
+
+
+def normalize_version(version: str | None) -> tuple[int, ...] | None:
+    if not version:
+        return None
+
+    digits = []
+
+    for part in version.split("."):
+        number = ""
+        for ch in part:
+            if ch.isdigit():
+                number += ch
+            else:
+                break
+        if not number:
+            break
+        digits.append(int(number))
+
+    return tuple(digits) if digits else None
+
+
+def version_is_at_least(actual: str | None, minimum: str | None) -> bool | None:
+    if minimum is None:
+        return True
+
+    actual_value = normalize_version(actual)
+    minimum_value = normalize_version(minimum)
+
+    if actual_value is None or minimum_value is None:
+        return None
+
+    max_len = max(len(actual_value), len(minimum_value))
+    actual_value = actual_value + (0,) * (max_len - len(actual_value))
+    minimum_value = minimum_value + (0,) * (max_len - len(minimum_value))
+    return actual_value >= minimum_value
+
+
+def build_index(examples: list[dict]) -> tuple[dict[str, dict], dict[str, list[dict]], dict[str, list[dict]]]:
+    by_id = {example["id"]: example for example in examples}
+    by_name: dict[str, list[dict]] = {}
+    by_group: dict[str, list[dict]] = {}
+
+    for example in examples:
+        by_name.setdefault(example["name"], []).append(example)
+        by_group.setdefault(example["group"], []).append(example)
+
+    return by_id, by_name, by_group
+
+
+def select_examples(examples: list[dict], args: argparse.Namespace) -> list[dict]:
+    by_id, by_name, by_group = build_index(examples)
+    selected: list[dict] = []
+    seen = set()
+
+    for token in args.targets:
+        if token == "all":
+            for example in examples:
+                if example["id"] not in seen:
+                    selected.append(example)
+                    seen.add(example["id"])
+            continue
+
+        if token in by_group:
+            for example in by_group[token]:
+                if example["id"] not in seen:
+                    selected.append(example)
+                    seen.add(example["id"])
+            continue
+
+        if token in by_id:
+            if token not in seen:
+                selected.append(by_id[token])
+                seen.add(token)
+            continue
+
+        if token in by_name:
+            matches = by_name[token]
+            if len(matches) != 1:
+                ids = ", ".join(example["id"] for example in matches)
+                raise SystemExit(f"Selection '{token}' is ambiguous. Use one of: {ids}")
+
+            example = matches[0]
+            if example["id"] not in seen:
+                selected.append(example)
+                seen.add(example["id"])
+            continue
+
+        raise SystemExit(f"Unknown example selection '{token}'")
+
+    if args.tag:
+        required = set(args.tag)
+        selected = [example for example in selected if required.issubset(set(example["tags"]))]
+
+    if args.exclude_tag:
+        excluded = set(args.exclude_tag)
+        selected = [example for example in selected if not excluded.intersection(example["tags"])]
+
+    return selected
+
+
+def print_examples(examples: list[dict]) -> None:
+    for example in examples:
+        tags = ",".join(example["tags"])
+        print(f"{example['id']:<24} group={example['group']:<11} tags={tags}")
+
+
+def parse_probe_bool(value: str) -> bool:
+    normalized = value.strip().lower()
+
+    if normalized == "true":
+        return True
+
+    if normalized == "false":
+        return False
+
+    raise ValueError(f"invalid boolean value {value!r}")
+
+
+def parse_probe_output(stdout: str) -> dict:
+    mapping = {
+        "SERVER_VERSION": "server_version",
+        "SERVER_ENTERPRISE": "enterprise",
+        "NAMESPACE_STRONG_CONSISTENCY": "strong_consistency",
+        "NAMESPACE_TTL_SUPPORT": "ttl_support",
+    }
+    facts: dict[str, str | bool | None] = {value: None for value in mapping.values()}
+
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+
+        if "=" not in line:
+            raise ValueError(f"malformed probe output line: {raw_line!r}")
+
+        key, raw_value = line.split("=", 1)
+
+        if key not in mapping:
+            raise ValueError(f"unexpected probe output key {key!r}")
+
+        field = mapping[key]
+        value = raw_value.strip()
+
+        if field == "server_version":
+            if not value:
+                raise ValueError("probe returned an empty server version")
+            facts[field] = value
+        else:
+            facts[field] = parse_probe_bool(value)
+
+    missing = [name for name, value in facts.items() if value is None]
+    if missing:
+        raise ValueError(f"probe output missing required fields: {', '.join(sorted(missing))}")
+
+    return facts
+
+
+def manual_fact_overrides(args: argparse.Namespace) -> dict:
+    if args.enterprise:
+        enterprise = True
+    elif args.community:
+        enterprise = False
+    else:
+        enterprise = None
+
+    if args.strong_consistency:
+        strong_consistency = True
+    elif args.no_strong_consistency:
+        strong_consistency = False
+    else:
+        strong_consistency = None
+
+    if args.ttl_support:
+        ttl_support = True
+    elif args.no_ttl_support:
+        ttl_support = False
+    else:
+        ttl_support = None
+
+    return {
+        "server_version": args.server_version,
+        "enterprise": enterprise,
+        "strong_consistency": strong_consistency,
+        "ttl_support": ttl_support,
+    }
+
+
+def build_fact_probe_command(args: argparse.Namespace) -> list[str]:
+    command = [
+        str(FACT_PROBE_BINARY),
+        "--host",
+        args.host,
+        "--port",
+        str(args.port),
+        "--namespace",
+        args.namespace,
+    ]
+
+    if args.user:
+        command.extend(["--user", args.user])
+    if args.password:
+        command.extend(["--password", args.password])
+    if args.auth:
+        command.extend(["--auth", args.auth])
+    if args.tls_enable:
+        command.append("--tls-enable")
+    if args.tls_ca_file:
+        command.extend(["--tls-ca-file", args.tls_ca_file])
+    if args.tls_ca_path:
+        command.extend(["--tls-ca-path", args.tls_ca_path])
+    if args.tls_protocols:
+        command.extend(["--tls-protocols", args.tls_protocols])
+    if args.tls_cipher_suite:
+        command.extend(["--tls-cipher-suite", args.tls_cipher_suite])
+    if args.tls_crl_check:
+        command.append("--tls-crl-check")
+    if args.tls_crl_check_all:
+        command.append("--tls-crl-check-all")
+    if args.tls_cert_blacklist:
+        command.extend(["--tls-cert-blacklist", args.tls_cert_blacklist])
+    if args.tls_log_session_info:
+        command.append("--tls-log-session-info")
+    if args.tls_key_file:
+        command.extend(["--tls-key-file", args.tls_key_file])
+    if args.tls_cert_file:
+        command.extend(["--tls-cert-file", args.tls_cert_file])
+    if args.tls_login_only:
+        command.append("--tls-login-only")
+    if args.tls_name:
+        command.extend(["--tls-name", args.tls_name])
+
+    return command
+
+
+def run_fact_probe(args: argparse.Namespace, out_dir: Path) -> dict:
+    stdout_path = out_dir / "probe_server_facts.stdout.log"
+    stderr_path = out_dir / "probe_server_facts.stderr.log"
+
+    root_ready, root_build_output, _ = ensure_directory_build(
+        REPO_ROOT,
+        args.event_lib,
+        False,
+        root_outputs_exist(),
+        build_targets=["build", "prepare"],
+    )
+    if not root_ready:
+        write_text(stdout_path, "")
+        write_text(stderr_path, root_build_output)
+        return {
+            "status": "failed",
+            "message": "fact probe build failed",
+            "stdout_path": stdout_path,
+            "stderr_path": stderr_path,
+            "command": shlex.join(make_command(["build", "prepare"], args.event_lib)),
+            "facts": None,
+        }
+
+    probe_ready, probe_build_output, _ = ensure_directory_build(
+        FACT_PROBE_DIR,
+        args.event_lib,
+        False,
+        FACT_PROBE_BINARY.exists(),
+    )
+    if not probe_ready:
+        write_text(stdout_path, "")
+        write_text(stderr_path, probe_build_output)
+        return {
+            "status": "failed",
+            "message": "fact probe build failed",
+            "stdout_path": stdout_path,
+            "stderr_path": stderr_path,
+            "command": shlex.join(make_command(["build"], args.event_lib)),
+            "facts": None,
+        }
+
+    command = build_fact_probe_command(args)
+    completed = run_command(command, FACT_PROBE_DIR)
+    write_text(stdout_path, completed.stdout)
+    write_text(stderr_path, completed.stderr)
+
+    if completed.returncode != 0:
+        return {
+            "status": "failed",
+            "message": "fact probe execution failed",
+            "stdout_path": stdout_path,
+            "stderr_path": stderr_path,
+            "command": shlex.join(command),
+            "facts": None,
+        }
+
+    try:
+        facts = parse_probe_output(completed.stdout)
+    except ValueError as exc:
+        return {
+            "status": "failed",
+            "message": f"fact probe emitted invalid output: {exc}",
+            "stdout_path": stdout_path,
+            "stderr_path": stderr_path,
+            "command": shlex.join(command),
+            "facts": None,
+        }
+
+    return {
+        "status": "passed",
+        "message": "server facts auto-detected",
+        "stdout_path": stdout_path,
+        "stderr_path": stderr_path,
+        "command": shlex.join(command),
+        "facts": facts,
+    }
+
+
+def derive_facts(args: argparse.Namespace, out_dir: Path | None = None) -> tuple[dict, dict | None]:
+    facts = {
+        "server_version": None,
+        "enterprise": None,
+        "strong_consistency": None,
+        "ttl_support": None,
+        "event_lib": args.event_lib,
+    }
+    overrides = manual_fact_overrides(args)
+    probe_result = None
+
+    if out_dir is not None:
+        probe_result = run_fact_probe(args, out_dir)
+        if probe_result["status"] == "passed":
+            facts.update(probe_result["facts"])
+
+    for key, value in overrides.items():
+        if value is not None:
+            facts[key] = value
+
+    return facts, probe_result
+
+
+def evaluate_prerequisites(example: dict, facts: dict) -> str | None:
+    requirements = example["requires"]
+
+    if requirements["event_lib"] and not facts["event_lib"]:
+        return "requires --event-lib for async examples"
+
+    if requirements["ttl_support"]:
+        if facts["ttl_support"] is None:
+            return "requires TTL support; auto-probe unavailable, pass --ttl-support or --no-ttl-support"
+        if not facts["ttl_support"]:
+            return "requires TTL support in the target namespace"
+
+    if requirements["enterprise"]:
+        if facts["enterprise"] is None:
+            return "requires Enterprise Edition; auto-probe unavailable, pass --enterprise or --community"
+        if not facts["enterprise"]:
+            return "requires Enterprise Edition"
+
+    if requirements["strong_consistency"]:
+        if facts["strong_consistency"] is None:
+            return "requires a strong-consistency namespace; auto-probe unavailable, pass --strong-consistency or --no-strong-consistency"
+        if not facts["strong_consistency"]:
+            return "requires a strong-consistency namespace"
+
+    version_check = version_is_at_least(facts["server_version"], requirements["min_server_version"])
+    if version_check is None:
+        if requirements["min_server_version"] is not None:
+            return f"requires server version >= {requirements['min_server_version']}; auto-probe unavailable, pass --server-version"
+    elif not version_check:
+        return f"requires server version >= {requirements['min_server_version']}"
+
+    return None
+
+
+def make_command(base: list[str], event_lib: str | None) -> list[str]:
+    command = ["make"]
+    if event_lib:
+        command.append(f"EVENT_LIB={event_lib}")
+    command.extend(base)
+    return command
+
+
+def run_command(command: list[str], cwd: Path, env: dict | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
+def backend_name(event_lib: str | None) -> str:
+    return event_lib or "none"
+
+
+def build_state_path(cwd: Path) -> Path:
+    return cwd / "target" / BUILD_STATE_FILENAME
+
+
+def read_build_backend(state_path: Path) -> str | None:
+    if not state_path.exists():
+        return None
+
+    value = state_path.read_text().strip()
+    return value or None
+
+
+def write_build_backend(state_path: Path, event_lib: str | None) -> None:
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(backend_name(event_lib))
+
+
+def root_outputs_exist() -> bool:
+    target_root = REPO_ROOT / "target"
+
+    if not target_root.exists():
+        return False
+
+    for platform_dir in target_root.iterdir():
+        if not platform_dir.is_dir():
+            continue
+
+        include_ready = (platform_dir / "include" / "aerospike" / "aerospike.h").exists()
+        lib_ready = any(
+            (platform_dir / "lib" / library_name).exists()
+            for library_name in ("libaerospike.a", "libaerospike.lib")
+        )
+
+        if include_ready and lib_ready:
+            return True
+
+    return False
+
+
+def resource_root_values(example: dict) -> list[str]:
+    roots = [str(REPO_ROOT / example["source_dir"])]
+    roots.extend(str(REPO_ROOT / root) for root in example["resource_roots"])
+    return list(dict.fromkeys(roots))
+
+
+def ensure_directory_build(
+    cwd: Path,
+    event_lib: str | None,
+    force_build: bool,
+    outputs_exist: bool,
+    build_targets: list[str] | None = None,
+) -> tuple[bool, str, bool]:
+    target_dir = cwd / "target"
+    state_path = build_state_path(cwd)
+    previous_backend = read_build_backend(state_path)
+    current_backend = backend_name(event_lib)
+    build_targets = build_targets or ["build"]
+    should_clean = force_build or (target_dir.exists() and previous_backend != current_backend)
+    should_build = should_clean or not outputs_exist
+    output_parts: list[str] = []
+
+    if should_clean:
+        clean_result = run_command(make_command(["clean"], event_lib), cwd)
+        output_parts.append(clean_result.stdout)
+        output_parts.append(clean_result.stderr)
+        if clean_result.returncode != 0:
+            return False, "".join(output_parts), False
+
+    if should_build:
+        build_result = run_command(make_command(build_targets, event_lib), cwd)
+        output_parts.append(build_result.stdout)
+        output_parts.append(build_result.stderr)
+        if build_result.returncode != 0:
+            return False, "".join(output_parts), False
+        write_build_backend(state_path, event_lib)
+        return True, "".join(output_parts), True
+
+    return True, "".join(output_parts), False
+
+
+def ensure_build(example: dict, args: argparse.Namespace, build_root_state: dict[str, str | bool | None]) -> tuple[bool, str]:
+    binary = REPO_ROOT / example["binary_path"]
+    backend = backend_name(args.event_lib)
+    root_output = ""
+
+    if build_root_state.get("backend") != backend:
+        build_root_state["backend"] = backend
+        build_root_state["completed"] = False
+
+    if not build_root_state.get("completed"):
+        ok, root_output, _ = ensure_directory_build(
+            REPO_ROOT,
+            args.event_lib,
+            args.build,
+            root_outputs_exist(),
+            build_targets=["build", "prepare"],
+        )
+        if not ok:
+            return False, root_output
+        build_root_state["completed"] = True
+
+    ok, example_output, _ = ensure_directory_build(
+        REPO_ROOT / example["source_dir"],
+        args.event_lib,
+        args.build,
+        binary.exists(),
+    )
+    return ok, root_output + example_output
+
+
+def shared_cli_args(example: dict, args: argparse.Namespace) -> list[str]:
+    cli = ["-h", args.host, "-p", str(args.port), "-n", args.namespace, "-s", args.set_name]
+
+    if args.user:
+        cli.extend(["-U", args.user])
+    if args.password:
+        cli.extend(["-P", args.password])
+    if args.auth:
+        cli.extend(["--auth", args.auth])
+
+    if args.tls_enable:
+        cli.append("--tlsEnable")
+    if args.tls_ca_file:
+        cli.extend(["--tlsCaFile", args.tls_ca_file])
+    if args.tls_ca_path:
+        cli.extend(["--tlsCaPath", args.tls_ca_path])
+    if args.tls_protocols:
+        cli.extend(["--tlsProtocols", args.tls_protocols])
+    if args.tls_cipher_suite:
+        cli.extend(["--tlsCipherSuite", args.tls_cipher_suite])
+    if args.tls_crl_check:
+        cli.append("--tlsCrlCheck")
+    if args.tls_crl_check_all:
+        cli.append("--tlsCrlCheckAll")
+    if args.tls_cert_blacklist:
+        cli.extend(["--tlsCertBlackList", args.tls_cert_blacklist])
+    if args.tls_log_session_info:
+        cli.append("--tlsLogSessionInfo")
+    if args.tls_key_file:
+        cli.extend(["--tlsKeyFile", args.tls_key_file])
+    if args.tls_cert_file:
+        cli.extend(["--tlsCertFile", args.tls_cert_file])
+    if args.tls_login_only:
+        cli.append("--tlsLoginOnly")
+
+    if example["args_profile"] == "basic":
+        cli.extend(["-k", args.key])
+    elif example["args_profile"] == "multi_key":
+        cli.extend(["-K", str(args.multikey)])
+
+    return cli
+
+
+def self_managed_args(args: argparse.Namespace) -> list[str]:
+    cli = ["-h", args.host, "-p", str(args.port)]
+
+    if args.tls_ca_file:
+        cli.extend(["--ca-file", args.tls_ca_file])
+    if args.tls_name:
+        cli.extend(["--cluster-name", args.tls_name])
+
+    return cli
+
+
+def build_example_command(example: dict, args: argparse.Namespace) -> list[str]:
+    binary = str(REPO_ROOT / example["binary_path"])
+
+    if example["cli_mode"] == "shared_cli":
+        return [binary, *shared_cli_args(example, args)]
+
+    if example["cli_mode"] == "self_managed":
+        return [binary, *self_managed_args(args)]
+
+    raise SystemExit(f"Unsupported cli_mode {example['cli_mode']!r} in manifest")
+
+
+def result_dir(args: argparse.Namespace) -> Path:
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    return DEFAULT_OUTPUT_ROOT / timestamp
+
+
+def write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+
+
+def run_example(
+    example: dict,
+    args: argparse.Namespace,
+    facts: dict,
+    out_dir: Path,
+    build_root_state: dict[str, str | bool | None],
+) -> dict:
+    skip_reason = evaluate_prerequisites(example, facts)
+    stdout_path = out_dir / "logs" / f"{example['id']}.stdout.log"
+    stderr_path = out_dir / "logs" / f"{example['id']}.stderr.log"
+
+    if skip_reason:
+        write_text(stdout_path, "")
+        write_text(stderr_path, skip_reason + "\n")
+        return {
+            "id": example["id"],
+            "status": "skipped",
+            "duration": 0.0,
+            "message": skip_reason,
+            "exit_code": None,
+            "stdout_path": stdout_path,
+            "stderr_path": stderr_path,
+            "command": None,
+        }
+
+    ok, build_output = ensure_build(example, args, build_root_state)
+    if not ok:
+        write_text(stdout_path, "")
+        write_text(stderr_path, build_output)
+        return {
+            "id": example["id"],
+            "status": "failed",
+            "duration": 0.0,
+            "message": "build failed",
+            "exit_code": 1,
+            "stdout_path": stdout_path,
+            "stderr_path": stderr_path,
+            "command": None,
+        }
+
+    env = os.environ.copy()
+    env["EXAMPLE_REPO_ROOT"] = str(REPO_ROOT)
+    env["EXAMPLE_RESOURCE_ROOTS"] = os.pathsep.join(resource_root_values(example))
+
+    command = build_example_command(example, args)
+    started = time.monotonic()
+    completed = run_command(command, REPO_ROOT / example["working_dir"], env=env)
+    duration = time.monotonic() - started
+
+    write_text(stdout_path, completed.stdout)
+    write_text(stderr_path, completed.stderr)
+
+    status = "passed" if completed.returncode == 0 else "failed"
+    message = "" if status == "passed" else f"exit code {completed.returncode}"
+
+    return {
+        "id": example["id"],
+        "status": status,
+        "duration": duration,
+        "message": message,
+        "exit_code": completed.returncode,
+        "stdout_path": stdout_path,
+        "stderr_path": stderr_path,
+        "command": shlex.join(command),
+    }
+
+
+def run_validation(args: argparse.Namespace, out_dir: Path) -> dict | None:
+    if not args.validate_inventory and not args.validation_only:
+        return None
+
+    command = [sys.executable, str(VALIDATION_SCRIPT), "--manifest", str(args.manifest)]
+    completed = run_command(command, REPO_ROOT)
+    output = completed.stdout + completed.stderr
+    output_path = out_dir / "inventory_validation.log"
+    write_text(output_path, output)
+
+    return {
+        "status": "passed" if completed.returncode == 0 else "failed",
+        "message": "inventory aligned" if completed.returncode == 0 else "inventory drift detected",
+        "output_path": output_path,
+        "command": shlex.join(command),
+        "duration": 0.0,
+        "exit_code": completed.returncode,
+    }
+
+
+def write_junit(results: list[dict], validation_result: dict | None, report_path: Path) -> None:
+    failures = sum(1 for result in results if result["status"] == "failed")
+    skipped = sum(1 for result in results if result["status"] == "skipped")
+    total = len(results) + (1 if validation_result else 0)
+
+    if validation_result and validation_result["status"] == "failed":
+        failures += 1
+
+    suite = ET.Element(
+        "testsuite",
+        name="aerospike-c-examples",
+        tests=str(total),
+        failures=str(failures),
+        skipped=str(skipped),
+    )
+
+    for result in results:
+        case = ET.SubElement(
+            suite,
+            "testcase",
+            name=result["id"],
+            time=f"{result['duration']:.3f}",
+        )
+        ET.SubElement(case, "system-out").text = str(result["stdout_path"])
+        ET.SubElement(case, "system-err").text = str(result["stderr_path"])
+
+        if result["status"] == "skipped":
+            ET.SubElement(case, "skipped", message=result["message"])
+        elif result["status"] == "failed":
+            failure = ET.SubElement(case, "failure", message=result["message"])
+            failure.text = result["command"] or ""
+
+    if validation_result:
+        case = ET.SubElement(suite, "testcase", name="inventory.validation", time="0.000")
+        ET.SubElement(case, "system-out").text = str(validation_result["output_path"])
+        if validation_result["status"] == "failed":
+            ET.SubElement(case, "failure", message=validation_result["message"]).text = validation_result["command"]
+
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    ET.ElementTree(suite).write(report_path, encoding="utf-8", xml_declaration=True)
+
+
+def print_summary(
+    results: list[dict],
+    validation_result: dict | None,
+    report_path: Path,
+    facts: dict,
+    probe_result: dict | None,
+) -> None:
+    passed = sum(1 for result in results if result["status"] == "passed")
+    failed = [result for result in results if result["status"] == "failed"]
+    skipped = [result for result in results if result["status"] == "skipped"]
+
+    print("Server facts:")
+    for key in ["server_version", "enterprise", "strong_consistency", "ttl_support", "event_lib"]:
+        print(f" - {key}: {facts[key]}")
+
+    print("\nExample results:")
+    for result in results:
+        print(f" - {result['id']}: {result['status']}", end="")
+        if result["message"]:
+            print(f" ({result['message']})")
+        else:
+            print()
+
+    print(f"\nSummary: passed={passed} failed={len(failed)} skipped={len(skipped)}")
+
+    if validation_result:
+        print(f"Inventory validation: {validation_result['status']} ({validation_result['message']})")
+        print(f"Validation log: {validation_result['output_path']}")
+
+    if probe_result:
+        print(f"Fact probe: {probe_result['status']} ({probe_result['message']})")
+        print(f"Fact probe stdout: {probe_result['stdout_path']}")
+        print(f"Fact probe stderr: {probe_result['stderr_path']}")
+
+    print(f"JUnit report: {report_path}")
+
+
+def main() -> int:
+    args = parse_args()
+    examples = load_manifest(args.manifest)
+
+    if args.list:
+        print_examples(examples)
+        return 0
+
+    selected = select_examples(examples, args)
+    out_dir = result_dir(args)
+    report_path = args.report or (out_dir / "results.xml")
+    facts, probe_result = derive_facts(args, out_dir if selected and not args.validation_only else None)
+
+    if args.validation_only:
+        validation_result = run_validation(args, out_dir)
+        write_junit([], validation_result, report_path)
+        print_summary([], validation_result, report_path, facts, probe_result)
+        return 0 if validation_result and validation_result["status"] == "passed" else 1
+
+    results = []
+    build_root_state: dict[str, str | bool | None] = {"backend": None, "completed": False}
+
+    for example in selected:
+        result = run_example(example, args, facts, out_dir, build_root_state)
+        results.append(result)
+        if args.fail_fast and result["status"] == "failed":
+            break
+
+    validation_result = run_validation(args, out_dir)
+    write_junit(results, validation_result, report_path)
+    print_summary(results, validation_result, report_path, facts, probe_result)
+
+    if any(result["status"] == "failed" for result in results):
+        return 1
+
+    if validation_result and validation_result["status"] == "failed":
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -25,6 +25,7 @@
 // Includes
 //
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,6 +54,13 @@
 
 #if defined(_MSC_VER)
 #undef _UNICODE  // Use ASCII version on windows.
+#include <io.h>
+#define ACCESS _access
+#define PATH_LIST_SEPARATOR ';'
+#else
+#include <unistd.h>
+#define ACCESS access
+#define PATH_LIST_SEPARATOR ':'
 #endif
 #include <getopt.h>
 
@@ -185,6 +193,12 @@ as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
 //
 
 static void usage(const char* short_opts);
+static bool example_path_exists(const char* path);
+static bool example_join_path(const char* root, const char* relative_path,
+		char* buffer, size_t buffer_size);
+static bool example_is_absolute_path(const char* path);
+static bool example_try_resource_roots(const char* roots, const char* relative_path,
+		char* buffer, size_t buffer_size);
 
 
 //==========================================================
@@ -370,6 +384,138 @@ example_get_opts(int argc, char* argv[], int which_opts)
 	return true;
 }
 
+void
+example_get_context(example_context* context)
+{
+	if (! context) {
+		return;
+	}
+
+	context->args.host = g_host;
+	context->args.port = g_port;
+	context->args.user = g_user;
+	context->args.password = g_password;
+	context->args.auth_mode = g_auth_mode;
+	context->args.tls = &g_tls;
+	context->args.namespace_name = g_namespace;
+	context->args.set = g_set;
+	context->args.key_string = g_key_str;
+	context->args.n_keys = g_n_keys;
+	context->resource_roots = getenv("EXAMPLE_RESOURCE_ROOTS");
+	context->repo_root = getenv("EXAMPLE_REPO_ROOT");
+}
+
+static bool
+example_path_exists(const char* path)
+{
+	return path && *path && ACCESS(path, 0) == 0;
+}
+
+static bool
+example_join_path(const char* root, const char* relative_path, char* buffer,
+		size_t buffer_size)
+{
+	if (! root || ! *root || ! relative_path || ! *relative_path || ! buffer ||
+			buffer_size == 0) {
+		return false;
+	}
+
+	int written = snprintf(buffer, buffer_size, "%s%s%s", root,
+			root[strlen(root) - 1] == '/' ? "" : "/", relative_path);
+	return written > 0 && (size_t)written < buffer_size;
+}
+
+static bool
+example_is_absolute_path(const char* path)
+{
+	if (! path || ! *path) {
+		return false;
+	}
+
+	if (path[0] == '/') {
+		return true;
+	}
+
+#if defined(_MSC_VER)
+	return isalpha((unsigned char)path[0]) && path[1] == ':';
+#else
+	return false;
+#endif
+}
+
+static bool
+example_try_resource_roots(const char* roots, const char* relative_path,
+		char* buffer, size_t buffer_size)
+{
+	if (! roots || ! *roots) {
+		return false;
+	}
+
+	char local[4096];
+
+	if (strlen(roots) >= sizeof(local)) {
+		return false;
+	}
+
+	strcpy(local, roots);
+	char separator[2] = {PATH_LIST_SEPARATOR, '\0'};
+#if defined(_MSC_VER)
+	char* saveptr = NULL;
+	char* root = strtok_s(local, separator, &saveptr);
+#else
+	char* saveptr = NULL;
+	char* root = strtok_r(local, separator, &saveptr);
+#endif
+
+	while (root) {
+		if (example_join_path(root, relative_path, buffer, buffer_size) &&
+				example_path_exists(buffer)) {
+			return true;
+		}
+#if defined(_MSC_VER)
+		root = strtok_s(NULL, separator, &saveptr);
+#else
+		root = strtok_r(NULL, separator, &saveptr);
+#endif
+	}
+
+	return false;
+}
+
+bool
+example_resolve_resource_path(const char* relative_path, char* buffer,
+		size_t buffer_size)
+{
+	example_context context;
+	example_get_context(&context);
+
+	if (! relative_path || ! *relative_path || ! buffer || buffer_size == 0) {
+		return false;
+	}
+
+	if (example_is_absolute_path(relative_path)) {
+		int written = snprintf(buffer, buffer_size, "%s", relative_path);
+		return written > 0 && (size_t)written < buffer_size;
+	}
+
+	if (example_path_exists(relative_path)) {
+		int written = snprintf(buffer, buffer_size, "%s", relative_path);
+		return written > 0 && (size_t)written < buffer_size;
+	}
+
+	if (example_try_resource_roots(context.resource_roots, relative_path, buffer,
+			buffer_size)) {
+		return true;
+	}
+
+	if (example_join_path(context.repo_root, relative_path, buffer, buffer_size) &&
+			example_path_exists(buffer)) {
+		return true;
+	}
+
+	return false;
+}
+
 //------------------------------------------------
 // Display supported command line options.
 //
@@ -519,6 +665,11 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	as_config_lua_init(&lua);
 	
 	if (lua_user_path) {
+		if (strlen(lua_user_path) >= sizeof(lua.user_path)) {
+			LOG("resolved UDF path exceeds max supported length (%u): %s",
+					(unsigned int)(sizeof(lua.user_path) - 1), lua_user_path);
+			exit(-1);
+		}
 		strcpy(lua.user_path, lua_user_path);
 	}
 	

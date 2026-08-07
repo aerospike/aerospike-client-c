@@ -108,10 +108,16 @@ Build default library:
 
 Build examples:
 
-	$ make
-	$ make EVENT_LIB=libuv    # Support asynchronous functions with libuv
-	$ make EVENT_LIB=libev    # Support asynchronous functions with libev
-	$ make EVENT_LIB=libevent # Support asynchronous functions with libevent
+	$ make -C examples
+	$ make -C examples EVENT_LIB=libuv    # Support asynchronous functions with libuv
+	$ make -C examples EVENT_LIB=libev    # Support asynchronous functions with libev
+	$ make -C examples EVENT_LIB=libevent # Support asynchronous functions with libevent
+
+The examples inventory is defined in `examples/manifest/examples.json`. To run
+examples with explicit skip reporting and local JUnit XML output, use
+`examples/run_examples`. The runner now auto-probes server version, edition,
+TTL support, and strong-consistency facts before evaluating skips, while still
+accepting manual override flags when probing is unavailable.
 
 The build adheres to the _GNU_SOURCE API level. The build will generate the following files:
 

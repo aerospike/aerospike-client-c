@@ -847,6 +847,7 @@ batch_write_operate_complex(aerospike* p_as, as_error* err)
 	as_batch_read_record* rr;
 	as_batch_write_record* wr;
 	as_batch_remove_record* rm;
+	as_policy_batch_remove rm_policy;
 
 	wr = as_batch_write_reserve(&recs);
 	as_key_init_int64(&wr->key, g_namespace, g_set, 1);
@@ -869,7 +870,9 @@ batch_write_operate_complex(aerospike* p_as, as_error* err)
 	rr->ops = &ops5;
 
 	rm = as_batch_remove_reserve(&recs);
+	example_init_batch_remove_policy(&rm_policy);
 	as_key_init_int64(&rm->key, g_namespace, g_set, 6);
+	rm->policy = &rm_policy;
 
 	// Execute batch.
 	as_status status = aerospike_batch_write(p_as, err, NULL, &recs);

@@ -181,6 +181,7 @@ static char g_password[AS_PASSWORD_SIZE];
 // -k <key string>
 //
 static char g_key_str[MAX_KEY_STR_SIZE];
+static bool g_require_durable_delete;
 
 //------------------------------------------------
 // TLS configuration variables.
@@ -740,6 +741,7 @@ example_remove_record(aerospike* p_as, as_error* err, const as_key* key)
 	as_status status = aerospike_key_remove(p_as, err, NULL, key);
 
 	if (status == AEROSPIKE_ERR_FAIL_FORBIDDEN) {
+		g_require_durable_delete = true;
 		as_policy_remove policy;
 		as_policy_remove_init(&policy);
 		policy.durable_delete = true;
@@ -747,6 +749,13 @@ example_remove_record(aerospike* p_as, as_error* err, const as_key* key)
 	}
 
 	return status;
+}
+
+void
+example_init_batch_remove_policy(as_policy_batch_remove* policy)
+{
+	as_policy_batch_remove_init(policy);
+	policy->durable_delete = g_require_durable_delete;
 }
 
 //------------------------------------------------

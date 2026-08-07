@@ -116,6 +116,7 @@ void example_connect_to_aerospike(aerospike* p_as);
 void example_connect_to_aerospike_with_udf_config(aerospike* p_as, const char* lua_user_path);
 void example_cleanup(aerospike* p_as);
 as_status example_remove_record(aerospike* p_as, as_error* err, const as_key* key);
+void example_init_batch_remove_policy(as_policy_batch_remove* policy);
 bool example_read_test_record(aerospike* p_as);
 void example_remove_test_record(aerospike* p_as);
 bool example_read_test_records(aerospike* p_as);

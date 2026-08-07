@@ -818,6 +818,14 @@ def print_summary(
 
     print(f"\nSummary: passed={passed} failed={len(failed)} skipped={len(skipped)}")
 
+    if failed:
+        print("Failed example logs:")
+        for result in failed:
+            print(f" - {result['id']}:")
+            print(f"   command: {result['command'] or 'build failed before command execution'}")
+            print(f"   stdout: {result['stdout_path']}")
+            print(f"   stderr: {result['stderr_path']}")
+
     if validation_result:
         print(f"Registry validation: {validation_result['status']} ({validation_result['message']})")
         print(f"Validation log: {validation_result['output_path']}")

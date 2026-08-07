@@ -776,7 +776,12 @@ example_remove_test_record(aerospike* p_as)
 	// Try to remove the test record from the database. If the example has not
 	// inserted the record, or it has already been removed, this call will
 	// return as_status AEROSPIKE_ERR_RECORD_NOT_FOUND - which we just ignore.
-	aerospike_key_remove(p_as, &err, NULL, &g_key);
+	as_status status = aerospike_key_remove(p_as, &err, NULL, &g_key);
+
+	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		LOG("example_remove_test_record(): aerospike_key_remove() returned %d - %s",
+				err.code, err.message);
+	}
 }
 
 //------------------------------------------------
@@ -839,7 +844,12 @@ example_remove_test_records(aerospike* p_as)
 		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
 		// Ignore errors - just trying to leave the database as we found it.
-		aerospike_key_remove(p_as, &err, NULL, &key);
+		as_status status = aerospike_key_remove(p_as, &err, NULL, &key);
+
+		if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			LOG("example_remove_test_records(): aerospike_key_remove() returned %d - %s for key %u",
+					err.code, err.message, i);
+		}
 	}
 }
 

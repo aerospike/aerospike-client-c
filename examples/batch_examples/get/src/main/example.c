@@ -129,8 +129,8 @@ main(int argc, char* argv[])
 		as_key key;
 		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
-		if (aerospike_key_remove(&as, &err, NULL, &key) != AEROSPIKE_OK) {
-			LOG("aerospike_key_remove() returned %d - %s", err.code,
+		if (example_remove_record(&as, &err, &key) != AEROSPIKE_OK) {
+			LOG("example_remove_record() returned %d - %s", err.code,
 					err.message);
 			cleanup(&as);
 			exit(-1);
@@ -336,7 +336,7 @@ delete_string_records(aerospike* p_as, as_error* err)
 		sprintf(kb, "k%u", i);
 		as_key_init_strp(&key, g_namespace, g_set, kb, false);
 
-		as_status status = aerospike_key_remove(p_as, err, NULL, &key);
+		as_status status = example_remove_record(p_as, err, &key);
 
 		if (status != AEROSPIKE_OK) {
 			return status;

@@ -734,6 +734,21 @@ example_cleanup(aerospike* p_as)
 // Database Operation Helpers
 //
 
+as_status
+example_remove_record(aerospike* p_as, as_error* err, const as_key* key)
+{
+	as_status status = aerospike_key_remove(p_as, err, NULL, key);
+
+	if (status == AEROSPIKE_ERR_FAIL_FORBIDDEN) {
+		as_policy_remove policy;
+		as_policy_remove_init(&policy);
+		policy.durable_delete = true;
+		status = aerospike_key_remove(p_as, err, &policy, key);
+	}
+
+	return status;
+}
+
 //------------------------------------------------
 // Read the whole test record from the database.
 //
@@ -776,10 +791,10 @@ example_remove_test_record(aerospike* p_as)
 	// Try to remove the test record from the database. If the example has not
 	// inserted the record, or it has already been removed, this call will
 	// return as_status AEROSPIKE_ERR_RECORD_NOT_FOUND - which we just ignore.
-	as_status status = aerospike_key_remove(p_as, &err, NULL, &g_key);
+	as_status status = example_remove_record(p_as, &err, &g_key);
 
 	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-		LOG("example_remove_test_record(): aerospike_key_remove() returned %d - %s",
+		LOG("example_remove_test_record(): example_remove_record() returned %d - %s",
 				err.code, err.message);
 	}
 }
@@ -844,10 +859,10 @@ example_remove_test_records(aerospike* p_as)
 		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
 		// Ignore errors - just trying to leave the database as we found it.
-		as_status status = aerospike_key_remove(p_as, &err, NULL, &key);
+		as_status status = example_remove_record(p_as, &err, &key);
 
 		if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
-			LOG("example_remove_test_records(): aerospike_key_remove() returned %d - %s for key %u",
+			LOG("example_remove_test_records(): example_remove_record() returned %d - %s for key %u",
 					err.code, err.message, i);
 		}
 	}

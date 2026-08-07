@@ -584,7 +584,7 @@ cleanup_example(aerospike* p_as)
 	for (uint32_t i = 0; i < 5; i++) {
 		as_key key;
 		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
-		aerospike_key_remove(p_as, &err, NULL, &key);
+		example_remove_record(p_as, &err, &key);
 	}
 
 	LOG("Example cleanup completed.");

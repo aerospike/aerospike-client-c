@@ -113,11 +113,13 @@ Build examples:
 	$ make -C examples EVENT_LIB=libev    # Support asynchronous functions with libev
 	$ make -C examples EVENT_LIB=libevent # Support asynchronous functions with libevent
 
-The examples inventory is defined in `examples/manifest/examples.json`. To run
+The examples registry is defined in `examples/manifest/examples.json`. To run
 examples with explicit skip reporting and local JUnit XML output, use
 `examples/run_examples`. The runner now auto-probes server version, edition,
 TTL support, and strong-consistency facts before evaluating skips, while still
 accepting manual override flags when probing is unavailable.
+
+    $ python3 "path/aerospike-client-c/examples/run_examples" all --event-lib libev --host 127.0.0.1 --port 3000 --enterprise --strong-consistency --ttl-support --server-version 8.1.2.3
 
 The build adheres to the _GNU_SOURCE API level. The build will generate the following files:
 

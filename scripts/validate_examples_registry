@@ -123,7 +123,7 @@ def expected_makefile_entries(examples: list[dict]) -> dict[str, set[str]]:
     entries: dict[str, set[str]] = defaultdict(set)
 
     for example in examples:
-        if example["inventory_flags"]["unix_makefile"]:
+        if example["registry_flags"]["unix_makefile"]:
             entries[example["group"]].add(example["source_dir"].split("/")[-1])
 
     return entries
@@ -133,7 +133,7 @@ def expected_readme_entries(examples: list[dict]) -> set[str]:
     return {
         example["id"]
         for example in examples
-        if example["inventory_flags"]["examples_readme"]
+        if example["registry_flags"]["examples_readme"]
     }
 
 
@@ -141,7 +141,7 @@ def expected_vs_entries(examples: list[dict]) -> set[str]:
     return {
         example["vs_project"]
         for example in examples
-        if example["inventory_flags"]["vs"]
+        if example["registry_flags"]["vs"]
     }
 
 
@@ -198,7 +198,7 @@ def validate(args: argparse.Namespace) -> list[str]:
     xcode_targets = parse_xcode_project_targets(pbxproj_text)
 
     for example in manifest:
-        if not example["inventory_flags"]["xcode"]:
+        if not example["registry_flags"]["xcode"]:
             continue
 
         expected_target = expected_xcode_target(example)
@@ -220,7 +220,7 @@ def validate(args: argparse.Namespace) -> list[str]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate example inventory drift against the manifest.")
+    parser = argparse.ArgumentParser(description="Validate example registry drift against the manifest.")
     parser.add_argument(
         "--manifest",
         type=Path,
@@ -232,12 +232,12 @@ def main() -> int:
     issues = validate(args)
 
     if issues:
-        print("Examples inventory drift detected:")
+        print("Examples registry drift detected:")
         for issue in issues:
             print(f" - {issue}")
         return 1
 
-    print("Examples inventory is aligned with the manifest.")
+    print("Examples registry is aligned with the manifest.")
     return 0
 
 

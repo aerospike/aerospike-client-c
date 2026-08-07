@@ -25,7 +25,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -57,7 +57,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -89,7 +89,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -121,7 +121,7 @@
         "udf": false,
         "secondary_index": true
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -153,7 +153,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -185,7 +185,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -217,7 +217,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -249,7 +249,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -281,7 +281,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -313,7 +313,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -345,7 +345,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -377,7 +377,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -409,7 +409,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -441,7 +441,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -473,7 +473,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -505,7 +505,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -537,7 +537,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -569,7 +569,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -601,7 +601,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -633,7 +633,7 @@
         "udf": true,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -665,7 +665,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -697,7 +697,7 @@
         "udf": true,
         "secondary_index": true
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -729,7 +729,7 @@
         "udf": false,
         "secondary_index": true
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -761,7 +761,7 @@
         "udf": true,
         "secondary_index": true
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -793,7 +793,7 @@
         "udf": false,
         "secondary_index": true
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -825,7 +825,7 @@
         "udf": false,
         "secondary_index": true
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -857,7 +857,7 @@
         "udf": true,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -889,7 +889,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,
@@ -921,7 +921,7 @@
         "udf": false,
         "secondary_index": false
       },
-      "inventory_flags": {
+      "registry_flags": {
         "unix_makefile": true,
         "examples_readme": true,
         "vs": true,

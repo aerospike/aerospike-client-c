@@ -37,6 +37,11 @@ on:
         required: false
         type: string
         default: libev
+      server-container-repo:
+        description: 'Aerospike server Docker image repository'
+        required: false
+        type: string
+        default: aerospike-enterprise-server
       server-tag:
         description: 'Aerospike server Docker image tag'
         required: false
@@ -49,6 +54,11 @@ on:
         default: '1'
       server-config-content:
         description: 'Optional Aerospike server configuration content'
+        required: false
+        type: string
+        default: ''
+      server-config-path:
+        description: 'Optional path to a checked-in Aerospike server config file'
         required: false
         type: string
         default: ''
@@ -81,16 +91,40 @@ jobs:
           submodules: recursive
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Load server config
+        id: load-server-config
+        env:
+          SERVER_CONFIG_PATH: ${{ inputs.server-config-path }}
+          INLINE_SERVER_CONFIG: ${{ inputs.server-config-content }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${SERVER_CONFIG_PATH}" ]; then
+            {
+              echo "content<<'EOF'"
+              cat "${SERVER_CONFIG_PATH}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "content<<'EOF'"
+            printf '%s\n' "${INLINE_SERVER_CONFIG}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Start Aerospike server
         id: setup-aerospike
         uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
         with:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          server-container-repo: ${{ inputs.server-container-repo }}
           server-tag: ${{ inputs.server-tag }}
           num-nodes: ${{ inputs.num-nodes }}
           features-content: ${{ secrets.AES_FEATURES_CONF }}
-          config-content: ${{ inputs.server-config-content }}
+          config-content: ${{ steps.load-server-config.outputs.content }}
           env-vars: 'DEFAULT_TTL=2592000'
 
       - name: Run Linux examples
@@ -105,7 +139,7 @@ jobs:
           target: all
           host: aerospike-1
           port: '3000'
-          validate-inventory: 'true'
+          validate-registry: 'true'
           junit-xml: /workspace/test-results/examples-${{ inputs.server-tag }}-${{ inputs.event-lib }}.xml
 
       - name: Dump server logs on failure
@@ -138,9 +172,10 @@ jobs:
             echo "## Aerospike C Client — Examples"
             echo ""
             echo "- Result: \`${RUN_OUTCOME}\`"
+            echo "- Server repo: \`${{ inputs.server-container-repo }}\`"
             echo "- Server tag: \`${{ inputs.server-tag }}\`"
             echo "- Event lib: \`${{ inputs.event-lib }}\`"
             echo "- Target selection: \`all\`"
-            echo "- Inventory validation: \`enabled\`"
-            echo "- Capability-gated examples may be skipped on community or older servers."
+            echo "- Registry validation: \`enabled\`"
+            echo "- Capability-gated examples may still be skipped when the configured server version does not satisfy manifest requirements."
           } >> "$GITHUB_STEP_SUMMARY"

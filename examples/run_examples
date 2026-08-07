@@ -14,7 +14,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = REPO_ROOT / "examples" / "manifest" / "examples.json"
 DEFAULT_OUTPUT_ROOT = REPO_ROOT / "examples" / "target" / "run_examples"
-VALIDATION_SCRIPT = REPO_ROOT / "scripts" / "validate_examples_inventory"
+VALIDATION_SCRIPT = REPO_ROOT / "scripts" / "validate_examples_registry"
 FACT_PROBE_DIR = REPO_ROOT / "examples" / "tools" / "probe_server_facts"
 FACT_PROBE_BINARY = FACT_PROBE_DIR / "target" / ("probe_server_facts.exe" if os.name == "nt" else "probe_server_facts")
 BUILD_STATE_FILENAME = ".run_examples_event_lib"
@@ -24,7 +24,7 @@ EXAMPLE_MANAGED_REQUIREMENTS = ("udf", "secondary_index")
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run Aerospike C examples from the authoritative manifest."
+        description="Run Aerospike C examples from the authoritative examples registry."
     )
     parser.add_argument("targets", nargs="*", default=["all"], help="Example ids, unique example names, groups, or 'all'.")
     parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH, help="Path to the manifest.")
@@ -40,11 +40,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--event-lib", choices=["libev", "libuv", "libevent"])
     parser.add_argument("--tag", action="append", default=[], help="Only include examples with this tag. Repeatable.")
     parser.add_argument("--exclude-tag", action="append", default=[], help="Exclude examples with this tag. Repeatable.")
-    parser.add_argument("--list", action="store_true", help="List manifest examples and exit.")
+    parser.add_argument("--list", action="store_true", help="List registry examples and exit.")
     parser.add_argument("--build", action="store_true", help="Force a build before running selected examples.")
     parser.add_argument("--fail-fast", action="store_true", help="Stop on the first failed example.")
-    parser.add_argument("--validate-inventory", action="store_true", help="Run the manifest drift validator after execution.")
-    parser.add_argument("--validation-only", action="store_true", help="Run only the manifest drift validator.")
+    parser.add_argument("--validate-registry", action="store_true", help="Run the examples registry drift validator after execution.")
+    parser.add_argument("--validation-only", action="store_true", help="Run only the examples registry drift validator.")
     parser.add_argument("--report", type=Path, help="JUnit XML output path.")
 
     parser.add_argument("--server-version", help="Override the detected server version for skip checks.")
@@ -732,18 +732,18 @@ def run_example(
 
 
 def run_validation(args: argparse.Namespace, out_dir: Path) -> dict | None:
-    if not args.validate_inventory and not args.validation_only:
+    if not args.validate_registry and not args.validation_only:
         return None
 
     command = [sys.executable, str(VALIDATION_SCRIPT), "--manifest", str(args.manifest)]
     completed = run_command(command, REPO_ROOT)
     output = completed.stdout + completed.stderr
-    output_path = out_dir / "inventory_validation.log"
+    output_path = out_dir / "registry_validation.log"
     write_text(output_path, output)
 
     return {
         "status": "passed" if completed.returncode == 0 else "failed",
-        "message": "inventory aligned" if completed.returncode == 0 else "inventory drift detected",
+        "message": "registry aligned" if completed.returncode == 0 else "registry drift detected",
         "output_path": output_path,
         "command": shlex.join(command),
         "duration": 0.0,
@@ -784,7 +784,7 @@ def write_junit(results: list[dict], validation_result: dict | None, report_path
             failure.text = result["command"] or ""
 
     if validation_result:
-        case = ET.SubElement(suite, "testcase", name="inventory.validation", time="0.000")
+        case = ET.SubElement(suite, "testcase", name="registry.validation", time="0.000")
         ET.SubElement(case, "system-out").text = str(validation_result["output_path"])
         if validation_result["status"] == "failed":
             ET.SubElement(case, "failure", message=validation_result["message"]).text = validation_result["command"]
@@ -819,7 +819,7 @@ def print_summary(
     print(f"\nSummary: passed={passed} failed={len(failed)} skipped={len(skipped)}")
 
     if validation_result:
-        print(f"Inventory validation: {validation_result['status']} ({validation_result['message']})")
+        print(f"Registry validation: {validation_result['status']} ({validation_result['message']})")
         print(f"Validation log: {validation_result['output_path']}")
 
     if probe_result:

@@ -32,8 +32,10 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       test-servers: ${{ steps.load.outputs.test-servers }}
+      example-server-container-repo: ${{ steps.load.outputs.example-server-container-repo }}
       example-server-tag: ${{ steps.load.outputs.example-server-tag }}
       example-server-nodes: ${{ steps.load.outputs.example-server-nodes }}
+      example-server-config-path: ${{ steps.load.outputs.example-server-config-path }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -59,6 +61,15 @@ jobs:
             exit 1
           fi
 
+          example_server_container_repo="$(
+            jq -r '.["server-container-repo"] // .server_container_repo // empty' .github/pr_examples_server.json
+          )"
+
+          if [ -z "$example_server_container_repo" ]; then
+            echo "Could not resolve the explicit examples server container repo" >&2
+            exit 1
+          fi
+
           example_server_tag="$(jq -r '.version // empty' .github/pr_examples_server.json)"
 
           if [ -z "$example_server_tag" ]; then
@@ -70,9 +81,20 @@ jobs:
             jq -r '(.["num-nodes"] // .num_nodes // 1) | tostring' .github/pr_examples_server.json
           )"
 
+          example_server_config_path="$(
+            jq -r '.["server-config-path"] // .server_config_path // empty' .github/pr_examples_server.json
+          )"
+
+          if [ -z "$example_server_config_path" ]; then
+            echo "Could not resolve the explicit examples server config path" >&2
+            exit 1
+          fi
+
           echo "test-servers=$test_servers" >> "$GITHUB_OUTPUT"
+          echo "example-server-container-repo=$example_server_container_repo" >> "$GITHUB_OUTPUT"
           echo "example-server-tag=$example_server_tag" >> "$GITHUB_OUTPUT"
           echo "example-server-nodes=$example_server_nodes" >> "$GITHUB_OUTPUT"
+          echo "example-server-config-path=$example_server_config_path" >> "$GITHUB_OUTPUT"
 
   ci:
     name: Enterprise ${{ matrix.server }} / ${{ matrix.num-nodes }} node
@@ -140,40 +162,8 @@ jobs:
       container: ubuntu:22.04
       arch: amd64
       event-lib: libev
+      server-container-repo: ${{ needs.load-test-servers.outputs.example-server-container-repo }}
       server-tag: ${{ needs.load-test-servers.outputs.example-server-tag }}
       num-nodes: ${{ needs.load-test-servers.outputs.example-server-nodes }}
-      server-config-content: |
-        service {
-            feature-key-file /etc/aerospike/features.conf
-            cluster-name docker
-            proto-fd-max 15000
-        }
-
-        logging {
-            console {
-                context any info
-            }
-        }
-
-        network {
-            service {
-                address any
-                port 3000
-            }
-            heartbeat {
-                mode mesh
-                port 3002
-            }
-            fabric {
-                port 3001
-            }
-        }
-
-        namespace test {
-          replication-factor 1
-          allow-ttl-without-nsup true
-          storage-engine memory {
-            data-size 4G
-          }
-        }
+      server-config-path: ${{ needs.load-test-servers.outputs.example-server-config-path }}
     secrets: inherit

@@ -1,7 +1,7 @@
 # Aerospike Client Examples
 
 This directory contains the standalone example binaries for the Aerospike C
-client. The authoritative runnable inventory now lives in
+client. The authoritative runnable registry is stored in
 `examples/manifest/examples.json`.
 
 ## Build
@@ -46,7 +46,7 @@ emits local JUnit XML:
 examples/run_examples all --host 127.0.0.1 --port 3000
 examples/run_examples query --namespace test --set demo1
 examples/run_examples async --event-lib libuv
-examples/run_examples --validate-inventory --validation-only
+examples/run_examples --validate-registry --validation-only
 ```
 
 The runner auto-probes server version, edition, namespace TTL support, and
@@ -56,11 +56,13 @@ namespace strong-consistency facts before evaluating skips. Manual
 `--ttl-support`/`--no-ttl-support` flags remain available as overrides when
 probing is unavailable.
 
-PR CI uses this runner for a dedicated examples check with a `libev` build on a
-representative community server configured in `.github/pr_examples_server.json`.
-That check fails on real example failures or inventory drift, while
-capability-gated examples may be reported as skipped when the target server
-does not satisfy their manifest requirements.
+PR CI uses this runner for a dedicated examples check with a `libev` build on
+an explicit examples server defined in `.github/pr_examples_server.json`. That
+server currently points at an EE image and a checked-in SC namespace config in
+`.github/aerospike/examples-ee-sc.conf`. The check fails on real example
+failures or registry drift, while version-gated examples may still be reported
+as skipped when the configured server does not satisfy their manifest
+requirements.
 
 Pre-launch skip handling currently covers:
 
@@ -76,7 +78,7 @@ preflight gates:
 - `udf`
 - `secondary_index`
 
-## Manifest Inventory
+## Manifest Registry
 
 <!-- examples-manifest:start -->
 - `async.batch_get`

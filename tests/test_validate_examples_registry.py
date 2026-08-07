@@ -5,11 +5,11 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-VALIDATOR_PATH = REPO_ROOT / "scripts" / "validate_examples_inventory"
+VALIDATOR_PATH = REPO_ROOT / "scripts" / "validate_examples_registry"
 
 
 def load_validator():
-    loader = importlib.machinery.SourceFileLoader("validate_examples_inventory", str(VALIDATOR_PATH))
+    loader = importlib.machinery.SourceFileLoader("validate_examples_registry", str(VALIDATOR_PATH))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)

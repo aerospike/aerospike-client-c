@@ -1,6 +1,6 @@
 {
   "version": "8.1.2.3",
   "num-nodes": 1,
-  "server-container-repo": "aerospike-enterprise-server",
+  "server-container-repo": "database-docker-virtual/aerospike-server-enterprise",
   "server-config-path": ".github/aerospike/examples-ee-sc.conf"
 }

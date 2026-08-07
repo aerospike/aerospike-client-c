@@ -41,7 +41,7 @@ on:
         description: 'Aerospike server Docker image repository'
         required: false
         type: string
-        default: aerospike-enterprise-server
+        default: database-docker-virtual/aerospike-server-enterprise
       server-edition:
         description: 'Aerospike server edition for setup-aerospike-server (auto, enterprise, community)'
         required: false

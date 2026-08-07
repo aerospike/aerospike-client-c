@@ -1,0 +1,123 @@
+name: Run Linux Examples
+description: >
+  Provisions a Linux distro container, installs the requested event library,
+  and runs the manifest-driven examples suite against an existing Aerospike
+  server on the provided Docker network.
+
+inputs:
+  distro:
+    description: 'Distro name passed to install_deps.bash (e.g. ubuntu-22.04)'
+    required: true
+  container:
+    description: 'Docker image to run the examples inside (e.g. ubuntu:22.04)'
+    required: true
+  arch:
+    description: 'Target architecture for --platform flag (amd64 or arm64)'
+    required: true
+  event-lib:
+    description: 'Event library to build and run with (libev, libuv, libevent)'
+    required: true
+  network-name:
+    description: 'Docker network name where the Aerospike server is reachable'
+    required: true
+  target:
+    description: 'Manifest selection token to pass to examples/run_examples'
+    required: false
+    default: all
+  host:
+    description: 'Aerospike hostname reachable from the build container'
+    required: false
+    default: aerospike-1
+  port:
+    description: 'Aerospike service port reachable from the build container'
+    required: false
+    default: '3000'
+  validate-inventory:
+    description: 'Run manifest inventory validation after the example suite'
+    required: false
+    default: 'true'
+  junit-xml:
+    description: 'JUnit XML output path inside the build container'
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Run examples (${{ inputs.distro }} / ${{ inputs.event-lib }})
+      shell: bash
+      env:
+        DISTRO: ${{ inputs.distro }}
+        EVENT_LIB: ${{ inputs.event-lib }}
+        TARGET: ${{ inputs.target }}
+        AS_HOST: ${{ inputs.host }}
+        AS_PORT: ${{ inputs.port }}
+        JUNIT_XML: ${{ inputs.junit-xml }}
+        VALIDATE_INVENTORY: ${{ inputs.validate-inventory }}
+        LD_LIBRARY_PATH: /usr/local/lib:/usr/local/lib64
+      run: |
+        set -euo pipefail
+        docker run --rm \
+          --platform linux/${{ inputs.arch }} \
+          --network "${{ inputs.network-name }}" \
+          -v "$GITHUB_WORKSPACE:/workspace" \
+          -w /workspace \
+          -e GITHUB_WORKSPACE=/workspace \
+          -e DISTRO="${DISTRO}" \
+          -e EVENT_LIB="${EVENT_LIB}" \
+          -e TARGET="${TARGET}" \
+          -e AS_HOST="${AS_HOST}" \
+          -e AS_PORT="${AS_PORT}" \
+          -e JUNIT_XML="${JUNIT_XML}" \
+          -e VALIDATE_INVENTORY="${VALIDATE_INVENTORY}" \
+          -e LD_LIBRARY_PATH="${LD_LIBRARY_PATH}" \
+          ${{ inputs.container }} \
+          bash -c '
+            set -euo pipefail
+
+            bash "${GITHUB_WORKSPACE}/.github/script/install_deps.bash" \
+              "${DISTRO}" "${EVENT_LIB}" "false" "false"
+
+            if ! command -v python3 >/dev/null; then
+              if command -v apt-get >/dev/null; then
+                apt-get update
+                apt-get install -y --no-install-recommends python3
+              elif command -v dnf >/dev/null; then
+                dnf install -y python3
+              elif command -v microdnf >/dev/null; then
+                microdnf install -y python3
+              else
+                echo "No supported package manager found to install python3" >&2
+                exit 1
+              fi
+            fi
+
+            export LD_LIBRARY_PATH="/usr/local/lib:/usr/local/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+            export MAKEFLAGS="-j$(nproc)"
+
+            if [ -n "${JUNIT_XML}" ]; then
+              mkdir -p "$(dirname "${JUNIT_XML}")"
+            fi
+
+            cmd=(
+              python3
+              examples/run_examples
+              "${TARGET}"
+              --event-lib
+              "${EVENT_LIB}"
+              --host
+              "${AS_HOST}"
+              --port
+              "${AS_PORT}"
+            )
+
+            if [ -n "${JUNIT_XML}" ]; then
+              cmd+=(--report "${JUNIT_XML}")
+            fi
+
+            if [ "${VALIDATE_INVENTORY}" = "true" ]; then
+              cmd+=(--validate-inventory)
+            fi
+
+            "${cmd[@]}"
+          '

@@ -1,0 +1,146 @@
+name: Run Examples
+
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+    && format('Examples — PR #{0} ({1})', github.event.pull_request.number, github.event.pull_request.title)
+    || format('Examples — {0}', inputs.server-tag) }}
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref (branch, tag, or SHA) to checkout.'
+        required: true
+        type: string
+      runner:
+        description: 'Runner label for the examples job'
+        required: false
+        type: string
+        default: ubuntu-24.04
+      distro:
+        description: 'Linux distro to use inside the examples container'
+        required: false
+        type: string
+        default: ubuntu-22.04
+      container:
+        description: 'Container image to run the examples inside'
+        required: false
+        type: string
+        default: ubuntu:22.04
+      arch:
+        description: 'Target architecture for the examples container'
+        required: false
+        type: string
+        default: amd64
+      event-lib:
+        description: 'Event library backend for the examples build/run'
+        required: false
+        type: string
+        default: libev
+      server-tag:
+        description: 'Aerospike server Docker image tag'
+        required: false
+        type: string
+        default: latest
+      num-nodes:
+        description: 'Aerospike cluster node count'
+        required: false
+        type: string
+        default: '1'
+      server-config-content:
+        description: 'Optional Aerospike server configuration content'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+  checks: write
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  run-linux:
+    name: examples / ${{ inputs.server-tag }} / ${{ inputs.event-lib }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout client
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Start Aerospike server
+        id: setup-aerospike
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+        with:
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          server-tag: ${{ inputs.server-tag }}
+          num-nodes: ${{ inputs.num-nodes }}
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
+          config-content: ${{ inputs.server-config-content }}
+          env-vars: 'DEFAULT_TTL=2592000'
+
+      - name: Run Linux examples
+        id: run-examples
+        uses: ./.github/actions/run-linux-examples
+        with:
+          distro: ${{ inputs.distro }}
+          container: ${{ inputs.container }}
+          arch: ${{ inputs.arch }}
+          event-lib: ${{ inputs.event-lib }}
+          network-name: ${{ steps.setup-aerospike.outputs.network-name }}
+          target: all
+          host: aerospike-1
+          port: '3000'
+          validate-inventory: 'true'
+          junit-xml: /workspace/test-results/examples-${{ inputs.server-tag }}-${{ inputs.event-lib }}.xml
+
+      - name: Dump server logs on failure
+        if: failure()
+        run: docker logs aerospike-1 2>&1 || true
+
+      - name: Summarize example results
+        if: always()
+        uses: ./.github/actions/test-report
+        with:
+          pattern: test-results/*.xml
+
+      - name: Upload example results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: example-results-${{ inputs.server-tag }}-${{ inputs.event-lib }}
+          path: |
+            test-results/*.xml
+            examples/target/run_examples/
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: Write run summary
+        if: always()
+        env:
+          RUN_OUTCOME: ${{ steps.run-examples.outcome }}
+        run: |
+          {
+            echo "## Aerospike C Client — Examples"
+            echo ""
+            echo "- Result: \`${RUN_OUTCOME}\`"
+            echo "- Server tag: \`${{ inputs.server-tag }}\`"
+            echo "- Event lib: \`${{ inputs.event-lib }}\`"
+            echo "- Target selection: \`all\`"
+            echo "- Inventory validation: \`enabled\`"
+            echo "- Capability-gated examples may be skipped on community or older servers."
+          } >> "$GITHUB_STEP_SUMMARY"

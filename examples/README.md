@@ -56,6 +56,12 @@ namespace strong-consistency facts before evaluating skips. Manual
 `--ttl-support`/`--no-ttl-support` flags remain available as overrides when
 probing is unavailable.
 
+PR CI uses this runner for a dedicated examples check with a `libev` build on a
+representative community server configured in `.github/pr_examples_server.json`.
+That check fails on real example failures or inventory drift, while
+capability-gated examples may be reported as skipped when the target server
+does not satisfy their manifest requirements.
+
 Pre-launch skip handling currently covers:
 
 - `event_lib`

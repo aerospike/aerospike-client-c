@@ -98,20 +98,21 @@ jobs:
           INLINE_SERVER_CONFIG: ${{ inputs.server-config-content }}
         run: |
           set -euo pipefail
+          delimiter="CONFIG_EOF_${GITHUB_RUN_ID:-0}_${GITHUB_RUN_ATTEMPT:-0}_$$"
 
           if [ -n "${SERVER_CONFIG_PATH}" ]; then
             {
-              echo "content<<'EOF'"
+              echo "content<<${delimiter}"
               cat "${SERVER_CONFIG_PATH}"
-              echo "EOF"
+              echo "${delimiter}"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           {
-            echo "content<<'EOF'"
+            echo "content<<${delimiter}"
             printf '%s\n' "${INLINE_SERVER_CONFIG}"
-            echo "EOF"
+            echo "${delimiter}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Start Aerospike server

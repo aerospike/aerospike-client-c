@@ -1,4 +1,4 @@
-name: Run Linux Examples
+name: Run containerized Linux examples
 description: >
   Provisions a Linux distro container, installs the requested event library,
   and runs the manifest-driven examples suite against an existing Aerospike

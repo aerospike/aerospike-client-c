@@ -134,7 +134,59 @@ jobs:
           config-content: ${{ steps.load-server-config.outputs.content }}
           env-vars: 'DEFAULT_TTL=2592000'
 
-      - name: Run Linux examples
+      - name: Initialize SC roster for examples namespace
+        env:
+          NETWORK_NAME: ${{ steps.setup-aerospike.outputs.network-name }}
+          AS_HOST: aerospike-1
+          AS_PORT: '3000'
+          AS_NAMESPACE: test
+          TOOLS_IMAGE: aerospike/aerospike-tools:8.1.0
+        run: |
+          set -euo pipefail
+
+          if ! roster_info="$(
+            docker run --rm --network "${NETWORK_NAME}" "${TOOLS_IMAGE}" \
+              asinfo -h "${AS_HOST}" -p "${AS_PORT}" -v "roster:namespace=${AS_NAMESPACE}"
+          )"; then
+            echo "Roster info is unavailable for namespace ${AS_NAMESPACE}; skipping roster initialization."
+            exit 0
+          fi
+
+          echo "${roster_info}"
+
+          if [[ "${roster_info}" != *"observed_nodes="* ]]; then
+            echo "No SC roster metadata reported for namespace ${AS_NAMESPACE}; skipping roster initialization."
+            exit 0
+          fi
+
+          current_roster="${roster_info#*roster=}"
+          current_roster="${current_roster%%:*}"
+          observed_nodes="${roster_info##*observed_nodes=}"
+          observed_nodes="${observed_nodes%%$'\n'*}"
+          observed_nodes="${observed_nodes%%$'\r'*}"
+
+          if [ -z "${observed_nodes}" ] || [ "${observed_nodes}" = "null" ]; then
+            echo "No observed nodes reported for namespace ${AS_NAMESPACE}; skipping roster initialization."
+            exit 0
+          fi
+
+          if [ -n "${current_roster}" ] && [ "${current_roster}" != "null" ]; then
+            echo "SC roster already initialized for namespace ${AS_NAMESPACE}: ${current_roster}"
+            exit 0
+          fi
+
+          docker run --rm --network "${NETWORK_NAME}" "${TOOLS_IMAGE}" \
+            asinfo -h "${AS_HOST}" -p "${AS_PORT}" \
+            -v "roster-set:namespace=${AS_NAMESPACE};nodes=${observed_nodes}"
+
+          docker run --rm --network "${NETWORK_NAME}" "${TOOLS_IMAGE}" \
+            asinfo -h "${AS_HOST}" -p "${AS_PORT}" \
+            -v "recluster:namespace=${AS_NAMESPACE}"
+
+          docker run --rm --network "${NETWORK_NAME}" "${TOOLS_IMAGE}" \
+            asinfo -h "${AS_HOST}" -p "${AS_PORT}" -v "roster:namespace=${AS_NAMESPACE}"
+
+      - name: Run containerized Linux examples
         id: run-examples
         uses: ./.github/actions/run-linux-examples
         with:

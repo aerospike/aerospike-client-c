@@ -163,6 +163,7 @@ jobs:
       arch: amd64
       event-lib: libev
       server-container-repo: ${{ needs.load-test-servers.outputs.example-server-container-repo }}
+      server-edition: enterprise
       server-tag: ${{ needs.load-test-servers.outputs.example-server-tag }}
       num-nodes: ${{ needs.load-test-servers.outputs.example-server-nodes }}
       server-config-path: ${{ needs.load-test-servers.outputs.example-server-config-path }}

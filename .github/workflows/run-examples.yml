@@ -42,6 +42,11 @@ on:
         required: false
         type: string
         default: aerospike-enterprise-server
+      server-edition:
+        description: 'Aerospike server edition for setup-aerospike-server (auto, enterprise, community)'
+        required: false
+        type: string
+        default: auto
       server-tag:
         description: 'Aerospike server Docker image tag'
         required: false
@@ -122,6 +127,7 @@ jobs:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
           server-container-repo: ${{ inputs.server-container-repo }}
+          server-edition: ${{ inputs.server-edition }}
           server-tag: ${{ inputs.server-tag }}
           num-nodes: ${{ inputs.num-nodes }}
           features-content: ${{ secrets.AES_FEATURES_CONF }}
@@ -174,6 +180,7 @@ jobs:
             echo ""
             echo "- Result: \`${RUN_OUTCOME}\`"
             echo "- Server repo: \`${{ inputs.server-container-repo }}\`"
+            echo "- Server edition: \`${{ inputs.server-edition }}\`"
             echo "- Server tag: \`${{ inputs.server-tag }}\`"
             echo "- Event lib: \`${{ inputs.event-lib }}\`"
             echo "- Target selection: \`all\`"

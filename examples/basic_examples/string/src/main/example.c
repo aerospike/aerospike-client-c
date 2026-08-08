@@ -49,6 +49,7 @@ static const char* BIN = "text";
 static const char* NUM_BIN = "n";
 
 static void run_read_ops(aerospike* as);
+static void run_read_write_ops(aerospike* as);
 static void run_modify_ops(aerospike* as);
 static void run_to_string(aerospike* as);
 static void put(aerospike* as, as_key* key, const char* value);
@@ -71,6 +72,7 @@ main(int argc, char* argv[])
 	example_connect_to_aerospike(&as);
 
 	run_read_ops(&as);
+	run_read_write_ops(&as);
 	run_modify_ops(&as);
 	run_to_string(&as);
 
@@ -284,6 +286,69 @@ run_read_ops(aerospike* as)
 	rec = operate(as, &key, &ops);
 	LOG("regexCompare(\"hello\", CASE_INSENSITIVE) = %s",
 			as_record_get_bool(rec, BIN) ? "true" : "false");
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+}
+
+// Example that shows one read op followed by one modify op.
+static void
+run_read_write_ops(aerospike* as)
+{
+	as_key key;
+	as_key_init_str(&key, g_namespace, g_set, "opstr_demo");
+
+	as_error err;
+	example_remove_record(as, &err, &key);
+
+	as_record put_rec;
+	as_record_inita(&put_rec, 1);
+	as_record_set_str(&put_rec, BIN, "hello world");
+
+	if (aerospike_key_put(as, &err, NULL, &key, &put_rec) != AEROSPIKE_OK) {
+		LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
+		as_record_destroy(&put_rec);
+		example_cleanup(as);
+		exit(-1);
+	}
+
+	as_record_destroy(&put_rec);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_string_strlen(&ops, BIN, NULL);
+
+	as_record* rec = NULL;
+
+	if (aerospike_key_operate(as, &err, NULL, &key, &ops, &rec) != AEROSPIKE_OK) {
+		LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
+		as_operations_destroy(&ops);
+		example_cleanup(as);
+		exit(-1);
+	}
+
+	LOG("strlen(\"hello world\") = %lld",
+			(long long)as_record_get_int64(rec, BIN, 0));
+	as_operations_destroy(&ops);
+	as_record_destroy(rec);
+
+	as_string_policy policy;
+	as_string_policy_init(&policy);
+
+	as_operations_inita(&ops, 2);
+	as_operations_string_upper(&ops, BIN, NULL, &policy);
+	as_operations_add_read(&ops, BIN);
+
+	rec = NULL;
+
+	if (aerospike_key_operate(as, &err, NULL, &key, &ops, &rec) != AEROSPIKE_OK) {
+		LOG("aerospike_key_operate() returned %d - %s", err.code, err.message);
+		as_operations_destroy(&ops);
+		example_cleanup(as);
+		exit(-1);
+	}
+
+	as_bin* results = rec->bins.entries;
+	LOG("upper() -> \"%s\"", as_string_get((as_string*)results[1].valuep));
 	as_operations_destroy(&ops);
 	as_record_destroy(rec);
 }

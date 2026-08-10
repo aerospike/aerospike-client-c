@@ -31,7 +31,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#if defined(_MSC_VER)
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 #include <aerospike/aerospike.h>
 

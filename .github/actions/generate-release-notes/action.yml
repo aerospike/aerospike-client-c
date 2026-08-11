@@ -77,7 +77,8 @@ runs:
         # **Full Changelog**: <prior-tag>...<new-tag>
         #
         # Style: proper English sentence, period at end, [CLIENT-xxxx] suffix.
-        # Omit empty sections. No commit SHAs in customer-facing output.
+        # Omit empty sections. No commit SHAs in section bullets.
+        # Dry-run Full Changelog uses short SHA; non-dry-run uses release tag.
         # ---------------------------------------------------------------------------
 
         build_changelog_link() {
@@ -118,9 +119,16 @@ runs:
           exit 1
         fi
 
-        # Label and link always use release version tags (no commit SHAs in output).
-        changelog_label="${prev_tag}...${VERSION}"
-        changelog_link=$(build_changelog_link "$prev_tag" "$VERSION" "$changelog_label")
+        # Dry-run: compare link uses commit SHA (tag not created yet).
+        # Non-dry-run: compare link uses release version tag.
+        if [[ "$using_tag" == "true" ]]; then
+          changelog_label="${prev_tag}...${VERSION}"
+          changelog_to_ref="$VERSION"
+        else
+          changelog_label="${prev_tag}...${TARGET_SHA:0:7}"
+          changelog_to_ref="$TARGET_SHA"
+        fi
+        changelog_link=$(build_changelog_link "$prev_tag" "$changelog_to_ref" "$changelog_label")
 
         release_date=$(date -u +"%B %d, %Y" | sed 's/ 0/ /')
 
@@ -143,6 +151,9 @@ runs:
         } > "$OUTPUT_PATH"
 
         echo "Release notes scaffold (${commit_count} commits in ${range}, sections empty for manual edit):"
+        if [[ "$using_tag" == "true" ]]; then
+          echo "Validated release tag ${VERSION} at ${TARGET_SHA}"
+        fi
         cat "$OUTPUT_PATH"
         echo "prev-tag=${prev_tag}" >> "$GITHUB_OUTPUT"
         echo "release-notes-path=${OUTPUT_PATH}" >> "$GITHUB_OUTPUT"

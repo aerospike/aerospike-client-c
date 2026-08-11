@@ -12,7 +12,9 @@ inputs:
     description: Release target commit SHA (merge-base or tag target)
     required: true
   dry-run:
-    description: When true, use target-sha instead of the version tag for the changelog range
+    description: >
+      When true, preview release notes before the tag exists (draft banner + SHA
+      for internal git range). When false, require tag VERSION at TARGET_SHA.
     required: false
     default: 'false'
   download-url:
@@ -87,7 +89,18 @@ runs:
         using_tag=false
         release_ref="$TARGET_SHA"
 
-        if [[ "$DRY_RUN" != "true" ]] && git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+        if [[ "$DRY_RUN" == "true" ]]; then
+          : # Preview: tag may not exist yet; git range uses TARGET_SHA.
+        else
+          if ! git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            echo "::error::Release tag ${VERSION} not found. push-tag must run before generating release notes."
+            exit 1
+          fi
+          tag_sha=$(git rev-parse "refs/tags/${VERSION}^{commit}")
+          if [[ "$tag_sha" != "$(git rev-parse "${TARGET_SHA}^{commit}")" ]]; then
+            echo "::error::Tag ${VERSION} points to ${tag_sha}, expected release target ${TARGET_SHA}."
+            exit 1
+          fi
           using_tag=true
           release_ref="$VERSION"
         fi

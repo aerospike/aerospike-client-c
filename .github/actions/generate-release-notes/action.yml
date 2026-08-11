@@ -1,8 +1,8 @@
 name: Generate Release Notes
 description: >
   Build GitHub release notes from git history using the Aerospike release notes
-  template (Release Date, New Features, Bug Fixes, Full Changelog link).
-  Requires a prior checkout with fetch-depth: 0 so tags and history are available.
+  template (Release Date, New Features, Improvements, Bug Fixes, Maintenance,
+  Full Changelog). Requires a prior checkout with fetch-depth: 0.
 
 inputs:
   version:
@@ -55,6 +55,29 @@ runs:
 
         git() { command git -C "$REPO_PATH" "$@"; }
 
+        # ---------------------------------------------------------------------------
+        # Aerospike GitHub Release Notes Template (Confluence + C# client alignment)
+        # ---------------------------------------------------------------------------
+        # Release Date: <Month DD, YYYY> | [Download](<url>)
+        #
+        # ### New Features
+        # - <Customer-facing sentence>. [CLIENT-xxxx]
+        #
+        # ### Improvements
+        # - <Customer-facing sentence>. [CLIENT-xxxx]
+        #
+        # ### Bug Fixes
+        # - <Customer-facing sentence>. [CLIENT-xxxx]
+        #
+        # ### Maintenance
+        # - <CI/CD, pipeline, or dependency update>. [CLIENT-xxxx]
+        #
+        # **Full Changelog**: <prior>...<current>
+        #
+        # Style: proper English sentence, period at end, [CLIENT-xxxx] suffix.
+        # Omit empty sections. No commit SHAs in customer-facing output.
+        # ---------------------------------------------------------------------------
+
         # Commits matching these patterns are omitted from release notes.
         readonly SKIP_COMMIT_RE='^(test|dry run|workflow|pipeline|bump version|update verison|harcode|override|clean rel|merge branch|promote-bundle|fixed run name|test announce|update version)'
 
@@ -98,10 +121,6 @@ runs:
             line="- ${summary}. [${jira}]"
           else
             line="- ${summary}."
-          fi
-
-          if [[ "$using_tag" != "true" && -n "$short_sha" ]]; then
-            line+=" (\`${short_sha}\`)"
           fi
 
           echo "$line"
@@ -153,9 +172,10 @@ runs:
         # ---------------------------------------------------------------------------
 
         workdir=$(mktemp -d)
-        : > "${workdir}/features" "${workdir}/bugfixes"
+        : > "${workdir}/features" "${workdir}/improvements" "${workdir}/bugfixes" "${workdir}/maintenance"
         total=0
 
+        # TODO: route commits into improvements/maintenance buckets (follow-up PR).
         while IFS='|' read -r msg sha; do
           [[ -z "$msg" ]] && continue
           should_skip "$msg" && continue
@@ -188,8 +208,10 @@ runs:
             echo ""
           fi
 
-          print_section "New Features" "${workdir}/features"
-          print_section "Bug Fixes"    "${workdir}/bugfixes"
+          print_section "New Features"  "${workdir}/features"
+          print_section "Improvements"  "${workdir}/improvements"
+          print_section "Bug Fixes"     "${workdir}/bugfixes"
+          print_section "Maintenance"   "${workdir}/maintenance"
           echo "**Full Changelog**: ${changelog_link}"
         } > "$OUTPUT_PATH"
 

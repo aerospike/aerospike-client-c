@@ -105,7 +105,7 @@ runs:
         }
 
         format_item() {
-          local msg="$1" short_sha="$2"
+          local msg="$1"
           local jira summary line
 
           jira=$(grep -oE 'CLIENT-[0-9]+' <<< "$msg" | head -1 || true)
@@ -180,7 +180,7 @@ runs:
           [[ -z "$msg" ]] && continue
           should_skip "$msg" && continue
 
-          line=$(format_item "$msg" "$sha")
+          line=$(format_item "$msg")
           case "$(bucket_commit "$msg")" in
             feature) echo "$line" >> "${workdir}/features" ;;
             bugfix)  echo "$line" >> "${workdir}/bugfixes" ;;

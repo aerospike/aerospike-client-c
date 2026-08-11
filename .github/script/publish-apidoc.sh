@@ -339,6 +339,6 @@ gh pr create --draft \
   --base "$base_branch" \
   --head "$branch" \
   --title "${lang} client ${version} api docs" \
-  --body "Automated api-doc update. Source: $source_arg"
+  --body "Update api-docs."
 
 echo "Done. Draft PR opened for branch $branch."

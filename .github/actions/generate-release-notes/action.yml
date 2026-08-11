@@ -116,7 +116,7 @@ runs:
           echo ""
 
           if [[ "$using_tag" != "true" ]]; then
-            echo "> **Draft preview** — tag \`${VERSION}\` not created yet. Add section bullets below before publishing."
+            echo "> **Draft preview** — release target \`${TARGET_SHA}\` (tag \`${VERSION}\` not created yet). Add section bullets below before publishing."
             echo ""
           fi
 

@@ -105,14 +105,9 @@ runs:
           exit 1
         fi
 
-        # Label always uses the release version; link target is the tag or commit SHA.
+        # Label and link always use release version tags (no commit SHAs in output).
         changelog_label="${prev_tag}...${VERSION}"
-        if [[ "$using_tag" == "true" ]]; then
-          changelog_to_ref="$release_ref"
-        else
-          changelog_to_ref="$TARGET_SHA"
-        fi
-        changelog_link=$(build_changelog_link "$prev_tag" "$changelog_to_ref" "$changelog_label")
+        changelog_link=$(build_changelog_link "$prev_tag" "$VERSION" "$changelog_label")
 
         release_date=$(date -u +"%B %d, %Y" | sed 's/ 0/ /')
 
@@ -121,7 +116,7 @@ runs:
           echo ""
 
           if [[ "$using_tag" != "true" ]]; then
-            echo "> **Draft preview** — release target \`${TARGET_SHA}\` (tag \`${VERSION}\` not created yet). Add section bullets below before publishing."
+            echo "> **Draft preview** — tag \`${VERSION}\` not created yet. Add section bullets below before publishing."
             echo ""
           fi
 

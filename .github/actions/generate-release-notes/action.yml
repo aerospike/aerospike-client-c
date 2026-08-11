@@ -1,8 +1,8 @@
 name: Generate Release Notes
 description: >
-  Build GitHub release notes from git history using the Aerospike release notes
-  template (Release Date, New Features, Improvements, Bug Fixes, Maintenance,
-  Full Changelog). Requires a prior checkout with fetch-depth: 0.
+  Build a scaffold GitHub release notes draft with Release Date and Full Changelog.
+  Section bullets (New Features, Improvements, Bug Fixes, Maintenance) are left
+  empty for manual editing. Requires a prior checkout with fetch-depth: 0.
 
 inputs:
   version:
@@ -72,78 +72,17 @@ runs:
         # ### Maintenance
         # - <CI/CD, pipeline, or dependency update>. [CLIENT-xxxx]
         #
-        # **Full Changelog**: <prior>...<current>
+        # **Full Changelog**: <prior-tag>...<new-tag>
         #
         # Style: proper English sentence, period at end, [CLIENT-xxxx] suffix.
         # Omit empty sections. No commit SHAs in customer-facing output.
         # ---------------------------------------------------------------------------
 
-        # Commits matching these patterns are omitted from release notes.
-        readonly SKIP_COMMIT_RE='^(test|dry run|workflow|pipeline|bump version|update verison|harcode|override|clean rel|merge branch|promote-bundle|fixed run name|test announce|update version)'
-
-        # ---------------------------------------------------------------------------
-        # Helpers
-        # ---------------------------------------------------------------------------
-
-        should_skip() {
-          local lower="${1,,}"
-          [[ "$lower" =~ $SKIP_COMMIT_RE ]] && return 0
-          [[ "$lower" =~ (^|[[:space:]])\[skip[[:space:]]ci\] ]] && return 0
-          return 1
-        }
-
-        bucket_commit() {
-          local lower="${1,,}"
-          if [[ "$lower" =~ ^(add|support|implement|introduce)[[:space:]] ]] || [[ "$lower" == *"new feature"* ]]; then
-            echo feature
-          elif [[ "$lower" =~ ^client-[0-9]+ ]]; then
-            if [[ "$lower" =~ (add|support|mark) ]]; then echo feature
-            else echo bugfix; fi
-          else
-            echo bugfix
-          fi
-        }
-
-        format_item() {
-          local msg="$1"
-          local jira summary line
-
-          jira=$(grep -oE 'CLIENT-[0-9]+' <<< "$msg" | head -1 || true)
-          summary=$(sed -E 's/^CLIENT-[0-9]+[[:space:]]*//' <<< "$msg")
-          if [[ -n "$jira" ]]; then
-            summary=$(sed -E "s/[[:space:]]*\\[${jira}\\][[:space:]]*$//" <<< "$summary")
-          fi
-
-          summary="${summary%.}"
-          summary="${summary^}"
-
-          if [[ -n "$jira" ]]; then
-            line="- ${summary}. [${jira}]"
-          else
-            line="- ${summary}."
-          fi
-
-          echo "$line"
-        }
-
-        print_section() {
-          local title="$1" file="$2"
-          [[ ! -s "$file" ]] && return
-          printf '### %s\n\n' "$title"
-          cat "$file"
-          echo ""
-        }
-
         build_changelog_link() {
           local from_tag="$1" to_ref="$2" label="$3"
           local compare_base="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare"
-          local compare_range="${from_tag}...${to_ref}"
-          echo "[${label}](${compare_base}/${compare_range})"
+          echo "[${label}](${compare_base}/${from_tag}...${to_ref})"
         }
-
-        # ---------------------------------------------------------------------------
-        # Resolve git range
-        # ---------------------------------------------------------------------------
 
         using_tag=false
         release_ref="$TARGET_SHA"
@@ -160,42 +99,20 @@ runs:
         fi
 
         range="${prev_tag}..${release_ref}"
-
-        if [[ "$using_tag" == "true" ]]; then
-          changelog_link=$(build_changelog_link "$prev_tag" "$release_ref" "${prev_tag}...${release_ref}")
-        else
-          changelog_link=$(build_changelog_link "$prev_tag" "$TARGET_SHA" "${prev_tag}...${TARGET_SHA:0:7}")
-        fi
-
-        # ---------------------------------------------------------------------------
-        # Bucket commits into section files
-        # ---------------------------------------------------------------------------
-
-        workdir=$(mktemp -d)
-        : > "${workdir}/features" "${workdir}/improvements" "${workdir}/bugfixes" "${workdir}/maintenance"
-        total=0
-
-        # TODO: route commits into improvements/maintenance buckets (follow-up PR).
-        while IFS='|' read -r msg sha; do
-          [[ -z "$msg" ]] && continue
-          should_skip "$msg" && continue
-
-          line=$(format_item "$msg")
-          case "$(bucket_commit "$msg")" in
-            feature) echo "$line" >> "${workdir}/features" ;;
-            bugfix)  echo "$line" >> "${workdir}/bugfixes" ;;
-          esac
-          total=$((total + 1))
-        done < <(git log "$range" --pretty=format:"%s|%h" --no-merges)
-
-        if [[ "$total" -eq 0 ]]; then
+        commit_count=$(git rev-list --count "$range" --no-merges || true)
+        if [[ "$commit_count" -eq 0 ]]; then
           echo "::error::No commits found between ${range}. Nothing to release."
           exit 1
         fi
 
-        # ---------------------------------------------------------------------------
-        # Write release-notes.md
-        # ---------------------------------------------------------------------------
+        # Label always uses the release version; link target is the tag or commit SHA.
+        changelog_label="${prev_tag}...${VERSION}"
+        if [[ "$using_tag" == "true" ]]; then
+          changelog_to_ref="$release_ref"
+        else
+          changelog_to_ref="$TARGET_SHA"
+        fi
+        changelog_link=$(build_changelog_link "$prev_tag" "$changelog_to_ref" "$changelog_label")
 
         release_date=$(date -u +"%B %d, %Y" | sed 's/ 0/ /')
 
@@ -204,24 +121,20 @@ runs:
           echo ""
 
           if [[ "$using_tag" != "true" ]]; then
-            echo "> **Draft preview** — release target \`${TARGET_SHA}\` (tag \`${VERSION}\` not created yet). Review and edit sections before publishing."
+            echo "> **Draft preview** — release target \`${TARGET_SHA}\` (tag \`${VERSION}\` not created yet). Add section bullets below before publishing."
             echo ""
           fi
 
-          print_section "New Features"  "${workdir}/features"
-          print_section "Improvements"  "${workdir}/improvements"
-          print_section "Bug Fixes"     "${workdir}/bugfixes"
-          print_section "Maintenance"   "${workdir}/maintenance"
+          # Sections intentionally empty — edit manually before publishing.
+          # ### New Features
+          # ### Improvements
+          # ### Bug Fixes
+          # ### Maintenance
+
           echo "**Full Changelog**: ${changelog_link}"
         } > "$OUTPUT_PATH"
 
-        rm -rf "$workdir"
-
-        # ---------------------------------------------------------------------------
-        # Outputs
-        # ---------------------------------------------------------------------------
-
-        echo "Release notes preview:"
+        echo "Release notes scaffold (${commit_count} commits in ${range}, sections empty for manual edit):"
         cat "$OUTPUT_PATH"
         echo "prev-tag=${prev_tag}" >> "$GITHUB_OUTPUT"
         echo "release-notes-path=${OUTPUT_PATH}" >> "$GITHUB_OUTPUT"

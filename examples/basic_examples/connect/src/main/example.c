@@ -200,7 +200,7 @@ connect_to_aerospike(aerospike* as, program_options* po, as_error* err)
 		// to connect to.  Failing to do that will yield connection
 		// failures when attempting to connect.
 
-		for (int i = 0; i < config.hosts->capacity; i++) {
+		for (uint32_t i = 0; i < config.hosts->capacity; i++) {
 			as_host* host = (as_host*)as_vector_get(config.hosts, i);
 
 			if( !host->tls_name) {

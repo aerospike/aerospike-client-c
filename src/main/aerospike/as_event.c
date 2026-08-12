@@ -2536,9 +2536,8 @@ as_event_close_cluster(aerospike* as, as_error* err)
 	state->event_loop_count = as_event_loop_size;
 
 	if (as_in_event_loops()) {
-		// Deadlock would occur if this method waits for all event loop
-		// responses from an event loop thread. Instead, create a new thread
-		// to run async cluster close and return.
+		// Deadlock would occur if we wait for all event loop responses from an event loop thread.
+		// Instead, create a new thread to run async cluster close and return.
 		pthread_t thread;
 
 		int rv = pthread_create(&thread, NULL, as_event_close_cluster_thread_cb, state);
@@ -2548,6 +2547,8 @@ as_event_close_cluster(aerospike* as, as_error* err)
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"Failed to create cluster close thread: %s", strerror(errno));
 		}
+
+		pthread_detach(thread);
 	}
 	else {
 		as_event_close_cluster_in_thread(state);

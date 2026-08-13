@@ -110,14 +110,21 @@ jobs:
             exit 0
           fi
 
-          existing=$(gh api "/repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}" \
-            --jq '.html_url // empty' 2>/dev/null || true)
-          if [ -n "$existing" ]; then
-            echo "::warning::Release ${VERSION} already exists (${existing}). Skipping draft creation — edit release notes manually."
+          set +e
+          result=$(gh release view "$VERSION" --repo "${GITHUB_REPOSITORY}" --json url -q .url 2>&1)
+          view_status=$?
+          set -e
+
+          if [ "$view_status" -eq 0 ]; then
+            echo "::warning::Release ${VERSION} already exists (${result}). Skipping draft creation — edit release notes manually."
             echo "skip-draft=true" >> "$GITHUB_OUTPUT"
-            echo "existing-url=${existing}" >> "$GITHUB_OUTPUT"
-          else
+            echo "existing-url=${result}" >> "$GITHUB_OUTPUT"
+          elif [ "$view_status" -eq 1 ] && [ "$result" = "release not found" ]; then
+            echo "No existing release for tag ${VERSION}."
             echo "skip-draft=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Failed to check release for tag ${VERSION}: ${result}" >&2
+            exit 1
           fi
 
   api-doc:

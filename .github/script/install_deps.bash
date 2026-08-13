@@ -22,7 +22,7 @@
 #
 # Usage: install_deps.bash <distro> [event_lib] [valgrind=false] [docs=true]
 #
-#   distro:    ubuntu-22.04 | ubuntu-24.04 | debian-12 | debian-13 |
+#   distro:    ubuntu-22.04 | ubuntu-24.04 | ubuntu-26.04 | debian-12 | debian-13 |
 #              amazonlinux-2023 | rhel-8 | rhel-9 | rhel-10
 #   event_lib: libev (default) | libuv | libevent
 #   valgrind:  true | false (default)
@@ -114,6 +114,7 @@ EL_PKG_DEPS='zip rpm-build'
 
 install_deps_ubuntu_2204() { install_ubuntu_common; }
 install_deps_ubuntu_2404() { install_ubuntu_common; }
+install_deps_ubuntu_2604() { install_ubuntu_common; }
 
 install_deps_debian_12() { install_debian_common; }
 install_deps_debian_13() { install_debian_common; }
@@ -377,6 +378,7 @@ main() {
     case "$distro" in
     ubuntu-22.04)     install_deps_ubuntu_2204 ;;
     ubuntu-24.04)     install_deps_ubuntu_2404 ;;
+    ubuntu-26.04)     install_deps_ubuntu_2604 ;;
     debian-12)        install_deps_debian_12 ;;
     debian-13)        install_deps_debian_13 ;;
     amazonlinux-2023) install_deps_amazonlinux_2023 ;;

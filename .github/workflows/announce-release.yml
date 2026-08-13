@@ -29,8 +29,8 @@ on:
 
 env:
   IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry-run && 'true' || 'false') || 'false' }}
-  BASE_REF_BRANCH: ${{ github.event_name == 'workflow_dispatch' && 'master' || github.ref_name }}
-  HEAD_REF_BRANCH: ${{ github.event_name == 'workflow_dispatch' && 'stage' || github.ref_name }}
+  BASE_REF_BRANCH: ${{ github.event_name == 'workflow_dispatch' && 'prestine-branch' || github.ref_name }}
+  HEAD_REF_BRANCH: ${{ github.event_name == 'workflow_dispatch' && 'stage-test' || github.ref_name }}
   BUILD_RUN_ID: ${{ inputs.build-run-id || '' }}
   
 defaults:

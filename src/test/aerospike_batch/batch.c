@@ -774,6 +774,24 @@ not_exists_cb(const as_batch_result* results, uint32_t n, void* udata)
 	return true;
 }
 
+typedef struct {
+	as_error* err;
+	as_batch* batch;
+	as_status status;
+	uint32_t errors;
+} batch_not_exists_data;
+
+static bool
+batch_not_exists(void* udata)
+{
+	batch_not_exists_data* data = udata;
+	data->errors = 0;
+	data->status = aerospike_batch_exists(as, data->err, NULL, data->batch, not_exists_cb,
+		&data->errors);
+
+	return data->status == AEROSPIKE_OK && data->errors == 0;
+}
+
 TEST(batch_remove, "Batch remove")
 {
 	as_error err;
@@ -848,8 +866,16 @@ TEST(batch_reset_read_ttl, "Batch reset read ttl")
 
 	// Read the record after it expires, showing it's gone.
 	as_sleep(2000);
-	errors = 0;
-	status = aerospike_batch_exists(as, &err, NULL, &batch, not_exists_cb, &errors);
+
+	batch_not_exists_data data = {
+		.err = &err,
+		.batch = &batch,
+		.status = AEROSPIKE_OK,
+		.errors = 0
+	};
+	ATF_WAIT_FOR_TTL_EXPIRATION(batch_not_exists, &data);
+	status = data.status;
+	errors = data.errors;
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(errors, 0);
 }
@@ -910,7 +936,10 @@ TEST(batch_write_with_cluster_send_key, "Batch write with cluster send key")
 
 	// Run batch operate.
 	uint32_t errors = 0;
-	status = aerospike_batch_operate(as, &err, NULL, NULL, &batch, &ops, result_cb, &errors);
+	as_policy_batch_write policy;
+	as_policy_batch_write_init(&policy);
+	policy.key = AS_POLICY_KEY_DIGEST;
+	status = aerospike_batch_operate(as, &err, NULL, &policy, &batch, &ops, result_cb, &errors);
 
 	// Reset global batch write sendKey.
 	as->config.policies.batch_write.key = orig;
@@ -933,6 +962,63 @@ TEST(batch_write_with_cluster_send_key, "Batch write with cluster send key")
 	as_query_destroy(&q);
 }
 
+TEST(batch_write_with_cluster_send_key_single, "Batch write with cluster send key single")
+{
+	// Use size 1 so single record optimization will apply.
+	const char* set = "sendKeyCluster2";
+	uint32_t size = 1;
+
+	as_error err;
+	as_status status;
+
+	// Truncate set
+	status = aerospike_truncate(as, &err, NULL, NAMESPACE, set, 0);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Define keys
+	as_batch batch;
+	as_batch_inita(&batch, size);
+
+	for (uint32_t i = 0; i < size; i++) {
+		as_key_init_int64(as_batch_keyat(&batch, i), NAMESPACE, set, i + 1);
+	}
+
+	// Define write ops
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write_int64(&ops, "a", 1);
+
+	// Change global batch write sendKey.
+	as_policy_key orig = as->config.policies.batch_write.key;
+	as->config.policies.batch_write.key = AS_POLICY_KEY_SEND;
+
+	// Run batch operate.
+	uint32_t errors = 0;
+	as_policy_batch_write policy;
+	as_policy_batch_write_init(&policy);
+	policy.key = AS_POLICY_KEY_DIGEST;
+	status = aerospike_batch_operate(as, &err, NULL, &policy, &batch, &ops, result_cb, &errors);
+
+	// Reset global batch write sendKey.
+	as->config.policies.batch_write.key = orig;
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(errors, 0);
+
+	// Query user keys.
+	query_stats stats = {.size = size};
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, set);
+
+	status = aerospike_query_foreach(as, &err, NULL, &q, query_send_key_callback, &stats);
+
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(stats.errors, 0);
+	assert_int_eq(stats.count, size);
+
+	as_query_destroy(&q);
+}
 TEST(batch_write_with_policy_send_key, "Batch write with policy send key")
 {
 	const char* set = "sendKeyBWP";
@@ -1052,6 +1138,10 @@ TEST(batch_write_complex_with_cluster_send_key, "Batch write complex with cluste
 	as_batch_records recs;
 	as_batch_records_inita(&recs, size);
 
+	as_policy_batch_write policy;
+	as_policy_batch_write_init(&policy);
+	policy.key = AS_POLICY_KEY_DIGEST;
+
 	for (uint32_t i = 0; i < size; i++) {
 		if (i >= 8 && i <= 10) {
 			as_batch_read_record* brr = as_batch_read_reserve(&recs);
@@ -1062,6 +1152,7 @@ TEST(batch_write_complex_with_cluster_send_key, "Batch write complex with cluste
 			as_batch_write_record* bwr = as_batch_write_reserve(&recs);
 			as_key_init_int64(&bwr->key, NAMESPACE, set, i + 1);
 			bwr->ops = &ops;
+			bwr->policy = &policy;
 		}
 	}
 
@@ -1175,6 +1266,7 @@ SUITE(batch, "aerospike batch tests")
 	suite_add(batch_write_read_all_bins);
 	suite_add(batch_remove);
 	suite_add(batch_write_with_cluster_send_key);
+	suite_add(batch_write_with_cluster_send_key_single);
 	suite_add(batch_write_with_policy_send_key);
 	suite_add(batch_write_complex_with_cluster_send_key);
 	suite_add(batch_write_complex_with_policy_send_key);

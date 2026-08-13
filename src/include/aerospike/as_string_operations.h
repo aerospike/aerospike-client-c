@@ -85,9 +85,12 @@ typedef enum as_string_write_flags_e {
 	/** Default. Allow create or update. */
 	AS_STRING_WRITE_FLAGS_DEFAULT = 0,
 
+	/** Update existing values only. */
+	AS_STRING_WRITE_FLAGS_UPDATE_ONLY = 2,
+
 	/**
-	 * Do not raise an error if a modify operation cannot be applied because
-	 * the target bin does not exist. The record is left unchanged.
+	 * Do not raise an error if a modify operation cannot be applied.
+	 * The record is left unchanged.
 	 */
 	AS_STRING_WRITE_FLAGS_NO_FAIL = 4
 } as_string_write_flags;
@@ -862,13 +865,11 @@ as_operations_string_repeat(
 /**
  * Create string regex_replace operation that replaces the first match of pattern
  * with replacement. Pass AS_STRING_REGEX_FLAGS_GLOBAL to replace every match.
- * The policy argument is accepted for API symmetry, but this server operation
- * accepts regex flags and does not pack string policy flags.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy. Not packed in the wire payload.
+ * @param policy String policy.
  * @param pattern The regex pattern to match against.
  * @param replacement The string to replace with.
  * @param flags The regex flags to use.

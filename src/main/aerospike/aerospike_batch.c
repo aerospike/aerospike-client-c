@@ -2377,6 +2377,27 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 // Single Record Policy Functions
 //---------------------------------
 
+static const as_policy_batch_write*
+as_policy_batch_write_get(aerospike* as)
+{
+	as_config* config = aerospike_load_config(as);
+	return &config->policies.batch_write;
+}
+
+static const as_policy_batch_apply*
+as_policy_batch_apply_get(aerospike* as)
+{
+	as_config* config = aerospike_load_config(as);
+	return &config->policies.batch_apply;
+}
+
+static const as_policy_batch_remove*
+as_policy_batch_remove_get(aerospike* as)
+{
+	as_config* config = aerospike_load_config(as);
+	return &config->policies.batch_remove;
+}
+
 static void
 as_read_policy_copy(
 	as_policy_read* trg, const as_policy_batch* pb, const as_policy_batch_read* pbr
@@ -2440,16 +2461,19 @@ as_operate_policy_copy_read(
 
 static void
 as_operate_policy_copy_write(
-	as_policy_operate* trg, const as_policy_batch* pb, const as_policy_batch_write* src
+	aerospike* as, const as_policy_batch* pb, as_batch_write_record* bw, as_policy_operate* trg
 	)
 {
+	const as_policy_batch_write* def = as_policy_batch_write_get(as);
+	const as_policy_batch_write* src = bw->policy ? bw->policy : def;
+
 	trg->base = pb->base;
 
 	if (src->filter_exp) {
 		trg->base.filter_exp = src->filter_exp;
 	}
 
-	trg->key = src->key;
+	trg->key = as_policy_key_resolve(def->key, src->key);
 	trg->replica = pb->replica;
 	trg->read_mode_ap = pb->read_mode_ap;
 	trg->read_mode_sc = pb->read_mode_sc;
@@ -2467,16 +2491,19 @@ as_operate_policy_copy_write(
 
 static void
 as_apply_policy_copy(
-	as_policy_apply* trg, const as_policy_batch* pb, const as_policy_batch_apply* src
+	aerospike* as, const as_policy_batch* pb, as_batch_apply_record* ba, as_policy_apply* trg
 	)
 {
+ 	const as_policy_batch_apply* def = as_policy_batch_apply_get(as);
+	const as_policy_batch_apply* src = ba->policy ? ba->policy : def;
+
 	trg->base = pb->base;
 
 	if (src->filter_exp) {
 		trg->base.filter_exp = src->filter_exp;
 	}
 
-	trg->key = src->key;
+	trg->key = as_policy_key_resolve(def->key, src->key);
 	trg->replica = pb->replica;
 	trg->commit_level = src->commit_level;
 	trg->ttl = src->ttl;
@@ -2486,16 +2513,19 @@ as_apply_policy_copy(
 
 static void
 as_remove_policy_copy(
-	as_policy_remove* trg, const as_policy_batch* pb, const as_policy_batch_remove* src
+	aerospike* as, const as_policy_batch* pb, as_batch_remove_record* br, as_policy_remove* trg
 	)
 {
+	const as_policy_batch_remove* def = as_policy_batch_remove_get(as);
+	const as_policy_batch_remove* src = br->policy ? br->policy : def;
+
 	trg->base = pb->base;
 
 	if (src->filter_exp) {
 		trg->base.filter_exp = src->filter_exp;
 	}
 
-	trg->key = src->key;
+	trg->key = as_policy_key_resolve(def->key, src->key);
 	trg->replica = pb->replica;
 	trg->commit_level = src->commit_level;
 	trg->gen = src->gen;
@@ -2525,27 +2555,6 @@ as_record_reset(as_record* record, uint32_t capacity)
 	record->bins.size = 0;
 	record->bins.entries = cf_malloc(sizeof(as_bin) * capacity);
 	record->bins._free = true;
-}
-
-static const as_policy_batch_write*
-as_policy_batch_write_get(aerospike* as)
-{
-	as_config* config = aerospike_load_config(as);
-	return &config->policies.batch_write;
-}
-
-static const as_policy_batch_apply*
-as_policy_batch_apply_get(aerospike* as)
-{
-	as_config* config = aerospike_load_config(as);
-	return &config->policies.batch_apply;
-}
-
-static const as_policy_batch_remove*
-as_policy_batch_remove_get(aerospike* as)
-{
-	as_config* config = aerospike_load_config(as);
-	return &config->policies.batch_remove;
 }
 
 static as_status
@@ -2588,20 +2597,18 @@ as_single_execute(
 
 		case AS_BATCH_WRITE: {
 			as_batch_write_record* bw = (as_batch_write_record*)bb;
-			const as_policy_batch_write* pbw = bw->policy ? bw->policy : as_policy_batch_write_get(as);
 
 			as_policy_operate po;
-			as_operate_policy_copy_write(&po, pb, pbw);
+			as_operate_policy_copy_write(as, pb, bw, &po);
 
 			return aerospike_key_operate(as, err, &po, key, bw->ops, &record);
 		}
 
 		case AS_BATCH_APPLY: {
 			as_batch_apply_record* ba = (as_batch_apply_record*)bb;
-			const as_policy_batch_apply* pba = ba->policy ? ba->policy : as_policy_batch_apply_get(as);
 
 			as_policy_apply pa;
-			as_apply_policy_copy(&pa, pb, pba);
+			as_apply_policy_copy(as, pb, ba, &pa);
 
 			as_val* val = NULL;
 			as_status status = aerospike_key_apply(as, err, &pa, key, ba->module, ba->function, ba->arglist, &val);
@@ -2622,10 +2629,9 @@ as_single_execute(
 
 		case AS_BATCH_REMOVE: {
 			as_batch_remove_record* br = (as_batch_remove_record*)bb;
-			const as_policy_batch_remove* pbr = br->policy ? br->policy : as_policy_batch_remove_get(as);
 
 			as_policy_remove pr;
-			as_remove_policy_copy(&pr, pb, pbr);
+			as_remove_policy_copy(as, pb, br, &pr);
 
 			return aerospike_key_remove(as, err, &pr, key);
 		}
@@ -2915,10 +2921,9 @@ as_single_execute_record_async(
 
 		case AS_BATCH_WRITE: {
 			as_batch_write_record* bw = (as_batch_write_record*)rec;
-			const as_policy_batch_write* pbw = bw->policy ? bw->policy : as_policy_batch_write_get(as);
 
 			as_policy_operate po;
-			as_operate_policy_copy_write(&po, pb, pbw);
+			as_operate_policy_copy_write(as, pb, bw, &po);
 
 			status = aerospike_key_operate_async(as, err, &po, &rec->key, bw->ops, as_single_record_listener,
 				data, exec->event_loop, NULL);
@@ -2927,10 +2932,9 @@ as_single_execute_record_async(
 
 		case AS_BATCH_APPLY: {
 			as_batch_apply_record* ba = (as_batch_apply_record*)rec;
-			const as_policy_batch_apply* pba = ba->policy ? ba->policy : as_policy_batch_apply_get(as);
 
 			as_policy_apply pa;
-			as_apply_policy_copy(&pa, pb, pba);
+			as_apply_policy_copy(as, pb, ba, &pa);
 
 			status = aerospike_key_apply_async(as, err, &pa, &rec->key, ba->module, ba->function,
 				ba->arglist, as_single_value_listener, data, exec->event_loop, NULL);
@@ -2939,10 +2943,9 @@ as_single_execute_record_async(
 
 		case AS_BATCH_REMOVE: {
 			as_batch_remove_record* br = (as_batch_remove_record*)rec;
-			const as_policy_batch_remove* pbr = br->policy ? br->policy : as_policy_batch_remove_get(as);
 
 			as_policy_remove pr;
-			as_remove_policy_copy(&pr, pb, pbr);
+			as_remove_policy_copy(as, pb, br, &pr);
 
 			status = aerospike_key_remove_async(as, err, &pr, &rec->key, as_single_write_listener, data,
 				exec->event_loop, NULL);
@@ -4579,19 +4582,24 @@ as_policy_batch_parent_write_merge(aerospike* as, const as_policy_batch* src, as
 }
 
 static const as_policy_batch_write*
-as_policy_batch_write_merge(aerospike* as, const as_policy_batch_write* src, as_policy_batch_write* mrg)
+as_policy_batch_write_merge(
+	aerospike* as, const as_policy_batch_write* src, as_policy_batch_write* mrg, as_policy_key* pkey
+	)
 {
-	if (!src) {
-		as_config* config = aerospike_load_config(as);
-		return &config->policies.batch_write;
-	}
-	else if (as->config_bitmap) {
-		uint8_t* bitmap = as->config_bitmap;
-		as_config* config = aerospike_load_config(as);
-		as_policy_batch_write* cfg = &config->policies.batch_write;
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch_write* cfg = &config->policies.batch_write;
 
-		mrg->key = as_field_is_set(bitmap, AS_BATCH_WRITE_SEND_KEY)?
-			cfg->key : src->key;
+	if (!src) {
+		*pkey = cfg->key;
+		return cfg;
+	}
+
+	*pkey = as_policy_key_resolve(cfg->key, src->key);
+
+	if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+
+		mrg->key = *pkey;
 		mrg->durable_delete = as_field_is_set(bitmap, AS_BATCH_WRITE_DURABLE_DELETE)?
 			cfg->durable_delete : src->durable_delete;
 
@@ -4603,25 +4611,28 @@ as_policy_batch_write_merge(aerospike* as, const as_policy_batch_write* src, as_
 		mrg->on_locking_only = src->on_locking_only;
 		return mrg;
 	}
-	else {
-		return src;
-	}
+	return src;
 }
 
 static const as_policy_batch_apply*
-as_policy_batch_apply_merge(aerospike* as, const as_policy_batch_apply* src, as_policy_batch_apply* mrg)
+as_policy_batch_apply_merge(
+	aerospike* as, const as_policy_batch_apply* src, as_policy_batch_apply* mrg, as_policy_key* pkey
+	)
 {
-	if (!src) {
-		as_config* config = aerospike_load_config(as);
-		return &config->policies.batch_apply;
-	}
-	else if (as->config_bitmap) {
-		uint8_t* bitmap = as->config_bitmap;
-		as_config* config = aerospike_load_config(as);
-		as_policy_batch_apply* cfg = &config->policies.batch_apply;
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch_apply* cfg = &config->policies.batch_apply;
 
-		mrg->key = as_field_is_set(bitmap, AS_BATCH_UDF_SEND_KEY)?
-			cfg->key : src->key;
+	if (!src) {
+		*pkey = cfg->key;
+		return cfg;
+	}
+
+	*pkey = as_policy_key_resolve(cfg->key, src->key);
+
+	if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+
+		mrg->key = *pkey;
 		mrg->durable_delete = as_field_is_set(bitmap, AS_BATCH_UDF_DURABLE_DELETE)?
 			cfg->durable_delete : src->durable_delete;
 
@@ -4631,25 +4642,28 @@ as_policy_batch_apply_merge(aerospike* as, const as_policy_batch_apply* src, as_
 		mrg->on_locking_only = src->on_locking_only;
 		return mrg;
 	}
-	else {
-		return src;
-	}
+	return src;
 }
 
 static const as_policy_batch_remove*
-as_policy_batch_remove_merge(aerospike* as, const as_policy_batch_remove* src, as_policy_batch_remove* mrg)
+as_policy_batch_remove_merge(
+	aerospike* as, const as_policy_batch_remove* src, as_policy_batch_remove* mrg, as_policy_key* pkey
+	)
 {
-	if (!src) {
-		as_config* config = aerospike_load_config(as);
-		return &config->policies.batch_remove;
-	}
-	else if (as->config_bitmap) {
-		uint8_t* bitmap = as->config_bitmap;
-		as_config* config = aerospike_load_config(as);
-		as_policy_batch_remove* cfg = &config->policies.batch_remove;
+	as_config* config = aerospike_load_config(as);
+	as_policy_batch_remove* cfg = &config->policies.batch_remove;
 
-		mrg->key = as_field_is_set(bitmap, AS_BATCH_DELETE_SEND_KEY)?
-			cfg->key : src->key;
+	if (!src) {
+		*pkey = cfg->key;
+		return cfg;
+	}
+
+	*pkey = as_policy_key_resolve(cfg->key, src->key);
+
+	if (as->config_bitmap) {
+		uint8_t* bitmap = as->config_bitmap;
+
+		mrg->key = *pkey;
 		mrg->durable_delete = as_field_is_set(bitmap, AS_BATCH_DELETE_DURABLE_DELETE)?
 			cfg->durable_delete : src->durable_delete;
 
@@ -4659,9 +4673,7 @@ as_policy_batch_remove_merge(aerospike* as, const as_policy_batch_remove* src, a
 		mrg->generation = src->generation;
 		return mrg;
 	}
-	else {
-		return src;
-	}
+	return src;
 }
 
 //---------------------------------
@@ -5150,7 +5162,8 @@ aerospike_batch_operate(
 		policy = as_policy_batch_parent_write_merge(as, policy, &merged);
 
 		as_policy_batch_write merged_write;
-		policy_write = as_policy_batch_write_merge(as, policy_write, &merged_write);
+		as_policy_key pkey;
+		policy_write = as_policy_batch_write_merge(as, policy_write, &merged_write, &pkey);
 
 		uint64_t* versions = NULL;
 
@@ -5177,7 +5190,7 @@ aerospike_batch_operate(
 		};
 
 		as_batch_attr attr;
-		as_batch_attr_write(&attr, ops, policy_write, policy_write->key, policy_write->durable_delete);
+		as_batch_attr_write(&attr, ops, policy_write, pkey, policy_write->durable_delete);
 
 		return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 			listener, udata);
@@ -5224,7 +5237,8 @@ aerospike_batch_apply(
 	policy = as_policy_batch_parent_write_merge(as, policy, &merged);
 	
 	as_policy_batch_apply merged_apply;
-	policy_apply = as_policy_batch_apply_merge(as, policy_apply, &merged_apply);
+	as_policy_key pkey;
+	policy_apply = as_policy_batch_apply_merge(as, policy_apply, &merged_apply, &pkey);
 
 	uint64_t* versions = NULL;
 
@@ -5253,7 +5267,7 @@ aerospike_batch_apply(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_apply(&attr, policy_apply, policy_apply->key, policy_apply->durable_delete);
+	as_batch_attr_apply(&attr, policy_apply, pkey, policy_apply->durable_delete);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 		listener, udata);
@@ -5272,7 +5286,8 @@ aerospike_batch_remove(
 	policy = as_policy_batch_parent_write_merge(as, policy, &merged);
 
 	as_policy_batch_remove merged_remove;
-	policy_remove = as_policy_batch_remove_merge(as, policy_remove, &merged_remove);
+	as_policy_key pkey;
+	policy_remove = as_policy_batch_remove_merge(as, policy_remove, &merged_remove, &pkey);
 
 	uint64_t* versions = NULL;
 
@@ -5298,7 +5313,7 @@ aerospike_batch_remove(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_remove(&attr, policy_remove, policy_remove->key, policy_remove->durable_delete);
+	as_batch_attr_remove(&attr, policy_remove, pkey, policy_remove->durable_delete);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 		listener, udata);

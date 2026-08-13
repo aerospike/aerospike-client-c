@@ -2312,6 +2312,19 @@ as_policy_txn_roll_copy(const as_policy_txn_roll* src, as_policy_txn_roll* trg)
 
 /**
  * @private
+ * Get union of send key policies.
+ */
+static inline as_policy_key
+as_policy_key_resolve(as_policy_key def_key, as_policy_key rec_key)
+{
+	if (def_key == AS_POLICY_KEY_SEND || rec_key == AS_POLICY_KEY_SEND) {
+		return AS_POLICY_KEY_SEND;
+	}
+	return AS_POLICY_KEY_DIGEST;
+}
+
+/**
+ * @private
  * Initialize as_policies.
  *
  * @relates as_policies

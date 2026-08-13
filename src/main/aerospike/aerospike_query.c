@@ -2518,7 +2518,9 @@ aerospike_query_partitions_async(
 }
 
 const as_policy_write*
-as_policy_write_merge(aerospike* as, const as_policy_write* src, as_policy_write* mrg);
+as_policy_write_merge(
+	aerospike* as, const as_policy_write* src, as_policy_write* mrg, as_policy_key* pkey
+	);
 
 as_status
 aerospike_query_background(
@@ -2528,7 +2530,8 @@ aerospike_query_background(
 	as_error_reset(err);
 	
 	as_policy_write merged;
-	policy = as_policy_write_merge(as, policy, &merged);
+	as_policy_key pkey;
+	policy = as_policy_write_merge(as, policy, &merged, &pkey);
 
 	if (! (query->apply.function[0] || query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,

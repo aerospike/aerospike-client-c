@@ -161,6 +161,32 @@ TEST(config_set_user_both_oversized, "as_config_set_user() rejects oversized use
 	assert_config_unchanged(__result__, &config, user_snapshot, password_snapshot);
 }
 
+TEST(config_add_hosts_tls_name_bad_port, "as_config_add_hosts() frees tls_name when the port after it is invalid")
+{
+	as_config config;
+	as_config_init(&config);
+
+	// "host:tlsname:<non-digit>" hits the tls_name-then-invalid-port error path.
+	assert_false(as_config_add_hosts(&config, "myhost:mytls:notaport", 3000));
+	assert_not_null(config.hosts);
+	assert_int_eq(config.hosts->size, 0);
+
+	as_config_destroy(&config);
+}
+
+TEST(config_add_hosts_tls_name_trailing_garbage, "as_config_add_hosts() frees tls_name when trailing garbage follows the port")
+{
+	as_config config;
+	as_config_init(&config);
+
+	// "host:tlsname:<port><garbage>" hits the tls_name-then-trailing-garbage error path.
+	assert_false(as_config_add_hosts(&config, "myhost:mytls:3000x", 3000));
+	assert_not_null(config.hosts);
+	assert_int_eq(config.hosts->size, 0);
+
+	as_config_destroy(&config);
+}
+
 SUITE(config_basics, "aerospike config tests")
 {
 	suite_add(config_set_user_valid);
@@ -169,4 +195,6 @@ SUITE(config_basics, "aerospike config tests")
 	suite_add(config_set_user_oversized_user);
 	suite_add(config_set_user_oversized_password);
 	suite_add(config_set_user_both_oversized);
+	suite_add(config_add_hosts_tls_name_bad_port);
+	suite_add(config_add_hosts_tls_name_trailing_garbage);
 }

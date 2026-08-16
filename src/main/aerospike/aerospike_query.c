@@ -2538,6 +2538,11 @@ aerospike_query_background(
 			"Background function or ops is required");
 	}
 
+	if (query->ops && query->apply.function[0]) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Cannot combine query operations with aggregation");
+	}
+
 	if (query->ops && !as_operations_consists_of_all_writes(query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Background query operations must be write-only. Use query for read-only operations.");

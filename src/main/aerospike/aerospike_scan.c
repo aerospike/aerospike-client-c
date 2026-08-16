@@ -814,6 +814,11 @@ static inline as_status
 as_scan_validate(as_error* err, const as_policy_scan* policy, const as_scan* scan)
 {
 	as_error_reset(err);
+
+	if (scan->ops && scan->apply_each.function[0]) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Cannot combine scan operations with a UDF");
+	}
 	return AEROSPIKE_OK;
 }
 

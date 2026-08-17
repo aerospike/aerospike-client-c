@@ -99,6 +99,14 @@ typedef struct as_batch_base_record_s {
 	 * to the server.
 	 */
 	bool in_doubt;
+
+	/**
+	 * Optional server error detail for this row.
+	 *
+	 * This pointer is owned by the batch record list and is freed by
+	 * as_batch_records_destroy().
+	 */
+	const as_error_detail* error_detail;
 } as_batch_base_record;
 
 /**
@@ -114,6 +122,7 @@ typedef struct as_batch_read_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt; // Will always be false for reads.
+	const as_error_detail* error_detail;
 
 	/**
 	 * Optional read policy.
@@ -163,6 +172,7 @@ typedef struct as_batch_write_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
+	const as_error_detail* error_detail;
 
 	/**
 	 * Optional write policy.
@@ -194,6 +204,7 @@ typedef struct as_batch_apply_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
+	const as_error_detail* error_detail;
 
 	/**
 	 * Optional apply policy.
@@ -237,6 +248,7 @@ typedef struct as_batch_remove_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
+	const as_error_detail* error_detail;
 
 	/**
 	 * Optional remove policy.
@@ -477,8 +489,8 @@ as_batch_remove_reserve(as_batch_records* records)
 }
 
 /**
- * Destroy keys and records in record list. It's the responsility of the caller to
- * free additional user specified fields in the record.
+ * Destroy keys and records in record list, including any server error-detail side objects.
+ * It's the responsility of the caller to free additional user specified fields in the record.
  *
  * @relates as_batch_records
  * @ingroup batch_operations
@@ -487,8 +499,8 @@ AS_EXTERN void
 as_batch_records_destroy(as_batch_records* records);
 
 /**
- * Destroy keys and records in record list. It's the responsility of the caller to
- * free additional user specified fields in the record.
+ * Destroy keys and records in record list, including any server error-detail side objects.
+ * It's the responsility of the caller to free additional user specified fields in the record.
  *
  * @deprecated Use as_batch_records_destroy() instead.
  * @relates as_batch_records

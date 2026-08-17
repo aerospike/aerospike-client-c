@@ -622,9 +622,15 @@ typedef struct as_policy_base_s {
 	 * 0 - disabled (no error details returned). Default.
 	 * 1 - return subcode only.
 	 * 2 - return subcode and human-readable message.
+	 * 3 - return subcode, message, and the client-supported structured expression
+	 *     trace subset when present.
 	 *
-	 * When enabled and the server returns error details, as_error.subcode will contain the
-	 * numeric subcode and as_error.message will contain the server-authored message.
+	 * When enabled and the server returns error details, as_error.subcode / has_subcode
+	 * and as_error.message / has_message reflect returned top-level detail fields.
+	 * The expression trace intentionally exposes a curated subset instead of every
+	 * server trace key, so has_exp_trace is false when key 3 contains only reserved
+	 * or unknown trace keys. If the server omits exp_trace.lang, the client preserves
+	 * has_lang=false while defaulting exp_trace.lang to AS_EXP_TRACE_LANG_MSGPACK.
 	 */
 	uint8_t error_detail_verbosity;
 } as_policy_base;

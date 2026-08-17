@@ -27,6 +27,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_exp.h>
+#include <aerospike/as_exp_operations.h>
 #include <aerospike/as_hll_operations.h>
 #include <aerospike/as_list_operations.h>
 #include <aerospike/as_map_operations.h>
@@ -48,6 +49,87 @@
 extern aerospike* as;
 extern bool g_has_sc;
 static as_monitor monitor;
+
+static bool
+query_no_leak_cb(const as_val* val, void* udata);
+
+static void
+assert_exp_trace_matches(
+	atf_test_result* __result__, const as_exp_trace* expected, const as_exp_trace* actual)
+{
+	assert_int_eq(actual->has_phase, expected->has_phase);
+	if (expected->has_phase) {
+		assert_int_eq(actual->phase, expected->phase);
+	}
+
+	assert_int_eq(actual->has_byte_offset, expected->has_byte_offset);
+	if (expected->has_byte_offset) {
+		assert_int_eq(actual->byte_offset, expected->byte_offset);
+	}
+
+	assert_int_eq(actual->has_op, expected->has_op);
+	if (expected->has_op) {
+		assert_string_eq(actual->op, expected->op);
+	}
+
+	assert_int_eq(actual->has_depth, expected->has_depth);
+	if (expected->has_depth) {
+		assert_int_eq(actual->depth, expected->depth);
+	}
+
+	assert_int_eq(actual->has_path, expected->has_path);
+	if (expected->has_path) {
+		assert_int_eq(actual->path_size, expected->path_size);
+		for (uint8_t i = 0; i < expected->path_size; i++) {
+			assert_string_eq(actual->path[i], expected->path[i]);
+		}
+	}
+
+	assert_int_eq(actual->has_snippet, expected->has_snippet);
+	if (expected->has_snippet) {
+		assert_string_eq(actual->snippet, expected->snippet);
+	}
+
+	assert_int_eq(actual->has_outcome, expected->has_outcome);
+	if (expected->has_outcome) {
+		assert_int_eq(actual->outcome, expected->outcome);
+	}
+
+	assert_int_eq(actual->has_lang, expected->has_lang);
+	assert_int_eq(actual->lang, expected->lang);
+
+	assert_int_eq(actual->has_ael_offset, expected->has_ael_offset);
+	if (expected->has_ael_offset) {
+		assert_int_eq(actual->ael_offset, expected->ael_offset);
+	}
+
+	assert_int_eq(actual->has_ael_span, expected->has_ael_span);
+	if (expected->has_ael_span) {
+		assert_int_eq(actual->ael_span, expected->ael_span);
+	}
+}
+
+static void
+assert_error_detail_matches_error(
+	atf_test_result* __result__, const as_error_detail* detail, const as_error* err)
+{
+	assert_not_null(detail);
+	assert_true(as_error_has_server_detail(err));
+	assert_true(as_error_detail_has_server_detail(detail));
+
+	assert_int_eq(detail->has_subcode, err->has_subcode);
+	if (err->has_subcode) {
+		assert_int_eq(detail->subcode, err->subcode);
+	}
+
+	assert_int_eq(detail->has_message, err->has_message);
+	assert_int_eq(detail->has_exp_trace, err->has_exp_trace);
+	if (err->has_exp_trace) {
+		assert_exp_trace_matches(__result__, &err->exp_trace, &detail->exp_trace);
+	}
+
+	assert_string_eq(detail->message, err->message);
+}
 
 //---------------------------------
 // Macros
@@ -666,8 +748,8 @@ TEST(ed_sync_cross_verbosity, "5.17.1 same error at v1 and v2 returns same subco
 	assert_true(strlen(err2.message) > 0);
 }
 
-// 5.9.1 UDF error at verbosity 2 does not break existing UDF error path
-TEST(ed_sync_udf_non_interference, "5.9.1 UDF error non-interference at verbosity 2")
+// 5.9.1 UDF error text replaces message while preserving returned server detail.
+TEST(ed_sync_udf_non_interference, "5.9.1 UDF error preserves server detail")
 {
 	as_error err;
 	as_key key;
@@ -675,18 +757,71 @@ TEST(ed_sync_udf_non_interference, "5.9.1 UDF error non-interference at verbosit
 
 	as_policy_apply pa;
 	as_policy_apply_init(&pa);
-	pa.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
+	pa.base.error_detail_verbosity = AS_ERROR_DETAIL_EXP_TRACE;
 
 	as_val* res = NULL;
 	as_status status = aerospike_key_apply(as, &err, &pa, &key, UDF_MODULE, "fail_test", NULL, &res);
 
 	assert_int_eq(status, AEROSPIKE_ERR_UDF);
 	assert_true(strstr(err.message, "test failure") != NULL);
-	assert_int_eq(err.subcode, AS_SUB_NONE);
+	assert_true(as_error_has_server_detail(&err));
 
 	if (res) {
 		as_val_destroy(res);
 	}
+}
+
+// 5.9.2 Batch UDF preserves row detail while surfacing FAILURE text.
+TEST(ed_sync_batch_udf_message_wins, "5.9.2 batch UDF message wins over server detail text")
+{
+	as_error err;
+	as_error single_err;
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "error_detail_test");
+
+	as_policy_apply pa;
+	as_policy_apply_init(&pa);
+	pa.base.error_detail_verbosity = AS_ERROR_DETAIL_EXP_TRACE;
+
+	as_val* res = NULL;
+	as_status single_status = aerospike_key_apply(as, &single_err, &pa, &key, UDF_MODULE,
+		"fail_test", NULL, &res);
+
+	assert_int_eq(single_status, AEROSPIKE_ERR_UDF);
+	assert_true(strstr(single_err.message, "test failure") != NULL);
+	assert_true(as_error_has_server_detail(&single_err));
+
+	if (res) {
+		as_val_destroy(res);
+	}
+
+	as_policy_batch pb;
+	as_policy_batch_parent_write_init(&pb);
+	pb.base.error_detail_verbosity = AS_ERROR_DETAIL_EXP_TRACE;
+
+	as_batch_records records;
+	as_batch_records_inita(&records, 1);
+
+	as_batch_apply_record* record = as_batch_apply_reserve(&records);
+	as_key_init(&record->key, NAMESPACE, SET, "error_detail_test");
+	record->module = UDF_MODULE;
+	record->function = "fail_test";
+
+	as_status status = aerospike_batch_write(as, &err, &pb, &records);
+
+	assert_int_eq(status, AEROSPIKE_BATCH_FAILED);
+
+	as_batch_apply_record* result = as_vector_get(&records.list, 0);
+	assert_int_eq(result->result, AEROSPIKE_ERR_UDF);
+
+	const char* udf_error = as_record_get_str(&result->record, "FAILURE");
+	assert_not_null(udf_error);
+	assert_true(strstr(udf_error, "test failure") != NULL);
+	assert_error_detail_matches_error(__result__, result->error_detail, &single_err);
+	assert_true(strstr(result->error_detail->message, "test failure") != NULL);
+
+	as_batch_records_destroy(&records);
+	as_key_destroy(&key);
 }
 
 // 5.11.1 CDT list get by index out of range at verbosity 2
@@ -926,12 +1061,139 @@ TEST(ed_sync_param_bits_size, "5.22.1 param bits size out of range verbosity 2")
 	as_operations_destroy(&ops);
 }
 
+// 5.23.1 Expression-op failure keeps v2 message/subcode semantics and adds trace at v3
+TEST(ed_sync_exp_trace_cross_verbosity, "5.23.1 expression trace additive across v2/v3")
+{
+	as_error err_v2;
+	as_error err_v3;
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "error_detail_test");
+
+	as_exp_build(expr, as_exp_cond(
+		as_exp_cmp_eq(as_exp_bin_int("ibin"), as_exp_int(100)), as_exp_unknown(),
+		as_exp_int(5)));
+	assert_not_null(expr);
+
+	as_policy_operate po_v2;
+	as_policy_operate_init(&po_v2);
+	po_v2.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
+
+	as_policy_operate po_v3;
+	as_policy_operate_init(&po_v3);
+	po_v3.base.error_detail_verbosity = AS_ERROR_DETAIL_EXP_TRACE;
+
+	as_operations ops_v2;
+	as_operations_inita(&ops_v2, 1);
+	as_operations_exp_read(&ops_v2, "expr_v2", expr, AS_EXP_READ_DEFAULT);
+
+	as_operations ops_v3;
+	as_operations_inita(&ops_v3, 1);
+	as_operations_exp_read(&ops_v3, "expr_v3", expr, AS_EXP_READ_DEFAULT);
+
+	as_status status_v2 = aerospike_key_operate(as, &err_v2, &po_v2, &key, &ops_v2, NULL);
+	as_status status_v3 = aerospike_key_operate(as, &err_v3, &po_v3, &key, &ops_v3, NULL);
+
+	assert_int_eq(status_v2, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
+	assert_int_eq(status_v3, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
+	assert_int_eq(err_v2.code, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
+	assert_int_eq(err_v3.code, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
+	assert_false(err_v2.has_exp_trace);
+	assert_true(err_v3.has_exp_trace);
+	assert_true(err_v3.exp_trace.has_phase);
+	assert_int_eq(err_v3.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
+	assert_int_eq(err_v3.exp_trace.lang, AS_EXP_TRACE_LANG_MSGPACK);
+	assert_true(err_v3.message[0] != '\0');
+	assert_int_eq(err_v2.subcode, err_v3.subcode);
+	assert_int_eq(err_v2.has_subcode, err_v3.has_subcode);
+	assert_int_eq(err_v2.has_message, err_v3.has_message);
+	assert_string_eq(err_v2.message, err_v3.message);
+
+	as_operations_destroy(&ops_v2);
+	as_operations_destroy(&ops_v3);
+	as_exp_destroy(expr);
+}
+
+// 5.24.1 Query start failures surface detail only on fatal replies.
+TEST(ed_sync_query_start_failure_detail, "5.24.1 query start failure parses legal field 45 reply")
+{
+	as_error err;
+	as_policy_query pq;
+	as_policy_query_init(&pq);
+	pq.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
+
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_where_inita(&query, 1);
+	as_query_where(&query, "ibin", as_integer_range(1, 200));
+
+	uint32_t count = 0;
+	as_status status = aerospike_query_foreach(as, &err, &pq, &query, query_no_leak_cb, &count);
+
+	assert_true(status != AEROSPIKE_OK);
+	assert_int_eq(err.code, status);
+	assert_int_eq(count, 0);
+	assert_true(as_error_has_server_detail(&err));
+	assert_true(strlen(err.message) > 0);
+
+	as_query_destroy(&query);
+}
+
 //----------------------------------------------------
 // Section 7: Negative / Edge-Case Tests (Integration)
 //----------------------------------------------------
 
-// 7.1 Verbosity is not leaked into batch requests
-TEST(ed_sync_batch_no_leak, "7.1 batch verbosity no leak")
+// 7.1 Batch row errors preserve structured expression-trace detail
+TEST(ed_sync_batch_row_detail, "7.1 batch row error detail propagation")
+{
+	as_error err;
+	as_policy_batch pb;
+	as_policy_batch_init(&pb);
+	pb.base.error_detail_verbosity = AS_ERROR_DETAIL_EXP_TRACE;
+
+	as_exp_build(expr, as_exp_cond(
+		as_exp_cmp_eq(as_exp_bin_int("ibin"), as_exp_int(100)), as_exp_unknown(),
+		as_exp_int(5)));
+	assert_not_null(expr);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "expr_batch", expr, AS_EXP_READ_DEFAULT);
+
+	as_batch_records records;
+	as_batch_records_inita(&records, 2);
+
+	as_batch_read_record* record_ok = as_batch_read_reserve(&records);
+	as_key_init(&record_ok->key, NAMESPACE, SET, "error_detail_test");
+	record_ok->read_all_bins = true;
+
+	as_batch_read_record* record_err = as_batch_read_reserve(&records);
+	as_key_init(&record_err->key, NAMESPACE, SET, "error_detail_test");
+	record_err->ops = &ops;
+
+	as_status status = aerospike_batch_read(as, &err, &pb, &records);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_batch_read_record* result_ok = as_vector_get(&records.list, 0);
+	assert_int_eq(result_ok->result, AEROSPIKE_OK);
+	assert_null(result_ok->error_detail);
+
+	as_batch_read_record* result_err = as_vector_get(&records.list, 1);
+	assert_int_eq(result_err->result, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
+	assert_not_null(result_err->error_detail);
+	assert_true(result_err->error_detail->has_exp_trace);
+	assert_true(result_err->error_detail->exp_trace.has_phase);
+	assert_int_eq(result_err->error_detail->exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
+	assert_int_eq(result_err->error_detail->exp_trace.lang, AS_EXP_TRACE_LANG_MSGPACK);
+	assert_true(result_err->error_detail->message[0] != '\0');
+
+	as_batch_records_destroy(&records);
+	as_operations_destroy(&ops);
+	as_exp_destroy(expr);
+}
+
+// 7.2 Verbosity is not leaked into batch requests
+TEST(ed_sync_batch_no_leak, "7.2 batch verbosity no leak")
 {
 	as_error err;
 	as_policy_batch pb;
@@ -943,9 +1205,7 @@ TEST(ed_sync_batch_no_leak, "7.1 batch verbosity no leak")
 
 	for (int i = 0; i < 3; i++) {
 		as_batch_read_record* record = as_batch_read_reserve(&records);
-		char kbuf[64];
-		snprintf(kbuf, sizeof(kbuf), "batch_ed_key_%d", i);
-		as_key_init_strp(&record->key, NAMESPACE, SET, kbuf, false);
+		as_key_init(&record->key, NAMESPACE, SET, "error_detail_test");
 		record->read_all_bins = true;
 	}
 
@@ -955,12 +1215,101 @@ TEST(ed_sync_batch_no_leak, "7.1 batch verbosity no leak")
 	as_vector* list = &records.list;
 	for (uint32_t i = 0; i < list->size; i++) {
 		as_batch_read_record* br = as_vector_get(list, i);
-		(void)br;
+		assert_int_eq(br->result, AEROSPIKE_OK);
+		assert_null(br->error_detail);
 	}
 	as_batch_records_destroy(&records);
 }
 
-// 7.2 Verbosity is not leaked into scan requests
+typedef struct {
+	bool called;
+	bool saw_ok_null_detail;
+	bool saw_err_detail;
+	bool saw_err_trace;
+	char err_message[AS_ERROR_MESSAGE_MAX_SIZE];
+} batch_listener_detail_state;
+
+static bool
+batch_listener_error_detail_cb(const as_batch_result* results, uint32_t n, void* udata)
+{
+	batch_listener_detail_state* state = udata;
+	state->called = true;
+	state->saw_ok_null_detail = true;
+
+	for (uint32_t i = 0; i < n; i++) {
+		const as_batch_result* result = &results[i];
+
+		if (result->result == AEROSPIKE_OK) {
+			state->saw_ok_null_detail &= (result->error_detail == NULL);
+		}
+		else if (result->result == AEROSPIKE_ERR_OP_NOT_APPLICABLE) {
+			state->saw_err_detail = (result->error_detail != NULL);
+
+			if (result->error_detail) {
+				state->saw_err_trace = result->error_detail->has_exp_trace;
+				as_strncpy(state->err_message, result->error_detail->message,
+					sizeof(state->err_message));
+			}
+		}
+	}
+	return true;
+}
+
+// 7.2.1 Legacy batch listener exposes as_batch_result.error_detail.
+TEST(ed_sync_batch_listener_error_detail, "7.2.1 batch listener error_detail callback coverage")
+{
+	as_error err;
+	as_key ok_key;
+	as_key_init(&ok_key, NAMESPACE, SET, "error_detail_batch_ok");
+
+	as_record ok_record;
+	as_record_inita(&ok_record, 1);
+	as_record_set_int64(&ok_record, "ibin", 50);
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &ok_key, &ok_record), AEROSPIKE_OK);
+
+	as_policy_batch pb;
+	as_policy_batch_parent_write_init(&pb);
+	pb.base.error_detail_verbosity = AS_ERROR_DETAIL_EXP_TRACE;
+
+	as_exp_build(expr, as_exp_cond(
+		as_exp_cmp_eq(as_exp_bin_int("ibin"), as_exp_int(100)), as_exp_unknown(),
+		as_exp_int(5)));
+	assert_not_null(expr);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "expr_listener", expr, AS_EXP_READ_DEFAULT);
+
+	as_batch batch;
+	as_batch_inita(&batch, 2);
+	as_key_init(as_batch_keyat(&batch, 0), NAMESPACE, SET, "error_detail_batch_ok");
+	as_key_init(as_batch_keyat(&batch, 1), NAMESPACE, SET, "error_detail_test");
+
+	batch_listener_detail_state state = {
+		.called = false,
+		.saw_ok_null_detail = false,
+		.saw_err_detail = false,
+		.saw_err_trace = false,
+		.err_message = {0}
+	};
+
+	as_status status = aerospike_batch_operate(as, &err, &pb, NULL, &batch, &ops,
+		batch_listener_error_detail_cb, &state);
+
+	assert_int_eq(status, AEROSPIKE_BATCH_FAILED);
+	assert_true(state.called);
+	assert_true(state.saw_ok_null_detail);
+	assert_true(state.saw_err_detail);
+	assert_true(state.saw_err_trace);
+	assert_true(state.err_message[0] != '\0');
+
+	as_batch_destroy(&batch);
+	as_operations_destroy(&ops);
+	as_exp_destroy(expr);
+	aerospike_key_remove(as, &err, NULL, &ok_key);
+}
+
+// 7.3 Verbosity is not leaked into scan requests
 static bool
 scan_no_leak_cb(const as_val* val, void* udata)
 {
@@ -971,7 +1320,7 @@ scan_no_leak_cb(const as_val* val, void* udata)
 	return true;
 }
 
-TEST(ed_sync_scan_no_leak, "7.2 scan verbosity no leak")
+TEST(ed_sync_scan_no_leak, "7.3 scan verbosity no leak")
 {
 	as_error err;
 	as_policy_scan ps;
@@ -984,11 +1333,15 @@ TEST(ed_sync_scan_no_leak, "7.2 scan verbosity no leak")
 	uint32_t count = 0;
 	as_status status = aerospike_scan_foreach(as, &err, &ps, &scan, scan_no_leak_cb, &count);
 	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(count > 0);
+	assert_false(err.has_subcode);
+	assert_false(err.has_message);
+	assert_false(err.has_exp_trace);
 
 	as_scan_destroy(&scan);
 }
 
-// 7.3 Verbosity is not leaked into query requests
+// 7.4 Verbosity is not leaked into query requests
 static bool
 query_no_leak_cb(const as_val* val, void* udata)
 {
@@ -999,7 +1352,7 @@ query_no_leak_cb(const as_val* val, void* udata)
 	return true;
 }
 
-TEST(ed_sync_query_no_leak, "7.3 query verbosity no leak")
+TEST(ed_sync_query_no_leak, "7.4 query verbosity no leak")
 {
 	as_error err;
 	as_policy_query pq;
@@ -1012,12 +1365,16 @@ TEST(ed_sync_query_no_leak, "7.3 query verbosity no leak")
 	uint32_t count = 0;
 	as_status status = aerospike_query_foreach(as, &err, &pq, &query, query_no_leak_cb, &count);
 	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(count > 0);
+	assert_false(err.has_subcode);
+	assert_false(err.has_message);
+	assert_false(err.has_exp_trace);
 
 	as_query_destroy(&query);
 }
 
-// 7.4 Multiple sequential errors do not leak across requests
-TEST(ed_sync_no_cross_request_leak, "7.4 no cross-request leak")
+// 7.5 Multiple sequential errors do not leak across requests
+TEST(ed_sync_no_cross_request_leak, "7.5 no cross-request leak")
 {
 	as_error err;
 	as_key key;
@@ -1066,9 +1423,9 @@ TEST(ed_sync_no_cross_request_leak, "7.4 no cross-request leak")
 	as_operations_destroy(&ops);
 }
 
-// 7.5 Second operation properly resets error state
+// 7.6 Second operation properly resets error state
 // Uses CDT list OOB (has a real subcode) for the failing step, then a successful write.
-TEST(ed_sync_error_state_reset, "7.5 error state reset on next op")
+TEST(ed_sync_error_state_reset, "7.6 error state reset on next op")
 {
 	as_error err;
 
@@ -1556,6 +1913,111 @@ TEST(ed_async_priority_logic_v2, "6.9 async server message displaces default for
 	}
 }
 
+// 6.10 Async expression-op failure surfaces verbosity-3 trace detail
+static void
+async_exp_trace_v3_cb(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+{
+	async_error_data* data = udata;
+
+	if (err) {
+		as_error_copy(&data->err_copy, err);
+		data->got_error = true;
+	}
+	else {
+		data->got_error = false;
+	}
+	as_monitor_notify(&monitor);
+}
+
+TEST(ed_async_exp_trace_v3, "6.10 async expression trace verbosity 3")
+{
+	as_monitor_begin(&monitor);
+
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "error_detail_test");
+
+	as_policy_operate po;
+	as_policy_operate_init(&po);
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_EXP_TRACE;
+
+	as_exp_build(expr, as_exp_cond(
+		as_exp_cmp_eq(as_exp_bin_int("ibin"), as_exp_int(100)), as_exp_unknown(),
+		as_exp_int(5)));
+	assert_not_null(expr);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "expr_async", expr, AS_EXP_READ_DEFAULT);
+
+	async_error_data data;
+	data.result = __result__;
+	data.got_error = false;
+
+	as_error err;
+	as_status status = aerospike_key_operate_async(as, &err, &po, &key, &ops,
+		async_exp_trace_v3_cb, &data, 0, NULL);
+	as_key_destroy(&key);
+	as_operations_destroy(&ops);
+	as_exp_destroy(expr);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
+
+	assert_true(data.got_error);
+	assert_int_eq(data.err_copy.code, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
+	assert_true(data.err_copy.has_exp_trace);
+	assert_true(data.err_copy.exp_trace.has_phase);
+	assert_int_eq(data.err_copy.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
+	assert_int_eq(data.err_copy.exp_trace.lang, AS_EXP_TRACE_LANG_MSGPACK);
+	assert_true(data.err_copy.message[0] != '\0');
+}
+
+static bool
+async_query_start_failure_cb(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+{
+	async_error_data* data = udata;
+
+	if (err) {
+		as_error_copy(&data->err_copy, err);
+		data->got_error = true;
+	}
+	else {
+		data->got_error = false;
+	}
+	as_monitor_notify(&monitor);
+	return false;
+}
+
+TEST(ed_async_query_start_failure_detail, "6.11 async query start failure parses legal field 45 reply")
+{
+	as_monitor_begin(&monitor);
+
+	as_policy_query pq;
+	as_policy_query_init(&pq);
+	pq.base.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE;
+
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_where_inita(&query, 1);
+	as_query_where(&query, "ibin", as_integer_range(1, 200));
+
+	async_error_data data;
+	data.result = __result__;
+	data.got_error = false;
+
+	as_error err;
+	as_status status = aerospike_query_async(as, &err, &pq, &query, async_query_start_failure_cb,
+		&data, NULL);
+	as_query_destroy(&query);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_monitor_wait(&monitor);
+
+	assert_true(data.got_error);
+	assert_true(as_error_has_server_detail(&data.err_copy));
+	assert_true(strlen(data.err_copy.message) > 0);
+}
+
 //-----------------------------------
 // Async Suite Lifecycle
 //-----------------------------------
@@ -1667,6 +2129,7 @@ SUITE(error_detail_sync, "error detail sync integration tests")
 	suite_add(ed_sync_priority_logic_v0);
 	suite_add(ed_sync_cross_verbosity);
 	suite_add(ed_sync_udf_non_interference);
+	suite_add(ed_sync_batch_udf_message_wins);
 	suite_add(ed_sync_cdt_list_oob);
 	suite_add(ed_sync_cdt_map_create_only);
 	suite_add(ed_sync_bit_invalid);
@@ -1676,7 +2139,11 @@ SUITE(error_detail_sync, "error detail sync integration tests")
 	suite_add(ed_sync_filtered_out);
 	suite_add(ed_sync_bin_not_found_hll);
 	suite_add(ed_sync_param_bits_size);
+	suite_add(ed_sync_exp_trace_cross_verbosity);
+	suite_add(ed_sync_query_start_failure_detail);
+	suite_add(ed_sync_batch_row_detail);
 	suite_add(ed_sync_batch_no_leak);
+	suite_add(ed_sync_batch_listener_error_detail);
 	suite_add(ed_sync_scan_no_leak);
 	suite_add(ed_sync_query_no_leak);
 	suite_add(ed_sync_no_cross_request_leak);
@@ -1697,4 +2164,6 @@ SUITE(error_detail_async, "error detail async integration tests")
 	suite_add(ed_async_read_ok_v2);
 	suite_add(ed_async_write_ok_v2);
 	suite_add(ed_async_priority_logic_v2);
+	suite_add(ed_async_exp_trace_v3);
+	suite_add(ed_async_query_start_failure_detail);
 }

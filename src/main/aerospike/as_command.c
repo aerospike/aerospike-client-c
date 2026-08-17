@@ -1437,6 +1437,68 @@ as_command_read_msgpack_uint(uint8_t** pp, uint8_t* end, uint64_t* out)
 }
 
 static bool
+as_command_read_msgpack_map_header(uint8_t** pp, uint8_t* end, uint32_t* out)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0xf0) == 0x80) {
+		*out = type & 0x0f;
+		return true;
+	}
+
+	if (type == 0xde) {
+		if (*pp + 2 > end) return false;
+		*out = cf_swap_from_be16(*(uint16_t*)*pp);
+		*pp += 2;
+		return true;
+	}
+
+	if (type == 0xdf) {
+		if (*pp + 4 > end) return false;
+		*out = cf_swap_from_be32(*(uint32_t*)*pp);
+		*pp += 4;
+		return true;
+	}
+	return false;
+}
+
+static bool
+as_command_read_msgpack_array_header(uint8_t** pp, uint8_t* end, uint32_t* out)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0xf0) == 0x90) {
+		*out = type & 0x0f;
+		return true;
+	}
+
+	if (type == 0xdc) {
+		if (*pp + 2 > end) return false;
+		*out = cf_swap_from_be16(*(uint16_t*)*pp);
+		*pp += 2;
+		return true;
+	}
+
+	if (type == 0xdd) {
+		if (*pp + 4 > end) return false;
+		*out = cf_swap_from_be32(*(uint32_t*)*pp);
+		*pp += 4;
+		return true;
+	}
+	return false;
+}
+
+static bool
 as_command_read_msgpack_str(uint8_t** pp, uint8_t* end, char** out, uint32_t* out_len)
 {
 	if (*pp >= end) {
@@ -1475,6 +1537,203 @@ as_command_read_msgpack_str(uint8_t** pp, uint8_t* end, char** out, uint32_t* ou
 	return true;
 }
 
+static inline void
+as_command_copy_msgpack_str(char* dst, size_t capacity, const char* src, uint32_t len)
+{
+	if (capacity == 0) {
+		return;
+	}
+
+	size_t copy_len = len < capacity - 1 ? len : capacity - 1;
+	memcpy(dst, src, copy_len);
+	dst[copy_len] = '\0';
+}
+
+enum {
+	AS_EXP_TRACE_KEY_PRIVATE_AEL_LINE = 11,
+	AS_EXP_TRACE_KEY_PRIVATE_AEL_COL = 12,
+	AS_EXP_TRACE_KEY_PRIVATE_OPERANDS = 13
+};
+
+static inline bool
+as_exp_trace_has_data(const as_exp_trace* trace)
+{
+	return trace->has_phase || trace->has_byte_offset || trace->has_op || trace->has_depth ||
+		trace->has_path || trace->has_snippet || trace->has_outcome || trace->has_lang ||
+		trace->has_ael_offset || trace->has_ael_span;
+}
+
+static bool
+as_command_parse_exp_trace(uint8_t** pp, uint8_t* end, as_exp_trace* trace)
+{
+	uint8_t* p = *pp;
+	uint32_t n_entries;
+
+	if (!as_command_read_msgpack_map_header(&p, end, &n_entries)) {
+		return false;
+	}
+	as_exp_trace_reset(trace);
+
+	for (uint32_t i = 0; i < n_entries; i++) {
+		uint64_t key;
+
+		if (!as_command_read_msgpack_uint(&p, end, &key)) {
+			return false;
+		}
+
+		switch (key) {
+		case AS_EXP_TRACE_KEY_PHASE: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_phase = true;
+			trace->phase = (uint8_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_BYTE_OFFSET: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_byte_offset = true;
+			trace->byte_offset = val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_OP: {
+			char* str;
+			uint32_t str_len;
+
+			if (!as_command_read_msgpack_str(&p, end, &str, &str_len)) {
+				return false;
+			}
+			trace->has_op = true;
+			as_command_copy_msgpack_str(trace->op, sizeof(trace->op), str, str_len);
+			break;
+		}
+		case AS_EXP_TRACE_KEY_DEPTH: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_depth = true;
+			trace->depth = (uint16_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_PATH: {
+			uint32_t count;
+
+			if (!as_command_read_msgpack_array_header(&p, end, &count)) {
+				return false;
+			}
+			trace->has_path = true;
+			trace->path_size = 0;
+
+			for (uint32_t j = 0; j < count; j++) {
+				char* str;
+				uint32_t str_len;
+
+				if (!as_command_read_msgpack_str(&p, end, &str, &str_len)) {
+					return false;
+				}
+
+				if (trace->path_size < AS_EXP_TRACE_PATH_MAX_DEPTH) {
+					as_command_copy_msgpack_str(trace->path[trace->path_size],
+						sizeof(trace->path[trace->path_size]), str, str_len);
+					trace->path_size++;
+				}
+			}
+			break;
+		}
+		case AS_EXP_TRACE_KEY_SNIPPET: {
+			char* str;
+			uint32_t str_len;
+
+			if (!as_command_read_msgpack_str(&p, end, &str, &str_len)) {
+				return false;
+			}
+			trace->has_snippet = true;
+			as_command_copy_msgpack_str(trace->snippet, sizeof(trace->snippet), str, str_len);
+			break;
+		}
+		case AS_EXP_TRACE_KEY_OUTCOME: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_outcome = true;
+			trace->outcome = (uint8_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_LANG: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_lang = true;
+			trace->lang = (uint8_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_AEL_OFFSET: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_ael_offset = true;
+			trace->ael_offset = (uint32_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_AEL_SPAN: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_ael_span = true;
+			trace->ael_span = (uint32_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_PRIVATE_AEL_LINE:
+		case AS_EXP_TRACE_KEY_PRIVATE_AEL_COL:
+		case AS_EXP_TRACE_KEY_PRIVATE_OPERANDS:
+			if (!as_command_skip_msgpack_value(&p, end)) {
+				return false;
+			}
+			break;
+		default:
+			if (!as_command_skip_msgpack_value(&p, end)) {
+				return false;
+			}
+			break;
+		}
+	}
+
+	if (!trace->has_lang && as_exp_trace_has_data(trace)) {
+		trace->lang = AS_EXP_TRACE_LANG_MSGPACK;
+	}
+
+	*pp = p;
+	return true;
+}
+
+static inline as_status
+as_command_set_message_preserving_detail(
+	as_error* err, as_status code, const char* message, const char* func, const char* file,
+	uint32_t line
+	)
+{
+	if (as_error_has_server_detail(err)) {
+		return as_error_set_message_preserving_server_detail(err, code, message, func, file, line);
+	}
+	return as_error_setall(err, code, message, func, file, line);
+}
+
 void
 as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 {
@@ -1484,77 +1743,88 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 
 	uint8_t* p = buf;
 	uint8_t* end = buf + len;
-
-	uint8_t type = *p;
-	p++;
-
 	uint32_t n_entries;
 
-	if ((type & 0xf0) == 0x80) {
-		n_entries = type & 0x0f;
-	}
-	else if (type == 0xde) {
-		if (p + 2 > end) return;
-		n_entries = cf_swap_from_be16(*(uint16_t*)p);
-		p += 2;
-	}
-	else if (type == 0xdf) {
-		if (p + 4 > end) return;
-		n_entries = cf_swap_from_be32(*(uint32_t*)p);
-		p += 4;
-	}
-	else {
+	if (!as_command_read_msgpack_map_header(&p, end, &n_entries)) {
 		return;
 	}
 
 	bool has_subcode = false;
 	uint64_t subcode = 0;
+	bool has_message = false;
 	char* msg_str = NULL;
 	uint32_t msg_len = 0;
+	bool has_exp_trace = false;
+	as_exp_trace exp_trace;
 
 	for (uint32_t i = 0; i < n_entries; i++) {
 		uint64_t key;
 
 		if (!as_command_read_msgpack_uint(&p, end, &key)) {
-			return;
+			break;
 		}
 
-		if (key == 1) {
+		if (key == AS_ERROR_DETAIL_KEY_SUBCODE) {
 			uint64_t val;
+
 			if (!as_command_read_msgpack_uint(&p, end, &val)) {
-				return;
+				break;
 			}
 			subcode = val;
 			has_subcode = true;
 		}
-		else if (key == 2) {
+		else if (key == AS_ERROR_DETAIL_KEY_MESSAGE) {
 			if (!as_command_read_msgpack_str(&p, end, &msg_str, &msg_len)) {
-				return;
+				break;
+			}
+			has_message = true;
+		}
+		else if (key == AS_ERROR_DETAIL_KEY_EXP_TRACE) {
+			uint8_t* trace_pos = p;
+			as_exp_trace trace;
+
+			if (as_command_parse_exp_trace(&trace_pos, end, &trace)) {
+				if (as_exp_trace_has_data(&trace)) {
+					exp_trace = trace;
+					has_exp_trace = true;
+				}
+				p = trace_pos;
+			}
+			else if (!as_command_skip_msgpack_value(&p, end)) {
+				break;
 			}
 		}
 		else {
 			if (!as_command_skip_msgpack_value(&p, end)) {
-				return;
+				break;
 			}
 		}
 	}
 
+	as_error_clear_server_detail(err);
+
 	if (has_subcode) {
 		err->subcode = (uint32_t)subcode;
+		err->has_subcode = true;
 	}
 
-	if (has_subcode && msg_str) {
+	if (has_exp_trace) {
+		as_exp_trace_copy(&err->exp_trace, &exp_trace);
+		err->has_exp_trace = true;
+	}
+
+	if (has_subcode && has_message) {
+		err->has_message = true;
 		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "%.*s (subcode=%" PRIu64 ")",
 				 (int)msg_len, msg_str, subcode);
 	}
 	else if (has_subcode) {
+		err->has_message = false;
 		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "error subcode=%" PRIu64, subcode);
 	}
-	else if (msg_str) {
-		uint32_t copy_len = msg_len < AS_ERROR_MESSAGE_MAX_SIZE - 1
-							? msg_len : AS_ERROR_MESSAGE_MAX_SIZE - 1;
-		memcpy(err->message, msg_str, copy_len);
-		err->message[copy_len] = '\0';
+	else if (has_message) {
+		err->has_message = true;
+		as_command_copy_msgpack_str(err->message, sizeof(err->message), msg_str, msg_len);
 	}
 }
 
@@ -1820,13 +2090,16 @@ as_command_parse_udf_error(as_error* err, as_status status, as_val* val)
 				int code = atoi(++p);
 				
 				if (code > 0) {
-					return as_error_set_message(err, code, begin);
+					return as_command_set_message_preserving_detail(err, code, begin,
+						__func__, __FILE__, __LINE__);
 				}
 			}
 		}
-		return as_error_set_message(err, status, begin);
+		return as_command_set_message_preserving_detail(err, status, begin,
+			__func__, __FILE__, __LINE__);
 	}
-	return as_error_set_message(err, status, as_error_string(status));
+	return as_command_set_message_preserving_detail(err, status, as_error_string(status),
+		__func__, __FILE__, __LINE__);
 }
 
 as_status
@@ -1857,7 +2130,8 @@ as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status s
 		}
 		p += value_size;
 	}
-	return as_error_set_message(err, status, as_error_string(status));
+	return as_command_set_message_preserving_detail(err, status, as_error_string(status),
+		__func__, __FILE__, __LINE__);
 }
 
 static as_status

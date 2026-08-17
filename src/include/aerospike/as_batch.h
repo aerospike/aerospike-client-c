@@ -17,6 +17,7 @@
 #pragma once 
 
 #include <aerospike/as_bin.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
@@ -91,6 +92,14 @@ typedef struct as_batch_result_s {
 	 * after the command was sent to the server.
 	 */
 	bool in_doubt;
+
+	/**
+	 * Optional server error detail for this row.
+	 *
+	 * This pointer is only valid for the lifetime of the batch listener callback and must
+	 * not be freed by the caller.
+	 */
+	const as_error_detail* error_detail;
 } as_batch_result;
 
 /**

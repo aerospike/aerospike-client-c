@@ -50,8 +50,9 @@
 #define AS_ERROR_DETAIL_MESSAGE    2
 
 /**
- * Request subcode and human-readable message from the server on error responses,
- * as well as expression build trace if an expression fails to build.
+ * Request all supported structured error detail from the server on error responses:
+ * subcode, human-readable message, and the client-supported expression trace
+ * subset when present.
  *
  * Set on as_policy_base.error_detail_verbosity.
  */

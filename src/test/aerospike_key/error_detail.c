@@ -138,10 +138,36 @@ write_fixarray(uint8_t* buf, uint8_t count)
 }
 
 static uint32_t
+write_array16(uint8_t* buf, uint16_t count)
+{
+	buf[0] = 0xdc;
+	buf[1] = (uint8_t)(count >> 8);
+	buf[2] = (uint8_t)(count);
+	return 3;
+}
+
+static uint32_t
 write_true(uint8_t* buf)
 {
 	buf[0] = 0xc3;
 	return 1;
+}
+
+static uint32_t
+write_op_string(uint8_t* buf, const char* name, const char* value)
+{
+	uint8_t name_len = (uint8_t)strlen(name);
+	uint32_t value_len = (uint32_t)strlen(value);
+	uint32_t op_size = name_len + value_len + 4;
+
+	*(uint32_t*)buf = cf_swap_to_be32(op_size);
+	buf[4] = 0;
+	buf[5] = AS_BYTES_STRING;
+	buf[6] = 0;
+	buf[7] = name_len;
+	memcpy(buf + 8, name, name_len);
+	memcpy(buf + 8 + name_len, value, value_len);
+	return op_size + 4;
 }
 
 //---------------------------------
@@ -614,6 +640,440 @@ TEST(error_detail_parser_overflow_truncation, "3.22 overflow is truncated")
 	assert_true(strlen(err.message) <= 1023);
 }
 
+// 3.23 Full expression trace is parsed into bounded public fields
+TEST(error_detail_parser_exp_trace_full, "3.23 full expression trace parse")
+{
+	as_error err;
+	as_error_init(&err);
+
+	const char* msg = "expression failed";
+	const char* op = "cmp_eq";
+	const char* path0 = "root";
+	const char* path1 = "bin";
+	const char* path2 = "leaf";
+	const char* snippet = "ibin == 99999";
+
+	uint8_t buf[512];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 3);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_SUBCODE);
+	p += write_uint16(buf + p, 4242);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_MESSAGE);
+	p += write_fixstr(buf + p, msg, (uint32_t)strlen(msg));
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 10);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PHASE);
+	p += write_fixint(buf + p, AS_EXP_TRACE_PHASE_EVAL);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_BYTE_OFFSET);
+	p += write_uint16(buf + p, 1234);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
+	p += write_fixstr(buf + p, op, (uint32_t)strlen(op));
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_DEPTH);
+	p += write_fixint(buf + p, 3);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PATH);
+	p += write_fixarray(buf + p, 3);
+	p += write_fixstr(buf + p, path0, (uint32_t)strlen(path0));
+	p += write_fixstr(buf + p, path1, (uint32_t)strlen(path1));
+	p += write_fixstr(buf + p, path2, (uint32_t)strlen(path2));
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_SNIPPET);
+	p += write_fixstr(buf + p, snippet, (uint32_t)strlen(snippet));
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OUTCOME);
+	p += write_fixint(buf + p, AS_EXP_TRACE_OUTCOME_FALSE);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_LANG);
+	p += write_fixint(buf + p, AS_EXP_TRACE_LANG_AEL);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_AEL_OFFSET);
+	p += write_fixint(buf + p, 10);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_AEL_SPAN);
+	p += write_fixint(buf + p, 4);
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_subcode);
+	assert_int_eq(err.subcode, 4242);
+	assert_true(err.has_message);
+	assert_string_eq(err.message, "expression failed (subcode=4242)");
+	assert_true(err.has_exp_trace);
+	assert_true(err.exp_trace.has_phase);
+	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
+	assert_true(err.exp_trace.has_byte_offset);
+	assert_int_eq(err.exp_trace.byte_offset, 1234);
+	assert_true(err.exp_trace.has_op);
+	assert_string_eq(err.exp_trace.op, "cmp_eq");
+	assert_true(err.exp_trace.has_depth);
+	assert_int_eq(err.exp_trace.depth, 3);
+	assert_true(err.exp_trace.has_path);
+	assert_int_eq(err.exp_trace.path_size, 3);
+	assert_string_eq(err.exp_trace.path[0], "root");
+	assert_string_eq(err.exp_trace.path[1], "bin");
+	assert_string_eq(err.exp_trace.path[2], "leaf");
+	assert_true(err.exp_trace.has_snippet);
+	assert_string_eq(err.exp_trace.snippet, "ibin == 99999");
+	assert_true(err.exp_trace.has_outcome);
+	assert_int_eq(err.exp_trace.outcome, AS_EXP_TRACE_OUTCOME_FALSE);
+	assert_true(err.exp_trace.has_lang);
+	assert_int_eq(err.exp_trace.lang, AS_EXP_TRACE_LANG_AEL);
+	assert_true(err.exp_trace.has_ael_offset);
+	assert_int_eq(err.exp_trace.ael_offset, 10);
+	assert_true(err.exp_trace.has_ael_span);
+	assert_int_eq(err.exp_trace.ael_span, 4);
+}
+
+// 3.24 Oversized trace arrays and strings are truncated into bounded storage
+TEST(error_detail_parser_exp_trace_truncation, "3.24 expression trace truncation")
+{
+	as_error err;
+	as_error_init(&err);
+
+	char long_op[80];
+	char long_path[80];
+	char long_snippet[400];
+
+	memset(long_op, 'O', sizeof(long_op) - 1);
+	long_op[sizeof(long_op) - 1] = '\0';
+	memset(long_path, 'P', sizeof(long_path) - 1);
+	long_path[sizeof(long_path) - 1] = '\0';
+	memset(long_snippet, 'S', sizeof(long_snippet) - 1);
+	long_snippet[sizeof(long_snippet) - 1] = '\0';
+
+	uint8_t buf[4096];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 3);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
+	p += write_str8(buf + p, long_op, (uint32_t)strlen(long_op));
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PATH);
+	p += write_array16(buf + p, AS_EXP_TRACE_PATH_MAX_DEPTH + 2);
+	for (uint32_t i = 0; i < AS_EXP_TRACE_PATH_MAX_DEPTH + 2; i++) {
+		p += write_str8(buf + p, long_path, (uint32_t)strlen(long_path));
+	}
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_SNIPPET);
+	p += write_str16(buf + p, long_snippet, (uint32_t)strlen(long_snippet));
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_exp_trace);
+	assert_true(err.exp_trace.has_op);
+	assert_int_eq(strlen(err.exp_trace.op), AS_EXP_TRACE_OP_MAX_SIZE - 1);
+	assert_true(strncmp(err.exp_trace.op, long_op, AS_EXP_TRACE_OP_MAX_SIZE - 1) == 0);
+	assert_true(err.exp_trace.has_path);
+	assert_int_eq(err.exp_trace.path_size, AS_EXP_TRACE_PATH_MAX_DEPTH);
+	assert_int_eq(strlen(err.exp_trace.path[0]), AS_EXP_TRACE_OP_MAX_SIZE - 1);
+	assert_true(strncmp(err.exp_trace.path[0], long_path,
+		AS_EXP_TRACE_OP_MAX_SIZE - 1) == 0);
+	assert_true(err.exp_trace.has_snippet);
+	assert_int_eq(strlen(err.exp_trace.snippet), AS_EXP_TRACE_SNIPPET_MAX_SIZE - 1);
+	assert_true(strncmp(err.exp_trace.snippet, long_snippet,
+		AS_EXP_TRACE_SNIPPET_MAX_SIZE - 1) == 0);
+}
+
+// 3.25 Reserved/dropped server keys are skipped without blocking kept fields.
+TEST(error_detail_parser_exp_trace_skips_dropped_keys,
+	"3.25 expression trace skips dropped server keys")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[256];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 4);
+	p += write_fixint(buf + p, 11);
+	p += write_fixint(buf + p, 2);
+	p += write_fixint(buf + p, 12);
+	p += write_fixint(buf + p, 8);
+	p += write_fixint(buf + p, 13);
+	p += write_fixarray(buf + p, 2);
+	p += write_fixstr(buf + p, "ibin", 4);
+	p += write_fixstr(buf + p, "99999", 5);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
+	p += write_fixstr(buf + p, "cmp_eq", 6);
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_exp_trace);
+	assert_true(err.exp_trace.has_op);
+	assert_string_eq(err.exp_trace.op, "cmp_eq");
+}
+
+// 3.26 Unknown/dropped-only trace maps do not surface as public exp_trace data.
+TEST(error_detail_parser_exp_trace_dropped_only_ignored,
+	"3.26 dropped-only expression trace is ignored")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[256];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 4);
+	p += write_fixint(buf + p, 11);
+	p += write_fixint(buf + p, 2);
+	p += write_fixint(buf + p, 12);
+	p += write_fixint(buf + p, 8);
+	p += write_fixint(buf + p, 13);
+	p += write_fixarray(buf + p, 2);
+	p += write_fixstr(buf + p, "ibin", 4);
+	p += write_fixstr(buf + p, "99999", 5);
+	p += write_fixint(buf + p, 99);
+	p += write_fixstr(buf + p, "future", 6);
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_false(err.has_exp_trace);
+	assert_false(err.exp_trace.has_lang);
+	assert_int_eq(err.exp_trace.lang, 0);
+}
+
+// 3.27 Invalid expression trace payload is ignored without losing other details
+TEST(error_detail_parser_invalid_exp_trace, "3.25 invalid expression trace is ignored")
+{
+	as_error err;
+	as_error_init(&err);
+
+	const char* msg = "detail survives";
+	const char* invalid = "not-a-map";
+
+	uint8_t buf[128];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 3);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_SUBCODE);
+	p += write_fixint(buf + p, 7);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_MESSAGE);
+	p += write_fixstr(buf + p, msg, (uint32_t)strlen(msg));
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixstr(buf + p, invalid, (uint32_t)strlen(invalid));
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_subcode);
+	assert_int_eq(err.subcode, 7);
+	assert_true(err.has_message);
+	assert_string_eq(err.message, "detail survives (subcode=7)");
+	assert_false(err.has_exp_trace);
+}
+
+// 3.28 UDF FAILURE text replaces err.message without setting has_message.
+TEST(error_detail_udf_message_preserves_server_detail,
+	"3.28 UDF message preserves parsed server detail")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t detail_buf[128];
+	uint32_t detail_len = 0;
+	detail_len += write_fixmap(detail_buf + detail_len, 2);
+	detail_len += write_fixint(detail_buf + detail_len, AS_ERROR_DETAIL_KEY_SUBCODE);
+	detail_len += write_fixint(detail_buf + detail_len, 7);
+	detail_len += write_fixint(detail_buf + detail_len, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	detail_len += write_fixmap(detail_buf + detail_len, 2);
+	detail_len += write_fixint(detail_buf + detail_len, AS_EXP_TRACE_KEY_PHASE);
+	detail_len += write_fixint(detail_buf + detail_len, AS_EXP_TRACE_PHASE_BUILD);
+	detail_len += write_fixint(detail_buf + detail_len, AS_EXP_TRACE_KEY_OP);
+	detail_len += write_fixstr(detail_buf + detail_len, "cmp_eq", 6);
+
+	as_command_parse_error_details(&err, detail_buf, detail_len);
+
+	as_msg msg;
+	memset(&msg, 0, sizeof(msg));
+	msg.n_ops = 1;
+
+	uint8_t udf_buf[128];
+	write_op_string(udf_buf, "FAILURE", "test failure from error_detail_udf");
+
+	as_status status = as_command_parse_udf_failure(udf_buf, &err, &msg, AEROSPIKE_ERR_UDF);
+
+	assert_int_eq(status, AEROSPIKE_ERR_UDF);
+	assert_true(err.has_subcode);
+	assert_int_eq(err.subcode, 7);
+	assert_false(err.has_message);
+	assert_true(err.has_exp_trace);
+	assert_true(err.exp_trace.has_phase);
+	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_BUILD);
+	assert_true(err.exp_trace.has_op);
+	assert_string_eq(err.exp_trace.op, "cmp_eq");
+	assert_string_eq(err.message, "test failure from error_detail_udf");
+}
+
+// 3.28.1 UDF fallback text also preserves parsed server detail.
+TEST(error_detail_udf_fallback_preserves_server_detail,
+	"3.28.1 UDF fallback preserves parsed server detail")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t detail_buf[128];
+	uint32_t detail_len = 0;
+	detail_len += write_fixmap(detail_buf + detail_len, 2);
+	detail_len += write_fixint(detail_buf + detail_len, AS_ERROR_DETAIL_KEY_SUBCODE);
+	detail_len += write_fixint(detail_buf + detail_len, 7);
+	detail_len += write_fixint(detail_buf + detail_len, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	detail_len += write_fixmap(detail_buf + detail_len, 2);
+	detail_len += write_fixint(detail_buf + detail_len, AS_EXP_TRACE_KEY_PHASE);
+	detail_len += write_fixint(detail_buf + detail_len, AS_EXP_TRACE_PHASE_BUILD);
+	detail_len += write_fixint(detail_buf + detail_len, AS_EXP_TRACE_KEY_OP);
+	detail_len += write_fixstr(detail_buf + detail_len, "cmp_eq", 6);
+
+	as_command_parse_error_details(&err, detail_buf, detail_len);
+
+	as_msg msg;
+	memset(&msg, 0, sizeof(msg));
+	msg.n_ops = 1;
+
+	uint8_t udf_buf[128];
+	write_op_string(udf_buf, "OTHER", "not the failure bin");
+
+	as_status status = as_command_parse_udf_failure(udf_buf, &err, &msg, AEROSPIKE_ERR_UDF);
+
+	assert_int_eq(status, AEROSPIKE_ERR_UDF);
+	assert_true(err.has_subcode);
+	assert_int_eq(err.subcode, 7);
+	assert_false(err.has_message);
+	assert_true(err.has_exp_trace);
+	assert_true(err.exp_trace.has_phase);
+	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_BUILD);
+	assert_true(err.exp_trace.has_op);
+	assert_string_eq(err.exp_trace.op, "cmp_eq");
+	assert_string_eq(err.message, as_error_string(AEROSPIKE_ERR_UDF));
+}
+
+// 3.29 Trace-only detail still receives generic status text when surfaced
+TEST(error_detail_parser_exp_trace_only_status_fallback,
+	"3.29 trace-only detail keeps fallback status text")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[128];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 2);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PHASE);
+	p += write_fixint(buf + p, AS_EXP_TRACE_PHASE_BUILD);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
+	p += write_fixstr(buf + p, "cmp_eq", 6);
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_exp_trace);
+	assert_false(err.has_message);
+	assert_string_eq(err.message, "");
+
+	as_error_update_status(&err, AEROSPIKE_ERR_REQUEST_INVALID);
+
+	assert_int_eq(err.code, AEROSPIKE_ERR_REQUEST_INVALID);
+	assert_false(err.has_message);
+	assert_true(err.has_exp_trace);
+	assert_true(err.exp_trace.has_phase);
+	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_BUILD);
+	assert_true(err.exp_trace.has_op);
+	assert_string_eq(err.exp_trace.op, "cmp_eq");
+	assert_string_eq(err.message, as_error_string(AEROSPIKE_ERR_REQUEST_INVALID));
+}
+
+// 3.30 Trace-only detail still receives address-formatted fallback text
+TEST(error_detail_parser_exp_trace_only_address_fallback,
+	"3.30 trace-only detail keeps fallback address text")
+{
+	as_error err;
+	as_error_init(&err);
+	const char* address = "127.0.0.1 3000";
+
+	uint8_t buf[128];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 2);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PHASE);
+	p += write_fixint(buf + p, AS_EXP_TRACE_PHASE_BUILD);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
+	p += write_fixstr(buf + p, "cmp_eq", 6);
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_exp_trace);
+	assert_false(err.has_message);
+	assert_string_eq(err.message, "");
+
+	as_error_update_address(&err, AEROSPIKE_ERR_REQUEST_INVALID, address);
+
+	char expected[AS_ERROR_MESSAGE_MAX_SIZE];
+	snprintf(expected, sizeof(expected), "%s %s", address,
+		as_error_string(AEROSPIKE_ERR_REQUEST_INVALID));
+
+	assert_int_eq(err.code, AEROSPIKE_ERR_REQUEST_INVALID);
+	assert_false(err.has_message);
+	assert_true(err.has_exp_trace);
+	assert_true(err.exp_trace.has_phase);
+	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_BUILD);
+	assert_true(err.exp_trace.has_op);
+	assert_string_eq(err.exp_trace.op, "cmp_eq");
+	assert_string_eq(err.message, expected);
+}
+
+// 3.31 Omitted lang preserves wire absence while defaulting to msgpack
+TEST(error_detail_parser_exp_trace_omitted_lang_defaults_msgpack,
+	"3.31 expression trace omitted lang defaults to msgpack")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[128];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 2);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PHASE);
+	p += write_fixint(buf + p, AS_EXP_TRACE_PHASE_EVAL);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
+	p += write_fixstr(buf + p, "unknown", 7);
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_exp_trace);
+	assert_true(err.exp_trace.has_phase);
+	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
+	assert_true(err.exp_trace.has_op);
+	assert_string_eq(err.exp_trace.op, "unknown");
+	assert_false(err.exp_trace.has_lang);
+	assert_int_eq(err.exp_trace.lang, AS_EXP_TRACE_LANG_MSGPACK);
+}
+
+// 3.32 Field-section parsing extracts the field-45 body written by the server.
+TEST(error_detail_parser_fields_err_extracts_detail,
+	"3.32 field parser extracts error detail")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t detail[128];
+	uint32_t detail_len = 0;
+	detail_len += write_fixmap(detail + detail_len, 2);
+	detail_len += write_fixint(detail + detail_len, AS_ERROR_DETAIL_KEY_SUBCODE);
+	detail_len += write_fixint(detail + detail_len, 7);
+	detail_len += write_fixint(detail + detail_len, AS_ERROR_DETAIL_KEY_MESSAGE);
+	detail_len += write_fixstr(detail + detail_len, "fatal detail", 12);
+
+	uint8_t fields[160];
+	uint32_t p = 0;
+	*(uint32_t*)(fields + p) = cf_swap_to_be32(detail_len + 1);
+	p += 4;
+	fields[p++] = AS_FIELD_ERROR_DETAILS;
+	memcpy(fields + p, detail, detail_len);
+	p += detail_len;
+
+	uint8_t* end = as_command_parse_fields_err(fields, &err, 1);
+
+	assert_true(end == fields + p);
+	assert_true(err.has_subcode);
+	assert_int_eq(err.subcode, 7);
+	assert_true(err.has_message);
+	assert_string_eq(err.message, "fatal detail (subcode=7)");
+}
+
 //-------------------------------------------------------
 // Section 4: Policy Field and Header Serialisation Tests
 //-------------------------------------------------------
@@ -710,12 +1170,12 @@ TEST(error_detail_header_v2, "4.5 verbosity 2 sets info4 0x40")
 	assert_int_eq(cmd[12] & 0x60, 0x40);
 }
 
-// 4.6 Verbosity 3 (reserved) sets correct info4 bits
+// 4.6 Verbosity 3 sets correct info4 bits
 TEST(error_detail_header_v3, "4.6 verbosity 3 sets info4 0x60")
 {
 	as_policy_base policy;
 	as_policy_base_write_init(&policy);
-	policy.error_detail_verbosity = 3;
+	policy.error_detail_verbosity = AS_ERROR_DETAIL_EXP_TRACE;
 
 	uint8_t cmd[30];
 	memset(cmd, 0, sizeof(cmd));
@@ -838,12 +1298,25 @@ TEST(error_detail_reset_clears_subcode, "7.6 as_error_reset clears subcode")
 {
 	as_error err;
 	as_error_init(&err);
+	err.has_subcode = true;
 	err.subcode = 5001;
+	err.has_message = true;
 	snprintf(err.message, sizeof(err.message), "some error (subcode=5001)");
+	err.has_exp_trace = true;
+	err.exp_trace.has_phase = true;
+	err.exp_trace.phase = AS_EXP_TRACE_PHASE_BUILD;
+	err.exp_trace.has_path = true;
+	err.exp_trace.path_size = 1;
+	strcpy(err.exp_trace.path[0], "bin");
 
 	as_error_reset(&err);
 
+	assert_false(err.has_subcode);
 	assert_int_eq(err.subcode, AS_SUB_NONE);
+	assert_false(err.has_message);
+	assert_false(err.has_exp_trace);
+	assert_false(err.exp_trace.has_phase);
+	assert_false(err.exp_trace.has_path);
 	assert_string_eq(err.message, "");
 }
 
@@ -852,16 +1325,38 @@ TEST(error_detail_copy_preserves_subcode, "7.7 as_error_copy preserves subcode")
 {
 	as_error src;
 	as_error_init(&src);
+	src.has_subcode = true;
 	src.subcode = 3042;
+	src.has_message = true;
 	snprintf(src.message, sizeof(src.message), "list bounds");
+	src.has_exp_trace = true;
+	src.exp_trace.has_phase = true;
+	src.exp_trace.phase = AS_EXP_TRACE_PHASE_EVAL;
+	src.exp_trace.has_op = true;
+	strcpy(src.exp_trace.op, "list_get_by_index");
+	src.exp_trace.has_path = true;
+	src.exp_trace.path_size = 2;
+	strcpy(src.exp_trace.path[0], "lbin");
+	strcpy(src.exp_trace.path[1], "99");
 
 	as_error trg;
 	as_error_init(&trg);
 
 	as_error_copy(&trg, &src);
 
+	assert_true(trg.has_subcode);
 	assert_int_eq(trg.subcode, 3042);
+	assert_true(trg.has_message);
 	assert_string_eq(trg.message, "list bounds");
+	assert_true(trg.has_exp_trace);
+	assert_true(trg.exp_trace.has_phase);
+	assert_int_eq(trg.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
+	assert_true(trg.exp_trace.has_op);
+	assert_string_eq(trg.exp_trace.op, "list_get_by_index");
+	assert_true(trg.exp_trace.has_path);
+	assert_int_eq(trg.exp_trace.path_size, 2);
+	assert_string_eq(trg.exp_trace.path[0], "lbin");
+	assert_string_eq(trg.exp_trace.path[1], "99");
 }
 
 // 7.8 Successful response with spurious field 45 -- parser populates but
@@ -920,6 +1415,17 @@ SUITE(error_detail_parser, "error detail msgpack parser tests")
 	suite_add(error_detail_parser_large_subcode);
 	suite_add(error_detail_parser_near_max_len);
 	suite_add(error_detail_parser_overflow_truncation);
+	suite_add(error_detail_parser_exp_trace_full);
+	suite_add(error_detail_parser_exp_trace_truncation);
+	suite_add(error_detail_parser_exp_trace_skips_dropped_keys);
+	suite_add(error_detail_parser_exp_trace_dropped_only_ignored);
+	suite_add(error_detail_parser_invalid_exp_trace);
+	suite_add(error_detail_udf_message_preserves_server_detail);
+	suite_add(error_detail_udf_fallback_preserves_server_detail);
+	suite_add(error_detail_parser_exp_trace_only_status_fallback);
+	suite_add(error_detail_parser_exp_trace_only_address_fallback);
+	suite_add(error_detail_parser_exp_trace_omitted_lang_defaults_msgpack);
+	suite_add(error_detail_parser_fields_err_extracts_detail);
 }
 
 SUITE(error_detail_policy, "error detail policy and header tests")

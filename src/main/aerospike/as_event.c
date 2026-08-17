@@ -1521,8 +1521,7 @@ bool
 as_event_command_parse_header(as_event_command* cmd)
 {
 	as_error err;
-	err.message[0] = '\0';
-	err.subcode = 0;
+	as_error_init(&err);
 
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
@@ -1557,8 +1556,7 @@ bool
 as_event_command_parse_result(as_event_command* cmd)
 {
 	as_error err;
-	err.message[0] = '\0';
-	err.subcode = 0;
+	as_error_init(&err);
 
 	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
@@ -1649,8 +1647,7 @@ bool
 as_event_command_parse_success_failure(as_event_command* cmd)
 {
 	as_error err;
-	err.message[0] = '\0';
-	err.subcode = 0;
+	as_error_init(&err);
 
 	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
@@ -1708,6 +1705,8 @@ bool
 as_event_command_parse_deadline(as_event_command* cmd)
 {
 	as_error err;
+	as_error_init(&err);
+
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);

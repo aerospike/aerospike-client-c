@@ -63,6 +63,7 @@ as_txn_roll_async(
 static void
 as_error_copy_fields(as_error* trg, as_error* src)
 {
+	as_error_copy_server_fields(trg, src);
 	trg->func = src->func;
 	trg->file = src->file;
 	trg->line = src->line;
@@ -184,6 +185,7 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 
 	// Verify failed. Abort.
 	if (verify_status == AEROSPIKE_BATCH_FAILED) {
+		as_error_clear_server_detail(&verify_err);
 		verify_status = AEROSPIKE_TXN_FAILED;
 		verify_err.code = AEROSPIKE_TXN_FAILED;
 		as_strncpy(verify_err.message, "One or more read keys failed to verify", sizeof(verify_err.message));
@@ -593,6 +595,7 @@ as_commit_verify_listener(
 	if (err) {
 		// Verify failed. Rollback transaction.
 		if (err->code == AEROSPIKE_BATCH_FAILED) {
+			as_error_clear_server_detail(err);
 			err->code = AEROSPIKE_TXN_FAILED;
 			as_strncpy(err->message, "One or more read keys failed to verify", sizeof(err->message));
 		}

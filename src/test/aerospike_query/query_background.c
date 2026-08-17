@@ -526,6 +526,35 @@ TEST(query_operate_ttl, "query operate ttl")
 	as_record_destroy(rec);
 }
 
+TEST(query_background_ops_and_apply_rejected, "background query rejects combined ops and UDF apply")
+{
+	as_error err;
+	as_status status;
+	as_query q;
+
+	as_query_init(&q, NAMESPACE, SET);
+	as_query_where_inita(&q, 1);
+	as_query_where(&q, "qebin1", as_integer_range(3, 9));
+
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+	q.ops = &ops;
+
+	as_query_apply(&q, UDF_FILE, "sum_bin", NULL);
+
+	uint64_t query_id = 0;
+	status = aerospike_query_background(as, &err, NULL, &q, &query_id);
+
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+
+	as_query_destroy(&q);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -541,6 +570,7 @@ SUITE(query_background, "aerospike_query_background tests")
 	suite_add(query_operate);
 	suite_add(query_operate_with_select);
 	suite_add(query_operate_expop);
+	suite_add(query_background_ops_and_apply_rejected);
 
 	if (g_has_ttl) {
 		suite_add(query_operate_ttl);

@@ -104,6 +104,14 @@ write_uint64(uint8_t* buf, uint64_t val)
 }
 
 static uint32_t
+write_int8(uint8_t* buf, int8_t val)
+{
+	buf[0] = 0xd0;
+	buf[1] = (uint8_t)val;
+	return 2;
+}
+
+static uint32_t
 write_fixstr(uint8_t* buf, const char* str, uint32_t len)
 {
 	buf[0] = 0xa0 | (len & 0x1f);
@@ -151,6 +159,36 @@ write_true(uint8_t* buf)
 {
 	buf[0] = 0xc3;
 	return 1;
+}
+
+static uint32_t
+write_fixext1(uint8_t* buf, int8_t type, uint8_t val)
+{
+	buf[0] = 0xd4;
+	buf[1] = (uint8_t)type;
+	buf[2] = val;
+	return 3;
+}
+
+static uint32_t
+write_ext8(uint8_t* buf, int8_t type, const uint8_t* val, uint8_t len)
+{
+	buf[0] = 0xc7;
+	buf[1] = len;
+	buf[2] = (uint8_t)type;
+	memcpy(buf + 3, val, len);
+	return 3 + len;
+}
+
+static uint32_t
+write_error_detail_field(uint8_t* buf, const uint8_t* detail, uint32_t detail_len)
+{
+	uint32_t p = 0;
+	*(uint32_t*)(buf + p) = cf_swap_to_be32(detail_len + 1);
+	p += 4;
+	buf[p++] = AS_FIELD_ERROR_DETAILS;
+	memcpy(buf + p, detail, detail_len);
+	return p + detail_len;
 }
 
 static uint32_t
@@ -285,7 +323,7 @@ TEST(error_detail_parser_unknown_keys, "3.6 unknown keys are skipped")
 
 	uint8_t buf[128];
 	uint32_t p = 0;
-	p += write_fixmap(buf + p, 3);
+	p += write_fixmap(buf + p, 4);
 	// key 1 -> subcode 99
 	p += write_fixint(buf + p, 1);
 	p += write_fixint(buf + p, 99);
@@ -661,7 +699,7 @@ TEST(error_detail_parser_exp_trace_full, "3.23 full expression trace parse")
 	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_MESSAGE);
 	p += write_fixstr(buf + p, msg, (uint32_t)strlen(msg));
 	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
-	p += write_fixmap(buf + p, 10);
+	p += write_fixmap(buf + p, 11);
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PHASE);
 	p += write_fixint(buf + p, AS_EXP_TRACE_PHASE_EVAL);
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_BYTE_OFFSET);
@@ -685,6 +723,10 @@ TEST(error_detail_parser_exp_trace_full, "3.23 full expression trace parse")
 	p += write_fixint(buf + p, 10);
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_AEL_SPAN);
 	p += write_fixint(buf + p, 4);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OPERANDS);
+	p += write_fixarray(buf + p, 2);
+	p += write_fixstr(buf + p, "100", 3);
+	p += write_fixstr(buf + p, "99999", 5);
 
 	as_command_parse_error_details(&err, buf, p);
 
@@ -716,6 +758,9 @@ TEST(error_detail_parser_exp_trace_full, "3.23 full expression trace parse")
 	assert_int_eq(err.exp_trace.ael_offset, 10);
 	assert_true(err.exp_trace.has_ael_span);
 	assert_int_eq(err.exp_trace.ael_span, 4);
+	assert_true(err.exp_trace.has_operands);
+	assert_string_eq(err.exp_trace.lhs, "100");
+	assert_string_eq(err.exp_trace.rhs, "99999");
 }
 
 // 3.24 Oversized trace arrays and strings are truncated into bounded storage
@@ -767,9 +812,9 @@ TEST(error_detail_parser_exp_trace_truncation, "3.24 expression trace truncation
 		AS_EXP_TRACE_SNIPPET_MAX_SIZE - 1) == 0);
 }
 
-// 3.25 Reserved/dropped server keys are skipped without blocking kept fields.
+// 3.25 Reserved server keys are skipped and operands are kept without blocking later fields.
 TEST(error_detail_parser_exp_trace_skips_dropped_keys,
-	"3.25 expression trace skips dropped server keys")
+	"3.25 expression trace skips reserved keys and keeps operands")
 {
 	as_error err;
 	as_error_init(&err);
@@ -783,7 +828,7 @@ TEST(error_detail_parser_exp_trace_skips_dropped_keys,
 	p += write_fixint(buf + p, 2);
 	p += write_fixint(buf + p, 12);
 	p += write_fixint(buf + p, 8);
-	p += write_fixint(buf + p, 13);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OPERANDS);
 	p += write_fixarray(buf + p, 2);
 	p += write_fixstr(buf + p, "ibin", 4);
 	p += write_fixstr(buf + p, "99999", 5);
@@ -795,6 +840,9 @@ TEST(error_detail_parser_exp_trace_skips_dropped_keys,
 	assert_true(err.has_exp_trace);
 	assert_true(err.exp_trace.has_op);
 	assert_string_eq(err.exp_trace.op, "cmp_eq");
+	assert_true(err.exp_trace.has_operands);
+	assert_string_eq(err.exp_trace.lhs, "ibin");
+	assert_string_eq(err.exp_trace.rhs, "99999");
 }
 
 // 3.26 Unknown/dropped-only trace maps do not surface as public exp_trace data.
@@ -808,15 +856,11 @@ TEST(error_detail_parser_exp_trace_dropped_only_ignored,
 	uint32_t p = 0;
 	p += write_fixmap(buf + p, 1);
 	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
-	p += write_fixmap(buf + p, 4);
+	p += write_fixmap(buf + p, 3);
 	p += write_fixint(buf + p, 11);
 	p += write_fixint(buf + p, 2);
 	p += write_fixint(buf + p, 12);
 	p += write_fixint(buf + p, 8);
-	p += write_fixint(buf + p, 13);
-	p += write_fixarray(buf + p, 2);
-	p += write_fixstr(buf + p, "ibin", 4);
-	p += write_fixstr(buf + p, "99999", 5);
 	p += write_fixint(buf + p, 99);
 	p += write_fixstr(buf + p, "future", 6);
 
@@ -825,6 +869,95 @@ TEST(error_detail_parser_exp_trace_dropped_only_ignored,
 	assert_false(err.has_exp_trace);
 	assert_false(err.exp_trace.has_lang);
 	assert_int_eq(err.exp_trace.lang, 0);
+}
+
+// 3.26.0 Truncated path markers are preserved as ordinary path frames.
+TEST(error_detail_parser_exp_trace_path_truncation_marker,
+	"3.26.0 expression trace path marker is preserved")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[256];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PATH);
+	p += write_fixarray(buf + p, 3);
+	p += write_fixstr(buf + p, "root", 4);
+	p += write_fixstr(buf + p, "...", 3);
+	p += write_fixstr(buf + p, "leaf", 4);
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_exp_trace);
+	assert_true(err.exp_trace.has_path);
+	assert_int_eq(err.exp_trace.path_size, 3);
+	assert_string_eq(err.exp_trace.path[0], "root");
+	assert_string_eq(err.exp_trace.path[1], "...");
+	assert_string_eq(err.exp_trace.path[2], "leaf");
+}
+
+// 3.26.1 Malformed operands are dropped without losing other trace fields.
+TEST(error_detail_parser_exp_trace_malformed_operands,
+	"3.26.1 malformed operands preserve trace fields")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[256];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 3);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OPERANDS);
+	p += write_fixarray(buf + p, 2);
+	p += write_fixstr(buf + p, "ibin", 4);
+	p += write_fixint(buf + p, 99);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
+	p += write_fixstr(buf + p, "cmp_eq", 6);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OUTCOME);
+	p += write_fixint(buf + p, AS_EXP_TRACE_OUTCOME_FALSE);
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_exp_trace);
+	assert_false(err.exp_trace.has_operands);
+	assert_true(err.exp_trace.has_op);
+	assert_string_eq(err.exp_trace.op, "cmp_eq");
+	assert_true(err.exp_trace.has_outcome);
+	assert_int_eq(err.exp_trace.outcome, AS_EXP_TRACE_OUTCOME_FALSE);
+}
+
+// 3.26.2 Unknown signed integers and extension values do not block later fields.
+TEST(error_detail_parser_unknown_signed_and_ext,
+	"3.26.2 unknown signed and ext values are skipped")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t ext[] = {0xaa, 0xbb};
+	uint8_t buf[256];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 5);
+	p += write_fixint(buf + p, 50);
+	p += write_int8(buf + p, -7);
+	p += write_fixint(buf + p, 51);
+	p += write_fixext1(buf + p, 1, 0xee);
+	p += write_fixint(buf + p, 52);
+	p += write_ext8(buf + p, 2, ext, sizeof(ext));
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_SUBCODE);
+	p += write_fixint(buf + p, 17);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_MESSAGE);
+	p += write_fixstr(buf + p, "after unknowns", 14);
+
+	as_command_parse_error_details(&err, buf, p);
+
+	assert_true(err.has_subcode);
+	assert_int_eq(err.subcode, 17);
+	assert_true(err.has_message);
+	assert_string_eq(err.message, "after unknowns (subcode=17)");
 }
 
 // 3.27 Invalid expression trace payload is ignored without losing other details
@@ -1074,6 +1207,109 @@ TEST(error_detail_parser_fields_err_extracts_detail,
 	assert_string_eq(err.message, "fatal detail (subcode=7)");
 }
 
+// 3.33 Batch command-level LAST errors parse field 45 before applying status text.
+TEST(error_detail_parser_batch_last_error_fields,
+	"3.33 batch LAST fatal error parses field 45")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t detail[128];
+	uint32_t detail_len = 0;
+	detail_len += write_fixmap(detail + detail_len, 2);
+	detail_len += write_fixint(detail + detail_len, AS_ERROR_DETAIL_KEY_SUBCODE);
+	detail_len += write_fixint(detail + detail_len, 7);
+	detail_len += write_fixint(detail + detail_len, AS_ERROR_DETAIL_KEY_MESSAGE);
+	detail_len += write_fixstr(detail + detail_len, "batch fatal detail", 18);
+
+	uint8_t fields[160];
+	uint32_t fields_len = write_error_detail_field(fields, detail, detail_len);
+
+	as_msg msg;
+	memset(&msg, 0, sizeof(msg));
+	msg.info3 = AS_MSG_INFO3_LAST;
+	msg.result_code = AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED;
+	msg.n_fields = 1;
+
+	as_status status = as_command_parse_result_error_fields(&err, &msg, fields);
+
+	assert_int_eq(fields_len, 4 + 1 + detail_len);
+	assert_int_eq(status, AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED);
+	assert_int_eq(err.code, AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED);
+	assert_true(err.has_subcode);
+	assert_int_eq(err.subcode, 7);
+	assert_true(err.has_message);
+	assert_string_eq(err.message, "batch fatal detail (subcode=7)");
+}
+
+// 3.34 Sync transaction verify/roll status paths preserve field 45 details.
+TEST(error_detail_parser_sync_txn_status_error_fields,
+	"3.34 sync txn status error parses field 45")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t detail[128];
+	uint32_t detail_len = 0;
+	detail_len += write_fixmap(detail + detail_len, 2);
+	detail_len += write_fixint(detail + detail_len, AS_ERROR_DETAIL_KEY_SUBCODE);
+	detail_len += write_fixint(detail + detail_len, 3);
+	detail_len += write_fixint(detail + detail_len, AS_ERROR_DETAIL_KEY_MESSAGE);
+	detail_len += write_fixstr(detail + detail_len, "txn verify detail", 17);
+
+	uint8_t fields[160];
+	write_error_detail_field(fields, detail, detail_len);
+
+	as_msg msg;
+	memset(&msg, 0, sizeof(msg));
+	msg.result_code = AEROSPIKE_MRT_VERSION_MISMATCH;
+	msg.n_fields = 1;
+
+	as_status status = as_command_parse_result_error_fields(&err, &msg, fields);
+
+	assert_int_eq(status, AEROSPIKE_MRT_VERSION_MISMATCH);
+	assert_int_eq(err.code, AEROSPIKE_MRT_VERSION_MISMATCH);
+	assert_true(as_error_has_server_detail(&err));
+	assert_true(err.has_subcode);
+	assert_int_eq(err.subcode, 3);
+	assert_true(err.has_message);
+	assert_string_eq(err.message, "txn verify detail (subcode=3)");
+}
+
+// 3.35 Async transaction verify/roll status paths use the same field 45 preservation.
+TEST(error_detail_parser_async_txn_status_error_fields,
+	"3.35 async txn status error parses field 45")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t detail[128];
+	uint32_t detail_len = 0;
+	detail_len += write_fixmap(detail + detail_len, 2);
+	detail_len += write_fixint(detail + detail_len, AS_ERROR_DETAIL_KEY_SUBCODE);
+	detail_len += write_fixint(detail + detail_len, 4);
+	detail_len += write_fixint(detail + detail_len, AS_ERROR_DETAIL_KEY_MESSAGE);
+	detail_len += write_fixstr(detail + detail_len, "txn roll detail", 15);
+
+	uint8_t fields[160];
+	write_error_detail_field(fields, detail, detail_len);
+
+	as_msg msg;
+	memset(&msg, 0, sizeof(msg));
+	msg.result_code = AEROSPIKE_MRT_EXPIRED;
+	msg.n_fields = 1;
+
+	as_status status = as_command_parse_result_error_fields(&err, &msg, fields);
+
+	assert_int_eq(status, AEROSPIKE_MRT_EXPIRED);
+	assert_int_eq(err.code, AEROSPIKE_MRT_EXPIRED);
+	assert_true(as_error_has_server_detail(&err));
+	assert_true(err.has_subcode);
+	assert_int_eq(err.subcode, 4);
+	assert_true(err.has_message);
+	assert_string_eq(err.message, "txn roll detail (subcode=4)");
+}
+
 //-------------------------------------------------------
 // Section 4: Policy Field and Header Serialisation Tests
 //-------------------------------------------------------
@@ -1186,36 +1422,32 @@ TEST(error_detail_header_v3, "4.6 verbosity 3 sets info4 0x60")
 	assert_int_eq(cmd[12] & 0x60, 0x60);
 }
 
-// 4.7 Verbosity > 3 is naturally truncated by the 2-bit mask
-TEST(error_detail_header_overflow, "4.7 verbosity > 3 mask truncation")
+// 4.7 Verbosity > 3 is clamped to the maximum public trace level
+TEST(error_detail_header_overflow, "4.7 verbosity > 3 clamps to trace")
 {
 	as_policy_base policy;
 	as_policy_base_write_init(&policy);
 
 	uint8_t cmd[30];
 
-	// verbosity 4 -> (4 << 5) & 0x60 = 0x80 & 0x60 = 0x00
 	policy.error_detail_verbosity = 4;
 	memset(cmd, 0, sizeof(cmd));
 	as_command_write_header_write(cmd, &policy, AS_POLICY_COMMIT_LEVEL_ALL,
 		AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0, 1, 1, false, false, 0, 0, 0);
-	assert_int_eq(cmd[12] & 0x60, 0x00);
+	assert_int_eq(cmd[12] & 0x60, 0x60);
 
-	// verbosity 5 -> (5 << 5) & 0x60 = 0xA0 & 0x60 = 0x20
 	policy.error_detail_verbosity = 5;
 	memset(cmd, 0, sizeof(cmd));
 	as_command_write_header_write(cmd, &policy, AS_POLICY_COMMIT_LEVEL_ALL,
 		AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0, 1, 1, false, false, 0, 0, 0);
-	assert_int_eq(cmd[12] & 0x60, 0x20);
+	assert_int_eq(cmd[12] & 0x60, 0x60);
 
-	// verbosity 7 -> (7 << 5) & 0x60 = 0xE0 & 0x60 = 0x60
 	policy.error_detail_verbosity = 7;
 	memset(cmd, 0, sizeof(cmd));
 	as_command_write_header_write(cmd, &policy, AS_POLICY_COMMIT_LEVEL_ALL,
 		AS_POLICY_EXISTS_IGNORE, AS_POLICY_GEN_IGNORE, 0, 0, 1, 1, false, false, 0, 0, 0);
 	assert_int_eq(cmd[12] & 0x60, 0x60);
 
-	// verbosity 255 -> (255 << 5) & 0x60 = 0xE0 & 0x60 = 0x60
 	policy.error_detail_verbosity = 255;
 	memset(cmd, 0, sizeof(cmd));
 	as_command_write_header_write(cmd, &policy, AS_POLICY_COMMIT_LEVEL_ALL,
@@ -1239,6 +1471,14 @@ TEST(error_detail_header_no_clobber, "4.8 verbosity does not clobber txn flags")
 
 	assert_int_eq(cmd[12] & 0x10, 0x10);
 	assert_int_eq(cmd[12] & 0x60, 0x40);
+}
+
+// 4.12 Public OP_NOT_APPLICABLE subcodes match the server protocol values.
+TEST(error_detail_opnot_string_subcodes, "4.12 OP_NOT string subcode constants")
+{
+	assert_int_eq(AS_SUB_OPNOT_STRING_CONVERSION_FAILED, 10);
+	assert_int_eq(AS_SUB_OPNOT_STRING_UTF8_INVALID, 11);
+	assert_int_eq(AS_SUB_OPNOT_STRING_B64_INVALID, 13);
 }
 
 // 4.9 Verbosity is applied in read header builder
@@ -1308,6 +1548,9 @@ TEST(error_detail_reset_clears_subcode, "7.6 as_error_reset clears subcode")
 	err.exp_trace.has_path = true;
 	err.exp_trace.path_size = 1;
 	strcpy(err.exp_trace.path[0], "bin");
+	err.exp_trace.has_operands = true;
+	strcpy(err.exp_trace.lhs, "100");
+	strcpy(err.exp_trace.rhs, "99999");
 
 	as_error_reset(&err);
 
@@ -1317,6 +1560,7 @@ TEST(error_detail_reset_clears_subcode, "7.6 as_error_reset clears subcode")
 	assert_false(err.has_exp_trace);
 	assert_false(err.exp_trace.has_phase);
 	assert_false(err.exp_trace.has_path);
+	assert_false(err.exp_trace.has_operands);
 	assert_string_eq(err.message, "");
 }
 
@@ -1338,6 +1582,9 @@ TEST(error_detail_copy_preserves_subcode, "7.7 as_error_copy preserves subcode")
 	src.exp_trace.path_size = 2;
 	strcpy(src.exp_trace.path[0], "lbin");
 	strcpy(src.exp_trace.path[1], "99");
+	src.exp_trace.has_operands = true;
+	strcpy(src.exp_trace.lhs, "100");
+	strcpy(src.exp_trace.rhs, "99999");
 
 	as_error trg;
 	as_error_init(&trg);
@@ -1357,6 +1604,9 @@ TEST(error_detail_copy_preserves_subcode, "7.7 as_error_copy preserves subcode")
 	assert_int_eq(trg.exp_trace.path_size, 2);
 	assert_string_eq(trg.exp_trace.path[0], "lbin");
 	assert_string_eq(trg.exp_trace.path[1], "99");
+	assert_true(trg.exp_trace.has_operands);
+	assert_string_eq(trg.exp_trace.lhs, "100");
+	assert_string_eq(trg.exp_trace.rhs, "99999");
 }
 
 // 7.8 Successful response with spurious field 45 -- parser populates but
@@ -1419,6 +1669,9 @@ SUITE(error_detail_parser, "error detail msgpack parser tests")
 	suite_add(error_detail_parser_exp_trace_truncation);
 	suite_add(error_detail_parser_exp_trace_skips_dropped_keys);
 	suite_add(error_detail_parser_exp_trace_dropped_only_ignored);
+	suite_add(error_detail_parser_exp_trace_path_truncation_marker);
+	suite_add(error_detail_parser_exp_trace_malformed_operands);
+	suite_add(error_detail_parser_unknown_signed_and_ext);
 	suite_add(error_detail_parser_invalid_exp_trace);
 	suite_add(error_detail_udf_message_preserves_server_detail);
 	suite_add(error_detail_udf_fallback_preserves_server_detail);
@@ -1426,6 +1679,9 @@ SUITE(error_detail_parser, "error detail msgpack parser tests")
 	suite_add(error_detail_parser_exp_trace_only_address_fallback);
 	suite_add(error_detail_parser_exp_trace_omitted_lang_defaults_msgpack);
 	suite_add(error_detail_parser_fields_err_extracts_detail);
+	suite_add(error_detail_parser_batch_last_error_fields);
+	suite_add(error_detail_parser_sync_txn_status_error_fields);
+	suite_add(error_detail_parser_async_txn_status_error_fields);
 }
 
 SUITE(error_detail_policy, "error detail policy and header tests")
@@ -1441,6 +1697,7 @@ SUITE(error_detail_policy, "error detail policy and header tests")
 	suite_add(error_detail_header_read);
 	suite_add(error_detail_header_write);
 	suite_add(error_detail_header_read_header);
+	suite_add(error_detail_opnot_string_subcodes);
 	suite_add(error_detail_reset_clears_subcode);
 	suite_add(error_detail_copy_preserves_subcode);
 	suite_add(error_detail_parser_populates_on_any_call);

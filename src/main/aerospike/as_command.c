@@ -295,8 +295,7 @@ as_command_write_header_write(
 	}
 
 	uint8_t txn_attr = on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
-	txn_attr |= (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
-				& AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	txn_attr |= as_command_info4_error_detail(policy->error_detail_verbosity);
 
 #if defined USE_XDR
 	read_attr |= AS_MSG_INFO1_XDR;
@@ -331,8 +330,7 @@ as_command_write_header_read(
 	cmd[9] = read_attr;
 	cmd[10] = write_attr;
 	cmd[11] = info_attr;
-	cmd[12] = (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
-			  & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	cmd[12] = as_command_info4_error_detail(policy->error_detail_verbosity);
 	cmd[13] = 0;
 	*(uint32_t*)&cmd[14] = 0;
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
@@ -356,8 +354,7 @@ as_command_write_header_read_header(
 	cmd[9] = read_attr;
 	cmd[10] = 0;
 	cmd[11] = info_attr;
-	cmd[12] = (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
-			  & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	cmd[12] = as_command_info4_error_detail(policy->error_detail_verbosity);
 	cmd[13] = 0;
 	*(uint32_t*)&cmd[14] = 0;
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
@@ -1299,21 +1296,45 @@ as_command_skip_msgpack_value(uint8_t** pp, uint8_t* end)
 			return true;
 
 		case 0xcc: // uint8
+		case 0xd0: // int8
 			*pp += 1;
 			return *pp <= end;
 
 		case 0xcd: // uint16
+		case 0xd1: // int16
 			*pp += 2;
 			return *pp <= end;
 
 		case 0xce: // uint32
 		case 0xca: // float32
+		case 0xd2: // int32
 			*pp += 4;
 			return *pp <= end;
 
 		case 0xcf: // uint64
 		case 0xcb: // float64
+		case 0xd3: // int64
 			*pp += 8;
+			return *pp <= end;
+
+		case 0xd4: // fixext 1
+			*pp += 2; // type + data
+			return *pp <= end;
+
+		case 0xd5: // fixext 2
+			*pp += 3; // type + data
+			return *pp <= end;
+
+		case 0xd6: // fixext 4
+			*pp += 5; // type + data
+			return *pp <= end;
+
+		case 0xd7: // fixext 8
+			*pp += 9; // type + data
+			return *pp <= end;
+
+		case 0xd8: // fixext 16
+			*pp += 17; // type + data
 			return *pp <= end;
 
 		case 0xd9: // str8
@@ -1321,6 +1342,13 @@ as_command_skip_msgpack_value(uint8_t** pp, uint8_t* end)
 			if (*pp >= end) return false;
 			uint32_t len = **pp;
 			(*pp) += 1 + len;
+			return *pp <= end;
+		}
+
+		case 0xc7: { // ext8
+			if (*pp >= end) return false;
+			uint32_t len = **pp;
+			(*pp) += 2 + len; // len + type + data
 			return *pp <= end;
 		}
 
@@ -1332,11 +1360,25 @@ as_command_skip_msgpack_value(uint8_t** pp, uint8_t* end)
 			return *pp <= end;
 		}
 
+		case 0xc8: { // ext16
+			if (*pp + 2 > end) return false;
+			uint32_t len = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 3 + len; // len + type + data
+			return *pp <= end;
+		}
+
 		case 0xdb: // str32
 		case 0xc6: { // bin32
 			if (*pp + 4 > end) return false;
 			uint32_t len = cf_swap_from_be32(*(uint32_t*)*pp);
 			*pp += 4 + len;
+			return *pp <= end;
+		}
+
+		case 0xc9: { // ext32
+			if (*pp + 4 > end) return false;
+			uint32_t len = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 5 + len; // len + type + data
 			return *pp <= end;
 		}
 
@@ -1523,6 +1565,11 @@ as_command_read_msgpack_str(uint8_t** pp, uint8_t* end, char** out, uint32_t* ou
 		len = cf_swap_from_be16(*(uint16_t*)*pp);
 		*pp += 2;
 	}
+	else if (type == 0xdb) {
+		if (*pp + 4 > end) return false;
+		len = cf_swap_from_be32(*(uint32_t*)*pp);
+		*pp += 4;
+	}
 	else {
 		return false;
 	}
@@ -1551,8 +1598,7 @@ as_command_copy_msgpack_str(char* dst, size_t capacity, const char* src, uint32_
 
 enum {
 	AS_EXP_TRACE_KEY_PRIVATE_AEL_LINE = 11,
-	AS_EXP_TRACE_KEY_PRIVATE_AEL_COL = 12,
-	AS_EXP_TRACE_KEY_PRIVATE_OPERANDS = 13
+	AS_EXP_TRACE_KEY_PRIVATE_AEL_COL = 12
 };
 
 static inline bool
@@ -1560,7 +1606,36 @@ as_exp_trace_has_data(const as_exp_trace* trace)
 {
 	return trace->has_phase || trace->has_byte_offset || trace->has_op || trace->has_depth ||
 		trace->has_path || trace->has_snippet || trace->has_outcome || trace->has_lang ||
-		trace->has_ael_offset || trace->has_ael_span;
+		trace->has_ael_offset || trace->has_ael_span || trace->has_operands;
+}
+
+static bool
+as_command_parse_exp_trace_operands(uint8_t** pp, uint8_t* end, as_exp_trace* trace)
+{
+	uint8_t* value = *pp;
+	uint8_t* p = value;
+	uint32_t count;
+
+	if (!as_command_read_msgpack_array_header(&p, end, &count) || count != 2) {
+		return as_command_skip_msgpack_value(pp, end);
+	}
+
+	char* lhs;
+	uint32_t lhs_len;
+	char* rhs;
+	uint32_t rhs_len;
+
+	if (!as_command_read_msgpack_str(&p, end, &lhs, &lhs_len) ||
+		!as_command_read_msgpack_str(&p, end, &rhs, &rhs_len)) {
+		*pp = value;
+		return as_command_skip_msgpack_value(pp, end);
+	}
+
+	trace->has_operands = true;
+	as_command_copy_msgpack_str(trace->lhs, sizeof(trace->lhs), lhs, lhs_len);
+	as_command_copy_msgpack_str(trace->rhs, sizeof(trace->rhs), rhs, rhs_len);
+	*pp = p;
+	return true;
 }
 
 static bool
@@ -1699,9 +1774,13 @@ as_command_parse_exp_trace(uint8_t** pp, uint8_t* end, as_exp_trace* trace)
 			trace->ael_span = (uint32_t)val;
 			break;
 		}
+		case AS_EXP_TRACE_KEY_OPERANDS:
+			if (!as_command_parse_exp_trace_operands(&p, end, trace)) {
+				return false;
+			}
+			break;
 		case AS_EXP_TRACE_KEY_PRIVATE_AEL_LINE:
 		case AS_EXP_TRACE_KEY_PRIVATE_AEL_COL:
-		case AS_EXP_TRACE_KEY_PRIVATE_OPERANDS:
 			if (!as_command_skip_msgpack_value(&p, end)) {
 				return false;
 			}
@@ -1846,6 +1925,18 @@ as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields)
 		p += field_size;
 	}
 	return p;
+}
+
+as_status
+as_command_parse_result_error_fields(as_error* err, as_msg* msg, uint8_t* p)
+{
+	as_command_parse_fields_err(p, err, msg->n_fields);
+
+	if (msg->result_code) {
+		as_error_update_status(err, msg->result_code);
+		return err->code;
+	}
+	return AEROSPIKE_OK;
 }
 
 uint8_t*

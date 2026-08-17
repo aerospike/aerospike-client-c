@@ -24,6 +24,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_subcode.h>
 #include <citrusleaf/cf_byte_order.h>
 
 #ifdef __cplusplus
@@ -123,6 +124,15 @@ extern "C" {
 // Error detail verbosity in info4 bits 5-6
 #define AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT	5
 #define AS_MSG_INFO4_ERROR_VERBOSITY_MASK	0x60
+
+static inline uint8_t
+as_command_info4_error_detail(uint8_t verbosity)
+{
+	if (verbosity > AS_ERROR_DETAIL_EXP_TRACE) {
+		verbosity = AS_ERROR_DETAIL_EXP_TRACE;
+	}
+	return (verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT) & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+}
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -677,6 +687,14 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
  */
 AS_EXTERN uint8_t*
 as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields);
+
+/**
+ * @private
+ * Parse returned fields and update err from result_code when the result is non-OK.
+ * Used by no-record response paths that can still carry field 45 details.
+ */
+AS_EXTERN as_status
+as_command_parse_result_error_fields(as_error* err, as_msg* msg, uint8_t* p);
 
 /**
  * @private

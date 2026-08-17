@@ -85,7 +85,7 @@ typedef struct {
 	uint8_t read_attr;
 	uint8_t write_attr;
 	uint8_t info_attr;
-	uint8_t txn_attr;
+	uint8_t info4_attr;
 	bool has_write;
 	bool send_key;
 } as_batch_attr;
@@ -435,7 +435,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
 			if (msg->result_code != AEROSPIKE_OK) {
-				as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+				as_command_parse_result_error_fields(&err, msg, p);
 				as_event_response_error(cmd, &err);
 				return true;
 			}
@@ -538,7 +538,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
 			if (msg->result_code != AEROSPIKE_OK) {
-				return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+				return as_command_parse_result_error_fields(err, msg, p);
 			}
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
@@ -1030,8 +1030,11 @@ as_batch_header_write_new(
 	p += 8;
 	*p++ = 22;
 	*p++ = read_attr;
-	memset(p, 0, 12);
-	p += 12;
+	*p++ = 0;
+	*p++ = 0;
+	*p++ = as_command_info4_error_detail(policy->base.error_detail_verbosity);
+	memset(p, 0, 9);
+	p += 9;
 	*(uint32_t*)p = cf_swap_to_be32(policy->base.total_timeout);
 	p += sizeof(uint32_t);
 	*(uint16_t*)p = cf_swap_to_be16(bb->field_count_header);
@@ -1141,7 +1144,9 @@ as_batch_txn_size(uint64_t ver, as_batch_builder* bb, bool has_write)
 static as_status
 as_batch_read_record_size(as_batch_read_record* rec, as_batch_builder* bb, as_error* err)
 {
-	bb->size += 4; // read ttl
+	// Always account for the info4 byte even though it is often zero. This can make the
+	// command capacity slightly larger than the serialized command size.
+	bb->size += 5; // read ttl(4) + info4(1)
 
 	if (rec->bin_names) {
 		for (uint32_t j = 0; j < rec->n_bin_names; j++) {
@@ -1214,7 +1219,9 @@ as_batch_apply_record_size(as_batch_apply_record* rec, as_batch_builder* bb)
 static inline void
 as_batch_remove_record_size(as_batch_builder* bb)
 {
-	bb->size += 6; // gen(2) + ttl(4)
+	// Always account for the info4 byte even though it is often zero. This can make the
+	// command capacity slightly larger than the serialized command size.
+	bb->size += 7; // gen(2) + ttl(4) + info4(1)
 }
 
 static inline void
@@ -1411,6 +1418,12 @@ as_batch_init_size(as_batch_builder* bb)
 	}
 }
 
+static inline uint8_t
+as_batch_info4_error_detail(uint8_t verbosity)
+{
+	return as_command_info4_error_detail(verbosity);
+}
+
 static as_status
 as_batch_records_size(
 	as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
@@ -1453,7 +1466,7 @@ as_batch_attr_read_header(as_batch_attr* attr, const as_policy_batch* p)
 		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
 		break;
 	}
-	attr->txn_attr = 0;
+	attr->info4_attr = as_batch_info4_error_detail(p->base.error_detail_verbosity);
 	attr->ttl = p->read_touch_ttl_percent;
 	attr->gen = 0;
 	attr->has_write = false;
@@ -1461,7 +1474,9 @@ as_batch_attr_read_header(as_batch_attr* attr, const as_policy_batch* p)
 }
 
 static void
-as_batch_attr_read_row(as_batch_attr* attr, const as_policy_batch_read* p)
+as_batch_attr_read_row(
+	as_batch_attr* attr, const as_policy_batch_read* p, uint8_t error_detail_verbosity
+	)
 {
 	attr->filter_exp = p->filter_exp;
 	attr->read_attr = AS_MSG_INFO1_READ;
@@ -1487,7 +1502,7 @@ as_batch_attr_read_row(as_batch_attr* attr, const as_policy_batch_read* p)
 		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
 		break;
 	}
-	attr->txn_attr = 0;
+	attr->info4_attr = as_batch_info4_error_detail(error_detail_verbosity);
 	attr->ttl = p->read_touch_ttl_percent;
 	attr->gen = 0;
 	attr->has_write = false;
@@ -1521,7 +1536,7 @@ as_batch_attr_read_adjust(as_batch_attr* attr, bool read_all_bins)
 static void
 as_batch_attr_write(
 	as_batch_attr* attr, as_operations* ops, const as_policy_batch_write* p,
-	as_policy_key policy_key, bool durable_delete
+	uint8_t error_detail_verbosity, as_policy_key policy_key, bool durable_delete
 )
 {
 	attr->filter_exp = p->filter_exp;
@@ -1587,12 +1602,17 @@ as_batch_attr_write(
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 
-	attr->txn_attr = p->on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
+	attr->info4_attr = as_batch_info4_error_detail(error_detail_verbosity);
+
+	if (p->on_locking_only) {
+		attr->info4_attr |= AS_MSG_INFO4_TXN_ON_LOCKING_ONLY;
+	}
 }
 
 static void
 as_batch_attr_apply(
-	as_batch_attr* attr, const as_policy_batch_apply* p, as_policy_key policy_key, bool durable_delete
+	as_batch_attr* attr, const as_policy_batch_apply* p, uint8_t error_detail_verbosity,
+	as_policy_key policy_key, bool durable_delete
 	)
 {
 	attr->filter_exp = p->filter_exp;
@@ -1612,12 +1632,17 @@ as_batch_attr_apply(
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 
-	attr->txn_attr = p->on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
+	attr->info4_attr = as_batch_info4_error_detail(error_detail_verbosity);
+
+	if (p->on_locking_only) {
+		attr->info4_attr |= AS_MSG_INFO4_TXN_ON_LOCKING_ONLY;
+	}
 }
 
 static void
 as_batch_attr_remove(
-	as_batch_attr* attr, const as_policy_batch_remove* p, as_policy_key policy_key, bool durable_delete
+	as_batch_attr* attr, const as_policy_batch_remove* p, uint8_t error_detail_verbosity,
+	as_policy_key policy_key, bool durable_delete
 	)
 {
 	attr->filter_exp = p->filter_exp;
@@ -1651,7 +1676,7 @@ as_batch_attr_remove(
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 
-	attr->txn_attr = 0;
+	attr->info4_attr = as_batch_info4_error_detail(error_detail_verbosity);
 }
 
 static uint8_t*
@@ -1710,10 +1735,19 @@ as_batch_write_read(
 	uint16_t n_ops
 	)
 {
-	*p++ = (BATCH_MSG_INFO | BATCH_MSG_TTL);
-	*p++ = attr->read_attr;
-	*p++ = attr->write_attr;
-	*p++ = attr->info_attr;
+	if (attr->info4_attr) {
+		*p++ = (BATCH_MSG_INFO | BATCH_MSG_TTL | BATCH_MSG_INFO4);
+		*p++ = attr->read_attr;
+		*p++ = attr->write_attr;
+		*p++ = attr->info_attr;
+		*p++ = attr->info4_attr;
+	}
+	else {
+		*p++ = (BATCH_MSG_INFO | BATCH_MSG_TTL);
+		*p++ = attr->read_attr;
+		*p++ = attr->write_attr;
+		*p++ = attr->info_attr;
+	}
 	*(uint32_t*)p = cf_swap_to_be32(attr->ttl);
 	p += sizeof(uint32_t);
 	p = as_batch_write_fields_all(p, key, txn, ver, attr, filter, 0, n_ops);
@@ -1726,12 +1760,12 @@ as_batch_write_write(
 	uint16_t n_fields, uint16_t n_ops
 	)
 {
-	if (attr->txn_attr) {
+	if (attr->info4_attr) {
 		*p++ = (BATCH_MSG_INFO | BATCH_MSG_GEN | BATCH_MSG_TTL | BATCH_MSG_INFO4);
 		*p++ = attr->read_attr;
 		*p++ = attr->write_attr;
 		*p++ = attr->info_attr;
-		*p++ = attr->txn_attr;
+		*p++ = attr->info4_attr;
 	}
 	else {
 		*p++ = (BATCH_MSG_INFO | BATCH_MSG_GEN | BATCH_MSG_TTL);
@@ -1748,13 +1782,13 @@ as_batch_write_write(
 }
 
 static uint8_t*
-as_batch_write_txn_verify(uint8_t* p, as_key* key, uint64_t ver)
+as_batch_write_txn_verify(uint8_t* p, as_key* key, uint64_t ver, uint8_t error_detail_verbosity)
 {
 	*p++ = (BATCH_MSG_INFO | BATCH_MSG_INFO4);
 	*p++ = (AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA);
 	*p++ = 0;
 	*p++ = AS_MSG_INFO3_SC_READ_TYPE;
-	*p++ = AS_MSG_INFO4_TXN_VERIFY_READ;
+	*p++ = AS_MSG_INFO4_TXN_VERIFY_READ | as_command_info4_error_detail(error_detail_verbosity);
 
 	if (ver) {
 		p = as_batch_write_fields(p, key, 1, 0);
@@ -1767,13 +1801,15 @@ as_batch_write_txn_verify(uint8_t* p, as_key* key, uint64_t ver)
 }
 
 static uint8_t*
-as_batch_write_txn_roll(uint8_t* p, as_key* key, as_txn* txn, uint64_t ver, uint8_t txn_attr)
+as_batch_write_txn_roll(
+	uint8_t* p, as_key* key, as_txn* txn, uint64_t ver, uint8_t txn_attr, uint8_t error_detail_verbosity
+	)
 {
 	*p++ = (BATCH_MSG_INFO | BATCH_MSG_INFO4);
 	*p++ = 0;
 	*p++ = (AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DURABLE_DELETE);
 	*p++ = 0;
-	*p++ = txn_attr;
+	*p++ = txn_attr | as_command_info4_error_detail(error_detail_verbosity);
 
 	uint16_t n_fields = 0;
 
@@ -1898,7 +1934,7 @@ as_batch_records_write_new(
 					as_batch_read_record* br = (as_batch_read_record*)rec;
 
 					if (br->policy) {
-						as_batch_attr_read_row(&attr, br->policy);
+						as_batch_attr_read_row(&attr, br->policy, policy->base.error_detail_verbosity);
 					}
 					else {
 						as_batch_attr_read_header(&attr, policy);
@@ -1941,7 +1977,8 @@ as_batch_records_write_new(
 						durable_delete = pbw->durable_delete;
 					}
 
-					as_batch_attr_write(&attr, bw->ops, pbw, send_key, durable_delete);
+					as_batch_attr_write(&attr, bw->ops, pbw, policy->base.error_detail_verbosity, send_key,
+						durable_delete);
 					p = as_batch_write_operations(p, &bw->key, txn, ver, &attr, attr.filter_exp, bw->ops,
 						bb->buffers);
 					break;
@@ -1968,7 +2005,8 @@ as_batch_records_write_new(
 						durable_delete = pba->durable_delete;
 					}
 
-					as_batch_attr_apply(&attr, pba, send_key, durable_delete);
+					as_batch_attr_apply(&attr, pba, policy->base.error_detail_verbosity, send_key,
+						durable_delete);
 					p = as_batch_write_udf(p, &ba->key, txn, ver, ba, &attr, attr.filter_exp, bb->buffers);
 					break;
 				}
@@ -1994,18 +2032,20 @@ as_batch_records_write_new(
 						durable_delete = pbr->durable_delete;
 					}
 
-					as_batch_attr_remove(&attr, pbr, send_key, durable_delete);
+					as_batch_attr_remove(&attr, pbr, policy->base.error_detail_verbosity, send_key,
+						durable_delete);
 					p = as_batch_write_write(p, &brm->key, txn, ver, &attr, attr.filter_exp, 0, 0);
 					break;
 				}
 
 				case AS_BATCH_TXN_VERIFY: {
-					p = as_batch_write_txn_verify(p, &rec->key, ver);
+					p = as_batch_write_txn_verify(p, &rec->key, ver, policy->base.error_detail_verbosity);
 					break;
 				}
 
 				case AS_BATCH_TXN_ROLL: {
-					p = as_batch_write_txn_roll(p, &rec->key, txn, ver, bb->txn_attr);
+					p = as_batch_write_txn_roll(p, &rec->key, txn, ver, bb->txn_attr,
+						policy->base.error_detail_verbosity);
 					break;
 				}
 			}
@@ -3466,7 +3506,7 @@ as_batch_keys_execute(
 	btk.base.has_write = rec->has_write;
 	btk.base.replica_index = rep.replica_index;
 	btk.base.replica_index_sc = rep.replica_index_sc;
-	btk.base.txn_attr = attr->txn_attr;
+	btk.base.txn_attr = 0;
 	btk.ns = ns;
 	btk.keys = batch->keys.entries;
 	btk.batch = batch;
@@ -5407,7 +5447,8 @@ aerospike_batch_operate(
 		};
 
 		as_batch_attr attr;
-		as_batch_attr_write(&attr, ops, policy_write, pkey, policy_write->durable_delete);
+		as_batch_attr_write(&attr, ops, policy_write, policy->base.error_detail_verbosity, pkey,
+			policy_write->durable_delete);
 
 		return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 			listener, udata);
@@ -5484,7 +5525,8 @@ aerospike_batch_apply(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_apply(&attr, policy_apply, pkey, policy_apply->durable_delete);
+	as_batch_attr_apply(&attr, policy_apply, policy->base.error_detail_verbosity, pkey,
+		policy_apply->durable_delete);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 		listener, udata);
@@ -5530,7 +5572,8 @@ aerospike_batch_remove(
 	};
 
 	as_batch_attr attr;
-	as_batch_attr_remove(&attr, policy_remove, pkey, policy_remove->durable_delete);
+	as_batch_attr_remove(&attr, policy_remove, policy->base.error_detail_verbosity, pkey,
+		policy_remove->durable_delete);
 
 	return as_batch_keys_execute(as, err, policy, batch, (as_batch_base_record*)&rec, versions, &attr,
 		listener, udata);

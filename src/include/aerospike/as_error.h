@@ -62,6 +62,11 @@ extern "C" {
 #define AS_EXP_TRACE_SNIPPET_MAX_SIZE 256
 
 /**
+ * Maximum bytes stored for each pre-rendered comparison operand, including the trailing null byte.
+ */
+#define AS_EXP_TRACE_OPERAND_MAX_SIZE 49
+
+/**
  * Top-level error-detail msgpack keys returned in field 45.
  */
 #define AS_ERROR_DETAIL_KEY_SUBCODE 1
@@ -81,6 +86,7 @@ extern "C" {
 #define AS_EXP_TRACE_KEY_LANG 8
 #define AS_EXP_TRACE_KEY_AEL_OFFSET 9
 #define AS_EXP_TRACE_KEY_AEL_SPAN 10
+#define AS_EXP_TRACE_KEY_OPERANDS 13
 
 /**
  * Expression trace phase values returned by the server.
@@ -159,6 +165,16 @@ typedef struct as_exp_trace_s {
 
 	bool has_ael_span;
 	uint32_t ael_span;
+
+	/**
+	 * True if the server returned key 13 operands. Operands are diagnostic,
+	 * pre-rendered strings and may disclose record values. They are emitted only
+	 * for some eval/false comparison traces and may be omitted by permissions or
+	 * by the server's field-45 response budget.
+	 */
+	bool has_operands;
+	char lhs[AS_EXP_TRACE_OPERAND_MAX_SIZE];
+	char rhs[AS_EXP_TRACE_OPERAND_MAX_SIZE];
 } as_exp_trace;
 
 /**

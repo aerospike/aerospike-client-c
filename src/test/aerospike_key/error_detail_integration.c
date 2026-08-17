@@ -1113,8 +1113,8 @@ TEST(ed_sync_exp_trace_cross_verbosity, "5.23.1 expression trace additive across
 	as_exp_destroy(expr);
 }
 
-// 5.24.1 Query start failures surface detail only on fatal replies.
-TEST(ed_sync_query_start_failure_detail, "5.24.1 query start failure parses legal field 45 reply")
+// 5.24.1 Query start failures surface detail on non-OK start replies.
+TEST(ed_sync_query_start_failure_detail, "5.24.1 query start failure parses field 45 detail")
 {
 	as_error err;
 	as_policy_query pq;
@@ -1988,7 +1988,7 @@ async_query_start_failure_cb(as_error* err, as_record* rec, void* udata, as_even
 	return false;
 }
 
-TEST(ed_async_query_start_failure_detail, "6.11 async query start failure parses legal field 45 reply")
+TEST(ed_async_query_start_failure_detail, "6.11 async query start failure parses field 45 detail")
 {
 	as_monitor_begin(&monitor);
 

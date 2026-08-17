@@ -414,7 +414,7 @@ as_query_parse_records_async(as_event_command* cmd)
 		}
 
 		if (msg->result_code != AEROSPIKE_OK) {
-			// Background scans return AEROSPIKE_ERR_RECORD_NOT_FOUND
+			// Background queries return AEROSPIKE_ERR_RECORD_NOT_FOUND
 			// when the set does not exist on the target node.
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 				// Non-fatal error.
@@ -551,7 +551,7 @@ as_query_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 		}
 
 		if (msg->result_code != AEROSPIKE_OK) {
-			// Background scans return AEROSPIKE_ERR_RECORD_NOT_FOUND
+			// Background queries return AEROSPIKE_ERR_RECORD_NOT_FOUND
 			// when the set does not exist on the target node.
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 				// Non-fatal error.

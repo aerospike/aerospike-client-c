@@ -675,7 +675,7 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
  * @private
  * Iterate fields, parse error details from field type 45 if present, skip others.
  */
-uint8_t*
+AS_EXTERN uint8_t*
 as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields);
 
 /**
@@ -748,7 +748,7 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
  * @private
  * Parse user defined function error.
  */
-as_status
+AS_EXTERN as_status
 as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status);
 
 /**

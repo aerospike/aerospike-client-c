@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - stage
+      - artifact-naming-fix
   workflow_dispatch:
 
 jobs:
@@ -18,7 +19,7 @@ jobs:
     name: Build stage
     uses: ./.github/workflows/build-artifacts.yml
     with:
-      dry-run:                  ${{ vars.DRY_RUN_RELEASE == 'true' }} # dry-run would be false by default
+      dry-run:                  true # TODO: restore vars.DRY_RUN_RELEASE == 'true' after dev testing
       enforce-doxygen-warnings: ${{ vars.ENFORCE_DOXYGEN_WARNINGS != 'false' }} # default on
       event-lib:                libev
       run-mac:                  ${{ fromJSON(vars.PR_EXTRA_PLATFORMS || '{}').mac == true }}

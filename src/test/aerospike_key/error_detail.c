@@ -811,7 +811,8 @@ TEST(error_detail_parser_exp_trace_truncation, "3.24 expression trace truncation
 	assert_true(strstr(err.message, "op=\"OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO\"") != NULL);
 	assert_true(strstr(err.message, "path=[\"PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP\"") != NULL);
 	assert_true(strstr(err.message, "snippet=\"SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS") != NULL);
-	assert_int_eq(err.message[AS_ERROR_MESSAGE_MAX_LEN], '\0');
+	assert_not_null(memchr(err.message, '\0', AS_ERROR_MESSAGE_MAX_SIZE));
+	assert_true(strlen(err.message) <= AS_ERROR_MESSAGE_MAX_LEN);
 }
 
 // 3.25 Reserved server keys are skipped and operands are kept without blocking later fields.

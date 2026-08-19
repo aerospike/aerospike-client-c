@@ -612,16 +612,15 @@ as_operations_string_regex_replace(
 	const char* replacement, as_string_regex_flags flags
 	)
 {
-	(void)policy;
-
 	if (! as_string_args_not_null2(pattern, replacement)) {
 		return false;
 	}
 
 	as_packer pk = as_cdt_begin();
-	as_string_pack_header(&pk, ctx, AS_STRING_OP_REGEX_REPLACE, 2);
+	as_string_pack_header(&pk, ctx, AS_STRING_OP_REGEX_REPLACE, 3);
 	as_string_pack_pair(&pk, pattern, replacement);
 	as_pack_uint64(&pk, (uint64_t)flags);
+	as_pack_uint64(&pk, as_string_policy_flags(policy));
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_MODIFY);
 }

@@ -101,12 +101,14 @@ typedef struct as_batch_base_record_s {
 	bool in_doubt;
 
 	/**
-	 * Optional server error detail for this row.
-	 *
-	 * This pointer is owned by the batch record list and is freed by
-	 * as_batch_records_destroy().
+	 * Server error detail subcode for this row. When absent, this field is 0.
 	 */
-	const as_error_detail* error_detail;
+	uint32_t subcode;
+
+	/**
+	 * NULL-terminated row error detail message. Empty when no row detail is present.
+	 */
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 } as_batch_base_record;
 
 /**
@@ -122,7 +124,8 @@ typedef struct as_batch_read_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt; // Will always be false for reads.
-	const as_error_detail* error_detail;
+	uint32_t subcode;
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 
 	/**
 	 * Optional read policy.
@@ -172,7 +175,8 @@ typedef struct as_batch_write_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
-	const as_error_detail* error_detail;
+	uint32_t subcode;
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 
 	/**
 	 * Optional write policy.
@@ -204,7 +208,8 @@ typedef struct as_batch_apply_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
-	const as_error_detail* error_detail;
+	uint32_t subcode;
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 
 	/**
 	 * Optional apply policy.
@@ -248,7 +253,8 @@ typedef struct as_batch_remove_record_s {
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
-	const as_error_detail* error_detail;
+	uint32_t subcode;
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 
 	/**
 	 * Optional remove policy.
@@ -340,6 +346,8 @@ typedef void (*as_async_batch_listener)(as_error* err, as_batch_records* records
 
 /**
  * Initialize batch records with specified capacity on the stack using alloca().
+ * Batch records include an inline error message buffer. For large capacities,
+ * prefer as_batch_records_init() to avoid high stack usage.
  *
  * When the batch is no longer needed, then use as_batch_records_destroy() to
  * release the batch and associated resources.
@@ -355,6 +363,8 @@ typedef void (*as_async_batch_listener)(as_error* err, as_batch_records* records
 
 /**
  * Initialize batch records with specified capacity on the stack using alloca().
+ * Batch records include an inline error message buffer. For large capacities,
+ * prefer as_batch_read_init() to avoid high stack usage.
  *
  * @deprecated Use as_batch_records_inita() instead.
  * @relates as_batch_records
@@ -489,7 +499,7 @@ as_batch_remove_reserve(as_batch_records* records)
 }
 
 /**
- * Destroy keys and records in record list, including any server error-detail side objects.
+ * Destroy keys and records in record list.
  * It's the responsility of the caller to free additional user specified fields in the record.
  *
  * @relates as_batch_records
@@ -499,7 +509,7 @@ AS_EXTERN void
 as_batch_records_destroy(as_batch_records* records);
 
 /**
- * Destroy keys and records in record list, including any server error-detail side objects.
+ * Destroy keys and records in record list.
  * It's the responsility of the caller to free additional user specified fields in the record.
  *
  * @deprecated Use as_batch_records_destroy() instead.

@@ -94,12 +94,14 @@ typedef struct as_batch_result_s {
 	bool in_doubt;
 
 	/**
-	 * Optional server error detail for this row.
-	 *
-	 * This pointer is only valid for the lifetime of the batch listener callback and must
-	 * not be freed by the caller.
+	 * Server error detail subcode for this row. When absent, this field is 0.
 	 */
-	const as_error_detail* error_detail;
+	uint32_t subcode;
+
+	/**
+	 * NULL-terminated row error detail message. Empty when no row detail is present.
+	 */
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 } as_batch_result;
 
 /**

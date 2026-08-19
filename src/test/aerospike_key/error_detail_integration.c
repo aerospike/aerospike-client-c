@@ -685,7 +685,7 @@ TEST(ed_sync_udf_text_without_field45, "5.9.1 UDF error surfaces text without fi
 
 	assert_int_eq(status, AEROSPIKE_ERR_UDF);
 	assert_true(strstr(err.message, "test failure") != NULL);
-	assert_false(as_error_has_server_detail(&err));
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 
 	if (res) {
 		as_val_destroy(res);
@@ -710,7 +710,7 @@ TEST(ed_sync_batch_udf_text_without_field45, "5.9.2 batch UDF FAILURE text witho
 
 	assert_int_eq(single_status, AEROSPIKE_ERR_UDF);
 	assert_true(strstr(single_err.message, "test failure") != NULL);
-	assert_false(as_error_has_server_detail(&single_err));
+	assert_int_eq(single_err.subcode, AS_SUB_NONE);
 
 	if (res) {
 		as_val_destroy(res);
@@ -738,7 +738,8 @@ TEST(ed_sync_batch_udf_text_without_field45, "5.9.2 batch UDF FAILURE text witho
 	const char* udf_error = as_record_get_str(&result->record, "FAILURE");
 	assert_not_null(udf_error);
 	assert_true(strstr(udf_error, "test failure") != NULL);
-	assert_null(result->error_detail);
+	assert_int_eq(result->subcode, AS_SUB_NONE);
+	assert_true(strstr(result->message, "test failure") != NULL);
 
 	as_batch_records_destroy(&records);
 	as_key_destroy(&key);
@@ -953,13 +954,9 @@ TEST(ed_sync_filtered_out_exp_trace_operands, "5.20.2 filtered out trace operand
 	as_status status = aerospike_key_put(as, &err, &pw, &key, &rec);
 
 	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_phase);
-	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
-	assert_int_eq(err.exp_trace.lang, AS_EXP_TRACE_LANG_MSGPACK);
-	assert_true(err.exp_trace.has_operands);
-	assert_true(err.exp_trace.lhs[0] != '\0');
-	assert_true(err.exp_trace.rhs[0] != '\0');
+	assert_true(strstr(err.message, "; exp_trace={") != NULL);
+	assert_true(strstr(err.message, "phase=\"eval\"") != NULL);
+	assert_true(strstr(err.message, "operands=[") != NULL);
 	as_exp_destroy(filter);
 }
 
@@ -1050,16 +1047,12 @@ TEST(ed_sync_exp_trace_cross_verbosity, "5.23.1 expression trace adds v3-only de
 	assert_int_eq(status_v3, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
 	assert_int_eq(err_v2.code, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
 	assert_int_eq(err_v3.code, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
-	assert_false(err_v2.has_exp_trace);
-	assert_true(err_v3.has_exp_trace);
-	assert_true(err_v3.exp_trace.has_phase);
-	assert_int_eq(err_v3.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
-	assert_int_eq(err_v3.exp_trace.lang, AS_EXP_TRACE_LANG_MSGPACK);
-	assert_false(err_v2.exp_trace.has_operands);
+	assert_true(strstr(err_v2.message, "exp_trace={") == NULL);
+	assert_true(strstr(err_v3.message, "; exp_trace={") != NULL);
+	assert_true(strstr(err_v3.message, "phase=\"eval\"") != NULL);
 	assert_true(err_v2.message[0] != '\0');
 	assert_true(err_v3.message[0] != '\0');
 	assert_int_eq(err_v2.subcode, err_v3.subcode);
-	assert_int_eq(err_v2.has_subcode, err_v3.has_subcode);
 
 	as_operations_destroy(&ops_v2);
 	as_operations_destroy(&ops_v3);
@@ -1085,7 +1078,7 @@ TEST(ed_sync_query_start_top_level_message, "5.24.1 query start failure keeps to
 	assert_true(status != AEROSPIKE_OK);
 	assert_int_eq(err.code, status);
 	assert_int_eq(count, 0);
-	assert_false(as_error_has_server_detail(&err));
+	assert_int_eq(err.subcode, AS_SUB_NONE);
 	assert_true(strlen(err.message) > 0);
 
 	as_query_destroy(&query);
@@ -1129,20 +1122,14 @@ TEST(ed_sync_batch_row_detail, "7.1 batch row error detail propagation")
 
 	as_batch_read_record* result_ok = as_vector_get(&records.list, 0);
 	assert_int_eq(result_ok->result, AEROSPIKE_OK);
-	assert_null(result_ok->error_detail);
+	assert_int_eq(result_ok->subcode, AS_SUB_NONE);
+	assert_string_eq(result_ok->message, "");
 
 	as_batch_read_record* result_err = as_vector_get(&records.list, 1);
 	assert_int_eq(result_err->result, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
-	assert_not_null(result_err->error_detail);
-	assert_true(result_err->error_detail->has_exp_trace);
-	assert_true(result_err->error_detail->exp_trace.has_phase);
-	assert_int_eq(result_err->error_detail->exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
-	assert_int_eq(result_err->error_detail->exp_trace.lang, AS_EXP_TRACE_LANG_MSGPACK);
-	if (result_err->error_detail->exp_trace.has_operands) {
-		assert_true(result_err->error_detail->exp_trace.lhs[0] != '\0');
-		assert_true(result_err->error_detail->exp_trace.rhs[0] != '\0');
-	}
-	assert_true(result_err->error_detail->message[0] != '\0');
+	assert_true(result_err->message[0] != '\0');
+	assert_true(strstr(result_err->message, "; exp_trace={") != NULL);
+	assert_true(strstr(result_err->message, "phase=\"eval\"") != NULL);
 
 	as_batch_records_destroy(&records);
 	as_operations_destroy(&ops);
@@ -1213,10 +1200,9 @@ TEST(ed_sync_batch_write_apply_remove_row_detail,
 			continue;
 		}
 
-		assert_not_null(result->error_detail);
-		assert_true(result->error_detail->has_exp_trace);
-		assert_true(result->error_detail->exp_trace.has_phase);
-		assert_int_eq(result->error_detail->exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
+		assert_true(result->message[0] != '\0');
+		assert_true(strstr(result->message, "; exp_trace={") != NULL);
+		assert_true(strstr(result->message, "phase=\"eval\"") != NULL);
 	}
 
 	as_batch_records_destroy(&records);
@@ -1249,14 +1235,15 @@ TEST(ed_sync_batch_no_leak, "7.2 batch verbosity no leak")
 	for (uint32_t i = 0; i < list->size; i++) {
 		as_batch_read_record* br = as_vector_get(list, i);
 		assert_int_eq(br->result, AEROSPIKE_OK);
-		assert_null(br->error_detail);
+		assert_int_eq(br->subcode, AS_SUB_NONE);
+		assert_string_eq(br->message, "");
 	}
 	as_batch_records_destroy(&records);
 }
 
 typedef struct {
 	bool called;
-	bool saw_ok_null_detail;
+	bool saw_ok_empty_detail;
 	bool saw_err_detail;
 	bool saw_err_trace;
 	char err_message[AS_ERROR_MESSAGE_MAX_SIZE];
@@ -1267,29 +1254,25 @@ batch_listener_error_detail_cb(const as_batch_result* results, uint32_t n, void*
 {
 	batch_listener_detail_state* state = udata;
 	state->called = true;
-	state->saw_ok_null_detail = true;
+	state->saw_ok_empty_detail = true;
 
 	for (uint32_t i = 0; i < n; i++) {
 		const as_batch_result* result = &results[i];
 
 		if (result->result == AEROSPIKE_OK) {
-			state->saw_ok_null_detail &= (result->error_detail == NULL);
+			state->saw_ok_empty_detail &= (result->subcode == AS_SUB_NONE && result->message[0] == '\0');
 		}
 		else if (result->result == AEROSPIKE_ERR_OP_NOT_APPLICABLE) {
-			state->saw_err_detail = (result->error_detail != NULL);
-
-			if (result->error_detail) {
-				state->saw_err_trace = result->error_detail->has_exp_trace;
-				as_strncpy(state->err_message, result->error_detail->message,
-					sizeof(state->err_message));
-			}
+			state->saw_err_detail = result->message[0] != '\0';
+			state->saw_err_trace = strstr(result->message, "; exp_trace={") != NULL;
+			as_strncpy(state->err_message, result->message, sizeof(state->err_message));
 		}
 	}
 	return true;
 }
 
-// 7.2.1 Legacy batch listener exposes as_batch_result.error_detail.
-TEST(ed_sync_batch_listener_error_detail, "7.2.1 batch listener error_detail callback coverage")
+// 7.2.1 Legacy batch listener exposes inline row detail.
+TEST(ed_sync_batch_listener_error_detail, "7.2.1 batch listener row detail callback coverage")
 {
 	as_error err;
 	as_key ok_key;
@@ -1320,7 +1303,7 @@ TEST(ed_sync_batch_listener_error_detail, "7.2.1 batch listener error_detail cal
 
 	batch_listener_detail_state state = {
 		.called = false,
-		.saw_ok_null_detail = false,
+		.saw_ok_empty_detail = false,
 		.saw_err_detail = false,
 		.saw_err_trace = false,
 		.err_message = {0}
@@ -1331,7 +1314,7 @@ TEST(ed_sync_batch_listener_error_detail, "7.2.1 batch listener error_detail cal
 
 	assert_int_eq(status, AEROSPIKE_BATCH_FAILED);
 	assert_true(state.called);
-	assert_true(state.saw_ok_null_detail);
+	assert_true(state.saw_ok_empty_detail);
 	assert_true(state.saw_err_detail);
 	assert_true(state.saw_err_trace);
 	assert_true(state.err_message[0] != '\0');
@@ -1367,9 +1350,8 @@ TEST(ed_sync_scan_no_leak, "7.3 scan verbosity no leak")
 	as_status status = aerospike_scan_foreach(as, &err, &ps, &scan, scan_no_leak_cb, &count);
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_true(count > 0);
-	assert_false(err.has_subcode);
-	assert_false(err.has_message);
-	assert_false(err.has_exp_trace);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
+	assert_string_eq(err.message, "");
 
 	as_scan_destroy(&scan);
 }
@@ -1399,9 +1381,8 @@ TEST(ed_sync_query_no_leak, "7.4 query verbosity no leak")
 	as_status status = aerospike_query_foreach(as, &err, &pq, &query, query_no_leak_cb, &count);
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_true(count > 0);
-	assert_false(err.has_subcode);
-	assert_false(err.has_message);
-	assert_false(err.has_exp_trace);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
+	assert_string_eq(err.message, "");
 
 	as_query_destroy(&query);
 }
@@ -1995,15 +1976,9 @@ TEST(ed_async_exp_trace_v3, "6.10 async expression trace verbosity 3")
 
 	assert_true(data.got_error);
 	assert_int_eq(data.err_copy.code, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
-	assert_true(data.err_copy.has_exp_trace);
-	assert_true(data.err_copy.exp_trace.has_phase);
-	assert_int_eq(data.err_copy.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
-	assert_int_eq(data.err_copy.exp_trace.lang, AS_EXP_TRACE_LANG_MSGPACK);
-	if (data.err_copy.exp_trace.has_operands) {
-		assert_true(data.err_copy.exp_trace.lhs[0] != '\0');
-		assert_true(data.err_copy.exp_trace.rhs[0] != '\0');
-	}
 	assert_true(data.err_copy.message[0] != '\0');
+	assert_true(strstr(data.err_copy.message, "; exp_trace={") != NULL);
+	assert_true(strstr(data.err_copy.message, "phase=\"eval\"") != NULL);
 }
 
 static bool

@@ -52,6 +52,8 @@
 #define BATCH_TYPE_RECORDS 0
 #define BATCH_TYPE_KEYS 1
 
+#define AS_BATCH_STACK_ALLOC_MAX AS_STACK_BUF_SIZE
+
 //---------------------------------
 // Imports
 //---------------------------------
@@ -206,68 +208,48 @@ destroy_versions(uint64_t* versions)
 	}
 }
 
-static inline void
-as_batch_error_detail_destroy(const as_error_detail* detail)
+static inline bool
+as_batch_stack_alloc_ok(size_t item_sz, uint32_t n_items)
 {
-	if (detail) {
-		cf_free((void*)detail);
-	}
+	return item_sz == 0 || n_items <= (AS_BATCH_STACK_ALLOC_MAX / item_sz);
 }
 
-static as_status
-as_batch_error_detail_from_error(
-	as_error* err, const as_error* src, const as_error_detail** detailp
-	)
+static inline bool
+as_batch_use_heap(size_t item_sz, uint32_t n_items)
 {
-	as_batch_error_detail_destroy(*detailp);
-	*detailp = NULL;
-
-	if (!as_error_has_server_detail(src)) {
-		return AEROSPIKE_OK;
-	}
-
-	as_error_detail* detail = cf_malloc(sizeof(as_error_detail));
-
-	if (!detail) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
-			"Batch error detail allocation failed");
-	}
-
-	as_error_detail_reset(detail);
-	detail->has_subcode = src->has_subcode;
-	detail->subcode = src->subcode;
-	detail->has_message = src->has_message;
-	detail->has_exp_trace = src->has_exp_trace;
-	as_exp_trace_copy(&detail->exp_trace, &src->exp_trace);
-	strcpy(detail->message, src->message);
-	*detailp = detail;
-	return AEROSPIKE_OK;
+	return !as_batch_stack_alloc_ok(item_sz, n_items);
 }
 
 static inline as_status
 as_batch_result_set_error_detail(as_error* err, as_batch_result* result, const as_error* src)
 {
-	return as_batch_error_detail_from_error(err, src, &result->error_detail);
+	(void)err;
+	result->subcode = src->subcode;
+	as_strncpy(result->message, src->message, sizeof(result->message));
+	return AEROSPIKE_OK;
 }
 
 static inline as_status
 as_batch_record_set_error_detail(as_error* err, as_batch_base_record* record, const as_error* src)
 {
-	return as_batch_error_detail_from_error(err, src, &record->error_detail);
+	(void)err;
+	record->subcode = src->subcode;
+	as_strncpy(record->message, src->message, sizeof(record->message));
+	return AEROSPIKE_OK;
 }
 
 static inline void
 as_batch_result_clear_error_detail(as_batch_result* result)
 {
-	as_batch_error_detail_destroy(result->error_detail);
-	result->error_detail = NULL;
+	result->subcode = 0;
+	result->message[0] = '\0';
 }
 
 static inline void
 as_batch_record_clear_error_detail(as_batch_base_record* record)
 {
-	as_batch_error_detail_destroy(record->error_detail);
-	record->error_detail = NULL;
+	record->subcode = 0;
+	record->message[0] = '\0';
 }
 
 static inline as_status
@@ -3370,11 +3352,11 @@ as_batch_keys_execute_seq(
 	return status;
 }
 
-#define batch_results_init(_item_sz, _n_keys) (_n_keys > 5000) ? \
+#define batch_results_init(_item_sz, _n_keys) as_batch_use_heap(_item_sz, _n_keys) ? \
 	(as_batch_result*)cf_malloc(_item_sz * _n_keys) : \
 	(as_batch_result*)alloca(_item_sz * _n_keys)
 
-#define batch_results_free(_results, _nkeys) if (_nkeys > 5000) {cf_free(_results);}
+#define batch_results_free(_results, _nkeys) if (as_batch_use_heap(sizeof(as_batch_result), _nkeys)) {cf_free(_results);}
 
 static as_status
 as_batch_keys_execute(
@@ -3435,7 +3417,7 @@ as_batch_keys_execute(
 		result->key = key;
 		result->result = AEROSPIKE_NO_RESPONSE;
 		result->in_doubt = false;
-		result->error_detail = NULL;
+	as_batch_result_clear_error_detail(result);
 		as_record_init(&result->record, 0);
 
 		status = as_key_set_digest(err, key);
@@ -3464,7 +3446,7 @@ as_batch_keys_execute(
 			batch_node = as_vector_reserve(&batch_nodes);
 			batch_node->node = node;  // Transfer node
 
-			if (n_keys <= 5000) {
+			if (as_batch_stack_alloc_ok(sizeof(uint32_t), offsets_capacity)) {
 				// All keys and offsets should fit on stack.
 				as_vector_inita(&batch_node->offsets, sizeof(uint32_t), offsets_capacity);
 			}
@@ -3967,7 +3949,7 @@ as_batch_records_execute(
 			batch_node = as_vector_reserve(&batch_nodes);
 			batch_node->node = node;  // Transfer node
 			
-			if (n_keys <= 5000) {
+			if (as_batch_stack_alloc_ok(sizeof(uint32_t), offsets_capacity)) {
 				// All keys and offsets should fit on stack.
 				as_vector_inita(&batch_node->offsets, sizeof(uint32_t), offsets_capacity);
 			}
@@ -4970,7 +4952,7 @@ as_txn_verify(aerospike* as, as_error* err, as_txn* txn)
 
 	as_batch_records records;
 
-	if (n_keys <= 5000) {
+	if (as_batch_stack_alloc_ok(sizeof(as_batch_record), n_keys)) {
 		as_batch_records_inita(&records, n_keys);
 	}
 	else {
@@ -5011,7 +4993,7 @@ as_txn_roll(aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* tx
 
 	as_batch_records records;
 
-	if (n_keys <= 5000) {
+	if (as_batch_stack_alloc_ok(sizeof(as_batch_record), n_keys)) {
 		as_batch_records_inita(&records, n_keys);
 	}
 	else {

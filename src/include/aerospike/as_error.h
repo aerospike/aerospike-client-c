@@ -43,157 +43,6 @@ extern "C" {
  */
 #define AS_ERROR_MESSAGE_MAX_LEN 	(AS_ERROR_MESSAGE_MAX_SIZE - 1)
 
-/**
- * Maximum bytes stored for a trace op name, including the trailing null byte.
- *
- * Public compatibility note: the expression-trace structs below are a branch-level
- * compatibility change and intentionally grow public struct sizes on this release line.
- */
-#define AS_EXP_TRACE_OP_MAX_SIZE 32
-
-/**
- * Maximum number of path frames stored inline.
- */
-#define AS_EXP_TRACE_PATH_MAX_DEPTH 16
-
-/**
- * Maximum bytes stored for the trace snippet, including the trailing null byte.
- */
-#define AS_EXP_TRACE_SNIPPET_MAX_SIZE 256
-
-/**
- * Maximum bytes stored for each pre-rendered comparison operand, including the trailing null byte.
- */
-#define AS_EXP_TRACE_OPERAND_MAX_SIZE 49
-
-/**
- * Top-level error-detail msgpack keys returned in field 45.
- */
-#define AS_ERROR_DETAIL_KEY_SUBCODE 1
-#define AS_ERROR_DETAIL_KEY_MESSAGE 2
-#define AS_ERROR_DETAIL_KEY_EXP_TRACE 3
-
-/**
- * Expression-trace sub-map keys returned under AS_ERROR_DETAIL_KEY_EXP_TRACE.
- */
-#define AS_EXP_TRACE_KEY_PHASE 1
-#define AS_EXP_TRACE_KEY_BYTE_OFFSET 2
-#define AS_EXP_TRACE_KEY_OP 3
-#define AS_EXP_TRACE_KEY_DEPTH 4
-#define AS_EXP_TRACE_KEY_PATH 5
-#define AS_EXP_TRACE_KEY_SNIPPET 6
-#define AS_EXP_TRACE_KEY_OUTCOME 7
-#define AS_EXP_TRACE_KEY_LANG 8
-#define AS_EXP_TRACE_KEY_AEL_OFFSET 9
-#define AS_EXP_TRACE_KEY_AEL_SPAN 10
-#define AS_EXP_TRACE_KEY_OPERANDS 13
-
-/**
- * Expression trace phase values returned by the server.
- */
-typedef enum as_exp_trace_phase_e {
-	AS_EXP_TRACE_PHASE_UNKNOWN = 0,
-	AS_EXP_TRACE_PHASE_BUILD = 1,
-	AS_EXP_TRACE_PHASE_EVAL = 2
-} as_exp_trace_phase;
-
-/**
- * Expression trace outcome values returned by the server for eval traces.
- */
-typedef enum as_exp_trace_outcome_e {
-	AS_EXP_TRACE_OUTCOME_UNKNOWN = 0,
-	AS_EXP_TRACE_OUTCOME_FAULT = 1,
-	AS_EXP_TRACE_OUTCOME_FALSE = 2,
-	AS_EXP_TRACE_OUTCOME_ABSENT = 3
-} as_exp_trace_outcome;
-
-/**
- * Expression trace language values surfaced to clients.
- *
- * When the server omits key 8 (lang), the client defaults lang to
- * AS_EXP_TRACE_LANG_MSGPACK while keeping has_lang false so callers can still
- * distinguish wire presence from the effective language.
- */
-typedef enum as_exp_trace_lang_e {
-	AS_EXP_TRACE_LANG_UNKNOWN = 0,
-	AS_EXP_TRACE_LANG_MSGPACK = 1,
-	AS_EXP_TRACE_LANG_AEL = 2
-} as_exp_trace_lang;
-
-/**
- * Structured expression trace returned under error-detail key 3.
- *
- * Most fields are optional on the wire. The `has_*` and `*_size` members distinguish
- * "present" from "absent". C intentionally exposes a curated subset of the server's
- * expression-trace map with bounded inline storage. When a field is absent, the client
- * cannot tell whether the field was not applicable or omitted by the server's
- * response-size budget. The exception is lang: when key 8 is absent, has_lang remains
- * false, but lang defaults to AS_EXP_TRACE_LANG_MSGPACK for trace consumers.
- */
-typedef struct as_exp_trace_s {
-	bool has_phase;
-	uint8_t phase;
-
-	bool has_byte_offset;
-	uint64_t byte_offset;
-
-	bool has_op;
-	char op[AS_EXP_TRACE_OP_MAX_SIZE];
-
-	bool has_depth;
-	uint16_t depth;
-
-	bool has_path;
-	uint8_t path_size;
-	char path[AS_EXP_TRACE_PATH_MAX_DEPTH][AS_EXP_TRACE_OP_MAX_SIZE];
-
-	bool has_snippet;
-	char snippet[AS_EXP_TRACE_SNIPPET_MAX_SIZE];
-
-	bool has_outcome;
-	uint8_t outcome;
-
-	/**
-	 * True if the server explicitly returned key 8 (lang).
-	 * When false, lang still defaults to AS_EXP_TRACE_LANG_MSGPACK for trace consumers.
-	 */
-	bool has_lang;
-	uint8_t lang;
-
-	bool has_ael_offset;
-	uint32_t ael_offset;
-
-	bool has_ael_span;
-	uint32_t ael_span;
-
-	/**
-	 * True if the server returned key 13 operands. Operands are diagnostic,
-	 * pre-rendered strings and may disclose record values. They are emitted only
-	 * for some eval/false comparison traces and may be omitted by permissions or
-	 * by the server's field-45 response budget.
-	 */
-	bool has_operands;
-	char lhs[AS_EXP_TRACE_OPERAND_MAX_SIZE];
-	char rhs[AS_EXP_TRACE_OPERAND_MAX_SIZE];
-} as_exp_trace;
-
-/**
- * Server-authored error detail payload used by batch row results.
- *
- * `message` surfaces the same user-facing text as `as_error.message`. Use `has_message`,
- * `has_subcode`, and `has_exp_trace` to determine which wire fields were actually present.
- */
-typedef struct as_error_detail_s {
-	bool has_subcode;
-	uint32_t subcode;
-
-	bool has_message;
-	bool has_exp_trace;
-	as_exp_trace exp_trace;
-
-	char message[AS_ERROR_MESSAGE_MAX_SIZE];
-} as_error_detail;
-
 //---------------------------------
 // Types
 //---------------------------------
@@ -251,37 +100,15 @@ typedef struct as_error_s {
 
 	/**
 	 * Server error detail subcode. When error_detail_verbosity >= 1 on the request policy
-	 * and the server returns structured error details, this field contains the numeric subcode.
-	 * Use has_subcode to distinguish "subcode 0" from "subcode absent".
+	 * and the server returns a subcode, this field contains the numeric subcode.
+	 * When absent, this field is 0.
 	 */
 	uint32_t subcode;
 
 	/**
-	 * True if error detail field 45 key 1 (subcode) was present.
-	 */
-	bool has_subcode;
-
-	/**
-	 * True if error detail field 45 key 2 (message) was present.
-	 * The surfaced message text still lives in message[] and may later be replaced by
-	 * fallback or UDF text without changing this wire-presence bit.
-	 */
-	bool has_message;
-
-	/**
-	 * True if error detail field 45 key 3 contained at least one client-exposed
-	 * expression trace field after reserved/unknown trace keys were dropped.
-	 */
-	bool has_exp_trace;
-
-	/**
-	 * Curated structured expression trace returned when error_detail_verbosity >= 3.
-	 * Absent optional fields remain zeroed with their corresponding has_* flag unset.
-	 */
-	as_exp_trace exp_trace;
-
-	/**
-	 * NULL-terminated user-facing error message.
+	 * NULL-terminated user-facing error message. When error_detail_verbosity is 3
+	 * and the server returns expression trace diagnostics, a bounded, escaped
+	 * `; exp_trace={...}` suffix may be appended to this message.
 	 */
 	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 
@@ -338,7 +165,7 @@ typedef struct as_error_s {
 #define as_error_update_status(__err, __code) \
 	do { \
 		if (as_error_has_server_detail(__err)) { \
-			if ((__err)->message[0] == '\0') { \
+			if ((__err)->message[0] == '\0' || as_error_message_is_trace_suffix_only((__err)->message)) { \
 				as_error_set_message_preserving_server_detail((__err), (__code), \
 					as_error_string(__code), __func__, __FILE__, __LINE__); \
 			} \
@@ -360,7 +187,7 @@ typedef struct as_error_s {
 #define as_error_update_address(__err, __code, __address) \
 	do { \
 		if (as_error_has_server_detail(__err)) { \
-			if ((__err)->message[0] == '\0') { \
+			if ((__err)->message[0] == '\0' || as_error_message_is_trace_suffix_only((__err)->message)) { \
 				as_error_set_messagev_preserving_server_detail((__err), (__code), \
 					__func__, __FILE__, __LINE__, "%s %s", (__address), as_error_string(__code)); \
 			} \
@@ -378,71 +205,59 @@ typedef struct as_error_s {
 // Functions
 //---------------------------------
 
-static inline void
-as_exp_trace_reset(as_exp_trace* trace)
+static inline const char*
+as_error_find_trace_suffix(const char* message)
 {
-	memset(trace, 0, sizeof(as_exp_trace));
-}
-
-static inline void
-as_exp_trace_copy(as_exp_trace* trg, const as_exp_trace* src)
-{
-	memcpy(trg, src, sizeof(as_exp_trace));
-}
-
-static inline void
-as_error_detail_reset(as_error_detail* detail)
-{
-	detail->has_subcode = false;
-	detail->subcode = 0;
-	detail->has_message = false;
-	detail->has_exp_trace = false;
-	as_exp_trace_reset(&detail->exp_trace);
-	detail->message[0] = '\0';
-}
-
-static inline void
-as_error_detail_copy(as_error_detail* trg, const as_error_detail* src)
-{
-	trg->has_subcode = src->has_subcode;
-	trg->subcode = src->subcode;
-	trg->has_message = src->has_message;
-	trg->has_exp_trace = src->has_exp_trace;
-	as_exp_trace_copy(&trg->exp_trace, &src->exp_trace);
-	strcpy(trg->message, src->message);
+	return strstr(message, "; exp_trace={");
 }
 
 static inline bool
-as_error_detail_has_server_detail(const as_error_detail* detail)
+as_error_message_is_trace_suffix_only(const char* message)
 {
-	return detail->has_subcode || detail->has_message || detail->has_exp_trace;
+	return strncmp(message, "; exp_trace={", 13) == 0;
+}
+
+static inline void
+as_error_append_preserved_trace_suffix(char* message, const char* suffix)
+{
+	if (suffix == NULL || suffix[0] == '\0' || strstr(message, suffix) != NULL) {
+		return;
+	}
+
+	size_t len = strlen(message);
+
+	if (len >= AS_ERROR_MESSAGE_MAX_LEN) {
+		return;
+	}
+
+	size_t copy_len = strlen(suffix);
+	size_t remaining = AS_ERROR_MESSAGE_MAX_LEN - len;
+
+	if (copy_len > remaining) {
+		copy_len = remaining;
+	}
+
+	memcpy(message + len, suffix, copy_len);
+	message[len + copy_len] = '\0';
 }
 
 static inline void
 as_error_clear_server_detail(as_error* err)
 {
 	err->subcode = 0;
-	err->has_subcode = false;
-	err->has_message = false;
-	err->has_exp_trace = false;
-	as_exp_trace_reset(&err->exp_trace);
 	err->message[0] = '\0';
 }
 
 static inline bool
 as_error_has_server_detail(const as_error* err)
 {
-	return err->has_subcode || err->has_message || err->has_exp_trace;
+	return err->subcode != 0 || err->message[0] != '\0';
 }
 
 static inline void
 as_error_copy_server_fields(as_error* trg, const as_error* src)
 {
 	trg->subcode = src->subcode;
-	trg->has_subcode = src->has_subcode;
-	trg->has_message = src->has_message;
-	trg->has_exp_trace = src->has_exp_trace;
-	as_exp_trace_copy(&trg->exp_trace, &src->exp_trace);
 }
 
 static inline as_status
@@ -464,8 +279,19 @@ as_error_set_message_preserving_server_detail(
 	uint32_t line
 	)
 {
+	char suffix[AS_ERROR_MESSAGE_MAX_SIZE];
+	const char* old_suffix = as_error_find_trace_suffix(err->message);
+
+	if (old_suffix) {
+		as_strncpy(suffix, old_suffix, sizeof(suffix));
+	}
+	else {
+		suffix[0] = '\0';
+	}
+
 	as_error_update_server_detail(err, code, func, file, line);
 	as_strncpy(err->message, message, AS_ERROR_MESSAGE_MAX_SIZE);
+	as_error_append_preserved_trace_suffix(err->message, suffix);
 	return err->code;
 }
 
@@ -475,6 +301,16 @@ as_error_set_messagev_preserving_server_detail(
 	const char* fmt, ...
 	)
 {
+	char suffix[AS_ERROR_MESSAGE_MAX_SIZE];
+	const char* old_suffix = as_error_find_trace_suffix(err->message);
+
+	if (old_suffix) {
+		as_strncpy(suffix, old_suffix, sizeof(suffix));
+	}
+	else {
+		suffix[0] = '\0';
+	}
+
 	as_error_update_server_detail(err, code, func, file, line);
 
 	if (fmt != NULL) {
@@ -484,6 +320,7 @@ as_error_set_messagev_preserving_server_detail(
 		err->message[AS_ERROR_MESSAGE_MAX_LEN] = '\0';
 		va_end(ap);
 	}
+	as_error_append_preserved_trace_suffix(err->message, suffix);
 	return err->code;
 }
 

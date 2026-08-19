@@ -22,6 +22,34 @@
 
 #include "../test.h"
 
+enum {
+	AS_ERROR_DETAIL_KEY_SUBCODE = 1,
+	AS_ERROR_DETAIL_KEY_MESSAGE = 2,
+	AS_ERROR_DETAIL_KEY_EXP_TRACE = 3,
+
+	AS_EXP_TRACE_KEY_PHASE = 1,
+	AS_EXP_TRACE_KEY_BYTE_OFFSET = 2,
+	AS_EXP_TRACE_KEY_OP = 3,
+	AS_EXP_TRACE_KEY_DEPTH = 4,
+	AS_EXP_TRACE_KEY_PATH = 5,
+	AS_EXP_TRACE_KEY_SNIPPET = 6,
+	AS_EXP_TRACE_KEY_OUTCOME = 7,
+	AS_EXP_TRACE_KEY_LANG = 8,
+	AS_EXP_TRACE_KEY_AEL_OFFSET = 9,
+	AS_EXP_TRACE_KEY_AEL_SPAN = 10,
+	AS_EXP_TRACE_KEY_OPERANDS = 13,
+
+	AS_EXP_TRACE_PHASE_BUILD = 1,
+	AS_EXP_TRACE_PHASE_EVAL = 2,
+	AS_EXP_TRACE_OUTCOME_FALSE = 2,
+	AS_EXP_TRACE_LANG_MSGPACK = 1,
+	AS_EXP_TRACE_LANG_AEL = 2,
+
+	AS_EXP_TRACE_OP_MAX_SIZE = 32,
+	AS_EXP_TRACE_PATH_MAX_DEPTH = 16,
+	AS_EXP_TRACE_SNIPPET_MAX_SIZE = 256
+};
+
 //-------------------------------------
 // Helpers: msgpack buffer construction
 //-------------------------------------
@@ -730,37 +758,19 @@ TEST(error_detail_parser_exp_trace_full, "3.23 full expression trace parse")
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_subcode);
 	assert_int_eq(err.subcode, 4242);
-	assert_true(err.has_message);
-	assert_string_eq(err.message, "expression failed (subcode=4242)");
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_phase);
-	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
-	assert_true(err.exp_trace.has_byte_offset);
-	assert_int_eq(err.exp_trace.byte_offset, 1234);
-	assert_true(err.exp_trace.has_op);
-	assert_string_eq(err.exp_trace.op, "cmp_eq");
-	assert_true(err.exp_trace.has_depth);
-	assert_int_eq(err.exp_trace.depth, 3);
-	assert_true(err.exp_trace.has_path);
-	assert_int_eq(err.exp_trace.path_size, 3);
-	assert_string_eq(err.exp_trace.path[0], "root");
-	assert_string_eq(err.exp_trace.path[1], "bin");
-	assert_string_eq(err.exp_trace.path[2], "leaf");
-	assert_true(err.exp_trace.has_snippet);
-	assert_string_eq(err.exp_trace.snippet, "ibin == 99999");
-	assert_true(err.exp_trace.has_outcome);
-	assert_int_eq(err.exp_trace.outcome, AS_EXP_TRACE_OUTCOME_FALSE);
-	assert_true(err.exp_trace.has_lang);
-	assert_int_eq(err.exp_trace.lang, AS_EXP_TRACE_LANG_AEL);
-	assert_true(err.exp_trace.has_ael_offset);
-	assert_int_eq(err.exp_trace.ael_offset, 10);
-	assert_true(err.exp_trace.has_ael_span);
-	assert_int_eq(err.exp_trace.ael_span, 4);
-	assert_true(err.exp_trace.has_operands);
-	assert_string_eq(err.exp_trace.lhs, "100");
-	assert_string_eq(err.exp_trace.rhs, "99999");
+	assert_true(strstr(err.message, "expression failed (subcode=4242); exp_trace={") == err.message);
+	assert_true(strstr(err.message, "phase=\"eval\"") != NULL);
+	assert_true(strstr(err.message, "byte_offset=1234") != NULL);
+	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
+	assert_true(strstr(err.message, "depth=3") != NULL);
+	assert_true(strstr(err.message, "path=[\"root\",\"bin\",\"leaf\"]") != NULL);
+	assert_true(strstr(err.message, "snippet=\"ibin == 99999\"") != NULL);
+	assert_true(strstr(err.message, "outcome=\"false\"") != NULL);
+	assert_true(strstr(err.message, "lang=\"ael\"") != NULL);
+	assert_true(strstr(err.message, "ael_offset=10") != NULL);
+	assert_true(strstr(err.message, "ael_span=4") != NULL);
+	assert_true(strstr(err.message, "operands=[\"100\",\"99999\"]") != NULL);
 }
 
 // 3.24 Oversized trace arrays and strings are truncated into bounded storage
@@ -797,19 +807,11 @@ TEST(error_detail_parser_exp_trace_truncation, "3.24 expression trace truncation
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_op);
-	assert_int_eq(strlen(err.exp_trace.op), AS_EXP_TRACE_OP_MAX_SIZE - 1);
-	assert_true(strncmp(err.exp_trace.op, long_op, AS_EXP_TRACE_OP_MAX_SIZE - 1) == 0);
-	assert_true(err.exp_trace.has_path);
-	assert_int_eq(err.exp_trace.path_size, AS_EXP_TRACE_PATH_MAX_DEPTH);
-	assert_int_eq(strlen(err.exp_trace.path[0]), AS_EXP_TRACE_OP_MAX_SIZE - 1);
-	assert_true(strncmp(err.exp_trace.path[0], long_path,
-		AS_EXP_TRACE_OP_MAX_SIZE - 1) == 0);
-	assert_true(err.exp_trace.has_snippet);
-	assert_int_eq(strlen(err.exp_trace.snippet), AS_EXP_TRACE_SNIPPET_MAX_SIZE - 1);
-	assert_true(strncmp(err.exp_trace.snippet, long_snippet,
-		AS_EXP_TRACE_SNIPPET_MAX_SIZE - 1) == 0);
+	assert_true(strstr(err.message, "; exp_trace={") == err.message);
+	assert_true(strstr(err.message, "op=\"OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO\"") != NULL);
+	assert_true(strstr(err.message, "path=[\"PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP\"") != NULL);
+	assert_true(strstr(err.message, "snippet=\"SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS") != NULL);
+	assert_int_eq(err.message[AS_ERROR_MESSAGE_MAX_LEN], '\0');
 }
 
 // 3.25 Reserved server keys are skipped and operands are kept without blocking later fields.
@@ -837,12 +839,9 @@ TEST(error_detail_parser_exp_trace_skips_dropped_keys,
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_op);
-	assert_string_eq(err.exp_trace.op, "cmp_eq");
-	assert_true(err.exp_trace.has_operands);
-	assert_string_eq(err.exp_trace.lhs, "ibin");
-	assert_string_eq(err.exp_trace.rhs, "99999");
+	assert_true(strstr(err.message, "; exp_trace={") == err.message);
+	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
+	assert_true(strstr(err.message, "operands=[\"ibin\",\"99999\"]") != NULL);
 }
 
 // 3.26 Unknown/dropped-only trace maps do not surface as public exp_trace data.
@@ -866,9 +865,8 @@ TEST(error_detail_parser_exp_trace_dropped_only_ignored,
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_false(err.has_exp_trace);
-	assert_false(err.exp_trace.has_lang);
-	assert_int_eq(err.exp_trace.lang, 0);
+	assert_int_eq(err.subcode, 0);
+	assert_string_eq(err.message, "");
 }
 
 // 3.26.0 Truncated path markers are preserved as ordinary path frames.
@@ -891,12 +889,7 @@ TEST(error_detail_parser_exp_trace_path_truncation_marker,
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_path);
-	assert_int_eq(err.exp_trace.path_size, 3);
-	assert_string_eq(err.exp_trace.path[0], "root");
-	assert_string_eq(err.exp_trace.path[1], "...");
-	assert_string_eq(err.exp_trace.path[2], "leaf");
+	assert_true(strstr(err.message, "path=[\"root\",\"...\",\"leaf\"]") != NULL);
 }
 
 // 3.26.1 Malformed operands are dropped without losing other trace fields.
@@ -922,12 +915,9 @@ TEST(error_detail_parser_exp_trace_malformed_operands,
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_exp_trace);
-	assert_false(err.exp_trace.has_operands);
-	assert_true(err.exp_trace.has_op);
-	assert_string_eq(err.exp_trace.op, "cmp_eq");
-	assert_true(err.exp_trace.has_outcome);
-	assert_int_eq(err.exp_trace.outcome, AS_EXP_TRACE_OUTCOME_FALSE);
+	assert_true(strstr(err.message, "operands=") == NULL);
+	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
+	assert_true(strstr(err.message, "outcome=\"false\"") != NULL);
 }
 
 // 3.26.2 Unknown signed integers and extension values do not block later fields.
@@ -954,9 +944,7 @@ TEST(error_detail_parser_unknown_signed_and_ext,
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_subcode);
 	assert_int_eq(err.subcode, 17);
-	assert_true(err.has_message);
 	assert_string_eq(err.message, "after unknowns (subcode=17)");
 }
 
@@ -981,14 +969,11 @@ TEST(error_detail_parser_invalid_exp_trace, "3.25 invalid expression trace is ig
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_subcode);
 	assert_int_eq(err.subcode, 7);
-	assert_true(err.has_message);
 	assert_string_eq(err.message, "detail survives (subcode=7)");
-	assert_false(err.has_exp_trace);
 }
 
-// 3.28 UDF FAILURE text replaces err.message without setting has_message.
+// 3.28 UDF FAILURE text preserves trace suffix in err.message.
 TEST(error_detail_udf_message_preserves_server_detail,
 	"3.28 UDF message preserves parsed server detail")
 {
@@ -1019,15 +1004,10 @@ TEST(error_detail_udf_message_preserves_server_detail,
 	as_status status = as_command_parse_udf_failure(udf_buf, &err, &msg, AEROSPIKE_ERR_UDF);
 
 	assert_int_eq(status, AEROSPIKE_ERR_UDF);
-	assert_true(err.has_subcode);
 	assert_int_eq(err.subcode, 7);
-	assert_false(err.has_message);
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_phase);
-	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_BUILD);
-	assert_true(err.exp_trace.has_op);
-	assert_string_eq(err.exp_trace.op, "cmp_eq");
-	assert_string_eq(err.message, "test failure from error_detail_udf");
+	assert_true(strstr(err.message, "test failure from error_detail_udf; exp_trace={") == err.message);
+	assert_true(strstr(err.message, "phase=\"build\"") != NULL);
+	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
 }
 
 // 3.28.1 UDF fallback text also preserves parsed server detail.
@@ -1061,15 +1041,11 @@ TEST(error_detail_udf_fallback_preserves_server_detail,
 	as_status status = as_command_parse_udf_failure(udf_buf, &err, &msg, AEROSPIKE_ERR_UDF);
 
 	assert_int_eq(status, AEROSPIKE_ERR_UDF);
-	assert_true(err.has_subcode);
 	assert_int_eq(err.subcode, 7);
-	assert_false(err.has_message);
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_phase);
-	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_BUILD);
-	assert_true(err.exp_trace.has_op);
-	assert_string_eq(err.exp_trace.op, "cmp_eq");
-	assert_string_eq(err.message, as_error_string(AEROSPIKE_ERR_UDF));
+	assert_true(strstr(err.message, as_error_string(AEROSPIKE_ERR_UDF)) == err.message);
+	assert_true(strstr(err.message, "; exp_trace={") != NULL);
+	assert_true(strstr(err.message, "phase=\"build\"") != NULL);
+	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
 }
 
 // 3.29 Trace-only detail still receives generic status text when surfaced
@@ -1091,20 +1067,15 @@ TEST(error_detail_parser_exp_trace_only_status_fallback,
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_exp_trace);
-	assert_false(err.has_message);
-	assert_string_eq(err.message, "");
+	assert_true(strstr(err.message, "; exp_trace={") == err.message);
 
 	as_error_update_status(&err, AEROSPIKE_ERR_REQUEST_INVALID);
 
 	assert_int_eq(err.code, AEROSPIKE_ERR_REQUEST_INVALID);
-	assert_false(err.has_message);
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_phase);
-	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_BUILD);
-	assert_true(err.exp_trace.has_op);
-	assert_string_eq(err.exp_trace.op, "cmp_eq");
-	assert_string_eq(err.message, as_error_string(AEROSPIKE_ERR_REQUEST_INVALID));
+	assert_true(strstr(err.message, as_error_string(AEROSPIKE_ERR_REQUEST_INVALID)) == err.message);
+	assert_true(strstr(err.message, "; exp_trace={") != NULL);
+	assert_true(strstr(err.message, "phase=\"build\"") != NULL);
+	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
 }
 
 // 3.30 Trace-only detail still receives address-formatted fallback text
@@ -1127,9 +1098,7 @@ TEST(error_detail_parser_exp_trace_only_address_fallback,
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_exp_trace);
-	assert_false(err.has_message);
-	assert_string_eq(err.message, "");
+	assert_true(strstr(err.message, "; exp_trace={") == err.message);
 
 	as_error_update_address(&err, AEROSPIKE_ERR_REQUEST_INVALID, address);
 
@@ -1138,18 +1107,15 @@ TEST(error_detail_parser_exp_trace_only_address_fallback,
 		as_error_string(AEROSPIKE_ERR_REQUEST_INVALID));
 
 	assert_int_eq(err.code, AEROSPIKE_ERR_REQUEST_INVALID);
-	assert_false(err.has_message);
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_phase);
-	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_BUILD);
-	assert_true(err.exp_trace.has_op);
-	assert_string_eq(err.exp_trace.op, "cmp_eq");
-	assert_string_eq(err.message, expected);
+	assert_true(strstr(err.message, expected) == err.message);
+	assert_true(strstr(err.message, "; exp_trace={") != NULL);
+	assert_true(strstr(err.message, "phase=\"build\"") != NULL);
+	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
 }
 
-// 3.31 Omitted lang preserves wire absence while defaulting to msgpack
+// 3.31 Omitted lang is not rendered in trace text
 TEST(error_detail_parser_exp_trace_omitted_lang_defaults_msgpack,
-	"3.31 expression trace omitted lang defaults to msgpack")
+	"3.31 expression trace omitted lang is absent")
 {
 	as_error err;
 	as_error_init(&err);
@@ -1166,13 +1132,9 @@ TEST(error_detail_parser_exp_trace_omitted_lang_defaults_msgpack,
 
 	as_command_parse_error_details(&err, buf, p);
 
-	assert_true(err.has_exp_trace);
-	assert_true(err.exp_trace.has_phase);
-	assert_int_eq(err.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
-	assert_true(err.exp_trace.has_op);
-	assert_string_eq(err.exp_trace.op, "unknown");
-	assert_false(err.exp_trace.has_lang);
-	assert_int_eq(err.exp_trace.lang, AS_EXP_TRACE_LANG_MSGPACK);
+	assert_true(strstr(err.message, "phase=\"eval\"") != NULL);
+	assert_true(strstr(err.message, "op=\"unknown\"") != NULL);
+	assert_true(strstr(err.message, "lang=") == NULL);
 }
 
 // 3.32 Field-section parsing extracts the field-45 body written by the server.
@@ -1201,9 +1163,7 @@ TEST(error_detail_parser_fields_err_extracts_detail,
 	uint8_t* end = as_command_parse_fields_err(fields, &err, 1);
 
 	assert_true(end == fields + p);
-	assert_true(err.has_subcode);
 	assert_int_eq(err.subcode, 7);
-	assert_true(err.has_message);
 	assert_string_eq(err.message, "fatal detail (subcode=7)");
 }
 
@@ -1236,9 +1196,7 @@ TEST(error_detail_parser_batch_last_error_fields,
 	assert_int_eq(fields_len, 4 + 1 + detail_len);
 	assert_int_eq(status, AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED);
 	assert_int_eq(err.code, AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED);
-	assert_true(err.has_subcode);
 	assert_int_eq(err.subcode, 7);
-	assert_true(err.has_message);
 	assert_string_eq(err.message, "batch fatal detail (subcode=7)");
 }
 
@@ -1270,9 +1228,7 @@ TEST(error_detail_parser_sync_txn_status_error_fields,
 	assert_int_eq(status, AEROSPIKE_MRT_VERSION_MISMATCH);
 	assert_int_eq(err.code, AEROSPIKE_MRT_VERSION_MISMATCH);
 	assert_true(as_error_has_server_detail(&err));
-	assert_true(err.has_subcode);
 	assert_int_eq(err.subcode, 3);
-	assert_true(err.has_message);
 	assert_string_eq(err.message, "txn verify detail (subcode=3)");
 }
 
@@ -1304,9 +1260,7 @@ TEST(error_detail_parser_async_txn_status_error_fields,
 	assert_int_eq(status, AEROSPIKE_MRT_EXPIRED);
 	assert_int_eq(err.code, AEROSPIKE_MRT_EXPIRED);
 	assert_true(as_error_has_server_detail(&err));
-	assert_true(err.has_subcode);
 	assert_int_eq(err.subcode, 4);
-	assert_true(err.has_message);
 	assert_string_eq(err.message, "txn roll detail (subcode=4)");
 }
 
@@ -1538,29 +1492,12 @@ TEST(error_detail_reset_clears_subcode, "7.6 as_error_reset clears subcode")
 {
 	as_error err;
 	as_error_init(&err);
-	err.has_subcode = true;
 	err.subcode = 5001;
-	err.has_message = true;
 	snprintf(err.message, sizeof(err.message), "some error (subcode=5001)");
-	err.has_exp_trace = true;
-	err.exp_trace.has_phase = true;
-	err.exp_trace.phase = AS_EXP_TRACE_PHASE_BUILD;
-	err.exp_trace.has_path = true;
-	err.exp_trace.path_size = 1;
-	strcpy(err.exp_trace.path[0], "bin");
-	err.exp_trace.has_operands = true;
-	strcpy(err.exp_trace.lhs, "100");
-	strcpy(err.exp_trace.rhs, "99999");
 
 	as_error_reset(&err);
 
-	assert_false(err.has_subcode);
 	assert_int_eq(err.subcode, AS_SUB_NONE);
-	assert_false(err.has_message);
-	assert_false(err.has_exp_trace);
-	assert_false(err.exp_trace.has_phase);
-	assert_false(err.exp_trace.has_path);
-	assert_false(err.exp_trace.has_operands);
 	assert_string_eq(err.message, "");
 }
 
@@ -1569,44 +1506,16 @@ TEST(error_detail_copy_preserves_subcode, "7.7 as_error_copy preserves subcode")
 {
 	as_error src;
 	as_error_init(&src);
-	src.has_subcode = true;
 	src.subcode = 3042;
-	src.has_message = true;
 	snprintf(src.message, sizeof(src.message), "list bounds");
-	src.has_exp_trace = true;
-	src.exp_trace.has_phase = true;
-	src.exp_trace.phase = AS_EXP_TRACE_PHASE_EVAL;
-	src.exp_trace.has_op = true;
-	strcpy(src.exp_trace.op, "list_get_by_index");
-	src.exp_trace.has_path = true;
-	src.exp_trace.path_size = 2;
-	strcpy(src.exp_trace.path[0], "lbin");
-	strcpy(src.exp_trace.path[1], "99");
-	src.exp_trace.has_operands = true;
-	strcpy(src.exp_trace.lhs, "100");
-	strcpy(src.exp_trace.rhs, "99999");
 
 	as_error trg;
 	as_error_init(&trg);
 
 	as_error_copy(&trg, &src);
 
-	assert_true(trg.has_subcode);
 	assert_int_eq(trg.subcode, 3042);
-	assert_true(trg.has_message);
 	assert_string_eq(trg.message, "list bounds");
-	assert_true(trg.has_exp_trace);
-	assert_true(trg.exp_trace.has_phase);
-	assert_int_eq(trg.exp_trace.phase, AS_EXP_TRACE_PHASE_EVAL);
-	assert_true(trg.exp_trace.has_op);
-	assert_string_eq(trg.exp_trace.op, "list_get_by_index");
-	assert_true(trg.exp_trace.has_path);
-	assert_int_eq(trg.exp_trace.path_size, 2);
-	assert_string_eq(trg.exp_trace.path[0], "lbin");
-	assert_string_eq(trg.exp_trace.path[1], "99");
-	assert_true(trg.exp_trace.has_operands);
-	assert_string_eq(trg.exp_trace.lhs, "100");
-	assert_string_eq(trg.exp_trace.rhs, "99999");
 }
 
 // 7.8 Successful response with spurious field 45 -- parser populates but

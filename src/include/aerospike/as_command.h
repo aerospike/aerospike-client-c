@@ -699,11 +699,8 @@ as_command_parse_result_error_fields(as_error* err, as_msg* msg, uint8_t* p);
 /**
  * @private
  * Parse msgpack-encoded error details (field type 45 payload).
- * Populates err->subcode / has_subcode, err->message / has_message, and
- * err->exp_trace / has_exp_trace. The exposed expression trace is a curated
- * subset of the server map, and has_exp_trace is false when key 3 contains only
- * reserved or unknown trace keys. If exp_trace.lang is omitted on the wire, the
- * parser preserves has_lang=false and defaults lang to AS_EXP_TRACE_LANG_MSGPACK.
+ * Populates err->subcode and err->message. Expression trace details are rendered
+ * as a bounded, escaped `; exp_trace={...}` suffix on err->message.
  */
 AS_EXTERN void
 as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len);

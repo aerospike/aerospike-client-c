@@ -1597,12 +1597,92 @@ as_command_copy_msgpack_str(char* dst, size_t capacity, const char* src, uint32_
 }
 
 enum {
+	AS_ERROR_DETAIL_KEY_SUBCODE = 1,
+	AS_ERROR_DETAIL_KEY_MESSAGE = 2,
+	AS_ERROR_DETAIL_KEY_EXP_TRACE = 3,
+
+	AS_EXP_TRACE_KEY_PHASE = 1,
+	AS_EXP_TRACE_KEY_BYTE_OFFSET = 2,
+	AS_EXP_TRACE_KEY_OP = 3,
+	AS_EXP_TRACE_KEY_DEPTH = 4,
+	AS_EXP_TRACE_KEY_PATH = 5,
+	AS_EXP_TRACE_KEY_SNIPPET = 6,
+	AS_EXP_TRACE_KEY_OUTCOME = 7,
+	AS_EXP_TRACE_KEY_LANG = 8,
+	AS_EXP_TRACE_KEY_AEL_OFFSET = 9,
+	AS_EXP_TRACE_KEY_AEL_SPAN = 10,
 	AS_EXP_TRACE_KEY_PRIVATE_AEL_LINE = 11,
-	AS_EXP_TRACE_KEY_PRIVATE_AEL_COL = 12
+	AS_EXP_TRACE_KEY_PRIVATE_AEL_COL = 12,
+	AS_EXP_TRACE_KEY_OPERANDS = 13,
+
+	AS_EXP_TRACE_PHASE_BUILD = 1,
+	AS_EXP_TRACE_PHASE_EVAL = 2,
+
+	AS_EXP_TRACE_OUTCOME_FAULT = 1,
+	AS_EXP_TRACE_OUTCOME_FALSE = 2,
+	AS_EXP_TRACE_OUTCOME_ABSENT = 3,
+
+	AS_EXP_TRACE_LANG_MSGPACK = 1,
+	AS_EXP_TRACE_LANG_AEL = 2,
+
+	AS_EXP_TRACE_OP_MAX_SIZE = 32,
+	AS_EXP_TRACE_PATH_MAX_DEPTH = 16,
+	AS_EXP_TRACE_SNIPPET_MAX_SIZE = 256,
+	AS_EXP_TRACE_OPERAND_MAX_SIZE = 49
 };
 
+typedef struct as_exp_trace_detail_s {
+	bool has_phase;
+	uint8_t phase;
+
+	bool has_byte_offset;
+	uint64_t byte_offset;
+
+	bool has_op;
+	char op[AS_EXP_TRACE_OP_MAX_SIZE];
+
+	bool has_depth;
+	uint16_t depth;
+
+	bool has_path;
+	uint8_t path_size;
+	char path[AS_EXP_TRACE_PATH_MAX_DEPTH][AS_EXP_TRACE_OP_MAX_SIZE];
+
+	bool has_snippet;
+	char snippet[AS_EXP_TRACE_SNIPPET_MAX_SIZE];
+
+	bool has_outcome;
+	uint8_t outcome;
+
+	bool has_lang;
+	uint8_t lang;
+
+	bool has_ael_offset;
+	uint32_t ael_offset;
+
+	bool has_ael_span;
+	uint32_t ael_span;
+
+	bool has_operands;
+	char lhs[AS_EXP_TRACE_OPERAND_MAX_SIZE];
+	char rhs[AS_EXP_TRACE_OPERAND_MAX_SIZE];
+} as_exp_trace_detail;
+
+typedef struct as_trace_writer_s {
+	char* buf;
+	size_t capacity;
+	size_t pos;
+	bool truncated;
+} as_trace_writer;
+
+static inline void
+as_exp_trace_detail_reset(as_exp_trace_detail* trace)
+{
+	memset(trace, 0, sizeof(as_exp_trace_detail));
+}
+
 static inline bool
-as_exp_trace_has_data(const as_exp_trace* trace)
+as_exp_trace_has_data(const as_exp_trace_detail* trace)
 {
 	return trace->has_phase || trace->has_byte_offset || trace->has_op || trace->has_depth ||
 		trace->has_path || trace->has_snippet || trace->has_outcome || trace->has_lang ||
@@ -1610,7 +1690,309 @@ as_exp_trace_has_data(const as_exp_trace* trace)
 }
 
 static bool
-as_command_parse_exp_trace_operands(uint8_t** pp, uint8_t* end, as_exp_trace* trace)
+as_trace_write_raw(as_trace_writer* w, const char* str, size_t reserve)
+{
+	size_t len = strlen(str);
+
+	if (w->capacity == 0 || w->pos >= w->capacity - 1) {
+		w->truncated = true;
+		return false;
+	}
+
+	size_t avail = w->capacity - 1 - w->pos;
+
+	if (avail <= reserve || len > avail - reserve) {
+		w->truncated = true;
+		return false;
+	}
+
+	memcpy(w->buf + w->pos, str, len);
+	w->pos += len;
+	w->buf[w->pos] = '\0';
+	return true;
+}
+
+static bool
+as_trace_write_u64(as_trace_writer* w, uint64_t val, size_t reserve)
+{
+	char tmp[32];
+	snprintf(tmp, sizeof(tmp), "%" PRIu64, val);
+	return as_trace_write_raw(w, tmp, reserve);
+}
+
+static bool
+as_trace_write_escaped(as_trace_writer* w, const char* str, uint32_t len, size_t reserve)
+{
+	static const char hex[] = "0123456789ABCDEF";
+
+	for (uint32_t i = 0; i < len && str[i] != '\0'; i++) {
+		unsigned char c = (unsigned char)str[i];
+		char esc[4];
+		size_t esc_len;
+
+		switch (c) {
+		case '\\':
+			esc[0] = '\\';
+			esc[1] = '\\';
+			esc_len = 2;
+			break;
+		case '"':
+			esc[0] = '\\';
+			esc[1] = '"';
+			esc_len = 2;
+			break;
+		case '\n':
+			esc[0] = '\\';
+			esc[1] = 'n';
+			esc_len = 2;
+			break;
+		case '\r':
+			esc[0] = '\\';
+			esc[1] = 'r';
+			esc_len = 2;
+			break;
+		case '\t':
+			esc[0] = '\\';
+			esc[1] = 't';
+			esc_len = 2;
+			break;
+		default:
+			if (c < 0x20) {
+				esc[0] = '\\';
+				esc[1] = 'x';
+				esc[2] = hex[c >> 4];
+				esc[3] = hex[c & 0x0f];
+				esc_len = 4;
+			}
+			else {
+				esc[0] = (char)c;
+				esc_len = 1;
+			}
+			break;
+		}
+
+		size_t avail = w->capacity - 1 - w->pos;
+
+		if (avail <= reserve || esc_len > avail - reserve) {
+			w->truncated = true;
+			return false;
+		}
+
+		memcpy(w->buf + w->pos, esc, esc_len);
+		w->pos += esc_len;
+		w->buf[w->pos] = '\0';
+	}
+	return true;
+}
+
+static bool
+as_trace_write_field_prefix(as_trace_writer* w, bool* has_field, const char* name)
+{
+	if (*has_field && !as_trace_write_raw(w, " ", 1)) {
+		return false;
+	}
+
+	if (!as_trace_write_raw(w, name, 1) || !as_trace_write_raw(w, "=", 1)) {
+		return false;
+	}
+
+	*has_field = true;
+	return true;
+}
+
+static bool
+as_trace_write_string_field(
+	as_trace_writer* w, bool* has_field, const char* name, const char* value
+	)
+{
+	if (!as_trace_write_field_prefix(w, has_field, name) || !as_trace_write_raw(w, "\"", 2)) {
+		return false;
+	}
+
+	as_trace_write_escaped(w, value, (uint32_t)strlen(value), 2);
+	return as_trace_write_raw(w, "\"", 1);
+}
+
+static bool
+as_trace_write_u64_field(
+	as_trace_writer* w, bool* has_field, const char* name, uint64_t value
+	)
+{
+	return as_trace_write_field_prefix(w, has_field, name) &&
+		as_trace_write_u64(w, value, 1);
+}
+
+static const char*
+as_exp_trace_phase_string(uint8_t phase)
+{
+	switch (phase) {
+	case AS_EXP_TRACE_PHASE_BUILD:
+		return "build";
+	case AS_EXP_TRACE_PHASE_EVAL:
+		return "eval";
+	default:
+		return NULL;
+	}
+}
+
+static const char*
+as_exp_trace_outcome_string(uint8_t outcome)
+{
+	switch (outcome) {
+	case AS_EXP_TRACE_OUTCOME_FAULT:
+		return "fault";
+	case AS_EXP_TRACE_OUTCOME_FALSE:
+		return "false";
+	case AS_EXP_TRACE_OUTCOME_ABSENT:
+		return "absent";
+	default:
+		return NULL;
+	}
+}
+
+static const char*
+as_exp_trace_lang_string(uint8_t lang)
+{
+	switch (lang) {
+	case AS_EXP_TRACE_LANG_MSGPACK:
+		return "msgpack";
+	case AS_EXP_TRACE_LANG_AEL:
+		return "ael";
+	default:
+		return NULL;
+	}
+}
+
+static bool
+as_trace_write_array_string(as_trace_writer* w, const char* value, size_t reserve)
+{
+	if (!as_trace_write_raw(w, "\"", reserve + 1)) {
+		return false;
+	}
+
+	as_trace_write_escaped(w, value, (uint32_t)strlen(value), reserve + 1);
+	return as_trace_write_raw(w, "\"", reserve);
+}
+
+static bool
+as_trace_write_path_field(as_trace_writer* w, bool* has_field, const as_exp_trace_detail* trace)
+{
+	if (!as_trace_write_field_prefix(w, has_field, "path") || !as_trace_write_raw(w, "[", 2)) {
+		return false;
+	}
+
+	for (uint8_t i = 0; i < trace->path_size; i++) {
+		if (i > 0 && !as_trace_write_raw(w, ",", 2)) {
+			break;
+		}
+
+		if (!as_trace_write_array_string(w, trace->path[i], 2)) {
+			break;
+		}
+	}
+	return as_trace_write_raw(w, "]", 1);
+}
+
+static bool
+as_trace_write_operands_field(as_trace_writer* w, bool* has_field, const as_exp_trace_detail* trace)
+{
+	if (!as_trace_write_field_prefix(w, has_field, "operands") || !as_trace_write_raw(w, "[", 2)) {
+		return false;
+	}
+
+	(void)as_trace_write_array_string(w, trace->lhs, 3);
+	(void)as_trace_write_raw(w, ",", 2);
+	(void)as_trace_write_array_string(w, trace->rhs, 2);
+	return as_trace_write_raw(w, "]", 1);
+}
+
+static void
+as_command_render_exp_trace_suffix(char* dst, size_t capacity, const as_exp_trace_detail* trace)
+{
+	as_trace_writer w = {
+		.buf = dst,
+		.capacity = capacity,
+		.pos = 0,
+		.truncated = false
+	};
+	bool has_field = false;
+
+	dst[0] = '\0';
+
+	if (!as_trace_write_raw(&w, "; exp_trace={", 1)) {
+		return;
+	}
+
+	if (trace->has_phase) {
+		const char* phase = as_exp_trace_phase_string(trace->phase);
+
+		if (phase) {
+			(void)as_trace_write_string_field(&w, &has_field, "phase", phase);
+		}
+		else {
+			(void)as_trace_write_u64_field(&w, &has_field, "phase", trace->phase);
+		}
+	}
+
+	if (trace->has_byte_offset) {
+		(void)as_trace_write_u64_field(&w, &has_field, "byte_offset", trace->byte_offset);
+	}
+
+	if (trace->has_op) {
+		(void)as_trace_write_string_field(&w, &has_field, "op", trace->op);
+	}
+
+	if (trace->has_depth) {
+		(void)as_trace_write_u64_field(&w, &has_field, "depth", trace->depth);
+	}
+
+	if (trace->has_path) {
+		(void)as_trace_write_path_field(&w, &has_field, trace);
+	}
+
+	if (trace->has_snippet) {
+		(void)as_trace_write_string_field(&w, &has_field, "snippet", trace->snippet);
+	}
+
+	if (trace->has_outcome) {
+		const char* outcome = as_exp_trace_outcome_string(trace->outcome);
+
+		if (outcome) {
+			(void)as_trace_write_string_field(&w, &has_field, "outcome", outcome);
+		}
+		else {
+			(void)as_trace_write_u64_field(&w, &has_field, "outcome", trace->outcome);
+		}
+	}
+
+	if (trace->has_lang) {
+		const char* lang = as_exp_trace_lang_string(trace->lang);
+
+		if (lang) {
+			(void)as_trace_write_string_field(&w, &has_field, "lang", lang);
+		}
+		else {
+			(void)as_trace_write_u64_field(&w, &has_field, "lang", trace->lang);
+		}
+	}
+
+	if (trace->has_ael_offset) {
+		(void)as_trace_write_u64_field(&w, &has_field, "ael_offset", trace->ael_offset);
+	}
+
+	if (trace->has_ael_span) {
+		(void)as_trace_write_u64_field(&w, &has_field, "ael_span", trace->ael_span);
+	}
+
+	if (trace->has_operands) {
+		(void)as_trace_write_operands_field(&w, &has_field, trace);
+	}
+
+	(void)as_trace_write_raw(&w, "}", 0);
+}
+
+static bool
+as_command_parse_exp_trace_operands(uint8_t** pp, uint8_t* end, as_exp_trace_detail* trace)
 {
 	uint8_t* value = *pp;
 	uint8_t* p = value;
@@ -1639,7 +2021,7 @@ as_command_parse_exp_trace_operands(uint8_t** pp, uint8_t* end, as_exp_trace* tr
 }
 
 static bool
-as_command_parse_exp_trace(uint8_t** pp, uint8_t* end, as_exp_trace* trace)
+as_command_parse_exp_trace(uint8_t** pp, uint8_t* end, as_exp_trace_detail* trace)
 {
 	uint8_t* p = *pp;
 	uint32_t n_entries;
@@ -1647,7 +2029,7 @@ as_command_parse_exp_trace(uint8_t** pp, uint8_t* end, as_exp_trace* trace)
 	if (!as_command_read_msgpack_map_header(&p, end, &n_entries)) {
 		return false;
 	}
-	as_exp_trace_reset(trace);
+	as_exp_trace_detail_reset(trace);
 
 	for (uint32_t i = 0; i < n_entries; i++) {
 		uint64_t key;
@@ -1793,10 +2175,6 @@ as_command_parse_exp_trace(uint8_t** pp, uint8_t* end, as_exp_trace* trace)
 		}
 	}
 
-	if (!trace->has_lang && as_exp_trace_has_data(trace)) {
-		trace->lang = AS_EXP_TRACE_LANG_MSGPACK;
-	}
-
 	*pp = p;
 	return true;
 }
@@ -1834,7 +2212,7 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 	char* msg_str = NULL;
 	uint32_t msg_len = 0;
 	bool has_exp_trace = false;
-	as_exp_trace exp_trace;
+	as_exp_trace_detail exp_trace;
 
 	for (uint32_t i = 0; i < n_entries; i++) {
 		uint64_t key;
@@ -1860,7 +2238,7 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 		}
 		else if (key == AS_ERROR_DETAIL_KEY_EXP_TRACE) {
 			uint8_t* trace_pos = p;
-			as_exp_trace trace;
+			as_exp_trace_detail trace;
 
 			if (as_command_parse_exp_trace(&trace_pos, end, &trace)) {
 				if (as_exp_trace_has_data(&trace)) {
@@ -1884,26 +2262,23 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 
 	if (has_subcode) {
 		err->subcode = (uint32_t)subcode;
-		err->has_subcode = true;
-	}
-
-	if (has_exp_trace) {
-		as_exp_trace_copy(&err->exp_trace, &exp_trace);
-		err->has_exp_trace = true;
 	}
 
 	if (has_subcode && has_message) {
-		err->has_message = true;
 		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "%.*s (subcode=%" PRIu64 ")",
 				 (int)msg_len, msg_str, subcode);
 	}
 	else if (has_subcode) {
-		err->has_message = false;
 		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "error subcode=%" PRIu64, subcode);
 	}
 	else if (has_message) {
-		err->has_message = true;
 		as_command_copy_msgpack_str(err->message, sizeof(err->message), msg_str, msg_len);
+	}
+
+	if (has_exp_trace) {
+		char suffix[AS_ERROR_MESSAGE_MAX_SIZE];
+		as_command_render_exp_trace_suffix(suffix, sizeof(suffix), &exp_trace);
+		as_error_append_preserved_trace_suffix(err->message, suffix);
 	}
 }
 

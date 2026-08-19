@@ -739,6 +739,7 @@ TEST(ed_sync_batch_udf_text_without_field45, "5.9.2 batch UDF FAILURE text witho
 	assert_not_null(udf_error);
 	assert_true(strstr(udf_error, "test failure") != NULL);
 	assert_int_eq(result->subcode, AS_SUB_NONE);
+	assert_not_null(result->message);
 	assert_true(strstr(result->message, "test failure") != NULL);
 
 	as_batch_records_destroy(&records);
@@ -1123,11 +1124,11 @@ TEST(ed_sync_batch_row_detail, "7.1 batch row error detail propagation")
 	as_batch_read_record* result_ok = as_vector_get(&records.list, 0);
 	assert_int_eq(result_ok->result, AEROSPIKE_OK);
 	assert_int_eq(result_ok->subcode, AS_SUB_NONE);
-	assert_string_eq(result_ok->message, "");
+	assert_null(result_ok->message);
 
 	as_batch_read_record* result_err = as_vector_get(&records.list, 1);
 	assert_int_eq(result_err->result, AEROSPIKE_ERR_OP_NOT_APPLICABLE);
-	assert_true(result_err->message[0] != '\0');
+	assert_not_null(result_err->message);
 	assert_true(strstr(result_err->message, "; exp_trace={") != NULL);
 	assert_true(strstr(result_err->message, "phase=\"eval\"") != NULL);
 
@@ -1200,7 +1201,7 @@ TEST(ed_sync_batch_write_apply_remove_row_detail,
 			continue;
 		}
 
-		assert_true(result->message[0] != '\0');
+		assert_not_null(result->message);
 		assert_true(strstr(result->message, "; exp_trace={") != NULL);
 		assert_true(strstr(result->message, "phase=\"eval\"") != NULL);
 	}
@@ -1236,7 +1237,7 @@ TEST(ed_sync_batch_no_leak, "7.2 batch verbosity no leak")
 		as_batch_read_record* br = as_vector_get(list, i);
 		assert_int_eq(br->result, AEROSPIKE_OK);
 		assert_int_eq(br->subcode, AS_SUB_NONE);
-		assert_string_eq(br->message, "");
+		assert_null(br->message);
 	}
 	as_batch_records_destroy(&records);
 }
@@ -1260,18 +1261,21 @@ batch_listener_error_detail_cb(const as_batch_result* results, uint32_t n, void*
 		const as_batch_result* result = &results[i];
 
 		if (result->result == AEROSPIKE_OK) {
-			state->saw_ok_empty_detail &= (result->subcode == AS_SUB_NONE && result->message[0] == '\0');
+			state->saw_ok_empty_detail &= (result->subcode == AS_SUB_NONE && result->message == NULL);
 		}
 		else if (result->result == AEROSPIKE_ERR_OP_NOT_APPLICABLE) {
-			state->saw_err_detail = result->message[0] != '\0';
-			state->saw_err_trace = strstr(result->message, "; exp_trace={") != NULL;
-			as_strncpy(state->err_message, result->message, sizeof(state->err_message));
+			state->saw_err_detail = result->message != NULL && result->message[0] != '\0';
+
+			if (state->saw_err_detail) {
+				state->saw_err_trace = strstr(result->message, "; exp_trace={") != NULL;
+				as_strncpy(state->err_message, result->message, sizeof(state->err_message));
+			}
 		}
 	}
 	return true;
 }
 
-// 7.2.1 Legacy batch listener exposes inline row detail.
+// 7.2.1 Legacy batch listener exposes allocated row detail.
 TEST(ed_sync_batch_listener_error_detail, "7.2.1 batch listener row detail callback coverage")
 {
 	as_error err;
@@ -2023,7 +2027,7 @@ TEST(ed_async_query_start_top_level_message, "6.11 async query start failure kee
 	as_monitor_wait(&monitor);
 
 	assert_true(data.got_error);
-	assert_false(as_error_has_server_detail(&data.err_copy));
+	assert_int_eq(data.err_copy.subcode, AS_SUB_NONE);
 	assert_true(strlen(data.err_copy.message) > 0);
 }
 

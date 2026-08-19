@@ -220,36 +220,68 @@ as_batch_use_heap(size_t item_sz, uint32_t n_items)
 	return !as_batch_stack_alloc_ok(item_sz, n_items);
 }
 
+static inline void
+as_batch_message_free(char** message)
+{
+	if (*message) {
+		cf_free(*message);
+		*message = NULL;
+	}
+}
+
+static inline as_status
+as_batch_message_copy(as_error* err, char** trg, const char* src)
+{
+	as_batch_message_free(trg);
+
+	if (src[0] == '\0') {
+		return AEROSPIKE_OK;
+	}
+
+	size_t len = strlen(src);
+
+	if (len > AS_ERROR_MESSAGE_MAX_LEN) {
+		len = AS_ERROR_MESSAGE_MAX_LEN;
+	}
+
+	char* message = cf_malloc(len + 1);
+
+	if (! message) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to allocate batch error detail message");
+	}
+
+	memcpy(message, src, len);
+	message[len] = '\0';
+	*trg = message;
+	return AEROSPIKE_OK;
+}
+
 static inline as_status
 as_batch_result_set_error_detail(as_error* err, as_batch_result* result, const as_error* src)
 {
-	(void)err;
 	result->subcode = src->subcode;
-	as_strncpy(result->message, src->message, sizeof(result->message));
-	return AEROSPIKE_OK;
+	return as_batch_message_copy(err, &result->message, src->message);
 }
 
 static inline as_status
 as_batch_record_set_error_detail(as_error* err, as_batch_base_record* record, const as_error* src)
 {
-	(void)err;
 	record->subcode = src->subcode;
-	as_strncpy(record->message, src->message, sizeof(record->message));
-	return AEROSPIKE_OK;
+	return as_batch_message_copy(err, &record->message, src->message);
 }
 
 static inline void
 as_batch_result_clear_error_detail(as_batch_result* result)
 {
 	result->subcode = 0;
-	result->message[0] = '\0';
+	as_batch_message_free(&result->message);
 }
 
 static inline void
 as_batch_record_clear_error_detail(as_batch_base_record* record)
 {
 	record->subcode = 0;
-	record->message[0] = '\0';
+	as_batch_message_free(&record->message);
 }
 
 static inline as_status
@@ -3416,8 +3448,9 @@ as_batch_keys_execute(
 		as_batch_result* result = &results[i];
 		result->key = key;
 		result->result = AEROSPIKE_NO_RESPONSE;
+		result->message = NULL;
 		result->in_doubt = false;
-	as_batch_result_clear_error_detail(result);
+		as_batch_result_clear_error_detail(result);
 		as_record_init(&result->record, 0);
 
 		status = as_key_set_digest(err, key);

@@ -364,7 +364,7 @@ typedef void (*as_async_batch_listener)(as_error* err, as_batch_records* records
 /**
  * Initialize batch records with specified capacity on the stack using alloca().
  * Batch records include an inline error message buffer. For large capacities,
- * prefer as_batch_read_init() to avoid high stack usage.
+ * prefer as_batch_records_init() to avoid high stack usage.
  *
  * @deprecated Use as_batch_records_inita() instead.
  * @relates as_batch_records

@@ -1088,7 +1088,7 @@ TEST(ed_sync_query_start_top_level_message, "5.24.1 query start failure keeps to
 // Section 7: Negative / Edge-Case Tests (Integration)
 //----------------------------------------------------
 
-// 7.1 Batch row errors preserve structured expression-trace detail
+// 7.1 Batch row errors preserve stringified expression-trace detail
 TEST(ed_sync_batch_row_detail, "7.1 batch row error detail propagation")
 {
 	as_error err;

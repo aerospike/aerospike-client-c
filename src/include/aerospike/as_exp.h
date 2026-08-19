@@ -4344,7 +4344,7 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_regex_replace operation.
  *
- * @param __policy		The string policy. Not packed in the wire payload.
+ * @param __policy		The string policy.
  * @param __pattern		The regex pattern to match against.
  * @param __replacement	The string to replace with.
  * @param __flags		The regex flags to use.
@@ -4353,9 +4353,10 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_string_regex_replace(__policy, __pattern, __replacement, __flags, __bin) \
-		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REGEX_REPLACE, 2), \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_REGEX_REPLACE, 3), \
 		_AS_EXP_QUOTED_PAIR(as_exp_str(__pattern), as_exp_str(__replacement)), \
 		as_exp_uint(__flags), \
+		as_exp_uint(__policy == NULL ? 0 : ((as_string_policy*)(__policy))->flags), \
 		__bin
 
 /**

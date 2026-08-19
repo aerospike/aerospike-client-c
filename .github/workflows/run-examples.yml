@@ -1,0 +1,241 @@
+name: Run Examples
+
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+    && format('Examples — PR #{0} ({1})', github.event.pull_request.number, github.event.pull_request.title)
+    || format('Examples — {0}', inputs.server-tag) }}
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref (branch, tag, or SHA) to checkout.'
+        required: true
+        type: string
+      runner:
+        description: 'Runner label for the examples job'
+        required: false
+        type: string
+        default: ubuntu-24.04
+      distro:
+        description: 'Linux distro to use inside the examples container'
+        required: false
+        type: string
+        default: ubuntu-22.04
+      container:
+        description: 'Container image to run the examples inside'
+        required: false
+        type: string
+        default: ubuntu:22.04
+      arch:
+        description: 'Target architecture for the examples container'
+        required: false
+        type: string
+        default: amd64
+      event-lib:
+        description: 'Event library backend for the examples build/run'
+        required: false
+        type: string
+        default: libev
+      server-container-repo:
+        description: 'Aerospike server Docker image repository'
+        required: false
+        type: string
+        default: database-docker-virtual/aerospike-server-enterprise
+      server-edition:
+        description: 'Aerospike server edition for setup-aerospike-server (auto, enterprise, community)'
+        required: false
+        type: string
+        default: auto
+      server-tag:
+        description: 'Aerospike server Docker image tag'
+        required: false
+        type: string
+        default: latest
+      num-nodes:
+        description: 'Aerospike cluster node count'
+        required: false
+        type: string
+        default: '1'
+      server-config-content:
+        description: 'Optional Aerospike server configuration content'
+        required: false
+        type: string
+        default: ''
+      server-config-path:
+        description: 'Optional path to a checked-in Aerospike server config file'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+  checks: write
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  run-linux:
+    name: examples / ${{ inputs.server-tag }} / ${{ inputs.event-lib }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout client
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load server config
+        id: load-server-config
+        env:
+          SERVER_CONFIG_PATH: ${{ inputs.server-config-path }}
+          INLINE_SERVER_CONFIG: ${{ inputs.server-config-content }}
+        run: |
+          set -euo pipefail
+          delimiter="CONFIG_EOF_${GITHUB_RUN_ID:-0}_${GITHUB_RUN_ATTEMPT:-0}_$$"
+
+          if [ -n "${SERVER_CONFIG_PATH}" ]; then
+            {
+              echo "content<<${delimiter}"
+              cat "${SERVER_CONFIG_PATH}"
+              echo "${delimiter}"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "content<<${delimiter}"
+            printf '%s\n' "${INLINE_SERVER_CONFIG}"
+            echo "${delimiter}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Start Aerospike server
+        id: setup-aerospike
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+        with:
+          oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
+          oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}
+          server-container-repo: ${{ inputs.server-container-repo }}
+          server-edition: ${{ inputs.server-edition }}
+          server-tag: ${{ inputs.server-tag }}
+          num-nodes: ${{ inputs.num-nodes }}
+          features-content: ${{ secrets.AES_FEATURES_CONF }}
+          config-content: ${{ steps.load-server-config.outputs.content }}
+          env-vars: 'DEFAULT_TTL=2592000'
+
+      - name: Initialize SC roster for examples namespace
+        env:
+          NETWORK_NAME: ${{ steps.setup-aerospike.outputs.network-name }}
+          AS_HOST: aerospike-1
+          AS_PORT: '3000'
+          AS_NAMESPACE: test
+          TOOLS_IMAGE: aerospike/aerospike-tools:8.1.0
+        run: |
+          set -euo pipefail
+
+          if ! roster_info="$(
+            docker run --rm --network "${NETWORK_NAME}" "${TOOLS_IMAGE}" \
+              asinfo -h "${AS_HOST}" -p "${AS_PORT}" -v "roster:namespace=${AS_NAMESPACE}"
+          )"; then
+            echo "Roster info is unavailable for namespace ${AS_NAMESPACE}; skipping roster initialization."
+            exit 0
+          fi
+
+          echo "${roster_info}"
+
+          if [[ "${roster_info}" != *"observed_nodes="* ]]; then
+            echo "No SC roster metadata reported for namespace ${AS_NAMESPACE}; skipping roster initialization."
+            exit 0
+          fi
+
+          current_roster="${roster_info#*roster=}"
+          current_roster="${current_roster%%:*}"
+          observed_nodes="${roster_info##*observed_nodes=}"
+          observed_nodes="${observed_nodes%%$'\n'*}"
+          observed_nodes="${observed_nodes%%$'\r'*}"
+
+          if [ -z "${observed_nodes}" ] || [ "${observed_nodes}" = "null" ]; then
+            echo "No observed nodes reported for namespace ${AS_NAMESPACE}; skipping roster initialization."
+            exit 0
+          fi
+
+          if [ -n "${current_roster}" ] && [ "${current_roster}" != "null" ]; then
+            echo "SC roster already initialized for namespace ${AS_NAMESPACE}: ${current_roster}"
+            exit 0
+          fi
+
+          docker run --rm --network "${NETWORK_NAME}" "${TOOLS_IMAGE}" \
+            asinfo -h "${AS_HOST}" -p "${AS_PORT}" \
+            -v "roster-set:namespace=${AS_NAMESPACE};nodes=${observed_nodes}"
+
+          docker run --rm --network "${NETWORK_NAME}" "${TOOLS_IMAGE}" \
+            asinfo -h "${AS_HOST}" -p "${AS_PORT}" \
+            -v "recluster:namespace=${AS_NAMESPACE}"
+
+          docker run --rm --network "${NETWORK_NAME}" "${TOOLS_IMAGE}" \
+            asinfo -h "${AS_HOST}" -p "${AS_PORT}" -v "roster:namespace=${AS_NAMESPACE}"
+
+      - name: Run containerized Linux examples
+        id: run-examples
+        uses: ./.github/actions/run-linux-examples
+        with:
+          distro: ${{ inputs.distro }}
+          container: ${{ inputs.container }}
+          arch: ${{ inputs.arch }}
+          event-lib: ${{ inputs.event-lib }}
+          network-name: ${{ steps.setup-aerospike.outputs.network-name }}
+          target: all
+          host: aerospike-1
+          port: '3000'
+          validate-registry: 'true'
+          junit-xml: /workspace/test-results/examples-${{ inputs.server-tag }}-${{ inputs.event-lib }}.xml
+
+      - name: Dump server logs on failure
+        if: failure()
+        run: docker logs aerospike-1 2>&1 || true
+
+      - name: Summarize example results
+        if: always()
+        uses: ./.github/actions/test-report
+        with:
+          pattern: test-results/*.xml
+
+      - name: Upload example results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: example-results-${{ inputs.server-tag }}-${{ inputs.event-lib }}
+          path: |
+            test-results/*.xml
+            examples/target/run_examples/
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: Write run summary
+        if: always()
+        env:
+          RUN_OUTCOME: ${{ steps.run-examples.outcome }}
+        run: |
+          {
+            echo "## Aerospike C Client — Examples"
+            echo ""
+            echo "- Result: \`${RUN_OUTCOME}\`"
+            echo "- Server repo: \`${{ inputs.server-container-repo }}\`"
+            echo "- Server edition: \`${{ inputs.server-edition }}\`"
+            echo "- Server tag: \`${{ inputs.server-tag }}\`"
+            echo "- Event lib: \`${{ inputs.event-lib }}\`"
+            echo "- Target selection: \`all\`"
+            echo "- Registry validation: \`enabled\`"
+            echo "- Capability-gated examples may still be skipped when the configured server version does not satisfy manifest requirements."
+          } >> "$GITHUB_STEP_SUMMARY"

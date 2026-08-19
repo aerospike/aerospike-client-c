@@ -1199,6 +1199,51 @@ TEST(scan_operate_expop, "scan operate expop")
 	as_exp_destroy(exp);
 }
 
+TEST(scan_background_ops_and_apply_rejected, "background scan rejects combined ops and UDF apply")
+{
+	as_error err;
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	scan.ops = &ops;
+	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_noop", NULL);
+
+	uint64_t scanid = 0;
+	as_status status = aerospike_scan_background(as, &err, NULL, &scan, &scanid);
+	as_scan_destroy(&scan);
+
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+}
+
+TEST(scan_foreach_ops_and_apply_rejected, "foreach scan rejects combined ops and UDF apply")
+{
+	as_error err;
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET2);
+	scan.ops = &ops;
+	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_noop", NULL);
+
+	as_status status = aerospike_scan_foreach(as, &err, NULL, &scan, scan_check_callback, NULL);
+	as_scan_destroy(&scan);
+
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+}
+
 TEST(scan_filter_set_name, "scan filter set_name")
 {
 	scan_check check = {
@@ -1484,6 +1529,8 @@ SUITE(scan_basics, "aerospike_scan basic tests")
 	suite_add(scan_operate_background_reads_and_writes);
 	suite_add(scan_operate_ttl);
 	suite_add(scan_operate_expop);
+	suite_add(scan_background_ops_and_apply_rejected);
+	suite_add(scan_foreach_ops_and_apply_rejected);
 	suite_add(scan_filter_set_name);
 	suite_add(scan_filter_rec_ttl);
 	suite_add(scan_filter_rec_str_key);

@@ -25,6 +25,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_query_validate.h>
 #include <aerospike/as_shm_cluster.h>
+#include <aerospike/as_thread.h>
 #include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <pthread.h>
@@ -2457,13 +2458,7 @@ as_event_close_cluster_event_loop(
 
 	if (as_aaf_uint32_rls(&state->event_loop_count, -1) == 0) {
 		as_fence_acq();
-		as_cluster_destroy(state->cluster);
-		aerospike_destroy_internal(state->as);
-
-		if (state->monitor) {
-			as_monitor_notify(state->monitor);
-		}
-		cf_free(state);
+		as_monitor_notify(state->monitor);
 	}
 }
 
@@ -2489,25 +2484,13 @@ as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state
 	as_event_close_cluster_event_loop(event_loop, state, event_state);
 }
 
-void
-as_event_close_cluster(aerospike* as)
+static void
+as_event_close_cluster_in_thread(as_event_close_state* state)
 {
-	if (as_event_loop_size == 0) {
-		return;
-	}
+	as_monitor* monitor = cf_malloc(sizeof(as_monitor));
+	as_monitor_init(monitor);
 
-	as_monitor* monitor = NULL;
-
-	if (! as_in_event_loops()) {
-		monitor = cf_malloc(sizeof(as_monitor));
-		as_monitor_init(monitor);
-	}
-
-	as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
 	state->monitor = monitor;
-	state->as = as;
-	state->cluster = as->cluster;
-	state->event_loop_count = as_event_loop_size;
 
 	// Send cluster close notification to async event loops.
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
@@ -2520,11 +2503,54 @@ as_event_close_cluster(aerospike* as)
 		}
 	}
 
-	// Deadlock would occur if we wait from an event loop thread.
-	// Only wait when not in event loop thread.
-	if (monitor) {
-		as_monitor_wait(monitor);
-		as_monitor_destroy(monitor);
-		cf_free(monitor);
+	as_monitor_wait(monitor);
+	as_monitor_destroy(monitor);
+	cf_free(monitor);
+
+	as_cluster_destroy(state->cluster);
+	aerospike_destroy_internal(state->as);
+	cf_free(state);
+}
+
+static void*
+as_event_close_cluster_thread_cb(void* data)
+{
+	as_thread_set_name("closecluster");
+	as_event_close_state* state = data;
+	as_event_close_cluster_in_thread(state);
+	return NULL;
+}
+
+as_status
+as_event_close_cluster(aerospike* as, as_error* err)
+{
+	if (as_event_loop_size == 0) {
+		return AEROSPIKE_OK;
 	}
+
+	as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
+	state->monitor = NULL;
+	state->as = as;
+	state->cluster = as->cluster;
+	state->event_loop_count = as_event_loop_size;
+
+	if (as_in_event_loops()) {
+		// Deadlock would occur if we wait for all event loop responses from an event loop thread.
+		// Instead, create a new thread to run async cluster close and return.
+		pthread_t thread;
+
+		int rv = pthread_create(&thread, NULL, as_event_close_cluster_thread_cb, state);
+
+		if (rv != 0) {
+			cf_free(state);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"Failed to create cluster close thread: %s", strerror(errno));
+		}
+
+		pthread_detach(thread);
+	}
+	else {
+		as_event_close_cluster_in_thread(state);
+	}
+	return AEROSPIKE_OK;
 }

@@ -914,6 +914,10 @@ TEST(string_expression_ops, "string expression operations")
 {
 	assert_int_eq(put_string_key(111, "Hello123World"), AEROSPIKE_OK);
 
+	as_string_policy policy;
+	as_string_policy_init(&policy);
+	as_string_policy_set(&policy, AS_STRING_WRITE_FLAGS_NO_FAIL);
+
 	as_exp_build(len_exp,
 		as_exp_string_strlen(as_exp_bin_str(BIN_NAME)));
 	assert_not_null(len_exp);
@@ -931,6 +935,11 @@ TEST(string_expression_ops, "string expression operations")
 			NULL, "[0-9]+", "NUM", AS_STRING_REGEX_FLAGS_GLOBAL, as_exp_bin_str(BIN_NAME)));
 	assert_not_null(regex_replace_exp);
 
+	as_exp_build(regex_replace_no_fail_exp,
+		as_exp_string_regex_replace(
+			&policy, "[unclosed", "NUM", AS_STRING_REGEX_FLAGS_NONE, as_exp_bin_str(BIN_NAME)));
+	assert_not_null(regex_replace_no_fail_exp);
+
 	as_exp_build(append_exp,
 		as_exp_string_append(NULL, "!", as_exp_bin_str(BIN_NAME)));
 	assert_not_null(append_exp);
@@ -947,11 +956,12 @@ TEST(string_expression_ops, "string expression operations")
 	as_key_init_int64(&key, NAMESPACE, SET, 111);
 
 	as_operations ops;
-	as_operations_inita(&ops, 7);
+	as_operations_inita(&ops, 8);
 	as_operations_exp_read(&ops, "len", len_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "upper", upper_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "replace", replace_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "regex_replace", regex_replace_exp, AS_EXP_READ_DEFAULT);
+	as_operations_exp_read(&ops, "regex_replace_no_fail", regex_replace_no_fail_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "append", append_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "prepend", prepend_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "to_string", to_string_exp, AS_EXP_READ_DEFAULT);
@@ -964,6 +974,7 @@ TEST(string_expression_ops, "string expression operations")
 	as_exp_destroy(upper_exp);
 	as_exp_destroy(replace_exp);
 	as_exp_destroy(regex_replace_exp);
+	as_exp_destroy(regex_replace_no_fail_exp);
 	as_exp_destroy(append_exp);
 	as_exp_destroy(prepend_exp);
 	as_exp_destroy(to_string_exp);
@@ -973,6 +984,7 @@ TEST(string_expression_ops, "string expression operations")
 	assert_string_eq(as_record_get_str(rec, "upper"), "HELLO123WORLD");
 	assert_string_eq(as_record_get_str(rec, "replace"), "Hello-World");
 	assert_string_eq(as_record_get_str(rec, "regex_replace"), "HelloNUMWorld");
+	assert_null(as_record_get(rec, "regex_replace_no_fail"));
 	assert_string_eq(as_record_get_str(rec, "append"), "Hello123World!");
 	assert_string_eq(as_record_get_str(rec, "prepend"), "Say Hello123World");
 	assert_string_eq(as_record_get_str(rec, "to_string"), "42");
@@ -1174,6 +1186,23 @@ TEST(string_error_ops, "string error operations")
 	as_operations_destroy(&ops);
 	assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
 	assert_null(rec);
+
+	as_string_policy policy;
+	as_string_policy_init(&policy);
+	as_string_policy_set(&policy, AS_STRING_WRITE_FLAGS_NO_FAIL);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_regex_replace(&ops, BIN_NAME, NULL, &policy, "[unclosed", "NUM",
+			AS_STRING_REGEX_FLAGS_NONE);
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, NULL);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	status = aerospike_key_get(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(rec, BIN_NAME), "hello");
+	as_record_destroy(rec);
+	rec = NULL;
 
 	assert_int_eq(put_invalid_string_key(120), AEROSPIKE_OK);
 

@@ -263,16 +263,18 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
 			if (more) {
 				if (! isdigit(*p)) {
 					cf_free(host.name);
+					cf_free(host.tls_name);
 					return false;
 				}
 				host.port = (uint16_t)strtol(p, (char**)&p, 10);
-				
+
 				if (*p) {
 					if (*p == ',') {
 						p++;
 					}
 					else {
 						cf_free(host.name);
+						cf_free(host.tls_name);
 						return false;
 					}
 				}

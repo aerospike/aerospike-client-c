@@ -16,7 +16,9 @@
  */
 
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_query.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
@@ -550,6 +552,109 @@ TEST(exp_ael_list_nested_index, "list: $.aelbin.[1].[0] == 3 (nested list path)"
 }
 
 /******************************************************************************
+ * BATCH AND QUERY FILTERS
+ *
+ * AEL reaches the server as an op of the wire expression language, so the same
+ * record-filter field carries it on every command that accepts one. Single-record
+ * is covered above; these are the other two the feature claims.
+ *****************************************************************************/
+
+TEST(exp_ael_filter_batch, "batch filter: AEL $.aelbin == 42 selects one of two")
+{
+	assert_int_eq(put_one_int(9101, 42), AEROSPIKE_OK);
+	assert_int_eq(put_one_int(9102, 43), AEROSPIKE_OK);
+
+	as_exp_build_ael(filt, "$.aelbin:INT == 42");
+	assert_not_null(filt);
+
+	as_batch_records recs;
+	as_batch_records_inita(&recs, 2);
+
+	as_batch_read_record* r1 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&r1->key, NAMESPACE, SET, 9101);
+	r1->read_all_bins = true;
+
+	as_batch_read_record* r2 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&r2->key, NAMESPACE, SET, 9102);
+	r2->read_all_bins = true;
+
+	as_policy_batch pb;
+	as_policy_batch_init(&pb);
+	pb.base.filter_exp = filt;
+
+	as_error err;
+	as_status rc = aerospike_batch_read(as, &err, &pb, &recs);
+
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	// The matching record is returned; the other is filtered out.
+	assert_int_eq(r1->result, AEROSPIKE_OK);
+	assert_int_eq(r2->result, AEROSPIKE_FILTERED_OUT);
+
+	as_batch_records_destroy(&recs);
+	as_exp_destroy(filt);
+}
+
+static bool
+count_cb(const as_val* val, void* udata)
+{
+	if (val != NULL) {
+		(*(uint32_t*)udata)++;
+	}
+
+	return true;
+}
+
+// Its own set: a query scans everything, and the shared set holds records from
+// the tests above, several of which also hold 42.
+#define SET_QUERY "testexpaelq"
+
+static as_status
+put_query_int(int64_t rec_id, int64_t val)
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET_QUERY, rec_id);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, BIN_AEL, val);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+
+	as_record_destroy(&rec);
+	return status;
+}
+
+TEST(exp_ael_filter_query, "query filter: AEL $.aelbin == 42 selects one of two")
+{
+	assert_int_eq(put_query_int(9201, 42), AEROSPIKE_OK);
+	assert_int_eq(put_query_int(9202, 43), AEROSPIKE_OK);
+
+	as_exp_build_ael(filt, "$.aelbin:INT == 42");
+	assert_not_null(filt);
+
+	as_query q;
+	as_query_init(&q, NAMESPACE, SET_QUERY);
+
+	as_policy_query pq;
+	as_policy_query_init(&pq);
+	pq.base.filter_exp = filt;
+
+	uint32_t n = 0;
+	as_error err;
+	as_status rc = aerospike_query_foreach(as, &err, &pq, &q, count_cb, &n);
+
+	assert_int_eq(rc, AEROSPIKE_OK);
+
+	// Only the record the filter admits reaches the callback.
+	assert_int_eq(n, 1);
+
+	as_query_destroy(&q);
+	as_exp_destroy(filt);
+}
+
+/******************************************************************************
  * TEST SUITE
  *****************************************************************************/
 
@@ -569,4 +674,6 @@ SUITE(exp_ael, "Expression AEL filters (as_exp_build_ael)")
 	suite_add(exp_ael_list_index_range_count);
 	suite_add(exp_ael_list_membership_in);
 	suite_add(exp_ael_list_nested_index);
+	suite_add(exp_ael_filter_batch);
+	suite_add(exp_ael_filter_query);
 }

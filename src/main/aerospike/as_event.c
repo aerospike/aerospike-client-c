@@ -1504,7 +1504,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 }
 
 static as_status
-as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg, uint8_t** pp)
+as_event_command_parse_fields_txn(as_event_command* cmd, as_error* err, as_msg* msg, uint8_t** pp)
 {
 	as_set set;
 	as_digest_value digest;
@@ -1515,31 +1515,38 @@ as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg,
 		return status;
 	}
 
-	return as_command_parse_fields_txn(pp, err, msg, cmd->txn, digest, set, (cmd->flags & AS_ASYNC_FLAGS_READ) == 0);
+	return as_command_parse_fields_txn(pp, err, cmd->node, msg, cmd->txn, digest, set,
+		(cmd->flags & AS_ASYNC_FLAGS_READ) == 0);
+}
+
+static bool
+as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg, uint8_t** pp)
+{
+	if (cmd->txn) {
+		as_status status = as_event_command_parse_fields_txn(cmd, err, msg, pp);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_response_error(cmd, err);
+			return false;
+		}
+	}
+	else {
+		*pp = as_command_parse_fields_err(*pp, err, cmd->node, msg);
+	}
+	return true;
 }
 
 bool
 as_event_command_parse_header(as_event_command* cmd)
 {
 	as_error err;
-	err.message[0] = '\0';
-	err.subcode = 0;
-
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
-	if (cmd->txn) {
-		as_status status = as_event_command_parse_fields(cmd, &err, msg, &p);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_response_error(cmd, &err);
-			return true;
-		}
-	}
-	else {
-		p = as_command_parse_fields_err(p, &err, msg->n_fields);
+	if (!as_event_command_parse_fields(cmd, &err, msg, &p)) {
+		return true;
 	}
 
 	if (msg->result_code == AEROSPIKE_OK) {
@@ -1548,7 +1555,7 @@ as_event_command_parse_header(as_event_command* cmd)
 		as_event_command_release(cmd);
 	}
 	else {
-		as_error_update_status(&err, msg->result_code);
+		as_error_set_node(&err, cmd->node, msg->result_code);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -1558,28 +1565,16 @@ bool
 as_event_command_parse_result(as_event_command* cmd)
 {
 	as_error err;
-	err.message[0] = '\0';
-	err.subcode = 0;
-
-	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
-	if (cmd->txn) {
-		status = as_event_command_parse_fields(cmd, &err, msg, &p);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_response_error(cmd, &err);
-			return true;
-		}
-	}
-	else {
-		p = as_command_parse_fields_err(p, &err, msg->n_fields);
+	if (!as_event_command_parse_fields(cmd, &err, msg, &p)) {
+		return true;
 	}
 
-	status = msg->result_code;
+	as_status status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
@@ -1632,13 +1627,13 @@ as_event_command_parse_result(as_event_command* cmd)
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			as_command_parse_udf_failure(p, &err, msg, status);
+			as_command_parse_udf_failure(p, &err, cmd->node, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
 			
 		default: {
-			as_error_update_address(&err, status, as_node_get_address_string(cmd->node));
+			as_error_set_node(&err, cmd->node, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
@@ -1650,28 +1645,16 @@ bool
 as_event_command_parse_success_failure(as_event_command* cmd)
 {
 	as_error err;
-	err.message[0] = '\0';
-	err.subcode = 0;
-
-	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)cmd->buf;
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
-	if (cmd->txn) {
-		status = as_event_command_parse_fields(cmd, &err, msg, &p);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_response_error(cmd, &err);
-			return true;
-		}
-	}
-	else {
-		p = as_command_parse_fields_err(p, &err, msg->n_fields);
+	if (!as_event_command_parse_fields(cmd, &err, msg, &p)) {
+		return true;
 	}
 
-	status = msg->result_code;
+	as_status status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
@@ -1691,13 +1674,13 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			as_command_parse_udf_failure(p, &err, msg, status);
+			as_command_parse_udf_failure(p, &err, cmd->node, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
 			
 		default: {
-			as_error_update_address(&err, status, as_node_get_address_string(cmd->node));
+			as_error_set_node(&err, cmd->node, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
@@ -1709,6 +1692,8 @@ bool
 as_event_command_parse_deadline(as_event_command* cmd)
 {
 	as_error err;
+	as_error_init(&err);
+
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);

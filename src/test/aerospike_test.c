@@ -51,10 +51,12 @@ static char g_user[AS_USER_SIZE];
 static char g_password[AS_PASSWORD_SIZE];
 as_config_tls g_tls = {0};
 as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
+bool g_use_services_alternate = false;
 bool g_enterprise_server = false;
 bool g_has_ttl = false;
 bool g_has_sc = false;
 bool g_has_query_expression = false;
+bool g_has_security = false;
 
 //---------------------------------
 // Static Functions
@@ -90,6 +92,9 @@ usage(void)
 
 	fprintf(stderr, "  -P[<password>], --password\n");
 	fprintf(stderr, "  The user's password. If empty, a prompt is shown. Default: no password.\n\n");
+
+	fprintf(stderr, "  -a, --servicesAlternate\n");
+	fprintf(stderr, "  Use alternate services addresses. Default: false.\n\n");
 
 	fprintf(stderr, "  -S, --suite <suite>\n");
 	fprintf(stderr, "  The suite to be run. Default: all suites.\n\n");
@@ -140,13 +145,14 @@ usage(void)
 	fprintf(stderr, "  Display program usage.\n\n");
 }
 
-static const char* short_options = "h:p:U:P::S:T:u";
+static const char* short_options = "h:p:U:P::aS:T:u";
 
 static struct option long_options[] = {
 	{"hosts",                required_argument, 0, 'h'},
 	{"port",                 required_argument, 0, 'p'},
 	{"user",                 required_argument, 0, 'U'},
 	{"password",             optional_argument, 0, 'P'},
+	{"servicesAlternate",    no_argument,       0, 'a'},
 	{"suite",                required_argument, 0, 'S'},
 	{"test",                 required_argument, 0, 'T'},
 	{"tlsEnable",            no_argument,       0, 'A'},
@@ -199,6 +205,11 @@ static bool parse_opts(int argc, char* argv[])
 
 		case 'P':
 			as_password_acquire(g_password, optarg, AS_PASSWORD_SIZE);
+			break;
+
+		case 'a':
+			g_use_services_alternate = true;
+			error("services alt:   true");
 			break;
 
 		case 'S':
@@ -315,6 +326,7 @@ static bool before(atf_plan* plan)
 	}
 
 	as_config_set_user(&config, g_user, g_password);
+	config.use_services_alternate = g_use_services_alternate;
 
 	// Transfer ownership of all heap allocated TLS fields via shallow copy.
 	memcpy(&config.tls, &g_tls, sizeof(as_config_tls));
@@ -378,19 +390,35 @@ static bool before(atf_plan* plan)
 	snprintf(command, sizeof(command), "get-config:context=namespace;%s=test", ns_field_name);
 
 	status = aerospike_info_node(as, &err, NULL, node, command, &result);
-	as_node_release(node);
 
 	if (status != AEROSPIKE_OK) {
 		error("%s @ %s[%s:%d]", err.message, err.func, err.file, err.line);
+		as_node_release(node);
 		aerospike_close(as, &err);
 		aerospike_destroy(as);
 		as_event_close_loops();
 		return false;
 	}
 
+	char* ns_result = result;
+
+	as_status security_status = aerospike_info_node(as, &err, NULL, node,
+		"get-config:context=security", &result);
+
+	if (security_status == AEROSPIKE_OK && result) {
+		bool security_enabled = strstr(result, "enable-security=true") != NULL;
+		g_has_security = security_enabled && g_user[0] != '\0';
+		cf_free(result);
+	}
+	else {
+		as_error_reset(&err);
+	}
+
+	as_node_release(node);
+
 	// Run ttl tests if nsup-period or allow-ttl-without-nsup is defined.
 	const char* search = "nsup-period=";
-	char* p = strstr(result, search);
+	char* p = strstr(ns_result, search);
 
 	if (p) {
 		p += strlen(search);
@@ -398,13 +426,13 @@ static bool before(atf_plan* plan)
 	}
 	else {
 		error("Failed to find namespace config nsup-period");
-		cf_free(result);
+		cf_free(ns_result);
 		return false;
 	}
 
 	if (! g_has_ttl) {
 		search = "allow-ttl-without-nsup=";
-		p = strstr(result, search);
+		p = strstr(ns_result, search);
 
 		if (p) {
 			p += strlen(search);
@@ -412,11 +440,11 @@ static bool before(atf_plan* plan)
 		}
 		else {
 			error("Failed to find namespace config allow-ttl-without-nsup");
-			cf_free(result);
+			cf_free(ns_result);
 			return false;
 		}
 	}
-	cf_free(result);
+	cf_free(ns_result);
 
 	// Determine if namespace is configured as strong consistency.
 	as_cluster* cluster = as->cluster;

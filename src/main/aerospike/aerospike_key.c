@@ -1852,7 +1852,7 @@ as_txn_monitor_parse_header(as_error* err, as_command* cmd, as_node* node, uint8
 		return AEROSPIKE_OK;
 	}
 
-	return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+	return as_command_parse_error(err, node, msg, buf + sizeof(as_msg));
 }
 
 as_status
@@ -1868,6 +1868,7 @@ as_txn_monitor_mark_roll_forward(
 	policy.base.timeout_delay = base_policy->timeout_delay;
 	policy.base.max_retries = base_policy->max_retries;
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
+	policy.base.error_detail_verbosity = base_policy->error_detail_verbosity;
 
 	as_record rec;
 	as_record_inita(&rec, 1);
@@ -1918,7 +1919,7 @@ as_txn_monitor_parse_header_async(as_event_command* cmd)
 	}
 	else {
 		as_error err;
-		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+		as_command_parse_error(&err, cmd->node, msg, p);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -1938,6 +1939,7 @@ as_txn_monitor_mark_roll_forward_async(
 	policy.base.timeout_delay = base_policy->timeout_delay;
 	policy.base.max_retries = base_policy->max_retries;
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
+	policy.base.error_detail_verbosity = base_policy->error_detail_verbosity;
 
 	as_record rec;
 	as_record_inita(&rec, 1);
@@ -2106,7 +2108,7 @@ parse_result_code(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, s
 	}
 
 	if (msg->result_code) {
-		return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+		return as_command_parse_error(err, node, msg, buf + sizeof(as_msg));
 	}
 	return AEROSPIKE_OK;
 }
@@ -2135,9 +2137,8 @@ as_txn_verify_single(
 	buf[9] = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA;
 	buf[10] = 0;
 	buf[11] = AS_MSG_INFO3_SC_READ_TYPE;
-	// Verbosity bits intentionally not set: response parser (parse_result_code)
-	// only checks result_code and does not iterate fields or parse field 45.
-	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ;
+	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ |
+		as_command_info4_error_detail(policy->base.error_detail_verbosity);
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;
 	*(int*)&buf[18] = 0;
@@ -2175,7 +2176,7 @@ txn_verify_parse(as_event_command* cmd)
 	}
 	else {
 		as_error err;
-		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+		as_command_parse_error(&err, cmd->node, msg, p);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -2214,9 +2215,8 @@ as_txn_verify_single_async(
 	buf[9] = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_NOBINDATA;
 	buf[10] = 0;
 	buf[11] = AS_MSG_INFO3_SC_READ_TYPE;
-	// Verbosity bits intentionally not set: response parser (txn_verify_parse)
-	// only checks result_code and does not iterate fields or parse field 45.
-	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ;
+	buf[12] = AS_MSG_INFO4_TXN_VERIFY_READ |
+		as_command_info4_error_detail(policy->base.error_detail_verbosity);
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;
 	*(int*)&buf[18] = 0;
@@ -2272,7 +2272,7 @@ as_txn_roll_single(
 	buf[9] = 0;
 	buf[10] = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DURABLE_DELETE;
 	buf[11] = 0;
-	buf[12] = roll_attr;
+	buf[12] = roll_attr | as_command_info4_error_detail(policy->base.error_detail_verbosity);
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;
 	*(int*)&buf[18] = 0;
@@ -2318,7 +2318,7 @@ txn_roll_parse(as_event_command* cmd)
 	}
 	else {
 		as_error err;
-		as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+		as_command_parse_error(&err, cmd->node, msg, p);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -2362,7 +2362,7 @@ as_txn_roll_single_async(
 	buf[9] = 0;
 	buf[10] = AS_MSG_INFO2_WRITE | AS_MSG_INFO2_DURABLE_DELETE;
 	buf[11] = 0;
-	buf[12] = roll_attr;
+	buf[12] = roll_attr | as_command_info4_error_detail(policy->base.error_detail_verbosity);
 	buf[13] = 0;
 	*(uint32_t*)&buf[14] = 0;
 	*(int*)&buf[18] = 0;

@@ -100,13 +100,15 @@ typedef struct as_error_s {
 
 	/**
 	 * Server error detail subcode. When error_detail_verbosity >= 1 on the request policy
-	 * and the server returns structured error details, this field contains the numeric subcode.
-	 * Zero when no subcode was returned.
+	 * and the server returns a subcode, this field contains the numeric subcode.
+	 * When absent, this field is 0.
 	 */
 	uint32_t subcode;
 
 	/**
-	 * NULL-terminated error message
+	 * NULL-terminated user-facing error message. When error_detail_verbosity is 3
+	 * and the server returns expression trace diagnostics, a bounded, escaped
+	 * `; exp_trace={...}` suffix may be appended to this message.
 	 */
 	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 
@@ -134,6 +136,42 @@ typedef struct as_error_s {
 
 } as_error;
 
+struct as_node_s;
+
+//---------------------------------
+// Functions
+//---------------------------------
+
+/**
+ * Return string representation of error code.  Result should not be freed.
+ *
+ * @relates as_error
+ */
+AS_EXTERN char*
+as_error_string(as_status status);
+
+/**
+ * Set the error code and func/file/line metadata after server subcode and error message have been parsed.
+ *
+ * @relates as_error
+ */
+AS_EXTERN as_status
+as_error_setnode(
+	as_error* err, struct as_node_s * node, as_status code, const char* func, const char* file,
+	uint32_t line
+	);
+
+/**
+ * Set UDF failure bin message.
+ *
+ * @relates as_error
+ */
+AS_EXTERN as_status
+as_error_setudf(
+	as_error* err, struct as_node_s* node, as_status code, const char* message, const char* func,
+	const char* file, uint32_t line
+	);
+
 //---------------------------------
 // Macros
 //---------------------------------
@@ -155,49 +193,37 @@ typedef struct as_error_s {
 	as_error_setall( __err, __code, __msg, __func__, __FILE__, __LINE__ );
 
 /**
- * If the error already has a message, update code/in_doubt/location fields only.
- * Otherwise, set a default message from the error code string.
+ * Set the error code and func/file/line metadata after server subcode and errorr message have been parsed.
  *
  * @relates as_error
  */
-#define as_error_update_status(__err, __code) \
-	do { \
-		if ((__err)->message[0] != '\0') { \
-			(__err)->code = (__code); \
-			(__err)->in_doubt = false; \
-			(__err)->func = __func__; \
-			(__err)->file = __FILE__; \
-			(__err)->line = __LINE__; \
-		} \
-		else { \
-			as_error_set_message((__err), (__code), as_error_string(__code)); \
-		} \
-	} while(0)
+#define as_error_set_node(__err, __node, __code) \
+	as_error_setnode( __err, __node, __code, __func__, __FILE__, __LINE__ );
 
 /**
- * If the error already has a message, update code/in_doubt/location fields only.
- * Otherwise, set a message containing the node address and error code string.
+ * Set the error code and func/file/line metadata after server subcode and errorr message have been parsed.
  *
  * @relates as_error
  */
-#define as_error_update_address(__err, __code, __address) \
-	do { \
-		if ((__err)->message[0] != '\0') { \
-			(__err)->code = (__code); \
-			(__err)->in_doubt = false; \
-			(__err)->func = __func__; \
-			(__err)->file = __FILE__; \
-			(__err)->line = __LINE__; \
-		} \
-		else { \
-			as_error_update((__err), (__code), "%s %s", \
-				(__address), as_error_string(__code)); \
-		} \
-	} while(0)
+#define as_error_set_udf(__err, __node, __code, __msg) \
+	as_error_setudf( __err, __node, __code, __msg, __func__, __FILE__, __LINE__ );
 
 //---------------------------------
-// Functions
+// Inline Functions
 //---------------------------------
+
+static inline void
+as_error_clear_server_detail(as_error* err)
+{
+	err->subcode = 0;
+	err->message[0] = '\0';
+}
+
+static inline void
+as_error_copy_server_fields(as_error* trg, const as_error* src)
+{
+	trg->subcode = src->subcode;
+}
 
 /**
  * Initialize the error to default (empty) values, returning the error.
@@ -212,8 +238,7 @@ static inline as_error*
 as_error_init(as_error* err)
 {
 	err->code = AEROSPIKE_OK;
-	err->subcode = 0;
-	err->message[0] = '\0';
+	as_error_clear_server_detail(err);
 	err->func = NULL;
 	err->file = NULL;
 	err->line = 0;
@@ -234,8 +259,7 @@ static inline as_status
 as_error_reset(as_error* err)
 {
 	err->code = AEROSPIKE_OK;
-	err->subcode = 0;
-	err->message[0] = '\0';
+	as_error_clear_server_detail(err);
 	err->func = NULL;
 	err->file = NULL;
 	err->line = 0;
@@ -253,14 +277,13 @@ as_error_reset(as_error* err)
 static inline as_status
 as_error_setall(as_error* err, as_status code, const char * message, const char * func, const char * file, uint32_t line)
 {
+	as_error_clear_server_detail(err);
 	err->code = code;
 	as_strncpy(err->message, message, AS_ERROR_MESSAGE_MAX_SIZE);
 	err->func = func;
 	err->file = file;
 	err->line = line;
 	err->in_doubt = false;
-	// subcode deliberately not zeroed: set by the field-45 parser and must
-	// survive setall/setallv calls made by the priority logic.
 	return err->code;
 }
 
@@ -274,7 +297,8 @@ as_error_setall(as_error* err, as_status code, const char * message, const char 
 static inline as_status
 as_error_setallv(as_error* err, as_status code, const char * func, const char * file, uint32_t line, const char * fmt, ...)
 {
-	if ( fmt != NULL ) {
+	as_error_clear_server_detail(err);
+	if (fmt != NULL) {
 		va_list ap;
 		va_start(ap, fmt);
 		vsnprintf(err->message, AS_ERROR_MESSAGE_MAX_LEN, fmt, ap);
@@ -286,8 +310,6 @@ as_error_setallv(as_error* err, as_status code, const char * func, const char * 
 	err->file = file;
 	err->line = line;
 	err->in_doubt = false;
-	// subcode deliberately not zeroed: set by the field-45 parser and must
-	// survive setall/setallv calls made by the priority logic.
 	return err->code;
 }
 
@@ -314,7 +336,7 @@ static inline void
 as_error_copy(as_error * trg, const as_error * src)
 {
 	trg->code = src->code;
-	trg->subcode = src->subcode;
+	as_error_copy_server_fields(trg, src);
 	strcpy(trg->message, src->message);
 	trg->func = src->func;
 	trg->file = src->file;
@@ -332,14 +354,6 @@ as_error_append(as_error* err, const char* str)
 {
 	strncat(err->message, str, sizeof(err->message) - strlen(err->message) - 1);
 }
-
-/**
- * Return string representation of error code.  Result should not be freed.
- *
- * @relates as_error
- */
-AS_EXTERN char*
-as_error_string(as_status status);
 
 #ifdef __cplusplus
 } // end extern "C"

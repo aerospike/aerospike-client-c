@@ -391,7 +391,7 @@ as_query_parse_records_async(as_event_command* cmd)
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
 			if (msg->result_code != AEROSPIKE_OK) {
 				// The server returned a fatal error.
-				as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+				as_command_parse_error(&err, cmd->node, msg, p);
 				as_event_response_error(cmd, &err);
 				return true;
 			}
@@ -412,14 +412,14 @@ as_query_parse_records_async(as_event_command* cmd)
 		}
 
 		if (msg->result_code != AEROSPIKE_OK) {
-			// Background scans return AEROSPIKE_ERR_RECORD_NOT_FOUND
+			// Background queries return AEROSPIKE_ERR_RECORD_NOT_FOUND
 			// when the set does not exist on the target node.
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 				// Non-fatal error.
 				as_event_query_complete(cmd);
 				return true;
 			}
-			as_error_set_message(&err, msg->result_code, as_error_string(msg->result_code));
+			as_command_parse_error(&err, cmd->node, msg, p);
 			as_event_response_error(cmd, &err);
 			return true;
 		}
@@ -528,7 +528,7 @@ as_query_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
 			if (msg->result_code != AEROSPIKE_OK) {
 				// The server returned a fatal error.
-				return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+				return as_command_parse_error(err, node, msg, p);
 			}
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
@@ -546,13 +546,13 @@ as_query_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 		}
 
 		if (msg->result_code != AEROSPIKE_OK) {
-			// Background scans return AEROSPIKE_ERR_RECORD_NOT_FOUND
+			// Background queries return AEROSPIKE_ERR_RECORD_NOT_FOUND
 			// when the set does not exist on the target node.
 			if (msg->result_code == AEROSPIKE_ERR_RECORD_NOT_FOUND) {
 				// Non-fatal error.
 				return AEROSPIKE_NO_MORE_RECORDS;
 			}
-			return as_error_set_message(err, msg->result_code, as_error_string(msg->result_code));
+			return as_command_parse_error(err, node, msg, p);
 		}
 
 		status = as_query_parse_record(&p, msg, task, err);

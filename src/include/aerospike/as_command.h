@@ -24,6 +24,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_random.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_subcode.h>
 #include <citrusleaf/cf_byte_order.h>
 
 #ifdef __cplusplus
@@ -123,6 +124,15 @@ extern "C" {
 // Error detail verbosity in info4 bits 5-6
 #define AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT	5
 #define AS_MSG_INFO4_ERROR_VERBOSITY_MASK	0x60
+
+static inline uint8_t
+as_command_info4_error_detail(uint8_t verbosity)
+{
+	if (verbosity > AS_ERROR_DETAIL_EXP_TRACE) {
+		verbosity = AS_ERROR_DETAIL_EXP_TRACE;
+	}
+	return (verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT) & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+}
 
 // Misc
 #define AS_HEADER_SIZE 30
@@ -675,16 +685,27 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
  * @private
  * Iterate fields, parse error details from field type 45 if present, skip others.
  */
-uint8_t*
-as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields);
+AS_EXTERN uint8_t*
+as_command_parse_fields_err(uint8_t* p, as_error* err, as_node* node, as_msg* msg);
+
+/**
+ * @private
+ * Parse returned fields and update err from result_code when the result is non-OK.
+ * Used by no-record response paths that can still carry field 45 details.
+ */
+AS_EXTERN as_status
+as_command_parse_error(as_error* err, as_node* node, as_msg* msg, uint8_t* p);
 
 /**
  * @private
  * Parse msgpack-encoded error details (field type 45 payload).
- * Populates err->subcode and err->message.
+ * Populates err->subcode and err->message. Expression trace details are rendered
+ * as a bounded, escaped `; exp_trace={...}` suffix on err->message.
  */
 AS_EXTERN void
-as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len);
+as_command_parse_error_details(
+	as_error* err, as_node* node, uint8_t* buf, uint32_t len, uint8_t result_code
+	);
 
 /**
  * @private
@@ -692,7 +713,7 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len);
  */
 as_status
 as_command_parse_fields_txn(
-	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const uint8_t* digest,
+	uint8_t** pp, as_error* err, as_node* node, as_msg* msg, struct as_txn* txn, const uint8_t* digest,
 	const char* set, bool is_write
 	);
 
@@ -702,14 +723,17 @@ as_command_parse_fields_txn(
  */
 static inline as_status
 as_command_parse_fields(
-	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const as_key* key, bool is_write
+	uint8_t** pp, as_error* err, as_node* node, as_msg* msg, struct as_txn* txn, const as_key* key,
+	bool is_write
 	)
 {
-	if (! txn) {
-		*pp = as_command_parse_fields_err(*pp, err, msg->n_fields);
+	if (txn) {
+		return as_command_parse_fields_txn(pp, err, node, msg, txn, key->digest.value, key->set, is_write);
+	}
+	else {
+		*pp = as_command_parse_fields_err(*pp, err, node, msg);
 		return AEROSPIKE_OK;
 	}
-	return as_command_parse_fields_txn(pp, err, msg, txn, key->digest.value, key->set, is_write);
 }
 
 /**
@@ -744,8 +768,8 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
  * @private
  * Parse user defined function error.
  */
-as_status
-as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status);
+AS_EXTERN as_status
+as_command_parse_udf_failure(uint8_t* p, as_error* err, as_node* node, as_msg* msg, as_status status);
 
 /**
  * @private

@@ -41,7 +41,9 @@ enum {
 
 	AS_EXP_TRACE_PHASE_BUILD = 1,
 	AS_EXP_TRACE_PHASE_EVAL = 2,
+	AS_EXP_TRACE_OUTCOME_FAULT = 1,
 	AS_EXP_TRACE_OUTCOME_FALSE = 2,
+	AS_EXP_TRACE_OUTCOME_ABSENT = 3,
 	AS_EXP_TRACE_LANG_MSGPACK = 1,
 	AS_EXP_TRACE_LANG_AEL = 2,
 
@@ -853,6 +855,45 @@ TEST(error_detail_parser_exp_trace_skips_dropped_keys,
 	assert_true(strstr(err.message, "operands=[\"ibin\",\"99999\"]") != NULL);
 }
 
+// 3.25.6 Operand strings longer than the client buffer are clipped.
+TEST(error_detail_parser_exp_trace_operand_clipping, "3.25.6 expression trace operand clipping")
+{
+	as_error err;
+	as_error_init(&err);
+
+	char long_lhs[56];
+	memset(long_lhs, 'a', 55);
+	long_lhs[55] = '\0';
+
+	char clipped[49];
+	memset(clipped, 'a', 48);
+	clipped[48] = '\0';
+
+	char expect[96];
+	snprintf(expect, sizeof(expect), "operands=[\"%s\",\"ok\"]", clipped);
+
+	uint8_t buf[512];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 2);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OPERANDS);
+	p += write_fixarray(buf + p, 2);
+	p += write_str8(buf + p, long_lhs, 55);
+	p += write_fixstr(buf + p, "ok", 2);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OUTCOME);
+	p += write_fixint(buf + p, AS_EXP_TRACE_OUTCOME_FALSE);
+
+	command_parse_error_details(&err, buf, p);
+
+	assert_true(strstr(err.message, expect) != NULL);
+
+	char too_long[50];
+	memset(too_long, 'a', 49);
+	too_long[49] = '\0';
+	assert_true(strstr(err.message, too_long) == NULL);
+}
+
 // 3.26 Unknown/dropped-only trace maps do not surface as public exp_trace data.
 TEST(error_detail_parser_exp_trace_dropped_only_ignored,
 	"3.26 dropped-only expression trace is ignored")
@@ -876,6 +917,148 @@ TEST(error_detail_parser_exp_trace_dropped_only_ignored,
 
 	assert_int_eq(err.subcode, 0);
 	assert_string_eq(err.message, "AEROSPIKE_OK");
+}
+
+// 3.25.1 Outcome and operands are decoded together.
+TEST(error_detail_parser_exp_trace_outcome_operands, "3.25.1 outcome and operands parse")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[256];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 4);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PHASE);
+	p += write_fixint(buf + p, AS_EXP_TRACE_PHASE_EVAL);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
+	p += write_fixstr(buf + p, "cmp_gt", 6);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OUTCOME);
+	p += write_fixint(buf + p, AS_EXP_TRACE_OUTCOME_FALSE);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OPERANDS);
+	p += write_fixarray(buf + p, 2);
+	p += write_fixstr(buf + p, "15", 2);
+	p += write_fixstr(buf + p, "18", 2);
+
+	command_parse_error_details(&err, buf, p);
+
+	assert_true(strstr(err.message, "phase=\"eval\"") != NULL);
+	assert_true(strstr(err.message, "outcome=\"false\"") != NULL);
+	assert_true(strstr(err.message, "operands=[\"15\",\"18\"]") != NULL);
+}
+
+// 3.25.2 Fault and absent outcomes carry no operands.
+TEST(error_detail_parser_exp_trace_outcome_no_operands,
+	"3.25.2 fault and absent outcomes omit operands")
+{
+	as_error err;
+	as_error_init(&err);
+
+	const uint8_t outcomes[] = {
+		AS_EXP_TRACE_OUTCOME_FAULT,
+		AS_EXP_TRACE_OUTCOME_ABSENT
+	};
+
+	for (size_t i = 0; i < sizeof(outcomes); i++) {
+		as_error_init(&err);
+
+		uint8_t buf[256];
+		uint32_t p = 0;
+		p += write_fixmap(buf + p, 1);
+		p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+		p += write_fixmap(buf + p, 2);
+		p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PHASE);
+		p += write_fixint(buf + p, AS_EXP_TRACE_PHASE_EVAL);
+		p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OUTCOME);
+		p += write_fixint(buf + p, outcomes[i]);
+
+		command_parse_error_details(&err, buf, p);
+
+		assert_true(strstr(err.message, "operands=") == NULL);
+		if (outcomes[i] == AS_EXP_TRACE_OUTCOME_FAULT) {
+			assert_true(strstr(err.message, "outcome=\"fault\"") != NULL);
+		}
+		else {
+			assert_true(strstr(err.message, "outcome=\"absent\"") != NULL);
+		}
+	}
+}
+
+// 3.25.3 FALSE outcome does not guarantee operands when the server drops them.
+TEST(error_detail_parser_exp_trace_false_without_operands,
+	"3.25.3 false outcome without operands")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[256];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 2);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PHASE);
+	p += write_fixint(buf + p, AS_EXP_TRACE_PHASE_EVAL);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OUTCOME);
+	p += write_fixint(buf + p, AS_EXP_TRACE_OUTCOME_FALSE);
+
+	command_parse_error_details(&err, buf, p);
+
+	assert_true(strstr(err.message, "outcome=\"false\"") != NULL);
+	assert_true(strstr(err.message, "operands=") == NULL);
+}
+
+// 3.25.4 Build traces omit eval-phase explainer fields.
+TEST(error_detail_parser_exp_trace_build_without_outcome,
+	"3.25.4 build trace omits outcome and operands")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[256];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 2);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PHASE);
+	p += write_fixint(buf + p, AS_EXP_TRACE_PHASE_BUILD);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_BYTE_OFFSET);
+	p += write_fixint(buf + p, 3);
+
+	command_parse_error_details(&err, buf, p);
+
+	assert_true(strstr(err.message, "phase=\"build\"") != NULL);
+	assert_true(strstr(err.message, "byte_offset=3") != NULL);
+	assert_true(strstr(err.message, "outcome=") == NULL);
+	assert_true(strstr(err.message, "operands=") == NULL);
+}
+
+// 3.25.5 Path arrays past fixarray size retain the server truncation sentinel.
+TEST(error_detail_parser_exp_trace_max_path, "3.25.5 expression trace max path frames")
+{
+	as_error err;
+	as_error_init(&err);
+
+	uint8_t buf[1024];
+	uint32_t p = 0;
+	p += write_fixmap(buf + p, 1);
+	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
+	p += write_fixmap(buf + p, 2);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_DEPTH);
+	p += write_fixint(buf + p, 40);
+	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PATH);
+	p += write_array16(buf + p, AS_EXP_TRACE_PATH_MAX_DEPTH);
+	for (uint32_t i = 0; i < 14; i++) {
+		p += write_fixstr(buf + p, "and", 3);
+	}
+	p += write_fixstr(buf + p, "...", 3);
+	p += write_fixstr(buf + p, "eq", 2);
+
+	command_parse_error_details(&err, buf, p);
+
+	assert_true(strstr(err.message, "depth=40") != NULL);
+	assert_true(strstr(err.message, "\"...\"") != NULL);
+	assert_true(strstr(err.message, "\"eq\"") != NULL);
 }
 
 // 3.26.0 Truncated path markers are preserved as ordinary path frames.
@@ -1455,8 +1638,8 @@ TEST(error_detail_opnot_string_subcodes, "4.12 OP_NOT string subcode constants")
 	assert_int_eq(AS_SUB_OPNOT_STRING_B64_INVALID, 13);
 }
 
-// 4.9 Verbosity is applied in read header builder
-TEST(error_detail_header_read, "4.9 verbosity in read header")
+// 4.13 Verbosity is applied in read header builder
+TEST(error_detail_header_read, "4.13 verbosity in read header")
 {
 	as_policy_base policy;
 	as_policy_base_read_init(&policy);
@@ -1471,8 +1654,8 @@ TEST(error_detail_header_read, "4.9 verbosity in read header")
 	assert_int_eq(cmd[12] & 0x60, 0x40);
 }
 
-// 4.10 Verbosity is applied in write header builder
-TEST(error_detail_header_write, "4.10 verbosity in write header")
+// 4.14 Verbosity is applied in write header builder
+TEST(error_detail_header_write, "4.14 verbosity in write header")
 {
 	as_policy_base policy;
 	as_policy_base_write_init(&policy);
@@ -1487,8 +1670,8 @@ TEST(error_detail_header_write, "4.10 verbosity in write header")
 	assert_int_eq(cmd[12] & 0x60, 0x20);
 }
 
-// 4.11 Verbosity is applied in read-header (exists) builder
-TEST(error_detail_header_read_header, "4.11 verbosity in exists header")
+// 4.15 Verbosity is applied in read-header (exists) builder
+TEST(error_detail_header_read_header, "4.15 verbosity in exists header")
 {
 	as_policy_base policy;
 	as_policy_base_read_init(&policy);
@@ -1597,6 +1780,12 @@ SUITE(error_detail_parser, "error detail msgpack parser tests")
 	suite_add(error_detail_parser_exp_trace_full);
 	suite_add(error_detail_parser_exp_trace_truncation);
 	suite_add(error_detail_parser_exp_trace_skips_dropped_keys);
+	suite_add(error_detail_parser_exp_trace_outcome_operands);
+	suite_add(error_detail_parser_exp_trace_outcome_no_operands);
+	suite_add(error_detail_parser_exp_trace_false_without_operands);
+	suite_add(error_detail_parser_exp_trace_build_without_outcome);
+	suite_add(error_detail_parser_exp_trace_max_path);
+	suite_add(error_detail_parser_exp_trace_operand_clipping);
 	suite_add(error_detail_parser_exp_trace_dropped_only_ignored);
 	suite_add(error_detail_parser_exp_trace_path_truncation_marker);
 	suite_add(error_detail_parser_exp_trace_malformed_operands);

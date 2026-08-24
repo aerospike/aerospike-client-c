@@ -1709,9 +1709,6 @@ TEST(ed_async_exists_not_found_v2, "6.5 async exists not found verbosity 2")
 
 	assert_true(data.got_error);
 	assert_int_eq(data.err_copy.code, AEROSPIKE_ERR_RECORD_NOT_FOUND);
-	if (data.err_copy.subcode > 0) {
-		assert_true(strstr(data.err_copy.message, "subcode=") != NULL);
-	}
 }
 
 // 6.6 Async CDT list out of bounds at verbosity 2

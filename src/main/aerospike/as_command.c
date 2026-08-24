@@ -1164,6 +1164,8 @@ as_command_parse_fields_txn(
 	const char* set, bool is_write
 	)
 {
+	as_error_clear_server_detail(err);
+
 	uint8_t* p = *pp;
 	uint64_t version = 0;
 	uint32_t len;
@@ -2247,8 +2249,6 @@ as_command_parse_error_details(as_error* err, as_node* node, uint8_t* buf, uint3
 		}
 	}
 
-	as_error_clear_server_detail(err);
-
 	if (has_subcode) {
 		err->subcode = (uint32_t)subcode;
 	}
@@ -2278,6 +2278,8 @@ as_command_parse_error_details(as_error* err, as_node* node, uint8_t* buf, uint3
 uint8_t*
 as_command_parse_fields_err(uint8_t* p, as_error* err, as_node* node, as_msg* msg)
 {
+	as_error_clear_server_detail(err);
+
 	for (uint32_t i = 0; i < msg->n_fields; i++) {
 		uint32_t field_size = cf_swap_from_be32(*(uint32_t*)p);
 		p += 4;

@@ -124,7 +124,7 @@ as_cdt_ctx_pack(const as_cdt_ctx* ctx, as_packer* pk)
 				return 0;
 			}
 		}
-		else if (item->type & AS_CDT_CTX_VALUE) {
+		else if (AS_CDT_CTX_HAS_VAL(item->type)) {
 			if (as_pack_val(pk, item->val.pval) != 0) {
 				return 0;
 			}

@@ -57,6 +57,11 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 		}
 
 		switch (entry->op) {
+		case _AS_EXP_CODE_AEL_COMPILE:
+			entry->sz = (uint32_t)strlen(entry->v.str_val);
+			total_sz += as_pack_int64_size((int64_t)_AS_EXP_CODE_AEL_COMPILE);
+			total_sz += as_pack_str_size(entry->sz);
+			break;
 		case _AS_EXP_CODE_CDT_LIST_CRMOD:
 			if (entry->v.list_pol != NULL) {
 				if (prev_va_args != -1) {
@@ -267,9 +272,19 @@ as_exp_compile(as_exp_entry* table, uint32_t n)
 		}
 
 		switch (entry->op) {
+		case _AS_EXP_CODE_AEL_COMPILE:
+			as_pack_int64(&pk, (int64_t)_AS_EXP_CODE_AEL_COMPILE);
+			as_pack_str(&pk, (const uint8_t*)entry->v.str_val, entry->sz);
+			break;
 		case _AS_EXP_CODE_CDT_LIST_CRMOD:
 			if (entry->v.list_pol != NULL) {
-				as_pack_uint64(&pk, (uint64_t)entry->v.list_pol->order);
+				uint64_t order = (uint64_t)entry->v.list_pol->order;
+
+				if (entry->v.list_pol->persist_index) {
+					order |= 0x10;
+				}
+
+				as_pack_uint64(&pk, order);
 				as_pack_uint64(&pk, (uint64_t)entry->v.list_pol->flags);
 			}
 

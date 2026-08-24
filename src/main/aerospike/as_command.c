@@ -2504,7 +2504,13 @@ as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, 
 		
 		uint32_t value_size = (op_size - (name_size + 4));
 
-		if (strcmp(name, "SUCCESS") == 0) {
+		// If strcmp() was used and gcc -O3 option is enabled, valgrind reports
+		// a "Conditional jump or move depends on uninitialised value(s)" on the name.
+		// The compiler optimized the bin name string comparison below into a word sized load
+		// that reads past the null terminator.
+		//
+		// Fix by comparing the length and using memcmp().
+		if (name_len == 7 && memcmp(name, "SUCCESS", name_len) == 0) {
 			if (value) {
 				as_command_parse_value(p, type, value_size, value);
 			}
@@ -2512,7 +2518,7 @@ as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, 
 			return AEROSPIKE_OK;
 		}
 		
-		if (strcmp(name, "FAILURE") == 0) {
+		if (name_len == 7 && memcmp(name, "FAILURE", name_len) == 0) {
 			as_val* val = 0;
 			as_command_parse_value(p, type, value_size, &val);
 			
@@ -2562,7 +2568,7 @@ as_command_parse_udf_failure(
 	)
 {
 	as_bin_name name;
-	
+
 	for (uint32_t i = 0; i < msg->n_ops; i++) {
 		uint32_t op_size = cf_swap_from_be32(*(uint32_t*)p);
 		p += 5;
@@ -2576,8 +2582,14 @@ as_command_parse_udf_failure(
 		p += name_size;
 		
 		uint32_t value_size = (op_size - (name_size + 4));
-		
-		if (strcmp(name, "FAILURE") == 0) {
+
+		// If strcmp() was used and gcc -O3 option is enabled, valgrind reports
+		// a "Conditional jump or move depends on uninitialised value(s)" on the name.
+		// The compiler optimized the bin name string comparison below into a word sized load
+		// that reads past the null terminator.
+		//
+		// Fix by comparing the length and using memcmp().
+		if (name_len == 7 && memcmp(name, "FAILURE", name_len) == 0) {
 			as_val* val = 0;
 			as_command_parse_value(p, type, value_size, &val);
 			status = as_command_parse_udf_error(err, node, status, val);

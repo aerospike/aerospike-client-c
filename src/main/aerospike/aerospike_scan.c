@@ -234,7 +234,6 @@ static bool
 as_scan_parse_records_async(as_event_command* cmd)
 {
 	as_error err;
-	as_error_init(&err);
 	as_async_scan_command* sc = (as_async_scan_command*)cmd;
 	as_async_scan_executor* se = cmd->udata;  // udata is overloaded to contain executor.
 	uint8_t* p = cmd->buf + cmd->pos;
@@ -248,8 +247,7 @@ as_scan_parse_records_async(as_event_command* cmd)
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
 			if (msg->result_code != AEROSPIKE_OK) {
 				// The server returned a fatal error.
-				p = as_command_parse_fields_err(p, &err, msg->n_fields);
-				as_error_update_status(&err, msg->result_code);
+				as_command_parse_error(&err, cmd->node, msg, p);
 				as_event_response_error(cmd, &err);
 				return true;
 			}
@@ -277,8 +275,7 @@ as_scan_parse_records_async(as_event_command* cmd)
 				as_event_query_complete(cmd);
 				return true;
 			}
-			p = as_command_parse_fields_err(p, &err, msg->n_fields);
-			as_error_update_status(&err, msg->result_code);
+			as_command_parse_error(&err, cmd->node, msg, p);
 			as_event_response_error(cmd, &err);
 			return true;
 		}
@@ -353,9 +350,7 @@ as_scan_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* bu
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
 			if (msg->result_code != AEROSPIKE_OK) {
 				// The server returned a fatal error.
-				p = as_command_parse_fields_err(p, err, msg->n_fields);
-				as_error_update_status(err, msg->result_code);
-				return err->code;
+				return as_command_parse_error(err, node, msg, p);
 			}
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
@@ -379,9 +374,7 @@ as_scan_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* bu
 				// Non-fatal error.
 				return AEROSPIKE_NO_MORE_RECORDS;
 			}
-			p = as_command_parse_fields_err(p, err, msg->n_fields);
-			as_error_update_status(err, msg->result_code);
-			return err->code;
+			return as_command_parse_error(err, node, msg, p);
 		}
 
 		status = as_scan_parse_record(&p, msg, task, err);

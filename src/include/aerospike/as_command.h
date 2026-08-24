@@ -686,7 +686,7 @@ as_command_ignore_fields(uint8_t* p, uint32_t n_fields);
  * Iterate fields, parse error details from field type 45 if present, skip others.
  */
 AS_EXTERN uint8_t*
-as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields);
+as_command_parse_fields_err(uint8_t* p, as_error* err, as_node* node, as_msg* msg);
 
 /**
  * @private
@@ -694,7 +694,7 @@ as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields);
  * Used by no-record response paths that can still carry field 45 details.
  */
 AS_EXTERN as_status
-as_command_parse_result_error_fields(as_error* err, as_msg* msg, uint8_t* p);
+as_command_parse_error(as_error* err, as_node* node, as_msg* msg, uint8_t* p);
 
 /**
  * @private
@@ -703,7 +703,9 @@ as_command_parse_result_error_fields(as_error* err, as_msg* msg, uint8_t* p);
  * as a bounded, escaped `; exp_trace={...}` suffix on err->message.
  */
 AS_EXTERN void
-as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len);
+as_command_parse_error_details(
+	as_error* err, as_node* node, uint8_t* buf, uint32_t len, uint8_t result_code
+	);
 
 /**
  * @private
@@ -711,7 +713,7 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len);
  */
 as_status
 as_command_parse_fields_txn(
-	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const uint8_t* digest,
+	uint8_t** pp, as_error* err, as_node* node, as_msg* msg, struct as_txn* txn, const uint8_t* digest,
 	const char* set, bool is_write
 	);
 
@@ -721,14 +723,17 @@ as_command_parse_fields_txn(
  */
 static inline as_status
 as_command_parse_fields(
-	uint8_t** pp, as_error* err, as_msg* msg, struct as_txn* txn, const as_key* key, bool is_write
+	uint8_t** pp, as_error* err, as_node* node, as_msg* msg, struct as_txn* txn, const as_key* key,
+	bool is_write
 	)
 {
-	if (! txn) {
-		*pp = as_command_parse_fields_err(*pp, err, msg->n_fields);
+	if (txn) {
+		return as_command_parse_fields_txn(pp, err, node, msg, txn, key->digest.value, key->set, is_write);
+	}
+	else {
+		*pp = as_command_parse_fields_err(*pp, err, node, msg);
 		return AEROSPIKE_OK;
 	}
-	return as_command_parse_fields_txn(pp, err, msg, txn, key->digest.value, key->set, is_write);
 }
 
 /**
@@ -764,7 +769,7 @@ as_command_parse_bins(uint8_t** pp, as_error* err, as_record* rec, uint32_t n_bi
  * Parse user defined function error.
  */
 AS_EXTERN as_status
-as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status);
+as_command_parse_udf_failure(uint8_t* p, as_error* err, as_node* node, as_msg* msg, as_status status);
 
 /**
  * @private

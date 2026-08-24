@@ -27,6 +27,7 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
+#include <aerospike/as_string_builder.h>
 #include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
@@ -1131,14 +1132,14 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 
 	uint8_t* p = buf + sizeof(as_msg);
 
-	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
+	status = as_command_parse_fields(&p, err, node, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
 
 	if (msg->result_code) {
-		as_error_update_status(err, msg->result_code);
+		as_error_set_node(err, node, msg->result_code);
 		return msg->result_code;
 	}
 
@@ -1159,8 +1160,8 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 
 as_status
 as_command_parse_fields_txn(
-	uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn, const uint8_t* digest, const char* set,
-	bool is_write
+	uint8_t** pp, as_error* err, as_node* node, as_msg* msg, as_txn* txn, const uint8_t* digest,
+	const char* set, bool is_write
 	)
 {
 	uint8_t* p = *pp;
@@ -1185,7 +1186,7 @@ as_command_parse_fields_txn(
 			}
 		}
 		else if (type == AS_FIELD_ERROR_DETAILS && len > 0) {
-			as_command_parse_error_details(err, p, len);
+			as_command_parse_error_details(err, node, p, len, msg->result_code);
 		}
 		p += len;
 	}
@@ -2179,20 +2180,8 @@ as_command_parse_exp_trace(uint8_t** pp, uint8_t* end, as_exp_trace_detail* trac
 	return true;
 }
 
-static inline as_status
-as_command_set_message_preserving_detail(
-	as_error* err, as_status code, const char* message, const char* func, const char* file,
-	uint32_t line
-	)
-{
-	if (as_error_has_server_detail(err)) {
-		return as_error_set_message_preserving_server_detail(err, code, message, func, file, line);
-	}
-	return as_error_setall(err, code, message, func, file, line);
-}
-
 void
-as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
+as_command_parse_error_details(as_error* err, as_node* node, uint8_t* buf, uint32_t len, uint8_t result_code)
 {
 	if (len == 0 || buf == NULL) {
 		return;
@@ -2264,28 +2253,32 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 		err->subcode = (uint32_t)subcode;
 	}
 
-	if (has_subcode && has_message) {
-		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "%.*s (subcode=%" PRIu64 ")",
-				 (int)msg_len, msg_str, subcode);
+	as_string_builder sb;
+	as_string_builder_assign(&sb, sizeof(err->message), err->message);
+
+	if (node) {
+		as_string_builder_append(&sb, as_node_get_address_string(node));
+		as_string_builder_append_char(&sb, ' ');
 	}
-	else if (has_subcode) {
-		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "error subcode=%" PRIu64, subcode);
+
+	if (has_message) {
+		as_string_builder_append_chars(&sb, msg_str, msg_len);
 	}
-	else if (has_message) {
-		as_command_copy_msgpack_str(err->message, sizeof(err->message), msg_str, msg_len);
+	else {
+		as_string_builder_append(&sb, as_error_string(result_code));
 	}
 
 	if (has_exp_trace) {
 		char suffix[AS_ERROR_MESSAGE_MAX_SIZE];
 		as_command_render_exp_trace_suffix(suffix, sizeof(suffix), &exp_trace);
-		as_error_append_preserved_trace_suffix(err->message, suffix);
+		as_string_builder_append(&sb, suffix);
 	}
 }
 
 uint8_t*
-as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields)
+as_command_parse_fields_err(uint8_t* p, as_error* err, as_node* node, as_msg* msg)
 {
-	for (uint32_t i = 0; i < n_fields; i++) {
+	for (uint32_t i = 0; i < msg->n_fields; i++) {
 		uint32_t field_size = cf_swap_from_be32(*(uint32_t*)p);
 		p += 4;
 
@@ -2293,7 +2286,7 @@ as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields)
 			uint8_t field_type = *p;
 
 			if (field_type == AS_FIELD_ERROR_DETAILS && field_size > 1) {
-				as_command_parse_error_details(err, p + 1, field_size - 1);
+				as_command_parse_error_details(err, node, p + 1, field_size - 1, msg->result_code);
 			}
 		}
 
@@ -2303,15 +2296,11 @@ as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields)
 }
 
 as_status
-as_command_parse_result_error_fields(as_error* err, as_msg* msg, uint8_t* p)
+as_command_parse_error(as_error* err, as_node* node, as_msg* msg, uint8_t* p)
 {
-	as_command_parse_fields_err(p, err, msg->n_fields);
-
-	if (msg->result_code) {
-		as_error_update_status(err, msg->result_code);
-		return err->code;
-	}
-	return AEROSPIKE_OK;
+	as_command_parse_fields_err(p, err, node, msg);
+	as_error_set_node(err, node, msg->result_code);
+	return err->code;
 }
 
 uint8_t*
@@ -2543,7 +2532,7 @@ as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, 
 }
 
 static as_status
-as_command_parse_udf_error(as_error* err, as_status status, as_val* val)
+as_command_parse_udf_error(as_error* err, as_node* node, as_status status, as_val* val)
 {
 	if (val && val->type == AS_STRING) {
 		char* begin = ((as_string*)val)->value;
@@ -2556,20 +2545,19 @@ as_command_parse_udf_error(as_error* err, as_status status, as_val* val)
 				int code = atoi(++p);
 				
 				if (code > 0) {
-					return as_command_set_message_preserving_detail(err, code, begin,
-						__func__, __FILE__, __LINE__);
+					return as_error_set_udf(err, node, code, begin);
 				}
 			}
 		}
-		return as_command_set_message_preserving_detail(err, status, begin,
-			__func__, __FILE__, __LINE__);
+		return as_error_set_udf(err, node, status, begin);
 	}
-	return as_command_set_message_preserving_detail(err, status, as_error_string(status),
-		__func__, __FILE__, __LINE__);
+	return as_error_set_node(err, node, status);
 }
 
 as_status
-as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status)
+as_command_parse_udf_failure(
+	uint8_t* p, as_error* err, as_node* node, as_msg* msg, as_status status
+	)
 {
 	as_bin_name name;
 	
@@ -2590,14 +2578,13 @@ as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status s
 		if (strcmp(name, "FAILURE") == 0) {
 			as_val* val = 0;
 			as_command_parse_value(p, type, value_size, &val);
-			status = as_command_parse_udf_error(err, status, val);
+			status = as_command_parse_udf_error(err, node, status, val);
 			as_val_destroy(val);
 			return status;
 		}
 		p += value_size;
 	}
-	return as_command_set_message_preserving_detail(err, status, as_error_string(status),
-		__func__, __FILE__, __LINE__);
+	return as_error_set_node(err, node, status);
 }
 
 static as_status
@@ -2759,7 +2746,7 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	}
 
 	uint8_t* p = buf + sizeof(as_msg);
-	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
+	status = as_command_parse_fields(&p, err, node, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -2810,12 +2797,12 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		}
 
 		case AEROSPIKE_ERR_UDF: {
-			status = as_command_parse_udf_failure(p, err, msg, status);
+			status = as_command_parse_udf_failure(p, err, node, msg, status);
 			break;
 		}
 
 		default:
-			as_error_update_address(err, status, as_node_get_address_string(node));
+			as_error_set_node(err, node, status);
 			break;
 	}
 	return status;
@@ -2835,7 +2822,7 @@ as_command_parse_success_failure(
 	}
 
 	uint8_t* p = buf + sizeof(as_msg);
-	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
+	status = as_command_parse_fields(&p, err, node, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -2856,7 +2843,7 @@ as_command_parse_success_failure(
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			status = as_command_parse_udf_failure(p, err, msg, status);
+			status = as_command_parse_udf_failure(p, err, node, msg, status);
 			if (val) {
 				*val = 0;
 			}
@@ -2864,7 +2851,7 @@ as_command_parse_success_failure(
 		}
 
 		default:
-			as_error_update_address(err, status, as_node_get_address_string(node));
+			as_error_set_node(err, node, status);
 			if (val) {
 				*val = 0;
 			}

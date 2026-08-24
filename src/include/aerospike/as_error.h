@@ -136,6 +136,42 @@ typedef struct as_error_s {
 
 } as_error;
 
+struct as_node_s;
+
+//---------------------------------
+// Functions
+//---------------------------------
+
+/**
+ * Return string representation of error code.  Result should not be freed.
+ *
+ * @relates as_error
+ */
+AS_EXTERN char*
+as_error_string(as_status status);
+
+/**
+ * Set the error code and func/file/line metadata after server subcode and error message have been parsed.
+ *
+ * @relates as_error
+ */
+AS_EXTERN as_status
+as_error_setnode(
+	as_error* err, struct as_node_s * node, as_status code, const char* func, const char* file,
+	uint32_t line
+	);
+
+/**
+ * Set UDF failure bin message.
+ *
+ * @relates as_error
+ */
+AS_EXTERN as_status
+as_error_setudf(
+	as_error* err, struct as_node_s* node, as_status code, const char* message, const char* func,
+	const char* file, uint32_t line
+	);
+
 //---------------------------------
 // Macros
 //---------------------------------
@@ -157,89 +193,24 @@ typedef struct as_error_s {
 	as_error_setall( __err, __code, __msg, __func__, __FILE__, __LINE__ );
 
 /**
- * If the error already has server detail, update code/in_doubt/location fields only.
- * Otherwise, set a default message from the error code string.
+ * Set the error code and func/file/line metadata after server subcode and errorr message have been parsed.
  *
  * @relates as_error
  */
-#define as_error_update_status(__err, __code) \
-	do { \
-		if (as_error_has_server_detail(__err)) { \
-			if ((__err)->message[0] == '\0' || as_error_message_is_trace_suffix_only((__err)->message)) { \
-				as_error_set_message_preserving_server_detail((__err), (__code), \
-					as_error_string(__code), __func__, __FILE__, __LINE__); \
-			} \
-			else { \
-				as_error_update_server_detail((__err), (__code), __func__, __FILE__, __LINE__); \
-			} \
-		} \
-		else { \
-			as_error_set_message((__err), (__code), as_error_string(__code)); \
-		} \
-	} while(0)
+#define as_error_set_node(__err, __node, __code) \
+	as_error_setnode( __err, __node, __code, __func__, __FILE__, __LINE__ );
 
 /**
- * If the error already has server detail, update code/in_doubt/location fields only.
- * Otherwise, set a message containing the node address and error code string.
+ * Set the error code and func/file/line metadata after server subcode and errorr message have been parsed.
  *
  * @relates as_error
  */
-#define as_error_update_address(__err, __code, __address) \
-	do { \
-		if (as_error_has_server_detail(__err)) { \
-			if ((__err)->message[0] == '\0' || as_error_message_is_trace_suffix_only((__err)->message)) { \
-				as_error_set_messagev_preserving_server_detail((__err), (__code), \
-					__func__, __FILE__, __LINE__, "%s %s", (__address), as_error_string(__code)); \
-			} \
-			else { \
-				as_error_update_server_detail((__err), (__code), __func__, __FILE__, __LINE__); \
-			} \
-		} \
-		else { \
-			as_error_update((__err), (__code), "%s %s", \
-				(__address), as_error_string(__code)); \
-		} \
-	} while(0)
+#define as_error_set_udf(__err, __node, __code, __msg) \
+	as_error_setudf( __err, __node, __code, __msg, __func__, __FILE__, __LINE__ );
 
 //---------------------------------
-// Functions
+// Inline Functions
 //---------------------------------
-
-static inline const char*
-as_error_find_trace_suffix(const char* message)
-{
-	return strstr(message, "; exp_trace={");
-}
-
-static inline bool
-as_error_message_is_trace_suffix_only(const char* message)
-{
-	return strncmp(message, "; exp_trace={", 13) == 0;
-}
-
-static inline void
-as_error_append_preserved_trace_suffix(char* message, const char* suffix)
-{
-	if (suffix == NULL || suffix[0] == '\0' || strstr(message, suffix) != NULL) {
-		return;
-	}
-
-	size_t len = strlen(message);
-
-	if (len >= AS_ERROR_MESSAGE_MAX_LEN) {
-		return;
-	}
-
-	size_t copy_len = strlen(suffix);
-	size_t remaining = AS_ERROR_MESSAGE_MAX_LEN - len;
-
-	if (copy_len > remaining) {
-		copy_len = remaining;
-	}
-
-	memcpy(message + len, suffix, copy_len);
-	message[len + copy_len] = '\0';
-}
 
 static inline void
 as_error_clear_server_detail(as_error* err)
@@ -248,80 +219,10 @@ as_error_clear_server_detail(as_error* err)
 	err->message[0] = '\0';
 }
 
-static inline bool
-as_error_has_server_detail(const as_error* err)
-{
-	return err->subcode != 0 || err->message[0] != '\0';
-}
-
 static inline void
 as_error_copy_server_fields(as_error* trg, const as_error* src)
 {
 	trg->subcode = src->subcode;
-}
-
-static inline as_status
-as_error_update_server_detail(
-	as_error* err, as_status code, const char* func, const char* file, uint32_t line
-	)
-{
-	err->code = code;
-	err->func = func;
-	err->file = file;
-	err->line = line;
-	err->in_doubt = false;
-	return err->code;
-}
-
-static inline as_status
-as_error_set_message_preserving_server_detail(
-	as_error* err, as_status code, const char* message, const char* func, const char* file,
-	uint32_t line
-	)
-{
-	char suffix[AS_ERROR_MESSAGE_MAX_SIZE];
-	const char* old_suffix = as_error_find_trace_suffix(err->message);
-
-	if (old_suffix) {
-		as_strncpy(suffix, old_suffix, sizeof(suffix));
-	}
-	else {
-		suffix[0] = '\0';
-	}
-
-	as_error_update_server_detail(err, code, func, file, line);
-	as_strncpy(err->message, message, AS_ERROR_MESSAGE_MAX_SIZE);
-	as_error_append_preserved_trace_suffix(err->message, suffix);
-	return err->code;
-}
-
-static inline as_status
-as_error_set_messagev_preserving_server_detail(
-	as_error* err, as_status code, const char* func, const char* file, uint32_t line,
-	const char* fmt, ...
-	)
-{
-	char suffix[AS_ERROR_MESSAGE_MAX_SIZE];
-	const char* old_suffix = as_error_find_trace_suffix(err->message);
-
-	if (old_suffix) {
-		as_strncpy(suffix, old_suffix, sizeof(suffix));
-	}
-	else {
-		suffix[0] = '\0';
-	}
-
-	as_error_update_server_detail(err, code, func, file, line);
-
-	if (fmt != NULL) {
-		va_list ap;
-		va_start(ap, fmt);
-		vsnprintf(err->message, AS_ERROR_MESSAGE_MAX_LEN, fmt, ap);
-		err->message[AS_ERROR_MESSAGE_MAX_LEN] = '\0';
-		va_end(ap);
-	}
-	as_error_append_preserved_trace_suffix(err->message, suffix);
-	return err->code;
 }
 
 /**
@@ -397,7 +298,7 @@ static inline as_status
 as_error_setallv(as_error* err, as_status code, const char * func, const char * file, uint32_t line, const char * fmt, ...)
 {
 	as_error_clear_server_detail(err);
-	if ( fmt != NULL ) {
+	if (fmt != NULL) {
 		va_list ap;
 		va_start(ap, fmt);
 		vsnprintf(err->message, AS_ERROR_MESSAGE_MAX_LEN, fmt, ap);
@@ -453,14 +354,6 @@ as_error_append(as_error* err, const char* str)
 {
 	strncat(err->message, str, sizeof(err->message) - strlen(err->message) - 1);
 }
-
-/**
- * Return string representation of error code.  Result should not be freed.
- *
- * @relates as_error
- */
-AS_EXTERN char*
-as_error_string(as_status status);
 
 #ifdef __cplusplus
 } // end extern "C"

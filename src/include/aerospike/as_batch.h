@@ -17,7 +17,6 @@
 #pragma once 
 
 #include <aerospike/as_bin.h>
-#include <aerospike/as_error.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>

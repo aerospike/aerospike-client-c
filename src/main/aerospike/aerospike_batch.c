@@ -52,7 +52,7 @@
 #define BATCH_TYPE_RECORDS 0
 #define BATCH_TYPE_KEYS 1
 
-#define AS_BATCH_STACK_ALLOC_MAX AS_STACK_BUF_SIZE
+#define AS_BATCH_MAX_STACK_ITEMS 5000
 
 //---------------------------------
 // Imports
@@ -208,18 +208,6 @@ destroy_versions(uint64_t* versions)
 	}
 }
 
-static inline bool
-as_batch_stack_alloc_ok(size_t item_sz, uint32_t n_items)
-{
-	return item_sz == 0 || n_items <= (AS_BATCH_STACK_ALLOC_MAX / item_sz);
-}
-
-static inline bool
-as_batch_use_heap(size_t item_sz, uint32_t n_items)
-{
-	return !as_batch_stack_alloc_ok(item_sz, n_items);
-}
-
 static inline void
 as_batch_message_free(char** message)
 {
@@ -229,83 +217,40 @@ as_batch_message_free(char** message)
 	}
 }
 
-static inline as_status
-as_batch_message_copy(as_error* err, char** trg, const char* src)
+static as_status
+as_batch_message_copy(as_error* err, char** trg)
 {
 	as_batch_message_free(trg);
 
-	if (src[0] == '\0') {
+	if (err->message[0] == '\0') {
 		return AEROSPIKE_OK;
 	}
 
-	size_t len = strlen(src);
-
-	if (len > AS_ERROR_MESSAGE_MAX_LEN) {
-		len = AS_ERROR_MESSAGE_MAX_LEN;
-	}
-
+	size_t len = strlen(err->message);
 	char* message = cf_malloc(len + 1);
 
 	if (! message) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to allocate batch error detail message");
 	}
 
-	memcpy(message, src, len);
+	memcpy(message, err->message, len);
 	message[len] = '\0';
 	*trg = message;
 	return AEROSPIKE_OK;
 }
 
 static inline as_status
-as_batch_result_set_error_detail(as_error* err, as_batch_result* result, const as_error* src)
+as_batch_result_set_error_detail(as_error* err, as_batch_result* result)
 {
-	result->subcode = src->subcode;
-	return as_batch_message_copy(err, &result->message, src->message);
+	result->subcode = err->subcode;
+	return as_batch_message_copy(err, &result->message);
 }
 
 static inline as_status
-as_batch_record_set_error_detail(as_error* err, as_batch_base_record* record, const as_error* src)
+as_batch_record_set_error_detail(as_error* err, as_batch_base_record* rec)
 {
-	record->subcode = src->subcode;
-	return as_batch_message_copy(err, &record->message, src->message);
-}
-
-static inline void
-as_batch_result_clear_error_detail(as_batch_result* result)
-{
-	result->subcode = 0;
-	as_batch_message_free(&result->message);
-}
-
-static inline void
-as_batch_record_clear_error_detail(as_batch_base_record* record)
-{
-	record->subcode = 0;
-	as_batch_message_free(&record->message);
-}
-
-static inline as_status
-as_batch_result_sync_error_detail(
-	as_error* err, as_batch_result* result, const as_error* src, as_status result_code
-	)
-{
-	if (result_code == AEROSPIKE_OK) {
-		as_batch_result_clear_error_detail(result);
-		return AEROSPIKE_OK;
-	}
-	return as_batch_result_set_error_detail(err, result, src);
-}
-
-static inline as_status
-as_batch_record_sync_error_detail(
-	as_error* err, as_batch_base_record* record, const as_error* src, as_status result_code
-	)
-{
-	if (result_code == AEROSPIKE_OK) {
-		as_batch_record_clear_error_detail(record);
-		return AEROSPIKE_OK;
-	}
-	return as_batch_record_set_error_detail(err, record, src);
+	rec->subcode = err->subcode;
+	return as_batch_message_copy(err, &rec->message);
 }
 
 static as_status
@@ -432,24 +377,63 @@ as_batch_in_doubt(const as_key* key, as_txn* txn, bool has_write, uint32_t sent)
 	return false;
 }
 
+static as_status
+as_batch_result_parse_udf_error(
+	as_error* err, as_node* node, as_msg* msg, as_batch_result* result, uint8_t** pp
+	)
+{
+	// Pointer pp does not advance in as_command_parse_udf_failure().
+	// Pointer pp will advance in as_batch_parse_record().
+	as_command_parse_udf_failure(*pp, err, node, msg, msg->result_code);
+	as_status status = as_batch_result_set_error_detail(err, result);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	// For backwards compatibility, populate record that contains the
+	// "FAILURE" bin that contains an error message.
+	return as_batch_parse_record(pp, err, msg, &result->record, true);
+}
+
+static as_status
+as_batch_record_parse_udf_error(
+	as_error* err, as_node* node, as_msg* msg, as_batch_base_record* rec, uint8_t** pp
+	)
+{
+	// Pointer pp does not advance in as_command_parse_udf_failure().
+	// Pointer pp will advance in as_batch_parse_record().
+	as_command_parse_udf_failure(*pp, err, node, msg, msg->result_code);
+	as_status status = as_batch_record_set_error_detail(err, rec);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	// For backwards compatibility, populate record that contains the
+	// "FAILURE" bin that contains an error message.
+	return as_batch_parse_record(pp, err, msg, &rec->record, true);
+}
+
 static bool
 as_batch_async_parse_records(as_event_command* cmd)
 {
 	as_error err;
-	as_error_init(&err);
 	uint8_t* p = cmd->buf + cmd->pos;
 	uint8_t* end = cmd->buf + cmd->len;
 	as_async_batch_executor* executor = cmd->udata;  // udata is overloaded to contain executor.
 	as_vector* records = &executor->records->list;
 
 	while (p < end) {
+		as_error_init(&err);
+
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
 			if (msg->result_code != AEROSPIKE_OK) {
-				as_command_parse_result_error_fields(&err, msg, p);
+				as_command_parse_error(&err, cmd->node, msg, p);
 				as_event_response_error(cmd, &err);
 				return true;
 			}
@@ -467,25 +451,22 @@ as_batch_async_parse_records(as_event_command* cmd)
 		}
 		
 		as_batch_base_record* rec = as_vector_get(records, offset);
-		as_error row_err;
-		as_error_init(&row_err);
 
-		as_status status = as_command_parse_fields(&p, &row_err, msg, cmd->txn, &rec->key, rec->has_write);
+		as_status status = as_command_parse_fields(&p, &err, cmd->node, msg, cmd->txn, &rec->key, rec->has_write);
 
 		if (status != AEROSPIKE_OK) {
-			as_event_response_error(cmd, &row_err);
+			as_event_response_error(cmd, &err);
 			return true;
 		}
 
 		rec->result = msg->result_code;
 
 		if (msg->result_code == AEROSPIKE_OK) {
-			as_batch_record_clear_error_detail(rec);
-			status = as_batch_parse_record(&p, &row_err, msg, &rec->record,
-													 cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
+			status = as_batch_parse_record(&p, &err, msg, &rec->record,
+				cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
 
 			if (status != AEROSPIKE_OK) {
-				as_event_response_error(cmd, &row_err);
+				as_event_response_error(cmd, &err);
 				return true;
 			}
 		}
@@ -493,22 +474,10 @@ as_batch_async_parse_records(as_event_command* cmd)
 			rec->in_doubt = as_batch_in_doubt(&rec->key, cmd->txn, rec->has_write, cmd->command_sent_counter);
 			executor->error_row = true;
 
-			uint8_t* udf_p = p;
-			(void)as_command_parse_udf_failure(udf_p, &row_err, msg, msg->result_code);
-
-			status = as_batch_record_sync_error_detail(&err, rec, &row_err, rec->result);
+			status = as_batch_record_parse_udf_error(&err, cmd->node, msg, rec, &p);
 
 			if (status != AEROSPIKE_OK) {
 				as_event_response_error(cmd, &err);
-				return true;
-			}
-
-			// AEROSPIKE_ERR_UDF results in "FAILURE" bin that contains an error message.
-			status = as_batch_parse_record(&p, &row_err, msg, &rec->record,
-										   cmd->flags & AS_ASYNC_FLAGS_DESERIALIZE);
-
-			if (status != AEROSPIKE_OK) {
-				as_event_response_error(cmd, &row_err);
 				return true;
 			}
 		}
@@ -516,7 +485,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 			rec->in_doubt = as_batch_in_doubt(&rec->key, cmd->txn, rec->has_write, cmd->command_sent_counter);
 			executor->error_row = true;
 
-			status = as_batch_record_sync_error_detail(&err, rec, &row_err, rec->result);
+			status = as_batch_record_set_error_detail(&err, rec);
 
 			if (status != AEROSPIKE_OK) {
 				as_event_response_error(cmd, &err);
@@ -524,7 +493,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 			}
 		}
 		else {
-			status = as_batch_record_sync_error_detail(&err, rec, &row_err, rec->result);
+			status = as_batch_record_set_error_detail(&err, rec);
 
 			if (status != AEROSPIKE_OK) {
 				as_event_response_error(cmd, &err);
@@ -546,13 +515,15 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 	uint8_t* end = buf + size;
 
 	while (p < end) {
+		as_error_init(err);
+
 		as_msg* msg = (as_msg*)p;
 		as_msg_swap_header_from_be(msg);
 		p += sizeof(as_msg);
 		
 		if (msg->info3 & AS_MSG_INFO3_LAST) {
 			if (msg->result_code != AEROSPIKE_OK) {
-				return as_command_parse_result_error_fields(err, msg, p);
+				return as_command_parse_error(err, node, msg, p);
 			}
 			return AEROSPIKE_NO_MORE_RECORDS;
 		}
@@ -569,24 +540,19 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 			case BATCH_TYPE_RECORDS: {
 				as_batch_task_records* btr = (as_batch_task_records*)task;
 				as_batch_base_record* rec = as_vector_get(btr->records, offset);
-				as_error row_err;
-				as_error_init(&row_err);
 
-				as_status status = as_command_parse_fields(&p, &row_err, msg, txn, &rec->key, rec->has_write);
+				as_status status = as_command_parse_fields(&p, err, node, msg, txn, &rec->key, rec->has_write);
 
 				if (status != AEROSPIKE_OK) {
-					as_error_copy(err, &row_err);
 					return status;
 				}
 
 				rec->result = msg->result_code;
 
 				if (msg->result_code == AEROSPIKE_OK) {
-					as_batch_record_clear_error_detail(rec);
-					status = as_batch_parse_record(&p, &row_err, msg, &rec->record, deserialize);
+					status = as_batch_parse_record(&p, err, msg, &rec->record, deserialize);
 
 					if (status != AEROSPIKE_OK) {
-						as_error_copy(err, &row_err);
 						return status;
 					}
 				}
@@ -594,20 +560,9 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					rec->in_doubt = as_batch_in_doubt(&rec->key, txn, rec->has_write, cmd->sent);
 					*task->error_row = true;
 
-					uint8_t* udf_p = p;
-					(void)as_command_parse_udf_failure(udf_p, &row_err, msg, msg->result_code);
-
-					status = as_batch_record_sync_error_detail(err, rec, &row_err, rec->result);
+					status = as_batch_record_parse_udf_error(err, node, msg, rec, &p);
 
 					if (status != AEROSPIKE_OK) {
-						return status;
-					}
-
-					// AEROSPIKE_ERR_UDF results in "FAILURE" bin that contains an error message.
-					status = as_batch_parse_record(&p, &row_err, msg, &rec->record, deserialize);
-
-					if (status != AEROSPIKE_OK) {
-						as_error_copy(err, &row_err);
 						return status;
 					}
 				}
@@ -615,14 +570,14 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					rec->in_doubt = as_batch_in_doubt(&rec->key, txn, rec->has_write, cmd->sent);
 					*task->error_row = true;
 
-					status = as_batch_record_sync_error_detail(err, rec, &row_err, rec->result);
+					status = as_batch_record_set_error_detail(err, rec);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
 					}
 				}
 				else {
-					status = as_batch_record_sync_error_detail(err, rec, &row_err, rec->result);
+					status = as_batch_record_set_error_detail(err, rec);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -634,44 +589,28 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 			case BATCH_TYPE_KEYS: {
 				as_batch_task_keys* btk = (as_batch_task_keys*)task;
 				as_batch_result* res = &btk->results[offset];
-				as_error row_err;
-				as_error_init(&row_err);
 
-				as_status status = as_command_parse_fields(&p, &row_err, msg, txn, res->key, btk->base.has_write);
+				as_status status = as_command_parse_fields(&p, err, node, msg, txn, res->key, btk->base.has_write);
 
 				if (status != AEROSPIKE_OK) {
-					as_error_copy(err, &row_err);
 					return status;
 				}
 
 				res->result = msg->result_code;
 
 				if (msg->result_code == AEROSPIKE_OK) {
-					as_batch_result_clear_error_detail(res);
-					status = as_batch_parse_record(&p, &row_err, msg, &res->record, deserialize);
+					status = as_batch_parse_record(&p, err, msg, &res->record, deserialize);
 
 					if (status != AEROSPIKE_OK) {
-						as_error_copy(err, &row_err);
 						return status;
 					}
 				}
 				else if (msg->result_code == AEROSPIKE_ERR_UDF) {
 					res->in_doubt = as_batch_in_doubt(res->key, txn, task->has_write, cmd->sent);
 					*task->error_row = true;
-
-					uint8_t* udf_p = p;
-					(void)as_command_parse_udf_failure(udf_p, &row_err, msg, msg->result_code);
-
-					status = as_batch_result_sync_error_detail(err, res, &row_err, res->result);
+					status = as_batch_result_parse_udf_error(err, node, msg, res, &p);
 
 					if (status != AEROSPIKE_OK) {
-						return status;
-					}
-
-					status = as_batch_parse_record(&p, &row_err, msg, &res->record, deserialize);
-
-					if (status != AEROSPIKE_OK) {
-						as_error_copy(err, &row_err);
 						return status;
 					}
 				}
@@ -679,14 +618,14 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					res->in_doubt = as_batch_in_doubt(res->key, txn, task->has_write, cmd->sent);
 					*task->error_row = true;
 
-					status = as_batch_result_sync_error_detail(err, res, &row_err, res->result);
+					status = as_batch_result_set_error_detail(err, res);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
 					}
 				}
 				else {
-					status = as_batch_result_sync_error_detail(err, res, &row_err, res->result);
+					status = as_batch_result_set_error_detail(err, res);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -1432,12 +1371,6 @@ as_batch_init_size(as_batch_builder* bb)
 	}
 }
 
-static inline uint8_t
-as_batch_info4_error_detail(uint8_t verbosity)
-{
-	return as_command_info4_error_detail(verbosity);
-}
-
 static as_status
 as_batch_records_size(
 	as_vector* records, as_vector* offsets, as_batch_builder* bb, as_error* err
@@ -1480,7 +1413,7 @@ as_batch_attr_read_header(as_batch_attr* attr, const as_policy_batch* p)
 		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
 		break;
 	}
-	attr->info4_attr = as_batch_info4_error_detail(p->base.error_detail_verbosity);
+	attr->info4_attr = as_command_info4_error_detail(p->base.error_detail_verbosity);
 	attr->ttl = p->read_touch_ttl_percent;
 	attr->gen = 0;
 	attr->has_write = false;
@@ -1516,7 +1449,7 @@ as_batch_attr_read_row(
 		attr->info_attr = AS_MSG_INFO3_SC_READ_TYPE | AS_MSG_INFO3_SC_READ_RELAX;
 		break;
 	}
-	attr->info4_attr = as_batch_info4_error_detail(error_detail_verbosity);
+	attr->info4_attr = as_command_info4_error_detail(error_detail_verbosity);
 	attr->ttl = p->read_touch_ttl_percent;
 	attr->gen = 0;
 	attr->has_write = false;
@@ -1616,7 +1549,7 @@ as_batch_attr_write(
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 
-	attr->info4_attr = as_batch_info4_error_detail(error_detail_verbosity);
+	attr->info4_attr = as_command_info4_error_detail(error_detail_verbosity);
 
 	if (p->on_locking_only) {
 		attr->info4_attr |= AS_MSG_INFO4_TXN_ON_LOCKING_ONLY;
@@ -1646,7 +1579,7 @@ as_batch_attr_apply(
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 
-	attr->info4_attr = as_batch_info4_error_detail(error_detail_verbosity);
+	attr->info4_attr = as_command_info4_error_detail(error_detail_verbosity);
 
 	if (p->on_locking_only) {
 		attr->info4_attr |= AS_MSG_INFO4_TXN_ON_LOCKING_ONLY;
@@ -1690,7 +1623,7 @@ as_batch_attr_remove(
 		attr->info_attr |= AS_MSG_INFO3_COMMIT_MASTER;
 	}
 
-	attr->info4_attr = as_batch_info4_error_detail(error_detail_verbosity);
+	attr->info4_attr = as_command_info4_error_detail(error_detail_verbosity);
 }
 
 static uint8_t*
@@ -2888,7 +2821,6 @@ as_single_execute_record(as_batch_task_records* btr, as_error* err)
 
 	if (status == AEROSPIKE_OK) {
 		rec->result = AEROSPIKE_OK;
-		as_batch_record_clear_error_detail(rec);
 	}
 	else {
 		if (as_batch_set_error_row(status)) {
@@ -2904,7 +2836,7 @@ as_single_execute_record(as_batch_task_records* btr, as_error* err)
 			status = AEROSPIKE_OK;
 		}
 
-		as_status detail_status = as_batch_record_sync_error_detail(err, rec, err, rec->result);
+		as_status detail_status = as_batch_record_set_error_detail(err, rec);
 
 		if (detail_status != AEROSPIKE_OK) {
 			return detail_status;
@@ -2923,7 +2855,6 @@ as_single_execute_key(as_batch_task_keys* btk, as_error* err)
 
 	if (status == AEROSPIKE_OK) {
 		res->result = AEROSPIKE_OK;
-		as_batch_result_clear_error_detail(res);
 	}
 	else {
 		if (as_batch_set_error_row(status)) {
@@ -2939,7 +2870,7 @@ as_single_execute_key(as_batch_task_keys* btk, as_error* err)
 			status = AEROSPIKE_OK;
 		}
 
-		as_status detail_status = as_batch_result_sync_error_detail(err, res, err, res->result);
+		as_status detail_status = as_batch_result_set_error_detail(err, res);
 
 		if (detail_status != AEROSPIKE_OK) {
 			return detail_status;
@@ -3003,7 +2934,7 @@ as_single_handle_error(as_batch_base_record* rec, as_single_data* data, as_error
 	// command contains multiple keys.
 	if (err->code > AEROSPIKE_OK && err->code != AEROSPIKE_ERR_TIMEOUT) {
 		rec->result = err->code;
-		as_status detail_status = as_batch_record_sync_error_detail(err, rec, err, rec->result);
+		as_status detail_status = as_batch_record_set_error_detail(err, rec);
 
 		if (detail_status != AEROSPIKE_OK) {
 			as_single_executor_error(err, data);
@@ -3012,7 +2943,6 @@ as_single_handle_error(as_batch_base_record* rec, as_single_data* data, as_error
 		as_single_executor_complete(data);
 	}
 	else {
-		as_batch_record_clear_error_detail(rec);
 		as_single_executor_error(err, data);
 	}
 }
@@ -3025,7 +2955,6 @@ as_single_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
 
 	if (! err) {
 		rec->result = AEROSPIKE_OK;
-		as_batch_record_clear_error_detail(rec);
 		as_single_executor_complete(data);
 	}
 	else {
@@ -3043,7 +2972,6 @@ as_single_record_listener(as_error* err, as_record* record, void* udata, as_even
 		// Transfer source record to batch record.
 		// The async_heap_rec policy must be set to true for this to work.
 		rec->result = AEROSPIKE_OK;
-		as_batch_record_clear_error_detail(rec);
 		rec->record.gen = record->gen;
 		rec->record.ttl = record->ttl;
 		rec->record.bins = record->bins;
@@ -3067,7 +2995,6 @@ as_single_value_listener(as_error* err, as_val* val, void* udata, as_event_loop*
 	if (! err) {
 		as_val_reserve(val);
 		rec->result = AEROSPIKE_OK;
-		as_batch_record_clear_error_detail(rec);
 		as_record_reset(&rec->record, 1);
 		as_record_set(&rec->record, "SUCCESS", (as_bin_value*)val);
 		as_single_executor_complete(data);
@@ -3085,11 +3012,11 @@ as_txn_verify_listener(as_error* err, as_record* record, void* udata, as_event_l
 
 	if (! err) {
 		rec->result = AEROSPIKE_OK;
-		as_batch_record_clear_error_detail(rec);
 	}
 	else {
 		rec->result = err->code;
-		as_status detail_status = as_batch_record_sync_error_detail(err, rec, err, rec->result);
+
+		as_status detail_status = as_batch_record_set_error_detail(err, rec);
 
 		if (detail_status != AEROSPIKE_OK) {
 			as_single_executor_error(err, data);
@@ -3112,11 +3039,10 @@ as_txn_roll_listener(as_error* err, void* udata, as_event_loop* event_loop)
 
 	if (! err) {
 		rec->result = AEROSPIKE_OK;
-		as_batch_record_clear_error_detail(rec);
 	}
 	else {
 		rec->result = err->code;
-		as_status detail_status = as_batch_record_sync_error_detail(err, rec, err, rec->result);
+		as_status detail_status = as_batch_record_set_error_detail(err, rec);
 
 		if (detail_status != AEROSPIKE_OK) {
 			as_single_executor_error(err, data);
@@ -3384,11 +3310,11 @@ as_batch_keys_execute_seq(
 	return status;
 }
 
-#define batch_results_init(_item_sz, _n_keys) as_batch_use_heap(_item_sz, _n_keys) ? \
+#define batch_results_init(_item_sz, _n_keys) (_n_keys > AS_BATCH_MAX_STACK_ITEMS) ? \
 	(as_batch_result*)cf_malloc(_item_sz * _n_keys) : \
 	(as_batch_result*)alloca(_item_sz * _n_keys)
 
-#define batch_results_free(_results, _nkeys) if (as_batch_use_heap(sizeof(as_batch_result), _nkeys)) {cf_free(_results);}
+#define batch_results_free(_results, _n_keys) if (_n_keys > AS_BATCH_MAX_STACK_ITEMS) {cf_free(_results);}
 
 static as_status
 as_batch_keys_execute(
@@ -3448,9 +3374,9 @@ as_batch_keys_execute(
 		as_batch_result* result = &results[i];
 		result->key = key;
 		result->result = AEROSPIKE_NO_RESPONSE;
+		result->subcode = 0;
 		result->message = NULL;
 		result->in_doubt = false;
-		as_batch_result_clear_error_detail(result);
 		as_record_init(&result->record, 0);
 
 		status = as_key_set_digest(err, key);
@@ -3479,7 +3405,7 @@ as_batch_keys_execute(
 			batch_node = as_vector_reserve(&batch_nodes);
 			batch_node->node = node;  // Transfer node
 
-			if (as_batch_stack_alloc_ok(sizeof(uint32_t), offsets_capacity)) {
+			if (n_keys <= AS_BATCH_MAX_STACK_ITEMS) {
 				// All keys and offsets should fit on stack.
 				as_vector_inita(&batch_node->offsets, sizeof(uint32_t), offsets_capacity);
 			}
@@ -3593,7 +3519,7 @@ as_batch_keys_execute(
 	for (uint32_t i = 0; i < n_keys; i++) {
 		as_batch_result* br = &btk.results[i];
 		as_record_destroy(&br->record);
-		as_batch_result_clear_error_detail(br);
+		as_batch_message_free(&br->message);
 	}
 	batch_results_free(results, n_keys);
 
@@ -3955,7 +3881,6 @@ as_batch_records_execute(
 		as_key* key = &rec->key;
 		
 		rec->result = AEROSPIKE_NO_RESPONSE;
-		as_batch_record_clear_error_detail(rec);
 		as_record_init(&rec->record, 0);
 		
 		status = as_key_set_digest(err, key);
@@ -3982,7 +3907,7 @@ as_batch_records_execute(
 			batch_node = as_vector_reserve(&batch_nodes);
 			batch_node->node = node;  // Transfer node
 			
-			if (as_batch_stack_alloc_ok(sizeof(uint32_t), offsets_capacity)) {
+			if (n_keys <= AS_BATCH_MAX_STACK_ITEMS) {
 				// All keys and offsets should fit on stack.
 				as_vector_inita(&batch_node->offsets, sizeof(uint32_t), offsets_capacity);
 			}
@@ -4985,7 +4910,7 @@ as_txn_verify(aerospike* as, as_error* err, as_txn* txn)
 
 	as_batch_records records;
 
-	if (as_batch_stack_alloc_ok(sizeof(as_batch_record), n_keys)) {
+	if (n_keys <= AS_BATCH_MAX_STACK_ITEMS) {
 		as_batch_records_inita(&records, n_keys);
 	}
 	else {
@@ -5026,7 +4951,7 @@ as_txn_roll(aerospike* as, as_error* err, as_policy_txn_roll* policy, as_txn* tx
 
 	as_batch_records records;
 
-	if (as_batch_stack_alloc_ok(sizeof(as_batch_record), n_keys)) {
+	if (n_keys <= AS_BATCH_MAX_STACK_ITEMS) {
 		as_batch_records_inita(&records, n_keys);
 	}
 	else {
@@ -5267,7 +5192,7 @@ as_batch_records_destroy(as_batch_records* records)
 		
 		as_key_destroy(&record->key);
 		as_record_destroy(&record->record);
-		as_batch_record_clear_error_detail(record);
+		as_batch_message_free(&record->message);
 	}
 	as_vector_destroy(list);
 }

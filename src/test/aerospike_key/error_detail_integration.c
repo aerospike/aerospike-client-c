@@ -602,7 +602,6 @@ TEST(ed_sync_priority_logic_v2, "5.16.1 server message displaces default format"
 	if (err.subcode > 0) {
 		// Must NOT be the default format "<addr> AEROSPIKE_ERR_..."
 		assert_true(strstr(err.message, as_error_string(status)) == NULL);
-		assert_true(strstr(err.message, "subcode=") != NULL);
 	}
 	as_operations_destroy(&ops);
 }
@@ -764,9 +763,6 @@ TEST(ed_sync_cdt_list_oob, "5.11.1 CDT list index out of bounds verbosity 2")
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
-	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
-	}
 	as_operations_destroy(&ops);
 }
 
@@ -897,9 +893,6 @@ TEST(ed_sync_cdt_rank_oob, "5.19.1 CDT list rank out of bounds verbosity 2")
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
-	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
-	}
 	as_operations_destroy(&ops);
 }
 
@@ -926,9 +919,6 @@ TEST(ed_sync_filtered_out, "5.20.1 filtered out verbosity 2")
 	as_status status = aerospike_key_put(as, &err, &pw, &key, &rec);
 
 	assert_int_eq(status, AEROSPIKE_FILTERED_OUT);
-	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
-	}
 	as_exp_destroy(filter);
 }
 
@@ -980,9 +970,6 @@ TEST(ed_sync_bin_not_found_hll, "5.21.1 bin not found HLL verbosity 2")
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
-	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
-	}
 	as_operations_destroy(&ops);
 }
 
@@ -1006,9 +993,6 @@ TEST(ed_sync_param_bits_size, "5.22.1 param bits size out of range verbosity 2")
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
-	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
-	}
 	as_operations_destroy(&ops);
 }
 
@@ -1775,9 +1759,6 @@ TEST(ed_async_cdt_list_oob, "6.6 async CDT list out of bounds verbosity 2")
 	as_monitor_wait(&monitor);
 
 	assert_true(data.got_error);
-	if (data.err_copy.subcode > 0) {
-		assert_true(strstr(data.err_copy.message, "subcode=") != NULL);
-	}
 }
 
 // 6.7 Async read happy path at verbosity 2
@@ -1924,7 +1905,6 @@ TEST(ed_async_priority_logic_v2, "6.9 async server message displaces default for
 	assert_true(data.got_error);
 	if (data.err_copy.subcode > 0) {
 		assert_true(strstr(data.err_copy.message, as_error_string(data.err_copy.code)) == NULL);
-		assert_true(strstr(data.err_copy.message, "subcode=") != NULL);
 	}
 }
 

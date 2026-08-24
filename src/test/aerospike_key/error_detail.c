@@ -50,6 +50,8 @@ enum {
 	AS_EXP_TRACE_SNIPPET_MAX_SIZE = 256
 };
 
+extern aerospike* as;
+
 //-------------------------------------
 // Helpers: msgpack buffer construction
 //-------------------------------------
@@ -236,6 +238,12 @@ write_op_string(uint8_t* buf, const char* name, const char* value)
 	return op_size + 4;
 }
 
+static inline void
+command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
+{
+	as_command_parse_error_details(err, NULL, buf, len, AEROSPIKE_OK);
+}
+
 //---------------------------------
 // Section 3: Parser Unit Tests
 //---------------------------------
@@ -249,9 +257,9 @@ TEST(error_detail_parser_empty_map, "3.1 empty map yields no error detail")
 	uint8_t buf[1];
 	uint32_t len = write_fixmap(buf, 0);
 
-	as_command_parse_error_details(&err, buf, len);
+	command_parse_error_details(&err, buf, len);
 
-	assert_string_eq(err.message, "");
+	assert_string_eq(err.message, "AEROSPIKE_OK");
 	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
@@ -267,9 +275,9 @@ TEST(error_detail_parser_subcode_only, "3.2 subcode only fixint")
 	p += write_fixint(buf + p, 1);
 	p += write_fixint(buf + p, 42);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_string_eq(err.message, "error subcode=42");
+	assert_string_eq(err.message, "AEROSPIKE_OK");
 	assert_int_eq(err.subcode, 42);
 }
 
@@ -288,7 +296,7 @@ TEST(error_detail_parser_message_only, "3.3 message only fixstr")
 	p += write_fixint(buf + p, 2);
 	p += write_fixstr(buf + p, msg, msg_len);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_string_eq(err.message, "record not found");
 	assert_int_eq(err.subcode, AS_SUB_NONE);
@@ -311,9 +319,9 @@ TEST(error_detail_parser_subcode_and_message, "3.4 subcode and message together"
 	p += write_fixint(buf + p, 2);
 	p += write_fixstr(buf + p, msg, msg_len);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_string_eq(err.message, "delete generation mismatch (subcode=5001)");
+	assert_string_eq(err.message, "delete generation mismatch");
 	assert_int_eq(err.subcode, 5001);
 }
 
@@ -334,9 +342,9 @@ TEST(error_detail_parser_reversed_keys, "3.5 reversed key order")
 	p += write_fixint(buf + p, 1);
 	p += write_uint16(buf + p, 1100);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_string_eq(err.message, "type mismatch (subcode=1100)");
+	assert_string_eq(err.message, "type mismatch");
 	assert_int_eq(err.subcode, 1100);
 }
 
@@ -362,9 +370,9 @@ TEST(error_detail_parser_unknown_keys, "3.6 unknown keys are skipped")
 	p += write_fixint(buf + p, 2);
 	p += write_fixstr(buf + p, msg, (uint32_t)strlen(msg));
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_string_eq(err.message, "some message (subcode=99)");
+	assert_string_eq(err.message, "some message");
 	assert_int_eq(err.subcode, 99);
 }
 
@@ -395,9 +403,9 @@ TEST(error_detail_parser_nested_unknown, "3.7 unknown key with nested container"
 	p += write_fixint(buf + p, 2);
 	p += write_fixstr(buf + p, msg, (uint32_t)strlen(msg));
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_string_eq(err.message, "msg (subcode=200)");
+	assert_string_eq(err.message, "msg");
 	assert_int_eq(err.subcode, 200);
 }
 
@@ -411,9 +419,9 @@ TEST(error_detail_parser_truncated, "3.8 truncated buffer no crash")
 	buf[0] = 0x82; // fixmap 2 entries
 	buf[1] = 0x01; // key 1, but value is missing
 
-	as_command_parse_error_details(&err, buf, 2);
+	command_parse_error_details(&err, buf, 2);
 
-	assert_string_eq(err.message, "");
+	assert_string_eq(err.message, "AEROSPIKE_OK");
 	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
@@ -423,7 +431,7 @@ TEST(error_detail_parser_zero_length, "3.9 zero-length buffer")
 	as_error err;
 	as_error_init(&err);
 
-	as_command_parse_error_details(&err, NULL, 0);
+	command_parse_error_details(&err, NULL, 0);
 
 	assert_string_eq(err.message, "");
 	assert_int_eq(err.subcode, AS_SUB_NONE);
@@ -441,10 +449,10 @@ TEST(error_detail_parser_uint8_subcode, "3.10 subcode uint8")
 	p += write_fixint(buf + p, 1);
 	p += write_uint8(buf + p, 200);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 200);
-	assert_string_eq(err.message, "error subcode=200");
+	assert_string_eq(err.message, "AEROSPIKE_OK");
 }
 
 // 3.11 Subcode encoded as uint16 (0xCD)
@@ -459,10 +467,10 @@ TEST(error_detail_parser_uint16_subcode, "3.11 subcode uint16")
 	p += write_fixint(buf + p, 1);
 	p += write_uint16(buf + p, 3001);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 3001);
-	assert_string_eq(err.message, "error subcode=3001");
+	assert_string_eq(err.message, "AEROSPIKE_OK");
 }
 
 // 3.12 Subcode encoded as uint32 (0xCE)
@@ -477,10 +485,10 @@ TEST(error_detail_parser_uint32_subcode, "3.12 subcode uint32")
 	p += write_fixint(buf + p, 1);
 	p += write_uint32(buf + p, 70000);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 70000);
-	assert_string_eq(err.message, "error subcode=70000");
+	assert_string_eq(err.message, "AEROSPIKE_OK");
 }
 
 // 3.13 Subcode encoded as uint64 (0xCF)
@@ -495,10 +503,10 @@ TEST(error_detail_parser_uint64_subcode, "3.13 subcode uint64")
 	p += write_fixint(buf + p, 1);
 	p += write_uint64(buf + p, 100000);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 100000);
-	assert_string_eq(err.message, "error subcode=100000");
+	assert_string_eq(err.message, "AEROSPIKE_OK");
 }
 
 // 3.14 Message encoded as str8 (0xD9)
@@ -516,7 +524,7 @@ TEST(error_detail_parser_str8_message, "3.14 message str8")
 	p += write_fixint(buf + p, 2);
 	p += write_str8(buf + p, msg, msg_len);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_string_eq(err.message, msg);
 }
@@ -537,7 +545,7 @@ TEST(error_detail_parser_str16_message, "3.15 message str16")
 	p += write_fixint(buf + p, 2);
 	p += write_str16(buf + p, msg, 300);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_string_eq(err.message, msg);
 }
@@ -557,7 +565,7 @@ TEST(error_detail_parser_unicode, "3.16 unicode message round-trips")
 	p += write_fixint(buf + p, 2);
 	p += write_str8(buf + p, msg, msg_len);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_string_eq(err.message, msg);
 }
@@ -579,9 +587,9 @@ TEST(error_detail_parser_map16, "3.17 map16 header")
 	p += write_fixint(buf + p, 2);
 	p += write_fixstr(buf + p, msg, msg_len);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_string_eq(err.message, "map16 test (subcode=500)");
+	assert_string_eq(err.message, "map16 test");
 	assert_int_eq(err.subcode, 500);
 }
 
@@ -602,9 +610,9 @@ TEST(error_detail_parser_map32, "3.18 map32 header")
 	p += write_fixint(buf + p, 2);
 	p += write_fixstr(buf + p, msg, msg_len);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_string_eq(err.message, "map32 test (subcode=600)");
+	assert_string_eq(err.message, "map32 test");
 	assert_int_eq(err.subcode, 600);
 }
 
@@ -625,9 +633,9 @@ TEST(error_detail_parser_subcode_zero, "3.19 subcode zero is valid")
 	p += write_fixint(buf + p, 2);
 	p += write_fixstr(buf + p, msg, msg_len);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_string_eq(err.message, "zero subcode (subcode=0)");
+	assert_string_eq(err.message, "zero subcode");
 	assert_int_eq(err.subcode, AS_SUB_NONE);
 }
 
@@ -648,10 +656,10 @@ TEST(error_detail_parser_large_subcode, "3.20 large subcode boundary")
 	p += write_fixint(buf + p, 2);
 	p += write_fixstr(buf + p, msg, msg_len);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 99999);
-	assert_string_eq(err.message, "cross-cutting (subcode=99999)");
+	assert_string_eq(err.message, "cross-cutting");
 }
 
 // 3.21 Message near AS_ERROR_MESSAGE_MAX_LEN with subcode suffix
@@ -672,7 +680,7 @@ TEST(error_detail_parser_near_max_len, "3.21 message near max length")
 	p += write_fixint(buf + p, 2);
 	p += write_str16(buf + p, msg, 1000);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 99999);
 	assert_true(err.message[0] != '\0');
@@ -698,7 +706,7 @@ TEST(error_detail_parser_overflow_truncation, "3.22 overflow is truncated")
 	p += write_fixint(buf + p, 2);
 	p += write_str16(buf + p, msg, 1020);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 1);
 	assert_true(err.message[0] != '\0');
@@ -756,10 +764,10 @@ TEST(error_detail_parser_exp_trace_full, "3.23 full expression trace parse")
 	p += write_fixstr(buf + p, "100", 3);
 	p += write_fixstr(buf + p, "99999", 5);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 4242);
-	assert_true(strstr(err.message, "expression failed (subcode=4242); exp_trace={") == err.message);
+	assert_true(strstr(err.message, "expression failed; exp_trace={") == err.message);
 	assert_true(strstr(err.message, "phase=\"eval\"") != NULL);
 	assert_true(strstr(err.message, "byte_offset=1234") != NULL);
 	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
@@ -805,9 +813,9 @@ TEST(error_detail_parser_exp_trace_truncation, "3.24 expression trace truncation
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_SNIPPET);
 	p += write_str16(buf + p, long_snippet, (uint32_t)strlen(long_snippet));
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_true(strstr(err.message, "; exp_trace={") == err.message);
+	assert_true(strstr(err.message, "AEROSPIKE_OK; exp_trace={") == err.message);
 	assert_true(strstr(err.message, "op=\"OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO\"") != NULL);
 	assert_true(strstr(err.message, "path=[\"PPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP\"") != NULL);
 	assert_true(strstr(err.message, "snippet=\"SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS") != NULL);
@@ -838,9 +846,9 @@ TEST(error_detail_parser_exp_trace_skips_dropped_keys,
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
 	p += write_fixstr(buf + p, "cmp_eq", 6);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
-	assert_true(strstr(err.message, "; exp_trace={") == err.message);
+	assert_true(strstr(err.message, "AEROSPIKE_OK; exp_trace={") == err.message);
 	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
 	assert_true(strstr(err.message, "operands=[\"ibin\",\"99999\"]") != NULL);
 }
@@ -864,10 +872,10 @@ TEST(error_detail_parser_exp_trace_dropped_only_ignored,
 	p += write_fixint(buf + p, 99);
 	p += write_fixstr(buf + p, "future", 6);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 0);
-	assert_string_eq(err.message, "");
+	assert_string_eq(err.message, "AEROSPIKE_OK");
 }
 
 // 3.26.0 Truncated path markers are preserved as ordinary path frames.
@@ -888,7 +896,7 @@ TEST(error_detail_parser_exp_trace_path_truncation_marker,
 	p += write_fixstr(buf + p, "...", 3);
 	p += write_fixstr(buf + p, "leaf", 4);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_true(strstr(err.message, "path=[\"root\",\"...\",\"leaf\"]") != NULL);
 }
@@ -914,7 +922,7 @@ TEST(error_detail_parser_exp_trace_malformed_operands,
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OUTCOME);
 	p += write_fixint(buf + p, AS_EXP_TRACE_OUTCOME_FALSE);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_true(strstr(err.message, "operands=") == NULL);
 	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
@@ -943,10 +951,10 @@ TEST(error_detail_parser_unknown_signed_and_ext,
 	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_MESSAGE);
 	p += write_fixstr(buf + p, "after unknowns", 14);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 17);
-	assert_string_eq(err.message, "after unknowns (subcode=17)");
+	assert_string_eq(err.message, "after unknowns");
 }
 
 // 3.27 Invalid expression trace payload is ignored without losing other details
@@ -968,10 +976,10 @@ TEST(error_detail_parser_invalid_exp_trace, "3.25 invalid expression trace is ig
 	p += write_fixint(buf + p, AS_ERROR_DETAIL_KEY_EXP_TRACE);
 	p += write_fixstr(buf + p, invalid, (uint32_t)strlen(invalid));
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_int_eq(err.subcode, 7);
-	assert_string_eq(err.message, "detail survives (subcode=7)");
+	assert_string_eq(err.message, "detail survives");
 }
 
 // 3.28 UDF FAILURE text preserves trace suffix in err.message.
@@ -993,7 +1001,7 @@ TEST(error_detail_udf_message_preserves_server_detail,
 	detail_len += write_fixint(detail_buf + detail_len, AS_EXP_TRACE_KEY_OP);
 	detail_len += write_fixstr(detail_buf + detail_len, "cmp_eq", 6);
 
-	as_command_parse_error_details(&err, detail_buf, detail_len);
+	command_parse_error_details(&err, detail_buf, detail_len);
 
 	as_msg msg;
 	memset(&msg, 0, sizeof(msg));
@@ -1002,13 +1010,16 @@ TEST(error_detail_udf_message_preserves_server_detail,
 	uint8_t udf_buf[128];
 	write_op_string(udf_buf, "FAILURE", "test failure from error_detail_udf");
 
-	as_status status = as_command_parse_udf_failure(udf_buf, &err, &msg, AEROSPIKE_ERR_UDF);
+	as_node* node = as_node_get_random(as->cluster);
+	as_status status = as_command_parse_udf_failure(udf_buf, &err, node, &msg, AEROSPIKE_ERR_UDF);
+	as_node_release(node);
 
 	assert_int_eq(status, AEROSPIKE_ERR_UDF);
 	assert_int_eq(err.subcode, 7);
-	assert_true(strstr(err.message, "test failure from error_detail_udf; exp_trace={") == err.message);
-	assert_true(strstr(err.message, "phase=\"build\"") != NULL);
-	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
+
+	// UDF messages override server detailed messages, so the expression trace will not be included.
+	assert_true(strstr(err.message, "test failure from error_detail_udf") != NULL);
+	assert_true(strstr(err.message, "exp_trace") == NULL);
 }
 
 // 3.28.1 UDF fallback text also preserves parsed server detail.
@@ -1030,7 +1041,7 @@ TEST(error_detail_udf_fallback_preserves_server_detail,
 	detail_len += write_fixint(detail_buf + detail_len, AS_EXP_TRACE_KEY_OP);
 	detail_len += write_fixstr(detail_buf + detail_len, "cmp_eq", 6);
 
-	as_command_parse_error_details(&err, detail_buf, detail_len);
+	as_command_parse_error_details(&err, NULL, detail_buf, detail_len, AEROSPIKE_ERR_UDF);
 
 	as_msg msg;
 	memset(&msg, 0, sizeof(msg));
@@ -1039,11 +1050,13 @@ TEST(error_detail_udf_fallback_preserves_server_detail,
 	uint8_t udf_buf[128];
 	write_op_string(udf_buf, "OTHER", "not the failure bin");
 
-	as_status status = as_command_parse_udf_failure(udf_buf, &err, &msg, AEROSPIKE_ERR_UDF);
+	as_node* node = as_node_get_random(as->cluster);
+	as_status status = as_command_parse_udf_failure(udf_buf, &err, node, &msg, AEROSPIKE_ERR_UDF);
+	as_node_release(node);
 
 	assert_int_eq(status, AEROSPIKE_ERR_UDF);
 	assert_int_eq(err.subcode, 7);
-	assert_true(strstr(err.message, as_error_string(AEROSPIKE_ERR_UDF)) == err.message);
+	assert_true(strstr(err.message, as_error_string(AEROSPIKE_ERR_UDF)) != NULL);
 	assert_true(strstr(err.message, "; exp_trace={") != NULL);
 	assert_true(strstr(err.message, "phase=\"build\"") != NULL);
 	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
@@ -1066,14 +1079,14 @@ TEST(error_detail_parser_exp_trace_only_status_fallback,
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
 	p += write_fixstr(buf + p, "cmp_eq", 6);
 
-	as_command_parse_error_details(&err, buf, p);
+	as_command_parse_error_details(&err, NULL, buf, p, AEROSPIKE_ERR_REQUEST_INVALID);
 
-	assert_true(strstr(err.message, "; exp_trace={") == err.message);
+	assert_true(strstr(err.message, "; exp_trace={") != NULL);
 
-	as_error_update_status(&err, AEROSPIKE_ERR_REQUEST_INVALID);
+	as_error_set_node(&err, NULL, AEROSPIKE_ERR_REQUEST_INVALID);
 
 	assert_int_eq(err.code, AEROSPIKE_ERR_REQUEST_INVALID);
-	assert_true(strstr(err.message, as_error_string(AEROSPIKE_ERR_REQUEST_INVALID)) == err.message);
+	assert_true(strstr(err.message, as_error_string(AEROSPIKE_ERR_REQUEST_INVALID)) != NULL);
 	assert_true(strstr(err.message, "; exp_trace={") != NULL);
 	assert_true(strstr(err.message, "phase=\"build\"") != NULL);
 	assert_true(strstr(err.message, "op=\"cmp_eq\"") != NULL);
@@ -1085,7 +1098,6 @@ TEST(error_detail_parser_exp_trace_only_address_fallback,
 {
 	as_error err;
 	as_error_init(&err);
-	const char* address = "127.0.0.1 3000";
 
 	uint8_t buf[128];
 	uint32_t p = 0;
@@ -1097,15 +1109,18 @@ TEST(error_detail_parser_exp_trace_only_address_fallback,
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
 	p += write_fixstr(buf + p, "cmp_eq", 6);
 
-	as_command_parse_error_details(&err, buf, p);
+	as_node* node = as_node_get_random(as->cluster);
+	as_command_parse_error_details(&err, node, buf, p, AEROSPIKE_ERR_REQUEST_INVALID);
 
-	assert_true(strstr(err.message, "; exp_trace={") == err.message);
+	assert_true(strstr(err.message, "; exp_trace={") != NULL);
 
-	as_error_update_address(&err, AEROSPIKE_ERR_REQUEST_INVALID, address);
+	as_error_set_node(&err, node, AEROSPIKE_ERR_REQUEST_INVALID);
 
 	char expected[AS_ERROR_MESSAGE_MAX_SIZE];
-	snprintf(expected, sizeof(expected), "%s %s", address,
+	snprintf(expected, sizeof(expected), "%s %s", as_node_get_address_string(node),
 		as_error_string(AEROSPIKE_ERR_REQUEST_INVALID));
+
+	as_node_release(node);
 
 	assert_int_eq(err.code, AEROSPIKE_ERR_REQUEST_INVALID);
 	assert_true(strstr(err.message, expected) == err.message);
@@ -1131,7 +1146,7 @@ TEST(error_detail_parser_exp_trace_omitted_lang_defaults_msgpack,
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_OP);
 	p += write_fixstr(buf + p, "unknown", 7);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	assert_true(strstr(err.message, "phase=\"eval\"") != NULL);
 	assert_true(strstr(err.message, "op=\"unknown\"") != NULL);
@@ -1161,11 +1176,15 @@ TEST(error_detail_parser_fields_err_extracts_detail,
 	memcpy(fields + p, detail, detail_len);
 	p += detail_len;
 
-	uint8_t* end = as_command_parse_fields_err(fields, &err, 1);
+	as_msg msg;
+	msg.result_code = AEROSPIKE_ERR_RECORD_NOT_FOUND;
+	msg.n_fields = 1;
+
+	uint8_t* end = as_command_parse_fields_err(fields, &err, NULL, &msg);
 
 	assert_true(end == fields + p);
 	assert_int_eq(err.subcode, 7);
-	assert_string_eq(err.message, "fatal detail (subcode=7)");
+	assert_string_eq(err.message, "fatal detail");
 }
 
 // 3.33 Batch command-level LAST errors parse field 45 before applying status text.
@@ -1192,13 +1211,13 @@ TEST(error_detail_parser_batch_last_error_fields,
 	msg.result_code = AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED;
 	msg.n_fields = 1;
 
-	as_status status = as_command_parse_result_error_fields(&err, &msg, fields);
+	as_status status = as_command_parse_error(&err, NULL, &msg, fields);
 
 	assert_int_eq(fields_len, 4 + 1 + detail_len);
 	assert_int_eq(status, AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED);
 	assert_int_eq(err.code, AEROSPIKE_ERR_BATCH_MAX_REQUESTS_EXCEEDED);
 	assert_int_eq(err.subcode, 7);
-	assert_string_eq(err.message, "batch fatal detail (subcode=7)");
+	assert_string_eq(err.message, "batch fatal detail");
 }
 
 // 3.34 Sync transaction verify/roll status paths preserve field 45 details.
@@ -1224,13 +1243,13 @@ TEST(error_detail_parser_sync_txn_status_error_fields,
 	msg.result_code = AEROSPIKE_MRT_VERSION_MISMATCH;
 	msg.n_fields = 1;
 
-	as_status status = as_command_parse_result_error_fields(&err, &msg, fields);
+	as_status status = as_command_parse_error(&err, NULL, &msg, fields);
 
 	assert_int_eq(status, AEROSPIKE_MRT_VERSION_MISMATCH);
 	assert_int_eq(err.code, AEROSPIKE_MRT_VERSION_MISMATCH);
-	assert_true(as_error_has_server_detail(&err));
+	assert_true(err.subcode != 0 || err.message[0] != '\0');
 	assert_int_eq(err.subcode, 3);
-	assert_string_eq(err.message, "txn verify detail (subcode=3)");
+	assert_string_eq(err.message, "txn verify detail");
 }
 
 // 3.35 Async transaction verify/roll status paths use the same field 45 preservation.
@@ -1256,13 +1275,13 @@ TEST(error_detail_parser_async_txn_status_error_fields,
 	msg.result_code = AEROSPIKE_MRT_EXPIRED;
 	msg.n_fields = 1;
 
-	as_status status = as_command_parse_result_error_fields(&err, &msg, fields);
+	as_status status = as_command_parse_error(&err, NULL, &msg, fields);
 
 	assert_int_eq(status, AEROSPIKE_MRT_EXPIRED);
 	assert_int_eq(err.code, AEROSPIKE_MRT_EXPIRED);
-	assert_true(as_error_has_server_detail(&err));
+	assert_true(err.subcode != 0 || err.message[0] != '\0');
 	assert_int_eq(err.subcode, 4);
-	assert_string_eq(err.message, "txn roll detail (subcode=4)");
+	assert_string_eq(err.message, "txn roll detail");
 }
 
 //-------------------------------------------------------
@@ -1539,7 +1558,7 @@ TEST(error_detail_parser_populates_on_any_call, "7.8 parser populates regardless
 	p += write_fixint(buf + p, 2);
 	p += write_fixstr(buf + p, msg, msg_len);
 
-	as_command_parse_error_details(&err, buf, p);
+	command_parse_error_details(&err, buf, p);
 
 	// The parser itself always writes subcode and message.
 	// The calling code (parse_result) is responsible for not surfacing it on success.

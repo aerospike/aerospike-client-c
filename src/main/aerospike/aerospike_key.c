@@ -1848,13 +1848,11 @@ as_txn_monitor_parse_header(as_error* err, as_command* cmd, as_node* node, uint8
 		return status;
 	}
 
-	uint8_t* p = buf + sizeof(as_msg);
-
 	if (msg->result_code == AEROSPIKE_OK || msg->result_code == AEROSPIKE_MRT_COMMITTED) {
 		return AEROSPIKE_OK;
 	}
 
-	return as_command_parse_result_error_fields(err, msg, p);
+	return as_command_parse_error(err, node, msg, buf + sizeof(as_msg));
 }
 
 as_status
@@ -1909,8 +1907,6 @@ as_txn_monitor_mark_roll_forward(
 static bool
 as_txn_monitor_parse_header_async(as_event_command* cmd)
 {
-	as_error err;
-	as_error_init(&err);
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
@@ -1922,7 +1918,8 @@ as_txn_monitor_parse_header_async(as_event_command* cmd)
 		as_event_command_release(cmd);
 	}
 	else {
-		as_command_parse_result_error_fields(&err, msg, p);
+		as_error err;
+		as_command_parse_error(&err, cmd->node, msg, p);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -2110,8 +2107,10 @@ parse_result_code(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, s
 		return status;
 	}
 
-	uint8_t* p = buf + sizeof(as_msg);
-	return as_command_parse_result_error_fields(err, msg, p);
+	if (msg->result_code) {
+		return as_command_parse_error(err, node, msg, buf + sizeof(as_msg));
+	}
+	return AEROSPIKE_OK;
 }
 
 as_status
@@ -2165,19 +2164,19 @@ as_txn_verify_single(
 static bool
 txn_verify_parse(as_event_command* cmd)
 {
-	as_error err;
-	as_error_init(&err);
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
-	if (as_command_parse_result_error_fields(&err, msg, p) == AEROSPIKE_OK) {
+	if (msg->result_code == AEROSPIKE_OK) {
 		as_event_response_complete(cmd);
 		((as_async_record_command*)cmd)->listener(0, 0, cmd->udata, cmd->event_loop);
 		as_event_command_release(cmd);
 	}
 	else {
+		as_error err;
+		as_command_parse_error(&err, cmd->node, msg, p);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -2307,19 +2306,19 @@ as_txn_roll_single(
 static bool
 txn_roll_parse(as_event_command* cmd)
 {
-	as_error err;
-	as_error_init(&err);
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
-	if (as_command_parse_result_error_fields(&err, msg, p) == AEROSPIKE_OK) {
+	if (msg->result_code == AEROSPIKE_OK) {
 		as_event_response_complete(cmd);
 		((as_async_write_command*)cmd)->listener(0, cmd->udata, cmd->event_loop);
 		as_event_command_release(cmd);
 	}
 	else {
+		as_error err;
+		as_command_parse_error(&err, cmd->node, msg, p);
 		as_event_response_error(cmd, &err);
 	}
 	return true;

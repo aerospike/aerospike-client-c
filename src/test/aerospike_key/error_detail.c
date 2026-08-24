@@ -49,6 +49,7 @@ enum {
 
 	AS_EXP_TRACE_OP_MAX_SIZE = 32,
 	AS_EXP_TRACE_PATH_MAX_DEPTH = 16,
+	AS_EXP_TRACE_PATH_MAX_SIZE = AS_EXP_TRACE_PATH_MAX_DEPTH + 1,
 	AS_EXP_TRACE_SNIPPET_MAX_SIZE = 256
 };
 
@@ -1033,7 +1034,8 @@ TEST(error_detail_parser_exp_trace_build_without_outcome,
 	assert_true(strstr(err.message, "operands=") == NULL);
 }
 
-// 3.25.5 Path arrays past fixarray size retain the server truncation sentinel.
+// 3.25.5 Path arrays of 16 frames plus the "..." sentinel retain both the
+// sentinel and the leaf. An 18th frame is dropped without overflowing.
 TEST(error_detail_parser_exp_trace_max_path, "3.25.5 expression trace max path frames")
 {
 	as_error err;
@@ -1047,18 +1049,20 @@ TEST(error_detail_parser_exp_trace_max_path, "3.25.5 expression trace max path f
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_DEPTH);
 	p += write_fixint(buf + p, 40);
 	p += write_fixint(buf + p, AS_EXP_TRACE_KEY_PATH);
-	p += write_array16(buf + p, AS_EXP_TRACE_PATH_MAX_DEPTH);
-	for (uint32_t i = 0; i < 14; i++) {
+	p += write_array16(buf + p, AS_EXP_TRACE_PATH_MAX_SIZE + 1);
+	for (uint32_t i = 0; i < AS_EXP_TRACE_PATH_MAX_DEPTH - 1; i++) {
 		p += write_fixstr(buf + p, "and", 3);
 	}
 	p += write_fixstr(buf + p, "...", 3);
 	p += write_fixstr(buf + p, "eq", 2);
+	p += write_fixstr(buf + p, "drop", 4);
 
 	command_parse_error_details(&err, buf, p);
 
 	assert_true(strstr(err.message, "depth=40") != NULL);
 	assert_true(strstr(err.message, "\"...\"") != NULL);
 	assert_true(strstr(err.message, "\"eq\"") != NULL);
+	assert_true(strstr(err.message, "\"drop\"") == NULL);
 }
 
 // 3.26.0 Truncated path markers are preserved as ordinary path frames.

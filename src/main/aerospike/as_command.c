@@ -1630,6 +1630,8 @@ enum {
 
 	AS_EXP_TRACE_OP_MAX_SIZE = 32,
 	AS_EXP_TRACE_PATH_MAX_DEPTH = 16,
+	// Server may splice a "..." sentinel in addition to the 16-frame cap.
+	AS_EXP_TRACE_PATH_MAX_SIZE = AS_EXP_TRACE_PATH_MAX_DEPTH + 1,
 	AS_EXP_TRACE_SNIPPET_MAX_SIZE = 256,
 	AS_EXP_TRACE_OPERAND_MAX_SIZE = 49
 };
@@ -1649,7 +1651,7 @@ typedef struct as_exp_trace_detail_s {
 
 	bool has_path;
 	uint8_t path_size;
-	char path[AS_EXP_TRACE_PATH_MAX_DEPTH][AS_EXP_TRACE_OP_MAX_SIZE];
+	char path[AS_EXP_TRACE_PATH_MAX_SIZE][AS_EXP_TRACE_OP_MAX_SIZE];
 
 	bool has_snippet;
 	char snippet[AS_EXP_TRACE_SNIPPET_MAX_SIZE];
@@ -2100,7 +2102,7 @@ as_command_parse_exp_trace(uint8_t** pp, uint8_t* end, as_exp_trace_detail* trac
 					return false;
 				}
 
-				if (trace->path_size < AS_EXP_TRACE_PATH_MAX_DEPTH) {
+				if (trace->path_size < AS_EXP_TRACE_PATH_MAX_SIZE) {
 					as_command_copy_msgpack_str(trace->path[trace->path_size],
 						sizeof(trace->path[trace->path_size]), str, str_len);
 					trace->path_size++;

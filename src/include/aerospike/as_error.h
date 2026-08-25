@@ -115,12 +115,12 @@ typedef struct as_error_s {
 	/**
 	 * Name of the function where the error occurred.
 	 */
-	const char * func;
+	const char* func;
 
 	/**
 	 * Name of the file where the error occurred.
 	 */
-	const char * file;
+	const char* file;
 
 	/**
 	 * Line in the file where the error occurred.
@@ -151,13 +151,21 @@ AS_EXTERN char*
 as_error_string(as_status status);
 
 /**
+ * Generate default error message.
+ *
+ * @relates as_error
+ */
+AS_EXTERN void
+as_error_default_message(as_error* err, struct as_node_s* node);
+
+/**
  * Set the error code and func/file/line metadata after server subcode and error message have been parsed.
  *
  * @relates as_error
  */
 AS_EXTERN as_status
 as_error_setnode(
-	as_error* err, struct as_node_s * node, as_status code, const char* func, const char* file,
+	as_error* err, struct as_node_s* node, as_status code, const char* func, const char* file,
 	uint32_t line
 	);
 
@@ -275,7 +283,7 @@ as_error_reset(as_error* err)
  * @relates as_error
  */
 static inline as_status
-as_error_setall(as_error* err, as_status code, const char * message, const char * func, const char * file, uint32_t line)
+as_error_setall(as_error* err, as_status code, const char* message, const char* func, const char* file, uint32_t line)
 {
 	as_error_clear_server_detail(err);
 	err->code = code;
@@ -295,7 +303,7 @@ as_error_setall(as_error* err, as_status code, const char * message, const char 
  * @relates as_error
  */
 static inline as_status
-as_error_setallv(as_error* err, as_status code, const char * func, const char * file, uint32_t line, const char * fmt, ...)
+as_error_setallv(as_error* err, as_status code, const char* func, const char* file, uint32_t line, const char* fmt, ...)
 {
 	as_error_clear_server_detail(err);
 	if (fmt != NULL) {
@@ -333,7 +341,7 @@ as_error_set_in_doubt(as_error* err, bool is_read, uint32_t command_sent_counter
  * @relates as_error
  */
 static inline void
-as_error_copy(as_error * trg, const as_error * src)
+as_error_copy(as_error* trg, const as_error* src)
 {
 	trg->code = src->code;
 	as_error_copy_server_fields(trg, src);

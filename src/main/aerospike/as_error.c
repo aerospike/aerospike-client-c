@@ -142,6 +142,20 @@ as_error_string(as_status status)
 	}
 }
 
+void
+as_error_default_message(as_error* err, as_node* node)
+{
+	as_string_builder sb;
+	as_string_builder_assign(&sb, sizeof(err->message), err->message);
+
+	if (node) {
+		as_string_builder_append(&sb, as_node_get_address_string(node));
+		as_string_builder_append_char(&sb, ' ');
+	}
+
+	as_string_builder_append(&sb, as_error_string(err->code));
+}
+
 as_status
 as_error_setnode(
 	as_error* err, as_node* node, as_status code, const char* func, const char* file, uint32_t line
@@ -156,15 +170,7 @@ as_error_setnode(
 	// Detailed server error fields may have already been applied to the message.
 	// If the error fields did not exist, add node address and error code.
 	if (err->message[0] == 0) {
-		as_string_builder sb;
-		as_string_builder_assign(&sb, sizeof(err->message), err->message);
-
-		if (node) {
-			as_string_builder_append(&sb, as_node_get_address_string(node));
-			as_string_builder_append_char(&sb, ' ');
-		}
-
-		as_string_builder_append(&sb, as_error_string(code));
+		as_error_default_message(err, node);
 	}
 	return code;
 }

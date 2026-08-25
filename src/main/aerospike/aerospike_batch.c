@@ -218,12 +218,12 @@ as_batch_message_free(char** message)
 }
 
 static as_status
-as_batch_message_copy(as_error* err, char** trg)
+as_batch_message_copy(as_error* err, as_node* node, char** trg)
 {
 	as_batch_message_free(trg);
 
 	if (err->message[0] == '\0') {
-		return AEROSPIKE_OK;
+		as_error_default_message(err, node);
 	}
 
 	size_t len = strlen(err->message);
@@ -240,17 +240,17 @@ as_batch_message_copy(as_error* err, char** trg)
 }
 
 static inline as_status
-as_batch_result_set_error_detail(as_error* err, as_batch_result* result)
+as_batch_result_set_error_detail(as_error* err, as_node* node, as_batch_result* result)
 {
 	result->subcode = err->subcode;
-	return as_batch_message_copy(err, &result->message);
+	return as_batch_message_copy(err, node, &result->message);
 }
 
 static inline as_status
-as_batch_record_set_error_detail(as_error* err, as_batch_base_record* rec)
+as_batch_record_set_error_detail(as_error* err, as_node* node, as_batch_base_record* rec)
 {
 	rec->subcode = err->subcode;
-	return as_batch_message_copy(err, &rec->message);
+	return as_batch_message_copy(err, node, &rec->message);
 }
 
 static as_status
@@ -385,7 +385,7 @@ as_batch_result_parse_udf_error(
 	// Pointer pp does not advance in as_command_parse_udf_failure().
 	// Pointer pp will advance in as_batch_parse_record().
 	as_command_parse_udf_failure(*pp, err, node, msg, msg->result_code);
-	as_status status = as_batch_result_set_error_detail(err, result);
+	as_status status = as_batch_result_set_error_detail(err, node, result);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -404,7 +404,7 @@ as_batch_record_parse_udf_error(
 	// Pointer pp does not advance in as_command_parse_udf_failure().
 	// Pointer pp will advance in as_batch_parse_record().
 	as_command_parse_udf_failure(*pp, err, node, msg, msg->result_code);
-	as_status status = as_batch_record_set_error_detail(err, rec);
+	as_status status = as_batch_record_set_error_detail(err, node, rec);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -485,15 +485,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 			rec->in_doubt = as_batch_in_doubt(&rec->key, cmd->txn, rec->has_write, cmd->command_sent_counter);
 			executor->error_row = true;
 
-			status = as_batch_record_set_error_detail(&err, rec);
-
-			if (status != AEROSPIKE_OK) {
-				as_event_response_error(cmd, &err);
-				return true;
-			}
-		}
-		else {
-			status = as_batch_record_set_error_detail(&err, rec);
+			status = as_batch_record_set_error_detail(&err, cmd->node, rec);
 
 			if (status != AEROSPIKE_OK) {
 				as_event_response_error(cmd, &err);
@@ -570,14 +562,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					rec->in_doubt = as_batch_in_doubt(&rec->key, txn, rec->has_write, cmd->sent);
 					*task->error_row = true;
 
-					status = as_batch_record_set_error_detail(err, rec);
-
-					if (status != AEROSPIKE_OK) {
-						return status;
-					}
-				}
-				else {
-					status = as_batch_record_set_error_detail(err, rec);
+					status = as_batch_record_set_error_detail(err, node, rec);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -618,14 +603,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					res->in_doubt = as_batch_in_doubt(res->key, txn, task->has_write, cmd->sent);
 					*task->error_row = true;
 
-					status = as_batch_result_set_error_detail(err, res);
-
-					if (status != AEROSPIKE_OK) {
-						return status;
-					}
-				}
-				else {
-					status = as_batch_result_set_error_detail(err, res);
+					status = as_batch_result_set_error_detail(err, node, res);
 
 					if (status != AEROSPIKE_OK) {
 						return status;
@@ -2826,6 +2804,12 @@ as_single_execute_record(as_batch_task_records* btr, as_error* err)
 		if (as_batch_set_error_row(status)) {
 			rec->in_doubt = err->in_doubt;
 			*btr->base.error_row = true;
+
+			as_status detail_status = as_batch_record_set_error_detail(err, btr->base.node, rec);
+
+			if (detail_status != AEROSPIKE_OK) {
+				return detail_status;
+			}
 		}
 
 		// Only server generated errors should change key specific result.
@@ -2834,12 +2818,6 @@ as_single_execute_record(as_batch_task_records* btr, as_error* err)
 		if (status > AEROSPIKE_OK && status != AEROSPIKE_ERR_TIMEOUT) {
 			rec->result = status;
 			status = AEROSPIKE_OK;
-		}
-
-		as_status detail_status = as_batch_record_set_error_detail(err, rec);
-
-		if (detail_status != AEROSPIKE_OK) {
-			return detail_status;
 		}
 	}
 	return status;
@@ -2860,6 +2838,12 @@ as_single_execute_key(as_batch_task_keys* btk, as_error* err)
 		if (as_batch_set_error_row(status)) {
 			res->in_doubt = err->in_doubt;
 			*btk->base.error_row = true;
+
+			as_status detail_status = as_batch_result_set_error_detail(err, btk->base.node, res);
+
+			if (detail_status != AEROSPIKE_OK) {
+				return detail_status;
+			}
 		}
 
 		// Only server generated errors should change key specific result.
@@ -2868,12 +2852,6 @@ as_single_execute_key(as_batch_task_keys* btk, as_error* err)
 		if (status > AEROSPIKE_OK && status != AEROSPIKE_ERR_TIMEOUT) {
 			res->result = status;
 			status = AEROSPIKE_OK;
-		}
-
-		as_status detail_status = as_batch_result_set_error_detail(err, res);
-
-		if (detail_status != AEROSPIKE_OK) {
-			return detail_status;
 		}
 	}
 	return status;
@@ -2927,6 +2905,16 @@ as_single_handle_error(as_batch_base_record* rec, as_single_data* data, as_error
 			as_string* s = as_string_new_strdup(err->message);
 			as_record_set(&rec->record, "FAILURE", (as_bin_value*)s);
 		}
+
+		// It's okay to pass in NULL for node because single record responses already
+		// set the default error message and the node is only used for the default
+		// error message.
+		as_status detail_status = as_batch_record_set_error_detail(err, NULL, rec);
+
+		if (detail_status != AEROSPIKE_OK) {
+			as_single_executor_error(err, data);
+			return;
+		}
 	}
 
 	// Only server generated errors should change key specific result.
@@ -2934,12 +2922,6 @@ as_single_handle_error(as_batch_base_record* rec, as_single_data* data, as_error
 	// command contains multiple keys.
 	if (err->code > AEROSPIKE_OK && err->code != AEROSPIKE_ERR_TIMEOUT) {
 		rec->result = err->code;
-		as_status detail_status = as_batch_record_set_error_detail(err, rec);
-
-		if (detail_status != AEROSPIKE_OK) {
-			as_single_executor_error(err, data);
-			return;
-		}
 		as_single_executor_complete(data);
 	}
 	else {
@@ -3016,16 +2998,19 @@ as_txn_verify_listener(as_error* err, as_record* record, void* udata, as_event_l
 	else {
 		rec->result = err->code;
 
-		as_status detail_status = as_batch_record_set_error_detail(err, rec);
-
-		if (detail_status != AEROSPIKE_OK) {
-			as_single_executor_error(err, data);
-			return;
-		}
-
 		if (as_batch_set_error_row(err->code)) {
 			rec->in_doubt = err->in_doubt;
 			data->executor->error_row = true;
+
+			// It's okay to pass in NULL for node because single record responses already
+			// set the default error message and the node is only used for the default
+			// error message.
+			as_status detail_status = as_batch_record_set_error_detail(err, NULL, rec);
+
+			if (detail_status != AEROSPIKE_OK) {
+				as_single_executor_error(err, data);
+				return;
+			}
 		}
 	}
 	as_single_executor_complete(data);
@@ -3042,16 +3027,20 @@ as_txn_roll_listener(as_error* err, void* udata, as_event_loop* event_loop)
 	}
 	else {
 		rec->result = err->code;
-		as_status detail_status = as_batch_record_set_error_detail(err, rec);
-
-		if (detail_status != AEROSPIKE_OK) {
-			as_single_executor_error(err, data);
-			return;
-		}
 
 		if (as_batch_set_error_row(err->code)) {
 			rec->in_doubt = err->in_doubt;
 			data->executor->error_row = true;
+
+			// It's okay to pass in NULL for node because single record responses already
+			// set the default error message and the node is only used for the default
+			// error message.
+			as_status detail_status = as_batch_record_set_error_detail(err, NULL, rec);
+
+			if (detail_status != AEROSPIKE_OK) {
+				as_single_executor_error(err, data);
+				return;
+			}
 		}
 	}
 	as_single_executor_complete(data);

@@ -2041,6 +2041,8 @@ as_policy_query_merge(aerospike* as, const as_policy_query* src, as_policy_query
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_QUERY_SLEEP_BETWEEN_RETRIES)?
 			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->base.error_detail_verbosity = as_field_is_set(bitmap, AS_QUERY_ERROR_DETAIL)?
+			cfg->base.error_detail_verbosity : src->base.error_detail_verbosity;
 		mrg->info_timeout = as_field_is_set(bitmap, AS_QUERY_INFO_TIMEOUT)?
 			cfg->info_timeout : src->info_timeout;
 		mrg->replica = as_field_is_set(bitmap, AS_QUERY_REPLICA)?
@@ -2051,7 +2053,6 @@ as_policy_query_merge(aerospike* as, const as_policy_query* src, as_policy_query
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
-		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->fail_on_cluster_change = src->fail_on_cluster_change;
 		mrg->deserialize = src->deserialize;
 		mrg->short_query = src->short_query;

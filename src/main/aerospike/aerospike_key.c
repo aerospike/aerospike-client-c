@@ -427,6 +427,8 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_READ_SLEEP_BETWEEN_RETRIES)?
 			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->base.error_detail_verbosity = as_field_is_set(bitmap, AS_READ_ERROR_DETAIL)?
+			cfg->base.error_detail_verbosity : src->base.error_detail_verbosity;
 		mrg->replica = as_field_is_set(bitmap, AS_READ_REPLICA)?
 			cfg->replica : src->replica;
 		mrg->read_mode_ap = as_field_is_set(bitmap, AS_READ_READ_MODE_AP)?
@@ -437,7 +439,6 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
-		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->key = src->key;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->deserialize = src->deserialize;
@@ -944,6 +945,8 @@ as_policy_write_merge(
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
 			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->base.error_detail_verbosity = as_field_is_set(bitmap, AS_WRITE_ERROR_DETAIL)?
+			cfg->base.error_detail_verbosity : src->base.error_detail_verbosity;
 		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
 			cfg->replica : src->replica;
 		mrg->durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
@@ -953,7 +956,6 @@ as_policy_write_merge(
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
-		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->exists = src->exists;
@@ -1122,6 +1124,8 @@ as_policy_remove_merge(
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
 			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->base.error_detail_verbosity = as_field_is_set(bitmap, AS_WRITE_ERROR_DETAIL)?
+			cfg->base.error_detail_verbosity : src->base.error_detail_verbosity;
 		mrg->key = *pkey;
 		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
 			cfg->replica : src->replica;
@@ -1131,7 +1135,6 @@ as_policy_remove_merge(
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
-		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->generation = src->generation;
@@ -1294,6 +1297,8 @@ as_policy_operate_merge(
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
 			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->base.error_detail_verbosity = as_field_is_set(bitmap, AS_WRITE_ERROR_DETAIL)?
+			cfg->base.error_detail_verbosity : src->base.error_detail_verbosity;
 		mrg->key = *pkey;
 		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
 			cfg->replica : src->replica;
@@ -1307,7 +1312,6 @@ as_policy_operate_merge(
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
-		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->gen = src->gen;
 		mrg->exists = src->exists;
@@ -1664,6 +1668,8 @@ as_policy_apply_merge(aerospike* as, const as_policy_apply* src, as_policy_apply
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
 			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->base.error_detail_verbosity = as_field_is_set(bitmap, AS_WRITE_ERROR_DETAIL)?
+			cfg->base.error_detail_verbosity : src->base.error_detail_verbosity;
 		mrg->key = *pkey;
 		mrg->replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
 			cfg->replica : src->replica;
@@ -1673,7 +1679,6 @@ as_policy_apply_merge(aerospike* as, const as_policy_apply* src, as_policy_apply
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
-		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->commit_level = src->commit_level;
 		mrg->ttl = src->ttl;
 		mrg->on_locking_only = src->on_locking_only;

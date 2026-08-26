@@ -724,6 +724,10 @@ as_parse_read(as_yaml* yaml, const char* name, const char* value, as_policies* b
 		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_READ_SLEEP_BETWEEN_RETRIES);
 	}
 
+	if (strcmp(name, "error_detail_verbosity") == 0) {
+		return as_parse_uint8(yaml, name, value, &policy->base.error_detail_verbosity, AS_READ_ERROR_DETAIL);
+	}
+
 	if (strcmp(name, "fail_on_filtered_out") == 0) {
 		// Not supported.
 		return true;
@@ -810,9 +814,19 @@ as_parse_write(as_yaml* yaml, const char* name, const char* value, as_policies* 
 		if (!as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_WRITE_SLEEP_BETWEEN_RETRIES)) {
 			return false;
 		}
-		as_assign_uint32(operate_section, name, value, policy->base.sleep_between_retries, &base->operate.base.max_retries);
-		as_assign_uint32(apply_section, name, value, policy->base.sleep_between_retries, &base->apply.base.max_retries);
-		as_assign_uint32(remove_section, name, value, policy->base.sleep_between_retries, &base->remove.base.max_retries);
+		as_assign_uint32(operate_section, name, value, policy->base.sleep_between_retries, &base->operate.base.sleep_between_retries);
+		as_assign_uint32(apply_section, name, value, policy->base.sleep_between_retries, &base->apply.base.sleep_between_retries);
+		as_assign_uint32(remove_section, name, value, policy->base.sleep_between_retries, &base->remove.base.sleep_between_retries);
+		return true;
+	}
+
+	if (strcmp(name, "error_detail_verbosity") == 0) {
+		if (!as_parse_uint8(yaml, name, value, &policy->base.error_detail_verbosity, AS_WRITE_ERROR_DETAIL)) {
+			return false;
+		}
+		as_assign_uint8(operate_section, name, value, policy->base.error_detail_verbosity, &base->operate.base.error_detail_verbosity);
+		as_assign_uint8(apply_section, name, value, policy->base.error_detail_verbosity, &base->apply.base.error_detail_verbosity);
+		as_assign_uint8(remove_section, name, value, policy->base.error_detail_verbosity, &base->remove.base.error_detail_verbosity);
 		return true;
 	}
 
@@ -879,7 +893,11 @@ as_parse_scan(as_yaml* yaml, const char* name, const char* value, as_policies* b
 		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_SCAN_SLEEP_BETWEEN_RETRIES);
 	}
 
-	if (strcmp(name, "concurrent_nodes") == 0) {
+	if (strcmp(name, "error_detail_verbosity") == 0) {
+		return as_parse_uint8(yaml, name, value, &policy->base.error_detail_verbosity, AS_SCAN_ERROR_DETAIL);
+	}
+
+  	if (strcmp(name, "concurrent_nodes") == 0) {
 		// Not supported.
 		return true;
 	}
@@ -925,6 +943,10 @@ as_parse_query(as_yaml* yaml, const char* name, const char* value, as_policies* 
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
 		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, AS_QUERY_SLEEP_BETWEEN_RETRIES);
+	}
+
+	if (strcmp(name, "error_detail_verbosity") == 0) {
+		return as_parse_uint8(yaml, name, value, &policy->base.error_detail_verbosity, AS_QUERY_ERROR_DETAIL);
 	}
 
 	if (strcmp(name, "info_timeout") == 0) {
@@ -988,6 +1010,10 @@ as_parse_batch_shared(
 
 	if (strcmp(name, "sleep_between_retries") == 0) {
 		return as_parse_uint32(yaml, name, value, &policy->base.sleep_between_retries, offset + AS_BATCH_SLEEP_BETWEEN_RETRIES);
+	}
+
+	if (strcmp(name, "error_detail_verbosity") == 0) {
+		return as_parse_uint8(yaml, name, value, &policy->base.error_detail_verbosity, offset + AS_BATCH_ERROR_DETAIL);
 	}
 
 	if (strcmp(name, "max_concurrent_threads") == 0) {
@@ -1463,7 +1489,7 @@ as_parse_version(as_yaml* yaml)
 		return false;
 	}
 
-	if (strcmp(version, "1.0.0") != 0) {
+	if (strcmp(version, "1.1.0") != 0) {
 		// Log warning and continue parsing on version mismatch.
 		as_log_warn("Unexpected dynamic config file version: %s expected: 1.0.0", version);
 	}
@@ -1651,6 +1677,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->read.base.max_retries : orig->read.base.max_retries;
 	trg->read.base.sleep_between_retries = as_field_is_set(bitmap, AS_READ_SLEEP_BETWEEN_RETRIES)?
 		src->read.base.sleep_between_retries : orig->read.base.sleep_between_retries;
+	trg->read.base.error_detail_verbosity = as_field_is_set(bitmap, AS_READ_ERROR_DETAIL)?
+		src->read.base.error_detail_verbosity : orig->read.base.error_detail_verbosity;
 	trg->read.read_mode_ap = as_field_is_set(bitmap, AS_READ_READ_MODE_AP)?
 		src->read.read_mode_ap : orig->read.read_mode_ap;
 	trg->read.read_mode_sc = as_field_is_set(bitmap, AS_READ_READ_MODE_SC)?
@@ -1670,6 +1698,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->write.base.max_retries : orig->write.base.max_retries;
 	trg->write.base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
 		src->write.base.sleep_between_retries : orig->write.base.sleep_between_retries;
+	trg->write.base.error_detail_verbosity = as_field_is_set(bitmap, AS_WRITE_ERROR_DETAIL)?
+		src->write.base.error_detail_verbosity : orig->write.base.error_detail_verbosity;
 	trg->write.replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
 		src->write.replica : orig->write.replica;
 	trg->write.durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
@@ -1689,6 +1719,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->operate.base.max_retries : orig->operate.base.max_retries;
 	trg->operate.base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
 		src->operate.base.sleep_between_retries : orig->operate.base.sleep_between_retries;
+	trg->operate.base.error_detail_verbosity = as_field_is_set(bitmap, AS_WRITE_ERROR_DETAIL)?
+		src->operate.base.error_detail_verbosity : orig->operate.base.error_detail_verbosity;
 	trg->operate.replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
 		src->operate.replica : orig->operate.replica;
 	trg->operate.durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
@@ -1712,6 +1744,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->apply.base.max_retries : orig->apply.base.max_retries;
 	trg->apply.base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
 		src->apply.base.sleep_between_retries : orig->apply.base.sleep_between_retries;
+	trg->apply.base.error_detail_verbosity = as_field_is_set(bitmap, AS_WRITE_ERROR_DETAIL)?
+		src->apply.base.error_detail_verbosity : orig->apply.base.error_detail_verbosity;
 	trg->apply.replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
 		src->apply.replica : orig->apply.replica;
 	trg->apply.durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
@@ -1731,6 +1765,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->remove.base.max_retries : orig->remove.base.max_retries;
 	trg->remove.base.sleep_between_retries = as_field_is_set(bitmap, AS_WRITE_SLEEP_BETWEEN_RETRIES)?
 		src->remove.base.sleep_between_retries : orig->remove.base.sleep_between_retries;
+	trg->remove.base.error_detail_verbosity = as_field_is_set(bitmap, AS_WRITE_ERROR_DETAIL)?
+		src->remove.base.error_detail_verbosity : orig->remove.base.error_detail_verbosity;
 	trg->remove.replica = as_field_is_set(bitmap, AS_WRITE_REPLICA)?
 		src->remove.replica : orig->remove.replica;
 	trg->remove.durable_delete = as_field_is_set(bitmap, AS_WRITE_DURABLE_DELETE)?
@@ -1750,6 +1786,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->scan.base.max_retries : orig->scan.base.max_retries;
 	trg->scan.base.sleep_between_retries = as_field_is_set(bitmap, AS_SCAN_SLEEP_BETWEEN_RETRIES)?
 		src->scan.base.sleep_between_retries : orig->scan.base.sleep_between_retries;
+	trg->scan.base.error_detail_verbosity = as_field_is_set(bitmap, AS_SCAN_ERROR_DETAIL)?
+		src->scan.base.error_detail_verbosity : orig->scan.base.error_detail_verbosity;
 	trg->scan.replica = as_field_is_set(bitmap, AS_SCAN_REPLICA)?
 		src->scan.replica : orig->scan.replica;
 
@@ -1765,6 +1803,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->query.base.max_retries : orig->query.base.max_retries;
 	trg->query.base.sleep_between_retries = as_field_is_set(bitmap, AS_QUERY_SLEEP_BETWEEN_RETRIES)?
 		src->query.base.sleep_between_retries : orig->query.base.sleep_between_retries;
+	trg->query.base.error_detail_verbosity = as_field_is_set(bitmap, AS_QUERY_ERROR_DETAIL)?
+		src->query.base.error_detail_verbosity : orig->query.base.error_detail_verbosity;
 	trg->query.replica = as_field_is_set(bitmap, AS_QUERY_REPLICA)?
 		src->query.replica : orig->query.replica;
 	trg->query.info_timeout = as_field_is_set(bitmap, AS_QUERY_INFO_TIMEOUT)?
@@ -1784,6 +1824,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->batch.base.max_retries : orig->batch.base.max_retries;
 	trg->batch.base.sleep_between_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
 		src->batch.base.sleep_between_retries : orig->batch.base.sleep_between_retries;
+	trg->batch.base.error_detail_verbosity = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_ERROR_DETAIL)?
+		src->batch.base.error_detail_verbosity : orig->batch.base.error_detail_verbosity;
 	trg->batch.read_mode_ap = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_READ_MODE_AP)?
 		src->batch.read_mode_ap : orig->batch.read_mode_ap;
 	trg->batch.read_mode_sc = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_READ_MODE_SC)?
@@ -1812,6 +1854,9 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 	trg->batch_parent_write.base.sleep_between_retries =
 		as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
 		src->batch_parent_write.base.sleep_between_retries : orig->batch_parent_write.base.sleep_between_retries;
+	trg->batch_parent_write.base.error_detail_verbosity =
+		as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_ERROR_DETAIL)?
+		src->batch_parent_write.base.error_detail_verbosity : orig->batch_parent_write.base.error_detail_verbosity;
 	trg->batch_parent_write.read_mode_ap = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_READ_MODE_AP)?
 		src->batch_parent_write.read_mode_ap : orig->batch_parent_write.read_mode_ap;
 	trg->batch_parent_write.read_mode_sc = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_READ_MODE_SC)?
@@ -1854,6 +1899,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->txn_verify.base.max_retries : orig->txn_verify.base.max_retries;
 	trg->txn_verify.base.sleep_between_retries = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
 		src->txn_verify.base.sleep_between_retries : orig->txn_verify.base.sleep_between_retries;
+	trg->txn_verify.base.error_detail_verbosity = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_ERROR_DETAIL)?
+		src->txn_verify.base.error_detail_verbosity : orig->txn_verify.base.error_detail_verbosity;
 	trg->txn_verify.read_mode_ap = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_READ_MODE_AP)?
 		src->txn_verify.read_mode_ap : orig->txn_verify.read_mode_ap;
 	trg->txn_verify.read_mode_sc = as_field_is_set(bitmap, AS_TXN_VERIFY + AS_BATCH_READ_MODE_SC)?
@@ -1881,6 +1928,8 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 		src->txn_roll.base.max_retries : orig->txn_roll.base.max_retries;
 	trg->txn_roll.base.sleep_between_retries = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
 		src->txn_roll.base.sleep_between_retries : orig->txn_roll.base.sleep_between_retries;
+	trg->txn_roll.base.error_detail_verbosity = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_ERROR_DETAIL)?
+		src->txn_roll.base.error_detail_verbosity : orig->txn_roll.base.error_detail_verbosity;
 	trg->txn_roll.read_mode_ap = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_READ_MODE_AP)?
 		src->txn_roll.read_mode_ap : orig->txn_roll.read_mode_ap;
 	trg->txn_roll.read_mode_sc = as_field_is_set(bitmap, AS_TXN_ROLL + AS_BATCH_READ_MODE_SC)?

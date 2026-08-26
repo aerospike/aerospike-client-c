@@ -1371,13 +1371,14 @@ as_policy_scan_merge(aerospike* as, const as_policy_scan* src, as_policy_scan* m
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_SCAN_SLEEP_BETWEEN_RETRIES)?
 			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->base.error_detail_verbosity = as_field_is_set(bitmap, AS_SCAN_ERROR_DETAIL)?
+			cfg->base.error_detail_verbosity : src->base.error_detail_verbosity;
 		mrg->replica = as_field_is_set(bitmap, AS_SCAN_REPLICA)?
 			cfg->replica : src->replica;
 
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
-		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->max_records = src->max_records;
 		mrg->records_per_second = src->records_per_second;
 		mrg->ttl = src->ttl;

@@ -4812,6 +4812,8 @@ as_policy_batch_parent_read_merge(aerospike* as, const as_policy_batch* src, as_
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
 			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->base.error_detail_verbosity = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_ERROR_DETAIL)?
+			cfg->base.error_detail_verbosity : src->base.error_detail_verbosity;
 		mrg->replica = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_REPLICA)?
 			cfg->replica : src->replica;
 		mrg->read_mode_ap = as_field_is_set(bitmap, AS_BATCH_PARENT_READ + AS_BATCH_READ_MODE_AP)?
@@ -4830,7 +4832,6 @@ as_policy_batch_parent_read_merge(aerospike* as, const as_policy_batch* src, as_
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
-		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->send_set_name = src->send_set_name;
 		mrg->deserialize = src->deserialize;
@@ -4865,6 +4866,8 @@ as_policy_batch_parent_write_merge(aerospike* as, const as_policy_batch* src, as
 			cfg->base.max_retries : src->base.max_retries;
 		mrg->base.sleep_between_retries = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_SLEEP_BETWEEN_RETRIES)?
 			cfg->base.sleep_between_retries : src->base.sleep_between_retries;
+		mrg->base.error_detail_verbosity = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_ERROR_DETAIL)?
+			cfg->base.error_detail_verbosity : src->base.error_detail_verbosity;
 		mrg->replica = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_REPLICA)?
 			cfg->replica : src->replica;
 		mrg->read_mode_ap = as_field_is_set(bitmap, AS_BATCH_PARENT_WRITE + AS_BATCH_READ_MODE_AP)?
@@ -4883,7 +4886,6 @@ as_policy_batch_parent_write_merge(aerospike* as, const as_policy_batch* src, as
 		mrg->base.filter_exp = src->base.filter_exp;
 		mrg->base.txn = src->base.txn;
 		mrg->base.compress = src->base.compress;
-		mrg->base.error_detail_verbosity = src->base.error_detail_verbosity;
 		mrg->read_touch_ttl_percent = src->read_touch_ttl_percent;
 		mrg->send_set_name = src->send_set_name;
 		mrg->deserialize = src->deserialize;

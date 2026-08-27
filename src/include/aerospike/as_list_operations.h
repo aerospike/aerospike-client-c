@@ -758,6 +758,9 @@ as_operations_list_join(as_operations* ops, const char* name, as_cdt_ctx* ctx);
  * This is the inverse of as_operations_string_split_separator().
  * Requires server version 8.1.3 or later.
  *
+ * @param ops Operations array.
+ * @param name Name of list bin.
+ * @param ctx Optional path to nested list. If not defined, the top-level list is used.
  * @param separator Separator placed between consecutive items.
  *
  * @ingroup list_operations

@@ -29,8 +29,8 @@
  *
  * All functions in this module, including as_operations_to_string(), require
  * server version 8.1.3 or later. When ctx is not NULL and not empty, the
- * NULL and not empty, the operation targets a string nested inside a list or
- * map. The ctx-navigated leaf must already be an Aerospike string; operations
+ * operation targets a string nested inside a list or map. The ctx-navigated
+ * leaf must already be an Aerospike string; operations
  * on non-string leaves return AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE.
  *
  * as_operations_to_string() is a top-level conversion operation and does not

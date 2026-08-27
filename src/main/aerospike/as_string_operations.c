@@ -43,15 +43,11 @@ as_string_has_ctx(const as_cdt_ctx* ctx)
 static void
 as_string_pack_header(as_packer* pk, as_cdt_ctx* ctx, uint16_t command, uint32_t count)
 {
-	bool has_ctx = as_string_has_ctx(ctx);
-
-	as_pack_list_header(pk, count + 1 + (has_ctx ? 2 : 0));
-
-	if (has_ctx) {
-		as_pack_uint64(pk, 0xff);
-		as_cdt_ctx_pack(ctx, pk);
+	if (as_string_has_ctx(ctx)) {
+		as_cdt_pack_ctx(pk, ctx);
 	}
 
+	as_pack_list_header(pk, count + 1);
 	as_pack_uint64(pk, command);
 }
 
@@ -460,6 +456,21 @@ as_operations_string_prepend(
 	as_string_pack_header(&pk, ctx, AS_STRING_OP_PREPEND, 2);
 	as_string_pack_value(&pk, value);
 	as_pack_uint64(&pk, as_string_policy_flags(policy));
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_MODIFY);
+}
+
+bool
+as_operations_string_snip_start(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
+	int64_t start
+	)
+{
+	(void)policy;
+
+	as_packer pk = as_cdt_begin();
+	as_string_pack_header(&pk, ctx, AS_STRING_OP_SNIP, 1);
+	as_pack_int64(&pk, start);
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_STRING_MODIFY);
 }

@@ -102,6 +102,12 @@
  */
 #define AS_SUB_PARAM_BIN_COUNT_TOO_LARGE                   5
 
+/**
+ * String op CTX envelope is malformed (SERVER-1483 nested shape).
+ * App use: verify the client emits `[0xFF, ctx_list, [sub_op, args...]]`.
+ */
+#define AS_SUB_PARAM_STRING_CTX_MALFORMED                  8
+
 //----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_CLUSTER (AS_ERR_UNAVAILABLE)
 //----------------------------------------------------------------
@@ -288,7 +294,11 @@
  */
 #define AS_SUB_OPNOT_STRING_UTF8_INVALID                   11
 
-/* 12 is reserved for AS_SUB_OPNOT_STRING_REGEX_LIMIT_EXCEEDED. */
+/**
+ * Regex pattern exceeded a server limit for an OP_NOT_APPLICABLE string operation.
+ * App use: simplify the pattern or reduce input size before retry.
+ */
+#define AS_SUB_OPNOT_STRING_REGEX_LIMIT_EXCEEDED           12
 
 /**
  * Base64 input is malformed for an OP_NOT_APPLICABLE string operation.

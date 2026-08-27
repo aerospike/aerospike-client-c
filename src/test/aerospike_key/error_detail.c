@@ -1640,6 +1640,7 @@ TEST(error_detail_opnot_string_subcodes, "4.12 OP_NOT string subcode constants")
 	assert_int_eq(AS_SUB_OPNOT_STRING_CONVERSION_FAILED, 10);
 	assert_int_eq(AS_SUB_OPNOT_STRING_UTF8_INVALID, 11);
 	assert_int_eq(AS_SUB_OPNOT_STRING_B64_INVALID, 13);
+	assert_int_eq(AS_SUB_PARAM_STRING_CTX_MALFORMED, 8);
 }
 
 // 4.13 Verbosity is applied in read header builder

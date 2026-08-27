@@ -173,7 +173,8 @@ typedef enum {
 	AS_BIT_OP_COUNT = 51,
 	AS_BIT_OP_LSCAN = 52,
 	AS_BIT_OP_RSCAN = 53,
-	AS_BIT_OP_GET_INT = 54
+	AS_BIT_OP_GET_INT = 54,
+	AS_BIT_OP_B64_ENCODE = 55
 } as_bit_op;
 
 /******************************************************************************
@@ -662,6 +663,62 @@ AS_EXTERN bool
 as_operations_bit_get_int(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, int bit_offset, uint32_t bit_size,
 	bool sign
+	);
+
+/**
+ * Create bit "b64 encode" operation.
+ * Server returns the base64 text of the whole blob bin as a string.
+ * This is the encode direction; as_operations_string_b64_decode() is the decode
+ * direction and takes a string bin back to a blob.
+ * Requires server version 8.1.3 or later.
+ *
+ * @ingroup bit_operations
+ */
+AS_EXTERN bool
+as_operations_bit_b64_encode(as_operations* ops, const char* name, as_cdt_ctx* ctx);
+
+/**
+ * Create bit "b64 encode" operation from a byte offset through the end of the blob.
+ * A negative byte_offset counts back from the end of the blob. Note the span is
+ * expressed in bytes, unlike the bit offsets and sizes other bit read operations take.
+ * Requires server version 8.1.3 or later.
+ *
+ * @ingroup bit_operations
+ */
+AS_EXTERN bool
+as_operations_bit_b64_encode_from(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset
+	);
+
+/**
+ * Create bit "b64 encode" operation on a byte span.
+ * Server returns the base64 text of byte_size bytes of the blob starting at
+ * byte_offset, as a string. A negative byte_offset counts back from the end of
+ * the blob. Note the span is expressed in bytes, unlike the bit offsets and
+ * sizes other bit read operations take.
+ * Requires server version 8.1.3 or later.
+ *
+ * @ingroup bit_operations
+ */
+AS_EXTERN bool
+as_operations_bit_b64_encode_range(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset, int byte_size
+	);
+
+/**
+ * Create bit "b64 encode" operation on a byte span, with byte_size measured from
+ * the end of the blob. When invert_size is true, byte_size counts back from the
+ * blob end rather than forward from byte_offset, so a byte_size of 0 means to the
+ * end of the blob. When false this behaves exactly as
+ * as_operations_bit_b64_encode_range().
+ * Requires server version 8.1.3 or later.
+ *
+ * @ingroup bit_operations
+ */
+AS_EXTERN bool
+as_operations_bit_b64_encode_range_invert(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset, int byte_size,
+	bool invert_size
 	);
 
 #ifdef __cplusplus

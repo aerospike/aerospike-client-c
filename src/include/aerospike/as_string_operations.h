@@ -27,7 +27,8 @@
  * Negative indexes count from the end of the string (-1 is the last
  * codepoint). Out-of-bounds indexes are clamped by the server.
  *
- * String operations require server version 8.1.3 or later. When ctx is not
+ * All functions in this module, including as_operations_to_string(), require
+ * server version 8.1.3 or later. When ctx is not NULL and not empty, the
  * NULL and not empty, the operation targets a string nested inside a list or
  * map. The ctx-navigated leaf must already be an Aerospike string; operations
  * on non-string leaves return AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE.
@@ -85,7 +86,18 @@ typedef enum as_string_write_flags_e {
 	/** Default. Allow create or update. */
 	AS_STRING_WRITE_FLAGS_DEFAULT = 0,
 
-	/** Update existing values only. */
+	/**
+	 * Create new values only. Valid on insert, overwrite, concat, append,
+	 * prepend, pad_start, pad_end, and repeat. Returns AEROSPIKE_ERR_BIN_EXISTS
+	 * if the bin already exists. Mutually exclusive with
+	 * AS_STRING_WRITE_FLAGS_UPDATE_ONLY. Invalid with a CDT context path.
+	 */
+	AS_STRING_WRITE_FLAGS_CREATE_ONLY = 1,
+
+	/**
+	 * Update existing values only. Mutually exclusive with
+	 * AS_STRING_WRITE_FLAGS_CREATE_ONLY.
+	 */
 	AS_STRING_WRITE_FLAGS_UPDATE_ONLY = 2,
 
 	/**
@@ -114,7 +126,11 @@ typedef enum as_string_numeric_type_e {
 	/** Match only integers. */
 	AS_STRING_NUMERIC_INT = 1,
 
-	/** Match only floating-point numbers. */
+	/**
+	 * Match only floating-point numbers. Stricter than parsing as a double: the
+	 * string must contain a `.` followed by a digit, so `"5"` is false under
+	 * AS_STRING_NUMERIC_FLOAT but true under AS_STRING_NUMERIC_ANY.
+	 */
 	AS_STRING_NUMERIC_FLOAT = 2
 } as_string_numeric_type;
 
@@ -354,7 +370,8 @@ as_operations_string_ends_with(
 
 /**
  * Create string to_integer operation that parses the string as an int64.
- * Returns AEROSPIKE_ERR_PARAMETER if the bin cannot be parsed as an integer.
+ * Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE if the bin cannot be parsed as an
+ * integer.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -367,7 +384,7 @@ as_operations_string_to_integer(as_operations* ops, const char* name, as_cdt_ctx
 
 /**
  * Create string to_double operation that parses the string as a 64-bit float.
- * Returns AEROSPIKE_ERR_PARAMETER if the bin cannot be parsed as a double.
+ * Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE if the bin cannot be parsed as a double.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -393,7 +410,7 @@ as_operations_string_byte_length(as_operations* ops, const char* name, as_cdt_ct
 
 /**
  * Create string is_numeric operation that returns true if the bin contains a
- * valid integer or floating-point number.
+ * valid integer or float, false otherwise.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -405,7 +422,10 @@ AS_EXTERN bool
 as_operations_string_is_numeric(as_operations* ops, const char* name, as_cdt_ctx* ctx);
 
 /**
- * Create string is_numeric operation with a numeric type filter.
+ * Create string is_numeric operation that filters by numeric_type (see
+ * as_string_numeric_type). For example, restrict to integer-only or float-only
+ * validation. AS_STRING_NUMERIC_FLOAT requires a `.` followed by a digit, so
+ * `"5"` is false under AS_STRING_NUMERIC_FLOAT.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -554,9 +574,9 @@ as_operations_string_insert(
 	);
 
 /**
- * Create string overwrite operation that overwrites codepoints starting at index
- * with value. The result may grow beyond the original length when value extends
- * past the end.
+ * Create string overwrite operation that overwrites codepoints starting at
+ * index with value. The result may grow beyond the original length when value
+ * extends past the end.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -640,6 +660,25 @@ as_operations_string_append(
 AS_EXTERN bool
 as_operations_string_prepend(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy, const char* value
+	);
+
+/**
+ * Create string snip operation that removes codepoints from start through the
+ * end of the string. This uses the 1-arg wire form; policy flags are not sent.
+ * Use as_operations_string_snip() when non-default policy flags are required.
+ *
+ * @param ops Operations array.
+ * @param name Name of string bin.
+ * @param ctx Optional path into a string nested inside a list or map.
+ * @param policy String policy. Ignored on the wire for this overload.
+ * @param start First codepoint to remove, inclusive.
+ *
+ * @ingroup string_operations
+*/
+AS_EXTERN bool
+as_operations_string_snip_start(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, as_string_policy* policy,
+	int64_t start
 	);
 
 /**

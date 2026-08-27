@@ -24,6 +24,7 @@
 //---------------------------------
 
 #define INT_FLAGS_SIGNED 1
+#define READ_SUBFLAG_INVERT_SIZE 1
 
 //---------------------------------
 // Static Functions
@@ -200,6 +201,59 @@ as_operations_bit_get_int(
 	if (sign) {
 		as_pack_uint64(&pk, INT_FLAGS_SIGNED);
 	}
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_BIT_READ);
+}
+
+bool
+as_operations_bit_b64_encode(as_operations* ops, const char* name, as_cdt_ctx* ctx)
+{
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_B64_ENCODE, 0);
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_BIT_READ);
+}
+
+bool
+as_operations_bit_b64_encode_from(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset
+	)
+{
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_B64_ENCODE, 1);
+	as_pack_int64(&pk, byte_offset);
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_BIT_READ);
+}
+
+bool
+as_operations_bit_b64_encode_range(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset, int byte_size
+	)
+{
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_B64_ENCODE, 2);
+	as_pack_int64(&pk, byte_offset);
+	as_pack_int64(&pk, byte_size);
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_BIT_READ);
+}
+
+bool
+as_operations_bit_b64_encode_range_invert(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset, int byte_size,
+	bool invert_size
+	)
+{
+	if (!invert_size) {
+		return as_operations_bit_b64_encode_range(ops, name, ctx, byte_offset, byte_size);
+	}
+
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_B64_ENCODE, 3);
+	as_pack_int64(&pk, byte_offset);
+	as_pack_int64(&pk, byte_size);
+	as_pack_uint64(&pk, READ_SUBFLAG_INVERT_SIZE);
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_BIT_READ);
 }

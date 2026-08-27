@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2024 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -17,9 +17,12 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_exp.h>
+#include <aerospike/as_exp_operations.h>
 #include <aerospike/as_bit_operations.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_record.h>
+#include <aerospike/as_string_operations.h>
+#include <aerospike/as_version.h>
 
 #include "../test.h"
 
@@ -36,6 +39,7 @@ extern aerospike* as;
 #define NAMESPACE "test"
 #define SET "test_bit"
 #define BIN_NAME "bitbin"
+#define B64_TXT_BIN "b64txt"
 
 /******************************************************************************
  * TYPES
@@ -48,6 +52,20 @@ extern aerospike* as;
 void example_dump_record(const as_record* p_rec);
 
 as_key REC_KEY;
+
+static bool
+server_supports_bit_b64_encode(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	as_node_release(node);
+	return supported;
+}
 
 static bool
 before(atf_suite* suite)
@@ -1686,6 +1704,132 @@ TEST(bit_filter_call_modify_set_int_sub, "Bit filter call modify set int sub")
 	assert_int_eq(status, AEROSPIKE_OK);
 }
 
+TEST(bit_b64_encode, "Bit B64 Encode")
+{
+	if (! server_supports_bit_b64_encode()) {
+		info("skipping bit b64 encode; requires server >= 8.1.3");
+		return;
+	}
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 120);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	uint8_t bytes[] = {0x01, 0x42, 0x03, 0x04, 0x05};
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_rawp(&rec, BIN_NAME, bytes, sizeof(bytes), false);
+
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_operations ops;
+	as_record* prec = NULL;
+
+	as_operations_inita(&ops, 1);
+	as_operations_bit_b64_encode(&ops, BIN_NAME, NULL);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	assert_string_eq(as_record_get_str(prec, BIN_NAME), "AUIDBAU=");
+	as_record_destroy(prec);
+
+	as_operations_inita(&ops, 1);
+	as_operations_bit_b64_encode_from(&ops, BIN_NAME, NULL, 1);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	assert_string_eq(as_record_get_str(prec, BIN_NAME), "QgMEBQ==");
+	as_record_destroy(prec);
+
+	as_operations_inita(&ops, 1);
+	as_operations_bit_b64_encode_range(&ops, BIN_NAME, NULL, 1, 2);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	assert_string_eq(as_record_get_str(prec, BIN_NAME), "QgM=");
+	as_record_destroy(prec);
+
+	as_operations_inita(&ops, 1);
+	as_operations_bit_b64_encode_range_invert(&ops, BIN_NAME, NULL, 1, 0, true);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	assert_string_eq(as_record_get_str(prec, BIN_NAME), "QgMEBQ==");
+	as_record_destroy(prec);
+
+	as_operations_inita(&ops, 1);
+	as_operations_bit_b64_encode_range(&ops, BIN_NAME, NULL, -1, 1);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+	assert_string_eq(as_record_get_str(prec, BIN_NAME), "BQ==");
+	as_record_destroy(prec);
+
+	as_exp_build(encode_exp, as_exp_bit_b64_encode(as_exp_bin_blob(BIN_NAME)));
+	as_exp_build(span_exp,
+		as_exp_bit_b64_encode_range(as_exp_int(1), as_exp_int(2), as_exp_bin_blob(BIN_NAME)));
+
+	as_operations_inita(&ops, 2);
+	as_operations_exp_read(&ops, "whole", encode_exp, AS_EXP_READ_DEFAULT);
+	as_operations_exp_read(&ops, "span", span_exp, AS_EXP_READ_DEFAULT);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(encode_exp);
+	as_exp_destroy(span_exp);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(prec, "whole"), "AUIDBAU=");
+	assert_string_eq(as_record_get_str(prec, "span"), "QgM=");
+	as_record_destroy(prec);
+
+	as_operations_inita(&ops, 1);
+	as_operations_bit_b64_encode(&ops, BIN_NAME, NULL);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	const char* encoded = as_record_get_str(prec, BIN_NAME);
+	assert_not_null(encoded);
+
+	as_record_inita(&rec, 1);
+	as_record_set_str(&rec, B64_TXT_BIN, encoded);
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	as_record_destroy(&rec);
+	as_record_destroy(prec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_operations_inita(&ops, 1);
+	as_operations_string_b64_decode(&ops, B64_TXT_BIN, NULL);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_bytes* decoded = (as_bytes*)as_record_get(prec, B64_TXT_BIN);
+	assert_bytes_eq(decoded->value, decoded->size, bytes, sizeof(bytes));
+	as_record_destroy(prec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1717,6 +1861,7 @@ SUITE(bit, "aerospike bitmap tests")
 	suite_add(bit_filter_call_read_lscan);
 	suite_add(bit_filter_call_read_rscan);
 	suite_add(bit_filter_call_read_get_int);
+	suite_add(bit_b64_encode);
 	suite_add(bit_filter_call_modify_resize);
 	suite_add(bit_filter_call_modify_insert);
 	suite_add(bit_filter_call_modify_remove);

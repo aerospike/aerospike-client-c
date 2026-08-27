@@ -2190,6 +2190,11 @@ as_exp_destroy_base64(char* base64)
 		{.op=_AS_EXP_CODE_CALL_VOP_START, .count=1 + __param, .v.ctx=__ctx}, \
 		as_exp_int(__op)
 
+#define _AS_EXP_CDT_LIST_READ_STR \
+		{.op=_AS_EXP_CODE_CALL, .count=5}, \
+		_AS_EXP_VAL_RTYPE(AS_EXP_TYPE_STR), \
+		as_exp_int(_AS_EXP_SYS_CALL_CDT)
+
 /**
  * Create expression that returns list size.
  *
@@ -2201,6 +2206,41 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_list_size(__ctx, __bin) \
 		_AS_EXP_CDT_LIST_READ(AS_EXP_TYPE_AUTO, AS_LIST_RETURN_COUNT, false), \
 		_AS_EXP_LIST_START(__ctx, AS_CDT_OP_LIST_SIZE, 0), \
+		__bin
+
+/**
+ * Create expression that concatenates the string items of a list and returns the
+ * result as a single string, with no separator between items. Every item must be
+ * a string. An empty list yields an empty string.
+ * Requires server version 8.1.3 or later.
+ *
+ * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __bin			List bin or list value expression.
+ * @return (string expression)
+ * @ingroup expression
+ */
+#define as_exp_list_join(__ctx, __bin) \
+		_AS_EXP_CDT_LIST_READ_STR, \
+		_AS_EXP_LIST_START(__ctx, AS_CDT_OP_LIST_STRING_LIST_JOIN, 0), \
+		__bin
+
+/**
+ * Create expression that concatenates the string items of a list, placing
+ * __separator between consecutive items, and returns the result as a single
+ * string. Every item must be a string. An empty list yields an empty string,
+ * and a single-item list yields that item with no separator applied.
+ * Requires server version 8.1.3 or later.
+ *
+ * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
+ * @param __separator	Separator string expression.
+ * @param __bin			List bin or list value expression.
+ * @return (string expression)
+ * @ingroup expression
+ */
+#define as_exp_list_join_separator(__ctx, __separator, __bin) \
+		_AS_EXP_CDT_LIST_READ_STR, \
+		_AS_EXP_LIST_START(__ctx, AS_CDT_OP_LIST_STRING_LIST_JOIN, 1), \
+		as_exp_str(__separator), \
 		__bin
 
 /**
@@ -3533,6 +3573,54 @@ as_exp_destroy_base64(char* base64)
 		as_exp_int(__sign ? 1 : 0), \
 		__bin
 
+/**
+ * Create expression that returns the base64 text of the whole blob bin as a string.
+ * Requires server version 8.1.3 or later.
+ *
+ * @param __bin			A blob bin expression to apply this function to.
+ * @return (string expression)
+ * @ingroup expression
+ */
+#define as_exp_bit_b64_encode(__bin) \
+		_AS_EXP_BIT_READ_START(AS_EXP_TYPE_STR, AS_BIT_OP_B64_ENCODE, 0), \
+		__bin
+
+/**
+ * Create expression that returns the base64 text from __byte_offset through the
+ * end of the blob as a string. A negative __byte_offset counts back from the end
+ * of the blob. Note the span is expressed in bytes, unlike the bit offsets and
+ * sizes other bit expressions take.
+ * Requires server version 8.1.3 or later.
+ *
+ * @param __byte_offset	Byte offset into the blob. Negative values count from the end.
+ * @param __bin			A blob bin expression to apply this function to.
+ * @return (string expression)
+ * @ingroup expression
+ */
+#define as_exp_bit_b64_encode_from(__byte_offset, __bin) \
+		_AS_EXP_BIT_READ_START(AS_EXP_TYPE_STR, AS_BIT_OP_B64_ENCODE, 1), \
+		__byte_offset, \
+		__bin
+
+/**
+ * Create expression that returns the base64 text of a byte range of the blob bin
+ * as a string. A negative __byte_offset counts back from the end of the blob.
+ * Note the span is expressed in bytes, unlike the bit offsets and sizes other
+ * bit expressions take.
+ * Requires server version 8.1.3 or later.
+ *
+ * @param __byte_offset	Byte offset into the blob. Negative values count from the end.
+ * @param __byte_size	Number of bytes to encode.
+ * @param __bin			A blob bin expression to apply this function to.
+ * @return (string expression)
+ * @ingroup expression
+ */
+#define as_exp_bit_b64_encode_range(__byte_offset, __byte_size, __bin) \
+		_AS_EXP_BIT_READ_START(AS_EXP_TYPE_STR, AS_BIT_OP_B64_ENCODE, 2), \
+		__byte_offset, \
+		__byte_size, \
+		__bin
+
 //---------------------------------
 // HLL Modify Expressions
 //---------------------------------
@@ -3738,6 +3826,24 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 //---------------------------------
+// String Expressions
+//---------------------------------
+
+/**
+ * String expressions invoke the string operation module (see @ref string_operations)
+ * inside an expression tree. Each as_exp_string_*() macro mirrors the
+ * corresponding as_operations_string_*() operate API; as_exp_to_string() mirrors
+ * as_operations_to_string().
+ *
+ * Requires server version 8.1.3 or later.
+ *
+ * Unlike operate-level string ops, these macros do not take as_cdt_ctx. To target
+ * a string nested inside a list or map, extract the leaf with
+ * as_exp_list_get_by_index() or as_exp_map_get_by_key() and pass the result as
+ * the operand expression.
+ */
+
+//---------------------------------
 // String Read Expressions
 //---------------------------------
 
@@ -3906,10 +4012,11 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Create an expression that performs an as_operations_string_is_numeric operation.
+ * Create expression that tests whether __bin contains a valid integer or float
+ * literal. Returns true on match, false otherwise.
  *
  * @param __bin			A bin expression to apply this function to.
- * @return (bool bin) true if the string is a numeric value, false otherwise.
+ * @return (bool expression)
  * @ingroup expression
  */
 #define as_exp_string_is_numeric(__bin) \
@@ -3917,11 +4024,14 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Create an expression that performs an as_operations_string_is_numeric_type operation.
+ * Create expression that tests whether __bin matches the requested
+ * as_string_numeric_type. This is a spelling check, not "parses as a number of
+ * that type": AS_STRING_NUMERIC_FLOAT requires a `.` followed by a digit, so
+ * `"5"` is false under AS_STRING_NUMERIC_FLOAT even though it parses as a double.
  *
  * @param __numeric_type	The numeric type to filter for.
  * @param __bin			A bin expression to apply this function to.
- * @return (bool bin) true if the string is a numeric value of the type, false otherwise.
+ * @return (bool expression)
  * @ingroup expression
  */
 #define as_exp_string_is_numeric_type(__numeric_type, __bin) \
@@ -4152,6 +4262,22 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
+ * Create expression that removes codepoints from __start through the end of the
+ * string. This uses the 1-arg wire form; policy flags are not sent. Use
+ * as_exp_string_snip() when non-default policy flags are required.
+ *
+ * @param __policy		The string policy. Ignored on the wire for this overload.
+ * @param __start		First codepoint to remove, inclusive.
+ * @param __bin			A bin expression to apply this function to.
+ * @return (string expression)
+ * @ingroup expression
+ */
+#define as_exp_string_snip_start(__policy, __start, __bin) \
+		_AS_EXP_STRING_MOD_START(AS_STRING_OP_SNIP, 1), \
+		as_exp_int(__start), \
+		__bin
+
+/**
  * Create an expression that performs an as_operations_string_snip operation.
  *
  * @param __policy		The string policy.
@@ -4360,10 +4486,12 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Create an expression that performs an as_operations_to_string operation.
+ * Create expression that returns the string representation of __bin, where
+ * __bin may be any expression yielding an integer, float, string, boolean, or
+ * blob value. Returns an error for any other source type.
  *
- * @param __bin			A bin expression to apply this function to.
- * @return (string bin) The string in the bin with the value converted to a string.
+ * @param __bin			Operand expression (INT, FLOAT, STR, BOOL, or BLOB).
+ * @return (string expression)
  * @ingroup expression
  */
 #define as_exp_to_string(__bin) \

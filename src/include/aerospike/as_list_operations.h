@@ -251,6 +251,7 @@ typedef enum {
 	AS_CDT_OP_LIST_GET_BY_VALUE_INTERVAL = 25,
 	AS_CDT_OP_LIST_GET_BY_RANK_RANGE = 26,
 	AS_CDT_OP_LIST_GET_BY_VALUE_REL_RANK_RANGE = 27,
+	AS_CDT_OP_LIST_STRING_LIST_JOIN = 28,
 	AS_CDT_OP_LIST_REMOVE_BY_INDEX = 32,
 	AS_CDT_OP_LIST_REMOVE_BY_RANK = 34,
 	AS_CDT_OP_LIST_REMOVE_ALL_BY_VALUE = 35,
@@ -731,6 +732,39 @@ as_operations_list_get_range(
 AS_EXTERN bool
 as_operations_list_get_range_from(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, int64_t index
+	);
+
+/**
+ * Create list join operation.
+ * Server concatenates the string items of the list bin and returns the result as a
+ * single string, with no separator between items. Every item must be a string;
+ * a non-string item returns AEROSPIKE_ERR_REQUEST_INVALID. An empty list returns an empty
+ * string.
+ * This is the inverse of as_operations_string_split().
+ * Requires server version 8.1.3 or later.
+ *
+ * @ingroup list_operations
+ */
+AS_EXTERN bool
+as_operations_list_join(as_operations* ops, const char* name, as_cdt_ctx* ctx);
+
+/**
+ * Create list join operation with a separator.
+ * Server concatenates the string items of the list bin, placing separator between
+ * consecutive items, and returns the result as a single string. Every item must
+ * be a string; a non-string item returns AEROSPIKE_ERR_REQUEST_INVALID. An empty list
+ * returns an empty string, and a single-item list returns that item with no
+ * separator applied.
+ * This is the inverse of as_operations_string_split_separator().
+ * Requires server version 8.1.3 or later.
+ *
+ * @param separator Separator placed between consecutive items.
+ *
+ * @ingroup list_operations
+ */
+AS_EXTERN bool
+as_operations_list_join_separator(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* separator
 	);
 
 /**

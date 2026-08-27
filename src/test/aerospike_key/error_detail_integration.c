@@ -603,9 +603,9 @@ TEST(ed_sync_exists_not_found_v2, "5.7.1 exists not found verbosity 2")
 	as_status status = aerospike_key_exists(as, &err, &pr, &key, &rec);
 
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
-	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
-	}
+	assert_true(strstr(err.message, "subcode=") == NULL);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
+	assert_true(strlen(err.message) > 0);
 }
 
 // 5.8.1 Delete missing key at verbosity 2
@@ -622,9 +622,9 @@ TEST(ed_sync_delete_not_found_v2, "5.8.1 delete not found verbosity 2")
 	as_status status = aerospike_key_remove(as, &err, &pr, &key);
 
 	assert_int_eq(status, AEROSPIKE_ERR_RECORD_NOT_FOUND);
-	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
-	}
+	assert_true(strstr(err.message, "subcode=") == NULL);
+	assert_int_eq(err.subcode, AS_SUB_NONE);
+	assert_true(strlen(err.message) > 0);
 }
 
 // 5.10.1 Successful write at verbosity 2
@@ -739,6 +739,7 @@ TEST(ed_sync_priority_logic_v2, "5.16.1 server message displaces default format"
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
+	assert_true(strstr(err.message, "subcode=") == NULL);
 	if (err.subcode > 0) {
 		// Must NOT be the default format "<addr> AEROSPIKE_ERR_..."
 		assert_true(strstr(err.message, as_error_string(status)) == NULL);
@@ -932,8 +933,9 @@ TEST(ed_sync_cdt_map_create_only, "5.12.1 CDT map create-only violation verbosit
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
+	assert_true(strstr(err.message, "subcode=") == NULL);
 	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
+		assert_true(strstr(err.message, as_error_string(status)) == NULL);
 	}
 	as_operations_destroy(&ops);
 }
@@ -957,8 +959,9 @@ TEST(ed_sync_bit_invalid, "5.13.1 bit invalid offset verbosity 2")
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
+	assert_true(strstr(err.message, "subcode=") == NULL);
 	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
+		assert_true(strstr(err.message, as_error_string(status)) == NULL);
 	}
 	as_operations_destroy(&ops);
 }
@@ -983,8 +986,9 @@ TEST(ed_sync_hll_invalid, "5.14.1 HLL invalid params verbosity 2")
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
+	assert_true(strstr(err.message, "subcode=") == NULL);
 	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
+		assert_true(strstr(err.message, as_error_string(status)) == NULL);
 	}
 	as_operations_destroy(&ops);
 }
@@ -1008,8 +1012,9 @@ TEST(ed_sync_param_ttl_invalid, "5.18.1 param bit offset out of range verbosity 
 	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
 
 	assert_true(status != AEROSPIKE_OK);
+	assert_true(strstr(err.message, "subcode=") == NULL);
 	if (err.subcode > 0) {
-		assert_true(strstr(err.message, "subcode=") != NULL);
+		assert_true(strstr(err.message, as_error_string(status)) == NULL);
 	}
 	as_operations_destroy(&ops);
 }

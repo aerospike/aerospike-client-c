@@ -47,6 +47,7 @@
 #define GET_BY_VALUE_INTERVAL 25
 #define GET_BY_RANK_RANGE 26
 #define GET_BY_VALUE_REL_RANK_RANGE 27
+#define STRING_LIST_JOIN 28
 #define REMOVE_BY_INDEX 32
 #define REMOVE_BY_RANK 34
 #define REMOVE_ALL_BY_VALUE 35
@@ -582,6 +583,34 @@ as_operations_list_get_range_from(
 	as_packer pk = as_cdt_begin();
 	as_cdt_pack_header(&pk, ctx, GET_RANGE, 1);
 	as_pack_int64(&pk, index);
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_READ);
+}
+
+bool
+as_operations_list_join(as_operations* ops, const char* name, as_cdt_ctx* ctx)
+{
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header(&pk, ctx, STRING_LIST_JOIN, 0);
+	as_cdt_end(&pk);
+	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_READ);
+}
+
+bool
+as_operations_list_join_separator(
+	as_operations* ops, const char* name, as_cdt_ctx* ctx, const char* separator
+	)
+{
+	if (! separator) {
+		return false;
+	}
+
+	as_string sep;
+	as_string_init(&sep, (char*)separator, false);
+
+	as_packer pk = as_cdt_begin();
+	as_cdt_pack_header(&pk, ctx, STRING_LIST_JOIN, 1);
+	as_pack_val(&pk, (as_val*)&sep);
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_CDT_READ);
 }

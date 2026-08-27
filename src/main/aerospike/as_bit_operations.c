@@ -228,32 +228,18 @@ as_operations_bit_b64_encode_from(
 
 bool
 as_operations_bit_b64_encode_range(
-	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset, int byte_size
-	)
-{
-	as_packer pk = as_cdt_begin();
-	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_B64_ENCODE, 2);
-	as_pack_int64(&pk, byte_offset);
-	as_pack_int64(&pk, byte_size);
-	as_cdt_end(&pk);
-	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_BIT_READ);
-}
-
-bool
-as_operations_bit_b64_encode_range_invert(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset, int byte_size,
 	bool invert_size
 	)
 {
-	if (!invert_size) {
-		return as_operations_bit_b64_encode_range(ops, name, ctx, byte_offset, byte_size);
-	}
-
 	as_packer pk = as_cdt_begin();
-	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_B64_ENCODE, 3);
+	as_cdt_pack_header(&pk, ctx, AS_BIT_OP_B64_ENCODE, invert_size ? 3 : 2);
 	as_pack_int64(&pk, byte_offset);
 	as_pack_int64(&pk, byte_size);
-	as_pack_uint64(&pk, READ_SUBFLAG_INVERT_SIZE);
+
+	if (invert_size) {
+		as_pack_uint64(&pk, READ_SUBFLAG_INVERT_SIZE);
+	}
 	as_cdt_end(&pk);
 	return as_cdt_add_packed(&pk, ops, name, AS_OPERATOR_BIT_READ);
 }

@@ -771,6 +771,7 @@ TEST(string_snip_start_ops, "string snip start wire and expression operations")
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_string_eq(as_string_get((as_string*)rec->bins.entries[1].valuep), "hello");
 	as_record_destroy(rec);
+	rec = NULL;
 
 	assert_int_eq(put_string_key(116, "hello world"), AEROSPIKE_OK);
 	as_key_init_int64(&key, NAMESPACE, SET, 116);

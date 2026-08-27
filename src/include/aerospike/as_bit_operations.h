@@ -679,8 +679,10 @@ as_operations_bit_b64_encode(as_operations* ops, const char* name, as_cdt_ctx* c
 
 /**
  * Create bit "b64 encode" operation from a byte offset through the end of the blob.
- * A negative byte_offset counts back from the end of the blob. Note the span is
- * expressed in bytes, unlike the bit offsets and sizes other bit read operations take.
+ * A negative byte_offset counts back from the end of the blob. This uses the 1-arg
+ * wire form. Use as_operations_bit_b64_encode_range() when invert_size semantics are
+ * required. Note the span is expressed in bytes, unlike the bit offsets and sizes
+ * other bit read operations take.
  * Requires server version 8.1.3 or later.
  *
  * @ingroup bit_operations
@@ -694,6 +696,8 @@ as_operations_bit_b64_encode_from(
  * Create bit "b64 encode" operation on a byte span.
  * Server returns the base64 text of byte_size bytes of the blob starting at
  * byte_offset, as a string. A negative byte_offset counts back from the end of
+ * the blob. When invert_size is true, byte_size counts back from the blob end
+ * rather than forward from byte_offset, so a byte_size of 0 means to the end of
  * the blob. Note the span is expressed in bytes, unlike the bit offsets and
  * sizes other bit read operations take.
  * Requires server version 8.1.3 or later.
@@ -702,21 +706,6 @@ as_operations_bit_b64_encode_from(
  */
 AS_EXTERN bool
 as_operations_bit_b64_encode_range(
-	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset, int byte_size
-	);
-
-/**
- * Create bit "b64 encode" operation on a byte span, with byte_size measured from
- * the end of the blob. When invert_size is true, byte_size counts back from the
- * blob end rather than forward from byte_offset, so a byte_size of 0 means to the
- * end of the blob. When false this behaves exactly as
- * as_operations_bit_b64_encode_range().
- * Requires server version 8.1.3 or later.
- *
- * @ingroup bit_operations
- */
-AS_EXTERN bool
-as_operations_bit_b64_encode_range_invert(
 	as_operations* ops, const char* name, as_cdt_ctx* ctx, int byte_offset, int byte_size,
 	bool invert_size
 	);

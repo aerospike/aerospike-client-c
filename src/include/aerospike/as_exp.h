@@ -3588,8 +3588,9 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create expression that returns the base64 text from __byte_offset through the
  * end of the blob as a string. A negative __byte_offset counts back from the end
- * of the blob. Note the span is expressed in bytes, unlike the bit offsets and
- * sizes other bit expressions take.
+ * of the blob. This uses the 1-arg wire form. Use as_exp_bit_b64_encode_range()
+ * when invert_size semantics are required. Note the span is expressed in bytes,
+ * unlike the bit offsets and sizes other bit expressions take.
  * Requires server version 8.1.3 or later.
  *
  * @param __byte_offset	Byte offset into the blob. Negative values count from the end.
@@ -3605,20 +3606,24 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create expression that returns the base64 text of a byte range of the blob bin
  * as a string. A negative __byte_offset counts back from the end of the blob.
- * Note the span is expressed in bytes, unlike the bit offsets and sizes other
- * bit expressions take.
+ * When __invert_size is true, __byte_size counts back from the blob end rather
+ * than forward from __byte_offset, so a __byte_size of 0 means to the end of the
+ * blob. Note the span is expressed in bytes, unlike the bit offsets and sizes
+ * other bit expressions take.
  * Requires server version 8.1.3 or later.
  *
  * @param __byte_offset	Byte offset into the blob. Negative values count from the end.
  * @param __byte_size	Number of bytes to encode.
+ * @param __invert_size	When true, __byte_size counts back from the blob end.
  * @param __bin			A blob bin expression to apply this function to.
  * @return (string expression)
  * @ingroup expression
  */
-#define as_exp_bit_b64_encode_range(__byte_offset, __byte_size, __bin) \
-		_AS_EXP_BIT_READ_START(AS_EXP_TYPE_STR, AS_BIT_OP_B64_ENCODE, 2), \
+#define as_exp_bit_b64_encode_range(__byte_offset, __byte_size, __invert_size, __bin) \
+		_AS_EXP_BIT_READ_START(AS_EXP_TYPE_STR, AS_BIT_OP_B64_ENCODE, 3), \
 		__byte_offset, \
 		__byte_size, \
+		as_exp_int((__invert_size) ? 1 : 0), \
 		__bin
 
 //---------------------------------

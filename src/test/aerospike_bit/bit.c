@@ -1752,7 +1752,7 @@ TEST(bit_b64_encode, "Bit B64 Encode")
 	as_record_destroy(prec);
 
 	as_operations_inita(&ops, 1);
-	as_operations_bit_b64_encode_range(&ops, BIN_NAME, NULL, 1, 2);
+	as_operations_bit_b64_encode_range(&ops, BIN_NAME, NULL, 1, 2, false);
 
 	prec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
@@ -1762,7 +1762,7 @@ TEST(bit_b64_encode, "Bit B64 Encode")
 	as_record_destroy(prec);
 
 	as_operations_inita(&ops, 1);
-	as_operations_bit_b64_encode_range_invert(&ops, BIN_NAME, NULL, 1, 0, true);
+	as_operations_bit_b64_encode_range(&ops, BIN_NAME, NULL, 1, 0, true);
 
 	prec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
@@ -1772,7 +1772,7 @@ TEST(bit_b64_encode, "Bit B64 Encode")
 	as_record_destroy(prec);
 
 	as_operations_inita(&ops, 1);
-	as_operations_bit_b64_encode_range(&ops, BIN_NAME, NULL, -1, 1);
+	as_operations_bit_b64_encode_range(&ops, BIN_NAME, NULL, -1, 1, false);
 
 	prec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
@@ -1782,21 +1782,33 @@ TEST(bit_b64_encode, "Bit B64 Encode")
 	as_record_destroy(prec);
 
 	as_exp_build(encode_exp, as_exp_bit_b64_encode(as_exp_bin_blob(BIN_NAME)));
+	as_exp_build(from_exp,
+		as_exp_bit_b64_encode_from(as_exp_int(1), as_exp_bin_blob(BIN_NAME)));
 	as_exp_build(span_exp,
-		as_exp_bit_b64_encode_range(as_exp_int(1), as_exp_int(2), as_exp_bin_blob(BIN_NAME)));
+		as_exp_bit_b64_encode_range(
+			as_exp_int(1), as_exp_int(2), false, as_exp_bin_blob(BIN_NAME)));
+	as_exp_build(invert_exp,
+		as_exp_bit_b64_encode_range(
+			as_exp_int(1), as_exp_int(0), true, as_exp_bin_blob(BIN_NAME)));
 
-	as_operations_inita(&ops, 2);
+	as_operations_inita(&ops, 4);
 	as_operations_exp_read(&ops, "whole", encode_exp, AS_EXP_READ_DEFAULT);
+	as_operations_exp_read(&ops, "from", from_exp, AS_EXP_READ_DEFAULT);
 	as_operations_exp_read(&ops, "span", span_exp, AS_EXP_READ_DEFAULT);
+	as_operations_exp_read(&ops, "invert", invert_exp, AS_EXP_READ_DEFAULT);
 
 	prec = NULL;
 	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
 	as_operations_destroy(&ops);
 	as_exp_destroy(encode_exp);
+	as_exp_destroy(from_exp);
 	as_exp_destroy(span_exp);
+	as_exp_destroy(invert_exp);
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_string_eq(as_record_get_str(prec, "whole"), "AUIDBAU=");
+	assert_string_eq(as_record_get_str(prec, "from"), "QgMEBQ==");
 	assert_string_eq(as_record_get_str(prec, "span"), "QgM=");
+	assert_string_eq(as_record_get_str(prec, "invert"), "QgMEBQ==");
 	as_record_destroy(prec);
 
 	as_operations_inita(&ops, 1);

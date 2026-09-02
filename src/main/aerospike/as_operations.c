@@ -29,7 +29,7 @@
 //---------------------------------
 
 // These values must line up with as_operator enum.
-bool as_op_is_write[] = {
+AS_EXTERN extern bool as_op_is_write[] = {
 	false,
 	true,
 	false,

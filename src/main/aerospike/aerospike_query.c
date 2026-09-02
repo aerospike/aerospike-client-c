@@ -1001,17 +1001,17 @@ as_query_command_size(
 		n_fields++;
 	}
 
-	// Top-K order-by clause: msgpack list [bin_name, type, direction, flags].
+	// Top-K order-by clause. The server parses this field as a flat, fixed byte
+	// layout - NOT msgpack:
+	//   [0] type       1=INTEGER 2=DOUBLE 3=STRING 4=BYTES
+	//   [1] direction  0=ASC 1=DESC
+	//   [2] flags      bit0 = CASE_INSENSITIVE (STRING only)
+	//   [3] name-len L (0 < L < AS_BIN_NAME_MAX_SZ)
+	//   [4..4+L)  bin name
 	// Validated (including the requirement that order_by/top_k always come as a pair) by
 	// as_query_validate_topk() above.
 	if (query->order_by.defined) {
-		as_packer pk = {.buffer = NULL, .capacity = UINT32_MAX};
-		as_pack_list_header(&pk, 4);
-		as_pack_string(&pk, query->order_by.bin);
-		as_pack_int64(&pk, query->order_by.type);
-		as_pack_int64(&pk, query->order_by.direction);
-		as_pack_uint64(&pk, query->order_by.flags);
-		qb->order_by_size = pk.offset;
+		qb->order_by_size = (uint32_t)(4 + strlen(query->order_by.bin));
 
 		qb->size += as_command_field_size(qb->order_by_size);
 		n_fields++;
@@ -1316,15 +1316,17 @@ as_query_command_init(
 	}
 
 	if (query->order_by.defined) {
+		size_t name_len = strlen(query->order_by.bin);
+
 		p = as_command_write_field_header(p, AS_FIELD_ORDER_BY, qb->order_by_size);
 
-		as_packer pk = {.buffer = p, .capacity = qb->order_by_size};
-		as_pack_list_header(&pk, 4);
-		as_pack_string(&pk, query->order_by.bin);
-		as_pack_int64(&pk, query->order_by.type);
-		as_pack_int64(&pk, query->order_by.direction);
-		as_pack_uint64(&pk, query->order_by.flags);
-		p += qb->order_by_size;
+		// Flat layout - see the size-estimation comment above.
+		*p++ = (uint8_t)query->order_by.type;
+		*p++ = (uint8_t)query->order_by.direction;
+		*p++ = (uint8_t)query->order_by.flags;
+		*p++ = (uint8_t)name_len;
+		memcpy(p, query->order_by.bin, name_len);
+		p += name_len;
 
 		p = as_command_write_field_uint32(p, AS_FIELD_TOP_K, query->top_k);
 	}

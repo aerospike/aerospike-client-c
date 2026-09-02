@@ -1034,7 +1034,7 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 			goto HandleError;
 		}
 
-		if (ival < 0 || ival > AS_QUERY_ORDER_BY_BYTES) {
+		if (ival < AS_QUERY_ORDER_BY_INTEGER || ival > AS_QUERY_ORDER_BY_BYTES) {
 			goto HandleError;
 		}
 

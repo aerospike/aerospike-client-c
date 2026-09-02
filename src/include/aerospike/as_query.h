@@ -307,22 +307,22 @@ typedef enum as_query_order_by_type_e {
 	/**
 	 * Order-by bin is an integer.
 	 */
-	AS_QUERY_ORDER_BY_INTEGER = 0,
+	AS_QUERY_ORDER_BY_INTEGER = 1,
 
 	/**
 	 * Order-by bin is a double.
 	 */
-	AS_QUERY_ORDER_BY_DOUBLE = 1,
+	AS_QUERY_ORDER_BY_DOUBLE = 2,
 
 	/**
 	 * Order-by bin is a string.
 	 */
-	AS_QUERY_ORDER_BY_STRING = 2,
+	AS_QUERY_ORDER_BY_STRING = 3,
 
 	/**
 	 * Order-by bin is a byte array.
 	 */
-	AS_QUERY_ORDER_BY_BYTES = 3
+	AS_QUERY_ORDER_BY_BYTES = 4
 
 } as_query_order_by_type;
 

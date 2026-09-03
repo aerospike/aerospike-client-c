@@ -651,7 +651,7 @@ as_exp_destroy_base64(char* base64)
  * // Cosine similarity between vector bin "v" and a query vector > 0.8
  * as_exp_build(expression,
  *     as_exp_cmp_gt(
- *         as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE, query, query_size,
+ *         as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE_SIMILARITY, query, query_size,
  *             as_exp_bin_vector("v")),
  *         as_exp_float(0.8)));
  * @endcode
@@ -683,7 +683,7 @@ as_exp_destroy_base64(char* base64)
  * const uint8_t* qbytes = as_vector_value_element_bytes(q, &qsize);
  * as_exp_build(expression,
  *     as_exp_cmp_ge(
- *         as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE, (uint8_t*)qbytes, qsize,
+ *         as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE_SIMILARITY, (uint8_t*)qbytes, qsize,
  *             as_exp_bin_vector("embedding")),
  *         as_exp_float(0.8)));
  * @endcode

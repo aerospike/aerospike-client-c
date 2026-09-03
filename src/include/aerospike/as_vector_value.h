@@ -79,19 +79,12 @@ typedef enum as_vector_element_type_e {
 /**
  * Distance metric used to compare two vectors in a vector distance expression.
  * See as_exp_vector_dist().
- *
- * WORK IN PROGRESS: the server does not yet implement the vector distance
- * expression (EXP_VECTOR_DIST), and the exact metric semantics are still being
- * finalized upstream. The current server kernels compute AS_VECTOR_DISTANCE_EUCLIDEAN
- * as squared L2 and AS_VECTOR_DISTANCE_COSINE as cosine similarity (larger is
- * closer). Revisit once the server contract ships. Matches the metric codes used
- * by the Java and Rust clients.
  */
 typedef enum as_vector_distance_metric_e {
 	/**
-	 * Euclidean (L2) distance. Smaller values indicate closer vectors.
+	 * Squared Euclidean (L2) distance. Smaller values indicate closer vectors.
 	 */
-	AS_VECTOR_DISTANCE_EUCLIDEAN = 0,
+	AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED = 0,
 
 	/**
 	 * Dot product. Larger values indicate more similar vectors.
@@ -101,7 +94,7 @@ typedef enum as_vector_distance_metric_e {
 	/**
 	 * Cosine similarity. Larger values indicate closer vectors.
 	 */
-	AS_VECTOR_DISTANCE_COSINE = 2
+	AS_VECTOR_DISTANCE_COSINE_SIMILARITY = 2
 } as_vector_distance_metric;
 
 /**

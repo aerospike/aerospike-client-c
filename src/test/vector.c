@@ -1544,7 +1544,7 @@ TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (c
 
 	as_exp_build(filter,
 		as_exp_cmp_ge(
-			as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE, (uint8_t*)qbytes, qsize,
+			as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE_SIMILARITY, (uint8_t*)qbytes, qsize,
 				as_exp_bin_vector("embedding")),
 			as_exp_float(0.8)));
 	assert_not_null(filter);
@@ -1591,7 +1591,7 @@ TEST(vector_distance_expression_server, "[disabled] vector distance expression e
 	const uint8_t* qbytes = as_vector_value_element_bytes(vec, &qsize);
 
 	as_exp_build(read_exp,
-		as_exp_vector_dist(AS_VECTOR_DISTANCE_EUCLIDEAN, (uint8_t*)qbytes, qsize,
+		as_exp_vector_dist(AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED, (uint8_t*)qbytes, qsize,
 			as_exp_bin_vector("embedding")));
 	assert_not_null(read_exp);
 

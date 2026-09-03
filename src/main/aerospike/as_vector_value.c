@@ -291,11 +291,9 @@ as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length)
 		return NULL;
 	}
 
-	// Use 64-bit math so a large dimensions count cannot overflow the size
-	// computation and bypass the bounds check below.
-	uint64_t data_size = (uint64_t)dimensions * elem_size;
+	uint32_t data_size = dimensions * elem_size;
 
-	if ((uint64_t)length < (uint64_t)AS_VECTOR_VALUE_HEADER_SIZE + data_size) {
+	if (length < AS_VECTOR_VALUE_HEADER_SIZE + data_size) {
 		return NULL;
 	}
 

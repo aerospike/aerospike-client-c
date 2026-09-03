@@ -230,6 +230,30 @@ as_operations_add_write_rawp(as_operations* ops, const char* name, const uint8_t
 }
 
 bool
+as_operations_add_write_vector(as_operations* ops, const char* name, const as_vector_value* value)
+{
+	as_bytes bytes;
+
+	if (! as_vector_value_to_bytes(value, &bytes)) {
+		return false;
+	}
+
+	as_binop* binop = as_binop_forappend(ops, AS_OPERATOR_WRITE, name);
+
+	if (! binop) {
+		as_bytes_destroy(&bytes);
+		return false;
+	}
+
+	// Embed the serialized buffer in the bin (sets the bin name and points
+	// valuep at the embedded value), then re-tag it as a vector. Ownership of
+	// the heap buffer transfers to the op, which frees it on destroy.
+	as_bin_init_raw(&binop->bin, name, bytes.value, bytes.size, true);
+	as_bytes_set_type((as_bytes*)&binop->bin.value, AS_BYTES_VECTOR);
+	return true;
+}
+
+bool
 as_operations_add_read(as_operations* ops, const char* name)
 {
 	as_binop * binop = as_binop_forappend(ops, AS_OPERATOR_READ, name);

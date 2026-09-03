@@ -163,6 +163,7 @@ AEROSPIKE += as_tls.o
 AEROSPIKE += as_txn.o
 AEROSPIKE += as_txn_monitor.o
 AEROSPIKE += as_udf.o
+AEROSPIKE += as_vector_value.o
 AEROSPIKE += as_version.o
 AEROSPIKE += version.o
 

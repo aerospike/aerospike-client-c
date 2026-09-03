@@ -2477,6 +2477,14 @@ as_command_parse_value(uint8_t* p, uint8_t type, uint32_t value_size, as_val** v
 			*value = (as_val*)b;
 			break;
 		}
+		case AS_BYTES_VECTOR: {
+			void* v = cf_malloc(value_size);
+			memcpy(v, p, value_size);
+			as_bytes* b = as_bytes_new_wrap(v, value_size, true);
+			b->type = AS_BYTES_VECTOR;
+			*value = (as_val*)b;
+			break;
+		}
 		default: {
 			void* v = cf_malloc(value_size);
 			memcpy(v, p, value_size);

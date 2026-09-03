@@ -281,6 +281,7 @@
     <ClCompile Include="..\..\src\test\test.c" />
     <ClCompile Include="..\..\src\test\transaction.c" />
     <ClCompile Include="..\..\src\test\transaction_async.c" />
+    <ClCompile Include="..\..\src\test\vector.c" />
     <ClCompile Include="..\..\src\test\util\consumer_stream.c" />
     <ClCompile Include="..\..\src\test\util\index_util.c" />
     <ClCompile Include="..\..\src\test\util\info_helper.c" />

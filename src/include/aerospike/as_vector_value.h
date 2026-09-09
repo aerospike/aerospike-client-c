@@ -445,15 +445,14 @@ as_vector_value_get_float64(const as_vector_value* vec)
 
 /**
  * Return a pointer to the vector's contiguous element array (without the 8-byte
- * header) and its size in bytes. This is the query-vector layout expected by a
- * vector distance expression (as_exp_vector_dist()): the server reinterprets the
- * bytes using the stored bin's element type.
+ * header) and its size in bytes.
  *
  * The returned pointer is owned by `vec` and valid for its lifetime. The bytes
  * are in the vector's little-endian wire order on little-endian hosts (the only
  * platforms the vector format supports).
  *
- * WORK IN PROGRESS: used only by the not-yet-shipped vector distance expression.
+ * A vector distance expression requires the complete serialized vector,
+ * including its header. Use as_vector_value_to_bytes() for that purpose.
  *
  * @param vec		Vector to inspect.
  * @param size		Set to the element-array size in bytes.

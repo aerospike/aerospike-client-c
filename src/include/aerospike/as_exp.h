@@ -111,7 +111,9 @@ typedef enum {
 
 	_AS_EXP_CODE_MIN = 50,
 	_AS_EXP_CODE_MAX = 51,
-	_AS_EXP_CODE_VECTOR_DIST = 52,
+	_AS_EXP_CODE_VECTOR_EUCLIDEAN_DIST = 52,
+	_AS_EXP_CODE_VECTOR_DOT_PRODUCT = 53,
+	_AS_EXP_CODE_VECTOR_COSINE_SIM = 54,
 
 	_AS_EXP_CODE_DIGEST_MODULO = 64,
 	_AS_EXP_CODE_DEVICE_SIZE = 65,
@@ -187,6 +189,7 @@ typedef enum {
 	AS_EXP_TYPE_FLOAT = 7,
 	AS_EXP_TYPE_GEOJSON = 8,
 	AS_EXP_TYPE_HLL = 9,
+	AS_EXP_TYPE_VECTOR = 10,
 
 	AS_EXP_TYPE_AUTO,
 	AS_EXP_TYPE_ERROR
@@ -642,10 +645,8 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create expression that returns a vector bin for use with as_exp_vector_dist().
- * The bin is read as an opaque blob; the server reinterprets it as a vector.
- *
- * WORK IN PROGRESS: only usable via as_exp_vector_dist(), which the server does
- * not yet implement (EXP_VECTOR_DIST).
+ * The vector is evaluated as an opaque blob containing its complete serialized
+ * vector wire value.
  *
  * @code
  * // Cosine similarity between vector bin "v" and a query vector > 0.8
@@ -662,42 +663,43 @@ as_exp_destroy_base64(char* base64)
  */
 #define as_exp_bin_vector(__bin_name) \
 		{.op=_AS_EXP_CODE_BIN, .count=3}, \
-		as_exp_int(AS_EXP_TYPE_BLOB), \
+		as_exp_int(AS_EXP_TYPE_VECTOR), \
 		_AS_EXP_VAL_RAWSTR(__bin_name)
 
 /**
  * Create expression that returns the distance between a stored vector bin and a
  * query vector as a 64 bit float, using the given distance metric. The query
- * vector's element type and dimension count must match the stored vector.
- *
- * WORK IN PROGRESS: the server does not yet implement this expression op
- * (EXP_VECTOR_DIST); building and sending it currently fails with
- * PARAMETER_ERROR. The query-vector wire form (headerless little-endian
- * elements) and the metric semantics are still being finalized upstream. This
- * mirrors the provisional API in the Java and Rust clients so all clients stay
- * in the same state.
+ * vector must contain the complete serialized vector wire value (8-byte header
+ * followed by little-endian elements). Its element type and dimension count
+ * must match the stored vector. Incompatible vectors evaluate to NIL.
  *
  * @code
  * as_vector_value* q = as_vector_value_new_float32(data, 128);
- * uint32_t qsize;
- * const uint8_t* qbytes = as_vector_value_element_bytes(q, &qsize);
+ * as_bytes qbytes;
+ * as_vector_value_to_bytes(q, &qbytes);
  * as_exp_build(expression,
  *     as_exp_cmp_ge(
- *         as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE_SIMILARITY, (uint8_t*)qbytes, qsize,
+ *         as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE_SIMILARITY,
+ *             as_bytes_get(&qbytes), as_bytes_size(&qbytes),
  *             as_exp_bin_vector("embedding")),
  *         as_exp_float(0.8)));
+ * as_bytes_destroy(&qbytes);
  * @endcode
  *
  * @param __metric		Distance metric (as_vector_distance_metric).
- * @param __query		Query vector's little-endian element bytes (no header).
- * @param __query_size	Number of query element bytes.
+ * @param __query		Complete serialized query vector, including its header.
+ * @param __query_size	Number of serialized query-vector bytes.
  * @param __bin			Vector bin expression, typically as_exp_bin_vector().
  * @return (float value)
  * @ingroup expression
  */
 #define as_exp_vector_dist(__metric, __query, __query_size, __bin) \
-		{.op=_AS_EXP_CODE_VECTOR_DIST, .count=4}, \
-		as_exp_int(__metric), \
+		{.op=(__metric) == AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED ? \
+			_AS_EXP_CODE_VECTOR_EUCLIDEAN_DIST : \
+			(__metric) == AS_VECTOR_DISTANCE_DOT_PRODUCT ? \
+			_AS_EXP_CODE_VECTOR_DOT_PRODUCT : \
+			(__metric) == AS_VECTOR_DISTANCE_COSINE_SIMILARITY ? \
+			_AS_EXP_CODE_VECTOR_COSINE_SIM : _AS_EXP_CODE_UNKNOWN, .count=3}, \
 		as_exp_bytes((uint8_t*)(__query), __query_size), \
 		__bin
 

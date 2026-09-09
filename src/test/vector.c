@@ -17,6 +17,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_query.h>
 #include <aerospike/as_arraylist.h>
 #include <aerospike/as_batch.h>
 #include <aerospike/as_buffer.h>
@@ -32,6 +33,7 @@
 #include <aerospike/as_monitor.h>
 #endif
 #include <aerospike/as_operations.h>
+#include <aerospike/as_query.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_serializer.h>
@@ -1531,46 +1533,45 @@ TEST(vector_batch_read_server, "a batch read returns records that contain vector
 
 TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (client-side only)")
 {
-	// The server does not yet implement EXP_VECTOR_DIST, so this only verifies
-	// that the ported expression macros build a well-formed expression. See the
-	// disabled vector_distance_expression_server test below.
 	float data[4] = {0.1f, 0.2f, 0.3f, 0.4f};
 	as_vector_value* query = as_vector_value_new_float32(data, 4);
+	as_bytes qbytes;
 
-	uint32_t qsize;
-	const uint8_t* qbytes = as_vector_value_element_bytes(query, &qsize);
-	assert_not_null(qbytes);
-	assert_int_eq(qsize, 4 * sizeof(float));
+	assert_true(as_vector_value_to_bytes(query, &qbytes));
+	assert_int_eq(as_bytes_size(&qbytes), AS_VECTOR_VALUE_HEADER_SIZE + 4 * sizeof(float));
 
-	as_exp_build(filter,
-		as_exp_cmp_ge(
-			as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE_SIMILARITY, (uint8_t*)qbytes, qsize,
-				as_exp_bin_vector("embedding")),
-			as_exp_float(0.8)));
-	assert_not_null(filter);
+	as_exp_build(euclidean,
+		as_exp_vector_dist(AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED,
+			as_bytes_get(&qbytes), as_bytes_size(&qbytes), as_exp_bin_vector("embedding")));
+	as_exp_build(dot_product,
+		as_exp_vector_dist(AS_VECTOR_DISTANCE_DOT_PRODUCT,
+			as_bytes_get(&qbytes), as_bytes_size(&qbytes), as_exp_bin_vector("embedding")));
+	as_exp_build(cosine,
+		as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE_SIMILARITY,
+			as_bytes_get(&qbytes), as_bytes_size(&qbytes), as_exp_bin_vector("embedding")));
 
-	as_exp_destroy(filter);
+	assert_not_null(euclidean);
+	assert_not_null(dot_product);
+	assert_not_null(cosine);
+
+	// Each server expression is [metric-specific-op, query-vector, vector-bin].
+	assert_int_eq(euclidean->packed[0], 0x93);
+	assert_int_eq(euclidean->packed[1], 52);
+	assert_int_eq(dot_product->packed[1], 53);
+	assert_int_eq(cosine->packed[1], 54);
+
+	as_exp_destroy(euclidean);
+	as_exp_destroy(dot_product);
+	as_exp_destroy(cosine);
+	as_bytes_destroy(&qbytes);
 	as_vector_value_destroy(query);
 }
 
 //---------------------------------
-// WORK IN PROGRESS - disabled server tests
-//
-// These are ported to keep the C client in the same state as the Java and Rust
-// clients, but are intentionally NOT registered in the suite below (the C test
-// framework has no per-test "disabled" flag, so leaving them unregistered is the
-// equivalent of Java's @Disabled / Rust's #[ignore]).
-//
-// - vector_distance_expression_server: the server has no EXP_VECTOR_DIST (op 52)
-//   yet; building+sending the expression fails with PARAMETER_ERROR. Re-enable
-//   once the server ships the op (and revisit metric semantics).
-// - vector_bin_expression_read_server: reading a vector bin through the
-//   expression engine currently crashes the node (server rt_bin_translate has no
-//   AS_PARTICLE_TYPE_VECTOR arm). Re-enable once the server handles VECTOR on the
-//   expression read path.
+// Vector expression server tests.
 //---------------------------------
 
-TEST(vector_distance_expression_server, "[disabled] vector distance expression evaluates on the server")
+TEST(vector_distance_expression_server, "vector distance expression evaluates on the server")
 {
 	float stored[4] = {0.1f, 0.2f, 0.3f, 0.4f};
 	as_vector_value* vec = as_vector_value_new_float32(stored, 4);
@@ -1587,13 +1588,14 @@ TEST(vector_distance_expression_server, "[disabled] vector distance expression e
 	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
-	uint32_t qsize;
-	const uint8_t* qbytes = as_vector_value_element_bytes(vec, &qsize);
+	as_bytes qbytes;
+	assert_true(as_vector_value_to_bytes(vec, &qbytes));
 
 	as_exp_build(read_exp,
-		as_exp_vector_dist(AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED, (uint8_t*)qbytes, qsize,
-			as_exp_bin_vector("embedding")));
+		as_exp_vector_dist(AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED,
+			as_bytes_get(&qbytes), as_bytes_size(&qbytes), as_exp_bin_vector("embedding")));
 	assert_not_null(read_exp);
+	as_bytes_destroy(&qbytes);
 
 	as_operations ops;
 	as_operations_inita(&ops, 1);
@@ -1613,7 +1615,8 @@ TEST(vector_distance_expression_server, "[disabled] vector distance expression e
 	as_vector_value_destroy(vec);
 }
 
-TEST(vector_bin_expression_read_server, "[disabled] reading a vector bin via an expression must not crash the node")
+TEST(vector_bin_expression_read_server,
+	"[disabled] reading a vector bin directly through an expression succeeds")
 {
 	float stored[3] = {0.5f, -1.5f, 2.0f};
 	as_vector_value* vec = as_vector_value_new_float32(stored, 3);
@@ -1646,6 +1649,148 @@ TEST(vector_bin_expression_read_server, "[disabled] reading a vector bin via an 
 	as_exp_destroy(read_exp);
 	as_key_destroy(&key);
 	as_vector_value_destroy(vec);
+}
+
+//---------------------------------
+// Vector KNN query integration test
+//---------------------------------
+
+#define KNN_SET "test_vector_knn"
+#define KNN_RECORDS 20
+#define KNN_K 5
+#define KNN_DIMS 4
+
+typedef struct knn_result_s {
+	uint32_t count;
+	int64_t ids[KNN_K];
+} knn_result;
+
+static void
+knn_remove_records(void)
+{
+	for (uint32_t i = 0; i < KNN_RECORDS; i++) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, KNN_SET, (int64_t)i);
+
+		as_error err;
+		aerospike_key_remove(as, &err, NULL, &key);
+	}
+}
+
+static bool
+knn_query_callback(const as_val* val, void* udata)
+{
+	if (! val) {
+		return true;
+	}
+
+	knn_result* result = (knn_result*)udata;
+
+	if (result->count < KNN_K) {
+		result->ids[result->count] =
+			as_record_get_int64(as_record_fromval(val), "id", -1);
+	}
+	result->count++;
+	return true;
+}
+
+static void
+assert_knn_query(atf_test_result* __result__, as_vector_distance_metric metric,
+	as_order direction, const float* query_data, const int64_t* expected)
+{
+	knn_remove_records();
+
+	for (uint32_t i = 0; i < KNN_RECORDS; i++) {
+		float data[KNN_DIMS] = {(float)i, 1.0f, 0.0f, 0.0f};
+
+		as_vector_value* vec = as_vector_value_new_float32(data, KNN_DIMS);
+		assert_not_null(vec);
+
+		as_record rec;
+		as_record_inita(&rec, 2);
+		as_record_set_int64(&rec, "id", (int64_t)i);
+		assert_true(as_record_set_vector(&rec, "vec", vec));
+		as_vector_value_destroy(vec);
+
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, KNN_SET, (int64_t)i);
+
+		as_error err;
+		assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+		as_record_destroy(&rec);
+	}
+
+	as_vector_value* query_vec =
+		as_vector_value_new_float32(query_data, KNN_DIMS);
+	assert_not_null(query_vec);
+
+	as_bytes query_bytes;
+	assert_true(as_vector_value_to_bytes(query_vec, &query_bytes));
+	as_vector_value_destroy(query_vec);
+
+	as_exp_build(exp,
+		as_exp_vector_dist(metric,
+			as_bytes_get(&query_bytes), as_bytes_size(&query_bytes),
+			as_exp_bin_vector("vec")));
+	as_bytes_destroy(&query_bytes);
+	assert_not_null(exp);
+
+	as_operations* ops = as_operations_new(2);
+	as_operations_exp_read(ops, "distance", exp, AS_EXP_READ_DEFAULT);
+	as_operations_add_read(ops, "id");
+	as_exp_destroy(exp);
+
+	as_query query;
+	as_query_init(&query, NAMESPACE, KNN_SET);
+	query.ops = ops;
+	as_query_order_by(&query, "distance", AS_QUERY_ORDER_BY_DOUBLE,
+		direction, AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, KNN_K);
+
+	knn_result result = {0};
+	as_error err;
+	as_status status =
+		aerospike_query_foreach(as, &err, NULL, &query, knn_query_callback, &result);
+
+	as_query_destroy(&query);
+	knn_remove_records();
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(result.count, KNN_K);
+
+	for (uint32_t i = 0; i < KNN_K; i++) {
+		assert_int_eq(result.ids[i], expected[i]);
+	}
+}
+
+TEST(vector_knn_euclidean_query_server,
+	"Euclidean distance projection and top-k return nearest neighbors")
+{
+	const float query[KNN_DIMS] = {7.3f, 1.0f, 0.0f, 0.0f};
+	const int64_t expected[KNN_K] = {7, 8, 6, 9, 5};
+
+	assert_knn_query(__result__, AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED,
+		AS_ORDER_ASCENDING, query, expected);
+}
+
+TEST(vector_knn_dot_product_query_server,
+	"dot-product projection and top-k return the largest projections")
+{
+	const float query[KNN_DIMS] = {1.0f, 0.0f, 0.0f, 0.0f};
+	const int64_t expected[KNN_K] = {19, 18, 17, 16, 15};
+
+	assert_knn_query(__result__, AS_VECTOR_DISTANCE_DOT_PRODUCT,
+		AS_ORDER_DESCENDING, query, expected);
+}
+
+TEST(vector_knn_cosine_similarity_query_server,
+	"cosine-similarity projection and top-k return the most similar vectors")
+{
+	const float query[KNN_DIMS] = {1.0f, 1.0f, 0.0f, 0.0f};
+	const int64_t expected[KNN_K] = {1, 2, 3, 4, 5};
+
+	assert_knn_query(__result__, AS_VECTOR_DISTANCE_COSINE_SIMILARITY,
+		AS_ORDER_DESCENDING, query, expected);
 }
 
 //---------------------------------
@@ -1701,9 +1846,14 @@ SUITE(vector, "as_vector_value serialization")
 #endif
 	suite_add(vector_batch_read_server);
 	suite_add(vector_dist_exp_compiles);
+	suite_add(vector_distance_expression_server);
+	suite_add(vector_knn_euclidean_query_server);
+	suite_add(vector_knn_dot_product_query_server);
+	suite_add(vector_knn_cosine_similarity_query_server);
 
-	// Intentionally not registered (ported WIP, gated like Java @Disabled /
-	// Rust #[ignore]); see the "WORK IN PROGRESS" section above:
-	//   vector_distance_expression_server
+	// The current server aborts in rt_value_bin_ptr_to_bin() with
+	// "unexpected type 16" when a VECTOR is returned directly as an expression
+	// result. Distance expressions translate VECTOR operands to BLOB internally
+	// and are covered by the enabled tests above.
 	//   vector_bin_expression_read_server
 }
